@@ -14,16 +14,20 @@ import (
 // DevboxConfig is the merged top-level devbox configuration.
 // It is produced by layering devbox.yml → devbox/defaults.yml → devbox/local.yml.
 type DevboxConfig struct {
-	SchemaVersion string                   `yaml:"schema_version"`
-	Project       ProjectConfig            `yaml:"project"`
-	Services      map[string]ServiceConfig `yaml:"services"`
-	Tools         ToolsConfig              `yaml:"tools"`
-	Runtime       RuntimeConfig            `yaml:"runtime"`
-	State         string                   `yaml:"state"`
-	Exports       ExportsConfig            `yaml:"exports"`
-	Compose       ComposeConfig            `yaml:"compose"`
-	IDE           IDEConfig                `yaml:"ide"`
-	Deploy        DeployConfig             `yaml:"-"`
+	SchemaVersion string        `yaml:"schema_version"`
+	Project       ProjectConfig `yaml:"project"`
+	Tools         ToolsConfig   `yaml:"tools"`
+	Runtime       RuntimeConfig `yaml:"runtime"`
+	State         string        `yaml:"state"`
+	Exports       ExportsConfig `yaml:"exports"`
+	Compose       ComposeConfig `yaml:"compose"`
+	IDE           IDEConfig     `yaml:"ide"`
+	Deploy        DeployConfig  `yaml:"-"`
+
+	// Services holds the fully resolved service definitions loaded from
+	// devbox/services.yml with Enabled populated from the 3-layer config merge.
+	// Not unmarshalled from the merge — built by LoadConfig.
+	Services map[string]ServiceConfig `yaml:"-"`
 
 	// Raw holds the merged config as a plain map, used for dot-path resolution
 	// in export rules. Populated only by LoadConfig; not serialized.
@@ -107,15 +111,34 @@ func (p ProjectConfig) FullName() string {
 	return p.Name
 }
 
-// ServiceConfig describes a single service (app hub).
+// ServiceConfig describes a single application service.
+// Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
+// from the 3-layer config merge (mandatory services are always enabled).
 type ServiceConfig struct {
-	Type            string   `yaml:"type"`
-	Dir             string   `yaml:"dir"`
-	Container       string   `yaml:"container"`
-	DirInternal     string   `yaml:"dir_internal"`      // hub dir inside container (e.g. /workspace/main)
-	WorkDirInternal string   `yaml:"work_dir_internal"` // code/work dir inside container (e.g. /workspace/main/src)
-	InstallerImage  string   `yaml:"installer_image"`
-	Configs         []string `yaml:"configs"`
+	Type            string           `yaml:"type"`
+	Container       string           `yaml:"container"`
+	Mandatory       bool             `yaml:"mandatory"`
+	Enabled         bool             `yaml:"-"` // computed: mandatory || services.<name>.enabled
+	Dir             string           `yaml:"dir"`
+	DirInternal     string           `yaml:"dir_internal"`
+	WorkDirInternal string           `yaml:"work_dir_internal"`
+	Configs         []string         `yaml:"configs"`
+	Extends         string           `yaml:"extends"`
+	Compose         []string         `yaml:"compose"`
+	CLI             ServiceCLIConfig `yaml:"cli"`
+}
+
+// ServiceCLIConfig holds defaults for the `services cli` command.
+// All fields are optional; empty values fall back to built-in defaults.
+type ServiceCLIConfig struct {
+	// Shell is the shell binary to invoke inside the container (default: bash).
+	Shell string `yaml:"shell"`
+	// User is the container user to run as (default: current OS user UID).
+	// Overridden by --root flag at runtime.
+	User string `yaml:"user"`
+	// WorkDir is the working directory inside the container.
+	// Falls back to service.work_dir_internal, then dir_internal.
+	WorkDir string `yaml:"workdir"`
 }
 
 // ToolsConfig holds the set of optional development tools.
@@ -141,12 +164,6 @@ type RuntimeConfig struct {
 	Ports    RuntimePorts `yaml:"ports"`
 	Hosts    RuntimeHosts `yaml:"hosts"`
 	SPX      SPXConfig    `yaml:"spx"`
-	Debug    DebugConfig  `yaml:"debug"`
-}
-
-// DebugConfig holds debug-mode settings (e.g. Xdebug container overlay).
-type DebugConfig struct {
-	Enabled bool `yaml:"enabled"`
 }
 
 // RuntimePorts maps service roles to host ports.
@@ -242,6 +259,29 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	}
 	cfg.Raw = merged
 
+	// Load devbox/services.yml separately (not merged with config layers).
+	servicesPath := filepath.Join(baseDir, "devbox", "services.yml")
+	if services, err := LoadServicesConfig(servicesPath); err == nil {
+		// Resolve enabled state from the 3-layer merge.
+		for name, svc := range services {
+			if svc.Mandatory {
+				svc.Enabled = true
+			} else {
+				val, ok := ResolvePath(merged, "services."+name+".enabled")
+				if ok {
+					svc.Enabled = isTruthy(val)
+				}
+			}
+			services[name] = svc
+		}
+		cfg.Services = services
+		// Inject service definitions into the raw map so export rules
+		// like "from: services.main.container" resolve via dot-path.
+		injectServicesIntoRaw(merged, services)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read %s: %w", servicesPath, err)
+	}
+
 	// Load devbox/deploy.yml separately (not merged with config layers).
 	deployPath := filepath.Join(baseDir, "devbox", "deploy.yml")
 	if deployCfg, err := LoadDeployConfig(deployPath); err == nil {
@@ -251,6 +291,117 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+// servicesFile is the top-level structure of devbox/services.yml.
+type servicesFile struct {
+	Services map[string]ServiceConfig `yaml:"services"`
+}
+
+// LoadServicesConfig loads service definitions from devbox/services.yml.
+// It resolves `extends` inheritance: a service with extends=<parent> inherits
+// all zero-value fields from the parent.
+func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var f servicesFile
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	// Resolve extends.
+	for name, svc := range f.Services {
+		if svc.Extends == "" {
+			continue
+		}
+		parent, ok := f.Services[svc.Extends]
+		if !ok {
+			return nil, fmt.Errorf("service %q extends unknown service %q", name, svc.Extends)
+		}
+		if svc.Type == "" {
+			svc.Type = parent.Type
+		}
+		if svc.Dir == "" {
+			svc.Dir = parent.Dir
+		}
+		if svc.DirInternal == "" {
+			svc.DirInternal = parent.DirInternal
+		}
+		if svc.WorkDirInternal == "" {
+			svc.WorkDirInternal = parent.WorkDirInternal
+		}
+		if len(svc.Configs) == 0 {
+			svc.Configs = parent.Configs
+		}
+		if svc.CLI.Shell == "" {
+			svc.CLI.Shell = parent.CLI.Shell
+		}
+		if svc.CLI.User == "" {
+			svc.CLI.User = parent.CLI.User
+		}
+		if svc.CLI.WorkDir == "" {
+			svc.CLI.WorkDir = parent.CLI.WorkDir
+		}
+		f.Services[name] = svc
+	}
+
+	return f.Services, nil
+}
+
+// injectServicesIntoRaw merges service definitions into raw["services"] so that
+// export rules can resolve dot-paths like "services.main.container".
+func injectServicesIntoRaw(raw map[string]any, services map[string]ServiceConfig) {
+	svcMap, ok := raw["services"].(map[string]any)
+	if !ok {
+		svcMap = make(map[string]any)
+		raw["services"] = svcMap
+	}
+	for name, svc := range services {
+		entry, ok := svcMap[name].(map[string]any)
+		if !ok {
+			entry = make(map[string]any)
+			svcMap[name] = entry
+		}
+		entry["type"] = svc.Type
+		entry["container"] = svc.Container
+		entry["mandatory"] = svc.Mandatory
+		entry["enabled"] = svc.Enabled
+		entry["dir"] = svc.Dir
+		entry["dir_internal"] = svc.DirInternal
+		entry["work_dir_internal"] = svc.WorkDirInternal
+		if len(svc.Compose) > 0 {
+			compose := make([]any, len(svc.Compose))
+			for i, c := range svc.Compose {
+				compose[i] = c
+			}
+			entry["compose"] = compose
+		}
+		if len(svc.Configs) > 0 {
+			configs := make([]any, len(svc.Configs))
+			for i, c := range svc.Configs {
+				configs[i] = c
+			}
+			entry["configs"] = configs
+		}
+	}
+}
+
+// isTruthy returns true for values that represent an enabled/truthy state.
+func isTruthy(v any) bool {
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		return val != "" && val != "false" && val != "0"
+	case int:
+		return val != 0
+	case float64:
+		return val != 0
+	default:
+		return v != nil
+	}
 }
 
 // LoadDeployConfig loads the deploy pipeline from a deploy.yml file.

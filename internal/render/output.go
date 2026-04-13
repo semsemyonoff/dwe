@@ -27,6 +27,11 @@ func Stdout() *Writer {
 	return NewWriter(os.Stdout)
 }
 
+// Writer returns the underlying io.Writer.
+func (w *Writer) Writer() io.Writer {
+	return w.w
+}
+
 // SetLineWidth sets the line width used for headers and text wrapping.
 // Values ≤ 0 are ignored (keeps the current/default width).
 func (w *Writer) SetLineWidth(n int) {

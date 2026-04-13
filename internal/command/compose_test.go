@@ -9,21 +9,19 @@ import (
 	"devbox-cli/internal/render"
 )
 
-func makeComposeCfg(base string, overlays map[string]string, tools config.ToolsConfig, debug bool) *config.DevboxConfig {
+func makeComposeCfg(base string, overlays map[string]string, tools config.ToolsConfig, services map[string]config.ServiceConfig) *config.DevboxConfig {
 	return &config.DevboxConfig{
 		Compose: config.ComposeConfig{
 			Base:     base,
 			Overlays: overlays,
 		},
-		Tools: tools,
-		Runtime: config.RuntimeConfig{
-			Debug: config.DebugConfig{Enabled: debug},
-		},
+		Tools:    tools,
+		Services: services,
 	}
 }
 
 func TestBuildComposeFileList_baseOnly(t *testing.T) {
-	cfg := makeComposeCfg("compose.yaml", nil, config.ToolsConfig{}, false)
+	cfg := makeComposeCfg("compose.yaml", nil, config.ToolsConfig{}, nil)
 	got := buildComposeFileList(cfg)
 	if len(got) != 1 || got[0] != "compose.yaml" {
 		t.Errorf("got %v, want [compose.yaml]", got)
@@ -33,7 +31,7 @@ func TestBuildComposeFileList_baseOnly(t *testing.T) {
 func TestBuildComposeFileList_noBase(t *testing.T) {
 	cfg := makeComposeCfg("", map[string]string{"adminer": "compose/tools/adminer.yml"}, config.ToolsConfig{
 		Adminer: config.ToolConfig{Enabled: true},
-	}, false)
+	}, nil)
 	got := buildComposeFileList(cfg)
 	// No base — only adminer overlay
 	if len(got) != 1 || got[0] != "compose/tools/adminer.yml" {
@@ -50,7 +48,7 @@ func TestBuildComposeFileList_oneToolEnabled(t *testing.T) {
 		Adminer:      config.ToolConfig{Enabled: false},
 		RedisInsight: config.ToolConfig{Enabled: true},
 		Mailpit:      config.ToolConfig{Enabled: false},
-	}, false)
+	}, nil)
 	got := buildComposeFileList(cfg)
 	if len(got) != 2 {
 		t.Fatalf("got %v, want 2 entries", got)
@@ -72,7 +70,7 @@ func TestBuildComposeFileList_multipleToolsEnabled(t *testing.T) {
 		Adminer:      config.ToolConfig{Enabled: true},
 		RedisInsight: config.ToolConfig{Enabled: true},
 		Mailpit:      config.ToolConfig{Enabled: false},
-	}, false)
+	}, nil)
 	got := buildComposeFileList(cfg)
 	// base + adminer + redis_insight (sorted: adminer < redis_insight < mailpit)
 	if len(got) != 3 {
@@ -96,17 +94,21 @@ func TestBuildComposeFileList_disabledExcluded(t *testing.T) {
 	}, config.ToolsConfig{
 		Adminer: config.ToolConfig{Enabled: false},
 		Mailpit: config.ToolConfig{Enabled: false},
-	}, false)
+	}, nil)
 	got := buildComposeFileList(cfg)
 	if len(got) != 1 || got[0] != "compose.yaml" {
 		t.Errorf("got %v, want only base", got)
 	}
 }
 
-func TestBuildComposeFileList_debugEnabled(t *testing.T) {
-	cfg := makeComposeCfg("compose.yaml", map[string]string{
-		"debug": "compose/services/main/debug.yml",
-	}, config.ToolsConfig{}, true)
+func TestBuildComposeFileList_serviceOverlayEnabled(t *testing.T) {
+	cfg := makeComposeCfg("compose.yaml", nil, config.ToolsConfig{}, map[string]config.ServiceConfig{
+		"main-debug": {
+			Container: "app-main-debug",
+			Enabled:   true,
+			Compose:   []string{"compose/services/main/debug.yml"},
+		},
+	})
 	got := buildComposeFileList(cfg)
 	if len(got) != 2 {
 		t.Fatalf("got %v, want 2 entries", got)
@@ -116,20 +118,24 @@ func TestBuildComposeFileList_debugEnabled(t *testing.T) {
 	}
 }
 
-func TestBuildComposeFileList_debugDisabled(t *testing.T) {
-	cfg := makeComposeCfg("compose.yaml", map[string]string{
-		"debug": "compose/services/main/debug.yml",
-	}, config.ToolsConfig{}, false)
+func TestBuildComposeFileList_serviceOverlayDisabled(t *testing.T) {
+	cfg := makeComposeCfg("compose.yaml", nil, config.ToolsConfig{}, map[string]config.ServiceConfig{
+		"main-debug": {
+			Container: "app-main-debug",
+			Enabled:   false,
+			Compose:   []string{"compose/services/main/debug.yml"},
+		},
+	})
 	got := buildComposeFileList(cfg)
 	if len(got) != 1 {
-		t.Errorf("got %v, want only base (debug disabled)", got)
+		t.Errorf("got %v, want only base (service disabled)", got)
 	}
 }
 
 func TestBuildComposeFileList_unknownOverlaySkipped(t *testing.T) {
 	cfg := makeComposeCfg("compose.yaml", map[string]string{
 		"unknown_tool": "compose/tools/unknown.yml",
-	}, config.ToolsConfig{}, false)
+	}, config.ToolsConfig{}, nil)
 	got := buildComposeFileList(cfg)
 	// unknown keys are not enabled → only base
 	if len(got) != 1 || got[0] != "compose.yaml" {

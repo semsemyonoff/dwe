@@ -8,16 +8,12 @@ import (
 	"testing"
 )
 
-// sampleDevboxYML reflects the new lean devbox.yml (structure only, no runtime/tools/state).
+// sampleDevboxYML reflects the lean devbox.yml (project identity only).
 const sampleDevboxYML = `
 schema_version: "1"
 project:
   name: laravel
   prefix: devbox
-services:
-  main:
-    type: app
-    dir: ./services/main
 `
 
 // sampleDefaultsYML mirrors devbox/defaults.yml.
@@ -71,6 +67,13 @@ func writeTempYML(t *testing.T, content string) string {
 //	<tmp>/devbox/local.yml       (optional)
 func writeLayeredFixture(t *testing.T, devbox, defaults, user string) string {
 	t.Helper()
+	return writeFullFixture(t, devbox, defaults, user, "")
+}
+
+// writeFullFixture creates the complete file layout used by LoadConfig,
+// including an optional services.yml.
+func writeFullFixture(t *testing.T, devbox, defaults, user, services string) string {
+	t.Helper()
 	dir := t.TempDir()
 
 	devboxPath := filepath.Join(dir, "devbox.yml")
@@ -78,23 +81,29 @@ func writeLayeredFixture(t *testing.T, devbox, defaults, user string) string {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
-	if defaults != "" {
-		devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "devbox")
+
+	if defaults != "" || services != "" || user != "" {
 		if err := os.MkdirAll(devboxDir, 0755); err != nil {
 			t.Fatalf("mkdir devbox/: %v", err)
 		}
+	}
+
+	if defaults != "" {
 		if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaults), 0644); err != nil {
 			t.Fatalf("write defaults.yml: %v", err)
 		}
 	}
 
 	if user != "" {
-		devboxDir := filepath.Join(dir, "devbox")
-		if err := os.MkdirAll(devboxDir, 0755); err != nil {
-			t.Fatalf("mkdir devbox/: %v", err)
-		}
 		if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(user), 0644); err != nil {
 			t.Fatalf("write local.yml: %v", err)
+		}
+	}
+
+	if services != "" {
+		if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(services), 0644); err != nil {
+			t.Fatalf("write services.yml: %v", err)
 		}
 	}
 
@@ -110,10 +119,6 @@ schema_version: "1"
 project:
   name: laravel
   prefix: devbox
-services:
-  main:
-    type: app
-    dir: ./services/main
 tools:
   adminer:
     enabled: false
@@ -156,9 +161,6 @@ func TestLoadDevboxConfig(t *testing.T) {
 	if cfg.Project.FullName() != "devbox-laravel" {
 		t.Errorf("FullName = %q, want devbox-laravel", cfg.Project.FullName())
 	}
-	if _, ok := cfg.Services["main"]; !ok {
-		t.Error("services.main not found")
-	}
 }
 
 func TestLoadDevboxConfig_notFound(t *testing.T) {
@@ -197,9 +199,6 @@ state: staging
 	// From devbox.yml
 	if cfg.Project.Name != "laravel" {
 		t.Errorf("Project.Name = %q", cfg.Project.Name)
-	}
-	if _, ok := cfg.Services["main"]; !ok {
-		t.Error("services.main not found")
 	}
 
 	// From defaults.yml
@@ -451,169 +450,175 @@ func TestLoadConfig_composeAbsent(t *testing.T) {
 	}
 }
 
-// --- ServiceConfig extended fields ---
+// --- Services (loaded from services.yml) ---
 
-func TestLoadConfig_serviceContainerAndDirInternal(t *testing.T) {
-	defaultsWithService := sampleDefaultsYML + `
+const sampleServicesYML = `
 services:
   main:
     type: app
-    dir: ./services/main
     container: app-main
-    dir_internal: /var/www/app
-`
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithService, "")
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	svc, ok := cfg.Services["main"]
-	if !ok {
-		t.Fatal("services.main not found")
-	}
-	if svc.Container != "app-main" {
-		t.Errorf("Container = %q, want app-main", svc.Container)
-	}
-	if svc.DirInternal != "/var/www/app" {
-		t.Errorf("DirInternal = %q, want /var/www/app", svc.DirInternal)
-	}
-}
-
-func TestLoadConfig_serviceConfigsLoaded(t *testing.T) {
-	devboxWithConfigs := `
-schema_version: "1"
-project:
-  name: laravel
-  prefix: devbox
-services:
-  main:
-    type: app
+    mandatory: true
     dir: ./services/main
+    dir_internal: /workspace
+    work_dir_internal: /workspace/src
     configs:
       - .env
-`
-	path := writeLayeredFixture(t, devboxWithConfigs, sampleDefaultsYML, "")
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	svc, ok := cfg.Services["main"]
-	if !ok {
-		t.Fatal("services.main not found")
-	}
-	if len(svc.Configs) != 1 {
-		t.Fatalf("Configs len = %d, want 1", len(svc.Configs))
-	}
-	if svc.Configs[0] != ".env" {
-		t.Errorf("Configs[0] = %q, want .env", svc.Configs[0])
-	}
-}
-
-func TestLoadConfig_serviceLocalOverride(t *testing.T) {
-	defaultsWithService := sampleDefaultsYML + `
-services:
-  main:
+  main-debug:
     type: app
-    dir: ./services/main
-    container: app-main
-    dir_internal: /var/www/app
+    container: app-main-debug
+    mandatory: false
+    extends: main
+    compose:
+      - compose/services/main/debug.yml
 `
-	// Local override changes container name
-	localYML := `
-services:
-  main:
-    container: app-main-custom
-`
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithService, localYML)
-	cfg, err := LoadConfig(path)
+
+func TestLoadServicesConfig_basic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("LoadServicesConfig: %v", err)
 	}
-	svc, ok := cfg.Services["main"]
-	if !ok {
-		t.Fatal("services.main not found")
+	if len(services) != 2 {
+		t.Fatalf("expected 2 services, got %d", len(services))
 	}
-	if svc.Container != "app-main-custom" {
-		t.Errorf("Container = %q, want app-main-custom (overridden by local)", svc.Container)
+	main := services["main"]
+	if main.Container != "app-main" {
+		t.Errorf("main.Container = %q, want app-main", main.Container)
 	}
-	// DirInternal should be preserved from defaults
-	if svc.DirInternal != "/var/www/app" {
-		t.Errorf("DirInternal = %q, want /var/www/app (from defaults)", svc.DirInternal)
+	if !main.Mandatory {
+		t.Error("main.Mandatory should be true")
+	}
+	if main.Dir != "./services/main" {
+		t.Errorf("main.Dir = %q, want ./services/main", main.Dir)
+	}
+	if len(main.Configs) != 1 || main.Configs[0] != ".env" {
+		t.Errorf("main.Configs = %v, want [.env]", main.Configs)
 	}
 }
 
-func TestLoadConfig_serviceInstallerImage(t *testing.T) {
-	defaultsWithService := sampleDefaultsYML + `
+func TestLoadServicesConfig_extendsResolved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	debug := services["main-debug"]
+	if debug.Container != "app-main-debug" {
+		t.Errorf("main-debug.Container = %q, want app-main-debug", debug.Container)
+	}
+	// Inherited from main via extends
+	if debug.Dir != "./services/main" {
+		t.Errorf("main-debug.Dir = %q, want ./services/main (inherited)", debug.Dir)
+	}
+	if debug.DirInternal != "/workspace" {
+		t.Errorf("main-debug.DirInternal = %q, want /workspace (inherited)", debug.DirInternal)
+	}
+	if debug.WorkDirInternal != "/workspace/src" {
+		t.Errorf("main-debug.WorkDirInternal = %q, want /workspace/src (inherited)", debug.WorkDirInternal)
+	}
+	if len(debug.Configs) != 1 || debug.Configs[0] != ".env" {
+		t.Errorf("main-debug.Configs = %v, want [.env] (inherited)", debug.Configs)
+	}
+	if len(debug.Compose) != 1 || debug.Compose[0] != "compose/services/main/debug.yml" {
+		t.Errorf("main-debug.Compose = %v, want [compose/services/main/debug.yml]", debug.Compose)
+	}
+}
+
+func TestLoadServicesConfig_extendsUnknownParent(t *testing.T) {
+	yml := `
 services:
-  main:
+  child:
     type: app
-    dir: ./services/main
-    container: app-main
-    dir_internal: /var/www/app
-    installer_image: composer:2
+    container: child
+    extends: nonexistent
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithService, "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadServicesConfig(path)
+	if err == nil {
+		t.Fatal("expected error for unknown extends parent")
+	}
+}
+
+func TestLoadConfig_servicesEnabledFromMerge(t *testing.T) {
+	defaults := sampleDefaultsYML + `
+services:
+  main-debug:
+    enabled: false
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaults, "", sampleServicesYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	svc, ok := cfg.Services["main"]
-	if !ok {
-		t.Fatal("services.main not found")
+	main := cfg.Services["main"]
+	if !main.Enabled {
+		t.Error("main should be enabled (mandatory)")
 	}
-	if svc.InstallerImage != "composer:2" {
-		t.Errorf("InstallerImage = %q, want composer:2", svc.InstallerImage)
+	debug := cfg.Services["main-debug"]
+	if debug.Enabled {
+		t.Error("main-debug should be disabled (defaults say false)")
 	}
 }
 
-func TestLoadConfig_serviceInstallerImageOverride(t *testing.T) {
-	defaultsWithService := sampleDefaultsYML + `
+func TestLoadConfig_servicesEnabledByLocal(t *testing.T) {
+	defaults := sampleDefaultsYML + `
 services:
-  main:
-    type: app
-    dir: ./services/main
-    container: app-main
-    dir_internal: /var/www/app
-    installer_image: composer:2
+  main-debug:
+    enabled: false
 `
-	localYML := `
+	local := `
 services:
-  main:
-    installer_image: composer:2.7
+  main-debug:
+    enabled: true
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithService, localYML)
+	path := writeFullFixture(t, sampleDevboxYML, defaults, local, sampleServicesYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	svc, ok := cfg.Services["main"]
-	if !ok {
-		t.Fatal("services.main not found")
-	}
-	if svc.InstallerImage != "composer:2.7" {
-		t.Errorf("InstallerImage = %q, want composer:2.7 (overridden by local)", svc.InstallerImage)
+	debug := cfg.Services["main-debug"]
+	if !debug.Enabled {
+		t.Error("main-debug should be enabled (local override)")
 	}
 }
 
-func TestLoadConfig_serviceNoExtendedFields(t *testing.T) {
-	// When service only has type/dir (no container), fields are zero values.
+func TestLoadConfig_servicesInjectedIntoRaw(t *testing.T) {
+	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", sampleServicesYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// Export rules resolve from raw map — verify service data is there.
+	val, ok := ResolvePath(cfg.Raw, "services.main.container")
+	if !ok {
+		t.Fatal("services.main.container not found in raw map")
+	}
+	if val != "app-main" {
+		t.Errorf("services.main.container = %v, want app-main", val)
+	}
+}
+
+func TestLoadConfig_noServicesFile(t *testing.T) {
+	// Without services.yml, cfg.Services should be nil (no error).
 	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	svc, ok := cfg.Services["main"]
-	if !ok {
-		t.Fatal("services.main not found")
-	}
-	if svc.Container != "" {
-		t.Errorf("Container = %q, want empty when not set", svc.Container)
-	}
-	if svc.DirInternal != "" {
-		t.Errorf("DirInternal = %q, want empty when not set", svc.DirInternal)
-	}
-	if len(svc.Configs) != 0 {
-		t.Errorf("Configs = %v, want empty when not set", svc.Configs)
+	if cfg.Services != nil {
+		t.Errorf("Services should be nil when services.yml absent, got %v", cfg.Services)
 	}
 }
 
@@ -632,7 +637,7 @@ phases:
       - name: copy-configs
         cmd: devbox deploy config main
         description: Copy template configs
-        when: "{{.Runtime.Debug.Enabled}}"
+        when: "{{.Runtime.UseHTTPS}}"
   - name: start
     description: Start containers
     steps:
@@ -736,8 +741,8 @@ func TestLoadDeployConfig_stepWithWhen(t *testing.T) {
 		t.Fatalf("LoadDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[1]
-	if step.When != "{{.Runtime.Debug.Enabled}}" {
-		t.Errorf("step.When = %q, want {{.Runtime.Debug.Enabled}}", step.When)
+	if step.When != "{{.Runtime.UseHTTPS}}" {
+		t.Errorf("step.When = %q, want {{.Runtime.UseHTTPS}}", step.When)
 	}
 }
 

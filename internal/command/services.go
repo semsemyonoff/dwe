@@ -16,6 +16,8 @@ type serviceRow struct {
 	Type      string
 	Dir       string
 	Container string
+	Mandatory bool
+	Enabled   bool
 }
 
 // toolRow holds a single row of the tools topology table.
@@ -27,10 +29,10 @@ type toolRow struct {
 }
 
 func newServicesCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "services",
-		Short: "Print topology: services table and tools table",
-		Args:  cobra.NoArgs,
+		Short: "Services topology and container access",
+		// Show topology when called with no subcommand.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -40,6 +42,8 @@ func newServicesCmd(flags *rootFlags) *cobra.Command {
 		},
 		SilenceUsage: true,
 	}
+	cmd.AddCommand(newServicesCLICmd(flags))
+	return cmd
 }
 
 // runServices renders the services and tools topology tables to w.
@@ -84,6 +88,8 @@ func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 			Type:      svc.Type,
 			Dir:       svc.Dir,
 			Container: svc.Container,
+			Mandatory: svc.Mandatory,
+			Enabled:   svc.Enabled,
 		})
 	}
 	return rows

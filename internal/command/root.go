@@ -41,6 +41,7 @@ Run 'devbox info' to display the current project status.`,
 	root.AddCommand(newRenderCmd(flags))
 	root.AddCommand(newComposeCmd(flags))
 	root.AddCommand(newServicesCmd(flags))
+	root.AddCommand(newServiceCmd(flags))
 	root.AddCommand(newDeployCmd(flags))
 
 	return root

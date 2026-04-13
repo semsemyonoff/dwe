@@ -44,13 +44,15 @@ func newComposeFilesCmd(flags *rootFlags) *cobra.Command {
 }
 
 // buildComposeFileList returns the ordered list of compose files.
-// The base file is always first; enabled overlays follow in sorted key order.
+// The base file is always first; enabled tool overlays follow in sorted key order;
+// then enabled service overlays (from services with compose_overlay) in sorted order.
 func buildComposeFileList(cfg *config.DevboxConfig) []string {
 	var files []string
 	if cfg.Compose.Base != "" {
 		files = append(files, cfg.Compose.Base)
 	}
 
+	// Tool overlays from compose.overlays.
 	keys := make([]string, 0, len(cfg.Compose.Overlays))
 	for k := range cfg.Compose.Overlays {
 		keys = append(keys, k)
@@ -58,10 +60,25 @@ func buildComposeFileList(cfg *config.DevboxConfig) []string {
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		if overlayEnabled(cfg, key) {
+		if toolOverlayEnabled(cfg, key) {
 			files = append(files, cfg.Compose.Overlays[key])
 		}
 	}
+
+	// Service overlays from services with compose_overlay set.
+	svcNames := make([]string, 0, len(cfg.Services))
+	for name := range cfg.Services {
+		svcNames = append(svcNames, name)
+	}
+	sort.Strings(svcNames)
+
+	for _, name := range svcNames {
+		svc := cfg.Services[name]
+		if svc.Enabled && len(svc.Compose) > 0 {
+			files = append(files, svc.Compose...)
+		}
+	}
+
 	return files
 }
 
@@ -189,8 +206,8 @@ func dockerHealthStatus(id string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// overlayEnabled reports whether the given overlay key is active in cfg.
-func overlayEnabled(cfg *config.DevboxConfig, key string) bool {
+// toolOverlayEnabled reports whether the given tool overlay key is active in cfg.
+func toolOverlayEnabled(cfg *config.DevboxConfig, key string) bool {
 	switch key {
 	case "adminer":
 		return cfg.Tools.Adminer.Enabled
@@ -198,11 +215,7 @@ func overlayEnabled(cfg *config.DevboxConfig, key string) bool {
 		return cfg.Tools.RedisInsight.Enabled
 	case "mailpit":
 		return cfg.Tools.Mailpit.Enabled
-	case "debug":
-		return cfg.Runtime.Debug.Enabled
 	default:
-		// Unknown overlay key — adding a new key to defaults.yml requires
-		// a corresponding case here to enable it.
 		return false
 	}
 }

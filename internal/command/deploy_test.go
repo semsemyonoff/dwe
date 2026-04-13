@@ -96,11 +96,11 @@ func TestResolveDeployPlan_noWhenAlwaysIncluded(t *testing.T) {
 func TestResolveDeployPlan_truthyWhenIncluded(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup",
-			whenStep("debug-step", "echo debug", "{{.Runtime.Debug.Enabled}}"),
+			whenStep("debug-step", "echo debug", "{{.Runtime.UseHTTPS}}"),
 		),
 	})
 	cfg.Runtime = config.RuntimeConfig{
-		Debug: config.DebugConfig{Enabled: true},
+		UseHTTPS: true,
 	}
 	steps, err := resolveDeployPlan(cfg)
 	if err != nil {
@@ -119,11 +119,11 @@ func TestResolveDeployPlan_falsyWhenExcluded(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup",
 			cmdStep("always", "echo always"),
-			whenStep("conditional", "echo only-if-debug", "{{.Runtime.Debug.Enabled}}"),
+			whenStep("conditional", "echo only-if-debug", "{{.Runtime.UseHTTPS}}"),
 		),
 	})
 	cfg.Runtime = config.RuntimeConfig{
-		Debug: config.DebugConfig{Enabled: false},
+		UseHTTPS: false,
 	}
 	steps, err := resolveDeployPlan(cfg)
 	if err != nil {
@@ -430,7 +430,7 @@ func TestFindStep_whenFalseIsSkippedByCallerLogic(t *testing.T) {
 	// Verify the when field is preserved on the returned step so the caller can evaluate it.
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup",
-			whenStep("conditional", "echo hi", "{{.Runtime.Debug.Enabled}}"),
+			whenStep("conditional", "echo hi", "{{.Runtime.UseHTTPS}}"),
 		),
 	})
 	_, step, err := findStep(cfg, "setup/conditional")
@@ -793,23 +793,34 @@ func TestCopyConfigFile_updateCreatesWhenDestMissing(t *testing.T) {
 func TestDeployConfigCmd_pathTraversalRejected(t *testing.T) {
 	dir := t.TempDir()
 
-	// Write devbox.yml with a malicious filename that escapes the configs directory.
 	devboxYML := `
 schema_version: "1"
 project:
   name: laravel
   prefix: devbox
+`
+	devboxPath := filepath.Join(dir, "devbox.yml")
+	if err := os.WriteFile(devboxPath, []byte(devboxYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write services.yml with a malicious filename that escapes the configs directory.
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	servicesYML := `
 services:
   main:
     type: app
-    dir: ./services/main
     container: app-main
+    mandatory: true
+    dir: ./services/main
     dir_internal: /var/www/app
     configs:
       - ../../etc/passwd
 `
-	devboxPath := filepath.Join(dir, "devbox.yml")
-	if err := os.WriteFile(devboxPath, []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -819,7 +830,6 @@ services:
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(srcDir, "../../etc/passwd"), []byte("KEY=value\n"), 0o644); err != nil {
-		// Source file creation may also fail — that is fine; we're testing dest traversal.
 		_ = err
 	}
 
@@ -922,11 +932,11 @@ func TestResolveDeployPlan_templateWhenFalseFiltered(t *testing.T) {
 	// Template when still filtered at plan time when false.
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup",
-			whenStep("debug-only", "echo debug", "{{.Runtime.Debug.Enabled}}"),
+			whenStep("debug-only", "echo debug", "{{.Runtime.UseHTTPS}}"),
 			cmdStep("always", "echo always"),
 		),
 	})
-	// Runtime.Debug.Enabled not set → false → debug-only filtered out.
+	// Runtime.UseHTTPS not set → false → debug-only filtered out.
 	steps, err := resolveDeployPlan(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1009,25 +1019,37 @@ func writeConfigCheckFixture(t *testing.T, configFiles []string) (dir string, fl
 	t.Helper()
 	dir = t.TempDir()
 
+	devboxYML := `schema_version: "1"
+project:
+  name: laravel
+  prefix: devbox
+`
+	devboxPath := filepath.Join(dir, "devbox.yml")
+	if err := os.WriteFile(devboxPath, []byte(devboxYML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatalf("mkdir devbox/: %v", err)
+	}
+
 	var sb strings.Builder
 	for _, f := range configFiles {
 		sb.WriteString("\n      - " + f)
 	}
 	cfgList := sb.String()
-	yml := `schema_version: "1"
-project:
-  name: laravel
-  prefix: devbox
-services:
+	servicesYML := `services:
   main:
     type: app
+    container: app-main
+    mandatory: true
     dir: ./services/main
     configs:` + cfgList + "\n"
-
-	devboxPath := filepath.Join(dir, "devbox.yml")
-	if err := os.WriteFile(devboxPath, []byte(yml), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
 	}
+
 	return dir, &rootFlags{configPath: devboxPath}
 }
 
