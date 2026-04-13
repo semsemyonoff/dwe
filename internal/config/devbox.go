@@ -21,10 +21,68 @@ type DevboxConfig struct {
 	Runtime       RuntimeConfig            `yaml:"runtime"`
 	State         string                   `yaml:"state"`
 	Exports       ExportsConfig            `yaml:"exports"`
+	Compose       ComposeConfig            `yaml:"compose"`
+	IDE           IDEConfig                `yaml:"ide"`
+	Deploy        DeployConfig             `yaml:"-"`
 
 	// Raw holds the merged config as a plain map, used for dot-path resolution
 	// in export rules. Populated only by LoadConfig; not serialized.
 	Raw map[string]any `yaml:"-"`
+}
+
+// IDEConfig holds per-editor IDE config generation settings.
+// Used by `devbox render ide` to determine which editor configs to generate.
+type IDEConfig struct {
+	VSCode       IDEEditorConfig `yaml:"vscode"`
+	JetBrains    IDEEditorConfig `yaml:"jetbrains"`
+	Devcontainer IDEEditorConfig `yaml:"devcontainer"`
+}
+
+// IDEEditorConfig holds the enabled flag for a single editor target.
+type IDEEditorConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// DeployConfig holds the full deploy pipeline loaded from devbox/deploy.yml.
+// It is loaded separately and not part of the 3-layer config merge.
+type DeployConfig struct {
+	Phases []DeployPhase `yaml:"phases"`
+}
+
+// DeployPhase groups a set of sequential deploy steps.
+type DeployPhase struct {
+	Name        string       `yaml:"name"`
+	Description string       `yaml:"description"`
+	Steps       []DeployStep `yaml:"steps"`
+}
+
+// DeployStep is a single atomic deploy action.
+// Exactly one of Cmd or Make must be set.
+//
+//   - Cmd  — shell command executed directly via os/exec
+//   - Make — Make target executed via `make <target>`
+//   - When — skip condition; three expression kinds are supported:
+//     1. Go template (contains "{{") — evaluated against DevboxConfig at plan-resolution time;
+//     step is excluded from the plan when the rendered result is falsy ("", "false", "0").
+//     2. Builtin predicate — evaluated at step-execution time:
+//     "dir-exists <path>", "dir-missing <path>",
+//     "dir-empty <path>", "dir-not-empty <path>",
+//     "file-exists <path>", "file-missing <path>".
+//     3. Shell command prefixed "cmd: <command>" — evaluated at step-execution time;
+//     exits 0 → true (run step), non-zero → false (skip step).
+type DeployStep struct {
+	Name        string `yaml:"name"`
+	Cmd         string `yaml:"cmd"`
+	Make        string `yaml:"make"`
+	Description string `yaml:"description"`
+	When        string `yaml:"when"`
+}
+
+// ComposeConfig holds Docker Compose file declarations.
+// Base is always included; Overlays are optional and keyed by a short name.
+type ComposeConfig struct {
+	Base     string            `yaml:"base"`
+	Overlays map[string]string `yaml:"overlays"`
 }
 
 // ProjectConfig holds project identity fields.
@@ -43,8 +101,24 @@ func (p ProjectConfig) FullName() string {
 
 // ServiceConfig describes a single service (app hub).
 type ServiceConfig struct {
-	Type string `yaml:"type"`
-	Dir  string `yaml:"dir"`
+	Type           string              `yaml:"type"`
+	Dir            string              `yaml:"dir"`
+	Container      string              `yaml:"container"`
+	DirInternal    string              `yaml:"dir_internal"`
+	Configs        []ServiceConfigFile `yaml:"configs"`
+	InstallerImage string              `yaml:"installer_image"`
+}
+
+// ServiceConfigFile declares a template config to copy into a service directory during deploy.
+//
+// Fields:
+//   - Src  — source template path (relative to project root, e.g. configs/app/main/.env)
+//   - Dest — destination filename in services/<name>/configs/ (e.g. .env)
+//   - Mode — copy mode: "default" (skip if exists), "update" (merge new keys), "replace" (overwrite)
+type ServiceConfigFile struct {
+	Src  string `yaml:"src"`
+	Dest string `yaml:"dest"`
+	Mode string `yaml:"mode"`
 }
 
 // ToolsConfig holds the set of optional development tools.
@@ -70,11 +144,19 @@ type RuntimeConfig struct {
 	Ports    RuntimePorts `yaml:"ports"`
 	Hosts    RuntimeHosts `yaml:"hosts"`
 	SPX      SPXConfig    `yaml:"spx"`
+	Debug    DebugConfig  `yaml:"debug"`
+}
+
+// DebugConfig holds debug-mode settings (e.g. Xdebug container overlay).
+type DebugConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // RuntimePorts maps service roles to host ports.
 type RuntimePorts struct {
 	App          int `yaml:"app"`
+	Db           int `yaml:"db"`
+	Redis        int `yaml:"redis"`
 	Adminer      int `yaml:"adminer"`
 	RedisInsight int `yaml:"redis_insight"`
 	Mailpit      int `yaml:"mailpit"`
@@ -162,6 +244,40 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
 	cfg.Raw = merged
+
+	// Load devbox/deploy.yml separately (not merged with config layers).
+	deployPath := filepath.Join(baseDir, "devbox", "deploy.yml")
+	if deployCfg, err := LoadDeployConfig(deployPath); err == nil {
+		cfg.Deploy = *deployCfg
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read %s: %w", deployPath, err)
+	}
+
+	return &cfg, nil
+}
+
+// LoadDeployConfig loads the deploy pipeline from a deploy.yml file.
+// The file is loaded standalone — it is not merged with the 3-layer config.
+// Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
+func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
+	data, err := os.ReadFile(deployPath)
+	if err != nil {
+		return nil, err
+	}
+	var cfg DeployConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", deployPath, err)
+	}
+	for _, phase := range cfg.Phases {
+		for _, step := range phase.Steps {
+			if step.Cmd != "" && step.Make != "" {
+				return nil, fmt.Errorf("deploy step %q (phase %q): only one of cmd or make may be set", step.Name, phase.Name)
+			}
+			if step.Cmd == "" && step.Make == "" {
+				return nil, fmt.Errorf("deploy step %q (phase %q): exactly one of cmd or make must be set", step.Name, phase.Name)
+			}
+		}
+	}
 	return &cfg, nil
 }
 

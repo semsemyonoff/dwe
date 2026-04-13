@@ -17,6 +17,7 @@ func newRenderCmd(flags *rootFlags) *cobra.Command {
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newRenderEnvCmd(flags))
+	cmd.AddCommand(newRenderIDECmd(flags))
 	return cmd
 }
 
@@ -79,11 +80,14 @@ func buildEnvContent(cfg *config.DevboxConfig) (string, error) {
 		}
 
 		// Resolve value from the effective config.
-		// A zero-valued source (empty string, 0, false) falls back to default,
-		// matching the documented ExportRule behaviour.
+		// For typed formats (bool, int), always use the resolved value even when
+		// falsy (false, 0) so that TOOL_FOO=false and PORT=0 are emitted correctly.
+		// For string format, an empty resolved value falls back to default.
 		value := rule.Default
-		if v, ok := config.ResolvePath(cfg.Raw, rule.From); ok && isTruthy(v) {
-			value = formatValue(v, rule.Format)
+		if v, ok := config.ResolvePath(cfg.Raw, rule.From); ok {
+			if rule.Format == "bool" || rule.Format == "int" || isTruthy(v) {
+				value = formatValue(v, rule.Format)
+			}
 		} else if rule.Required && value == "" {
 			return "", fmt.Errorf("export %q: required path %q not found in config", rule.Name, rule.From)
 		}
