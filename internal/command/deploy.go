@@ -39,6 +39,7 @@ func newDeployCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newDeployRunCmd(flags))
 	cmd.AddCommand(newDeployStepCmd(flags))
 	cmd.AddCommand(newDeployConfigCmd(flags))
+	cmd.AddCommand(newDeployConfigCheckCmd(flags))
 	return cmd
 }
 
@@ -152,6 +153,9 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 		if rs.runtimeWhen != "" {
 			w.Println("        [when: " + rs.runtimeWhen + "]")
 		}
+		if rs.step.Check != "" {
+			w.Println("        [check: " + rs.step.Check + "]")
+		}
 	}
 }
 
@@ -170,6 +174,9 @@ func printDeployPlanShell(steps []resolvedStep, w io.Writer) {
 		_, _ = fmt.Fprintln(w, stepCommand(rs.step))
 		if rs.step.Name == implicitEnvStep.Name {
 			_, _ = fmt.Fprintln(w, ". .env")
+		}
+		if rs.step.Check != "" {
+			_, _ = fmt.Fprintf(w, "# check: %s\n", rs.step.Check)
 		}
 	}
 }
@@ -197,7 +204,11 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 			}
 
 			workDir := filepath.Dir(flags.configPath)
-			logPath := filepath.Join(workDir, "deploy.log")
+			logsDir := filepath.Join(workDir, "logs")
+			if err := os.MkdirAll(logsDir, 0o755); err != nil {
+				return fmt.Errorf("creating logs directory %s: %w", logsDir, err)
+			}
+			logPath := filepath.Join(logsDir, "deploy.log")
 
 			logFile, err := os.Create(logPath)
 			if err != nil {
@@ -254,6 +265,22 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 					}
 				}
 
+				if rs.step.Check != "" {
+					ok, err := condition.EvalRuntime(rs.step.Check, workDir)
+					if err != nil {
+						w.Error(fmt.Sprintf("Deploy failed at phase %q, step %q: check error", rs.phase.Name, rs.step.Name))
+						w.Error("  " + err.Error())
+						w.Warning("Full output saved to: " + logPath)
+						return ErrSilent
+					}
+					if !ok {
+						w.Error(fmt.Sprintf("Deploy failed at phase %q, step %q: check did not pass", rs.phase.Name, rs.step.Name))
+						w.Error(fmt.Sprintf("  check: %s", rs.step.Check))
+						w.Warning("Full output saved to: " + logPath)
+						return ErrSilent
+					}
+				}
+
 				w.Success(fmt.Sprintf("  [%d/%d] Done: %s", i+1, totalSteps, rs.step.Name))
 			}
 
@@ -288,19 +315,31 @@ func sourceDotEnv(path string) error {
 	return nil
 }
 
-// stepBadge returns the display badge for a step: [cmd] or [make].
+// stepBadge returns the display badge for a step: [cmd], [make], or [config].
 func stepBadge(step config.DeployStep) string {
 	if step.Make != "" {
 		return "[make]"
+	}
+	if step.ServiceConfigsCopy != "" {
+		return "[config]"
 	}
 	return "[cmd]"
 }
 
 // stepCommand returns the resolved shell command for a step.
-// For make: steps, it returns "make -f Makefile <target>"; for cmd: steps it returns the raw command.
+// For make: steps, it returns "make -f Makefile <target>".
+// For service_configs_copy: steps, it returns the equivalent devbox deploy config command.
+// For cmd: steps it returns the raw command.
 func stepCommand(step config.DeployStep) string {
 	if step.Make != "" {
 		return "make -f Makefile " + strings.TrimSpace(step.Make)
+	}
+	if step.ServiceConfigsCopy != "" {
+		mode := step.Mode
+		if mode == "" {
+			mode = "replace"
+		}
+		return "./bin/devbox deploy config " + strings.TrimSpace(step.ServiceConfigsCopy) + " --mode " + mode
 	}
 	return strings.TrimSpace(step.Cmd)
 }
@@ -358,9 +397,12 @@ func (s *ansiStripper) Write(p []byte) (int, error) {
 // (docker compose progress renderers, build output, etc.).
 func execStep(step config.DeployStep, workDir string) error {
 	var cmd *exec.Cmd
-	if step.Make != "" {
+	switch {
+	case step.Make != "":
 		cmd = exec.Command("make", "-f", "Makefile", strings.TrimSpace(step.Make))
-	} else {
+	case step.ServiceConfigsCopy != "":
+		cmd = exec.Command("sh", "-c", stepCommand(step))
+	default:
 		cmd = exec.Command("sh", "-c", strings.TrimSpace(step.Cmd))
 	}
 	cmd.Dir = workDir
@@ -445,7 +487,22 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 				return nil
 			}
 
-			return execStep(step, filepath.Dir(flags.configPath))
+			workDir := filepath.Dir(flags.configPath)
+			if err := execStep(step, workDir); err != nil {
+				return err
+			}
+
+			if step.Check != "" {
+				ok, err := condition.EvalRuntime(step.Check, workDir)
+				if err != nil {
+					return fmt.Errorf("step %s: check error: %w", address, err)
+				}
+				if !ok {
+					return fmt.Errorf("step %s: check did not pass (%s)", address, step.Check)
+				}
+			}
+
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -455,11 +512,14 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 }
 
 // newDeployConfigCmd creates the `devbox deploy config <service>` command.
-// It reads ServiceConfig.Configs[] for the named service and copies each template
-// config to <service.Dir>/<Dest> using the declared Mode. Dest paths are
-// validated against the service directory to prevent path traversal.
+// It reads services.<service>.configs from devbox.yml (list of filenames) and copies
+// each file from configs/services/<service>/<file> to services/<service>/configs/<file>
+// using the given mode (default: replace). Dest paths are validated against the service
+// configs directory to prevent path traversal.
 func newDeployConfigCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	var mode string
+
+	cmd := &cobra.Command{
 		Use:   "config <service>",
 		Short: "Copy template configs to service directory",
 		Args:  cobra.ExactArgs(1),
@@ -479,27 +539,33 @@ func newDeployConfigCmd(flags *rootFlags) *cobra.Command {
 			}
 
 			projectRoot := filepath.Dir(flags.configPath)
-			destDir := filepath.Join(projectRoot, svc.Dir)
+			// Source: configs/services/<service>/
+			srcDir := filepath.Join(projectRoot, "configs", "services", serviceName)
+			// Dest: services/<service>/configs/
+			destDir := filepath.Join(projectRoot, svc.Dir, "configs")
 
 			w := render.Stdout()
-			for _, cf := range svc.Configs {
-				src := filepath.Join(projectRoot, cf.Src)
-				dest := filepath.Join(destDir, cf.Dest)
+			for _, filename := range svc.Configs {
+				src := filepath.Join(srcDir, filename)
+				dest := filepath.Join(destDir, filename)
 				// Guard against path traversal: dest must remain inside destDir.
 				cleanDestDir := filepath.Clean(destDir)
 				cleanDest := filepath.Clean(dest)
 				if cleanDest == cleanDestDir || !strings.HasPrefix(cleanDest, cleanDestDir+string(filepath.Separator)) {
-					return fmt.Errorf("service %q: config dest %q escapes the service directory", serviceName, cf.Dest)
+					return fmt.Errorf("service %q: config %q escapes the configs directory", serviceName, filename)
 				}
-				if err := copyConfigFile(src, dest, cf.Mode); err != nil {
-					return fmt.Errorf("copying %s → %s: %w", cf.Src, dest, err)
+				if err := copyConfigFile(src, dest, mode); err != nil {
+					return fmt.Errorf("copying %s → %s: %w", src, dest, err)
 				}
-				w.Success(fmt.Sprintf("config %s → %s [%s]", cf.Src, dest, cf.Mode))
+				w.Success(fmt.Sprintf("config %s → %s [%s]", src, dest, mode))
 			}
 			return nil
 		},
 		SilenceUsage: true,
 	}
+
+	cmd.Flags().StringVar(&mode, "mode", "replace", "copy mode: default, update, or replace")
+	return cmd
 }
 
 // copyConfigFile copies src to dest using the given mode:
@@ -599,6 +665,62 @@ func updateEnvFile(srcData []byte, dest string) error {
 		return closeErr
 	}
 	return writeErr
+}
+
+// newDeployConfigCheckCmd creates the `devbox deploy config-check <service>` command.
+// It verifies that all config files declared in services.<service>.configs exist in
+// services/<service>/configs/. Exits non-zero and prints missing files if any are absent.
+// Intended for use as a step check: "cmd: ./bin/devbox deploy config-check <service>".
+func newDeployConfigCheckCmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "config-check <service>",
+		Short: "Verify that all declared service configs exist in the service directory",
+		Long: `Check that every file listed in services.<service>.configs exists at
+services/<service>/configs/<file>. Exits non-zero if any files are missing.
+
+Intended as a deploy step check condition:
+  check: "cmd: ./bin/devbox deploy config-check <service>"`,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+
+			serviceName := args[0]
+			svc, ok := cfg.Services[serviceName]
+			if !ok {
+				return fmt.Errorf("service %q not found in config", serviceName)
+			}
+
+			projectRoot := filepath.Dir(flags.configPath)
+			destDir := filepath.Join(projectRoot, svc.Dir, "configs")
+
+			var missing []string
+			for _, filename := range svc.Configs {
+				dest := filepath.Join(destDir, filename)
+				if !isRegularFile(dest) {
+					missing = append(missing, filepath.Join(svc.Dir, "configs", filename))
+				}
+			}
+
+			if len(missing) > 0 {
+				w := render.Stdout()
+				for _, f := range missing {
+					w.Error("missing config: " + f)
+				}
+				return ErrSilent
+			}
+			return nil
+		},
+	}
+}
+
+// isRegularFile reports whether path exists and is a regular file.
+func isRegularFile(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Mode().IsRegular()
 }
 
 // parseEnvKeys returns a set of KEY names found in an .env file content.

@@ -2,7 +2,7 @@ package command
 
 import (
 	"bytes"
-	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,15 +13,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-//go:embed templates/ide/devcontainer.json.tpl
-var devcontainerTpl string
-
-//go:embed templates/ide/vscode_launch.json.tpl
-var vscodeLaunchTpl string
-
-//go:embed templates/ide/vscode_settings.json.tpl
-var vscodeSettingsTpl string
 
 // ideTemplateData is passed to IDE config templates.
 type ideTemplateData struct {
@@ -46,7 +37,8 @@ For each service directory (services/<name>/):
   - devcontainer:  .devcontainer/devcontainer.json
   - vscode:        .vscode/launch.json, .vscode/settings.json
 
-Enabled editors are controlled by the ide: section in devbox/defaults.yml.`,
+Enabled editors are controlled by the ide: section in devbox/defaults.yml.
+Templates are read from devbox/templates/ide/ in the project root.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -79,6 +71,17 @@ Enabled editors are controlled by the ide: section in devbox/defaults.yml.`,
 	}
 }
 
+// loadIDETemplate reads a template from devbox/templates/ide/<name>.tpl
+// relative to the project root.
+func loadIDETemplate(projectRoot, templateName string) (string, error) {
+	path := filepath.Join(projectRoot, "devbox", "templates", "ide", templateName+".tpl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read ide template %s: %w", templateName, err)
+	}
+	return string(data), nil
+}
+
 // renderIDEConfigs generates IDE config files for a single service.
 func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
 	data := ideTemplateData{
@@ -92,11 +95,19 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	serviceDir := filepath.Join(projectRoot, svc.Dir)
 
 	if cfg.IDE.Devcontainer.Enabled {
-		dest := filepath.Join(serviceDir, ".devcontainer", "devcontainer.json")
-		if err := renderIDETemplate(devcontainerTpl, "devcontainer.json", data, dest); err != nil {
+		tpl, err := loadIDETemplate(projectRoot, "devcontainer.json")
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			w.Warning("ide [devcontainer] — template not found, skipping (add devbox/templates/ide/devcontainer.json.tpl)")
+		case err != nil:
 			return err
+		default:
+			dest := filepath.Join(serviceDir, ".devcontainer", "devcontainer.json")
+			if err := renderIDETemplate(tpl, "devcontainer.json", data, dest); err != nil {
+				return err
+			}
+			w.Success(fmt.Sprintf("ide [devcontainer] → %s", dest))
 		}
-		w.Success(fmt.Sprintf("ide [devcontainer] → %s", dest))
 	}
 
 	if cfg.IDE.JetBrains.Enabled {
@@ -104,17 +115,33 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	}
 
 	if cfg.IDE.VSCode.Enabled {
-		launchDest := filepath.Join(serviceDir, ".vscode", "launch.json")
-		if err := renderIDETemplate(vscodeLaunchTpl, "launch.json", data, launchDest); err != nil {
+		launchTpl, err := loadIDETemplate(projectRoot, "vscode_launch.json")
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			w.Warning("ide [vscode] — template not found, skipping (add devbox/templates/ide/vscode_launch.json.tpl)")
+		case err != nil:
 			return err
-		}
-		w.Success(fmt.Sprintf("ide [vscode]       → %s", launchDest))
+		default:
+			launchDest := filepath.Join(serviceDir, ".vscode", "launch.json")
+			if err := renderIDETemplate(launchTpl, "launch.json", data, launchDest); err != nil {
+				return err
+			}
+			w.Success(fmt.Sprintf("ide [vscode]       → %s", launchDest))
 
-		settingsDest := filepath.Join(serviceDir, ".vscode", "settings.json")
-		if err := renderIDETemplate(vscodeSettingsTpl, "settings.json", data, settingsDest); err != nil {
-			return err
+			settingsTpl, err := loadIDETemplate(projectRoot, "vscode_settings.json")
+			switch {
+			case errors.Is(err, os.ErrNotExist):
+				w.Warning("ide [vscode] — template not found, skipping (add devbox/templates/ide/vscode_settings.json.tpl)")
+			case err != nil:
+				return err
+			default:
+				settingsDest := filepath.Join(serviceDir, ".vscode", "settings.json")
+				if err := renderIDETemplate(settingsTpl, "settings.json", data, settingsDest); err != nil {
+					return err
+				}
+				w.Success(fmt.Sprintf("ide [vscode]       → %s", settingsDest))
+			}
 		}
-		w.Success(fmt.Sprintf("ide [vscode]       → %s", settingsDest))
 	}
 
 	return nil

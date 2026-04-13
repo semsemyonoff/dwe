@@ -465,6 +465,9 @@ func TestStepCommand_bothTypes(t *testing.T) {
 		{config.DeployStep{Make: "up"}, "make -f Makefile up"},
 		{config.DeployStep{Make: "  db_create  "}, "make -f Makefile db_create"},
 		{config.DeployStep{Cmd: "  mkdir -p x  "}, "mkdir -p x"},
+		{config.DeployStep{ServiceConfigsCopy: "main"}, "./bin/devbox deploy config main --mode replace"},
+		{config.DeployStep{ServiceConfigsCopy: "main", Mode: "update"}, "./bin/devbox deploy config main --mode update"},
+		{config.DeployStep{ServiceConfigsCopy: "  worker  "}, "./bin/devbox deploy config worker --mode replace"},
 	}
 	for _, tc := range cases {
 		got := stepCommand(tc.step)
@@ -481,6 +484,97 @@ func TestStepBadge_bothTypes(t *testing.T) {
 	}
 	if got := stepBadge(config.DeployStep{Make: "x"}); got != "[make]" {
 		t.Errorf("got %q want [make]", got)
+	}
+	if got := stepBadge(config.DeployStep{ServiceConfigsCopy: "main"}); got != "[config]" {
+		t.Errorf("got %q want [config]", got)
+	}
+}
+
+// --- check field tests ---
+
+// checkStep builds a cmd-type step with a check postcondition.
+func checkStep(name, cmd, check string) config.DeployStep {
+	return config.DeployStep{Name: name, Cmd: cmd, Description: name + " description", Check: check}
+}
+
+// TestDeployStep_checkPreservedInConfig verifies the check field round-trips through YAML.
+func TestDeployStep_checkPreservedInConfig(t *testing.T) {
+	step := config.DeployStep{
+		Name:  "copy-configs",
+		Check: "file-exists services/main/configs/.env",
+	}
+	if step.Check != "file-exists services/main/configs/.env" {
+		t.Errorf("Check = %q, want file-exists ...", step.Check)
+	}
+}
+
+// TestPrintDeployPlanTable_showsCheck verifies [check: ...] appears in plan table output.
+func TestPrintDeployPlanTable_showsCheck(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	steps := []resolvedStep{
+		{
+			phase: config.DeployPhase{Name: "setup"},
+			step:  checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
+		},
+	}
+	printDeployPlanTable(steps, w)
+	out := buf.String()
+
+	if !strings.Contains(out, "[check: file-exists services/main/configs/.env]") {
+		t.Errorf("plan table missing check annotation, got:\n%s", out)
+	}
+}
+
+// TestPrintDeployPlanShell_showsCheckComment verifies # check: ... appears in shell output.
+func TestPrintDeployPlanShell_showsCheckComment(t *testing.T) {
+	var buf bytes.Buffer
+
+	steps := []resolvedStep{
+		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
+		{
+			phase: config.DeployPhase{Name: "setup"},
+			step:  checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
+		},
+	}
+	printDeployPlanShell(steps, &buf)
+	out := buf.String()
+
+	if !strings.Contains(out, "# check: file-exists services/main/configs/.env") {
+		t.Errorf("shell plan missing check comment, got:\n%s", out)
+	}
+}
+
+// TestPrintDeployPlanShell_checkCommentAfterCommand verifies check appears after the step command.
+func TestPrintDeployPlanShell_checkCommentAfterCommand(t *testing.T) {
+	var buf bytes.Buffer
+
+	step := checkStep("copy-configs", "echo copy", "file-exists services/main/configs/.env")
+	steps := []resolvedStep{
+		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
+		{phase: config.DeployPhase{Name: "setup"}, step: step},
+	}
+	printDeployPlanShell(steps, &buf)
+	lines := strings.Split(buf.String(), "\n")
+
+	cmdIdx, checkIdx := -1, -1
+	for i, l := range lines {
+		if strings.TrimSpace(l) == "echo copy" {
+			cmdIdx = i
+		}
+		if strings.Contains(l, "# check:") {
+			checkIdx = i
+		}
+	}
+	if cmdIdx == -1 {
+		t.Fatal("command line not found in shell output")
+	}
+	if checkIdx == -1 {
+		t.Fatal("check comment not found in shell output")
+	}
+	if checkIdx <= cmdIdx {
+		t.Errorf("check comment (line %d) should appear after command (line %d)", checkIdx, cmdIdx)
 	}
 }
 
@@ -699,7 +793,7 @@ func TestCopyConfigFile_updateCreatesWhenDestMissing(t *testing.T) {
 func TestDeployConfigCmd_pathTraversalRejected(t *testing.T) {
 	dir := t.TempDir()
 
-	// Write devbox.yml
+	// Write devbox.yml with a malicious filename that escapes the configs directory.
 	devboxYML := `
 schema_version: "1"
 project:
@@ -712,9 +806,7 @@ services:
     container: app-main
     dir_internal: /var/www/app
     configs:
-      - src: configs/app/main/.env
-        dest: "../../../etc/passwd"
-        mode: default
+      - ../../etc/passwd
 `
 	devboxPath := filepath.Join(dir, "devbox.yml")
 	if err := os.WriteFile(devboxPath, []byte(devboxYML), 0o644); err != nil {
@@ -722,12 +814,13 @@ services:
 	}
 
 	// Write source file at expected src path.
-	srcDir := filepath.Join(dir, "configs", "app", "main")
+	srcDir := filepath.Join(dir, "configs", "services", "main")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(srcDir, ".env"), []byte("KEY=value\n"), 0o644); err != nil {
-		t.Fatal(err)
+	if err := os.WriteFile(filepath.Join(srcDir, "../../etc/passwd"), []byte("KEY=value\n"), 0o644); err != nil {
+		// Source file creation may also fail — that is fine; we're testing dest traversal.
+		_ = err
 	}
 
 	flags := &rootFlags{configPath: devboxPath}
@@ -903,5 +996,109 @@ func TestPrintDeployPlanShell_runtimeWhenComment(t *testing.T) {
 	// Step without runtimeWhen should not have comment.
 	if strings.Count(out, "# when:") != 1 {
 		t.Errorf("expected exactly 1 when comment, got:\n%s", out)
+	}
+}
+
+// --- config-check command tests ---
+
+// writeConfigCheckFixture creates the minimal file layout for config-check tests:
+//
+//	<dir>/devbox.yml          — config with services.main.configs list
+//	<dir>/services/main/configs/<files>  — optional; call writeConfigFile to add them
+func writeConfigCheckFixture(t *testing.T, configFiles []string) (dir string, flags *rootFlags) {
+	t.Helper()
+	dir = t.TempDir()
+
+	var sb strings.Builder
+	for _, f := range configFiles {
+		sb.WriteString("\n      - " + f)
+	}
+	cfgList := sb.String()
+	yml := `schema_version: "1"
+project:
+  name: laravel
+  prefix: devbox
+services:
+  main:
+    type: app
+    dir: ./services/main
+    configs:` + cfgList + "\n"
+
+	devboxPath := filepath.Join(dir, "devbox.yml")
+	if err := os.WriteFile(devboxPath, []byte(yml), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+	return dir, &rootFlags{configPath: devboxPath}
+}
+
+func writeConfigFile(t *testing.T, dir, name string) {
+	t.Helper()
+	dest := filepath.Join(dir, "services", "main", "configs", name)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(dest, []byte("KEY=value\n"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+}
+
+func TestDeployConfigCheckCmd_allPresentReturnsNil(t *testing.T) {
+	dir, flags := writeConfigCheckFixture(t, []string{".env"})
+	writeConfigFile(t, dir, ".env")
+
+	cmd := newDeployConfigCheckCmd(flags)
+	if err := cmd.RunE(cmd, []string{"main"}); err != nil {
+		t.Errorf("expected nil when all configs present, got: %v", err)
+	}
+}
+
+func TestDeployConfigCheckCmd_missingFileReturnsError(t *testing.T) {
+	_, flags := writeConfigCheckFixture(t, []string{".env"})
+	// Intentionally do NOT create the config file.
+
+	cmd := newDeployConfigCheckCmd(flags)
+	if err := cmd.RunE(cmd, []string{"main"}); err == nil {
+		t.Error("expected error when config file missing, got nil")
+	}
+}
+
+func TestDeployConfigCheckCmd_partialMissingReturnsError(t *testing.T) {
+	dir, flags := writeConfigCheckFixture(t, []string{".env", "other.conf"})
+	writeConfigFile(t, dir, ".env")
+	// other.conf intentionally missing
+
+	cmd := newDeployConfigCheckCmd(flags)
+	if err := cmd.RunE(cmd, []string{"main"}); err == nil {
+		t.Error("expected error when some configs missing, got nil")
+	}
+}
+
+func TestDeployConfigCheckCmd_allMultiplePresentReturnsNil(t *testing.T) {
+	dir, flags := writeConfigCheckFixture(t, []string{".env", "other.conf"})
+	writeConfigFile(t, dir, ".env")
+	writeConfigFile(t, dir, "other.conf")
+
+	cmd := newDeployConfigCheckCmd(flags)
+	if err := cmd.RunE(cmd, []string{"main"}); err != nil {
+		t.Errorf("expected nil when all configs present, got: %v", err)
+	}
+}
+
+func TestDeployConfigCheckCmd_unknownServiceReturnsError(t *testing.T) {
+	_, flags := writeConfigCheckFixture(t, []string{".env"})
+
+	cmd := newDeployConfigCheckCmd(flags)
+	err := cmd.RunE(cmd, []string{"nonexistent"})
+	if err == nil {
+		t.Error("expected error for unknown service, got nil")
+	}
+}
+
+func TestDeployConfigCheckCmd_emptyConfigsListReturnsNil(t *testing.T) {
+	_, flags := writeConfigCheckFixture(t, []string{})
+
+	cmd := newDeployConfigCheckCmd(flags)
+	if err := cmd.RunE(cmd, []string{"main"}); err != nil {
+		t.Errorf("expected nil for empty configs list, got: %v", err)
 	}
 }

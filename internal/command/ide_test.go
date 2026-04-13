@@ -10,16 +10,42 @@ import (
 	"devbox-cli/internal/render"
 )
 
+// Minimal inline templates used by renderIDETemplate unit tests.
+const minimalDevcontainerTpl = `{"name":"{{ .Project.Name }}","service":"{{ .ServiceCfg.Container }}","workspaceFolder":"{{ .ServiceCfg.DirInternal }}","forwardPorts":[{{ .Runtime.Ports.App }}]}`
+const minimalVscodeLaunchTpl = `{"type":"php","pathMappings":{"{{ .ServiceCfg.WorkDirInternal }}":"${workspaceFolder}/src"}}`
+const minimalVscodeSettingsTpl = `{"php.validate.executablePath":"/usr/local/bin/php","editor.formatOnSave":true}`
+
+// setupIDETemplates writes the three IDE template files into <dir>/devbox/templates/ide/
+// so that renderIDEConfigs can load them during tests.
+func setupIDETemplates(t *testing.T, dir string) {
+	t.Helper()
+	tplDir := filepath.Join(dir, "devbox", "templates", "ide")
+	if err := os.MkdirAll(tplDir, 0o755); err != nil {
+		t.Fatalf("create template dir: %v", err)
+	}
+	files := map[string]string{
+		"devcontainer.json.tpl":    minimalDevcontainerTpl,
+		"vscode_launch.json.tpl":   minimalVscodeLaunchTpl,
+		"vscode_settings.json.tpl": minimalVscodeSettingsTpl,
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(tplDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write template %s: %v", name, err)
+		}
+	}
+}
+
 // makeIDECfg returns a DevboxConfig configured for IDE rendering tests.
 func makeIDECfg(vscodeEnabled, devcontainerEnabled bool) *config.DevboxConfig {
 	return &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
 		Services: map[string]config.ServiceConfig{
 			"main": {
-				Type:        "app",
-				Dir:         "./services/main",
-				Container:   "app-main",
-				DirInternal: "/var/www/app",
+				Type:            "app",
+				Dir:             "./services/main",
+				Container:       "app-main",
+				DirInternal:     "/workspace",
+				WorkDirInternal: "/workspace/src",
 			},
 		},
 		Runtime: config.RuntimeConfig{
@@ -34,14 +60,15 @@ func makeIDECfg(vscodeEnabled, devcontainerEnabled bool) *config.DevboxConfig {
 }
 
 // TestRenderIDETemplate_devcontainer verifies that the devcontainer template
-// substitutes project name, container, workspaceFolder, and port.
+// substitutes project name, container, workspaceFolder (hub dir), and port.
 func TestRenderIDETemplate_devcontainer(t *testing.T) {
 	data := ideTemplateData{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Service: "main",
 		ServiceCfg: config.ServiceConfig{
-			Container:   "app-main",
-			DirInternal: "/var/www/app",
+			Container:       "app-main",
+			DirInternal:     "/workspace",
+			WorkDirInternal: "/workspace/src",
 		},
 		Runtime: config.RuntimeConfig{
 			Ports: config.RuntimePorts{App: 8080},
@@ -50,7 +77,7 @@ func TestRenderIDETemplate_devcontainer(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "devcontainer.json")
 
-	if err := renderIDETemplate(devcontainerTpl, "devcontainer.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalDevcontainerTpl, "devcontainer.json", data, dest); err != nil {
 		t.Fatalf("renderIDETemplate: %v", err)
 	}
 
@@ -61,9 +88,9 @@ func TestRenderIDETemplate_devcontainer(t *testing.T) {
 	content := string(got)
 
 	checks := []struct{ want, label string }{
-		{`"name": "myapp"`, "project name"},
-		{`"service": "app-main"`, "container name"},
-		{`"workspaceFolder": "/var/www/app"`, "workspaceFolder"},
+		{`"name":"myapp"`, "project name"},
+		{`"service":"app-main"`, "container name"},
+		{`"workspaceFolder":"/workspace"`, "workspaceFolder (hub dir)"},
 		{`8080`, "port"},
 	}
 	for _, c := range checks {
@@ -73,15 +100,18 @@ func TestRenderIDETemplate_devcontainer(t *testing.T) {
 	}
 }
 
-// TestRenderIDETemplate_vscodeLaunch verifies path mappings in launch.json.
+// TestRenderIDETemplate_vscodeLaunch verifies path mappings in launch.json use WorkDirInternal.
 func TestRenderIDETemplate_vscodeLaunch(t *testing.T) {
 	data := ideTemplateData{
-		ServiceCfg: config.ServiceConfig{DirInternal: "/var/www/app"},
+		ServiceCfg: config.ServiceConfig{
+			DirInternal:     "/workspace",
+			WorkDirInternal: "/workspace/src",
+		},
 	}
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "launch.json")
 
-	if err := renderIDETemplate(vscodeLaunchTpl, "launch.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalVscodeLaunchTpl, "launch.json", data, dest); err != nil {
 		t.Fatalf("renderIDETemplate: %v", err)
 	}
 
@@ -91,10 +121,10 @@ func TestRenderIDETemplate_vscodeLaunch(t *testing.T) {
 	}
 	content := string(got)
 
-	if !strings.Contains(content, `"/var/www/app": "${workspaceFolder}"`) {
-		t.Errorf("launch.json missing pathMappings, got:\n%s", content)
+	if !strings.Contains(content, `"/workspace/src":"${workspaceFolder}/src"`) {
+		t.Errorf("launch.json missing correct pathMappings, got:\n%s", content)
 	}
-	if !strings.Contains(content, `"type": "php"`) {
+	if !strings.Contains(content, `"type":"php"`) {
 		t.Errorf("launch.json missing type: php, got:\n%s", content)
 	}
 }
@@ -105,7 +135,7 @@ func TestRenderIDETemplate_vscodeSettings(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "settings.json")
 
-	if err := renderIDETemplate(vscodeSettingsTpl, "settings.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalVscodeSettingsTpl, "settings.json", data, dest); err != nil {
 		t.Fatalf("renderIDETemplate: %v", err)
 	}
 
@@ -118,7 +148,7 @@ func TestRenderIDETemplate_vscodeSettings(t *testing.T) {
 	if !strings.Contains(content, `"php.validate.executablePath"`) {
 		t.Errorf("settings.json missing php.validate.executablePath, got:\n%s", content)
 	}
-	if !strings.Contains(content, `"editor.formatOnSave": true`) {
+	if !strings.Contains(content, `"editor.formatOnSave":true`) {
 		t.Errorf("settings.json missing editor.formatOnSave, got:\n%s", content)
 	}
 }
@@ -126,12 +156,15 @@ func TestRenderIDETemplate_vscodeSettings(t *testing.T) {
 // TestRenderIDETemplate_createsParentDirs verifies parent directories are created.
 func TestRenderIDETemplate_createsParentDirs(t *testing.T) {
 	data := ideTemplateData{
-		ServiceCfg: config.ServiceConfig{DirInternal: "/var/www/app"},
+		ServiceCfg: config.ServiceConfig{
+			DirInternal:     "/workspace",
+			WorkDirInternal: "/workspace/src",
+		},
 	}
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "nested", "deep", "file.json")
 
-	if err := renderIDETemplate(vscodeLaunchTpl, "file.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalVscodeLaunchTpl, "file.json", data, dest); err != nil {
 		t.Fatalf("renderIDETemplate should create parent dirs: %v", err)
 	}
 	if _, err := os.Stat(dest); err != nil {
@@ -141,9 +174,11 @@ func TestRenderIDETemplate_createsParentDirs(t *testing.T) {
 
 // TestRenderIDEConfigs_devcontainerOnly verifies only devcontainer files generated.
 func TestRenderIDEConfigs_devcontainerOnly(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
 	cfg := makeIDECfg(false, true) // vscode=off, devcontainer=on
 	svc := cfg.Services["main"]
-	projectRoot := t.TempDir()
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
@@ -166,9 +201,11 @@ func TestRenderIDEConfigs_devcontainerOnly(t *testing.T) {
 
 // TestRenderIDEConfigs_vscodeOnly verifies only vscode files generated.
 func TestRenderIDEConfigs_vscodeOnly(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
 	cfg := makeIDECfg(true, false) // vscode=on, devcontainer=off
 	svc := cfg.Services["main"]
-	projectRoot := t.TempDir()
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
@@ -196,9 +233,11 @@ func TestRenderIDEConfigs_vscodeOnly(t *testing.T) {
 
 // TestRenderIDEConfigs_bothEnabled verifies all IDE files generated when both enabled.
 func TestRenderIDEConfigs_bothEnabled(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
 	cfg := makeIDECfg(true, true) // vscode=on, devcontainer=on
 	svc := cfg.Services["main"]
-	projectRoot := t.TempDir()
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
@@ -221,9 +260,11 @@ func TestRenderIDEConfigs_bothEnabled(t *testing.T) {
 
 // TestRenderIDEConfigs_neitherEnabled verifies nothing generated when both disabled.
 func TestRenderIDEConfigs_neitherEnabled(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
 	cfg := makeIDECfg(false, false) // vscode=off, devcontainer=off
 	svc := cfg.Services["main"]
-	projectRoot := t.TempDir()
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
@@ -234,8 +275,6 @@ func TestRenderIDEConfigs_neitherEnabled(t *testing.T) {
 
 	serviceDir := filepath.Join(projectRoot, "services", "main")
 	if _, err := os.Stat(serviceDir); err == nil {
-		// The directory may not exist since nothing was written.
-		// Check specific files.
 		for _, rel := range []string{".devcontainer/devcontainer.json", ".vscode/launch.json"} {
 			if _, err := os.Stat(filepath.Join(serviceDir, rel)); err == nil {
 				t.Errorf("file %s should not be created when all editors disabled", rel)
@@ -245,11 +284,13 @@ func TestRenderIDEConfigs_neitherEnabled(t *testing.T) {
 }
 
 // TestRenderIDEConfigs_devcontainerSubstitutesValues checks that the rendered
-// devcontainer.json has correct project name and container values.
+// devcontainer.json has correct project name, container, and hub workspace folder.
 func TestRenderIDEConfigs_devcontainerSubstitutesValues(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
 	cfg := makeIDECfg(false, true)
 	svc := cfg.Services["main"]
-	projectRoot := t.TempDir()
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
@@ -265,13 +306,34 @@ func TestRenderIDEConfigs_devcontainerSubstitutesValues(t *testing.T) {
 	}
 	s := string(content)
 
-	if !strings.Contains(s, `"name": "laravel"`) {
+	if !strings.Contains(s, `"name":"laravel"`) {
 		t.Errorf("devcontainer.json should contain project name, got:\n%s", s)
 	}
-	if !strings.Contains(s, `"service": "app-main"`) {
+	if !strings.Contains(s, `"service":"app-main"`) {
 		t.Errorf("devcontainer.json should contain container name, got:\n%s", s)
 	}
-	if !strings.Contains(s, `"workspaceFolder": "/var/www/app"`) {
-		t.Errorf("devcontainer.json should contain workspaceFolder, got:\n%s", s)
+	// workspaceFolder should be the hub dir, not the src dir
+	if !strings.Contains(s, `"workspaceFolder":"/workspace"`) {
+		t.Errorf("devcontainer.json should contain hub workspaceFolder, got:\n%s", s)
+	}
+}
+
+// TestRenderIDEConfigs_missingTemplates verifies that missing project-level
+// templates emit a warning and are skipped rather than returning an error.
+func TestRenderIDEConfigs_missingTemplates(t *testing.T) {
+	projectRoot := t.TempDir()
+	// Intentionally do NOT call setupIDETemplates.
+
+	cfg := makeIDECfg(false, true) // devcontainer=on
+	svc := cfg.Services["main"]
+
+	var buf strings.Builder
+	w := render.NewWriter(&buf)
+
+	if err := renderIDEConfigs(projectRoot, "main", svc, cfg, w); err != nil {
+		t.Fatalf("expected warn-and-skip for missing templates, got error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "skipping") {
+		t.Errorf("expected warning about missing template, got: %s", buf.String())
 	}
 }

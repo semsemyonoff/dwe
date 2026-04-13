@@ -461,10 +461,6 @@ services:
     dir: ./services/main
     container: app-main
     dir_internal: /var/www/app
-    configs:
-      - src: configs/app/main/.env
-        dest: .env
-        mode: replace
 `
 	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithService, "")
 	cfg, err := LoadConfig(path)
@@ -484,19 +480,19 @@ services:
 }
 
 func TestLoadConfig_serviceConfigsLoaded(t *testing.T) {
-	defaultsWithService := sampleDefaultsYML + `
+	devboxWithConfigs := `
+schema_version: "1"
+project:
+  name: laravel
+  prefix: devbox
 services:
   main:
     type: app
     dir: ./services/main
-    container: app-main
-    dir_internal: /var/www/app
     configs:
-      - src: configs/app/main/.env
-        dest: .env
-        mode: replace
+      - .env
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithService, "")
+	path := writeLayeredFixture(t, devboxWithConfigs, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -508,15 +504,8 @@ services:
 	if len(svc.Configs) != 1 {
 		t.Fatalf("Configs len = %d, want 1", len(svc.Configs))
 	}
-	cf := svc.Configs[0]
-	if cf.Src != "configs/app/main/.env" {
-		t.Errorf("Configs[0].Src = %q, want configs/app/main/.env", cf.Src)
-	}
-	if cf.Dest != ".env" {
-		t.Errorf("Configs[0].Dest = %q, want .env", cf.Dest)
-	}
-	if cf.Mode != "replace" {
-		t.Errorf("Configs[0].Mode = %q, want replace", cf.Mode)
+	if svc.Configs[0] != ".env" {
+		t.Errorf("Configs[0] = %q, want .env", svc.Configs[0])
 	}
 }
 
@@ -528,10 +517,6 @@ services:
     dir: ./services/main
     container: app-main
     dir_internal: /var/www/app
-    configs:
-      - src: configs/app/main/.env
-        dest: .env
-        mode: replace
 `
 	// Local override changes container name
 	localYML := `
@@ -566,10 +551,6 @@ services:
     container: app-main
     dir_internal: /var/www/app
     installer_image: composer:2
-    configs:
-      - src: configs/app/main/.env
-        dest: .env
-        mode: replace
 `
 	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithService, "")
 	cfg, err := LoadConfig(path)
@@ -615,7 +596,7 @@ services:
 }
 
 func TestLoadConfig_serviceNoExtendedFields(t *testing.T) {
-	// When service only has type/dir (no container/configs), fields are zero values.
+	// When service only has type/dir (no container), fields are zero values.
 	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -855,6 +836,33 @@ func TestLoadDeployConfig_stepNeitherCmdNorMake(t *testing.T) {
 	_, err := LoadDeployConfig(path)
 	if err == nil {
 		t.Fatal("LoadDeployConfig: expected error for step with neither cmd nor make, got nil")
+	}
+}
+
+func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
+	yml := `phases:
+  - name: setup
+    steps:
+      - name: copy-configs
+        service_configs_copy: main
+        mode: replace
+        description: Copy configs
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	step := cfg.Phases[0].Steps[0]
+	if step.ServiceConfigsCopy != "main" {
+		t.Errorf("ServiceConfigsCopy = %q, want main", step.ServiceConfigsCopy)
+	}
+	if step.Mode != "replace" {
+		t.Errorf("Mode = %q, want replace", step.Mode)
 	}
 }
 
