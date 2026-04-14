@@ -1,0 +1,396 @@
+// Package commands provides types, loading, and execution for the devbox command system.
+// Commands are defined in YAML files under devbox/commands/ and organised into groups
+// derived from the directory structure.
+package commands
+
+import (
+	"fmt"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// CommandType identifies the execution strategy for a command.
+type CommandType string
+
+const (
+	// CommandTypeCommand runs a shell command or argv on the host.
+	CommandTypeCommand CommandType = "command"
+	// CommandTypeScript runs one or more script files.
+	CommandTypeScript CommandType = "script"
+	// CommandTypeServiceExec runs inside an existing container via docker compose exec.
+	CommandTypeServiceExec CommandType = "service_exec"
+	// CommandTypeServiceRun starts a one-off container via docker compose run.
+	CommandTypeServiceRun CommandType = "service_run"
+	// CommandTypeWorkflow executes a sequence of command references.
+	CommandTypeWorkflow CommandType = "workflow"
+)
+
+// ParamType describes the expected value type of a command parameter.
+type ParamType string
+
+const (
+	// ParamTypeString is the default param type: a plain text value.
+	ParamTypeString ParamType = "string"
+	// ParamTypeBool is a boolean param (true/false).
+	ParamTypeBool ParamType = "bool"
+	// ParamTypeInt is an integer param.
+	ParamTypeInt ParamType = "int"
+	// ParamTypePath is a file-system path param.
+	ParamTypePath ParamType = "path"
+)
+
+// UserMode specifies which user to use inside a container.
+// Special values: "current" (pass --user with host UID:GID), "root" (--user root).
+// Any other string value is passed verbatim as --user <value>.
+type UserMode string
+
+const (
+	// UserModeCurrent passes --user with the host UID:GID.
+	UserModeCurrent UserMode = "current"
+	// UserModeRoot passes --user root.
+	UserModeRoot UserMode = "root"
+)
+
+// ExecMode controls how service_exec commands behave when the container state is unknown.
+type ExecMode string
+
+const (
+	// ExecModeExec always uses docker compose exec (fails if container not running).
+	ExecModeExec ExecMode = "exec"
+	// ExecModeRun always uses docker compose run --rm.
+	ExecModeRun ExecMode = "run"
+	// ExecModeExecOrRun checks if container is running; uses exec if so, run otherwise.
+	ExecModeExecOrRun ExecMode = "exec-or-run"
+)
+
+// GroupMeta holds optional metadata about a command group, declared at the top of a
+// command file under the `group` key.
+type GroupMeta struct {
+	Title       string `yaml:"title"`
+	Description string `yaml:"description"`
+}
+
+// ParamDef defines a single named parameter for a command.
+type ParamDef struct {
+	// Type is the expected value type. Defaults to "string" when empty.
+	Type ParamType `yaml:"type"`
+	// Description is human-readable help text shown by devbox command inspect.
+	Description string `yaml:"description"`
+	// Required indicates the caller must supply this parameter explicitly.
+	Required bool `yaml:"required"`
+	// Default is a literal fallback value when the parameter is not supplied.
+	Default string `yaml:"default"`
+	// DefaultFrom is a dot-path into the merged config used as the default
+	// when the parameter is not supplied and Default is empty.
+	DefaultFrom string `yaml:"default_from"`
+	// Env is the environment variable name used to expose this param to the process.
+	// When empty the param is not injected as an env var (only available for templating).
+	Env string `yaml:"env"`
+}
+
+// ContextDef defines a single named context value derived from the merged config.
+type ContextDef struct {
+	// From is a dot-path into the merged DevboxConfig.Raw map.
+	From string `yaml:"from"`
+	// Required causes an error at resolution time when the path resolves to nil/empty.
+	Required bool `yaml:"required"`
+	// Env is the environment variable name used to expose this value to the process.
+	Env string `yaml:"env"`
+}
+
+// ScriptDef describes the script to execute for a command of type "script".
+// Exactly one of the two modes must be configured:
+//   - Simple mode:  Path is set (a single script file).
+//   - Phased mode:  Run (and optionally Plan and Cleanup) are set.
+type ScriptDef struct {
+	// Shell is the interpreter to use. Defaults to "sh".
+	Shell string `yaml:"shell"`
+
+	// --- Simple mode ---
+	// Path is the path to a single script file (relative to the project root).
+	Path string `yaml:"path"`
+
+	// --- Phased mode ---
+	// Plan is an optional script run before Run (setup / dry-run phase).
+	Plan string `yaml:"plan"`
+	// Run is the main execution script.
+	Run string `yaml:"run"`
+	// Cleanup is an optional script that is always executed after Run, even on failure.
+	Cleanup string `yaml:"cleanup"`
+}
+
+// Validate checks that exactly one mode is configured.
+func (s *ScriptDef) Validate() error {
+	hasSimple := s.Path != ""
+	hasPhased := s.Run != ""
+	switch {
+	case hasSimple && hasPhased:
+		return fmt.Errorf("script: path and run are mutually exclusive")
+	case hasSimple && (s.Plan != "" || s.Cleanup != ""):
+		return fmt.Errorf("script: plan/cleanup may not be combined with path")
+	case !hasSimple && !hasPhased:
+		return fmt.Errorf("script: one of path or run must be set")
+	}
+	return nil
+}
+
+// WorkflowStep is one step in a workflow command.
+// Exactly one of Command or Confirm must be set.
+type WorkflowStep struct {
+	// Command is the full command ID (e.g. "services.main.migrate") to execute.
+	Command string `yaml:"command"`
+	// With holds parameter overrides passed to the referenced command.
+	With map[string]string `yaml:"with"`
+	// Confirm is a message displayed to the user before continuing.
+	// The workflow is aborted if the user declines.
+	Confirm string `yaml:"confirm"`
+}
+
+// Validate checks that exactly one of Command or Confirm is set.
+func (s *WorkflowStep) Validate() error {
+	hasCommand := s.Command != ""
+	hasConfirm := s.Confirm != ""
+	switch {
+	case hasCommand && hasConfirm:
+		return fmt.Errorf("workflow step: command and confirm are mutually exclusive")
+	case !hasCommand && !hasConfirm:
+		return fmt.Errorf("workflow step: one of command or confirm must be set")
+	case hasConfirm && len(s.With) > 0:
+		return fmt.Errorf("workflow step: with may not be combined with confirm")
+	}
+	return nil
+}
+
+// RunnerDef allows a command to override service/user/workdir fields without
+// duplicating the full command definition.  When present on a CommandDef these
+// fields take precedence over the top-level service/user/workdir fields.
+type RunnerDef struct {
+	Service     string   `yaml:"service"`
+	User        UserMode `yaml:"user"`
+	Workdir     string   `yaml:"workdir"`
+	WorkdirFrom string   `yaml:"workdir_from"`
+	Mode        ExecMode `yaml:"mode"`
+}
+
+// CommandDef is a single command entry inside a command file.
+type CommandDef struct {
+	// Type is the execution strategy. Required.
+	Type CommandType `yaml:"type"`
+	// Description is human-readable help text.
+	Description string `yaml:"description"`
+	// Private hides the command from `devbox command list` but allows
+	// it to be referenced from workflows.
+	Private bool `yaml:"private"`
+
+	// Params declares named parameters accepted by the command.
+	Params map[string]ParamDef `yaml:"params"`
+	// Context declares named values derived from the merged config.
+	Context map[string]ContextDef `yaml:"context"`
+	// Env is additional environment variables injected into the process,
+	// supporting ${...} template interpolation.
+	Env map[string]string `yaml:"env"`
+
+	// --- type=command fields ---
+	// Run is a shell command string executed via `sh -c`.
+	// Mutually exclusive with Argv.
+	Run string `yaml:"run"`
+	// Argv is the raw argument vector (no shell quoting).
+	// Mutually exclusive with Run.
+	Argv []string `yaml:"argv"`
+	// Cwd is the working directory for the process (supports ${...} interpolation).
+	Cwd string `yaml:"cwd"`
+
+	// --- type=service_exec / service_run fields ---
+	// Service is the Docker Compose service name.
+	Service string `yaml:"service"`
+	// User specifies the container user (current, root, or a literal string).
+	User UserMode `yaml:"user"`
+	// Workdir is the working directory inside the container.
+	Workdir string `yaml:"workdir"`
+	// WorkdirFrom is a dot-path into the merged config resolving to a workdir string.
+	WorkdirFrom string `yaml:"workdir_from"`
+	// Mode controls exec vs run behaviour for service_exec commands.
+	Mode ExecMode `yaml:"mode"`
+
+	// --- type=script fields ---
+	Script *ScriptDef `yaml:"script"`
+
+	// --- type=workflow fields ---
+	Steps []WorkflowStep `yaml:"steps"`
+
+	// Runner is an optional override block for service/user/workdir/mode.
+	// When set, its non-zero fields take precedence over the top-level fields.
+	Runner *RunnerDef `yaml:"runner"`
+
+	// Computed fields — not part of YAML, populated by the loader.
+
+	// ID is the full qualified command ID, e.g. "services.main.migrate".
+	ID string `yaml:"-"`
+	// Group is the dot-separated group prefix, e.g. "services.main".
+	Group string `yaml:"-"`
+	// LocalName is the command name within its group, e.g. "migrate".
+	LocalName string `yaml:"-"`
+}
+
+// Validate checks that the CommandDef is internally consistent.
+// It enforces mutually exclusive field combinations per type.
+func (c *CommandDef) Validate() error {
+	if c.Type == "" {
+		return fmt.Errorf("command %q: type is required", c.ID)
+	}
+
+	switch c.Type {
+	case CommandTypeCommand:
+		if err := c.validateCommandType(); err != nil {
+			return fmt.Errorf("command %q: %w", c.ID, err)
+		}
+	case CommandTypeScript:
+		if err := c.validateScriptType(); err != nil {
+			return fmt.Errorf("command %q: %w", c.ID, err)
+		}
+	case CommandTypeServiceExec, CommandTypeServiceRun:
+		if err := c.validateServiceType(); err != nil {
+			return fmt.Errorf("command %q: %w", c.ID, err)
+		}
+	case CommandTypeWorkflow:
+		if err := c.validateWorkflowType(); err != nil {
+			return fmt.Errorf("command %q: %w", c.ID, err)
+		}
+	default:
+		return fmt.Errorf("command %q: unknown type %q", c.ID, c.Type)
+	}
+	return nil
+}
+
+func (c *CommandDef) validateCommandType() error {
+	hasRun := c.Run != ""
+	hasArgv := len(c.Argv) > 0
+	if hasRun && hasArgv {
+		return fmt.Errorf("run and argv are mutually exclusive")
+	}
+	if !hasRun && !hasArgv {
+		return fmt.Errorf("one of run or argv must be set")
+	}
+	if c.Script != nil {
+		return fmt.Errorf("script field is not valid for type=command")
+	}
+	if len(c.Steps) > 0 {
+		return fmt.Errorf("steps field is not valid for type=command")
+	}
+	if c.Service != "" {
+		return fmt.Errorf("service field is not valid for type=command")
+	}
+	return nil
+}
+
+func (c *CommandDef) validateScriptType() error {
+	if c.Script == nil {
+		return fmt.Errorf("script block is required for type=script")
+	}
+	if err := c.Script.Validate(); err != nil {
+		return err
+	}
+	if c.Run != "" || len(c.Argv) > 0 {
+		return fmt.Errorf("run/argv fields are not valid for type=script")
+	}
+	if len(c.Steps) > 0 {
+		return fmt.Errorf("steps field is not valid for type=script")
+	}
+	return nil
+}
+
+func (c *CommandDef) validateServiceType() error {
+	// service field is required at the command level or via runner override.
+	// We check here that if runner does not provide a service, top-level service is set.
+	effectiveService := c.Service
+	if c.Runner != nil && c.Runner.Service != "" {
+		effectiveService = c.Runner.Service
+	}
+	if effectiveService == "" {
+		return fmt.Errorf("service is required for type=%s", c.Type)
+	}
+	if c.Script != nil {
+		return fmt.Errorf("script field is not valid for type=%s", c.Type)
+	}
+	if len(c.Steps) > 0 {
+		return fmt.Errorf("steps field is not valid for type=%s", c.Type)
+	}
+	hasRun := c.Run != ""
+	hasArgv := len(c.Argv) > 0
+	if hasRun && hasArgv {
+		return fmt.Errorf("run and argv are mutually exclusive")
+	}
+	if !hasRun && !hasArgv {
+		return fmt.Errorf("one of run or argv must be set")
+	}
+	if c.Type == CommandTypeServiceRun && c.Mode != "" && c.Mode != ExecModeRun {
+		return fmt.Errorf("mode is not applicable for type=service_run (always runs a new container)")
+	}
+	return nil
+}
+
+func (c *CommandDef) validateWorkflowType() error {
+	if len(c.Steps) == 0 {
+		return fmt.Errorf("steps is required and must be non-empty for type=workflow")
+	}
+	if c.Run != "" || len(c.Argv) > 0 {
+		return fmt.Errorf("run/argv fields are not valid for type=workflow")
+	}
+	if c.Script != nil {
+		return fmt.Errorf("script field is not valid for type=workflow")
+	}
+	if c.Service != "" {
+		return fmt.Errorf("service field is not valid for type=workflow")
+	}
+	for i, step := range c.Steps {
+		if err := step.Validate(); err != nil {
+			return fmt.Errorf("step[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// CommandFile is the top-level structure of a command YAML file.
+// The file may declare a group metadata block and a map of named commands.
+type CommandFile struct {
+	// Group holds optional metadata about the group this file defines.
+	Group GroupMeta `yaml:"group"`
+	// Commands maps local command names to their definitions.
+	Commands map[string]CommandDef `yaml:"commands"`
+
+	// Computed fields set by the loader.
+
+	// FilePath is the absolute path of the source file.
+	FilePath string `yaml:"-"`
+	// GroupID is the computed dot-separated group prefix, e.g. "services.main".
+	GroupID string `yaml:"-"`
+}
+
+// Validate validates all command definitions in the file.
+func (f *CommandFile) Validate() error {
+	var errs []string
+	for name, cmd := range f.Commands {
+		if strings.TrimSpace(name) == "" {
+			errs = append(errs, "command name must not be empty")
+			continue
+		}
+		if err := cmd.Validate(); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("validation errors in %s:\n  %s", f.FilePath, strings.Join(errs, "\n  "))
+	}
+	return nil
+}
+
+// parseCommandFile is a helper used in tests and LoadCommandFile to unmarshal YAML bytes
+// into a CommandFile and run basic field validation.
+func parseCommandFile(data []byte) (*CommandFile, error) {
+	var cf CommandFile
+	if err := yaml.Unmarshal(data, &cf); err != nil {
+		return nil, fmt.Errorf("YAML parse error: %w", err)
+	}
+	return &cf, nil
+}
