@@ -86,7 +86,7 @@ func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning contai
 	out := w.Writer()
 
 	// Header.
-	fmt.Fprintf(out,
+	_, _ = fmt.Fprintf(out,
 		"  %s%-*s  %-*s  %-*s  %s%s\n",
 		render.White, maxName, "NAME", maxContainer, "CONTAINER", statusWidth, "STATE", "RUNNING", render.Reset,
 	)
@@ -96,11 +96,12 @@ func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning contai
 
 		// Status: icon + label, then pad to statusWidth.
 		var icon, label, statusColor string
-		if svc.Mandatory {
+		switch {
+		case svc.Mandatory:
 			icon, label, statusColor = "●", "on", render.Blue
-		} else if svc.Enabled {
+		case svc.Enabled:
 			icon, label, statusColor = "✔", "on", render.Green
-		} else {
+		default:
 			icon, label, statusColor = "✘", "off", render.Gray
 		}
 		statusText := icon + " " + label
@@ -125,7 +126,7 @@ func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning contai
 			containerColor = render.Gray
 		}
 
-		fmt.Fprintf(out,
+		_, _ = fmt.Fprintf(out,
 			"  %s%-*s%s  %s%-*s%s  %s%s%s%s  %s\n",
 			nameColor, maxName, name, render.Reset,
 			containerColor, maxContainer, svc.Container, render.Reset,
@@ -220,7 +221,7 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 	} else {
 		w.Success(fmt.Sprintf("service %q disabled (written to %s)", name, localPath))
 	}
-	return nil
+	return regenEnv(configPath, baseDir)
 }
 
 func disableWord(enabled bool) string {

@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
 )
@@ -132,6 +134,25 @@ func buildEnvContent(cfg *config.DevboxConfig) (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+// regenEnv reloads config from configPath, regenerates .env in baseDir,
+// and prints a confirmation. Called after any enable/disable mutation.
+func regenEnv(configPath, baseDir string) error {
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("reload config: %w", err)
+	}
+	content, err := buildEnvContent(cfg)
+	if err != nil {
+		return err
+	}
+	envPath := filepath.Join(baseDir, ".env")
+	if err := os.WriteFile(envPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", envPath, err)
+	}
+	render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
+	return nil
 }
 
 // isTruthy returns whether v represents a truthy config value.
