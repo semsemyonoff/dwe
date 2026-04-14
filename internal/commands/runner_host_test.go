@@ -194,16 +194,16 @@ func TestNewRunner_Returns_ServiceRunRunner(t *testing.T) {
 }
 
 func TestNewRunner_Unsupported_Type(t *testing.T) {
-	cmd := &CommandDef{Type: CommandTypeWorkflow}
+	cmd := &CommandDef{Type: CommandType("unknown_type")}
 	_, err := NewRunner(cmd)
 	if err == nil {
-		t.Fatal("expected error for workflow type")
+		t.Fatal("expected error for unknown type")
 	}
 	unsup, ok := err.(*ErrUnsupportedType)
 	if !ok {
 		t.Fatalf("expected *ErrUnsupportedType, got %T", err)
 	}
-	if unsup.Type != CommandTypeWorkflow {
-		t.Errorf("expected workflow type in error, got %q", unsup.Type)
+	if unsup.Type != "unknown_type" {
+		t.Errorf("expected 'unknown_type' in error, got %q", unsup.Type)
 	}
 }

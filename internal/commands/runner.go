@@ -30,6 +30,10 @@ type RunContext struct {
 	// Config is the merged devbox configuration.
 	Config *config.DevboxConfig
 
+	// Registry is the loaded command registry, used by WorkflowRunner to look
+	// up referenced commands. May be nil when workflows are not expected.
+	Registry *Registry
+
 	// ProjectRoot is the absolute path to the devbox project root directory.
 	// Runners use it to resolve relative cwd paths and script paths.
 	ProjectRoot string
@@ -50,6 +54,10 @@ func NewRunner(cmd *CommandDef) (Runner, error) {
 		return &ServiceExecRunner{}, nil
 	case CommandTypeServiceRun:
 		return &ServiceRunRunner{}, nil
+	case CommandTypeScript:
+		return &ScriptRunner{}, nil
+	case CommandTypeWorkflow:
+		return &WorkflowRunner{}, nil
 	default:
 		return nil, &ErrUnsupportedType{Type: cmd.Type}
 	}
