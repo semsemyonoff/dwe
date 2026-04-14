@@ -34,6 +34,17 @@ type Registry struct {
 	root *GroupNode
 }
 
+// NewEmptyRegistry returns an empty Registry with no commands.
+// Useful as a safe fallback when the commands directory does not exist.
+func NewEmptyRegistry() *Registry {
+	reg := &Registry{
+		byID:   make(map[string]*CommandDef),
+		groups: make(map[string]*GroupNode),
+	}
+	reg.root = reg.ensureGroup("")
+	return reg
+}
+
 // LoadRegistry discovers all command files under baseDir, loads them, and
 // assembles a Registry.  It returns an error on any file load failure or
 // duplicate command ID.
