@@ -30,9 +30,14 @@ func cmdStep(name, cmd string) config.DeployStep {
 	return config.DeployStep{Name: name, Cmd: cmd, Description: name + " description"}
 }
 
-// makeStep builds a make-type step.
-func makeStep(name, target string) config.DeployStep {
-	return config.DeployStep{Name: name, Make: target, Description: name + " description"}
+// commandStep builds a command-type step.
+func commandStep(name, id string) config.DeployStep {
+	return config.DeployStep{Name: name, Command: id, Description: name + " description"}
+}
+
+// commandStepWith builds a command-type step with param overrides.
+func commandStepWith(name, id string, with map[string]string) config.DeployStep {
+	return config.DeployStep{Name: name, Command: id, With: with, Description: name + " description"}
 }
 
 // whenStep builds a cmd-type step with a when condition.
@@ -79,7 +84,7 @@ func TestResolveDeployPlan_noWhenAlwaysIncluded(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup",
 			cmdStep("create-dirs", "mkdir -p services/main/src"),
-			makeStep("up", "up"),
+			commandStep("up", "up"),
 		),
 	})
 	steps, err := resolveDeployPlan(cfg)
@@ -148,7 +153,7 @@ func TestResolveDeployPlan_falsyWhenExcluded(t *testing.T) {
 func TestResolveDeployPlan_multiplePhasesPreserveOrder(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup", cmdStep("s1", "cmd1"), cmdStep("s2", "cmd2")),
-		phaseWith("init", makeStep("m1", "target1"), makeStep("m2", "target2")),
+		phaseWith("init", commandStep("m1", "services.main.cmd1"), commandStep("m2", "services.main.cmd2")),
 	})
 	steps, err := resolveDeployPlan(cfg)
 	if err != nil {
@@ -175,10 +180,10 @@ func TestStepBadge_cmdStep(t *testing.T) {
 	}
 }
 
-func TestStepBadge_makeStep(t *testing.T) {
-	s := config.DeployStep{Make: "up"}
-	if got := stepBadge(s); got != "[make]" {
-		t.Errorf("got %q, want [make]", got)
+func TestStepBadge_commandStep(t *testing.T) {
+	s := config.DeployStep{Command: "services.main.migrate"}
+	if got := stepBadge(s); got != "[command]" {
+		t.Errorf("got %q, want [command]", got)
 	}
 }
 
@@ -191,10 +196,10 @@ func TestStepCommand_cmdReturnsRaw(t *testing.T) {
 	}
 }
 
-func TestStepCommand_makeReturnsMakeTarget(t *testing.T) {
-	s := config.DeployStep{Make: "up"}
-	if got := stepCommand(s); got != "make -f Makefile up" {
-		t.Errorf("got %q, want 'make -f Makefile up'", got)
+func TestStepCommand_commandReturnsDevboxRunCmd(t *testing.T) {
+	s := config.DeployStep{Command: "services.main.migrate"}
+	if got := stepCommand(s); got != "./bin/devbox command run services.main.migrate" {
+		t.Errorf("got %q, want './bin/devbox command run services.main.migrate'", got)
 	}
 }
 
@@ -225,15 +230,15 @@ func TestPrintDeployPlanShell_cmdStepAsIs(t *testing.T) {
 	}
 }
 
-func TestPrintDeployPlanShell_makeStepAsMakeTarget(t *testing.T) {
+func TestPrintDeployPlanShell_commandStepAsDevboxRun(t *testing.T) {
 	var buf bytes.Buffer
 	steps := []resolvedStep{
-		{phase: phaseWith("start"), step: makeStep("up", "up")},
+		{phase: phaseWith("start"), step: commandStep("migrate", "services.main.migrate")},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
-	if !strings.Contains(out, "make -f Makefile up") {
-		t.Errorf("shell output missing make step, got: %q", out)
+	if !strings.Contains(out, "./bin/devbox command run services.main.migrate") {
+		t.Errorf("shell output missing command step, got: %q", out)
 	}
 }
 
@@ -285,8 +290,8 @@ func TestPrintDeployPlanShell_sourcesEnvAfterImplicitStep(t *testing.T) {
 func TestPrintDeployPlanShell_noEnvSourceForNonImplicitSteps(t *testing.T) {
 	var buf bytes.Buffer
 	steps := []resolvedStep{
-		{phase: phaseWith("start"), step: makeStep("up", "up")},
-		{phase: phaseWith("init"), step: makeStep("migrate", "migrate")},
+		{phase: phaseWith("start"), step: commandStep("up", "up")},
+		{phase: phaseWith("init"), step: commandStep("migrate", "services.main.migrate")},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
@@ -321,13 +326,13 @@ func TestPrintDeployPlanTable_showsStepBadgeAndName(t *testing.T) {
 	w := render.NewWriter(&buf)
 
 	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "start"}, step: makeStep("up", "up")},
+		{phase: config.DeployPhase{Name: "start"}, step: commandStep("up", "up")},
 	}
 	printDeployPlanTable(steps, w)
 	out := buf.String()
 
-	if !strings.Contains(out, "[make]") {
-		t.Errorf("expected '[make]' badge in table output, got: %s", out)
+	if !strings.Contains(out, "[command]") {
+		t.Errorf("expected '[command]' badge in table output, got: %s", out)
 	}
 	if !strings.Contains(out, "up") {
 		t.Errorf("expected step name 'up' in table output, got: %s", out)
@@ -359,7 +364,7 @@ func TestPrintDeployPlanTable_showsImplicitStepFirst(t *testing.T) {
 func TestFindStep_findsExistingStep(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup", cmdStep("create-dirs", "mkdir -p services/main/src")),
-		phaseWith("init", makeStep("migrate", "migrate")),
+		phaseWith("init", commandStep("migrate", "services.main.migrate")),
 	})
 
 	phase, step, err := findStep(cfg, "init/migrate")
@@ -372,8 +377,8 @@ func TestFindStep_findsExistingStep(t *testing.T) {
 	if step.Name != "migrate" {
 		t.Errorf("step.Name = %q, want migrate", step.Name)
 	}
-	if step.Make != "migrate" {
-		t.Errorf("step.Make = %q, want migrate", step.Make)
+	if step.Command != "services.main.migrate" {
+		t.Errorf("step.Command = %q, want services.main.migrate", step.Command)
 	}
 }
 
@@ -421,11 +426,11 @@ func TestDeployStep_dryRunPrintsCmdCommand(t *testing.T) {
 	}
 }
 
-func TestDeployStep_dryRunPrintsMakeCommand(t *testing.T) {
-	step := makeStep("migrate", "migrate")
+func TestDeployStep_dryRunPrintsCommandRef(t *testing.T) {
+	step := commandStep("migrate", "services.main.migrate")
 	got := stepCommand(step)
-	if got != "make -f Makefile migrate" {
-		t.Errorf("dry-run make output = %q, want 'make -f Makefile migrate'", got)
+	if got != "./bin/devbox command run services.main.migrate" {
+		t.Errorf("dry-run command output = %q, want './bin/devbox command run services.main.migrate'", got)
 	}
 }
 
@@ -459,16 +464,16 @@ func TestResolveDeployPlan_invalidWhenTemplate(t *testing.T) {
 	}
 }
 
-// --- stepCommand for both types ---
+// --- stepCommand for all types ---
 
-func TestStepCommand_bothTypes(t *testing.T) {
+func TestStepCommand_allTypes(t *testing.T) {
 	cases := []struct {
 		step config.DeployStep
 		want string
 	}{
 		{config.DeployStep{Cmd: "echo hello"}, "echo hello"},
-		{config.DeployStep{Make: "up"}, "make -f Makefile up"},
-		{config.DeployStep{Make: "  db_create  "}, "make -f Makefile db_create"},
+		{config.DeployStep{Command: "services.main.migrate"}, "./bin/devbox command run services.main.migrate"},
+		{config.DeployStep{Command: "  services.main.migrate  "}, "./bin/devbox command run services.main.migrate"},
 		{config.DeployStep{Cmd: "  mkdir -p x  "}, "mkdir -p x"},
 		{config.DeployStep{ServiceConfigsCopy: "main"}, "./bin/devbox deploy config main --mode replace"},
 		{config.DeployStep{ServiceConfigsCopy: "main", Mode: "update"}, "./bin/devbox deploy config main --mode update"},
@@ -482,13 +487,25 @@ func TestStepCommand_bothTypes(t *testing.T) {
 	}
 }
 
-// Verify stepBadge for completeness in context of deploy step dispatch.
-func TestStepBadge_bothTypes(t *testing.T) {
+func TestStepCommand_commandWithWith(t *testing.T) {
+	step := config.DeployStep{
+		Command: "services.main.migrate",
+		With:    map[string]string{"db": "mydb"},
+	}
+	got := stepCommand(step)
+	want := "./bin/devbox command run services.main.migrate --set db=mydb"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// Verify stepBadge for all step types.
+func TestStepBadge_allTypes(t *testing.T) {
 	if got := stepBadge(config.DeployStep{Cmd: "x"}); got != "[cmd]" {
 		t.Errorf("got %q want [cmd]", got)
 	}
-	if got := stepBadge(config.DeployStep{Make: "x"}); got != "[make]" {
-		t.Errorf("got %q want [make]", got)
+	if got := stepBadge(config.DeployStep{Command: "x"}); got != "[command]" {
+		t.Errorf("got %q want [command]", got)
 	}
 	if got := stepBadge(config.DeployStep{ServiceConfigsCopy: "main"}); got != "[config]" {
 		t.Errorf("got %q want [config]", got)
@@ -1294,7 +1311,7 @@ func TestStepAddress_orchestratorStep(t *testing.T) {
 func TestStepAddress_serviceStep(t *testing.T) {
 	rs := resolvedStep{
 		phase:   config.DeployPhase{Name: "init"},
-		step:    makeStep("migrate", "migrate"),
+		step:    commandStep("migrate", "services.main.migrate"),
 		service: "main",
 	}
 	if got := rs.stepAddress(); got != "main/init/migrate" {
@@ -1361,7 +1378,7 @@ func TestResolveDeployPlan_deployServicesInlines(t *testing.T) {
     description: Start
     steps:
       - name: up
-        make: up
+        cmd: make up
 `
 	serviceDeploy := `phases:
   - name: setup
@@ -1373,7 +1390,7 @@ func TestResolveDeployPlan_deployServicesInlines(t *testing.T) {
     description: Init main
     steps:
       - name: migrate
-        make: migrate
+        command: services.main.migrate
 `
 	devboxPath := writeServiceDeployFixture(t, orchestrator, serviceDeploy)
 	cfg, err := config.LoadConfig(devboxPath)
@@ -1423,7 +1440,7 @@ func TestResolveServiceDeployPlan_singleService(t *testing.T) {
   - name: init
     steps:
       - name: migrate
-        make: migrate
+        command: services.main.migrate
 `
 	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
 	cfg, err := config.LoadConfig(devboxPath)
@@ -1450,7 +1467,7 @@ func TestFindStep_threePartAddress(t *testing.T) {
   - name: init
     steps:
       - name: migrate
-        make: migrate
+        command: services.main.migrate
         description: Run migrations
 `
 	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
@@ -1466,8 +1483,8 @@ func TestFindStep_threePartAddress(t *testing.T) {
 	if phase.Name != "init" {
 		t.Errorf("phase.Name = %q, want init", phase.Name)
 	}
-	if step.Make != "migrate" {
-		t.Errorf("step.Make = %q, want migrate", step.Make)
+	if step.Command != "services.main.migrate" {
+		t.Errorf("step.Command = %q, want services.main.migrate", step.Command)
 	}
 }
 
@@ -1478,7 +1495,7 @@ func TestPrintDeployPlanTable_serviceStepsIndented(t *testing.T) {
 	steps := []resolvedStep{
 		{phase: config.DeployPhase{Name: "env", Description: "Environment"}, step: implicitEnvStep},
 		{phase: config.DeployPhase{Name: "setup", Description: "Setup"}, step: cmdStep("create-dirs", "mkdir"), service: "main"},
-		{phase: config.DeployPhase{Name: "start", Description: "Start"}, step: makeStep("up", "up")},
+		{phase: config.DeployPhase{Name: "start", Description: "Start"}, step: commandStep("up", "up")},
 	}
 	printDeployPlanTable(steps, w)
 	out := buf.String()
@@ -1488,5 +1505,54 @@ func TestPrintDeployPlanTable_serviceStepsIndented(t *testing.T) {
 	}
 	if !strings.Contains(out, "main/setup") {
 		t.Errorf("expected 'main/setup' phase, got:\n%s", out)
+	}
+}
+
+// --- command-reference step tests ---
+
+func TestResolveDeployPlan_commandStepIncluded(t *testing.T) {
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWith("init",
+			commandStep("migrate", "services.main.migrate"),
+			commandStepWith("seed", "services.main.seed", map[string]string{"env": "test"}),
+		),
+	})
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// implicit + 2 steps
+	if len(steps) != 3 {
+		t.Fatalf("want 3 steps, got %d", len(steps))
+	}
+	if steps[1].step.Command != "services.main.migrate" {
+		t.Errorf("steps[1].Command = %q, want services.main.migrate", steps[1].step.Command)
+	}
+	if steps[2].step.Command != "services.main.seed" {
+		t.Errorf("steps[2].Command = %q, want services.main.seed", steps[2].step.Command)
+	}
+	if steps[2].step.With["env"] != "test" {
+		t.Errorf("steps[2].With[env] = %q, want test", steps[2].step.With["env"])
+	}
+}
+
+func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
+	step := config.DeployStep{
+		Command: "services.main.migrate",
+		With:    map[string]string{"z": "last", "a": "first", "m": "mid"},
+	}
+	got := stepCommand(step)
+	want := "./bin/devbox command run services.main.migrate --set a=first --set m=mid --set z=last"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestStepCommand_commandWithEmptyWith(t *testing.T) {
+	step := config.DeployStep{Command: "services.main.migrate", With: map[string]string{}}
+	got := stepCommand(step)
+	want := "./bin/devbox command run services.main.migrate"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

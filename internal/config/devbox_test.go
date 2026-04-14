@@ -642,7 +642,7 @@ phases:
     description: Start containers
     steps:
       - name: up
-        make: up
+        command: up
         description: Start all containers
 `
 
@@ -703,12 +703,12 @@ func TestLoadDeployConfig_stepWithCmd(t *testing.T) {
 	if step.Cmd == "" {
 		t.Error("step.Cmd should be set for cmd: steps")
 	}
-	if step.Make != "" {
-		t.Error("step.Make should be empty for cmd: steps")
+	if step.Command != "" {
+		t.Error("step.Command should be empty for cmd: steps")
 	}
 }
 
-func TestLoadDeployConfig_stepWithMake(t *testing.T) {
+func TestLoadDeployConfig_stepWithCommand(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte(sampleDeployYML), 0644); err != nil {
@@ -722,11 +722,11 @@ func TestLoadDeployConfig_stepWithMake(t *testing.T) {
 	if step.Name != "up" {
 		t.Errorf("step.Name = %q, want up", step.Name)
 	}
-	if step.Make == "" {
-		t.Error("step.Make should be set for make: steps")
+	if step.Command == "" {
+		t.Error("step.Command should be set for command: steps")
 	}
 	if step.Cmd != "" {
-		t.Error("step.Cmd should be empty for make: steps")
+		t.Error("step.Cmd should be empty for command: steps")
 	}
 }
 
@@ -807,13 +807,13 @@ func TestLoadDeployConfig_emptyPhases(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepBothCmdAndMake(t *testing.T) {
+func TestLoadDeployConfig_stepBothCmdAndCommand(t *testing.T) {
 	yml := `phases:
   - name: setup
     steps:
       - name: bad-step
         cmd: echo hi
-        make: up
+        command: services.main.migrate
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
@@ -822,7 +822,7 @@ func TestLoadDeployConfig_stepBothCmdAndMake(t *testing.T) {
 	}
 	_, err := LoadDeployConfig(path)
 	if err == nil {
-		t.Fatal("LoadDeployConfig: expected error for step with both cmd and make, got nil")
+		t.Fatal("LoadDeployConfig: expected error for step with both cmd and command, got nil")
 	}
 }
 
@@ -868,6 +868,38 @@ func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 	}
 	if step.Mode != "replace" {
 		t.Errorf("Mode = %q, want replace", step.Mode)
+	}
+}
+
+func TestLoadDeployConfig_stepWithCommandAndWith(t *testing.T) {
+	yml := `phases:
+  - name: init
+    steps:
+      - name: migrate
+        command: services.main.migrate
+        with:
+          db: mydb
+          env: testing
+        description: Run migrations
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	step := cfg.Phases[0].Steps[0]
+	if step.Command != "services.main.migrate" {
+		t.Errorf("Command = %q, want services.main.migrate", step.Command)
+	}
+	if step.With["db"] != "mydb" {
+		t.Errorf("With[db] = %q, want mydb", step.With["db"])
+	}
+	if step.With["env"] != "testing" {
+		t.Errorf("With[env] = %q, want testing", step.With["env"])
 	}
 }
 

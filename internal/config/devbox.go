@@ -75,10 +75,11 @@ type DeployPhase struct {
 }
 
 // DeployStep is a single atomic deploy action.
-// Exactly one of Cmd, Make, or ServiceConfigsCopy must be set.
+// Exactly one of Cmd, Command, or ServiceConfigsCopy must be set.
 //
 //   - Cmd                — shell command executed directly via os/exec
-//   - Make               — Make target executed via `make <target>`
+//   - Command            — devbox command ID (e.g. "services.main.migrate"); dispatched via command runner
+//   - With               — param overrides passed to the command runner (used with Command)
 //   - ServiceConfigsCopy — service name; copies all files declared in services.<name>.configs
 //     from configs/services/<name>/ into services/<name>/configs/ using Mode (default: replace)
 //   - When — skip condition; three expression kinds are supported:
@@ -94,14 +95,15 @@ type DeployPhase struct {
 //     as When (builtin predicates and "cmd: <command>"), but no Go templates.
 //     Deploy is aborted with an error when the check returns false.
 type DeployStep struct {
-	Name               string `yaml:"name"`
-	Cmd                string `yaml:"cmd"`
-	Make               string `yaml:"make"`
-	ServiceConfigsCopy string `yaml:"service_configs_copy"`
-	Mode               string `yaml:"mode"`
-	Description        string `yaml:"description"`
-	When               string `yaml:"when"`
-	Check              string `yaml:"check"`
+	Name               string            `yaml:"name"`
+	Cmd                string            `yaml:"cmd"`
+	Command            string            `yaml:"command"`
+	With               map[string]string `yaml:"with"`
+	ServiceConfigsCopy string            `yaml:"service_configs_copy"`
+	Mode               string            `yaml:"mode"`
+	Description        string            `yaml:"description"`
+	When               string            `yaml:"when"`
+	Check              string            `yaml:"check"`
 }
 
 // ComposeConfig holds Docker Compose file declarations.
@@ -485,17 +487,17 @@ func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
 			if step.Cmd != "" {
 				set++
 			}
-			if step.Make != "" {
+			if step.Command != "" {
 				set++
 			}
 			if step.ServiceConfigsCopy != "" {
 				set++
 			}
 			if set > 1 {
-				return nil, fmt.Errorf("deploy step %q (phase %q): only one of cmd, make, or service_configs_copy may be set", step.Name, phase.Name)
+				return nil, fmt.Errorf("deploy step %q (phase %q): only one of cmd, command, or service_configs_copy may be set", step.Name, phase.Name)
 			}
 			if set == 0 {
-				return nil, fmt.Errorf("deploy step %q (phase %q): exactly one of cmd, make, or service_configs_copy must be set", step.Name, phase.Name)
+				return nil, fmt.Errorf("deploy step %q (phase %q): exactly one of cmd, command, or service_configs_copy must be set", step.Name, phase.Name)
 			}
 		}
 	}

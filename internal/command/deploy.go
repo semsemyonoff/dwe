@@ -10,9 +10,11 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall"
 
+	"devbox-cli/internal/commands"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
@@ -409,6 +411,11 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 			}
 
 			workDir := filepath.Dir(flags.configPath)
+			reg, err := loadCommandRegistry(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading command registry: %w", err)
+			}
+
 			logsDir := filepath.Join(workDir, "logs")
 			if err := os.MkdirAll(logsDir, 0o755); err != nil {
 				return fmt.Errorf("creating logs directory %s: %w", logsDir, err)
@@ -459,7 +466,7 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 					}
 				}
 
-				if stepErr := execStep(rs.step, workDir); stepErr != nil {
+				if stepErr := execStep(rs.step, workDir, cfg, reg); stepErr != nil {
 					w.Error(fmt.Sprintf("Deploy failed at step %q", rs.stepAddress()))
 					w.Error("  " + stepErr.Error())
 					w.Warning("Full output saved to: " + logPath)
@@ -527,10 +534,10 @@ func sourceDotEnv(path string) error {
 	return nil
 }
 
-// stepBadge returns the display badge for a step: [cmd], [make], or [config].
+// stepBadge returns the display badge for a step: [cmd], [command], or [config].
 func stepBadge(step config.DeployStep) string {
-	if step.Make != "" {
-		return "[make]"
+	if step.Command != "" {
+		return "[command]"
 	}
 	if step.ServiceConfigsCopy != "" {
 		return "[config]"
@@ -539,12 +546,24 @@ func stepBadge(step config.DeployStep) string {
 }
 
 // stepCommand returns the resolved shell command for a step.
-// For make: steps, it returns "make -f Makefile <target>".
+// For command: steps, it returns "devbox command run <id> [--set key=value...]".
 // For service_configs_copy: steps, it returns the equivalent devbox deploy config command.
 // For cmd: steps it returns the raw command.
 func stepCommand(step config.DeployStep) string {
-	if step.Make != "" {
-		return "make -f Makefile " + strings.TrimSpace(step.Make)
+	if step.Command != "" {
+		parts := []string{"./bin/devbox", "command", "run", strings.TrimSpace(step.Command)}
+		// Sort With keys for deterministic output.
+		if len(step.With) > 0 {
+			keys := make([]string, 0, len(step.With))
+			for k := range step.With {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				parts = append(parts, "--set", k+"="+step.With[k])
+			}
+		}
+		return strings.Join(parts, " ")
 	}
 	if step.ServiceConfigsCopy != "" {
 		mode := step.Mode
@@ -622,25 +641,25 @@ func (s *ansiStripper) Write(p []byte) (int, error) {
 	return len(p), err
 }
 
-// execStep executes a deploy step in workDir. For cmd: steps it runs the command via sh -c;
-// for make: steps it runs make <target>. Output is attached to the current process
-// stdin/stdout/stderr. workDir must be the project root so that relative paths in
-// commands and Makefile resolution work correctly.
+// execStep executes a deploy step in workDir.
+// For cmd: steps it runs the command via sh -c.
+// For command: steps it dispatches to the command runner via cfg and reg.
+// For service_configs_copy: steps it runs the equivalent devbox CLI command.
+// Output is attached to the current process stdin/stdout/stderr.
+// workDir must be the project root so that relative paths in commands work correctly.
 //
 // Signal handling: the child inherits devbox's terminal foreground process group,
 // so Ctrl+C (SIGINT) is delivered by the terminal directly to the entire group
-// (devbox + make + shell + docker). Make recipes and shell traps handle Docker
-// container cleanup. devbox suppresses its own default SIGINT handler while waiting
-// so it does not exit before the child finishes cleanup. A second Ctrl+C restores
-// the default handler, allowing the user to force-exit if cleanup hangs.
-// execStep executes a single deploy step. Child process stdout and stderr are
-// connected directly to os.Stdout/os.Stderr so TTY detection works correctly
-// (docker compose progress renderers, build output, etc.).
-func execStep(step config.DeployStep, workDir string) error {
+// (devbox + shell + docker). devbox suppresses its own default SIGINT handler while
+// waiting so it does not exit before the child finishes cleanup. A second Ctrl+C
+// restores the default handler, allowing the user to force-exit if cleanup hangs.
+func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry) error {
+	if step.Command != "" {
+		return execCommandStep(step, workDir, cfg, reg)
+	}
+
 	var cmd *exec.Cmd
 	switch {
-	case step.Make != "":
-		cmd = exec.Command("make", "-f", "Makefile", strings.TrimSpace(step.Make))
 	case step.ServiceConfigsCopy != "":
 		cmd = exec.Command("sh", "-c", stepCommand(step))
 	default:
@@ -681,6 +700,49 @@ func execStep(step config.DeployStep, workDir string) error {
 		return waitErr
 	}
 	return nil
+}
+
+// execCommandStep executes a deploy step with a command: reference via the command runner.
+// It looks up the command ID in the registry, resolves params (merging step.With overrides),
+// resolves context, and dispatches to the appropriate runner. Output goes directly to
+// os.Stdout/os.Stderr so TTY detection works correctly.
+func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry) error {
+	if reg == nil {
+		return fmt.Errorf("command registry not available for step %q (command: %s)", step.Name, step.Command)
+	}
+	def, err := reg.Get(step.Command)
+	if err != nil {
+		return fmt.Errorf("step %q: %w", step.Name, err)
+	}
+	params, err := commands.ResolveParams(def.Params, step.With, cfg)
+	if err != nil {
+		return fmt.Errorf("step %q: resolving params: %w", step.Name, err)
+	}
+	ctx, err := commands.ResolveContext(def.Context, cfg)
+	if err != nil {
+		return fmt.Errorf("step %q: resolving context: %w", step.Name, err)
+	}
+	rctx := &tpl.RenderContext{
+		Raw:     cfg.Raw,
+		Params:  params,
+		Context: ctx,
+		Host:    tpl.CurrentHostInfo(),
+	}
+	runner, err := commands.NewRunner(def)
+	if err != nil {
+		return fmt.Errorf("step %q: %w", step.Name, err)
+	}
+	return runner.Run(commands.RunContext{
+		Cmd:         def,
+		Params:      params,
+		Context:     ctx,
+		Render:      rctx,
+		Config:      cfg,
+		Registry:    reg,
+		ProjectRoot: workDir,
+		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
+	})
 }
 
 func newDeployStepCmd(flags *rootFlags) *cobra.Command {
@@ -729,7 +791,11 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 			}
 
 			workDir := filepath.Dir(flags.configPath)
-			if err := execStep(step, workDir); err != nil {
+			reg, err := loadCommandRegistry(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading command registry: %w", err)
+			}
+			if err := execStep(step, workDir, cfg, reg); err != nil {
 				return err
 			}
 
