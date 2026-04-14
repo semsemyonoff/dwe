@@ -45,6 +45,7 @@ func newDeployCmd(flags *rootFlags) *cobra.Command {
 
 func newDeployPlanCmd(flags *rootFlags) *cobra.Command {
 	var format string
+	var serviceName string
 
 	cmd := &cobra.Command{
 		Use:   "plan",
@@ -56,7 +57,15 @@ func newDeployPlanCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			steps, err := resolveDeployPlan(cfg)
+			var steps []resolvedStep
+			if serviceName != "" {
+				if _, ok := cfg.Services[serviceName]; !ok {
+					return fmt.Errorf("service %q not found in config", serviceName)
+				}
+				steps, err = resolveServiceDeployPlan(cfg, serviceName)
+			} else {
+				steps, err = resolveDeployPlan(cfg)
+			}
 			if err != nil {
 				return fmt.Errorf("resolving deploy plan: %w", err)
 			}
@@ -73,24 +82,39 @@ func newDeployPlanCmd(flags *rootFlags) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table or shell")
+	cmd.Flags().StringVar(&serviceName, "service", "", "show plan for a single service only")
 	return cmd
 }
 
 // resolvedStep holds a deploy step together with the phase it belongs to,
 // after when-condition filtering.
 //
+// service is non-empty for steps that belong to a per-service deploy pipeline.
 // runtimeWhen is non-empty when the step's When condition is a runtime expression
 // (builtin predicate or cmd:). Such conditions are NOT evaluated at plan-resolution
 // time — they are checked immediately before the step executes.
 type resolvedStep struct {
 	phase       config.DeployPhase
 	step        config.DeployStep
+	service     string // non-empty for per-service steps (e.g. "main")
 	runtimeWhen string // copy of step.When when IsRuntime; empty otherwise
+}
+
+// stepAddress returns the full address of a step for display and lookup:
+//   - orchestrator steps: "<phase>/<step>"
+//   - service steps:      "<service>/<phase>/<step>"
+func (rs resolvedStep) stepAddress() string {
+	if rs.service != "" {
+		return rs.service + "/" + rs.phase.Name + "/" + rs.step.Name
+	}
+	return rs.phase.Name + "/" + rs.step.Name
 }
 
 // resolveDeployPlan builds the ordered list of active steps from cfg.Deploy.
 // The implicit .env generation step is always prepended as step 0 (no phase).
 // Steps whose when condition evaluates to false are excluded.
+// Phases with deploy_services=true are expanded by inlining per-service
+// deploy pipelines in topological dependency order.
 func resolveDeployPlan(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 	// Implicit first step — no associated phase.
 	implicit := resolvedStep{
@@ -100,41 +124,197 @@ func resolveDeployPlan(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 	result := []resolvedStep{implicit}
 
 	for _, phase := range cfg.Deploy.Phases {
-		for _, step := range phase.Steps {
-			if step.When != "" {
-				if condition.IsRuntime(step.When) {
-					// Runtime conditions (builtin predicates, cmd:) are evaluated
-					// at step-execution time, not at plan-resolution time.
-					result = append(result, resolvedStep{phase: phase, step: step, runtimeWhen: step.When})
-					continue
-				}
-				// Go template condition — evaluate against config now.
-				ok, err := tpl.EvalCondition(step.When, cfg)
-				if err != nil {
-					return nil, fmt.Errorf("evaluating when condition for step %s/%s: %w", phase.Name, step.Name, err)
-				}
-				if !ok {
-					continue
-				}
+		if phase.DeployServices {
+			serviceSteps, err := resolveServicesDeploy(cfg)
+			if err != nil {
+				return nil, fmt.Errorf("resolving services deploy: %w", err)
 			}
-			result = append(result, resolvedStep{phase: phase, step: step})
+			result = append(result, serviceSteps...)
+			continue
 		}
+		resolved, err := resolvePhaseSteps(cfg, phase, "")
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, resolved...)
 	}
 
 	return result, nil
 }
 
+// resolveServiceDeployPlan builds the step list for a single service.
+// Used by --service flag to deploy only one service.
+func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]resolvedStep, error) {
+	// Implicit first step.
+	implicit := resolvedStep{
+		phase: config.DeployPhase{Name: "env", Description: "Environment"},
+		step:  implicitEnvStep,
+	}
+	result := []resolvedStep{implicit}
+
+	baseDir := filepath.Dir(cfg.Raw["__configPath"].(string))
+	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
+		serviceName: cfg.Services[serviceName],
+	})
+	if err != nil {
+		return nil, err
+	}
+	svcDeploy, ok := svcDeploys[serviceName]
+	if !ok {
+		return nil, fmt.Errorf("no deploy pipeline found for service %q (expected devbox/deploy/%s.yml)", serviceName, serviceName)
+	}
+
+	for _, phase := range svcDeploy.Phases {
+		resolved, err := resolvePhaseSteps(cfg, phase, serviceName)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, resolved...)
+	}
+	return result, nil
+}
+
+// resolveServicesDeploy loads all per-service deploy pipelines, sorts them
+// by dependency order, and returns their steps inlined.
+func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
+	baseDir := filepath.Dir(cfg.Raw["__configPath"].(string))
+
+	// Only deploy enabled services.
+	enabled := make(map[string]config.ServiceConfig)
+	for name, svc := range cfg.Services {
+		if svc.Enabled {
+			enabled[name] = svc
+		}
+	}
+
+	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, enabled)
+	if err != nil {
+		return nil, err
+	}
+	if len(svcDeploys) == 0 {
+		return nil, nil
+	}
+
+	// Collect names that have deploy files and toposort.
+	var names []string
+	for name := range svcDeploys {
+		names = append(names, name)
+	}
+	sorted, err := config.TopoSortServices(names, cfg.Services)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []resolvedStep
+	for _, name := range sorted {
+		deploy := svcDeploys[name]
+		for _, phase := range deploy.Phases {
+			resolved, err := resolvePhaseSteps(cfg, phase, name)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, resolved...)
+		}
+	}
+	return result, nil
+}
+
+// resolvePhaseSteps resolves steps for a single phase, evaluating when conditions.
+// service is empty for orchestrator phases.
+//
+// Phase-level when is evaluated first:
+//   - Go template: evaluated at plan time; entire phase is excluded when false.
+//   - Runtime condition: propagated to each step that does not already carry its
+//     own runtime when condition. The phase condition is stored in runtimeWhen and
+//     evaluated before each such step at execution time.
+func resolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, service string) ([]resolvedStep, error) {
+	// Evaluate phase-level when condition.
+	phaseRuntimeWhen := ""
+	if phase.When != "" {
+		if condition.IsRuntime(phase.When) {
+			// Propagate to steps at execution time.
+			phaseRuntimeWhen = phase.When
+		} else {
+			// Template condition — evaluate at plan time.
+			ok, err := tpl.EvalCondition(phase.When, cfg)
+			if err != nil {
+				prefix := phase.Name
+				if service != "" {
+					prefix = service + "/" + prefix
+				}
+				return nil, fmt.Errorf("evaluating when condition for phase %s: %w", prefix, err)
+			}
+			if !ok {
+				return nil, nil
+			}
+		}
+	}
+
+	var result []resolvedStep
+	for _, step := range phase.Steps {
+		if step.When != "" {
+			if condition.IsRuntime(step.When) {
+				// Step has its own runtime condition — it takes priority over the phase condition.
+				result = append(result, resolvedStep{phase: phase, step: step, service: service, runtimeWhen: step.When})
+				continue
+			}
+			ok, err := tpl.EvalCondition(step.When, cfg)
+			if err != nil {
+				prefix := phase.Name + "/" + step.Name
+				if service != "" {
+					prefix = service + "/" + prefix
+				}
+				return nil, fmt.Errorf("evaluating when condition for step %s: %w", prefix, err)
+			}
+			if !ok {
+				continue
+			}
+		}
+		// Apply phase runtime condition to steps that have no condition of their own.
+		result = append(result, resolvedStep{phase: phase, step: step, service: service, runtimeWhen: phaseRuntimeWhen})
+	}
+	return result, nil
+}
+
 // printDeployPlanTable prints the plan in human-readable table format.
 func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
-	lastPhase := ""
+	lastPhaseKey := "" // "phase" or "service/phase" to detect transitions
+	lastService := ""
 	for _, rs := range steps {
-		if rs.phase.Name != lastPhase {
-			phaseLine := rs.phase.Name
-			if rs.phase.Description != "" {
-				phaseLine = rs.phase.Name + ": " + rs.phase.Description
+		phaseKey := rs.phase.Name
+		if rs.service != "" {
+			phaseKey = rs.service + "/" + rs.phase.Name
+		}
+
+		if phaseKey != lastPhaseKey {
+			// Show service header when entering a new service.
+			if rs.service != "" && rs.service != lastService {
+				w.TableSubheader("service: " + rs.service)
+				lastService = rs.service
 			}
-			w.TableSubheader(phaseLine)
-			lastPhase = rs.phase.Name
+			phaseLine := rs.phase.Name
+			if rs.service != "" {
+				phaseLine = rs.service + "/" + rs.phase.Name
+			}
+			if rs.phase.Description != "" {
+				phaseLine += ": " + rs.phase.Description
+			}
+			if rs.phase.When != "" {
+				phaseLine += " [when: " + rs.phase.When + "]"
+			}
+			indent := ""
+			if rs.service != "" {
+				indent = "  "
+			}
+			w.TableSubheader(indent + phaseLine)
+			lastPhaseKey = phaseKey
+		}
+
+		indent := "  "
+		detailIndent := "        "
+		if rs.service != "" {
+			indent = "    "
+			detailIndent = "          "
 		}
 
 		badge := stepBadge(rs.step)
@@ -143,18 +323,20 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 		cmd := stepCommand(rs.step)
 
 		if desc != "" {
-			w.Definition(badge+" "+name, desc, 2, "", "—")
+			w.Definition(badge+" "+name, desc, len(indent), "", "—")
 		} else {
-			w.Println("  " + badge + " " + name)
+			w.Println(indent + badge + " " + name)
 		}
 		if cmd != "" {
-			w.Println("        " + cmd)
+			w.Println(detailIndent + cmd)
 		}
-		if rs.runtimeWhen != "" {
-			w.Println("        [when: " + rs.runtimeWhen + "]")
+		// Show step-level when only when it differs from the phase condition
+		// (phase condition is already shown in the phase header).
+		if rs.runtimeWhen != "" && rs.runtimeWhen != rs.phase.When {
+			w.Println(detailIndent + "[when: " + rs.runtimeWhen + "]")
 		}
 		if rs.step.Check != "" {
-			w.Println("        [check: " + rs.step.Check + "]")
+			w.Println(detailIndent + "[check: " + rs.step.Check + "]")
 		}
 	}
 }
@@ -167,8 +349,21 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 // available to all subsequent steps in the generated script.
 func printDeployPlanShell(steps []resolvedStep, w io.Writer) {
 	_, _ = fmt.Fprintln(w, "set -e")
+	lastService := ""
+	lastPhaseKey := ""
 	for _, rs := range steps {
-		if rs.runtimeWhen != "" {
+		if rs.service != "" && rs.service != lastService {
+			_, _ = fmt.Fprintf(w, "\n# === service: %s ===\n", rs.service)
+			lastService = rs.service
+		}
+		phaseKey := rs.service + "/" + rs.phase.Name
+		if phaseKey != lastPhaseKey {
+			if rs.phase.When != "" {
+				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.phase.Name, rs.phase.When)
+			}
+			lastPhaseKey = phaseKey
+		}
+		if rs.runtimeWhen != "" && rs.runtimeWhen != rs.phase.When {
 			_, _ = fmt.Fprintf(w, "# when: %s\n", rs.runtimeWhen)
 		}
 		_, _ = fmt.Fprintln(w, stepCommand(rs.step))
@@ -187,7 +382,9 @@ func printDeployPlanShell(steps []resolvedStep, w io.Writer) {
 // Devbox status messages are teed to deploy.log. Child process output
 // (docker, make) goes directly to os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	var serviceName string
+
+	cmd := &cobra.Command{
 		Use:          "run",
 		Short:        "Execute the deploy plan",
 		Args:         cobra.NoArgs,
@@ -198,7 +395,15 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			steps, err := resolveDeployPlan(cfg)
+			var steps []resolvedStep
+			if serviceName != "" {
+				if _, ok := cfg.Services[serviceName]; !ok {
+					return fmt.Errorf("service %q not found in config", serviceName)
+				}
+				steps, err = resolveServiceDeployPlan(cfg, serviceName)
+			} else {
+				steps, err = resolveDeployPlan(cfg)
+			}
 			if err != nil {
 				return fmt.Errorf("resolving deploy plan: %w", err)
 			}
@@ -221,37 +426,41 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 			tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
 			w := render.NewWriter(tee)
 			totalSteps := len(steps)
-			lastPhase := ""
+			lastPhaseKey := ""
 
 			for i, rs := range steps {
-				if rs.phase.Name != lastPhase {
-					phaseLabel := rs.phase.Name
+				phaseKey := rs.phase.Name
+				if rs.service != "" {
+					phaseKey = rs.service + "/" + rs.phase.Name
+				}
+				if phaseKey != lastPhaseKey {
+					phaseLabel := phaseKey
 					if rs.phase.Description != "" {
-						phaseLabel = rs.phase.Name + ": " + rs.phase.Description
+						phaseLabel += ": " + rs.phase.Description
 					}
 					w.Info("Phase: " + phaseLabel)
-					lastPhase = rs.phase.Name
+					lastPhaseKey = phaseKey
 				}
 
-				stepLabel := rs.step.Name
+				stepLabel := rs.stepAddress()
 				if rs.step.Description != "" {
-					stepLabel = rs.step.Name + ": " + rs.step.Description
+					stepLabel += ": " + rs.step.Description
 				}
 				w.Info(fmt.Sprintf("  [%d/%d] %s", i+1, totalSteps, stepLabel))
 
 				if rs.runtimeWhen != "" {
 					ok, err := condition.EvalRuntime(rs.runtimeWhen, workDir)
 					if err != nil {
-						return fmt.Errorf("evaluating when condition for %s/%s: %w", rs.phase.Name, rs.step.Name, err)
+						return fmt.Errorf("evaluating when condition for %s: %w", rs.stepAddress(), err)
 					}
 					if !ok {
-						w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (when: %s)", i+1, totalSteps, rs.step.Name, rs.runtimeWhen))
+						w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (when: %s)", i+1, totalSteps, rs.stepAddress(), rs.runtimeWhen))
 						continue
 					}
 				}
 
 				if stepErr := execStep(rs.step, workDir); stepErr != nil {
-					w.Error(fmt.Sprintf("Deploy failed at phase %q, step %q", rs.phase.Name, rs.step.Name))
+					w.Error(fmt.Sprintf("Deploy failed at step %q", rs.stepAddress()))
 					w.Error("  " + stepErr.Error())
 					w.Warning("Full output saved to: " + logPath)
 					return ErrSilent
@@ -268,26 +477,29 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 				if rs.step.Check != "" {
 					ok, err := condition.EvalRuntime(rs.step.Check, workDir)
 					if err != nil {
-						w.Error(fmt.Sprintf("Deploy failed at phase %q, step %q: check error", rs.phase.Name, rs.step.Name))
+						w.Error(fmt.Sprintf("Deploy failed at step %q: check error", rs.stepAddress()))
 						w.Error("  " + err.Error())
 						w.Warning("Full output saved to: " + logPath)
 						return ErrSilent
 					}
 					if !ok {
-						w.Error(fmt.Sprintf("Deploy failed at phase %q, step %q: check did not pass", rs.phase.Name, rs.step.Name))
+						w.Error(fmt.Sprintf("Deploy failed at step %q: check did not pass", rs.stepAddress()))
 						w.Error(fmt.Sprintf("  check: %s", rs.step.Check))
 						w.Warning("Full output saved to: " + logPath)
 						return ErrSilent
 					}
 				}
 
-				w.Success(fmt.Sprintf("  [%d/%d] Done: %s", i+1, totalSteps, rs.step.Name))
+				w.Success(fmt.Sprintf("  [%d/%d] Done: %s", i+1, totalSteps, rs.stepAddress()))
 			}
 
 			w.Info("Deploy log saved to: " + logPath)
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&serviceName, "service", "", "deploy a single service only")
+	return cmd
 }
 
 // sourceDotEnv reads a .env file and sets each KEY=VALUE pair as an OS
@@ -344,27 +556,56 @@ func stepCommand(step config.DeployStep) string {
 	return strings.TrimSpace(step.Cmd)
 }
 
-// findStep looks up a step by "<phase>/<step>" address in the deploy config.
-// Returns the phase and step if found, or an error if not.
+// findStep looks up a step by address in the deploy config.
+// Supports two forms:
+//   - "<phase>/<step>"          — orchestrator step
+//   - "<service>/<phase>/<step>" — per-service step (loaded from devbox/deploy/<service>.yml)
 func findStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, config.DeployStep, error) {
-	parts := strings.SplitN(address, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("invalid step address %q: expected <phase>/<step>", address)
-	}
-	phaseName, stepName := parts[0], parts[1]
-
-	for _, phase := range cfg.Deploy.Phases {
-		if phase.Name != phaseName {
-			continue
-		}
-		for _, step := range phase.Steps {
-			if step.Name == stepName {
-				return phase, step, nil
+	parts := strings.Split(address, "/")
+	switch len(parts) {
+	case 2:
+		// Orchestrator step: <phase>/<step>
+		phaseName, stepName := parts[0], parts[1]
+		for _, phase := range cfg.Deploy.Phases {
+			if phase.Name != phaseName {
+				continue
 			}
+			for _, step := range phase.Steps {
+				if step.Name == stepName {
+					return phase, step, nil
+				}
+			}
+			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("step %q not found in phase %q", stepName, phaseName)
 		}
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("step %q not found in phase %q", stepName, phaseName)
+		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("phase %q not found", phaseName)
+
+	case 3:
+		// Service step: <service>/<phase>/<step>
+		serviceName, phaseName, stepName := parts[0], parts[1], parts[2]
+		if _, ok := cfg.Services[serviceName]; !ok {
+			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("service %q not found", serviceName)
+		}
+		baseDir := filepath.Dir(cfg.Raw["__configPath"].(string))
+		svcDeploy, err := config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy", serviceName+".yml"))
+		if err != nil {
+			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("loading deploy config for service %q: %w", serviceName, err)
+		}
+		for _, phase := range svcDeploy.Phases {
+			if phase.Name != phaseName {
+				continue
+			}
+			for _, step := range phase.Steps {
+				if step.Name == stepName {
+					return phase, step, nil
+				}
+			}
+			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("step %q not found in phase %q of service %q", stepName, phaseName, serviceName)
+		}
+		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("phase %q not found in service %q", phaseName, serviceName)
+
+	default:
+		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("invalid step address %q: expected <phase>/<step> or <service>/<phase>/<step>", address)
 	}
-	return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("phase %q not found", phaseName)
 }
 
 // ansiRe matches ANSI/VT100 escape sequences and bare carriage returns.
@@ -545,19 +786,32 @@ func newDeployConfigCmd(flags *rootFlags) *cobra.Command {
 			destDir := filepath.Join(projectRoot, svc.Dir, "configs")
 
 			w := render.Stdout()
-			for _, filename := range svc.Configs {
-				src := filepath.Join(srcDir, filename)
-				dest := filepath.Join(destDir, filename)
+			svcDir := filepath.Join(projectRoot, svc.Dir)
+			for _, entry := range svc.Configs {
+				src := filepath.Join(srcDir, entry.File)
+				dest := filepath.Join(destDir, entry.File)
 				// Guard against path traversal: dest must remain inside destDir.
 				cleanDestDir := filepath.Clean(destDir)
 				cleanDest := filepath.Clean(dest)
 				if cleanDest == cleanDestDir || !strings.HasPrefix(cleanDest, cleanDestDir+string(filepath.Separator)) {
-					return fmt.Errorf("service %q: config %q escapes the configs directory", serviceName, filename)
+					return fmt.Errorf("service %q: config %q escapes the configs directory", serviceName, entry.File)
 				}
 				if err := copyConfigFile(src, dest, mode); err != nil {
 					return fmt.Errorf("copying %s → %s: %w", src, dest, err)
 				}
 				w.Success(fmt.Sprintf("config %s → %s [%s]", src, dest, mode))
+
+				// If a mountpoint is declared, ensure the file exists at that path
+				// (relative to the service dir) so Docker Desktop virtiofs can create
+				// a nested file bind mount over it. Touch only — content comes from
+				// the bind mount at runtime.
+				if entry.Mountpoint != "" {
+					mp := filepath.Join(svcDir, entry.Mountpoint)
+					if err := touchFile(mp); err != nil {
+						return fmt.Errorf("creating mountpoint %s: %w", mp, err)
+					}
+					w.Success(fmt.Sprintf("mountpoint %s [touched]", mp))
+				}
 			}
 			return nil
 		},
@@ -698,10 +952,10 @@ Intended as a deploy step check condition:
 			destDir := filepath.Join(projectRoot, svc.Dir, "configs")
 
 			var missing []string
-			for _, filename := range svc.Configs {
-				dest := filepath.Join(destDir, filename)
+			for _, entry := range svc.Configs {
+				dest := filepath.Join(destDir, entry.File)
 				if !isRegularFile(dest) {
-					missing = append(missing, filepath.Join(svc.Dir, "configs", filename))
+					missing = append(missing, filepath.Join(svc.Dir, "configs", entry.File))
 				}
 			}
 
@@ -721,6 +975,22 @@ Intended as a deploy step check condition:
 func isRegularFile(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.Mode().IsRegular()
+}
+
+// touchFile creates an empty file at path (and its parent directories) if it does
+// not already exist. If it exists it is left unchanged.
+func touchFile(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create parent dir: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL, 0o644)
+	if os.IsExist(err) {
+		return nil // already exists — nothing to do
+	}
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // parseEnvKeys returns a set of KEY names found in an .env file content.

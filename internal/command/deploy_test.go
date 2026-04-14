@@ -16,7 +16,7 @@ import (
 func makeDeployCfg(phases []config.DeployPhase) *config.DevboxConfig {
 	return &config.DevboxConfig{
 		Deploy: config.DeployConfig{Phases: phases},
-		Raw:    map[string]any{},
+		Raw:    map[string]any{"__configPath": "/tmp/devbox.yml"},
 	}
 }
 
@@ -38,6 +38,11 @@ func makeStep(name, target string) config.DeployStep {
 // whenStep builds a cmd-type step with a when condition.
 func whenStep(name, cmd, when string) config.DeployStep {
 	return config.DeployStep{Name: name, Cmd: cmd, Description: name + " description", When: when}
+}
+
+// phaseWithWhen builds a DeployPhase with a when condition.
+func phaseWithWhen(name, when string, steps ...config.DeployStep) config.DeployPhase {
+	return config.DeployPhase{Name: name, Description: name + " phase", When: when, Steps: steps}
 }
 
 // --- resolveDeployPlan tests ---
@@ -968,6 +973,155 @@ func TestResolveDeployPlan_runtimeWhenHasEmptyRuntimeWhenForTemplateStep(t *test
 	}
 }
 
+// --- phase-level when tests ---
+
+func TestResolvePhaseSteps_phaseFalsyTemplateWhenExcludesAllSteps(t *testing.T) {
+	// Phase with a false template when — all steps excluded.
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWithWhen("setup", "{{.Runtime.UseHTTPS}}",
+			cmdStep("step1", "cmd1"),
+			cmdStep("step2", "cmd2"),
+		),
+	})
+	cfg.Runtime = config.RuntimeConfig{UseHTTPS: false}
+
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only implicit step, phase excluded.
+	if len(steps) != 1 {
+		t.Fatalf("want 1 step (implicit only), got %d", len(steps))
+	}
+}
+
+func TestResolvePhaseSteps_phaseTruthyTemplateWhenIncludesSteps(t *testing.T) {
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWithWhen("setup", "{{.Runtime.UseHTTPS}}",
+			cmdStep("step1", "cmd1"),
+		),
+	})
+	cfg.Runtime = config.RuntimeConfig{UseHTTPS: true}
+
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// implicit + step1
+	if len(steps) != 2 {
+		t.Fatalf("want 2 steps, got %d", len(steps))
+	}
+}
+
+func TestResolvePhaseSteps_phaseRuntimeWhenPropagatedToSteps(t *testing.T) {
+	// Phase with a runtime when — propagated to steps without their own condition.
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWithWhen("setup", "dir-empty services/main/src",
+			cmdStep("create-dirs", "mkdir -p services/main/src"),
+			cmdStep("install", "make install"),
+		),
+	})
+
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// implicit + 2 steps (not filtered — runtime condition)
+	if len(steps) != 3 {
+		t.Fatalf("want 3 steps, got %d", len(steps))
+	}
+	// Both steps should carry the phase runtimeWhen.
+	for _, rs := range steps[1:] {
+		if rs.runtimeWhen != "dir-empty services/main/src" {
+			t.Errorf("step %q: runtimeWhen = %q, want dir-empty services/main/src", rs.step.Name, rs.runtimeWhen)
+		}
+	}
+}
+
+func TestResolvePhaseSteps_stepOwnRuntimeWhenTakesPriority(t *testing.T) {
+	// Step with its own runtime when overrides the phase condition.
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWithWhen("setup", "dir-empty services/main/src",
+			cmdStep("plain", "echo plain"),
+			runtimeWhenStep("install", "make install", "dir-empty services/main/src/special"),
+		),
+	})
+
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(steps) != 3 {
+		t.Fatalf("want 3 steps, got %d", len(steps))
+	}
+	plain := steps[1]
+	install := steps[2]
+
+	if plain.runtimeWhen != "dir-empty services/main/src" {
+		t.Errorf("plain: runtimeWhen = %q, want phase condition", plain.runtimeWhen)
+	}
+	if install.runtimeWhen != "dir-empty services/main/src/special" {
+		t.Errorf("install: runtimeWhen = %q, want step's own condition", install.runtimeWhen)
+	}
+}
+
+func TestPrintDeployPlanTable_showsPhaseWhenInHeader(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	steps := []resolvedStep{
+		{
+			phase: config.DeployPhase{Name: "setup", Description: "Setup", When: "dir-empty services/main/src"},
+			step:  cmdStep("create-dirs", "mkdir"),
+		},
+	}
+	printDeployPlanTable(steps, w)
+	out := buf.String()
+
+	if !strings.Contains(out, "[when: dir-empty services/main/src]") {
+		t.Errorf("expected phase when annotation in header, got:\n%s", out)
+	}
+}
+
+func TestPrintDeployPlanShell_showsPhaseWhenComment(t *testing.T) {
+	var buf bytes.Buffer
+
+	steps := []resolvedStep{
+		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
+		{
+			phase:       config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"},
+			step:        cmdStep("create-dirs", "mkdir"),
+			runtimeWhen: "dir-empty services/main/src",
+		},
+	}
+	printDeployPlanShell(steps, &buf)
+	out := buf.String()
+
+	if !strings.Contains(out, "# phase setup [when: dir-empty services/main/src]") {
+		t.Errorf("expected phase when comment in shell output, got:\n%s", out)
+	}
+}
+
+func TestPrintDeployPlanShell_stepWhenNotDuplicatedWhenSameAsPhase(t *testing.T) {
+	// When step runtimeWhen == phase.When, it should not be printed twice.
+	var buf bytes.Buffer
+
+	phase := config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"}
+	steps := []resolvedStep{
+		{phase: phase, step: cmdStep("create-dirs", "mkdir"), runtimeWhen: "dir-empty services/main/src"},
+	}
+	printDeployPlanShell(steps, &buf)
+	out := buf.String()
+
+	// Phase comment should appear once; step-level "# when:" should not appear.
+	if strings.Count(out, "# when:") != 0 {
+		t.Errorf("step-level when comment should not appear when same as phase, got:\n%s", out)
+	}
+	if !strings.Contains(out, "# phase setup [when: dir-empty services/main/src]") {
+		t.Errorf("phase when comment missing:\n%s", out)
+	}
+}
+
 func TestPrintDeployPlanTable_showsRuntimeWhenAnnotation(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
@@ -1122,5 +1276,217 @@ func TestDeployConfigCheckCmd_emptyConfigsListReturnsNil(t *testing.T) {
 	cmd := newDeployConfigCheckCmd(flags)
 	if err := cmd.RunE(cmd, []string{"main"}); err != nil {
 		t.Errorf("expected nil for empty configs list, got: %v", err)
+	}
+}
+
+// --- stepAddress tests ---
+
+func TestStepAddress_orchestratorStep(t *testing.T) {
+	rs := resolvedStep{
+		phase: config.DeployPhase{Name: "start"},
+		step:  cmdStep("up", "make up"),
+	}
+	if got := rs.stepAddress(); got != "start/up" {
+		t.Errorf("stepAddress() = %q, want start/up", got)
+	}
+}
+
+func TestStepAddress_serviceStep(t *testing.T) {
+	rs := resolvedStep{
+		phase:   config.DeployPhase{Name: "init"},
+		step:    makeStep("migrate", "migrate"),
+		service: "main",
+	}
+	if got := rs.stepAddress(); got != "main/init/migrate" {
+		t.Errorf("stepAddress() = %q, want main/init/migrate", got)
+	}
+}
+
+// --- per-service deploy integration tests ---
+
+// writeServiceDeployFixture creates the full file layout for service deploy tests.
+func writeServiceDeployFixture(t *testing.T, orchestratorYML, serviceDeployYML string) string {
+	t.Helper()
+	dir := t.TempDir()
+	devboxPath := filepath.Join(dir, "devbox.yml")
+	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
+project:
+  name: laravel
+  prefix: devbox
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	servicesYML := `services:
+  main:
+    type: app
+    container: app-main
+    mandatory: true
+    dir: ./services/main
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if orchestratorYML != "" {
+		if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(orchestratorYML), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if serviceDeployYML != "" {
+		deployDir := filepath.Join(devboxDir, "deploy")
+		if err := os.MkdirAll(deployDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte(serviceDeployYML), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return devboxPath
+}
+
+func TestResolveDeployPlan_deployServicesInlines(t *testing.T) {
+	orchestrator := `phases:
+  - name: services
+    deploy_services: true
+    description: Deploy services
+  - name: start
+    description: Start
+    steps:
+      - name: up
+        make: up
+`
+	serviceDeploy := `phases:
+  - name: setup
+    description: Setup main
+    steps:
+      - name: create-dirs
+        cmd: mkdir -p services/main/src
+  - name: init
+    description: Init main
+    steps:
+      - name: migrate
+        make: migrate
+`
+	devboxPath := writeServiceDeployFixture(t, orchestrator, serviceDeploy)
+	cfg, err := config.LoadConfig(devboxPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("resolveDeployPlan: %v", err)
+	}
+
+	// Expected: implicit + create-dirs + migrate + up = 4
+	if len(steps) != 4 {
+		var names []string
+		for _, s := range steps {
+			names = append(names, s.stepAddress())
+		}
+		t.Fatalf("want 4 steps, got %d: %v", len(steps), names)
+	}
+
+	// Service steps should have service="main"
+	if steps[1].service != "main" {
+		t.Errorf("steps[1].service = %q, want main", steps[1].service)
+	}
+	if steps[1].stepAddress() != "main/setup/create-dirs" {
+		t.Errorf("steps[1] address = %q, want main/setup/create-dirs", steps[1].stepAddress())
+	}
+	if steps[2].stepAddress() != "main/init/migrate" {
+		t.Errorf("steps[2] address = %q, want main/init/migrate", steps[2].stepAddress())
+	}
+	// Orchestrator step should have empty service
+	if steps[3].service != "" {
+		t.Errorf("steps[3].service = %q, want empty", steps[3].service)
+	}
+	if steps[3].stepAddress() != "start/up" {
+		t.Errorf("steps[3] address = %q, want start/up", steps[3].stepAddress())
+	}
+}
+
+func TestResolveServiceDeployPlan_singleService(t *testing.T) {
+	serviceDeploy := `phases:
+  - name: setup
+    steps:
+      - name: create-dirs
+        cmd: mkdir -p services/main/src
+  - name: init
+    steps:
+      - name: migrate
+        make: migrate
+`
+	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
+	cfg, err := config.LoadConfig(devboxPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	steps, err := resolveServiceDeployPlan(cfg, "main")
+	if err != nil {
+		t.Fatalf("resolveServiceDeployPlan: %v", err)
+	}
+
+	// implicit + create-dirs + migrate = 3
+	if len(steps) != 3 {
+		t.Fatalf("want 3 steps, got %d", len(steps))
+	}
+	if steps[1].service != "main" {
+		t.Errorf("steps[1].service = %q, want main", steps[1].service)
+	}
+}
+
+func TestFindStep_threePartAddress(t *testing.T) {
+	serviceDeploy := `phases:
+  - name: init
+    steps:
+      - name: migrate
+        make: migrate
+        description: Run migrations
+`
+	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
+	cfg, err := config.LoadConfig(devboxPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	phase, step, err := findStep(cfg, "main/init/migrate")
+	if err != nil {
+		t.Fatalf("findStep: %v", err)
+	}
+	if phase.Name != "init" {
+		t.Errorf("phase.Name = %q, want init", phase.Name)
+	}
+	if step.Make != "migrate" {
+		t.Errorf("step.Make = %q, want migrate", step.Make)
+	}
+}
+
+func TestPrintDeployPlanTable_serviceStepsIndented(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	steps := []resolvedStep{
+		{phase: config.DeployPhase{Name: "env", Description: "Environment"}, step: implicitEnvStep},
+		{phase: config.DeployPhase{Name: "setup", Description: "Setup"}, step: cmdStep("create-dirs", "mkdir"), service: "main"},
+		{phase: config.DeployPhase{Name: "start", Description: "Start"}, step: makeStep("up", "up")},
+	}
+	printDeployPlanTable(steps, w)
+	out := buf.String()
+
+	if !strings.Contains(out, "service: main") {
+		t.Errorf("expected 'service: main' header, got:\n%s", out)
+	}
+	if !strings.Contains(out, "main/setup") {
+		t.Errorf("expected 'main/setup' phase, got:\n%s", out)
 	}
 }

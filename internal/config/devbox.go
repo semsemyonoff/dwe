@@ -54,10 +54,24 @@ type DeployConfig struct {
 }
 
 // DeployPhase groups a set of sequential deploy steps.
+// A phase with DeployServices=true is a marker: CLI resolves it by inlining
+// the deploy pipelines of all enabled services in dependency order.
+// Such phases must not contain Steps.
+//
+// When is an optional skip condition evaluated before any steps in the phase run.
+// It supports the same three expression kinds as DeployStep.When:
+//   - Go template "{{...}}"         — evaluated against config at plan time; phase excluded when false
+//   - Builtin predicate             — e.g. "dir-empty services/main/src" (runtime)
+//   - Shell command "cmd: <cmd>"    — evaluated at step-execution time (runtime)
+//
+// For runtime conditions the phase condition is applied to each step in the phase
+// that does not already carry its own runtime when condition.
 type DeployPhase struct {
-	Name        string       `yaml:"name"`
-	Description string       `yaml:"description"`
-	Steps       []DeployStep `yaml:"steps"`
+	Name           string       `yaml:"name"`
+	Description    string       `yaml:"description"`
+	When           string       `yaml:"when"`
+	Steps          []DeployStep `yaml:"steps"`
+	DeployServices bool         `yaml:"deploy_services"`
 }
 
 // DeployStep is a single atomic deploy action.
@@ -111,21 +125,62 @@ func (p ProjectConfig) FullName() string {
 	return p.Name
 }
 
+// ServiceConfigEntry represents one config file declared under a service's configs list.
+// It supports a string shorthand ("- .env") and an explicit struct form:
+//
+//   - file: .env
+//     mountpoint: src/.env
+//
+// The mountpoint field is optional. When set, deploy config touches that path
+// (relative to the service dir) after copying to configs/, so that Docker Desktop
+// virtiofs can create a nested file bind mount over it.
+type ServiceConfigEntry struct {
+	// File is the config filename. It is the source (configs/services/<svc>/<file>)
+	// and the default destination basename under services/<svc>/configs/.
+	File string
+	// Mountpoint is an optional path relative to the service dir (e.g. "src/.env").
+	// When set, deploy config touches this file after copying to configs/ so that
+	// Docker Desktop virtiofs can create a nested file bind mount over it.
+	Mountpoint string
+}
+
+// UnmarshalYAML supports both the string shorthand ("- .env") and the explicit
+// struct form ("- file: .env\n  mountpoint: src/.env").
+func (e *ServiceConfigEntry) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		e.File = value.Value
+		return nil
+	}
+	// Struct form: decode into a temporary alias to avoid recursion.
+	type entryAlias struct {
+		File       string `yaml:"file"`
+		Mountpoint string `yaml:"mountpoint"`
+	}
+	var a entryAlias
+	if err := value.Decode(&a); err != nil {
+		return err
+	}
+	e.File = a.File
+	e.Mountpoint = a.Mountpoint
+	return nil
+}
+
 // ServiceConfig describes a single application service.
 // Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
 // from the 3-layer config merge (mandatory services are always enabled).
 type ServiceConfig struct {
-	Type            string           `yaml:"type"`
-	Container       string           `yaml:"container"`
-	Mandatory       bool             `yaml:"mandatory"`
-	Enabled         bool             `yaml:"-"` // computed: mandatory || services.<name>.enabled
-	Dir             string           `yaml:"dir"`
-	DirInternal     string           `yaml:"dir_internal"`
-	WorkDirInternal string           `yaml:"work_dir_internal"`
-	Configs         []string         `yaml:"configs"`
-	Extends         string           `yaml:"extends"`
-	Compose         []string         `yaml:"compose"`
-	CLI             ServiceCLIConfig `yaml:"cli"`
+	Type            string               `yaml:"type"`
+	Container       string               `yaml:"container"`
+	Mandatory       bool                 `yaml:"mandatory"`
+	Enabled         bool                 `yaml:"-"` // computed: mandatory || services.<name>.enabled
+	Dir             string               `yaml:"dir"`
+	DirInternal     string               `yaml:"dir_internal"`
+	WorkDirInternal string               `yaml:"work_dir_internal"`
+	Configs         []ServiceConfigEntry `yaml:"configs"`
+	Extends         string               `yaml:"extends"`
+	DependsOn       []string             `yaml:"depends_on"`
+	Compose         []string             `yaml:"compose"`
+	CLI             ServiceCLIConfig     `yaml:"cli"`
 }
 
 // ServiceCLIConfig holds defaults for the `services cli` command.
@@ -258,6 +313,8 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
 	cfg.Raw = merged
+	// Store config path so deploy resolution can find service deploy files.
+	cfg.Raw["__configPath"] = devboxPath
 
 	// Load devbox/services.yml separately (not merged with config layers).
 	servicesPath := filepath.Join(baseDir, "devbox", "services.yml")
@@ -381,7 +438,7 @@ func injectServicesIntoRaw(raw map[string]any, services map[string]ServiceConfig
 		if len(svc.Configs) > 0 {
 			configs := make([]any, len(svc.Configs))
 			for i, c := range svc.Configs {
-				configs[i] = c
+				configs[i] = c.File
 			}
 			entry["configs"] = configs
 		}
@@ -417,6 +474,12 @@ func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
 		return nil, fmt.Errorf("parse %s: %w", deployPath, err)
 	}
 	for _, phase := range cfg.Phases {
+		if phase.DeployServices {
+			if len(phase.Steps) > 0 {
+				return nil, fmt.Errorf("deploy phase %q: deploy_services phase must not contain steps", phase.Name)
+			}
+			continue
+		}
 		for _, step := range phase.Steps {
 			set := 0
 			if step.Cmd != "" {
@@ -437,6 +500,81 @@ func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
 		}
 	}
 	return &cfg, nil
+}
+
+// LoadServiceDeployConfigs loads per-service deploy pipelines from devbox/deploy/<name>.yml.
+// Only services present in the services map AND having a corresponding deploy file are returned.
+// Missing deploy files are silently skipped (not every service needs a deploy pipeline).
+func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig) (map[string]*DeployConfig, error) {
+	deployDir := filepath.Join(baseDir, "devbox", "deploy")
+	result := make(map[string]*DeployConfig)
+
+	for name := range services {
+		path := filepath.Join(deployDir, name+".yml")
+		cfg, err := LoadDeployConfig(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, fmt.Errorf("load deploy config for service %q: %w", name, err)
+		}
+		result[name] = cfg
+	}
+	return result, nil
+}
+
+// TopoSortServices returns service names in dependency order (dependencies first).
+// Only services present in the names slice are included. Returns an error on
+// cycles or references to unknown services.
+func TopoSortServices(names []string, services map[string]ServiceConfig) ([]string, error) {
+	nameSet := make(map[string]bool, len(names))
+	for _, n := range names {
+		nameSet[n] = true
+	}
+
+	// States: 0 = unvisited, 1 = in-progress, 2 = done.
+	state := make(map[string]int, len(names))
+	var order []string
+
+	var visit func(string) error
+	visit = func(name string) error {
+		if state[name] == 2 {
+			return nil
+		}
+		if state[name] == 1 {
+			return fmt.Errorf("circular dependency detected involving service %q", name)
+		}
+		state[name] = 1
+
+		svc, ok := services[name]
+		if !ok {
+			return fmt.Errorf("service %q not found", name)
+		}
+		for _, dep := range svc.DependsOn {
+			if !nameSet[dep] {
+				// Dependency exists in services but not in the set we're sorting —
+				// it's either not enabled or has no deploy file. Still validate it exists.
+				if _, ok := services[dep]; !ok {
+					return fmt.Errorf("service %q depends on unknown service %q", name, dep)
+				}
+				continue
+			}
+			if err := visit(dep); err != nil {
+				return err
+			}
+		}
+
+		state[name] = 2
+		order = append(order, name)
+		return nil
+	}
+
+	for _, name := range names {
+		if err := visit(name); err != nil {
+			return nil, err
+		}
+	}
+	return order, nil
 }
 
 // LoadDevboxConfig reads and parses a single devbox.yml file at the given path.

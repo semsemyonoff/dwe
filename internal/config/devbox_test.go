@@ -495,8 +495,8 @@ func TestLoadServicesConfig_basic(t *testing.T) {
 	if main.Dir != "./services/main" {
 		t.Errorf("main.Dir = %q, want ./services/main", main.Dir)
 	}
-	if len(main.Configs) != 1 || main.Configs[0] != ".env" {
-		t.Errorf("main.Configs = %v, want [.env]", main.Configs)
+	if len(main.Configs) != 1 || main.Configs[0].File != ".env" {
+		t.Errorf("main.Configs = %v, want [{File:.env}]", main.Configs)
 	}
 }
 
@@ -524,8 +524,8 @@ func TestLoadServicesConfig_extendsResolved(t *testing.T) {
 	if debug.WorkDirInternal != "/workspace/src" {
 		t.Errorf("main-debug.WorkDirInternal = %q, want /workspace/src (inherited)", debug.WorkDirInternal)
 	}
-	if len(debug.Configs) != 1 || debug.Configs[0] != ".env" {
-		t.Errorf("main-debug.Configs = %v, want [.env] (inherited)", debug.Configs)
+	if len(debug.Configs) != 1 || debug.Configs[0].File != ".env" {
+		t.Errorf("main-debug.Configs = %v, want [{File:.env}] (inherited)", debug.Configs)
 	}
 	if len(debug.Compose) != 1 || debug.Compose[0] != "compose/services/main/debug.yml" {
 		t.Errorf("main-debug.Compose = %v, want [compose/services/main/debug.yml]", debug.Compose)
@@ -868,6 +868,157 @@ func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 	}
 	if step.Mode != "replace" {
 		t.Errorf("Mode = %q, want replace", step.Mode)
+	}
+}
+
+// --- DeployServices marker validation ---
+
+func TestLoadDeployConfig_deployServicesPhase(t *testing.T) {
+	yml := `phases:
+  - name: services
+    deploy_services: true
+    description: Deploy all services
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	if !cfg.Phases[0].DeployServices {
+		t.Error("expected DeployServices=true")
+	}
+}
+
+func TestLoadDeployConfig_deployServicesWithStepsError(t *testing.T) {
+	yml := `phases:
+  - name: services
+    deploy_services: true
+    steps:
+      - name: bad
+        cmd: echo bad
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Fatal("expected error for deploy_services phase with steps")
+	}
+}
+
+// --- TopoSortServices ---
+
+func TestTopoSortServices_noDeps(t *testing.T) {
+	services := map[string]ServiceConfig{
+		"a": {},
+		"b": {},
+	}
+	sorted, err := TopoSortServices([]string{"b", "a"}, services)
+	if err != nil {
+		t.Fatalf("TopoSortServices: %v", err)
+	}
+	if len(sorted) != 2 {
+		t.Fatalf("want 2, got %d", len(sorted))
+	}
+}
+
+func TestTopoSortServices_withDeps(t *testing.T) {
+	services := map[string]ServiceConfig{
+		"main":   {},
+		"worker": {DependsOn: []string{"main"}},
+	}
+	sorted, err := TopoSortServices([]string{"worker", "main"}, services)
+	if err != nil {
+		t.Fatalf("TopoSortServices: %v", err)
+	}
+	// main must come before worker
+	mainIdx, workerIdx := -1, -1
+	for i, name := range sorted {
+		if name == "main" {
+			mainIdx = i
+		}
+		if name == "worker" {
+			workerIdx = i
+		}
+	}
+	if mainIdx >= workerIdx {
+		t.Errorf("main (idx %d) should come before worker (idx %d)", mainIdx, workerIdx)
+	}
+}
+
+func TestTopoSortServices_circularError(t *testing.T) {
+	services := map[string]ServiceConfig{
+		"a": {DependsOn: []string{"b"}},
+		"b": {DependsOn: []string{"a"}},
+	}
+	_, err := TopoSortServices([]string{"a", "b"}, services)
+	if err == nil {
+		t.Fatal("expected circular dependency error")
+	}
+}
+
+func TestTopoSortServices_unknownDepError(t *testing.T) {
+	services := map[string]ServiceConfig{
+		"a": {DependsOn: []string{"nonexistent"}},
+	}
+	_, err := TopoSortServices([]string{"a"}, services)
+	if err == nil {
+		t.Fatal("expected unknown dependency error")
+	}
+}
+
+func TestTopoSortServices_depNotInSetSkipped(t *testing.T) {
+	// worker depends on main, but main is not in the set being sorted.
+	// main exists in services though — should not error, just skip.
+	services := map[string]ServiceConfig{
+		"main":   {},
+		"worker": {DependsOn: []string{"main"}},
+	}
+	sorted, err := TopoSortServices([]string{"worker"}, services)
+	if err != nil {
+		t.Fatalf("TopoSortServices: %v", err)
+	}
+	if len(sorted) != 1 || sorted[0] != "worker" {
+		t.Errorf("got %v, want [worker]", sorted)
+	}
+}
+
+// --- LoadServiceDeployConfigs ---
+
+func TestLoadServiceDeployConfigs_loadsExisting(t *testing.T) {
+	dir := t.TempDir()
+	deployDir := filepath.Join(dir, "devbox", "deploy")
+	if err := os.MkdirAll(deployDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	mainDeploy := `phases:
+  - name: setup
+    steps:
+      - name: create-dirs
+        cmd: mkdir -p services/main/src
+`
+	if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte(mainDeploy), 0644); err != nil {
+		t.Fatal(err)
+	}
+	services := map[string]ServiceConfig{
+		"main":  {},
+		"other": {},
+	}
+	result, err := LoadServiceDeployConfigs(dir, services)
+	if err != nil {
+		t.Fatalf("LoadServiceDeployConfigs: %v", err)
+	}
+	if _, ok := result["main"]; !ok {
+		t.Error("expected main deploy config to be loaded")
+	}
+	if _, ok := result["other"]; ok {
+		t.Error("other should not be loaded (no deploy file)")
 	}
 }
 
