@@ -158,6 +158,23 @@ func (w *Writer) Println(s string) {
 	_, _ = fmt.Fprintln(w.w, s)
 }
 
+// Confirm prints an interactive yes/no prompt and reads a reply from r.
+// Returns true if the user answered y/Y, false otherwise.
+// If the CI environment variable is set, skips the prompt and returns true.
+func (w *Writer) Confirm(msg string, r io.Reader) bool {
+	if os.Getenv("CI") != "" {
+		return true
+	}
+	_, _ = fmt.Fprintf(w.w, "⚠️  %s%s%s [%sy%s/%sn%s] > ",
+		Yellow, msg, Reset,
+		Green, Reset,
+		Red, Reset,
+	)
+	var reply string
+	_, _ = fmt.Fscan(r, &reply)
+	return strings.EqualFold(strings.TrimSpace(reply), "y")
+}
+
 // wordWrap splits text into lines where each line is at most width runes wide.
 // Breaks at the last space within positions [1, width] (inclusive) when possible,
 // otherwise hard-breaks at width. Always returns at least one element.
