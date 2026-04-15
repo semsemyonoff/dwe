@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/user"
 	"regexp"
+	"runtime"
 	"strings"
 	"text/template"
 )
@@ -27,10 +28,17 @@ type HostInfo struct {
 	GID string
 }
 
-// CurrentHostInfo returns the UID/GID of the current OS user.
-// On lookup failure, both fields fall back to "0".
+// CurrentHostInfo returns the UID/GID to use inside containers.
+// On macOS, Docker Desktop runs containers in a Linux VM where host UIDs
+// (e.g. 501) don't exist in the container's /etc/passwd. The convention
+// is to use 1000:1000, matching the UID/GID baked into the image at build
+// time. On Linux, the actual host UID/GID is returned so file permissions
+// match.
 func CurrentHostInfo() HostInfo {
-	h := HostInfo{UID: "0", GID: "0"}
+	h := HostInfo{UID: "1000", GID: "1000"}
+	if runtime.GOOS == "darwin" {
+		return h
+	}
 	u, err := user.Current()
 	if err != nil {
 		return h

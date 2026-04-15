@@ -147,8 +147,8 @@ func TestServiceRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	args := strings.Join(c.Args, " ")
-	if !strings.Contains(args, "run --rm --no-deps") {
-		t.Errorf("expected 'run --rm', got: %s", args)
+	if !strings.Contains(args, "run --rm --no-deps --entrypoint ") {
+		t.Errorf("expected 'run --rm --no-deps --entrypoint', got: %s", args)
 	}
 	if strings.Contains(args, " exec ") {
 		t.Errorf("ServiceRunRunner must not use exec, got: %s", args)

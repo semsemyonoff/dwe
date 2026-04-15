@@ -221,7 +221,7 @@ func buildDockerComposeCmd(
 	if useExec {
 		args = append(args, "exec")
 	} else {
-		args = append(args, "run", "--rm", "--no-deps")
+		args = append(args, "run", "--rm", "--no-deps", "--entrypoint", "")
 	}
 
 	// User flag.
