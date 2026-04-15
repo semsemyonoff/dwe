@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -96,7 +97,9 @@ type DeployPhase struct {
 //     Deploy is aborted with an error when the check returns false.
 type DeployStep struct {
 	Name               string            `yaml:"name"`
-	Cmd                string            `yaml:"cmd"`
+	Run                string            `yaml:"run"`
+	Devbox             string            `yaml:"devbox"`
+	Make               string            `yaml:"make"`
 	Command            string            `yaml:"command"`
 	With               map[string]string `yaml:"with"`
 	ServiceConfigsCopy string            `yaml:"service_configs_copy"`
@@ -125,6 +128,58 @@ func (p ProjectConfig) FullName() string {
 		return p.Prefix + "-" + p.Name
 	}
 	return p.Name
+}
+
+// ComposeFiles returns the ordered list of compose files for the project:
+// base file first, then enabled tool overlays (sorted by key), then enabled
+// service overlays (sorted by service name). This is the canonical file list
+// used by all compose-aware CLI operations.
+func (c *DevboxConfig) ComposeFiles() []string {
+	var files []string
+	if c.Compose.Base != "" {
+		files = append(files, c.Compose.Base)
+	}
+
+	// Tool overlays from compose.overlays in sorted key order.
+	keys := make([]string, 0, len(c.Compose.Overlays))
+	for k := range c.Compose.Overlays {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if c.toolOverlayEnabled(key) {
+			files = append(files, c.Compose.Overlays[key])
+		}
+	}
+
+	// Service overlays from services with compose_overlay set.
+	svcNames := make([]string, 0, len(c.Services))
+	for name := range c.Services {
+		svcNames = append(svcNames, name)
+	}
+	sort.Strings(svcNames)
+	for _, name := range svcNames {
+		svc := c.Services[name]
+		if svc.Enabled && len(svc.Compose) > 0 {
+			files = append(files, svc.Compose...)
+		}
+	}
+
+	return files
+}
+
+// toolOverlayEnabled reports whether the overlay with the given key is active.
+func (c *DevboxConfig) toolOverlayEnabled(key string) bool {
+	switch key {
+	case "adminer":
+		return c.Tools.Adminer.Enabled
+	case "redis_insight":
+		return c.Tools.RedisInsight.Enabled
+	case "mailpit":
+		return c.Tools.Mailpit.Enabled
+	default:
+		return false
+	}
 }
 
 // ServiceConfigEntry represents one config file declared under a service's configs list.
@@ -484,7 +539,13 @@ func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
 		}
 		for _, step := range phase.Steps {
 			set := 0
-			if step.Cmd != "" {
+			if step.Run != "" {
+				set++
+			}
+			if step.Devbox != "" {
+				set++
+			}
+			if step.Make != "" {
 				set++
 			}
 			if step.Command != "" {
@@ -494,10 +555,10 @@ func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
 				set++
 			}
 			if set > 1 {
-				return nil, fmt.Errorf("deploy step %q (phase %q): only one of cmd, command, or service_configs_copy may be set", step.Name, phase.Name)
+				return nil, fmt.Errorf("deploy step %q (phase %q): only one of run, devbox, make, command, or service_configs_copy may be set", step.Name, phase.Name)
 			}
 			if set == 0 {
-				return nil, fmt.Errorf("deploy step %q (phase %q): exactly one of cmd, command, or service_configs_copy must be set", step.Name, phase.Name)
+				return nil, fmt.Errorf("deploy step %q (phase %q): exactly one of run, devbox, make, command, or service_configs_copy must be set", step.Name, phase.Name)
 			}
 		}
 	}

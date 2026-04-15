@@ -27,7 +27,7 @@ func phaseWith(name string, steps ...config.DeployStep) config.DeployPhase {
 
 // cmdStep builds a cmd-type step.
 func cmdStep(name, cmd string) config.DeployStep {
-	return config.DeployStep{Name: name, Cmd: cmd, Description: name + " description"}
+	return config.DeployStep{Name: name, Run: cmd, Description: name + " description"}
 }
 
 // commandStep builds a command-type step.
@@ -42,7 +42,7 @@ func commandStepWith(name, id string, with map[string]string) config.DeployStep 
 
 // whenStep builds a cmd-type step with a when condition.
 func whenStep(name, cmd, when string) config.DeployStep {
-	return config.DeployStep{Name: name, Cmd: cmd, Description: name + " description", When: when}
+	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: when}
 }
 
 // phaseWithWhen builds a DeployPhase with a when condition.
@@ -64,8 +64,8 @@ func TestResolveDeployPlan_implicitEnvStepAlwaysFirst(t *testing.T) {
 	if steps[0].step.Name != "render-env" {
 		t.Errorf("first step name = %q, want render-env", steps[0].step.Name)
 	}
-	if steps[0].step.Cmd != "./bin/devbox render env -o .env" {
-		t.Errorf("first step cmd = %q, want ./bin/devbox render env -o .env", steps[0].step.Cmd)
+	if steps[0].step.Devbox != "render env -o .env" {
+		t.Errorf("first step devbox = %q, want render env -o .env", steps[0].step.Devbox)
 	}
 }
 
@@ -174,9 +174,9 @@ func TestResolveDeployPlan_multiplePhasesPreserveOrder(t *testing.T) {
 // --- stepBadge tests ---
 
 func TestStepBadge_cmdStep(t *testing.T) {
-	s := config.DeployStep{Cmd: "echo hello"}
-	if got := stepBadge(s); got != "[cmd]" {
-		t.Errorf("got %q, want [cmd]", got)
+	s := config.DeployStep{Run: "echo hello"}
+	if got := stepBadge(s); got != "[run]" {
+		t.Errorf("got %q, want [run]", got)
 	}
 }
 
@@ -190,7 +190,7 @@ func TestStepBadge_commandStep(t *testing.T) {
 // --- stepCommand tests ---
 
 func TestStepCommand_cmdReturnsRaw(t *testing.T) {
-	s := config.DeployStep{Cmd: "mkdir -p services/main/src"}
+	s := config.DeployStep{Run: "mkdir -p services/main/src"}
 	if got := stepCommand(s); got != "mkdir -p services/main/src" {
 		t.Errorf("got %q, want raw cmd", got)
 	}
@@ -262,7 +262,7 @@ func TestPrintDeployPlanShell_sourcesEnvAfterImplicitStep(t *testing.T) {
 	mkdirIdx := -1
 	for i, l := range lines {
 		switch l {
-		case implicitEnvStep.Cmd:
+		case stepCommand(implicitEnvStep):
 			renderIdx = i
 		case ". .env":
 			sourceIdx = i
@@ -471,10 +471,10 @@ func TestStepCommand_allTypes(t *testing.T) {
 		step config.DeployStep
 		want string
 	}{
-		{config.DeployStep{Cmd: "echo hello"}, "echo hello"},
+		{config.DeployStep{Run: "echo hello"}, "echo hello"},
 		{config.DeployStep{Command: "services.main.migrate"}, "./bin/devbox command run services.main.migrate"},
 		{config.DeployStep{Command: "  services.main.migrate  "}, "./bin/devbox command run services.main.migrate"},
-		{config.DeployStep{Cmd: "  mkdir -p x  "}, "mkdir -p x"},
+		{config.DeployStep{Run: "  mkdir -p x  "}, "mkdir -p x"},
 		{config.DeployStep{ServiceConfigsCopy: "main"}, "./bin/devbox deploy config main --mode replace"},
 		{config.DeployStep{ServiceConfigsCopy: "main", Mode: "update"}, "./bin/devbox deploy config main --mode update"},
 		{config.DeployStep{ServiceConfigsCopy: "  worker  "}, "./bin/devbox deploy config worker --mode replace"},
@@ -501,8 +501,8 @@ func TestStepCommand_commandWithWith(t *testing.T) {
 
 // Verify stepBadge for all step types.
 func TestStepBadge_allTypes(t *testing.T) {
-	if got := stepBadge(config.DeployStep{Cmd: "x"}); got != "[cmd]" {
-		t.Errorf("got %q want [cmd]", got)
+	if got := stepBadge(config.DeployStep{Run: "x"}); got != "[run]" {
+		t.Errorf("got %q want [run]", got)
 	}
 	if got := stepBadge(config.DeployStep{Command: "x"}); got != "[command]" {
 		t.Errorf("got %q want [command]", got)
@@ -516,7 +516,7 @@ func TestStepBadge_allTypes(t *testing.T) {
 
 // checkStep builds a cmd-type step with a check postcondition.
 func checkStep(name, cmd, check string) config.DeployStep {
-	return config.DeployStep{Name: name, Cmd: cmd, Description: name + " description", Check: check}
+	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", Check: check}
 }
 
 // TestDeployStep_checkPreservedInConfig verifies the check field round-trips through YAML.
@@ -904,7 +904,7 @@ func TestParseEnvKeys(t *testing.T) {
 
 // runtimeWhenStep builds a cmd-type step with a runtime when condition (builtin predicate).
 func runtimeWhenStep(name, cmd, when string) config.DeployStep {
-	return config.DeployStep{Name: name, Cmd: cmd, Description: name + " description", When: when}
+	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: when}
 }
 
 func TestResolveDeployPlan_runtimeWhenPassesThrough(t *testing.T) {
@@ -1378,14 +1378,14 @@ func TestResolveDeployPlan_deployServicesInlines(t *testing.T) {
     description: Start
     steps:
       - name: up
-        cmd: make up
+        run: make up
 `
 	serviceDeploy := `phases:
   - name: setup
     description: Setup main
     steps:
       - name: create-dirs
-        cmd: mkdir -p services/main/src
+        run: mkdir -p services/main/src
   - name: init
     description: Init main
     steps:
@@ -1436,7 +1436,7 @@ func TestResolveServiceDeployPlan_singleService(t *testing.T) {
   - name: setup
     steps:
       - name: create-dirs
-        cmd: mkdir -p services/main/src
+        run: mkdir -p services/main/src
   - name: init
     steps:
       - name: migrate

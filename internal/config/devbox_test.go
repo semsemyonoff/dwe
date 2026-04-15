@@ -632,10 +632,10 @@ phases:
     description: Prepare directories
     steps:
       - name: create-dirs
-        cmd: mkdir -p services/main/{src,configs}
+        run: mkdir -p services/main/{src,configs}
         description: Create service hub directories
       - name: copy-configs
-        cmd: devbox deploy config main
+        run: devbox deploy config main
         description: Copy template configs
         when: "{{.Runtime.UseHTTPS}}"
   - name: start
@@ -700,8 +700,8 @@ func TestLoadDeployConfig_stepWithCmd(t *testing.T) {
 	if step.Name != "create-dirs" {
 		t.Errorf("step.Name = %q, want create-dirs", step.Name)
 	}
-	if step.Cmd == "" {
-		t.Error("step.Cmd should be set for cmd: steps")
+	if step.Run == "" {
+		t.Error("step.Run should be set for cmd: steps")
 	}
 	if step.Command != "" {
 		t.Error("step.Command should be empty for cmd: steps")
@@ -725,8 +725,8 @@ func TestLoadDeployConfig_stepWithCommand(t *testing.T) {
 	if step.Command == "" {
 		t.Error("step.Command should be set for command: steps")
 	}
-	if step.Cmd != "" {
-		t.Error("step.Cmd should be empty for command: steps")
+	if step.Run != "" {
+		t.Error("step.Run should be empty for command: steps")
 	}
 }
 
@@ -812,7 +812,7 @@ func TestLoadDeployConfig_stepBothCmdAndCommand(t *testing.T) {
   - name: setup
     steps:
       - name: bad-step
-        cmd: echo hi
+        run: echo hi
         command: services.main.migrate
 `
 	dir := t.TempDir()
@@ -826,12 +826,12 @@ func TestLoadDeployConfig_stepBothCmdAndCommand(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepNeitherCmdNorMake(t *testing.T) {
+func TestLoadDeployConfig_stepNeitherCmdNorCommand(t *testing.T) {
 	yml := `phases:
   - name: setup
     steps:
       - name: empty-step
-        description: no cmd or make
+        description: no cmd or command
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
@@ -840,7 +840,7 @@ func TestLoadDeployConfig_stepNeitherCmdNorMake(t *testing.T) {
 	}
 	_, err := LoadDeployConfig(path)
 	if err == nil {
-		t.Fatal("LoadDeployConfig: expected error for step with neither cmd nor make, got nil")
+		t.Fatal("LoadDeployConfig: expected error for step with neither cmd nor command, got nil")
 	}
 }
 
@@ -1033,7 +1033,7 @@ func TestLoadServiceDeployConfigs_loadsExisting(t *testing.T) {
   - name: setup
     steps:
       - name: create-dirs
-        cmd: mkdir -p services/main/src
+        run: mkdir -p services/main/src
 `
 	if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte(mainDeploy), 0644); err != nil {
 		t.Fatal(err)

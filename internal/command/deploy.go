@@ -27,7 +27,7 @@ import (
 // It regenerates .env from the current config before any phase runs.
 var implicitEnvStep = config.DeployStep{
 	Name:        "render-env",
-	Cmd:         "./bin/devbox render env -o .env",
+	Devbox:      "render env -o .env",
 	Description: "Generate .env from config (implicit first step)",
 }
 
@@ -154,7 +154,11 @@ func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]r
 	}
 	result := []resolvedStep{implicit}
 
-	baseDir := filepath.Dir(cfg.Raw["__configPath"].(string))
+	cfgPath, ok := cfg.Raw["__configPath"].(string)
+	if !ok {
+		return nil, fmt.Errorf("internal: __configPath missing from config")
+	}
+	baseDir := filepath.Dir(cfgPath)
 	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
 		serviceName: cfg.Services[serviceName],
 	})
@@ -179,7 +183,11 @@ func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]r
 // resolveServicesDeploy loads all per-service deploy pipelines, sorts them
 // by dependency order, and returns their steps inlined.
 func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
-	baseDir := filepath.Dir(cfg.Raw["__configPath"].(string))
+	cfgPath, ok := cfg.Raw["__configPath"].(string)
+	if !ok {
+		return nil, fmt.Errorf("internal: __configPath missing from config")
+	}
+	baseDir := filepath.Dir(cfgPath)
 
 	// Only deploy enabled services.
 	enabled := make(map[string]config.ServiceConfig)
@@ -527,14 +535,18 @@ func sourceDotEnv(path string) error {
 		if !ok {
 			continue
 		}
-		if err := os.Setenv(strings.TrimSpace(key), strings.TrimSpace(value)); err != nil {
+		val := strings.TrimSpace(value)
+		if n := len(val); n >= 2 && val[0] == val[n-1] && (val[0] == '"' || val[0] == '\'') {
+			val = val[1 : n-1]
+		}
+		if err := os.Setenv(strings.TrimSpace(key), val); err != nil {
 			return fmt.Errorf("setenv %s: %w", key, err)
 		}
 	}
 	return nil
 }
 
-// stepBadge returns the display badge for a step: [cmd], [command], or [config].
+// stepBadge returns the display badge for a step: [run], [devbox], [make], [command], or [config].
 func stepBadge(step config.DeployStep) string {
 	if step.Command != "" {
 		return "[command]"
@@ -542,13 +554,21 @@ func stepBadge(step config.DeployStep) string {
 	if step.ServiceConfigsCopy != "" {
 		return "[config]"
 	}
-	return "[cmd]"
+	if step.Make != "" {
+		return "[make]"
+	}
+	if step.Devbox != "" {
+		return "[devbox]"
+	}
+	return "[run]"
 }
 
-// stepCommand returns the resolved shell command for a step.
+// stepCommand returns the resolved shell command for a step (used for plan display).
 // For command: steps, it returns "devbox command run <id> [--set key=value...]".
 // For service_configs_copy: steps, it returns the equivalent devbox deploy config command.
-// For cmd: steps it returns the raw command.
+// For make: steps it returns "make <target>".
+// For devbox: steps it returns "./bin/devbox <args>" (display only; execution uses os.Executable).
+// For run: steps it returns the raw shell command.
 func stepCommand(step config.DeployStep) string {
 	if step.Command != "" {
 		parts := []string{"./bin/devbox", "command", "run", strings.TrimSpace(step.Command)}
@@ -572,7 +592,13 @@ func stepCommand(step config.DeployStep) string {
 		}
 		return "./bin/devbox deploy config " + strings.TrimSpace(step.ServiceConfigsCopy) + " --mode " + mode
 	}
-	return strings.TrimSpace(step.Cmd)
+	if step.Make != "" {
+		return "make " + strings.TrimSpace(step.Make)
+	}
+	if step.Devbox != "" {
+		return "./bin/devbox " + strings.TrimSpace(step.Devbox)
+	}
+	return strings.TrimSpace(step.Run)
 }
 
 // findStep looks up a step by address in the deploy config.
@@ -604,7 +630,11 @@ func findStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, con
 		if _, ok := cfg.Services[serviceName]; !ok {
 			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("service %q not found", serviceName)
 		}
-		baseDir := filepath.Dir(cfg.Raw["__configPath"].(string))
+		cfgPath, ok := cfg.Raw["__configPath"].(string)
+		if !ok {
+			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("internal: __configPath missing from config")
+		}
+		baseDir := filepath.Dir(cfgPath)
 		svcDeploy, err := config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy", serviceName+".yml"))
 		if err != nil {
 			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("loading deploy config for service %q: %w", serviceName, err)
@@ -662,8 +692,16 @@ func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 	switch {
 	case step.ServiceConfigsCopy != "":
 		cmd = exec.Command("sh", "-c", stepCommand(step))
+	case step.Make != "":
+		cmd = exec.Command("make", strings.Fields(strings.TrimSpace(step.Make))...)
+	case step.Devbox != "":
+		bin, err := os.Executable()
+		if err != nil {
+			bin = "./bin/devbox"
+		}
+		cmd = exec.Command("sh", "-c", bin+" "+strings.TrimSpace(step.Devbox)) //nolint:gosec
 	default:
-		cmd = exec.Command("sh", "-c", strings.TrimSpace(step.Cmd))
+		cmd = exec.Command("sh", "-c", strings.TrimSpace(step.Run))
 	}
 	cmd.Dir = workDir
 	cmd.Stdin = os.Stdin
