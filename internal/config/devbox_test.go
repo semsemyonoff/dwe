@@ -863,11 +863,23 @@ func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 		t.Fatalf("LoadDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
-	if step.ServiceConfigsCopy != "main" {
-		t.Errorf("ServiceConfigsCopy = %q, want main", step.ServiceConfigsCopy)
+	// Legacy service_configs_copy is converted to builtin at load time.
+	if step.Builtin != "service_configs_copy" {
+		t.Errorf("Builtin = %q, want service_configs_copy", step.Builtin)
 	}
-	if step.Mode != "replace" {
-		t.Errorf("Mode = %q, want replace", step.Mode)
+	if step.ServiceConfigsCopy != "" {
+		t.Errorf("ServiceConfigsCopy should be empty after normalization, got %q", step.ServiceConfigsCopy)
+	}
+	if step.Mode != "" {
+		t.Errorf("Mode should be empty after normalization, got %q", step.Mode)
+	}
+	service, _ := step.With["service"].(string)
+	if service != "main" {
+		t.Errorf("With[service] = %q, want main", service)
+	}
+	mode, _ := step.With["mode"].(string)
+	if mode != "replace" {
+		t.Errorf("With[mode] = %q, want replace", mode)
 	}
 }
 

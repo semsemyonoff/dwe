@@ -75,15 +75,15 @@ type DeployPhase struct {
 	DeployServices bool         `yaml:"deploy_services"`
 }
 
-// DeployStep is a single atomic deploy action.
-// Exactly one of Cmd, Command, or ServiceConfigsCopy must be set.
+// DeployStep is a single atomic pipeline action.
+// Exactly one of Run, Devbox, Command, or Builtin must be set.
 //
-//   - Cmd                — shell command executed directly via os/exec
-//   - Command            — devbox command ID (e.g. "services.main.migrate"); dispatched via command runner
-//   - With               — param overrides passed to the command runner (used with Command)
-//   - ServiceConfigsCopy — service name; copies all files declared in services.<name>.configs
-//     from configs/services/<name>/ into services/<name>/configs/ using Mode (default: replace)
-//   - When — skip condition; three expression kinds are supported:
+//   - Run     — shell command executed directly via os/exec
+//   - Devbox  — public devbox CLI subcommand (e.g. "docker down"); invoked as "devbox <subcommand>"
+//   - Command — devbox command ID (e.g. "services.main.migrate"); dispatched via command runner
+//   - Builtin — engine-internal action name (e.g. "confirm", "remove_paths"); executed directly in Go
+//   - With    — parameters for Command or Builtin steps (string values for Command, any type for Builtin)
+//   - When    — skip condition; three expression kinds are supported:
 //     1. Go template (contains "{{") — evaluated against DevboxConfig at plan-resolution time;
 //     step is excluded from the plan when the rendered result is falsy ("", "false", "0").
 //     2. Builtin predicate — evaluated at step-execution time:
@@ -94,19 +94,23 @@ type DeployPhase struct {
 //     exits 0 → true (run step), non-zero → false (skip step).
 //   - Check — post-condition evaluated after the step succeeds; same expression kinds
 //     as When (builtin predicates and "cmd: <command>"), but no Go templates.
-//     Deploy is aborted with an error when the check returns false.
+//     Pipeline is aborted with an error when the check returns false.
 type DeployStep struct {
-	Name               string            `yaml:"name"`
-	Run                string            `yaml:"run"`
-	Devbox             string            `yaml:"devbox"`
-	Make               string            `yaml:"make"`
-	Command            string            `yaml:"command"`
-	With               map[string]string `yaml:"with"`
-	ServiceConfigsCopy string            `yaml:"service_configs_copy"`
-	Mode               string            `yaml:"mode"`
-	Description        string            `yaml:"description"`
-	When               string            `yaml:"when"`
-	Check              string            `yaml:"check"`
+	Name        string         `yaml:"name"`
+	Run         string         `yaml:"run"`
+	Devbox      string         `yaml:"devbox"`
+	Command     string         `yaml:"command"`
+	Builtin     string         `yaml:"builtin"`
+	With        map[string]any `yaml:"with"`
+	Description string         `yaml:"description"`
+	When        string         `yaml:"when"`
+	Check       string         `yaml:"check"`
+
+	// Deprecated: use builtin: service_configs_copy with with.service and with.mode.
+	// Automatically converted to Builtin at load time for backward compatibility.
+	ServiceConfigsCopy string `yaml:"service_configs_copy"`
+	// Deprecated: paired with ServiceConfigsCopy; use with.mode in the builtin form.
+	Mode string `yaml:"mode"`
 }
 
 // ComposeConfig holds Docker Compose file declarations.
@@ -522,22 +526,59 @@ func isTruthy(v any) bool {
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
 func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
-	data, err := os.ReadFile(deployPath)
+	return loadPipelineConfig(deployPath, true)
+}
+
+// LoadResetConfig loads the reset pipeline from a reset.yml file.
+// The file is loaded standalone — it is not merged with the 3-layer config.
+// Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
+// Reset pipelines must not contain deploy_services phases.
+func LoadResetConfig(resetPath string) (*DeployConfig, error) {
+	return loadPipelineConfig(resetPath, false)
+}
+
+// loadPipelineConfig is the shared loader for deploy and reset pipelines.
+// When allowDeployServices is false, deploy_services phases are rejected.
+func loadPipelineConfig(path string, allowDeployServices bool) (*DeployConfig, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	var cfg DeployConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", deployPath, err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	for _, phase := range cfg.Phases {
+	for pi := range cfg.Phases {
+		phase := &cfg.Phases[pi]
 		if phase.DeployServices {
+			if !allowDeployServices {
+				return nil, fmt.Errorf("phase %q: deploy_services is not allowed in this pipeline type", phase.Name)
+			}
 			if len(phase.Steps) > 0 {
-				return nil, fmt.Errorf("deploy phase %q: deploy_services phase must not contain steps", phase.Name)
+				return nil, fmt.Errorf("phase %q: deploy_services phase must not contain steps", phase.Name)
 			}
 			continue
 		}
-		for _, step := range phase.Steps {
+		for si := range phase.Steps {
+			step := &phase.Steps[si]
+			// Normalize deprecated service_configs_copy into builtin form.
+			if step.ServiceConfigsCopy != "" {
+				if step.Builtin != "" || step.Run != "" || step.Devbox != "" || step.Command != "" {
+					return nil, fmt.Errorf("step %q (phase %q): service_configs_copy cannot be combined with other step types", step.Name, phase.Name)
+				}
+				mode := step.Mode
+				if mode == "" {
+					mode = "replace"
+				}
+				if step.With == nil {
+					step.With = make(map[string]any)
+				}
+				step.With["service"] = step.ServiceConfigsCopy
+				step.With["mode"] = mode
+				step.Builtin = "service_configs_copy"
+				step.ServiceConfigsCopy = ""
+				step.Mode = ""
+			}
 			set := 0
 			if step.Run != "" {
 				set++
@@ -545,20 +586,17 @@ func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
 			if step.Devbox != "" {
 				set++
 			}
-			if step.Make != "" {
-				set++
-			}
 			if step.Command != "" {
 				set++
 			}
-			if step.ServiceConfigsCopy != "" {
+			if step.Builtin != "" {
 				set++
 			}
 			if set > 1 {
-				return nil, fmt.Errorf("deploy step %q (phase %q): only one of run, devbox, make, command, or service_configs_copy may be set", step.Name, phase.Name)
+				return nil, fmt.Errorf("step %q (phase %q): only one of run, devbox, command, or builtin may be set", step.Name, phase.Name)
 			}
 			if set == 0 {
-				return nil, fmt.Errorf("deploy step %q (phase %q): exactly one of run, devbox, make, command, or service_configs_copy must be set", step.Name, phase.Name)
+				return nil, fmt.Errorf("step %q (phase %q): exactly one of run, devbox, command, or builtin must be set", step.Name, phase.Name)
 			}
 		}
 	}

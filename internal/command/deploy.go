@@ -2,19 +2,13 @@ package command
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"os/signal"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
-	"syscall"
 
-	"devbox-cli/internal/commands"
+	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
@@ -87,31 +81,6 @@ func newDeployPlanCmd(flags *rootFlags) *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table or shell")
 	cmd.Flags().StringVar(&serviceName, "service", "", "show plan for a single service only")
 	return cmd
-}
-
-// resolvedStep holds a deploy step together with the phase it belongs to,
-// after when-condition filtering.
-//
-// service is non-empty for steps that belong to a per-service deploy pipeline.
-// runtimeWhen is non-empty when the step's When condition is a runtime expression
-// (builtin predicate or cmd:). Such conditions are NOT evaluated at plan-resolution
-// time — they are checked immediately before the step executes.
-type resolvedStep struct {
-	phase       config.DeployPhase
-	step        config.DeployStep
-	service     string // non-empty for per-service steps (e.g. "main")
-	runtimeWhen string // step-level runtime when condition (step.When); empty otherwise
-	phaseWhen   string // phase-level runtime when condition; evaluated once per phase, not per step
-}
-
-// stepAddress returns the full address of a step for display and lookup:
-//   - orchestrator steps: "<phase>/<step>"
-//   - service steps:      "<service>/<phase>/<step>"
-func (rs resolvedStep) stepAddress() string {
-	if rs.service != "" {
-		return rs.service + "/" + rs.phase.Name + "/" + rs.step.Name
-	}
-	return rs.phase.Name + "/" + rs.step.Name
 }
 
 // resolveDeployPlan builds the ordered list of active steps from cfg.Deploy.
@@ -231,163 +200,6 @@ func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 	return result, nil
 }
 
-// resolvePhaseSteps resolves steps for a single phase, evaluating when conditions.
-// service is empty for orchestrator phases.
-//
-// Phase-level when is evaluated first:
-//   - Go template: evaluated at plan time; entire phase is excluded when false.
-//   - Runtime condition: propagated to each step that does not already carry its
-//     own runtime when condition. The phase condition is stored in runtimeWhen and
-//     evaluated before each such step at execution time.
-func resolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, service string) ([]resolvedStep, error) {
-	// Evaluate phase-level when condition.
-	phaseRuntimeWhen := ""
-	if phase.When != "" {
-		if condition.IsRuntime(phase.When) {
-			// Propagate to steps at execution time.
-			phaseRuntimeWhen = phase.When
-		} else {
-			// Template condition — evaluate at plan time.
-			ok, err := tpl.EvalCondition(phase.When, cfg)
-			if err != nil {
-				prefix := phase.Name
-				if service != "" {
-					prefix = service + "/" + prefix
-				}
-				return nil, fmt.Errorf("evaluating when condition for phase %s: %w", prefix, err)
-			}
-			if !ok {
-				return nil, nil
-			}
-		}
-	}
-
-	var result []resolvedStep
-	for _, step := range phase.Steps {
-		if step.When != "" {
-			if condition.IsRuntime(step.When) {
-				// Step has its own runtime condition — evaluated at execution time.
-				result = append(result, resolvedStep{phase: phase, step: step, service: service, runtimeWhen: step.When, phaseWhen: phaseRuntimeWhen})
-				continue
-			}
-			ok, err := tpl.EvalCondition(step.When, cfg)
-			if err != nil {
-				prefix := phase.Name + "/" + step.Name
-				if service != "" {
-					prefix = service + "/" + prefix
-				}
-				return nil, fmt.Errorf("evaluating when condition for step %s: %w", prefix, err)
-			}
-			if !ok {
-				continue
-			}
-		}
-		// Phase runtime condition is stored in phaseWhen (evaluated once per phase at
-		// execution time, not per step). Steps without their own when have no runtimeWhen.
-		result = append(result, resolvedStep{phase: phase, step: step, service: service, phaseWhen: phaseRuntimeWhen})
-	}
-	return result, nil
-}
-
-// printDeployPlanTable prints the plan in human-readable table format.
-func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
-	lastPhaseKey := "" // "phase" or "service/phase" to detect transitions
-	lastService := ""
-	for _, rs := range steps {
-		phaseKey := rs.phase.Name
-		if rs.service != "" {
-			phaseKey = rs.service + "/" + rs.phase.Name
-		}
-
-		if phaseKey != lastPhaseKey {
-			// Show service header when entering a new service.
-			if rs.service != "" && rs.service != lastService {
-				w.TableSubheader("service: " + rs.service)
-				lastService = rs.service
-			}
-			phaseLine := rs.phase.Name
-			if rs.service != "" {
-				phaseLine = rs.service + "/" + rs.phase.Name
-			}
-			if rs.phase.Description != "" {
-				phaseLine += ": " + rs.phase.Description
-			}
-			if rs.phase.When != "" {
-				phaseLine += " [when: " + rs.phase.When + "]"
-			}
-			indent := ""
-			if rs.service != "" {
-				indent = "  "
-			}
-			w.TableSubheader(indent + phaseLine)
-			lastPhaseKey = phaseKey
-		}
-
-		indent := "  "
-		detailIndent := "        "
-		if rs.service != "" {
-			indent = "    "
-			detailIndent = "          "
-		}
-
-		badge := stepBadge(rs.step)
-		name := rs.step.Name
-		desc := rs.step.Description
-		cmd := stepCommand(rs.step)
-
-		if desc != "" {
-			w.Definition(badge+" "+name, desc, len(indent), "", "—")
-		} else {
-			w.Println(indent + badge + " " + name)
-		}
-		if cmd != "" {
-			w.Println(detailIndent + cmd)
-		}
-		// Show step-level when (phase condition is already shown in the phase header).
-		if rs.runtimeWhen != "" {
-			w.Println(detailIndent + "[when: " + rs.runtimeWhen + "]")
-		}
-		if rs.step.Check != "" {
-			w.Println(detailIndent + "[check: " + rs.step.Check + "]")
-		}
-	}
-}
-
-// printDeployPlanShell emits executable shell commands for each step to w.
-// Prepends "set -e" so the pipeline aborts on any step failure.
-// cmd: steps are emitted as-is; make: steps become "make <target>".
-// After the implicit .env generation step, ". .env" is emitted so that
-// variables exported by .env (PROJECT_PREFIX, PROJECT_NAME, etc.) are
-// available to all subsequent steps in the generated script.
-func printDeployPlanShell(steps []resolvedStep, w io.Writer) {
-	_, _ = fmt.Fprintln(w, "set -e")
-	lastService := ""
-	lastPhaseKey := ""
-	for _, rs := range steps {
-		if rs.service != "" && rs.service != lastService {
-			_, _ = fmt.Fprintf(w, "\n# === service: %s ===\n", rs.service)
-			lastService = rs.service
-		}
-		phaseKey := rs.service + "/" + rs.phase.Name
-		if phaseKey != lastPhaseKey {
-			if rs.phase.When != "" {
-				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.phase.Name, rs.phase.When)
-			}
-			lastPhaseKey = phaseKey
-		}
-		if rs.runtimeWhen != "" {
-			_, _ = fmt.Fprintf(w, "# when: %s\n", rs.runtimeWhen)
-		}
-		_, _ = fmt.Fprintln(w, stepCommand(rs.step))
-		if rs.step.Name == implicitEnvStep.Name {
-			_, _ = fmt.Fprintln(w, ". .env")
-		}
-		if rs.step.Check != "" {
-			_, _ = fmt.Fprintf(w, "# check: %s\n", rs.step.Check)
-		}
-	}
-}
-
 // newDeployRunCmd creates the `devbox deploy run` command.
 // It executes the resolved deploy plan step by step, printing phase/step
 // progress and success messages directly — without generating a shell script.
@@ -505,7 +317,7 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 					}
 				}
 
-				if stepErr := execStep(rs.step, workDir, cfg, reg, logFile); stepErr != nil {
+				if stepErr := execStep(rs.step, workDir, cfg, reg, logFile, false); stepErr != nil {
 					w.Error(fmt.Sprintf("Deploy failed at step %q", rs.stepAddress()))
 					w.Error("  " + stepErr.Error())
 					w.Warning("Full output saved to: " + logPath)
@@ -577,61 +389,6 @@ func sourceDotEnv(path string) error {
 	return nil
 }
 
-// stepBadge returns the display badge for a step: [run], [devbox], [make], [command], or [config].
-func stepBadge(step config.DeployStep) string {
-	if step.Command != "" {
-		return "[command]"
-	}
-	if step.ServiceConfigsCopy != "" {
-		return "[config]"
-	}
-	if step.Make != "" {
-		return "[make]"
-	}
-	if step.Devbox != "" {
-		return "[devbox]"
-	}
-	return "[run]"
-}
-
-// stepCommand returns the resolved shell command for a step (used for plan display).
-// For command: steps, it returns "devbox command run <id> [--set key=value...]".
-// For service_configs_copy: steps, it returns the equivalent devbox deploy config command.
-// For make: steps it returns "make <target>".
-// For devbox: steps it returns "./bin/devbox <args>" (display only; execution uses os.Executable).
-// For run: steps it returns the raw shell command.
-func stepCommand(step config.DeployStep) string {
-	if step.Command != "" {
-		parts := []string{"./bin/devbox", "command", "run", strings.TrimSpace(step.Command)}
-		// Sort With keys for deterministic output.
-		if len(step.With) > 0 {
-			keys := make([]string, 0, len(step.With))
-			for k := range step.With {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				parts = append(parts, "--set", k+"="+step.With[k])
-			}
-		}
-		return strings.Join(parts, " ")
-	}
-	if step.ServiceConfigsCopy != "" {
-		mode := step.Mode
-		if mode == "" {
-			mode = "replace"
-		}
-		return "./bin/devbox deploy config " + strings.TrimSpace(step.ServiceConfigsCopy) + " --mode " + mode
-	}
-	if step.Make != "" {
-		return "make " + strings.TrimSpace(step.Make)
-	}
-	if step.Devbox != "" {
-		return "./bin/devbox " + strings.TrimSpace(step.Devbox)
-	}
-	return strings.TrimSpace(step.Run)
-}
-
 // findStep looks up a step by address in the deploy config.
 // Supports two forms:
 //   - "<phase>/<step>"          — orchestrator step
@@ -688,150 +445,6 @@ func findStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, con
 	}
 }
 
-// ansiRe matches ANSI/VT100 escape sequences and bare carriage returns.
-// Used to strip control codes before writing to a plain-text log file.
-var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b[a-zA-Z]|\r`)
-
-// ansiStripper wraps an io.Writer, stripping ANSI escape sequences and carriage
-// returns before writing. The original byte-count is always returned so callers
-// never see a short-write error.
-type ansiStripper struct{ w io.Writer }
-
-func (s *ansiStripper) Write(p []byte) (int, error) {
-	_, err := s.w.Write(ansiRe.ReplaceAll(p, nil))
-	return len(p), err
-}
-
-// execStep executes a deploy step in workDir.
-// For cmd: steps it runs the command via sh -c.
-// For command: steps it dispatches to the command runner via cfg and reg.
-// For service_configs_copy: steps it runs the equivalent devbox CLI command.
-// Output is attached to the current process stdin/stdout/stderr.
-// workDir must be the project root so that relative paths in commands work correctly.
-//
-// Signal handling: the child inherits devbox's terminal foreground process group,
-// so Ctrl+C (SIGINT) is delivered by the terminal directly to the entire group
-// (devbox + shell + docker). devbox suppresses its own default SIGINT handler while
-// waiting so it does not exit before the child finishes cleanup. A second Ctrl+C
-// restores the default handler, allowing the user to force-exit if cleanup hangs.
-func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer) error {
-	if step.Command != "" {
-		return execCommandStep(step, workDir, cfg, reg, logWriter)
-	}
-
-	var cmd *exec.Cmd
-	switch {
-	case step.ServiceConfigsCopy != "":
-		cmd = exec.Command("sh", "-c", stepCommand(step))
-	case step.Make != "":
-		cmd = exec.Command("make", strings.Fields(strings.TrimSpace(step.Make))...)
-	case step.Devbox != "":
-		bin, err := os.Executable()
-		if err != nil {
-			bin = "./bin/devbox"
-		}
-		cmd = exec.Command("sh", "-c", bin+" "+strings.TrimSpace(step.Devbox)) //nolint:gosec
-	default:
-		cmd = exec.Command("sh", "-c", strings.TrimSpace(step.Run))
-	}
-	cmd.Dir = workDir
-	cmd.Stdin = os.Stdin
-	if logWriter != nil {
-		logStripped := &ansiStripper{logWriter}
-		cmd.Stdout = io.MultiWriter(os.Stdout, logStripped)
-		cmd.Stderr = io.MultiWriter(os.Stderr, logStripped)
-	} else {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-	// No Setpgid: child stays in the terminal foreground process group so Ctrl+C
-	// reaches child processes (make, shell, docker) directly from the terminal.
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start: %w", err)
-	}
-
-	// Suppress devbox's own default SIGINT/SIGTERM handlers while the child runs.
-	// The terminal already delivers the signal to the whole foreground process group;
-	// shell traps inside Make recipes handle Docker resource cleanup.
-	// After the first signal, restore defaults: a second Ctrl+C will force-exit devbox.
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		if _, ok := <-sigCh; ok {
-			signal.Reset(syscall.SIGINT, syscall.SIGTERM)
-		}
-	}()
-
-	waitErr := cmd.Wait()
-	signal.Stop(sigCh)
-	close(sigCh)
-
-	if waitErr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(waitErr, &exitErr) {
-			return fmt.Errorf("exit status %d", exitErr.ExitCode())
-		}
-		return waitErr
-	}
-	return nil
-}
-
-// execCommandStep executes a deploy step with a command: reference via the command runner.
-// It looks up the command ID in the registry, resolves params (merging step.With overrides),
-// resolves context, and dispatches to the appropriate runner. Output goes directly to
-// os.Stdout/os.Stderr so TTY detection works correctly.
-func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer) error {
-	if reg == nil {
-		return fmt.Errorf("command registry not available for step %q (command: %s)", step.Name, step.Command)
-	}
-	def, err := reg.Get(step.Command)
-	if err != nil {
-		return fmt.Errorf("step %q: %w", step.Name, err)
-	}
-	params, err := commands.ResolveParams(def.Params, step.With, cfg)
-	if err != nil {
-		return fmt.Errorf("step %q: resolving params: %w", step.Name, err)
-	}
-	ctx, err := commands.ResolveContext(def.Context, cfg)
-	if err != nil {
-		return fmt.Errorf("step %q: resolving context: %w", step.Name, err)
-	}
-	rctx := &tpl.RenderContext{
-		Raw:     cfg.Raw,
-		Params:  params,
-		Context: ctx,
-		Host:    tpl.CurrentHostInfo(),
-	}
-	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
-	if err != nil {
-		return fmt.Errorf("step %q: loading docker config: %w", step.Name, err)
-	}
-	runner, err := commands.NewRunner(def)
-	if err != nil {
-		return fmt.Errorf("step %q: %w", step.Name, err)
-	}
-	stdout := io.Writer(os.Stdout)
-	stderr := io.Writer(os.Stderr)
-	if logWriter != nil {
-		logStripped := &ansiStripper{logWriter}
-		stdout = io.MultiWriter(os.Stdout, logStripped)
-		stderr = io.MultiWriter(os.Stderr, logStripped)
-	}
-	return runner.Run(commands.RunContext{
-		Cmd:          def,
-		Params:       params,
-		Context:      ctx,
-		Render:       rctx,
-		Config:       cfg,
-		DockerConfig: dockerCfg,
-		Registry:     reg,
-		ProjectRoot:  workDir,
-		Stdout:       stdout,
-		Stderr:       stderr,
-	})
-}
-
 func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 	var dryRun bool
 
@@ -882,7 +495,7 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
-			if err := execStep(step, workDir, cfg, reg, nil); err != nil {
+			if err := execStep(step, workDir, cfg, reg, nil, false); err != nil {
 				return err
 			}
 
@@ -906,172 +519,35 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 }
 
 // newDeployConfigCmd creates the `devbox deploy config <service>` command.
-// It reads services.<service>.configs from devbox.yml (list of filenames) and copies
-// each file from configs/services/<service>/<file> to services/<service>/configs/<file>
-// using the given mode (default: replace). Dest paths are validated against the service
-// configs directory to prevent path traversal.
+// It copies all config files declared in services.<service>.configs from
+// configs/services/<service>/ to services/<service>/configs/ using the given mode.
+// Delegates to the service_configs_copy builtin for the actual copy logic.
 func newDeployConfigCmd(flags *rootFlags) *cobra.Command {
 	var mode string
 
 	cmd := &cobra.Command{
-		Use:   "config <service>",
-		Short: "Copy template configs to service directory",
-		Args:  cobra.ExactArgs(1),
+		Use:          "config <service>",
+		Short:        "Copy template configs to service directory",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-
-			serviceName := args[0]
-			svc, ok := cfg.Services[serviceName]
-			if !ok {
-				return fmt.Errorf("service %q not found in config", serviceName)
-			}
-			if svc.Dir == "" {
-				return fmt.Errorf("service %q: dir is not set", serviceName)
-			}
-
 			projectRoot := filepath.Dir(flags.configPath)
-			// Source: configs/services/<service>/
-			srcDir := filepath.Join(projectRoot, "configs", "services", serviceName)
-			// Dest: services/<service>/configs/
-			destDir := filepath.Join(projectRoot, svc.Dir, "configs")
-
-			w := render.Stdout()
-			svcDir := filepath.Join(projectRoot, svc.Dir)
-			for _, entry := range svc.Configs {
-				src := filepath.Join(srcDir, entry.File)
-				dest := filepath.Join(destDir, entry.File)
-				// Guard against path traversal: dest must remain inside destDir.
-				cleanDestDir := filepath.Clean(destDir)
-				cleanDest := filepath.Clean(dest)
-				if cleanDest == cleanDestDir || !strings.HasPrefix(cleanDest, cleanDestDir+string(filepath.Separator)) {
-					return fmt.Errorf("service %q: config %q escapes the configs directory", serviceName, entry.File)
-				}
-				if err := copyConfigFile(src, dest, mode); err != nil {
-					return fmt.Errorf("copying %s → %s: %w", src, dest, err)
-				}
-				w.Success(fmt.Sprintf("config %s → %s [%s]", src, dest, mode))
-
-				// If a mountpoint is declared, ensure the file exists at that path
-				// (relative to the service dir) so Docker Desktop virtiofs can create
-				// a nested file bind mount over it. Touch only — content comes from
-				// the bind mount at runtime.
-				if entry.Mountpoint != "" {
-					mp := filepath.Join(svcDir, entry.Mountpoint)
-					if err := touchFile(mp); err != nil {
-						return fmt.Errorf("creating mountpoint %s: %w", mp, err)
-					}
-					w.Success(fmt.Sprintf("mountpoint %s [touched]", mp))
-				}
+			ctx := builtin.ExecContext{
+				Config:      cfg,
+				ProjectRoot: projectRoot,
+				Output:      render.Stdout(),
 			}
-			return nil
+			with := map[string]any{"service": args[0], "mode": mode}
+			return builtin.Run("service_configs_copy", with, ctx)
 		},
-		SilenceUsage: true,
 	}
 
 	cmd.Flags().StringVar(&mode, "mode", "replace", "copy mode: default, update, or replace")
 	return cmd
-}
-
-// copyConfigFile copies src to dest using the given mode:
-//   - "default" — skip if dest already exists
-//   - "replace" — overwrite unconditionally
-//   - "update"  — merge new keys from src into dest without overwriting existing values
-//
-// The dest directory is created if it does not exist.
-func copyConfigFile(src, dest, mode string) error {
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return fmt.Errorf("create dest dir: %w", err)
-	}
-
-	srcData, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("read source %s: %w", src, err)
-	}
-
-	switch mode {
-	case "default":
-		if _, err := os.Stat(dest); err == nil {
-			// Destination exists — skip.
-			return nil
-		}
-		return os.WriteFile(dest, srcData, 0o644)
-
-	case "replace":
-		return os.WriteFile(dest, srcData, 0o644)
-
-	case "update":
-		return updateEnvFile(srcData, dest)
-
-	default:
-		// Treat unknown mode as "default".
-		if _, err := os.Stat(dest); err == nil {
-			return nil
-		}
-		return os.WriteFile(dest, srcData, 0o644)
-	}
-}
-
-// updateEnvFile merges new KEY=VALUE entries from srcData into the dest file.
-// Keys already present in dest are preserved unchanged. New keys from the
-// source template are appended to dest. If dest does not exist it is created
-// with the full content of srcData.
-func updateEnvFile(srcData []byte, dest string) error {
-	destData, err := os.ReadFile(dest)
-	if errors.Is(err, os.ErrNotExist) {
-		return os.WriteFile(dest, srcData, 0o644)
-	}
-	if err != nil {
-		return fmt.Errorf("read dest %s: %w", dest, err)
-	}
-
-	// Parse existing dest keys.
-	existingKeys := parseEnvKeys(destData)
-
-	// Build lines to append: src keys not already in dest.
-	var additions []string
-	scanner := bufio.NewScanner(strings.NewReader(string(srcData)))
-	for scanner.Scan() {
-		line := scanner.Text()
-		key := envLineKey(line)
-		if key == "" {
-			// Comment or blank — skip (do not copy comments from template to existing file).
-			continue
-		}
-		if !existingKeys[key] {
-			additions = append(additions, line)
-		}
-	}
-
-	if len(additions) == 0 {
-		return nil
-	}
-
-	// Append new keys to dest, preceded by a blank line separator if the
-	// dest does not already end with a newline.
-	f, err := os.OpenFile(dest, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("open dest for append: %w", err)
-	}
-
-	var writeErr error
-	// Ensure a trailing newline before appending.
-	if len(destData) > 0 && destData[len(destData)-1] != '\n' {
-		_, writeErr = f.WriteString("\n")
-	}
-	for _, line := range additions {
-		if writeErr != nil {
-			break
-		}
-		_, writeErr = f.WriteString(line + "\n")
-	}
-
-	if closeErr := f.Close(); closeErr != nil && writeErr == nil {
-		return closeErr
-	}
-	return writeErr
 }
 
 // newDeployConfigCheckCmd creates the `devbox deploy config-check <service>` command.
@@ -1128,43 +604,4 @@ Intended as a deploy step check condition:
 func isRegularFile(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.Mode().IsRegular()
-}
-
-// touchFile creates an empty file at path (and its parent directories) if it does
-// not already exist. If it exists it is left unchanged.
-func touchFile(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create parent dir: %w", err)
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL, 0o644)
-	if os.IsExist(err) {
-		return nil // already exists — nothing to do
-	}
-	if err != nil {
-		return err
-	}
-	return f.Close()
-}
-
-// parseEnvKeys returns a set of KEY names found in an .env file content.
-func parseEnvKeys(data []byte) map[string]bool {
-	keys := make(map[string]bool)
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	for scanner.Scan() {
-		if key := envLineKey(scanner.Text()); key != "" {
-			keys[key] = true
-		}
-	}
-	return keys
-}
-
-// envLineKey returns the KEY part of a "KEY=VALUE" env line.
-// Returns "" for blank lines and comment lines (starting with #).
-func envLineKey(line string) string {
-	line = strings.TrimSpace(line)
-	if line == "" || strings.HasPrefix(line, "#") {
-		return ""
-	}
-	key, _, _ := strings.Cut(line, "=")
-	return strings.TrimSpace(key)
 }

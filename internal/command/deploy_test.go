@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
 )
@@ -36,7 +37,7 @@ func commandStep(name, id string) config.DeployStep {
 }
 
 // commandStepWith builds a command-type step with param overrides.
-func commandStepWith(name, id string, with map[string]string) config.DeployStep {
+func commandStepWith(name, id string, with map[string]any) config.DeployStep {
 	return config.DeployStep{Name: name, Command: id, With: with, Description: name + " description"}
 }
 
@@ -475,9 +476,13 @@ func TestStepCommand_allTypes(t *testing.T) {
 		{config.DeployStep{Command: "services.main.migrate"}, "./bin/devbox command run services.main.migrate"},
 		{config.DeployStep{Command: "  services.main.migrate  "}, "./bin/devbox command run services.main.migrate"},
 		{config.DeployStep{Run: "  mkdir -p x  "}, "mkdir -p x"},
-		{config.DeployStep{ServiceConfigsCopy: "main"}, "./bin/devbox deploy config main --mode replace"},
-		{config.DeployStep{ServiceConfigsCopy: "main", Mode: "update"}, "./bin/devbox deploy config main --mode update"},
-		{config.DeployStep{ServiceConfigsCopy: "  worker  "}, "./bin/devbox deploy config worker --mode replace"},
+		{config.DeployStep{Devbox: "docker down"}, "./bin/devbox docker down"},
+		{config.DeployStep{Builtin: "service_configs_copy", With: map[string]any{"service": "main", "mode": "replace"}},
+			`builtin: service_configs_copy(service=main, mode=replace)`},
+		{config.DeployStep{Builtin: "docker_remove_project_volumes"},
+			`builtin: docker_remove_project_volumes()`},
+		{config.DeployStep{Builtin: "remove_paths", With: map[string]any{"paths": []any{"services/"}}},
+			`builtin: remove_paths(paths=[services/])`},
 	}
 	for _, tc := range cases {
 		got := stepCommand(tc.step)
@@ -490,7 +495,7 @@ func TestStepCommand_allTypes(t *testing.T) {
 func TestStepCommand_commandWithWith(t *testing.T) {
 	step := config.DeployStep{
 		Command: "services.main.migrate",
-		With:    map[string]string{"db": "mydb"},
+		With:    map[string]any{"db": "mydb"},
 	}
 	got := stepCommand(step)
 	want := "./bin/devbox command run services.main.migrate --set db=mydb"
@@ -507,8 +512,11 @@ func TestStepBadge_allTypes(t *testing.T) {
 	if got := stepBadge(config.DeployStep{Command: "x"}); got != "[command]" {
 		t.Errorf("got %q want [command]", got)
 	}
-	if got := stepBadge(config.DeployStep{ServiceConfigsCopy: "main"}); got != "[config]" {
-		t.Errorf("got %q want [config]", got)
+	if got := stepBadge(config.DeployStep{Devbox: "docker down"}); got != "[devbox]" {
+		t.Errorf("got %q want [devbox]", got)
+	}
+	if got := stepBadge(config.DeployStep{Builtin: "service_configs_copy"}); got != "[builtin]" {
+		t.Errorf("got %q want [builtin]", got)
 	}
 }
 
@@ -654,7 +662,7 @@ func TestCopyConfigFile_defaultSkipsExisting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := copyConfigFile(src, dest, "default"); err != nil {
+	if err := builtin.CopyConfigFile(src, dest, "default"); err != nil {
 		t.Fatalf("copyConfigFile: %v", err)
 	}
 
@@ -676,7 +684,7 @@ func TestCopyConfigFile_defaultCreatesWhenMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := copyConfigFile(src, dest, "default"); err != nil {
+	if err := builtin.CopyConfigFile(src, dest, "default"); err != nil {
 		t.Fatalf("copyConfigFile: %v", err)
 	}
 
@@ -701,7 +709,7 @@ func TestCopyConfigFile_replaceOverwrites(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := copyConfigFile(src, dest, "replace"); err != nil {
+	if err := builtin.CopyConfigFile(src, dest, "replace"); err != nil {
 		t.Fatalf("copyConfigFile: %v", err)
 	}
 
@@ -729,7 +737,7 @@ func TestCopyConfigFile_updateMergesNewKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := copyConfigFile(src, dest, "update"); err != nil {
+	if err := builtin.CopyConfigFile(src, dest, "update"); err != nil {
 		t.Fatalf("copyConfigFile: %v", err)
 	}
 
@@ -768,7 +776,7 @@ func TestCopyConfigFile_updatePreservesExistingValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := copyConfigFile(src, dest, "update"); err != nil {
+	if err := builtin.CopyConfigFile(src, dest, "update"); err != nil {
 		t.Fatalf("copyConfigFile: %v", err)
 	}
 
@@ -799,7 +807,7 @@ func TestCopyConfigFile_updateCreatesWhenDestMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := copyConfigFile(src, dest, "update"); err != nil {
+	if err := builtin.CopyConfigFile(src, dest, "update"); err != nil {
 		t.Fatalf("copyConfigFile: %v", err)
 	}
 
@@ -880,7 +888,7 @@ func TestEnvLineKey(t *testing.T) {
 		{"  KEY = value", "KEY"},
 	}
 	for _, tc := range cases {
-		got := envLineKey(tc.line)
+		got := builtin.EnvLineKey(tc.line)
 		if got != tc.want {
 			t.Errorf("envLineKey(%q) = %q, want %q", tc.line, got, tc.want)
 		}
@@ -889,7 +897,7 @@ func TestEnvLineKey(t *testing.T) {
 
 func TestParseEnvKeys(t *testing.T) {
 	data := []byte("# comment\nFOO=1\nBAR=2\n\nBAZ=3\n")
-	keys := parseEnvKeys(data)
+	keys := builtin.ParseEnvKeys(data)
 	for _, k := range []string{"FOO", "BAR", "BAZ"} {
 		if !keys[k] {
 			t.Errorf("parseEnvKeys: expected key %q", k)
@@ -1525,7 +1533,7 @@ func TestResolveDeployPlan_commandStepIncluded(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("init",
 			commandStep("migrate", "services.main.migrate"),
-			commandStepWith("seed", "services.main.seed", map[string]string{"env": "test"}),
+			commandStepWith("seed", "services.main.seed", map[string]any{"env": "test"}),
 		),
 	})
 	steps, err := resolveDeployPlan(cfg)
@@ -1550,7 +1558,7 @@ func TestResolveDeployPlan_commandStepIncluded(t *testing.T) {
 func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 	step := config.DeployStep{
 		Command: "services.main.migrate",
-		With:    map[string]string{"z": "last", "a": "first", "m": "mid"},
+		With:    map[string]any{"z": "last", "a": "first", "m": "mid"},
 	}
 	got := stepCommand(step)
 	want := "./bin/devbox command run services.main.migrate --set a=first --set m=mid --set z=last"
@@ -1560,10 +1568,56 @@ func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 }
 
 func TestStepCommand_commandWithEmptyWith(t *testing.T) {
-	step := config.DeployStep{Command: "services.main.migrate", With: map[string]string{}}
+	step := config.DeployStep{Command: "services.main.migrate", With: map[string]any{}}
 	got := stepCommand(step)
 	want := "./bin/devbox command run services.main.migrate"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestExecBuiltinStep_validatesBeforeRun verifies that execBuiltinStep enforces
+// the same builtin validation contract as full-pipeline plan resolution, so that
+// `devbox deploy step` / `devbox reset step` cannot bypass it.
+func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
+	cases := []struct {
+		name    string
+		step    config.DeployStep
+		wantErr string
+	}{
+		{
+			name:    "unknown builtin name",
+			step:    config.DeployStep{Builtin: "typo_name"},
+			wantErr: `invalid builtin "typo_name"`,
+		},
+		{
+			name:    "remove_paths missing paths param",
+			step:    config.DeployStep{Builtin: "remove_paths", With: map[string]any{}},
+			wantErr: `invalid builtin "remove_paths"`,
+		},
+		{
+			name:    "remove_paths with root-equivalent path",
+			step:    config.DeployStep{Builtin: "remove_paths", With: map[string]any{"paths": []any{"."}}},
+			wantErr: `invalid builtin "remove_paths"`,
+		},
+		{
+			name: "service_configs_copy with invalid mode",
+			step: config.DeployStep{
+				Builtin: "service_configs_copy",
+				With:    map[string]any{"service": "main", "mode": "bogus"},
+			},
+			wantErr: `invalid builtin "service_configs_copy"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := execBuiltinStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, false)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error %q does not contain %q", err.Error(), tc.wantErr)
+			}
+		})
 	}
 }
