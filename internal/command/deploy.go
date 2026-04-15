@@ -99,7 +99,8 @@ type resolvedStep struct {
 	phase       config.DeployPhase
 	step        config.DeployStep
 	service     string // non-empty for per-service steps (e.g. "main")
-	runtimeWhen string // copy of step.When when IsRuntime; empty otherwise
+	runtimeWhen string // step-level runtime when condition (step.When); empty otherwise
+	phaseWhen   string // phase-level runtime when condition; evaluated once per phase, not per step
 }
 
 // stepAddress returns the full address of a step for display and lookup:
@@ -264,8 +265,8 @@ func resolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 	for _, step := range phase.Steps {
 		if step.When != "" {
 			if condition.IsRuntime(step.When) {
-				// Step has its own runtime condition — it takes priority over the phase condition.
-				result = append(result, resolvedStep{phase: phase, step: step, service: service, runtimeWhen: step.When})
+				// Step has its own runtime condition — evaluated at execution time.
+				result = append(result, resolvedStep{phase: phase, step: step, service: service, runtimeWhen: step.When, phaseWhen: phaseRuntimeWhen})
 				continue
 			}
 			ok, err := tpl.EvalCondition(step.When, cfg)
@@ -280,8 +281,9 @@ func resolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 				continue
 			}
 		}
-		// Apply phase runtime condition to steps that have no condition of their own.
-		result = append(result, resolvedStep{phase: phase, step: step, service: service, runtimeWhen: phaseRuntimeWhen})
+		// Phase runtime condition is stored in phaseWhen (evaluated once per phase at
+		// execution time, not per step). Steps without their own when have no runtimeWhen.
+		result = append(result, resolvedStep{phase: phase, step: step, service: service, phaseWhen: phaseRuntimeWhen})
 	}
 	return result, nil
 }
@@ -340,9 +342,8 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 		if cmd != "" {
 			w.Println(detailIndent + cmd)
 		}
-		// Show step-level when only when it differs from the phase condition
-		// (phase condition is already shown in the phase header).
-		if rs.runtimeWhen != "" && rs.runtimeWhen != rs.phase.When {
+		// Show step-level when (phase condition is already shown in the phase header).
+		if rs.runtimeWhen != "" {
 			w.Println(detailIndent + "[when: " + rs.runtimeWhen + "]")
 		}
 		if rs.step.Check != "" {
@@ -373,7 +374,7 @@ func printDeployPlanShell(steps []resolvedStep, w io.Writer) {
 			}
 			lastPhaseKey = phaseKey
 		}
-		if rs.runtimeWhen != "" && rs.runtimeWhen != rs.phase.When {
+		if rs.runtimeWhen != "" {
 			_, _ = fmt.Fprintf(w, "# when: %s\n", rs.runtimeWhen)
 		}
 		_, _ = fmt.Fprintln(w, stepCommand(rs.step))
@@ -442,6 +443,7 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 			w := render.NewWriter(tee)
 			totalSteps := len(steps)
 			lastPhaseKey := ""
+			phaseSkipped := false // true when the current phase's when condition evaluated to false
 
 			for i, rs := range steps {
 				phaseKey := rs.phase.Name
@@ -455,6 +457,19 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 					}
 					w.Info("Phase: " + phaseLabel)
 					lastPhaseKey = phaseKey
+
+					// Evaluate the phase-level when condition once at phase entry.
+					phaseSkipped = false
+					if rs.phaseWhen != "" {
+						ok, err := condition.EvalRuntime(rs.phaseWhen, workDir)
+						if err != nil {
+							return fmt.Errorf("evaluating when condition for phase %s: %w", phaseKey, err)
+						}
+						if !ok {
+							phaseSkipped = true
+							w.Warning(fmt.Sprintf("  Skipping phase %s (when: %s)", phaseKey, rs.phaseWhen))
+						}
+					}
 				}
 
 				stepLabel := rs.stepAddress()
@@ -463,6 +478,13 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 				}
 				w.Info(fmt.Sprintf("  [%d/%d] %s", i+1, totalSteps, stepLabel))
 
+				// Skip all steps in a phase whose when condition was false.
+				if phaseSkipped {
+					w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (phase when: %s)", i+1, totalSteps, rs.stepAddress(), rs.phaseWhen))
+					continue
+				}
+
+				// Evaluate step-level when condition (independent of the phase condition).
 				if rs.runtimeWhen != "" {
 					ok, err := condition.EvalRuntime(rs.runtimeWhen, workDir)
 					if err != nil {

@@ -1031,7 +1031,7 @@ func TestResolvePhaseSteps_phaseTruthyTemplateWhenIncludesSteps(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_phaseRuntimeWhenPropagatedToSteps(t *testing.T) {
-	// Phase with a runtime when — propagated to steps without their own condition.
+	// Phase with a runtime when — stored in phaseWhen on each step; runtimeWhen stays empty.
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWithWhen("setup", "dir-empty services/main/src",
 			cmdStep("create-dirs", "mkdir -p services/main/src"),
@@ -1047,10 +1047,13 @@ func TestResolvePhaseSteps_phaseRuntimeWhenPropagatedToSteps(t *testing.T) {
 	if len(steps) != 3 {
 		t.Fatalf("want 3 steps, got %d", len(steps))
 	}
-	// Both steps should carry the phase runtimeWhen.
+	// Both steps should carry the phase condition in phaseWhen, not runtimeWhen.
 	for _, rs := range steps[1:] {
-		if rs.runtimeWhen != "dir-empty services/main/src" {
-			t.Errorf("step %q: runtimeWhen = %q, want dir-empty services/main/src", rs.step.Name, rs.runtimeWhen)
+		if rs.phaseWhen != "dir-empty services/main/src" {
+			t.Errorf("step %q: phaseWhen = %q, want dir-empty services/main/src", rs.step.Name, rs.phaseWhen)
+		}
+		if rs.runtimeWhen != "" {
+			t.Errorf("step %q: runtimeWhen = %q, want empty (no step-level condition)", rs.step.Name, rs.runtimeWhen)
 		}
 	}
 }
@@ -1074,11 +1077,19 @@ func TestResolvePhaseSteps_stepOwnRuntimeWhenTakesPriority(t *testing.T) {
 	plain := steps[1]
 	install := steps[2]
 
-	if plain.runtimeWhen != "dir-empty services/main/src" {
-		t.Errorf("plain: runtimeWhen = %q, want phase condition", plain.runtimeWhen)
+	// plain has no step-level condition — phase condition goes into phaseWhen.
+	if plain.phaseWhen != "dir-empty services/main/src" {
+		t.Errorf("plain: phaseWhen = %q, want phase condition", plain.phaseWhen)
 	}
+	if plain.runtimeWhen != "" {
+		t.Errorf("plain: runtimeWhen = %q, want empty", plain.runtimeWhen)
+	}
+	// install has its own step condition in runtimeWhen; phaseWhen still carries the phase condition.
 	if install.runtimeWhen != "dir-empty services/main/src/special" {
 		t.Errorf("install: runtimeWhen = %q, want step's own condition", install.runtimeWhen)
+	}
+	if install.phaseWhen != "dir-empty services/main/src" {
+		t.Errorf("install: phaseWhen = %q, want phase condition", install.phaseWhen)
 	}
 }
 
@@ -1106,9 +1117,9 @@ func TestPrintDeployPlanShell_showsPhaseWhenComment(t *testing.T) {
 	steps := []resolvedStep{
 		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
 		{
-			phase:       config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"},
-			step:        cmdStep("create-dirs", "mkdir"),
-			runtimeWhen: "dir-empty services/main/src",
+			phase:     config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"},
+			step:      cmdStep("create-dirs", "mkdir"),
+			phaseWhen: "dir-empty services/main/src",
 		},
 	}
 	printDeployPlanShell(steps, &buf)
@@ -1120,19 +1131,19 @@ func TestPrintDeployPlanShell_showsPhaseWhenComment(t *testing.T) {
 }
 
 func TestPrintDeployPlanShell_stepWhenNotDuplicatedWhenSameAsPhase(t *testing.T) {
-	// When step runtimeWhen == phase.When, it should not be printed twice.
+	// Phase condition in phaseWhen — should appear as phase comment only, not as step "# when:".
 	var buf bytes.Buffer
 
 	phase := config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"}
 	steps := []resolvedStep{
-		{phase: phase, step: cmdStep("create-dirs", "mkdir"), runtimeWhen: "dir-empty services/main/src"},
+		{phase: phase, step: cmdStep("create-dirs", "mkdir"), phaseWhen: "dir-empty services/main/src"},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
 
 	// Phase comment should appear once; step-level "# when:" should not appear.
 	if strings.Count(out, "# when:") != 0 {
-		t.Errorf("step-level when comment should not appear when same as phase, got:\n%s", out)
+		t.Errorf("step-level when comment should not appear for phase-only condition, got:\n%s", out)
 	}
 	if !strings.Contains(out, "# phase setup [when: dir-empty services/main/src]") {
 		t.Errorf("phase when comment missing:\n%s", out)
