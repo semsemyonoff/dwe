@@ -3,10 +3,12 @@ package command
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
@@ -15,23 +17,23 @@ import (
 func newComposeCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "compose",
-		Short:        "Docker Compose helpers",
+		Short:        "Low-level Docker Compose diagnostics",
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newComposeFilesCmd(flags))
-	cmd.AddCommand(newComposeWaitCmd(flags))
-	cmd.AddCommand(newComposeRunCmd(flags))
+	cmd.AddCommand(newComposeRawCmd(flags))
+	cmd.AddCommand(newComposeArgvCmd(flags))
 	return cmd
 }
 
-// newComposeRunCmd creates the `devbox compose run` command.
+// newComposeRawCmd creates the `devbox compose raw` command (formerly `devbox compose run`).
 // It resolves the compose file list and project name from config, then delegates
 // to `docker compose` with the user-supplied arguments. All docker compose flags
 // and subcommands can be passed after `--`.
-func newComposeRunCmd(flags *rootFlags) *cobra.Command {
+func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:                "run [-- docker-compose-args...]",
-		Short:              "Run docker compose with the resolved file list and project name",
+		Use:                "raw [-- docker-compose-args...]",
+		Short:              "Run docker compose directly with resolved file list and project name (escape hatch)",
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
@@ -55,6 +57,40 @@ func newComposeRunCmd(flags *rootFlags) *cobra.Command {
 			dockerCmd.Stdout = cmd.OutOrStdout()
 			dockerCmd.Stderr = cmd.ErrOrStderr()
 			return dockerCmd.Run()
+		},
+		SilenceUsage: true,
+	}
+}
+
+// newComposeArgvCmd creates the `devbox compose argv` command.
+// It shows the full `docker compose` command that `devbox docker <command>` would
+// execute, without running it. Useful for diagnostics and debugging.
+func newComposeArgvCmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "argv <command> [args...]",
+		Short: "Show the full docker compose command that would be executed",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+
+			baseDir := filepath.Dir(flags.configPath)
+			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+			if err != nil {
+				return fmt.Errorf("loading docker config: %w", err)
+			}
+
+			compose := docker.NewCompose(cfg, dockerCfg)
+
+			command := args[0]
+			extraArgs := args[1:]
+			fullArgs := compose.BuildArgs(command, extraArgs...)
+
+			// Print as: docker compose -p ... -f ... <command> ...
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "docker "+strings.Join(fullArgs, " "))
+			return err
 		},
 		SilenceUsage: true,
 	}
@@ -88,49 +124,6 @@ func buildComposeFileList(cfg *config.DevboxConfig) []string {
 // healthGetFn returns the Docker health status string for a container by ID.
 // Known return values: "healthy", "unhealthy", "starting", "none".
 type healthGetFn func(id string) (string, error)
-
-// newComposeWaitCmd creates the `devbox compose wait` command.
-// It polls each container's health status until all are healthy (or times out).
-func newComposeWaitCmd(flags *rootFlags) *cobra.Command {
-	var timeout time.Duration
-	var interval time.Duration
-
-	cmd := &cobra.Command{
-		Use:   "wait",
-		Short: "Wait for all compose containers to become healthy",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-
-			composeFiles := buildComposeFileList(cfg)
-			projectName := cfg.Project.FullName()
-
-			ids, err := dockerComposeContainerIDs(projectName, composeFiles)
-			if err != nil {
-				return fmt.Errorf("getting container IDs: %w", err)
-			}
-			if len(ids) == 0 {
-				render.Stdout().Warning("no containers found")
-				return nil
-			}
-
-			if interval <= 0 {
-				return fmt.Errorf("--interval must be greater than zero")
-			}
-			attempts := max(int(timeout/interval), 1)
-
-			return waitContainersHealthy(ids, dockerHealthStatus, attempts, interval, render.Stdout())
-		},
-		SilenceUsage: true,
-	}
-
-	cmd.Flags().DurationVar(&timeout, "timeout", 60*time.Second, "total wait timeout")
-	cmd.Flags().DurationVar(&interval, "interval", 2*time.Second, "poll interval")
-	return cmd
-}
 
 // waitContainersHealthy polls each container until all are healthy or times out.
 // Containers with no healthcheck ("none" status) emit a one-time warning and are
@@ -171,28 +164,6 @@ func waitContainersHealthy(ids []string, getHealth healthGetFn, attempts int, in
 		}
 	}
 	return fmt.Errorf("containers did not become healthy within timeout (%d attempts)", attempts)
-}
-
-// dockerComposeContainerIDs returns the container IDs for the given compose project.
-func dockerComposeContainerIDs(projectName string, composeFiles []string) ([]string, error) {
-	args := []string{"compose", "-p", projectName}
-	for _, f := range composeFiles {
-		args = append(args, "-f", f)
-	}
-	args = append(args, "ps", "-q")
-
-	out, err := exec.Command("docker", args...).Output()
-	if err != nil {
-		return nil, err
-	}
-
-	var ids []string
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			ids = append(ids, line)
-		}
-	}
-	return ids, nil
 }
 
 // dockerHealthStatus returns the health status of a single container by ID.

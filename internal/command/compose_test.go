@@ -1,12 +1,17 @@
 package command
 
 import (
+	"bytes"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
+
+	"github.com/spf13/cobra"
 )
 
 func makeComposeCfg(base string, overlays map[string]string, tools config.ToolsConfig, services map[string]config.ServiceConfig) *config.DevboxConfig {
@@ -209,4 +214,125 @@ func TestWaitContainersHealthy_mixedNoHealthcheckAndHealthy(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
+}
+
+// TestComposeSubcommands verifies the compose command group has the expected subcommands
+// after the refactor: files, raw, argv (wait removed, run renamed to raw).
+func TestComposeSubcommands(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	composeCmd := newComposeCmd(flags)
+
+	expectedSubs := []string{"files", "raw", "argv"}
+	commands := composeCmd.Commands()
+
+	if len(commands) != len(expectedSubs) {
+		t.Fatalf("compose has %d subcommands, want %d: %v", len(commands), len(expectedSubs), commandNames(commands))
+	}
+
+	nameSet := make(map[string]bool)
+	for _, c := range commands {
+		nameSet[c.Name()] = true
+	}
+
+	for _, name := range expectedSubs {
+		if !nameSet[name] {
+			t.Errorf("missing subcommand %q", name)
+		}
+	}
+}
+
+// TestComposeArgvOutput verifies that `compose argv` produces the correct output
+// using the docker package's BuildArgs.
+func TestComposeArgvOutput(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "devbox-laravel",
+		Args: config.DockerArgs{
+			Global:  []string{"--ansi", "always"},
+			Up:      []string{"-d", "--remove-orphans"},
+			Down:    []string{},
+			Stop:    []string{},
+			Restart: []string{},
+			Logs:    []string{"-f"},
+			Ps:      []string{},
+			Exec:    []string{},
+			Run:     []string{"--rm"},
+		},
+	}
+
+	compose := docker.NewCompose(cfg, dockerCfg)
+
+	tests := []struct {
+		name     string
+		command  string
+		extra    []string
+		contains []string
+	}{
+		{
+			name:     "up with service",
+			command:  "up",
+			extra:    []string{"redis"},
+			contains: []string{"docker", "compose", "-p", "devbox-laravel", "-f", "compose.yaml", "--ansi", "always", "up", "-d", "--remove-orphans", "redis"},
+		},
+		{
+			name:     "down no extras",
+			command:  "down",
+			extra:    nil,
+			contains: []string{"docker", "compose", "-p", "devbox-laravel", "-f", "compose.yaml", "--ansi", "always", "down"},
+		},
+		{
+			name:     "logs with service",
+			command:  "logs",
+			extra:    []string{"nginx"},
+			contains: []string{"docker", "compose", "-p", "devbox-laravel", "logs", "-f", "nginx"},
+		},
+		{
+			name:     "run with command",
+			command:  "run",
+			extra:    []string{"app-main", "--", "composer", "install"},
+			contains: []string{"run", "--rm", "app-main", "--", "composer", "install"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := compose.BuildArgs(tt.command, tt.extra...)
+			// BuildArgs returns without "docker" prefix; the output line prepends "docker "
+			output := "docker " + strings.Join(args, " ")
+
+			for _, want := range tt.contains {
+				if !strings.Contains(output, want) {
+					t.Errorf("output %q missing %q", output, want)
+				}
+			}
+		})
+	}
+}
+
+// TestComposeArgvCmd verifies the cobra command for `compose argv` requires at least one arg.
+func TestComposeArgvCmd(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newComposeArgvCmd(flags)
+
+	// No args should fail validation.
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error when no args provided to argv, got nil")
+	}
+}
+
+func commandNames(cmds []*cobra.Command) []string {
+	names := make([]string, len(cmds))
+	for i, c := range cmds {
+		names[i] = c.Name()
+	}
+	return names
 }
