@@ -157,6 +157,9 @@ func loadCommandRegistry(configPath string) (*commands.Registry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading command registry: %w", err)
 	}
+	if err := reg.Validate(); err != nil {
+		return nil, fmt.Errorf("command registry validation: %w", err)
+	}
 	return reg, nil
 }
 

@@ -80,7 +80,7 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 			cmd := cf.Commands[name]
 			cmdCopy := cmd // take address of local copy
 			if existing, dup := reg.byID[cmdCopy.ID]; dup {
-				return nil, fmt.Errorf("load registry: duplicate command ID %q (files: %s and %s)",
+				return nil, fmt.Errorf("load registry: duplicate command ID %q (groups: %s and %s)",
 					cmdCopy.ID, existing.Group, cmdCopy.Group)
 			}
 			reg.byID[cmdCopy.ID] = &cmdCopy

@@ -100,7 +100,7 @@ func ResolveContext(defs map[string]ContextDef, cfg *config.DevboxConfig) (map[s
 	return result, nil
 }
 
-// isEmpty returns true for nil, empty string, or the string "false"/"0".
+// isEmpty returns true for nil or empty string.
 // Used to test whether a required context value is considered missing.
 func isEmpty(v any) bool {
 	if v == nil {

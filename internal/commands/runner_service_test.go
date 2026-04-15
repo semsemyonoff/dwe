@@ -147,7 +147,7 @@ func TestServiceRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	args := strings.Join(c.Args, " ")
-	if !strings.Contains(args, "run --rm") {
+	if !strings.Contains(args, "run --rm --no-deps") {
 		t.Errorf("expected 'run --rm', got: %s", args)
 	}
 	if strings.Contains(args, " exec ") {
@@ -184,7 +184,7 @@ func TestServiceExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
 	if !strings.Contains(args, "app-installer") {
 		t.Errorf("expected runner service 'app-installer', got: %s", args)
 	}
-	if !strings.Contains(args, "run --rm") {
+	if !strings.Contains(args, "run --rm --no-deps") {
 		t.Errorf("expected 'run --rm' due to runner mode override, got: %s", args)
 	}
 }
@@ -220,6 +220,77 @@ func TestServiceExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 	args := strings.Join(c.Args, " ")
 	if !strings.Contains(args, "--workdir /var/www/html") {
 		t.Errorf("expected '--workdir /var/www/html', got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeServiceExec,
+			Service: "app-second",
+			Mode:    ExecModeExec,
+			Run:     "composer install",
+		},
+		Render: &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Compose: config.ComposeConfig{
+				Base:     "compose.yaml",
+				Overlays: map[string]string{},
+			},
+			Services: map[string]config.ServiceConfig{
+				"second": {Enabled: true, Compose: []string{"compose/services/second/app.yml"}},
+			},
+		},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, "devbox-laravel")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "-f compose.yaml") {
+		t.Errorf("expected '-f compose.yaml' in args, got: %s", args)
+	}
+	if !strings.Contains(args, "-f compose/services/second/app.yml") {
+		t.Errorf("expected '-f compose/services/second/app.yml' in args, got: %s", args)
+	}
+}
+
+func TestServiceRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeServiceRun,
+			Service: "app-second",
+			Run:     "composer install",
+		},
+		Render: &tpl.RenderContext{},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Compose: config.ComposeConfig{
+				Base:     "compose.yaml",
+				Overlays: map[string]string{},
+			},
+			Services: map[string]config.ServiceConfig{
+				"second": {Enabled: true, Compose: []string{"compose/services/second/app.yml"}},
+			},
+		},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceRunRunner{}
+	c, err := r.BuildCommand(ctx, "devbox-laravel")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "-f compose.yaml") {
+		t.Errorf("expected '-f compose.yaml' in args, got: %s", args)
+	}
+	if !strings.Contains(args, "-f compose/services/second/app.yml") {
+		t.Errorf("expected '-f compose/services/second/app.yml' in args, got: %s", args)
 	}
 }
 

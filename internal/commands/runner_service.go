@@ -32,13 +32,23 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, projectFull string) (*e
 		return nil, err
 	}
 
+	envVars, err := buildRenderedEnv(ctx.Cmd, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var composeFiles []string
+	if ctx.Config != nil {
+		composeFiles = ctx.Config.ComposeFiles()
+	}
+
 	// Determine exec vs run.
 	useExec := true
 	switch mode {
 	case ExecModeRun:
 		useExec = false
 	case ExecModeExecOrRun:
-		running, checkErr := isContainerRunning(projectFull, svc)
+		running, checkErr := isContainerRunning(projectFull, composeFiles, svc)
 		if checkErr != nil {
 			// On check failure, fall back to exec (let docker report the real error).
 			running = true
@@ -46,7 +56,7 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, projectFull string) (*e
 		useExec = running
 	}
 
-	return buildDockerComposeCmd(ctx, projectFull, svc, user, workdir, argv, useExec), nil
+	return buildDockerComposeCmd(ctx, projectFull, composeFiles, svc, user, workdir, argv, envVars, useExec), nil
 }
 
 // Run executes the command inside the container.
@@ -77,7 +87,17 @@ func (r *ServiceRunRunner) BuildCommand(ctx RunContext, projectFull string) (*ex
 		return nil, err
 	}
 
-	return buildDockerComposeCmd(ctx, projectFull, svc, user, workdir, argv, false), nil
+	envVars, err := buildRenderedEnv(ctx.Cmd, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var composeFiles []string
+	if ctx.Config != nil {
+		composeFiles = ctx.Config.ComposeFiles()
+	}
+
+	return buildDockerComposeCmd(ctx, projectFull, composeFiles, svc, user, workdir, argv, envVars, false), nil
 }
 
 // Run executes the command in a one-off container.
@@ -181,10 +201,12 @@ func buildServiceArgv(ctx RunContext) ([]string, error) {
 func buildDockerComposeCmd(
 	ctx RunContext,
 	projectFull string,
+	composeFiles []string,
 	svc string,
 	user UserMode,
 	workdir string,
 	serviceArgv []string,
+	envVars map[string]string,
 	useExec bool,
 ) *exec.Cmd {
 	var args []string
@@ -192,11 +214,14 @@ func buildDockerComposeCmd(
 	if projectFull != "" {
 		args = append(args, "-p", projectFull)
 	}
+	for _, f := range composeFiles {
+		args = append(args, "-f", f)
+	}
 
 	if useExec {
 		args = append(args, "exec")
 	} else {
-		args = append(args, "run", "--rm")
+		args = append(args, "run", "--rm", "--no-deps")
 	}
 
 	// User flag.
@@ -218,6 +243,11 @@ func buildDockerComposeCmd(
 		args = append(args, "--workdir", workdir)
 	}
 
+	// Env vars passed via -e flags (each value is a separate argument, never shell-interpreted).
+	for k, v := range envVars {
+		args = append(args, "-e", k+"="+v)
+	}
+
 	// Service name.
 	args = append(args, svc)
 
@@ -229,10 +259,13 @@ func buildDockerComposeCmd(
 
 // isContainerRunning checks whether the named service container is running
 // in the given compose project.
-func isContainerRunning(projectFull, service string) (bool, error) {
+func isContainerRunning(projectFull string, composeFiles []string, service string) (bool, error) {
 	args := []string{"compose"}
 	if projectFull != "" {
 		args = append(args, "-p", projectFull)
+	}
+	for _, f := range composeFiles {
+		args = append(args, "-f", f)
 	}
 	args = append(args, "ps", "--status", "running", "--format", "json", service)
 

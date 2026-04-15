@@ -324,7 +324,8 @@ func TestRegistry_Validate_Valid(t *testing.T) {
 
 func TestRegistry_Validate_MissingWorkflowRef(t *testing.T) {
 	// Workflow references a command ID that doesn't exist.
-	_, err := buildTestRegistry(t, map[string]string{
+	// LoadRegistry succeeds (validation is lazy); Validate() must catch the bad ref.
+	reg, err := buildTestRegistry(t, map[string]string{
 		"services/main/index.yml": `
 commands:
   bootstrap:
@@ -334,13 +335,11 @@ commands:
       - command: services.main.nonexistent
 `,
 	})
-	// LoadRegistry itself does not call Validate; we need to call it explicitly.
-	// If it did load successfully, validate should catch the missing ref.
-	// But since LoadRegistry doesn't call Validate, we test Validate separately.
-	// The above will load fine; validate will catch the bad ref.
 	if err != nil {
-		// LoadRegistry itself errored (unexpected).
 		t.Fatalf("LoadRegistry: %v", err)
+	}
+	if err := reg.Validate(); err == nil {
+		t.Error("expected validation error for missing workflow ref, got nil")
 	}
 }
 
