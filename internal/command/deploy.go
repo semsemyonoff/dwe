@@ -496,7 +496,7 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 					}
 				}
 
-				if stepErr := execStep(rs.step, workDir, cfg, reg); stepErr != nil {
+				if stepErr := execStep(rs.step, workDir, cfg, reg, logFile); stepErr != nil {
 					w.Error(fmt.Sprintf("Deploy failed at step %q", rs.stepAddress()))
 					w.Error("  " + stepErr.Error())
 					w.Warning("Full output saved to: " + logPath)
@@ -705,9 +705,9 @@ func (s *ansiStripper) Write(p []byte) (int, error) {
 // (devbox + shell + docker). devbox suppresses its own default SIGINT handler while
 // waiting so it does not exit before the child finishes cleanup. A second Ctrl+C
 // restores the default handler, allowing the user to force-exit if cleanup hangs.
-func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry) error {
+func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer) error {
 	if step.Command != "" {
-		return execCommandStep(step, workDir, cfg, reg)
+		return execCommandStep(step, workDir, cfg, reg, logWriter)
 	}
 
 	var cmd *exec.Cmd
@@ -727,8 +727,14 @@ func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 	}
 	cmd.Dir = workDir
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if logWriter != nil {
+		logStripped := &ansiStripper{logWriter}
+		cmd.Stdout = io.MultiWriter(os.Stdout, logStripped)
+		cmd.Stderr = io.MultiWriter(os.Stderr, logStripped)
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 	// No Setpgid: child stays in the terminal foreground process group so Ctrl+C
 	// reaches child processes (make, shell, docker) directly from the terminal.
 
@@ -766,7 +772,7 @@ func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 // It looks up the command ID in the registry, resolves params (merging step.With overrides),
 // resolves context, and dispatches to the appropriate runner. Output goes directly to
 // os.Stdout/os.Stderr so TTY detection works correctly.
-func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry) error {
+func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer) error {
 	if reg == nil {
 		return fmt.Errorf("command registry not available for step %q (command: %s)", step.Name, step.Command)
 	}
@@ -792,6 +798,13 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 	if err != nil {
 		return fmt.Errorf("step %q: %w", step.Name, err)
 	}
+	stdout := io.Writer(os.Stdout)
+	stderr := io.Writer(os.Stderr)
+	if logWriter != nil {
+		logStripped := &ansiStripper{logWriter}
+		stdout = io.MultiWriter(os.Stdout, logStripped)
+		stderr = io.MultiWriter(os.Stderr, logStripped)
+	}
 	return runner.Run(commands.RunContext{
 		Cmd:         def,
 		Params:      params,
@@ -800,8 +813,8 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		Config:      cfg,
 		Registry:    reg,
 		ProjectRoot: workDir,
-		Stdout:      os.Stdout,
-		Stderr:      os.Stderr,
+		Stdout:      stdout,
+		Stderr:      stderr,
 	})
 }
 
@@ -855,7 +868,7 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
-			if err := execStep(step, workDir, cfg, reg); err != nil {
+			if err := execStep(step, workDir, cfg, reg, nil); err != nil {
 				return err
 			}
 
