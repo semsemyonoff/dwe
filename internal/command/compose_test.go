@@ -329,6 +329,70 @@ func TestComposeArgvCmd(t *testing.T) {
 	}
 }
 
+// TestExtractBareFlag verifies --bare parsing from raw args.
+func TestExtractBareFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantBare bool
+		wantRest []string
+	}{
+		{
+			name:     "no flags",
+			args:     []string{"--", "ps"},
+			wantBare: false,
+			wantRest: []string{"ps"},
+		},
+		{
+			name:     "bare before separator",
+			args:     []string{"--bare", "--", "-f", "installer.yml", "run", "--rm", "app"},
+			wantBare: true,
+			wantRest: []string{"-f", "installer.yml", "run", "--rm", "app"},
+		},
+		{
+			name:     "bare only",
+			args:     []string{"--bare"},
+			wantBare: true,
+			wantRest: nil,
+		},
+		{
+			name:     "empty args",
+			args:     nil,
+			wantBare: false,
+			wantRest: nil,
+		},
+		{
+			name:     "separator only",
+			args:     []string{"--"},
+			wantBare: false,
+			wantRest: nil,
+		},
+		{
+			name:     "bare without separator",
+			args:     []string{"--bare", "up"},
+			wantBare: true,
+			wantRest: []string{"up"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bare, rest := extractBareFlag(tt.args)
+			if bare != tt.wantBare {
+				t.Errorf("bare = %v, want %v", bare, tt.wantBare)
+			}
+			if len(rest) != len(tt.wantRest) {
+				t.Fatalf("rest = %v, want %v", rest, tt.wantRest)
+			}
+			for i := range rest {
+				if rest[i] != tt.wantRest[i] {
+					t.Errorf("rest[%d] = %q, want %q", i, rest[i], tt.wantRest[i])
+				}
+			}
+		})
+	}
+}
+
 func commandNames(cmds []*cobra.Command) []string {
 	names := make([]string, len(cmds))
 	for i, c := range cmds {

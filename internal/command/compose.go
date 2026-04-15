@@ -30,25 +30,28 @@ func newComposeCmd(flags *rootFlags) *cobra.Command {
 // It resolves the compose file list and project name from config, then delegates
 // to `docker compose` with the user-supplied arguments. All docker compose flags
 // and subcommands can be passed after `--`.
+//
+// With --bare, only the project name is injected (no default compose files).
+// This is useful for commands that use a standalone compose file like the installer.
 func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:                "raw [-- docker-compose-args...]",
+		Use:                "raw [--bare] [-- docker-compose-args...]",
 		Short:              "Run docker compose directly with resolved file list and project name (escape hatch)",
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Parse --bare flag manually (DisableFlagParsing is on).
+			bare, passArgs := extractBareFlag(args)
+
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
 			composeArgs := []string{"-p", cfg.Project.FullName()}
-			for _, f := range buildComposeFileList(cfg) {
-				composeArgs = append(composeArgs, "-f", f)
-			}
-			// Strip leading "--" separator if present.
-			passArgs := args
-			if len(passArgs) > 0 && passArgs[0] == "--" {
-				passArgs = passArgs[1:]
+			if !bare {
+				for _, f := range buildComposeFileList(cfg) {
+					composeArgs = append(composeArgs, "-f", f)
+				}
 			}
 			composeArgs = append(composeArgs, passArgs...)
 
@@ -60,6 +63,23 @@ func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 		},
 		SilenceUsage: true,
 	}
+}
+
+// extractBareFlag checks for --bare in the arg list and returns the remaining
+// args with "--" stripped. This is needed because DisableFlagParsing prevents
+// cobra from handling flags.
+func extractBareFlag(args []string) (bare bool, rest []string) {
+	for _, arg := range args {
+		switch arg {
+		case "--bare":
+			bare = true
+		case "--":
+			// skip separator
+		default:
+			rest = append(rest, arg)
+		}
+	}
+	return
 }
 
 // newComposeArgvCmd creates the `devbox compose argv` command.
