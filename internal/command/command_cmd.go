@@ -124,20 +124,25 @@ func newCommandRunCmd(flags *rootFlags) *cobra.Command {
 				Host:    tpl.CurrentHostInfo(),
 			}
 			projectRoot := filepath.Dir(flags.configPath)
+			dockerCfg, err := config.LoadDockerConfig(projectRoot, cfg)
+			if err != nil {
+				return fmt.Errorf("loading docker config: %w", err)
+			}
 			runner, err := commands.NewRunner(def)
 			if err != nil {
 				return fmt.Errorf("creating runner: %w", err)
 			}
 			return runner.Run(commands.RunContext{
-				Cmd:         def,
-				Params:      params,
-				Context:     ctx,
-				Render:      rctx,
-				Config:      cfg,
-				Registry:    reg,
-				ProjectRoot: projectRoot,
-				Stdout:      os.Stdout,
-				Stderr:      os.Stderr,
+				Cmd:          def,
+				Params:       params,
+				Context:      ctx,
+				Render:       rctx,
+				Config:       cfg,
+				DockerConfig: dockerCfg,
+				Registry:     reg,
+				ProjectRoot:  projectRoot,
+				Stdout:       os.Stdout,
+				Stderr:       os.Stderr,
 			})
 		},
 		SilenceUsage: true,

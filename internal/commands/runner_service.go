@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/tpl"
 )
 
@@ -18,7 +19,7 @@ type ServiceExecRunner struct{}
 // BuildCommand constructs the exec.Cmd for the given context.
 // When mode is exec-or-run the container state is checked at build time:
 // if the container is not running the command will use `run --rm` instead.
-func (r *ServiceExecRunner) BuildCommand(ctx RunContext, projectFull string) (*exec.Cmd, error) {
+func (r *ServiceExecRunner) BuildCommand(ctx RunContext, compose *docker.Compose) (*exec.Cmd, error) {
 	svc, user, workdir, mode, err := resolveServiceFields(ctx)
 	if err != nil {
 		return nil, err
@@ -37,18 +38,13 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, projectFull string) (*e
 		return nil, err
 	}
 
-	var composeFiles []string
-	if ctx.Config != nil {
-		composeFiles = ctx.Config.ComposeFiles()
-	}
-
 	// Determine exec vs run.
 	useExec := true
 	switch mode {
 	case ExecModeRun:
 		useExec = false
 	case ExecModeExecOrRun:
-		running, checkErr := isContainerRunning(projectFull, composeFiles, svc)
+		running, checkErr := isContainerRunning(compose, svc)
 		if checkErr != nil {
 			// On check failure, fall back to exec (let docker report the real error).
 			running = true
@@ -56,13 +52,13 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, projectFull string) (*e
 		useExec = running
 	}
 
-	return buildDockerComposeCmd(ctx, projectFull, composeFiles, svc, user, workdir, argv, envVars, useExec), nil
+	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, useExec), nil
 }
 
 // Run executes the command inside the container.
 func (r *ServiceExecRunner) Run(ctx RunContext) error {
-	projectFull := resolveProjectFull(ctx.Config)
-	c, err := r.BuildCommand(ctx, projectFull)
+	compose := ctx.Compose()
+	c, err := r.BuildCommand(ctx, compose)
 	if err != nil {
 		return err
 	}
@@ -76,7 +72,7 @@ func (r *ServiceExecRunner) Run(ctx RunContext) error {
 type ServiceRunRunner struct{}
 
 // BuildCommand constructs the exec.Cmd for the given context.
-func (r *ServiceRunRunner) BuildCommand(ctx RunContext, projectFull string) (*exec.Cmd, error) {
+func (r *ServiceRunRunner) BuildCommand(ctx RunContext, compose *docker.Compose) (*exec.Cmd, error) {
 	svc, user, workdir, _, err := resolveServiceFields(ctx)
 	if err != nil {
 		return nil, err
@@ -92,18 +88,13 @@ func (r *ServiceRunRunner) BuildCommand(ctx RunContext, projectFull string) (*ex
 		return nil, err
 	}
 
-	var composeFiles []string
-	if ctx.Config != nil {
-		composeFiles = ctx.Config.ComposeFiles()
-	}
-
-	return buildDockerComposeCmd(ctx, projectFull, composeFiles, svc, user, workdir, argv, envVars, false), nil
+	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, false), nil
 }
 
 // Run executes the command in a one-off container.
 func (r *ServiceRunRunner) Run(ctx RunContext) error {
-	projectFull := resolveProjectFull(ctx.Config)
-	c, err := r.BuildCommand(ctx, projectFull)
+	compose := ctx.Compose()
+	c, err := r.BuildCommand(ctx, compose)
 	if err != nil {
 		return err
 	}
@@ -197,11 +188,11 @@ func buildServiceArgv(ctx RunContext) ([]string, error) {
 	return rendered, nil
 }
 
-// buildDockerComposeCmd assembles the full docker compose exec/run command.
+// buildDockerComposeCmd assembles the full docker compose exec/run command
+// using the shared Compose struct for project name, file list, and global args.
 func buildDockerComposeCmd(
 	ctx RunContext,
-	projectFull string,
-	composeFiles []string,
+	compose *docker.Compose,
 	svc string,
 	user UserMode,
 	workdir string,
@@ -211,12 +202,15 @@ func buildDockerComposeCmd(
 ) *exec.Cmd {
 	var args []string
 
-	if projectFull != "" {
-		args = append(args, "-p", projectFull)
+	if compose.ProjectName != "" {
+		args = append(args, "-p", compose.ProjectName)
 	}
-	for _, f := range composeFiles {
+	for _, f := range compose.Files {
 		args = append(args, "-f", f)
 	}
+
+	// Global args from docker policy (e.g. --ansi always --progress tty).
+	args = append(args, compose.GlobalArgs...)
 
 	if useExec {
 		args = append(args, "exec")
@@ -258,13 +252,13 @@ func buildDockerComposeCmd(
 }
 
 // isContainerRunning checks whether the named service container is running
-// in the given compose project.
-func isContainerRunning(projectFull string, composeFiles []string, service string) (bool, error) {
+// in the given compose project using the shared Compose struct.
+func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
 	args := []string{"compose"}
-	if projectFull != "" {
-		args = append(args, "-p", projectFull)
+	if compose.ProjectName != "" {
+		args = append(args, "-p", compose.ProjectName)
 	}
-	for _, f := range composeFiles {
+	for _, f := range compose.Files {
 		args = append(args, "-f", f)
 	}
 	args = append(args, "ps", "--status", "running", "--format", "json", service)
@@ -275,12 +269,4 @@ func isContainerRunning(projectFull string, composeFiles []string, service strin
 	}
 	// If output contains any non-whitespace the container is running.
 	return strings.TrimSpace(string(out)) != "", nil
-}
-
-// resolveProjectFull returns the compose project name from config (prefix-name).
-func resolveProjectFull(cfg *config.DevboxConfig) string {
-	if cfg == nil {
-		return ""
-	}
-	return cfg.Project.FullName()
 }

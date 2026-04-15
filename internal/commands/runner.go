@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/tpl"
 )
 
@@ -29,6 +30,11 @@ type RunContext struct {
 
 	// Config is the merged devbox configuration.
 	Config *config.DevboxConfig
+
+	// DockerConfig is the Docker Compose execution policy. When set, service
+	// runners use it to apply global args and project naming from the policy.
+	// May be nil — runners fall back to config-only defaults.
+	DockerConfig *config.DockerConfig
 
 	// Registry is the loaded command registry, used by WorkflowRunner to look
 	// up referenced commands. May be nil when workflows are not expected.
@@ -72,4 +78,22 @@ type ErrUnsupportedType struct {
 
 func (e *ErrUnsupportedType) Error() string {
 	return "no runner for command type: " + string(e.Type)
+}
+
+// Compose builds a *docker.Compose from the context's config and docker policy.
+// When DockerConfig is nil a minimal Compose is returned with just the project
+// name and file list derived from the devbox config.
+func (ctx RunContext) Compose() *docker.Compose {
+	if ctx.DockerConfig != nil && ctx.Config != nil {
+		return docker.NewCompose(ctx.Config, ctx.DockerConfig)
+	}
+	// Fallback: build a minimal Compose from config only.
+	c := &docker.Compose{
+		CommandArgs: map[string][]string{},
+	}
+	if ctx.Config != nil {
+		c.ProjectName = ctx.Config.Project.FullName()
+		c.Files = ctx.Config.ComposeFiles()
+	}
+	return c
 }

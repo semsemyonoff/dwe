@@ -108,15 +108,16 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step Workfl
 	}
 
 	subCtx := RunContext{
-		Cmd:         cmd,
-		Params:      resolvedParams,
-		Context:     resolvedCtx,
-		Render:      renderCtx,
-		Config:      ctx.Config,
-		Registry:    ctx.Registry,
-		ProjectRoot: ctx.ProjectRoot,
-		Stdout:      ctx.Stdout,
-		Stderr:      ctx.Stderr,
+		Cmd:          cmd,
+		Params:       resolvedParams,
+		Context:      resolvedCtx,
+		Render:       renderCtx,
+		Config:       ctx.Config,
+		DockerConfig: ctx.DockerConfig,
+		Registry:     ctx.Registry,
+		ProjectRoot:  ctx.ProjectRoot,
+		Stdout:       ctx.Stdout,
+		Stderr:       ctx.Stderr,
 	}
 
 	runner, err := NewRunner(cmd)
