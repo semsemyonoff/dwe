@@ -20,6 +20,26 @@ type DockerConfig struct {
 	Args DockerArgs `yaml:"args"`
 	// Env controls automatic .env generation before lifecycle commands.
 	Env DockerEnvConfig `yaml:"env"`
+	// Resources declares managed Docker resources (volumes, etc.).
+	Resources DockerResourcesConfig `yaml:"resources"`
+}
+
+// DockerResourcesConfig holds declarations for Docker resources managed by devbox.
+type DockerResourcesConfig struct {
+	// Volumes is a map of logical name → volume config.
+	Volumes map[string]DockerVolumeConfig `yaml:"volumes"`
+}
+
+// DockerVolumeConfig describes a Docker volume that devbox should ensure exists.
+type DockerVolumeConfig struct {
+	// Name is the actual Docker volume name to create.
+	Name string `yaml:"name"`
+	// Shared marks the volume as project-independent (not prefixed with project name).
+	// Shared volumes persist across project resets.
+	Shared bool `yaml:"shared"`
+	// EnsureBefore lists the devbox docker/deploy commands that trigger idempotent creation.
+	// Supported values: up, deploy.
+	EnsureBefore []string `yaml:"ensure_before"`
 }
 
 // DockerArgs holds global and per-command default arguments.

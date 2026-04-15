@@ -60,6 +60,11 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 		}
 	}
 
+	// Ensure declared Docker resources exist before the command runs.
+	if err := docker.EnsureVolumes(dockerCfg.Resources, command, render.Stdout()); err != nil {
+		return nil, fmt.Errorf("ensuring volumes: %w", err)
+	}
+
 	compose := docker.NewCompose(cfg, dockerCfg)
 
 	return &dockerPipeline{

@@ -17,6 +17,7 @@ import (
 	"devbox-cli/internal/commands"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 
@@ -406,6 +407,15 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
+			workDir := filepath.Dir(flags.configPath)
+			dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+			if err != nil {
+				return fmt.Errorf("loading docker config: %w", err)
+			}
+			if err := docker.EnsureVolumes(dockerCfg.Resources, "deploy", render.Stdout()); err != nil {
+				return fmt.Errorf("ensuring volumes: %w", err)
+			}
+
 			var steps []resolvedStep
 			if serviceName != "" {
 				if _, ok := cfg.Services[serviceName]; !ok {
@@ -419,7 +429,6 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("resolving deploy plan: %w", err)
 			}
 
-			workDir := filepath.Dir(flags.configPath)
 			reg, err := loadCommandRegistry(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
