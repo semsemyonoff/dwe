@@ -45,6 +45,7 @@ Run 'devbox info' to display the current project status.`,
 	root.AddCommand(newToolCmd(flags))
 	root.AddCommand(newDeployCmd(flags))
 	root.AddCommand(newCommandCmd(flags))
+	root.AddCommand(newDockerCmd(flags))
 
 	return root
 }
