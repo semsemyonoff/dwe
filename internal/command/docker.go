@@ -29,6 +29,7 @@ func newDockerCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newDockerExecCmd(flags))
 	cmd.AddCommand(newDockerRunCmd(flags))
 	cmd.AddCommand(newDockerWaitCmd(flags))
+	cmd.AddCommand(newDockerProjectNameCmd(flags))
 	return cmd
 }
 
@@ -238,4 +239,28 @@ func newDockerWaitCmd(flags *rootFlags) *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 60*time.Second, "total wait timeout")
 	cmd.Flags().DurationVar(&interval, "interval", 2*time.Second, "poll interval")
 	return cmd
+}
+
+func newDockerProjectNameCmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "project-name",
+		Short: "Print the resolved compose project name",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+
+			baseDir := filepath.Dir(flags.configPath)
+			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+			if err != nil {
+				return fmt.Errorf("loading docker config: %w", err)
+			}
+
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), dockerCfg.ProjectName)
+			return err
+		},
+		SilenceUsage: true,
+	}
 }
