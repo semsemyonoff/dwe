@@ -10,11 +10,15 @@ import (
 )
 
 // testCompose returns a minimal *docker.Compose for use in tests.
+// Includes realistic per-command defaults matching devbox/docker.yml.
 func testCompose(projectName string, files []string) *docker.Compose {
 	return &docker.Compose{
 		ProjectName: projectName,
 		Files:       files,
-		CommandArgs: map[string][]string{},
+		CommandArgs: map[string][]string{
+			"run":  {"--rm"},
+			"exec": {},
+		},
 	}
 }
 
@@ -24,7 +28,10 @@ func testComposeWithGlobalArgs(projectName string, files []string, globalArgs []
 		ProjectName: projectName,
 		Files:       files,
 		GlobalArgs:  globalArgs,
-		CommandArgs: map[string][]string{},
+		CommandArgs: map[string][]string{
+			"run":  {"--rm"},
+			"exec": {},
+		},
 	}
 }
 

@@ -35,30 +35,6 @@ type DockerArgs struct {
 	Run     []string `yaml:"run"`
 }
 
-// CommandArgs returns the default args for the given compose subcommand.
-func (a *DockerArgs) CommandArgs(command string) []string {
-	switch command {
-	case "up":
-		return a.Up
-	case "down":
-		return a.Down
-	case "stop":
-		return a.Stop
-	case "restart":
-		return a.Restart
-	case "logs":
-		return a.Logs
-	case "ps":
-		return a.Ps
-	case "exec":
-		return a.Exec
-	case "run":
-		return a.Run
-	default:
-		return nil
-	}
-}
-
 // DockerEnvConfig controls automatic .env generation.
 type DockerEnvConfig struct {
 	AutoGenerate bool     `yaml:"auto_generate"`
@@ -113,8 +89,9 @@ func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) 
 // This is a lightweight resolver that doesn't need the full tpl package —
 // it only handles the ${key} → value substitution pattern.
 func resolveVarTemplate(s string, raw map[string]any) (string, error) {
+	const maxIter = 10
 	result := s
-	for {
+	for i := range maxIter {
 		start := strings.Index(result, "${")
 		if start == -1 {
 			break
@@ -130,6 +107,9 @@ func resolveVarTemplate(s string, raw map[string]any) (string, error) {
 			return "", fmt.Errorf("unresolved path %q in template %q", path, s)
 		}
 		result = result[:start] + fmt.Sprintf("%v", val) + result[end+1:]
+		if i == maxIter-1 && strings.Contains(result, "${") {
+			return "", fmt.Errorf("too many template substitutions in %q (possible circular reference)", s)
+		}
 	}
 	return result, nil
 }

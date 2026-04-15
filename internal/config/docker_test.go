@@ -215,43 +215,6 @@ env: {}
 	}
 }
 
-func TestDockerArgs_CommandArgs(t *testing.T) {
-	args := &DockerArgs{
-		Up:   []string{"-d"},
-		Down: []string{"--volumes"},
-		Logs: []string{"-f"},
-		Run:  []string{"--rm"},
-	}
-
-	tests := []struct {
-		command string
-		want    []string
-	}{
-		{"up", []string{"-d"}},
-		{"down", []string{"--volumes"}},
-		{"logs", []string{"-f"}},
-		{"run", []string{"--rm"}},
-		{"stop", nil},
-		{"restart", nil},
-		{"ps", nil},
-		{"exec", nil},
-		{"unknown", nil},
-	}
-
-	for _, tt := range tests {
-		got := args.CommandArgs(tt.command)
-		if len(got) != len(tt.want) {
-			t.Errorf("CommandArgs(%q) len = %d, want %d", tt.command, len(got), len(tt.want))
-			continue
-		}
-		for i := range got {
-			if got[i] != tt.want[i] {
-				t.Errorf("CommandArgs(%q)[%d] = %q, want %q", tt.command, i, got[i], tt.want[i])
-			}
-		}
-	}
-}
-
 func TestDockerEnvConfig_ShouldGenerateEnv(t *testing.T) {
 	env := &DockerEnvConfig{
 		AutoGenerate: true,

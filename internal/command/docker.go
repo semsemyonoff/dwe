@@ -70,12 +70,15 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 }
 
 // generateEnv runs the equivalent of `devbox render env -o .env`.
+// The output path is resolved relative to the config file's directory
+// so that it works correctly when invoked from a different working directory.
 func generateEnv(flags *rootFlags) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("finding executable: %w", err)
 	}
-	cmd := exec.Command(exe, "-c", flags.configPath, "render", "env", "-o", ".env")
+	envPath := filepath.Join(filepath.Dir(flags.configPath), ".env")
+	cmd := exec.Command(exe, "-c", flags.configPath, "render", "env", "-o", envPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

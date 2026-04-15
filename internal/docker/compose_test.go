@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"slices"
 	"testing"
 
 	"devbox-cli/internal/config"
@@ -155,6 +156,52 @@ func TestBuildArgs_EmptyProjectName(t *testing.T) {
 			t.Errorf("BuildArgs[%d] = %q, want %q", i, got, expected[i])
 		}
 	}
+}
+
+func TestBuildInternalArgs_SkipsPolicyDefaults(t *testing.T) {
+	c := &Compose{
+		ProjectName: "proj",
+		Files:       []string{"compose.yaml"},
+		GlobalArgs:  []string{"--ansi", "always"},
+		CommandArgs: map[string][]string{
+			"ps": {"--services", "--format", "table"},
+		},
+	}
+
+	// BuildArgs should include ps policy defaults.
+	withPolicy := c.BuildArgs("ps", "-q")
+	if !containsArg(withPolicy, "--services") {
+		t.Error("BuildArgs should include policy defaults for ps")
+	}
+
+	// BuildInternalArgs should NOT include ps policy defaults or global args.
+	internal := c.BuildInternalArgs("ps", "-q")
+	if containsArg(internal, "--services") {
+		t.Error("BuildInternalArgs should not include policy defaults")
+	}
+	if containsArg(internal, "--ansi") {
+		t.Error("BuildInternalArgs should not include global args")
+	}
+
+	expected := []string{
+		"compose",
+		"-p", "proj",
+		"-f", "compose.yaml",
+		"ps",
+		"-q",
+	}
+	if len(internal) != len(expected) {
+		t.Fatalf("BuildInternalArgs = %v, want %v", internal, expected)
+	}
+	for i, got := range internal {
+		if got != expected[i] {
+			t.Errorf("BuildInternalArgs[%d] = %q, want %q", i, got, expected[i])
+		}
+	}
+}
+
+func containsArg(args []string, target string) bool {
+	return slices.Contains(args, target)
 }
 
 func TestBuildArgs_MultipleExtraArgs(t *testing.T) {

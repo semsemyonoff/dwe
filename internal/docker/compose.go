@@ -88,16 +88,30 @@ func (c *Compose) Exec(command string, extraArgs ...string) error {
 	return cmd.Run()
 }
 
-// ContainerIDs returns the IDs of running containers for this compose project.
-func (c *Compose) ContainerIDs() ([]string, error) {
+// BuildInternalArgs returns the argument list for internal probes (e.g. health
+// checks, container-running detection). Unlike BuildArgs it injects neither
+// global args nor per-command policy defaults, so that user-facing overrides
+// (e.g. args.global: ["--dry-run"], args.ps: ["--services"]) cannot break
+// the expected output format of machine-readable queries.
+func (c *Compose) BuildInternalArgs(command string, extraArgs ...string) []string {
 	args := []string{"compose"}
+
 	if c.ProjectName != "" {
 		args = append(args, "-p", c.ProjectName)
 	}
 	for _, f := range c.Files {
 		args = append(args, "-f", f)
 	}
-	args = append(args, "ps", "-q")
+	args = append(args, command)
+	args = append(args, extraArgs...)
+
+	return args
+}
+
+// ContainerIDs returns the IDs of running containers for this compose project.
+// It uses BuildInternalArgs to bypass per-command policy defaults.
+func (c *Compose) ContainerIDs() ([]string, error) {
+	args := c.BuildInternalArgs("ps", "-q")
 
 	out, err := exec.Command("docker", args...).Output()
 	if err != nil {

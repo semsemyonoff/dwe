@@ -27,7 +27,7 @@ func makeComposeCfg(base string, overlays map[string]string, tools config.ToolsC
 
 func TestBuildComposeFileList_baseOnly(t *testing.T) {
 	cfg := makeComposeCfg("compose.yaml", nil, config.ToolsConfig{}, nil)
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	if len(got) != 1 || got[0] != "compose.yaml" {
 		t.Errorf("got %v, want [compose.yaml]", got)
 	}
@@ -37,7 +37,7 @@ func TestBuildComposeFileList_noBase(t *testing.T) {
 	cfg := makeComposeCfg("", map[string]string{"adminer": "compose/tools/adminer.yml"}, config.ToolsConfig{
 		Adminer: config.ToolConfig{Enabled: true},
 	}, nil)
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	// No base — only adminer overlay
 	if len(got) != 1 || got[0] != "compose/tools/adminer.yml" {
 		t.Errorf("got %v, want [compose/tools/adminer.yml]", got)
@@ -54,7 +54,7 @@ func TestBuildComposeFileList_oneToolEnabled(t *testing.T) {
 		RedisInsight: config.ToolConfig{Enabled: true},
 		Mailpit:      config.ToolConfig{Enabled: false},
 	}, nil)
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	if len(got) != 2 {
 		t.Fatalf("got %v, want 2 entries", got)
 	}
@@ -76,7 +76,7 @@ func TestBuildComposeFileList_multipleToolsEnabled(t *testing.T) {
 		RedisInsight: config.ToolConfig{Enabled: true},
 		Mailpit:      config.ToolConfig{Enabled: false},
 	}, nil)
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	// base + adminer + redis_insight (sorted: adminer < redis_insight < mailpit)
 	if len(got) != 3 {
 		t.Fatalf("got %v, want 3 entries", got)
@@ -100,7 +100,7 @@ func TestBuildComposeFileList_disabledExcluded(t *testing.T) {
 		Adminer: config.ToolConfig{Enabled: false},
 		Mailpit: config.ToolConfig{Enabled: false},
 	}, nil)
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	if len(got) != 1 || got[0] != "compose.yaml" {
 		t.Errorf("got %v, want only base", got)
 	}
@@ -114,7 +114,7 @@ func TestBuildComposeFileList_serviceOverlayEnabled(t *testing.T) {
 			Compose:   []string{"compose/services/main/debug.yml"},
 		},
 	})
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	if len(got) != 2 {
 		t.Fatalf("got %v, want 2 entries", got)
 	}
@@ -131,7 +131,7 @@ func TestBuildComposeFileList_serviceOverlayDisabled(t *testing.T) {
 			Compose:   []string{"compose/services/main/debug.yml"},
 		},
 	})
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	if len(got) != 1 {
 		t.Errorf("got %v, want only base (service disabled)", got)
 	}
@@ -141,7 +141,7 @@ func TestBuildComposeFileList_unknownOverlaySkipped(t *testing.T) {
 	cfg := makeComposeCfg("compose.yaml", map[string]string{
 		"unknown_tool": "compose/tools/unknown.yml",
 	}, config.ToolsConfig{}, nil)
-	got := buildComposeFileList(cfg)
+	got := cfg.ComposeFiles()
 	// unknown keys are not enabled → only base
 	if len(got) != 1 || got[0] != "compose.yaml" {
 		t.Errorf("got %v, want only base for unknown overlay key", got)
@@ -372,6 +372,18 @@ func TestExtractBareFlag(t *testing.T) {
 			args:     []string{"--bare", "up"},
 			wantBare: true,
 			wantRest: []string{"up"},
+		},
+		{
+			name:     "separator in docker args preserved when no leading separator",
+			args:     []string{"run", "app-main", "php", "artisan", "test", "--", "--filter", "Foo"},
+			wantBare: false,
+			wantRest: []string{"run", "app-main", "php", "artisan", "test", "--", "--filter", "Foo"},
+		},
+		{
+			name:     "leading separator stripped but inner separator preserved",
+			args:     []string{"--", "run", "app-main", "php", "artisan", "test", "--", "--filter", "Foo"},
+			wantBare: false,
+			wantRest: []string{"run", "app-main", "php", "artisan", "test", "--", "--filter", "Foo"},
 		},
 	}
 

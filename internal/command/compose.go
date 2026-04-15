@@ -47,9 +47,16 @@ func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			composeArgs := []string{"-p", cfg.Project.FullName()}
+			// Use docker policy project name for consistency with devbox docker commands.
+			baseDir := filepath.Dir(flags.configPath)
+			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+			if err != nil {
+				return fmt.Errorf("loading docker config: %w", err)
+			}
+
+			composeArgs := []string{"-p", dockerCfg.ProjectName}
 			if !bare {
-				for _, f := range buildComposeFileList(cfg) {
+				for _, f := range cfg.ComposeFiles() {
 					composeArgs = append(composeArgs, "-f", f)
 				}
 			}
@@ -66,16 +73,21 @@ func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 }
 
 // extractBareFlag checks for --bare in the arg list and returns the remaining
-// args with "--" stripped. This is needed because DisableFlagParsing prevents
-// cobra from handling flags.
+// args with the leading "--" separator stripped. Only a "--" that appears before
+// any positional argument (i.e. before args that are not --bare) is treated as
+// the devbox separator and removed. Once positional args have started, all "--"
+// tokens are preserved so they pass through to docker compose unchanged.
 func extractBareFlag(args []string) (bare bool, rest []string) {
+	separatorSkipped := false
+	positionalStarted := false
 	for _, arg := range args {
-		switch arg {
-		case "--bare":
+		switch {
+		case arg == "--bare" && !positionalStarted:
 			bare = true
-		case "--":
-			// skip separator
+		case arg == "--" && !separatorSkipped && !positionalStarted:
+			separatorSkipped = true
 		default:
+			positionalStarted = true
 			rest = append(rest, arg)
 		}
 	}
@@ -126,19 +138,13 @@ func newComposeFilesCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			for _, f := range buildComposeFileList(cfg) {
+			for _, f := range cfg.ComposeFiles() {
 				fmt.Println(f)
 			}
 			return nil
 		},
 		SilenceUsage: true,
 	}
-}
-
-// buildComposeFileList returns the ordered list of compose files.
-// Delegates to cfg.ComposeFiles() which is the canonical implementation.
-func buildComposeFileList(cfg *config.DevboxConfig) []string {
-	return cfg.ComposeFiles()
 }
 
 // healthGetFn returns the Docker health status string for a container by ID.

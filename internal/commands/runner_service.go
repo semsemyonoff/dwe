@@ -214,8 +214,17 @@ func buildDockerComposeCmd(
 
 	if useExec {
 		args = append(args, "exec")
+		// Per-command default args from docker policy.
+		if defaults, ok := compose.CommandArgs["exec"]; ok {
+			args = append(args, defaults...)
+		}
 	} else {
-		args = append(args, "run", "--rm", "--no-deps", "--entrypoint", "")
+		args = append(args, "run")
+		// Per-command default args from docker policy.
+		if defaults, ok := compose.CommandArgs["run"]; ok {
+			args = append(args, defaults...)
+		}
+		args = append(args, "--no-deps", "--entrypoint", "")
 	}
 
 	// User flag.
@@ -254,14 +263,7 @@ func buildDockerComposeCmd(
 // isContainerRunning checks whether the named service container is running
 // in the given compose project using the shared Compose struct.
 func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
-	args := []string{"compose"}
-	if compose.ProjectName != "" {
-		args = append(args, "-p", compose.ProjectName)
-	}
-	for _, f := range compose.Files {
-		args = append(args, "-f", f)
-	}
-	args = append(args, "ps", "--status", "running", "--format", "json", service)
+	args := compose.BuildInternalArgs("ps", "--status", "running", "--format", "json", service)
 
 	out, err := exec.Command("docker", args...).Output() //nolint:gosec
 	if err != nil {

@@ -5,9 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
@@ -34,7 +36,13 @@ in devbox/services.yml and can be overridden with flags.`,
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return runServicesCLI(cfg, args[0], asRoot)
+			baseDir := filepath.Dir(flags.configPath)
+			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+			if err != nil {
+				return fmt.Errorf("loading docker config: %w", err)
+			}
+			compose := docker.NewCompose(cfg, dockerCfg)
+			return runServicesCLI(cfg, compose, args[0], asRoot)
 		},
 	}
 
@@ -44,7 +52,7 @@ in devbox/services.yml and can be overridden with flags.`,
 
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.
-func runServicesCLI(cfg *config.DevboxConfig, serviceName string, asRoot bool) error {
+func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceName string, asRoot bool) error {
 	svc, ok := cfg.Services[serviceName]
 	if !ok {
 		return fmt.Errorf("service %q not found", serviceName)
@@ -70,13 +78,12 @@ func runServicesCLI(cfg *config.DevboxConfig, serviceName string, asRoot bool) e
 
 	// Container name matches the container_name field in compose.yaml:
 	// <project-full-name>-<container>, e.g. devbox-laravel-app-main.
-	fullContainerName := cfg.Project.FullName() + "-" + svc.Container
+	fullContainerName := compose.ProjectName + "-" + svc.Container
 
 	status, err := containerStateStatus(fullContainerName)
 	if err != nil {
 		// Container does not exist — start a new one via compose run.
-		composeFiles := buildComposeFileList(cfg)
-		return composeRunCLI(cfg.Project.FullName(), composeFiles, svc.Container, shell, u, workDir)
+		return composeRunCLI(compose, svc.Container, shell, u, workDir)
 	}
 
 	switch status {
@@ -136,11 +143,16 @@ func dockerExecCLI(containerName, shell, u, workDir string) error {
 }
 
 // composeRunCLI starts a new temporary container via docker compose run --rm.
-func composeRunCLI(projectName string, composeFiles []string, serviceName, shell, u, workDir string) error {
-	args := []string{"compose", "-p", projectName}
-	for _, f := range composeFiles {
+// It uses the shared Compose struct for project name, file list, and global args.
+func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir string) error {
+	args := []string{"compose"}
+	if compose.ProjectName != "" {
+		args = append(args, "-p", compose.ProjectName)
+	}
+	for _, f := range compose.Files {
 		args = append(args, "-f", f)
 	}
+	args = append(args, compose.GlobalArgs...)
 	args = append(args, "run", "--rm", "-it")
 	if u != "" {
 		args = append(args, "-u", u)
