@@ -10,6 +10,51 @@ import (
 	"devbox-cli/internal/tpl"
 )
 
+// DevboxRunner executes type=devbox commands by invoking the current devbox
+// executable with the run: string as its arguments. This avoids hard-coding
+// the binary path (./bin/devbox) in command definitions.
+//
+// The run: field contains only the subcommand and its arguments, e.g.:
+//
+//	run: "compose run -- up -d db"
+//
+// At runtime this becomes: <devbox-executable> compose run -- up -d db
+type DevboxRunner struct{}
+
+// Run executes the devbox subcommand described by ctx.Run.
+func (r *DevboxRunner) Run(ctx RunContext) error {
+	bin, err := os.Executable()
+	if err != nil {
+		bin = "./bin/devbox"
+	}
+
+	rendered, err := tpl.RenderCommand(ctx.Cmd.Run, ctx.Render)
+	if err != nil {
+		return fmt.Errorf("render run: %w", err)
+	}
+
+	cmd := exec.Command("sh", "-c", bin+" "+rendered) //nolint:gosec
+	if ctx.ProjectRoot != "" {
+		cmd.Dir = ctx.ProjectRoot
+	}
+
+	envMap, err := buildRenderedEnv(ctx.Cmd, ctx)
+	if err != nil {
+		return err
+	}
+	if len(envMap) > 0 {
+		cmd.Env = os.Environ()
+		for k, v := range envMap {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+	}
+
+	cmd.Stdout = stdout(ctx)
+	cmd.Stderr = stderr(ctx)
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
+
 // HostRunner executes type=command commands on the host machine.
 // It supports two execution modes:
 //   - run:  the command string is passed to `sh -c` for shell evaluation.
@@ -43,6 +88,9 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 		argv = rendered
 	}
 
+	if len(argv) == 0 {
+		return nil, fmt.Errorf("argv is empty")
+	}
 	c := exec.Command(argv[0], argv[1:]...) //nolint:gosec
 
 	// Resolve working directory.

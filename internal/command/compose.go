@@ -3,7 +3,6 @@ package command
 import (
 	"fmt"
 	"os/exec"
-	"sort"
 	"strings"
 	"time"
 
@@ -21,7 +20,44 @@ func newComposeCmd(flags *rootFlags) *cobra.Command {
 	}
 	cmd.AddCommand(newComposeFilesCmd(flags))
 	cmd.AddCommand(newComposeWaitCmd(flags))
+	cmd.AddCommand(newComposeRunCmd(flags))
 	return cmd
+}
+
+// newComposeRunCmd creates the `devbox compose run` command.
+// It resolves the compose file list and project name from config, then delegates
+// to `docker compose` with the user-supplied arguments. All docker compose flags
+// and subcommands can be passed after `--`.
+func newComposeRunCmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:                "run [-- docker-compose-args...]",
+		Short:              "Run docker compose with the resolved file list and project name",
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+
+			composeArgs := []string{"-p", cfg.Project.FullName()}
+			for _, f := range buildComposeFileList(cfg) {
+				composeArgs = append(composeArgs, "-f", f)
+			}
+			// Strip leading "--" separator if present.
+			passArgs := args
+			if len(passArgs) > 0 && passArgs[0] == "--" {
+				passArgs = passArgs[1:]
+			}
+			composeArgs = append(composeArgs, passArgs...)
+
+			dockerCmd := exec.Command("docker", append([]string{"compose"}, composeArgs...)...)
+			dockerCmd.Stdin = cmd.InOrStdin()
+			dockerCmd.Stdout = cmd.OutOrStdout()
+			dockerCmd.Stderr = cmd.ErrOrStderr()
+			return dockerCmd.Run()
+		},
+		SilenceUsage: true,
+	}
 }
 
 func newComposeFilesCmd(flags *rootFlags) *cobra.Command {
@@ -44,42 +80,9 @@ func newComposeFilesCmd(flags *rootFlags) *cobra.Command {
 }
 
 // buildComposeFileList returns the ordered list of compose files.
-// The base file is always first; enabled tool overlays follow in sorted key order;
-// then enabled service overlays (from services with compose_overlay) in sorted order.
+// Delegates to cfg.ComposeFiles() which is the canonical implementation.
 func buildComposeFileList(cfg *config.DevboxConfig) []string {
-	var files []string
-	if cfg.Compose.Base != "" {
-		files = append(files, cfg.Compose.Base)
-	}
-
-	// Tool overlays from compose.overlays.
-	keys := make([]string, 0, len(cfg.Compose.Overlays))
-	for k := range cfg.Compose.Overlays {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
-		if toolOverlayEnabled(cfg, key) {
-			files = append(files, cfg.Compose.Overlays[key])
-		}
-	}
-
-	// Service overlays from services with compose_overlay set.
-	svcNames := make([]string, 0, len(cfg.Services))
-	for name := range cfg.Services {
-		svcNames = append(svcNames, name)
-	}
-	sort.Strings(svcNames)
-
-	for _, name := range svcNames {
-		svc := cfg.Services[name]
-		if svc.Enabled && len(svc.Compose) > 0 {
-			files = append(files, svc.Compose...)
-		}
-	}
-
-	return files
+	return cfg.ComposeFiles()
 }
 
 // healthGetFn returns the Docker health status string for a container by ID.
@@ -204,18 +207,4 @@ func dockerHealthStatus(id string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-// toolOverlayEnabled reports whether the given tool overlay key is active in cfg.
-func toolOverlayEnabled(cfg *config.DevboxConfig, key string) bool {
-	switch key {
-	case "adminer":
-		return cfg.Tools.Adminer.Enabled
-	case "redis_insight":
-		return cfg.Tools.RedisInsight.Enabled
-	case "mailpit":
-		return cfg.Tools.Mailpit.Enabled
-	default:
-		return false
-	}
 }

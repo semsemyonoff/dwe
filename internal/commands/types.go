@@ -24,6 +24,9 @@ const (
 	CommandTypeServiceRun CommandType = "service_run"
 	// CommandTypeWorkflow executes a sequence of command references.
 	CommandTypeWorkflow CommandType = "workflow"
+	// CommandTypeDevbox runs a devbox subcommand using the current executable.
+	// The run: field contains the subcommand and its arguments (without the binary path).
+	CommandTypeDevbox CommandType = "devbox"
 )
 
 // ParamType describes the expected value type of a command parameter.
@@ -241,7 +244,7 @@ func (c *CommandDef) Validate() error {
 	}
 
 	switch c.Type {
-	case CommandTypeCommand:
+	case CommandTypeCommand, CommandTypeDevbox:
 		if err := c.validateCommandType(); err != nil {
 			return fmt.Errorf("command %q: %w", c.ID, err)
 		}

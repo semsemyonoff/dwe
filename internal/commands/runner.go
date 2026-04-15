@@ -50,6 +50,8 @@ func NewRunner(cmd *CommandDef) (Runner, error) {
 	switch cmd.Type {
 	case CommandTypeCommand:
 		return &HostRunner{}, nil
+	case CommandTypeDevbox:
+		return &DevboxRunner{}, nil
 	case CommandTypeServiceExec:
 		return &ServiceExecRunner{}, nil
 	case CommandTypeServiceRun:

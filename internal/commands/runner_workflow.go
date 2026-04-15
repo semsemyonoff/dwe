@@ -3,7 +3,6 @@ package commands
 import (
 	"bufio"
 	"fmt"
-	"maps"
 	"os"
 	"strings"
 
@@ -73,10 +72,17 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step Workfl
 		return fmt.Errorf("workflow %q step[%d]: %w", ctx.Cmd.ID, stepIdx, err)
 	}
 
-	// Merge parent workflow params with step-level `with` overrides.
-	// `with` values are strings; ResolveParams will coerce them appropriately.
+	// Build params map from step-level `with` values.
+	// Render ${...} templates in with: values using the parent render context so that
+	// config references like "${db.database}" resolve to their actual values.
 	provided := make(map[string]string, len(step.With))
-	maps.Copy(provided, step.With)
+	for k, v := range step.With {
+		rendered, err := tpl.RenderCommand(v, ctx.Render)
+		if err != nil {
+			return fmt.Errorf("workflow %q step[%d]: render with[%q]: %w", ctx.Cmd.ID, stepIdx, k, err)
+		}
+		provided[k] = rendered
+	}
 
 	// Resolve params and context for the sub-command.
 	resolvedParams, err := ResolveParams(cmd.Params, provided, ctx.Config)
