@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -116,10 +118,21 @@ func addCmd(parent *cobra.Command, groupID string, cmd *cobra.Command) {
 // It prints an ASCII header and compact project summary (when a config is
 // found), followed by the Cobra/Fang help output.
 func runRoot(cmd *cobra.Command, flags *rootFlags) error {
+	// Load and apply styles (graceful — missing styles.yml uses defaults).
+	stylesPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "styles.yml")
+	stylesCfg, _ := config.LoadStylesConfig(stylesPath)
+	ui.ApplyStyles(stylesCfg)
+
 	cfg, err := config.LoadConfig(flags.configPath)
 	switch {
 	case err == nil:
-		// ASCII art header rendered from styles.yml (wired in Task 5).
+		// Render ASCII art header from styles config if lines are set.
+		if stylesCfg != nil && len(stylesCfg.Header.Lines) > 0 {
+			r := render.NewWriter(cmd.OutOrStdout())
+			if asciiErr := r.ASCII(stylesCfg.Header.Lines, stylesCfg.Header.Font, stylesCfg.Header.Color); asciiErr == nil {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout())
+			}
+		}
 		// Print compact project summary followed by a blank separator line.
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())

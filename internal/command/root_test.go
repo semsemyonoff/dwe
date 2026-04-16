@@ -190,3 +190,66 @@ func TestRootCmdInfoIsNotDuplicated(t *testing.T) {
 		t.Error("info command should still be a distinct subcommand")
 	}
 }
+
+// TestRootCmd_StylesMissingIsGraceful verifies that root command does not error
+// when devbox/styles.yml is absent (defaults apply).
+func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "devbox.yml")
+	if err := os.WriteFile(cfgPath, []byte("project:\n  name: styletest\n  prefix: devbox\n"), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	// No devbox/styles.yml — must not cause an error.
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+
+	if err := root.Execute(); err != nil {
+		t.Errorf("root command returned unexpected error without styles.yml: %v", err)
+	}
+	if !strings.Contains(buf.String(), "styletest") {
+		t.Errorf("expected project name in output, got:\n%s", buf.String())
+	}
+}
+
+// TestRootCmd_StylesWithHeaderRendered verifies that when devbox/styles.yml
+// contains a header block, root command renders ASCII art without error.
+func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "devbox.yml")
+	if err := os.WriteFile(cfgPath, []byte("project:\n  name: headertest\n  prefix: devbox\n"), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	stylesYAML := "header:\n  lines:\n    - \"Devbox\"\n  font: standard\n  color: none\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
+		t.Fatalf("writing styles.yml: %v", err)
+	}
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+
+	if err := root.Execute(); err != nil {
+		t.Errorf("root command returned error with styles.yml header: %v", err)
+	}
+	// ASCII art and project summary both appear.
+	out := buf.String()
+	if !strings.Contains(out, "headertest") {
+		t.Errorf("expected project name in output, got:\n%s", out)
+	}
+}

@@ -144,6 +144,70 @@ func TestInfoCmd_ConditionalItems(t *testing.T) {
 	}
 }
 
+// TestInfoCmd_StylesMissingIsGraceful verifies that info command does not error
+// when devbox/styles.yml is absent.
+func TestInfoCmd_StylesMissingIsGraceful(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	writeMinimalInfoYML(t, dir, `sections:
+  - id: s1
+    title: Test
+    items:
+      - type: definition
+        name: Name
+        value: "{{ .Project.Name }}"
+`)
+	// No devbox/styles.yml — must not cause an error.
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"info"})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+	if err := root.Execute(); err != nil {
+		t.Errorf("info command returned unexpected error without styles.yml: %v", err)
+	}
+	if !strings.Contains(buf.String(), "infotest") {
+		t.Errorf("expected project name in output, got:\n%s", buf.String())
+	}
+}
+
+// TestInfoCmd_StylesWithHeaderRendered verifies that info command renders ASCII
+// art header when devbox/styles.yml defines one, without error.
+func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	writeMinimalInfoYML(t, dir, `sections:
+  - id: s1
+    items:
+      - type: definition
+        name: Name
+        value: "{{ .Project.Name }}"
+`)
+	devboxDir := filepath.Join(dir, "devbox")
+	stylesYAML := "header:\n  lines:\n    - \"Devbox\"\n  font: standard\n  color: none\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
+		t.Fatalf("writing styles.yml: %v", err)
+	}
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"info"})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+	if err := root.Execute(); err != nil {
+		t.Errorf("info command returned error with styles.yml header: %v", err)
+	}
+	if !strings.Contains(buf.String(), "infotest") {
+		t.Errorf("expected project name in output, got:\n%s", buf.String())
+	}
+}
+
 // TestInfoCmd_MissingConfig returns an error when devbox.yml is not found.
 func TestInfoCmd_MissingConfig(t *testing.T) {
 	root := NewRootCmd()
