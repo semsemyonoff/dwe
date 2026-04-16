@@ -114,6 +114,18 @@ func RenderPartial(s string) string { return stylePartial.Render(s) }
 // Used for "stopped" stack state to draw attention (coral red, bold).
 func RenderStopped(s string) string { return styleMandatory.Render(s) }
 
+// StyleKey renders s with the key/label style (bright-blue, bold).
+// Used for definition labels, command names, and leaf nodes in tree views.
+func StyleKey(s string) string { return styleKey.Render(s) }
+
+// StyleGroup renders s with the group/section-title style (cyan, bold).
+// Used for group headers in tree views.
+func StyleGroup(s string) string { return styleSectionTitle.Render(s) }
+
+// StyleMuted renders s with the muted/dim style.
+// Used for tags, separators, and secondary information.
+func StyleMuted(s string) string { return styleMuted.Render(s) }
+
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.
 func TermWidth() int {

@@ -60,6 +60,18 @@ func RenderSectionTitle(text string) string {
 	return renderSectionTitle(text)
 }
 
+// RenderSubheader renders a bold yellow in-section subheader.
+// Used for grouping sections within a larger block (e.g. Steps, Params).
+func RenderSubheader(text string) string {
+	return styleSubheader.Render(text)
+}
+
+// RenderDefinition renders a styled "key — value" definition line.
+// Wraps the internal renderDefinition helper for use outside the ui package.
+func RenderDefinition(name, value string, indent int, icon string) string {
+	return renderDefinition(name, value, indent, icon)
+}
+
 // renderSectionTitle is the internal implementation of RenderSectionTitle.
 func renderSectionTitle(text string) string {
 	width := min(TermWidth(), 100)
@@ -126,25 +138,77 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 	}
 }
 
-// renderDefinition formats a single definition line:
+// renderDefinition formats a definition line, wrapping long values at word
+// boundaries to fit the terminal width. Continuation lines are aligned under
+// the start of the value on the first line.
 //
-//	<indent>[icon ]<key> — <value>
+//	<indent>[icon ]<key> — first line of value
+//	                       continuation aligned here
 func renderDefinition(name, value string, indent int, icon string) string {
+	iconWidth := 0
+	iconPrefix := ""
+	if icon != "" {
+		iconWidth = utf8.RuneCountInString(icon) + 1
+		iconPrefix = icon + " "
+	}
+
+	sep := defSep
+	// Visible overhead: indent + icon + name + " " + sep + " "
+	overhead := indent + iconWidth + utf8.RuneCountInString(name) + 1 + utf8.RuneCountInString(sep) + 1
+	maxValue := max(TermWidth()-overhead, 20)
+
+	lines := wordWrap(value, maxValue)
+
 	prefix := strings.Repeat(" ", indent)
+	contPrefix := strings.Repeat(" ", overhead)
 
 	var sb strings.Builder
 	sb.WriteString(prefix)
-
-	if icon != "" {
-		sb.WriteString(icon)
-		sb.WriteByte(' ')
-	}
-
+	sb.WriteString(iconPrefix)
 	sb.WriteString(styleKey.Render(name))
 	sb.WriteString(" ")
-	sb.WriteString(styleMuted.Render(defSep))
+	sb.WriteString(styleMuted.Render(sep))
 	sb.WriteString(" ")
-	sb.WriteString(styleValue.Render(value))
+	sb.WriteString(styleValue.Render(lines[0]))
+	for _, l := range lines[1:] {
+		sb.WriteByte('\n')
+		sb.WriteString(contPrefix)
+		sb.WriteString(styleValue.Render(l))
+	}
 
 	return sb.String()
+}
+
+// wordWrap splits text into lines of at most width runes, breaking at word
+// boundaries. Always returns at least one element.
+func wordWrap(text string, width int) []string {
+	if width <= 0 || utf8.RuneCountInString(text) <= width {
+		return []string{text}
+	}
+
+	runes := []rune(text)
+	var lines []string
+
+	for len(runes) > 0 {
+		if len(runes) <= width {
+			lines = append(lines, string(runes))
+			break
+		}
+		cut := -1
+		for i := width; i >= 1; i-- {
+			if runes[i] == ' ' {
+				cut = i
+				break
+			}
+		}
+		if cut < 0 {
+			lines = append(lines, string(runes[:width]))
+			runes = runes[width:]
+		} else {
+			lines = append(lines, string(runes[:cut]))
+			runes = runes[cut+1:]
+		}
+	}
+
+	return lines
 }
