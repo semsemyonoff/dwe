@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
@@ -40,15 +41,21 @@ a tools table with live container status, and a compose topology tree.`,
 			}
 			composeFiles := cfg.ComposeFiles()
 
+			// Extract process env so topology probes hit the same daemon as lifecycle commands.
+			var processEnv []string
+			if dockerCfg != nil {
+				processEnv = docker.MergeEnv(dockerCfg.ProcessEnv)
+			}
+
 			// Fetch compose topology (best-effort; nil on failure).
-			topo := fetchComposeTopology(composeFiles, projectName)
+			topo := fetchComposeTopology(composeFiles, projectName, processEnv)
 			var topoStatus map[string]ui.NodeStatus
 			if topo == nil {
 				// Fallback: parse compose files directly without docker.
 				topo = parseTopologyFromFiles(composeFiles)
 				// No running status in fallback mode — nodes appear without annotation.
 			} else {
-				topoStatus = composeNodeStatuses(composeFiles, projectName)
+				topoStatus = composeNodeStatuses(composeFiles, projectName, processEnv)
 				// Mark topology services that have no container yet as stopped.
 				// docker compose ps --all only lists services with existing containers;
 				// services that have never been started are absent from that output.
@@ -231,12 +238,16 @@ func runStatus(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCh
 // fetchComposeTopology runs `docker compose config` with the given compose files
 // and parses the service dependency graph. Returns nil on any error (docker not
 // available, no compose files, etc.) so callers can degrade gracefully.
-func fetchComposeTopology(composeFiles []string, projectName string) map[string][]string {
+// processEnv is applied to the docker process so that DOCKER_HOST / DOCKER_CONTEXT
+// overrides from docker.yml process_env are honoured.
+func fetchComposeTopology(composeFiles []string, projectName string, processEnv []string) map[string][]string {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	args := buildComposeArgs(projectName, composeFiles, "config")
-	out, err := exec.Command("docker", args...).Output()
+	cmd := exec.Command("docker", args...)
+	cmd.Env = processEnv
+	out, err := cmd.Output()
 	if err != nil {
 		return nil
 	}
@@ -277,14 +288,18 @@ func parseTopologyFromFiles(composeFiles []string) map[string][]string {
 
 // composeNodeStatuses runs `docker compose ps` with the given compose files and
 // returns a map of compose service name → NodeStatus. Returns nil on any error.
-func composeNodeStatuses(composeFiles []string, projectName string) map[string]ui.NodeStatus {
+// processEnv is applied to the docker process so that DOCKER_HOST / DOCKER_CONTEXT
+// overrides from docker.yml process_env are honoured.
+func composeNodeStatuses(composeFiles []string, projectName string, processEnv []string) map[string]ui.NodeStatus {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	// "docker compose ps --format {{.Service}} --filter status=running" lists
 	// only running service names. We collect those, then mark all others stopped.
 	runningArgs := buildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--filter", "status=running")
-	runningOut, err := exec.Command("docker", runningArgs...).Output()
+	runningCmd := exec.Command("docker", runningArgs...)
+	runningCmd.Env = processEnv
+	runningOut, err := runningCmd.Output()
 	if err != nil {
 		return nil
 	}
@@ -298,7 +313,9 @@ func composeNodeStatuses(composeFiles []string, projectName string) map[string]u
 
 	// Get all service names from ps (any state).
 	allArgs := buildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--all")
-	allOut, err := exec.Command("docker", allArgs...).Output()
+	allCmd := exec.Command("docker", allArgs...)
+	allCmd.Env = processEnv
+	allOut, err := allCmd.Output()
 	if err != nil {
 		// Fall back: only mark known running services.
 		result := make(map[string]ui.NodeStatus, len(running))

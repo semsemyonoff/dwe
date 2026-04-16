@@ -63,6 +63,7 @@ func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 			composeArgs = append(composeArgs, passArgs...)
 
 			dockerCmd := exec.Command("docker", append([]string{"compose"}, composeArgs...)...)
+			dockerCmd.Env = docker.MergeEnv(dockerCfg.ProcessEnv)
 			dockerCmd.Stdin = cmd.InOrStdin()
 			dockerCmd.Stdout = cmd.OutOrStdout()
 			dockerCmd.Stderr = cmd.ErrOrStderr()

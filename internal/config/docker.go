@@ -20,6 +20,12 @@ type DockerConfig struct {
 	Args DockerArgs `yaml:"args"`
 	// Env controls automatic .env generation before lifecycle commands.
 	Env DockerEnvConfig `yaml:"env"`
+	// ProcessEnv holds additional environment variables passed to every
+	// `docker compose` process launched by devbox. Use this to suppress
+	// unwanted Docker CLI output, e.g.:
+	//   process_env:
+	//     DOCKER_CLI_HINTS: "false"
+	ProcessEnv map[string]string `yaml:"process_env"`
 	// Resources declares managed Docker resources (volumes, etc.).
 	Resources DockerResourcesConfig `yaml:"resources"`
 	// Topology controls topology display and health calculation.

@@ -5,6 +5,7 @@ package docker
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -18,6 +19,10 @@ type Compose struct {
 	Files       []string
 	GlobalArgs  []string
 	CommandArgs map[string][]string // per-command default args
+	// ProcessEnv holds additional environment variables injected into every
+	// docker compose process (e.g. DOCKER_CLI_HINTS=false).
+	// Keys are sorted for deterministic ordering when building os.Environ slices.
+	ProcessEnv map[string]string
 }
 
 // NewCompose creates a Compose from the resolved devbox config and docker policy.
@@ -38,6 +43,7 @@ func NewCompose(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig) *Compo
 		Files:       cfg.ComposeFiles(),
 		GlobalArgs:  dockerCfg.Args.Global,
 		CommandArgs: cmdArgs,
+		ProcessEnv:  dockerCfg.ProcessEnv,
 	}
 }
 
@@ -79,13 +85,53 @@ func (c *Compose) BuildArgs(command string, extraArgs ...string) []string {
 
 // Exec runs `docker compose <command>` with the full argument pipeline.
 // Stdin, stdout, and stderr are connected to the current process.
+// ProcessEnv variables are merged on top of the current process environment.
 func (c *Compose) Exec(command string, extraArgs ...string) error {
 	args := c.BuildArgs(command, extraArgs...)
 	cmd := exec.Command("docker", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = c.BuildEnv()
 	return cmd.Run()
+}
+
+// MergeEnv returns the current process environment with overrides applied.
+// Equivalent to BuildEnv on a Compose that has only ProcessEnv set.
+// Returns nil when overrides is empty.
+func MergeEnv(overrides map[string]string) []string {
+	return (&Compose{ProcessEnv: overrides}).BuildEnv()
+}
+
+// BuildEnv returns the environment for docker processes: current process env
+// with ProcessEnv overlaid. Returns nil (inherit unchanged) when ProcessEnv is empty.
+func (c *Compose) BuildEnv() []string {
+	if len(c.ProcessEnv) == 0 {
+		return nil
+	}
+	// Start from the current process environment.
+	base := os.Environ()
+	// Build an override set for O(1) lookup.
+	override := maps.Clone(c.ProcessEnv)
+	// Replace any existing entries that are overridden.
+	result := make([]string, 0, len(base)+len(override))
+	replaced := make(map[string]bool, len(override))
+	for _, entry := range base {
+		k, _, _ := strings.Cut(entry, "=")
+		if v, ok := override[k]; ok {
+			result = append(result, k+"="+v)
+			replaced[k] = true
+		} else {
+			result = append(result, entry)
+		}
+	}
+	// Append keys that were not already present in the base env.
+	for k, v := range c.ProcessEnv {
+		if !replaced[k] {
+			result = append(result, k+"="+v)
+		}
+	}
+	return result
 }
 
 // BuildInternalArgs returns the argument list for internal probes (e.g. health
@@ -108,12 +154,21 @@ func (c *Compose) BuildInternalArgs(command string, extraArgs ...string) []strin
 	return args
 }
 
+// output runs an internal probe command and returns its stdout.
+// ProcessEnv is applied so that daemon/context overrides (e.g. DOCKER_HOST)
+// are consistent with Exec-based lifecycle commands.
+func (c *Compose) output(args []string) ([]byte, error) {
+	cmd := exec.Command("docker", args...)
+	cmd.Env = c.BuildEnv()
+	return cmd.Output()
+}
+
 // ContainerIDs returns the IDs of running containers for this compose project.
 // It uses BuildInternalArgs to bypass per-command policy defaults.
 func (c *Compose) ContainerIDs() ([]string, error) {
 	args := c.BuildInternalArgs("ps", "-q")
 
-	out, err := exec.Command("docker", args...).Output()
+	out, err := c.output(args)
 	if err != nil {
 		return nil, fmt.Errorf("docker compose ps -q: %w", err)
 	}

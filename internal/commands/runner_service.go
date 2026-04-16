@@ -257,7 +257,9 @@ func buildDockerComposeCmd(
 	// Command arguments.
 	args = append(args, serviceArgv...)
 
-	return exec.Command("docker", append([]string{"compose"}, args...)...) //nolint:gosec
+	cmd := exec.Command("docker", append([]string{"compose"}, args...)...) //nolint:gosec
+	cmd.Env = compose.BuildEnv()
+	return cmd
 }
 
 // isContainerRunning checks whether the named service container is running
@@ -265,7 +267,9 @@ func buildDockerComposeCmd(
 func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
 	args := compose.BuildInternalArgs("ps", "--status", "running", "--format", "json", service)
 
-	out, err := exec.Command("docker", args...).Output() //nolint:gosec
+	cmd := exec.Command("docker", args...) //nolint:gosec
+	cmd.Env = compose.BuildEnv()
+	out, err := cmd.Output()
 	if err != nil {
 		return false, fmt.Errorf("docker compose ps: %w", err)
 	}

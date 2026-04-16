@@ -139,7 +139,14 @@ service exists, or shows an interactive selector when multiple services are enab
 				workDir: flagWorkDir,
 				envVars: flagEnvVars,
 			}
-			return runServicesCLI(cfg, compose, serviceName, shellFlags, containerStateStatus, dockerExecCLI, composeRunCLI)
+			processEnv := compose.BuildEnv()
+			stateFn := func(name string) (string, error) {
+				return containerStateStatus(name, processEnv)
+			}
+			execFn := func(containerName, shell, u, workDir string, env map[string]string) error {
+				return dockerExecCLI(containerName, shell, u, workDir, env, processEnv)
+			}
+			return runServicesCLI(cfg, compose, serviceName, shellFlags, stateFn, execFn, composeRunCLI)
 		},
 	}
 
