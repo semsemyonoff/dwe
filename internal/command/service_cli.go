@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"os/user"
@@ -69,9 +70,7 @@ func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, sv
 
 	// --- Env: merge config env; config values are passed to the container. ---
 	env := make(map[string]string)
-	for k, v := range svcCLI.Env {
-		env[k] = v
-	}
+	maps.Copy(env, svcCLI.Env)
 
 	return shellOptions{
 		Mode:    mode,
