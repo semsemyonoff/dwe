@@ -6,8 +6,6 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
-
-	"github.com/spf13/cobra"
 )
 
 // serviceRow holds a single row of the services topology table.
@@ -27,24 +25,6 @@ type toolRow struct {
 	Port      int
 	Host      string
 	Container string
-}
-
-func newServicesCmd(flags *rootFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "services",
-		Short: "Services topology and container access",
-		// Show topology when called with no subcommand.
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			return runServices(render.Stdout(), cfg)
-		},
-		SilenceUsage: true,
-	}
-	cmd.AddCommand(newServicesCLICmd(flags))
-	return cmd
 }
 
 // runServices renders the services and tools topology tables to w.

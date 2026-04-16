@@ -17,7 +17,7 @@ import (
 
 func newServiceCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "service",
+		Use:          "services",
 		Short:        "Manage application services",
 		SilenceUsage: true,
 	}

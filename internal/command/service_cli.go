@@ -5,50 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
-
-	"github.com/spf13/cobra"
 )
-
-func newServicesCLICmd(flags *rootFlags) *cobra.Command {
-	var asRoot bool
-
-	cmd := &cobra.Command{
-		Use:   "cli <service>",
-		Short: "Open a shell in the service container (exec if running, run if stopped)",
-		Long: `Open an interactive shell in the specified service container.
-
-If the container is running, connects via 'docker exec'.
-If the container does not exist, starts a new one via 'docker compose run --rm'.
-If the container is stopped (exited), an error is returned.
-
-Shell, user, and working directory defaults are read from the cli: section
-in devbox/services.yml and can be overridden with flags.`,
-		Args:         cobra.ExactArgs(1),
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			baseDir := filepath.Dir(flags.configPath)
-			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
-			if err != nil {
-				return fmt.Errorf("loading docker config: %w", err)
-			}
-			compose := docker.NewCompose(cfg, dockerCfg)
-			return runServicesCLI(cfg, compose, args[0], asRoot)
-		},
-	}
-
-	cmd.Flags().BoolVar(&asRoot, "root", false, "run as root user")
-	return cmd
-}
 
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.

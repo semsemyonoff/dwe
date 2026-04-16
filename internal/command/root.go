@@ -37,10 +37,10 @@ Run 'devbox info' to display the current project status.`,
 	)
 
 	root.AddCommand(newInfoCmd(flags))
+	root.AddCommand(newVersionCmd())
 	root.AddCommand(newPrintCmd())
 	root.AddCommand(newRenderCmd(flags))
 	root.AddCommand(newComposeCmd(flags))
-	root.AddCommand(newServicesCmd(flags))
 	root.AddCommand(newServiceCmd(flags))
 	root.AddCommand(newToolCmd(flags))
 	root.AddCommand(newDeployCmd(flags))
@@ -54,6 +54,8 @@ Run 'devbox info' to display the current project status.`,
 	root.AddCommand(newLogsCmd(flags))
 	root.AddCommand(newPsCmd(flags))
 	root.AddCommand(newWaitCmd(flags))
+	root.AddCommand(newShellCmd(flags))
+	root.AddCommand(newStatusCmd(flags))
 
 	return root
 }

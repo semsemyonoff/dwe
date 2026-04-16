@@ -18,7 +18,7 @@ import (
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "command",
+		Use:          "commands",
 		Short:        "List, inspect, and run devbox commands",
 		SilenceUsage: true,
 	}
