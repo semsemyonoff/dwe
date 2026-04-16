@@ -37,10 +37,16 @@ var (
 	styleValue = lipgloss.NewStyle()
 
 	// Semantic status styles.
-	styleEnabled   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleDisabled  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleMandatory = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	stylePartial   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleEnabled    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	styleDisabled   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	styleMandatory  = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	stylePartial    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleRunStopped = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+
+	// Topology category styles.
+	styleCatService = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	styleCatTool    = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	styleCatInfra   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 	// Table styles.
 	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))

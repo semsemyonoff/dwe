@@ -19,6 +19,16 @@ const (
 	NodeDisabled                   // service/tool is disabled in config
 )
 
+// NodeCategory represents the role of a topology node.
+type NodeCategory int
+
+// NodeCategory constants describe the category of a compose service.
+const (
+	CatInfra   NodeCategory = iota // infrastructure (nginx, db, redis, …)
+	CatService                     // application service
+	CatTool                        // optional dev tool
+)
+
 // ParseComposeTopology parses the YAML output of `docker compose config`
 // and returns a map of service name → sorted list of services it depends on.
 // The depends_on field may be a YAML map (expanded form) or sequence (short form).
@@ -71,9 +81,11 @@ func extractDependsOn(n *yaml.Node) []string {
 // RenderTopology renders the compose service dependency graph as an indented tree.
 // deps maps service name → services it depends on (from ParseComposeTopology).
 // status maps service name → NodeStatus for node coloring.
+// categories maps service name → NodeCategory for category labels.
 // Services absent from status are treated as NodeUnknown (no color annotation).
+// Services absent from categories default to CatInfra.
 // Returns an empty string when deps is empty.
-func RenderTopology(deps map[string][]string, status map[string]NodeStatus) string {
+func RenderTopology(deps map[string][]string, status map[string]NodeStatus, categories map[string]NodeCategory) string {
 	if len(deps) == 0 {
 		return ""
 	}
@@ -103,9 +115,9 @@ func RenderTopology(deps map[string][]string, status map[string]NodeStatus) stri
 		sort.Strings(roots)
 	}
 
-	root := tree.New()
+	root := tree.Root(styleSectionTitle.Render("⁜ Devbox"))
 	for _, name := range roots {
-		root.Child(buildTopoNode(name, deps, status, nil))
+		root.Child(buildTopoNode(name, deps, status, categories, nil))
 	}
 
 	return root.String()
@@ -113,8 +125,8 @@ func RenderTopology(deps map[string][]string, status map[string]NodeStatus) stri
 
 // buildTopoNode recursively builds a *tree.Tree for the given service.
 // ancestors tracks the current path to detect cycles and prevent infinite loops.
-func buildTopoNode(name string, deps map[string][]string, status map[string]NodeStatus, ancestors map[string]bool) *tree.Tree {
-	node := tree.Root(topoNodeLabel(name, status))
+func buildTopoNode(name string, deps map[string][]string, status map[string]NodeStatus, categories map[string]NodeCategory, ancestors map[string]bool) *tree.Tree {
+	node := tree.Root(topoNodeLabel(name, status, categories))
 
 	// Guard against cycles (compose shouldn't have them, but be safe).
 	if ancestors[name] {
@@ -129,18 +141,60 @@ func buildTopoNode(name string, deps map[string][]string, status map[string]Node
 	next[name] = true
 
 	for _, child := range deps[name] {
-		node.Child(buildTopoNode(child, deps, status, next))
+		node.Child(buildTopoNode(child, deps, status, categories, next))
 	}
 	return node
 }
 
-// topoNodeLabel formats a service name with a status annotation.
-// Status is rendered using the matching semantic style var.
-func topoNodeLabel(name string, status map[string]NodeStatus) string {
-	st, ok := status[name]
-	if !ok {
-		return name
+// categoryStyle returns the Lipgloss style for a node category tag.
+func categoryStyle(cat NodeCategory) lipgloss.Style {
+	switch cat {
+	case CatService:
+		return styleCatService
+	case CatTool:
+		return styleCatTool
+	default:
+		return styleCatInfra
 	}
+}
+
+// categoryLabel returns the display string for a node category.
+func categoryLabel(cat NodeCategory) string {
+	switch cat {
+	case CatService:
+		return "service"
+	case CatTool:
+		return "tool"
+	default:
+		return "infra"
+	}
+}
+
+// topoNodeLabel formats a service name with a category tag and status annotation.
+// Category tag uses a per-category color; disabled nodes render the entire label in gray.
+func topoNodeLabel(name string, status map[string]NodeStatus, categories map[string]NodeCategory) string {
+	cat := CatInfra
+	if categories != nil {
+		if c, ok := categories[name]; ok {
+			cat = c
+		}
+	}
+
+	// Check if the node is disabled — render everything in muted gray.
+	st, hasStatus := status[name]
+	if hasStatus && st == NodeDisabled {
+		return styleDisabled.Render(name) +
+			" " + styleDisabled.Render("["+categoryLabel(cat)+"]") +
+			" " + styleDisabled.Render("(disabled)")
+	}
+
+	// Normal node: name in default color, category tag in its own color.
+	sb := name + " " + categoryStyle(cat).Render("["+categoryLabel(cat)+"]")
+
+	if !hasStatus {
+		return sb
+	}
+
 	var label string
 	var style lipgloss.Style
 	switch st {
@@ -150,11 +204,8 @@ func topoNodeLabel(name string, status map[string]NodeStatus) string {
 	case NodeStopped:
 		label = "stopped"
 		style = stylePartial
-	case NodeDisabled:
-		label = "disabled"
-		style = styleDisabled
 	default:
-		return name
+		return sb
 	}
-	return name + " " + style.Render("("+label+")")
+	return sb + " " + style.Render("("+label+")")
 }

@@ -42,56 +42,77 @@ type ServiceTableRow struct {
 	Running bool
 }
 
+// rowCellStyle holds per-column styles for a single table row.
+type rowCellStyle struct {
+	base  lipgloss.Style // NAME, CONTAINER, HOST, PORT columns
+	state lipgloss.Style // STATE column
+	run   lipgloss.Style // RUNNING column
+}
+
 // RenderServiceTable renders a styled Lipgloss table of services.
 // Columns: NAME, CONTAINER, STATE, RUNNING.
-// Row colors use semantic style vars: mandatory (bold), enabled (green), disabled (gray).
+// Cell colors depend on the service state: disabled=gray, enabled=white,
+// STATE column reflects the state value, RUNNING column is green/red/gray.
 func RenderServiceTable(rows []ServiceTableRow) string {
-	// Build string rows and capture per-row styles in parallel slices.
 	stringRows := make([][]string, len(rows))
-	rowStyles := make([]lipgloss.Style, len(rows))
+	cellStyles := make([]rowCellStyle, len(rows))
 
 	for i, r := range rows {
 		var stateStr, runStr string
-		var rowStyle lipgloss.Style
+		var cs rowCellStyle
 
 		switch {
 		case r.Mandatory:
 			stateStr = "mandatory"
-			rowStyle = styleMandatory
+			cs.base = lipgloss.NewStyle()
+			cs.state = styleMandatory
 		case r.Enabled:
 			stateStr = "enabled"
-			rowStyle = styleEnabled
+			cs.base = lipgloss.NewStyle()
+			cs.state = lipgloss.NewStyle()
 		default:
 			stateStr = "disabled"
-			rowStyle = styleDisabled
+			cs.base = styleDisabled
+			cs.state = styleDisabled
 		}
 
 		if r.Mandatory || r.Enabled {
 			if r.Running {
 				runStr = "running"
+				cs.run = styleEnabled
 			} else {
 				runStr = "stopped"
+				cs.run = styleRunStopped
 			}
 		} else {
 			runStr = "—"
+			cs.run = styleDisabled
 		}
 
 		stringRows[i] = []string{r.Name, r.Container, stateStr, runStr}
-		rowStyles[i] = rowStyle
+		cellStyles[i] = cs
 	}
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styleTableBorder).
 		Headers("NAME", "CONTAINER", "STATE", "RUNNING").
-		StyleFunc(func(row, _ int) lipgloss.Style {
+		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return styleTableHeader
 			}
-			if row >= 0 && row < len(rowStyles) {
-				return rowStyles[row]
+			if row < 0 || row >= len(cellStyles) {
+				return lipgloss.NewStyle()
 			}
-			return lipgloss.NewStyle()
+			cs := cellStyles[row]
+			switch col {
+			case 2:
+				return cs.state
+			case 3:
+				return cs.run
+			default:
+				return cs.base
+			}
 		})
 
 	for _, r := range stringRows {
@@ -114,31 +135,33 @@ type ToolTableRow struct {
 
 // RenderToolTable renders a styled Lipgloss table of optional tools.
 // Columns: NAME, HOST, PORT, STATE, RUNNING.
-// Row colors use semantic style vars: enabled (green), disabled (gray).
+// Cell colors depend on the tool state: disabled=gray, enabled=white,
+// STATE column reflects the state value, RUNNING column is green/red/gray.
 func RenderToolTable(rows []ToolTableRow) string {
 	stringRows := make([][]string, len(rows))
-	rowStyles := make([]lipgloss.Style, len(rows))
+	cellStyles := make([]rowCellStyle, len(rows))
 
 	for i, r := range rows {
 		var stateStr, runStr string
-		var rowStyle lipgloss.Style
+		var cs rowCellStyle
 
 		if r.Enabled {
 			stateStr = "enabled"
-			rowStyle = styleEnabled
-		} else {
-			stateStr = "disabled"
-			rowStyle = styleDisabled
-		}
-
-		if r.Enabled {
+			cs.base = lipgloss.NewStyle()
+			cs.state = lipgloss.NewStyle()
 			if r.Running {
 				runStr = "running"
+				cs.run = styleEnabled
 			} else {
 				runStr = "stopped"
+				cs.run = styleRunStopped
 			}
 		} else {
+			stateStr = "disabled"
 			runStr = "—"
+			cs.base = styleDisabled
+			cs.state = styleDisabled
+			cs.run = styleDisabled
 		}
 
 		portStr := fmt.Sprintf("%d", r.Port)
@@ -147,21 +170,29 @@ func RenderToolTable(rows []ToolTableRow) string {
 		}
 
 		stringRows[i] = []string{r.Name, r.Host, portStr, stateStr, runStr}
-		rowStyles[i] = rowStyle
+		cellStyles[i] = cs
 	}
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styleTableBorder).
 		Headers("NAME", "HOST", "PORT", "STATE", "RUNNING").
-		StyleFunc(func(row, _ int) lipgloss.Style {
+		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return styleTableHeader
 			}
-			if row >= 0 && row < len(rowStyles) {
-				return rowStyles[row]
+			if row < 0 || row >= len(cellStyles) {
+				return lipgloss.NewStyle()
 			}
-			return lipgloss.NewStyle()
+			cs := cellStyles[row]
+			switch col {
+			case 3:
+				return cs.state
+			case 4:
+				return cs.run
+			default:
+				return cs.base
+			}
 		})
 
 	for _, r := range stringRows {

@@ -140,8 +140,8 @@ func TestRunStatus_ContainsStackIndicator(t *testing.T) {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "Stack:") {
-		t.Errorf("output missing 'Stack:' indicator\n%s", out)
+	if !strings.Contains(out, "Devbox:") {
+		t.Errorf("output missing 'Devbox:' indicator\n%s", out)
 	}
 }
 

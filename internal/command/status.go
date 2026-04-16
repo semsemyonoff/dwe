@@ -1,10 +1,12 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -32,7 +34,7 @@ a tools table with live container status, and a compose topology tree.`,
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			projectName, err := resolveProjectName(flags.configPath, cfg)
+			projectName, dockerCfg, err := resolveProjectAndDocker(flags.configPath, cfg)
 			if err != nil {
 				return err
 			}
@@ -61,6 +63,11 @@ a tools table with live container status, and a compose topology tree.`,
 
 			// Augment topology with disabled services/tools as isolated nodes.
 			topo, topoStatus = augmentWithDisabled(cfg, topo, topoStatus)
+
+			// Remove hidden nodes from topology and health calculation.
+			if dockerCfg != nil && len(dockerCfg.Topology.Hidden) > 0 {
+				topo, topoStatus = removeHiddenNodes(topo, topoStatus, dockerCfg.Topology.Hidden)
+			}
 
 			isRunning := func(_, container string) bool {
 				return containerRunning(projectName, container)
@@ -100,6 +107,19 @@ func aggregateHealth(rows []ui.ServiceTableRow) StackHealth {
 		return StackPartial
 	}
 	return StackRunning
+}
+
+// hasRuntimeStatuses reports whether topoStatus contains at least one
+// non-disabled node, indicating that runtime status collection succeeded.
+// A map with only NodeDisabled entries (from augmentWithDisabled) is not
+// sufficient to compute accurate health.
+func hasRuntimeStatuses(topoStatus map[string]ui.NodeStatus) bool {
+	for _, st := range topoStatus {
+		if st != ui.NodeDisabled {
+			return true
+		}
+	}
+	return false
 }
 
 // aggregateHealthFromTopo computes stack health from topology node statuses.
@@ -171,9 +191,10 @@ func runStatus(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCh
 
 	// Stack health indicator: prefer topology status (covers all compose services including
 	// infrastructure containers like nginx, db, redis). Fall back to svcRows-only when
-	// topology is unavailable (docker not running or compose files missing).
+	// topology is unavailable or contains only disabled nodes (which means runtime status
+	// collection failed but augmentWithDisabled still populated the map).
 	var health StackHealth
-	if len(topoStatus) > 0 {
+	if hasRuntimeStatuses(topoStatus) {
 		health = aggregateHealthFromTopo(topoStatus)
 	} else {
 		health = aggregateHealth(svcRows)
@@ -188,14 +209,18 @@ func runStatus(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCh
 		indicator = ui.RenderStopped("○ stopped")
 	}
 
-	_, _ = fmt.Fprintf(w.Writer(), "Stack: %s\n\n", indicator)
+	_, _ = fmt.Fprintf(w.Writer(), "Devbox: %s\n\n", indicator)
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Services"))
 	_, _ = fmt.Fprintln(w.Writer(), ui.RenderServiceTable(svcRows))
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Tools"))
 	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(toolRows))
 
 	// Topology tree (optional).
 	if topo != nil {
-		rendered := ui.RenderTopology(topo, topoStatus)
+		categories := buildNodeCategories(cfg)
+		rendered := ui.RenderTopology(topo, topoStatus, categories)
 		if rendered != "" {
+			_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Topology"))
 			_, _ = fmt.Fprintln(w.Writer(), rendered)
 		}
 	}
@@ -337,6 +362,68 @@ func augmentWithDisabled(cfg *config.DevboxConfig, topo map[string][]string, top
 		topoStatus[name] = ui.NodeDisabled
 	}
 	return topo, topoStatus
+}
+
+// resolveProjectAndDocker returns both the compose project name and the full
+// docker config. If docker.yml does not exist, project name falls back to the
+// config default and dockerCfg is nil (no error).
+func resolveProjectAndDocker(configPath string, cfg *config.DevboxConfig) (string, *config.DockerConfig, error) {
+	baseDir := filepath.Dir(configPath)
+	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return cfg.Project.FullName(), nil, nil
+		}
+		return "", nil, fmt.Errorf("loading docker config: %w", err)
+	}
+	projectName := cfg.Project.FullName()
+	if dockerCfg.ProjectName != "" {
+		projectName = dockerCfg.ProjectName
+	}
+	return projectName, dockerCfg, nil
+}
+
+// removeHiddenNodes removes the listed compose service names from the topology
+// graph and status map. Hidden nodes are also pruned from dependency lists so
+// they don't leave dangling references in the tree.
+func removeHiddenNodes(topo map[string][]string, status map[string]ui.NodeStatus, hidden []string) (map[string][]string, map[string]ui.NodeStatus) {
+	hide := make(map[string]bool, len(hidden))
+	for _, h := range hidden {
+		hide[h] = true
+	}
+	for name := range hide {
+		delete(topo, name)
+		delete(status, name)
+	}
+	// Prune hidden names from dependency lists.
+	for name, deps := range topo {
+		filtered := deps[:0]
+		for _, d := range deps {
+			if !hide[d] {
+				filtered = append(filtered, d)
+			}
+		}
+		topo[name] = filtered
+	}
+	return topo, status
+}
+
+// buildNodeCategories maps compose service names to topology categories
+// based on the devbox config. Service containers → CatService, tool
+// containers → CatTool, everything else defaults to CatInfra.
+func buildNodeCategories(cfg *config.DevboxConfig) map[string]ui.NodeCategory {
+	cats := make(map[string]ui.NodeCategory)
+	for _, svc := range cfg.Services {
+		if svc.Container != "" {
+			cats[svc.Container] = ui.CatService
+		}
+	}
+	for _, t := range buildToolRows(cfg) {
+		if t.Container != "" {
+			cats[t.Container] = ui.CatTool
+		}
+	}
+	return cats
 }
 
 // buildComposeArgs constructs `["compose", ["-p", projectName,] "-f", file..., command, extraArgs...]`.

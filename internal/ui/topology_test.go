@@ -108,7 +108,7 @@ func TestParseComposeTopology_InvalidYAML(t *testing.T) {
 // --- RenderTopology ---
 
 func TestRenderTopology_Empty(t *testing.T) {
-	result := RenderTopology(nil, nil)
+	result := RenderTopology(nil, nil, nil)
 	if result != "" {
 		t.Errorf("expected empty string for nil deps, got %q", result)
 	}
@@ -118,7 +118,7 @@ func TestRenderTopology_SingleService(t *testing.T) {
 	deps := map[string][]string{
 		"nginx": {},
 	}
-	result := RenderTopology(deps, nil)
+	result := RenderTopology(deps, nil, nil)
 	if !strings.Contains(result, "nginx") {
 		t.Errorf("expected 'nginx' in output, got:\n%s", result)
 	}
@@ -131,7 +131,7 @@ func TestRenderTopology_RootIdentification(t *testing.T) {
 		"app-main": {"db"},
 		"db":       {},
 	}
-	result := RenderTopology(deps, nil)
+	result := RenderTopology(deps, nil, nil)
 
 	// nginx must appear as a root node (before app-main, db in tree hierarchy)
 	nginxIdx := strings.Index(result, "nginx")
@@ -158,7 +158,7 @@ func TestRenderTopology_StatusAnnotation(t *testing.T) {
 		"nginx":    NodeRunning,
 		"app-main": NodeStopped,
 	}
-	result := RenderTopology(deps, status)
+	result := RenderTopology(deps, status, nil)
 
 	if !strings.Contains(result, "running") {
 		t.Errorf("expected 'running' annotation in output:\n%s", result)
@@ -179,7 +179,7 @@ func TestRenderTopology_DisabledAnnotation(t *testing.T) {
 		"app":     NodeRunning,
 		"adminer": NodeDisabled,
 	}
-	result := RenderTopology(deps, status)
+	result := RenderTopology(deps, status, nil)
 	if !strings.Contains(result, "disabled") {
 		t.Errorf("expected 'disabled' annotation for adminer in output:\n%s", result)
 	}
@@ -193,7 +193,7 @@ func TestRenderTopology_UnknownStatusNoAnnotation(t *testing.T) {
 		"nginx": {},
 	}
 	// No status map — NodeUnknown (default)
-	result := RenderTopology(deps, nil)
+	result := RenderTopology(deps, nil, nil)
 	if strings.Contains(result, "running") || strings.Contains(result, "stopped") {
 		t.Errorf("unexpected status annotation when status is nil:\n%s", result)
 	}
@@ -211,7 +211,7 @@ func TestRenderTopology_DiamondDependency(t *testing.T) {
 		"db":         {},
 		"redis":      {},
 	}
-	result := RenderTopology(deps, nil)
+	result := RenderTopology(deps, nil, nil)
 
 	// nginx and app-second are roots (nothing depends on them)
 	if !strings.Contains(result, "nginx") {

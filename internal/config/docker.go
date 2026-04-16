@@ -22,6 +22,17 @@ type DockerConfig struct {
 	Env DockerEnvConfig `yaml:"env"`
 	// Resources declares managed Docker resources (volumes, etc.).
 	Resources DockerResourcesConfig `yaml:"resources"`
+	// Topology controls topology display and health calculation.
+	Topology DockerTopologyConfig `yaml:"topology"`
+}
+
+// DockerTopologyConfig controls which compose services appear in the
+// topology tree and are counted toward stack health.
+type DockerTopologyConfig struct {
+	// Hidden lists compose service names to exclude from the topology
+	// tree and from the stack health calculation. Useful for init
+	// containers that run once and then exit (e.g. redis-insight-setup).
+	Hidden []string `yaml:"hidden"`
 }
 
 // DockerResourcesConfig holds declarations for Docker resources managed by devbox.

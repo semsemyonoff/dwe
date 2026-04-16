@@ -22,6 +22,10 @@ func resetStyles() {
 	styleDisabled = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	styleMandatory = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
 	stylePartial = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleRunStopped = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	styleCatService = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	styleCatTool = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	styleCatInfra = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
 	defSep = "—"

@@ -99,8 +99,8 @@ func TestRunStatusViaCfg(t *testing.T) {
 	if !strings.Contains(out, "main") {
 		t.Errorf("status output missing service name 'main'\n%s", out)
 	}
-	if !strings.Contains(out, "Stack:") {
-		t.Errorf("status output missing 'Stack:' health indicator\n%s", out)
+	if !strings.Contains(out, "Devbox:") {
+		t.Errorf("status output missing 'Devbox:' health indicator\n%s", out)
 	}
 }
 

@@ -54,8 +54,13 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 	return sb.String(), nil
 }
 
-// renderSectionTitle renders a section header line using Lipgloss styling.
+// RenderSectionTitle renders a section header line using Lipgloss styling.
 // Empty text renders a closing separator line.
+func RenderSectionTitle(text string) string {
+	return renderSectionTitle(text)
+}
+
+// renderSectionTitle is the internal implementation of RenderSectionTitle.
 func renderSectionTitle(text string) string {
 	width := min(TermWidth(), 100)
 
