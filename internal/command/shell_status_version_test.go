@@ -258,6 +258,141 @@ func TestResolveShellOptions_EnvNilWhenEmpty(t *testing.T) {
 	}
 }
 
+// --- Task 6: pickService selection logic ---
+
+// makeMultiServiceCfg builds a DevboxConfig with multiple services for selector tests.
+func makeMultiServiceCfg(services map[string]config.ServiceConfig) *config.DevboxConfig {
+	return makeServicesCfg(services, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+}
+
+// alwaysSelectFn returns a selectServiceFn that always picks the service at the given index.
+func alwaysSelectFn(idx int) selectServiceFn {
+	return func(cfg *config.DevboxConfig, names []string) (string, error) {
+		if idx < 0 || idx >= len(names) {
+			return "", fmt.Errorf("index %d out of range for %d services", idx, len(names))
+		}
+		return names[idx], nil
+	}
+}
+
+// neverSelectFn returns a selectServiceFn that fails if called.
+func neverSelectFn(t *testing.T) selectServiceFn {
+	return func(cfg *config.DevboxConfig, names []string) (string, error) {
+		t.Helper()
+		t.Errorf("selector should not have been called, but was called with %v", names)
+		return "", fmt.Errorf("selector unexpectedly called")
+	}
+}
+
+func TestPickService_DirectArg_ReturnedUnchanged(t *testing.T) {
+	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: true},
+	})
+	name, err := pickService(cfg, "main", neverSelectFn(t))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "main" {
+		t.Errorf("pickService: expected 'main', got %q", name)
+	}
+}
+
+func TestPickService_SingleEnabled_AutoSelect(t *testing.T) {
+	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: false},
+	})
+	// Only "main" is enabled (mandatory); selector should not be called.
+	name, err := pickService(cfg, "", neverSelectFn(t))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "main" {
+		t.Errorf("pickService: expected auto-select 'main', got %q", name)
+	}
+}
+
+func TestPickService_NoEnabledServices_ReturnsError(t *testing.T) {
+	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: false, Enabled: false},
+		"second": {Type: "app", Container: "app-second", Enabled: false},
+	})
+	_, err := pickService(cfg, "", neverSelectFn(t))
+	if err == nil {
+		t.Error("expected error when no enabled services, got nil")
+	}
+	if !strings.Contains(err.Error(), "no enabled services") {
+		t.Errorf("error should mention 'no enabled services', got: %v", err)
+	}
+}
+
+func TestPickService_MultipleEnabled_CallsSelector(t *testing.T) {
+	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: true},
+	})
+	selectorCalled := false
+	selector := func(c *config.DevboxConfig, names []string) (string, error) {
+		selectorCalled = true
+		if len(names) != 2 {
+			return "", fmt.Errorf("expected 2 names, got %d: %v", len(names), names)
+		}
+		return names[0], nil
+	}
+	name, err := pickService(cfg, "", selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !selectorCalled {
+		t.Error("expected selector to be called for multiple enabled services")
+	}
+	if name == "" {
+		t.Error("expected a non-empty service name from selector")
+	}
+}
+
+func TestPickService_MultipleEnabled_SelectorSeesOnlyEnabledServices(t *testing.T) {
+	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
+		"main":     {Type: "app", Container: "app-main", Mandatory: true},
+		"second":   {Type: "app", Container: "app-second", Enabled: true},
+		"disabled": {Type: "app", Container: "app-disabled", Enabled: false},
+	})
+	var selectorNames []string
+	selector := func(c *config.DevboxConfig, names []string) (string, error) {
+		selectorNames = names
+		return names[0], nil
+	}
+	_, err := pickService(cfg, "", selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// "disabled" must not appear in the selector list.
+	for _, n := range selectorNames {
+		if n == "disabled" {
+			t.Errorf("disabled service should not appear in selector list: %v", selectorNames)
+		}
+	}
+	if len(selectorNames) != 2 {
+		t.Errorf("expected 2 enabled services in selector, got %d: %v", len(selectorNames), selectorNames)
+	}
+}
+
+func TestPickService_SelectorPicksSecond(t *testing.T) {
+	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
+		"alpha": {Type: "app", Container: "app-alpha", Mandatory: true},
+		"beta":  {Type: "app", Container: "app-beta", Enabled: true},
+	})
+	// sorted order: alpha, beta → index 1 = "beta"
+	name, err := pickService(cfg, "", alwaysSelectFn(1))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "beta" {
+		t.Errorf("expected 'beta' from selector index 1, got %q", name)
+	}
+}
+
 // --- Task 4: mode logic and env passthrough ---
 
 // testCompose returns a minimal docker.Compose for tests (no project name, no files).
