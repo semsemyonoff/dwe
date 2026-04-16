@@ -14,7 +14,7 @@ import (
 
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.
-func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceName string, asRoot bool) error {
+func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceName string, flags shellCLIFlags) error {
 	svc, ok := cfg.Services[serviceName]
 	if !ok {
 		return fmt.Errorf("service %q not found", serviceName)
@@ -23,12 +23,18 @@ func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceNa
 		return fmt.Errorf("service %q has no container defined", serviceName)
 	}
 
-	shell := svc.CLI.Shell
+	shell := flags.shell
+	if shell == "" {
+		shell = svc.CLI.Shell
+	}
 	if shell == "" {
 		shell = "bash"
 	}
 
-	workDir := svc.CLI.WorkDir
+	workDir := flags.workDir
+	if workDir == "" {
+		workDir = svc.CLI.WorkDir
+	}
 	if workDir == "" {
 		workDir = svc.WorkDirInternal
 	}
@@ -36,20 +42,19 @@ func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceNa
 		workDir = svc.DirInternal
 	}
 
-	u := resolveUser(svc.CLI.User, asRoot)
+	u := resolveUser(flags.user, svc.CLI.User, flags.asRoot)
 
 	// Container name matches the container_name field in compose.yaml:
 	// <project-full-name>-<container>, e.g. devbox-laravel-app-main.
 	fullContainerName := compose.ProjectName + "-" + svc.Container
 
 	status, err := containerStateStatus(fullContainerName)
-	if err != nil {
-		// Container does not exist — start a new one via compose run.
-		return composeRunCLI(compose, svc.Container, shell, u, workDir)
-	}
 
-	switch status {
-	case "running":
+	switch {
+	case err != nil:
+		// Container does not exist.
+		return composeRunCLI(compose, svc.Container, shell, u, workDir)
+	case status == "running":
 		return dockerExecCLI(fullContainerName, shell, u, workDir)
 	default:
 		return fmt.Errorf(
@@ -60,13 +65,16 @@ func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceNa
 }
 
 // resolveUser returns the effective user string for -u flag.
-// --root overrides everything; otherwise uses configured user or current UID.
-func resolveUser(configured string, asRoot bool) string {
+// --root overrides everything; flag user overrides config user; fallback is current UID.
+func resolveUser(flagUser, configUser string, asRoot bool) string {
 	if asRoot {
 		return "root"
 	}
-	if configured != "" {
-		return configured
+	if flagUser != "" {
+		return flagUser
+	}
+	if configUser != "" {
+		return configUser
 	}
 	if u, err := user.Current(); err == nil {
 		return u.Uid

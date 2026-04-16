@@ -57,6 +57,81 @@ func TestShellRegisteredAtRoot(t *testing.T) {
 	}
 }
 
+func TestNewShellCmd_HasNewFlags(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newShellCmd(flags)
+	for _, name := range []string{"mode", "shell", "user", "workdir"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("shell command missing --%s flag", name)
+		}
+	}
+}
+
+func TestNewShellCmd_RootAndUserMutuallyExclusive(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newShellCmd(flags)
+	// Wire up so RunE is reachable without needing a real config.
+	// We simulate the flag values directly by running through Execute.
+	// Since config loading will fail (no real devbox.yml), we set up a
+	// fake RunE that only checks flag validation — but it's easier to
+	// call the validation inline here.
+
+	// Set both --root and --user; expect an error before config is loaded.
+	cmd.SetArgs([]string{"--root", "--user", "deploy", "main"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error when --root and --user both set, got nil")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error should mention mutually exclusive, got: %v", err)
+	}
+}
+
+func TestNewShellCmd_InvalidModeValidation(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newShellCmd(flags)
+	cmd.SetArgs([]string{"--mode", "invalid", "main"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error for invalid --mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "--mode") {
+		t.Errorf("error should mention --mode, got: %v", err)
+	}
+}
+
+func TestValidModes(t *testing.T) {
+	for _, mode := range []string{"auto", "exec", "run"} {
+		if !validModes[mode] {
+			t.Errorf("expected %q to be a valid mode", mode)
+		}
+	}
+	if validModes["invalid"] {
+		t.Error("expected 'invalid' to not be a valid mode")
+	}
+}
+
+func TestResolveUser_FlagOverridesConfig(t *testing.T) {
+	result := resolveUser("flaguser", "configuser", false)
+	if result != "flaguser" {
+		t.Errorf("resolveUser: flag user should take priority, got %q", result)
+	}
+}
+
+func TestResolveUser_ConfigOverridesDefault(t *testing.T) {
+	result := resolveUser("", "configuser", false)
+	if result != "configuser" {
+		t.Errorf("resolveUser: config user should override default, got %q", result)
+	}
+}
+
+func TestResolveUser_RootOverridesAll(t *testing.T) {
+	result := resolveUser("flaguser", "configuser", true)
+	if result != "root" {
+		t.Errorf("resolveUser: --root should override all, got %q", result)
+	}
+}
+
 // --- status command ---
 
 func TestNewStatusCmd_UseField(t *testing.T) {
