@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 )
@@ -82,6 +84,76 @@ func RenderServiceTable(rows []ServiceTableRow) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styleTableBorder).
 		Headers("NAME", "CONTAINER", "STATE", "RUNNING").
+		StyleFunc(func(row, _ int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return styleTableHeader
+			}
+			if row >= 0 && row < len(rowStyles) {
+				return rowStyles[row]
+			}
+			return lipgloss.NewStyle()
+		})
+
+	for _, r := range stringRows {
+		t.Row(r...)
+	}
+
+	return t.String()
+}
+
+// ToolTableRow holds data for one row in the tools Lipgloss table.
+type ToolTableRow struct {
+	Name      string
+	Host      string
+	Port      int
+	Container string
+	Enabled   bool
+	// Running is only meaningful when Enabled is true.
+	Running bool
+}
+
+// RenderToolTable renders a styled Lipgloss table of optional tools.
+// Columns: NAME, HOST, PORT, STATE, RUNNING.
+// Row colors use semantic style vars: enabled (green), disabled (gray).
+func RenderToolTable(rows []ToolTableRow) string {
+	stringRows := make([][]string, len(rows))
+	rowStyles := make([]lipgloss.Style, len(rows))
+
+	for i, r := range rows {
+		var stateStr, runStr string
+		var rowStyle lipgloss.Style
+
+		if r.Enabled {
+			stateStr = "enabled"
+			rowStyle = styleEnabled
+		} else {
+			stateStr = "disabled"
+			rowStyle = styleDisabled
+		}
+
+		if r.Enabled {
+			if r.Running {
+				runStr = "running"
+			} else {
+				runStr = "stopped"
+			}
+		} else {
+			runStr = "—"
+		}
+
+		portStr := fmt.Sprintf("%d", r.Port)
+		if r.Port == 0 {
+			portStr = "—"
+		}
+
+		stringRows[i] = []string{r.Name, r.Host, portStr, stateStr, runStr}
+		rowStyles[i] = rowStyle
+	}
+
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(styleTableBorder).
+		Headers("NAME", "HOST", "PORT", "STATE", "RUNNING").
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return styleTableHeader

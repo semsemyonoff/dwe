@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -51,76 +51,28 @@ func newToolListCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-// runToolList prints the tool list with aligned columns and colored status.
+// runToolList prints the tool list as a styled Lipgloss table.
 func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCheckFn) error {
-	rows := buildToolRows(cfg)
-
-	// Compute column widths.
-	maxName := len("NAME")
-	maxHost := len("HOST")
-	maxPort := len("PORT")
-	for _, t := range rows {
-		if len(t.Name) > maxName {
-			maxName = len(t.Name)
-		}
-		if len(t.Host) > maxHost {
-			maxHost = len(t.Host)
-		}
-		port := fmt.Sprintf("%d", t.Port)
-		if len(port) > maxPort {
-			maxPort = len(port)
-		}
-	}
-
-	statusWidth := 5 // "✔ on " / "✘ off"
-
+	toolData := buildToolRows(cfg)
 	projectFull := cfg.Project.FullName()
-	out := w.Writer()
 
-	_, _ = fmt.Fprintf(out,
-		"  %s%-*s  %-*s  %-*s  %-*s  %s%s\n",
-		render.White, maxName, "NAME", maxHost, "HOST", maxPort, "PORT", statusWidth, "STATE", "RUNNING", render.Reset,
-	)
-
-	for _, t := range rows {
-		var icon, label, statusColor string
+	rows := make([]ui.ToolTableRow, len(toolData))
+	for i, t := range toolData {
+		running := false
 		if t.Enabled {
-			icon, label, statusColor = "✔", "on", render.Green
-		} else {
-			icon, label, statusColor = "✘", "off", render.Gray
+			running = isRunning(projectFull, t.Container)
 		}
-		statusText := icon + " " + label
-		statusPad := strings.Repeat(" ", max(statusWidth-len(icon)-1-len(label), 0))
-
-		var runStr string
-		if t.Enabled {
-			if isRunning(projectFull, t.Container) {
-				runStr = render.Green + "running" + render.Reset
-			} else {
-				runStr = render.Yellow + "stopped" + render.Reset
-			}
-		} else {
-			runStr = render.Gray + "—" + render.Reset
+		rows[i] = ui.ToolTableRow{
+			Name:      t.Name,
+			Host:      t.Host,
+			Port:      t.Port,
+			Container: t.Container,
+			Enabled:   t.Enabled,
+			Running:   running,
 		}
-
-		nameColor := render.Blue
-		hostColor := render.Reset
-		portStr := fmt.Sprintf("%d", t.Port)
-		if !t.Enabled {
-			nameColor = render.Gray
-			hostColor = render.Gray
-		}
-
-		_, _ = fmt.Fprintf(out,
-			"  %s%-*s%s  %s%-*s%s  %-*s  %s%s%s%s  %s\n",
-			nameColor, maxName, t.Name, render.Reset,
-			hostColor, maxHost, t.Host, render.Reset,
-			maxPort, portStr,
-			statusColor, statusText, render.Reset, statusPad,
-			runStr,
-		)
 	}
 
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(rows))
 	return nil
 }
 
