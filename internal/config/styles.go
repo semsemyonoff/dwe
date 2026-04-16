@@ -42,6 +42,20 @@ type StylesColors struct {
 	// Table colors (shared across all Lipgloss tables)
 	TableBorder string `yaml:"table_border"`
 	TableHeader string `yaml:"table_header"`
+
+	// Help/Fang color scheme (CLI help output)
+	Help StylesHelpColors `yaml:"help"`
+}
+
+// StylesHelpColors holds ANSI 256-color codes for CLI help output elements
+// rendered by Fang. Empty string means "use Fang default".
+type StylesHelpColors struct {
+	Title       string `yaml:"title"`       // section headers (USAGE, COMMANDS, etc.)
+	Command     string `yaml:"command"`     // command names
+	Flag        string `yaml:"flag"`        // flag names
+	Program     string `yaml:"program"`     // program name in usage line
+	Description string `yaml:"description"` // command/flag descriptions
+	Argument    string `yaml:"argument"`    // arguments like [command]
 }
 
 // LoadStylesConfig reads and parses a styles.yml file at the given path.
