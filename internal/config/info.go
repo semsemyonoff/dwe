@@ -7,31 +7,31 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// HelpConfig is the top-level structure of devbox/help.yml.
+// InfoConfig is the top-level structure of devbox/info.yml.
 // It describes what to render when showing project info/help.
-type HelpConfig struct {
-	Settings HelpSettings  `yaml:"settings"`
-	Header   HelpHeader    `yaml:"header"`
-	Sections []HelpSection `yaml:"sections"`
+type InfoConfig struct {
+	Settings InfoSettings  `yaml:"settings"`
+	Header   InfoHeader    `yaml:"header"`
+	Sections []InfoSection `yaml:"sections"`
 	// Footer controls whether a closing table header line is printed after all sections.
 	Footer bool `yaml:"footer"`
 }
 
-// HelpSettings controls global display parameters for the help output.
-type HelpSettings struct {
+// InfoSettings controls global display parameters for the info output.
+type InfoSettings struct {
 	// LineWidth is the inner width (in characters) used for table header padding
 	// and text truncation. Default (0) falls back to 76.
 	LineWidth int `yaml:"line_width"`
 }
 
-// HelpHeader contains the ASCII art banner rendered at the top.
-type HelpHeader struct {
-	ASCII HelpASCII `yaml:"ascii"`
+// InfoHeader contains the ASCII art banner rendered at the top.
+type InfoHeader struct {
+	ASCII InfoASCII `yaml:"ascii"`
 }
 
-// HelpASCII describes the ASCII art banner to generate at startup.
+// InfoASCII describes the ASCII art banner to generate at startup.
 // devbox-cli renders each line in Lines as ASCII art using the given font.
-type HelpASCII struct {
+type InfoASCII struct {
 	// Lines are the text strings to render as ASCII art, one per visual block.
 	// Example: ["Welcome to", "Devbox 2.0"]
 	Lines []string `yaml:"lines"`
@@ -41,33 +41,33 @@ type HelpASCII struct {
 	Color string `yaml:"color"`
 }
 
-// HelpSection is a named block of help content, optionally enclosed by a table header.
-type HelpSection struct {
+// InfoSection is a named block of info content, optionally enclosed by a table header.
+type InfoSection struct {
 	// ID is a machine-readable section identifier (used for referencing/overriding).
 	ID string `yaml:"id"`
 	// Title, when non-empty, prints a TableHeader line before the section items.
 	Title string `yaml:"title"`
 	// Items is the ordered list of content entries.
-	Items []HelpItem `yaml:"items"`
+	Items []InfoItem `yaml:"items"`
 }
 
-// HelpIndent represents an optional indent value for a HelpItem.
+// InfoIndent represents an optional indent value for an InfoItem.
 // It distinguishes between "not set" (use default), an explicit int (use that),
 // and false (force zero indent).
-type HelpIndent struct {
+type InfoIndent struct {
 	set   bool
 	value int
 }
 
 // IsSet reports whether the indent was explicitly provided in YAML.
-func (h HelpIndent) IsSet() bool { return h.set }
+func (h InfoIndent) IsSet() bool { return h.set }
 
 // Value returns the explicit indent value (0 when indent: false).
-func (h HelpIndent) Value() int { return h.value }
+func (h InfoIndent) Value() int { return h.value }
 
 // UnmarshalYAML accepts an integer value (indent: 0, indent: 4, etc.).
 // Any other type returns an error.
-func (h *HelpIndent) UnmarshalYAML(node *yaml.Node) error {
+func (h *InfoIndent) UnmarshalYAML(node *yaml.Node) error {
 	if node.Tag != "!!int" {
 		return fmt.Errorf("indent: expected int, got %s", node.Tag)
 	}
@@ -83,8 +83,8 @@ func (h *HelpIndent) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// HelpItem is a single renderable element within a section.
-type HelpItem struct {
+// InfoItem is a single renderable element within a section.
+type InfoItem struct {
 	// Type selects the rendering function:
 	//   subheader  — yellow "---Title---" line
 	//   definition — "  name — value" definition line
@@ -106,7 +106,7 @@ type HelpItem struct {
 
 	// Indent controls leading whitespace for definition and info items (number of spaces).
 	// When omitted, renderItem applies a default of 2 for definition items.
-	Indent HelpIndent `yaml:"indent"`
+	Indent InfoIndent `yaml:"indent"`
 
 	// Icon is an optional symbol (emoji or character) displayed before the name
 	// in definition items. Empty means no icon.
@@ -119,13 +119,13 @@ type HelpItem struct {
 	When string `yaml:"when"`
 }
 
-// LoadHelpConfig reads and parses a help.yml file at the given path.
-func LoadHelpConfig(path string) (*HelpConfig, error) {
+// LoadInfoConfig reads and parses an info.yml file at the given path.
+func LoadInfoConfig(path string) (*InfoConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	var cfg HelpConfig
+	var cfg InfoConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}

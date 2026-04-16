@@ -33,29 +33,29 @@ func runInfo(flags *rootFlags) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	helpPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "help.yml")
-	helpCfg, err := config.LoadHelpConfig(helpPath)
+	infoPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "info.yml")
+	infoCfg, err := config.LoadInfoConfig(infoPath)
 	if err != nil {
-		return fmt.Errorf("loading devbox/help.yml: %w", err)
+		return fmt.Errorf("loading devbox/info.yml: %w", err)
 	}
 
-	return renderInfo(render.Stdout(), cfg, helpCfg)
+	return renderInfo(render.Stdout(), cfg, infoCfg)
 }
 
 // renderInfo renders the full project info screen to w.
-func renderInfo(w *render.Writer, cfg *config.DevboxConfig, helpCfg *config.HelpConfig) error {
-	if helpCfg.Settings.LineWidth > 0 {
-		w.SetLineWidth(helpCfg.Settings.LineWidth)
+func renderInfo(w *render.Writer, cfg *config.DevboxConfig, infoCfg *config.InfoConfig) error {
+	if infoCfg.Settings.LineWidth > 0 {
+		w.SetLineWidth(infoCfg.Settings.LineWidth)
 	}
 
 	// ASCII art header
-	if len(helpCfg.Header.ASCII.Lines) > 0 {
-		if err := w.ASCII(helpCfg.Header.ASCII.Lines, helpCfg.Header.ASCII.Font, helpCfg.Header.ASCII.Color); err != nil {
+	if len(infoCfg.Header.ASCII.Lines) > 0 {
+		if err := w.ASCII(infoCfg.Header.ASCII.Lines, infoCfg.Header.ASCII.Font, infoCfg.Header.ASCII.Color); err != nil {
 			return fmt.Errorf("header ASCII: %w", err)
 		}
 	}
 
-	for _, section := range helpCfg.Sections {
+	for _, section := range infoCfg.Sections {
 		if section.Title != "" {
 			w.TableHeader(section.Title)
 		}
@@ -75,14 +75,14 @@ func renderInfo(w *render.Writer, cfg *config.DevboxConfig, helpCfg *config.Help
 		}
 	}
 
-	if helpCfg.Footer {
+	if infoCfg.Footer {
 		w.TableHeader("")
 	}
 
 	return nil
 }
 
-func renderItem(w *render.Writer, cfg *config.DevboxConfig, item config.HelpItem) error {
+func renderItem(w *render.Writer, cfg *config.DevboxConfig, item config.InfoItem) error {
 	switch item.Type {
 	case "subheader":
 		text, err := tpl.Render(item.Text, cfg)

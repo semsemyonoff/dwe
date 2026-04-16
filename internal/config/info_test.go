@@ -6,7 +6,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const sampleHelpYML = `
+const sampleInfoYML = `
 header:
   ascii:
     lines:
@@ -51,11 +51,11 @@ sections:
 footer: true
 `
 
-func TestLoadHelpConfig(t *testing.T) {
-	path := writeTempYML(t, sampleHelpYML)
-	cfg, err := LoadHelpConfig(path)
+func TestLoadInfoConfig(t *testing.T) {
+	path := writeTempYML(t, sampleInfoYML)
+	cfg, err := LoadInfoConfig(path)
 	if err != nil {
-		t.Fatalf("LoadHelpConfig: %v", err)
+		t.Fatalf("LoadInfoConfig: %v", err)
 	}
 
 	if cfg.Header.ASCII.Color != "blue" {
@@ -102,17 +102,17 @@ func TestLoadHelpConfig(t *testing.T) {
 	}
 }
 
-func TestLoadHelpConfig_notFound(t *testing.T) {
-	_, err := LoadHelpConfig("/tmp/devbox-nonexistent-help.yml")
+func TestLoadInfoConfig_notFound(t *testing.T) {
+	_, err := LoadInfoConfig("/tmp/devbox-nonexistent-info.yml")
 	if err == nil {
 		t.Error("expected error for missing file")
 	}
 }
 
-func parseIndent(t *testing.T, yamlStr string) HelpIndent {
+func parseInfoIndent(t *testing.T, yamlStr string) InfoIndent {
 	t.Helper()
 	var item struct {
-		Indent HelpIndent `yaml:"indent"`
+		Indent InfoIndent `yaml:"indent"`
 	}
 	if err := yaml.Unmarshal([]byte(yamlStr), &item); err != nil {
 		t.Fatalf("yaml.Unmarshal: %v", err)
@@ -120,8 +120,8 @@ func parseIndent(t *testing.T, yamlStr string) HelpIndent {
 	return item.Indent
 }
 
-func TestHelpIndent_notSet(t *testing.T) {
-	h := parseIndent(t, `{}`)
+func TestInfoIndent_notSet(t *testing.T) {
+	h := parseInfoIndent(t, `{}`)
 	if h.IsSet() {
 		t.Error("IsSet() should be false when indent is omitted")
 	}
@@ -130,8 +130,8 @@ func TestHelpIndent_notSet(t *testing.T) {
 	}
 }
 
-func TestHelpIndent_int(t *testing.T) {
-	h := parseIndent(t, `indent: 4`)
+func TestInfoIndent_int(t *testing.T) {
+	h := parseInfoIndent(t, `indent: 4`)
 	if !h.IsSet() {
 		t.Error("IsSet() should be true")
 	}
@@ -140,8 +140,8 @@ func TestHelpIndent_int(t *testing.T) {
 	}
 }
 
-func TestHelpIndent_zero(t *testing.T) {
-	h := parseIndent(t, `indent: 0`)
+func TestInfoIndent_zero(t *testing.T) {
+	h := parseInfoIndent(t, `indent: 0`)
 	if !h.IsSet() {
 		t.Error("IsSet() should be true for explicit 0")
 	}
@@ -150,9 +150,9 @@ func TestHelpIndent_zero(t *testing.T) {
 	}
 }
 
-func TestHelpIndent_invalidType(t *testing.T) {
+func TestInfoIndent_invalidType(t *testing.T) {
 	var item struct {
-		Indent HelpIndent `yaml:"indent"`
+		Indent InfoIndent `yaml:"indent"`
 	}
 	for _, bad := range []string{`indent: "oops"`, `indent: false`, `indent: true`} {
 		if err := yaml.Unmarshal([]byte(bad), &item); err == nil {
