@@ -123,23 +123,100 @@ func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning contai
 	return nil
 }
 
+// selectToggleFn is a function type for interactive service selection used by
+// enable/disable commands when no service argument is provided.
+type selectToggleFn func(title string, items []ui.SelectorItem) (int, error)
+
+// defaultSelectToggle calls ui.RunSelector.
+var defaultSelectToggle selectToggleFn = ui.RunSelector
+
+// pickServiceToEnable returns the name of a disabled non-mandatory service to enable.
+// If no disabled optional services exist, returns an error.
+// If exactly one exists, it is auto-selected (no selector invoked).
+// Otherwise the selector is called with all disabled optional services.
+func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
+	var candidates []string
+	for _, name := range sortedKeys(cfg.Services) {
+		svc := cfg.Services[name]
+		if !svc.Mandatory && !svc.Enabled {
+			candidates = append(candidates, name)
+		}
+	}
+	return pickToggleCandidates(cfg, candidates, "disabled", "Select a service to enable:", selector)
+}
+
+// pickServiceToDisable returns the name of an enabled non-mandatory service to disable.
+// If no enabled optional services exist, returns an error.
+// If exactly one exists, it is auto-selected (no selector invoked).
+// Otherwise the selector is called with all enabled optional services.
+func pickServiceToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
+	var candidates []string
+	for _, name := range sortedKeys(cfg.Services) {
+		svc := cfg.Services[name]
+		if !svc.Mandatory && svc.Enabled {
+			candidates = append(candidates, name)
+		}
+	}
+	return pickToggleCandidates(cfg, candidates, "enabled", "Select a service to disable:", selector)
+}
+
+// pickToggleCandidates resolves a service name from a candidate list.
+// - Empty list → error mentioning statusLabel.
+// - Exactly one → auto-selected.
+// - Multiple → selector is invoked.
+func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel, title string, selector selectToggleFn) (string, error) {
+	switch len(names) {
+	case 0:
+		return "", fmt.Errorf("no %s optional services found", statusLabel)
+	case 1:
+		return names[0], nil
+	default:
+		items := make([]ui.SelectorItem, len(names))
+		for i, name := range names {
+			svc := cfg.Services[name]
+			items[i] = ui.SelectorItem{
+				Label:       name,
+				Description: svc.Container,
+				Status:      statusLabel,
+			}
+		}
+		idx, err := selector(title, items)
+		if err != nil {
+			return "", err
+		}
+		return names[idx], nil
+	}
+}
+
 func newServiceEnableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "enable <service>",
+		Use:   "enable [service]",
 		Short: "Enable an optional service (writes to devbox/local.yml)",
 		Long: `Enable an optional service by writing services.<name>.enabled = true to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox up' to start the newly enabled service.`,
+Use 'devbox up' to start the newly enabled service.
+
+When no service name is given, an interactive selector shows all currently
+disabled optional services.`,
 		Example:           "  devbox services enable second",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: optionalServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return setServiceEnabled(flags.configPath, cfg, args[0], true)
+			name := ""
+			if len(args) == 1 {
+				name = args[0]
+			} else {
+				name, err = pickServiceToEnable(cfg, defaultSelectToggle)
+				if err != nil {
+					return err
+				}
+			}
+			return setServiceEnabled(flags.configPath, cfg, name, true)
 		},
 		SilenceUsage: true,
 	}
@@ -147,21 +224,33 @@ Use 'devbox up' to start the newly enabled service.`,
 
 func newServiceDisableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "disable <service>",
+		Use:   "disable [service]",
 		Short: "Disable an optional service (writes to devbox/local.yml)",
 		Long: `Disable an optional service by writing services.<name>.enabled = false to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox stop <container>' or 'devbox down' to stop the service.`,
+Use 'devbox stop <container>' or 'devbox down' to stop the service.
+
+When no service name is given, an interactive selector shows all currently
+enabled optional services.`,
 		Example:           "  devbox services disable second",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: optionalServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return setServiceEnabled(flags.configPath, cfg, args[0], false)
+			name := ""
+			if len(args) == 1 {
+				name = args[0]
+			} else {
+				name, err = pickServiceToDisable(cfg, defaultSelectToggle)
+				if err != nil {
+					return err
+				}
+			}
+			return setServiceEnabled(flags.configPath, cfg, name, false)
 		},
 		SilenceUsage: true,
 	}

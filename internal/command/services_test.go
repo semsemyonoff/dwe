@@ -2,11 +2,13 @@ package command
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 )
 
 func makeServicesCfg(services map[string]config.ServiceConfig, tools config.ToolsConfig, ports config.RuntimePorts, hosts config.RuntimeHosts) *config.DevboxConfig {
@@ -162,6 +164,255 @@ func TestRunServiceList_LipglossTable(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
 		}
+	}
+}
+
+// --- Task 7: services enable/disable interactive selector ---
+
+// neverToggleFn returns a selectToggleFn that fails the test if called.
+func neverToggleFn(t *testing.T) selectToggleFn {
+	return func(title string, items []ui.SelectorItem) (int, error) {
+		t.Helper()
+		t.Errorf("selector should not have been called, but was called with %d items", len(items))
+		return -1, fmt.Errorf("selector unexpectedly called")
+	}
+}
+
+// alwaysToggleFn returns a selectToggleFn that always picks the item at idx.
+func alwaysToggleFn(idx int) selectToggleFn {
+	return func(title string, items []ui.SelectorItem) (int, error) {
+		if idx < 0 || idx >= len(items) {
+			return -1, fmt.Errorf("index %d out of range for %d items", idx, len(items))
+		}
+		return idx, nil
+	}
+}
+
+func TestPickServiceToEnable_NoDisabled_ReturnsError(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: true},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	_, err := pickServiceToEnable(cfg, neverToggleFn(t))
+	if err == nil {
+		t.Fatal("expected error when no disabled services, got nil")
+	}
+	if !strings.Contains(err.Error(), "disabled") {
+		t.Errorf("error should mention 'disabled', got: %v", err)
+	}
+}
+
+func TestPickServiceToEnable_SingleDisabled_AutoSelect(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: false},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	name, err := pickServiceToEnable(cfg, neverToggleFn(t))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "second" {
+		t.Errorf("expected 'second', got %q", name)
+	}
+}
+
+func TestPickServiceToEnable_MultipleDisabled_CallsSelector(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"alpha":  {Type: "app", Container: "app-alpha", Enabled: false},
+		"beta":   {Type: "app", Container: "app-beta", Enabled: false},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	selectorCalled := false
+	var seenItems []ui.SelectorItem
+	sel := func(title string, items []ui.SelectorItem) (int, error) {
+		selectorCalled = true
+		seenItems = items
+		return 0, nil
+	}
+
+	name, err := pickServiceToEnable(cfg, sel)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !selectorCalled {
+		t.Error("selector should have been called for multiple disabled services")
+	}
+	if len(seenItems) != 2 {
+		t.Errorf("selector should see 2 items, got %d", len(seenItems))
+	}
+	// mandatory service must not appear
+	for _, item := range seenItems {
+		if item.Label == "main" {
+			t.Error("mandatory service 'main' should not appear in enable selector")
+		}
+		if item.Status != "disabled" {
+			t.Errorf("item %q status should be 'disabled', got %q", item.Label, item.Status)
+		}
+	}
+	if name == "" {
+		t.Error("expected non-empty service name from selector")
+	}
+}
+
+func TestPickServiceToEnable_SelectorPicksSecond(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"alpha": {Type: "app", Container: "app-alpha", Enabled: false},
+		"beta":  {Type: "app", Container: "app-beta", Enabled: false},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	// sorted: alpha(0), beta(1)
+	name, err := pickServiceToEnable(cfg, alwaysToggleFn(1))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "beta" {
+		t.Errorf("expected 'beta' from index 1, got %q", name)
+	}
+}
+
+func TestPickServiceToDisable_NoEnabled_ReturnsError(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: false},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	_, err := pickServiceToDisable(cfg, neverToggleFn(t))
+	if err == nil {
+		t.Fatal("expected error when no enabled optional services, got nil")
+	}
+	if !strings.Contains(err.Error(), "enabled") {
+		t.Errorf("error should mention 'enabled', got: %v", err)
+	}
+}
+
+func TestPickServiceToDisable_SingleEnabled_AutoSelect(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: true},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	name, err := pickServiceToDisable(cfg, neverToggleFn(t))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "second" {
+		t.Errorf("expected 'second', got %q", name)
+	}
+}
+
+func TestPickServiceToDisable_MultipleEnabled_CallsSelector(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"alpha":  {Type: "app", Container: "app-alpha", Enabled: true},
+		"beta":   {Type: "app", Container: "app-beta", Enabled: true},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	selectorCalled := false
+	var seenItems []ui.SelectorItem
+	sel := func(title string, items []ui.SelectorItem) (int, error) {
+		selectorCalled = true
+		seenItems = items
+		return 0, nil
+	}
+
+	name, err := pickServiceToDisable(cfg, sel)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !selectorCalled {
+		t.Error("selector should have been called for multiple enabled services")
+	}
+	if len(seenItems) != 2 {
+		t.Errorf("selector should see 2 items, got %d", len(seenItems))
+	}
+	// mandatory service must not appear
+	for _, item := range seenItems {
+		if item.Label == "main" {
+			t.Error("mandatory service 'main' should not appear in disable selector")
+		}
+		if item.Status != "enabled" {
+			t.Errorf("item %q status should be 'enabled', got %q", item.Label, item.Status)
+		}
+	}
+	if name == "" {
+		t.Error("expected non-empty service name from selector")
+	}
+}
+
+func TestPickServiceToDisable_MandatoryNotShown(t *testing.T) {
+	// Even if mandatory service has no explicit enabled=false, it must be excluded.
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true, Enabled: true},
+		"second": {Type: "app", Container: "app-second", Enabled: true},
+		"third":  {Type: "app", Container: "app-third", Enabled: true},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	var seenLabels []string
+	sel := func(title string, items []ui.SelectorItem) (int, error) {
+		for _, item := range items {
+			seenLabels = append(seenLabels, item.Label)
+		}
+		return 0, nil
+	}
+
+	_, err := pickServiceToDisable(cfg, sel)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, label := range seenLabels {
+		if label == "main" {
+			t.Errorf("mandatory service 'main' should not be in disable selector, got %v", seenLabels)
+		}
+	}
+}
+
+func TestServiceEnableCmd_ArgsOptional(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newServiceEnableCmd(flags)
+	// MaximumNArgs(1): 0 args is valid
+	if err := cmd.Args(cmd, []string{}); err != nil {
+		t.Errorf("enable: 0 args should be valid, got: %v", err)
+	}
+	// 1 arg is valid
+	if err := cmd.Args(cmd, []string{"second"}); err != nil {
+		t.Errorf("enable: 1 arg should be valid, got: %v", err)
+	}
+	// 2 args should fail
+	if err := cmd.Args(cmd, []string{"a", "b"}); err == nil {
+		t.Error("enable: 2 args should fail, got nil")
+	}
+}
+
+func TestServiceDisableCmd_ArgsOptional(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newServiceDisableCmd(flags)
+	if err := cmd.Args(cmd, []string{}); err != nil {
+		t.Errorf("disable: 0 args should be valid, got: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{"second"}); err != nil {
+		t.Errorf("disable: 1 arg should be valid, got: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{"a", "b"}); err == nil {
+		t.Error("disable: 2 args should fail, got nil")
+	}
+}
+
+func TestServiceEnableCmd_UseField(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newServiceEnableCmd(flags)
+	if !strings.Contains(cmd.Use, "[service]") {
+		t.Errorf("enable Use should show [service] as optional, got %q", cmd.Use)
+	}
+}
+
+func TestServiceDisableCmd_UseField(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newServiceDisableCmd(flags)
+	if !strings.Contains(cmd.Use, "[service]") {
+		t.Errorf("disable Use should show [service] as optional, got %q", cmd.Use)
 	}
 }
 
