@@ -145,8 +145,13 @@ func TestLoadStylesConfig_invalidYAML(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{ invalid yaml ]["), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadStylesConfig(path)
+	cfg, err := LoadStylesConfig(path)
 	if err == nil {
 		t.Error("expected error for invalid YAML")
+	}
+	// Even on parse error, a non-nil fallback config must be returned so callers
+	// can still apply defaults without a nil check.
+	if cfg == nil {
+		t.Error("expected non-nil fallback config even on parse error")
 	}
 }

@@ -341,31 +341,20 @@ services:
 	}
 }
 
-// TestContainsStr checks the containsStr helper.
-func TestContainsStr(t *testing.T) {
-	if !containsStr([]string{"markdown", "yaml"}, "yaml") {
-		t.Error("expected yaml to be found")
-	}
-	if containsStr([]string{"markdown"}, "man") {
-		t.Error("expected man not to be found")
-	}
-}
-
 // TestCLIIndexNotGeneratedWithoutMarkdown verifies that genCLIIndex is never
 // called (and therefore no broken .md links are produced) when the format list
-// does not contain markdown. The fix gates index generation on containsStr.
+// does not contain markdown.
 func TestCLIIndexNotGeneratedWithoutMarkdown(t *testing.T) {
 	dir := t.TempDir()
 
 	// Simulate a yaml-only run: only .yaml files are produced, no index.md.
-	// We verify that containsStr correctly gates the index generation.
 	formats := resolveFormats("yaml")
-	if containsStr(formats, "markdown") {
+	if slices.Contains(formats, "markdown") {
 		t.Fatal("yaml-only format list should not contain markdown")
 	}
 
 	formats2 := resolveFormats("all")
-	if !containsStr(formats2, "markdown") {
+	if !slices.Contains(formats2, "markdown") {
 		t.Fatal("all format list should contain markdown")
 	}
 

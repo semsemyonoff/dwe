@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,19 +44,41 @@ func newServiceListCmd(flags *rootFlags) *cobra.Command {
 		Example: "  devbox services list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load and apply styles (graceful — missing styles.yml uses defaults).
-			stylesPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "styles.yml")
-			stylesCfg, _ := config.LoadStylesConfig(stylesPath)
-			ui.ApplyStyles(stylesCfg)
-
+			applyStyles(flags.configPath, cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return runServiceList(render.Stdout(), cfg, containerRunning)
+			projectName, err := resolveProjectName(flags.configPath, cfg)
+			if err != nil {
+				return err
+			}
+			isRunning := func(_, container string) bool {
+				return containerRunning(projectName, container)
+			}
+			return runServiceList(render.Stdout(), cfg, isRunning)
 		},
 		SilenceUsage: true,
 	}
+}
+
+// resolveProjectName returns the compose project name from docker.yml.
+// If docker.yml does not exist, the config default is returned (nil error).
+// Any other load/parse/template error is returned so the caller can fail fast
+// rather than silently querying the wrong container names.
+func resolveProjectName(configPath string, cfg *config.DevboxConfig) (string, error) {
+	baseDir := filepath.Dir(configPath)
+	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return cfg.Project.FullName(), nil
+		}
+		return "", fmt.Errorf("loading docker config: %w", err)
+	}
+	if dockerCfg.ProjectName != "" {
+		return dockerCfg.ProjectName, nil
+	}
+	return cfg.Project.FullName(), nil
 }
 
 // containerCheckFn checks whether a container with the given name is running.
@@ -207,7 +230,7 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 	if err != nil {
 		return fmt.Errorf("marshal local config: %w", err)
 	}
-	if err := os.WriteFile(localPath, data, 0o644); err != nil {
+	if err := os.WriteFile(localPath, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", localPath, err)
 	}
 

@@ -40,10 +40,7 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 		return fmt.Errorf("loading devbox/info.yml: %w", err)
 	}
 
-	// Load and apply styles (graceful — missing styles.yml uses defaults).
-	stylesPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "styles.yml")
-	stylesCfg, _ := config.LoadStylesConfig(stylesPath)
-	ui.ApplyStyles(stylesCfg)
+	stylesCfg := applyStyles(flags.configPath, cmd.ErrOrStderr())
 
 	// Render ASCII art header from styles config if lines are set.
 	if stylesCfg != nil && len(stylesCfg.Header.Lines) > 0 {

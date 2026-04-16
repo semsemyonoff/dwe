@@ -2,8 +2,10 @@ package command
 
 import (
 	"fmt"
+	"maps"
+	"os"
 	"os/exec"
-	"path/filepath"
+	"sort"
 	"strings"
 
 	"devbox-cli/internal/config"
@@ -24,26 +26,46 @@ a tools table with live container status, and a compose topology tree.`,
 		Example:      "  devbox status",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load and apply styles (graceful — missing styles.yml uses defaults).
-			stylesPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "styles.yml")
-			stylesCfg, _ := config.LoadStylesConfig(stylesPath)
-			ui.ApplyStyles(stylesCfg)
-
+			applyStyles(flags.configPath, cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			// Fetch compose topology (best-effort; nil on failure).
-			topo := fetchComposeTopology(cfg.ComposeFiles())
+			projectName, err := resolveProjectName(flags.configPath, cfg)
+			if err != nil {
+				return err
+			}
+			composeFiles := cfg.ComposeFiles()
 
-			// Build node status map for topology coloring.
+			// Fetch compose topology (best-effort; nil on failure).
+			topo := fetchComposeTopology(composeFiles, projectName)
 			var topoStatus map[string]ui.NodeStatus
-			if topo != nil {
-				topoStatus = composeNodeStatuses(cfg.ComposeFiles())
+			if topo == nil {
+				// Fallback: parse compose files directly without docker.
+				topo = parseTopologyFromFiles(composeFiles)
+				// No running status in fallback mode — nodes appear without annotation.
+			} else {
+				topoStatus = composeNodeStatuses(composeFiles, projectName)
+				// Mark topology services that have no container yet as stopped.
+				// docker compose ps --all only lists services with existing containers;
+				// services that have never been started are absent from that output.
+				if topoStatus != nil {
+					for name := range topo {
+						if _, ok := topoStatus[name]; !ok {
+							topoStatus[name] = ui.NodeStopped
+						}
+					}
+				}
 			}
 
-			return runStatus(render.Stdout(), cfg, containerRunning, topo, topoStatus)
+			// Augment topology with disabled services/tools as isolated nodes.
+			topo, topoStatus = augmentWithDisabled(cfg, topo, topoStatus)
+
+			isRunning := func(_, container string) bool {
+				return containerRunning(projectName, container)
+			}
+			return runStatus(render.Stdout(), cfg, isRunning, topo, topoStatus)
 		},
 	}
 }
@@ -69,6 +91,31 @@ func aggregateHealth(rows []ui.ServiceTableRow) StackHealth {
 			if r.Running {
 				running++
 			}
+		}
+	}
+	if active == 0 || running == 0 {
+		return StackStopped
+	}
+	if running < active {
+		return StackPartial
+	}
+	return StackRunning
+}
+
+// aggregateHealthFromTopo computes stack health from topology node statuses.
+// All non-disabled nodes are treated as active (including infrastructure containers
+// such as nginx, db, redis that are not tracked in cfg.Services). Returns StackStopped
+// when topoStatus is empty.
+func aggregateHealthFromTopo(topoStatus map[string]ui.NodeStatus) StackHealth {
+	active := 0
+	running := 0
+	for _, status := range topoStatus {
+		if status == ui.NodeDisabled {
+			continue
+		}
+		active++
+		if status == ui.NodeRunning {
+			running++
 		}
 	}
 	if active == 0 || running == 0 {
@@ -122,8 +169,15 @@ func runStatus(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCh
 		}
 	}
 
-	// Stack health indicator.
-	health := aggregateHealth(svcRows)
+	// Stack health indicator: prefer topology status (covers all compose services including
+	// infrastructure containers like nginx, db, redis). Fall back to svcRows-only when
+	// topology is unavailable (docker not running or compose files missing).
+	var health StackHealth
+	if len(topoStatus) > 0 {
+		health = aggregateHealthFromTopo(topoStatus)
+	} else {
+		health = aggregateHealth(svcRows)
+	}
 	var indicator string
 	switch health {
 	case StackRunning:
@@ -152,11 +206,11 @@ func runStatus(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCh
 // fetchComposeTopology runs `docker compose config` with the given compose files
 // and parses the service dependency graph. Returns nil on any error (docker not
 // available, no compose files, etc.) so callers can degrade gracefully.
-func fetchComposeTopology(composeFiles []string) map[string][]string {
+func fetchComposeTopology(composeFiles []string, projectName string) map[string][]string {
 	if len(composeFiles) == 0 {
 		return nil
 	}
-	args := buildComposeArgs(composeFiles, "config")
+	args := buildComposeArgs(projectName, composeFiles, "config")
 	out, err := exec.Command("docker", args...).Output()
 	if err != nil {
 		return nil
@@ -168,15 +222,43 @@ func fetchComposeTopology(composeFiles []string) map[string][]string {
 	return deps
 }
 
+// parseTopologyFromFiles builds a dependency map by reading and parsing compose
+// YAML files directly, without invoking docker. Used as a fallback when docker
+// is not available. Each file is parsed independently; services are merged across files.
+func parseTopologyFromFiles(composeFiles []string) map[string][]string {
+	if len(composeFiles) == 0 {
+		return nil
+	}
+	result := make(map[string][]string)
+	for _, f := range composeFiles {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		deps, err := ui.ParseComposeTopology(data)
+		if err != nil {
+			continue
+		}
+		// Later files replace earlier deps for the same service, matching
+		// Docker Compose override semantics (depends_on is not additive
+		// across files; a later file can clear or replace it).
+		maps.Copy(result, deps)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
 // composeNodeStatuses runs `docker compose ps` with the given compose files and
 // returns a map of compose service name → NodeStatus. Returns nil on any error.
-func composeNodeStatuses(composeFiles []string) map[string]ui.NodeStatus {
+func composeNodeStatuses(composeFiles []string, projectName string) map[string]ui.NodeStatus {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	// "docker compose ps --format {{.Service}} --filter status=running" lists
 	// only running service names. We collect those, then mark all others stopped.
-	runningArgs := buildComposeArgs(composeFiles, "ps", "--format", "{{.Service}}", "--filter", "status=running")
+	runningArgs := buildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--filter", "status=running")
 	runningOut, err := exec.Command("docker", runningArgs...).Output()
 	if err != nil {
 		return nil
@@ -190,7 +272,7 @@ func composeNodeStatuses(composeFiles []string) map[string]ui.NodeStatus {
 	}
 
 	// Get all service names from ps (any state).
-	allArgs := buildComposeArgs(composeFiles, "ps", "--format", "{{.Service}}", "--all")
+	allArgs := buildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--all")
 	allOut, err := exec.Command("docker", allArgs...).Output()
 	if err != nil {
 		// Fall back: only mark known running services.
@@ -216,9 +298,53 @@ func composeNodeStatuses(composeFiles []string) map[string]ui.NodeStatus {
 	return result
 }
 
-// buildComposeArgs constructs `["compose", "-f", file..., command, extraArgs...]`.
-func buildComposeArgs(composeFiles []string, command string, extraArgs ...string) []string {
+// disabledNodes returns the compose service names for services and tools that
+// are neither mandatory nor enabled in the current config.
+func disabledNodes(cfg *config.DevboxConfig) []string {
+	var names []string
+	for _, svc := range cfg.Services {
+		if !svc.Mandatory && !svc.Enabled && svc.Container != "" {
+			names = append(names, svc.Container)
+		}
+	}
+	for _, t := range buildToolRows(cfg) {
+		if !t.Enabled && t.Container != "" {
+			names = append(names, t.Container)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// augmentWithDisabled adds disabled services and tools as isolated nodes to topo
+// and marks them NodeDisabled in the status map. If topo is nil, it is initialised
+// to an empty map so disabled nodes are still shown.
+func augmentWithDisabled(cfg *config.DevboxConfig, topo map[string][]string, topoStatus map[string]ui.NodeStatus) (map[string][]string, map[string]ui.NodeStatus) {
+	disabled := disabledNodes(cfg)
+	if len(disabled) == 0 {
+		return topo, topoStatus
+	}
+	if topo == nil {
+		topo = make(map[string][]string)
+	}
+	if topoStatus == nil {
+		topoStatus = make(map[string]ui.NodeStatus)
+	}
+	for _, name := range disabled {
+		if _, exists := topo[name]; !exists {
+			topo[name] = nil
+		}
+		topoStatus[name] = ui.NodeDisabled
+	}
+	return topo, topoStatus
+}
+
+// buildComposeArgs constructs `["compose", ["-p", projectName,] "-f", file..., command, extraArgs...]`.
+func buildComposeArgs(projectName string, composeFiles []string, command string, extraArgs ...string) []string {
 	args := []string{"compose"}
+	if projectName != "" {
+		args = append(args, "-p", projectName)
+	}
 	for _, f := range composeFiles {
 		args = append(args, "-f", f)
 	}

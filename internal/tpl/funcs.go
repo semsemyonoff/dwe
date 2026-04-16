@@ -1,4 +1,4 @@
-// Package tpl provides Go template evaluation for help.yml when/value fields.
+// Package tpl provides Go template evaluation for info.yml when/value fields.
 package tpl
 
 import (
@@ -7,7 +7,7 @@ import (
 	"text/template"
 )
 
-// FuncMap returns the template functions available in help.yml expressions.
+// FuncMap returns the template functions available in info.yml expressions.
 //
 // Available functions:
 //

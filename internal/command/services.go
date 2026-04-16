@@ -1,11 +1,9 @@
 package command
 
 import (
-	"fmt"
 	"sort"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
 )
 
 // serviceRow holds a single row of the services topology table.
@@ -25,35 +23,6 @@ type toolRow struct {
 	Port      int
 	Host      string
 	Container string
-}
-
-// runServices renders the services and tools topology tables to w.
-func runServices(w *render.Writer, cfg *config.DevboxConfig) error {
-	services := buildServiceRows(cfg)
-	tools := buildToolRows(cfg)
-
-	w.TableHeader("Services")
-	w.Definition("NAME", "TYPE / DIR / CONTAINER", 2, "")
-	for _, s := range services {
-		container := s.Container
-		if container == "" {
-			container = "-"
-		}
-		w.Definition(s.Name, fmt.Sprintf("%s  %s  %s", s.Type, s.Dir, container), 2, "")
-	}
-
-	w.TableSubheader("Tools")
-	w.Definition("NAME", "ENABLED / PORT / HOST", 2, "")
-	for _, t := range tools {
-		enabled := "no"
-		if t.Enabled {
-			enabled = "yes"
-		}
-		w.Definition(t.Name, fmt.Sprintf("%s  %d  %s", enabled, t.Port, t.Host), 2, "")
-	}
-
-	w.TableHeader("")
-	return nil
 }
 
 // buildServiceRows returns an ordered list of service rows from cfg.

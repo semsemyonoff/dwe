@@ -13,7 +13,7 @@ const (
 )
 
 // ColorNone is the explicit no-color sentinel for ASCII art.
-// It is the default when no color is specified in help.yml.
+// It is the default when no color is specified in styles.yml.
 const ColorNone = "none"
 
 // ColorByName returns an ANSI escape code for a named color.

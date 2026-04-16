@@ -52,11 +52,11 @@ func LoadStylesConfig(path string) (*StylesConfig, error) {
 		if os.IsNotExist(err) {
 			return &StylesConfig{}, nil
 		}
-		return nil, fmt.Errorf("read %s: %w", path, err)
+		return &StylesConfig{}, fmt.Errorf("read %s: %w", path, err)
 	}
 	var cfg StylesConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return &StylesConfig{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return &cfg, nil
 }

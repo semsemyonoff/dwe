@@ -13,9 +13,10 @@ type NodeStatus int
 
 // NodeStatus constants describe the running state of a topology node.
 const (
-	NodeUnknown NodeStatus = iota // status unavailable (docker not running)
-	NodeRunning                   // container is running
-	NodeStopped                   // container is stopped
+	NodeUnknown  NodeStatus = iota // status unavailable (docker not running)
+	NodeRunning                    // container is running
+	NodeStopped                    // container is stopped
+	NodeDisabled                   // service/tool is disabled in config
 )
 
 // ParseComposeTopology parses the YAML output of `docker compose config`
@@ -149,6 +150,9 @@ func topoNodeLabel(name string, status map[string]NodeStatus) string {
 	case NodeStopped:
 		label = "stopped"
 		style = stylePartial
+	case NodeDisabled:
+		label = "disabled"
+		style = styleDisabled
 	default:
 		return name
 	}

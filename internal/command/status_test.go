@@ -2,6 +2,7 @@ package command
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 
@@ -55,6 +56,68 @@ func TestAggregateHealth_OnlyDisabled(t *testing.T) {
 func TestAggregateHealth_Empty(t *testing.T) {
 	if got := aggregateHealth(nil); got != StackStopped {
 		t.Errorf("aggregateHealth(nil) = %d, want StackStopped (%d)", got, StackStopped)
+	}
+}
+
+// --- aggregateHealthFromTopo ---
+
+func TestAggregateHealthFromTopo_AllRunning(t *testing.T) {
+	topo := map[string]ui.NodeStatus{
+		"nginx":    ui.NodeRunning,
+		"app-main": ui.NodeRunning,
+		"db":       ui.NodeRunning,
+		"redis":    ui.NodeRunning,
+	}
+	if got := aggregateHealthFromTopo(topo); got != StackRunning {
+		t.Errorf("aggregateHealthFromTopo = %d, want StackRunning (%d)", got, StackRunning)
+	}
+}
+
+func TestAggregateHealthFromTopo_Partial(t *testing.T) {
+	topo := map[string]ui.NodeStatus{
+		"nginx":    ui.NodeRunning,
+		"app-main": ui.NodeStopped,
+		"db":       ui.NodeRunning,
+	}
+	if got := aggregateHealthFromTopo(topo); got != StackPartial {
+		t.Errorf("aggregateHealthFromTopo = %d, want StackPartial (%d)", got, StackPartial)
+	}
+}
+
+func TestAggregateHealthFromTopo_NoneRunning(t *testing.T) {
+	topo := map[string]ui.NodeStatus{
+		"nginx":    ui.NodeStopped,
+		"app-main": ui.NodeStopped,
+	}
+	if got := aggregateHealthFromTopo(topo); got != StackStopped {
+		t.Errorf("aggregateHealthFromTopo = %d, want StackStopped (%d)", got, StackStopped)
+	}
+}
+
+func TestAggregateHealthFromTopo_DisabledExcluded(t *testing.T) {
+	// Disabled nodes do not count; only running nodes matter.
+	topo := map[string]ui.NodeStatus{
+		"nginx":      ui.NodeRunning,
+		"app-main":   ui.NodeRunning,
+		"app-second": ui.NodeDisabled,
+	}
+	if got := aggregateHealthFromTopo(topo); got != StackRunning {
+		t.Errorf("aggregateHealthFromTopo = %d, want StackRunning (%d) (disabled should not count)", got, StackRunning)
+	}
+}
+
+func TestAggregateHealthFromTopo_OnlyDisabled(t *testing.T) {
+	topo := map[string]ui.NodeStatus{
+		"app-second": ui.NodeDisabled,
+	}
+	if got := aggregateHealthFromTopo(topo); got != StackStopped {
+		t.Errorf("aggregateHealthFromTopo = %d, want StackStopped (%d)", got, StackStopped)
+	}
+}
+
+func TestAggregateHealthFromTopo_Empty(t *testing.T) {
+	if got := aggregateHealthFromTopo(nil); got != StackStopped {
+		t.Errorf("aggregateHealthFromTopo(nil) = %d, want StackStopped (%d)", got, StackStopped)
 	}
 }
 
@@ -269,5 +332,222 @@ func TestRunStatus_TopologyWithStatus(t *testing.T) {
 	}
 	if !strings.Contains(out, "stopped") {
 		t.Errorf("expected 'stopped' status in topology output:\n%s", out)
+	}
+}
+
+// --- disabledNodes ---
+
+func TestDisabledNodes_ReturnsDisabledServiceContainers(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main":   {Type: "app", Container: "app-main", Mandatory: true},
+			"second": {Type: "app", Container: "app-second", Enabled: false},
+		},
+		config.ToolsConfig{
+			Adminer: config.ToolConfig{Enabled: false},
+		},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+
+	names := disabledNodes(cfg)
+
+	// app-second and adminer should appear; app-main is mandatory so excluded.
+	hasSecond := false
+	hasAdminer := false
+	hasMain := false
+	for _, n := range names {
+		switch n {
+		case "app-second":
+			hasSecond = true
+		case "adminer":
+			hasAdminer = true
+		case "app-main":
+			hasMain = true
+		}
+	}
+	if !hasSecond {
+		t.Error("expected app-second in disabled nodes")
+	}
+	if !hasAdminer {
+		t.Error("expected adminer in disabled nodes")
+	}
+	if hasMain {
+		t.Error("app-main is mandatory and must not appear in disabled nodes")
+	}
+}
+
+func TestDisabledNodes_EnabledToolExcluded(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{},
+		config.ToolsConfig{
+			Adminer: config.ToolConfig{Enabled: true},
+		},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+
+	for _, name := range disabledNodes(cfg) {
+		if name == "adminer" {
+			t.Error("enabled adminer must not appear in disabled nodes")
+		}
+	}
+}
+
+// --- augmentWithDisabled ---
+
+func TestAugmentWithDisabled_AddsDisabledNodes(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"second": {Type: "app", Container: "app-second", Enabled: false},
+		},
+		config.ToolsConfig{},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+
+	topo := map[string][]string{
+		"nginx": {},
+	}
+	status := map[string]ui.NodeStatus{
+		"nginx": ui.NodeRunning,
+	}
+
+	newTopo, newStatus := augmentWithDisabled(cfg, topo, status)
+
+	if _, ok := newTopo["app-second"]; !ok {
+		t.Error("expected app-second added to topology")
+	}
+	if newStatus["app-second"] != ui.NodeDisabled {
+		t.Errorf("expected app-second NodeDisabled, got %v", newStatus["app-second"])
+	}
+	// existing entries preserved
+	if newStatus["nginx"] != ui.NodeRunning {
+		t.Errorf("nginx status should be preserved, got %v", newStatus["nginx"])
+	}
+}
+
+func TestAugmentWithDisabled_NilTopoInitialised(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"second": {Type: "app", Container: "app-second", Enabled: false},
+		},
+		config.ToolsConfig{},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+
+	newTopo, newStatus := augmentWithDisabled(cfg, nil, nil)
+
+	if newTopo == nil {
+		t.Fatal("expected non-nil topo after augment")
+	}
+	if _, ok := newTopo["app-second"]; !ok {
+		t.Error("expected app-second in topo")
+	}
+	if newStatus["app-second"] != ui.NodeDisabled {
+		t.Errorf("expected app-second NodeDisabled, got %v", newStatus["app-second"])
+	}
+}
+
+func TestAugmentWithDisabled_NoDisabledNoop(t *testing.T) {
+	// All tools enabled + mandatory service → no disabled nodes → topo/status unchanged.
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		config.ToolsConfig{
+			Adminer:      config.ToolConfig{Enabled: true},
+			RedisInsight: config.ToolConfig{Enabled: true},
+			Mailpit:      config.ToolConfig{Enabled: true},
+		},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+
+	topo := map[string][]string{"nginx": {}}
+	status := map[string]ui.NodeStatus{"nginx": ui.NodeRunning}
+
+	newTopo, newStatus := augmentWithDisabled(cfg, topo, status)
+
+	if len(newTopo) != 1 {
+		t.Errorf("expected topo unchanged (len 1), got len %d", len(newTopo))
+	}
+	if len(newStatus) != 1 {
+		t.Errorf("expected status unchanged (len 1), got len %d", len(newStatus))
+	}
+}
+
+// --- buildComposeArgs ---
+
+func TestBuildComposeArgs_WithProjectName(t *testing.T) {
+	args := buildComposeArgs("my-project", []string{"compose.yaml"}, "config")
+	// Expect: compose -p my-project -f compose.yaml config
+	want := []string{"compose", "-p", "my-project", "-f", "compose.yaml", "config"}
+	if len(args) != len(want) {
+		t.Fatalf("args length = %d, want %d: %v", len(args), len(want), args)
+	}
+	for i, w := range want {
+		if args[i] != w {
+			t.Errorf("args[%d] = %q, want %q", i, args[i], w)
+		}
+	}
+}
+
+func TestBuildComposeArgs_NoProjectName(t *testing.T) {
+	args := buildComposeArgs("", []string{"compose.yaml"}, "ps", "--all")
+	// Expect: compose -f compose.yaml ps --all (no -p flag)
+	want := []string{"compose", "-f", "compose.yaml", "ps", "--all"}
+	if len(args) != len(want) {
+		t.Fatalf("args length = %d, want %d: %v", len(args), len(want), args)
+	}
+	for i, w := range want {
+		if args[i] != w {
+			t.Errorf("args[%d] = %q, want %q", i, args[i], w)
+		}
+	}
+}
+
+// --- parseTopologyFromFiles ---
+
+func TestParseTopologyFromFiles_Empty(t *testing.T) {
+	result := parseTopologyFromFiles(nil)
+	if result != nil {
+		t.Errorf("expected nil for no files, got %v", result)
+	}
+}
+
+func TestParseTopologyFromFiles_MissingFile(t *testing.T) {
+	result := parseTopologyFromFiles([]string{"/nonexistent/path/compose.yaml"})
+	if result != nil {
+		t.Errorf("expected nil when all files missing, got %v", result)
+	}
+}
+
+func TestParseTopologyFromFiles_ValidFile(t *testing.T) {
+	const composeYAML = `
+services:
+  nginx:
+    image: nginx
+    depends_on:
+      - app
+  app:
+    image: myapp
+`
+	dir := t.TempDir()
+	f := dir + "/compose.yaml"
+	if err := os.WriteFile(f, []byte(composeYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result := parseTopologyFromFiles([]string{f})
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if _, ok := result["nginx"]; !ok {
+		t.Error("expected nginx in result")
+	}
+	if _, ok := result["app"]; !ok {
+		t.Error("expected app in result")
 	}
 }

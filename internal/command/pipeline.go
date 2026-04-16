@@ -266,7 +266,11 @@ var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b[a-zA-Z]|\r`)
 type ansiStripper struct{ w io.Writer }
 
 func (s *ansiStripper) Write(p []byte) (int, error) {
-	_, err := s.w.Write(ansiRe.ReplaceAll(p, nil))
+	stripped := ansiRe.ReplaceAll(p, nil)
+	n, err := s.w.Write(stripped)
+	if n < len(stripped) && err == nil {
+		err = io.ErrShortWrite
+	}
 	if err != nil {
 		return 0, err
 	}

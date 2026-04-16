@@ -41,11 +41,19 @@ func newToolListCmd(flags *rootFlags) *cobra.Command {
 		Example: "  devbox tools list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyStyles(flags.configPath, cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return runToolList(render.Stdout(), cfg, containerRunning)
+			projectName, err := resolveProjectName(flags.configPath, cfg)
+			if err != nil {
+				return err
+			}
+			isRunning := func(_, container string) bool {
+				return containerRunning(projectName, container)
+			}
+			return runToolList(render.Stdout(), cfg, isRunning)
 		},
 		SilenceUsage: true,
 	}
@@ -176,7 +184,7 @@ func setToolEnabled(configPath string, cfg *config.DevboxConfig, name string, en
 	if err != nil {
 		return fmt.Errorf("marshal local config: %w", err)
 	}
-	if err := os.WriteFile(localPath, data, 0o644); err != nil {
+	if err := os.WriteFile(localPath, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", localPath, err)
 	}
 

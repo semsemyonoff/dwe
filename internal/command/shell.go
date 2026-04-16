@@ -22,8 +22,8 @@ If the container is running, connects via 'docker exec'.
 If the container does not exist, starts a new one via 'docker compose run --rm'.
 If the container is stopped (exited), an error is returned.
 
-Shell, user, and working directory defaults are read from the cli: section
-in devbox/services.yml and can be overridden with flags.
+Shell, user, and working directory defaults are read from the service config
+in devbox/defaults.yml and can be overridden with flags.
 
 When only one service is defined, the service argument may be omitted.`,
 		Example: `  devbox shell

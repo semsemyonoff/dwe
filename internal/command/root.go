@@ -4,6 +4,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -114,14 +115,25 @@ func addCmd(parent *cobra.Command, groupID string, cmd *cobra.Command) {
 	parent.AddCommand(cmd)
 }
 
+// applyStyles loads devbox/styles.yml relative to configPath, applies the
+// palette to ui, and warns on error. errW is used for warning output so that
+// Cobra stderr redirection (cmd.ErrOrStderr()) is respected. Returns the
+// config (never nil).
+func applyStyles(configPath string, errW io.Writer) *config.StylesConfig {
+	stylesPath := filepath.Join(filepath.Dir(configPath), "devbox", "styles.yml")
+	stylesCfg, err := config.LoadStylesConfig(stylesPath)
+	ui.ApplyStyles(stylesCfg)
+	if err != nil {
+		render.NewWriter(errW).Warning("styles.yml: " + err.Error())
+	}
+	return stylesCfg
+}
+
 // runRoot is the handler for `devbox` with no subcommand.
 // It prints an ASCII header and compact project summary (when a config is
 // found), followed by the Cobra/Fang help output.
 func runRoot(cmd *cobra.Command, flags *rootFlags) error {
-	// Load and apply styles (graceful — missing styles.yml uses defaults).
-	stylesPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "styles.yml")
-	stylesCfg, _ := config.LoadStylesConfig(stylesPath)
-	ui.ApplyStyles(stylesCfg)
+	stylesCfg := applyStyles(flags.configPath, cmd.ErrOrStderr())
 
 	cfg, err := config.LoadConfig(flags.configPath)
 	switch {

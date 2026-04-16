@@ -126,13 +126,12 @@ func TestVersionRegisteredAtRoot(t *testing.T) {
 
 func TestVersionCmd_Output(t *testing.T) {
 	cmd := newVersionCmd()
-	// version command uses Run (not RunE), execute it by capturing stdout.
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	// Override fmt.Println is not possible directly; just verify the command runs.
-	if cmd.Run == nil {
-		t.Error("version command has no Run handler")
+	cmd.Run(cmd, nil)
+	if buf.Len() == 0 {
+		t.Error("version command produced no output")
 	}
 }
 

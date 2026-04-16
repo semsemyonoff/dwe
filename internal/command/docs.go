@@ -87,9 +87,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 			return fmt.Errorf("creating cli output dir: %w", err)
 		}
 		root := cmd.Root()
-		if !df.includeHidden {
-			hideHiddenForDocs(root)
-		}
+		// cobra/doc already skips Hidden commands; no pre-processing needed.
 		for _, fmt_ := range formats {
 			if err := genCLIDocs(root, cliDir, fmt_); err != nil {
 				return fmt.Errorf("generating cli docs (%s): %w", fmt_, err)
@@ -116,7 +114,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		// The CLI index is a markdown file — only generate it when markdown output
 		// is included in the requested formats. For yaml/man-only runs the index
 		// would link to .md files that were never produced.
-		if containsStr(formats, "markdown") {
+		if slices.Contains(formats, "markdown") {
 			if err := genCLIIndex(root, cliDir, df.includeHidden); err != nil {
 				return fmt.Errorf("generating cli index: %w", err)
 			}
@@ -136,7 +134,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		// Registry docs only support markdown. When yaml/man are also in the format
 		// list (e.g. --format all), inform the user that those formats are skipped
 		// rather than silently producing nothing.
-		if containsStr(formats, "yaml") || containsStr(formats, "man") {
+		if slices.Contains(formats, "yaml") || slices.Contains(formats, "man") {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "note: registry docs only support markdown; yaml/man formats skipped for commands scope\n")
 		}
 		for _, fmt_ := range formats {
@@ -189,13 +187,6 @@ func resolveScopes(scope string) map[string]bool {
 		return map[string]bool{"cli": true, "commands": true}
 	}
 	return map[string]bool{scope: true}
-}
-
-// hideHiddenForDocs temporarily marks hidden commands so cobra/doc skips them.
-// cobra/doc already skips commands where Hidden==true, so this is a no-op;
-// included for explicitness.
-func hideHiddenForDocs(_ *cobra.Command) {
-	// cobra/doc already excludes Hidden commands. Nothing to do.
 }
 
 // genCLIDocs generates docs for the CLI command tree in the given format.
@@ -280,11 +271,6 @@ func genHiddenCLIMan(root *cobra.Command, dir string) error {
 		}
 		return f.Close()
 	})
-}
-
-// containsStr reports whether s is in the slice.
-func containsStr(ss []string, s string) bool {
-	return slices.Contains(ss, s)
 }
 
 // walkAllCommands visits every command in the tree, including hidden ones.

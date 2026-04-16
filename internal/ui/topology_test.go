@@ -168,6 +168,26 @@ func TestRenderTopology_StatusAnnotation(t *testing.T) {
 	}
 }
 
+func TestRenderTopology_DisabledAnnotation(t *testing.T) {
+	deps := map[string][]string{
+		"nginx":   {"app"},
+		"app":     {},
+		"adminer": {},
+	}
+	status := map[string]NodeStatus{
+		"nginx":   NodeRunning,
+		"app":     NodeRunning,
+		"adminer": NodeDisabled,
+	}
+	result := RenderTopology(deps, status)
+	if !strings.Contains(result, "disabled") {
+		t.Errorf("expected 'disabled' annotation for adminer in output:\n%s", result)
+	}
+	if !strings.Contains(result, "adminer") {
+		t.Errorf("expected 'adminer' in output:\n%s", result)
+	}
+}
+
 func TestRenderTopology_UnknownStatusNoAnnotation(t *testing.T) {
 	deps := map[string][]string{
 		"nginx": {},
