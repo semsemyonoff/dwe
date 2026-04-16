@@ -92,7 +92,7 @@ func TestRunStatusViaCfg(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runStatus(w, cfg, neverRunning); err != nil {
+	if err := runStatus(w, cfg, neverRunning, nil, nil); err != nil {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()

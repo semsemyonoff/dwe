@@ -73,7 +73,7 @@ func TestRunStatus_ContainsStackIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runStatus(w, cfg, neverRunning); err != nil {
+	if err := runStatus(w, cfg, neverRunning, nil, nil); err != nil {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()
@@ -95,7 +95,7 @@ func TestRunStatus_StoppedIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runStatus(w, cfg, neverRunning); err != nil {
+	if err := runStatus(w, cfg, neverRunning, nil, nil); err != nil {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()
@@ -117,7 +117,7 @@ func TestRunStatus_RunningIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runStatus(w, cfg, alwaysRunning); err != nil {
+	if err := runStatus(w, cfg, alwaysRunning, nil, nil); err != nil {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()
@@ -143,7 +143,7 @@ func TestRunStatus_PartialIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runStatus(w, cfg, partialRunning); err != nil {
+	if err := runStatus(w, cfg, partialRunning, nil, nil); err != nil {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()
@@ -167,7 +167,7 @@ func TestRunStatus_ContainsServiceAndToolTables(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runStatus(w, cfg, neverRunning); err != nil {
+	if err := runStatus(w, cfg, neverRunning, nil, nil); err != nil {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()
@@ -176,5 +176,98 @@ func TestRunStatus_ContainsServiceAndToolTables(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\n%s", want, out)
 		}
+	}
+}
+
+// --- topology integration ---
+
+func TestRunStatus_WithTopologyShown(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		config.ToolsConfig{},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+	neverRunning := func(_, _ string) bool { return false }
+
+	topo := map[string][]string{
+		"nginx":    {"app-main"},
+		"app-main": {"db"},
+		"db":       {},
+	}
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+	if err := runStatus(w, cfg, neverRunning, topo, nil); err != nil {
+		t.Fatalf("runStatus error: %v", err)
+	}
+	out := buf.String()
+
+	// Topology services should appear in output.
+	for _, want := range []string{"nginx", "app-main", "db"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("topology output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunStatus_TopologyNilSkipped(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		config.ToolsConfig{},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+	neverRunning := func(_, _ string) bool { return false }
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+	// topo=nil means no topology section — must not error.
+	if err := runStatus(w, cfg, neverRunning, nil, nil); err != nil {
+		t.Fatalf("runStatus error: %v", err)
+	}
+	// nginx and db come from topology, not config — should not appear.
+	out := buf.String()
+	if strings.Contains(out, "nginx") {
+		t.Errorf("unexpected 'nginx' in output when topo is nil:\n%s", out)
+	}
+}
+
+func TestRunStatus_TopologyWithStatus(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		config.ToolsConfig{},
+		config.RuntimePorts{},
+		config.RuntimeHosts{},
+	)
+	neverRunning := func(_, _ string) bool { return false }
+
+	topo := map[string][]string{
+		"nginx":    {"app-main"},
+		"app-main": {},
+	}
+	topoStatus := map[string]ui.NodeStatus{
+		"nginx":    ui.NodeRunning,
+		"app-main": ui.NodeStopped,
+	}
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+	if err := runStatus(w, cfg, neverRunning, topo, topoStatus); err != nil {
+		t.Fatalf("runStatus error: %v", err)
+	}
+	out := buf.String()
+
+	if !strings.Contains(out, "running") {
+		t.Errorf("expected 'running' status in topology output:\n%s", out)
+	}
+	if !strings.Contains(out, "stopped") {
+		t.Errorf("expected 'stopped' status in topology output:\n%s", out)
 	}
 }
