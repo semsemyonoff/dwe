@@ -78,7 +78,7 @@ func TestStatusRegisteredAtRoot(t *testing.T) {
 	}
 }
 
-func TestRunServicesViaCfg(t *testing.T) {
+func TestRunStatusViaCfg(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Dir: "./services/main", Container: "app-main"},
@@ -88,14 +88,19 @@ func TestRunServicesViaCfg(t *testing.T) {
 		config.RuntimeHosts{},
 	)
 
+	neverRunning := func(_, _ string) bool { return false }
+
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runServices(w, cfg); err != nil {
-		t.Fatalf("runServices error: %v", err)
+	if err := runStatus(w, cfg, neverRunning); err != nil {
+		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()
 	if !strings.Contains(out, "main") {
 		t.Errorf("status output missing service name 'main'\n%s", out)
+	}
+	if !strings.Contains(out, "Stack:") {
+		t.Errorf("status output missing 'Stack:' health indicator\n%s", out)
 	}
 }
 
