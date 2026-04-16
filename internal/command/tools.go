@@ -16,8 +16,15 @@ import (
 
 func newToolCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "tools",
-		Short:        "Manage optional tools",
+		Use:   "tools",
+		Short: "Manage optional tools",
+		Long: `List, enable, or disable optional tool services (adminer, redis_insight, mailpit).
+
+Enabling or disabling a tool writes the change to devbox/local.yml and regenerates .env.
+Use 'devbox up' to start newly enabled tools.`,
+		Example: `  devbox tools list
+  devbox tools enable adminer
+  devbox tools disable mailpit`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newToolListCmd(flags))
@@ -28,9 +35,11 @@ func newToolCmd(flags *rootFlags) *cobra.Command {
 
 func newToolListCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List all tools and their status",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List all tools and their status",
+		Long:    `Show all optional tools with their host, port, enabled state, and running status.`,
+		Example: "  devbox tools list",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -117,8 +126,13 @@ func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning container
 
 func newToolEnableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:               "enable <tool>",
-		Short:             "Enable an optional tool (writes to devbox/local.yml)",
+		Use:   "enable <tool>",
+		Short: "Enable an optional tool (writes to devbox/local.yml)",
+		Long: `Enable an optional tool by writing tools.<name>.enabled = true to devbox/local.yml.
+
+Available tools: adminer, redis_insight, mailpit.
+The .env file is regenerated automatically after the change.`,
+		Example:           "  devbox tools enable adminer",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: toolNameCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -134,8 +148,13 @@ func newToolEnableCmd(flags *rootFlags) *cobra.Command {
 
 func newToolDisableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:               "disable <tool>",
-		Short:             "Disable an optional tool (writes to devbox/local.yml)",
+		Use:   "disable <tool>",
+		Short: "Disable an optional tool (writes to devbox/local.yml)",
+		Long: `Disable an optional tool by writing tools.<name>.enabled = false to devbox/local.yml.
+
+Available tools: adminer, redis_insight, mailpit.
+The .env file is regenerated automatically after the change.`,
+		Example:           "  devbox tools disable adminer",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: toolNameCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {

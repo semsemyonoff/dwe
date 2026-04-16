@@ -15,7 +15,12 @@ func newInfoCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info",
 		Short: "Display project info, URLs, credentials and available commands",
-		Args:  cobra.NoArgs,
+		Long: `Display a styled project dashboard loaded from devbox/info.yml.
+
+Shows project name, URLs, hosts, services, tools, and runtime details.
+The dashboard is driven by Go templates evaluated against the merged devbox config.`,
+		Example: "  devbox info",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInfo(cmd, flags)
 		},

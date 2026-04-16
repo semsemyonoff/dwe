@@ -18,8 +18,16 @@ import (
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "commands",
-		Short:        "List, inspect, and run devbox commands",
+		Use:   "commands",
+		Short: "List, inspect, and run devbox commands",
+		Long: `Manage declarative commands defined in devbox/commands/.
+
+Commands are YAML-defined operations organized into groups (e.g. db, app, services.main).
+They can be shell commands, scripts, service exec/run operations, or multi-step workflows.`,
+		Example: `  devbox commands list
+  devbox commands list db
+  devbox commands inspect db.up
+  devbox commands run db.up`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newCommandListCmd(flags))
@@ -34,7 +42,14 @@ func newCommandListCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list [group]",
 		Short: "List available commands",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `List all available declarative commands from devbox/commands/.
+
+An optional group filter narrows the output to a specific command group (e.g. 'db', 'services.main').
+Use --all to include private commands.`,
+		Example: `  devbox commands list
+  devbox commands list db
+  devbox commands list --all`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			groupFilter := ""
 			if len(args) > 0 {
@@ -63,7 +78,12 @@ func newCommandInspectCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "inspect <id>",
 		Short: "Show full command definition",
-		Args:  cobra.ExactArgs(1),
+		Long: `Show the full definition of a declarative command by its dot-separated ID.
+
+Displays type, run/argv, params, context variables, env, and workflow steps.`,
+		Example: `  devbox commands inspect db.up
+  devbox commands inspect services.main.migrate`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
 			reg, err := loadCommandRegistry(flags.configPath)
@@ -87,8 +107,14 @@ func newCommandRunCmd(flags *rootFlags) *cobra.Command {
 	var setFlags []string
 
 	cmd := &cobra.Command{
-		Use:               "run <id>",
-		Short:             "Run a devbox command",
+		Use:   "run <id>",
+		Short: "Run a devbox command",
+		Long: `Execute a declarative command by its dot-separated ID.
+
+Use --set key=value to override declared params at runtime.
+Private commands cannot be run directly.`,
+		Example: `  devbox commands run db.up
+  devbox commands run services.main.migrate --set db=mydb`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: registryIDCompletion(flags, false),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -17,8 +17,15 @@ import (
 
 func newServiceCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "services",
-		Short:        "Manage application services",
+		Use:   "services",
+		Short: "Manage application services",
+		Long: `List, enable, or disable application services defined in the project config.
+
+Mandatory services are always active and cannot be toggled.
+Optional services can be enabled or disabled; the change is written to devbox/local.yml.`,
+		Example: `  devbox services list
+  devbox services enable second
+  devbox services disable second`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newServiceListCmd(flags))
@@ -29,9 +36,11 @@ func newServiceCmd(flags *rootFlags) *cobra.Command {
 
 func newServiceListCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List all services and their status",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List all services and their status",
+		Long:    `Show all services defined in the project with their container names, enabled state, and running status.`,
+		Example: "  devbox services list",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -140,8 +149,13 @@ func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning contai
 
 func newServiceEnableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:               "enable <service>",
-		Short:             "Enable an optional service (writes to devbox/local.yml)",
+		Use:   "enable <service>",
+		Short: "Enable an optional service (writes to devbox/local.yml)",
+		Long: `Enable an optional service by writing services.<name>.enabled = true to devbox/local.yml.
+
+The .env file is regenerated automatically after the change.
+Use 'devbox up' to start the newly enabled service.`,
+		Example:           "  devbox services enable second",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: optionalServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -157,8 +171,13 @@ func newServiceEnableCmd(flags *rootFlags) *cobra.Command {
 
 func newServiceDisableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:               "disable <service>",
-		Short:             "Disable an optional service (writes to devbox/local.yml)",
+		Use:   "disable <service>",
+		Short: "Disable an optional service (writes to devbox/local.yml)",
+		Long: `Disable an optional service by writing services.<name>.enabled = false to devbox/local.yml.
+
+The .env file is regenerated automatically after the change.
+Use 'devbox stop <container>' or 'devbox down' to stop the service.`,
+		Example:           "  devbox services disable second",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: optionalServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {

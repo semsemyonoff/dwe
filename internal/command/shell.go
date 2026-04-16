@@ -26,6 +26,9 @@ Shell, user, and working directory defaults are read from the cli: section
 in devbox/services.yml and can be overridden with flags.
 
 When only one service is defined, the service argument may be omitted.`,
+		Example: `  devbox shell
+  devbox shell main
+  devbox shell main --root`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: serviceNameCompletion(flags),

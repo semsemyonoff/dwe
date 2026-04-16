@@ -183,6 +183,102 @@ func TestCommandsRegisteredAtRoot(t *testing.T) {
 	}
 }
 
+// --- Task 13: message cleanup ---
+
+// TestNoMakeReferencesInCLIMessages verifies that no public command's Short, Long,
+// or Example fields reference 'make <target>' (should use 'devbox <command>' instead).
+func TestNoMakeReferencesInCLIMessages(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	root := NewRootCmd()
+
+	// Collect all commands recursively.
+	var collect func(cmd *cobra.Command) []*cobra.Command
+	collect = func(cmd *cobra.Command) []*cobra.Command {
+		result := []*cobra.Command{cmd}
+		for _, sub := range cmd.Commands() {
+			result = append(result, collect(sub)...)
+		}
+		return result
+	}
+	_ = flags
+	all := collect(root)
+
+	for _, cmd := range all {
+		for _, field := range []struct {
+			name string
+			val  string
+		}{
+			{"Short", cmd.Short},
+			{"Long", cmd.Long},
+			{"Example", cmd.Example},
+		} {
+			if strings.Contains(field.val, "'make ") || strings.Contains(field.val, "\"make ") {
+				t.Errorf("command %q %s contains 'make <target>' reference: %q", cmd.CommandPath(), field.name, field.val)
+			}
+		}
+	}
+}
+
+// TestPublicCommandsHaveLongDescription verifies that key public commands have
+// non-empty Long descriptions.
+func TestPublicCommandsHaveLongDescription(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	checks := []struct {
+		name string
+		cmd  *cobra.Command
+	}{
+		{"up", newUpCmd(flags)},
+		{"down", newDownCmd(flags)},
+		{"stop", newStopCmd(flags)},
+		{"restart", newRestartCmd(flags)},
+		{"logs", newLogsCmd(flags)},
+		{"wait", newWaitCmd(flags)},
+		{"info", newInfoCmd(flags)},
+		{"version", newVersionCmd()},
+		{"status", newStatusCmd(flags)},
+		{"commands", newCommandCmd(flags)},
+		{"services", newServiceCmd(flags)},
+		{"tools", newToolCmd(flags)},
+		{"render", newRenderCmd(flags)},
+		{"deploy", newDeployCmd(flags)},
+	}
+	for _, tc := range checks {
+		t.Run(tc.name, func(t *testing.T) {
+			if strings.TrimSpace(tc.cmd.Long) == "" {
+				t.Errorf("command %q has no Long description", tc.name)
+			}
+		})
+	}
+}
+
+// TestPublicCommandsHaveExamples verifies that key public commands have
+// non-empty Example fields.
+func TestPublicCommandsHaveExamples(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	checks := []struct {
+		name string
+		cmd  *cobra.Command
+	}{
+		{"up", newUpCmd(flags)},
+		{"down", newDownCmd(flags)},
+		{"stop", newStopCmd(flags)},
+		{"restart", newRestartCmd(flags)},
+		{"logs", newLogsCmd(flags)},
+		{"wait", newWaitCmd(flags)},
+		{"info", newInfoCmd(flags)},
+		{"version", newVersionCmd()},
+		{"status", newStatusCmd(flags)},
+		{"shell", newShellCmd(flags)},
+	}
+	for _, tc := range checks {
+		t.Run(tc.name, func(t *testing.T) {
+			if strings.TrimSpace(tc.cmd.Example) == "" {
+				t.Errorf("command %q has no Example", tc.name)
+			}
+		})
+	}
+}
+
 // --- old services topology command removed ---
 
 func TestOldServicesTopologyCmdRemoved(t *testing.T) {

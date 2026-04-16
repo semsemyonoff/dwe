@@ -28,8 +28,15 @@ var implicitEnvStep = config.DeployStep{
 
 func newDeployCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "deploy",
-		Short:        "Deploy pipeline commands",
+		Use:   "deploy",
+		Short: "Deploy pipeline commands",
+		Long: `Run and inspect the declarative deploy pipeline defined in devbox/deploy.yml.
+
+The deploy pipeline consists of phases and steps that install, configure, and migrate
+application services. Use 'devbox deploy plan' to preview before running.`,
+		Example: `  devbox deploy plan
+  devbox deploy run
+  devbox deploy step init/render-env`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newDeployPlanCmd(flags))
@@ -47,7 +54,14 @@ func newDeployPlanCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan",
 		Short: "Show resolved deploy plan",
-		Args:  cobra.NoArgs,
+		Long: `Print all phases and steps from devbox/deploy.yml as they would be executed.
+
+The implicit .env generation step is always shown first. Use --service to filter
+the plan to steps relevant to a specific service. Use --format yaml for machine-readable output.`,
+		Example: `  devbox deploy plan
+  devbox deploy plan --service main
+  devbox deploy plan --format yaml`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -209,8 +223,15 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var serviceName string
 
 	cmd := &cobra.Command{
-		Use:          "run",
-		Short:        "Execute the deploy plan",
+		Use:   "run",
+		Short: "Execute the deploy plan",
+		Long: `Execute the full deploy pipeline from devbox/deploy.yml phase by phase.
+
+Steps are run in declaration order. Progress and status messages are written to deploy.log.
+The .env file is regenerated as the implicit first step. Use --service to run only the
+steps relevant to a specific service.`,
+		Example: `  devbox deploy run
+  devbox deploy run --service main`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -451,7 +472,14 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "step <phase>/<step>",
 		Short: "Run a single deploy step by <phase>/<step> address",
-		Args:  cobra.ExactArgs(1),
+		Long: `Execute a single step from the deploy pipeline by its address.
+
+The address format is '<phase>/<step>' (e.g. 'init/render-env') or '<service>/<phase>/<step>'.
+Use 'devbox deploy plan' to list available step addresses. Use --dry-run to preview without executing.`,
+		Example: `  devbox deploy step init/render-env
+  devbox deploy step main/setup/migrate
+  devbox deploy step init/render-env --dry-run`,
+		Args: cobra.ExactArgs(1),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
@@ -550,8 +578,14 @@ func newDeployConfigCmd(flags *rootFlags) *cobra.Command {
 	var mode string
 
 	cmd := &cobra.Command{
-		Use:          "config <service>",
-		Short:        "Copy template configs to service directory",
+		Use:   "config <service>",
+		Short: "Copy template configs to service directory",
+		Long: `Copy config file templates declared in services.<service>.configs from
+configs/services/<service>/ to services/<service>/configs/.
+
+Mode controls copy behavior: 'default' skips existing files, 'update' copies always, 'replace' overwrites.`,
+		Example: `  devbox deploy config main
+  devbox deploy config main --mode update`,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

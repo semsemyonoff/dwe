@@ -16,8 +16,15 @@ import (
 
 func newRenderCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "render",
-		Short:        "Render derived artifacts from the merged devbox config",
+		Use:   "render",
+		Short: "Render derived artifacts from the merged devbox config",
+		Long: `Generate files derived from the merged devbox config (devbox.yml + defaults.yml + local.yml).
+
+Subcommands:
+  env  — generate .env from the exports.env spec
+  ide  — generate IDE config files for enabled editors`,
+		Example: `  devbox render env -o .env
+  devbox render ide`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newRenderEnvCmd(flags))
@@ -31,7 +38,15 @@ func newRenderEnvCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env",
 		Short: "Generate .env from exports.env spec (stdout or --output <file>)",
-		Args:  cobra.NoArgs,
+		Long: `Evaluate the exports.env rules from the merged config and write the resulting .env content.
+
+Rules are declared in devbox/defaults.yml under 'exports.env'. Each rule maps a config
+dot-path to an environment variable name with optional format and conditional logic.
+
+Output goes to stdout by default; use --output to write directly to a file.`,
+		Example: `  devbox render env
+  devbox render env -o .env`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRenderEnv(flags, outputPath)
 		},

@@ -53,7 +53,7 @@ func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceNa
 		return dockerExecCLI(fullContainerName, shell, u, workDir)
 	default:
 		return fmt.Errorf(
-			"container %q is %s — start it first with 'make up'",
+			"container %q is %s — start it first with 'devbox up'",
 			fullContainerName, status,
 		)
 	}
