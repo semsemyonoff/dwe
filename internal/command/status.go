@@ -127,11 +127,11 @@ func runStatus(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCh
 	var indicator string
 	switch health {
 	case StackRunning:
-		indicator = "● running"
+		indicator = ui.RenderEnabled("● running")
 	case StackPartial:
-		indicator = "◐ partial"
+		indicator = ui.RenderPartial("◐ partial")
 	default:
-		indicator = "○ stopped"
+		indicator = ui.RenderStopped("○ stopped")
 	}
 
 	_, _ = fmt.Fprintf(w.Writer(), "Stack: %s\n\n", indicator)

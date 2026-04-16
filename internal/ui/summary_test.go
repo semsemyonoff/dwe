@@ -68,6 +68,21 @@ func TestRenderSummary_ServiceCounts(t *testing.T) {
 	}
 }
 
+func TestRenderSummary_MandatoryCountsAsEnabled(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "myapp"},
+		Services: map[string]config.ServiceConfig{
+			"main":   {Mandatory: true},
+			"second": {Enabled: true},
+			"third":  {Enabled: false},
+		},
+	}
+	out := RenderSummary(cfg)
+	if !strings.Contains(out, "2/3") {
+		t.Errorf("expected '2/3' service count (mandatory counts as enabled), got:\n%s", out)
+	}
+}
+
 func TestRenderSummary_ToolCounts(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},

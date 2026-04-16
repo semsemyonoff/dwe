@@ -98,6 +98,16 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	}
 }
 
+// RenderEnabled applies the enabled/running style to s.
+func RenderEnabled(s string) string { return styleEnabled.Render(s) }
+
+// RenderPartial applies the partial style to s.
+func RenderPartial(s string) string { return stylePartial.Render(s) }
+
+// RenderStopped applies the mandatory/alert style to s.
+// Used for "stopped" stack state to draw attention (coral red, bold).
+func RenderStopped(s string) string { return styleMandatory.Render(s) }
+
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.
 func TermWidth() int {
