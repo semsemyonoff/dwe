@@ -199,8 +199,8 @@ func TestStepCommand_cmdReturnsRaw(t *testing.T) {
 
 func TestStepCommand_commandReturnsDevboxRunCmd(t *testing.T) {
 	s := config.DeployStep{Command: "services.main.migrate"}
-	if got := stepCommand(s); got != "./bin/devbox command run services.main.migrate" {
-		t.Errorf("got %q, want './bin/devbox command run services.main.migrate'", got)
+	if got := stepCommand(s); got != "./bin/devbox commands run services.main.migrate" {
+		t.Errorf("got %q, want './bin/devbox commands run services.main.migrate'", got)
 	}
 }
 
@@ -238,7 +238,7 @@ func TestPrintDeployPlanShell_commandStepAsDevboxRun(t *testing.T) {
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
-	if !strings.Contains(out, "./bin/devbox command run services.main.migrate") {
+	if !strings.Contains(out, "./bin/devbox commands run services.main.migrate") {
 		t.Errorf("shell output missing command step, got: %q", out)
 	}
 }
@@ -430,8 +430,8 @@ func TestDeployStep_dryRunPrintsCmdCommand(t *testing.T) {
 func TestDeployStep_dryRunPrintsCommandRef(t *testing.T) {
 	step := commandStep("migrate", "services.main.migrate")
 	got := stepCommand(step)
-	if got != "./bin/devbox command run services.main.migrate" {
-		t.Errorf("dry-run command output = %q, want './bin/devbox command run services.main.migrate'", got)
+	if got != "./bin/devbox commands run services.main.migrate" {
+		t.Errorf("dry-run command output = %q, want './bin/devbox commands run services.main.migrate'", got)
 	}
 }
 
@@ -473,8 +473,8 @@ func TestStepCommand_allTypes(t *testing.T) {
 		want string
 	}{
 		{config.DeployStep{Run: "echo hello"}, "echo hello"},
-		{config.DeployStep{Command: "services.main.migrate"}, "./bin/devbox command run services.main.migrate"},
-		{config.DeployStep{Command: "  services.main.migrate  "}, "./bin/devbox command run services.main.migrate"},
+		{config.DeployStep{Command: "services.main.migrate"}, "./bin/devbox commands run services.main.migrate"},
+		{config.DeployStep{Command: "  services.main.migrate  "}, "./bin/devbox commands run services.main.migrate"},
 		{config.DeployStep{Run: "  mkdir -p x  "}, "mkdir -p x"},
 		{config.DeployStep{Devbox: "docker down"}, "./bin/devbox docker down"},
 		{config.DeployStep{Builtin: "service_configs_copy", With: map[string]any{"service": "main", "mode": "replace"}},
@@ -498,7 +498,7 @@ func TestStepCommand_commandWithWith(t *testing.T) {
 		With:    map[string]any{"db": "mydb"},
 	}
 	got := stepCommand(step)
-	want := "./bin/devbox command run services.main.migrate --set db=mydb"
+	want := "./bin/devbox commands run services.main.migrate --set db=mydb"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -1561,7 +1561,7 @@ func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 		With:    map[string]any{"z": "last", "a": "first", "m": "mid"},
 	}
 	got := stepCommand(step)
-	want := "./bin/devbox command run services.main.migrate --set a=first --set m=mid --set z=last"
+	want := "./bin/devbox commands run services.main.migrate --set a=first --set m=mid --set z=last"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -1570,7 +1570,7 @@ func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 func TestStepCommand_commandWithEmptyWith(t *testing.T) {
 	step := config.DeployStep{Command: "services.main.migrate", With: map[string]any{}}
 	got := stepCommand(step)
-	want := "./bin/devbox command run services.main.migrate"
+	want := "./bin/devbox commands run services.main.migrate"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

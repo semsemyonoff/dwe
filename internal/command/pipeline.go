@@ -130,14 +130,14 @@ func stepBadge(step config.DeployStep) string {
 }
 
 // stepCommand returns the resolved command or action string for plan display.
-//   - command: steps — "devbox command run <id> [--set key=value...]"
+//   - command: steps — "devbox commands run <id> [--set key=value...]"
 //   - builtin: steps — builtin description from registry (e.g. "builtin: confirm(...)")
 //   - devbox: steps  — "./bin/devbox <args>"
 //   - run: steps     — raw shell command
 func stepCommand(step config.DeployStep) string {
 	switch {
 	case step.Command != "":
-		parts := []string{"./bin/devbox", "command", "run", strings.TrimSpace(step.Command)}
+		parts := []string{"./bin/devbox", "commands", "run", strings.TrimSpace(step.Command)}
 		if len(step.With) > 0 {
 			keys := make([]string, 0, len(step.With))
 			for k := range step.With {
@@ -267,7 +267,10 @@ type ansiStripper struct{ w io.Writer }
 
 func (s *ansiStripper) Write(p []byte) (int, error) {
 	_, err := s.w.Write(ansiRe.ReplaceAll(p, nil))
-	return len(p), err
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 // execStep executes a pipeline step in workDir.

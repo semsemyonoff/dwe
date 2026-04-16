@@ -16,7 +16,7 @@ func newVersionCmd() *cobra.Command {
 		Example:      "  devbox version",
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(version.Info())
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), version.Info())
 		},
 	}
 }

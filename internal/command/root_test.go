@@ -59,8 +59,8 @@ func TestCommandGroups(t *testing.T) {
 		}
 	}
 
-	// Advanced group: commands, docker, compose
-	for _, name := range []string{"commands", "docker", "compose"} {
+	// Advanced group: commands, docker, compose, docs
+	for _, name := range []string{"commands", "docker", "compose", "docs"} {
 		if cmdGroupID[name] != groupAdvanced {
 			t.Errorf("command %q groupID = %q, want %q", name, cmdGroupID[name], groupAdvanced)
 		}

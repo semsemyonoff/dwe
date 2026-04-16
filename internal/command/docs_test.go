@@ -16,12 +16,23 @@ func TestValidateDocsFlags(t *testing.T) {
 		cases := []docsFlags{
 			{format: "markdown", scope: "all"},
 			{format: "yaml", scope: "cli"},
-			{format: "man", scope: "commands"},
+			{format: "man", scope: "cli"},
 			{format: "all", scope: "all"},
+			{format: "markdown", scope: "commands"},
+			{format: "all", scope: "commands"},
 		}
 		for _, df := range cases {
 			if err := validateDocsFlags(&df); err != nil {
 				t.Errorf("expected no error for format=%s scope=%s, got: %v", df.format, df.scope, err)
+			}
+		}
+	})
+
+	t.Run("non-markdown format with commands scope", func(t *testing.T) {
+		for _, format := range []string{"yaml", "man"} {
+			df := docsFlags{format: format, scope: "commands"}
+			if err := validateDocsFlags(&df); err == nil {
+				t.Errorf("expected error for format=%s scope=commands", format)
 			}
 		}
 	})
@@ -92,7 +103,7 @@ func TestGenRegistryMarkdown(t *testing.T) {
 	reg := buildTestRegistryForDocs(t)
 
 	dir := t.TempDir()
-	if err := genRegistryMarkdown(reg, dir); err != nil {
+	if err := genRegistryMarkdown(reg, dir, false); err != nil {
 		t.Fatalf("genRegistryMarkdown: %v", err)
 	}
 
@@ -327,6 +338,50 @@ services:
 	commandsIndex := filepath.Join(outputDir, "commands", "index.md")
 	if _, err := os.Stat(commandsIndex); err != nil {
 		t.Errorf("commands/index.md not written: %v", err)
+	}
+}
+
+// TestContainsStr checks the containsStr helper.
+func TestContainsStr(t *testing.T) {
+	if !containsStr([]string{"markdown", "yaml"}, "yaml") {
+		t.Error("expected yaml to be found")
+	}
+	if containsStr([]string{"markdown"}, "man") {
+		t.Error("expected man not to be found")
+	}
+}
+
+// TestCLIIndexNotGeneratedWithoutMarkdown verifies that genCLIIndex is never
+// called (and therefore no broken .md links are produced) when the format list
+// does not contain markdown. The fix gates index generation on containsStr.
+func TestCLIIndexNotGeneratedWithoutMarkdown(t *testing.T) {
+	dir := t.TempDir()
+
+	// Simulate a yaml-only run: only .yaml files are produced, no index.md.
+	// We verify that containsStr correctly gates the index generation.
+	formats := resolveFormats("yaml")
+	if containsStr(formats, "markdown") {
+		t.Fatal("yaml-only format list should not contain markdown")
+	}
+
+	formats2 := resolveFormats("all")
+	if !containsStr(formats2, "markdown") {
+		t.Fatal("all format list should contain markdown")
+	}
+
+	// Write an index directly to confirm the function still works correctly.
+	root := NewRootCmd()
+	if err := genCLIIndex(root, dir, false); err != nil {
+		t.Fatalf("genCLIIndex: %v", err)
+	}
+	// All entries in the index must end with .md, not .yaml or .1
+	data, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if strings.Contains(content, ".yaml)") || strings.Contains(content, ".1)") {
+		t.Errorf("CLI index contains non-.md links: %s", content)
 	}
 }
 

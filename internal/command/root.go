@@ -2,7 +2,9 @@
 package command
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"devbox-cli/internal/config"
@@ -36,7 +38,8 @@ func NewRootCmd() *cobra.Command {
 		Long: `devbox-cli is the core engine for the devbox local development environment.
 
 It provides config validation, rendering, topology inspection, and project info display.
-Run 'devbox info' to display the current project status.`,
+Run 'devbox' with no arguments to display a compact project summary and available commands.
+Run 'devbox info' for the full info dashboard.`,
 		// Running 'devbox' with no subcommand shows project summary + help.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRoot(cmd, flags)
@@ -116,7 +119,8 @@ func addCmd(parent *cobra.Command, groupID string, cmd *cobra.Command) {
 // found), followed by the Cobra/Fang help output.
 func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 	cfg, err := config.LoadConfig(flags.configPath)
-	if err == nil {
+	switch {
+	case err == nil:
 		// Print ASCII art header from info.yml when available.
 		infoPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "info.yml")
 		if infoCfg, infoErr := config.LoadInfoConfig(infoPath); infoErr == nil {
@@ -126,10 +130,14 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 				_ = w.ASCII(infoCfg.Header.ASCII.Lines, infoCfg.Header.ASCII.Font, infoCfg.Header.ASCII.Color)
 			}
 		}
-
 		// Print compact project summary followed by a blank separator line.
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	case errors.Is(err, os.ErrNotExist):
+		// Config file not found — not an error, just skip the summary.
+	default:
+		// Config exists but could not be parsed — surface the error.
+		return err
 	}
 
 	// Always show help regardless of whether config loaded.

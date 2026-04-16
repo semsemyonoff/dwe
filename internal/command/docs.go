@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -93,9 +94,32 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 			if err := genCLIDocs(root, cliDir, fmt_); err != nil {
 				return fmt.Errorf("generating cli docs (%s): %w", fmt_, err)
 			}
+			// cobra's stock generators skip hidden commands; when --include-hidden
+			// is set, generate their pages explicitly so index links are not broken.
+			if df.includeHidden {
+				switch fmt_ {
+				case "markdown":
+					if err := genHiddenCLIMarkdown(root, cliDir); err != nil {
+						return fmt.Errorf("generating hidden cli docs: %w", err)
+					}
+				case "yaml":
+					if err := genHiddenCLIYaml(root, cliDir); err != nil {
+						return fmt.Errorf("generating hidden cli docs (yaml): %w", err)
+					}
+				case "man":
+					if err := genHiddenCLIMan(root, cliDir); err != nil {
+						return fmt.Errorf("generating hidden cli docs (man): %w", err)
+					}
+				}
+			}
 		}
-		if err := genCLIIndex(root, cliDir, df.includeHidden); err != nil {
-			return fmt.Errorf("generating cli index: %w", err)
+		// The CLI index is a markdown file — only generate it when markdown output
+		// is included in the requested formats. For yaml/man-only runs the index
+		// would link to .md files that were never produced.
+		if containsStr(formats, "markdown") {
+			if err := genCLIIndex(root, cliDir, df.includeHidden); err != nil {
+				return fmt.Errorf("generating cli index: %w", err)
+			}
 		}
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "CLI docs written to %s\n", cliDir)
 	}
@@ -109,8 +133,14 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		if err := os.MkdirAll(commandsDir, 0o755); err != nil {
 			return fmt.Errorf("creating commands output dir: %w", err)
 		}
+		// Registry docs only support markdown. When yaml/man are also in the format
+		// list (e.g. --format all), inform the user that those formats are skipped
+		// rather than silently producing nothing.
+		if containsStr(formats, "yaml") || containsStr(formats, "man") {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "note: registry docs only support markdown; yaml/man formats skipped for commands scope\n")
+		}
 		for _, fmt_ := range formats {
-			if err := genRegistryDocs(reg, commandsDir, fmt_); err != nil {
+			if err := genRegistryDocs(reg, commandsDir, fmt_, df.includePrivate); err != nil {
 				return fmt.Errorf("generating commands docs (%s): %w", fmt_, err)
 			}
 		}
@@ -136,6 +166,11 @@ func validateDocsFlags(df *docsFlags) error {
 	validScopes := map[string]bool{"all": true, "cli": true, "commands": true}
 	if !validScopes[df.scope] {
 		return fmt.Errorf("--scope %q is not valid; must be one of: all, cli, commands", df.scope)
+	}
+	// Registry docs only support markdown; reject non-markdown when the scope
+	// would exclusively generate registry output (scope=commands).
+	if df.scope == "commands" && df.format != "markdown" && df.format != "all" {
+		return fmt.Errorf("--format %q is not supported for --scope commands; registry docs only support markdown (use --format markdown or --format all)", df.format)
 	}
 	return nil
 }
@@ -181,6 +216,90 @@ func genCLIDocs(root *cobra.Command, dir, format string) error {
 	}
 }
 
+// genHiddenCLIMarkdown generates markdown pages for hidden commands that cobra's
+// stock GenMarkdownTree skips. Called only when --include-hidden is set so that
+// every entry written to cli/index.md has a corresponding file.
+func genHiddenCLIMarkdown(root *cobra.Command, dir string) error {
+	return walkAllCommands(root, func(cmd *cobra.Command) error {
+		if !cmd.Hidden {
+			return nil
+		}
+		filename := strings.ReplaceAll(cmd.CommandPath(), " ", "_") + ".md"
+		f, err := os.Create(filepath.Join(dir, filename))
+		if err != nil {
+			return fmt.Errorf("creating doc file for %s: %w", cmd.CommandPath(), err)
+		}
+		if err := cobradoc.GenMarkdown(cmd, f); err != nil {
+			_ = f.Close()
+			return err
+		}
+		return f.Close()
+	})
+}
+
+// genHiddenCLIYaml generates yaml docs for hidden commands that cobra's
+// stock GenYamlTree skips. Called only when --include-hidden is set.
+func genHiddenCLIYaml(root *cobra.Command, dir string) error {
+	return walkAllCommands(root, func(cmd *cobra.Command) error {
+		if !cmd.Hidden {
+			return nil
+		}
+		filename := strings.ReplaceAll(cmd.CommandPath(), " ", "_") + ".yaml"
+		f, err := os.Create(filepath.Join(dir, filename))
+		if err != nil {
+			return fmt.Errorf("creating yaml doc file for %s: %w", cmd.CommandPath(), err)
+		}
+		if err := cobradoc.GenYaml(cmd, f); err != nil {
+			_ = f.Close()
+			return err
+		}
+		return f.Close()
+	})
+}
+
+// genHiddenCLIMan generates man pages for hidden commands that cobra's
+// stock GenManTree skips. Called only when --include-hidden is set.
+func genHiddenCLIMan(root *cobra.Command, dir string) error {
+	header := &cobradoc.GenManHeader{
+		Title:   "DEVBOX",
+		Section: "1",
+	}
+	return walkAllCommands(root, func(cmd *cobra.Command) error {
+		if !cmd.Hidden {
+			return nil
+		}
+		basename := strings.ReplaceAll(cmd.CommandPath(), " ", "-")
+		filename := basename + "." + header.Section
+		f, err := os.Create(filepath.Join(dir, filename))
+		if err != nil {
+			return fmt.Errorf("creating man doc file for %s: %w", cmd.CommandPath(), err)
+		}
+		if err := cobradoc.GenMan(cmd, header, f); err != nil {
+			_ = f.Close()
+			return err
+		}
+		return f.Close()
+	})
+}
+
+// containsStr reports whether s is in the slice.
+func containsStr(ss []string, s string) bool {
+	return slices.Contains(ss, s)
+}
+
+// walkAllCommands visits every command in the tree, including hidden ones.
+func walkAllCommands(cmd *cobra.Command, fn func(*cobra.Command) error) error {
+	if err := fn(cmd); err != nil {
+		return err
+	}
+	for _, sub := range cmd.Commands() {
+		if err := walkAllCommands(sub, fn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // genCLIIndex writes a markdown index of all CLI commands.
 func genCLIIndex(root *cobra.Command, dir string, includeHidden bool) error {
 	var sb strings.Builder
@@ -196,6 +315,11 @@ func genCLIIndex(root *cobra.Command, dir string, includeHidden bool) error {
 
 func writeCLIIndexEntries(sb *strings.Builder, cmd *cobra.Command, includeHidden bool, depth int) {
 	if cmd.Hidden && !includeHidden {
+		return
+	}
+	// Skip cobra's built-in help subcommand — cobradoc.GenMarkdownTree does not
+	// generate a file for it, so linking to it would produce a broken reference.
+	if cmd.Name() == "help" {
 		return
 	}
 	if depth > 0 {
@@ -215,19 +339,24 @@ func writeCLIIndexEntries(sb *strings.Builder, cmd *cobra.Command, includeHidden
 }
 
 // genRegistryDocs generates documentation for each registry command.
-func genRegistryDocs(reg *commands.Registry, dir, format string) error {
+func genRegistryDocs(reg *commands.Registry, dir, format string, includePrivate bool) error {
 	// We always use markdown for the registry; yaml/man are CLI-specific.
 	// For non-markdown formats we skip (registry has no cobra representation).
 	if format != "markdown" {
 		return nil
 	}
-	return genRegistryMarkdown(reg, dir)
+	return genRegistryMarkdown(reg, dir, includePrivate)
 }
 
 // genRegistryMarkdown writes one markdown file per command group and one file
-// per private/public command.
-func genRegistryMarkdown(reg *commands.Registry, dir string) error {
-	all := reg.ListAll("")
+// per command. Private commands are only written when includePrivate is true.
+func genRegistryMarkdown(reg *commands.Registry, dir string, includePrivate bool) error {
+	var all []*commands.CommandDef
+	if includePrivate {
+		all = reg.ListAll("")
+	} else {
+		all = reg.List("")
+	}
 
 	// Group by group ID.
 	byGroup := make(map[string][]*commands.CommandDef)

@@ -139,7 +139,7 @@ func newComposeFilesCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 			for _, f := range cfg.ComposeFiles() {
-				fmt.Println(f)
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), f)
 			}
 			return nil
 		},

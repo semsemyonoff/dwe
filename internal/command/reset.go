@@ -232,7 +232,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 
 			resolved := stepCommand(step)
 			if dryRun {
-				fmt.Println(resolved)
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
 				return nil
 			}
 

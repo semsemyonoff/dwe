@@ -57,10 +57,10 @@ func newDeployPlanCmd(flags *rootFlags) *cobra.Command {
 		Long: `Print all phases and steps from devbox/deploy.yml as they would be executed.
 
 The implicit .env generation step is always shown first. Use --service to filter
-the plan to steps relevant to a specific service. Use --format yaml for machine-readable output.`,
+the plan to steps relevant to a specific service. Use --format shell for script-friendly output.`,
 		Example: `  devbox deploy plan
   devbox deploy plan --service main
-  devbox deploy plan --format yaml`,
+  devbox deploy plan --format shell`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
@@ -495,7 +495,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}
 			for _, s := range steps {
-				addr := s.phase.Name + "/" + s.step.Name
+				addr := s.stepAddress()
 				desc := s.step.Description
 				if desc == "" {
 					desc = s.step.Name
@@ -538,7 +538,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 
 			resolved := stepCommand(step)
 			if dryRun {
-				fmt.Println(resolved)
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
 				return nil
 			}
 
