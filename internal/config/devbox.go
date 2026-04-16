@@ -247,6 +247,11 @@ type ServiceConfig struct {
 // ServiceCLIConfig holds defaults for the `services cli` command.
 // All fields are optional; empty values fall back to built-in defaults.
 type ServiceCLIConfig struct {
+	// Mode controls how the shell session is started: "auto", "exec", or "run".
+	// auto (default): running->exec, absent->run, stopped->error.
+	// exec: always docker exec, error if not running.
+	// run: always docker compose run --rm.
+	Mode string `yaml:"mode"`
 	// Shell is the shell binary to invoke inside the container (default: bash).
 	Shell string `yaml:"shell"`
 	// User is the container user to run as (default: current OS user UID).
@@ -255,6 +260,8 @@ type ServiceCLIConfig struct {
 	// WorkDir is the working directory inside the container.
 	// Falls back to service.work_dir_internal, then dir_internal.
 	WorkDir string `yaml:"workdir"`
+	// Env is a map of environment variables to pass into the container session.
+	Env map[string]string `yaml:"env"`
 }
 
 // ToolsConfig holds the set of optional development tools.
@@ -453,6 +460,9 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		if len(svc.Configs) == 0 {
 			svc.Configs = parent.Configs
 		}
+		if svc.CLI.Mode == "" {
+			svc.CLI.Mode = parent.CLI.Mode
+		}
 		if svc.CLI.Shell == "" {
 			svc.CLI.Shell = parent.CLI.Shell
 		}
@@ -461,6 +471,9 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		}
 		if svc.CLI.WorkDir == "" {
 			svc.CLI.WorkDir = parent.CLI.WorkDir
+		}
+		if len(svc.CLI.Env) == 0 && len(parent.CLI.Env) > 0 {
+			svc.CLI.Env = parent.CLI.Env
 		}
 		f.Services[name] = svc
 	}

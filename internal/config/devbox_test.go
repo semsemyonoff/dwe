@@ -1094,3 +1094,132 @@ exports:
 		t.Errorf("rule[0].Format = %q", cfg.Exports.Env[0].Format)
 	}
 }
+
+// --- ServiceCLIConfig: Mode and Env fields ---
+
+const sampleServicesWithCLIYML = `
+services:
+  main:
+    type: app
+    container: app-main
+    mandatory: true
+    dir: ./services/main
+    dir_internal: /workspace
+    work_dir_internal: /workspace/src
+    configs:
+      - .env
+    cli:
+      mode: auto
+      shell: bash
+      user: www-data
+      workdir: /workspace/src
+      env:
+        APP_ENV: local
+        DEBUG: "true"
+  main-debug:
+    type: app
+    container: app-main-debug
+    mandatory: false
+    extends: main
+    compose:
+      - compose/services/main/debug.yml
+  main-run:
+    type: app
+    container: app-main-run
+    mandatory: false
+    extends: main
+    cli:
+      mode: run
+`
+
+func TestLoadServicesConfig_modeField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	main := services["main"]
+	if main.CLI.Mode != "auto" {
+		t.Errorf("main.CLI.Mode = %q, want auto", main.CLI.Mode)
+	}
+}
+
+func TestLoadServicesConfig_envField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	main := services["main"]
+	if len(main.CLI.Env) != 2 {
+		t.Fatalf("main.CLI.Env len = %d, want 2", len(main.CLI.Env))
+	}
+	if main.CLI.Env["APP_ENV"] != "local" {
+		t.Errorf("main.CLI.Env[APP_ENV] = %q, want local", main.CLI.Env["APP_ENV"])
+	}
+	if main.CLI.Env["DEBUG"] != "true" {
+		t.Errorf("main.CLI.Env[DEBUG] = %q, want true", main.CLI.Env["DEBUG"])
+	}
+}
+
+func TestLoadServicesConfig_extendsInheritsMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	// main-debug extends main and has no CLI block of its own — inherits mode from parent
+	debug := services["main-debug"]
+	if debug.CLI.Mode != "auto" {
+		t.Errorf("main-debug.CLI.Mode = %q, want auto (inherited from main)", debug.CLI.Mode)
+	}
+}
+
+func TestLoadServicesConfig_extendsInheritsEnv(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	// main-debug extends main and has no CLI.Env of its own — inherits env from parent
+	debug := services["main-debug"]
+	if len(debug.CLI.Env) != 2 {
+		t.Fatalf("main-debug.CLI.Env len = %d, want 2 (inherited from main)", len(debug.CLI.Env))
+	}
+	if debug.CLI.Env["APP_ENV"] != "local" {
+		t.Errorf("main-debug.CLI.Env[APP_ENV] = %q, want local (inherited)", debug.CLI.Env["APP_ENV"])
+	}
+}
+
+func TestLoadServicesConfig_extendsOverridesMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	// main-run extends main but sets its own mode: run — should NOT inherit parent mode
+	run := services["main-run"]
+	if run.CLI.Mode != "run" {
+		t.Errorf("main-run.CLI.Mode = %q, want run (own value, not inherited)", run.CLI.Mode)
+	}
+}
