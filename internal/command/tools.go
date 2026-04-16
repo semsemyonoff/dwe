@@ -86,21 +86,33 @@ func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning container
 
 func newToolEnableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "enable <tool>",
+		Use:   "enable [tool]",
 		Short: "Enable an optional tool (writes to devbox/local.yml)",
 		Long: `Enable an optional tool by writing tools.<name>.enabled = true to devbox/local.yml.
 
 Available tools: adminer, redis_insight, mailpit.
-The .env file is regenerated automatically after the change.`,
+The .env file is regenerated automatically after the change.
+
+When no tool name is given, an interactive selector shows all currently
+disabled tools.`,
 		Example:           "  devbox tools enable adminer",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: toolNameCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return setToolEnabled(flags.configPath, cfg, args[0], true)
+			name := ""
+			if len(args) == 1 {
+				name = args[0]
+			} else {
+				name, err = pickToolToEnable(cfg, defaultSelectToggle)
+				if err != nil {
+					return err
+				}
+			}
+			return setToolEnabled(flags.configPath, cfg, name, true)
 		},
 		SilenceUsage: true,
 	}
@@ -108,23 +120,89 @@ The .env file is regenerated automatically after the change.`,
 
 func newToolDisableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "disable <tool>",
+		Use:   "disable [tool]",
 		Short: "Disable an optional tool (writes to devbox/local.yml)",
 		Long: `Disable an optional tool by writing tools.<name>.enabled = false to devbox/local.yml.
 
 Available tools: adminer, redis_insight, mailpit.
-The .env file is regenerated automatically after the change.`,
+The .env file is regenerated automatically after the change.
+
+When no tool name is given, an interactive selector shows all currently
+enabled tools.`,
 		Example:           "  devbox tools disable adminer",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: toolNameCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return setToolEnabled(flags.configPath, cfg, args[0], false)
+			name := ""
+			if len(args) == 1 {
+				name = args[0]
+			} else {
+				name, err = pickToolToDisable(cfg, defaultSelectToggle)
+				if err != nil {
+					return err
+				}
+			}
+			return setToolEnabled(flags.configPath, cfg, name, false)
 		},
 		SilenceUsage: true,
+	}
+}
+
+// pickToolToEnable returns the name of a disabled tool to enable.
+// If no disabled tools exist, returns an error.
+// If exactly one disabled tool exists, it is auto-selected (no selector invoked).
+// Otherwise the selector is called.
+func pickToolToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
+	var candidates []toolRow
+	for _, row := range buildToolRows(cfg) {
+		if !row.Enabled {
+			candidates = append(candidates, row)
+		}
+	}
+	return pickToolCandidates(candidates, "disabled", "Select a tool to enable:", selector)
+}
+
+// pickToolToDisable returns the name of an enabled tool to disable.
+// If no enabled tools exist, returns an error.
+// If exactly one enabled tool exists, it is auto-selected (no selector invoked).
+// Otherwise the selector is called.
+func pickToolToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
+	var candidates []toolRow
+	for _, row := range buildToolRows(cfg) {
+		if row.Enabled {
+			candidates = append(candidates, row)
+		}
+	}
+	return pickToolCandidates(candidates, "enabled", "Select a tool to disable:", selector)
+}
+
+// pickToolCandidates resolves a tool name from a candidate list.
+// - Empty list → error mentioning statusLabel.
+// - Exactly one → auto-selected.
+// - Multiple → selector is invoked.
+func pickToolCandidates(rows []toolRow, statusLabel, title string, selector selectToggleFn) (string, error) {
+	switch len(rows) {
+	case 0:
+		return "", fmt.Errorf("no %s tools found", statusLabel)
+	case 1:
+		return rows[0].Name, nil
+	default:
+		items := make([]ui.SelectorItem, len(rows))
+		for i, row := range rows {
+			items[i] = ui.SelectorItem{
+				Label:  row.Name,
+				Status: statusLabel,
+			}
+		}
+		idx, err := selector(title, items)
+		if err != nil {
+			return "", err
+		}
+		return rows[idx].Name, nil
 	}
 }
 
