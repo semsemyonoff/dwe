@@ -27,6 +27,7 @@ const (
 // rootFlags holds flags shared across all commands.
 type rootFlags struct {
 	configPath string
+	stylesCfg  *config.StylesConfig // populated by PersistentPreRun before any command runs
 }
 
 // NewRootCmd builds and returns the root cobra.Command.
@@ -41,6 +42,12 @@ func NewRootCmd() *cobra.Command {
 It provides config validation, rendering, topology inspection, and project info display.
 Run 'devbox' with no arguments to display a compact project summary and available commands.
 Run 'devbox info' for the full info dashboard.`,
+		// PersistentPreRun applies the styles theme before any subcommand runs,
+		// so all ui output (commands list/inspect, info, deploy plan, etc.) uses
+		// the palette from devbox/styles.yml.
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			flags.stylesCfg = applyStyles(flags.configPath, cmd.ErrOrStderr())
+		},
 		// Running 'devbox' with no subcommand shows project summary + help.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRoot(cmd, flags)
@@ -133,7 +140,7 @@ func applyStyles(configPath string, errW io.Writer) *config.StylesConfig {
 // It prints an ASCII header and compact project summary (when a config is
 // found), followed by the Cobra/Fang help output.
 func runRoot(cmd *cobra.Command, flags *rootFlags) error {
-	stylesCfg := applyStyles(flags.configPath, cmd.ErrOrStderr())
+	stylesCfg := flags.stylesCfg // already applied by PersistentPreRun
 
 	cfg, err := config.LoadConfig(flags.configPath)
 	switch {

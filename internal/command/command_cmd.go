@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -62,10 +64,10 @@ Use --all to include private commands.`,
 			root := reg.Groups()
 			nodes := buildTreeNodes(root, groupFilter, showAll)
 			if len(nodes) == 0 {
-				render.Stdout().Info("No commands found.")
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No commands found.")
 				return nil
 			}
-			render.Stdout().WriteTree(nodes)
+			printTreeNodes(cmd.OutOrStdout(), nodes)
 			return nil
 		},
 		SilenceUsage: true,
@@ -94,7 +96,7 @@ Displays type, run/argv, params, context variables, env, and workflow steps.`,
 			if err != nil {
 				return err
 			}
-			printCommandInspect(render.Stdout(), def)
+			printCommandInspect(cmd.OutOrStdout(), def)
 			return nil
 		},
 		SilenceUsage:      true,
@@ -283,7 +285,7 @@ func commandDefToTreeNode(cmd *commands.CommandDef) *render.TreeNode {
 	}
 	tags = append(tags, string(cmd.Type))
 	return &render.TreeNode{
-		Label: cmd.LocalName,
+		Label: cmd.ID,
 		Tags:  tags,
 		Desc:  cmd.Description,
 	}
@@ -325,52 +327,59 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 	}
 }
 
-// printCommandInspect writes a detailed view of a command definition.
-func printCommandInspect(w *render.Writer, def *commands.CommandDef) {
-	w.TableHeader(def.ID)
-	w.Definition("type", string(def.Type), 2, "")
+// printCommandInspect writes a detailed view of a command definition using Lipgloss styles.
+func printCommandInspect(w io.Writer, def *commands.CommandDef) {
+	def2 := func(name, value string, indent int) {
+		_, _ = fmt.Fprintln(w, ui.RenderDefinition(name, value, indent, ""))
+	}
+	sub := func(title string) {
+		_, _ = fmt.Fprintln(w, ui.RenderSubheader("  "+title))
+	}
+
+	_, _ = fmt.Fprintln(w, ui.RenderSectionTitle(def.ID))
+	def2("type", string(def.Type), 2)
 	if def.Description != "" {
-		w.Definition("description", def.Description, 2, "")
+		def2("description", def.Description, 2)
 	}
 	if def.Private {
-		w.Definition("private", "true", 2, "")
+		def2("private", "true", 2)
 	}
 
 	switch def.Type {
 	case commands.CommandTypeCommand:
 		if def.Run != "" {
-			w.Definition("run", def.Run, 2, "")
+			def2("run", def.Run, 2)
 		}
 		if len(def.Argv) > 0 {
-			w.Definition("argv", strings.Join(def.Argv, " "), 2, "")
+			def2("argv", strings.Join(def.Argv, " "), 2)
 		}
 		if def.Cwd != "" {
-			w.Definition("cwd", def.Cwd, 2, "")
+			def2("cwd", def.Cwd, 2)
 		}
 	case commands.CommandTypeServiceExec, commands.CommandTypeServiceRun:
 		if def.Service != "" {
-			w.Definition("service", def.Service, 2, "")
+			def2("service", def.Service, 2)
 		}
 		if def.Runner != nil && def.Runner.Service != "" {
-			w.Definition("service (runner)", def.Runner.Service, 2, "")
+			def2("service (runner)", def.Runner.Service, 2)
 		}
 		if def.User != "" {
-			w.Definition("user", string(def.User), 2, "")
+			def2("user", string(def.User), 2)
 		}
 		if def.Workdir != "" {
-			w.Definition("workdir", def.Workdir, 2, "")
+			def2("workdir", def.Workdir, 2)
 		}
 		if def.WorkdirFrom != "" {
-			w.Definition("workdir_from", def.WorkdirFrom, 2, "")
+			def2("workdir_from", def.WorkdirFrom, 2)
 		}
 		if def.Mode != "" {
-			w.Definition("mode", string(def.Mode), 2, "")
+			def2("mode", string(def.Mode), 2)
 		}
 		if def.Run != "" {
-			w.Definition("run", def.Run, 2, "")
+			def2("run", def.Run, 2)
 		}
 		if len(def.Argv) > 0 {
-			w.Definition("argv", strings.Join(def.Argv, " "), 2, "")
+			def2("argv", strings.Join(def.Argv, " "), 2)
 		}
 	case commands.CommandTypeScript:
 		if def.Script != nil {
@@ -378,25 +387,25 @@ func printCommandInspect(w *render.Writer, def *commands.CommandDef) {
 			if shell == "" {
 				shell = "sh"
 			}
-			w.Definition("script.shell", shell, 2, "")
+			def2("script.shell", shell, 2)
 			if def.Script.Path != "" {
-				w.Definition("script.path", def.Script.Path, 2, "")
+				def2("script.path", def.Script.Path, 2)
 			}
 			if def.Script.Plan != "" {
-				w.Definition("script.plan", def.Script.Plan, 2, "")
+				def2("script.plan", def.Script.Plan, 2)
 			}
 			if def.Script.Run != "" {
-				w.Definition("script.run", def.Script.Run, 2, "")
+				def2("script.run", def.Script.Run, 2)
 			}
 			if def.Script.Cleanup != "" {
-				w.Definition("script.cleanup", def.Script.Cleanup, 2, "")
+				def2("script.cleanup", def.Script.Cleanup, 2)
 			}
 		}
 	case commands.CommandTypeWorkflow:
-		w.TableSubheader("Steps")
+		sub("Steps")
 		for i, step := range def.Steps {
 			if step.Confirm != "" {
-				w.Definition(fmt.Sprintf("[%d] confirm", i), step.Confirm, 2, "")
+				def2(fmt.Sprintf("[%d] confirm", i), step.Confirm, 4)
 			} else {
 				label := fmt.Sprintf("[%d]", i)
 				desc := step.Command
@@ -408,13 +417,13 @@ func printCommandInspect(w *render.Writer, def *commands.CommandDef) {
 					sort.Strings(pairs)
 					desc += "  with: " + strings.Join(pairs, ", ")
 				}
-				w.Definition(label, desc, 2, "")
+				def2(label, desc, 4)
 			}
 		}
 	}
 
 	if len(def.Params) > 0 {
-		w.TableSubheader("Params")
+		sub("Params")
 		var names []string
 		for name := range def.Params {
 			names = append(names, name)
@@ -435,12 +444,12 @@ func printCommandInspect(w *render.Writer, def *commands.CommandDef) {
 			if p.DefaultFrom != "" {
 				desc += " [default_from: " + p.DefaultFrom + "]"
 			}
-			w.Definition(name, desc, 4, "")
+			def2(name, desc, 4)
 		}
 	}
 
 	if len(def.Context) > 0 {
-		w.TableSubheader("Context")
+		sub("Context")
 		var names []string
 		for name := range def.Context {
 			names = append(names, name)
@@ -455,21 +464,59 @@ func printCommandInspect(w *render.Writer, def *commands.CommandDef) {
 			if c.Env != "" {
 				desc += " [env: " + c.Env + "]"
 			}
-			w.Definition(name, desc, 4, "")
+			def2(name, desc, 4)
 		}
 	}
 
 	if len(def.Env) > 0 {
-		w.TableSubheader("Env")
+		sub("Env")
 		var keys []string
 		for k := range def.Env {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			w.Definition(k, def.Env[k], 4, "")
+			def2(k, def.Env[k], 4)
 		}
 	}
 
-	w.TableHeader("")
+	_, _ = fmt.Fprintln(w, ui.RenderSectionTitle(""))
+}
+
+// printTreeNodes renders a flat list of tree nodes to w using Lipgloss styles.
+func printTreeNodes(w io.Writer, nodes []*render.TreeNode) {
+	for _, node := range nodes {
+		printTreeNode(w, node, 0)
+	}
+}
+
+// printTreeNode renders a single tree node and its children recursively.
+// Group nodes (those with children) use the group/section style; leaf nodes use the key style.
+func printTreeNode(w io.Writer, node *render.TreeNode, depth int) {
+	indent := strings.Repeat("  ", depth)
+	var sb strings.Builder
+	sb.WriteString(indent)
+
+	if len(node.Children) > 0 {
+		sb.WriteString(ui.StyleGroup(node.Label))
+	} else {
+		sb.WriteString(ui.StyleKey(node.Label))
+		if len(node.Tags) > 0 {
+			sb.WriteString("  ")
+			sb.WriteString(ui.StyleMuted("[" + strings.Join(node.Tags, ", ") + "]"))
+		}
+	}
+
+	if node.Desc != "" {
+		sb.WriteString("  ")
+		sb.WriteString(ui.StyleMuted("—"))
+		sb.WriteString(" ")
+		sb.WriteString(node.Desc)
+	}
+
+	_, _ = fmt.Fprintln(w, sb.String())
+
+	for _, child := range node.Children {
+		printTreeNode(w, child, depth+1)
+	}
 }

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"devbox-cli/internal/commands"
-	"devbox-cli/internal/render"
 )
 
 // --- parseSetFlags ---
@@ -81,16 +80,16 @@ func TestBuildTreeNodes_emptyRegistry(t *testing.T) {
 func TestBuildTreeNodes_publicCommandsOnly(t *testing.T) {
 	root := &commands.GroupNode{
 		Commands: []*commands.CommandDef{
-			{LocalName: "migrate", Type: commands.CommandTypeServiceExec, Private: false},
-			{LocalName: "secret", Type: commands.CommandTypeCommand, Private: true},
+			{ID: "services.main.migrate", LocalName: "migrate", Type: commands.CommandTypeServiceExec, Private: false},
+			{ID: "services.main.secret", LocalName: "secret", Type: commands.CommandTypeCommand, Private: true},
 		},
 	}
 	nodes := buildTreeNodes(root, "", false)
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node (public only), got %d", len(nodes))
 	}
-	if nodes[0].Label != "migrate" {
-		t.Errorf("expected 'migrate', got %q", nodes[0].Label)
+	if nodes[0].Label != "services.main.migrate" {
+		t.Errorf("expected 'services.main.migrate', got %q", nodes[0].Label)
 	}
 }
 
@@ -112,7 +111,7 @@ func TestBuildTreeNodes_nestedGroups(t *testing.T) {
 		ID:   "services.main",
 		Name: "main",
 		Commands: []*commands.CommandDef{
-			{LocalName: "migrate", Type: commands.CommandTypeServiceExec},
+			{ID: "services.main.migrate", LocalName: "migrate", Type: commands.CommandTypeServiceExec},
 		},
 	}
 	services := &commands.GroupNode{
@@ -140,8 +139,8 @@ func TestBuildTreeNodes_nestedGroups(t *testing.T) {
 	if len(mainNode.Children) != 1 {
 		t.Fatalf("expected 1 command, got %d", len(mainNode.Children))
 	}
-	if mainNode.Children[0].Label != "migrate" {
-		t.Errorf("expected 'migrate', got %q", mainNode.Children[0].Label)
+	if mainNode.Children[0].Label != "services.main.migrate" {
+		t.Errorf("expected 'services.main.migrate', got %q", mainNode.Children[0].Label)
 	}
 }
 
@@ -162,7 +161,7 @@ func TestBuildTreeNodes_groupFilter(t *testing.T) {
 		ID:   "services.main",
 		Name: "main",
 		Commands: []*commands.CommandDef{
-			{LocalName: "migrate", Type: commands.CommandTypeServiceExec},
+			{ID: "services.main.migrate", LocalName: "migrate", Type: commands.CommandTypeServiceExec},
 		},
 	}
 	services := &commands.GroupNode{
@@ -177,8 +176,8 @@ func TestBuildTreeNodes_groupFilter(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node for services.main filter, got %d", len(nodes))
 	}
-	if nodes[0].Label != "migrate" {
-		t.Errorf("expected 'migrate', got %q", nodes[0].Label)
+	if nodes[0].Label != "services.main.migrate" {
+		t.Errorf("expected 'services.main.migrate', got %q", nodes[0].Label)
 	}
 }
 
@@ -202,14 +201,15 @@ func TestBuildTreeNodes_privateGroupHiddenWhenAllPrivate(t *testing.T) {
 
 func TestCommandDefToTreeNode_public(t *testing.T) {
 	def := &commands.CommandDef{
+		ID:          "services.main.migrate",
 		LocalName:   "migrate",
 		Type:        commands.CommandTypeServiceExec,
 		Description: "Run migrations",
 		Private:     false,
 	}
 	node := commandDefToTreeNode(def)
-	if node.Label != "migrate" {
-		t.Errorf("label: want %q, got %q", "migrate", node.Label)
+	if node.Label != "services.main.migrate" {
+		t.Errorf("label: want %q, got %q", "services.main.migrate", node.Label)
 	}
 	if node.Desc != "Run migrations" {
 		t.Errorf("desc: want %q, got %q", "Run migrations", node.Desc)
@@ -251,8 +251,7 @@ func TestPrintCommandInspect_workflow(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	w := render.NewWriter(buf)
-	printCommandInspect(w, def)
+	printCommandInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "services.main.bootstrap") {
 		t.Errorf("output should contain command ID")
@@ -277,8 +276,7 @@ func TestPrintCommandInspect_serviceExec(t *testing.T) {
 		Run:     "php artisan migrate",
 	}
 	buf := &testBuf{}
-	w := render.NewWriter(buf)
-	printCommandInspect(w, def)
+	printCommandInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "service_exec") {
 		t.Errorf("output should contain type: %s", out)
@@ -301,8 +299,7 @@ func TestPrintCommandInspect_withParams(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	w := render.NewWriter(buf)
-	printCommandInspect(w, def)
+	printCommandInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "Params") {
 		t.Errorf("output should contain Params section: %s", out)

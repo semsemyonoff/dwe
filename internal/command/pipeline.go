@@ -18,6 +18,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
 )
 
 // resolvedStep holds a pipeline step together with the phase it belongs to,
@@ -160,6 +161,7 @@ func stepCommand(step config.DeployStep) string {
 
 // printDeployPlanTable prints the plan in human-readable table format.
 func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
+	out := w.Writer()
 	lastPhaseKey := ""
 	lastService := ""
 	for _, rs := range steps {
@@ -170,7 +172,7 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 
 		if phaseKey != lastPhaseKey {
 			if rs.service != "" && rs.service != lastService {
-				w.TableSubheader("service: " + rs.service)
+				_, _ = fmt.Fprintln(out, ui.RenderSubheader("service: "+rs.service))
 				lastService = rs.service
 			}
 			phaseLine := rs.phase.Name
@@ -187,7 +189,7 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 			if rs.service != "" {
 				indent = "  "
 			}
-			w.TableSubheader(indent + phaseLine)
+			_, _ = fmt.Fprintln(out, ui.RenderSubheader(indent+phaseLine))
 			lastPhaseKey = phaseKey
 		}
 
@@ -204,18 +206,18 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 		cmd := stepCommand(rs.step)
 
 		if desc != "" {
-			w.Definition(badge+" "+name, desc, len(indent), "", "—")
+			_, _ = fmt.Fprintln(out, ui.RenderDefinition(badge+" "+name, desc, len(indent), ""))
 		} else {
-			w.Println(indent + badge + " " + name)
+			_, _ = fmt.Fprintln(out, indent+badge+" "+name)
 		}
 		if cmd != "" {
-			w.Println(detailIndent + cmd)
+			_, _ = fmt.Fprintln(out, detailIndent+cmd)
 		}
 		if rs.runtimeWhen != "" {
-			w.Println(detailIndent + "[when: " + rs.runtimeWhen + "]")
+			_, _ = fmt.Fprintln(out, detailIndent+"[when: "+rs.runtimeWhen+"]")
 		}
 		if rs.step.Check != "" {
-			w.Println(detailIndent + "[check: " + rs.step.Check + "]")
+			_, _ = fmt.Fprintln(out, detailIndent+"[check: "+rs.step.Check+"]")
 		}
 	}
 }
