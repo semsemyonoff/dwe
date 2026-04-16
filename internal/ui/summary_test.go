@@ -39,7 +39,7 @@ func TestRenderSummary_NoState(t *testing.T) {
 	}
 }
 
-func TestRenderSummary_URL_HTTP(t *testing.T) {
+func TestRenderSummary_NoURL(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Runtime: config.RuntimeConfig{
@@ -48,32 +48,9 @@ func TestRenderSummary_URL_HTTP(t *testing.T) {
 		},
 	}
 	out := RenderSummary(cfg)
-	if !strings.Contains(out, "http://myapp.localhost") {
-		t.Errorf("expected http URL in summary, got:\n%s", out)
-	}
-}
-
-func TestRenderSummary_URL_HTTPS(t *testing.T) {
-	cfg := &config.DevboxConfig{
-		Project: config.ProjectConfig{Name: "myapp"},
-		Runtime: config.RuntimeConfig{
-			UseHTTPS: true,
-			Hosts:    config.RuntimeHosts{Main: "myapp.localhost"},
-		},
-	}
-	out := RenderSummary(cfg)
-	if !strings.Contains(out, "https://myapp.localhost") {
-		t.Errorf("expected https URL in summary, got:\n%s", out)
-	}
-}
-
-func TestRenderSummary_NoURL_WhenHostEmpty(t *testing.T) {
-	cfg := &config.DevboxConfig{
-		Project: config.ProjectConfig{Name: "myapp"},
-	}
-	out := RenderSummary(cfg)
+	// URL must not appear in the compact summary.
 	if strings.Contains(out, "http://") || strings.Contains(out, "https://") {
-		t.Errorf("did not expect URL when host is empty, got:\n%s", out)
+		t.Errorf("did not expect URL in compact summary, got:\n%s", out)
 	}
 }
 

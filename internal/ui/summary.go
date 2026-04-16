@@ -8,12 +8,12 @@ import (
 )
 
 // RenderSummary returns a compact two-line project summary string.
-// It shows the project name, state, primary URL, and enabled service/tool counts.
+// It shows the project name, state, and enabled service/tool counts.
 // The returned string contains no trailing newline on the last line.
 func RenderSummary(cfg *config.DevboxConfig) string {
 	var lines []string
 
-	// Line 1: project name, state, URL.
+	// Line 1: project name and state.
 	var parts []string
 
 	name := cfg.Project.FullName()
@@ -21,15 +21,6 @@ func RenderSummary(cfg *config.DevboxConfig) string {
 
 	if cfg.State != "" {
 		parts = append(parts, styleMuted.Render("state")+" "+defSep+" "+cfg.State)
-	}
-
-	if cfg.Runtime.Hosts.Main != "" {
-		scheme := "http"
-		if cfg.Runtime.UseHTTPS {
-			scheme = "https"
-		}
-		url := fmt.Sprintf("%s://%s", scheme, cfg.Runtime.Hosts.Main)
-		parts = append(parts, styleMuted.Render("url")+" "+defSep+" "+url)
 	}
 
 	lines = append(lines, strings.Join(parts, "  "))

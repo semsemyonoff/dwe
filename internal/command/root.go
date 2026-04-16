@@ -128,6 +128,8 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 				w := render.NewWriter(cmd.OutOrStdout())
 				// Header is cosmetic — skip on render error.
 				_ = w.ASCII(infoCfg.Header.ASCII.Lines, infoCfg.Header.ASCII.Font, infoCfg.Header.ASCII.Color)
+				// Blank line after ASCII header so it doesn't run into the summary.
+				_, _ = fmt.Fprintln(cmd.OutOrStdout())
 			}
 		}
 		// Print compact project summary followed by a blank separator line.
