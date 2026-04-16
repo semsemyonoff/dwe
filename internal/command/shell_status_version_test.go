@@ -2,6 +2,7 @@ package command
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -191,7 +193,10 @@ func TestResolveShellOptions_BuiltinDefaults(t *testing.T) {
 	if opts.Shell != "bash" {
 		t.Errorf("Shell default should be 'bash', got %q", opts.Shell)
 	}
-	// User default is current UID or empty — just check it doesn't panic.
+	// User default is current OS UID — must be non-empty in a normal test environment.
+	if opts.User == "" {
+		t.Error("User default should be non-empty (current OS UID)")
+	}
 	if opts.WorkDir != "" {
 		t.Errorf("WorkDir default should be empty when svc has no dirs, got %q", opts.WorkDir)
 	}
@@ -245,7 +250,7 @@ func TestResolveShellOptions_EnvFromConfig(t *testing.T) {
 	}
 }
 
-func TestResolveShellOptions_EnvNilWhenEmpty(t *testing.T) {
+func TestResolveShellOptions_EnvAlwaysInitialized(t *testing.T) {
 	flags := shellCLIFlags{}
 	svcCLI := config.ServiceCLIConfig{}
 	svc := config.ServiceConfig{}
@@ -442,7 +447,7 @@ func TestRunServicesCLI_AutoMode_Running_UsesExec(t *testing.T) {
 	flags := shellCLIFlags{mode: "auto"}
 
 	execCalled, runCalled := false, false
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("running"), captureExec(&execCalled), captureRun(&runCalled))
 
 	if err != nil {
@@ -462,7 +467,7 @@ func TestRunServicesCLI_AutoMode_Absent_UsesRun(t *testing.T) {
 	flags := shellCLIFlags{mode: "auto"}
 
 	execCalled, runCalled := false, false
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc(""), captureExec(&execCalled), captureRun(&runCalled))
 
 	if err != nil {
@@ -481,7 +486,7 @@ func TestRunServicesCLI_AutoMode_Stopped_ReturnsError(t *testing.T) {
 	compose := testCompose()
 	flags := shellCLIFlags{mode: "auto"}
 
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("exited"), captureExec(new(bool)), captureRun(new(bool)))
 
 	if err == nil {
@@ -498,7 +503,7 @@ func TestRunServicesCLI_ExecMode_Running_UsesExec(t *testing.T) {
 	flags := shellCLIFlags{mode: "exec"}
 
 	execCalled := false
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("running"), captureExec(&execCalled), captureRun(new(bool)))
 
 	if err != nil {
@@ -514,7 +519,7 @@ func TestRunServicesCLI_ExecMode_Absent_ReturnsError(t *testing.T) {
 	compose := testCompose()
 	flags := shellCLIFlags{mode: "exec"}
 
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc(""), captureExec(new(bool)), captureRun(new(bool)))
 
 	if err == nil {
@@ -530,7 +535,7 @@ func TestRunServicesCLI_ExecMode_Stopped_ReturnsError(t *testing.T) {
 	compose := testCompose()
 	flags := shellCLIFlags{mode: "exec"}
 
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("exited"), captureExec(new(bool)), captureRun(new(bool)))
 
 	if err == nil {
@@ -547,7 +552,7 @@ func TestRunServicesCLI_RunMode_Running_UsesRun(t *testing.T) {
 	flags := shellCLIFlags{mode: "run"}
 
 	runCalled := false
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("running"), captureExec(new(bool)), captureRun(&runCalled))
 
 	if err != nil {
@@ -564,7 +569,7 @@ func TestRunServicesCLI_RunMode_Absent_UsesRun(t *testing.T) {
 	flags := shellCLIFlags{mode: "run"}
 
 	runCalled := false
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc(""), captureExec(new(bool)), captureRun(&runCalled))
 
 	if err != nil {
@@ -581,7 +586,7 @@ func TestRunServicesCLI_RunMode_Stopped_UsesRun(t *testing.T) {
 	flags := shellCLIFlags{mode: "run"}
 
 	runCalled := false
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("exited"), captureExec(new(bool)), captureRun(&runCalled))
 
 	if err != nil {
@@ -605,7 +610,7 @@ func TestRunServicesCLI_EnvPassthroughToExec(t *testing.T) {
 		return nil
 	}
 
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("running"), execFn, captureRun(new(bool)))
 
 	if err != nil {
@@ -629,7 +634,7 @@ func TestRunServicesCLI_EnvPassthroughToRun(t *testing.T) {
 		return nil
 	}
 
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc(""), captureExec(new(bool)), runFn)
 
 	if err != nil {
@@ -645,7 +650,7 @@ func TestRunServicesCLI_UnknownService_ReturnsError(t *testing.T) {
 	compose := testCompose()
 	flags := shellCLIFlags{}
 
-	err := runServicesCLIWith(cfg, compose, "unknown", flags,
+	err := runServicesCLI(cfg, compose, "unknown", flags,
 		stateFunc("running"), captureExec(new(bool)), captureRun(new(bool)))
 
 	if err == nil {
@@ -663,11 +668,146 @@ func TestRunServicesCLI_NoContainer_ReturnsError(t *testing.T) {
 	compose := testCompose()
 	flags := shellCLIFlags{}
 
-	err := runServicesCLIWith(cfg, compose, "main", flags,
+	err := runServicesCLI(cfg, compose, "main", flags,
 		stateFunc("running"), captureExec(new(bool)), captureRun(new(bool)))
 
 	if err == nil {
 		t.Error("expected error for service with no container, got nil")
+	}
+}
+
+// TestRunServicesCLI_ConfigMode_ExecUsedWhenContainerRunning verifies that
+// mode from ServiceCLIConfig (not flag) correctly governs exec vs run routing.
+func TestRunServicesCLI_ConfigMode_ExecUsedWhenContainerRunning(t *testing.T) {
+	// No mode flag set; mode comes from ServiceCLIConfig.
+	cfg := testCfg("app-main", config.ServiceCLIConfig{Mode: "exec"})
+	compose := testCompose()
+	flags := shellCLIFlags{} // no mode flag
+
+	execCalled := false
+	err := runServicesCLI(cfg, compose, "main", flags,
+		stateFunc("running"), captureExec(&execCalled), captureRun(new(bool)))
+
+	if err != nil {
+		t.Fatalf("config mode exec+running: unexpected error: %v", err)
+	}
+	if !execCalled {
+		t.Error("config mode exec+running: expected exec to be called")
+	}
+}
+
+// TestRunServicesCLI_ConfigMode_RunAlwaysUsesRun verifies that mode: run from
+// config always starts a new container.
+func TestRunServicesCLI_ConfigMode_RunAlwaysUsesRun(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{Mode: "run"})
+	compose := testCompose()
+	flags := shellCLIFlags{} // no mode flag
+
+	runCalled := false
+	err := runServicesCLI(cfg, compose, "main", flags,
+		stateFunc("running"), captureExec(new(bool)), captureRun(&runCalled))
+
+	if err != nil {
+		t.Fatalf("config mode run: unexpected error: %v", err)
+	}
+	if !runCalled {
+		t.Error("config mode run: expected run to be called regardless of container state")
+	}
+}
+
+// TestRunServicesCLI_InvalidConfigMode_ReturnsError verifies that a typo in
+// cli.mode from config/defaults.yml produces an error instead of silently
+// falling through to "auto" behavior.
+func TestRunServicesCLI_InvalidConfigMode_ReturnsError(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{Mode: "typo"})
+	compose := testCompose()
+	flags := shellCLIFlags{}
+
+	err := runServicesCLI(cfg, compose, "main", flags,
+		stateFunc("running"), captureExec(new(bool)), captureRun(new(bool)))
+
+	if err == nil {
+		t.Fatal("expected error for invalid config mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid cli.mode") {
+		t.Errorf("error should mention 'invalid cli.mode', got: %v", err)
+	}
+}
+
+// captureStateContainer returns a getState func that records the container name it was called with.
+func captureStateContainer(status string, got *string) func(string) (string, error) {
+	return func(containerName string) (string, error) {
+		*got = containerName
+		if status == "" {
+			return "", fmt.Errorf("container not found")
+		}
+		return status, nil
+	}
+}
+
+// TestRunServicesCLI_ContainerNameConstruction verifies the full container name
+// (<project>-<container>) is built correctly and passed to getState.
+func TestRunServicesCLI_ContainerNameConstruction(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := &docker.Compose{ProjectName: "myproject", Files: nil}
+	flags := shellCLIFlags{mode: "auto"}
+
+	var gotContainerName string
+	_ = runServicesCLI(cfg, compose, "main", flags,
+		captureStateContainer("running", &gotContainerName),
+		captureExec(new(bool)), captureRun(new(bool)))
+
+	if gotContainerName != "myproject-app-main" {
+		t.Errorf("container name: expected %q, got %q", "myproject-app-main", gotContainerName)
+	}
+}
+
+// TestRunServicesCLI_EnvFlagOverridesConfig verifies that --env KEY=VALUE flag
+// values override matching keys from the service cli.env config.
+func TestRunServicesCLI_EnvFlagOverridesConfig(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{
+		Env: map[string]string{"FOO": "from-config", "BAR": "keep"},
+	})
+	compose := testCompose()
+	// Flag overrides FOO, BAR is untouched.
+	flags := shellCLIFlags{mode: "exec", envVars: []string{"FOO=from-flag"}}
+
+	var capturedEnv map[string]string
+	execFn := func(containerName, shell, u, workDir string, env map[string]string) error {
+		capturedEnv = env
+		return nil
+	}
+
+	err := runServicesCLI(cfg, compose, "main", flags,
+		stateFunc("running"), execFn, captureRun(new(bool)))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedEnv["FOO"] != "from-flag" {
+		t.Errorf("flag env should override config: FOO expected 'from-flag', got %q", capturedEnv["FOO"])
+	}
+	if capturedEnv["BAR"] != "keep" {
+		t.Errorf("config env key BAR should be kept: expected 'keep', got %q", capturedEnv["BAR"])
+	}
+}
+
+// TestPickService_SelectorReturnsErrCancelled_Propagated verifies that
+// ErrCancelled from the selector is propagated by pickService.
+func TestPickService_SelectorReturnsErrCancelled_Propagated(t *testing.T) {
+	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: true},
+	})
+	cancelSelector := func(c *config.DevboxConfig, names []string) (string, error) {
+		return "", ui.ErrCancelled
+	}
+	_, err := pickService(cfg, "", cancelSelector)
+	if err == nil {
+		t.Fatal("expected ErrCancelled to propagate, got nil")
+	}
+	if !errors.Is(err, ui.ErrCancelled) {
+		t.Errorf("expected errors.Is(err, ui.ErrCancelled), got: %v", err)
 	}
 }
 

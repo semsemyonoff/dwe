@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -158,7 +159,7 @@ func initialCursor(items []SelectorItem) int {
 // the chosen item. Returns ErrCancelled if the user presses Esc or q.
 func RunSelector(title string, items []SelectorItem) (int, error) {
 	if len(items) == 0 {
-		return -1, ErrCancelled
+		return -1, fmt.Errorf("selector: no items to display")
 	}
 
 	m := selectorModel{

@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,6 +110,9 @@ disabled tools.`,
 			} else {
 				name, err = pickToolToEnable(cfg, defaultSelectToggle)
 				if err != nil {
+					if errors.Is(err, ui.ErrCancelled) {
+						return nil
+					}
 					return err
 				}
 			}
@@ -143,6 +147,9 @@ enabled tools.`,
 			} else {
 				name, err = pickToolToDisable(cfg, defaultSelectToggle)
 				if err != nil {
+					if errors.Is(err, ui.ErrCancelled) {
+						return nil
+					}
 					return err
 				}
 			}

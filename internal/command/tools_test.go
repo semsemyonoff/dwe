@@ -2,6 +2,7 @@ package command
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -307,5 +308,21 @@ func TestToolDisableCmd_UseField(t *testing.T) {
 	cmd := newToolDisableCmd(flags)
 	if !strings.Contains(cmd.Use, "[tool]") {
 		t.Errorf("disable Use should show [tool] as optional, got %q", cmd.Use)
+	}
+}
+
+// TestPickToolToEnable_SelectorReturnsErrCancelled_Propagated verifies that
+// ErrCancelled from the selector propagates through pickToolToEnable.
+func TestPickToolToEnable_SelectorReturnsErrCancelled_Propagated(t *testing.T) {
+	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cancelSelector := func(title string, items []ui.SelectorItem) (int, error) {
+		return -1, ui.ErrCancelled
+	}
+	_, err := pickToolToEnable(cfg, cancelSelector)
+	if err == nil {
+		t.Fatal("expected ErrCancelled to propagate, got nil")
+	}
+	if !errors.Is(err, ui.ErrCancelled) {
+		t.Errorf("expected errors.Is(err, ui.ErrCancelled), got: %v", err)
 	}
 }

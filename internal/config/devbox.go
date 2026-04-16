@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -473,7 +474,7 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 			svc.CLI.WorkDir = parent.CLI.WorkDir
 		}
 		if len(svc.CLI.Env) == 0 && len(parent.CLI.Env) > 0 {
-			svc.CLI.Env = parent.CLI.Env
+			svc.CLI.Env = maps.Clone(parent.CLI.Env)
 		}
 		f.Services[name] = svc
 	}

@@ -213,6 +213,9 @@ disabled optional services.`,
 			} else {
 				name, err = pickServiceToEnable(cfg, defaultSelectToggle)
 				if err != nil {
+					if errors.Is(err, ui.ErrCancelled) {
+						return nil
+					}
 					return err
 				}
 			}
@@ -247,6 +250,9 @@ enabled optional services.`,
 			} else {
 				name, err = pickServiceToDisable(cfg, defaultSelectToggle)
 				if err != nil {
+					if errors.Is(err, ui.ErrCancelled) {
+						return nil
+					}
 					return err
 				}
 			}

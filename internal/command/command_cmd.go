@@ -100,6 +100,9 @@ directly without showing a selector.`,
 			}
 			id, err := resolveCommandID(reg, args, true, defaultSelectCommand)
 			if err != nil {
+				if errors.Is(err, ui.ErrCancelled) {
+					return nil
+				}
 				return err
 			}
 			def, err := reg.Get(id)
@@ -147,6 +150,9 @@ it runs directly without showing a selector.`,
 			}
 			id, err := resolveCommandID(reg, args, false, defaultSelectCommand)
 			if err != nil {
+				if errors.Is(err, ui.ErrCancelled) {
+					return nil
+				}
 				return err
 			}
 			def, err := reg.Get(id)

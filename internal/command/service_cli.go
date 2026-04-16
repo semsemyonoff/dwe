@@ -68,9 +68,15 @@ func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, sv
 	// --- User ---
 	u := resolveUser(flags.user, svcCLI.User, flags.asRoot)
 
-	// --- Env: merge config env; config values are passed to the container. ---
+	// --- Env: start from config env, then apply flag env on top (flag wins). ---
 	env := make(map[string]string)
 	maps.Copy(env, svcCLI.Env)
+	for _, kv := range flags.envVars {
+		k, v, _ := strings.Cut(kv, "=")
+		if k != "" {
+			env[k] = v
+		}
+	}
 
 	return shellOptions{
 		Mode:    mode,
@@ -89,12 +95,8 @@ type shellRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir s
 
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.
-func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceName string, flags shellCLIFlags) error {
-	return runServicesCLIWith(cfg, compose, serviceName, flags, containerStateStatus, dockerExecCLI, composeRunCLI)
-}
-
-// runServicesCLIWith is the testable version of runServicesCLI with injectable state and runner functions.
-func runServicesCLIWith(
+// getState, execCLI, and runCLI are injected for testability.
+func runServicesCLI(
 	cfg *config.DevboxConfig,
 	compose *docker.Compose,
 	serviceName string,
@@ -113,15 +115,19 @@ func runServicesCLIWith(
 
 	opts := resolveShellOptions(flags, svc.CLI, svc)
 
+	// Validate the resolved mode — catches typos in devbox/services.yml or defaults.yml.
+	if !validModes[opts.Mode] {
+		return fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
+	}
+
 	// Container name matches the container_name field in compose.yaml:
 	// <project-full-name>-<container>, e.g. devbox-laravel-app-main.
 	fullContainerName := compose.ProjectName + "-" + svc.Container
 
-	status, stateErr := getState(fullContainerName)
-
 	switch opts.Mode {
 	case "exec":
 		// Always exec; error if container is not running.
+		status, stateErr := getState(fullContainerName)
 		if stateErr != nil || status != "running" {
 			return fmt.Errorf("container %q is not running — start it with 'devbox up'", fullContainerName)
 		}
@@ -130,6 +136,7 @@ func runServicesCLIWith(
 		// Always start a new container, regardless of current state.
 		return runCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 	default: // "auto"
+		status, stateErr := getState(fullContainerName)
 		switch {
 		case stateErr != nil:
 			// Container does not exist — start a new one.
@@ -164,8 +171,8 @@ func resolveUser(flagUser, configUser string, asRoot bool) string {
 }
 
 // containerStateStatus returns the Docker state status string for a container
-// (e.g. "running", "exited", "paused"). Returns an error when the container
-// does not exist.
+// (e.g. "running", "exited", "paused"). Returns the original Docker error when
+// the container does not exist or the daemon is unreachable.
 func containerStateStatus(containerName string) (string, error) {
 	out, err := exec.Command(
 		"docker", "inspect",
@@ -173,7 +180,7 @@ func containerStateStatus(containerName string) (string, error) {
 		containerName,
 	).Output()
 	if err != nil {
-		return "", fmt.Errorf("container %q not found", containerName)
+		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }

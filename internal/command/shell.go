@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -72,6 +73,7 @@ func newShellCmd(flags *rootFlags) *cobra.Command {
 	var flagShell string
 	var flagUser string
 	var flagWorkDir string
+	var flagEnvVars []string
 
 	cmd := &cobra.Command{
 		Use:   "shell [service]",
@@ -123,6 +125,9 @@ service exists, or shows an interactive selector when multiple services are enab
 			}
 			serviceName, err := pickService(cfg, argName, defaultSelectService)
 			if err != nil {
+				if errors.Is(err, ui.ErrCancelled) {
+					return nil
+				}
 				return err
 			}
 
@@ -132,8 +137,9 @@ service exists, or shows an interactive selector when multiple services are enab
 				shell:   flagShell,
 				user:    flagUser,
 				workDir: flagWorkDir,
+				envVars: flagEnvVars,
 			}
-			return runServicesCLI(cfg, compose, serviceName, shellFlags)
+			return runServicesCLI(cfg, compose, serviceName, shellFlags, containerStateStatus, dockerExecCLI, composeRunCLI)
 		},
 	}
 
@@ -142,6 +148,7 @@ service exists, or shows an interactive selector when multiple services are enab
 	cmd.Flags().StringVar(&flagShell, "shell", "", "shell binary to use (e.g. bash, sh, zsh)")
 	cmd.Flags().StringVar(&flagUser, "user", "", "user to run as inside the container")
 	cmd.Flags().StringVar(&flagWorkDir, "workdir", "", "working directory inside the container")
+	cmd.Flags().StringArrayVar(&flagEnvVars, "env", nil, "set an environment variable (KEY=VALUE); overrides service cli.env config")
 	return cmd
 }
 
@@ -152,6 +159,7 @@ type shellCLIFlags struct {
 	shell   string
 	user    string
 	workDir string
+	envVars []string // KEY=VALUE pairs from --env flags; override service cli.env config
 }
 
 // serviceNameCompletion returns a ValidArgsFunction that completes service names
