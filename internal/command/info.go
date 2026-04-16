@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -40,14 +39,7 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 		return fmt.Errorf("loading devbox/info.yml: %w", err)
 	}
 
-	w := render.NewWriter(cmd.OutOrStdout())
-
-	// ASCII art header
-	if len(infoCfg.Header.ASCII.Lines) > 0 {
-		if err := w.ASCII(infoCfg.Header.ASCII.Lines, infoCfg.Header.ASCII.Font, infoCfg.Header.ASCII.Color); err != nil {
-			return fmt.Errorf("header ASCII: %w", err)
-		}
-	}
+	// ASCII art header rendered from styles.yml (wired in Task 5).
 
 	out, err := ui.RenderInfo(cfg, infoCfg)
 	if err != nil {

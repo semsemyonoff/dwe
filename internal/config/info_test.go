@@ -7,14 +7,6 @@ import (
 )
 
 const sampleInfoYML = `
-header:
-  ascii:
-    lines:
-      - "Welcome to"
-      - "Devbox 2.0"
-    font: standard
-    color: blue
-
 sections:
   - id: devbox_info
     items:
@@ -58,18 +50,6 @@ func TestLoadInfoConfig(t *testing.T) {
 		t.Fatalf("LoadInfoConfig: %v", err)
 	}
 
-	if cfg.Header.ASCII.Color != "blue" {
-		t.Errorf("header.ascii.color = %q", cfg.Header.ASCII.Color)
-	}
-	if cfg.Header.ASCII.Font != "standard" {
-		t.Errorf("header.ascii.font = %q", cfg.Header.ASCII.Font)
-	}
-	if len(cfg.Header.ASCII.Lines) != 2 {
-		t.Errorf("header.ascii.lines count = %d, want 2", len(cfg.Header.ASCII.Lines))
-	}
-	if cfg.Header.ASCII.Lines[0] != "Welcome to" {
-		t.Errorf("header.ascii.lines[0] = %q", cfg.Header.ASCII.Lines[0])
-	}
 	if !cfg.Footer {
 		t.Error("footer should be true")
 	}

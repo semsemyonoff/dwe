@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -121,17 +119,7 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 	cfg, err := config.LoadConfig(flags.configPath)
 	switch {
 	case err == nil:
-		// Print ASCII art header from info.yml when available.
-		infoPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "info.yml")
-		if infoCfg, infoErr := config.LoadInfoConfig(infoPath); infoErr == nil {
-			if len(infoCfg.Header.ASCII.Lines) > 0 {
-				w := render.NewWriter(cmd.OutOrStdout())
-				// Header is cosmetic — skip on render error.
-				_ = w.ASCII(infoCfg.Header.ASCII.Lines, infoCfg.Header.ASCII.Font, infoCfg.Header.ASCII.Color)
-				// Blank line after ASCII header so it doesn't run into the summary.
-				_, _ = fmt.Fprintln(cmd.OutOrStdout())
-			}
-		}
+		// ASCII art header rendered from styles.yml (wired in Task 5).
 		// Print compact project summary followed by a blank separator line.
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())

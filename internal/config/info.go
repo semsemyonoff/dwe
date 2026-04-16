@@ -11,7 +11,6 @@ import (
 // It describes what to render when showing project info/help.
 type InfoConfig struct {
 	Settings InfoSettings  `yaml:"settings"`
-	Header   InfoHeader    `yaml:"header"`
 	Sections []InfoSection `yaml:"sections"`
 	// Footer controls whether a closing table header line is printed after all sections.
 	Footer bool `yaml:"footer"`
@@ -22,23 +21,6 @@ type InfoSettings struct {
 	// LineWidth is the inner width (in characters) used for table header padding
 	// and text truncation. Default (0) falls back to 76.
 	LineWidth int `yaml:"line_width"`
-}
-
-// InfoHeader contains the ASCII art banner rendered at the top.
-type InfoHeader struct {
-	ASCII InfoASCII `yaml:"ascii"`
-}
-
-// InfoASCII describes the ASCII art banner to generate at startup.
-// devbox-cli renders each line in Lines as ASCII art using the given font.
-type InfoASCII struct {
-	// Lines are the text strings to render as ASCII art, one per visual block.
-	// Example: ["Welcome to", "Devbox 2.0"]
-	Lines []string `yaml:"lines"`
-	// Font is the figlet font name (default: "standard").
-	Font string `yaml:"font"`
-	// Color is a named color applied to the rendered output (default: "blue").
-	Color string `yaml:"color"`
 }
 
 // InfoSection is a named block of info content, optionally enclosed by a table header.
