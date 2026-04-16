@@ -3,6 +3,7 @@ package command
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -48,14 +49,7 @@ func TestResolveFormats(t *testing.T) {
 			t.Errorf("expected 3 formats, got %d: %v", len(got), got)
 		}
 		for _, f := range []string{"markdown", "yaml", "man"} {
-			found := false
-			for _, g := range got {
-				if g == f {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !slices.Contains(got, f) {
 				t.Errorf("expected format %q in result", f)
 			}
 		}

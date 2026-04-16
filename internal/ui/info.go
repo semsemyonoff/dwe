@@ -57,10 +57,7 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 // renderSectionTitle renders a section header line using Lipgloss styling.
 // Empty text renders a closing separator line.
 func renderSectionTitle(text string) string {
-	width := TermWidth()
-	if width > 100 {
-		width = 100
-	}
+	width := min(TermWidth(), 100)
 
 	if text == "" {
 		return styleMuted.Render(strings.Repeat("─", width))
@@ -72,10 +69,7 @@ func renderSectionTitle(text string) string {
 	labelVisible := " " + text + " "
 	labelWidth := utf8.RuneCountInString(labelVisible)
 
-	remaining := width - 4 - labelWidth
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(width-4-labelWidth, 0)
 	leftDash := styleMuted.Render("──")
 	rightDash := styleMuted.Render(strings.Repeat("─", remaining+2))
 

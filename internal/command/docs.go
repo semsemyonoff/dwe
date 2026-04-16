@@ -97,7 +97,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		if err := genCLIIndex(root, cliDir, df.includeHidden); err != nil {
 			return fmt.Errorf("generating cli index: %w", err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "CLI docs written to %s\n", cliDir)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "CLI docs written to %s\n", cliDir)
 	}
 
 	if scopes["commands"] {
@@ -117,7 +117,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		if err := genCommandsIndex(reg, commandsDir, df.includePrivate); err != nil {
 			return fmt.Errorf("generating commands index: %w", err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Command docs written to %s\n", commandsDir)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Command docs written to %s\n", commandsDir)
 	}
 
 	// Top-level index.
@@ -263,17 +263,17 @@ func genRegistryMarkdown(reg *commands.Registry, dir string) error {
 func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# %s\n\n", def.ID))
+	fmt.Fprintf(&sb, "# %s\n\n", def.ID)
 
 	if def.Description != "" {
 		sb.WriteString(def.Description + "\n\n")
 	}
 
 	sb.WriteString("## Properties\n\n")
-	sb.WriteString(fmt.Sprintf("| Property | Value |\n|---|---|\n"))
-	sb.WriteString(fmt.Sprintf("| **ID** | `%s` |\n", def.ID))
-	sb.WriteString(fmt.Sprintf("| **Type** | `%s` |\n", def.Type))
-	sb.WriteString(fmt.Sprintf("| **Group** | `%s` |\n", def.Group))
+	sb.WriteString("| Property | Value |\n|---|---|\n")
+	fmt.Fprintf(&sb, "| **ID** | `%s` |\n", def.ID)
+	fmt.Fprintf(&sb, "| **Type** | `%s` |\n", def.Type)
+	fmt.Fprintf(&sb, "| **Group** | `%s` |\n", def.Group)
 	if def.Private {
 		sb.WriteString("| **Private** | yes |\n")
 	}
@@ -289,11 +289,11 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 			sb.WriteString("## Argv\n\n```\n" + strings.Join(def.Argv, " ") + "\n```\n\n")
 		}
 		if def.Cwd != "" {
-			sb.WriteString(fmt.Sprintf("**Working directory:** `%s`\n\n", def.Cwd))
+			fmt.Fprintf(&sb, "**Working directory:** `%s`\n\n", def.Cwd)
 		}
 	case commands.CommandTypeServiceExec, commands.CommandTypeServiceRun:
 		if def.Service != "" {
-			sb.WriteString(fmt.Sprintf("**Service:** `%s`\n\n", def.Service))
+			fmt.Fprintf(&sb, "**Service:** `%s`\n\n", def.Service)
 		}
 		if def.Run != "" {
 			sb.WriteString("## Command\n\n```sh\n" + def.Run + "\n```\n\n")
@@ -307,9 +307,9 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 			if shell == "" {
 				shell = "sh"
 			}
-			sb.WriteString(fmt.Sprintf("**Shell:** `%s`\n\n", shell))
+			fmt.Fprintf(&sb, "**Shell:** `%s`\n\n", shell)
 			if def.Script.Path != "" {
-				sb.WriteString(fmt.Sprintf("**Script:** `%s`\n\n", def.Script.Path))
+				fmt.Fprintf(&sb, "**Script:** `%s`\n\n", def.Script.Path)
 			}
 			if def.Script.Run != "" {
 				sb.WriteString("## Script\n\n```sh\n" + def.Script.Run + "\n```\n\n")
@@ -320,7 +320,7 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 			sb.WriteString("## Steps\n\n")
 			for i, step := range def.Steps {
 				if step.Confirm != "" {
-					sb.WriteString(fmt.Sprintf("%d. **confirm:** %s\n", i+1, step.Confirm))
+					fmt.Fprintf(&sb, "%d. **confirm:** %s\n", i+1, step.Confirm)
 				} else {
 					line := fmt.Sprintf("%d. `%s`", i+1, step.Command)
 					if len(step.With) > 0 {
@@ -356,8 +356,8 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 			if defVal == "" && p.DefaultFrom != "" {
 				defVal = fmt.Sprintf("from `%s`", p.DefaultFrom)
 			}
-			sb.WriteString(fmt.Sprintf("| `%s` | `%s` | %s | %s | %s |\n",
-				name, p.Type, required, defVal, p.Description))
+			fmt.Fprintf(&sb, "| `%s` | `%s` | %s | %s | %s |\n",
+				name, p.Type, required, defVal, p.Description)
 		}
 		sb.WriteString("\n")
 	}
@@ -376,7 +376,7 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 			if c.Required {
 				required = "yes"
 			}
-			sb.WriteString(fmt.Sprintf("| `%s` | `%s` | %s | %s |\n", name, c.From, required, c.Env))
+			fmt.Fprintf(&sb, "| `%s` | `%s` | %s | %s |\n", name, c.From, required, c.Env)
 		}
 		sb.WriteString("\n")
 	}
@@ -390,7 +390,7 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			sb.WriteString(fmt.Sprintf("| `%s` | `%s` |\n", k, def.Env[k]))
+			fmt.Fprintf(&sb, "| `%s` | `%s` |\n", k, def.Env[k])
 		}
 		sb.WriteString("\n")
 	}
@@ -432,7 +432,7 @@ func genCommandsIndex(reg *commands.Registry, dir string, includePrivate bool) e
 			if groupLabel == "" {
 				groupLabel = "(root)"
 			}
-			sb.WriteString(fmt.Sprintf("## %s\n\n", groupLabel))
+			fmt.Fprintf(&sb, "## %s\n\n", groupLabel)
 			for _, def := range byGroup[group] {
 				relPath := def.LocalName + ".md"
 				if group != "" {
@@ -446,7 +446,7 @@ func genCommandsIndex(reg *commands.Registry, dir string, includePrivate bool) e
 				if desc == "" {
 					desc = string(def.Type)
 				}
-				sb.WriteString(fmt.Sprintf("- [%s](%s)%s — %s\n", def.ID, relPath, private, desc))
+				fmt.Fprintf(&sb, "- [%s](%s)%s — %s\n", def.ID, relPath, private, desc)
 			}
 			sb.WriteString("\n")
 		}

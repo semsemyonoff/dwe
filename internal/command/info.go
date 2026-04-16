@@ -54,6 +54,6 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 		return fmt.Errorf("rendering info: %w", err)
 	}
 
-	fmt.Fprint(cmd.OutOrStdout(), out)
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 	return nil
 }

@@ -128,8 +128,8 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 		}
 
 		// Print compact project summary followed by a blank separator line.
-		fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
-		fmt.Fprintln(cmd.OutOrStdout())
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 	}
 
 	// Always show help regardless of whether config loaded.
