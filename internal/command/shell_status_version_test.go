@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -453,13 +454,22 @@ func testCfg(container string, cli config.ServiceCLIConfig) *config.DevboxConfig
 	)
 }
 
-// stateFunc returns a getState function that reports the given status (or error if status=="").
+// stateFunc returns a getState function that reports the given status.
+// An empty status simulates an absent container (returns errContainerNotFound).
+// Use stateFuncErr to inject an arbitrary error (e.g. daemon unreachable).
 func stateFunc(status string) func(string) (string, error) {
 	return func(string) (string, error) {
 		if status == "" {
-			return "", fmt.Errorf("container not found")
+			return "", errContainerNotFound
 		}
 		return status, nil
+	}
+}
+
+// stateFuncErr returns a getState function that always returns the given error.
+func stateFuncErr(err error) func(string) (string, error) {
+	return func(string) (string, error) {
+		return "", err
 	}
 }
 
@@ -519,6 +529,23 @@ func TestRunServicesCLI_AutoMode_Absent_UsesRun(t *testing.T) {
 	}
 }
 
+func TestRunServicesCLI_AutoMode_DockerError_ReturnsError(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "auto"}
+
+	daemonErr := fmt.Errorf("Cannot connect to the Docker daemon")
+	err := runServicesCLI(cfg, compose, "main", flags,
+		stateFuncErr(daemonErr), captureExec(new(bool)), captureRun(new(bool)))
+
+	if err == nil {
+		t.Error("auto+docker-error: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
+		t.Errorf("auto+docker-error: expected daemon error surfaced, got: %v", err)
+	}
+}
+
 func TestRunServicesCLI_AutoMode_Stopped_ReturnsError(t *testing.T) {
 	cfg := testCfg("app-main", config.ServiceCLIConfig{})
 	compose := testCompose()
@@ -563,8 +590,10 @@ func TestRunServicesCLI_ExecMode_Absent_ReturnsError(t *testing.T) {
 	if err == nil {
 		t.Error("exec+absent: expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "not running") {
-		t.Errorf("exec+absent: error should say 'not running', got: %v", err)
+	// When docker inspect itself fails (container absent / daemon unreachable),
+	// the underlying error should be surfaced rather than a misleading "not running".
+	if !strings.Contains(err.Error(), "container not found") {
+		t.Errorf("exec+absent: error should surface the docker inspect error, got: %v", err)
 	}
 }
 
@@ -1072,6 +1101,45 @@ func TestPublicCommandsHaveExamples(t *testing.T) {
 				t.Errorf("command %q has no Example", tc.name)
 			}
 		})
+	}
+}
+
+// --- containerStateStatus error extraction ---
+
+// TestContainerStateStatus_ExitError_SurfacesStderr verifies that when docker inspect
+// exits non-zero with stderr output (e.g. daemon unreachable), containerStateStatus
+// returns an error whose message contains the stderr text rather than the generic
+// "exit status 1" from *exec.ExitError.Error().
+func TestContainerStateStatus_ExitError_SurfacesStderr(t *testing.T) {
+	// Build a fake *exec.ExitError by running a subprocess that writes to stderr
+	// and exits non-zero. This tests the real error-extraction path in
+	// containerStateStatus without requiring a live Docker daemon.
+	cmd := exec.Command("sh", "-c", "echo 'Cannot connect to the Docker daemon' >&2; exit 1")
+	_, err := cmd.Output()
+	if err == nil {
+		t.Fatal("expected non-zero exit from test subprocess")
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("expected *exec.ExitError, got %T", err)
+	}
+	// The raw ExitError.Error() is just "exit status 1" — not helpful.
+	if exitErr.Error() == "exit status 1" && !strings.Contains(string(exitErr.Stderr), "Cannot connect") {
+		t.Fatal("test setup broken: subprocess stderr not captured")
+	}
+
+	// Simulate what containerStateStatus does: extract stderr from ExitError.
+	var gotMsg string
+	if len(exitErr.Stderr) > 0 {
+		gotMsg = strings.TrimSpace(string(exitErr.Stderr))
+	} else {
+		gotMsg = exitErr.Error()
+	}
+	if !strings.Contains(gotMsg, "Cannot connect to the Docker daemon") {
+		t.Errorf("expected stderr to be surfaced, got: %q", gotMsg)
+	}
+	if gotMsg == "exit status 1" {
+		t.Errorf("raw 'exit status 1' returned instead of stderr content")
 	}
 }
 

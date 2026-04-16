@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -132,7 +133,10 @@ func runServicesCLI(
 	case "exec":
 		// Always exec; error if container is not running.
 		status, stateErr := getState(fullContainerName)
-		if stateErr != nil || status != "running" {
+		if stateErr != nil {
+			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
+		}
+		if status != "running" {
 			return fmt.Errorf("container %q is not running — start it with 'devbox up'", fullContainerName)
 		}
 		return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
@@ -142,9 +146,12 @@ func runServicesCLI(
 	default: // "auto"
 		status, stateErr := getState(fullContainerName)
 		switch {
-		case stateErr != nil:
+		case errors.Is(stateErr, errContainerNotFound):
 			// Container does not exist — start a new one.
 			return runCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+		case stateErr != nil:
+			// Real Docker error (daemon down, permission denied, etc.) — surface it.
+			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
 		case status == "running":
 			return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 		default:
@@ -174,9 +181,16 @@ func resolveUser(flagUser, configUser string, asRoot bool) string {
 	return ""
 }
 
+// errContainerNotFound is returned by containerStateStatus when the container
+// does not exist (docker inspect "No such object"). It is distinct from a real
+// Docker error (daemon down, permission denied, etc.) so callers can choose to
+// fall back to "docker compose run" only for the absent-container case.
+var errContainerNotFound = fmt.Errorf("container not found")
+
 // containerStateStatus returns the Docker state status string for a container
-// (e.g. "running", "exited", "paused"). Returns the original Docker error when
-// the container does not exist or the daemon is unreachable.
+// (e.g. "running", "exited", "paused"). Returns errContainerNotFound when the
+// container does not exist, or the original Docker error for all other failures
+// (daemon unreachable, permission denied, etc.).
 func containerStateStatus(containerName string) (string, error) {
 	out, err := exec.Command(
 		"docker", "inspect",
@@ -184,6 +198,15 @@ func containerStateStatus(containerName string) (string, error) {
 		containerName,
 	).Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			if strings.Contains(string(exitErr.Stderr), "No such object") {
+				return "", errContainerNotFound
+			}
+			if len(exitErr.Stderr) > 0 {
+				return "", fmt.Errorf("%s", strings.TrimSpace(string(exitErr.Stderr)))
+			}
+		}
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
