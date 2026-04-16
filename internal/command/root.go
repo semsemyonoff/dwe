@@ -89,6 +89,7 @@ Run 'devbox info' to display the current project status.`,
 	addCmd(root, groupAdvanced, newCommandCmd(flags))
 	addCmd(root, groupAdvanced, newDockerCmd(flags))
 	addCmd(root, groupAdvanced, newComposeCmd(flags))
+	addCmd(root, groupAdvanced, newDocsCmd(flags))
 
 	// Add the built-in Cobra completion command to the Advanced group.
 	root.InitDefaultCompletionCmd()
