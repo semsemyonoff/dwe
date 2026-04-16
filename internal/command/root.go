@@ -5,6 +5,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Command group IDs.
+const (
+	groupCore          = "core"
+	groupEnvironment   = "environment"
+	groupConfiguration = "configuration"
+	groupPipelines     = "pipelines"
+	groupAdvanced      = "advanced"
+)
+
 // rootFlags holds flags shared across all commands.
 type rootFlags struct {
 	configPath string
@@ -36,26 +45,54 @@ Run 'devbox info' to display the current project status.`,
 		"path to devbox.yml",
 	)
 
-	root.AddCommand(newInfoCmd(flags))
-	root.AddCommand(newVersionCmd())
-	root.AddCommand(newPrintCmd())
-	root.AddCommand(newRenderCmd(flags))
-	root.AddCommand(newComposeCmd(flags))
-	root.AddCommand(newServiceCmd(flags))
-	root.AddCommand(newToolCmd(flags))
-	root.AddCommand(newDeployCmd(flags))
-	root.AddCommand(newResetCmd(flags))
-	root.AddCommand(newCommandCmd(flags))
-	root.AddCommand(newDockerCmd(flags))
-	root.AddCommand(newUpCmd(flags))
-	root.AddCommand(newDownCmd(flags))
-	root.AddCommand(newStopCmd(flags))
-	root.AddCommand(newRestartCmd(flags))
-	root.AddCommand(newLogsCmd(flags))
-	root.AddCommand(newPsCmd(flags))
-	root.AddCommand(newWaitCmd(flags))
-	root.AddCommand(newShellCmd(flags))
-	root.AddCommand(newStatusCmd(flags))
+	// Define command groups for organized help output.
+	root.AddGroup(
+		&cobra.Group{ID: groupCore, Title: "Core Commands:"},
+		&cobra.Group{ID: groupEnvironment, Title: "Environment Commands:"},
+		&cobra.Group{ID: groupConfiguration, Title: "Configuration Commands:"},
+		&cobra.Group{ID: groupPipelines, Title: "Pipeline Commands:"},
+		&cobra.Group{ID: groupAdvanced, Title: "Advanced Commands:"},
+	)
+
+	// Core group: project info and version.
+	addCmd(root, groupCore, newInfoCmd(flags))
+	addCmd(root, groupCore, newVersionCmd())
+
+	// Environment group: lifecycle and shell access.
+	addCmd(root, groupEnvironment, newUpCmd(flags))
+	addCmd(root, groupEnvironment, newDownCmd(flags))
+	addCmd(root, groupEnvironment, newStopCmd(flags))
+	addCmd(root, groupEnvironment, newRestartCmd(flags))
+	addCmd(root, groupEnvironment, newLogsCmd(flags))
+	addCmd(root, groupEnvironment, newPsCmd(flags))
+	addCmd(root, groupEnvironment, newWaitCmd(flags))
+	addCmd(root, groupEnvironment, newShellCmd(flags))
+	addCmd(root, groupEnvironment, newStatusCmd(flags))
+
+	// Configuration group: services, tools, rendering.
+	addCmd(root, groupConfiguration, newServiceCmd(flags))
+	addCmd(root, groupConfiguration, newToolCmd(flags))
+	addCmd(root, groupConfiguration, newRenderCmd(flags))
+
+	// Pipelines group: deploy and reset.
+	addCmd(root, groupPipelines, newDeployCmd(flags))
+	addCmd(root, groupPipelines, newResetCmd(flags))
+
+	// Advanced group: low-level and diagnostic commands.
+	addCmd(root, groupAdvanced, newCommandCmd(flags))
+	addCmd(root, groupAdvanced, newDockerCmd(flags))
+	addCmd(root, groupAdvanced, newComposeCmd(flags))
+
+	// Internal: hidden Make-compatibility command.
+	printCmd := newPrintCmd()
+	printCmd.Hidden = true
+	root.AddCommand(printCmd)
 
 	return root
+}
+
+// addCmd assigns a group ID to cmd and adds it to parent.
+func addCmd(parent *cobra.Command, groupID string, cmd *cobra.Command) {
+	cmd.GroupID = groupID
+	parent.AddCommand(cmd)
 }
