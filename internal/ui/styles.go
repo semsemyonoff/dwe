@@ -8,6 +8,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
+
+	"devbox-cli/internal/config"
 )
 
 // Styles follow the Fang aesthetic: simple, high-contrast, terminal-friendly.
@@ -33,10 +35,68 @@ var (
 
 	// styleValue renders definition values: no styling (inherits terminal default).
 	styleValue = lipgloss.NewStyle()
+
+	// Semantic status styles.
+	styleEnabled   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	styleDisabled  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	styleMandatory = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	stylePartial   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+
+	// Table styles.
+	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
 )
 
 // defSep is the delimiter used between a definition label and its value.
-const defSep = "—"
+var defSep = "—"
+
+// ApplyStyles rebuilds package-level style vars from the provided StylesConfig.
+// Fields with empty color strings are skipped — the existing defaults are preserved.
+func ApplyStyles(cfg *config.StylesConfig) {
+	if cfg == nil {
+		return
+	}
+	c := cfg.Colors
+	if c.Label != "" {
+		styleKey = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Label)).Bold(true)
+	}
+	if c.SectionTitle != "" {
+		styleSectionTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.SectionTitle))
+	}
+	if c.SubHeader != "" {
+		styleSubheader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.SubHeader))
+	}
+	if c.Muted != "" {
+		styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Muted))
+	}
+	if c.Warning != "" {
+		styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Warning))
+	}
+	if c.Info != "" {
+		styleInfoText = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Info))
+	}
+	if c.Enabled != "" {
+		styleEnabled = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Enabled))
+	}
+	if c.Disabled != "" {
+		styleDisabled = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Disabled))
+	}
+	if c.Mandatory != "" {
+		styleMandatory = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Mandatory)).Bold(true)
+	}
+	if c.Partial != "" {
+		stylePartial = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Partial))
+	}
+	if c.TableBorder != "" {
+		styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color(c.TableBorder))
+	}
+	if c.TableHeader != "" {
+		styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color(c.TableHeader)).Bold(true)
+	}
+	if cfg.Separator != "" {
+		defSep = cfg.Separator
+	}
+}
 
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.
