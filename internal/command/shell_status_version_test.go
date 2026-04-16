@@ -2,10 +2,12 @@ package command
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
@@ -253,6 +255,284 @@ func TestResolveShellOptions_EnvNilWhenEmpty(t *testing.T) {
 	// Env should be an initialized (non-nil) map even when empty.
 	if opts.Env == nil {
 		t.Error("Env should be non-nil even when no env vars are configured")
+	}
+}
+
+// --- Task 4: mode logic and env passthrough ---
+
+// testCompose returns a minimal docker.Compose for tests (no project name, no files).
+func testCompose() *docker.Compose {
+	return &docker.Compose{ProjectName: "test", Files: nil, GlobalArgs: nil}
+}
+
+// testCfg builds a DevboxConfig with a single service "main" using the given container name.
+func testCfg(container string, cli config.ServiceCLIConfig) *config.DevboxConfig {
+	return makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: container, CLI: cli},
+		},
+		config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{},
+	)
+}
+
+// stateFunc returns a getState function that reports the given status (or error if status=="").
+func stateFunc(status string) func(string) (string, error) {
+	return func(string) (string, error) {
+		if status == "" {
+			return "", fmt.Errorf("container not found")
+		}
+		return status, nil
+	}
+}
+
+// captureExec returns a shellExecFunc that records the call in called and returns nil.
+func captureExec(called *bool) shellExecFunc {
+	return func(containerName, shell, u, workDir string, env map[string]string) error {
+		*called = true
+		return nil
+	}
+}
+
+// captureRun returns a shellRunFunc that records the call in called and returns nil.
+func captureRun(called *bool) shellRunFunc {
+	return func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error {
+		*called = true
+		return nil
+	}
+}
+
+func TestRunServicesCLI_AutoMode_Running_UsesExec(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "auto"}
+
+	execCalled, runCalled := false, false
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("running"), captureExec(&execCalled), captureRun(&runCalled))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !execCalled {
+		t.Error("auto+running: expected exec to be called")
+	}
+	if runCalled {
+		t.Error("auto+running: expected run NOT to be called")
+	}
+}
+
+func TestRunServicesCLI_AutoMode_Absent_UsesRun(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "auto"}
+
+	execCalled, runCalled := false, false
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc(""), captureExec(&execCalled), captureRun(&runCalled))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if execCalled {
+		t.Error("auto+absent: expected exec NOT to be called")
+	}
+	if !runCalled {
+		t.Error("auto+absent: expected run to be called")
+	}
+}
+
+func TestRunServicesCLI_AutoMode_Stopped_ReturnsError(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "auto"}
+
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("exited"), captureExec(new(bool)), captureRun(new(bool)))
+
+	if err == nil {
+		t.Error("auto+stopped: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "exited") {
+		t.Errorf("auto+stopped: error should mention status 'exited', got: %v", err)
+	}
+}
+
+func TestRunServicesCLI_ExecMode_Running_UsesExec(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "exec"}
+
+	execCalled := false
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("running"), captureExec(&execCalled), captureRun(new(bool)))
+
+	if err != nil {
+		t.Fatalf("exec+running: unexpected error: %v", err)
+	}
+	if !execCalled {
+		t.Error("exec+running: expected exec to be called")
+	}
+}
+
+func TestRunServicesCLI_ExecMode_Absent_ReturnsError(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "exec"}
+
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc(""), captureExec(new(bool)), captureRun(new(bool)))
+
+	if err == nil {
+		t.Error("exec+absent: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not running") {
+		t.Errorf("exec+absent: error should say 'not running', got: %v", err)
+	}
+}
+
+func TestRunServicesCLI_ExecMode_Stopped_ReturnsError(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "exec"}
+
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("exited"), captureExec(new(bool)), captureRun(new(bool)))
+
+	if err == nil {
+		t.Error("exec+stopped: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not running") {
+		t.Errorf("exec+stopped: error should say 'not running', got: %v", err)
+	}
+}
+
+func TestRunServicesCLI_RunMode_Running_UsesRun(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "run"}
+
+	runCalled := false
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("running"), captureExec(new(bool)), captureRun(&runCalled))
+
+	if err != nil {
+		t.Fatalf("run+running: unexpected error: %v", err)
+	}
+	if !runCalled {
+		t.Error("run+running: expected run to be called")
+	}
+}
+
+func TestRunServicesCLI_RunMode_Absent_UsesRun(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "run"}
+
+	runCalled := false
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc(""), captureExec(new(bool)), captureRun(&runCalled))
+
+	if err != nil {
+		t.Fatalf("run+absent: unexpected error: %v", err)
+	}
+	if !runCalled {
+		t.Error("run+absent: expected run to be called")
+	}
+}
+
+func TestRunServicesCLI_RunMode_Stopped_UsesRun(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "run"}
+
+	runCalled := false
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("exited"), captureExec(new(bool)), captureRun(&runCalled))
+
+	if err != nil {
+		t.Fatalf("run+stopped: unexpected error: %v", err)
+	}
+	if !runCalled {
+		t.Error("run+stopped: expected run to be called even when stopped")
+	}
+}
+
+func TestRunServicesCLI_EnvPassthroughToExec(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{
+		Env: map[string]string{"FOO": "bar"},
+	})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "exec"}
+
+	var capturedEnv map[string]string
+	execFn := func(containerName, shell, u, workDir string, env map[string]string) error {
+		capturedEnv = env
+		return nil
+	}
+
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("running"), execFn, captureRun(new(bool)))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedEnv["FOO"] != "bar" {
+		t.Errorf("env passthrough to exec: expected FOO=bar, got %q", capturedEnv["FOO"])
+	}
+}
+
+func TestRunServicesCLI_EnvPassthroughToRun(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{
+		Env: map[string]string{"DB_HOST": "localhost"},
+	})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "run"}
+
+	var capturedEnv map[string]string
+	runFn := func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error {
+		capturedEnv = env
+		return nil
+	}
+
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc(""), captureExec(new(bool)), runFn)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedEnv["DB_HOST"] != "localhost" {
+		t.Errorf("env passthrough to run: expected DB_HOST=localhost, got %q", capturedEnv["DB_HOST"])
+	}
+}
+
+func TestRunServicesCLI_UnknownService_ReturnsError(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{}
+
+	err := runServicesCLIWith(cfg, compose, "unknown", flags,
+		stateFunc("running"), captureExec(new(bool)), captureRun(new(bool)))
+
+	if err == nil {
+		t.Error("expected error for unknown service, got nil")
+	}
+}
+
+func TestRunServicesCLI_NoContainer_ReturnsError(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: ""},
+		},
+		config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{},
+	)
+	compose := testCompose()
+	flags := shellCLIFlags{}
+
+	err := runServicesCLIWith(cfg, compose, "main", flags,
+		stateFunc("running"), captureExec(new(bool)), captureRun(new(bool)))
+
+	if err == nil {
+		t.Error("expected error for service with no container, got nil")
 	}
 }
 

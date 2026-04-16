@@ -67,12 +67,11 @@ func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, sv
 	// --- User ---
 	u := resolveUser(flags.user, svcCLI.User, flags.asRoot)
 
-	// --- Env: merge config env first, then flag env overrides ---
+	// --- Env: merge config env; config values are passed to the container. ---
 	env := make(map[string]string)
 	for k, v := range svcCLI.Env {
 		env[k] = v
 	}
-	// (flag-level env override will be wired in Task 4 when --env flag is added)
 
 	return shellOptions{
 		Mode:    mode,
@@ -83,9 +82,28 @@ func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, sv
 	}
 }
 
+// shellExecFunc is the function signature for executing a shell in a running container.
+type shellExecFunc func(containerName, shell, u, workDir string, env map[string]string) error
+
+// shellRunFunc is the function signature for starting a new container shell.
+type shellRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error
+
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.
 func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceName string, flags shellCLIFlags) error {
+	return runServicesCLIWith(cfg, compose, serviceName, flags, containerStateStatus, dockerExecCLI, composeRunCLI)
+}
+
+// runServicesCLIWith is the testable version of runServicesCLI with injectable state and runner functions.
+func runServicesCLIWith(
+	cfg *config.DevboxConfig,
+	compose *docker.Compose,
+	serviceName string,
+	flags shellCLIFlags,
+	getState func(string) (string, error),
+	execCLI shellExecFunc,
+	runCLI shellRunFunc,
+) error {
 	svc, ok := cfg.Services[serviceName]
 	if !ok {
 		return fmt.Errorf("service %q not found", serviceName)
@@ -100,19 +118,31 @@ func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceNa
 	// <project-full-name>-<container>, e.g. devbox-laravel-app-main.
 	fullContainerName := compose.ProjectName + "-" + svc.Container
 
-	status, err := containerStateStatus(fullContainerName)
+	status, stateErr := getState(fullContainerName)
 
-	switch {
-	case err != nil:
-		// Container does not exist.
-		return composeRunCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir)
-	case status == "running":
-		return dockerExecCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir)
-	default:
-		return fmt.Errorf(
-			"container %q is %s — start it first with 'devbox up'",
-			fullContainerName, status,
-		)
+	switch opts.Mode {
+	case "exec":
+		// Always exec; error if container is not running.
+		if stateErr != nil || status != "running" {
+			return fmt.Errorf("container %q is not running — start it with 'devbox up'", fullContainerName)
+		}
+		return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+	case "run":
+		// Always start a new container, regardless of current state.
+		return runCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+	default: // "auto"
+		switch {
+		case stateErr != nil:
+			// Container does not exist — start a new one.
+			return runCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+		case status == "running":
+			return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+		default:
+			return fmt.Errorf(
+				"container %q is %s — start it first with 'devbox up'",
+				fullContainerName, status,
+			)
+		}
 	}
 }
 
@@ -150,13 +180,16 @@ func containerStateStatus(containerName string) (string, error) {
 }
 
 // dockerExecCLI runs an interactive shell in a running container via docker exec.
-func dockerExecCLI(containerName, shell, u, workDir string) error {
+func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string) error {
 	args := []string{"exec", "-it"}
 	if u != "" {
 		args = append(args, "-u", u)
 	}
 	if workDir != "" {
 		args = append(args, "-w", workDir)
+	}
+	for _, k := range sortedKeys(env) {
+		args = append(args, "-e", k+"="+env[k])
 	}
 	args = append(args, containerName, shell)
 
@@ -166,7 +199,7 @@ func dockerExecCLI(containerName, shell, u, workDir string) error {
 
 // composeRunCLI starts a new temporary container via docker compose run --rm.
 // It uses the shared Compose struct for project name, file list, and global args.
-func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir string) error {
+func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error {
 	args := []string{"compose"}
 	if compose.ProjectName != "" {
 		args = append(args, "-p", compose.ProjectName)
@@ -181,6 +214,9 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 	}
 	if workDir != "" {
 		args = append(args, "-w", workDir)
+	}
+	for _, k := range sortedKeys(env) {
+		args = append(args, "-e", k+"="+env[k])
 	}
 	args = append(args, serviceName, shell)
 
