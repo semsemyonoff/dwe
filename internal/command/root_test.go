@@ -1,6 +1,10 @@
 package command
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -102,4 +106,87 @@ func TestRenderCmdRegisteredWithGroup(t *testing.T) {
 		}
 	}
 	t.Error("render command not found in root commands")
+}
+
+// TestRootCmdRunEIsSet verifies root RunE is configured.
+func TestRootCmdRunEIsSet(t *testing.T) {
+	root := NewRootCmd()
+	if root.RunE == nil {
+		t.Error("root command should have a RunE handler")
+	}
+}
+
+// TestRootCmdNoConfigShowsHelp verifies that running root without a config file
+// still produces help output (no error, no crash).
+func TestRootCmdNoConfigShowsHelp(t *testing.T) {
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{})
+	if err := root.PersistentFlags().Set("config", "/tmp/nonexistent-devbox-xyz-123.yml"); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+
+	// Execute must not return an error when config is missing.
+	if err := root.Execute(); err != nil {
+		t.Errorf("root command returned unexpected error when config missing: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "devbox") {
+		t.Errorf("root output should contain 'devbox', got:\n%s", out)
+	}
+}
+
+// TestRootCmdWithConfigShowsSummaryAndHelp verifies that root command shows the
+// project summary (from config) followed by Cobra help output.
+func TestRootCmdWithConfigShowsSummaryAndHelp(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgYAML := `project:
+  name: testproject
+  prefix: devbox
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0644); err != nil {
+		t.Fatalf("writing temp config: %v", err)
+	}
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+
+	if err := root.Execute(); err != nil {
+		t.Errorf("root command returned error: %v", err)
+	}
+	out := buf.String()
+
+	// Project name must appear in the summary.
+	if !strings.Contains(out, "testproject") {
+		t.Errorf("root output should contain project name 'testproject', got:\n%s", out)
+	}
+	// Help must be present (root command name).
+	if !strings.Contains(out, "devbox") {
+		t.Errorf("root output should contain help text with 'devbox', got:\n%s", out)
+	}
+}
+
+// TestRootCmdInfoIsNotDuplicated verifies that `devbox info` is a separate code
+// path from root: the info command still exists as a subcommand.
+func TestRootCmdInfoIsNotDuplicated(t *testing.T) {
+	root := NewRootCmd()
+	var found bool
+	for _, c := range root.Commands() {
+		if c.Name() == "info" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("info command should still be a distinct subcommand")
+	}
 }

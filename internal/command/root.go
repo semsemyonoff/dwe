@@ -2,6 +2,13 @@
 package command
 
 import (
+	"fmt"
+	"path/filepath"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
+
 	"github.com/spf13/cobra"
 )
 
@@ -30,9 +37,9 @@ func NewRootCmd() *cobra.Command {
 
 It provides config validation, rendering, topology inspection, and project info display.
 Run 'devbox info' to display the current project status.`,
-		// Running 'devbox' with no subcommand shows project info.
+		// Running 'devbox' with no subcommand shows project summary + help.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInfo(flags)
+			return runRoot(cmd, flags)
 		},
 		// Suppress cobra's default "Run 'devbox --help' for more information" footer.
 		SilenceUsage: true,
@@ -95,4 +102,29 @@ Run 'devbox info' to display the current project status.`,
 func addCmd(parent *cobra.Command, groupID string, cmd *cobra.Command) {
 	cmd.GroupID = groupID
 	parent.AddCommand(cmd)
+}
+
+// runRoot is the handler for `devbox` with no subcommand.
+// It prints an ASCII header and compact project summary (when a config is
+// found), followed by the Cobra/Fang help output.
+func runRoot(cmd *cobra.Command, flags *rootFlags) error {
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err == nil {
+		// Print ASCII art header from info.yml when available.
+		infoPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "info.yml")
+		if infoCfg, infoErr := config.LoadInfoConfig(infoPath); infoErr == nil {
+			if len(infoCfg.Header.ASCII.Lines) > 0 {
+				w := render.NewWriter(cmd.OutOrStdout())
+				// Header is cosmetic — skip on render error.
+				_ = w.ASCII(infoCfg.Header.ASCII.Lines, infoCfg.Header.ASCII.Font, infoCfg.Header.ASCII.Color)
+			}
+		}
+
+		// Print compact project summary followed by a blank separator line.
+		fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
+		fmt.Fprintln(cmd.OutOrStdout())
+	}
+
+	// Always show help regardless of whether config loaded.
+	return cmd.Help()
 }
