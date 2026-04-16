@@ -66,3 +66,46 @@ func TestRenderTable_UsesTableStyles(t *testing.T) {
 	}
 	resetStyles()
 }
+
+func TestRenderServiceTable_Basic(t *testing.T) {
+	resetStyles()
+	rows := []ServiceTableRow{
+		{Name: "main", Container: "app-main", Mandatory: true, Running: true},
+		{Name: "second", Container: "app-second", Enabled: true, Running: false},
+		{Name: "worker", Container: "app-worker", Mandatory: false, Enabled: false},
+	}
+	out := RenderServiceTable(rows)
+
+	for _, want := range []string{
+		"NAME", "CONTAINER", "STATE", "RUNNING",
+		"main", "app-main", "mandatory", "running",
+		"second", "app-second", "enabled", "stopped",
+		"worker", "app-worker", "disabled",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderServiceTable_Empty(t *testing.T) {
+	resetStyles()
+	out := RenderServiceTable(nil)
+	if !strings.Contains(out, "NAME") {
+		t.Error("expected header NAME in empty service table")
+	}
+	if !strings.Contains(out, "STATE") {
+		t.Error("expected header STATE in empty service table")
+	}
+}
+
+func TestRenderServiceTable_DisabledRunStr(t *testing.T) {
+	resetStyles()
+	rows := []ServiceTableRow{
+		{Name: "tool", Container: "c-tool", Mandatory: false, Enabled: false},
+	}
+	out := RenderServiceTable(rows)
+	if !strings.Contains(out, "—") {
+		t.Errorf("disabled service should show em-dash run status\nfull output:\n%s", out)
+	}
+}

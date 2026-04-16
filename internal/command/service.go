@@ -10,6 +10,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -42,6 +43,11 @@ func newServiceListCmd(flags *rootFlags) *cobra.Command {
 		Example: "  devbox services list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Load and apply styles (graceful — missing styles.yml uses defaults).
+			stylesPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "styles.yml")
+			stylesCfg, _ := config.LoadStylesConfig(stylesPath)
+			ui.ApplyStyles(stylesCfg)
+
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
@@ -69,81 +75,28 @@ func containerRunning(projectFullName, containerName string) bool {
 	return strings.TrimSpace(string(out)) != ""
 }
 
-// runServiceList prints the service list with aligned columns and colored status.
+// runServiceList prints the service list as a styled Lipgloss table.
 func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCheckFn) error {
-	names := make([]string, 0, len(cfg.Services))
-	for name := range cfg.Services {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	// Compute column widths.
-	maxName := len("NAME")
-	maxContainer := len("CONTAINER")
-	for _, name := range names {
-		if len(name) > maxName {
-			maxName = len(name)
-		}
-		if c := len(cfg.Services[name].Container); c > maxContainer {
-			maxContainer = c
-		}
-	}
-
-	statusWidth := 5 // "● on " / "✔ on " / "✘ off"
-
+	names := sortedKeys(cfg.Services)
 	projectFull := cfg.Project.FullName()
-	out := w.Writer()
 
-	// Header.
-	_, _ = fmt.Fprintf(out,
-		"  %s%-*s  %-*s  %-*s  %s%s\n",
-		render.White, maxName, "NAME", maxContainer, "CONTAINER", statusWidth, "STATE", "RUNNING", render.Reset,
-	)
-
+	rows := make([]ui.ServiceTableRow, 0, len(names))
 	for _, name := range names {
 		svc := cfg.Services[name]
-
-		// Status: icon + label, then pad to statusWidth.
-		var icon, label, statusColor string
-		switch {
-		case svc.Mandatory:
-			icon, label, statusColor = "●", "on", render.Blue
-		case svc.Enabled:
-			icon, label, statusColor = "✔", "on", render.Green
-		default:
-			icon, label, statusColor = "✘", "off", render.Gray
-		}
-		statusText := icon + " " + label
-		statusPad := strings.Repeat(" ", max(statusWidth-len(icon)-1-len(label), 0))
-
-		// Running state.
-		var runStr string
+		running := false
 		if svc.Mandatory || svc.Enabled {
-			if isRunning(projectFull, svc.Container) {
-				runStr = render.Green + "running" + render.Reset
-			} else {
-				runStr = render.Yellow + "stopped" + render.Reset
-			}
-		} else {
-			runStr = render.Gray + "—" + render.Reset
+			running = isRunning(projectFull, svc.Container)
 		}
-
-		nameColor := render.Blue
-		containerColor := render.Reset
-		if !svc.Mandatory && !svc.Enabled {
-			nameColor = render.Gray
-			containerColor = render.Gray
-		}
-
-		_, _ = fmt.Fprintf(out,
-			"  %s%-*s%s  %s%-*s%s  %s%s%s%s  %s\n",
-			nameColor, maxName, name, render.Reset,
-			containerColor, maxContainer, svc.Container, render.Reset,
-			statusColor, statusText, render.Reset, statusPad,
-			runStr,
-		)
+		rows = append(rows, ui.ServiceTableRow{
+			Name:      name,
+			Container: svc.Container,
+			Mandatory: svc.Mandatory,
+			Enabled:   svc.Enabled,
+			Running:   running,
+		})
 	}
 
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderServiceTable(rows))
 	return nil
 }
 

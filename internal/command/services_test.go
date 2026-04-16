@@ -139,6 +139,51 @@ func TestBuildToolRows_someEnabled(t *testing.T) {
 	}
 }
 
+func TestRunServiceList_LipglossTable(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: false},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	neverRunning := func(_, _ string) bool { return false }
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+	if err := runServiceList(w, cfg, neverRunning); err != nil {
+		t.Fatalf("runServiceList error: %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{
+		"NAME", "CONTAINER", "STATE", "RUNNING",
+		"main", "app-main", "mandatory", "stopped",
+		"second", "app-second", "disabled",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunServiceList_EnabledRunning(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main": {Type: "app", Container: "app-main", Enabled: true},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	alwaysRunning := func(_, _ string) bool { return true }
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+	if err := runServiceList(w, cfg, alwaysRunning); err != nil {
+		t.Fatalf("runServiceList error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "running") {
+		t.Errorf("enabled running service should show 'running'\nfull output:\n%s", out)
+	}
+}
+
 func TestRunServices_containsExpectedText(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"main": {Type: "app", Dir: "./services/main"},
