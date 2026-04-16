@@ -162,30 +162,25 @@ func pickServiceToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (st
 
 // pickToggleCandidates resolves a service name from a candidate list.
 // - Empty list → error mentioning statusLabel.
-// - Exactly one → auto-selected.
-// - Multiple → selector is invoked.
+// - One or more → selector is always invoked.
 func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel, title string, selector selectToggleFn) (string, error) {
-	switch len(names) {
-	case 0:
+	if len(names) == 0 {
 		return "", fmt.Errorf("no %s optional services found", statusLabel)
-	case 1:
-		return names[0], nil
-	default:
-		items := make([]ui.SelectorItem, len(names))
-		for i, name := range names {
-			svc := cfg.Services[name]
-			items[i] = ui.SelectorItem{
-				Label:       name,
-				Description: svc.Container,
-				Status:      statusLabel,
-			}
-		}
-		idx, err := selector(title, items)
-		if err != nil {
-			return "", err
-		}
-		return names[idx], nil
 	}
+	items := make([]ui.SelectorItem, len(names))
+	for i, name := range names {
+		svc := cfg.Services[name]
+		items[i] = ui.SelectorItem{
+			Label:       name,
+			Description: svc.Container,
+			Status:      statusLabel,
+		}
+	}
+	idx, err := selector(title, items)
+	if err != nil {
+		return "", err
+	}
+	return names[idx], nil
 }
 
 func newServiceEnableCmd(flags *rootFlags) *cobra.Command {

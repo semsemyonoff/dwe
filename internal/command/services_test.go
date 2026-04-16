@@ -203,15 +203,27 @@ func TestPickServiceToEnable_NoDisabled_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestPickServiceToEnable_SingleDisabled_AutoSelect(t *testing.T) {
+func TestPickServiceToEnable_SingleDisabled_ShowsSelector(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"main":   {Type: "app", Container: "app-main", Mandatory: true},
 		"second": {Type: "app", Container: "app-second", Enabled: false},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
-	name, err := pickServiceToEnable(cfg, neverToggleFn(t))
+	selectorCalled := false
+	sel := func(title string, items []ui.SelectorItem) (int, error) {
+		selectorCalled = true
+		if len(items) != 1 {
+			t.Errorf("expected 1 item in selector, got %d", len(items))
+		}
+		return 0, nil
+	}
+
+	name, err := pickServiceToEnable(cfg, sel)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !selectorCalled {
+		t.Error("selector should have been called even for a single item")
 	}
 	if name != "second" {
 		t.Errorf("expected 'second', got %q", name)
@@ -288,15 +300,27 @@ func TestPickServiceToDisable_NoEnabled_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestPickServiceToDisable_SingleEnabled_AutoSelect(t *testing.T) {
+func TestPickServiceToDisable_SingleEnabled_ShowsSelector(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"main":   {Type: "app", Container: "app-main", Mandatory: true},
 		"second": {Type: "app", Container: "app-second", Enabled: true},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
-	name, err := pickServiceToDisable(cfg, neverToggleFn(t))
+	selectorCalled := false
+	sel := func(title string, items []ui.SelectorItem) (int, error) {
+		selectorCalled = true
+		if len(items) != 1 {
+			t.Errorf("expected 1 item in selector, got %d", len(items))
+		}
+		return 0, nil
+	}
+
+	name, err := pickServiceToDisable(cfg, sel)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !selectorCalled {
+		t.Error("selector should have been called even for a single item")
 	}
 	if name != "second" {
 		t.Errorf("expected 'second', got %q", name)

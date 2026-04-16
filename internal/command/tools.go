@@ -116,7 +116,7 @@ disabled tools.`,
 					return err
 				}
 			}
-			return setToolEnabled(flags.configPath, cfg, name, true)
+			return setToolEnabled(flags.configPath, name, true)
 		},
 		SilenceUsage: true,
 	}
@@ -153,7 +153,7 @@ enabled tools.`,
 					return err
 				}
 			}
-			return setToolEnabled(flags.configPath, cfg, name, false)
+			return setToolEnabled(flags.configPath, name, false)
 		},
 		SilenceUsage: true,
 	}
@@ -189,28 +189,23 @@ func pickToolToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (strin
 
 // pickToolCandidates resolves a tool name from a candidate list.
 // - Empty list → error mentioning statusLabel.
-// - Exactly one → auto-selected.
-// - Multiple → selector is invoked.
+// - One or more → selector is always invoked.
 func pickToolCandidates(rows []toolRow, statusLabel, title string, selector selectToggleFn) (string, error) {
-	switch len(rows) {
-	case 0:
+	if len(rows) == 0 {
 		return "", fmt.Errorf("no %s tools found", statusLabel)
-	case 1:
-		return rows[0].Name, nil
-	default:
-		items := make([]ui.SelectorItem, len(rows))
-		for i, row := range rows {
-			items[i] = ui.SelectorItem{
-				Label:  row.Name,
-				Status: statusLabel,
-			}
-		}
-		idx, err := selector(title, items)
-		if err != nil {
-			return "", err
-		}
-		return rows[idx].Name, nil
 	}
+	items := make([]ui.SelectorItem, len(rows))
+	for i, row := range rows {
+		items[i] = ui.SelectorItem{
+			Label:  row.Name,
+			Status: statusLabel,
+		}
+	}
+	idx, err := selector(title, items)
+	if err != nil {
+		return "", err
+	}
+	return rows[idx].Name, nil
 }
 
 // toolNameCompletion completes tool names from the known tools set.
@@ -235,7 +230,7 @@ var knownTools = map[string]bool{
 
 // setToolEnabled writes tools.<name>.enabled = value to devbox/local.yml,
 // then regenerates .env.
-func setToolEnabled(configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
+func setToolEnabled(configPath string, name string, enabled bool) error {
 	if !knownTools[name] {
 		return fmt.Errorf("tool %q not found", name)
 	}

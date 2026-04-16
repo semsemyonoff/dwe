@@ -130,16 +130,28 @@ func TestPickToolToEnable_NoneDisabled_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestPickToolToEnable_SingleDisabled_AutoSelect(t *testing.T) {
+func TestPickToolToEnable_SingleDisabled_ShowsSelector(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
 		Adminer:      config.ToolConfig{Enabled: false},
 		RedisInsight: config.ToolConfig{Enabled: true},
 		Mailpit:      config.ToolConfig{Enabled: true},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 
-	name, err := pickToolToEnable(cfg, neverToolToggleFn(t))
+	selectorCalled := false
+	sel := func(title string, items []ui.SelectorItem) (int, error) {
+		selectorCalled = true
+		if len(items) != 1 {
+			t.Errorf("expected 1 item in selector, got %d", len(items))
+		}
+		return 0, nil
+	}
+
+	name, err := pickToolToEnable(cfg, sel)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !selectorCalled {
+		t.Error("selector should have been called even for a single item")
 	}
 	if name != "adminer" {
 		t.Errorf("expected 'adminer', got %q", name)
@@ -210,16 +222,28 @@ func TestPickToolToDisable_NoneEnabled_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestPickToolToDisable_SingleEnabled_AutoSelect(t *testing.T) {
+func TestPickToolToDisable_SingleEnabled_ShowsSelector(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
 		Adminer:      config.ToolConfig{Enabled: false},
 		RedisInsight: config.ToolConfig{Enabled: false},
 		Mailpit:      config.ToolConfig{Enabled: true},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 
-	name, err := pickToolToDisable(cfg, neverToolToggleFn(t))
+	selectorCalled := false
+	sel := func(title string, items []ui.SelectorItem) (int, error) {
+		selectorCalled = true
+		if len(items) != 1 {
+			t.Errorf("expected 1 item in selector, got %d", len(items))
+		}
+		return 0, nil
+	}
+
+	name, err := pickToolToDisable(cfg, sel)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !selectorCalled {
+		t.Error("selector should have been called even for a single item")
 	}
 	if name != "mailpit" {
 		t.Errorf("expected 'mailpit', got %q", name)

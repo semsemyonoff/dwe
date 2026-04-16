@@ -191,12 +191,19 @@ var errContainerNotFound = fmt.Errorf("container not found")
 // (e.g. "running", "exited", "paused"). Returns errContainerNotFound when the
 // container does not exist, or the original Docker error for all other failures
 // (daemon unreachable, permission denied, etc.).
-func containerStateStatus(containerName string) (string, error) {
-	out, err := exec.Command(
+// processEnv is applied to the docker process so that DOCKER_HOST / DOCKER_CONTEXT
+// overrides from docker.yml process_env are honoured for the probe.
+func containerStateStatus(containerName string, processEnv []string) (string, error) {
+	// Use a conditional template so that containers without a State field
+	// (e.g. when Docker returns an unexpected object type) return an empty
+	// string rather than a template execution error.
+	cmd := exec.Command(
 		"docker", "inspect",
-		"--format", "{{.State.Status}}",
+		"--format", "{{if .State}}{{.State.Status}}{{end}}",
 		containerName,
-	).Output()
+	)
+	cmd.Env = processEnv
+	out, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
@@ -209,11 +216,17 @@ func containerStateStatus(containerName string) (string, error) {
 		}
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	status := strings.TrimSpace(string(out))
+	if status == "" {
+		// State field was absent — container exists but is not usable.
+		return "", errContainerNotFound
+	}
+	return status, nil
 }
 
 // dockerExecCLI runs an interactive shell in a running container via docker exec.
-func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string) error {
+// processEnv is the OS-level environment for the docker process itself (e.g. DOCKER_CLI_HINTS=false).
+func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string, processEnv []string) error {
 	args := []string{"exec", "-it"}
 	if u != "" {
 		args = append(args, "-u", u)
@@ -227,7 +240,7 @@ func dockerExecCLI(containerName, shell, u, workDir string, env map[string]strin
 	args = append(args, containerName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("exec → %s", containerName))
-	return runInteractive("docker", args...)
+	return runInteractive(processEnv, "docker", args...)
 }
 
 // composeRunCLI starts a new temporary container via docker compose run --rm.
@@ -254,15 +267,17 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 	args = append(args, serviceName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("run → %s (new container)", serviceName))
-	return runInteractive("docker", args...)
+	return runInteractive(compose.BuildEnv(), "docker", args...)
 }
 
 // runInteractive executes a command with the current process's stdin/stdout/stderr,
-// allowing full interactive terminal use.
-func runInteractive(name string, args ...string) error {
+// allowing full interactive terminal use. processEnv overrides the OS environment
+// for the child process (nil means inherit unchanged).
+func runInteractive(processEnv []string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = processEnv
 	return cmd.Run()
 }

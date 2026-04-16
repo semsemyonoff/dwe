@@ -262,7 +262,56 @@ type ServiceCLIConfig struct {
 	// Falls back to service.work_dir_internal, then dir_internal.
 	WorkDir string `yaml:"workdir"`
 	// Env is a map of environment variables to pass into the container session.
+	// Accepts both map form (KEY: VALUE) and list form (- KEY=VALUE).
 	Env map[string]string `yaml:"env"`
+}
+
+// UnmarshalYAML supports both map and list forms for the Env field.
+// Map form:   env: { KEY: VALUE }
+// List form:  env: [ "KEY=VALUE" ]
+func (c *ServiceCLIConfig) UnmarshalYAML(value *yaml.Node) error {
+	// Decode using a type alias to avoid infinite recursion.
+	type cliAlias struct {
+		Mode    string    `yaml:"mode"`
+		Shell   string    `yaml:"shell"`
+		User    string    `yaml:"user"`
+		WorkDir string    `yaml:"workdir"`
+		Env     yaml.Node `yaml:"env"`
+	}
+	var a cliAlias
+	if err := value.Decode(&a); err != nil {
+		return err
+	}
+	c.Mode = a.Mode
+	c.Shell = a.Shell
+	c.User = a.User
+	c.WorkDir = a.WorkDir
+
+	if a.Env.Kind == 0 {
+		// env key was not present.
+		return nil
+	}
+
+	switch a.Env.Kind {
+	case yaml.MappingNode:
+		// Map form: env: { KEY: VALUE }
+		if err := a.Env.Decode(&c.Env); err != nil {
+			return fmt.Errorf("cli.env: %w", err)
+		}
+	case yaml.SequenceNode:
+		// List form: env: [ "KEY=VALUE" ]
+		c.Env = make(map[string]string)
+		for _, item := range a.Env.Content {
+			k, v, found := strings.Cut(item.Value, "=")
+			if !found || k == "" {
+				return fmt.Errorf("cli.env: %q is not in KEY=VALUE format", item.Value)
+			}
+			c.Env[k] = v
+		}
+	default:
+		return fmt.Errorf("cli.env: must be a map or a list of KEY=VALUE strings")
+	}
+	return nil
 }
 
 // ToolsConfig holds the set of optional development tools.
