@@ -12,6 +12,77 @@ import (
 	"devbox-cli/internal/render"
 )
 
+// shellOptions holds fully resolved shell session parameters after applying
+// flag -> config -> default priority.
+type shellOptions struct {
+	Mode    string            // "auto", "exec", or "run"
+	Shell   string            // shell binary, e.g. "bash"
+	User    string            // container user or UID
+	WorkDir string            // working directory inside container
+	Env     map[string]string // environment variables to pass into the container
+}
+
+// resolveShellOptions merges CLI flags, service CLI config, and built-in defaults
+// using the priority: flag (non-empty) > config (non-empty) > built-in default.
+//
+// Built-in defaults:
+//   - Mode:    "auto"
+//   - Shell:   "bash"
+//   - User:    current OS UID (empty string if unavailable)
+//   - WorkDir: svc.WorkDirInternal, then svc.DirInternal, then ""
+//   - Env:     empty map
+//
+// --root (flags.asRoot) overrides User to "root" at the highest priority level.
+func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, svc config.ServiceConfig) shellOptions {
+	// --- Mode ---
+	mode := flags.mode
+	if mode == "" {
+		mode = svcCLI.Mode
+	}
+	if mode == "" {
+		mode = "auto"
+	}
+
+	// --- Shell ---
+	shell := flags.shell
+	if shell == "" {
+		shell = svcCLI.Shell
+	}
+	if shell == "" {
+		shell = "bash"
+	}
+
+	// --- WorkDir ---
+	workDir := flags.workDir
+	if workDir == "" {
+		workDir = svcCLI.WorkDir
+	}
+	if workDir == "" {
+		workDir = svc.WorkDirInternal
+	}
+	if workDir == "" {
+		workDir = svc.DirInternal
+	}
+
+	// --- User ---
+	u := resolveUser(flags.user, svcCLI.User, flags.asRoot)
+
+	// --- Env: merge config env first, then flag env overrides ---
+	env := make(map[string]string)
+	for k, v := range svcCLI.Env {
+		env[k] = v
+	}
+	// (flag-level env override will be wired in Task 4 when --env flag is added)
+
+	return shellOptions{
+		Mode:    mode,
+		Shell:   shell,
+		User:    u,
+		WorkDir: workDir,
+		Env:     env,
+	}
+}
+
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.
 func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceName string, flags shellCLIFlags) error {
@@ -23,26 +94,7 @@ func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceNa
 		return fmt.Errorf("service %q has no container defined", serviceName)
 	}
 
-	shell := flags.shell
-	if shell == "" {
-		shell = svc.CLI.Shell
-	}
-	if shell == "" {
-		shell = "bash"
-	}
-
-	workDir := flags.workDir
-	if workDir == "" {
-		workDir = svc.CLI.WorkDir
-	}
-	if workDir == "" {
-		workDir = svc.WorkDirInternal
-	}
-	if workDir == "" {
-		workDir = svc.DirInternal
-	}
-
-	u := resolveUser(flags.user, svc.CLI.User, flags.asRoot)
+	opts := resolveShellOptions(flags, svc.CLI, svc)
 
 	// Container name matches the container_name field in compose.yaml:
 	// <project-full-name>-<container>, e.g. devbox-laravel-app-main.
@@ -53,9 +105,9 @@ func runServicesCLI(cfg *config.DevboxConfig, compose *docker.Compose, serviceNa
 	switch {
 	case err != nil:
 		// Container does not exist.
-		return composeRunCLI(compose, svc.Container, shell, u, workDir)
+		return composeRunCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir)
 	case status == "running":
-		return dockerExecCLI(fullContainerName, shell, u, workDir)
+		return dockerExecCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir)
 	default:
 		return fmt.Errorf(
 			"container %q is %s — start it first with 'devbox up'",

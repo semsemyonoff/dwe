@@ -132,6 +132,130 @@ func TestResolveUser_RootOverridesAll(t *testing.T) {
 	}
 }
 
+// --- resolveShellOptions tests ---
+
+func TestResolveShellOptions_FlagOverridesConfig(t *testing.T) {
+	flags := shellCLIFlags{mode: "run", shell: "zsh", user: "deploy", workDir: "/app"}
+	svcCLI := config.ServiceCLIConfig{Mode: "exec", Shell: "sh", User: "www-data", WorkDir: "/var/www"}
+	svc := config.ServiceConfig{WorkDirInternal: "/work", DirInternal: "/dir"}
+
+	opts := resolveShellOptions(flags, svcCLI, svc)
+
+	if opts.Mode != "run" {
+		t.Errorf("Mode: flag should override config, got %q", opts.Mode)
+	}
+	if opts.Shell != "zsh" {
+		t.Errorf("Shell: flag should override config, got %q", opts.Shell)
+	}
+	if opts.User != "deploy" {
+		t.Errorf("User: flag should override config, got %q", opts.User)
+	}
+	if opts.WorkDir != "/app" {
+		t.Errorf("WorkDir: flag should override config, got %q", opts.WorkDir)
+	}
+}
+
+func TestResolveShellOptions_ConfigOverridesDefault(t *testing.T) {
+	flags := shellCLIFlags{}
+	svcCLI := config.ServiceCLIConfig{Mode: "exec", Shell: "sh", User: "www-data", WorkDir: "/var/www"}
+	svc := config.ServiceConfig{}
+
+	opts := resolveShellOptions(flags, svcCLI, svc)
+
+	if opts.Mode != "exec" {
+		t.Errorf("Mode: config should override default, got %q", opts.Mode)
+	}
+	if opts.Shell != "sh" {
+		t.Errorf("Shell: config should override default, got %q", opts.Shell)
+	}
+	if opts.User != "www-data" {
+		t.Errorf("User: config should override default, got %q", opts.User)
+	}
+	if opts.WorkDir != "/var/www" {
+		t.Errorf("WorkDir: config should override default, got %q", opts.WorkDir)
+	}
+}
+
+func TestResolveShellOptions_BuiltinDefaults(t *testing.T) {
+	flags := shellCLIFlags{}
+	svcCLI := config.ServiceCLIConfig{}
+	svc := config.ServiceConfig{}
+
+	opts := resolveShellOptions(flags, svcCLI, svc)
+
+	if opts.Mode != "auto" {
+		t.Errorf("Mode default should be 'auto', got %q", opts.Mode)
+	}
+	if opts.Shell != "bash" {
+		t.Errorf("Shell default should be 'bash', got %q", opts.Shell)
+	}
+	// User default is current UID or empty — just check it doesn't panic.
+	if opts.WorkDir != "" {
+		t.Errorf("WorkDir default should be empty when svc has no dirs, got %q", opts.WorkDir)
+	}
+}
+
+func TestResolveShellOptions_WorkDirFallbackChain(t *testing.T) {
+	flags := shellCLIFlags{}
+	svcCLI := config.ServiceCLIConfig{}
+
+	// work_dir_internal takes priority over dir_internal.
+	svc1 := config.ServiceConfig{WorkDirInternal: "/work", DirInternal: "/dir"}
+	opts1 := resolveShellOptions(flags, svcCLI, svc1)
+	if opts1.WorkDir != "/work" {
+		t.Errorf("WorkDir: work_dir_internal should take priority, got %q", opts1.WorkDir)
+	}
+
+	// When work_dir_internal is empty, dir_internal is used.
+	svc2 := config.ServiceConfig{DirInternal: "/dir"}
+	opts2 := resolveShellOptions(flags, svcCLI, svc2)
+	if opts2.WorkDir != "/dir" {
+		t.Errorf("WorkDir: dir_internal fallback, got %q", opts2.WorkDir)
+	}
+}
+
+func TestResolveShellOptions_RootOverridesUser(t *testing.T) {
+	flags := shellCLIFlags{asRoot: true, user: "deploy"}
+	svcCLI := config.ServiceCLIConfig{User: "www-data"}
+	svc := config.ServiceConfig{}
+
+	opts := resolveShellOptions(flags, svcCLI, svc)
+
+	if opts.User != "root" {
+		t.Errorf("User: --root should override all, got %q", opts.User)
+	}
+}
+
+func TestResolveShellOptions_EnvFromConfig(t *testing.T) {
+	flags := shellCLIFlags{}
+	svcCLI := config.ServiceCLIConfig{
+		Env: map[string]string{"FOO": "bar", "BAZ": "qux"},
+	}
+	svc := config.ServiceConfig{}
+
+	opts := resolveShellOptions(flags, svcCLI, svc)
+
+	if opts.Env["FOO"] != "bar" {
+		t.Errorf("Env: expected FOO=bar from config, got %q", opts.Env["FOO"])
+	}
+	if opts.Env["BAZ"] != "qux" {
+		t.Errorf("Env: expected BAZ=qux from config, got %q", opts.Env["BAZ"])
+	}
+}
+
+func TestResolveShellOptions_EnvNilWhenEmpty(t *testing.T) {
+	flags := shellCLIFlags{}
+	svcCLI := config.ServiceCLIConfig{}
+	svc := config.ServiceConfig{}
+
+	opts := resolveShellOptions(flags, svcCLI, svc)
+
+	// Env should be an initialized (non-nil) map even when empty.
+	if opts.Env == nil {
+		t.Error("Env should be non-nil even when no env vars are configured")
+	}
+}
+
 // --- status command ---
 
 func TestNewStatusCmd_UseField(t *testing.T) {
