@@ -2,11 +2,19 @@ BINARY_NAME := devbox
 BIN_DIR     := ../bin
 MODULE      := devbox-cli
 
+VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS  := -X devbox-cli/internal/version.Version=$(VERSION) \
+            -X devbox-cli/internal/version.Commit=$(COMMIT) \
+            -X devbox-cli/internal/version.Date=$(DATE) \
+            -X devbox-cli/internal/version.BuiltBy=make
+
 .PHONY: build test test-v clean tidy lint
 
 build: tidy
 	@mkdir -p $(BIN_DIR)
-	go build -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/devbox
+	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/devbox
 	@echo "Built: $(BIN_DIR)/$(BINARY_NAME)"
 
 test:
