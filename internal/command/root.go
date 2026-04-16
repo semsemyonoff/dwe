@@ -90,6 +90,12 @@ Run 'devbox info' to display the current project status.`,
 	addCmd(root, groupAdvanced, newDockerCmd(flags))
 	addCmd(root, groupAdvanced, newComposeCmd(flags))
 
+	// Add the built-in Cobra completion command to the Advanced group.
+	root.InitDefaultCompletionCmd()
+	if completionCmd, _, err := root.Find([]string{"completion"}); err == nil && completionCmd != nil {
+		completionCmd.GroupID = groupAdvanced
+	}
+
 	// Internal: hidden Make-compatibility command.
 	printCmd := newPrintCmd()
 	printCmd.Hidden = true

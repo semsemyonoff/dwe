@@ -140,9 +140,10 @@ func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning contai
 
 func newServiceEnableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "enable <service>",
-		Short: "Enable an optional service (writes to devbox/local.yml)",
-		Args:  cobra.ExactArgs(1),
+		Use:               "enable <service>",
+		Short:             "Enable an optional service (writes to devbox/local.yml)",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: optionalServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -156,9 +157,10 @@ func newServiceEnableCmd(flags *rootFlags) *cobra.Command {
 
 func newServiceDisableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "disable <service>",
-		Short: "Disable an optional service (writes to devbox/local.yml)",
-		Args:  cobra.ExactArgs(1),
+		Use:               "disable <service>",
+		Short:             "Disable an optional service (writes to devbox/local.yml)",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: optionalServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -167,6 +169,28 @@ func newServiceDisableCmd(flags *rootFlags) *cobra.Command {
 			return setServiceEnabled(flags.configPath, cfg, args[0], false)
 		},
 		SilenceUsage: true,
+	}
+}
+
+// optionalServiceNameCompletion completes non-mandatory service names (those
+// that can be enabled or disabled).
+func optionalServiceNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		cfg, err := config.LoadConfig(flags.configPath)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		var names []string
+		for name, svc := range cfg.Services {
+			if !svc.Mandatory {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		return names, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 

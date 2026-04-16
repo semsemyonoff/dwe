@@ -39,8 +39,9 @@ For each service directory (services/<name>/):
 
 Enabled editors are controlled by the ide: section in devbox/defaults.yml.
 Templates are read from devbox/templates/ide/ in the project root.`,
-		Args:         cobra.MaximumNArgs(1),
-		SilenceUsage: true,
+		Args:              cobra.MaximumNArgs(1),
+		SilenceUsage:      true,
+		ValidArgsFunction: serviceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {

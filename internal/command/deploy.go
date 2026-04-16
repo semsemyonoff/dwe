@@ -452,6 +452,30 @@ func newDeployStepCmd(flags *rootFlags) *cobra.Command {
 		Use:   "step <phase>/<step>",
 		Short: "Run a single deploy step by <phase>/<step> address",
 		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) != 0 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			var completions []string
+			completions = cobra.AppendActiveHelp(completions, "Use 'devbox deploy plan' to see available phase/step addresses")
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return completions, cobra.ShellCompDirectiveNoFileComp
+			}
+			steps, err := resolveDeployPlan(cfg)
+			if err != nil {
+				return completions, cobra.ShellCompDirectiveNoFileComp
+			}
+			for _, s := range steps {
+				addr := s.phase.Name + "/" + s.step.Name
+				desc := s.step.Description
+				if desc == "" {
+					desc = s.step.Name
+				}
+				completions = append(completions, cobra.CompletionWithDesc(addr, desc))
+			}
+			return completions, cobra.ShellCompDirectiveNoFileComp
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {

@@ -26,8 +26,9 @@ Shell, user, and working directory defaults are read from the cli: section
 in devbox/services.yml and can be overridden with flags.
 
 When only one service is defined, the service argument may be omitted.`,
-		Args:         cobra.MaximumNArgs(1),
-		SilenceUsage: true,
+		Args:              cobra.MaximumNArgs(1),
+		SilenceUsage:      true,
+		ValidArgsFunction: serviceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -60,4 +61,20 @@ When only one service is defined, the service argument may be omitted.`,
 
 	cmd.Flags().BoolVar(&asRoot, "root", false, "run as root user")
 	return cmd
+}
+
+// serviceNameCompletion returns a ValidArgsFunction that completes service names
+// from the loaded devbox config.
+func serviceNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		cfg, err := config.LoadConfig(flags.configPath)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		names := sortedKeys(cfg.Services)
+		return names, cobra.ShellCompDirectiveNoFileComp
+	}
 }

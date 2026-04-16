@@ -60,7 +60,7 @@ func newCommandListCmd(flags *rootFlags) *cobra.Command {
 }
 
 func newCommandInspectCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "inspect <id>",
 		Short: "Show full command definition",
 		Args:  cobra.ExactArgs(1),
@@ -77,17 +77,20 @@ func newCommandInspectCmd(flags *rootFlags) *cobra.Command {
 			printCommandInspect(render.Stdout(), def)
 			return nil
 		},
-		SilenceUsage: true,
+		SilenceUsage:      true,
+		ValidArgsFunction: registryIDCompletion(flags, true),
 	}
+	return cmd
 }
 
 func newCommandRunCmd(flags *rootFlags) *cobra.Command {
 	var setFlags []string
 
 	cmd := &cobra.Command{
-		Use:   "run <id>",
-		Short: "Run a devbox command",
-		Args:  cobra.ExactArgs(1),
+		Use:               "run <id>",
+		Short:             "Run a devbox command",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: registryIDCompletion(flags, false),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
 			cfg, err := config.LoadConfig(flags.configPath)
@@ -257,6 +260,42 @@ func commandDefToTreeNode(cmd *commands.CommandDef) *render.TreeNode {
 		Label: cmd.LocalName,
 		Tags:  tags,
 		Desc:  cmd.Description,
+	}
+}
+
+// registryIDCompletion returns a ValidArgsFunction that completes command IDs
+// from the registry. When includePrivate is true, private command IDs are also
+// returned (useful for `inspect`). When false, only public IDs are returned
+// (useful for `run`).
+func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// Only complete the first positional argument.
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		reg, err := loadCommandRegistry(flags.configPath)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		var defs []*commands.CommandDef
+		if includePrivate {
+			defs = reg.ListAll("")
+		} else {
+			defs = reg.List("")
+		}
+		completions := make([]string, 0, len(defs)+1)
+		if !includePrivate && len(defs) > 0 {
+			// Active Help: hint for run subcommand.
+			completions = cobra.AppendActiveHelp(completions, "Use 'devbox commands inspect <id>' to see command details")
+		}
+		for _, d := range defs {
+			entry := d.ID
+			if d.Description != "" {
+				entry = cobra.CompletionWithDesc(d.ID, d.Description)
+			}
+			completions = append(completions, entry)
+		}
+		return completions, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 

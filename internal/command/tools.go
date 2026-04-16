@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"devbox-cli/internal/config"
@@ -116,9 +117,10 @@ func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning container
 
 func newToolEnableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "enable <tool>",
-		Short: "Enable an optional tool (writes to devbox/local.yml)",
-		Args:  cobra.ExactArgs(1),
+		Use:               "enable <tool>",
+		Short:             "Enable an optional tool (writes to devbox/local.yml)",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: toolNameCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -132,9 +134,10 @@ func newToolEnableCmd(flags *rootFlags) *cobra.Command {
 
 func newToolDisableCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "disable <tool>",
-		Short: "Disable an optional tool (writes to devbox/local.yml)",
-		Args:  cobra.ExactArgs(1),
+		Use:               "disable <tool>",
+		Short:             "Disable an optional tool (writes to devbox/local.yml)",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: toolNameCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -144,6 +147,19 @@ func newToolDisableCmd(flags *rootFlags) *cobra.Command {
 		},
 		SilenceUsage: true,
 	}
+}
+
+// toolNameCompletion completes tool names from the known tools set.
+func toolNameCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	names := make([]string, 0, len(knownTools))
+	for name := range knownTools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
 // knownTools is the set of valid tool names.
