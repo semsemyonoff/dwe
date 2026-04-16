@@ -220,9 +220,9 @@ func TestPickServiceToEnable_SingleDisabled_AutoSelect(t *testing.T) {
 
 func TestPickServiceToEnable_MultipleDisabled_CallsSelector(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"alpha":  {Type: "app", Container: "app-alpha", Enabled: false},
-		"beta":   {Type: "app", Container: "app-beta", Enabled: false},
+		"main":  {Type: "app", Container: "app-main", Mandatory: true},
+		"alpha": {Type: "app", Container: "app-alpha", Enabled: false},
+		"beta":  {Type: "app", Container: "app-beta", Enabled: false},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	selectorCalled := false
@@ -305,9 +305,9 @@ func TestPickServiceToDisable_SingleEnabled_AutoSelect(t *testing.T) {
 
 func TestPickServiceToDisable_MultipleEnabled_CallsSelector(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"alpha":  {Type: "app", Container: "app-alpha", Enabled: true},
-		"beta":   {Type: "app", Container: "app-beta", Enabled: true},
+		"main":  {Type: "app", Container: "app-main", Mandatory: true},
+		"alpha": {Type: "app", Container: "app-alpha", Enabled: true},
+		"beta":  {Type: "app", Container: "app-beta", Enabled: true},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	selectorCalled := false

@@ -1,6 +1,7 @@
 package command
 
 import (
+	"fmt"
 	"testing"
 
 	"devbox-cli/internal/commands"
@@ -337,4 +338,173 @@ func contains(s, substr string) bool {
 			}
 			return false
 		}())
+}
+
+// --- resolveCommandID ---
+
+// noopSelector is a selectCommandFn that always returns the first item's ID.
+// Used to test that the selector is called without actually running a TUI.
+func noopSelector(defs []*commands.CommandDef, _ string) (string, error) {
+	if len(defs) == 0 {
+		return "", fmt.Errorf("no commands")
+	}
+	return defs[0].ID, nil
+}
+
+// captureSelector records the title and def IDs it was called with, then returns the first item.
+type captureSelector struct {
+	calledWith []string
+	title      string
+}
+
+func (c *captureSelector) selector(defs []*commands.CommandDef, title string) (string, error) {
+	c.title = title
+	for _, d := range defs {
+		c.calledWith = append(c.calledWith, d.ID)
+	}
+	if len(defs) == 0 {
+		return "", fmt.Errorf("no commands")
+	}
+	return defs[0].ID, nil
+}
+
+func TestResolveCommandID_exactID(t *testing.T) {
+	// When the arg matches a full command ID, return it directly without calling selector.
+	selectorCalled := false
+	mockSelector := func(defs []*commands.CommandDef, title string) (string, error) {
+		selectorCalled = true
+		return defs[0].ID, nil
+	}
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+
+	got, err := resolveCommandID(reg, []string{"db.up"}, false, mockSelector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "db.up" {
+		t.Errorf("want %q, got %q", "db.up", got)
+	}
+	if selectorCalled {
+		t.Error("selector should NOT be called for exact ID")
+	}
+}
+
+func TestResolveCommandID_noArg_callsSelector(t *testing.T) {
+	// When no arg is given, selector is called with all public commands.
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	reg.AddCommandForTest(&commands.CommandDef{ID: "app.install", LocalName: "install", Group: "app", Type: commands.CommandTypeCommand, Private: false})
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: commands.CommandTypeCommand, Private: true})
+
+	cs := &captureSelector{}
+	_, err := resolveCommandID(reg, []string{}, false, cs.selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only public commands should be in selector.
+	if len(cs.calledWith) != 2 {
+		t.Errorf("expected 2 public commands, got %d: %v", len(cs.calledWith), cs.calledWith)
+	}
+	for _, id := range cs.calledWith {
+		if id == "db.secret" {
+			t.Error("private command should not appear in selector")
+		}
+	}
+}
+
+func TestResolveCommandID_noArg_includePrivate(t *testing.T) {
+	// When includePrivate is true and no arg, selector gets all commands.
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: commands.CommandTypeCommand, Private: true})
+
+	cs := &captureSelector{}
+	_, err := resolveCommandID(reg, []string{}, true, cs.selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cs.calledWith) != 2 {
+		t.Errorf("expected 2 commands (include private), got %d: %v", len(cs.calledWith), cs.calledWith)
+	}
+}
+
+func TestResolveCommandID_groupPrefix_callsFilteredSelector(t *testing.T) {
+	// When arg is a group prefix, selector is called with only those group commands.
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "services.main.migrate", LocalName: "migrate", Group: "services.main", Type: commands.CommandTypeServiceExec, Private: false})
+	reg.AddCommandForTest(&commands.CommandDef{ID: "services.main.seed", LocalName: "seed", Group: "services.main", Type: commands.CommandTypeServiceExec, Private: false})
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+
+	cs := &captureSelector{}
+	_, err := resolveCommandID(reg, []string{"services.main"}, false, cs.selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only services.main.* commands should be in selector.
+	if len(cs.calledWith) != 2 {
+		t.Errorf("expected 2 commands in group, got %d: %v", len(cs.calledWith), cs.calledWith)
+	}
+	for _, id := range cs.calledWith {
+		if !contains(id, "services.main.") {
+			t.Errorf("unexpected command in group selector: %q", id)
+		}
+	}
+	// Title should include the group prefix.
+	if !contains(cs.title, "services.main") {
+		t.Errorf("title should contain group prefix, got %q", cs.title)
+	}
+}
+
+func TestResolveCommandID_unknownArg_error(t *testing.T) {
+	// When arg is neither a command ID nor a group prefix, return an error.
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+
+	_, err := resolveCommandID(reg, []string{"nonexistent"}, false, noopSelector)
+	if err == nil {
+		t.Fatal("expected error for unknown arg, got nil")
+	}
+}
+
+func TestResolveCommandID_noArg_emptyRegistry_error(t *testing.T) {
+	// When no arg and no commands exist, return an error.
+	reg := commands.NewEmptyRegistry()
+	_, err := resolveCommandID(reg, []string{}, false, noopSelector)
+	if err == nil {
+		t.Fatal("expected error for empty registry, got nil")
+	}
+}
+
+// --- commands run/inspect accept optional arg ---
+
+func TestCommandRunCmd_AcceptsOptionalArg(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandRunCmd(flags)
+	// 0 args OK
+	if err := cmd.Args(cmd, []string{}); err != nil {
+		t.Errorf("0 args should be accepted: %v", err)
+	}
+	// 1 arg OK
+	if err := cmd.Args(cmd, []string{"db.up"}); err != nil {
+		t.Errorf("1 arg should be accepted: %v", err)
+	}
+	// 2 args should fail
+	if err := cmd.Args(cmd, []string{"db.up", "extra"}); err == nil {
+		t.Error("2 args should be rejected")
+	}
+}
+
+func TestCommandInspectCmd_AcceptsOptionalArg(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandInspectCmd(flags)
+	if err := cmd.Args(cmd, []string{}); err != nil {
+		t.Errorf("0 args should be accepted: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{"db.up"}); err != nil {
+		t.Errorf("1 arg should be accepted: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{"db.up", "extra"}); err == nil {
+		t.Error("2 args should be rejected")
+	}
 }

@@ -122,6 +122,15 @@ func (r *Registry) ensureGroup(id string) *GroupNode {
 	return gn
 }
 
+// AddCommandForTest inserts a CommandDef directly into the registry.
+// It is intended only for use in unit tests that need a populated Registry
+// without loading YAML files from disk.
+func (r *Registry) AddCommandForTest(def *CommandDef) {
+	r.byID[def.ID] = def
+	gn := r.ensureGroup(def.Group)
+	gn.Commands = append(gn.Commands, def)
+}
+
 // Get returns the CommandDef for the given full command ID.
 // Returns an error when the ID is not found.
 func (r *Registry) Get(id string) (*CommandDef, error) {

@@ -78,17 +78,27 @@ Use --all to include private commands.`,
 
 func newCommandInspectCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "inspect <id>",
+		Use:   "inspect [id|group]",
 		Short: "Show full command definition",
 		Long: `Show the full definition of a declarative command by its dot-separated ID.
 
-Displays type, run/argv, params, context variables, env, and workflow steps.`,
-		Example: `  devbox commands inspect db.up
+Displays type, run/argv, params, context variables, env, and workflow steps.
+
+When called without an argument, an interactive selector lists all commands.
+When called with a group prefix (e.g. 'services.main'), the selector is
+filtered to that group.  When called with a full command ID, it inspects
+directly without showing a selector.`,
+		Example: `  devbox commands inspect
+  devbox commands inspect services.main
+  devbox commands inspect db.up
   devbox commands inspect services.main.migrate`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id := args[0]
 			reg, err := loadCommandRegistry(flags.configPath)
+			if err != nil {
+				return err
+			}
+			id, err := resolveCommandID(reg, args, true, defaultSelectCommand)
 			if err != nil {
 				return err
 			}
@@ -109,23 +119,33 @@ func newCommandRunCmd(flags *rootFlags) *cobra.Command {
 	var setFlags []string
 
 	cmd := &cobra.Command{
-		Use:   "run <id>",
+		Use:   "run [id|group]",
 		Short: "Run a devbox command",
 		Long: `Execute a declarative command by its dot-separated ID.
 
 Use --set key=value to override declared params at runtime.
-Private commands cannot be run directly.`,
-		Example: `  devbox commands run db.up
+Private commands cannot be run directly.
+
+When called without an argument, an interactive selector lists all public
+commands.  When called with a group prefix (e.g. 'services.main'), the
+selector is filtered to that group.  When called with a full command ID,
+it runs directly without showing a selector.`,
+		Example: `  devbox commands run
+  devbox commands run services.main
+  devbox commands run db.up
   devbox commands run services.main.migrate --set db=mydb`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: registryIDCompletion(flags, false),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id := args[0]
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
 			reg, err := loadCommandRegistry(flags.configPath)
+			if err != nil {
+				return err
+			}
+			id, err := resolveCommandID(reg, args, false, defaultSelectCommand)
 			if err != nil {
 				return err
 			}
@@ -197,6 +217,65 @@ func loadCommandRegistry(configPath string) (*commands.Registry, error) {
 		return nil, fmt.Errorf("command registry validation: %w", err)
 	}
 	return reg, nil
+}
+
+// selectCommandFn is the function signature for interactive command selection.
+// It receives a slice of CommandDefs and a display title, and returns the chosen ID.
+type selectCommandFn func(defs []*commands.CommandDef, title string) (string, error)
+
+// defaultSelectCommand shows an interactive selector via ui.RunSelector.
+func defaultSelectCommand(defs []*commands.CommandDef, title string) (string, error) {
+	items := make([]ui.SelectorItem, len(defs))
+	for i, d := range defs {
+		items[i] = ui.SelectorItem{
+			Label:       d.ID,
+			Description: d.Description,
+		}
+	}
+	idx, err := ui.RunSelector(title, items)
+	if err != nil {
+		return "", err
+	}
+	return defs[idx].ID, nil
+}
+
+// resolveCommandID determines the target command ID from optional positional args.
+//
+//   - No args: calls selector with all public (or all when includePrivate is true) commands.
+//   - One arg that is a full command ID (registry.Get succeeds): returns it directly.
+//   - One arg that is a group prefix (registry.List returns results): calls selector
+//     filtered to that group.
+//   - One arg that is neither: returns an error.
+func resolveCommandID(reg *commands.Registry, args []string, includePrivate bool, selector selectCommandFn) (string, error) {
+	if len(args) == 1 {
+		arg := args[0]
+		// Exact command ID — use directly without selector.
+		if _, err := reg.Get(arg); err == nil {
+			return arg, nil
+		}
+		// Try as a group prefix.
+		var defs []*commands.CommandDef
+		if includePrivate {
+			defs = reg.ListAll(arg)
+		} else {
+			defs = reg.List(arg)
+		}
+		if len(defs) == 0 {
+			return "", fmt.Errorf("command %q not found", arg)
+		}
+		return selector(defs, "Select command ("+arg+")")
+	}
+	// No arg — show full list.
+	var defs []*commands.CommandDef
+	if includePrivate {
+		defs = reg.ListAll("")
+	} else {
+		defs = reg.List("")
+	}
+	if len(defs) == 0 {
+		return "", fmt.Errorf("no commands available")
+	}
+	return selector(defs, "Select command")
 }
 
 // parseSetFlags parses --set key=value flags into a map.
