@@ -34,7 +34,7 @@ type shellOptions struct {
 //   - Env:     empty map
 //
 // --root (flags.asRoot) overrides User to "root" at the highest priority level.
-func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, svc config.ServiceConfig) shellOptions {
+func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, svc config.ServiceConfig) (shellOptions, error) {
 	// --- Mode ---
 	mode := flags.mode
 	if mode == "" {
@@ -72,10 +72,11 @@ func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, sv
 	env := make(map[string]string)
 	maps.Copy(env, svcCLI.Env)
 	for _, kv := range flags.envVars {
-		k, v, _ := strings.Cut(kv, "=")
-		if k != "" {
-			env[k] = v
+		k, v, found := strings.Cut(kv, "=")
+		if !found || k == "" {
+			return shellOptions{}, fmt.Errorf("--env %q: expected KEY=VALUE format", kv)
 		}
+		env[k] = v
 	}
 
 	return shellOptions{
@@ -84,7 +85,7 @@ func resolveShellOptions(flags shellCLIFlags, svcCLI config.ServiceCLIConfig, sv
 		User:    u,
 		WorkDir: workDir,
 		Env:     env,
-	}
+	}, nil
 }
 
 // shellExecFunc is the function signature for executing a shell in a running container.
@@ -113,7 +114,10 @@ func runServicesCLI(
 		return fmt.Errorf("service %q has no container defined", serviceName)
 	}
 
-	opts := resolveShellOptions(flags, svc.CLI, svc)
+	opts, err := resolveShellOptions(flags, svc.CLI, svc)
+	if err != nil {
+		return err
+	}
 
 	// Validate the resolved mode — catches typos in devbox/services.yml or defaults.yml.
 	if !validModes[opts.Mode] {

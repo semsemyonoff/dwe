@@ -143,7 +143,10 @@ func TestResolveShellOptions_FlagOverridesConfig(t *testing.T) {
 	svcCLI := config.ServiceCLIConfig{Mode: "exec", Shell: "sh", User: "www-data", WorkDir: "/var/www"}
 	svc := config.ServiceConfig{WorkDirInternal: "/work", DirInternal: "/dir"}
 
-	opts := resolveShellOptions(flags, svcCLI, svc)
+	opts, err := resolveShellOptions(flags, svcCLI, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if opts.Mode != "run" {
 		t.Errorf("Mode: flag should override config, got %q", opts.Mode)
@@ -164,7 +167,10 @@ func TestResolveShellOptions_ConfigOverridesDefault(t *testing.T) {
 	svcCLI := config.ServiceCLIConfig{Mode: "exec", Shell: "sh", User: "www-data", WorkDir: "/var/www"}
 	svc := config.ServiceConfig{}
 
-	opts := resolveShellOptions(flags, svcCLI, svc)
+	opts, err := resolveShellOptions(flags, svcCLI, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if opts.Mode != "exec" {
 		t.Errorf("Mode: config should override default, got %q", opts.Mode)
@@ -185,7 +191,10 @@ func TestResolveShellOptions_BuiltinDefaults(t *testing.T) {
 	svcCLI := config.ServiceCLIConfig{}
 	svc := config.ServiceConfig{}
 
-	opts := resolveShellOptions(flags, svcCLI, svc)
+	opts, err := resolveShellOptions(flags, svcCLI, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if opts.Mode != "auto" {
 		t.Errorf("Mode default should be 'auto', got %q", opts.Mode)
@@ -208,14 +217,20 @@ func TestResolveShellOptions_WorkDirFallbackChain(t *testing.T) {
 
 	// work_dir_internal takes priority over dir_internal.
 	svc1 := config.ServiceConfig{WorkDirInternal: "/work", DirInternal: "/dir"}
-	opts1 := resolveShellOptions(flags, svcCLI, svc1)
+	opts1, err := resolveShellOptions(flags, svcCLI, svc1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if opts1.WorkDir != "/work" {
 		t.Errorf("WorkDir: work_dir_internal should take priority, got %q", opts1.WorkDir)
 	}
 
 	// When work_dir_internal is empty, dir_internal is used.
 	svc2 := config.ServiceConfig{DirInternal: "/dir"}
-	opts2 := resolveShellOptions(flags, svcCLI, svc2)
+	opts2, err := resolveShellOptions(flags, svcCLI, svc2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if opts2.WorkDir != "/dir" {
 		t.Errorf("WorkDir: dir_internal fallback, got %q", opts2.WorkDir)
 	}
@@ -226,7 +241,10 @@ func TestResolveShellOptions_RootOverridesUser(t *testing.T) {
 	svcCLI := config.ServiceCLIConfig{User: "www-data"}
 	svc := config.ServiceConfig{}
 
-	opts := resolveShellOptions(flags, svcCLI, svc)
+	opts, err := resolveShellOptions(flags, svcCLI, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if opts.User != "root" {
 		t.Errorf("User: --root should override all, got %q", opts.User)
@@ -240,7 +258,10 @@ func TestResolveShellOptions_EnvFromConfig(t *testing.T) {
 	}
 	svc := config.ServiceConfig{}
 
-	opts := resolveShellOptions(flags, svcCLI, svc)
+	opts, err := resolveShellOptions(flags, svcCLI, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if opts.Env["FOO"] != "bar" {
 		t.Errorf("Env: expected FOO=bar from config, got %q", opts.Env["FOO"])
@@ -255,11 +276,28 @@ func TestResolveShellOptions_EnvAlwaysInitialized(t *testing.T) {
 	svcCLI := config.ServiceCLIConfig{}
 	svc := config.ServiceConfig{}
 
-	opts := resolveShellOptions(flags, svcCLI, svc)
+	opts, err := resolveShellOptions(flags, svcCLI, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Env should be an initialized (non-nil) map even when empty.
 	if opts.Env == nil {
 		t.Error("Env should be non-nil even when no env vars are configured")
+	}
+}
+
+func TestResolveShellOptions_EnvFlagInvalidFormat_ReturnsError(t *testing.T) {
+	flags := shellCLIFlags{envVars: []string{"NOEQUALSIGN"}}
+	svcCLI := config.ServiceCLIConfig{}
+	svc := config.ServiceConfig{}
+
+	_, err := resolveShellOptions(flags, svcCLI, svc)
+	if err == nil {
+		t.Fatal("expected error for --env without '=', got nil")
+	}
+	if !strings.Contains(err.Error(), "KEY=VALUE") {
+		t.Errorf("error should mention KEY=VALUE format, got: %v", err)
 	}
 }
 

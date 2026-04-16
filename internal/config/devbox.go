@@ -473,8 +473,12 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		if svc.CLI.WorkDir == "" {
 			svc.CLI.WorkDir = parent.CLI.WorkDir
 		}
-		if len(svc.CLI.Env) == 0 && len(parent.CLI.Env) > 0 {
-			svc.CLI.Env = maps.Clone(parent.CLI.Env)
+		// Merge parent CLI env into child: parent provides defaults, child overrides.
+		// This mirrors the recursive map merge used throughout the 3-layer config system.
+		if len(parent.CLI.Env) > 0 {
+			merged := maps.Clone(parent.CLI.Env)
+			maps.Copy(merged, svc.CLI.Env) // child wins on conflicts
+			svc.CLI.Env = merged
 		}
 		f.Services[name] = svc
 	}

@@ -172,10 +172,16 @@ func RunSelector(title string, items []SelectorItem) (int, error) {
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
+		if errors.Is(err, tea.ErrInterrupted) {
+			return -1, ErrCancelled
+		}
 		return -1, err
 	}
 
-	result := final.(selectorModel)
+	result, ok := final.(selectorModel)
+	if !ok {
+		return -1, fmt.Errorf("selector: unexpected model type %T", final)
+	}
 	if result.selected < 0 {
 		return -1, ErrCancelled
 	}
