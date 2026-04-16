@@ -47,6 +47,13 @@ Run 'devbox info' to display the current project status.`,
 	root.AddCommand(newResetCmd(flags))
 	root.AddCommand(newCommandCmd(flags))
 	root.AddCommand(newDockerCmd(flags))
+	root.AddCommand(newUpCmd(flags))
+	root.AddCommand(newDownCmd(flags))
+	root.AddCommand(newStopCmd(flags))
+	root.AddCommand(newRestartCmd(flags))
+	root.AddCommand(newLogsCmd(flags))
+	root.AddCommand(newPsCmd(flags))
+	root.AddCommand(newWaitCmd(flags))
 
 	return root
 }
