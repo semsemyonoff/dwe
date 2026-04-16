@@ -437,15 +437,19 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	// Resolve extends.
-	for name, svc := range f.Services {
+	// Resolve extends in topological order so that multi-level chains (C→B→A)
+	// are processed parent-first regardless of map iteration order.
+	order, err := topoSortServices(f.Services)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range order {
+		svc := f.Services[name]
 		if svc.Extends == "" {
 			continue
 		}
-		parent, ok := f.Services[svc.Extends]
-		if !ok {
-			return nil, fmt.Errorf("service %q extends unknown service %q", name, svc.Extends)
-		}
+		// Parent is guaranteed to be fully resolved already.
+		parent := f.Services[svc.Extends]
 		if svc.Type == "" {
 			svc.Type = parent.Type
 		}
@@ -484,6 +488,62 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 	}
 
 	return f.Services, nil
+}
+
+// topoSortServices returns service names in topological order (parents before
+// children) so that multi-level extends chains are resolved correctly.
+// Returns an error if a cycle or unknown parent is detected.
+func topoSortServices(services map[string]ServiceConfig) ([]string, error) {
+	// Validate all extends references first.
+	for name, svc := range services {
+		if svc.Extends != "" {
+			if _, ok := services[svc.Extends]; !ok {
+				return nil, fmt.Errorf("service %q extends unknown service %q", name, svc.Extends)
+			}
+		}
+	}
+
+	// Kahn's algorithm: count in-degree (number of parents) for each node.
+	inDegree := make(map[string]int, len(services))
+	children := make(map[string][]string, len(services))
+	for name, svc := range services {
+		if _, exists := inDegree[name]; !exists {
+			inDegree[name] = 0
+		}
+		if svc.Extends != "" {
+			inDegree[name]++
+			children[svc.Extends] = append(children[svc.Extends], name)
+		}
+	}
+
+	// Start with nodes that have no parent (roots).
+	var queue []string
+	for name, deg := range inDegree {
+		if deg == 0 {
+			queue = append(queue, name)
+		}
+	}
+	sort.Strings(queue) // deterministic order
+
+	result := make([]string, 0, len(services))
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		result = append(result, name)
+		kids := children[name]
+		sort.Strings(kids)
+		for _, child := range kids {
+			inDegree[child]--
+			if inDegree[child] == 0 {
+				queue = append(queue, child)
+			}
+		}
+	}
+
+	if len(result) != len(services) {
+		return nil, fmt.Errorf("services config contains a circular extends dependency")
+	}
+	return result, nil
 }
 
 // injectServicesIntoRaw merges service definitions into raw["services"] so that
