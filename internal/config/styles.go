@@ -43,6 +43,9 @@ type StylesColors struct {
 	TableBorder string `yaml:"table_border"`
 	TableHeader string `yaml:"table_header"`
 
+	// Progress bar fill color (used in TUI deploy/reset reporter)
+	ProgressBar string `yaml:"progress_bar"`
+
 	// Help/Fang color scheme (CLI help output)
 	Help StylesHelpColors `yaml:"help"`
 }
