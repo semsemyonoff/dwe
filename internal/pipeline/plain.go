@@ -8,15 +8,22 @@ import (
 	"devbox-cli/internal/render"
 )
 
-// PlainReporter implements Reporter with the same line-by-line text output
-// that the deploy/reset runner produced before the reporter abstraction was
-// introduced. Output format:
+// Icons used in step output lines.
+const (
+	iconDone    = "✓"
+	iconFailed  = "✗"
+	iconSkipped = "◎"
+	iconRunning = "·"
+)
+
+// PlainReporter implements Reporter with line-by-line text output.
+// Output format:
 //
 //	Phase: <phaseKey>[: <description>]
-//	  [N/M] <stepAddr>[: <description>]
-//	  [N/M] Done: <stepAddr>
-//	  [N/M] Skipped: <stepAddr> (<reason>)
-//	Deploy failed at step "<stepAddr>"
+//	  · [N/M] <stepAddr>[: <description>]
+//	  ✓ [N/M] Done: <stepAddr>
+//	  ◎ [N/M] Skipped: <stepAddr> (<reason>)
+//	✗ Deploy failed at step "<stepAddr>"
 //	  <error message>
 //
 // SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
@@ -40,7 +47,12 @@ func (r *PlainReporter) StartPipeline(name string, _ int) {
 // EnterPhase prints the phase label line:
 //
 //	Phase: <phaseKey>[: <description>]
+//
+// Untracked phases produce no output.
 func (r *PlainReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
+	if phase.Untracked {
+		return
+	}
 	label := "Phase: " + phaseKey
 	if phase.Description != "" {
 		label += ": " + phase.Description
@@ -51,56 +63,70 @@ func (r *PlainReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
 // SkipPhase prints a warning when an entire phase is skipped:
 //
 //	Skipping phase <phaseKey> (<reason>)
-func (r *PlainReporter) SkipPhase(phaseKey string, _ config.DeployPhase, reason string) {
+//
+// Untracked phases produce no output.
+func (r *PlainReporter) SkipPhase(phaseKey string, phase config.DeployPhase, reason string) {
+	if phase.Untracked {
+		return
+	}
 	r.w.Warning(fmt.Sprintf("  Skipping phase %s (%s)", phaseKey, reason))
 }
 
 // StartStep prints the step-start info line:
 //
-//	[N/M] <stepAddr>[: <description>]
+//	· [N/M] <stepAddr>[: <description>]
 //
-// For untracked steps (index == 0), the [N/M] counter is omitted.
+// Untracked steps (index == 0, total == 0) produce no output.
 func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index int, total int) {
+	if index == 0 && total == 0 {
+		return
+	}
 	label := stepAddr
 	if step.Description != "" {
 		label += ": " + step.Description
 	}
 	if index > 0 {
-		r.w.Info(fmt.Sprintf("  [%d/%d] %s", index, total, label))
+		r.w.Info(fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
 	} else {
-		r.w.Info(fmt.Sprintf("  %s", label))
+		r.w.Info(fmt.Sprintf("  %s %s", iconRunning, label))
 	}
 }
 
 // SkipStep prints a warning when a step is skipped due to a when condition:
 //
-//	[N/M] Skipped: <stepAddr> (<reason>)
+//	◎ [N/M] Skipped: <stepAddr> (<reason>)
 //
-// For untracked steps (index == 0), the [N/M] counter is omitted.
+// Untracked steps (index == 0, total == 0) produce no output.
 func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int, total int, reason string) {
+	if index == 0 && total == 0 {
+		return
+	}
 	if index > 0 {
-		r.w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (%s)", index, total, stepAddr, reason))
+		r.w.Warning(fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
 	} else {
-		r.w.Warning(fmt.Sprintf("  Skipped: %s (%s)", stepAddr, reason))
+		r.w.Warning(fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, stepAddr, reason))
 	}
 }
 
 // FinishStep prints a success line when a step completes:
 //
-//	[N/M] Done: <stepAddr>
+//	✓ [N/M] Done: <stepAddr>
 //
-// For untracked steps (index == 0), the [N/M] counter is omitted.
+// Untracked steps (index == 0, total == 0) produce no output.
 func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
+	if index == 0 && total == 0 {
+		return
+	}
 	if index > 0 {
-		r.w.Success(fmt.Sprintf("  [%d/%d] Done: %s", index, total, stepAddr))
+		r.w.Success(fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
 	} else {
-		r.w.Success(fmt.Sprintf("  Done: %s", stepAddr))
+		r.w.Success(fmt.Sprintf("  %s Done: %s", iconDone, stepAddr))
 	}
 }
 
 // FailStep prints error lines when a step fails:
 //
-//	<Name> failed at step "<stepAddr>"
+//	✗ <Name> failed at step "<stepAddr>"
 //	  <error message>
 //
 // The label is derived from the pipeline name set by StartPipeline (e.g.
@@ -112,7 +138,7 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, _ int, _ 
 		label = "pipeline"
 	}
 	label = strings.ToUpper(label[:1]) + label[1:]
-	r.w.Error(fmt.Sprintf("%s failed at step %q", label, stepAddr))
+	r.w.Error(fmt.Sprintf("%s %s failed at step %q", iconFailed, label, stepAddr))
 	if err != nil {
 		r.w.Error("  " + err.Error())
 	}

@@ -110,7 +110,7 @@ func TestPlainReporter_StartStep_WithDescription(t *testing.T) {
 	step := config.DeployStep{Name: "render-env", Description: "Generate .env from config"}
 	r.StartStep("init/render-env", step, 1, 5)
 	got := stripANSI(buf.String())
-	want := "  [1/5] init/render-env: Generate .env from config\n"
+	want := "  · [1/5] init/render-env: Generate .env from config\n"
 	if got != want {
 		t.Errorf("StartStep with description: got %q, want %q", got, want)
 	}
@@ -121,7 +121,7 @@ func TestPlainReporter_StartStep_NoDescription(t *testing.T) {
 	step := config.DeployStep{Name: "migrate"}
 	r.StartStep("main/setup/migrate", step, 3, 7)
 	got := stripANSI(buf.String())
-	want := "  [3/7] main/setup/migrate\n"
+	want := "  · [3/7] main/setup/migrate\n"
 	if got != want {
 		t.Errorf("StartStep no description: got %q, want %q", got, want)
 	}
@@ -134,7 +134,7 @@ func TestPlainReporter_SkipStep_WhenCondition(t *testing.T) {
 	step := config.DeployStep{Name: "migrate"}
 	r.SkipStep("init/migrate", step, 2, 4, "when: dir-empty services/main/src")
 	got := stripANSI(buf.String())
-	want := "  [2/4] Skipped: init/migrate (when: dir-empty services/main/src)\n"
+	want := "  ◎ [2/4] Skipped: init/migrate (when: dir-empty services/main/src)\n"
 	if got != want {
 		t.Errorf("SkipStep: got %q, want %q", got, want)
 	}
@@ -145,7 +145,7 @@ func TestPlainReporter_SkipStep_PhaseWhenCondition(t *testing.T) {
 	step := config.DeployStep{Name: "key-gen"}
 	r.SkipStep("main/setup/key-gen", step, 3, 5, "phase when: cmd: check")
 	got := stripANSI(buf.String())
-	want := "  [3/5] Skipped: main/setup/key-gen (phase when: cmd: check)\n"
+	want := "  ◎ [3/5] Skipped: main/setup/key-gen (phase when: cmd: check)\n"
 	if got != want {
 		t.Errorf("SkipStep with phase when: got %q, want %q", got, want)
 	}
@@ -158,7 +158,7 @@ func TestPlainReporter_FinishStep(t *testing.T) {
 	step := config.DeployStep{Name: "render-env"}
 	r.FinishStep("init/render-env", step, 1, 5)
 	got := stripANSI(buf.String())
-	want := "  [1/5] Done: init/render-env\n"
+	want := "  ✓ [1/5] Done: init/render-env\n"
 	if got != want {
 		t.Errorf("FinishStep: got %q, want %q", got, want)
 	}
@@ -173,7 +173,7 @@ func TestPlainReporter_FailStep(t *testing.T) {
 	r.FailStep("main/setup/migrate", step, 4, 7, errors.New("exit status 1"))
 	got := stripANSI(buf.String())
 	wantLines := []string{
-		`Deploy failed at step "main/setup/migrate"`,
+		`✗ Deploy failed at step "main/setup/migrate"`,
 		"  exit status 1",
 	}
 	gotLines := lines(got)
@@ -194,7 +194,7 @@ func TestPlainReporter_FailStep_Reset(t *testing.T) {
 	r.FailStep("cleanup/stop", step, 2, 3, errors.New("exit status 2"))
 	got := stripANSI(buf.String())
 	wantLines := []string{
-		`Reset failed at step "cleanup/stop"`,
+		`✗ Reset failed at step "cleanup/stop"`,
 		"  exit status 2",
 	}
 	gotLines := lines(got)
@@ -214,7 +214,7 @@ func TestPlainReporter_FailStep_NoStartPipeline(t *testing.T) {
 	r.FailStep("init/migrate", step, 1, 1, errors.New("timeout"))
 	got := stripANSI(buf.String())
 	wantLines := []string{
-		`Pipeline failed at step "init/migrate"`,
+		`✗ Pipeline failed at step "init/migrate"`,
 		"  timeout",
 	}
 	gotLines := lines(got)
@@ -294,20 +294,121 @@ func TestPlainReporter_FullEventSequence(t *testing.T) {
 	got := stripANSI(buf.String())
 	wantLines := []string{
 		"Phase: env: Environment",
-		"  [1/4] env/render-env: Generate .env from config",
-		"  [1/4] Done: env/render-env",
+		"  · [1/4] env/render-env: Generate .env from config",
+		"  ✓ [1/4] Done: env/render-env",
 		"Phase: main/setup",
-		"  [2/4] main/setup/dirs-ensure",
-		"  [2/4] Done: main/setup/dirs-ensure",
-		"  [3/4] main/setup/migrate",
-		"  [3/4] Skipped: main/setup/migrate (when: dir-not-empty services/main/src)",
+		"  · [2/4] main/setup/dirs-ensure",
+		"  ✓ [2/4] Done: main/setup/dirs-ensure",
+		"  · [3/4] main/setup/migrate",
+		"  ◎ [3/4] Skipped: main/setup/migrate (when: dir-not-empty services/main/src)",
 		"Phase: post-deploy",
-		"  [4/4] post-deploy/success",
-		"  [4/4] Done: post-deploy/success",
+		"  · [4/4] post-deploy/success",
+		"  ✓ [4/4] Done: post-deploy/success",
 	}
 	gotLines := lines(got)
 	if len(gotLines) != len(wantLines) {
 		t.Fatalf("FullEventSequence: got %d lines, want %d\ngot:\n%s\nwant:\n%s",
+			len(gotLines), len(wantLines),
+			strings.Join(gotLines, "\n"),
+			strings.Join(wantLines, "\n"),
+		)
+	}
+	for i, want := range wantLines {
+		if gotLines[i] != want {
+			t.Errorf("line %d: got %q, want %q", i, gotLines[i], want)
+		}
+	}
+}
+
+// --- Untracked suppression ---
+
+func TestPlainReporter_EnterPhase_Untracked_Silent(t *testing.T) {
+	r, buf := newBufReporter()
+	phase := config.DeployPhase{Name: "post-deploy", Description: "Post-deploy tasks", Untracked: true}
+	r.EnterPhase("post-deploy", phase)
+	if buf.Len() != 0 {
+		t.Errorf("EnterPhase untracked should produce no output, got: %q", buf.String())
+	}
+}
+
+func TestPlainReporter_SkipPhase_Untracked_Silent(t *testing.T) {
+	r, buf := newBufReporter()
+	phase := config.DeployPhase{Name: "post-deploy", Untracked: true}
+	r.SkipPhase("post-deploy", phase, "when: skip")
+	if buf.Len() != 0 {
+		t.Errorf("SkipPhase untracked should produce no output, got: %q", buf.String())
+	}
+}
+
+func TestPlainReporter_StartStep_Untracked_Silent(t *testing.T) {
+	r, buf := newBufReporter()
+	step := config.DeployStep{Name: "notify", Description: "Send notification"}
+	r.StartStep("post-deploy/notify", step, 0, 0)
+	if buf.Len() != 0 {
+		t.Errorf("StartStep untracked (0,0) should produce no output, got: %q", buf.String())
+	}
+}
+
+func TestPlainReporter_FinishStep_Untracked_Silent(t *testing.T) {
+	r, buf := newBufReporter()
+	step := config.DeployStep{Name: "notify"}
+	r.FinishStep("post-deploy/notify", step, 0, 0)
+	if buf.Len() != 0 {
+		t.Errorf("FinishStep untracked (0,0) should produce no output, got: %q", buf.String())
+	}
+}
+
+func TestPlainReporter_SkipStep_Untracked_Silent(t *testing.T) {
+	r, buf := newBufReporter()
+	step := config.DeployStep{Name: "notify"}
+	r.SkipStep("post-deploy/notify", step, 0, 0, "when: skip")
+	if buf.Len() != 0 {
+		t.Errorf("SkipStep untracked (0,0) should produce no output, got: %q", buf.String())
+	}
+}
+
+func TestPlainReporter_FailStep_Untracked_StillPrints(t *testing.T) {
+	r, buf := newBufReporter()
+	r.StartPipeline("deploy", 0)
+	step := config.DeployStep{Name: "notify"}
+	r.FailStep("post-deploy/notify", step, 0, 0, errors.New("network error"))
+	got := stripANSI(buf.String())
+	if !strings.Contains(got, "failed at step") {
+		t.Errorf("FailStep untracked should still print failure, got: %q", got)
+	}
+}
+
+func TestPlainReporter_FullEventSequence_WithUntracked(t *testing.T) {
+	r, buf := newBufReporter()
+
+	tracked := config.DeployPhase{Name: "setup", Description: "Setup"}
+	untracked := config.DeployPhase{Name: "post-deploy", Untracked: true}
+
+	step1 := config.DeployStep{Name: "migrate"}
+	step2 := config.DeployStep{Name: "notify"}
+
+	r.StartPipeline("deploy", 1)
+
+	r.EnterPhase("setup", tracked)
+	r.StartStep("setup/migrate", step1, 1, 1)
+	r.FinishStep("setup/migrate", step1, 1, 1)
+
+	// Untracked phase: all system output suppressed
+	r.EnterPhase("post-deploy", untracked)
+	r.StartStep("post-deploy/notify", step2, 0, 0)
+	r.FinishStep("post-deploy/notify", step2, 0, 0)
+
+	r.FinishPipeline(true)
+
+	got := stripANSI(buf.String())
+	wantLines := []string{
+		"Phase: setup: Setup",
+		"  · [1/1] setup/migrate",
+		"  ✓ [1/1] Done: setup/migrate",
+	}
+	gotLines := lines(got)
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("FullEventSequence with untracked: got %d lines, want %d\ngot:\n%s\nwant:\n%s",
 			len(gotLines), len(wantLines),
 			strings.Join(gotLines, "\n"),
 			strings.Join(wantLines, "\n"),
