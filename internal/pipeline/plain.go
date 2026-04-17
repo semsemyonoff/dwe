@@ -46,14 +46,14 @@ func (r *PlainReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
 
 // SkipPhase prints a warning when an entire phase is skipped:
 //
-//	  Skipping phase <phaseKey> (<reason>)
+//	Skipping phase <phaseKey> (<reason>)
 func (r *PlainReporter) SkipPhase(phaseKey string, _ config.DeployPhase, reason string) {
 	r.w.Warning(fmt.Sprintf("  Skipping phase %s (%s)", phaseKey, reason))
 }
 
 // StartStep prints the step-start info line:
 //
-//	  [N/M] <stepAddr>[: <description>]
+//	[N/M] <stepAddr>[: <description>]
 func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index int, total int) {
 	label := stepAddr
 	if step.Description != "" {
@@ -64,14 +64,14 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 
 // SkipStep prints a warning when a step is skipped due to a when condition:
 //
-//	  [N/M] Skipped: <stepAddr> (<reason>)
+//	[N/M] Skipped: <stepAddr> (<reason>)
 func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int, total int, reason string) {
 	r.w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (%s)", index, total, stepAddr, reason))
 }
 
 // FinishStep prints a success line when a step completes:
 //
-//	  [N/M] Done: <stepAddr>
+//	[N/M] Done: <stepAddr>
 func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
 	r.w.Success(fmt.Sprintf("  [%d/%d] Done: %s", index, total, stepAddr))
 }

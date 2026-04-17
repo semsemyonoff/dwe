@@ -16,6 +16,7 @@ import (
 	"devbox-cli/internal/commands"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
@@ -364,6 +365,114 @@ func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		SkipConfirm: skipConfirm,
 	}
 	return builtin.Run(step.Builtin, step.With, ctx)
+}
+
+// runPipeline executes a resolved step list, calling rep for all lifecycle events.
+//
+// postStepHooks maps step names to callbacks invoked after successful execution
+// (before the check condition) — used e.g. to source .env after render-env.
+//
+// Returns ErrSilent when any step fails (rep.FailStep has already been called).
+// Returns other errors for config/condition evaluation failures.
+func runPipeline(
+	steps []resolvedStep,
+	rep pipeline.Reporter,
+	cfg *config.DevboxConfig,
+	reg *commands.Registry,
+	workDir string,
+	logWriter io.Writer,
+	skipConfirm bool,
+	postStepHooks map[string]func() error,
+) error {
+	total := len(steps)
+	rep.StartPipeline("", total)
+
+	lastPhaseKey := ""
+	phaseSkipped := false
+	phaseWhen := ""
+
+	for i, rs := range steps {
+		phaseKey := rs.phase.Name
+		if rs.service != "" {
+			phaseKey = rs.service + "/" + rs.phase.Name
+		}
+
+		if phaseKey != lastPhaseKey {
+			rep.EnterPhase(phaseKey, rs.phase)
+			lastPhaseKey = phaseKey
+			phaseSkipped = false
+			phaseWhen = ""
+
+			if rs.phaseWhen != "" {
+				ok, err := condition.EvalRuntime(rs.phaseWhen, workDir)
+				if err != nil {
+					return fmt.Errorf("evaluating when condition for phase %s: %w", phaseKey, err)
+				}
+				if !ok {
+					phaseSkipped = true
+					phaseWhen = rs.phaseWhen
+					rep.SkipPhase(phaseKey, rs.phase, "when: "+phaseWhen)
+				}
+			}
+		}
+
+		addr := rs.stepAddress()
+
+		// Phase-level when condition was false — skip all steps in this phase.
+		if phaseSkipped {
+			rep.StartStep(addr, rs.step, i+1, total)
+			rep.SkipStep(addr, rs.step, i+1, total, "phase when: "+phaseWhen)
+			continue
+		}
+
+		// Step-level runtime when condition.
+		if rs.runtimeWhen != "" {
+			ok, err := condition.EvalRuntime(rs.runtimeWhen, workDir)
+			if err != nil {
+				return fmt.Errorf("evaluating when condition for %s: %w", addr, err)
+			}
+			if !ok {
+				rep.StartStep(addr, rs.step, i+1, total)
+				rep.SkipStep(addr, rs.step, i+1, total, "when: "+rs.runtimeWhen)
+				continue
+			}
+		}
+
+		rep.StartStep(addr, rs.step, i+1, total)
+		rep.SuspendForExec()
+		stepErr := execStep(rs.step, workDir, cfg, reg, logWriter, skipConfirm)
+		rep.ResumeAfterExec()
+
+		if stepErr != nil {
+			rep.FailStep(addr, rs.step, i+1, total, stepErr)
+			return ErrSilent
+		}
+
+		// Run post-step hook if registered (e.g. source .env after render-env).
+		if hook, ok := postStepHooks[rs.step.Name]; ok {
+			if err := hook(); err != nil {
+				return err
+			}
+		}
+
+		// Evaluate check condition after successful execution.
+		if rs.step.Check != "" {
+			ok, err := condition.EvalRuntime(rs.step.Check, workDir)
+			if err != nil {
+				rep.FailStep(addr, rs.step, i+1, total, fmt.Errorf("check error: %w", err))
+				return ErrSilent
+			}
+			if !ok {
+				rep.FailStep(addr, rs.step, i+1, total, fmt.Errorf("check did not pass (%s)", rs.step.Check))
+				return ErrSilent
+			}
+		}
+
+		rep.FinishStep(addr, rs.step, i+1, total)
+	}
+
+	rep.FinishPipeline(true)
+	return nil
 }
 
 // execCommandStep executes a command: pipeline step via the command runner.

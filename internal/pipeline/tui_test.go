@@ -10,7 +10,7 @@ import (
 )
 
 // applyMsg is a helper that calls model.Update and returns the updated tuiModel.
-func applyMsg(m tuiModel, msg interface{}) tuiModel {
+func applyMsg(m tuiModel, msg any) tuiModel {
 	updated, _ := m.Update(msg)
 	return updated.(tuiModel)
 }
@@ -227,7 +227,7 @@ func TestTUIModel_Tick_ReturnsCmdForNext(t *testing.T) {
 
 func TestTUIModel_RecentSteps_Cap(t *testing.T) {
 	m := tuiModel{}
-	for i := 0; i < maxRecentSteps+2; i++ {
+	for i := range maxRecentSteps + 2 {
 		step := config.DeployStep{Name: "step"}
 		addr := fmt.Sprintf("phase/step%d", i)
 		m = applyMsg(m, tuiStartStepMsg{addr: addr, step: step, index: i + 1, total: 10})

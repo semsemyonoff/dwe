@@ -176,27 +176,27 @@ func (m tuiModel) View() tea.View {
 	b.WriteString("\n")
 
 	if m.pipelineName != "" {
-		b.WriteString(fmt.Sprintf("  Deploy: %s\n", m.pipelineName))
+		fmt.Fprintf(&b, "  Deploy: %s\n", m.pipelineName)
 	}
 	if m.currentPhase != "" {
-		b.WriteString(fmt.Sprintf("  Phase:  %s\n", m.currentPhase))
+		fmt.Fprintf(&b, "  Phase:  %s\n", m.currentPhase)
 	}
 	if m.currentStep != "" {
 		spinner := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-		b.WriteString(fmt.Sprintf("  %s [%d/%d] %s\n",
-			spinner, m.stepIndex, m.stepTotal, m.currentStep))
+		fmt.Fprintf(&b, "  %s [%d/%d] %s\n",
+			spinner, m.stepIndex, m.stepTotal, m.currentStep)
 	}
 
 	if m.totalSteps > 0 {
 		bar := progressBar(m.completedCount, m.totalSteps, 20)
-		b.WriteString(fmt.Sprintf("  %s %d/%d\n", bar, m.completedCount, m.totalSteps))
+		fmt.Fprintf(&b, "  %s %d/%d\n", bar, m.completedCount, m.totalSteps)
 	}
 
 	if len(m.recentSteps) > 0 {
 		b.WriteString("\n")
 		for _, s := range m.recentSteps {
 			icon := stepIcon(s.status)
-			b.WriteString(fmt.Sprintf("  %s %s\n", icon, s.addr))
+			fmt.Fprintf(&b, "  %s %s\n", icon, s.addr)
 		}
 	}
 
@@ -229,10 +229,7 @@ func progressBar(done, total, width int) string {
 	if total <= 0 {
 		return "[" + strings.Repeat("░", width) + "]"
 	}
-	filled := (done * width) / total
-	if filled > width {
-		filled = width
-	}
+	filled := min((done*width)/total, width)
 	return "[" + strings.Repeat("█", filled) + strings.Repeat("░", width-filled) + "]"
 }
 
@@ -274,11 +271,9 @@ func NewTUIReporter() *TUIReporter {
 	r := &TUIReporter{}
 	m := tuiModel{}
 	r.program = tea.NewProgram(m)
-	r.wg.Add(1)
-	go func() {
-		defer r.wg.Done()
+	r.wg.Go(func() {
 		_, _ = r.program.Run()
-	}()
+	})
 	return r
 }
 

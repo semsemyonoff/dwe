@@ -37,7 +37,7 @@ func stripANSI(s string) string {
 // lines splits s into non-empty trimmed lines for readable assertions.
 func lines(s string) []string {
 	var result []string
-	for _, l := range strings.Split(s, "\n") {
+	for l := range strings.SplitSeq(s, "\n") {
 		if l != "" {
 			result = append(result, l)
 		}
