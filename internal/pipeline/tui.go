@@ -262,7 +262,7 @@ func (m tuiModel) View() tea.View {
 
 	// Confirmation prompt takes over the display.
 	if m.confirmActive {
-		fmt.Fprintf(&b, "  ⚠  %s\n", m.confirmMessage)
+		fmt.Fprintf(&b, "  %s  %s\n", ui.StyleWarning("⚠"), m.confirmMessage)
 		b.WriteString("  Press [Y] to confirm or [N] to cancel\n")
 		return tea.NewView(b.String())
 	}
@@ -270,20 +270,21 @@ func (m tuiModel) View() tea.View {
 	if m.pipelineName != "" {
 		label := strings.ToUpper(m.pipelineName[:1]) + m.pipelineName[1:]
 		elapsed := formatElapsed(m.stopwatch.Elapsed())
-		fmt.Fprintf(&b, "  %-34s%s\n", label, elapsed)
+		fmt.Fprintf(&b, "  %s  %s\n", ui.StyleSectionTitle(label), ui.StyleMuted(elapsed))
 	}
 	if m.currentPhase != "" {
-		fmt.Fprintf(&b, "  Phase: %s\n", m.currentPhase)
+		fmt.Fprintf(&b, "  %s\n", ui.StyleSubheader("Phase: "+m.currentPhase))
 	}
 
 	if m.totalSteps > 0 {
 		percent := float64(m.completedCount) / float64(m.totalSteps)
 		bar := m.progress.ViewAs(percent)
-		fmt.Fprintf(&b, "  %s  %d/%d\n", bar, m.completedCount, m.totalSteps)
+		count := ui.StyleMuted(fmt.Sprintf("%d/%d", m.completedCount, m.totalSteps))
+		fmt.Fprintf(&b, "  %s  %s\n", bar, count)
 	}
 
 	if m.currentStep != "" {
-		spin := m.spinner.View()
+		spin := ui.StyleInfo(m.spinner.View())
 		fmt.Fprintf(&b, "  %s [%d/%d] %s\n",
 			spin, m.stepIndex, m.stepTotal, m.currentStep)
 	}
@@ -291,7 +292,7 @@ func (m tuiModel) View() tea.View {
 	if len(m.recentSteps) > 0 {
 		b.WriteString("\n")
 		for _, s := range m.recentSteps {
-			icon := stepIcon(s.status)
+			icon := styledStepIcon(s.status)
 			switch s.status {
 			case "done":
 				if s.index > 0 {
@@ -371,6 +372,23 @@ func stepIcon(status string) string {
 		return "✗"
 	default: // "running" or unknown
 		return "·"
+	}
+}
+
+// styledStepIcon returns the step icon for status wrapped in the appropriate
+// Lipgloss color style: green for done, muted for skipped, red for failed,
+// and plain for running/unknown.
+func styledStepIcon(status string) string {
+	icon := stepIcon(status)
+	switch status {
+	case "done":
+		return ui.RenderEnabled(icon)
+	case "skipped":
+		return ui.StyleMuted(icon)
+	case "failed":
+		return ui.StyleFailed(icon)
+	default:
+		return icon
 	}
 }
 

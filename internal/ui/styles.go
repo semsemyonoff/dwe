@@ -133,9 +133,29 @@ func StyleKey(s string) string { return styleKey.Render(s) }
 // Used for group headers in tree views.
 func StyleGroup(s string) string { return styleSectionTitle.Render(s) }
 
+// StyleSectionTitle renders s with the section title style (cyan, bold).
+// Used for pipeline/dashboard top-level headers.
+func StyleSectionTitle(s string) string { return styleSectionTitle.Render(s) }
+
+// StyleSubheader renders s with the subheader style (yellow, bold).
+// Used for phase labels and in-section sub-headers.
+func StyleSubheader(s string) string { return styleSubheader.Render(s) }
+
 // StyleMuted renders s with the muted/dim style.
 // Used for tags, separators, and secondary information.
 func StyleMuted(s string) string { return styleMuted.Render(s) }
+
+// StyleInfo renders s with the info style (bright blue/cyan).
+// Used for informational callouts such as the spinner in the TUI.
+func StyleInfo(s string) string { return styleInfoText.Render(s) }
+
+// StyleFailed renders s with the failed/error style (red).
+// Used for failure icons in step history.
+func StyleFailed(s string) string { return styleRunStopped.Render(s) }
+
+// StyleWarning renders s with the warning style (yellow).
+// Used for warning icons and cautionary prompts.
+func StyleWarning(s string) string { return styleWarn.Render(s) }
 
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.

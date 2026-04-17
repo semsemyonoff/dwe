@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/ui"
 )
 
 // applyMsg is a helper that calls model.Update and returns the updated tuiModel.
@@ -378,8 +379,10 @@ func TestTUIModel_View_RecentSteps_PlainStyle_Done(t *testing.T) {
 		{addr: "init/render-env", status: "done", index: 1, total: 5},
 	}
 	view := m.View()
-	if !strings.Contains(view.Content, "✓ [1/5] Done: init/render-env") {
-		t.Errorf("expected plain-style done line, got: %s", view.Content)
+	// Strip ANSI codes so the check is not affected by Lipgloss icon styling.
+	plain := stripANSI(view.Content)
+	if !strings.Contains(plain, "✓ [1/5] Done: init/render-env") {
+		t.Errorf("expected plain-style done line, got: %s", plain)
 	}
 }
 
@@ -389,8 +392,9 @@ func TestTUIModel_View_RecentSteps_PlainStyle_Skipped(t *testing.T) {
 		{addr: "main/db/create", status: "skipped", index: 3, total: 5, reason: "when: dir-empty"},
 	}
 	view := m.View()
-	if !strings.Contains(view.Content, "◎ [3/5] Skipped: main/db/create (when: dir-empty)") {
-		t.Errorf("expected plain-style skipped line with reason, got: %s", view.Content)
+	plain := stripANSI(view.Content)
+	if !strings.Contains(plain, "◎ [3/5] Skipped: main/db/create (when: dir-empty)") {
+		t.Errorf("expected plain-style skipped line with reason, got: %s", plain)
 	}
 }
 
@@ -400,8 +404,9 @@ func TestTUIModel_View_RecentSteps_PlainStyle_Failed(t *testing.T) {
 		{addr: "main/setup/migrate", status: "failed", index: 4, total: 5, errMsg: "exit status 1"},
 	}
 	view := m.View()
-	if !strings.Contains(view.Content, "✗ [4/5] Failed: main/setup/migrate") {
-		t.Errorf("expected plain-style failed line, got: %s", view.Content)
+	plain := stripANSI(view.Content)
+	if !strings.Contains(plain, "✗ [4/5] Failed: main/setup/migrate") {
+		t.Errorf("expected plain-style failed line, got: %s", plain)
 	}
 	if !strings.Contains(view.Content, "exit status 1") {
 		t.Errorf("expected error message in view, got: %s", view.Content)
@@ -415,8 +420,9 @@ func TestTUIModel_View_RecentSteps_Untracked_NoIndex(t *testing.T) {
 		{addr: "post-deploy/notify", status: "done", index: 0, total: 0},
 	}
 	view := m.View()
-	if !strings.Contains(view.Content, "✓ Done: post-deploy/notify") {
-		t.Errorf("expected untracked done step without index, got: %s", view.Content)
+	plain := stripANSI(view.Content)
+	if !strings.Contains(plain, "✓ Done: post-deploy/notify") {
+		t.Errorf("expected untracked done step without index, got: %s", plain)
 	}
 	if strings.Contains(view.Content, "[0/0]") {
 		t.Errorf("untracked step must not show [0/0], got: %s", view.Content)
@@ -867,6 +873,180 @@ func TestTUIReporter_StartPipeline_SetsName(t *testing.T) {
 	label = strings.ToUpper(label[:1]) + label[1:]
 	if label != "Deploy" {
 		t.Errorf("expected 'Deploy', got %q", label)
+	}
+}
+
+// --- Lipgloss style markers in View output ---
+
+// TestTUIModel_View_PipelineTitle_IsStyled verifies the pipeline title is
+// rendered via ui.StyleSectionTitle (whatever that resolves to in this env).
+func TestTUIModel_View_PipelineTitle_IsStyled(t *testing.T) {
+	m := testModel()
+	m.pipelineName = "deploy"
+	view := m.View()
+	expected := ui.StyleSectionTitle("Deploy")
+	if !strings.Contains(view.Content, expected) {
+		t.Errorf("expected styled title %q in view; got: %s", expected, view.Content)
+	}
+}
+
+// TestTUIModel_View_Elapsed_IsStyled verifies the elapsed timer is rendered
+// via ui.StyleMuted.
+func TestTUIModel_View_Elapsed_IsStyled(t *testing.T) {
+	m := testModel()
+	m.pipelineName = "deploy"
+	view := m.View()
+	expected := ui.StyleMuted("00:00")
+	if !strings.Contains(view.Content, expected) {
+		t.Errorf("expected styled elapsed %q in view; got: %s", expected, view.Content)
+	}
+}
+
+// TestTUIModel_View_PhaseLabel_IsStyled verifies the phase label is rendered
+// via ui.StyleSubheader.
+func TestTUIModel_View_PhaseLabel_IsStyled(t *testing.T) {
+	m := testModel()
+	m.currentPhase = "setup"
+	view := m.View()
+	expected := ui.StyleSubheader("Phase: setup")
+	if !strings.Contains(view.Content, expected) {
+		t.Errorf("expected styled phase label %q in view; got: %s", expected, view.Content)
+	}
+}
+
+// TestTUIModel_View_ProgressCount_IsStyled verifies the progress count is
+// rendered via ui.StyleMuted.
+func TestTUIModel_View_ProgressCount_IsStyled(t *testing.T) {
+	m := testModel()
+	m.totalSteps = 10
+	m.completedCount = 5
+	view := m.View()
+	expected := ui.StyleMuted("5/10")
+	if !strings.Contains(view.Content, expected) {
+		t.Errorf("expected styled progress count %q in view; got: %s", expected, view.Content)
+	}
+}
+
+// TestTUIModel_View_Spinner_IsStyled verifies the current-step spinner is
+// rendered via ui.StyleInfo.
+func TestTUIModel_View_Spinner_IsStyled(t *testing.T) {
+	m := testModel()
+	m.currentStep = "p/step"
+	m.stepIndex = 1
+	m.stepTotal = 5
+	view := m.View()
+	styledSpin := ui.StyleInfo(m.spinner.View())
+	if !strings.Contains(view.Content, styledSpin) {
+		t.Errorf("expected styled spinner %q in view; got: %s", styledSpin, view.Content)
+	}
+}
+
+// TestStyledStepIcon_Done verifies styledStepIcon("done") contains the done
+// icon character and applies the enabled style.
+func TestStyledStepIcon_Done(t *testing.T) {
+	got := styledStepIcon("done")
+	if !strings.Contains(got, "✓") {
+		t.Errorf("expected '✓' in styled done icon, got: %q", got)
+	}
+	expected := ui.RenderEnabled("✓")
+	if got != expected {
+		t.Errorf("expected styledStepIcon(done)=%q (via ui.RenderEnabled), got %q", expected, got)
+	}
+}
+
+// TestStyledStepIcon_Skipped verifies styledStepIcon("skipped") contains the
+// skipped icon and applies the muted style.
+func TestStyledStepIcon_Skipped(t *testing.T) {
+	got := styledStepIcon("skipped")
+	if !strings.Contains(got, "◎") {
+		t.Errorf("expected '◎' in styled skipped icon, got: %q", got)
+	}
+	expected := ui.StyleMuted("◎")
+	if got != expected {
+		t.Errorf("expected styledStepIcon(skipped)=%q (via ui.StyleMuted), got %q", expected, got)
+	}
+}
+
+// TestStyledStepIcon_Failed verifies styledStepIcon("failed") contains the
+// failed icon and applies the failed/red style.
+func TestStyledStepIcon_Failed(t *testing.T) {
+	got := styledStepIcon("failed")
+	if !strings.Contains(got, "✗") {
+		t.Errorf("expected '✗' in styled failed icon, got: %q", got)
+	}
+	expected := ui.StyleFailed("✗")
+	if got != expected {
+		t.Errorf("expected styledStepIcon(failed)=%q (via ui.StyleFailed), got %q", expected, got)
+	}
+}
+
+// TestStyledStepIcon_Running verifies styledStepIcon("running") returns the
+// plain running icon without styling.
+func TestStyledStepIcon_Running(t *testing.T) {
+	got := styledStepIcon("running")
+	if got != "·" {
+		t.Errorf("expected '·' for running status, got: %q", got)
+	}
+}
+
+// TestTUIModel_View_DoneStepIcon_IsStyled verifies that a done step in the
+// history uses ui.RenderEnabled for its icon.
+func TestTUIModel_View_DoneStepIcon_IsStyled(t *testing.T) {
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "p/step", status: "done", index: 1, total: 3},
+	}
+	view := m.View()
+	expectedIcon := ui.RenderEnabled("✓")
+	if !strings.Contains(view.Content, expectedIcon) {
+		t.Errorf("expected styled done icon %q in view; got: %s", expectedIcon, view.Content)
+	}
+}
+
+// TestTUIModel_View_SkippedStepIcon_IsStyled verifies a skipped step uses
+// ui.StyleMuted for its icon.
+func TestTUIModel_View_SkippedStepIcon_IsStyled(t *testing.T) {
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "p/step", status: "skipped", index: 1, total: 3, reason: "when: false"},
+	}
+	view := m.View()
+	expectedIcon := ui.StyleMuted("◎")
+	if !strings.Contains(view.Content, expectedIcon) {
+		t.Errorf("expected styled skipped icon %q in view; got: %s", expectedIcon, view.Content)
+	}
+}
+
+// TestTUIModel_View_FailedStepIcon_IsStyled verifies a failed step uses
+// ui.StyleFailed for its icon.
+func TestTUIModel_View_FailedStepIcon_IsStyled(t *testing.T) {
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "p/step", status: "failed", index: 1, total: 3, errMsg: "oops"},
+	}
+	view := m.View()
+	expectedIcon := ui.StyleFailed("✗")
+	if !strings.Contains(view.Content, expectedIcon) {
+		t.Errorf("expected styled failed icon %q in view; got: %s", expectedIcon, view.Content)
+	}
+}
+
+// TestTUIModel_View_LogWriter_NoStyledOutput verifies that logWriter output
+// (plain text) is not affected by Lipgloss styling applied in View().
+func TestTUIModel_View_LogWriter_NoStyledOutput(t *testing.T) {
+	buf := &bytes.Buffer{}
+	r := tuiReporterWithLog(buf)
+	r.logf("Phase: %s\n", "setup")
+	r.logf("  [%d/%d] Done: %s\n", 1, 3, "setup/step")
+	got := buf.String()
+	if strings.ContainsRune(got, '\x1b') {
+		t.Errorf("logWriter must not contain ANSI codes, got: %q", got)
+	}
+	if !strings.Contains(got, "Phase: setup") {
+		t.Errorf("expected plain phase line in log, got: %q", got)
+	}
+	if !strings.Contains(got, "[1/3] Done: setup/step") {
+		t.Errorf("expected plain done line in log, got: %q", got)
 	}
 }
 
