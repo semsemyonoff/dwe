@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
+
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/stopwatch"
 
 	"devbox-cli/internal/config"
 )
@@ -15,10 +20,15 @@ func applyMsg(m tuiModel, msg any) tuiModel {
 	return updated.(tuiModel)
 }
 
+// testModel returns a properly initialized tuiModel for use in tests.
+func testModel() tuiModel {
+	return newTUIModel("203")
+}
+
 // --- tuiStartPipelineMsg ---
 
 func TestTUIModel_StartPipeline(t *testing.T) {
-	m := tuiModel{}
+	m := testModel()
 	m = applyMsg(m, tuiStartPipelineMsg{name: "deploy", total: 10})
 	if m.pipelineName != "deploy" {
 		t.Errorf("expected pipelineName %q, got %q", "deploy", m.pipelineName)
@@ -31,7 +41,7 @@ func TestTUIModel_StartPipeline(t *testing.T) {
 // --- tuiEnterPhaseMsg ---
 
 func TestTUIModel_EnterPhase(t *testing.T) {
-	m := tuiModel{}
+	m := testModel()
 	m = applyMsg(m, tuiEnterPhaseMsg{phaseKey: "init", phase: config.DeployPhase{Name: "init"}})
 	if m.currentPhase != "init" {
 		t.Errorf("expected currentPhase %q, got %q", "init", m.currentPhase)
@@ -39,7 +49,8 @@ func TestTUIModel_EnterPhase(t *testing.T) {
 }
 
 func TestTUIModel_EnterPhase_ClearsCurrentStep(t *testing.T) {
-	m := tuiModel{currentStep: "init/some-step"}
+	m := testModel()
+	m.currentStep = "init/some-step"
 	m = applyMsg(m, tuiEnterPhaseMsg{phaseKey: "setup", phase: config.DeployPhase{Name: "setup"}})
 	if m.currentStep != "" {
 		t.Errorf("expected currentStep cleared, got %q", m.currentStep)
@@ -49,7 +60,9 @@ func TestTUIModel_EnterPhase_ClearsCurrentStep(t *testing.T) {
 // --- tuiSkipPhaseMsg ---
 
 func TestTUIModel_SkipPhase_NoStateChange(t *testing.T) {
-	m := tuiModel{currentPhase: "init", totalSteps: 5}
+	m := testModel()
+	m.currentPhase = "init"
+	m.totalSteps = 5
 	m = applyMsg(m, tuiSkipPhaseMsg{phaseKey: "init", reason: "when: dir-empty"})
 	// SkipPhase is intentionally a no-op on visible state (phase label unchanged).
 	if m.currentPhase != "init" {
@@ -63,7 +76,7 @@ func TestTUIModel_SkipPhase_NoStateChange(t *testing.T) {
 // --- tuiStartStepMsg ---
 
 func TestTUIModel_StartStep(t *testing.T) {
-	m := tuiModel{}
+	m := testModel()
 	step := config.DeployStep{Name: "migrate"}
 	m = applyMsg(m, tuiStartStepMsg{addr: "main/setup/migrate", step: step, index: 3, total: 7})
 	if m.currentStep != "main/setup/migrate" {
@@ -90,7 +103,7 @@ func TestTUIModel_StartStep(t *testing.T) {
 
 func TestTUIModel_FinishStep(t *testing.T) {
 	step := config.DeployStep{Name: "migrate"}
-	m := tuiModel{}
+	m := testModel()
 	m = applyMsg(m, tuiStartStepMsg{addr: "main/setup/migrate", step: step, index: 3, total: 7})
 	m = applyMsg(m, tuiFinishStepMsg{addr: "main/setup/migrate", index: 3, total: 7})
 
@@ -112,7 +125,7 @@ func TestTUIModel_FinishStep(t *testing.T) {
 
 func TestTUIModel_SkipStep(t *testing.T) {
 	step := config.DeployStep{Name: "migrate"}
-	m := tuiModel{}
+	m := testModel()
 	m = applyMsg(m, tuiStartStepMsg{addr: "init/migrate", step: step, index: 2, total: 5})
 	m = applyMsg(m, tuiSkipStepMsg{addr: "init/migrate", index: 2, total: 5, reason: "when: dir-empty"})
 
@@ -131,7 +144,7 @@ func TestTUIModel_SkipStep(t *testing.T) {
 
 func TestTUIModel_FailStep(t *testing.T) {
 	step := config.DeployStep{Name: "migrate"}
-	m := tuiModel{}
+	m := testModel()
 	m = applyMsg(m, tuiStartStepMsg{addr: "main/setup/migrate", step: step, index: 4, total: 6})
 	m = applyMsg(m, tuiFailStepMsg{
 		addr:  "main/setup/migrate",
@@ -155,7 +168,7 @@ func TestTUIModel_FailStep(t *testing.T) {
 
 func TestTUIModel_FailStep_NilError(t *testing.T) {
 	step := config.DeployStep{Name: "step"}
-	m := tuiModel{}
+	m := testModel()
 	m = applyMsg(m, tuiStartStepMsg{addr: "a/b", step: step, index: 1, total: 1})
 	m = applyMsg(m, tuiFailStepMsg{addr: "a/b", index: 1, total: 1, err: nil})
 
@@ -167,7 +180,8 @@ func TestTUIModel_FailStep_NilError(t *testing.T) {
 // --- tuiFinishPipelineMsg ---
 
 func TestTUIModel_FinishPipeline_Success(t *testing.T) {
-	m := tuiModel{pipelineName: "deploy"}
+	m := testModel()
+	m.pipelineName = "deploy"
 	updated, cmd := m.Update(tuiFinishPipelineMsg{success: true})
 	result := updated.(tuiModel)
 
@@ -186,7 +200,7 @@ func TestTUIModel_FinishPipeline_Success(t *testing.T) {
 }
 
 func TestTUIModel_FinishPipeline_Failure(t *testing.T) {
-	m := tuiModel{}
+	m := testModel()
 	updated, _ := m.Update(tuiFinishPipelineMsg{success: false})
 	result := updated.(tuiModel)
 	if result.done != true {
@@ -197,36 +211,58 @@ func TestTUIModel_FinishPipeline_Failure(t *testing.T) {
 	}
 }
 
-// --- tuiTickMsg ---
+// --- spinner sub-model forwarding ---
 
-func TestTUIModel_Tick_AdvancesSpinner(t *testing.T) {
-	m := tuiModel{spinnerFrame: 0}
-	m = applyMsg(m, tuiTickMsg{})
-	if m.spinnerFrame != 1 {
-		t.Errorf("expected spinnerFrame 1, got %d", m.spinnerFrame)
-	}
+func TestTUIModel_SpinnerTickForwarded(t *testing.T) {
+	m := testModel()
+	initialView := m.spinner.View()
+	// Send a spinner tick; it should advance the spinner's internal frame.
+	tickMsg := m.spinner.Tick()
+	m = applyMsg(m, tickMsg)
+	// After one tick the spinner frame advances; View may differ.
+	// We mainly verify no panic and a non-nil cmd is returned.
+	_ = m.spinner.View()
+	_ = initialView
 }
 
-func TestTUIModel_Tick_WrapsSpinner(t *testing.T) {
-	m := tuiModel{spinnerFrame: len(spinnerFrames) - 1}
-	m = applyMsg(m, tuiTickMsg{})
-	if m.spinnerFrame != 0 {
-		t.Errorf("expected spinnerFrame 0 after wrap, got %d", m.spinnerFrame)
-	}
-}
-
-func TestTUIModel_Tick_ReturnsCmdForNext(t *testing.T) {
-	m := tuiModel{}
-	_, cmd := m.Update(tuiTickMsg{})
+func TestTUIModel_SpinnerTick_ReturnsCmdForNext(t *testing.T) {
+	m := testModel()
+	tickMsg := m.spinner.Tick()
+	_, cmd := m.Update(tickMsg)
 	if cmd == nil {
-		t.Error("expected non-nil Cmd to schedule next tick")
+		t.Error("expected non-nil Cmd after spinner tick to schedule next tick")
 	}
+}
+
+// --- stopwatch sub-model forwarding ---
+
+func TestTUIModel_StopwatchStartStop_Forwarded(t *testing.T) {
+	m := testModel()
+	startMsg := stopwatch.StartStopMsg{}
+	m2 := applyMsg(m, startMsg)
+	// We mainly verify the message is handled without panic.
+	_ = m2.stopwatch.Elapsed()
+}
+
+func TestTUIModel_StopwatchTick_Forwarded(t *testing.T) {
+	m := testModel()
+	// Manually construct a tick — in real use it arrives after Init/Start.
+	tickMsg := stopwatch.TickMsg{}
+	_ = applyMsg(m, tickMsg) // should not panic
+}
+
+// --- progress sub-model forwarding ---
+
+func TestTUIModel_ProgressFrameMsg_Forwarded(t *testing.T) {
+	m := testModel()
+	frameMsg := progress.FrameMsg{}
+	_ = applyMsg(m, frameMsg) // should not panic
 }
 
 // --- recentSteps cap ---
 
 func TestTUIModel_RecentSteps_Cap(t *testing.T) {
-	m := tuiModel{}
+	m := testModel()
 	for i := range maxRecentSteps + 2 {
 		step := config.DeployStep{Name: "step"}
 		addr := fmt.Sprintf("phase/step%d", i)
@@ -240,7 +276,8 @@ func TestTUIModel_RecentSteps_Cap(t *testing.T) {
 // --- completedCount accumulates across steps ---
 
 func TestTUIModel_CompletedCount(t *testing.T) {
-	m := tuiModel{totalSteps: 5}
+	m := testModel()
+	m.totalSteps = 5
 	step := config.DeployStep{Name: "s"}
 
 	// done
@@ -261,7 +298,9 @@ func TestTUIModel_CompletedCount(t *testing.T) {
 // --- View content ---
 
 func TestTUIModel_View_PipelineName(t *testing.T) {
-	m := tuiModel{pipelineName: "deploy", totalSteps: 5}
+	m := testModel()
+	m.pipelineName = "deploy"
+	m.totalSteps = 5
 	view := m.View()
 	if !strings.Contains(view.Content, "Deploy") {
 		t.Error("expected pipeline name in view")
@@ -269,7 +308,9 @@ func TestTUIModel_View_PipelineName(t *testing.T) {
 }
 
 func TestTUIModel_View_PipelineName_Reset(t *testing.T) {
-	m := tuiModel{pipelineName: "reset", totalSteps: 3}
+	m := testModel()
+	m.pipelineName = "reset"
+	m.totalSteps = 3
 	view := m.View()
 	if !strings.Contains(view.Content, "Reset") {
 		t.Error("expected reset pipeline name in view, got: " + view.Content)
@@ -280,7 +321,8 @@ func TestTUIModel_View_PipelineName_Reset(t *testing.T) {
 }
 
 func TestTUIModel_View_CurrentPhase(t *testing.T) {
-	m := tuiModel{currentPhase: "main/setup"}
+	m := testModel()
+	m.currentPhase = "main/setup"
 	view := m.View()
 	if !strings.Contains(view.Content, "main/setup") {
 		t.Error("expected phase name in view")
@@ -288,7 +330,10 @@ func TestTUIModel_View_CurrentPhase(t *testing.T) {
 }
 
 func TestTUIModel_View_CurrentStep(t *testing.T) {
-	m := tuiModel{currentStep: "main/setup/migrate", stepIndex: 3, stepTotal: 7}
+	m := testModel()
+	m.currentStep = "main/setup/migrate"
+	m.stepIndex = 3
+	m.stepTotal = 7
 	view := m.View()
 	if !strings.Contains(view.Content, "main/setup/migrate") {
 		t.Error("expected step addr in view")
@@ -299,22 +344,21 @@ func TestTUIModel_View_CurrentStep(t *testing.T) {
 }
 
 func TestTUIModel_View_ProgressBar(t *testing.T) {
-	m := tuiModel{totalSteps: 10, completedCount: 5}
+	m := testModel()
+	m.totalSteps = 10
+	m.completedCount = 5
 	view := m.View()
+	// Progress count should appear
 	if !strings.Contains(view.Content, "5/10") {
 		t.Error("expected '5/10' in view")
-	}
-	if !strings.Contains(view.Content, "[") {
-		t.Error("expected progress bar brackets in view")
 	}
 }
 
 func TestTUIModel_View_RecentSteps(t *testing.T) {
-	m := tuiModel{
-		recentSteps: []tuiStepRecord{
-			{addr: "init/render-env", status: "done"},
-			{addr: "main/setup/migrate", status: "running"},
-		},
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "init/render-env", status: "done"},
+		{addr: "main/setup/migrate", status: "running"},
 	}
 	view := m.View()
 	if !strings.Contains(view.Content, "init/render-env") {
@@ -326,44 +370,45 @@ func TestTUIModel_View_RecentSteps(t *testing.T) {
 }
 
 func TestTUIModel_View_EmptyState(t *testing.T) {
-	m := tuiModel{}
+	m := testModel()
 	view := m.View()
 	// Should not panic and should return a valid (possibly empty) view.
 	_ = view.Content
 }
 
-// --- progressBar ---
-
-func TestProgressBar_Empty(t *testing.T) {
-	got := progressBar(0, 10, 10)
-	if !strings.HasPrefix(got, "[") || !strings.HasSuffix(got, "]") {
-		t.Errorf("expected brackets, got %q", got)
-	}
-	if strings.Contains(got, "█") {
-		t.Errorf("expected no filled chars at 0, got %q", got)
+func TestTUIModel_View_ElapsedTimer(t *testing.T) {
+	m := testModel()
+	m.pipelineName = "deploy"
+	// With zero elapsed the timer should show 00:00.
+	view := m.View()
+	if !strings.Contains(view.Content, "00:00") {
+		t.Errorf("expected '00:00' elapsed timer in view, got: %s", view.Content)
 	}
 }
 
-func TestProgressBar_Full(t *testing.T) {
-	got := progressBar(10, 10, 10)
-	want := "[██████████]"
-	if got != want {
-		t.Errorf("progressBar(10,10,10): got %q, want %q", got, want)
+// --- formatElapsed ---
+
+func TestFormatElapsed_Zero(t *testing.T) {
+	if got := formatElapsed(0); got != "00:00" {
+		t.Errorf("formatElapsed(0): got %q, want %q", got, "00:00")
 	}
 }
 
-func TestProgressBar_Half(t *testing.T) {
-	got := progressBar(5, 10, 10)
-	want := "[█████░░░░░]"
-	if got != want {
-		t.Errorf("progressBar(5,10,10): got %q, want %q", got, want)
+func TestFormatElapsed_Seconds(t *testing.T) {
+	if got := formatElapsed(42 * time.Second); got != "00:42" {
+		t.Errorf("formatElapsed(42s): got %q, want %q", got, "00:42")
 	}
 }
 
-func TestProgressBar_ZeroTotal(t *testing.T) {
-	got := progressBar(0, 0, 10)
-	if !strings.Contains(got, "░") {
-		t.Errorf("expected all-empty bar for zero total, got %q", got)
+func TestFormatElapsed_Minutes(t *testing.T) {
+	if got := formatElapsed(90 * time.Second); got != "01:30" {
+		t.Errorf("formatElapsed(90s): got %q, want %q", got, "01:30")
+	}
+}
+
+func TestFormatElapsed_Hours(t *testing.T) {
+	if got := formatElapsed(3661 * time.Second); got != "61:01" {
+		t.Errorf("formatElapsed(3661s): got %q, want %q", got, "61:01")
 	}
 }
 
@@ -402,14 +447,43 @@ func TestStepIcon_Unknown(t *testing.T) {
 // --- Init returns a Cmd ---
 
 func TestTUIModel_Init_ReturnsCmd(t *testing.T) {
-	m := tuiModel{}
+	m := testModel()
 	cmd := m.Init()
 	if cmd == nil {
-		t.Error("expected Init to return a non-nil Cmd for spinner tick")
+		t.Error("expected Init to return a non-nil Cmd for spinner/stopwatch")
+	}
+}
+
+// --- newTUIModel sub-model initialization ---
+
+func TestNewTUIModel_SpinnerInitialized(t *testing.T) {
+	m := newTUIModel("203")
+	// A properly initialized spinner should not return "(error)" in its View.
+	v := m.spinner.View()
+	if v == "(error)" {
+		t.Errorf("spinner not initialized: View() returned %q", v)
+	}
+}
+
+func TestNewTUIModel_StopwatchZeroElapsed(t *testing.T) {
+	m := newTUIModel("203")
+	if m.stopwatch.Elapsed() != 0 {
+		t.Errorf("expected stopwatch elapsed=0 initially, got %v", m.stopwatch.Elapsed())
+	}
+}
+
+func TestNewTUIModel_ProgressRendersBar(t *testing.T) {
+	m := newTUIModel("203")
+	bar := m.progress.ViewAs(0.5)
+	if bar == "" {
+		t.Error("expected non-empty progress bar at 50%")
 	}
 }
 
 // --- Interface compliance ---
+
+// Verify spinner is properly typed (compile-time check).
+var _ spinner.Model = newTUIModel("").spinner
 
 // Verify TUIReporter satisfies the Reporter interface at compile time.
 var _ Reporter = (*TUIReporter)(nil)

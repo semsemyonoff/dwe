@@ -6,15 +6,18 @@ import (
 	"sync"
 	"time"
 
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/stopwatch"
 	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/ui"
 )
 
-// spinnerFrames is the character sequence for the step-in-progress spinner.
-var spinnerFrames = []string{"⠋", "⠙", "⠸", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 // maxRecentSteps is the maximum number of step records shown in the TUI.
+// Will be removed in Task 4 when full history is enabled.
 const maxRecentSteps = 5
 
 // tuiStepRecord holds the display state for a single pipeline step.
@@ -72,8 +75,6 @@ type tuiFinishPipelineMsg struct {
 	success bool
 }
 
-type tuiTickMsg struct{}
-
 // tuiModel is the Bubble Tea model for the TUI reporter.
 // It maintains all pipeline state required to render the progress UI.
 type tuiModel struct {
@@ -84,17 +85,33 @@ type tuiModel struct {
 	currentStep    string
 	stepIndex      int
 	stepTotal      int
-	spinnerFrame   int
 	recentSteps    []tuiStepRecord // capped at maxRecentSteps
 	done           bool
 	success        bool
+
+	// bubbles sub-models
+	spinner   spinner.Model
+	progress  progress.Model
+	stopwatch stopwatch.Model
 }
 
-// Init starts the spinner tick.
+// newTUIModel creates a properly initialized tuiModel with bubbles sub-models.
+// color is an ANSI 256-color string (e.g. "203") for the progress bar fill.
+func newTUIModel(barColor string) tuiModel {
+	fillColor := lipgloss.Color(barColor)
+	return tuiModel{
+		spinner:   spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		progress:  progress.New(progress.WithColors(fillColor), progress.WithoutPercentage()),
+		stopwatch: stopwatch.New(stopwatch.WithInterval(time.Second)),
+	}
+}
+
+// Init starts the spinner tick and the stopwatch.
 func (m tuiModel) Init() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(_ time.Time) tea.Msg {
-		return tuiTickMsg{}
-	})
+	return tea.Batch(
+		m.spinner.Tick,
+		m.stopwatch.Init(),
+	)
 }
 
 // Update handles all TUI state transitions.
@@ -161,11 +178,26 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentStep = ""
 		return m, tea.Quit
 
-	case tuiTickMsg:
-		m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
-		return m, tea.Tick(100*time.Millisecond, func(_ time.Time) tea.Msg {
-			return tuiTickMsg{}
-		})
+	// Forward sub-model messages.
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
+	case stopwatch.TickMsg:
+		var cmd tea.Cmd
+		m.stopwatch, cmd = m.stopwatch.Update(msg)
+		return m, cmd
+
+	case stopwatch.StartStopMsg:
+		var cmd tea.Cmd
+		m.stopwatch, cmd = m.stopwatch.Update(msg)
+		return m, cmd
+
+	case progress.FrameMsg:
+		var cmd tea.Cmd
+		m.progress, cmd = m.progress.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -177,20 +209,23 @@ func (m tuiModel) View() tea.View {
 
 	if m.pipelineName != "" {
 		label := strings.ToUpper(m.pipelineName[:1]) + m.pipelineName[1:]
-		fmt.Fprintf(&b, "  %s\n", label)
+		elapsed := formatElapsed(m.stopwatch.Elapsed())
+		fmt.Fprintf(&b, "  %-34s%s\n", label, elapsed)
 	}
 	if m.currentPhase != "" {
-		fmt.Fprintf(&b, "  Phase:  %s\n", m.currentPhase)
-	}
-	if m.currentStep != "" {
-		spinner := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-		fmt.Fprintf(&b, "  %s [%d/%d] %s\n",
-			spinner, m.stepIndex, m.stepTotal, m.currentStep)
+		fmt.Fprintf(&b, "  Phase: %s\n", m.currentPhase)
 	}
 
 	if m.totalSteps > 0 {
-		bar := progressBar(m.completedCount, m.totalSteps, 20)
-		fmt.Fprintf(&b, "  %s %d/%d\n", bar, m.completedCount, m.totalSteps)
+		percent := float64(m.completedCount) / float64(m.totalSteps)
+		bar := m.progress.ViewAs(percent)
+		fmt.Fprintf(&b, "  %s  %d/%d\n", bar, m.completedCount, m.totalSteps)
+	}
+
+	if m.currentStep != "" {
+		spin := m.spinner.View()
+		fmt.Fprintf(&b, "  %s [%d/%d] %s\n",
+			spin, m.stepIndex, m.stepTotal, m.currentStep)
 	}
 
 	if len(m.recentSteps) > 0 {
@@ -202,6 +237,14 @@ func (m tuiModel) View() tea.View {
 	}
 
 	return tea.NewView(b.String())
+}
+
+// formatElapsed formats a duration as MM:SS for the TUI timer display.
+func formatElapsed(d time.Duration) string {
+	totalSeconds := int(d.Seconds())
+	mins := totalSeconds / 60
+	secs := totalSeconds % 60
+	return fmt.Sprintf("%02d:%02d", mins, secs)
 }
 
 // addRecentStep appends a record, dropping the oldest entry if over the cap.
@@ -221,17 +264,6 @@ func (m *tuiModel) updateLastStep(addr, status, errMsg string) {
 			return
 		}
 	}
-}
-
-// progressBar returns a fixed-width ASCII progress bar.
-//
-//	progressBar(3, 10, 20) → "[██████░░░░░░░░░░░░░░] 3/10"
-func progressBar(done, total, width int) string {
-	if total <= 0 {
-		return "[" + strings.Repeat("░", width) + "]"
-	}
-	filled := min((done*width)/total, width)
-	return "[" + strings.Repeat("█", filled) + strings.Repeat("░", width-filled) + "]"
 }
 
 // stepIcon maps a step status to a single display character.
@@ -268,9 +300,10 @@ type TUIReporter struct {
 
 // NewTUIReporter creates and starts a TUIReporter. The Bubble Tea program
 // begins running immediately in a background goroutine.
+// The progress bar color is read from ui.ProgressBarColor() at the time of creation.
 func NewTUIReporter() *TUIReporter {
 	r := &TUIReporter{}
-	m := tuiModel{}
+	m := newTUIModel(ui.ProgressBarColor())
 	r.program = tea.NewProgram(m)
 	r.wg.Go(func() {
 		_, _ = r.program.Run()
