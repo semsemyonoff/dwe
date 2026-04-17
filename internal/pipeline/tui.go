@@ -161,7 +161,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tuiSkipStepMsg:
 		m.stepIndex = msg.index
 		m.stepTotal = msg.total
-		m.completedCount++
+		if msg.total > 0 {
+			m.completedCount++
+		}
 		m.updateLastStep(msg.addr, "skipped", "", msg.reason)
 		if m.currentStep == msg.addr {
 			m.currentStep = ""
@@ -171,7 +173,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tuiFinishStepMsg:
 		m.stepIndex = msg.index
 		m.stepTotal = msg.total
-		m.completedCount++
+		if msg.total > 0 {
+			m.completedCount++
+		}
 		m.updateLastStep(msg.addr, "done", "", "")
 		if m.currentStep == msg.addr {
 			m.currentStep = ""
@@ -181,7 +185,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tuiFailStepMsg:
 		m.stepIndex = msg.index
 		m.stepTotal = msg.total
-		m.completedCount++
+		if msg.total > 0 {
+			m.completedCount++
+		}
 		errMsg := ""
 		if msg.err != nil {
 			errMsg = msg.err.Error()
@@ -285,8 +291,12 @@ func (m tuiModel) View() tea.View {
 
 	if m.currentStep != "" {
 		spin := ui.StyleInfo(m.spinner.View())
-		fmt.Fprintf(&b, "  %s [%d/%d] %s\n",
-			spin, m.stepIndex, m.stepTotal, m.currentStep)
+		if m.stepIndex > 0 {
+			fmt.Fprintf(&b, "  %s [%d/%d] %s\n",
+				spin, m.stepIndex, m.stepTotal, m.currentStep)
+		} else {
+			fmt.Fprintf(&b, "  %s %s\n", spin, m.currentStep)
+		}
 	}
 
 	if len(m.recentSteps) > 0 {
@@ -408,10 +418,11 @@ type TUIReporter struct {
 	program      *tea.Program
 	wg           sync.WaitGroup
 	mu           sync.Mutex
-	suspendCount int       // reference count; terminal released when > 0
-	inPlainPhase bool      // whether the current phase has ui:plain
-	logWriter    io.Writer // receives plain-text lifecycle events (may be nil)
-	name         string    // pipeline name set by StartPipeline (for FailStep label)
+	suspendCount int           // reference count; terminal released when > 0
+	inPlainPhase bool          // whether the current phase has ui:plain
+	logWriter    io.Writer     // receives plain-text lifecycle events (may be nil)
+	name         string        // pipeline name set by StartPipeline (for FailStep label)
+	done         chan struct{} // closed when the Bubble Tea program exits
 }
 
 // NewTUIReporter creates and starts a TUIReporter. The Bubble Tea program
@@ -420,11 +431,12 @@ type TUIReporter struct {
 // logWriter, if non-nil, receives plain-text lifecycle events so log files
 // match PlainReporter format without escape sequences.
 func NewTUIReporter(logWriter io.Writer) *TUIReporter {
-	r := &TUIReporter{logWriter: logWriter}
+	r := &TUIReporter{logWriter: logWriter, done: make(chan struct{})}
 	m := newTUIModel(ui.ProgressBarColor())
 	r.program = tea.NewProgram(m)
 	r.wg.Go(func() {
 		_, _ = r.program.Run()
+		close(r.done)
 	})
 	return r
 }
@@ -487,19 +499,31 @@ func (r *TUIReporter) StartStep(stepAddr string, step config.DeployStep, index i
 	if step.Description != "" {
 		label += ": " + step.Description
 	}
-	r.logf("  [%d/%d] %s\n", index, total, label)
+	if index > 0 {
+		r.logf("  [%d/%d] %s\n", index, total, label)
+	} else {
+		r.logf("  %s\n", label)
+	}
 }
 
 // SkipStep marks the step as skipped.
 func (r *TUIReporter) SkipStep(stepAddr string, _ config.DeployStep, index int, total int, reason string) {
 	r.program.Send(tuiSkipStepMsg{addr: stepAddr, index: index, total: total, reason: reason})
-	r.logf("  [%d/%d] Skipped: %s (%s)\n", index, total, stepAddr, reason)
+	if index > 0 {
+		r.logf("  [%d/%d] Skipped: %s (%s)\n", index, total, stepAddr, reason)
+	} else {
+		r.logf("  Skipped: %s (%s)\n", stepAddr, reason)
+	}
 }
 
 // FinishStep marks the step as done.
 func (r *TUIReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
 	r.program.Send(tuiFinishStepMsg{addr: stepAddr, index: index, total: total})
-	r.logf("  [%d/%d] Done: %s\n", index, total, stepAddr)
+	if index > 0 {
+		r.logf("  [%d/%d] Done: %s\n", index, total, stepAddr)
+	} else {
+		r.logf("  Done: %s\n", stepAddr)
+	}
 }
 
 // FailStep marks the step as failed.
@@ -582,8 +606,17 @@ func (r *TUIReporter) Confirm(message, okMsg, stopMsg string) (bool, error) {
 		stopMsg: stopMsg,
 		respCh:  respCh,
 	})
-	result := <-respCh
-	return result, nil
+	select {
+	case result := <-respCh:
+		if result {
+			r.logf("  %s\n", okMsg)
+		} else {
+			r.logf("  %s\n", stopMsg)
+		}
+		return result, nil
+	case <-r.done:
+		return false, fmt.Errorf("TUI program exited before confirmation response")
+	}
 }
 
 // doResumeLocked must be called with r.mu held.
