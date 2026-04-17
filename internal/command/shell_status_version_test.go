@@ -489,6 +489,13 @@ func captureRun(called *bool) shellRunFunc {
 	}
 }
 
+// runFuncErr returns a shellRunFunc that always returns the given error.
+func runFuncErr(err error) shellRunFunc {
+	return func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error {
+		return err
+	}
+}
+
 func TestRunServicesCLI_AutoMode_Running_UsesExec(t *testing.T) {
 	cfg := testCfg("app-main", config.ServiceCLIConfig{})
 	compose := testCompose()
@@ -543,6 +550,26 @@ func TestRunServicesCLI_AutoMode_DockerError_ReturnsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
 		t.Errorf("auto+docker-error: expected daemon error surfaced, got: %v", err)
+	}
+}
+
+// TestRunServicesCLI_AutoMode_Absent_RunFails_SurfacesOriginalError verifies that
+// when the container is absent and compose run also fails, the original runCLI
+// error is surfaced rather than being dropped or replaced by a generic hint.
+func TestRunServicesCLI_AutoMode_Absent_RunFails_SurfacesOriginalError(t *testing.T) {
+	cfg := testCfg("app-main", config.ServiceCLIConfig{})
+	compose := testCompose()
+	flags := shellCLIFlags{mode: "auto"}
+
+	runErr := fmt.Errorf("image pull failed: access denied")
+	err := runServicesCLI(cfg, compose, "main", flags,
+		stateFunc(""), captureExec(new(bool)), runFuncErr(runErr))
+
+	if err == nil {
+		t.Fatal("expected error when compose run fails, got nil")
+	}
+	if !errors.Is(err, runErr) {
+		t.Errorf("original runCLI error should be preserved via wrapping, got: %v", err)
 	}
 }
 
