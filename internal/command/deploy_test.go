@@ -530,7 +530,6 @@ func checkStep(name, cmd, check string) config.DeployStep {
 // TestDeployStep_checkPreservedInConfig verifies the check field round-trips through YAML.
 func TestDeployStep_checkPreservedInConfig(t *testing.T) {
 	step := config.DeployStep{
-		Name:  "copy-configs",
 		Check: "file-exists services/main/configs/.env",
 	}
 	if step.Check != "file-exists services/main/configs/.env" {

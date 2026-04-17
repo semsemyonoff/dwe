@@ -1040,7 +1040,6 @@ func TestCommandsRegisteredAtRoot(t *testing.T) {
 // TestNoMakeReferencesInCLIMessages verifies that no public command's Short, Long,
 // or Example fields reference 'make <target>' (should use 'devbox <command>' instead).
 func TestNoMakeReferencesInCLIMessages(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
 	root := NewRootCmd()
 
 	// Collect all commands recursively.
@@ -1052,7 +1051,6 @@ func TestNoMakeReferencesInCLIMessages(t *testing.T) {
 		}
 		return result
 	}
-	_ = flags
 	all := collect(root)
 
 	for _, cmd := range all {
