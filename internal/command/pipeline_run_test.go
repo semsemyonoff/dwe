@@ -97,7 +97,7 @@ func buildResolvedSteps(phase config.DeployPhase, steps []config.DeployStep) []r
 func TestRunPipeline_EmptySteps(t *testing.T) {
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
-	err := runPipeline(nil, rep, cfg, nil, t.TempDir(), nil, false, nil)
+	err := runPipeline(nil, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestRunPipeline_SingleStep_Success(t *testing.T) {
 	step := noopStep("setup")
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, nil)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestRunPipeline_MultipleSteps_CorrectIndexing(t *testing.T) {
 		noopStep("c"),
 	})
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, nil)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestRunPipeline_StepFailure_ReporterCalled(t *testing.T) {
 		{Name: "fail", Run: "exit 1"},
 	})
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, nil)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if !errors.Is(err, ErrSilent) {
 		t.Fatalf("want ErrSilent, got %v", err)
 	}
@@ -215,9 +215,12 @@ func TestRunPipeline_StepFailure_ReporterCalled(t *testing.T) {
 	if rep.eventAt(failIdx).err == nil {
 		t.Error("FailStep should carry non-nil error")
 	}
-	// FinishPipeline must not be called after failure.
-	if findKind("FinishPipeline") != -1 {
-		t.Error("FinishPipeline should not be called on failure")
+	// FinishPipeline must be called with success=false after step failure.
+	fpIdx := findKind("FinishPipeline")
+	if fpIdx == -1 {
+		t.Error("FinishPipeline should be called even on failure (deferred cleanup)")
+	} else if rep.eventAt(fpIdx).success {
+		t.Error("FinishPipeline should be called with success=false on step failure")
 	}
 }
 
@@ -238,7 +241,7 @@ func TestRunPipeline_StepSkippedByRuntimeWhen(t *testing.T) {
 		{phase: phase, step: noopStep("do-thing"), runtimeWhen: "dir-empty " + workDir},
 	}
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, nil)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -274,7 +277,7 @@ func TestRunPipeline_PhaseSkipped_AllStepsSkipped(t *testing.T) {
 		{phase: phase, step: noopStep("step-b"), phaseWhen: phaseWhenExpr},
 	}
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, nil)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -319,7 +322,7 @@ func TestRunPipeline_PostStepHook_CalledAfterSuccess(t *testing.T) {
 		},
 	}
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, hooks)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, hooks)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -342,7 +345,7 @@ func TestRunPipeline_PostStepHook_NotCalledOnFailure(t *testing.T) {
 		},
 	}
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, hooks)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, hooks)
 	if !errors.Is(err, ErrSilent) {
 		t.Fatalf("want ErrSilent, got %v", err)
 	}
@@ -359,7 +362,7 @@ func TestRunPipeline_ServiceStep_PhaseKeyIncludesService(t *testing.T) {
 		{phase: phase, step: noopStep("migrate"), service: "main"},
 	}
 
-	err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, nil)
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -399,7 +402,7 @@ func TestRunPipeline_SuspendResumeWrapsExec(t *testing.T) {
 	phase := config.DeployPhase{Name: "p"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{noopStep("s")})
 
-	if err := runPipeline(steps, rep, cfg, nil, t.TempDir(), nil, false, nil); err != nil {
+	if err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -422,6 +425,45 @@ func TestRunPipeline_SuspendResumeWrapsExec(t *testing.T) {
 	}
 	if startIdx >= suspendIdx || suspendIdx >= resumeIdx || resumeIdx >= finishIdx {
 		t.Errorf("event order wrong: Start=%d Suspend=%d Resume=%d Finish=%d", startIdx, suspendIdx, resumeIdx, finishIdx)
+	}
+}
+
+func TestRunPipeline_PostDeploySkippedOnFailure(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	phase1 := config.DeployPhase{Name: "setup"}
+	phase2 := config.DeployPhase{Name: "post-deploy"}
+
+	steps := []resolvedStep{
+		{phase: phase1, step: config.DeployStep{Name: "fail-step", Run: "exit 1"}},
+		{phase: phase2, step: noopStep("notify")},
+	}
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent, got %v", err)
+	}
+
+	// post-deploy phase must never be entered.
+	for _, e := range rep.events {
+		if e.kind == "EnterPhase" && e.phaseKey == "post-deploy" {
+			t.Error("post-deploy phase was entered after a prior step failed")
+		}
+		if e.kind == "StartStep" && e.step.Name == "notify" {
+			t.Error("post-deploy step was started after a prior step failed")
+		}
+	}
+
+	// FailStep must be recorded for the failing step.
+	failFound := false
+	for _, e := range rep.events {
+		if e.kind == "FailStep" && e.step.Name == "fail-step" {
+			failFound = true
+		}
+	}
+	if !failFound {
+		t.Error("FailStep event not recorded for failing step")
 	}
 }
 

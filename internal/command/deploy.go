@@ -302,7 +302,7 @@ steps relevant to a specific service.`,
 				},
 			}
 
-			if err := runPipeline(steps, rep, cfg, reg, workDir, logFile, false, postStepHooks); err != nil {
+			if err := runPipeline(steps, rep, "deploy", cfg, reg, workDir, logFile, false, postStepHooks); err != nil {
 				if errors.Is(err, ErrSilent) {
 					w.Warning("Full output saved to: " + logPath)
 				}

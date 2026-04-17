@@ -369,6 +369,7 @@ func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 
 // runPipeline executes a resolved step list, calling rep for all lifecycle events.
 //
+// name is a human-readable label passed to rep.StartPipeline (e.g. "deploy", "reset").
 // postStepHooks maps step names to callbacks invoked after successful execution
 // (before the check condition) — used e.g. to source .env after render-env.
 //
@@ -377,6 +378,7 @@ func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 func runPipeline(
 	steps []resolvedStep,
 	rep pipeline.Reporter,
+	name string,
 	cfg *config.DevboxConfig,
 	reg *commands.Registry,
 	workDir string,
@@ -385,7 +387,10 @@ func runPipeline(
 	postStepHooks map[string]func() error,
 ) error {
 	total := len(steps)
-	rep.StartPipeline("", total)
+	rep.StartPipeline(name, total)
+
+	success := false
+	defer func() { rep.FinishPipeline(success) }()
 
 	lastPhaseKey := ""
 	phaseSkipped := false
@@ -471,7 +476,7 @@ func runPipeline(
 		rep.FinishStep(addr, rs.step, i+1, total)
 	}
 
-	rep.FinishPipeline(true)
+	success = true
 	return nil
 }
 

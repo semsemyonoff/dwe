@@ -176,7 +176,8 @@ func (m tuiModel) View() tea.View {
 	b.WriteString("\n")
 
 	if m.pipelineName != "" {
-		fmt.Fprintf(&b, "  Deploy: %s\n", m.pipelineName)
+		label := strings.ToUpper(m.pipelineName[:1]) + m.pipelineName[1:]
+		fmt.Fprintf(&b, "  %s\n", label)
 	}
 	if m.currentPhase != "" {
 		fmt.Fprintf(&b, "  Phase:  %s\n", m.currentPhase)

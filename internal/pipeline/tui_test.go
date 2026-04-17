@@ -263,8 +263,19 @@ func TestTUIModel_CompletedCount(t *testing.T) {
 func TestTUIModel_View_PipelineName(t *testing.T) {
 	m := tuiModel{pipelineName: "deploy", totalSteps: 5}
 	view := m.View()
-	if !strings.Contains(view.Content, "deploy") {
+	if !strings.Contains(view.Content, "Deploy") {
 		t.Error("expected pipeline name in view")
+	}
+}
+
+func TestTUIModel_View_PipelineName_Reset(t *testing.T) {
+	m := tuiModel{pipelineName: "reset", totalSteps: 3}
+	view := m.View()
+	if !strings.Contains(view.Content, "Reset") {
+		t.Error("expected reset pipeline name in view, got: " + view.Content)
+	}
+	if strings.Contains(view.Content, "Deploy") {
+		t.Error("reset pipeline must not display Deploy header")
 	}
 }
 

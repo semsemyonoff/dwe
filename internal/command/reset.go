@@ -113,7 +113,7 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 			}
 			rep := pipeline.NewReporter(mode, w)
 
-			if err := runPipeline(steps, rep, cfg, reg, workDir, logFile, yes, nil); err != nil {
+			if err := runPipeline(steps, rep, "reset", cfg, reg, workDir, logFile, yes, nil); err != nil {
 				if errors.Is(err, ErrSilent) {
 					w.Warning("Full output saved to: " + logPath)
 				}

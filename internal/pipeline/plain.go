@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
@@ -21,7 +22,8 @@ import (
 // SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
 // need to yield or reclaim the terminal.
 type PlainReporter struct {
-	w *render.Writer
+	w    *render.Writer
+	name string // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 }
 
 // NewPlainReporter creates a PlainReporter that writes to w.
@@ -29,9 +31,11 @@ func NewPlainReporter(w *render.Writer) *PlainReporter {
 	return &PlainReporter{w: w}
 }
 
-// StartPipeline is a no-op for PlainReporter; the current deploy output does
-// not print a pipeline header.
-func (r *PlainReporter) StartPipeline(_ string, _ int) {}
+// StartPipeline stores the pipeline name for use in failure messages. It does
+// not print a header; the current deploy/reset output has no pipeline banner.
+func (r *PlainReporter) StartPipeline(name string, _ int) {
+	r.name = name
+}
 
 // EnterPhase prints the phase label line:
 //
@@ -78,10 +82,19 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 
 // FailStep prints error lines when a step fails:
 //
-//	Deploy failed at step "<stepAddr>"
+//	<Name> failed at step "<stepAddr>"
 //	  <error message>
+//
+// The label is derived from the pipeline name set by StartPipeline (e.g.
+// "deploy" → "Deploy failed…", "reset" → "Reset failed…"). Falls back to
+// "Pipeline" if StartPipeline was not called.
 func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, _ int, _ int, err error) {
-	r.w.Error(fmt.Sprintf("Deploy failed at step %q", stepAddr))
+	label := r.name
+	if label == "" {
+		label = "pipeline"
+	}
+	label = strings.ToUpper(label[:1]) + label[1:]
+	r.w.Error(fmt.Sprintf("%s failed at step %q", label, stepAddr))
 	r.w.Error("  " + err.Error())
 }
 

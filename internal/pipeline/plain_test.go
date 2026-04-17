@@ -168,6 +168,7 @@ func TestPlainReporter_FinishStep(t *testing.T) {
 
 func TestPlainReporter_FailStep(t *testing.T) {
 	r, buf := newBufReporter()
+	r.StartPipeline("deploy", 7)
 	step := config.DeployStep{Name: "migrate"}
 	r.FailStep("main/setup/migrate", step, 4, 7, errors.New("exit status 1"))
 	got := stripANSI(buf.String())
@@ -182,6 +183,47 @@ func TestPlainReporter_FailStep(t *testing.T) {
 	for i, want := range wantLines {
 		if gotLines[i] != want {
 			t.Errorf("FailStep line %d: got %q, want %q", i, gotLines[i], want)
+		}
+	}
+}
+
+func TestPlainReporter_FailStep_Reset(t *testing.T) {
+	r, buf := newBufReporter()
+	r.StartPipeline("reset", 3)
+	step := config.DeployStep{Name: "stop"}
+	r.FailStep("cleanup/stop", step, 2, 3, errors.New("exit status 2"))
+	got := stripANSI(buf.String())
+	wantLines := []string{
+		`Reset failed at step "cleanup/stop"`,
+		"  exit status 2",
+	}
+	gotLines := lines(got)
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("FailStep reset: got %d lines, want %d; output: %q", len(gotLines), len(wantLines), got)
+	}
+	for i, want := range wantLines {
+		if gotLines[i] != want {
+			t.Errorf("FailStep reset line %d: got %q, want %q", i, gotLines[i], want)
+		}
+	}
+}
+
+func TestPlainReporter_FailStep_NoStartPipeline(t *testing.T) {
+	r, buf := newBufReporter()
+	step := config.DeployStep{Name: "migrate"}
+	r.FailStep("init/migrate", step, 1, 1, errors.New("timeout"))
+	got := stripANSI(buf.String())
+	wantLines := []string{
+		`Pipeline failed at step "init/migrate"`,
+		"  timeout",
+	}
+	gotLines := lines(got)
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("FailStep no name: got %d lines, want %d; output: %q", len(gotLines), len(wantLines), got)
+	}
+	for i, want := range wantLines {
+		if gotLines[i] != want {
+			t.Errorf("FailStep no name line %d: got %q, want %q", i, gotLines[i], want)
 		}
 	}
 }
