@@ -14,7 +14,7 @@ import (
 func newInfoCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info",
-		Short: "Display project info, URLs, credentials and available commands",
+		Short: "Display project info dashboard (URLs, hosts, services, tools)",
 		Long: `Display a styled project dashboard loaded from devbox/info.yml.
 
 Shows project name, URLs, hosts, services, tools, and runtime details.

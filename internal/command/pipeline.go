@@ -395,8 +395,8 @@ func runPipeline(
 	postStepHooks map[string]func() error,
 ) error {
 	// trackedTotal excludes steps belonging to phases with Untracked=true.
-	// These steps receive index=0, total=0 in reporter calls so the TUI can
-	// distinguish them from counted steps and exclude them from the progress bar.
+	// These steps receive index=0, total=0 in reporter calls so PlainReporter
+	// can suppress output for them.
 	trackedTotal := 0
 	for _, rs := range steps {
 		if !rs.phase.Untracked {

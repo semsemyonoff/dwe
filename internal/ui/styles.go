@@ -135,7 +135,7 @@ func StyleSubheader(s string) string { return styleSubheader.Render(s) }
 func StyleMuted(s string) string { return styleMuted.Render(s) }
 
 // StyleInfo renders s with the info style (bright blue/cyan).
-// Used for informational callouts such as the spinner in the TUI.
+// Used for informational callouts.
 func StyleInfo(s string) string { return styleInfoText.Render(s) }
 
 // StyleFailed renders s with the failed/error style (red).

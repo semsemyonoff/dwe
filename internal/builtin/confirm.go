@@ -24,8 +24,7 @@ func (confirmBuiltin) Run(with map[string]any, ctx ExecContext) error {
 	okMsg := getStringParam(with, "ok_msg", "Continuing")
 	stopMsg := getStringParam(with, "stop_msg", "Aborted")
 
-	// TUI mode: delegate to the native Bubble Tea confirmation prompt.
-	// Visual feedback is handled by the TUI model; suppress ctx.Output writes.
+	// Injected confirmation callback (e.g. in tests); suppress ctx.Output writes.
 	if ctx.ConfirmFunc != nil {
 		confirmed, err := ctx.ConfirmFunc(msg, okMsg, stopMsg)
 		if err != nil {

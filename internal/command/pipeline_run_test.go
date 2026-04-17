@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
@@ -303,7 +304,7 @@ func TestRunPipeline_PhaseSkipped_AllStepsSkipped(t *testing.T) {
 	}
 	// Verify SkipStep reasons include "phase when:"
 	for _, e := range rep.events {
-		if e.kind == "SkipStep" && !containsStr(e.reason, "phase when:") {
+		if e.kind == "SkipStep" && !strings.Contains(e.reason, "phase when:") {
 			t.Errorf("SkipStep reason %q should contain 'phase when:'", e.reason)
 		}
 	}
@@ -630,15 +631,4 @@ func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 	if cmd.Dir != workDir {
 		t.Errorf("buildDevboxCmd Dir = %q, want %q", cmd.Dir, workDir)
 	}
-}
-
-func containsStr(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || func() bool {
-		for i := 0; i <= len(s)-len(sub); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
-			}
-		}
-		return false
-	}())
 }

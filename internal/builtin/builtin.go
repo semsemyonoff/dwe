@@ -41,7 +41,7 @@ type ExecContext struct {
 	// SkipConfirm suppresses all confirm builtins (e.g. when --yes is passed).
 	SkipConfirm bool
 	// ConfirmFunc is an optional callback for interactive confirmation.
-	// When non-nil (TUI mode), the confirm builtin uses it instead of stdin.
+	// When non-nil, the confirm builtin uses it instead of reading from stdin.
 	// Returns (true, nil) if confirmed, (false, nil) if denied.
 	ConfirmFunc func(msg, okMsg, stopMsg string) (bool, error)
 }
