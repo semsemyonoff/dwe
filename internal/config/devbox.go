@@ -239,6 +239,7 @@ type ServiceConfig struct {
 	DirInternal     string               `yaml:"dir_internal"`
 	WorkDirInternal string               `yaml:"work_dir_internal"`
 	Configs         []ServiceConfigEntry `yaml:"configs"`
+	Dirs            []string             `yaml:"dirs"`
 	Extends         string               `yaml:"extends"`
 	DependsOn       []string             `yaml:"depends_on"`
 	Compose         []string             `yaml:"compose"`
@@ -533,6 +534,8 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 			maps.Copy(merged, svc.CLI.Env) // child wins on conflicts
 			svc.CLI.Env = merged
 		}
+		// Merge dirs: parent dirs come first, child dirs appended (deduplicated).
+		svc.Dirs = mergeDeduplicatedStrings(parent.Dirs, svc.Dirs)
 		f.Services[name] = svc
 	}
 
@@ -852,6 +855,29 @@ func loadRawYAML(path string) (map[string]any, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return m, nil
+}
+
+// mergeDeduplicatedStrings returns a slice containing all elements of a followed
+// by any elements of b that are not already present in a. Order is preserved.
+func mergeDeduplicatedStrings(a, b []string) []string {
+	if len(a) == 0 {
+		return append([]string(nil), b...)
+	}
+	seen := make(map[string]bool, len(a))
+	result := make([]string, 0, len(a)+len(b))
+	for _, s := range a {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range b {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 // deepMerge merges src into dst in place.

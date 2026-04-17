@@ -1223,3 +1223,191 @@ func TestLoadServicesConfig_extendsOverridesMode(t *testing.T) {
 		t.Errorf("main-run.CLI.Mode = %q, want run (own value, not inherited)", run.CLI.Mode)
 	}
 }
+
+// --- ServiceConfig.Dirs field ---
+
+const sampleServicesWithDirsYML = `
+services:
+  base:
+    type: app
+    container: app-base
+    mandatory: true
+    dir: ./services/base
+    dirs:
+      - logs
+      - home
+      - runtime
+  child:
+    type: app
+    container: app-child
+    mandatory: false
+    extends: base
+    dirs:
+      - extra
+  child-nodir:
+    type: app
+    container: app-child-nodir
+    mandatory: false
+    extends: base
+  child-overlap:
+    type: app
+    container: app-child-overlap
+    mandatory: false
+    extends: base
+    dirs:
+      - logs
+      - home
+      - custom
+`
+
+func TestLoadServicesConfig_dirsField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	base := services["base"]
+	want := []string{"logs", "home", "runtime"}
+	if len(base.Dirs) != len(want) {
+		t.Fatalf("base.Dirs = %v, want %v", base.Dirs, want)
+	}
+	for i, d := range want {
+		if base.Dirs[i] != d {
+			t.Errorf("base.Dirs[%d] = %q, want %q", i, base.Dirs[i], d)
+		}
+	}
+}
+
+func TestLoadServicesConfig_dirsInheritedAndMerged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	// child extends base (dirs: [logs, home, runtime]) and adds dirs: [extra]
+	// expected: parent first, then child additions
+	child := services["child"]
+	want := []string{"logs", "home", "runtime", "extra"}
+	if len(child.Dirs) != len(want) {
+		t.Fatalf("child.Dirs = %v, want %v", child.Dirs, want)
+	}
+	for i, d := range want {
+		if child.Dirs[i] != d {
+			t.Errorf("child.Dirs[%d] = %q, want %q", i, child.Dirs[i], d)
+		}
+	}
+}
+
+func TestLoadServicesConfig_dirsInheritedWhenChildEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	// child-nodir extends base and has no dirs of its own — should inherit parent dirs
+	child := services["child-nodir"]
+	want := []string{"logs", "home", "runtime"}
+	if len(child.Dirs) != len(want) {
+		t.Fatalf("child-nodir.Dirs = %v, want %v", child.Dirs, want)
+	}
+	for i, d := range want {
+		if child.Dirs[i] != d {
+			t.Errorf("child-nodir.Dirs[%d] = %q, want %q", i, child.Dirs[i], d)
+		}
+	}
+}
+
+func TestLoadServicesConfig_dirsDeduplicated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	// child-overlap extends base (logs, home, runtime) and adds (logs, home, custom)
+	// duplicate logs and home must appear only once; parent order preserved
+	child := services["child-overlap"]
+	want := []string{"logs", "home", "runtime", "custom"}
+	if len(child.Dirs) != len(want) {
+		t.Fatalf("child-overlap.Dirs = %v, want %v (deduplicated)", child.Dirs, want)
+	}
+	for i, d := range want {
+		if child.Dirs[i] != d {
+			t.Errorf("child-overlap.Dirs[%d] = %q, want %q", i, child.Dirs[i], d)
+		}
+	}
+}
+
+// --- mergeDeduplicatedStrings ---
+
+func TestMergeDeduplicatedStrings_basic(t *testing.T) {
+	got := mergeDeduplicatedStrings([]string{"a", "b"}, []string{"c"})
+	want := []string{"a", "b", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i, v := range want {
+		if got[i] != v {
+			t.Errorf("[%d] got %q, want %q", i, got[i], v)
+		}
+	}
+}
+
+func TestMergeDeduplicatedStrings_deduplicates(t *testing.T) {
+	got := mergeDeduplicatedStrings([]string{"a", "b", "c"}, []string{"b", "d"})
+	want := []string{"a", "b", "c", "d"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i, v := range want {
+		if got[i] != v {
+			t.Errorf("[%d] got %q, want %q", i, got[i], v)
+		}
+	}
+}
+
+func TestMergeDeduplicatedStrings_emptyA(t *testing.T) {
+	got := mergeDeduplicatedStrings(nil, []string{"x", "y"})
+	want := []string{"x", "y"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestMergeDeduplicatedStrings_emptyB(t *testing.T) {
+	got := mergeDeduplicatedStrings([]string{"x", "y"}, nil)
+	want := []string{"x", "y"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestMergeDeduplicatedStrings_bothEmpty(t *testing.T) {
+	got := mergeDeduplicatedStrings(nil, nil)
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %v", got)
+	}
+}
+
+func TestMergeDeduplicatedStrings_allDuplicates(t *testing.T) {
+	got := mergeDeduplicatedStrings([]string{"a", "b"}, []string{"a", "b"})
+	want := []string{"a", "b"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
