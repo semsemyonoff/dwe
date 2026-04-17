@@ -577,17 +577,16 @@ func TestRunPipeline_TrackedIndexContinuous(t *testing.T) {
 	}
 }
 
-func TestRunPipeline_ConfirmInPlainPhase_SuspendNotSkipped(t *testing.T) {
-	// When a confirm builtin is in a ui:plain phase the TUI reporter is already
-	// suspended. effectiveConfirmFunc must be nil so the builtin falls back to
-	// stdin and SuspendForExec is not skipped (i.e. it IS called).
-	// skipConfirm=true lets the builtin return immediately without blocking stdin.
+func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
+	// A confirm builtin step must always call SuspendForExec/ResumeAfterExec so
+	// the reporter can yield the terminal to stdin. skipConfirm=true lets the
+	// builtin return immediately without blocking stdin.
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
-	plainPhase := config.DeployPhase{Name: "pre", UI: "plain"}
+	phase := config.DeployPhase{Name: "pre"}
 	steps := []resolvedStep{
-		{phase: plainPhase, step: config.DeployStep{Name: "confirm", Builtin: "confirm"}},
+		{phase: phase, step: config.DeployStep{Name: "confirm", Builtin: "confirm"}},
 	}
 
 	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, true, nil)
@@ -595,10 +594,8 @@ func TestRunPipeline_ConfirmInPlainPhase_SuspendNotSkipped(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// SuspendForExec must be present — the confirm step must NOT skip the
-	// suspend cycle when its phase has ui:plain.
 	if !slices.Contains(rep.kindSeq(), "SuspendForExec") {
-		t.Errorf("SuspendForExec must be called for confirm step in plain phase, kinds: %v", rep.kindSeq())
+		t.Errorf("SuspendForExec must be called for confirm step, kinds: %v", rep.kindSeq())
 	}
 }
 

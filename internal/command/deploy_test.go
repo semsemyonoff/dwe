@@ -1578,9 +1578,9 @@ func TestStepCommand_commandWithEmptyWith(t *testing.T) {
 // TestExecBuiltinStep_validatesBeforeRun verifies that execBuiltinStep enforces
 // --- post-deploy phase tests ---
 
-// phaseWithUI builds a DeployPhase with a UI field set.
-func phaseWithUI(name, ui string, steps ...config.DeployStep) config.DeployPhase {
-	return config.DeployPhase{Name: name, Description: name + " phase", UI: ui, Steps: steps}
+// phaseWithUI builds a DeployPhase (ui parameter ignored — field removed).
+func phaseWithUI(name, _ string, steps ...config.DeployStep) config.DeployPhase {
+	return config.DeployPhase{Name: name, Description: name + " phase", Steps: steps}
 }
 
 // TestResolveDeployPlan_postDeployPhaseIncludedLast verifies that a post-deploy phase
@@ -1625,13 +1625,17 @@ func TestResolveDeployPlan_postDeployPhaseIncludedLast(t *testing.T) {
 	}
 }
 
-// TestResolveDeployPlan_postDeployPhaseUIFieldPreserved verifies the UI field is
-// propagated from phase to resolvedStep so the runner can read it.
-func TestResolveDeployPlan_postDeployPhaseUIFieldPreserved(t *testing.T) {
+// TestResolveDeployPlan_postDeployPhasePreserved verifies the phase is
+// propagated from DeployPhase to resolvedStep so the runner can read it.
+func TestResolveDeployPlan_postDeployPhasePreserved(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
-		phaseWithUI("post-deploy", "plain",
-			config.DeployStep{Name: "info", Devbox: "info", Description: "Show info"},
-		),
+		{
+			Name:        "post-deploy",
+			Description: "post-deploy phase",
+			Steps: []config.DeployStep{
+				{Name: "info", Devbox: "info", Description: "Show info"},
+			},
+		},
 	})
 	steps, err := resolveDeployPlan(cfg)
 	if err != nil {
@@ -1641,8 +1645,8 @@ func TestResolveDeployPlan_postDeployPhaseUIFieldPreserved(t *testing.T) {
 	if len(steps) != 2 {
 		t.Fatalf("want 2 steps, got %d", len(steps))
 	}
-	if steps[1].phase.UI != "plain" {
-		t.Errorf("phase UI = %q, want plain", steps[1].phase.UI)
+	if steps[1].phase.Name != "post-deploy" {
+		t.Errorf("phase Name = %q, want post-deploy", steps[1].phase.Name)
 	}
 }
 

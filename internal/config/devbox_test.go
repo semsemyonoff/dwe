@@ -956,7 +956,9 @@ func TestLoadDeployConfig_deployServicesWithStepsError(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_phaseUIField(t *testing.T) {
+func TestLoadDeployConfig_phaseUIFieldIgnored(t *testing.T) {
+	// The ui: field was removed from DeployPhase. YAML with ui: must still load
+	// without error (backward compatibility — unknown fields are silently ignored).
 	yml := `phases:
   - name: setup
     description: Setup phase
@@ -966,7 +968,7 @@ func TestLoadDeployConfig_phaseUIField(t *testing.T) {
         run: mkdir -p services/main/src
         description: Create directories
   - name: post-deploy
-    description: Post-deploy phase (inherits TUI mode)
+    description: Post-deploy phase
     steps:
       - name: info
         devbox: "info"
@@ -984,15 +986,10 @@ func TestLoadDeployConfig_phaseUIField(t *testing.T) {
 	if len(cfg.Phases) != 2 {
 		t.Fatalf("Phases len = %d, want 2", len(cfg.Phases))
 	}
-	if cfg.Phases[0].UI != "plain" {
-		t.Errorf("Phases[0].UI = %q, want plain", cfg.Phases[0].UI)
-	}
-	if cfg.Phases[1].UI != "" {
-		t.Errorf("Phases[1].UI = %q, want empty (inherit default)", cfg.Phases[1].UI)
-	}
 }
 
-func TestLoadDeployConfig_phaseUIInheritDefault(t *testing.T) {
+func TestLoadDeployConfig_phaseUntrackedDefaultFalseSimple(t *testing.T) {
+	// Phases without untracked: default to false.
 	yml := `phases:
   - name: start
     description: Start phase
@@ -1010,8 +1007,8 @@ func TestLoadDeployConfig_phaseUIInheritDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDeployConfig: %v", err)
 	}
-	if cfg.Phases[0].UI != "" {
-		t.Errorf("Phases[0].UI = %q, want empty string (default inherit)", cfg.Phases[0].UI)
+	if cfg.Phases[0].Untracked {
+		t.Error("Phases[0].Untracked = true, want false (default)")
 	}
 }
 
@@ -1047,9 +1044,6 @@ func TestLoadDeployConfig_phaseUntrackedField(t *testing.T) {
 	}
 	if !cfg.Phases[1].Untracked {
 		t.Error("Phases[1].Untracked = false, want true")
-	}
-	if cfg.Phases[1].UI != "plain" {
-		t.Errorf("Phases[1].UI = %q, want plain", cfg.Phases[1].UI)
 	}
 }
 

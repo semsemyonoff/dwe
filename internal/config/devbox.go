@@ -81,7 +81,6 @@ type DeployPhase struct {
 	Name           string       `yaml:"name"`
 	Description    string       `yaml:"description"`
 	When           string       `yaml:"when"`
-	UI             string       `yaml:"ui"`
 	Untracked      bool         `yaml:"untracked"`
 	Steps          []DeployStep `yaml:"steps"`
 	DeployServices bool         `yaml:"deploy_services"`
