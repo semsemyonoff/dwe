@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -382,20 +383,26 @@ func stepIcon(status string) string {
 // the entire phase duration.
 //
 // TUI frames are written only to the terminal via the Bubble Tea renderer and
-// never reach the log writer.
+// never reach the log writer. Plain-text lifecycle events are mirrored to
+// logWriter (if non-nil) in the same format as PlainReporter so log files
+// contain readable output with no escape sequences.
 type TUIReporter struct {
 	program      *tea.Program
 	wg           sync.WaitGroup
 	mu           sync.Mutex
-	suspendCount int  // reference count; terminal released when > 0
-	inPlainPhase bool // whether the current phase has ui:plain
+	suspendCount int       // reference count; terminal released when > 0
+	inPlainPhase bool      // whether the current phase has ui:plain
+	logWriter    io.Writer // receives plain-text lifecycle events (may be nil)
+	name         string    // pipeline name set by StartPipeline (for FailStep label)
 }
 
 // NewTUIReporter creates and starts a TUIReporter. The Bubble Tea program
 // begins running immediately in a background goroutine.
 // The progress bar color is read from ui.ProgressBarColor() at the time of creation.
-func NewTUIReporter() *TUIReporter {
-	r := &TUIReporter{}
+// logWriter, if non-nil, receives plain-text lifecycle events so log files
+// match PlainReporter format without escape sequences.
+func NewTUIReporter(logWriter io.Writer) *TUIReporter {
+	r := &TUIReporter{logWriter: logWriter}
 	m := newTUIModel(ui.ProgressBarColor())
 	r.program = tea.NewProgram(m)
 	r.wg.Go(func() {
@@ -404,8 +411,17 @@ func NewTUIReporter() *TUIReporter {
 	return r
 }
 
+// logf writes a plain-text line to the logWriter if one is set.
+func (r *TUIReporter) logf(format string, args ...any) {
+	if r.logWriter == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(r.logWriter, format, args...)
+}
+
 // StartPipeline sends the pipeline header to the TUI model.
 func (r *TUIReporter) StartPipeline(name string, totalSteps int) {
+	r.name = name
 	r.program.Send(tuiStartPipelineMsg{name: name, total: totalSteps})
 }
 
@@ -427,6 +443,13 @@ func (r *TUIReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
 
 	r.program.Send(tuiEnterPhaseMsg{phaseKey: phaseKey, phase: phase})
 
+	// Mirror to log file.
+	label := "Phase: " + phaseKey
+	if phase.Description != "" {
+		label += ": " + phase.Description
+	}
+	r.logf("%s\n", label)
+
 	// Then release terminal for a plain phase.
 	if isNowPlain {
 		r.doSuspend()
@@ -436,26 +459,43 @@ func (r *TUIReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
 // SkipPhase forwards the skip event to the TUI model.
 func (r *TUIReporter) SkipPhase(phaseKey string, phase config.DeployPhase, reason string) {
 	r.program.Send(tuiSkipPhaseMsg{phaseKey: phaseKey, reason: reason})
+	r.logf("  Skipping phase %s (%s)\n", phaseKey, reason)
 }
 
 // StartStep updates the current step display.
 func (r *TUIReporter) StartStep(stepAddr string, step config.DeployStep, index int, total int) {
 	r.program.Send(tuiStartStepMsg{addr: stepAddr, step: step, index: index, total: total})
+	label := stepAddr
+	if step.Description != "" {
+		label += ": " + step.Description
+	}
+	r.logf("  [%d/%d] %s\n", index, total, label)
 }
 
 // SkipStep marks the step as skipped.
 func (r *TUIReporter) SkipStep(stepAddr string, _ config.DeployStep, index int, total int, reason string) {
 	r.program.Send(tuiSkipStepMsg{addr: stepAddr, index: index, total: total, reason: reason})
+	r.logf("  [%d/%d] Skipped: %s (%s)\n", index, total, stepAddr, reason)
 }
 
 // FinishStep marks the step as done.
 func (r *TUIReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
 	r.program.Send(tuiFinishStepMsg{addr: stepAddr, index: index, total: total})
+	r.logf("  [%d/%d] Done: %s\n", index, total, stepAddr)
 }
 
 // FailStep marks the step as failed.
 func (r *TUIReporter) FailStep(stepAddr string, _ config.DeployStep, index int, total int, err error) {
 	r.program.Send(tuiFailStepMsg{addr: stepAddr, index: index, total: total, err: err})
+	label := r.name
+	if label == "" {
+		label = "pipeline"
+	}
+	label = strings.ToUpper(label[:1]) + label[1:]
+	r.logf("%s failed at step %q\n", label, stepAddr)
+	if err != nil {
+		r.logf("  %s\n", err.Error())
+	}
 }
 
 // FinishPipeline sends the done signal and waits for the Bubble Tea program

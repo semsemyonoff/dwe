@@ -292,7 +292,7 @@ steps relevant to a specific service.`,
 			if err != nil {
 				return err
 			}
-			rep := pipeline.NewReporter(mode, w)
+			rep := pipeline.NewReporter(mode, w, logFile)
 
 			// After .env is regenerated, load it into the current process
 			// environment so subsequent cmd: steps can reference its variables.

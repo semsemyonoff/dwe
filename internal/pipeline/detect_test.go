@@ -130,7 +130,7 @@ func TestParseUIMode_Invalid(t *testing.T) {
 func TestNewReporter_Plain(t *testing.T) {
 	buf := &bytes.Buffer{}
 	w := render.NewWriter(buf)
-	rep := NewReporter(UIModePlain, w)
+	rep := NewReporter(UIModePlain, w, nil)
 	if _, ok := rep.(*PlainReporter); !ok {
 		t.Errorf("NewReporter(plain): expected *PlainReporter, got %T", rep)
 	}
@@ -143,7 +143,7 @@ func TestNewReporter_Auto(t *testing.T) {
 	// In the test environment stdout is not a TTY, so auto falls back to plain.
 	buf := &bytes.Buffer{}
 	w := render.NewWriter(buf)
-	rep := NewReporter(UIModeAuto, w)
+	rep := NewReporter(UIModeAuto, w, nil)
 	if _, ok := rep.(*PlainReporter); !ok {
 		t.Errorf("NewReporter(auto): expected *PlainReporter in non-TTY, got %T", rep)
 	}
@@ -156,7 +156,7 @@ func TestNewReporter_TUI_FallbackWithWarning(t *testing.T) {
 	// In test environment, stdout is not a TTY, so tui mode should warn and fall back.
 	buf := &bytes.Buffer{}
 	w := render.NewWriter(buf)
-	rep := NewReporter(UIModeTUI, w)
+	rep := NewReporter(UIModeTUI, w, nil)
 	if _, ok := rep.(*PlainReporter); !ok {
 		t.Errorf("NewReporter(tui) fallback: expected *PlainReporter, got %T", rep)
 	}

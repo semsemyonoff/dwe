@@ -111,7 +111,7 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rep := pipeline.NewReporter(mode, w)
+			rep := pipeline.NewReporter(mode, w, logFile)
 
 			if err := runPipeline(steps, rep, "reset", cfg, reg, workDir, logFile, yes, nil); err != nil {
 				if errors.Is(err, ErrSilent) {

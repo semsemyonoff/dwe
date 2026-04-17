@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"devbox-cli/internal/render"
@@ -61,17 +62,20 @@ func isCapableTTYWith(isTTY func(fd uintptr) bool, getenv func(string) string) b
 //   - plain: always PlainReporter
 //   - auto:  TUIReporter if terminal is capable, else PlainReporter (silent fallback)
 //   - tui:   TUIReporter if terminal is capable, else PlainReporter (warns if not capable)
-func NewReporter(mode UIMode, w *render.Writer) Reporter {
+//
+// logWriter, if non-nil, receives plain-text lifecycle events from TUIReporter
+// so log files match PlainReporter format without escape sequences.
+func NewReporter(mode UIMode, w *render.Writer, logWriter io.Writer) Reporter {
 	switch mode {
 	case UIModeTUI:
 		if !IsCapableTTY() {
 			w.Warning("TUI mode requested but terminal is not capable; falling back to plain output")
 			return NewPlainReporter(w)
 		}
-		return NewTUIReporter()
+		return NewTUIReporter(logWriter)
 	case UIModeAuto:
 		if IsCapableTTY() {
-			return NewTUIReporter()
+			return NewTUIReporter(logWriter)
 		}
 		return NewPlainReporter(w)
 	default: // UIModePlain
