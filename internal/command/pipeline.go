@@ -386,8 +386,17 @@ func runPipeline(
 	skipConfirm bool,
 	postStepHooks map[string]func() error,
 ) error {
-	total := len(steps)
-	rep.StartPipeline(name, total)
+	// trackedTotal excludes steps belonging to phases with Untracked=true.
+	// These steps receive index=0, total=0 in reporter calls so the TUI can
+	// distinguish them from counted steps and exclude them from the progress bar.
+	trackedTotal := 0
+	for _, rs := range steps {
+		if !rs.phase.Untracked {
+			trackedTotal++
+		}
+	}
+
+	rep.StartPipeline(name, trackedTotal)
 
 	success := false
 	defer func() { rep.FinishPipeline(success) }()
@@ -395,8 +404,9 @@ func runPipeline(
 	lastPhaseKey := ""
 	phaseSkipped := false
 	phaseWhen := ""
+	trackedIndex := 0
 
-	for i, rs := range steps {
+	for _, rs := range steps {
 		phaseKey := rs.phase.Name
 		if rs.service != "" {
 			phaseKey = rs.service + "/" + rs.phase.Name
@@ -423,10 +433,18 @@ func runPipeline(
 
 		addr := rs.stepAddress()
 
+		// Determine the index/total to pass to reporter calls for this step.
+		// Untracked phase steps always receive 0/0 so reporters can identify them.
+		stepIndex, stepTotal := 0, 0
+		if !rs.phase.Untracked {
+			trackedIndex++
+			stepIndex, stepTotal = trackedIndex, trackedTotal
+		}
+
 		// Phase-level when condition was false — skip all steps in this phase.
 		if phaseSkipped {
-			rep.StartStep(addr, rs.step, i+1, total)
-			rep.SkipStep(addr, rs.step, i+1, total, "phase when: "+phaseWhen)
+			rep.StartStep(addr, rs.step, stepIndex, stepTotal)
+			rep.SkipStep(addr, rs.step, stepIndex, stepTotal, "phase when: "+phaseWhen)
 			continue
 		}
 
@@ -437,19 +455,19 @@ func runPipeline(
 				return fmt.Errorf("evaluating when condition for %s: %w", addr, err)
 			}
 			if !ok {
-				rep.StartStep(addr, rs.step, i+1, total)
-				rep.SkipStep(addr, rs.step, i+1, total, "when: "+rs.runtimeWhen)
+				rep.StartStep(addr, rs.step, stepIndex, stepTotal)
+				rep.SkipStep(addr, rs.step, stepIndex, stepTotal, "when: "+rs.runtimeWhen)
 				continue
 			}
 		}
 
-		rep.StartStep(addr, rs.step, i+1, total)
+		rep.StartStep(addr, rs.step, stepIndex, stepTotal)
 		rep.SuspendForExec()
 		stepErr := execStep(rs.step, workDir, cfg, reg, logWriter, skipConfirm)
 		rep.ResumeAfterExec()
 
 		if stepErr != nil {
-			rep.FailStep(addr, rs.step, i+1, total, stepErr)
+			rep.FailStep(addr, rs.step, stepIndex, stepTotal, stepErr)
 			return ErrSilent
 		}
 
@@ -464,16 +482,16 @@ func runPipeline(
 		if rs.step.Check != "" {
 			ok, err := condition.EvalRuntime(rs.step.Check, workDir)
 			if err != nil {
-				rep.FailStep(addr, rs.step, i+1, total, fmt.Errorf("check error: %w", err))
+				rep.FailStep(addr, rs.step, stepIndex, stepTotal, fmt.Errorf("check error: %w", err))
 				return ErrSilent
 			}
 			if !ok {
-				rep.FailStep(addr, rs.step, i+1, total, fmt.Errorf("check did not pass (%s)", rs.step.Check))
+				rep.FailStep(addr, rs.step, stepIndex, stepTotal, fmt.Errorf("check did not pass (%s)", rs.step.Check))
 				return ErrSilent
 			}
 		}
 
-		rep.FinishStep(addr, rs.step, i+1, total)
+		rep.FinishStep(addr, rs.step, stepIndex, stepTotal)
 	}
 
 	success = true

@@ -72,11 +72,17 @@ type DeployConfig struct {
 // UI controls how the phase is rendered when the deploy runner uses TUI mode.
 // Valid values: "plain" (bypass TUI, output raw text) or "inherit" (default, use TUI).
 // Empty string is treated as "inherit".
+//
+// Untracked marks the phase as excluded from the progress bar and step counter.
+// Steps in untracked phases receive index=0 and total=0 in reporter calls, and
+// the pipeline StartPipeline total does not include them. Useful for post-deploy
+// summary phases that run after the main work is done.
 type DeployPhase struct {
 	Name           string       `yaml:"name"`
 	Description    string       `yaml:"description"`
 	When           string       `yaml:"when"`
 	UI             string       `yaml:"ui"`
+	Untracked      bool         `yaml:"untracked"`
 	Steps          []DeployStep `yaml:"steps"`
 	DeployServices bool         `yaml:"deploy_services"`
 }

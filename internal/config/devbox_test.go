@@ -1015,6 +1015,66 @@ func TestLoadDeployConfig_phaseUIInheritDefault(t *testing.T) {
 	}
 }
 
+func TestLoadDeployConfig_phaseUntrackedField(t *testing.T) {
+	yml := `phases:
+  - name: setup
+    description: Setup phase
+    steps:
+      - name: create-dirs
+        run: mkdir -p services/main/src
+  - name: post-deploy
+    description: Post-deploy phase
+    ui: plain
+    untracked: true
+    steps:
+      - name: info
+        devbox: "info"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	if len(cfg.Phases) != 2 {
+		t.Fatalf("Phases len = %d, want 2", len(cfg.Phases))
+	}
+	if cfg.Phases[0].Untracked {
+		t.Error("Phases[0].Untracked = true, want false (default)")
+	}
+	if !cfg.Phases[1].Untracked {
+		t.Error("Phases[1].Untracked = false, want true")
+	}
+	if cfg.Phases[1].UI != "plain" {
+		t.Errorf("Phases[1].UI = %q, want plain", cfg.Phases[1].UI)
+	}
+}
+
+func TestLoadDeployConfig_phaseUntrackedDefaultFalse(t *testing.T) {
+	yml := `phases:
+  - name: start
+    description: Start phase
+    steps:
+      - name: up
+        devbox: "docker up"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	if cfg.Phases[0].Untracked {
+		t.Error("Phases[0].Untracked = true, want false (zero value default)")
+	}
+}
+
 // --- TopoSortServices ---
 
 func TestTopoSortServices_noDeps(t *testing.T) {

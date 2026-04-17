@@ -467,6 +467,115 @@ func TestRunPipeline_PostDeploySkippedOnFailure(t *testing.T) {
 	}
 }
 
+func TestRunPipeline_UntrackedPhase_ExcludedFromTotal(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	tracked := config.DeployPhase{Name: "setup", Untracked: false}
+	untracked := config.DeployPhase{Name: "post-deploy", Untracked: true}
+
+	steps := []resolvedStep{
+		{phase: tracked, step: noopStep("a")},
+		{phase: tracked, step: noopStep("b")},
+		{phase: untracked, step: noopStep("info")},
+	}
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// StartPipeline total must only count tracked steps (2, not 3).
+	startPipeline := rep.events[0]
+	if startPipeline.kind != "StartPipeline" {
+		t.Fatalf("first event kind = %q, want StartPipeline", startPipeline.kind)
+	}
+	if startPipeline.total0 != 2 {
+		t.Errorf("StartPipeline totalSteps = %d, want 2 (untracked phase excluded)", startPipeline.total0)
+	}
+}
+
+func TestRunPipeline_UntrackedPhase_StepsReceiveZeroIndex(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	tracked := config.DeployPhase{Name: "setup", Untracked: false}
+	untracked := config.DeployPhase{Name: "post-deploy", Untracked: true}
+
+	steps := []resolvedStep{
+		{phase: tracked, step: noopStep("a")},
+		{phase: untracked, step: noopStep("info")},
+	}
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Collect StartStep events.
+	var startSteps []reporterEvent
+	for _, e := range rep.events {
+		if e.kind == "StartStep" {
+			startSteps = append(startSteps, e)
+		}
+	}
+	if len(startSteps) != 2 {
+		t.Fatalf("want 2 StartStep events, got %d", len(startSteps))
+	}
+
+	// Tracked step: index=1, total=1.
+	if startSteps[0].stepAddr != "setup/a" {
+		t.Errorf("StartStep[0] addr = %q, want setup/a", startSteps[0].stepAddr)
+	}
+	if startSteps[0].index != 1 || startSteps[0].total != 1 {
+		t.Errorf("tracked StartStep: index=%d total=%d, want 1/1", startSteps[0].index, startSteps[0].total)
+	}
+
+	// Untracked step: index=0, total=0.
+	if startSteps[1].stepAddr != "post-deploy/info" {
+		t.Errorf("StartStep[1] addr = %q, want post-deploy/info", startSteps[1].stepAddr)
+	}
+	if startSteps[1].index != 0 || startSteps[1].total != 0 {
+		t.Errorf("untracked StartStep: index=%d total=%d, want 0/0", startSteps[1].index, startSteps[1].total)
+	}
+}
+
+func TestRunPipeline_TrackedIndexContinuous(t *testing.T) {
+	// Three tracked steps across two phases: indices should be 1, 2, 3.
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	phase1 := config.DeployPhase{Name: "phase1", Untracked: false}
+	phase2 := config.DeployPhase{Name: "phase2", Untracked: false}
+
+	steps := []resolvedStep{
+		{phase: phase1, step: noopStep("a")},
+		{phase: phase1, step: noopStep("b")},
+		{phase: phase2, step: noopStep("c")},
+	}
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var starts []reporterEvent
+	for _, e := range rep.events {
+		if e.kind == "StartStep" {
+			starts = append(starts, e)
+		}
+	}
+	if len(starts) != 3 {
+		t.Fatalf("want 3 StartStep events, got %d", len(starts))
+	}
+	for i, s := range starts {
+		wantIndex := i + 1
+		if s.index != wantIndex || s.total != 3 {
+			t.Errorf("StartStep[%d]: index=%d total=%d, want %d/3", i, s.index, s.total, wantIndex)
+		}
+	}
+}
+
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || func() bool {
 		for i := 0; i <= len(s)-len(sub); i++ {
