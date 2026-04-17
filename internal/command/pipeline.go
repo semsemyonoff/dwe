@@ -270,12 +270,8 @@ type ansiStripper struct{ w io.Writer }
 
 func (s *ansiStripper) Write(p []byte) (int, error) {
 	stripped := ansiRe.ReplaceAll(p, nil)
-	n, err := s.w.Write(stripped)
-	if n < len(stripped) && err == nil {
-		err = io.ErrShortWrite
-	}
-	if err != nil {
-		return len(p), err
+	if _, err := s.w.Write(stripped); err != nil {
+		return 0, err
 	}
 	return len(p), nil
 }

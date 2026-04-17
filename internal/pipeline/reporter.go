@@ -49,12 +49,10 @@ type Reporter interface {
 	FinishPipeline(success bool)
 
 	// SuspendForExec is called before an external child process takes the
-	// terminal. TUIReporter uses this to release the terminal; PlainReporter
-	// is a no-op.
+	// terminal. PlainReporter is a no-op.
 	SuspendForExec()
 
 	// ResumeAfterExec is called after the external child process exits.
-	// TUIReporter uses this to reclaim and redraw the terminal; PlainReporter
-	// is a no-op.
+	// PlainReporter is a no-op.
 	ResumeAfterExec()
 }
