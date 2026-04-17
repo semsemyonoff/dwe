@@ -604,14 +604,7 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 // is piped through an io.MultiWriter.
 func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
 	cmd := buildDevboxCmd("info", t.TempDir())
-	found := false
-	for _, e := range cmd.Env {
-		if e == "CLICOLOR_FORCE=1" {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(cmd.Env, "CLICOLOR_FORCE=1") {
 		t.Errorf("buildDevboxCmd env should contain CLICOLOR_FORCE=1, got: %v", cmd.Env)
 	}
 }
