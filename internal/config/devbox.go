@@ -68,10 +68,15 @@ type DeployConfig struct {
 //
 // For runtime conditions the phase condition is applied to each step in the phase
 // that does not already carry its own runtime when condition.
+//
+// UI controls how the phase is rendered when the deploy runner uses TUI mode.
+// Valid values: "plain" (bypass TUI, output raw text) or "inherit" (default, use TUI).
+// Empty string is treated as "inherit".
 type DeployPhase struct {
 	Name           string       `yaml:"name"`
 	Description    string       `yaml:"description"`
 	When           string       `yaml:"when"`
+	UI             string       `yaml:"ui"`
 	Steps          []DeployStep `yaml:"steps"`
 	DeployServices bool         `yaml:"deploy_services"`
 }

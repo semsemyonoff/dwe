@@ -1577,6 +1577,106 @@ func TestStepCommand_commandWithEmptyWith(t *testing.T) {
 }
 
 // TestExecBuiltinStep_validatesBeforeRun verifies that execBuiltinStep enforces
+// --- post-deploy phase tests ---
+
+// phaseWithUI builds a DeployPhase with a UI field set.
+func phaseWithUI(name, ui string, steps ...config.DeployStep) config.DeployPhase {
+	return config.DeployPhase{Name: name, Description: name + " phase", UI: ui, Steps: steps}
+}
+
+// TestResolveDeployPlan_postDeployPhaseIncludedLast verifies that a post-deploy phase
+// (which is just a conventionally-named regular phase at the end) is included in the plan
+// as the last set of steps, after all other phases.
+func TestResolveDeployPlan_postDeployPhaseIncludedLast(t *testing.T) {
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWith("setup", cmdStep("create-dirs", "mkdir -p services/main/src")),
+		phaseWith("init", commandStep("migrate", "services.main.migrate")),
+		phaseWithUI("post-deploy", "plain",
+			config.DeployStep{Name: "info", Devbox: "info", Description: "Show info"},
+			config.DeployStep{
+				Name:        "success",
+				Builtin:     "message",
+				With:        map[string]any{"level": "success", "text": "Deploy completed"},
+				Description: "Print success",
+			},
+		),
+	})
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// implicit + setup(1) + init(1) + post-deploy(2) = 5
+	if len(steps) != 5 {
+		t.Fatalf("want 5 steps, got %d", len(steps))
+	}
+	// Last two steps should be from post-deploy phase.
+	last := steps[len(steps)-1]
+	if last.phase.Name != "post-deploy" {
+		t.Errorf("last step phase = %q, want post-deploy", last.phase.Name)
+	}
+	if last.step.Name != "success" {
+		t.Errorf("last step name = %q, want success", last.step.Name)
+	}
+	secondLast := steps[len(steps)-2]
+	if secondLast.phase.Name != "post-deploy" {
+		t.Errorf("second-last step phase = %q, want post-deploy", secondLast.phase.Name)
+	}
+	if secondLast.step.Name != "info" {
+		t.Errorf("second-last step name = %q, want info", secondLast.step.Name)
+	}
+}
+
+// TestResolveDeployPlan_postDeployPhaseUIFieldPreserved verifies the UI field is
+// propagated from phase to resolvedStep so the runner can read it.
+func TestResolveDeployPlan_postDeployPhaseUIFieldPreserved(t *testing.T) {
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWithUI("post-deploy", "plain",
+			config.DeployStep{Name: "info", Devbox: "info", Description: "Show info"},
+		),
+	})
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// implicit + info = 2
+	if len(steps) != 2 {
+		t.Fatalf("want 2 steps, got %d", len(steps))
+	}
+	if steps[1].phase.UI != "plain" {
+		t.Errorf("phase UI = %q, want plain", steps[1].phase.UI)
+	}
+}
+
+// TestResolveDeployPlan_postDeploySkippedOnPriorFailure verifies the skip-on-failure
+// semantics: when a step in a prior phase fails, the pipeline aborts and post-deploy
+// steps are never reached. This is achieved by the existing abort-on-first-failure
+// behavior in the deploy runner. Here we verify the plan resolution still includes
+// post-deploy steps (they're part of the plan), making them skippable by the runner.
+func TestResolveDeployPlan_postDeployStepsAreInPlan(t *testing.T) {
+	cfg := makeDeployCfg([]config.DeployPhase{
+		phaseWith("start", cmdStep("up", "docker up")),
+		phaseWithUI("post-deploy", "plain",
+			config.DeployStep{Name: "summary", Devbox: "info", Description: "Summary"},
+		),
+	})
+	steps, err := resolveDeployPlan(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Post-deploy steps appear in the plan. The runner skips them only when an
+	// earlier step fails (abort-on-first-failure contract).
+	hasPostDeploy := false
+	for _, rs := range steps {
+		if rs.phase.Name == "post-deploy" {
+			hasPostDeploy = true
+			break
+		}
+	}
+	if !hasPostDeploy {
+		t.Error("post-deploy phase steps should be included in the plan")
+	}
+}
+
 // the same builtin validation contract as full-pipeline plan resolution, so that
 // `devbox deploy step` / `devbox reset step` cannot bypass it.
 func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {

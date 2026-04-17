@@ -956,6 +956,65 @@ func TestLoadDeployConfig_deployServicesWithStepsError(t *testing.T) {
 	}
 }
 
+func TestLoadDeployConfig_phaseUIField(t *testing.T) {
+	yml := `phases:
+  - name: setup
+    description: Setup phase
+    ui: plain
+    steps:
+      - name: create-dirs
+        run: mkdir -p services/main/src
+        description: Create directories
+  - name: post-deploy
+    description: Post-deploy phase (inherits TUI mode)
+    steps:
+      - name: info
+        devbox: "info"
+        description: Show info
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	if len(cfg.Phases) != 2 {
+		t.Fatalf("Phases len = %d, want 2", len(cfg.Phases))
+	}
+	if cfg.Phases[0].UI != "plain" {
+		t.Errorf("Phases[0].UI = %q, want plain", cfg.Phases[0].UI)
+	}
+	if cfg.Phases[1].UI != "" {
+		t.Errorf("Phases[1].UI = %q, want empty (inherit default)", cfg.Phases[1].UI)
+	}
+}
+
+func TestLoadDeployConfig_phaseUIInheritDefault(t *testing.T) {
+	yml := `phases:
+  - name: start
+    description: Start phase
+    steps:
+      - name: up
+        devbox: "docker up"
+        description: Start containers
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	if cfg.Phases[0].UI != "" {
+		t.Errorf("Phases[0].UI = %q, want empty string (default inherit)", cfg.Phases[0].UI)
+	}
+}
+
 // --- TopoSortServices ---
 
 func TestTopoSortServices_noDeps(t *testing.T) {
