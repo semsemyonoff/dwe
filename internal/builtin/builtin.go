@@ -40,6 +40,10 @@ type ExecContext struct {
 	LogWriter io.Writer
 	// SkipConfirm suppresses all confirm builtins (e.g. when --yes is passed).
 	SkipConfirm bool
+	// ConfirmFunc is an optional callback for interactive confirmation.
+	// When non-nil (TUI mode), the confirm builtin uses it instead of stdin.
+	// Returns (true, nil) if confirmed, (false, nil) if denied.
+	ConfirmFunc func(msg, okMsg, stopMsg string) (bool, error)
 }
 
 // Builtin is an engine-internal pipeline action.

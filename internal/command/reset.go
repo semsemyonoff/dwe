@@ -184,7 +184,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
 			// Single-step execution: no --yes flag, so confirm prompts are shown.
-			if err := execStep(step, workDir, cfg, reg, nil, false); err != nil {
+			if err := execStep(step, workDir, cfg, reg, nil, false, nil); err != nil {
 				return err
 			}
 

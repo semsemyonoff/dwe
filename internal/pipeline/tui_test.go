@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/stopwatch"
+	tea "charm.land/bubbletea/v2"
 
 	"devbox-cli/internal/config"
 )
@@ -259,17 +260,18 @@ func TestTUIModel_ProgressFrameMsg_Forwarded(t *testing.T) {
 	_ = applyMsg(m, frameMsg) // should not panic
 }
 
-// --- recentSteps cap ---
+// --- recentSteps: no cap, full history ---
 
-func TestTUIModel_RecentSteps_Cap(t *testing.T) {
+func TestTUIModel_RecentSteps_NoCap(t *testing.T) {
 	m := testModel()
-	for i := range maxRecentSteps + 2 {
+	const n = 20
+	for i := range n {
 		step := config.DeployStep{Name: "step"}
 		addr := fmt.Sprintf("phase/step%d", i)
-		m = applyMsg(m, tuiStartStepMsg{addr: addr, step: step, index: i + 1, total: 10})
+		m = applyMsg(m, tuiStartStepMsg{addr: addr, step: step, index: i + 1, total: n})
 	}
-	if len(m.recentSteps) != maxRecentSteps {
-		t.Errorf("expected recentSteps capped at %d, got %d", maxRecentSteps, len(m.recentSteps))
+	if len(m.recentSteps) != n {
+		t.Errorf("expected all %d steps stored, got %d", n, len(m.recentSteps))
 	}
 }
 
@@ -366,6 +368,95 @@ func TestTUIModel_View_RecentSteps(t *testing.T) {
 	}
 	if !strings.Contains(view.Content, "main/setup/migrate") {
 		t.Error("expected running step in view")
+	}
+}
+
+func TestTUIModel_View_RecentSteps_PlainStyle_Done(t *testing.T) {
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "init/render-env", status: "done", index: 1, total: 5},
+	}
+	view := m.View()
+	if !strings.Contains(view.Content, "✓ [1/5] Done: init/render-env") {
+		t.Errorf("expected plain-style done line, got: %s", view.Content)
+	}
+}
+
+func TestTUIModel_View_RecentSteps_PlainStyle_Skipped(t *testing.T) {
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "main/db/create", status: "skipped", index: 3, total: 5, reason: "when: dir-empty"},
+	}
+	view := m.View()
+	if !strings.Contains(view.Content, "◎ [3/5] Skipped: main/db/create (when: dir-empty)") {
+		t.Errorf("expected plain-style skipped line with reason, got: %s", view.Content)
+	}
+}
+
+func TestTUIModel_View_RecentSteps_PlainStyle_Failed(t *testing.T) {
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "main/setup/migrate", status: "failed", index: 4, total: 5, errMsg: "exit status 1"},
+	}
+	view := m.View()
+	if !strings.Contains(view.Content, "✗ [4/5] Failed: main/setup/migrate") {
+		t.Errorf("expected plain-style failed line, got: %s", view.Content)
+	}
+	if !strings.Contains(view.Content, "exit status 1") {
+		t.Errorf("expected error message in view, got: %s", view.Content)
+	}
+}
+
+func TestTUIModel_View_RecentSteps_Untracked_NoIndex(t *testing.T) {
+	// Untracked steps have index=0, total=0 and should render without [N/M].
+	m := testModel()
+	m.recentSteps = []tuiStepRecord{
+		{addr: "post-deploy/notify", status: "done", index: 0, total: 0},
+	}
+	view := m.View()
+	if !strings.Contains(view.Content, "✓ Done: post-deploy/notify") {
+		t.Errorf("expected untracked done step without index, got: %s", view.Content)
+	}
+	if strings.Contains(view.Content, "[0/0]") {
+		t.Errorf("untracked step must not show [0/0], got: %s", view.Content)
+	}
+}
+
+func TestTUIModel_StepRecord_IndexAndReason(t *testing.T) {
+	step := config.DeployStep{Name: "db/create"}
+	m := testModel()
+	m = applyMsg(m, tuiStartStepMsg{addr: "main/db/create", step: step, index: 3, total: 7})
+	m = applyMsg(m, tuiSkipStepMsg{addr: "main/db/create", index: 3, total: 7, reason: "when: dir-empty"})
+
+	if len(m.recentSteps) != 1 {
+		t.Fatalf("expected 1 step record, got %d", len(m.recentSteps))
+	}
+	rec := m.recentSteps[0]
+	if rec.index != 3 {
+		t.Errorf("expected index 3, got %d", rec.index)
+	}
+	if rec.total != 7 {
+		t.Errorf("expected total 7, got %d", rec.total)
+	}
+	if rec.reason != "when: dir-empty" {
+		t.Errorf("expected reason %q, got %q", "when: dir-empty", rec.reason)
+	}
+}
+
+func TestTUIModel_StepRecord_IndexStoredOnStart(t *testing.T) {
+	step := config.DeployStep{Name: "migrate"}
+	m := testModel()
+	m = applyMsg(m, tuiStartStepMsg{addr: "main/setup/migrate", step: step, index: 5, total: 10})
+
+	if len(m.recentSteps) != 1 {
+		t.Fatalf("expected 1 step record, got %d", len(m.recentSteps))
+	}
+	rec := m.recentSteps[0]
+	if rec.index != 5 {
+		t.Errorf("expected index 5, got %d", rec.index)
+	}
+	if rec.total != 10 {
+		t.Errorf("expected total 10, got %d", rec.total)
 	}
 }
 
@@ -478,6 +569,184 @@ func TestNewTUIModel_ProgressRendersBar(t *testing.T) {
 	if bar == "" {
 		t.Error("expected non-empty progress bar at 50%")
 	}
+}
+
+// --- confirmation model ---
+
+func TestTUIModel_ConfirmMsg_SetsConfirmActive(t *testing.T) {
+	m := testModel()
+	respCh := make(chan bool, 1)
+	m = applyMsg(m, tuiConfirmMsg{message: "Delete all data?", okMsg: "OK", stopMsg: "Aborted", respCh: respCh})
+	if !m.confirmActive {
+		t.Error("expected confirmActive=true after tuiConfirmMsg")
+	}
+}
+
+func TestTUIModel_ConfirmMsg_StoresFields(t *testing.T) {
+	m := testModel()
+	respCh := make(chan bool, 1)
+	m = applyMsg(m, tuiConfirmMsg{message: "Delete all data?", okMsg: "Continuing", stopMsg: "Stopped", respCh: respCh})
+	if m.confirmMessage != "Delete all data?" {
+		t.Errorf("expected confirmMessage %q, got %q", "Delete all data?", m.confirmMessage)
+	}
+	if m.confirmOkMsg != "Continuing" {
+		t.Errorf("expected confirmOkMsg %q, got %q", "Continuing", m.confirmOkMsg)
+	}
+	if m.confirmStopMsg != "Stopped" {
+		t.Errorf("expected confirmStopMsg %q, got %q", "Stopped", m.confirmStopMsg)
+	}
+}
+
+func TestTUIModel_KeyY_WhenConfirmActive_ClearsAndSignalsTrue(t *testing.T) {
+	m := testModel()
+	respCh := make(chan bool, 1)
+	m = applyMsg(m, tuiConfirmMsg{message: "Are you sure?", respCh: respCh})
+
+	// Send 'y' key while confirm is active.
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	result := updated.(tuiModel)
+
+	if result.confirmActive {
+		t.Error("expected confirmActive=false after 'y' key")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd to send response")
+	}
+	// Execute the returned cmd — it should send true to respCh.
+	cmd()
+	select {
+	case v := <-respCh:
+		if !v {
+			t.Error("expected true sent to respCh for 'y' key")
+		}
+	default:
+		t.Error("expected value in respCh after cmd execution")
+	}
+}
+
+func TestTUIModel_KeyCapitalY_WhenConfirmActive_SignalsTrue(t *testing.T) {
+	m := testModel()
+	respCh := make(chan bool, 1)
+	m = applyMsg(m, tuiConfirmMsg{message: "Are you sure?", respCh: respCh})
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'Y', Text: "Y"})
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for 'Y' key")
+	}
+	cmd()
+	select {
+	case v := <-respCh:
+		if !v {
+			t.Error("expected true sent to respCh for 'Y' key")
+		}
+	default:
+		t.Error("expected value in respCh")
+	}
+}
+
+func TestTUIModel_KeyN_WhenConfirmActive_ClearsAndSignalsFalse(t *testing.T) {
+	m := testModel()
+	respCh := make(chan bool, 1)
+	m = applyMsg(m, tuiConfirmMsg{message: "Are you sure?", respCh: respCh})
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	result := updated.(tuiModel)
+
+	if result.confirmActive {
+		t.Error("expected confirmActive=false after 'n' key")
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd to send response")
+	}
+	cmd()
+	select {
+	case v := <-respCh:
+		if v {
+			t.Error("expected false sent to respCh for 'n' key")
+		}
+	default:
+		t.Error("expected value in respCh after cmd execution")
+	}
+}
+
+func TestTUIModel_KeyEsc_WhenConfirmActive_SignalsFalse(t *testing.T) {
+	m := testModel()
+	respCh := make(chan bool, 1)
+	m = applyMsg(m, tuiConfirmMsg{message: "Are you sure?", respCh: respCh})
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for esc key")
+	}
+	cmd()
+	select {
+	case v := <-respCh:
+		if v {
+			t.Error("expected false sent to respCh for esc key")
+		}
+	default:
+		t.Error("expected value in respCh")
+	}
+}
+
+func TestTUIModel_KeyY_WhenNotConfirmActive_IsNoOp(t *testing.T) {
+	m := testModel()
+	m.pipelineName = "deploy"
+	m.totalSteps = 5
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	result := updated.(tuiModel)
+
+	if result.confirmActive {
+		t.Error("confirmActive must remain false when confirm is not active")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd for key event when confirm is not active")
+	}
+}
+
+func TestTUIModel_View_ConfirmPrompt_ShowsMessage(t *testing.T) {
+	m := testModel()
+	m.confirmActive = true
+	m.confirmMessage = "This will delete all data."
+	m.confirmOkMsg = "Continuing"
+	m.confirmStopMsg = "Aborted"
+
+	view := m.View()
+	if !strings.Contains(view.Content, "This will delete all data.") {
+		t.Errorf("expected confirm message in view, got: %s", view.Content)
+	}
+	if !strings.Contains(view.Content, "[Y]") {
+		t.Errorf("expected [Y] key hint in view, got: %s", view.Content)
+	}
+	if !strings.Contains(view.Content, "[N]") {
+		t.Errorf("expected [N] key hint in view, got: %s", view.Content)
+	}
+}
+
+func TestTUIModel_View_ConfirmPrompt_HidesPipelineUI(t *testing.T) {
+	// When confirm is active the regular pipeline UI should not be shown.
+	m := testModel()
+	m.pipelineName = "deploy"
+	m.currentPhase = "setup"
+	m.confirmActive = true
+	m.confirmMessage = "Are you sure?"
+
+	view := m.View()
+	// The confirm view returns early — pipeline header/phase should be absent.
+	if strings.Contains(view.Content, "Deploy") {
+		t.Errorf("pipeline header must not appear when confirm is active, got: %s", view.Content)
+	}
+	if strings.Contains(view.Content, "Phase: setup") {
+		t.Errorf("phase label must not appear when confirm is active, got: %s", view.Content)
+	}
+}
+
+func TestTUIModel_ConfirmResponseSentMsg_Handled(t *testing.T) {
+	// tuiConfirmResponseSentMsg must not panic and should be a no-op.
+	m := testModel()
+	result := applyMsg(m, tuiConfirmResponseSentMsg{})
+	_ = result // no panic is sufficient
 }
 
 // --- Interface compliance ---

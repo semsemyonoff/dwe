@@ -16,15 +16,14 @@ import (
 	"devbox-cli/internal/ui"
 )
 
-// maxRecentSteps is the maximum number of step records shown in the TUI.
-// Will be removed in Task 4 when full history is enabled.
-const maxRecentSteps = 5
-
 // tuiStepRecord holds the display state for a single pipeline step.
 type tuiStepRecord struct {
 	addr   string
 	status string // "running" | "done" | "skipped" | "failed"
 	errMsg string
+	index  int    // tracked step index (0 for untracked phase steps)
+	total  int    // tracked step total (0 for untracked phase steps)
+	reason string // skip reason
 }
 
 // --- Internal Bubble Tea messages ---
@@ -75,6 +74,19 @@ type tuiFinishPipelineMsg struct {
 	success bool
 }
 
+// tuiConfirmMsg asks the TUI model to display a confirmation prompt.
+// The pipeline goroutine blocks on respCh until the user responds.
+type tuiConfirmMsg struct {
+	message string
+	okMsg   string
+	stopMsg string
+	respCh  chan bool
+}
+
+// tuiConfirmResponseSentMsg is a no-op message returned by the command that
+// sends a confirmation response, so Bubble Tea has a valid Msg to process.
+type tuiConfirmResponseSentMsg struct{}
+
 // tuiModel is the Bubble Tea model for the TUI reporter.
 // It maintains all pipeline state required to render the progress UI.
 type tuiModel struct {
@@ -85,9 +97,16 @@ type tuiModel struct {
 	currentStep    string
 	stepIndex      int
 	stepTotal      int
-	recentSteps    []tuiStepRecord // capped at maxRecentSteps
+	recentSteps    []tuiStepRecord // full history, no cap
 	done           bool
 	success        bool
+
+	// confirmation prompt state
+	confirmActive  bool
+	confirmMessage string
+	confirmOkMsg   string
+	confirmStopMsg string
+	confirmRespCh  chan bool
 
 	// bubbles sub-models
 	spinner   spinner.Model
@@ -135,14 +154,14 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentStep = msg.addr
 		m.stepIndex = msg.index
 		m.stepTotal = msg.total
-		m.addRecentStep(tuiStepRecord{addr: msg.addr, status: "running"})
+		m.addRecentStep(tuiStepRecord{addr: msg.addr, status: "running", index: msg.index, total: msg.total})
 		return m, nil
 
 	case tuiSkipStepMsg:
 		m.stepIndex = msg.index
 		m.stepTotal = msg.total
 		m.completedCount++
-		m.updateLastStep(msg.addr, "skipped", "")
+		m.updateLastStep(msg.addr, "skipped", "", msg.reason)
 		if m.currentStep == msg.addr {
 			m.currentStep = ""
 		}
@@ -152,7 +171,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stepIndex = msg.index
 		m.stepTotal = msg.total
 		m.completedCount++
-		m.updateLastStep(msg.addr, "done", "")
+		m.updateLastStep(msg.addr, "done", "", "")
 		if m.currentStep == msg.addr {
 			m.currentStep = ""
 		}
@@ -166,7 +185,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			errMsg = msg.err.Error()
 		}
-		m.updateLastStep(msg.addr, "failed", errMsg)
+		m.updateLastStep(msg.addr, "failed", errMsg, "")
 		if m.currentStep == msg.addr {
 			m.currentStep = ""
 		}
@@ -177,6 +196,39 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.success = msg.success
 		m.currentStep = ""
 		return m, tea.Quit
+
+	case tuiConfirmMsg:
+		m.confirmActive = true
+		m.confirmMessage = msg.message
+		m.confirmOkMsg = msg.okMsg
+		m.confirmStopMsg = msg.stopMsg
+		m.confirmRespCh = msg.respCh
+		return m, nil
+
+	case tea.KeyMsg:
+		if m.confirmActive {
+			ch := m.confirmRespCh
+			switch msg.String() {
+			case "y", "Y":
+				m.confirmActive = false
+				m.confirmRespCh = nil
+				return m, func() tea.Msg {
+					ch <- true
+					return tuiConfirmResponseSentMsg{}
+				}
+			case "n", "N", "esc":
+				m.confirmActive = false
+				m.confirmRespCh = nil
+				return m, func() tea.Msg {
+					ch <- false
+					return tuiConfirmResponseSentMsg{}
+				}
+			}
+		}
+		return m, nil
+
+	case tuiConfirmResponseSentMsg:
+		return m, nil
 
 	// Forward sub-model messages.
 	case spinner.TickMsg:
@@ -207,6 +259,13 @@ func (m tuiModel) View() tea.View {
 	var b strings.Builder
 	b.WriteString("\n")
 
+	// Confirmation prompt takes over the display.
+	if m.confirmActive {
+		fmt.Fprintf(&b, "  ⚠  %s\n", m.confirmMessage)
+		b.WriteString("  Press [Y] to confirm or [N] to cancel\n")
+		return tea.NewView(b.String())
+	}
+
 	if m.pipelineName != "" {
 		label := strings.ToUpper(m.pipelineName[:1]) + m.pipelineName[1:]
 		elapsed := formatElapsed(m.stopwatch.Elapsed())
@@ -232,7 +291,43 @@ func (m tuiModel) View() tea.View {
 		b.WriteString("\n")
 		for _, s := range m.recentSteps {
 			icon := stepIcon(s.status)
-			fmt.Fprintf(&b, "  %s %s\n", icon, s.addr)
+			switch s.status {
+			case "done":
+				if s.index > 0 {
+					fmt.Fprintf(&b, "  %s [%d/%d] Done: %s\n", icon, s.index, s.total, s.addr)
+				} else {
+					fmt.Fprintf(&b, "  %s Done: %s\n", icon, s.addr)
+				}
+			case "skipped":
+				if s.index > 0 {
+					if s.reason != "" {
+						fmt.Fprintf(&b, "  %s [%d/%d] Skipped: %s (%s)\n", icon, s.index, s.total, s.addr, s.reason)
+					} else {
+						fmt.Fprintf(&b, "  %s [%d/%d] Skipped: %s\n", icon, s.index, s.total, s.addr)
+					}
+				} else {
+					if s.reason != "" {
+						fmt.Fprintf(&b, "  %s Skipped: %s (%s)\n", icon, s.addr, s.reason)
+					} else {
+						fmt.Fprintf(&b, "  %s Skipped: %s\n", icon, s.addr)
+					}
+				}
+			case "failed":
+				if s.index > 0 {
+					fmt.Fprintf(&b, "  %s [%d/%d] Failed: %s\n", icon, s.index, s.total, s.addr)
+				} else {
+					fmt.Fprintf(&b, "  %s Failed: %s\n", icon, s.addr)
+				}
+				if s.errMsg != "" {
+					fmt.Fprintf(&b, "    %s\n", s.errMsg)
+				}
+			default: // "running"
+				if s.index > 0 {
+					fmt.Fprintf(&b, "  %s [%d/%d] %s\n", icon, s.index, s.total, s.addr)
+				} else {
+					fmt.Fprintf(&b, "  %s %s\n", icon, s.addr)
+				}
+			}
 		}
 	}
 
@@ -247,20 +342,18 @@ func formatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", mins, secs)
 }
 
-// addRecentStep appends a record, dropping the oldest entry if over the cap.
+// addRecentStep appends a record to the full step history (no cap).
 func (m *tuiModel) addRecentStep(s tuiStepRecord) {
 	m.recentSteps = append(m.recentSteps, s)
-	if len(m.recentSteps) > maxRecentSteps {
-		m.recentSteps = m.recentSteps[len(m.recentSteps)-maxRecentSteps:]
-	}
 }
 
-// updateLastStep finds the most-recent entry with addr and updates its status.
-func (m *tuiModel) updateLastStep(addr, status, errMsg string) {
+// updateLastStep finds the most-recent entry with addr and updates its status, errMsg, and reason.
+func (m *tuiModel) updateLastStep(addr, status, errMsg, reason string) {
 	for i := len(m.recentSteps) - 1; i >= 0; i-- {
 		if m.recentSteps[i].addr == addr {
 			m.recentSteps[i].status = status
 			m.recentSteps[i].errMsg = errMsg
+			m.recentSteps[i].reason = reason
 			return
 		}
 	}
@@ -417,6 +510,22 @@ func (r *TUIReporter) doSuspendLocked() {
 		_ = r.program.ReleaseTerminal()
 	}
 	r.suspendCount++
+}
+
+// Confirm sends a TUI confirmation prompt and blocks until the user responds.
+// It is used by the confirm builtin in TUI mode instead of the stdin-based prompt.
+// The TUI must not be suspended when this is called (i.e. the caller must not
+// have called SuspendForExec for this step).
+func (r *TUIReporter) Confirm(message, okMsg, stopMsg string) (bool, error) {
+	respCh := make(chan bool, 1)
+	r.program.Send(tuiConfirmMsg{
+		message: message,
+		okMsg:   okMsg,
+		stopMsg: stopMsg,
+		respCh:  respCh,
+	})
+	result := <-respCh
+	return result, nil
 }
 
 // doResumeLocked must be called with r.mu held.

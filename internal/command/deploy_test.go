@@ -1711,7 +1711,7 @@ func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := execBuiltinStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, false)
+			err := execBuiltinStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, false, nil)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}

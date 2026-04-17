@@ -485,7 +485,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
-			if err := execStep(step, workDir, cfg, reg, nil, false); err != nil {
+			if err := execStep(step, workDir, cfg, reg, nil, false, nil); err != nil {
 				return err
 			}
 
