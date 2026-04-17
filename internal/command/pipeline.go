@@ -275,7 +275,7 @@ func (s *ansiStripper) Write(p []byte) (int, error) {
 		err = io.ErrShortWrite
 	}
 	if err != nil {
-		return 0, err
+		return len(p), err
 	}
 	return len(p), nil
 }
@@ -474,11 +474,19 @@ func runPipeline(
 		// Bubble Tea so it can render the prompt and receive key events.
 		// All other steps (including other builtins) follow the normal
 		// suspend/resume cycle so subprocess output is not mixed with TUI frames.
-		skipSuspend := rs.step.Builtin == "confirm" && confirmFunc != nil
+		//
+		// Exception: if the current phase has ui:plain the TUI is already
+		// suspended (EnterPhase released the terminal), so Bubble Tea cannot
+		// process messages. In that case fall back to the stdin-based prompt.
+		effectiveConfirmFunc := confirmFunc
+		if rs.phase.UI == "plain" {
+			effectiveConfirmFunc = nil
+		}
+		skipSuspend := rs.step.Builtin == "confirm" && effectiveConfirmFunc != nil
 		if !skipSuspend {
 			rep.SuspendForExec()
 		}
-		stepErr := execStep(rs.step, workDir, cfg, reg, logWriter, skipConfirm, confirmFunc)
+		stepErr := execStep(rs.step, workDir, cfg, reg, logWriter, skipConfirm, effectiveConfirmFunc)
 		if !skipSuspend {
 			rep.ResumeAfterExec()
 		}
