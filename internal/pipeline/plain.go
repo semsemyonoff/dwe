@@ -58,26 +58,44 @@ func (r *PlainReporter) SkipPhase(phaseKey string, _ config.DeployPhase, reason 
 // StartStep prints the step-start info line:
 //
 //	[N/M] <stepAddr>[: <description>]
+//
+// For untracked steps (index == 0), the [N/M] counter is omitted.
 func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index int, total int) {
 	label := stepAddr
 	if step.Description != "" {
 		label += ": " + step.Description
 	}
-	r.w.Info(fmt.Sprintf("  [%d/%d] %s", index, total, label))
+	if index > 0 {
+		r.w.Info(fmt.Sprintf("  [%d/%d] %s", index, total, label))
+	} else {
+		r.w.Info(fmt.Sprintf("  %s", label))
+	}
 }
 
 // SkipStep prints a warning when a step is skipped due to a when condition:
 //
 //	[N/M] Skipped: <stepAddr> (<reason>)
+//
+// For untracked steps (index == 0), the [N/M] counter is omitted.
 func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int, total int, reason string) {
-	r.w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (%s)", index, total, stepAddr, reason))
+	if index > 0 {
+		r.w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (%s)", index, total, stepAddr, reason))
+	} else {
+		r.w.Warning(fmt.Sprintf("  Skipped: %s (%s)", stepAddr, reason))
+	}
 }
 
 // FinishStep prints a success line when a step completes:
 //
 //	[N/M] Done: <stepAddr>
+//
+// For untracked steps (index == 0), the [N/M] counter is omitted.
 func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
-	r.w.Success(fmt.Sprintf("  [%d/%d] Done: %s", index, total, stepAddr))
+	if index > 0 {
+		r.w.Success(fmt.Sprintf("  [%d/%d] Done: %s", index, total, stepAddr))
+	} else {
+		r.w.Success(fmt.Sprintf("  Done: %s", stepAddr))
+	}
 }
 
 // FailStep prints error lines when a step fails:
@@ -95,7 +113,9 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, _ int, _ 
 	}
 	label = strings.ToUpper(label[:1]) + label[1:]
 	r.w.Error(fmt.Sprintf("%s failed at step %q", label, stepAddr))
-	r.w.Error("  " + err.Error())
+	if err != nil {
+		r.w.Error("  " + err.Error())
+	}
 }
 
 // FinishPipeline is a no-op for PlainReporter; callers print their own
