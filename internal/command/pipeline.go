@@ -399,12 +399,8 @@ func runPipeline(
 
 	rep.StartPipeline(name, trackedTotal)
 
-	// TUI mode: wire the native Bubble Tea confirmation prompt so the confirm
-	// builtin does not write to stdin while Bubble Tea owns the terminal.
+	// confirmFunc is always nil with PlainReporter; confirm builtin uses stdin-based prompt.
 	var confirmFunc func(string, string, string) (bool, error)
-	if tuiRep, ok := rep.(*pipeline.TUIReporter); ok {
-		confirmFunc = tuiRep.Confirm
-	}
 
 	success := false
 	defer func() { rep.FinishPipeline(success) }()

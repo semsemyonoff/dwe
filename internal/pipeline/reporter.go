@@ -1,13 +1,12 @@
 // Package pipeline defines the Reporter interface for deploy/reset pipeline execution
-// and provides concrete implementations (PlainReporter, TUIReporter).
+// and provides the PlainReporter implementation.
 package pipeline
 
 import "devbox-cli/internal/config"
 
 // Reporter receives lifecycle events from the deploy/reset pipeline executor
-// and renders them to the terminal. Two implementations are provided:
-//   - PlainReporter  — reproduces the current line-by-line text output
-//   - TUIReporter    — Bubble Tea progress UI (added in a later task)
+// and renders them to the terminal. The only implementation is PlainReporter,
+// which produces line-by-line text output.
 //
 // Event ordering contract:
 //
