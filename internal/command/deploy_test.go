@@ -1710,7 +1710,7 @@ func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := execBuiltinStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, false, nil)
+			err := execBuiltinStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, false)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -1718,5 +1718,23 @@ func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 				t.Errorf("error %q does not contain %q", err.Error(), tc.wantErr)
 			}
 		})
+	}
+}
+
+// TestDeployRunNoUIFlag verifies that the deploy run and reset run commands
+// no longer expose a --ui flag after TUI removal.
+func TestDeployRunNoUIFlag(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	deployCmd := newDeployRunCmd(flags)
+	if f := deployCmd.Flags().Lookup("ui"); f != nil {
+		t.Error("deploy run should not have --ui flag after TUI removal")
+	}
+}
+
+func TestResetRunNoUIFlag(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	resetCmd := newResetRunCmd(flags)
+	if f := resetCmd.Flags().Lookup("ui"); f != nil {
+		t.Error("reset run should not have --ui flag after TUI removal")
 	}
 }

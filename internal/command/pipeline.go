@@ -290,9 +290,9 @@ func (s *ansiStripper) Write(p []byte) (int, error) {
 // Signal handling: the child inherits devbox's terminal foreground process group,
 // so Ctrl+C is delivered by the terminal to the entire group. devbox suppresses
 // its own SIGINT handler while waiting so it does not exit before the child finishes.
-func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer, skipConfirm bool, confirmFunc func(string, string, string) (bool, error)) error {
+func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer, skipConfirm bool) error {
 	if step.Builtin != "" {
-		return execBuiltinStep(step, workDir, cfg, logWriter, skipConfirm, confirmFunc)
+		return execBuiltinStep(step, workDir, cfg, logWriter, skipConfirm)
 	}
 	if step.Command != "" {
 		return execCommandStep(step, workDir, cfg, reg, logWriter)
@@ -349,7 +349,7 @@ func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 // Validates builtin params before running so that single-step execution
 // (devbox deploy step / devbox reset step) enforces the same contract as
 // full-pipeline plan resolution.
-func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, logWriter io.Writer, skipConfirm bool, confirmFunc func(string, string, string) (bool, error)) error {
+func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, logWriter io.Writer, skipConfirm bool) error {
 	if err := builtin.Validate(step.Builtin, step.With); err != nil {
 		return fmt.Errorf("invalid builtin %q: %w", step.Builtin, err)
 	}
@@ -363,7 +363,6 @@ func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		Output:      render.NewWriter(out),
 		LogWriter:   logWriter,
 		SkipConfirm: skipConfirm,
-		ConfirmFunc: confirmFunc,
 	}
 	return builtin.Run(step.Builtin, step.With, ctx)
 }
@@ -398,9 +397,6 @@ func runPipeline(
 	}
 
 	rep.StartPipeline(name, trackedTotal)
-
-	// confirmFunc is always nil with PlainReporter; confirm builtin uses stdin-based prompt.
-	var confirmFunc func(string, string, string) (bool, error)
 
 	success := false
 	defer func() { rep.FinishPipeline(success) }()
@@ -466,26 +462,9 @@ func runPipeline(
 		}
 
 		rep.StartStep(addr, rs.step, stepIndex, stepTotal)
-		// For the confirm builtin in TUI mode the terminal must remain with
-		// Bubble Tea so it can render the prompt and receive key events.
-		// All other steps (including other builtins) follow the normal
-		// suspend/resume cycle so subprocess output is not mixed with TUI frames.
-		//
-		// Exception: if the current phase has ui:plain the TUI is already
-		// suspended (EnterPhase released the terminal), so Bubble Tea cannot
-		// process messages. In that case fall back to the stdin-based prompt.
-		effectiveConfirmFunc := confirmFunc
-		if rs.phase.UI == "plain" {
-			effectiveConfirmFunc = nil
-		}
-		skipSuspend := rs.step.Builtin == "confirm" && effectiveConfirmFunc != nil
-		if !skipSuspend {
-			rep.SuspendForExec()
-		}
-		stepErr := execStep(rs.step, workDir, cfg, reg, logWriter, skipConfirm, effectiveConfirmFunc)
-		if !skipSuspend {
-			rep.ResumeAfterExec()
-		}
+		rep.SuspendForExec()
+		stepErr := execStep(rs.step, workDir, cfg, reg, logWriter, skipConfirm)
+		rep.ResumeAfterExec()
 
 		if stepErr != nil {
 			rep.FailStep(addr, rs.step, stepIndex, stepTotal, stepErr)

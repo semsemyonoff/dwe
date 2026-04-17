@@ -69,7 +69,6 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 // Use --yes to skip confirmation prompts.
 func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
-	var uiFlag string
 
 	cmd := &cobra.Command{
 		Use:          "run",
@@ -107,11 +106,7 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 			tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
 			w := render.NewWriter(tee)
 
-			mode, err := pipeline.ParseUIMode(uiFlag)
-			if err != nil {
-				return err
-			}
-			rep := pipeline.NewReporter(mode, w, logFile)
+			rep := pipeline.NewPlainReporter(w)
 
 			if err := runPipeline(steps, rep, "reset", cfg, reg, workDir, logFile, yes, nil); err != nil {
 				if errors.Is(err, ErrSilent) {
@@ -126,7 +121,6 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
-	cmd.Flags().StringVar(&uiFlag, "ui", "auto", "output mode: auto, plain, or tui")
 	return cmd
 }
 
@@ -184,7 +178,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
 			// Single-step execution: no --yes flag, so confirm prompts are shown.
-			if err := execStep(step, workDir, cfg, reg, nil, false, nil); err != nil {
+			if err := execStep(step, workDir, cfg, reg, nil, false); err != nil {
 				return err
 			}
 

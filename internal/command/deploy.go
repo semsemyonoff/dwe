@@ -223,7 +223,6 @@ func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 // (docker, make) goes directly to os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var serviceName string
-	var uiFlag string
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -234,8 +233,7 @@ Steps are run in declaration order. Progress and status messages are written to 
 The .env file is regenerated as the implicit first step. Use --service to run only the
 steps relevant to a specific service.`,
 		Example: `  devbox deploy run
-  devbox deploy run --service main
-  devbox deploy run --ui plain`,
+  devbox deploy run --service main`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -288,11 +286,7 @@ steps relevant to a specific service.`,
 			tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
 			w := render.NewWriter(tee)
 
-			mode, err := pipeline.ParseUIMode(uiFlag)
-			if err != nil {
-				return err
-			}
-			rep := pipeline.NewReporter(mode, w, logFile)
+			rep := pipeline.NewPlainReporter(w)
 
 			// After .env is regenerated, load it into the current process
 			// environment so subsequent cmd: steps can reference its variables.
@@ -315,7 +309,6 @@ steps relevant to a specific service.`,
 	}
 
 	cmd.Flags().StringVar(&serviceName, "service", "", "deploy a single service only")
-	cmd.Flags().StringVar(&uiFlag, "ui", "auto", "output mode: auto, plain, or tui")
 	return cmd
 }
 
@@ -485,7 +478,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
-			if err := execStep(step, workDir, cfg, reg, nil, false, nil); err != nil {
+			if err := execStep(step, workDir, cfg, reg, nil, false); err != nil {
 				return err
 			}
 
