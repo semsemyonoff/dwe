@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 
@@ -67,6 +69,7 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 // Use --yes to skip confirmation prompts.
 func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
+	var uiFlag string
 
 	cmd := &cobra.Command{
 		Use:          "run",
@@ -103,80 +106,18 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 
 			tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
 			w := render.NewWriter(tee)
-			totalSteps := len(steps)
-			lastPhaseKey := ""
-			phaseSkipped := false
 
-			for i, rs := range steps {
-				phaseKey := rs.phase.Name
+			mode, err := pipeline.ParseUIMode(uiFlag)
+			if err != nil {
+				return err
+			}
+			rep := pipeline.NewReporter(mode, w)
 
-				if phaseKey != lastPhaseKey {
-					phaseLabel := phaseKey
-					if rs.phase.Description != "" {
-						phaseLabel += ": " + rs.phase.Description
-					}
-					w.Info("Phase: " + phaseLabel)
-					lastPhaseKey = phaseKey
-
-					phaseSkipped = false
-					if rs.phaseWhen != "" {
-						ok, err := condition.EvalRuntime(rs.phaseWhen, workDir)
-						if err != nil {
-							return fmt.Errorf("evaluating when condition for phase %s: %w", phaseKey, err)
-						}
-						if !ok {
-							phaseSkipped = true
-							w.Warning(fmt.Sprintf("  Skipping phase %s (when: %s)", phaseKey, rs.phaseWhen))
-						}
-					}
-				}
-
-				stepLabel := rs.stepAddress()
-				if rs.step.Description != "" {
-					stepLabel += ": " + rs.step.Description
-				}
-				w.Info(fmt.Sprintf("  [%d/%d] %s", i+1, totalSteps, stepLabel))
-
-				if phaseSkipped {
-					w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (phase when: %s)", i+1, totalSteps, rs.stepAddress(), rs.phaseWhen))
-					continue
-				}
-
-				if rs.runtimeWhen != "" {
-					ok, err := condition.EvalRuntime(rs.runtimeWhen, workDir)
-					if err != nil {
-						return fmt.Errorf("evaluating when condition for %s: %w", rs.stepAddress(), err)
-					}
-					if !ok {
-						w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (when: %s)", i+1, totalSteps, rs.stepAddress(), rs.runtimeWhen))
-						continue
-					}
-				}
-
-				if stepErr := execStep(rs.step, workDir, cfg, reg, logFile, yes); stepErr != nil {
-					w.Error(fmt.Sprintf("Reset failed at step %q", rs.stepAddress()))
-					w.Error("  " + stepErr.Error())
+			if err := runPipeline(steps, rep, cfg, reg, workDir, logFile, yes, nil); err != nil {
+				if errors.Is(err, ErrSilent) {
 					w.Warning("Full output saved to: " + logPath)
-					return ErrSilent
 				}
-
-				if rs.step.Check != "" {
-					ok, err := condition.EvalRuntime(rs.step.Check, workDir)
-					if err != nil {
-						w.Error(fmt.Sprintf("Reset failed at step %q: check error", rs.stepAddress()))
-						w.Error("  " + err.Error())
-						w.Warning("Full output saved to: " + logPath)
-						return ErrSilent
-					}
-					if !ok {
-						w.Error(fmt.Sprintf("Reset failed at step %q: check did not pass", rs.stepAddress()))
-						w.Error(fmt.Sprintf("  check: %s", rs.step.Check))
-						w.Warning("Full output saved to: " + logPath)
-						return ErrSilent
-					}
-				}
-
-				w.Success(fmt.Sprintf("  [%d/%d] Done: %s", i+1, totalSteps, rs.stepAddress()))
+				return err
 			}
 
 			w.Info("Reset log saved to: " + logPath)
@@ -185,6 +126,7 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
+	cmd.Flags().StringVar(&uiFlag, "ui", "auto", "output mode: auto, plain, or tui")
 	return cmd
 }
 

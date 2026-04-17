@@ -2,6 +2,7 @@ package command
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 
@@ -221,6 +223,7 @@ func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 // (docker, make) goes directly to os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var serviceName string
+	var uiFlag string
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -231,7 +234,8 @@ Steps are run in declaration order. Progress and status messages are written to 
 The .env file is regenerated as the implicit first step. Use --service to run only the
 steps relevant to a specific service.`,
 		Example: `  devbox deploy run
-  devbox deploy run --service main`,
+  devbox deploy run --service main
+  devbox deploy run --ui plain`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -283,93 +287,26 @@ steps relevant to a specific service.`,
 			// Child process output goes directly to os.Stdout (see execStep).
 			tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
 			w := render.NewWriter(tee)
-			totalSteps := len(steps)
-			lastPhaseKey := ""
-			phaseSkipped := false // true when the current phase's when condition evaluated to false
 
-			for i, rs := range steps {
-				phaseKey := rs.phase.Name
-				if rs.service != "" {
-					phaseKey = rs.service + "/" + rs.phase.Name
-				}
-				if phaseKey != lastPhaseKey {
-					phaseLabel := phaseKey
-					if rs.phase.Description != "" {
-						phaseLabel += ": " + rs.phase.Description
-					}
-					w.Info("Phase: " + phaseLabel)
-					lastPhaseKey = phaseKey
+			mode, err := pipeline.ParseUIMode(uiFlag)
+			if err != nil {
+				return err
+			}
+			rep := pipeline.NewReporter(mode, w)
 
-					// Evaluate the phase-level when condition once at phase entry.
-					phaseSkipped = false
-					if rs.phaseWhen != "" {
-						ok, err := condition.EvalRuntime(rs.phaseWhen, workDir)
-						if err != nil {
-							return fmt.Errorf("evaluating when condition for phase %s: %w", phaseKey, err)
-						}
-						if !ok {
-							phaseSkipped = true
-							w.Warning(fmt.Sprintf("  Skipping phase %s (when: %s)", phaseKey, rs.phaseWhen))
-						}
-					}
-				}
+			// After .env is regenerated, load it into the current process
+			// environment so subsequent cmd: steps can reference its variables.
+			postStepHooks := map[string]func() error{
+				implicitEnvStep.Name: func() error {
+					return sourceDotEnv(filepath.Join(workDir, ".env"))
+				},
+			}
 
-				stepLabel := rs.stepAddress()
-				if rs.step.Description != "" {
-					stepLabel += ": " + rs.step.Description
-				}
-				w.Info(fmt.Sprintf("  [%d/%d] %s", i+1, totalSteps, stepLabel))
-
-				// Skip all steps in a phase whose when condition was false.
-				if phaseSkipped {
-					w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (phase when: %s)", i+1, totalSteps, rs.stepAddress(), rs.phaseWhen))
-					continue
-				}
-
-				// Evaluate step-level when condition (independent of the phase condition).
-				if rs.runtimeWhen != "" {
-					ok, err := condition.EvalRuntime(rs.runtimeWhen, workDir)
-					if err != nil {
-						return fmt.Errorf("evaluating when condition for %s: %w", rs.stepAddress(), err)
-					}
-					if !ok {
-						w.Warning(fmt.Sprintf("  [%d/%d] Skipped: %s (when: %s)", i+1, totalSteps, rs.stepAddress(), rs.runtimeWhen))
-						continue
-					}
-				}
-
-				if stepErr := execStep(rs.step, workDir, cfg, reg, logFile, false); stepErr != nil {
-					w.Error(fmt.Sprintf("Deploy failed at step %q", rs.stepAddress()))
-					w.Error("  " + stepErr.Error())
+			if err := runPipeline(steps, rep, cfg, reg, workDir, logFile, false, postStepHooks); err != nil {
+				if errors.Is(err, ErrSilent) {
 					w.Warning("Full output saved to: " + logPath)
-					return ErrSilent
 				}
-
-				// After .env is regenerated, load it into the current process
-				// environment so subsequent cmd: steps can reference its variables.
-				if rs.step.Name == implicitEnvStep.Name {
-					if err := sourceDotEnv(filepath.Join(workDir, ".env")); err != nil {
-						return fmt.Errorf("sourcing .env: %w", err)
-					}
-				}
-
-				if rs.step.Check != "" {
-					ok, err := condition.EvalRuntime(rs.step.Check, workDir)
-					if err != nil {
-						w.Error(fmt.Sprintf("Deploy failed at step %q: check error", rs.stepAddress()))
-						w.Error("  " + err.Error())
-						w.Warning("Full output saved to: " + logPath)
-						return ErrSilent
-					}
-					if !ok {
-						w.Error(fmt.Sprintf("Deploy failed at step %q: check did not pass", rs.stepAddress()))
-						w.Error(fmt.Sprintf("  check: %s", rs.step.Check))
-						w.Warning("Full output saved to: " + logPath)
-						return ErrSilent
-					}
-				}
-
-				w.Success(fmt.Sprintf("  [%d/%d] Done: %s", i+1, totalSteps, rs.stepAddress()))
+				return err
 			}
 
 			w.Info("Deploy log saved to: " + logPath)
@@ -378,6 +315,7 @@ steps relevant to a specific service.`,
 	}
 
 	cmd.Flags().StringVar(&serviceName, "service", "", "deploy a single service only")
+	cmd.Flags().StringVar(&uiFlag, "ui", "auto", "output mode: auto, plain, or tui")
 	return cmd
 }
 
