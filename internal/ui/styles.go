@@ -56,14 +56,6 @@ var (
 // defSep is the delimiter used between a definition label and its value.
 var defSep = "—"
 
-// progressBarColor is the ANSI 256-color code used for the TUI progress bar fill.
-// Defaults to coral red (203) matching the project theme.
-var progressBarColor = "203"
-
-// ProgressBarColor returns the current progress bar color code (ANSI 256-color string).
-// Used by the TUI reporter to configure the bubbles progress bar.
-func ProgressBarColor() string { return progressBarColor }
-
 // ApplyStyles rebuilds package-level style vars from the provided StylesConfig.
 // Fields with empty color strings are skipped — the existing defaults are preserved.
 func ApplyStyles(cfg *config.StylesConfig) {
@@ -106,9 +98,6 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	}
 	if c.TableHeader != "" {
 		styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color(c.TableHeader)).Bold(true)
-	}
-	if c.ProgressBar != "" {
-		progressBarColor = c.ProgressBar
 	}
 	if cfg.Separator != "" {
 		defSep = cfg.Separator

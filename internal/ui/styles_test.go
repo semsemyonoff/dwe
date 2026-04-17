@@ -28,7 +28,6 @@ func resetStyles() {
 	styleCatInfra = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	progressBarColor = "203"
 	defSep = "—"
 }
 
@@ -89,27 +88,6 @@ func TestApplyStyles_PartialColors_PreservesDefault(t *testing.T) {
 	ApplyStyles(cfg)
 	if defSep != "—" {
 		t.Errorf("expected defSep to remain default '—', got %q", defSep)
-	}
-}
-
-func TestApplyStyles_ProgressBarColor(t *testing.T) {
-	resetStyles()
-	cfg := &config.StylesConfig{
-		Colors: config.StylesColors{
-			ProgressBar: "167",
-		},
-	}
-	ApplyStyles(cfg)
-	if ProgressBarColor() != "167" {
-		t.Errorf("ProgressBarColor() = %q, want 167", ProgressBarColor())
-	}
-}
-
-func TestApplyStyles_ProgressBarColor_EmptyPreservesDefault(t *testing.T) {
-	resetStyles()
-	ApplyStyles(&config.StylesConfig{})
-	if ProgressBarColor() != "203" {
-		t.Errorf("empty cfg must preserve default progress bar color 203, got %q", ProgressBarColor())
 	}
 }
 

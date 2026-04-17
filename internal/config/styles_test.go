@@ -27,7 +27,6 @@ colors:
   partial: "214"
   table_border: "167"
   table_header: "203"
-  progress_bar: "209"
 
 separator: "—"
 `
@@ -95,9 +94,6 @@ func TestLoadStylesConfig(t *testing.T) {
 	}
 	if cfg.Colors.TableHeader != "203" {
 		t.Errorf("colors.table_header = %q, want 203", cfg.Colors.TableHeader)
-	}
-	if cfg.Colors.ProgressBar != "209" {
-		t.Errorf("colors.progress_bar = %q, want 209", cfg.Colors.ProgressBar)
 	}
 	if cfg.Separator != "—" {
 		t.Errorf("separator = %q, want —", cfg.Separator)
