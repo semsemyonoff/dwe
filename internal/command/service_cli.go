@@ -1,6 +1,7 @@
 package command
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -147,7 +148,7 @@ func runServicesCLI(
 		status, stateErr := getState(fullContainerName)
 		switch {
 		case errors.Is(stateErr, errContainerNotFound):
-			// Container does not exist — start a new one.
+			// Container does not exist — start a new one via compose run.
 			return runCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 		case stateErr != nil:
 			// Real Docker error (daemon down, permission denied, etc.) — surface it.
@@ -193,21 +194,17 @@ var errContainerNotFound = fmt.Errorf("container not found")
 // (daemon unreachable, permission denied, etc.).
 // processEnv is applied to the docker process so that DOCKER_HOST / DOCKER_CONTEXT
 // overrides from docker.yml process_env are honoured for the probe.
+//
+// Uses raw JSON output from docker inspect to avoid Docker's template engine
+// raising "map has no entry for key" errors on containers without a State field.
 func containerStateStatus(containerName string, processEnv []string) (string, error) {
-	// Use a conditional template so that containers without a State field
-	// (e.g. when Docker returns an unexpected object type) return an empty
-	// string rather than a template execution error.
-	cmd := exec.Command(
-		"docker", "inspect",
-		"--format", "{{if .State}}{{.State.Status}}{{end}}",
-		containerName,
-	)
+	cmd := exec.Command("docker", "inspect", containerName)
 	cmd.Env = processEnv
 	out, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			if strings.Contains(string(exitErr.Stderr), "No such object") {
+			if strings.Contains(strings.ToLower(string(exitErr.Stderr)), "no such object") {
 				return "", errContainerNotFound
 			}
 			if len(exitErr.Stderr) > 0 {
@@ -216,12 +213,17 @@ func containerStateStatus(containerName string, processEnv []string) (string, er
 		}
 		return "", err
 	}
-	status := strings.TrimSpace(string(out))
-	if status == "" {
-		// State field was absent — container exists but is not usable.
+	// docker inspect returns a JSON array; parse the first element's State.Status.
+	var items []struct {
+		State *struct {
+			Status string `json:"Status"`
+		} `json:"State"`
+	}
+	if err := json.Unmarshal(out, &items); err != nil || len(items) == 0 || items[0].State == nil {
+		// Object exists but has no usable State — treat as not found.
 		return "", errContainerNotFound
 	}
-	return status, nil
+	return items[0].State.Status, nil
 }
 
 // dockerExecCLI runs an interactive shell in a running container via docker exec.
