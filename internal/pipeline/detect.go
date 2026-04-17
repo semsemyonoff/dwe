@@ -59,21 +59,20 @@ func isCapableTTYWith(isTTY func(fd uintptr) bool, getenv func(string) string) b
 
 // NewReporter creates a Reporter appropriate for mode.
 //   - plain: always PlainReporter
-//   - auto:  TUI if capable, else PlainReporter (silent fallback)
-//   - tui:   TUI if capable, else PlainReporter (warns if not capable)
-//
-// TUIReporter is not yet implemented; tui and auto modes currently fall back
-// to PlainReporter. This will change when Task 9 is complete.
+//   - auto:  TUIReporter if terminal is capable, else PlainReporter (silent fallback)
+//   - tui:   TUIReporter if terminal is capable, else PlainReporter (warns if not capable)
 func NewReporter(mode UIMode, w *render.Writer) Reporter {
 	switch mode {
 	case UIModeTUI:
 		if !IsCapableTTY() {
 			w.Warning("TUI mode requested but terminal is not capable; falling back to plain output")
+			return NewPlainReporter(w)
 		}
-		// TUI not yet implemented — fall through to plain.
-		return NewPlainReporter(w)
+		return NewTUIReporter()
 	case UIModeAuto:
-		// TUI not yet implemented; always plain for now.
+		if IsCapableTTY() {
+			return NewTUIReporter()
+		}
 		return NewPlainReporter(w)
 	default: // UIModePlain
 		return NewPlainReporter(w)

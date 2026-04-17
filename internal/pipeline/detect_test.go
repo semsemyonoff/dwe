@@ -140,12 +140,12 @@ func TestNewReporter_Plain(t *testing.T) {
 }
 
 func TestNewReporter_Auto(t *testing.T) {
-	// auto currently falls back to plain (TUI not yet implemented)
+	// In the test environment stdout is not a TTY, so auto falls back to plain.
 	buf := &bytes.Buffer{}
 	w := render.NewWriter(buf)
 	rep := NewReporter(UIModeAuto, w)
 	if _, ok := rep.(*PlainReporter); !ok {
-		t.Errorf("NewReporter(auto): expected *PlainReporter, got %T", rep)
+		t.Errorf("NewReporter(auto): expected *PlainReporter in non-TTY, got %T", rep)
 	}
 	if buf.Len() != 0 {
 		t.Errorf("NewReporter(auto): should not emit warnings in non-capable TTY, got: %q", buf.String())
