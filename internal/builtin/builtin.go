@@ -54,6 +54,7 @@ type Builtin interface {
 
 var registry = map[string]Builtin{
 	"confirm":                       confirmBuiltin{},
+	"message":                       messageBuiltin{},
 	"service_configs_copy":          serviceConfigsCopyBuiltin{},
 	"service_dirs_ensure":           serviceDirsEnsureBuiltin{},
 	"docker_remove_project_volumes": dockerRemoveProjectVolumesBuiltin{},
