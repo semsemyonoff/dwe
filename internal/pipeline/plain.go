@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
@@ -25,12 +26,14 @@ const (
 //	  ◎ [N/M] Skipped: <stepAddr> (<reason>)
 //	✗ Deploy failed at step "<stepAddr>"
 //	  <error message>
+//	✓ Done (1m 23s)
 //
 // SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
 // need to yield or reclaim the terminal.
 type PlainReporter struct {
-	w    *render.Writer
-	name string // pipeline name set by StartPipeline (e.g. "deploy", "reset")
+	w         *render.Writer
+	name      string    // pipeline name set by StartPipeline (e.g. "deploy", "reset")
+	startTime time.Time // recorded by StartPipeline for elapsed time in FinishPipeline
 }
 
 // NewPlainReporter creates a PlainReporter that writes to w.
@@ -38,10 +41,12 @@ func NewPlainReporter(w *render.Writer) *PlainReporter {
 	return &PlainReporter{w: w}
 }
 
-// StartPipeline stores the pipeline name for use in failure messages. It does
-// not print a header; the current deploy/reset output has no pipeline banner.
+// StartPipeline stores the pipeline name and records the start time for
+// elapsed time reporting. It does not print a header; the current deploy/reset
+// output has no pipeline banner.
 func (r *PlainReporter) StartPipeline(name string, _ int) {
 	r.name = name
+	r.startTime = time.Now()
 }
 
 // EnterPhase prints the phase label line:
@@ -144,9 +149,38 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, _ int, _ 
 	}
 }
 
-// FinishPipeline is a no-op for PlainReporter; callers print their own
-// completion messages (e.g. log path) after the pipeline loop finishes.
-func (r *PlainReporter) FinishPipeline(_ bool) {}
+// FinishPipeline prints a Done message with elapsed time on success:
+//
+//	✓ Done (1m 23s)
+//
+// On failure it is silent; the failure is already reported by FailStep.
+func (r *PlainReporter) FinishPipeline(success bool) {
+	if !success {
+		return
+	}
+	elapsed := formatElapsed(time.Since(r.startTime))
+	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s Done%s %s(%s)%s\n",
+		render.Green, iconDone, render.Reset,
+		render.Gray, elapsed, render.Reset,
+	)
+}
+
+// formatElapsed formats a duration as a human-readable elapsed time string.
+// Examples: "5s", "1m 23s", "2h 5m".
+func formatElapsed(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	switch {
+	case h > 0:
+		return fmt.Sprintf("%dh %dm", h, m)
+	case m > 0:
+		return fmt.Sprintf("%dm %ds", m, s)
+	default:
+		return fmt.Sprintf("%ds", s)
+	}
+}
 
 // SuspendForExec is a no-op for PlainReporter.
 func (r *PlainReporter) SuspendForExec() {}

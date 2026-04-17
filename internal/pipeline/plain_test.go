@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
@@ -230,19 +231,41 @@ func TestPlainReporter_FailStep_NoStartPipeline(t *testing.T) {
 
 // --- FinishPipeline ---
 
-func TestPlainReporter_FinishPipeline_NoOutput(t *testing.T) {
+func TestPlainReporter_FinishPipeline_Success_PrintsDone(t *testing.T) {
 	r, buf := newBufReporter()
+	r.StartPipeline("deploy", 3)
 	r.FinishPipeline(true)
-	if buf.Len() != 0 {
-		t.Errorf("FinishPipeline(true) should produce no output, got: %q", buf.String())
+	got := stripANSI(buf.String())
+	// StartPipeline produces no output; only FinishPipeline does.
+	gotLines := lines(got)
+	if len(gotLines) != 1 {
+		t.Fatalf("FinishPipeline(true) should produce 1 line, got %d: %q", len(gotLines), got)
+	}
+	if !strings.Contains(gotLines[0], "✓ Done") {
+		t.Errorf("FinishPipeline(true) line should contain '✓ Done', got: %q", gotLines[0])
+	}
+	if !strings.Contains(gotLines[0], "s)") {
+		t.Errorf("FinishPipeline(true) line should contain elapsed time ending in 's)', got: %q", gotLines[0])
 	}
 }
 
-func TestPlainReporter_FinishPipelineFailure_NoOutput(t *testing.T) {
+func TestPlainReporter_FinishPipeline_Failure_NoOutput(t *testing.T) {
 	r, buf := newBufReporter()
+	r.StartPipeline("deploy", 3)
 	r.FinishPipeline(false)
+	// Only StartPipeline output (none) — FinishPipeline(false) is silent.
 	if buf.Len() != 0 {
 		t.Errorf("FinishPipeline(false) should produce no output, got: %q", buf.String())
+	}
+}
+
+func TestPlainReporter_FinishPipeline_NoStartPipeline(t *testing.T) {
+	r, buf := newBufReporter()
+	// Even without StartPipeline, success still prints Done (startTime is zero → large elapsed, but valid).
+	r.FinishPipeline(true)
+	got := stripANSI(buf.String())
+	if !strings.Contains(got, "✓ Done") {
+		t.Errorf("FinishPipeline without StartPipeline should still print Done, got: %q", got)
 	}
 }
 
@@ -306,17 +329,21 @@ func TestPlainReporter_FullEventSequence(t *testing.T) {
 		"  ✓ [4/4] Done: post-deploy/success",
 	}
 	gotLines := lines(got)
-	if len(gotLines) != len(wantLines) {
-		t.Fatalf("FullEventSequence: got %d lines, want %d\ngot:\n%s\nwant:\n%s",
-			len(gotLines), len(wantLines),
+	// Last line is the "✓ Done (Xs)" summary — check it separately.
+	if len(gotLines) < len(wantLines)+1 {
+		t.Fatalf("FullEventSequence: got %d lines, want at least %d\ngot:\n%s",
+			len(gotLines), len(wantLines)+1,
 			strings.Join(gotLines, "\n"),
-			strings.Join(wantLines, "\n"),
 		)
 	}
 	for i, want := range wantLines {
 		if gotLines[i] != want {
 			t.Errorf("line %d: got %q, want %q", i, gotLines[i], want)
 		}
+	}
+	doneLine := gotLines[len(gotLines)-1]
+	if !strings.Contains(doneLine, "✓ Done") {
+		t.Errorf("last line should be Done summary, got: %q", doneLine)
 	}
 }
 
@@ -407,17 +434,44 @@ func TestPlainReporter_FullEventSequence_WithUntracked(t *testing.T) {
 		"  ✓ [1/1] Done: setup/migrate",
 	}
 	gotLines := lines(got)
-	if len(gotLines) != len(wantLines) {
-		t.Fatalf("FullEventSequence with untracked: got %d lines, want %d\ngot:\n%s\nwant:\n%s",
-			len(gotLines), len(wantLines),
+	// Last line is the "✓ Done (Xs)" summary — check at least wantLines + 1 lines total.
+	if len(gotLines) < len(wantLines)+1 {
+		t.Fatalf("FullEventSequence with untracked: got %d lines, want at least %d\ngot:\n%s",
+			len(gotLines), len(wantLines)+1,
 			strings.Join(gotLines, "\n"),
-			strings.Join(wantLines, "\n"),
 		)
 	}
 	for i, want := range wantLines {
 		if gotLines[i] != want {
 			t.Errorf("line %d: got %q, want %q", i, gotLines[i], want)
 		}
+	}
+	doneLine := gotLines[len(gotLines)-1]
+	if !strings.Contains(doneLine, "✓ Done") {
+		t.Errorf("last line should be Done summary, got: %q", doneLine)
+	}
+}
+
+// --- formatElapsed ---
+
+func TestFormatElapsed_Seconds(t *testing.T) {
+	got := formatElapsed(45 * time.Second)
+	if got != "45s" {
+		t.Errorf("formatElapsed(45s): got %q, want %q", got, "45s")
+	}
+}
+
+func TestFormatElapsed_MinutesAndSeconds(t *testing.T) {
+	got := formatElapsed(83 * time.Second)
+	if got != "1m 23s" {
+		t.Errorf("formatElapsed(83s): got %q, want %q", got, "1m 23s")
+	}
+}
+
+func TestFormatElapsed_HoursAndMinutes(t *testing.T) {
+	got := formatElapsed(2*time.Hour + 5*time.Minute + 30*time.Second)
+	if got != "2h 5m" {
+		t.Errorf("formatElapsed(2h5m30s): got %q, want %q", got, "2h 5m")
 	}
 }
 
