@@ -280,6 +280,22 @@ func (s *ansiStripper) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// buildDevboxCmd constructs an exec.Cmd for a devbox: pipeline step.
+//
+// It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
+// colors even when stdout is wrapped in an io.MultiWriter (which the child sees
+// as a pipe rather than a TTY). The log tee via ansiStripper is unaffected.
+func buildDevboxCmd(devboxArg, workDir string) *exec.Cmd {
+	bin, err := os.Executable()
+	if err != nil {
+		bin = "./bin/devbox"
+	}
+	cmd := exec.Command("sh", "-c", bin+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
+	cmd.Dir = workDir
+	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
+	return cmd
+}
+
 // execStep executes a pipeline step in workDir.
 // Dispatches to the appropriate handler based on step type:
 //   - builtin: — execBuiltinStep
@@ -300,15 +316,11 @@ func execStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 
 	var cmd *exec.Cmd
 	if step.Devbox != "" {
-		bin, err := os.Executable()
-		if err != nil {
-			bin = "./bin/devbox"
-		}
-		cmd = exec.Command("sh", "-c", bin+" "+strings.TrimSpace(step.Devbox)) //nolint:gosec
+		cmd = buildDevboxCmd(step.Devbox, workDir)
 	} else {
-		cmd = exec.Command("sh", "-c", strings.TrimSpace(step.Run))
+		cmd = exec.Command("sh", "-c", strings.TrimSpace(step.Run)) //nolint:gosec
+		cmd.Dir = workDir
 	}
-	cmd.Dir = workDir
 	cmd.Stdin = os.Stdin
 	if logWriter != nil {
 		logStripped := &ansiStripper{logWriter}

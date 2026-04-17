@@ -599,6 +599,46 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 	}
 }
 
+// TestBuildDevboxCmd_SetsCLICOLOR_FORCE verifies that devbox: step commands
+// are built with CLICOLOR_FORCE=1 so lipgloss enables colors even when stdout
+// is piped through an io.MultiWriter.
+func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
+	cmd := buildDevboxCmd("info", t.TempDir())
+	found := false
+	for _, e := range cmd.Env {
+		if e == "CLICOLOR_FORCE=1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("buildDevboxCmd env should contain CLICOLOR_FORCE=1, got: %v", cmd.Env)
+	}
+}
+
+// TestBuildDevboxCmd_InheritsParentEnv verifies that the child env includes
+// parent environment variables (not just CLICOLOR_FORCE).
+func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
+	cmd := buildDevboxCmd("info", t.TempDir())
+	// cmd.Env should be non-empty (it includes os.Environ() + CLICOLOR_FORCE).
+	if len(cmd.Env) == 0 {
+		t.Error("buildDevboxCmd env should include parent environment (os.Environ())")
+	}
+	// The env count should be at least os.Environ() + 1 for CLICOLOR_FORCE.
+	if len(cmd.Env) < len(os.Environ())+1 {
+		t.Errorf("expected at least %d env vars, got %d", len(os.Environ())+1, len(cmd.Env))
+	}
+}
+
+// TestBuildDevboxCmd_WorkDir verifies that the cmd working directory is set correctly.
+func TestBuildDevboxCmd_WorkDir(t *testing.T) {
+	workDir := t.TempDir()
+	cmd := buildDevboxCmd("info", workDir)
+	if cmd.Dir != workDir {
+		t.Errorf("buildDevboxCmd Dir = %q, want %q", cmd.Dir, workDir)
+	}
+}
+
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || func() bool {
 		for i := 0; i <= len(s)-len(sub); i++ {
