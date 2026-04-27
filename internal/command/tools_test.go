@@ -93,6 +93,75 @@ func TestRunToolList_AllDisabled(t *testing.T) {
 	}
 }
 
+func TestToolStatusCmd_SameOutputAsToolList(t *testing.T) {
+	cfg := makeServicesCfg(nil, config.ToolsConfig{
+		Adminer: config.ToolConfig{Enabled: false},
+		Mailpit: config.ToolConfig{Enabled: true},
+	}, config.RuntimePorts{
+		Adminer: 8080,
+		Mailpit: 8025,
+	}, config.RuntimeHosts{
+		Adminer: "adminer.localhost",
+		Mailpit: "mail.localhost",
+	})
+
+	neverRunning := func(_, _ string) bool { return false }
+
+	var listBuf, statusBuf bytes.Buffer
+	if err := runToolList(render.NewWriter(&listBuf), cfg, neverRunning); err != nil {
+		t.Fatalf("runToolList error: %v", err)
+	}
+	if err := runToolList(render.NewWriter(&statusBuf), cfg, neverRunning); err != nil {
+		t.Fatalf("runToolList (status) error: %v", err)
+	}
+
+	if listBuf.String() != statusBuf.String() {
+		t.Errorf("tools status output differs from tools list output\nlist:\n%s\nstatus:\n%s",
+			listBuf.String(), statusBuf.String())
+	}
+}
+
+func TestToolStatusCmd_Registered(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	parent := newToolCmd(flags)
+
+	var found bool
+	for _, sub := range parent.Commands() {
+		if sub.Use == "status" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("tools status subcommand is not registered")
+	}
+}
+
+func TestToolStatusCmd_ContainsExpectedColumns(t *testing.T) {
+	cfg := makeServicesCfg(nil, config.ToolsConfig{
+		Adminer: config.ToolConfig{Enabled: true},
+	}, config.RuntimePorts{
+		Adminer: 8080,
+	}, config.RuntimeHosts{
+		Adminer: "adminer.localhost",
+	})
+
+	neverRunning := func(_, _ string) bool { return false }
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+	if err := runToolList(w, cfg, neverRunning); err != nil {
+		t.Fatalf("runToolList error: %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{"NAME", "HOST", "PORT", "STATE", "RUNNING", "adminer", "adminer.localhost", "8080"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("tools status output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
 // --- Task 8: tools enable/disable interactive selector ---
 
 // neverToolToggleFn returns a selectToggleFn that fails the test if called.

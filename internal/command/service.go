@@ -24,16 +24,47 @@ func newServiceCmd(flags *rootFlags) *cobra.Command {
 		Long: `List, enable, or disable application services defined in the project config.
 
 Mandatory services are always active and cannot be toggled.
-Optional services can be enabled or disabled; the change is written to devbox/local.yml.`,
-		Example: `  devbox services list
+Optional services can be enabled or disabled; the change is written to devbox/local.yml.
+
+Use 'services status' to display a read-only table of all services and their current state.
+Use 'services list' for an interactive toggle form (TTY) or the same table (non-TTY).`,
+		Example: `  devbox services status
+  devbox services list
   devbox services enable second
   devbox services disable second`,
 		SilenceUsage: true,
 	}
+	cmd.AddCommand(newServiceStatusCmd(flags))
 	cmd.AddCommand(newServiceListCmd(flags))
 	cmd.AddCommand(newServiceEnableCmd(flags))
 	cmd.AddCommand(newServiceDisableCmd(flags))
 	return cmd
+}
+
+func newServiceStatusCmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:     "status",
+		Short:   "Show all services and their current state (read-only table)",
+		Long:    `Show all services defined in the project with their container names, enabled state, and running status.`,
+		Example: "  devbox services status",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			applyStyles(flags.configPath, cmd.ErrOrStderr())
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+			projectName, err := resolveProjectName(flags.configPath, cfg)
+			if err != nil {
+				return err
+			}
+			isRunning := func(_, container string) bool {
+				return containerRunning(projectName, container)
+			}
+			return runServiceList(render.Stdout(), cfg, isRunning)
+		},
+		SilenceUsage: true,
+	}
 }
 
 func newServiceListCmd(flags *rootFlags) *cobra.Command {

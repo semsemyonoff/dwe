@@ -440,6 +440,65 @@ func TestServiceDisableCmd_UseField(t *testing.T) {
 	}
 }
 
+func TestServiceStatusCmd_SameOutputAsServiceList(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"second": {Type: "app", Container: "app-second", Enabled: false},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	neverRunning := func(_, _ string) bool { return false }
+
+	var listBuf, statusBuf bytes.Buffer
+	if err := runServiceList(render.NewWriter(&listBuf), cfg, neverRunning); err != nil {
+		t.Fatalf("runServiceList error: %v", err)
+	}
+	if err := runServiceList(render.NewWriter(&statusBuf), cfg, neverRunning); err != nil {
+		t.Fatalf("runServiceList (status) error: %v", err)
+	}
+
+	if listBuf.String() != statusBuf.String() {
+		t.Errorf("services status output differs from services list output\nlist:\n%s\nstatus:\n%s",
+			listBuf.String(), statusBuf.String())
+	}
+}
+
+func TestServiceStatusCmd_Registered(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	parent := newServiceCmd(flags)
+
+	var found bool
+	for _, sub := range parent.Commands() {
+		if sub.Use == "status" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("services status subcommand is not registered")
+	}
+}
+
+func TestServiceStatusCmd_ContainsExpectedColumns(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"main": {Type: "app", Container: "app-main", Mandatory: true},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+
+	neverRunning := func(_, _ string) bool { return false }
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+	if err := runServiceList(w, cfg, neverRunning); err != nil {
+		t.Fatalf("runServiceList error: %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{"NAME", "CONTAINER", "STATE", "RUNNING", "main", "app-main", "mandatory"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("services status output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
 func TestRunServiceList_EnabledRunning(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"main": {Type: "app", Container: "app-main", Enabled: true},

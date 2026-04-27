@@ -22,16 +22,47 @@ func newToolCmd(flags *rootFlags) *cobra.Command {
 		Long: `List, enable, or disable optional tool services (adminer, redis_insight, mailpit).
 
 Enabling or disabling a tool writes the change to devbox/local.yml and regenerates .env.
-Use 'devbox up' to start newly enabled tools.`,
-		Example: `  devbox tools list
+Use 'devbox up' to start newly enabled tools.
+
+Use 'tools status' to display a read-only table of all tools and their current state.
+Use 'tools list' for an interactive toggle form (TTY) or the same table (non-TTY).`,
+		Example: `  devbox tools status
+  devbox tools list
   devbox tools enable adminer
   devbox tools disable mailpit`,
 		SilenceUsage: true,
 	}
+	cmd.AddCommand(newToolStatusCmd(flags))
 	cmd.AddCommand(newToolListCmd(flags))
 	cmd.AddCommand(newToolEnableCmd(flags))
 	cmd.AddCommand(newToolDisableCmd(flags))
 	return cmd
+}
+
+func newToolStatusCmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:     "status",
+		Short:   "Show all tools and their current state (read-only table)",
+		Long:    `Show all optional tools with their host, port, enabled state, and running status.`,
+		Example: "  devbox tools status",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			applyStyles(flags.configPath, cmd.ErrOrStderr())
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+			projectName, err := resolveProjectName(flags.configPath, cfg)
+			if err != nil {
+				return err
+			}
+			isRunning := func(_, container string) bool {
+				return containerRunning(projectName, container)
+			}
+			return runToolList(render.Stdout(), cfg, isRunning)
+		},
+		SilenceUsage: true,
+	}
 }
 
 func newToolListCmd(flags *rootFlags) *cobra.Command {
