@@ -6,6 +6,7 @@ package ui
 import (
 	"os"
 
+	huh "charm.land/huh/v2"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
 
@@ -102,6 +103,12 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	if cfg.Separator != "" {
 		defSep = cfg.Separator
 	}
+	apply := buildPaletteApplier(&c)
+	huhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
+		s := huh.ThemeBase(isDark)
+		apply(s)
+		return s
+	})
 }
 
 // RenderEnabled applies the enabled/running style to s.
