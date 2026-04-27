@@ -69,25 +69,97 @@ func newServiceStatusCmd(flags *rootFlags) *cobra.Command {
 
 func newServiceListCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "list",
-		Short:   "List all services and their status",
-		Long:    `Show all services defined in the project with their container names, enabled state, and running status.`,
-		Example: "  devbox services list",
-		Args:    cobra.NoArgs,
+		Use:   "list",
+		Short: "Toggle services interactively (TTY) or show status table (non-TTY)",
+		Long: `Toggle optional services on or off using an interactive multi-select form.
+
+Mandatory services are always active and are shown above the form as "Always on".
+On submit, newly-checked services are enabled and newly-unchecked services are
+disabled in devbox/local.yml; .env is regenerated once.
+
+In non-TTY mode (piped stdin or no terminal) the command falls back to printing
+the read-only status table.`,
+		Example: `  devbox services list
+  devbox services list | cat   # non-TTY: prints the table`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyStyles(flags.configPath, cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			projectName, err := resolveProjectName(flags.configPath, cfg)
+
+			// Non-TTY: fall back to the read-only table.
+			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				projectName, err := resolveProjectName(flags.configPath, cfg)
+				if err != nil {
+					return err
+				}
+				isRunning := func(_, container string) bool {
+					return containerRunning(projectName, container)
+				}
+				return runServiceList(render.Stdout(), cfg, isRunning)
+			}
+
+			// TTY: build multi-select items from service rows.
+			rows := buildServiceRows(cfg)
+			items := make([]ui.MultiSelectItem, len(rows))
+			var lockedNames []string
+			for i, row := range rows {
+				items[i] = ui.MultiSelectItem{
+					Key:         row.Name,
+					Label:       row.Name,
+					Description: row.Container,
+					Locked:      row.Mandatory,
+					Selected:    row.Enabled,
+				}
+				if row.Mandatory {
+					lockedNames = append(lockedNames, row.Name)
+				}
+			}
+
+			// Print always-on header before the form.
+			if len(lockedNames) > 0 {
+				w := render.Stdout()
+				_, _ = fmt.Fprintln(w.Writer(), ui.StyleSubheader("Always on: ")+ui.StyleMuted(strings.Join(lockedNames, ", ")))
+			}
+
+			result, err := runMultiSelect("Toggle services:", items)
 			if err != nil {
+				if errors.Is(err, ui.ErrCancelled) {
+					return nil
+				}
 				return err
 			}
-			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container)
+
+			toEnable, toDisable := diffServiceSelection(rows, result.Kept)
+			if len(toEnable) == 0 && len(toDisable) == 0 {
+				return nil
 			}
-			return runServiceList(render.Stdout(), cfg, isRunning)
+
+			baseDir := filepath.Dir(flags.configPath)
+			for _, name := range toEnable {
+				if err := setServiceEnabledNoRegen(flags.configPath, cfg, name, true); err != nil {
+					return err
+				}
+			}
+			for _, name := range toDisable {
+				if err := setServiceEnabledNoRegen(flags.configPath, cfg, name, false); err != nil {
+					return err
+				}
+			}
+
+			// Print one-line summary of all changes.
+			var parts []string
+			if len(toEnable) > 0 {
+				parts = append(parts, "enabled: "+strings.Join(toEnable, ", "))
+			}
+			if len(toDisable) > 0 {
+				parts = append(parts, "disabled: "+strings.Join(toDisable, ", "))
+			}
+			render.Stdout().Success(strings.Join(parts, "; "))
+
+			return regenEnv(flags.configPath, baseDir)
 		},
 		SilenceUsage: true,
 	}
@@ -310,8 +382,9 @@ func optionalServiceNameCompletion(flags *rootFlags) func(*cobra.Command, []stri
 	}
 }
 
-// setServiceEnabled writes services.<name>.enabled = value to devbox/local.yml.
-func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
+// setServiceEnabledNoRegen writes services.<name>.enabled = value to devbox/local.yml
+// without printing or regenerating .env. Used by the batch multi-toggle path.
+func setServiceEnabledNoRegen(configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
 	svc, ok := cfg.Services[name]
 	if !ok {
 		return fmt.Errorf("service %q not found", name)
@@ -323,7 +396,6 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	// Load existing local.yml or start with empty map.
 	local := make(map[string]any)
 	if data, err := os.ReadFile(localPath); err == nil {
 		if err := yaml.Unmarshal(data, &local); err != nil {
@@ -334,7 +406,6 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 		}
 	}
 
-	// Set services.<name>.enabled.
 	svcMap, ok := local["services"].(map[string]any)
 	if !ok {
 		svcMap = make(map[string]any)
@@ -354,7 +425,18 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 	if err := os.WriteFile(localPath, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", localPath, err)
 	}
+	return nil
+}
 
+// setServiceEnabled writes services.<name>.enabled = value to devbox/local.yml,
+// prints a confirmation, and regenerates .env.
+func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
+	if err := setServiceEnabledNoRegen(configPath, cfg, name, enabled); err != nil {
+		return err
+	}
+
+	baseDir := filepath.Dir(configPath)
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 	w := render.Stdout()
 	if enabled {
 		w.Success(fmt.Sprintf("service %q enabled (written to %s)", name, localPath))
