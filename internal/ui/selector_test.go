@@ -1,277 +1,140 @@
 package ui
 
 import (
-	"strings"
+	"errors"
 	"testing"
 
-	tea "charm.land/bubbletea/v2"
+	huh "charm.land/huh/v2"
 )
 
-// helpers to create test key messages
-
-func keyPress(code rune, text string) tea.KeyPressMsg {
-	return tea.KeyPressMsg{Code: code, Text: text}
-}
-
-func specialKey(code rune) tea.KeyPressMsg {
-	return tea.KeyPressMsg{Code: code}
-}
-
-// TestSelectorInit verifies that Init returns nil (no initial command).
-func TestSelectorInit(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}},
-		cursor:   0,
-		selected: -1,
+// TestRunSelectorEmptyItems verifies the empty-items error.
+func TestRunSelectorEmptyItems(t *testing.T) {
+	_, err := RunSelector("title", nil)
+	if err == nil {
+		t.Fatal("expected error for empty items")
 	}
-	cmd := m.Init()
-	if cmd != nil {
-		t.Error("expected Init to return nil")
+	if err.Error() != "selector: no items to display" {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
-// TestSelectorView verifies that View renders labels and the hint line.
-func TestSelectorView(t *testing.T) {
-	m := selectorModel{
-		title:    "Pick one",
-		items:    []SelectorItem{{Label: "alpha"}, {Label: "beta"}},
-		cursor:   0,
-		selected: -1,
+// TestBuildSelectorOptions_LabelOnly verifies key is just the label when no
+// description or status is set.
+func TestBuildSelectorOptions_LabelOnly(t *testing.T) {
+	opts := buildSelectorOptions([]SelectorItem{{Label: "main"}})
+	if len(opts) != 1 {
+		t.Fatalf("expected 1 option, got %d", len(opts))
 	}
-	view := m.View()
-	// view.Content holds the rendered string
-	if !strings.Contains(view.Content, "Pick one") {
-		t.Error("expected title in view")
+	if opts[0].Key != "main" {
+		t.Errorf("expected key %q, got %q", "main", opts[0].Key)
 	}
-	if !strings.Contains(view.Content, "alpha") {
-		t.Error("expected 'alpha' in view")
-	}
-	if !strings.Contains(view.Content, "beta") {
-		t.Error("expected 'beta' in view")
-	}
-	if !strings.Contains(view.Content, "navigate") {
-		t.Error("expected hint line in view")
+	if opts[0].Value != 0 {
+		t.Errorf("expected value 0 (index), got %d", opts[0].Value)
 	}
 }
 
-// TestSelectorViewStatusEnabled verifies enabled status shows checkmark.
-func TestSelectorViewStatusEnabled(t *testing.T) {
-	m := selectorModel{
-		items: []SelectorItem{
-			{Label: "svc", Status: "enabled"},
-		},
-		cursor:   0,
-		selected: -1,
-	}
-	view := m.View()
-	if !strings.Contains(view.Content, "✓") {
-		t.Error("expected checkmark for enabled status")
+// TestBuildSelectorOptions_WithDescription verifies description is appended.
+func TestBuildSelectorOptions_WithDescription(t *testing.T) {
+	opts := buildSelectorOptions([]SelectorItem{{Label: "main", Description: "app-main"}})
+	if opts[0].Key != "main  app-main" {
+		t.Errorf("unexpected key: %q", opts[0].Key)
 	}
 }
 
-// TestSelectorViewDescription verifies description is rendered.
-func TestSelectorViewDescription(t *testing.T) {
-	m := selectorModel{
-		items: []SelectorItem{
-			{Label: "main", Description: "app-main container"},
-		},
-		cursor:   0,
-		selected: -1,
-	}
-	view := m.View()
-	if !strings.Contains(view.Content, "app-main container") {
-		t.Error("expected description in view")
+// TestBuildSelectorOptions_StatusEnabled verifies enabled status shows ✓.
+func TestBuildSelectorOptions_StatusEnabled(t *testing.T) {
+	opts := buildSelectorOptions([]SelectorItem{{Label: "svc", Status: "enabled"}})
+	if opts[0].Key != "svc  ✓" {
+		t.Errorf("unexpected key: %q", opts[0].Key)
 	}
 }
 
-// TestSelectorNavigateDown verifies down key moves cursor to next selectable.
-func TestSelectorNavigateDown(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}, {Label: "b"}, {Label: "c"}},
-		cursor:   0,
-		selected: -1,
-	}
-	updated, _ := m.Update(specialKey(tea.KeyDown))
-	result := updated.(selectorModel)
-	if result.cursor != 1 {
-		t.Errorf("expected cursor 1 after down, got %d", result.cursor)
+// TestBuildSelectorOptions_StatusDisabled verifies disabled status shows ○.
+func TestBuildSelectorOptions_StatusDisabled(t *testing.T) {
+	opts := buildSelectorOptions([]SelectorItem{{Label: "svc", Status: "disabled"}})
+	if opts[0].Key != "svc  ○" {
+		t.Errorf("unexpected key: %q", opts[0].Key)
 	}
 }
 
-// TestSelectorNavigateUp verifies up key moves cursor to previous selectable.
-func TestSelectorNavigateUp(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}, {Label: "b"}, {Label: "c"}},
-		cursor:   2,
-		selected: -1,
-	}
-	updated, _ := m.Update(specialKey(tea.KeyUp))
-	result := updated.(selectorModel)
-	if result.cursor != 1 {
-		t.Errorf("expected cursor 1 after up, got %d", result.cursor)
+// TestBuildSelectorOptions_StatusFreeText verifies arbitrary status is appended literally.
+func TestBuildSelectorOptions_StatusFreeText(t *testing.T) {
+	opts := buildSelectorOptions([]SelectorItem{{Label: "cmd", Status: "running"}})
+	if opts[0].Key != "cmd  running" {
+		t.Errorf("unexpected key: %q", opts[0].Key)
 	}
 }
 
-// TestSelectorNavigateWrapsDown verifies down wraps from last to first.
-func TestSelectorNavigateWrapsDown(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}, {Label: "b"}},
-		cursor:   1,
-		selected: -1,
-	}
-	updated, _ := m.Update(specialKey(tea.KeyDown))
-	result := updated.(selectorModel)
-	if result.cursor != 0 {
-		t.Errorf("expected cursor 0 (wrap), got %d", result.cursor)
+// TestBuildSelectorOptions_AllFields verifies all three fields combine correctly.
+func TestBuildSelectorOptions_AllFields(t *testing.T) {
+	opts := buildSelectorOptions([]SelectorItem{
+		{Label: "main", Description: "app-main", Status: "enabled"},
+	})
+	want := "main  app-main  ✓"
+	if opts[0].Key != want {
+		t.Errorf("expected %q, got %q", want, opts[0].Key)
 	}
 }
 
-// TestSelectorNavigateWrapsUp verifies up wraps from first to last.
-func TestSelectorNavigateWrapsUp(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}, {Label: "b"}},
-		cursor:   0,
-		selected: -1,
-	}
-	updated, _ := m.Update(specialKey(tea.KeyUp))
-	result := updated.(selectorModel)
-	if result.cursor != 1 {
-		t.Errorf("expected cursor 1 (wrap), got %d", result.cursor)
-	}
-}
-
-// TestSelectorNavigateSkipsDisabled verifies navigation skips Disabled items.
-func TestSelectorNavigateSkipsDisabled(t *testing.T) {
-	m := selectorModel{
-		items: []SelectorItem{
-			{Label: "a"},
-			{Label: "b", Disabled: true},
-			{Label: "c"},
-		},
-		cursor:   0,
-		selected: -1,
-	}
-	updated, _ := m.Update(specialKey(tea.KeyDown))
-	result := updated.(selectorModel)
-	// should skip b (disabled) and land on c
-	if result.cursor != 2 {
-		t.Errorf("expected cursor 2 (skip disabled), got %d", result.cursor)
-	}
-}
-
-// TestSelectorEnterSelects verifies Enter key selects current item.
-func TestSelectorEnterSelects(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}, {Label: "b"}},
-		cursor:   1,
-		selected: -1,
-	}
-	updated, cmd := m.Update(specialKey(tea.KeyEnter))
-	result := updated.(selectorModel)
-	if result.selected != 1 {
-		t.Errorf("expected selected=1, got %d", result.selected)
-	}
-	if !result.done {
-		t.Error("expected done=true after enter")
-	}
-	if cmd == nil {
-		t.Error("expected Quit cmd after enter")
-	}
-}
-
-// TestSelectorEnterOnDisabledDoesNotSelect verifies disabled items cannot be selected.
-func TestSelectorEnterOnDisabledDoesNotSelect(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a", Disabled: true}},
-		cursor:   0,
-		selected: -1,
-	}
-	updated, cmd := m.Update(specialKey(tea.KeyEnter))
-	result := updated.(selectorModel)
-	if result.selected != -1 {
-		t.Error("expected disabled item cannot be selected")
-	}
-	if cmd != nil {
-		t.Error("expected no cmd when trying to select disabled item")
-	}
-}
-
-// TestSelectorEscCancels verifies Esc sets selected=-1 and done=true.
-func TestSelectorEscCancels(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}},
-		cursor:   0,
-		selected: -1,
-	}
-	updated, cmd := m.Update(specialKey(tea.KeyEsc))
-	result := updated.(selectorModel)
-	if result.selected != -1 {
-		t.Errorf("expected selected=-1 after esc, got %d", result.selected)
-	}
-	if !result.done {
-		t.Error("expected done=true after esc")
-	}
-	if cmd == nil {
-		t.Error("expected Quit cmd after esc")
-	}
-}
-
-// TestSelectorQKeyCancels verifies 'q' also cancels.
-func TestSelectorQKeyCancels(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}},
-		cursor:   0,
-		selected: -1,
-	}
-	updated, _ := m.Update(keyPress('q', "q"))
-	result := updated.(selectorModel)
-	if result.selected != -1 || !result.done {
-		t.Error("expected cancellation on q key")
-	}
-}
-
-// TestSelectorKJNavigation verifies vim-style k/j navigation.
-func TestSelectorKJNavigation(t *testing.T) {
-	m := selectorModel{
-		items:    []SelectorItem{{Label: "a"}, {Label: "b"}, {Label: "c"}},
-		cursor:   0,
-		selected: -1,
-	}
-	// j = down
-	updated, _ := m.Update(keyPress('j', "j"))
-	m = updated.(selectorModel)
-	if m.cursor != 1 {
-		t.Errorf("j: expected cursor 1, got %d", m.cursor)
-	}
-	// k = up
-	updated, _ = m.Update(keyPress('k', "k"))
-	m = updated.(selectorModel)
-	if m.cursor != 0 {
-		t.Errorf("k: expected cursor 0, got %d", m.cursor)
-	}
-}
-
-// TestInitialCursor verifies initialCursor picks first non-disabled item.
-func TestInitialCursor(t *testing.T) {
+// TestBuildSelectorOptions_IndexValues verifies each option carries its original index.
+func TestBuildSelectorOptions_IndexValues(t *testing.T) {
 	items := []SelectorItem{
-		{Label: "a", Disabled: true},
+		{Label: "a"},
 		{Label: "b"},
 		{Label: "c"},
 	}
-	got := initialCursor(items)
-	if got != 1 {
-		t.Errorf("expected initial cursor 1, got %d", got)
+	opts := buildSelectorOptions(items)
+	for i, opt := range opts {
+		if opt.Value != i {
+			t.Errorf("item %d: expected value %d, got %d", i, i, opt.Value)
+		}
 	}
 }
 
-// TestInitialCursorAllDisabled verifies initialCursor returns 0 when all disabled.
-func TestInitialCursorAllDisabled(t *testing.T) {
-	items := []SelectorItem{
-		{Label: "a", Disabled: true},
-		{Label: "b", Disabled: true},
+// TestRunSelectorErrUserAborted verifies huh.ErrUserAborted → ErrCancelled.
+func TestRunSelectorErrUserAborted(t *testing.T) {
+	old := runSelectFormFn
+	t.Cleanup(func() { runSelectFormFn = old })
+	runSelectFormFn = func(_ string, _ []huh.Option[int]) (int, error) {
+		return -1, huh.ErrUserAborted
 	}
-	got := initialCursor(items)
-	if got != 0 {
-		t.Errorf("expected 0 when all disabled, got %d", got)
+
+	_, err := RunSelector("title", []SelectorItem{{Label: "x"}})
+	if !errors.Is(err, ErrCancelled) {
+		t.Errorf("expected ErrCancelled, got %v", err)
+	}
+}
+
+// TestRunSelectorGenericError verifies non-abort errors are propagated.
+func TestRunSelectorGenericError(t *testing.T) {
+	sentinel := errors.New("form exploded")
+	old := runSelectFormFn
+	t.Cleanup(func() { runSelectFormFn = old })
+	runSelectFormFn = func(_ string, _ []huh.Option[int]) (int, error) {
+		return -1, sentinel
+	}
+
+	_, err := RunSelector("title", []SelectorItem{{Label: "x"}})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("expected sentinel error, got %v", err)
+	}
+}
+
+// TestRunSelectorReturnsIndex verifies the chosen index is returned.
+func TestRunSelectorReturnsIndex(t *testing.T) {
+	old := runSelectFormFn
+	t.Cleanup(func() { runSelectFormFn = old })
+	runSelectFormFn = func(_ string, _ []huh.Option[int]) (int, error) {
+		return 2, nil // simulate user picking the third item
+	}
+
+	idx, err := RunSelector("title", []SelectorItem{
+		{Label: "a"}, {Label: "b"}, {Label: "c"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if idx != 2 {
+		t.Errorf("expected index 2, got %d", idx)
 	}
 }
