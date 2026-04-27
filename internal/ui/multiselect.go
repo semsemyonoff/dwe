@@ -3,8 +3,14 @@ package ui
 import (
 	"errors"
 
+	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
 )
+
+// multiSelectMinHeight is the floor for the multi-select viewport height. The
+// huh default of 10 truncates the visible area for projects with many services
+// or tools, so we expand it to fit at least 10 options plus chrome.
+const multiSelectMinHeight = 15
 
 // MultiSelectItem is one option in the interactive multi-select form.
 type MultiSelectItem struct {
@@ -28,8 +34,24 @@ var runMultiSelectFormFn = defaultRunMultiSelectForm
 
 func defaultRunMultiSelectForm(title string, opts []huh.Option[string]) ([]string, error) {
 	var keys []string
-	field := huh.NewMultiSelect[string]().Options(opts...).Title(title).Value(&keys)
-	err := huh.NewForm(huh.NewGroup(field)).WithTheme(Theme()).WithShowHelp(false).Run()
+	height := max(len(opts)+5, multiSelectMinHeight)
+	field := huh.NewMultiSelect[string]().
+		Options(opts...).
+		Title(title).
+		Description("enter: confirm · q/esc: quit without saving").
+		Value(&keys).
+		Filterable(false).
+		Height(height)
+
+	keymap := huh.NewDefaultKeyMap()
+	// Bind q and esc to abort so users can leave the form without saving.
+	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "q", "esc"), key.WithHelp("q/esc", "quit"))
+
+	err := huh.NewForm(huh.NewGroup(field)).
+		WithTheme(Theme()).
+		WithKeyMap(keymap).
+		WithShowHelp(true).
+		Run()
 	return keys, err
 }
 
@@ -81,7 +103,7 @@ func lockedKeys(items []MultiSelectItem) []string {
 //
 // Locked items are never shown in the form. If all items are locked or there are
 // no toggleable items, the form is skipped entirely. ErrCancelled is returned when
-// the user presses Esc or Ctrl-C.
+// the user presses q, Esc, or Ctrl-C.
 func RunMultiSelect(title string, items []MultiSelectItem) (MultiSelectResult, error) {
 	locked, toggleable := partitionMultiSelect(items)
 	lk := lockedKeys(locked)

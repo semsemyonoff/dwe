@@ -8,8 +8,23 @@ import (
 )
 
 // huhTheme is the package-level huh.Theme built from devbox/styles.yml.
-// It defaults to ThemeBase (no project palette applied) until ApplyStyles is called.
-var huhTheme huh.Theme = huh.ThemeFunc(huh.ThemeBase)
+// It defaults to ThemeBase + devbox glyph overrides (no project palette
+// applied) until ApplyStyles is called.
+var huhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
+	s := huh.ThemeBase(isDark)
+	applyFormGlyphs(s)
+	return s
+})
+
+// applyFormGlyphs replaces the default huh prefix glyphs with the devbox look:
+// "✓ " for selected items, "• " for unselected. Coloring is handled separately
+// by buildPaletteApplier so the glyphs always render even without a palette.
+func applyFormGlyphs(s *huh.Styles) {
+	s.Focused.SelectedPrefix = s.Focused.SelectedPrefix.SetString("✓ ")
+	s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.SetString("• ")
+	s.Blurred.SelectedPrefix = s.Blurred.SelectedPrefix.SetString("✓ ")
+	s.Blurred.UnselectedPrefix = s.Blurred.UnselectedPrefix.SetString("• ")
+}
 
 // Theme returns the current package-level huh.Theme.
 // All huh form/field call sites should use .WithTheme(ui.Theme()) so they
@@ -57,6 +72,7 @@ func buildPaletteApplier(c *config.StylesColors) func(*huh.Styles) {
 			s.Blurred.Title = s.Blurred.Title.Foreground(col)
 			s.Blurred.Description = s.Blurred.Description.Foreground(col)
 			s.Focused.UnselectedOption = s.Focused.UnselectedOption.Foreground(col)
+			s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.Foreground(col)
 			s.Focused.TextInput.Placeholder = s.Focused.TextInput.Placeholder.Foreground(col)
 		}
 		if c.Enabled != "" {

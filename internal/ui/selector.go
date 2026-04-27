@@ -4,11 +4,16 @@ import (
 	"errors"
 	"fmt"
 
+	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
 )
 
-// ErrCancelled is returned by RunSelector when the user presses Esc or Ctrl-C.
+// ErrCancelled is returned by RunSelector when the user presses q, Esc, or Ctrl-C.
 var ErrCancelled = errors.New("cancelled")
+
+// selectMinHeight matches multiSelectMinHeight: huh's default of 10 truncates
+// the visible area for projects with many services or commands.
+const selectMinHeight = 15
 
 // SelectorItem represents one option in the interactive list.
 type SelectorItem struct {
@@ -22,8 +27,24 @@ var runSelectFormFn = defaultRunSelectForm
 
 func defaultRunSelectForm(title string, opts []huh.Option[int]) (int, error) {
 	var idx int
-	field := huh.NewSelect[int]().Options(opts...).Title(title).Value(&idx)
-	err := huh.NewForm(huh.NewGroup(field)).WithTheme(Theme()).WithShowHelp(false).Run()
+	height := max(len(opts)+5, selectMinHeight)
+	field := huh.NewSelect[int]().
+		Options(opts...).
+		Title(title).
+		Description("enter: select · q/esc: quit without choosing").
+		Value(&idx).
+		Height(height)
+
+	keymap := huh.NewDefaultKeyMap()
+	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "q", "esc"), key.WithHelp("q/esc", "quit"))
+	// Disable filter so 'q' is never swallowed by filter input.
+	keymap.Select.Filter = key.NewBinding(key.WithDisabled())
+
+	err := huh.NewForm(huh.NewGroup(field)).
+		WithTheme(Theme()).
+		WithKeyMap(keymap).
+		WithShowHelp(true).
+		Run()
 	return idx, err
 }
 
@@ -57,7 +78,7 @@ func buildSelectorOptions(items []SelectorItem) []huh.Option[int] {
 
 // RunSelector displays an interactive list selector and returns the index of
 // the chosen item in the original items slice. Returns ErrCancelled if the
-// user presses Esc or Ctrl-C (huh.ErrUserAborted is translated).
+// user presses q, Esc, or Ctrl-C (huh.ErrUserAborted is translated).
 func RunSelector(title string, items []SelectorItem) (int, error) {
 	if len(items) == 0 {
 		return -1, fmt.Errorf("selector: no items to display")

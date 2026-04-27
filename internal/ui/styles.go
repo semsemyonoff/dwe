@@ -106,6 +106,7 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	apply := buildPaletteApplier(&c)
 	huhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeBase(isDark)
+		applyFormGlyphs(s)
 		apply(s)
 		return s
 	})
