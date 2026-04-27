@@ -241,3 +241,68 @@ func TestRenderInfo_TemplateError(t *testing.T) {
 		t.Error("expected error from invalid template, got nil")
 	}
 }
+
+func TestRenderSectionTitle_NonEmpty(t *testing.T) {
+	resetStyles()
+	out := RenderSectionTitle("My Section")
+	if out == "" {
+		t.Error("expected non-empty output for non-empty title")
+	}
+}
+
+func TestRenderSectionTitle_Empty(t *testing.T) {
+	resetStyles()
+	out := RenderSectionTitle("")
+	if out == "" {
+		t.Error("expected separator line for empty title")
+	}
+}
+
+func TestRenderSubheader_ReturnsNonEmpty(t *testing.T) {
+	resetStyles()
+	out := RenderSubheader("sub")
+	if out == "" {
+		t.Error("expected non-empty subheader output")
+	}
+}
+
+func TestRenderDefinition_Basic(t *testing.T) {
+	resetStyles()
+	out := RenderDefinition("key", "value", 0, "")
+	if !strings.Contains(out, "key") {
+		t.Errorf("expected key in definition output, got %q", out)
+	}
+}
+
+func TestWordWrap_ShortText(t *testing.T) {
+	out := wordWrap("hello", 80)
+	if len(out) != 1 || out[0] != "hello" {
+		t.Errorf("short text should be unchanged: %v", out)
+	}
+}
+
+func TestWordWrap_ZeroWidth(t *testing.T) {
+	out := wordWrap("hello world", 0)
+	if len(out) != 1 || out[0] != "hello world" {
+		t.Errorf("zero width should return text unchanged: %v", out)
+	}
+}
+
+func TestWordWrap_BreaksAtWordBoundary(t *testing.T) {
+	out := wordWrap("one two three four five", 10)
+	if len(out) < 2 {
+		t.Errorf("expected multiple lines for long text, got %v", out)
+	}
+	for _, line := range out {
+		if len([]rune(line)) > 10 {
+			t.Errorf("line exceeds width: %q", line)
+		}
+	}
+}
+
+func TestWordWrap_NoSpaces(t *testing.T) {
+	out := wordWrap("abcdefghij", 5)
+	if len(out) < 2 {
+		t.Errorf("expected split of word without spaces: %v", out)
+	}
+}

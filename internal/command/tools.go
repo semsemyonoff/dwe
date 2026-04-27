@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
@@ -67,25 +68,85 @@ func newToolStatusCmd(flags *rootFlags) *cobra.Command {
 
 func newToolListCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "list",
-		Short:   "List all tools and their status",
-		Long:    `Show all optional tools with their host, port, enabled state, and running status.`,
-		Example: "  devbox tools list",
-		Args:    cobra.NoArgs,
+		Use:   "list",
+		Short: "Toggle tools interactively (TTY) or show status table (non-TTY)",
+		Long: `Toggle optional tools on or off using an interactive multi-select form.
+
+On submit, newly-checked tools are enabled and newly-unchecked tools are
+disabled in devbox/local.yml; .env is regenerated once.
+
+In non-TTY mode (piped stdin or no terminal) the command falls back to printing
+the read-only status table.`,
+		Example: `  devbox tools list
+  devbox tools list | cat   # non-TTY: prints the table`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyStyles(flags.configPath, cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			projectName, err := resolveProjectName(flags.configPath, cfg)
+
+			// Non-TTY: fall back to the read-only table.
+			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				projectName, err := resolveProjectName(flags.configPath, cfg)
+				if err != nil {
+					return err
+				}
+				isRunning := func(_, container string) bool {
+					return containerRunning(projectName, container)
+				}
+				return runToolList(render.Stdout(), cfg, isRunning)
+			}
+
+			// TTY: build multi-select items from tool rows.
+			rows := buildToolRows(cfg)
+			items := make([]ui.MultiSelectItem, len(rows))
+			for i, row := range rows {
+				items[i] = ui.MultiSelectItem{
+					Key:      row.Name,
+					Label:    row.Name,
+					Locked:   false,
+					Selected: row.Enabled,
+				}
+			}
+
+			result, err := runMultiSelect("Toggle tools:", items)
 			if err != nil {
+				if errors.Is(err, ui.ErrCancelled) {
+					return nil
+				}
 				return err
 			}
-			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container)
+
+			toEnable, toDisable := diffToolSelection(rows, result.Kept)
+			if len(toEnable) == 0 && len(toDisable) == 0 {
+				return nil
 			}
-			return runToolList(render.Stdout(), cfg, isRunning)
+
+			baseDir := filepath.Dir(flags.configPath)
+			for _, name := range toEnable {
+				if err := setToolEnabledNoRegen(flags.configPath, name, true); err != nil {
+					return err
+				}
+			}
+			for _, name := range toDisable {
+				if err := setToolEnabledNoRegen(flags.configPath, name, false); err != nil {
+					return err
+				}
+			}
+
+			// Print one-line summary of all changes.
+			var parts []string
+			if len(toEnable) > 0 {
+				parts = append(parts, "enabled: "+strings.Join(toEnable, ", "))
+			}
+			if len(toDisable) > 0 {
+				parts = append(parts, "disabled: "+strings.Join(toDisable, ", "))
+			}
+			render.Stdout().Success(strings.Join(parts, "; "))
+
+			return regenEnv(flags.configPath, baseDir)
 		},
 		SilenceUsage: true,
 	}
@@ -259,9 +320,9 @@ var knownTools = map[string]bool{
 	"mailpit":       true,
 }
 
-// setToolEnabled writes tools.<name>.enabled = value to devbox/local.yml,
-// then regenerates .env.
-func setToolEnabled(configPath string, name string, enabled bool) error {
+// setToolEnabledNoRegen writes tools.<name>.enabled = value to devbox/local.yml
+// without printing or regenerating .env. Used by the batch multi-toggle path.
+func setToolEnabledNoRegen(configPath string, name string, enabled bool) error {
 	if !knownTools[name] {
 		return fmt.Errorf("tool %q not found", name)
 	}
@@ -298,13 +359,23 @@ func setToolEnabled(configPath string, name string, enabled bool) error {
 	if err := os.WriteFile(localPath, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", localPath, err)
 	}
+	return nil
+}
 
+// setToolEnabled writes tools.<name>.enabled = value to devbox/local.yml,
+// prints a confirmation, and regenerates .env.
+func setToolEnabled(configPath string, name string, enabled bool) error {
+	if err := setToolEnabledNoRegen(configPath, name, enabled); err != nil {
+		return err
+	}
+
+	baseDir := filepath.Dir(configPath)
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 	w := render.Stdout()
 	if enabled {
 		w.Success(fmt.Sprintf("tool %q enabled (written to %s)", name, localPath))
 	} else {
 		w.Success(fmt.Sprintf("tool %q disabled (written to %s)", name, localPath))
 	}
-
 	return regenEnv(configPath, baseDir)
 }

@@ -109,3 +109,41 @@ func TestRenderServiceTable_DisabledRunStr(t *testing.T) {
 		t.Errorf("disabled service should show em-dash run status\nfull output:\n%s", out)
 	}
 }
+
+func TestRenderToolTable_Basic(t *testing.T) {
+	resetStyles()
+	rows := []ToolTableRow{
+		{Name: "adminer", Host: "localhost", Port: 8080, Enabled: true, Running: true},
+		{Name: "mailpit", Host: "localhost", Port: 8025, Enabled: true, Running: false},
+		{Name: "redis-insight", Host: "localhost", Port: 8001, Enabled: false},
+	}
+	out := RenderToolTable(rows)
+	for _, want := range []string{
+		"NAME", "HOST", "PORT", "STATE", "RUNNING",
+		"adminer", "mailpit", "redis-insight",
+		"running", "stopped", "disabled",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderToolTable_ZeroPort(t *testing.T) {
+	resetStyles()
+	rows := []ToolTableRow{
+		{Name: "tool", Host: "localhost", Port: 0, Enabled: true, Running: false},
+	}
+	out := RenderToolTable(rows)
+	if !strings.Contains(out, "—") {
+		t.Errorf("zero port should render as em-dash:\n%s", out)
+	}
+}
+
+func TestRenderToolTable_Empty(t *testing.T) {
+	resetStyles()
+	out := RenderToolTable(nil)
+	if !strings.Contains(out, "NAME") {
+		t.Error("expected header NAME in empty tool table")
+	}
+}

@@ -387,3 +387,94 @@ func TestServiceDirsEnsureRegistered(t *testing.T) {
 		t.Error("service_dirs_ensure not found in builtin registry")
 	}
 }
+
+// ---- ensureInsideBase -------------------------------------------------------
+
+func TestEnsureInsideBase_Escaping(t *testing.T) {
+	base := "/tmp/project"
+	abs := "/tmp/other"
+	if err := ensureInsideBase(base, abs); err == nil {
+		t.Error("expected error for path outside base")
+	}
+}
+
+func TestEnsureInsideBase_Valid(t *testing.T) {
+	base := "/tmp/project"
+	abs := "/tmp/project/services/main"
+	if err := ensureInsideBase(base, abs); err != nil {
+		t.Errorf("unexpected error for valid path: %v", err)
+	}
+}
+
+// ---- ensureDir edge cases ---------------------------------------------------
+
+func TestEnsureDir_ExistsNotDir(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "notadir.txt")
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	err := ensureDir(p, "notadir.txt", "skip", false, ctx)
+	if err == nil {
+		t.Fatal("expected error when path exists but is not a directory")
+	}
+}
+
+func TestEnsureDir_ErrorMode_Exists(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "existing")
+	if err := os.Mkdir(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	err := ensureDir(p, "existing", "error", false, ctx)
+	if err == nil {
+		t.Fatal("expected error in error mode when dir exists")
+	}
+}
+
+func TestEnsureDir_UnknownMode(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "newdir")
+	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	err := ensureDir(p, "newdir", "bogusmode", false, ctx)
+	if err == nil {
+		t.Fatal("expected error for unknown mode")
+	}
+}
+
+func TestServiceDirsEnsure_EmptyServiceDir(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"main": {Dir: ""},
+		},
+	}
+	ctx := ExecContext{
+		Config:      cfg,
+		ProjectRoot: root,
+		Output:      render.NewWriter(&bytes.Buffer{}),
+	}
+	b := serviceDirsEnsureBuiltin{}
+	err := b.Run(map[string]any{"service": "main"}, ctx)
+	if err == nil {
+		t.Fatal("expected error when service dir is empty")
+	}
+}
+
+func TestEnsureDir_RecreateMode_Mandatory_Exists(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "src")
+	if err := os.Mkdir(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	err := ensureDir(p, "src", "recreate", true, ctx)
+	if err != nil {
+		t.Fatalf("recreate on mandatory+existing dir should skip: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Error("mandatory dir should still exist after recreate skip")
+	}
+}

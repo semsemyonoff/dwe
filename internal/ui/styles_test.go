@@ -104,3 +104,38 @@ func TestApplyStyles_ChangesAreVisible(t *testing.T) {
 		t.Errorf("expected defSep '>>', got %q", defSep)
 	}
 }
+
+func TestStyleHelpers_NonEmpty(t *testing.T) {
+	resetStyles()
+	cases := []struct {
+		name string
+		fn   func(string) string
+	}{
+		{"RenderEnabled", RenderEnabled},
+		{"RenderPartial", RenderPartial},
+		{"RenderStopped", RenderStopped},
+		{"StyleKey", StyleKey},
+		{"StyleGroup", StyleGroup},
+		{"StyleSectionTitle", StyleSectionTitle},
+		{"StyleSubheader", StyleSubheader},
+		{"StyleMuted", StyleMuted},
+		{"StyleInfo", StyleInfo},
+		{"StyleFailed", StyleFailed},
+		{"StyleWarning", StyleWarning},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := tc.fn("test")
+			if out == "" {
+				t.Errorf("%s returned empty string", tc.name)
+			}
+		})
+	}
+}
+
+func TestTermWidth_ReturnsPositive(t *testing.T) {
+	w := TermWidth()
+	if w <= 0 {
+		t.Errorf("expected positive terminal width, got %d", w)
+	}
+}
