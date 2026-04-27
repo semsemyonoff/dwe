@@ -138,15 +138,8 @@ the read-only status table.`,
 			}
 
 			baseDir := filepath.Dir(flags.configPath)
-			for _, name := range toEnable {
-				if err := setServiceEnabledNoRegen(flags.configPath, cfg, name, true); err != nil {
-					return err
-				}
-			}
-			for _, name := range toDisable {
-				if err := setServiceEnabledNoRegen(flags.configPath, cfg, name, false); err != nil {
-					return err
-				}
+			if err := applyServiceTogglesBatch(flags.configPath, cfg, toEnable, toDisable); err != nil {
+				return err
 			}
 
 			// Print one-line summary of all changes.
@@ -188,17 +181,19 @@ func resolveProjectName(configPath string, cfg *config.DevboxConfig) (string, er
 type containerCheckFn func(projectFullName, containerName string) bool
 
 // containerRunning checks if a Docker container is running by full container name.
+// Uses docker inspect to get an exact name match (docker ps name filter uses substring
+// matching against the full /name path which is not portable across Docker versions).
 func containerRunning(projectFullName, containerName string) bool {
 	fullName := projectFullName + "-" + containerName
 	out, err := exec.Command(
-		"docker", "ps", "-q",
-		"--filter", fmt.Sprintf("name=^%s$", fullName),
-		"--filter", "status=running",
+		"docker", "inspect",
+		"--format", "{{.State.Status}}",
+		fullName,
 	).Output()
 	if err != nil {
 		return false
 	}
-	return strings.TrimSpace(string(out)) != ""
+	return strings.TrimSpace(string(out)) == "running"
 }
 
 // runServiceList prints the service list as a styled Lipgloss table.
@@ -235,7 +230,6 @@ var defaultSelectToggle selectToggleFn = ui.RunSelector
 
 // pickServiceToEnable returns the name of a disabled non-mandatory service to enable.
 // If no disabled optional services exist, returns an error.
-// If exactly one exists, it is auto-selected (no selector invoked).
 // Otherwise the selector is called with all disabled optional services.
 func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
@@ -250,7 +244,6 @@ func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (str
 
 // pickServiceToDisable returns the name of an enabled non-mandatory service to disable.
 // If no enabled optional services exist, returns an error.
-// If exactly one exists, it is auto-selected (no selector invoked).
 // Otherwise the selector is called with all enabled optional services.
 func pickServiceToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
@@ -309,6 +302,9 @@ disabled optional services.`,
 			if len(args) == 1 {
 				name = args[0]
 			} else {
+				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+					return fmt.Errorf("no service name given; pass a service name or run in an interactive terminal")
+				}
 				name, err = pickServiceToEnable(cfg, defaultSelectToggle)
 				if err != nil {
 					if errors.Is(err, ui.ErrCancelled) {
@@ -346,6 +342,9 @@ enabled optional services.`,
 			if len(args) == 1 {
 				name = args[0]
 			} else {
+				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+					return fmt.Errorf("no service name given; pass a service name or run in an interactive terminal")
+				}
 				name, err = pickServiceToDisable(cfg, defaultSelectToggle)
 				if err != nil {
 					if errors.Is(err, ui.ErrCancelled) {
@@ -382,28 +381,28 @@ func optionalServiceNameCompletion(flags *rootFlags) func(*cobra.Command, []stri
 	}
 }
 
-// setServiceEnabledNoRegen writes services.<name>.enabled = value to devbox/local.yml
-// without printing or regenerating .env. Used by the batch multi-toggle path.
-func setServiceEnabledNoRegen(configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
-	svc, ok := cfg.Services[name]
-	if !ok {
-		return fmt.Errorf("service %q not found", name)
+// applyServiceTogglesBatch loads devbox/local.yml once, validates and applies all
+// toggles in-memory, then writes the file once. Either every change is persisted
+// or none are — eliminating partial-state risk if a later validation fails after
+// earlier ones already wrote to disk.
+func applyServiceTogglesBatch(configPath string, cfg *config.DevboxConfig, toEnable, toDisable []string) error {
+	for _, name := range toEnable {
+		if err := validateServiceToggle(cfg, name, true); err != nil {
+			return err
+		}
 	}
-	if svc.Mandatory {
-		return fmt.Errorf("service %q is mandatory and cannot be %s", name, disableWord(enabled))
+	for _, name := range toDisable {
+		if err := validateServiceToggle(cfg, name, false); err != nil {
+			return err
+		}
 	}
 
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	local := make(map[string]any)
-	if data, err := os.ReadFile(localPath); err == nil {
-		if err := yaml.Unmarshal(data, &local); err != nil {
-			return fmt.Errorf("parse %s: %w", localPath, err)
-		}
-		if local == nil {
-			local = make(map[string]any)
-		}
+	local, err := loadLocalYAML(localPath)
+	if err != nil {
+		return err
 	}
 
 	svcMap, ok := local["services"].(map[string]any)
@@ -411,13 +410,49 @@ func setServiceEnabledNoRegen(configPath string, cfg *config.DevboxConfig, name 
 		svcMap = make(map[string]any)
 		local["services"] = svcMap
 	}
-	entry, ok := svcMap[name].(map[string]any)
-	if !ok {
-		entry = make(map[string]any)
-		svcMap[name] = entry
+	for _, name := range toEnable {
+		setLocalEntryEnabled(svcMap, name, true)
 	}
-	entry["enabled"] = enabled
+	for _, name := range toDisable {
+		setLocalEntryEnabled(svcMap, name, false)
+	}
 
+	return writeLocalYAML(localPath, local)
+}
+
+// validateServiceToggle returns an error if the service is unknown or mandatory.
+func validateServiceToggle(cfg *config.DevboxConfig, name string, enabled bool) error {
+	svc, ok := cfg.Services[name]
+	if !ok {
+		return fmt.Errorf("service %q not found", name)
+	}
+	if svc.Mandatory {
+		return fmt.Errorf("service %q is mandatory and cannot be %s", name, disableWord(enabled))
+	}
+	return nil
+}
+
+// loadLocalYAML reads and parses devbox/local.yml. A missing file is not an error.
+func loadLocalYAML(localPath string) (map[string]any, error) {
+	local := make(map[string]any)
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return local, nil
+		}
+		return nil, fmt.Errorf("read %s: %w", localPath, err)
+	}
+	if err := yaml.Unmarshal(data, &local); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", localPath, err)
+	}
+	if local == nil {
+		local = make(map[string]any)
+	}
+	return local, nil
+}
+
+// writeLocalYAML marshals and atomically writes the local config map.
+func writeLocalYAML(localPath string, local map[string]any) error {
 	data, err := yaml.Marshal(local)
 	if err != nil {
 		return fmt.Errorf("marshal local config: %w", err)
@@ -428,10 +463,27 @@ func setServiceEnabledNoRegen(configPath string, cfg *config.DevboxConfig, name 
 	return nil
 }
 
+// setLocalEntryEnabled sets the "enabled" field on the named entry within a
+// services/tools subtree, creating the entry map if absent.
+func setLocalEntryEnabled(subtree map[string]any, name string, enabled bool) {
+	entry, ok := subtree[name].(map[string]any)
+	if !ok {
+		entry = make(map[string]any)
+		subtree[name] = entry
+	}
+	entry["enabled"] = enabled
+}
+
 // setServiceEnabled writes services.<name>.enabled = value to devbox/local.yml,
 // prints a confirmation, and regenerates .env.
 func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
-	if err := setServiceEnabledNoRegen(configPath, cfg, name, enabled); err != nil {
+	var toEnable, toDisable []string
+	if enabled {
+		toEnable = []string{name}
+	} else {
+		toDisable = []string{name}
+	}
+	if err := applyServiceTogglesBatch(configPath, cfg, toEnable, toDisable); err != nil {
 		return err
 	}
 

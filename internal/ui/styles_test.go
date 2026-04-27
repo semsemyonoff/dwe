@@ -73,8 +73,16 @@ func TestApplyStyles_Colors_Applied(t *testing.T) {
 			TableHeader:  "203",
 		},
 	}
-	// Should not panic and styles should be rebuilt.
 	ApplyStyles(cfg)
+	if styleKey.GetForeground() != lipgloss.Color("203") {
+		t.Errorf("styleKey foreground: got %v, want 203", styleKey.GetForeground())
+	}
+	if styleSectionTitle.GetForeground() != lipgloss.Color("167") {
+		t.Errorf("styleSectionTitle foreground: got %v, want 167", styleSectionTitle.GetForeground())
+	}
+	if styleMuted.GetForeground() != lipgloss.Color("245") {
+		t.Errorf("styleMuted foreground: got %v, want 245", styleMuted.GetForeground())
+	}
 }
 
 func TestApplyStyles_PartialColors_PreservesDefault(t *testing.T) {

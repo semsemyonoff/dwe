@@ -454,6 +454,42 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_YInput(t *testing.T) {
 	}
 }
 
+// TestWorkflowRunner_ConfirmStep_NonTTY_CIEnv verifies that CI=1 auto-confirms
+// the prompt — matching the behavior of builtin/print confirm paths.
+func TestWorkflowRunner_ConfirmStep_NonTTY_CIEnv(t *testing.T) {
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	t.Setenv("CI", "1")
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.nontty-ci",
+		Group:     "wf",
+		LocalName: "nontty-ci",
+		Steps: []WorkflowStep{
+			{Confirm: "Continue?"},
+		},
+	}
+	reg := buildWorkflowRegistry(wf)
+
+	var outBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:      wf,
+		Params:   map[string]any{},
+		Context:  map[string]any{},
+		Render:   &tpl.RenderContext{},
+		Registry: reg,
+		Stdout:   &outBuf,
+		Stderr:   &outBuf,
+		Stdin:    bytes.NewBufferString(""), // no input — CI must short-circuit
+	}
+	if err := (&WorkflowRunner{}).Run(ctx); err != nil {
+		t.Fatalf("expected no error under CI=1; got %v", err)
+	}
+}
+
 func TestWorkflowRunner_ConfirmStep_NonTTY_NInput(t *testing.T) {
 	origIsInteractive := ui.IsInteractiveFn
 	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })

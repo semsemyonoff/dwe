@@ -3,7 +3,6 @@ package command
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newToolCmd(flags *rootFlags) *cobra.Command {
@@ -125,15 +123,8 @@ the read-only status table.`,
 			}
 
 			baseDir := filepath.Dir(flags.configPath)
-			for _, name := range toEnable {
-				if err := setToolEnabledNoRegen(flags.configPath, name, true); err != nil {
-					return err
-				}
-			}
-			for _, name := range toDisable {
-				if err := setToolEnabledNoRegen(flags.configPath, name, false); err != nil {
-					return err
-				}
+			if err := applyToolTogglesBatch(flags.configPath, toEnable, toDisable); err != nil {
+				return err
 			}
 
 			// Print one-line summary of all changes.
@@ -200,6 +191,9 @@ disabled tools.`,
 			if len(args) == 1 {
 				name = args[0]
 			} else {
+				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+					return fmt.Errorf("no tool name given; pass a tool name or run in an interactive terminal")
+				}
 				name, err = pickToolToEnable(cfg, defaultSelectToggle)
 				if err != nil {
 					if errors.Is(err, ui.ErrCancelled) {
@@ -237,6 +231,9 @@ enabled tools.`,
 			if len(args) == 1 {
 				name = args[0]
 			} else {
+				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+					return fmt.Errorf("no tool name given; pass a tool name or run in an interactive terminal")
+				}
 				name, err = pickToolToDisable(cfg, defaultSelectToggle)
 				if err != nil {
 					if errors.Is(err, ui.ErrCancelled) {
@@ -253,7 +250,6 @@ enabled tools.`,
 
 // pickToolToEnable returns the name of a disabled tool to enable.
 // If no disabled tools exist, returns an error.
-// If exactly one disabled tool exists, it is auto-selected (no selector invoked).
 // Otherwise the selector is called.
 func pickToolToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []toolRow
@@ -267,7 +263,6 @@ func pickToolToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string
 
 // pickToolToDisable returns the name of an enabled tool to disable.
 // If no enabled tools exist, returns an error.
-// If exactly one enabled tool exists, it is auto-selected (no selector invoked).
 // Otherwise the selector is called.
 func pickToolToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []toolRow
@@ -320,24 +315,26 @@ var knownTools = map[string]bool{
 	"mailpit":       true,
 }
 
-// setToolEnabledNoRegen writes tools.<name>.enabled = value to devbox/local.yml
-// without printing or regenerating .env. Used by the batch multi-toggle path.
-func setToolEnabledNoRegen(configPath string, name string, enabled bool) error {
-	if !knownTools[name] {
-		return fmt.Errorf("tool %q not found", name)
+// applyToolTogglesBatch loads devbox/local.yml once, validates and applies all
+// toggles in-memory, then writes the file once. See applyServiceTogglesBatch.
+func applyToolTogglesBatch(configPath string, toEnable, toDisable []string) error {
+	for _, name := range toEnable {
+		if !knownTools[name] {
+			return fmt.Errorf("tool %q not found", name)
+		}
+	}
+	for _, name := range toDisable {
+		if !knownTools[name] {
+			return fmt.Errorf("tool %q not found", name)
+		}
 	}
 
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	local := make(map[string]any)
-	if data, err := os.ReadFile(localPath); err == nil {
-		if err := yaml.Unmarshal(data, &local); err != nil {
-			return fmt.Errorf("parse %s: %w", localPath, err)
-		}
-		if local == nil {
-			local = make(map[string]any)
-		}
+	local, err := loadLocalYAML(localPath)
+	if err != nil {
+		return err
 	}
 
 	toolsMap, ok := local["tools"].(map[string]any)
@@ -345,27 +342,26 @@ func setToolEnabledNoRegen(configPath string, name string, enabled bool) error {
 		toolsMap = make(map[string]any)
 		local["tools"] = toolsMap
 	}
-	entry, ok := toolsMap[name].(map[string]any)
-	if !ok {
-		entry = make(map[string]any)
-		toolsMap[name] = entry
+	for _, name := range toEnable {
+		setLocalEntryEnabled(toolsMap, name, true)
 	}
-	entry["enabled"] = enabled
+	for _, name := range toDisable {
+		setLocalEntryEnabled(toolsMap, name, false)
+	}
 
-	data, err := yaml.Marshal(local)
-	if err != nil {
-		return fmt.Errorf("marshal local config: %w", err)
-	}
-	if err := os.WriteFile(localPath, data, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", localPath, err)
-	}
-	return nil
+	return writeLocalYAML(localPath, local)
 }
 
 // setToolEnabled writes tools.<name>.enabled = value to devbox/local.yml,
 // prints a confirmation, and regenerates .env.
 func setToolEnabled(configPath string, name string, enabled bool) error {
-	if err := setToolEnabledNoRegen(configPath, name, enabled); err != nil {
+	var toEnable, toDisable []string
+	if enabled {
+		toEnable = []string{name}
+	} else {
+		toDisable = []string{name}
+	}
+	if err := applyToolTogglesBatch(configPath, toEnable, toDisable); err != nil {
 		return err
 	}
 

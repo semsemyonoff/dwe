@@ -123,7 +123,13 @@ service exists, or shows an interactive selector when multiple services are enab
 			if len(args) > 0 {
 				argName = args[0]
 			}
-			serviceName, err := pickService(cfg, argName, defaultSelectService)
+			svcSelector := selectServiceFn(defaultSelectService)
+			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				svcSelector = func(_ *config.DevboxConfig, _ []string) (string, error) {
+					return "", fmt.Errorf("multiple services are enabled; pass a service name or run in an interactive terminal")
+				}
+			}
+			serviceName, err := pickService(cfg, argName, svcSelector)
 			if err != nil {
 				if errors.Is(err, ui.ErrCancelled) {
 					return nil

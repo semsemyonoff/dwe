@@ -166,6 +166,33 @@ func TestConfirmBuiltin_TTY_UsesRunConfirmWrapper(t *testing.T) {
 	}
 }
 
+// TestConfirmBuiltin_TTY_ErrCancelled verifies that ErrCancelled (Esc/Ctrl-C) maps to "aborted by user".
+func TestConfirmBuiltin_TTY_ErrCancelled(t *testing.T) {
+	orig := runConfirm
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() {
+		runConfirm = orig
+		ui.IsInteractiveFn = origIsInteractive
+	})
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		return false, ui.ErrCancelled
+	}
+
+	out := &bytes.Buffer{}
+	ctx := ExecContext{
+		Config:      &config.DevboxConfig{},
+		ProjectRoot: "/tmp",
+		Output:      render.NewWriter(out),
+		Stdin:       bytes.NewBufferString(""),
+	}
+	err := confirmBuiltin{}.Run(nil, ctx)
+	if err == nil || err.Error() != "aborted by user" {
+		t.Errorf("expected 'aborted by user' for ErrCancelled, got %v", err)
+	}
+}
+
 // TestConfirmBuiltin_TTY_Denied verifies that runConfirm returning false aborts.
 func TestConfirmBuiltin_TTY_Denied(t *testing.T) {
 	orig := runConfirm

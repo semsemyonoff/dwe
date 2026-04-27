@@ -98,7 +98,13 @@ directly without showing a selector.`,
 			if err != nil {
 				return err
 			}
-			id, err := resolveCommandID(reg, args, true, defaultSelectCommand)
+			selector := selectCommandFn(defaultSelectCommand)
+			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				selector = func(_ []*commands.CommandDef, _ string) (string, error) {
+					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
+				}
+			}
+			id, err := resolveCommandID(reg, args, true, selector)
 			if err != nil {
 				if errors.Is(err, ui.ErrCancelled) {
 					return nil
@@ -148,7 +154,13 @@ it runs directly without showing a selector.`,
 			if err != nil {
 				return err
 			}
-			id, err := resolveCommandID(reg, args, false, defaultSelectCommand)
+			selector := selectCommandFn(defaultSelectCommand)
+			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				selector = func(_ []*commands.CommandDef, _ string) (string, error) {
+					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
+				}
+			}
+			id, err := resolveCommandID(reg, args, false, selector)
 			if err != nil {
 				if errors.Is(err, ui.ErrCancelled) {
 					return nil

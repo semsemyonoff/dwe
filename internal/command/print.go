@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"os"
 
 	"devbox-cli/internal/render"
@@ -107,9 +108,14 @@ func newPrintConfirmCmd() *cobra.Command {
 			if ui.IsInteractiveFn(stdin) {
 				result, err := runConfirm(args[0], okMsg, stopMsg)
 				if err != nil {
-					return err
+					if errors.Is(err, ui.ErrCancelled) {
+						confirmed = false
+					} else {
+						return err
+					}
+				} else {
+					confirmed = result
 				}
-				confirmed = result
 			} else {
 				confirmed = w.Confirm(args[0], stdin)
 			}

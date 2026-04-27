@@ -1,11 +1,11 @@
 package commands
 
 import (
-	"bufio"
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 
+	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
 )
@@ -63,6 +63,9 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 	if ui.IsInteractiveFn(stdin) {
 		confirmed, err := runConfirm(message, "Yes", "No")
 		if err != nil {
+			if errors.Is(err, ui.ErrCancelled) {
+				return fmt.Errorf("aborted by user")
+			}
 			return err
 		}
 		if !confirmed {
@@ -71,19 +74,12 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 		return nil
 	}
 
-	// Non-TTY fallback: plain [y/N] via bufio.Scanner.
-	out := stdout(ctx)
-	_, _ = fmt.Fprintf(out, "%s [y/N] ", message)
-
-	scanner := bufio.NewScanner(stdin)
-	if !scanner.Scan() {
-		return fmt.Errorf("aborted (no input)")
+	// Non-TTY fallback: route through render.Writer.Confirm so CI=1 auto-confirm
+	// behavior matches the builtin/print confirm paths.
+	if render.NewWriter(stdout(ctx)).Confirm(message, stdin) {
+		return nil
 	}
-	answer := strings.TrimSpace(scanner.Text())
-	if answer != "y" && answer != "Y" {
-		return fmt.Errorf("aborted by user")
-	}
-	return nil
+	return fmt.Errorf("aborted by user")
 }
 
 // runCommandStep resolves and executes a single command-reference step.

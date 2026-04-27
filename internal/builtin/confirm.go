@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -50,6 +51,10 @@ func (confirmBuiltin) Run(with map[string]any, ctx ExecContext) error {
 	if ui.IsInteractiveFn(stdin) {
 		confirmed, err := runConfirm(msg, okMsg, stopMsg)
 		if err != nil {
+			if errors.Is(err, ui.ErrCancelled) {
+				ctx.Output.Error(stopMsg)
+				return fmt.Errorf("aborted by user")
+			}
 			return err
 		}
 		if !confirmed {

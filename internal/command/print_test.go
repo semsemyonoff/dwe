@@ -90,6 +90,37 @@ func TestPrintConfirmCmd_NonTTY_Y(t *testing.T) {
 	}
 }
 
+// TestPrintConfirmCmd_TTY_Cancelled verifies that ErrCancelled (Esc/Ctrl-C) is
+// treated as a refusal rather than propagated as an error.
+func TestPrintConfirmCmd_TTY_Cancelled(t *testing.T) {
+	origRC := runConfirm
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() {
+		runConfirm = origRC
+		ui.IsInteractiveFn = origIsInteractive
+	})
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		return false, ui.ErrCancelled
+	}
+
+	root := NewRootCmd()
+	var outBuf bytes.Buffer
+	root.SetOut(&outBuf)
+	root.SetErr(&outBuf)
+	root.SetIn(bytes.NewBufferString(""))
+	root.SetArgs([]string{"print", "confirm", "--continue", "--stop-msg", "Cancelled", "Proceed?"})
+
+	err := root.Execute()
+	if err != nil {
+		t.Fatalf("ErrCancelled should not propagate as error; got %v", err)
+	}
+	if !strings.Contains(outBuf.String(), "Cancelled") {
+		t.Errorf("expected 'Cancelled' in output; got %q", outBuf.String())
+	}
+}
+
 // TestPrintConfirmCmd_NonTTY_N verifies that the stdin Y/N fallback is used when
 // stdin is a bytes.Buffer and input is "n" (with --continue to avoid os.Exit(1)).
 func TestPrintConfirmCmd_NonTTY_N(t *testing.T) {

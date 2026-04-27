@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/ui"
 
 	"gopkg.in/yaml.v3"
@@ -285,6 +286,35 @@ func TestServiceListCmd_TTY_NoChanges_NoWrites(t *testing.T) {
 	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
 	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
 		t.Error("local.yml should not be created when no changes were made")
+	}
+}
+
+// TestApplyServiceTogglesBatch_AllOrNothing verifies that when validation
+// rejects any toggle in the batch, no partial state is written to local.yml.
+func TestApplyServiceTogglesBatch_AllOrNothing(t *testing.T) {
+	configPath := writeTempServiceConfig(t, map[string]struct {
+		mandatory bool
+		enabled   bool
+		container string
+	}{
+		"main":   {mandatory: true, enabled: false},
+		"second": {mandatory: false, enabled: false},
+	})
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	// "second" is valid; "main" is mandatory — batch must reject before writing.
+	err = applyServiceTogglesBatch(configPath, cfg, []string{"second"}, []string{"main"})
+	if err == nil {
+		t.Fatal("expected error for mandatory toggle, got nil")
+	}
+
+	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
+	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
+		t.Error("local.yml must not be written when batch validation fails")
 	}
 }
 

@@ -23,7 +23,8 @@ var runSelectFormFn = defaultRunSelectForm
 func defaultRunSelectForm(title string, opts []huh.Option[int]) (int, error) {
 	var idx int
 	field := huh.NewSelect[int]().Options(opts...).Title(title).Value(&idx)
-	return idx, huh.NewForm(huh.NewGroup(field)).WithTheme(Theme()).WithShowHelp(false).Run()
+	err := huh.NewForm(huh.NewGroup(field)).WithTheme(Theme()).WithShowHelp(false).Run()
+	return idx, err
 }
 
 // buildSelectorOptions converts SelectorItems to huh options whose key includes

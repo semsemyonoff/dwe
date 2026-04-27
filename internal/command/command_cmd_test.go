@@ -476,6 +476,56 @@ func TestResolveCommandID_noArg_emptyRegistry_error(t *testing.T) {
 	}
 }
 
+func TestResolveCommandID_nonInteractiveSelector_noArg_returnsError(t *testing.T) {
+	// When a non-TTY selector is passed and no exact ID is given, it returns an error.
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+
+	nonTTYSelector := func(_ []*commands.CommandDef, _ string) (string, error) {
+		return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
+	}
+	_, err := resolveCommandID(reg, []string{}, false, nonTTYSelector)
+	if err == nil {
+		t.Fatal("expected error from non-TTY selector, got nil")
+	}
+}
+
+func TestResolveCommandID_nonInteractiveSelector_groupPrefix_returnsError(t *testing.T) {
+	// When a non-TTY selector is passed and a group prefix is given (not exact ID), it returns an error.
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+
+	nonTTYSelector := func(_ []*commands.CommandDef, _ string) (string, error) {
+		return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
+	}
+	_, err := resolveCommandID(reg, []string{"db"}, false, nonTTYSelector)
+	if err == nil {
+		t.Fatal("expected error from non-TTY selector for group prefix, got nil")
+	}
+}
+
+func TestResolveCommandID_nonInteractiveSelector_exactID_succeeds(t *testing.T) {
+	// When an exact ID is given, the selector is never called even in non-TTY mode.
+	reg := commands.NewEmptyRegistry()
+	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+
+	selectorCalled := false
+	nonTTYSelector := func(_ []*commands.CommandDef, _ string) (string, error) {
+		selectorCalled = true
+		return "", fmt.Errorf("not interactive")
+	}
+	got, err := resolveCommandID(reg, []string{"db.up"}, false, nonTTYSelector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "db.up" {
+		t.Errorf("want %q, got %q", "db.up", got)
+	}
+	if selectorCalled {
+		t.Error("selector must not be called for exact ID")
+	}
+}
+
 // --- commands run/inspect accept optional arg ---
 
 func TestCommandRunCmd_AcceptsOptionalArg(t *testing.T) {
