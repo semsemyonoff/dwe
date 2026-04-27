@@ -38,6 +38,8 @@ type ExecContext struct {
 	Output *render.Writer
 	// LogWriter receives a plain-text copy of output (ANSI stripped). May be nil.
 	LogWriter io.Writer
+	// Stdin is the reader used for interactive prompts. Defaults to os.Stdin when nil.
+	Stdin io.Reader
 	// SkipConfirm suppresses all confirm builtins (e.g. when --yes is passed).
 	SkipConfirm bool
 	// ConfirmFunc is an optional callback for interactive confirmation.

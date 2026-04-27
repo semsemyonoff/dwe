@@ -200,6 +200,7 @@ it runs directly without showing a selector.`,
 				ProjectRoot:  projectRoot,
 				Stdout:       os.Stdout,
 				Stderr:       os.Stderr,
+				Stdin:        os.Stdin,
 			})
 		},
 		SilenceUsage: true,

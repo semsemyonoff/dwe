@@ -2,11 +2,13 @@ package commands
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
 )
 
 // ---------------------------------------------------------------------------
@@ -322,5 +324,169 @@ func TestNewRunner_Returns_WorkflowRunner(t *testing.T) {
 	}
 	if _, ok := runner.(*WorkflowRunner); !ok {
 		t.Errorf("expected *WorkflowRunner, got %T", runner)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Confirm step — TTY path (huh wrapper)
+// ---------------------------------------------------------------------------
+
+func TestWorkflowRunner_ConfirmStep_TTY_Confirmed(t *testing.T) {
+	origRC := runConfirm
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() {
+		runConfirm = origRC
+		ui.IsInteractiveFn = origIsInteractive
+	})
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		return true, nil
+	}
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.tty-confirm",
+		Group:     "wf",
+		LocalName: "tty-confirm",
+		Steps: []WorkflowStep{
+			{Confirm: "Do you want to continue?"},
+		},
+	}
+	reg := buildWorkflowRegistry(wf)
+
+	var outBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:      wf,
+		Params:   map[string]any{},
+		Context:  map[string]any{},
+		Render:   &tpl.RenderContext{},
+		Registry: reg,
+		Stdout:   &outBuf,
+		Stderr:   &outBuf,
+		Stdin:    bytes.NewBufferString(""),
+	}
+	err := (&WorkflowRunner{}).Run(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error on confirmed TTY prompt: %v", err)
+	}
+}
+
+func TestWorkflowRunner_ConfirmStep_TTY_Denied(t *testing.T) {
+	origRC := runConfirm
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() {
+		runConfirm = origRC
+		ui.IsInteractiveFn = origIsInteractive
+	})
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		return false, nil
+	}
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.tty-deny",
+		Group:     "wf",
+		LocalName: "tty-deny",
+		Steps: []WorkflowStep{
+			{Confirm: "Do you want to continue?"},
+		},
+	}
+	reg := buildWorkflowRegistry(wf)
+
+	var outBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:      wf,
+		Params:   map[string]any{},
+		Context:  map[string]any{},
+		Render:   &tpl.RenderContext{},
+		Registry: reg,
+		Stdout:   &outBuf,
+		Stderr:   &outBuf,
+		Stdin:    bytes.NewBufferString(""),
+	}
+	err := (&WorkflowRunner{}).Run(ctx)
+	if err == nil {
+		t.Fatal("expected error when user denies TTY confirm")
+	}
+	if !strings.Contains(err.Error(), "aborted by user") {
+		t.Errorf("expected 'aborted by user' in error; got %q", err.Error())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Confirm step — non-TTY path (bufio stdin fallback)
+// ---------------------------------------------------------------------------
+
+func TestWorkflowRunner_ConfirmStep_NonTTY_YInput(t *testing.T) {
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.nontty-y",
+		Group:     "wf",
+		LocalName: "nontty-y",
+		Steps: []WorkflowStep{
+			{Confirm: "Continue?"},
+		},
+	}
+	reg := buildWorkflowRegistry(wf)
+
+	var outBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:      wf,
+		Params:   map[string]any{},
+		Context:  map[string]any{},
+		Render:   &tpl.RenderContext{},
+		Registry: reg,
+		Stdout:   &outBuf,
+		Stderr:   &outBuf,
+		Stdin:    bytes.NewBufferString("y\n"),
+	}
+	err := (&WorkflowRunner{}).Run(ctx)
+	if err != nil {
+		t.Fatalf("expected no error for 'y' input; got %v", err)
+	}
+}
+
+func TestWorkflowRunner_ConfirmStep_NonTTY_NInput(t *testing.T) {
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.nontty-n",
+		Group:     "wf",
+		LocalName: "nontty-n",
+		Steps: []WorkflowStep{
+			{Confirm: "Continue?"},
+		},
+	}
+	reg := buildWorkflowRegistry(wf)
+
+	var outBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:      wf,
+		Params:   map[string]any{},
+		Context:  map[string]any{},
+		Render:   &tpl.RenderContext{},
+		Registry: reg,
+		Stdout:   &outBuf,
+		Stderr:   &outBuf,
+		Stdin:    bytes.NewBufferString("n\n"),
+	}
+	err := (&WorkflowRunner{}).Run(ctx)
+	if err == nil {
+		t.Fatal("expected error for 'n' input")
+	}
+	if !strings.Contains(err.Error(), "aborted by user") {
+		t.Errorf("expected 'aborted by user'; got %q", err.Error())
 	}
 }

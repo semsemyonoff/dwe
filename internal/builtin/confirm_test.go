@@ -3,10 +3,12 @@ package builtin
 import (
 	"bytes"
 	"errors"
+	"io"
 	"testing"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 )
 
 // newTestConfirmCtx returns an ExecContext for use in confirm builtin tests.
@@ -127,5 +129,124 @@ func TestConfirmBuiltin_NoConfirmFunc_SkipsWhenSkipConfirmSet(t *testing.T) {
 	err := confirmBuiltin{}.Run(nil, ctx)
 	if err != nil {
 		t.Errorf("expected nil with SkipConfirm=true and no ConfirmFunc, got %v", err)
+	}
+}
+
+// TestConfirmBuiltin_TTY_UsesRunConfirmWrapper verifies the huh path via injected wrapper.
+func TestConfirmBuiltin_TTY_UsesRunConfirmWrapper(t *testing.T) {
+	orig := runConfirm
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() {
+		runConfirm = orig
+		ui.IsInteractiveFn = origIsInteractive
+	})
+
+	// Force TTY detection to return true.
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	var called bool
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		called = true
+		return true, nil
+	}
+
+	out := &bytes.Buffer{}
+	ctx := ExecContext{
+		Config:      &config.DevboxConfig{},
+		ProjectRoot: "/tmp",
+		Output:      render.NewWriter(out),
+		Stdin:       bytes.NewBufferString(""), // non-nil, but IsInteractiveFn is faked
+	}
+	err := confirmBuiltin{}.Run(nil, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("expected runConfirm to be called in TTY mode")
+	}
+}
+
+// TestConfirmBuiltin_TTY_Denied verifies that runConfirm returning false aborts.
+func TestConfirmBuiltin_TTY_Denied(t *testing.T) {
+	orig := runConfirm
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() {
+		runConfirm = orig
+		ui.IsInteractiveFn = origIsInteractive
+	})
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		return false, nil
+	}
+
+	out := &bytes.Buffer{}
+	ctx := ExecContext{
+		Config:      &config.DevboxConfig{},
+		ProjectRoot: "/tmp",
+		Output:      render.NewWriter(out),
+		Stdin:       bytes.NewBufferString(""),
+	}
+	err := confirmBuiltin{}.Run(nil, ctx)
+	if err == nil || err.Error() != "aborted by user" {
+		t.Errorf("expected 'aborted by user', got %v", err)
+	}
+}
+
+// TestConfirmBuiltin_NonTTY_StdinY verifies that piped "y" input succeeds via fallback.
+func TestConfirmBuiltin_NonTTY_StdinY(t *testing.T) {
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	out := &bytes.Buffer{}
+	ctx := ExecContext{
+		Config:      &config.DevboxConfig{},
+		ProjectRoot: "/tmp",
+		Output:      render.NewWriter(out),
+		Stdin:       bytes.NewBufferString("y\n"),
+	}
+	err := confirmBuiltin{}.Run(nil, ctx)
+	if err != nil {
+		t.Errorf("expected nil for y input, got %v", err)
+	}
+}
+
+// TestConfirmBuiltin_NonTTY_StdinN verifies that piped "n" input aborts via fallback.
+func TestConfirmBuiltin_NonTTY_StdinN(t *testing.T) {
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	out := &bytes.Buffer{}
+	ctx := ExecContext{
+		Config:      &config.DevboxConfig{},
+		ProjectRoot: "/tmp",
+		Output:      render.NewWriter(out),
+		Stdin:       bytes.NewBufferString("n\n"),
+	}
+	err := confirmBuiltin{}.Run(nil, ctx)
+	if err == nil || err.Error() != "aborted by user" {
+		t.Errorf("expected 'aborted by user' for n input, got %v", err)
+	}
+}
+
+// TestConfirmBuiltin_PipedStdin_RoutesToFallback verifies that a non-os.File stdin
+// (e.g. bytes.Buffer from "echo y | devbox ...") always uses the non-TTY fallback.
+func TestConfirmBuiltin_PipedStdin_RoutesToFallback(t *testing.T) {
+	// IsInteractiveFn returns false for bytes.Buffer (not *os.File), so this
+	// test exercises the real IsInteractiveFn behavior with a bytes.Buffer.
+	out := &bytes.Buffer{}
+	ctx := ExecContext{
+		Config:      &config.DevboxConfig{},
+		ProjectRoot: "/tmp",
+		Output:      render.NewWriter(out),
+		Stdin:       bytes.NewBufferString("y\n"),
+	}
+	err := confirmBuiltin{}.Run(nil, ctx)
+	if err != nil {
+		t.Errorf("expected nil for piped y input, got %v", err)
 	}
 }

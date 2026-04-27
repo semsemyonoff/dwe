@@ -4,9 +4,13 @@ import (
 	"os"
 
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 )
+
+// runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
+var runConfirm = ui.RunConfirm
 
 func newPrintCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -97,14 +101,25 @@ func newPrintConfirmCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			w := render.Stdout()
-			if w.Confirm(args[0], os.Stdin) {
-				w.Success(okMsg)
-				return nil
+			w := render.NewWriter(cmd.OutOrStdout())
+			stdin := cmd.InOrStdin()
+			var confirmed bool
+			if ui.IsInteractiveFn(stdin) {
+				result, err := runConfirm(args[0], okMsg, stopMsg)
+				if err != nil {
+					return err
+				}
+				confirmed = result
+			} else {
+				confirmed = w.Confirm(args[0], stdin)
 			}
-			w.Error(stopMsg)
-			if !continueOnRefusal {
-				os.Exit(1)
+			if confirmed {
+				w.Success(okMsg)
+			} else {
+				w.Error(stopMsg)
+				if !continueOnRefusal {
+					os.Exit(1)
+				}
 			}
 			return nil
 		},

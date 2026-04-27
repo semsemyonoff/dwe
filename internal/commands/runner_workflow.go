@@ -7,7 +7,11 @@ import (
 	"strings"
 
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
 )
+
+// runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
+var runConfirm = ui.RunConfirm
 
 // WorkflowRunner executes type=workflow commands by running each step in sequence.
 //
@@ -29,7 +33,7 @@ func (r *WorkflowRunner) Run(ctx RunContext) error {
 
 	for i, step := range ctx.Cmd.Steps {
 		if step.Confirm != "" {
-			if err := r.runConfirm(ctx, step.Confirm); err != nil {
+			if err := r.runConfirmStep(ctx, step.Confirm); err != nil {
 				return fmt.Errorf("workflow %q step[%d] confirm: %w", ctx.Cmd.ID, i, err)
 			}
 			continue
@@ -43,18 +47,35 @@ func (r *WorkflowRunner) Run(ctx RunContext) error {
 	return nil
 }
 
-// runConfirm handles a confirm step.  In non-interactive mode the prompt is
-// skipped (auto-confirmed).  Otherwise the user must enter "y" or "Y" to
-// continue; any other input aborts the workflow.
-func (r *WorkflowRunner) runConfirm(ctx RunContext, message string) error {
+// runConfirmStep handles a confirm step. In non-interactive mode the prompt is
+// skipped (auto-confirmed). In interactive mode huh.Confirm is used. Otherwise
+// the plain [y/N] stdin fallback is used.
+func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 	if isNonInteractive() {
 		return nil
 	}
 
+	stdin := ctx.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+
+	if ui.IsInteractiveFn(stdin) {
+		confirmed, err := runConfirm(message, "Yes", "No")
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			return fmt.Errorf("aborted by user")
+		}
+		return nil
+	}
+
+	// Non-TTY fallback: plain [y/N] via bufio.Scanner.
 	out := stdout(ctx)
 	_, _ = fmt.Fprintf(out, "%s [y/N] ", message)
 
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(stdin)
 	if !scanner.Scan() {
 		return fmt.Errorf("aborted (no input)")
 	}
@@ -118,6 +139,7 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step Workfl
 		ProjectRoot:  ctx.ProjectRoot,
 		Stdout:       ctx.Stdout,
 		Stderr:       ctx.Stderr,
+		Stdin:        ctx.Stdin,
 	}
 
 	runner, err := NewRunner(cmd)

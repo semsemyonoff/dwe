@@ -48,6 +48,9 @@ type RunContext struct {
 	// are used instead.
 	Stdout io.Writer
 	Stderr io.Writer
+
+	// Stdin is the reader used for interactive prompts. When nil, os.Stdin is used.
+	Stdin io.Reader
 }
 
 // NewRunner returns the appropriate Runner implementation for the given command type.

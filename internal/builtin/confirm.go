@@ -3,7 +3,12 @@ package builtin
 import (
 	"fmt"
 	"os"
+
+	"devbox-cli/internal/ui"
 )
+
+// runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
+var runConfirm = ui.RunConfirm
 
 type confirmBuiltin struct{}
 
@@ -36,8 +41,27 @@ func (confirmBuiltin) Run(with map[string]any, ctx ExecContext) error {
 		return nil
 	}
 
-	// Plain/stdin fallback.
-	if ctx.Output.Confirm(msg, os.Stdin) {
+	stdin := ctx.Stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+
+	// Interactive TTY path: use huh.Confirm.
+	if ui.IsInteractiveFn(stdin) {
+		confirmed, err := runConfirm(msg, okMsg, stopMsg)
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			ctx.Output.Error(stopMsg)
+			return fmt.Errorf("aborted by user")
+		}
+		ctx.Output.Success(okMsg)
+		return nil
+	}
+
+	// Non-TTY fallback: plain stdin Y/n.
+	if ctx.Output.Confirm(msg, stdin) {
 		ctx.Output.Success(okMsg)
 		return nil
 	}

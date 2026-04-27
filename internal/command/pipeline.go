@@ -370,6 +370,7 @@ func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		ProjectRoot: workDir,
 		Output:      render.NewWriter(out),
 		LogWriter:   logWriter,
+		Stdin:       os.Stdin,
 		SkipConfirm: skipConfirm,
 	}
 	return builtin.Run(step.Builtin, step.With, ctx)
@@ -560,5 +561,6 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		ProjectRoot:  workDir,
 		Stdout:       stdout,
 		Stderr:       stderr,
+		Stdin:        os.Stdin,
 	})
 }

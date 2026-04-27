@@ -529,6 +529,7 @@ Mode controls copy behavior: 'default' skips existing files, 'update' copies alw
 				Config:      cfg,
 				ProjectRoot: projectRoot,
 				Output:      render.Stdout(),
+				Stdin:       os.Stdin,
 			}
 			with := map[string]any{"service": args[0], "mode": mode}
 			return builtin.Run("service_configs_copy", with, ctx)
