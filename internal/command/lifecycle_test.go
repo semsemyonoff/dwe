@@ -38,7 +38,7 @@ func TestRootLevelLifecycleCommandUse(t *testing.T) {
 		{"up", newUpCmd(flags), "up [services...]"},
 		{"down", newDownCmd(flags), "down"},
 		{"stop", newStopCmd(flags), "stop"},
-		{"restart", newRestartCmd(flags), "restart [services...]"},
+		{"restart", newRestartCmd(flags), "restart"},
 		{"logs", newLogsCmd(flags), "logs [services...]"},
 		{"ps", newPsCmd(flags), "ps"},
 		{"wait", newWaitCmd(flags), "wait"},

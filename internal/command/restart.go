@@ -3,21 +3,31 @@ package command
 import "github.com/spf13/cobra"
 
 func newRestartCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "restart [services...]",
-		Short: "Restart compose services",
-		Long: `Restart running compose services.
+	var yes bool
 
-When service names are provided, only those services are restarted.`,
-		Example: `  devbox restart
-  devbox restart app-main`,
+	cmd := &cobra.Command{
+		Use:   "restart",
+		Short: "Restart the project (stop, then run --no-update)",
+		Long: `Restart the project by running the full stop lifecycle then the full run lifecycle.
+
+The run leg always skips the git update probe (equivalent to 'devbox run --no-update').
+
+Use 'devbox docker restart' for the low-level compose restart passthrough.`,
+		Example:      `  devbox restart`,
+		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p, err := newDockerPipeline(flags, "restart")
-			if err != nil {
-				return err
-			}
-			return p.compose.Exec("restart", args...)
+			return runRestart(cmd, flags, yes)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
+	return cmd
+}
+
+func runRestart(cmd *cobra.Command, flags *rootFlags, yes bool) error {
+	if err := runStop(flags, yes); err != nil {
+		return err
+	}
+	return runRun(cmd, flags, true /* noUpdate */, "", yes)
 }
