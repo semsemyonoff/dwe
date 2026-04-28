@@ -6,10 +6,13 @@ func newUpCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "up [services...]",
 		Short: "Start compose services",
-		Long: `Start all compose services defined in the project (detached).
+		Long: `Low-level Docker Compose operation: start compose services (detached).
 
 When service names are provided, only those services are started.
-Equivalent to running 'devbox docker up' with the resolved compose files and project name.`,
+Equivalent to running 'devbox docker up' with the resolved compose files and project name.
+
+For the full project lifecycle (git update probe, hook phases, health wait, info display),
+use 'devbox run' instead. 'devbox up' is the raw compose passthrough.`,
 		Example: `  devbox up
   devbox up app-main
   devbox up app-main db`,
