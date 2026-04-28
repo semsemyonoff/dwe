@@ -394,6 +394,55 @@ func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 	}
 }
 
+// TestRunRun_ProbeError verifies that a fatal error from gitProbeFunc is propagated.
+func TestRunRun_ProbeError(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	writeLifecycleYML(t, devboxDir, "done")
+
+	origProbe := gitProbeFunc
+	t.Cleanup(func() { gitProbeFunc = origProbe })
+
+	gitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+		return git.Status{}, errors.New("probe failed")
+	}
+
+	flags := &rootFlags{configPath: cfgPath}
+	cmd := newRunCmd(flags)
+	err := runRun(cmd, flags, false, "off", false)
+	if err == nil {
+		t.Fatal("expected error from probe failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "git probe") {
+		t.Errorf("error should mention 'git probe', got: %v", err)
+	}
+}
+
+// TestRunRun_InvalidUpdateFlag verifies that an invalid --update mode value is rejected.
+func TestRunRun_InvalidUpdateFlag(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	writeLifecycleYML(t, devboxDir, "done")
+
+	flags := &rootFlags{configPath: cfgPath}
+	cmd := newRunCmd(flags)
+	err := runRun(cmd, flags, false, "bogus", false)
+	if err == nil {
+		t.Fatal("expected error for invalid --update mode, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid --update mode") {
+		t.Errorf("error should mention 'invalid --update mode', got: %v", err)
+	}
+}
+
 // TestRunRun_WarnOnFetchFailed verifies the warn path when fetch is attempted but fails.
 func TestRunRun_WarnOnFetchFailed(t *testing.T) {
 	dir := t.TempDir()

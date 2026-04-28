@@ -1520,9 +1520,6 @@ func TestLoadLifecycleConfig_happyPath(t *testing.T) {
 	if cfg.Run.Update.Mode != "prompt" {
 		t.Errorf("cfg.Run.Update.Mode = %q, want prompt", cfg.Run.Update.Mode)
 	}
-	if cfg.Run.Update.Strategy != "ff-only" {
-		t.Errorf("cfg.Run.Update.Strategy = %q, want ff-only", cfg.Run.Update.Strategy)
-	}
 	if !cfg.Run.ShowInfo {
 		t.Error("cfg.Run.ShowInfo should be true")
 	}
@@ -1581,8 +1578,8 @@ run:
 	}
 }
 
-func TestLoadLifecycleConfig_defaultModeAndStrategy(t *testing.T) {
-	// update block present but mode and strategy omitted — defaults should apply.
+func TestLoadLifecycleConfig_defaultMode(t *testing.T) {
+	// update block present but mode omitted — EffectiveMode should default to "prompt".
 	yml := `
 run:
   update:
@@ -1598,10 +1595,6 @@ run:
 	if err != nil {
 		t.Fatalf("LoadLifecycleConfig: %v", err)
 	}
-	if cfg.Run.Update.Strategy != "ff-only" {
-		t.Errorf("Update.Strategy = %q, want ff-only (default)", cfg.Run.Update.Strategy)
-	}
-	// Mode omitted — EffectiveMode should return "prompt"
 	if cfg.Run.EffectiveMode() != "prompt" {
 		t.Errorf("EffectiveMode() = %q, want prompt when mode omitted with enabled:true", cfg.Run.EffectiveMode())
 	}
@@ -1652,6 +1645,31 @@ stop:
 	}
 	if cfg.Stop.FinalMessage != "Project is stopped. Have a nice day!" {
 		t.Errorf("Stop.FinalMessage = %q, want default", cfg.Stop.FinalMessage)
+	}
+}
+
+func TestLoadLifecycleConfig_ContinueOnError_YAML(t *testing.T) {
+	// Verify that continue_on_error: true in YAML is correctly parsed by the loader.
+	yml := `
+run:
+  phases:
+    - name: hooks
+      steps:
+        - name: optional-hook
+          run: echo hello
+          continue_on_error: true
+`
+	path := writeLifecycleFixture(t, yml)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if len(cfg.Run.Phases) == 0 || len(cfg.Run.Phases[0].Steps) == 0 {
+		t.Fatal("expected at least one phase with one step")
+	}
+	step := cfg.Run.Phases[0].Steps[0]
+	if !step.ContinueOnError {
+		t.Errorf("step.ContinueOnError = false, want true (continue_on_error: true in YAML)")
 	}
 }
 

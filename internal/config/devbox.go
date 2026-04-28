@@ -710,11 +710,10 @@ type LifecycleStopConfig struct {
 
 // LifecycleUpdate configures the optional git update probe run at the start of devbox run.
 // Enabled is a pointer so absent (nil) is distinguishable from explicit false at load time.
-// Mode must be one of: prompt, auto, check, off. Strategy defaults to "ff-only".
+// Mode must be one of: prompt, auto, check, off.
 type LifecycleUpdate struct {
-	Enabled  *bool  `yaml:"enabled"`
-	Mode     string `yaml:"mode"`
-	Strategy string `yaml:"strategy"`
+	Enabled *bool  `yaml:"enabled"`
+	Mode    string `yaml:"mode"`
 }
 
 // LoadLifecycleConfig loads the lifecycle pipeline from devbox/lifecycle.yml.
@@ -742,11 +741,8 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 				t := true
 				cfg.Run.Update.Enabled = &t
 			}
-			if cfg.Run.Update.Strategy == "" {
-				cfg.Run.Update.Strategy = "ff-only"
-			}
 			if cfg.Run.Update.Mode != "" {
-				if !validUpdateMode(cfg.Run.Update.Mode) {
+				if !ValidUpdateMode(cfg.Run.Update.Mode) {
 					return nil, fmt.Errorf("lifecycle run: update.mode %q is invalid; must be one of: prompt, auto, check, off", cfg.Run.Update.Mode)
 				}
 			}
@@ -763,8 +759,8 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 	return &cfg, nil
 }
 
-// validUpdateMode reports whether s is one of the four allowed update mode values.
-func validUpdateMode(s string) bool {
+// ValidUpdateMode reports whether s is one of the four allowed update mode values.
+func ValidUpdateMode(s string) bool {
 	switch s {
 	case "prompt", "auto", "check", "off":
 		return true

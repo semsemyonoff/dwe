@@ -783,3 +783,79 @@ func TestPrintResetPlanShell_ContinueOnError(t *testing.T) {
 		}
 	}
 }
+
+// TestRunPipeline_PostStepHook_ReturnsError verifies that when a post-step hook returns
+// an error, runPipeline propagates it (not ErrSilent).
+func TestRunPipeline_PostStepHook_ReturnsError(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "env"}
+	steps := buildResolvedSteps(phase, []config.DeployStep{noopStep("render-env")})
+
+	hookErr := errors.New("hook failed")
+	hooks := map[string]func() error{
+		"render-env": func() error { return hookErr },
+	}
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, hooks)
+	if err == nil {
+		t.Fatal("expected error from hook, got nil")
+	}
+	if !errors.Is(err, hookErr) {
+		t.Errorf("expected hook error %v, got %v", hookErr, err)
+	}
+}
+
+// TestRunPipeline_Check_Fails verifies that when a step succeeds but its Check
+// condition evaluates to false, FailStep is called and ErrSilent is returned.
+func TestRunPipeline_Check_Fails(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+
+	// "dir-missing /": root always exists, so dir-missing returns false.
+	step := config.DeployStep{Name: "check-step", Run: "true", Check: "dir-missing /"}
+	steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent when check fails, got %v", err)
+	}
+
+	failFound := false
+	for _, e := range rep.events {
+		if e.kind == "FailStep" && e.step.Name == "check-step" {
+			failFound = true
+		}
+	}
+	if !failFound {
+		t.Errorf("FailStep not recorded when check fails; kinds: %v", rep.kindSeq())
+	}
+}
+
+// TestRunPipeline_Check_EvalError verifies that when EvalRuntime returns an error,
+// FailStep is called and ErrSilent is returned.
+func TestRunPipeline_Check_EvalError(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+
+	// An invalid/unknown condition function name causes EvalRuntime to error.
+	step := config.DeployStep{Name: "check-step", Run: "true", Check: "unknown-condition-fn /some/path"}
+	steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent when check eval errors, got %v", err)
+	}
+
+	failFound := false
+	for _, e := range rep.events {
+		if e.kind == "FailStep" && e.step.Name == "check-step" {
+			failFound = true
+		}
+	}
+	if !failFound {
+		t.Errorf("FailStep not recorded when check eval errors; kinds: %v", rep.kindSeq())
+	}
+}

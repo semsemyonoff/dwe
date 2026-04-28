@@ -83,6 +83,10 @@ func runRun(cmd *cobra.Command, flags *rootFlags, noUpdate bool, updateMode stri
 		return fmt.Errorf("lifecycle.yml has no `run:` section — see devbox/lifecycle.example.yml")
 	}
 
+	if updateMode != "" && !config.ValidUpdateMode(updateMode) {
+		return fmt.Errorf("invalid --update mode %q: must be one of: prompt, auto, check, off", updateMode)
+	}
+
 	effectiveMode := resolveUpdateMode(lifecycleCfg.Run, noUpdate, updateMode)
 
 	// Run the git update probe (fetch only when mode is not off).
@@ -117,6 +121,8 @@ func runRun(cmd *cobra.Command, flags *rootFlags, noUpdate bool, updateMode stri
 			} else {
 				pulled = moved
 			}
+		} else if confirmErr != nil && !errors.Is(confirmErr, ui.ErrCancelled) {
+			w.Warning(fmt.Sprintf("confirmation prompt failed: %v — skipping update", confirmErr))
 		}
 	default:
 		// git.ActionSkip: nothing to do.

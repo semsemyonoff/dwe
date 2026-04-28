@@ -46,6 +46,7 @@ func (execRunner) Run(ctx context.Context, dir string, args ...string) (string, 
 var defaultRunner runner = execRunner{}
 
 const fetchTimeout = 15 * time.Second
+const pullTimeout = 2 * time.Minute
 
 // Probe inspects the git repository at workDir and returns a Status.
 //
@@ -141,7 +142,9 @@ func pullFFOnlyWith(workDir string, r runner) (bool, error) {
 		return false, fmt.Errorf("git rev-parse HEAD (before): %w", err)
 	}
 
-	_, _, err = r.Run(ctx, workDir, "git", "pull", "--ff-only")
+	pullCtx, cancel := context.WithTimeout(ctx, pullTimeout)
+	defer cancel()
+	_, _, err = r.Run(pullCtx, workDir, "git", "pull", "--ff-only")
 	if err != nil {
 		return false, fmt.Errorf("git pull --ff-only: %w", err)
 	}
