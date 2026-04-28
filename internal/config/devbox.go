@@ -51,8 +51,19 @@ type IDEEditorConfig struct {
 
 // DeployConfig holds the full deploy pipeline loaded from devbox/deploy.yml.
 // It is loaded separately and not part of the 3-layer config merge.
+//
+// Log enables/disables file logging at logs/<pipeline>.log for the pipeline run.
+// nil means "use loader default": LoadDeployConfig defaults to true,
+// LoadResetConfig defaults to false. Set explicitly via top-level `log: true|false`.
 type DeployConfig struct {
+	Log    *bool         `yaml:"log"`
 	Phases []DeployPhase `yaml:"phases"`
+}
+
+// LogEnabled reports whether file logging is enabled. It assumes the loader
+// has normalized the Log pointer; nil is treated as false defensively.
+func (c *DeployConfig) LogEnabled() bool {
+	return c != nil && c.Log != nil && *c.Log
 }
 
 // DeployPhase groups a set of sequential deploy steps.
@@ -678,7 +689,14 @@ type LifecycleRunConfig struct {
 	Update       *LifecycleUpdate `yaml:"update"`
 	ShowInfo     bool             `yaml:"show_info"`
 	FinalMessage string           `yaml:"final_message"`
+	Log          *bool            `yaml:"log"`
 	Phases       []DeployPhase    `yaml:"phases"`
+}
+
+// LogEnabled reports whether file logging is enabled for the run pipeline.
+// Defaults to false when unset; loader normalizes nil to false.
+func (cfg *LifecycleRunConfig) LogEnabled() bool {
+	return cfg != nil && cfg.Log != nil && *cfg.Log
 }
 
 // EffectiveMode returns the resolved update mode before any CLI flag is applied.
@@ -705,7 +723,14 @@ func (cfg *LifecycleRunConfig) EffectiveMode() string {
 // LifecycleStopConfig holds the stop lifecycle pipeline configuration.
 type LifecycleStopConfig struct {
 	FinalMessage string        `yaml:"final_message"`
+	Log          *bool         `yaml:"log"`
 	Phases       []DeployPhase `yaml:"phases"`
+}
+
+// LogEnabled reports whether file logging is enabled for the stop pipeline.
+// Defaults to false when unset; loader normalizes nil to false.
+func (cfg *LifecycleStopConfig) LogEnabled() bool {
+	return cfg != nil && cfg.Log != nil && *cfg.Log
 }
 
 // LifecycleUpdate configures the optional git update probe run at the start of devbox run.
@@ -736,6 +761,10 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 		if cfg.Run.FinalMessage == "" {
 			cfg.Run.FinalMessage = "Project is ready for work!"
 		}
+		if cfg.Run.Log == nil {
+			f := false
+			cfg.Run.Log = &f
+		}
 		if cfg.Run.Update != nil {
 			if cfg.Run.Update.Enabled == nil {
 				t := true
@@ -755,6 +784,10 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 		if cfg.Stop.FinalMessage == "" {
 			cfg.Stop.FinalMessage = "Project is stopped. Have a nice day!"
 		}
+		if cfg.Stop.Log == nil {
+			f := false
+			cfg.Stop.Log = &f
+		}
 	}
 	return &cfg, nil
 }
@@ -771,21 +804,27 @@ func ValidUpdateMode(s string) bool {
 // LoadDeployConfig loads the deploy pipeline from a deploy.yml file.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
+//
+// File logging defaults to enabled (Log=true) when unset. Override with
+// `log: false` at the top of deploy.yml.
 func LoadDeployConfig(deployPath string) (*DeployConfig, error) {
-	return loadPipelineConfig(deployPath, true)
+	return loadPipelineConfig(deployPath, true, true)
 }
 
 // LoadResetConfig loads the reset pipeline from a reset.yml file.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
 // Reset pipelines must not contain deploy_services phases.
+//
+// File logging defaults to disabled (Log=false). Enable with `log: true` at the top.
 func LoadResetConfig(resetPath string) (*DeployConfig, error) {
-	return loadPipelineConfig(resetPath, false)
+	return loadPipelineConfig(resetPath, false, false)
 }
 
 // loadPipelineConfig is the shared loader for deploy and reset pipelines.
 // When allowDeployServices is false, deploy_services phases are rejected.
-func loadPipelineConfig(path string, allowDeployServices bool) (*DeployConfig, error) {
+// defaultLog is applied when the YAML omits the top-level log: field.
+func loadPipelineConfig(path string, allowDeployServices bool, defaultLog bool) (*DeployConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -796,6 +835,10 @@ func loadPipelineConfig(path string, allowDeployServices bool) (*DeployConfig, e
 	}
 	if err := validatePhaseSteps(cfg.Phases, allowDeployServices); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if cfg.Log == nil {
+		v := defaultLog
+		cfg.Log = &v
 	}
 	return &cfg, nil
 }

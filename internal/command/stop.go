@@ -61,7 +61,7 @@ func runStop(flags *rootFlags, yes bool) error {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
 
-	if err := runLifecyclePhases(cfg, reg, workDir, lifecycleCfg.Stop.Phases, "stop", "stop", yes); err != nil {
+	if err := runLifecyclePhases(cfg, reg, workDir, lifecycleCfg.Stop.Phases, "stop", "stop", yes, lifecycleCfg.Stop.LogEnabled()); err != nil {
 		return err
 	}
 

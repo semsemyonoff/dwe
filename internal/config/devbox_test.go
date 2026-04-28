@@ -1843,3 +1843,126 @@ func TestMergeDeduplicatedStrings_allDuplicates(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
+
+// writePipelineFixture writes content to a temporary <name>.yml and returns the path.
+func writePipelineFixture(t *testing.T, name, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, name+".yml")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	return path
+}
+
+// TestLoadDeployConfig_logDefaultEnabled verifies that omitting `log:` in
+// deploy.yml defaults to logging enabled.
+func TestLoadDeployConfig_logDefaultEnabled(t *testing.T) {
+	path := writePipelineFixture(t, "deploy", "phases: []\n")
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	if !cfg.LogEnabled() {
+		t.Errorf("deploy log should default to enabled")
+	}
+}
+
+// TestLoadDeployConfig_logExplicitFalse verifies that `log: false` disables it.
+func TestLoadDeployConfig_logExplicitFalse(t *testing.T) {
+	path := writePipelineFixture(t, "deploy", "log: false\nphases: []\n")
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	if cfg.LogEnabled() {
+		t.Errorf("deploy log should be disabled when log: false")
+	}
+}
+
+// TestLoadResetConfig_logDefaultDisabled verifies that omitting `log:` in
+// reset.yml defaults to logging disabled.
+func TestLoadResetConfig_logDefaultDisabled(t *testing.T) {
+	path := writePipelineFixture(t, "reset", "phases: []\n")
+	cfg, err := LoadResetConfig(path)
+	if err != nil {
+		t.Fatalf("LoadResetConfig: %v", err)
+	}
+	if cfg.LogEnabled() {
+		t.Errorf("reset log should default to disabled")
+	}
+}
+
+// TestLoadResetConfig_logExplicitTrue verifies that `log: true` enables it.
+func TestLoadResetConfig_logExplicitTrue(t *testing.T) {
+	path := writePipelineFixture(t, "reset", "log: true\nphases: []\n")
+	cfg, err := LoadResetConfig(path)
+	if err != nil {
+		t.Fatalf("LoadResetConfig: %v", err)
+	}
+	if !cfg.LogEnabled() {
+		t.Errorf("reset log should be enabled when log: true")
+	}
+}
+
+// TestLoadLifecycleConfig_logDefaults verifies run/stop logging defaults to
+// disabled when the `log:` field is omitted.
+func TestLoadLifecycleConfig_logDefaults(t *testing.T) {
+	yml := `
+run:
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+stop:
+  phases:
+    - name: stop
+      steps:
+        - name: down
+          devbox: "docker down"
+`
+	path := writeLifecycleFixture(t, yml)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if cfg.Run.LogEnabled() {
+		t.Errorf("run log should default to disabled")
+	}
+	if cfg.Stop.LogEnabled() {
+		t.Errorf("stop log should default to disabled")
+	}
+}
+
+// TestLoadLifecycleConfig_logExplicit verifies that `log: true` is respected
+// for both run and stop.
+func TestLoadLifecycleConfig_logExplicit(t *testing.T) {
+	yml := `
+run:
+  log: true
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+stop:
+  log: true
+  phases:
+    - name: stop
+      steps:
+        - name: down
+          devbox: "docker down"
+`
+	path := writeLifecycleFixture(t, yml)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if !cfg.Run.LogEnabled() {
+		t.Errorf("run log should be enabled when log: true")
+	}
+	if !cfg.Stop.LogEnabled() {
+		t.Errorf("stop log should be enabled when log: true")
+	}
+}

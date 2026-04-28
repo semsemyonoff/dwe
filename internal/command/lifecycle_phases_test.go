@@ -11,8 +11,8 @@ import (
 )
 
 // TestRunLifecyclePhases_HappyPath verifies that runLifecyclePhases returns nil,
-// writes a non-empty log file at logs/<logFileName>.log, and the log contains
-// ANSI-stripped output for the executed step.
+// writes a non-empty log file at logs/<logFileName>.log when logEnabled is true,
+// and the log contains ANSI-stripped output for the executed step.
 func TestRunLifecyclePhases_HappyPath(t *testing.T) {
 	workDir := t.TempDir()
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
@@ -26,7 +26,7 @@ func TestRunLifecyclePhases_HappyPath(t *testing.T) {
 		},
 	}
 
-	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false)
+	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -60,12 +60,12 @@ func TestRunLifecyclePhases_AbortingStepFails(t *testing.T) {
 		},
 	}
 
-	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false)
+	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false, true)
 	if !errors.Is(err, ErrSilent) {
 		t.Fatalf("want ErrSilent, got %v", err)
 	}
 
-	// Log file must still be created even on failure.
+	// Log file must still be created even on failure when logging is enabled.
 	logPath := filepath.Join(workDir, "logs", "run.log")
 	if _, statErr := os.Stat(logPath); statErr != nil {
 		t.Errorf("log file not created on failure: %v", statErr)
@@ -89,7 +89,7 @@ func TestRunLifecyclePhases_ContinueOnError(t *testing.T) {
 		},
 	}
 
-	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false)
+	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false, true)
 	if err != nil {
 		t.Fatalf("want nil (continue_on_error), got %v", err)
 	}
@@ -105,7 +105,7 @@ func TestRunLifecyclePhases_LogFileNameUsed(t *testing.T) {
 		{Name: "stop", Steps: []config.DeployStep{{Name: "noop", Run: "true"}}},
 	}
 
-	err := runLifecyclePhases(cfg, nil, workDir, phases, "stop", "stop", false)
+	err := runLifecyclePhases(cfg, nil, workDir, phases, "stop", "stop", false, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -121,12 +121,13 @@ func TestRunLifecyclePhases_LogFileNameUsed(t *testing.T) {
 	}
 }
 
-// TestRunLifecyclePhases_EmptyPhases returns nil immediately and creates a log file.
+// TestRunLifecyclePhases_EmptyPhases returns nil immediately and creates a log file
+// when logging is enabled.
 func TestRunLifecyclePhases_EmptyPhases(t *testing.T) {
 	workDir := t.TempDir()
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
-	err := runLifecyclePhases(cfg, nil, workDir, nil, "run", "run", false)
+	err := runLifecyclePhases(cfg, nil, workDir, nil, "run", "run", false, true)
 	if err != nil {
 		t.Fatalf("unexpected error with empty phases: %v", err)
 	}
@@ -134,5 +135,50 @@ func TestRunLifecyclePhases_EmptyPhases(t *testing.T) {
 	logPath := filepath.Join(workDir, "logs", "run.log")
 	if _, statErr := os.Stat(logPath); statErr != nil {
 		t.Errorf("log file not created for empty phases: %v", statErr)
+	}
+}
+
+// TestRunLifecyclePhases_LogDisabled verifies that no log file (and no logs dir)
+// is created when logEnabled is false, even if a step is executed successfully.
+func TestRunLifecyclePhases_LogDisabled(t *testing.T) {
+	workDir := t.TempDir()
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	phases := []config.DeployPhase{
+		{Name: "start", Steps: []config.DeployStep{{Name: "noop", Run: "true"}}},
+	}
+
+	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	logPath := filepath.Join(workDir, "logs", "run.log")
+	if _, statErr := os.Stat(logPath); !os.IsNotExist(statErr) {
+		t.Errorf("log file should not exist when logging is disabled, got stat err: %v", statErr)
+	}
+	logsDir := filepath.Join(workDir, "logs")
+	if _, statErr := os.Stat(logsDir); !os.IsNotExist(statErr) {
+		t.Errorf("logs/ dir should not be created when logging is disabled, got stat err: %v", statErr)
+	}
+}
+
+// TestRunLifecyclePhases_LogDisabledFailingStep verifies that a step failure with
+// logging disabled returns ErrSilent and does not create a log file.
+func TestRunLifecyclePhases_LogDisabledFailingStep(t *testing.T) {
+	workDir := t.TempDir()
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	phases := []config.DeployPhase{
+		{Name: "start", Steps: []config.DeployStep{{Name: "fail", Run: "exit 1"}}},
+	}
+
+	err := runLifecyclePhases(cfg, nil, workDir, phases, "run", "run", false, false)
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent, got %v", err)
+	}
+	logPath := filepath.Join(workDir, "logs", "run.log")
+	if _, statErr := os.Stat(logPath); !os.IsNotExist(statErr) {
+		t.Errorf("log file should not exist when logging is disabled, got stat err: %v", statErr)
 	}
 }

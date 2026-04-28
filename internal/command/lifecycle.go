@@ -3,20 +3,18 @@ package command
 import (
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 
 	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
 	pipeline "devbox-cli/internal/pipeline"
-	"devbox-cli/internal/render"
 )
 
 // runLifecyclePhases resolves and executes a set of lifecycle pipeline phases.
 //
 // name is the human-readable label passed to the reporter (e.g. "run", "stop").
 // logFileName is the base name (without extension) for the log file written to logs/.
+// logEnabled toggles file logging at logs/<logFileName>.log; when false, output
+// goes only to stdout and no log file is created.
 // Phases are resolved with an empty service (lifecycle is orchestrator-only).
 //
 // Returns ErrSilent when any aborting step fails (reporter has already printed
@@ -29,6 +27,7 @@ func runLifecyclePhases(
 	name string,
 	logFileName string,
 	skipConfirm bool,
+	logEnabled bool,
 ) error {
 	var steps []resolvedStep
 	for _, phase := range phases {
@@ -39,28 +38,23 @@ func runLifecyclePhases(
 		steps = append(steps, resolved...)
 	}
 
-	logsDir := filepath.Join(workDir, "logs")
-	if err := os.MkdirAll(logsDir, 0o755); err != nil {
-		return fmt.Errorf("creating logs directory %s: %w", logsDir, err)
-	}
-	logPath := filepath.Join(logsDir, logFileName+".log")
-	logFile, err := os.Create(logPath)
+	w, logWriter, logPath, cleanup, err := openPipelineLog(workDir, logFileName, logEnabled)
 	if err != nil {
-		return fmt.Errorf("creating lifecycle log %s: %w", logPath, err)
+		return err
 	}
-	defer func() { _ = logFile.Close() }()
+	defer cleanup()
 
-	tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
-	w := render.NewWriter(tee)
 	rep := pipeline.NewPlainReporter(w)
 
-	if err := runPipeline(steps, rep, name, cfg, reg, workDir, logFile, skipConfirm, nil); err != nil {
-		if errors.Is(err, ErrSilent) {
+	if err := runPipeline(steps, rep, name, cfg, reg, workDir, logWriter, skipConfirm, nil); err != nil {
+		if errors.Is(err, ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}
 		return err
 	}
 
-	w.Info("Log saved to: " + logPath)
+	if logEnabled {
+		w.Info("Log saved to: " + logPath)
+	}
 	return nil
 }

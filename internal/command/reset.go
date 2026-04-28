@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -67,12 +66,19 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 // newResetRunCmd creates the `devbox reset run` command.
 // Executes the reset pipeline from devbox/reset.yml.
 // Use --yes to skip confirmation prompts.
+//
+// File logging is controlled by the top-level `log:` field in devbox/reset.yml
+// (default: disabled). Enable with `log: true` to write logs/reset.log.
 func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
 
 	cmd := &cobra.Command{
-		Use:          "run",
-		Short:        "Execute the reset pipeline",
+		Use:   "run",
+		Short: "Execute the reset pipeline",
+		Long: `Execute the reset pipeline from devbox/reset.yml.
+
+File logging is disabled by default for reset. Enable it with 'log: true' at
+the top of devbox/reset.yml; output will be written to logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -82,7 +88,7 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 			}
 			workDir := filepath.Dir(flags.configPath)
 
-			steps, err := resolveResetPlan(cfg)
+			resetCfg, steps, err := loadAndResolveResetPlan(cfg)
 			if err != nil {
 				return fmt.Errorf("resolving reset plan: %w", err)
 			}
@@ -92,30 +98,25 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
 
-			logsDir := filepath.Join(workDir, "logs")
-			if err := os.MkdirAll(logsDir, 0o755); err != nil {
-				return fmt.Errorf("creating logs directory %s: %w", logsDir, err)
-			}
-			logPath := filepath.Join(logsDir, "reset.log")
-			logFile, err := os.Create(logPath)
+			logEnabled := resetCfg.LogEnabled()
+			w, logWriter, logPath, cleanup, err := openPipelineLog(workDir, "reset", logEnabled)
 			if err != nil {
-				return fmt.Errorf("creating reset log %s: %w", logPath, err)
+				return err
 			}
-			defer func() { _ = logFile.Close() }()
-
-			tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
-			w := render.NewWriter(tee)
+			defer cleanup()
 
 			rep := pipeline.NewPlainReporter(w)
 
-			if err := runPipeline(steps, rep, "reset", cfg, reg, workDir, logFile, yes, nil); err != nil {
-				if errors.Is(err, ErrSilent) {
+			if err := runPipeline(steps, rep, "reset", cfg, reg, workDir, logWriter, yes, nil); err != nil {
+				if errors.Is(err, ErrSilent) && logEnabled {
 					w.Warning("Full output saved to: " + logPath)
 				}
 				return err
 			}
 
-			w.Info("Reset log saved to: " + logPath)
+			if logEnabled {
+				w.Info("Reset log saved to: " + logPath)
+			}
 			return nil
 		},
 	}
@@ -236,27 +237,35 @@ func newResetConfigCheckCmd(flags *rootFlags) *cobra.Command {
 // resolveResetPlan builds the ordered step list from the reset pipeline config.
 // Loads devbox/reset.yml and resolves all phases/steps.
 func resolveResetPlan(cfg *config.DevboxConfig) ([]resolvedStep, error) {
+	_, steps, err := loadAndResolveResetPlan(cfg)
+	return steps, err
+}
+
+// loadAndResolveResetPlan loads devbox/reset.yml and resolves its phases.
+// Returns the loaded reset config (for inspecting fields like Log) alongside
+// the resolved step list.
+func loadAndResolveResetPlan(cfg *config.DevboxConfig) (*config.DeployConfig, []resolvedStep, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
-		return nil, fmt.Errorf("internal: __configPath missing from config")
+		return nil, nil, fmt.Errorf("internal: __configPath missing from config")
 	}
 	baseDir := filepath.Dir(cfgPath)
 	resetPath := filepath.Join(baseDir, "devbox", "reset.yml")
 
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {
-		return nil, fmt.Errorf("loading reset config %s: %w", resetPath, err)
+		return nil, nil, fmt.Errorf("loading reset config %s: %w", resetPath, err)
 	}
 
 	var result []resolvedStep
 	for _, phase := range resetCfg.Phases {
 		resolved, err := resolvePhaseSteps(cfg, phase, "")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		result = append(result, resolved...)
 	}
-	return result, nil
+	return resetCfg, result, nil
 }
 
 // findResetStep looks up a step by <phase>/<step> address in the reset config.

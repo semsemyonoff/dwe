@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -219,8 +218,11 @@ func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 // newDeployRunCmd creates the `devbox deploy run` command.
 // It executes the resolved deploy plan step by step, printing phase/step
 // progress and success messages directly — without generating a shell script.
-// Devbox status messages are teed to deploy.log. Child process output
-// (docker, make) goes directly to os.Stdout/os.Stderr so TTY detection works.
+//
+// File logging is controlled by the top-level `log:` field in devbox/deploy.yml
+// (default: enabled). When enabled, devbox status messages are teed to
+// logs/deploy.log; child process output (docker, make) goes directly to
+// os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var serviceName string
 
@@ -229,9 +231,11 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 		Short: "Execute the deploy plan",
 		Long: `Execute the full deploy pipeline from devbox/deploy.yml phase by phase.
 
-Steps are run in declaration order. Progress and status messages are written to deploy.log.
-The .env file is regenerated as the implicit first step. Use --service to run only the
-steps relevant to a specific service.`,
+Steps are run in declaration order. The .env file is regenerated as the implicit
+first step. Use --service to run only the steps relevant to a specific service.
+
+File logging is enabled by default for deploy and writes to logs/deploy.log.
+Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 		Example: `  devbox deploy run
   devbox deploy run --service main`,
 		Args:         cobra.NoArgs,
@@ -269,22 +273,12 @@ steps relevant to a specific service.`,
 				return fmt.Errorf("loading command registry: %w", err)
 			}
 
-			logsDir := filepath.Join(workDir, "logs")
-			if err := os.MkdirAll(logsDir, 0o755); err != nil {
-				return fmt.Errorf("creating logs directory %s: %w", logsDir, err)
-			}
-			logPath := filepath.Join(logsDir, "deploy.log")
-
-			logFile, err := os.Create(logPath)
+			logEnabled := cfg.Deploy.LogEnabled()
+			w, logWriter, logPath, cleanup, err := openPipelineLog(workDir, "deploy", logEnabled)
 			if err != nil {
-				return fmt.Errorf("creating deploy log %s: %w", logPath, err)
+				return err
 			}
-			defer func() { _ = logFile.Close() }()
-
-			// Devbox messages go to both terminal and log file.
-			// Child process output goes directly to os.Stdout (see execStep).
-			tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
-			w := render.NewWriter(tee)
+			defer cleanup()
 
 			rep := pipeline.NewPlainReporter(w)
 
@@ -296,14 +290,16 @@ steps relevant to a specific service.`,
 				},
 			}
 
-			if err := runPipeline(steps, rep, "deploy", cfg, reg, workDir, logFile, false, postStepHooks); err != nil {
-				if errors.Is(err, ErrSilent) {
+			if err := runPipeline(steps, rep, "deploy", cfg, reg, workDir, logWriter, false, postStepHooks); err != nil {
+				if errors.Is(err, ErrSilent) && logEnabled {
 					w.Warning("Full output saved to: " + logPath)
 				}
 				return err
 			}
 
-			w.Info("Deploy log saved to: " + logPath)
+			if logEnabled {
+				w.Info("Deploy log saved to: " + logPath)
+			}
 			return nil
 		},
 	}

@@ -148,7 +148,7 @@ func runRun(cmd *cobra.Command, flags *rootFlags, noUpdate bool, updateMode stri
 	}
 
 	// Execute lifecycle run phases using the (possibly reloaded) config.
-	if err := runLifecyclePhases(cfg, reg, workDir, lifecycleCfg.Run.Phases, "run", "run", yes); err != nil {
+	if err := runLifecyclePhases(cfg, reg, workDir, lifecycleCfg.Run.Phases, "run", "run", yes, lifecycleCfg.Run.LogEnabled()); err != nil {
 		return err
 	}
 
