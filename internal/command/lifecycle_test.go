@@ -11,7 +11,7 @@ import (
 func TestRootLevelLifecycleCommandsExist(t *testing.T) {
 	root := NewRootCmd()
 
-	want := []string{"up", "down", "stop", "restart", "logs", "ps", "wait"}
+	want := []string{"run", "up", "down", "stop", "restart", "logs", "ps", "wait"}
 
 	nameSet := make(map[string]bool)
 	for _, c := range root.Commands() {

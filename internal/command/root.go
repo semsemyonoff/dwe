@@ -77,6 +77,7 @@ Run 'devbox info' for the full info dashboard.`,
 	addCmd(root, groupCore, newVersionCmd())
 
 	// Environment group: lifecycle and shell access.
+	addCmd(root, groupEnvironment, newRunCmd(flags))
 	addCmd(root, groupEnvironment, newUpCmd(flags))
 	addCmd(root, groupEnvironment, newDownCmd(flags))
 	addCmd(root, groupEnvironment, newStopCmd(flags))

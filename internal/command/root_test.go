@@ -39,7 +39,7 @@ func TestCommandGroups(t *testing.T) {
 	}
 
 	// Environment group: lifecycle + shell + status
-	for _, name := range []string{"up", "down", "stop", "restart", "logs", "ps", "wait", "shell", "status"} {
+	for _, name := range []string{"run", "up", "down", "stop", "restart", "logs", "ps", "wait", "shell", "status"} {
 		if cmdGroupID[name] != groupEnvironment {
 			t.Errorf("command %q groupID = %q, want %q", name, cmdGroupID[name], groupEnvironment)
 		}
