@@ -1473,7 +1473,6 @@ run:
   update:
     enabled: true
     mode: prompt
-    strategy: ff-only
   show_info: true
   final_message: "Project is ready for work!"
   phases:

@@ -89,43 +89,42 @@ func runRun(cmd *cobra.Command, flags *rootFlags, noUpdate bool, updateMode stri
 
 	effectiveMode := resolveUpdateMode(lifecycleCfg.Run, noUpdate, updateMode)
 
-	// Run the git update probe (fetch only when mode is not off).
-	fetch := effectiveMode != "off"
-	status, err := gitProbeFunc(workDir, fetch)
-	if err != nil {
-		return fmt.Errorf("git probe: %w", err)
-	}
-	action, msg := git.Decide(status, git.UpdateMode(effectiveMode), ui.IsInteractiveFn(os.Stdin))
-
 	w := render.Stdout()
 	var pulled bool
-	switch action {
-	case git.ActionWarn:
-		w.Warning(msg)
-	case git.ActionPullAuto:
-		moved, pullErr := gitPullFFOnlyFunc(workDir)
-		if pullErr != nil {
-			w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
-		} else {
-			pulled = moved
+	if effectiveMode != "off" {
+		status, err := gitProbeFunc(workDir, true)
+		if err != nil {
+			return fmt.Errorf("git probe: %w", err)
 		}
-	case git.ActionPullPrompt:
-		confirmed, confirmErr := ui.RunConfirm(
-			fmt.Sprintf("Update available: %s — pull now?", msg),
-			"Pull", "Skip",
-		)
-		if confirmErr == nil && confirmed {
+		action, msg := git.Decide(status, git.UpdateMode(effectiveMode), ui.IsInteractiveFn(os.Stdin))
+		switch action {
+		case git.ActionWarn:
+			w.Warning(msg)
+		case git.ActionPullAuto:
 			moved, pullErr := gitPullFFOnlyFunc(workDir)
 			if pullErr != nil {
 				w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
 			} else {
 				pulled = moved
 			}
-		} else if confirmErr != nil && !errors.Is(confirmErr, ui.ErrCancelled) {
-			w.Warning(fmt.Sprintf("confirmation prompt failed: %v — skipping update", confirmErr))
+		case git.ActionPullPrompt:
+			confirmed, confirmErr := ui.RunConfirm(
+				fmt.Sprintf("Update available: %s — pull now?", msg),
+				"Pull", "Skip",
+			)
+			if confirmErr == nil && confirmed {
+				moved, pullErr := gitPullFFOnlyFunc(workDir)
+				if pullErr != nil {
+					w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
+				} else {
+					pulled = moved
+				}
+			} else if confirmErr != nil && !errors.Is(confirmErr, ui.ErrCancelled) {
+				w.Warning(fmt.Sprintf("confirmation prompt failed: %v — skipping update", confirmErr))
+			}
+		default:
+			// git.ActionSkip: nothing to do.
 		}
-	default:
-		// git.ActionSkip: nothing to do.
 	}
 
 	// If pull moved HEAD, reload all configs from disk.

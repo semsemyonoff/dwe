@@ -394,7 +394,8 @@ func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 	}
 }
 
-// TestRunRun_ProbeError verifies that a fatal error from gitProbeFunc is propagated.
+// TestRunRun_ProbeError verifies that a fatal error from gitProbeFunc is propagated
+// when the probe is actually enabled (mode != "off").
 func TestRunRun_ProbeError(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
@@ -413,7 +414,8 @@ func TestRunRun_ProbeError(t *testing.T) {
 
 	flags := &rootFlags{configPath: cfgPath}
 	cmd := newRunCmd(flags)
-	err := runRun(cmd, flags, false, "off", false)
+	// Use "auto" so the probe runs; "off" would skip the probe entirely.
+	err := runRun(cmd, flags, false, "auto", false)
 	if err == nil {
 		t.Fatal("expected error from probe failure, got nil")
 	}

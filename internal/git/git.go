@@ -144,8 +144,11 @@ func pullFFOnlyWith(workDir string, r runner) (bool, error) {
 
 	pullCtx, cancel := context.WithTimeout(ctx, pullTimeout)
 	defer cancel()
-	_, _, err = r.Run(pullCtx, workDir, "git", "pull", "--ff-only")
+	_, stderr, err := r.Run(pullCtx, workDir, "git", "pull", "--ff-only")
 	if err != nil {
+		if stderr != "" {
+			return false, fmt.Errorf("git pull --ff-only: %w\n%s", err, stderr)
+		}
 		return false, fmt.Errorf("git pull --ff-only: %w", err)
 	}
 
