@@ -220,6 +220,9 @@ func printDeployPlanTable(steps []resolvedStep, w *render.Writer) {
 		if rs.step.Check != "" {
 			_, _ = fmt.Fprintln(out, detailIndent+"[check: "+rs.step.Check+"]")
 		}
+		if rs.step.ContinueOnError {
+			_, _ = fmt.Fprintln(out, detailIndent+"[continue_on_error]")
+		}
 	}
 }
 
@@ -246,11 +249,16 @@ func printDeployPlanShell(steps []resolvedStep, w io.Writer) {
 		if rs.runtimeWhen != "" {
 			_, _ = fmt.Fprintf(w, "# when: %s\n", rs.runtimeWhen)
 		}
-		if rs.step.Builtin != "" {
+		switch {
+		case rs.step.Builtin != "" && rs.step.ContinueOnError:
 			// Builtins are in-process Go; delegate to the CLI step runner so the
 			// generated script remains executable and behaviorally equivalent.
+			_, _ = fmt.Fprintf(w, "./bin/devbox deploy step %s || true\n", rs.stepAddress())
+		case rs.step.Builtin != "":
 			_, _ = fmt.Fprintf(w, "./bin/devbox deploy step %s\n", rs.stepAddress())
-		} else {
+		case rs.step.ContinueOnError:
+			_, _ = fmt.Fprintln(w, stepCommand(rs.step)+" || true")
+		default:
 			_, _ = fmt.Fprintln(w, stepCommand(rs.step))
 		}
 		if rs.step.Name == implicitEnvStep.Name {
@@ -477,6 +485,11 @@ func runPipeline(
 
 		if stepErr != nil {
 			rep.FailStep(addr, rs.step, stepIndex, stepTotal, stepErr)
+			if rs.step.ContinueOnError {
+				// Step failed but is marked continue_on_error: report the failure
+				// and proceed to the next step. Post-step hook and Check are skipped.
+				continue
+			}
 			return ErrSilent
 		}
 

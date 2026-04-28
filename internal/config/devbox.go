@@ -86,12 +86,12 @@ type DeployPhase struct {
 // DeployStep is a single atomic pipeline action.
 // Exactly one of Run, Devbox, Command, or Builtin must be set.
 //
-//   - Run     — shell command executed directly via os/exec
-//   - Devbox  — public devbox CLI subcommand (e.g. "docker down"); invoked as "devbox <subcommand>"
-//   - Command — devbox command ID (e.g. "services.main.migrate"); dispatched via command runner
-//   - Builtin — engine-internal action name (e.g. "confirm", "remove_paths"); executed directly in Go
-//   - With    — parameters for Command or Builtin steps (string values for Command, any type for Builtin)
-//   - When    — skip condition; three expression kinds are supported:
+//   - Run             — shell command executed directly via os/exec
+//   - Devbox          — public devbox CLI subcommand (e.g. "docker down"); invoked as "devbox <subcommand>"
+//   - Command         — devbox command ID (e.g. "services.main.migrate"); dispatched via command runner
+//   - Builtin         — engine-internal action name (e.g. "confirm", "remove_paths"); executed directly in Go
+//   - With            — parameters for Command or Builtin steps (string values for Command, any type for Builtin)
+//   - When            — skip condition; three expression kinds are supported:
 //     1. Go template (contains "{{") — evaluated against DevboxConfig at plan-resolution time;
 //     step is excluded from the plan when the rendered result is falsy ("", "false", "0").
 //     2. Builtin predicate — evaluated at step-execution time:
@@ -100,19 +100,24 @@ type DeployPhase struct {
 //     "file-exists <path>", "file-missing <path>".
 //     3. Shell command prefixed "cmd: <command>" — evaluated at step-execution time;
 //     exits 0 → true (run step), non-zero → false (skip step).
-//   - Check — post-condition evaluated after the step succeeds; same expression kinds
+//   - Check           — post-condition evaluated after the step succeeds; same expression kinds
 //     as When (builtin predicates and "cmd: <command>"), but no Go templates.
 //     Pipeline is aborted with an error when the check returns false.
+//   - ContinueOnError — when true, a failed step is reported via FailStep but the pipeline
+//     does not abort; the next step runs as if nothing happened. The post-step hook
+//     and Check are skipped for the failed step. Useful for optional hook phases
+//     where failure should be visible but not block the main scenario.
 type DeployStep struct {
-	Name        string         `yaml:"name"`
-	Run         string         `yaml:"run"`
-	Devbox      string         `yaml:"devbox"`
-	Command     string         `yaml:"command"`
-	Builtin     string         `yaml:"builtin"`
-	With        map[string]any `yaml:"with"`
-	Description string         `yaml:"description"`
-	When        string         `yaml:"when"`
-	Check       string         `yaml:"check"`
+	Name            string         `yaml:"name"`
+	Run             string         `yaml:"run"`
+	Devbox          string         `yaml:"devbox"`
+	Command         string         `yaml:"command"`
+	Builtin         string         `yaml:"builtin"`
+	With            map[string]any `yaml:"with"`
+	Description     string         `yaml:"description"`
+	When            string         `yaml:"when"`
+	Check           string         `yaml:"check"`
+	ContinueOnError bool           `yaml:"continue_on_error"`
 
 	// Deprecated: use builtin: service_configs_copy with with.service and with.mode.
 	// Automatically converted to Builtin at load time for backward compatibility.

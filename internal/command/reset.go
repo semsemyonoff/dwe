@@ -306,11 +306,16 @@ func printResetPlanShell(steps []resolvedStep, w io.Writer) {
 		if rs.runtimeWhen != "" {
 			_, _ = fmt.Fprintf(w, "# when: %s\n", rs.runtimeWhen)
 		}
-		if rs.step.Builtin != "" {
+		switch {
+		case rs.step.Builtin != "" && rs.step.ContinueOnError:
 			// Builtins are in-process Go; delegate to the CLI step runner so the
 			// generated script remains executable and behaviorally equivalent.
+			_, _ = fmt.Fprintf(w, "./bin/devbox reset step %s || true\n", rs.stepAddress())
+		case rs.step.Builtin != "":
 			_, _ = fmt.Fprintf(w, "./bin/devbox reset step %s\n", rs.stepAddress())
-		} else {
+		case rs.step.ContinueOnError:
+			_, _ = fmt.Fprintln(w, stepCommand(rs.step)+" || true")
+		default:
 			_, _ = fmt.Fprintln(w, stepCommand(rs.step))
 		}
 		if rs.step.Check != "" {

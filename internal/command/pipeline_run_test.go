@@ -632,3 +632,154 @@ func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 		t.Errorf("buildDevboxCmd Dir = %q, want %q", cmd.Dir, workDir)
 	}
 }
+
+// TestRunPipeline_ContinueOnError_Continues verifies that a failing step with
+// ContinueOnError=true causes FailStep to be called but does not abort the pipeline.
+// The next step must still execute and FinishPipeline must be called with success=true.
+func TestRunPipeline_ContinueOnError_Continues(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "hooks"}
+
+	failStep := config.DeployStep{Name: "optional-hook", Run: "exit 1", ContinueOnError: true}
+	nextStep := noopStep("after-hook")
+	steps := buildResolvedSteps(phase, []config.DeployStep{failStep, nextStep})
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("want nil error (continue_on_error), got %v", err)
+	}
+
+	kinds := rep.kindSeq()
+	// FailStep must appear for the failing step.
+	failFound := false
+	for _, e := range rep.events {
+		if e.kind == "FailStep" && e.step.Name == "optional-hook" {
+			failFound = true
+		}
+	}
+	if !failFound {
+		t.Errorf("FailStep not recorded for continue_on_error step; kinds: %v", kinds)
+	}
+
+	// The next step must have been executed (FinishStep present for it).
+	afterFound := false
+	for _, e := range rep.events {
+		if e.kind == "FinishStep" && e.step.Name == "after-hook" {
+			afterFound = true
+		}
+	}
+	if !afterFound {
+		t.Errorf("FinishStep not recorded for step after continue_on_error step; kinds: %v", kinds)
+	}
+
+	// FinishPipeline must be success=true.
+	fp := rep.events[len(rep.events)-1]
+	if fp.kind != "FinishPipeline" || !fp.success {
+		t.Errorf("FinishPipeline success = %v, want true; kinds: %v", fp.success, kinds)
+	}
+}
+
+// TestRunPipeline_ContinueOnError_SkipsHookAndCheck verifies that when a step fails
+// with ContinueOnError=true, neither the post-step hook nor the Check condition runs.
+func TestRunPipeline_ContinueOnError_SkipsHookAndCheck(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "hooks"}
+
+	failStep := config.DeployStep{
+		Name:            "optional-hook",
+		Run:             "exit 1",
+		ContinueOnError: true,
+		Check:           "dir-missing /this-path-should-not-be-checked",
+	}
+	steps := buildResolvedSteps(phase, []config.DeployStep{failStep})
+
+	hookCalled := false
+	hooks := map[string]func() error{
+		"optional-hook": func() error {
+			hookCalled = true
+			return nil
+		},
+	}
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, hooks)
+	if err != nil {
+		t.Fatalf("want nil error, got %v", err)
+	}
+	if hookCalled {
+		t.Error("post-step hook must not be called after a failed continue_on_error step")
+	}
+	// FinishStep must NOT appear (the check path is skipped too).
+	for _, e := range rep.events {
+		if e.kind == "FinishStep" {
+			t.Errorf("FinishStep must not be called when continue_on_error step fails; kinds: %v", rep.kindSeq())
+		}
+	}
+}
+
+// TestRunPipeline_NoContinueOnError_AbortsAsUsual verifies that a failing step
+// without ContinueOnError still returns ErrSilent (existing behaviour is unchanged).
+func TestRunPipeline_NoContinueOnError_AbortsAsUsual(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "init"}
+	steps := buildResolvedSteps(phase, []config.DeployStep{
+		{Name: "fail", Run: "exit 1", ContinueOnError: false},
+	})
+
+	err := runPipeline(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent, got %v", err)
+	}
+}
+
+// TestPrintDeployPlanShell_ContinueOnError checks that steps with ContinueOnError=true
+// are emitted with "|| true" in the deploy shell plan, and normal steps are not.
+func TestPrintDeployPlanShell_ContinueOnError(t *testing.T) {
+	phase := config.DeployPhase{Name: "hooks"}
+	steps := []resolvedStep{
+		{phase: phase, step: config.DeployStep{Name: "normal", Run: "echo hello"}},
+		{phase: phase, step: config.DeployStep{Name: "optional", Run: "echo bye", ContinueOnError: true}},
+	}
+
+	var buf strings.Builder
+	printDeployPlanShell(steps, &buf)
+	out := buf.String()
+
+	if strings.Contains(out, "echo hello || true") {
+		t.Error("normal step should not have '|| true'")
+	}
+	if !strings.Contains(out, "echo bye || true") {
+		t.Errorf("continue_on_error step must have '|| true'; got:\n%s", out)
+	}
+	// Normal step must appear without || true.
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.Contains(line, "echo hello") && strings.Contains(line, "|| true") {
+			t.Errorf("normal step line must not contain '|| true': %q", line)
+		}
+	}
+}
+
+// TestPrintResetPlanShell_ContinueOnError checks that steps with ContinueOnError=true
+// are emitted with "|| true" in the reset shell plan.
+func TestPrintResetPlanShell_ContinueOnError(t *testing.T) {
+	phase := config.DeployPhase{Name: "cleanup"}
+	steps := []resolvedStep{
+		{phase: phase, step: config.DeployStep{Name: "normal", Run: "echo ok"}},
+		{phase: phase, step: config.DeployStep{Name: "optional-builtin", Builtin: "confirm", ContinueOnError: true}},
+	}
+
+	var buf strings.Builder
+	printResetPlanShell(steps, &buf)
+	out := buf.String()
+
+	if !strings.Contains(out, "|| true") {
+		t.Errorf("continue_on_error builtin step must have '|| true' in reset plan; got:\n%s", out)
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.Contains(line, "echo ok") && strings.Contains(line, "|| true") {
+			t.Errorf("normal step line must not contain '|| true': %q", line)
+		}
+	}
+}
