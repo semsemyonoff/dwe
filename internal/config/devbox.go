@@ -664,6 +664,114 @@ func isTruthy(v any) bool {
 	}
 }
 
+// LifecycleConfig holds the full lifecycle pipeline loaded from devbox/lifecycle.yml.
+// It is loaded separately and not part of the 3-layer config merge.
+type LifecycleConfig struct {
+	Run  *LifecycleRunConfig  `yaml:"run"`
+	Stop *LifecycleStopConfig `yaml:"stop"`
+}
+
+// LifecycleRunConfig holds the run lifecycle pipeline configuration.
+// Update is a pointer so a missing block (nil) is distinguishable from a present
+// block with defaults — writing the update: key is itself the opt-in.
+type LifecycleRunConfig struct {
+	Update       *LifecycleUpdate `yaml:"update"`
+	ShowInfo     bool             `yaml:"show_info"`
+	FinalMessage string           `yaml:"final_message"`
+	Phases       []DeployPhase    `yaml:"phases"`
+}
+
+// EffectiveMode returns the resolved update mode before any CLI flag is applied.
+// Precedence: missing block → off; enabled:false → off; enabled:true+no mode → prompt;
+// enabled:true+mode set → that value. CLI flags (--no-update, --update) override this.
+func (cfg *LifecycleRunConfig) EffectiveMode() string {
+	if cfg.Update == nil {
+		return "off"
+	}
+	if cfg.Update.Enabled == nil {
+		// Loader is responsible for setting Enabled when the block is present;
+		// this branch only fires if a caller bypasses LoadLifecycleConfig.
+		return "off"
+	}
+	if !*cfg.Update.Enabled {
+		return "off"
+	}
+	if cfg.Update.Mode == "" {
+		return "prompt"
+	}
+	return cfg.Update.Mode
+}
+
+// LifecycleStopConfig holds the stop lifecycle pipeline configuration.
+type LifecycleStopConfig struct {
+	FinalMessage string        `yaml:"final_message"`
+	Phases       []DeployPhase `yaml:"phases"`
+}
+
+// LifecycleUpdate configures the optional git update probe run at the start of devbox run.
+// Enabled is a pointer so absent (nil) is distinguishable from explicit false at load time.
+// Mode must be one of: prompt, auto, check, off. Strategy defaults to "ff-only".
+type LifecycleUpdate struct {
+	Enabled  *bool  `yaml:"enabled"`
+	Mode     string `yaml:"mode"`
+	Strategy string `yaml:"strategy"`
+}
+
+// LoadLifecycleConfig loads the lifecycle pipeline from devbox/lifecycle.yml.
+// The file is loaded standalone — it is not merged with the 3-layer config.
+// Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
+// Lifecycle pipelines must not use deploy_services phases.
+func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg LifecycleConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if cfg.Run != nil {
+		if err := validatePhaseSteps(cfg.Run.Phases, false); err != nil {
+			return nil, fmt.Errorf("lifecycle run: %w", err)
+		}
+		if cfg.Run.FinalMessage == "" {
+			cfg.Run.FinalMessage = "Project is ready for work!"
+		}
+		if cfg.Run.Update != nil {
+			if cfg.Run.Update.Enabled == nil {
+				t := true
+				cfg.Run.Update.Enabled = &t
+			}
+			if cfg.Run.Update.Strategy == "" {
+				cfg.Run.Update.Strategy = "ff-only"
+			}
+			if cfg.Run.Update.Mode != "" {
+				if !validUpdateMode(cfg.Run.Update.Mode) {
+					return nil, fmt.Errorf("lifecycle run: update.mode %q is invalid; must be one of: prompt, auto, check, off", cfg.Run.Update.Mode)
+				}
+			}
+		}
+	}
+	if cfg.Stop != nil {
+		if err := validatePhaseSteps(cfg.Stop.Phases, false); err != nil {
+			return nil, fmt.Errorf("lifecycle stop: %w", err)
+		}
+		if cfg.Stop.FinalMessage == "" {
+			cfg.Stop.FinalMessage = "Project is stopped. Have a nice day!"
+		}
+	}
+	return &cfg, nil
+}
+
+// validUpdateMode reports whether s is one of the four allowed update mode values.
+func validUpdateMode(s string) bool {
+	switch s {
+	case "prompt", "auto", "check", "off":
+		return true
+	}
+	return false
+}
+
 // LoadDeployConfig loads the deploy pipeline from a deploy.yml file.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
@@ -690,14 +798,24 @@ func loadPipelineConfig(path string, allowDeployServices bool) (*DeployConfig, e
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	for pi := range cfg.Phases {
-		phase := &cfg.Phases[pi]
+	if err := validatePhaseSteps(cfg.Phases, allowDeployServices); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return &cfg, nil
+}
+
+// validatePhaseSteps validates and normalizes a slice of DeployPhase values.
+// When allowDeployServices is false, deploy_services phases are rejected.
+// Deprecated service_configs_copy steps are normalized to builtin form in place.
+func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
+	for pi := range phases {
+		phase := &phases[pi]
 		if phase.DeployServices {
 			if !allowDeployServices {
-				return nil, fmt.Errorf("phase %q: deploy_services is not allowed in this pipeline type", phase.Name)
+				return fmt.Errorf("phase %q: deploy_services is not allowed in this pipeline type", phase.Name)
 			}
 			if len(phase.Steps) > 0 {
-				return nil, fmt.Errorf("phase %q: deploy_services phase must not contain steps", phase.Name)
+				return fmt.Errorf("phase %q: deploy_services phase must not contain steps", phase.Name)
 			}
 			continue
 		}
@@ -706,7 +824,7 @@ func loadPipelineConfig(path string, allowDeployServices bool) (*DeployConfig, e
 			// Normalize deprecated service_configs_copy into builtin form.
 			if step.ServiceConfigsCopy != "" {
 				if step.Builtin != "" || step.Run != "" || step.Devbox != "" || step.Command != "" {
-					return nil, fmt.Errorf("step %q (phase %q): service_configs_copy cannot be combined with other step types", step.Name, phase.Name)
+					return fmt.Errorf("step %q (phase %q): service_configs_copy cannot be combined with other step types", step.Name, phase.Name)
 				}
 				mode := step.Mode
 				if mode == "" {
@@ -735,14 +853,14 @@ func loadPipelineConfig(path string, allowDeployServices bool) (*DeployConfig, e
 				set++
 			}
 			if set > 1 {
-				return nil, fmt.Errorf("step %q (phase %q): only one of run, devbox, command, or builtin may be set", step.Name, phase.Name)
+				return fmt.Errorf("step %q (phase %q): only one of run, devbox, command, or builtin may be set", step.Name, phase.Name)
 			}
 			if set == 0 {
-				return nil, fmt.Errorf("step %q (phase %q): exactly one of run, devbox, command, or builtin must be set", step.Name, phase.Name)
+				return fmt.Errorf("step %q (phase %q): exactly one of run, devbox, command, or builtin must be set", step.Name, phase.Name)
 			}
 		}
 	}
-	return &cfg, nil
+	return nil
 }
 
 // LoadServiceDeployConfigs loads per-service deploy pipelines from devbox/deploy/<name>.yml.

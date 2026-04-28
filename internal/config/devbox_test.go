@@ -1466,6 +1466,308 @@ func TestLoadServicesConfig_dirsDeduplicated(t *testing.T) {
 	}
 }
 
+// --- LoadLifecycleConfig ---
+
+const sampleLifecycleYML = `
+run:
+  update:
+    enabled: true
+    mode: prompt
+    strategy: ff-only
+  show_info: true
+  final_message: "Project is ready for work!"
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+        - name: wait
+          devbox: "docker wait"
+stop:
+  final_message: "Project is stopped. Have a nice day!"
+  phases:
+    - name: stop
+      steps:
+        - name: down
+          devbox: "docker down"
+`
+
+func writeLifecycleFixture(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "lifecycle.yml")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write lifecycle.yml: %v", err)
+	}
+	return path
+}
+
+func TestLoadLifecycleConfig_happyPath(t *testing.T) {
+	path := writeLifecycleFixture(t, sampleLifecycleYML)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if cfg.Run == nil {
+		t.Fatal("cfg.Run should not be nil")
+	}
+	if cfg.Run.Update == nil {
+		t.Fatal("cfg.Run.Update should not be nil")
+	}
+	if cfg.Run.Update.Enabled == nil || !*cfg.Run.Update.Enabled {
+		t.Error("cfg.Run.Update.Enabled should be true")
+	}
+	if cfg.Run.Update.Mode != "prompt" {
+		t.Errorf("cfg.Run.Update.Mode = %q, want prompt", cfg.Run.Update.Mode)
+	}
+	if cfg.Run.Update.Strategy != "ff-only" {
+		t.Errorf("cfg.Run.Update.Strategy = %q, want ff-only", cfg.Run.Update.Strategy)
+	}
+	if !cfg.Run.ShowInfo {
+		t.Error("cfg.Run.ShowInfo should be true")
+	}
+	if cfg.Run.FinalMessage != "Project is ready for work!" {
+		t.Errorf("cfg.Run.FinalMessage = %q", cfg.Run.FinalMessage)
+	}
+	if len(cfg.Run.Phases) != 1 || cfg.Run.Phases[0].Name != "start" {
+		t.Errorf("cfg.Run.Phases = %v", cfg.Run.Phases)
+	}
+	if cfg.Stop == nil {
+		t.Fatal("cfg.Stop should not be nil")
+	}
+	if cfg.Stop.FinalMessage != "Project is stopped. Have a nice day!" {
+		t.Errorf("cfg.Stop.FinalMessage = %q", cfg.Stop.FinalMessage)
+	}
+	if len(cfg.Stop.Phases) != 1 || cfg.Stop.Phases[0].Name != "stop" {
+		t.Errorf("cfg.Stop.Phases = %v", cfg.Stop.Phases)
+	}
+}
+
+func TestLoadLifecycleConfig_notFound(t *testing.T) {
+	_, err := LoadLifecycleConfig(filepath.Join(t.TempDir(), "nonexistent.yml"))
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected os.ErrNotExist, got %v", err)
+	}
+}
+
+func TestLoadLifecycleConfig_invalidStep(t *testing.T) {
+	yml := `
+run:
+  phases:
+    - name: start
+      steps:
+        - name: bad
+          devbox: "docker up"
+          run: echo hello
+`
+	path := writeLifecycleFixture(t, yml)
+	_, err := LoadLifecycleConfig(path)
+	if err == nil {
+		t.Fatal("expected error for step with two action fields, got nil")
+	}
+}
+
+func TestLoadLifecycleConfig_rejectsDeployServicesPhase(t *testing.T) {
+	yml := `
+run:
+  phases:
+    - name: services
+      deploy_services: true
+`
+	path := writeLifecycleFixture(t, yml)
+	_, err := LoadLifecycleConfig(path)
+	if err == nil {
+		t.Fatal("expected error for deploy_services phase in lifecycle, got nil")
+	}
+}
+
+func TestLoadLifecycleConfig_defaultModeAndStrategy(t *testing.T) {
+	// update block present but mode and strategy omitted — defaults should apply.
+	yml := `
+run:
+  update:
+    enabled: true
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+`
+	path := writeLifecycleFixture(t, yml)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if cfg.Run.Update.Strategy != "ff-only" {
+		t.Errorf("Update.Strategy = %q, want ff-only (default)", cfg.Run.Update.Strategy)
+	}
+	// Mode omitted — EffectiveMode should return "prompt"
+	if cfg.Run.EffectiveMode() != "prompt" {
+		t.Errorf("EffectiveMode() = %q, want prompt when mode omitted with enabled:true", cfg.Run.EffectiveMode())
+	}
+}
+
+func TestLoadLifecycleConfig_invalidUpdateMode(t *testing.T) {
+	yml := `
+run:
+  update:
+    enabled: true
+    mode: invalid-mode
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+`
+	path := writeLifecycleFixture(t, yml)
+	_, err := LoadLifecycleConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid update.mode, got nil")
+	}
+}
+
+func TestLoadLifecycleConfig_defaultFinalMessages(t *testing.T) {
+	// final_message omitted in both run and stop — defaults should be applied by loader.
+	yml := `
+run:
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+stop:
+  phases:
+    - name: stop
+      steps:
+        - name: down
+          devbox: "docker down"
+`
+	path := writeLifecycleFixture(t, yml)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if cfg.Run.FinalMessage != "Project is ready for work!" {
+		t.Errorf("Run.FinalMessage = %q, want default", cfg.Run.FinalMessage)
+	}
+	if cfg.Stop.FinalMessage != "Project is stopped. Have a nice day!" {
+		t.Errorf("Stop.FinalMessage = %q, want default", cfg.Stop.FinalMessage)
+	}
+}
+
+func TestLoadLifecycleConfig_explicitFinalMessagesPreserved(t *testing.T) {
+	yml := `
+run:
+  final_message: "Custom run message"
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+stop:
+  final_message: "Custom stop message"
+  phases:
+    - name: stop
+      steps:
+        - name: down
+          devbox: "docker down"
+`
+	path := writeLifecycleFixture(t, yml)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if cfg.Run.FinalMessage != "Custom run message" {
+		t.Errorf("Run.FinalMessage = %q, want preserved value", cfg.Run.FinalMessage)
+	}
+	if cfg.Stop.FinalMessage != "Custom stop message" {
+		t.Errorf("Stop.FinalMessage = %q, want preserved value", cfg.Stop.FinalMessage)
+	}
+}
+
+func TestLoadLifecycleConfig_updateBlockPresentEnabledOmitted(t *testing.T) {
+	// Writing the update: block without enabled: → loader sets Enabled to &true.
+	yml := `
+run:
+  update:
+    mode: auto
+  phases:
+    - name: start
+      steps:
+        - name: up
+          devbox: "docker up"
+`
+	path := writeLifecycleFixture(t, yml)
+	cfg, err := LoadLifecycleConfig(path)
+	if err != nil {
+		t.Fatalf("LoadLifecycleConfig: %v", err)
+	}
+	if cfg.Run.Update.Enabled == nil {
+		t.Fatal("Update.Enabled should be set by loader when block is present")
+	}
+	if !*cfg.Run.Update.Enabled {
+		t.Error("Update.Enabled should be true (block presence = opt-in)")
+	}
+}
+
+// --- EffectiveMode ---
+
+func TestEffectiveMode(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	cases := []struct {
+		name string
+		cfg  *LifecycleRunConfig
+		want string
+	}{
+		{
+			name: "update block omitted",
+			cfg:  &LifecycleRunConfig{Update: nil},
+			want: "off",
+		},
+		{
+			name: "block present enabled omitted (nil)",
+			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Enabled: nil}},
+			want: "off",
+		},
+		{
+			name: "enabled true mode auto",
+			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Enabled: &trueVal, Mode: "auto"}},
+			want: "auto",
+		},
+		{
+			name: "enabled false mode auto",
+			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Enabled: &falseVal, Mode: "auto"}},
+			want: "off",
+		},
+		{
+			name: "enabled true mode omitted",
+			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Enabled: &trueVal, Mode: ""}},
+			want: "prompt",
+		},
+		{
+			name: "enabled true mode check",
+			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Enabled: &trueVal, Mode: "check"}},
+			want: "check",
+		},
+		{
+			name: "enabled true mode off",
+			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Enabled: &trueVal, Mode: "off"}},
+			want: "off",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.cfg.EffectiveMode()
+			if got != tc.want {
+				t.Errorf("EffectiveMode() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // --- mergeDeduplicatedStrings ---
 
 func TestMergeDeduplicatedStrings_basic(t *testing.T) {
