@@ -34,9 +34,10 @@ func TestRootLevelLifecycleCommandUse(t *testing.T) {
 		cmd     *cobra.Command
 		wantUse string
 	}{
+		{"run", newRunCmd(flags), "run"},
 		{"up", newUpCmd(flags), "up [services...]"},
 		{"down", newDownCmd(flags), "down"},
-		{"stop", newStopCmd(flags), "stop [services...]"},
+		{"stop", newStopCmd(flags), "stop"},
 		{"restart", newRestartCmd(flags), "restart [services...]"},
 		{"logs", newLogsCmd(flags), "logs [services...]"},
 		{"ps", newPsCmd(flags), "ps"},
