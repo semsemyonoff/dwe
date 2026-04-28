@@ -580,10 +580,6 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 	if err != nil {
 		return fmt.Errorf("step %q: loading docker config: %w", step.Name, err)
 	}
-	runner, err := commands.NewRunner(def)
-	if err != nil {
-		return fmt.Errorf("step %q: %w", step.Name, err)
-	}
 	stdout := io.Writer(os.Stdout)
 	stderr := io.Writer(os.Stderr)
 	if logWriter != nil {
@@ -591,7 +587,7 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		stdout = io.MultiWriter(os.Stdout, logStripped)
 		stderr = io.MultiWriter(os.Stderr, logStripped)
 	}
-	return runner.Run(commands.RunContext{
+	if err := commands.RunCommand(commands.RunContext{
 		Cmd:          def,
 		Params:       params,
 		Context:      ctx,
@@ -603,5 +599,8 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		Stdout:       stdout,
 		Stderr:       stderr,
 		Stdin:        os.Stdin,
-	})
+	}); err != nil {
+		return fmt.Errorf("step %q: %w", step.Name, err)
+	}
+	return nil
 }

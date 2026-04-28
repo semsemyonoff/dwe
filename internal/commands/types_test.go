@@ -139,6 +139,55 @@ commands:
 	}
 }
 
+func TestParseCommandFile_ConfirmationFields(t *testing.T) {
+	yaml := `
+commands:
+  reset:
+    type: command
+    confirmation: true
+    confirmation_text: "Drop local data?"
+    run: echo reset
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["reset"]
+	if !cmd.Confirmation {
+		t.Error("Confirmation should be true")
+	}
+	if cmd.ConfirmationText != "Drop local data?" {
+		t.Errorf("ConfirmationText = %q, want custom text", cmd.ConfirmationText)
+	}
+	if cmd.EffectiveConfirmationText() != "Drop local data?" {
+		t.Errorf("EffectiveConfirmationText() = %q", cmd.EffectiveConfirmationText())
+	}
+}
+
+func TestParseCommandFile_Messages(t *testing.T) {
+	yaml := `
+commands:
+  create:
+    type: command
+    messages:
+      success: "Created ${param.name}"
+      error: "Failed ${param.name}"
+    run: echo create
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["create"]
+	if cmd.Messages.Success != "Created ${param.name}" {
+		t.Errorf("Messages.Success = %q", cmd.Messages.Success)
+	}
+	if cmd.Messages.Error != "Failed ${param.name}" {
+		t.Errorf("Messages.Error = %q", cmd.Messages.Error)
+	}
+}
+
+func TestCommandDef_EffectiveConfirmationText_Default(t *testing.T) {
+	cmd := &CommandDef{Confirmation: true}
+	if got := cmd.EffectiveConfirmationText(); got != DefaultConfirmationText {
+		t.Errorf("EffectiveConfirmationText() = %q, want %q", got, DefaultConfirmationText)
+	}
+}
+
 func TestParseCommandFile_ServiceExec(t *testing.T) {
 	yaml := `
 commands:

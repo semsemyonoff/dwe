@@ -313,6 +313,49 @@ func TestPrintCommandInspect_withParams(t *testing.T) {
 	}
 }
 
+func TestPrintCommandInspect_withConfirmation(t *testing.T) {
+	def := &commands.CommandDef{
+		ID:               "db.reset",
+		Type:             commands.CommandTypeCommand,
+		Run:              "echo reset",
+		Confirmation:     true,
+		ConfirmationText: "Drop database?",
+	}
+	buf := &testBuf{}
+	printCommandInspect(buf, def)
+	out := buf.String()
+	if !contains(out, "confirmation") {
+		t.Errorf("output should contain confirmation flag: %s", out)
+	}
+	if !contains(out, "Drop database?") {
+		t.Errorf("output should contain confirmation text: %s", out)
+	}
+}
+
+func TestPrintCommandInspect_withMessages(t *testing.T) {
+	def := &commands.CommandDef{
+		ID:   "db.create",
+		Type: commands.CommandTypeCommand,
+		Run:  "echo create",
+		Messages: commands.CommandMessages{
+			Success: "Database created.",
+			Error:   "Database create failed.",
+		},
+	}
+	buf := &testBuf{}
+	printCommandInspect(buf, def)
+	out := buf.String()
+	if !contains(out, "Messages") {
+		t.Errorf("output should contain Messages section: %s", out)
+	}
+	if !contains(out, "Database created.") {
+		t.Errorf("output should contain success message: %s", out)
+	}
+	if !contains(out, "Database create failed.") {
+		t.Errorf("output should contain error message: %s", out)
+	}
+}
+
 // --- helpers ---
 
 type testBuf struct {

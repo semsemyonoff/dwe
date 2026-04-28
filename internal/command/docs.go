@@ -392,6 +392,16 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 	if def.Private {
 		sb.WriteString("| **Private** | yes |\n")
 	}
+	if def.Confirmation {
+		sb.WriteString("| **Confirmation** | yes |\n")
+		fmt.Fprintf(&sb, "| **Confirmation text** | %s |\n", def.EffectiveConfirmationText())
+	}
+	if def.Messages.Success != "" {
+		fmt.Fprintf(&sb, "| **Success message** | %s |\n", def.Messages.Success)
+	}
+	if def.Messages.Error != "" {
+		fmt.Fprintf(&sb, "| **Error message** | %s |\n", def.Messages.Error)
+	}
 	sb.WriteString("\n")
 
 	// Type-specific details.

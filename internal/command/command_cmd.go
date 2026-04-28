@@ -197,11 +197,7 @@ it runs directly without showing a selector.`,
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)
 			}
-			runner, err := commands.NewRunner(def)
-			if err != nil {
-				return fmt.Errorf("creating runner: %w", err)
-			}
-			return runner.Run(commands.RunContext{
+			if err := commands.RunCommand(commands.RunContext{
 				Cmd:          def,
 				Params:       params,
 				Context:      ctx,
@@ -213,7 +209,10 @@ it runs directly without showing a selector.`,
 				Stdout:       os.Stdout,
 				Stderr:       os.Stderr,
 				Stdin:        os.Stdin,
-			})
+			}); err != nil {
+				return fmt.Errorf("running command %q: %w", id, err)
+			}
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -441,6 +440,19 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 	}
 	if def.Private {
 		def2("private", "true", 2)
+	}
+	if def.Confirmation {
+		def2("confirmation", "true", 2)
+		def2("confirmation_text", def.EffectiveConfirmationText(), 2)
+	}
+	if def.Messages.Success != "" || def.Messages.Error != "" {
+		sub("Messages")
+		if def.Messages.Success != "" {
+			def2("success", def.Messages.Success, 4)
+		}
+		if def.Messages.Error != "" {
+			def2("error", def.Messages.Error, 4)
+		}
 	}
 
 	switch def.Type {

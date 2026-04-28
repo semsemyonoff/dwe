@@ -1,10 +1,12 @@
 package commands
 
 import (
+	"fmt"
 	"io"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 )
 
@@ -72,6 +74,48 @@ func NewRunner(cmd *CommandDef) (Runner, error) {
 	default:
 		return nil, &ErrUnsupportedType{Type: cmd.Type}
 	}
+}
+
+// RunCommand executes a command definition, applying command-level pre-run
+// behavior such as confirmation prompts before dispatching to the concrete
+// runner for the command type.
+func RunCommand(ctx RunContext) error {
+	if err := ConfirmCommand(ctx); err != nil {
+		return err
+	}
+	runner, err := NewRunner(ctx.Cmd)
+	if err != nil {
+		return err
+	}
+	if err := runner.Run(ctx); err != nil {
+		if msgErr := emitCommandMessage(ctx, ctx.Cmd.Messages.Error, false); msgErr != nil {
+			return fmt.Errorf("%w; render error message: %v", err, msgErr)
+		}
+		return err
+	}
+	if err := emitCommandMessage(ctx, ctx.Cmd.Messages.Success, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func emitCommandMessage(ctx RunContext, message string, success bool) error {
+	if message == "" {
+		return nil
+	}
+	if ctx.Render != nil {
+		rendered, err := tpl.RenderCommand(message, ctx.Render)
+		if err != nil {
+			return err
+		}
+		message = rendered
+	}
+	if success {
+		render.NewWriter(stdout(ctx)).Success(message)
+		return nil
+	}
+	render.NewWriter(stderr(ctx)).Error(message)
+	return nil
 }
 
 // ErrUnsupportedType is returned when no runner exists for a given command type.

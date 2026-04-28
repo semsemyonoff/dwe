@@ -176,6 +176,13 @@ type RunnerDef struct {
 	Mode        ExecMode `yaml:"mode"`
 }
 
+// CommandMessages defines optional command-level messages emitted by the
+// shared runner after command execution.
+type CommandMessages struct {
+	Success string `yaml:"success"`
+	Error   string `yaml:"error"`
+}
+
 // CommandDef is a single command entry inside a command file.
 type CommandDef struct {
 	// Type is the execution strategy. Required.
@@ -185,6 +192,11 @@ type CommandDef struct {
 	// Private hides the command from `devbox command list` but allows
 	// it to be referenced from workflows.
 	Private bool `yaml:"private"`
+	// Confirmation asks the user to confirm before the command is executed.
+	Confirmation bool `yaml:"confirmation"`
+	// ConfirmationText is the prompt shown when Confirmation is true.
+	// Defaults to DefaultConfirmationText when empty.
+	ConfirmationText string `yaml:"confirmation_text"`
 
 	// Params declares named parameters accepted by the command.
 	Params map[string]ParamDef `yaml:"params"`
@@ -193,6 +205,8 @@ type CommandDef struct {
 	// Env is additional environment variables injected into the process,
 	// supporting ${...} template interpolation.
 	Env map[string]string `yaml:"env"`
+	// Messages holds optional centralized success/error output for the command.
+	Messages CommandMessages `yaml:"messages"`
 
 	// --- type=command fields ---
 	// Run is a shell command string executed via `sh -c`.
@@ -264,6 +278,15 @@ func (c *CommandDef) Validate() error {
 		return fmt.Errorf("command %q: unknown type %q", c.ID, c.Type)
 	}
 	return nil
+}
+
+// EffectiveConfirmationText returns the prompt text for confirmation-enabled
+// commands, applying the documented default.
+func (c *CommandDef) EffectiveConfirmationText() string {
+	if c != nil && c.ConfirmationText != "" {
+		return c.ConfirmationText
+	}
+	return DefaultConfirmationText
 }
 
 func (c *CommandDef) validateCommandType() error {

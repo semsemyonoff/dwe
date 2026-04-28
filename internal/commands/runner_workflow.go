@@ -10,9 +10,6 @@ import (
 	"devbox-cli/internal/ui"
 )
 
-// runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
-var runConfirm = ui.RunConfirm
-
 // WorkflowRunner executes type=workflow commands by running each step in sequence.
 //
 // Each step is either a command reference or a confirm prompt:
@@ -138,12 +135,7 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step Workfl
 		Stdin:        ctx.Stdin,
 	}
 
-	runner, err := NewRunner(cmd)
-	if err != nil {
-		return fmt.Errorf("workflow %q step[%d] %q: %w", ctx.Cmd.ID, stepIdx, step.Command, err)
-	}
-
-	if err := runner.Run(subCtx); err != nil {
+	if err := RunCommand(subCtx); err != nil {
 		return fmt.Errorf("workflow %q step[%d] %q: %w", ctx.Cmd.ID, stepIdx, step.Command, err)
 	}
 
