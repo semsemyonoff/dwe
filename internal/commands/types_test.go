@@ -1501,6 +1501,110 @@ func TestValidate_NoFiles_EnvConflictParamVsContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ComposeArgs Tests
+// ---------------------------------------------------------------------------
+
+func TestParseYAML_ServiceExec_WithComposeArgs(t *testing.T) {
+	yaml := `
+commands:
+  exec_custom:
+    type: service_exec
+    service: app-main
+    run: php -v
+    compose_args:
+      - "-T"
+      - "--name"
+      - "custom-container"
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["exec_custom"]
+	if len(cmd.ComposeArgs) != 3 {
+		t.Fatalf("expected 3 compose_args, got %d", len(cmd.ComposeArgs))
+	}
+	expected := []string{"-T", "--name", "custom-container"}
+	for i, arg := range expected {
+		if cmd.ComposeArgs[i] != arg {
+			t.Errorf("ComposeArgs[%d] = %q, want %q", i, cmd.ComposeArgs[i], arg)
+		}
+	}
+}
+
+func TestParseYAML_ServiceRun_WithComposeArgs(t *testing.T) {
+	yaml := `
+commands:
+  run_bg:
+    type: service_run
+    service: app-main
+    run: sleep 300
+    compose_args:
+      - "-d"
+      - "--rm"
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["run_bg"]
+	if len(cmd.ComposeArgs) != 2 {
+		t.Fatalf("expected 2 compose_args, got %d", len(cmd.ComposeArgs))
+	}
+	if cmd.ComposeArgs[0] != "-d" || cmd.ComposeArgs[1] != "--rm" {
+		t.Errorf("unexpected compose_args: %v", cmd.ComposeArgs)
+	}
+}
+
+func TestValidate_ComposeArgsRejectedOnCommand(t *testing.T) {
+	cmd := CommandDef{
+		Type:        CommandTypeCommand,
+		ID:          "g.cmd",
+		Run:         "echo ok",
+		ComposeArgs: []string{"-T"},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "compose_args") {
+		t.Errorf("expected compose_args rejection for type=command, got %v", err)
+	}
+}
+
+func TestValidate_ComposeArgsRejectedOnScript(t *testing.T) {
+	cmd := CommandDef{
+		Type:        CommandTypeScript,
+		ID:          "g.s",
+		Script:      &ScriptDef{Path: "s.sh"},
+		ComposeArgs: []string{"-T"},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "compose_args") {
+		t.Errorf("expected compose_args rejection for type=script, got %v", err)
+	}
+}
+
+func TestValidate_ComposeArgsRejectedOnWorkflow(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeWorkflow,
+		ID:   "g.w",
+		Steps: []WorkflowStep{
+			{Command: "g.step1"},
+		},
+		ComposeArgs: []string{"-T"},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "compose_args") {
+		t.Errorf("expected compose_args rejection for type=workflow, got %v", err)
+	}
+}
+
+func TestValidate_ComposeArgsRejectedOnDevbox(t *testing.T) {
+	cmd := CommandDef{
+		Type:        CommandTypeDevbox,
+		ID:          "g.devbox",
+		Run:         "info",
+		ComposeArgs: []string{"-T"},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "compose_args") {
+		t.Errorf("expected compose_args rejection for type=devbox, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

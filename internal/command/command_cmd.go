@@ -503,6 +503,9 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 		if def.Mode != "" {
 			def2("mode", string(def.Mode), 2)
 		}
+		if len(def.ComposeArgs) > 0 {
+			def2("compose_args", strings.Join(def.ComposeArgs, " "), 2)
+		}
 		if def.Run != "" {
 			def2("run", def.Run, 2)
 		}

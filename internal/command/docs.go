@@ -426,6 +426,9 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 		if len(def.Argv) > 0 {
 			sb.WriteString("## Argv\n\n```\n" + strings.Join(def.Argv, " ") + "\n```\n\n")
 		}
+		if len(def.ComposeArgs) > 0 {
+			fmt.Fprintf(&sb, "**Compose args:** `%s`\n\n", strings.Join(def.ComposeArgs, " "))
+		}
 	case commands.CommandTypeScript:
 		if def.Script != nil {
 			shell := def.Script.Shell

@@ -52,7 +52,12 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, compose *docker.Compose
 		useExec = running
 	}
 
-	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, useExec), nil
+	composeArgs, err := buildRenderedComposeArgs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, composeArgs, useExec), nil
 }
 
 // Run executes the command inside the container.
@@ -88,7 +93,12 @@ func (r *ServiceRunRunner) BuildCommand(ctx RunContext, compose *docker.Compose)
 		return nil, err
 	}
 
-	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, false), nil
+	composeArgs, err := buildRenderedComposeArgs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, composeArgs, false), nil
 }
 
 // Run executes the command in a one-off container.
@@ -166,6 +176,24 @@ func resolveWorkdirFrom(dotPath string, ctx RunContext) (string, error) {
 	return s, nil
 }
 
+// buildRenderedComposeArgs renders each compose_args entry via templates and returns the slice.
+func buildRenderedComposeArgs(ctx RunContext) ([]string, error) {
+	cmd := ctx.Cmd
+	if len(cmd.ComposeArgs) == 0 {
+		return nil, nil
+	}
+
+	rendered := make([]string, len(cmd.ComposeArgs))
+	for i, arg := range cmd.ComposeArgs {
+		r, err := tpl.RenderCommand(arg, ctx.Render)
+		if err != nil {
+			return nil, fmt.Errorf("render compose_args[%d]: %w", i, err)
+		}
+		rendered[i] = r
+	}
+	return rendered, nil
+}
+
 // buildServiceArgv renders the run/argv fields of the command and returns the
 // argument slice (the part that follows the service name in the compose command).
 func buildServiceArgv(ctx RunContext) ([]string, error) {
@@ -198,6 +226,7 @@ func buildDockerComposeCmd(
 	workdir string,
 	serviceArgv []string,
 	envVars map[string]string,
+	composeArgs []string,
 	useExec bool,
 ) *exec.Cmd {
 	var args []string
@@ -226,6 +255,9 @@ func buildDockerComposeCmd(
 		}
 		args = append(args, "--no-deps", "--entrypoint", "")
 	}
+
+	// Custom compose args from command definition (e.g. -T, --name, -d, --rm).
+	args = append(args, composeArgs...)
 
 	// User flag.
 	switch user {

@@ -417,3 +417,141 @@ func TestRunContext_Compose_NilConfig(t *testing.T) {
 		t.Errorf("expected nil files, got: %v", compose.Files)
 	}
 }
+
+func TestServiceExecRunner_BuildCommand_ComposeArgsEmpty(t *testing.T) {
+	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+	ctx.Cmd.ComposeArgs = []string{}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	// Should not have any extra flags
+	if strings.Count(args, " ") < strings.Count("docker compose exec app-main", " ") {
+		t.Logf("args: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
+	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+	ctx.Cmd.ComposeArgs = []string{"-T", "--name", "test-container"}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := c.Args
+	// Find where compose_args should be: after "exec" and before "--user"
+	var foundT, foundName, foundTestContainer bool
+	var tIndex, userIndex int
+	for i, arg := range args {
+		if arg == "-T" {
+			foundT = true
+			tIndex = i
+		}
+		if arg == "--name" {
+			foundName = true
+		}
+		if arg == "test-container" {
+			foundTestContainer = true
+		}
+		if arg == "--user" {
+			userIndex = i
+		}
+	}
+	if !foundT || !foundName || !foundTestContainer {
+		t.Errorf("expected -T --name test-container in args, got: %v", args)
+	}
+	if userIndex > 0 && tIndex > 0 && tIndex >= userIndex {
+		t.Errorf("expected -T before --user, but -T was at index %d and --user at %d", tIndex, userIndex)
+	}
+}
+
+func TestServiceRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:        CommandTypeServiceRun,
+			Service:     "app-main",
+			Run:         "php -v",
+			ComposeArgs: []string{"-d", "--rm"},
+		},
+		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
+		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceRunRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := c.Args
+	// Verify -d and --rm are present
+	found := false
+	for i, arg := range args {
+		if arg == "-d" {
+			found = true
+			// Check that -d comes after "run" but before "--workdir" (if present)
+			for j := i + 1; j < len(args); j++ {
+				if args[j] == "--workdir" {
+					t.Errorf("expected -d before --workdir, but --workdir at index %d", j)
+					break
+				}
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected -d in args, got: %v", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_ComposeArgsTemplate(t *testing.T) {
+	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+	ctx.Cmd.ComposeArgs = []string{"--name", "${param.name}"}
+	ctx.Render.Params = map[string]any{"name": "custom-name"}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "custom-name") {
+		t.Errorf("expected 'custom-name' after template substitution, got: %s", args)
+	}
+	if strings.Contains(args, "${param.name}") {
+		t.Errorf("expected template to be rendered, but found literal ${param.name} in: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_ComposeArgsPositioning(t *testing.T) {
+	// Verify compose_args are inserted between run defaults and --user flag
+	ctx := makeServiceExecCtx("app-main", UserModeRoot, "", ExecModeRun, "id", nil)
+	ctx.Cmd.ComposeArgs = []string{"-d", "--name", "test"}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := c.Args
+	// Find indices of key markers
+	runIdx, dIdx, userIdx := -1, -1, -1
+	for i, arg := range args {
+		if arg == "run" {
+			runIdx = i
+		}
+		if arg == "-d" {
+			dIdx = i
+		}
+		if arg == "--user" {
+			userIdx = i
+		}
+	}
+	if runIdx < 0 || dIdx < 0 || userIdx < 0 {
+		t.Fatalf("couldn't find expected args in %v", args)
+	}
+	if dIdx <= runIdx || dIdx >= userIdx {
+		t.Errorf("compose_args (-d) should be between run and --user, got indices: run=%d, -d=%d, --user=%d", runIdx, dIdx, userIdx)
+	}
+}

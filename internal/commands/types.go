@@ -322,6 +322,9 @@ type CommandDef struct {
 	WorkdirFrom string `yaml:"workdir_from"`
 	// Mode controls exec vs run behaviour for service_exec commands.
 	Mode ExecMode `yaml:"mode"`
+	// ComposeArgs is a list of arbitrary flags to pass to docker compose exec/run,
+	// inserted before --user/--workdir/-e flags. Supports ${...} template interpolation.
+	ComposeArgs []string `yaml:"compose_args"`
 
 	// --- type=script fields ---
 	Script *ScriptDef `yaml:"script"`
@@ -411,6 +414,9 @@ func (c *CommandDef) validateCommandType() error {
 	if c.Service != "" {
 		return fmt.Errorf("service field is not valid for type=command")
 	}
+	if len(c.ComposeArgs) > 0 {
+		return fmt.Errorf("compose_args field is not valid for type=command")
+	}
 	return nil
 }
 
@@ -426,6 +432,9 @@ func (c *CommandDef) validateScriptType() error {
 	}
 	if len(c.Steps) > 0 {
 		return fmt.Errorf("steps field is not valid for type=script")
+	}
+	if len(c.ComposeArgs) > 0 {
+		return fmt.Errorf("compose_args field is not valid for type=script")
 	}
 	return nil
 }
@@ -472,6 +481,9 @@ func (c *CommandDef) validateWorkflowType() error {
 	}
 	if c.Service != "" {
 		return fmt.Errorf("service field is not valid for type=workflow")
+	}
+	if len(c.ComposeArgs) > 0 {
+		return fmt.Errorf("compose_args field is not valid for type=workflow")
 	}
 	for i, step := range c.Steps {
 		if err := step.Validate(); err != nil {
