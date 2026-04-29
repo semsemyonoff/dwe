@@ -900,6 +900,211 @@ func TestPrepareFileEffects_ReadWriteNoCleanup(t *testing.T) {
 	}
 }
 
+// TestComputeFilePaths_DumpDeployIntegration tests the full dump-deploy workflow:
+// glob+match+sort to find the most recent dated dump, fallback to legacy path,
+// and env injection with context-resolved variables.
+func TestComputeFilePaths_DumpDeployIntegration(t *testing.T) {
+	tmpdir := t.TempDir()
+	dumpsDir := filepath.Join(tmpdir, "dumps")
+	if err := os.MkdirAll(dumpsDir, 0o755); err != nil {
+		t.Fatalf("create dumps dir: %v", err)
+	}
+
+	// Create dated dump files
+	files := []string{
+		"mydb_2026-04-28.sql.gz",
+		"mydb_2026-04-29.sql.gz",
+	}
+	for _, f := range files {
+		path := filepath.Join(dumpsDir, f)
+		if err := os.WriteFile(path, []byte{}, 0o644); err != nil {
+			t.Fatalf("create dump file: %v", err)
+		}
+	}
+
+	cmd := &CommandDef{
+		ID:   "db.dump-deploy",
+		Type: CommandTypeScript,
+		Params: map[string]ParamDef{
+			"database": {
+				Type:    ParamTypeString,
+				Default: "mydb",
+			},
+			"target_database": {
+				Type:     ParamTypeString,
+				Required: true,
+			},
+		},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{
+						Glob:  "dumps/mydb_*.sql.gz",
+						Match: `\d{4}-\d{2}-\d{2}`,
+						Sort:  FileSortNameDesc,
+					},
+					{
+						Path: "dumps/mydb.sql.gz",
+					},
+				},
+				Required: true,
+				Env:      "DUMP_FILE",
+			},
+		},
+		Env: map[string]string{
+			"DB_NAME":        "${param.database}",
+			"TARGET_DB_NAME": "${param.target_database}",
+			"DB_USER":        "${db.user}",
+			"DUMP_LOCATION":  "${files.dump.path}",
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw: map[string]any{
+				"db": map[string]any{
+					"user":     "root",
+					"password": "secret",
+				},
+			},
+			Params: map[string]any{
+				"database":        "mydb",
+				"target_database": "mydb_restored",
+			},
+			Context: map[string]any{},
+		},
+	}
+
+	// Compute file paths
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	// Assign paths to render context for template resolution
+	ctx.Render.Files = paths
+
+	// Should resolve to the most recent dated dump (name_desc sort)
+	expectedPath := filepath.Join(dumpsDir, "mydb_2026-04-29.sql.gz")
+	if resolved, ok := paths["dump"]; !ok {
+		t.Fatalf("expected path with id 'dump', not found")
+	} else if resolved.Path != expectedPath {
+		t.Fatalf("expected path %s, got %s", expectedPath, resolved.Path)
+	}
+
+	// Verify env injection includes file env vars
+	env, err := BuildEnv(cmd, ctx.Render.Params, ctx.Render.Context, paths)
+	if err != nil {
+		t.Fatalf("BuildEnv: %v", err)
+	}
+
+	// Render template variables in env values
+	renderedEnv := make(map[string]string, len(env))
+	for k, v := range env {
+		rendered, err := tpl.RenderCommand(v, ctx.Render)
+		if err != nil {
+			t.Fatalf("render env %q: %v", k, err)
+		}
+		renderedEnv[k] = rendered
+	}
+
+	// Check that file env var is injected with absolute path
+	if dump, ok := renderedEnv["DUMP_FILE"]; !ok {
+		t.Fatalf("expected DUMP_FILE in env, not found")
+	} else if dump != expectedPath {
+		t.Fatalf("expected DUMP_FILE=%s, got %s", expectedPath, dump)
+	}
+
+	// Check that other env vars are populated
+	if db, ok := renderedEnv["DB_NAME"]; !ok {
+		t.Fatalf("expected DB_NAME in env")
+	} else if db != "mydb" {
+		t.Fatalf("expected DB_NAME=mydb, got %s", db)
+	}
+
+	if target, ok := renderedEnv["TARGET_DB_NAME"]; !ok {
+		t.Fatalf("expected TARGET_DB_NAME in env")
+	} else if target != "mydb_restored" {
+		t.Fatalf("expected TARGET_DB_NAME=mydb_restored, got %s", target)
+	}
+
+	// Check context-resolved env var
+	if user, ok := renderedEnv["DB_USER"]; !ok {
+		t.Fatalf("expected DB_USER in env")
+	} else if user != "root" {
+		t.Fatalf("expected DB_USER=root, got %s", user)
+	}
+
+	// Check file path exposed in template context
+	if loc, ok := renderedEnv["DUMP_LOCATION"]; !ok {
+		t.Fatalf("expected DUMP_LOCATION in env")
+	} else if loc != expectedPath {
+		t.Fatalf("expected DUMP_LOCATION=%s, got %s", expectedPath, loc)
+	}
+}
+
+// TestComputeFilePaths_DumpDeployFallback tests fallback from glob to legacy path.
+func TestComputeFilePaths_DumpDeployFallback(t *testing.T) {
+	tmpdir := t.TempDir()
+	dumpsDir := filepath.Join(tmpdir, "dumps")
+	if err := os.MkdirAll(dumpsDir, 0o755); err != nil {
+		t.Fatalf("create dumps dir: %v", err)
+	}
+
+	// Create only the legacy (undated) dump file
+	legacyPath := filepath.Join(dumpsDir, "mydb.sql.gz")
+	if err := os.WriteFile(legacyPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("create legacy dump file: %v", err)
+	}
+
+	cmd := &CommandDef{
+		ID:   "db.dump-deploy",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{
+						Glob:  "dumps/mydb_*.sql.gz",
+						Match: `\d{4}-\d{2}-\d{2}`,
+						Sort:  FileSortNameDesc,
+					},
+					{
+						Path: "dumps/mydb.sql.gz",
+					},
+				},
+				Required: true,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+	}
+
+	// Compute file paths
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	// Should fall back to legacy path when glob finds no matches
+	if resolved, ok := paths["dump"]; !ok {
+		t.Fatalf("expected path with id 'dump', not found")
+	} else if resolved.Path != legacyPath {
+		t.Fatalf("expected fallback path %s, got %s", legacyPath, resolved.Path)
+	}
+}
+
 // Helper function to check if a string contains a substring.
 func contains(s, substr string) bool {
 	for i := range s {

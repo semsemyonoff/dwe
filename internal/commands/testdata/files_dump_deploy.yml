@@ -1,0 +1,41 @@
+type: script
+description: Restore a database from a dump file (test fixture)
+params:
+  database:
+    type: string
+    description: Source database
+    default: mydb
+  target_database:
+    type: string
+    description: Target database to restore to
+    default: mydb_restored
+  dump_dir:
+    type: string
+    description: Directory containing dump files
+    default: /tmp/dumps
+  check_exists:
+    type: bool
+    description: Check if target database exists before restore
+    default: false
+env:
+  DB_NAME: "${param.database}"
+  TARGET_DB_NAME: "${param.target_database}"
+  CHECK_EXISTS: "{{ if .Params.check_exists }}1{{ else }}0{{ end }}"
+  DB_USER: "${db.user}"
+  DB_PASSWORD: "${db.password}"
+  DUMP_LOCATION: "${files.dump.path}"
+files:
+  dump:
+    access: read
+    candidates:
+      - glob: "${param.dump_dir}/${param.database}_*.sql.gz"
+        match: '\d{4}-\d{2}-\d{2}'
+        sort: name_desc
+      - path: "${param.dump_dir}/${param.database}.sql.gz"
+    required: true
+    env: DUMP_FILE
+script:
+  path: devbox/scripts/db/dump-deploy.sh
+messages:
+  success: "Database restored from ${files.dump.path}"
+  error: "Failed to restore database"

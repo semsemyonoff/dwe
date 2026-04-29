@@ -530,3 +530,129 @@ commands:
 		t.Errorf("messages.success = %q", cmd.Messages.Success)
 	}
 }
+
+func TestLoadCommandFile_DumpDeployFixture(t *testing.T) {
+	// Load and validate the dump-deploy fixture with read-mode candidates and glob+match+sort.
+	dir := t.TempDir()
+	fixtureContent := `
+commands:
+  dump-deploy:
+    type: script
+    description: Restore a database from a dump file (test fixture)
+    params:
+      database:
+        type: string
+        description: Source database
+        default: mydb
+      target_database:
+        type: string
+        description: Target database to restore to
+        default: mydb_restored
+      dump_dir:
+        type: string
+        description: Directory containing dump files
+        default: /tmp/dumps
+      check_exists:
+        type: bool
+        description: Check if target database exists before restore
+        default: false
+    env:
+      DB_NAME: "${param.database}"
+      TARGET_DB_NAME: "${param.target_database}"
+      CHECK_EXISTS: "{{ if .Params.check_exists }}1{{ else }}0{{ end }}"
+      DB_USER: "${db.user}"
+      DB_PASSWORD: "${db.password}"
+      DUMP_LOCATION: "${files.dump.path}"
+    files:
+      dump:
+        access: read
+        candidates:
+          - glob: "${param.dump_dir}/${param.database}_*.sql.gz"
+            match: '\d{4}-\d{2}-\d{2}'
+            sort: name_desc
+          - path: "${param.dump_dir}/${param.database}.sql.gz"
+        required: true
+        env: DUMP_FILE
+    script:
+      path: devbox/scripts/db/dump-deploy.sh
+    messages:
+      success: "Database restored from ${files.dump.path}"
+      error: "Failed to restore database"
+`
+	absPath := writeYAML(t, dir, "db.yml", fixtureContent)
+
+	cf, err := LoadCommandFile(absPath, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cmd, ok := cf.Commands["dump-deploy"]
+	if !ok {
+		t.Fatal("command 'dump-deploy' not found")
+	}
+
+	// Verify Files field was unmarshalled correctly
+	if len(cmd.Files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(cmd.Files))
+	}
+
+	// Check dump file spec
+	dumpSpec, ok := cmd.Files["dump"]
+	if !ok {
+		t.Fatal("files.dump not found")
+	}
+	if dumpSpec.Access != FileAccessRead {
+		t.Errorf("dump.Access = %q, want %q", dumpSpec.Access, FileAccessRead)
+	}
+	if !dumpSpec.Required {
+		t.Error("dump.Required should be true")
+	}
+	if len(dumpSpec.Candidates) != 2 {
+		t.Fatalf("expected 2 candidates, got %d", len(dumpSpec.Candidates))
+	}
+
+	// First candidate: glob+match+sort
+	cand0 := dumpSpec.Candidates[0]
+	if cand0.Glob != "${param.dump_dir}/${param.database}_*.sql.gz" {
+		t.Errorf("candidates[0].Glob = %q", cand0.Glob)
+	}
+	if cand0.Match != `\d{4}-\d{2}-\d{2}` {
+		t.Errorf("candidates[0].Match = %q", cand0.Match)
+	}
+	if cand0.Sort != FileSortNameDesc {
+		t.Errorf("candidates[0].Sort = %q, want %q", cand0.Sort, FileSortNameDesc)
+	}
+
+	// Second candidate: path
+	cand1 := dumpSpec.Candidates[1]
+	if cand1.Path != "${param.dump_dir}/${param.database}.sql.gz" {
+		t.Errorf("candidates[1].Path = %q", cand1.Path)
+	}
+	if dumpSpec.Env != "DUMP_FILE" {
+		t.Errorf("dump.Env = %q, want %q", dumpSpec.Env, "DUMP_FILE")
+	}
+
+	// Verify params
+	if len(cmd.Params) != 4 {
+		t.Fatalf("expected 4 params, got %d", len(cmd.Params))
+	}
+	if cmd.Params["database"].Default != "mydb" {
+		t.Errorf("database.Default = %q, want %q", cmd.Params["database"].Default, "mydb")
+	}
+	if cmd.Params["target_database"].Default != "mydb_restored" {
+		t.Errorf("target_database.Default = %q", cmd.Params["target_database"].Default)
+	}
+
+	// Verify env references both files and params directives
+	if cmd.Env["DUMP_LOCATION"] != "${files.dump.path}" {
+		t.Errorf("env.DUMP_LOCATION = %q, want %q", cmd.Env["DUMP_LOCATION"], "${files.dump.path}")
+	}
+	if cmd.Env["TARGET_DB_NAME"] != "${param.target_database}" {
+		t.Errorf("env.TARGET_DB_NAME = %q", cmd.Env["TARGET_DB_NAME"])
+	}
+
+	// Verify success message references files directive
+	if cmd.Messages.Success != "Database restored from ${files.dump.path}" {
+		t.Errorf("messages.success = %q", cmd.Messages.Success)
+	}
+}
