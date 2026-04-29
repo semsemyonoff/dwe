@@ -532,6 +532,9 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 				def2("script.cleanup", def.Script.Cleanup, 2)
 			}
 		}
+		if def.Workdir != "" {
+			def2("workdir", def.Workdir, 2)
+		}
 	case commands.CommandTypeWorkflow:
 		sub("Steps")
 		for i, step := range def.Steps {
@@ -547,6 +550,12 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 					}
 					sort.Strings(pairs)
 					desc += "  with: " + strings.Join(pairs, ", ")
+				}
+				if step.When != "" {
+					desc += "  when: " + step.When
+				}
+				if step.ContinueOnError {
+					desc += "  (continue_on_error)"
 				}
 				def2(label, desc, 4)
 			}

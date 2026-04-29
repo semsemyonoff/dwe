@@ -258,7 +258,11 @@ func EvalCommandCondition(expr string, ctx *RenderContext, projectRoot string) (
 
 	switch kind {
 	case condition.KindCmd:
-		return condition.EvalCmd(payload, projectRoot)
+		ok, err := condition.EvalCmd(payload, projectRoot)
+		if err != nil {
+			return false, fmt.Errorf("eval when %q: %w", expr, err)
+		}
+		return ok, nil
 	case condition.KindBuiltin:
 		ok, err := condition.EvalBuiltin(payload, projectRoot)
 		if err != nil {

@@ -443,6 +443,9 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 				sb.WriteString("## Script\n\n```sh\n" + def.Script.Run + "\n```\n\n")
 			}
 		}
+		if def.Workdir != "" {
+			fmt.Fprintf(&sb, "**Workdir:** `%s`\n\n", def.Workdir)
+		}
 	case commands.CommandTypeWorkflow:
 		if len(def.Steps) > 0 {
 			sb.WriteString("## Steps\n\n")
@@ -458,6 +461,12 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 						}
 						sort.Strings(pairs)
 						line += " (with: " + strings.Join(pairs, ", ") + ")"
+					}
+					if step.When != "" {
+						line += " (when: " + step.When + ")"
+					}
+					if step.ContinueOnError {
+						line += " (continue_on_error)"
 					}
 					sb.WriteString(line + "\n")
 				}
