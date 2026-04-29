@@ -126,6 +126,7 @@ directly without showing a selector.`,
 
 func newCommandRunCmd(flags *rootFlags) *cobra.Command {
 	var setFlags []string
+	var skipConfirm bool
 
 	cmd := &cobra.Command{
 		Use:   "run [id|group]",
@@ -133,6 +134,7 @@ func newCommandRunCmd(flags *rootFlags) *cobra.Command {
 		Long: `Execute a declarative command by its dot-separated ID.
 
 Use --set key=value to override declared params at runtime.
+Use --yes to skip confirmation prompts (intended for non-interactive use).
 Private commands cannot be run directly.
 
 When called without an argument, an interactive selector lists all public
@@ -142,7 +144,8 @@ it runs directly without showing a selector.`,
 		Example: `  devbox commands run
   devbox commands run services.main
   devbox commands run db.up
-  devbox commands run services.main.migrate --set db=mydb`,
+  devbox commands run services.main.migrate --set db=mydb
+  devbox commands run db.drop --set database=mydb --yes`,
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: registryIDCompletion(flags, false),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -197,18 +200,29 @@ it runs directly without showing a selector.`,
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)
 			}
+
+			// Determine if we should skip confirmation:
+			// 1. --yes flag takes precedence
+			// 2. inherited DEVBOX_NONINTERACTIVE env var
+			shouldSkip := skipConfirm
+			if !shouldSkip && (os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true") {
+				shouldSkip = true
+			}
+
 			if err := commands.RunCommand(commands.RunContext{
-				Cmd:          def,
-				Params:       params,
-				Context:      ctx,
-				Render:       rctx,
-				Config:       cfg,
-				DockerConfig: dockerCfg,
-				Registry:     reg,
-				ProjectRoot:  projectRoot,
-				Stdout:       os.Stdout,
-				Stderr:       os.Stderr,
-				Stdin:        os.Stdin,
+				Cmd:            def,
+				Params:         params,
+				Context:        ctx,
+				Render:         rctx,
+				Config:         cfg,
+				DockerConfig:   dockerCfg,
+				Registry:       reg,
+				ProjectRoot:    projectRoot,
+				Stdout:         os.Stdout,
+				Stderr:         os.Stderr,
+				Stdin:          os.Stdin,
+				SkipConfirm:    shouldSkip,
+				NonInteractive: shouldSkip,
 			}); err != nil {
 				return fmt.Errorf("running command %q: %w", id, err)
 			}
@@ -217,6 +231,7 @@ it runs directly without showing a selector.`,
 		SilenceUsage: true,
 	}
 	cmd.Flags().StringArrayVar(&setFlags, "set", nil, "Set a param value (key=value)")
+	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompts; intended for non-interactive use such as scripts and nested command runs")
 	return cmd
 }
 

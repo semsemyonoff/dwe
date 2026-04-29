@@ -138,3 +138,40 @@ func TestRunCommand_Confirmation_TTYUsesCustomText(t *testing.T) {
 		t.Errorf("confirmation labels = %q/%q", gotAffirmative, gotNegative)
 	}
 }
+
+func TestRunCommand_Confirmation_SkipConfirmSkipsPrompt(t *testing.T) {
+	origRC := runConfirm
+	t.Cleanup(func() { runConfirm = origRC })
+
+	prompted := false
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		prompted = true
+		return true, nil
+	}
+
+	dir := t.TempDir()
+	logFile := dir + "/run.log"
+	cmd := &CommandDef{
+		ID:           "test.skip-confirm",
+		Type:         CommandTypeCommand,
+		Confirmation: true,
+		Run:          `printf 'ran\n' >> ` + logFile,
+	}
+
+	err := RunCommand(RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{},
+		Stdin:       bytes.NewBufferString(""), // Empty stdin; would block if prompt tried to read
+		SkipConfirm: true,
+	})
+	if err != nil {
+		t.Fatalf("expected confirmed command to run with SkipConfirm: %v", err)
+	}
+	if prompted {
+		t.Error("expected no prompt when SkipConfirm is true")
+	}
+	data, _ := readFileBytes(logFile)
+	if !strings.Contains(string(data), "ran") {
+		t.Errorf("expected command to run, log: %q", string(data))
+	}
+}

@@ -22,6 +22,11 @@ func ConfirmCommand(ctx RunContext) error {
 		return nil
 	}
 
+	// Tier 1: SkipConfirm flag set — no prompt
+	if ctx.SkipConfirm {
+		return nil
+	}
+
 	message := ctx.Cmd.EffectiveConfirmationText()
 	if ctx.Render != nil {
 		rendered, err := tpl.RenderCommand(message, ctx.Render)

@@ -87,7 +87,9 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 	}
 
 	nonInteractive := "0"
-	if v := os.Getenv("DEVBOX_NONINTERACTIVE"); v == "1" || v == "true" {
+	if ctx.NonInteractive {
+		nonInteractive = "1"
+	} else if v := os.Getenv("DEVBOX_NONINTERACTIVE"); v == "1" || v == "true" {
 		nonInteractive = "1"
 	}
 

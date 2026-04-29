@@ -526,3 +526,50 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_NInput(t *testing.T) {
 		t.Errorf("expected 'aborted by user'; got %q", err.Error())
 	}
 }
+
+func TestWorkflowRunner_ConfirmStep_NonInteractiveContext_SkipsConfirm(t *testing.T) {
+	dir := t.TempDir()
+	logFile := dir + "/step.log"
+
+	step := &CommandDef{
+		Type:      CommandTypeCommand,
+		ID:        "wf.after-confirm",
+		Group:     "wf",
+		LocalName: "after-confirm",
+		Run:       `printf 'ran\n' >> ` + logFile,
+	}
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.confirm-skip",
+		Group:     "wf",
+		LocalName: "confirm-skip",
+		Steps: []WorkflowStep{
+			{Confirm: "Do you want to continue?"},
+			{Command: "wf.after-confirm"},
+		},
+	}
+
+	reg := buildWorkflowRegistry(wf, step)
+
+	var outBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:            wf,
+		Params:         map[string]any{},
+		Context:        map[string]any{},
+		Render:         &tpl.RenderContext{},
+		Registry:       reg,
+		Stdout:         &outBuf,
+		Stderr:         &outBuf,
+		Stdin:          bytes.NewBufferString(""), // Empty stdin; would block if prompt tried to read
+		NonInteractive: true,
+	}
+	err := (&WorkflowRunner{}).Run(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error with NonInteractive=true: %v", err)
+	}
+
+	data, _ := readFileBytes(logFile)
+	if !strings.Contains(string(data), "ran") {
+		t.Errorf("expected step after confirm to run; log: %q", string(data))
+	}
+}

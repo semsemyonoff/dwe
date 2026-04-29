@@ -705,3 +705,29 @@ func TestScriptRunner_FilesOnError_PreservesExisting(t *testing.T) {
 		t.Errorf("expected 'existing data'; got %q", string(data))
 	}
 }
+
+func TestScriptRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
+	dir := t.TempDir()
+	scriptPath := writeScript(t, dir, "nonint.sh", `printf '%s' "$DEVBOX_NONINTERACTIVE"`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.nonint-context",
+		Script: &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd:            cmd,
+		Render:         &tpl.RenderContext{},
+		ProjectRoot:    dir,
+		NonInteractive: true,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if out != "1" {
+		t.Errorf("expected DEVBOX_NONINTERACTIVE=1 when NonInteractive=true; got %q", out)
+	}
+}

@@ -48,7 +48,7 @@ func (r *WorkflowRunner) Run(ctx RunContext) error {
 // skipped (auto-confirmed). In interactive mode huh.Confirm is used. Otherwise
 // the plain [y/N] stdin fallback is used.
 func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
-	if isNonInteractive() {
+	if ctx.NonInteractive || isNonInteractive() {
 		return nil
 	}
 
@@ -122,17 +122,19 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step Workfl
 	}
 
 	subCtx := RunContext{
-		Cmd:          cmd,
-		Params:       resolvedParams,
-		Context:      resolvedCtx,
-		Render:       renderCtx,
-		Config:       ctx.Config,
-		DockerConfig: ctx.DockerConfig,
-		Registry:     ctx.Registry,
-		ProjectRoot:  ctx.ProjectRoot,
-		Stdout:       ctx.Stdout,
-		Stderr:       ctx.Stderr,
-		Stdin:        ctx.Stdin,
+		Cmd:            cmd,
+		Params:         resolvedParams,
+		Context:        resolvedCtx,
+		Render:         renderCtx,
+		Config:         ctx.Config,
+		DockerConfig:   ctx.DockerConfig,
+		Registry:       ctx.Registry,
+		ProjectRoot:    ctx.ProjectRoot,
+		Stdout:         ctx.Stdout,
+		Stderr:         ctx.Stderr,
+		Stdin:          ctx.Stdin,
+		SkipConfirm:    ctx.SkipConfirm,
+		NonInteractive: ctx.NonInteractive,
 	}
 
 	if err := RunCommand(subCtx); err != nil {

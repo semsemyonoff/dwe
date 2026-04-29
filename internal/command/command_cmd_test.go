@@ -601,3 +601,36 @@ func TestCommandInspectCmd_AcceptsOptionalArg(t *testing.T) {
 		t.Error("2 args should be rejected")
 	}
 }
+
+// --- commands run flag tests ---
+
+func TestCommandRunCmd_HasYesFlag(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandRunCmd(flags)
+
+	// Check that the --yes flag exists
+	yesFlag := cmd.Flags().Lookup("yes")
+	if yesFlag == nil {
+		t.Fatal("--yes flag not found")
+	}
+
+	// Check that -y is the shorthand
+	if yesFlag.Shorthand != "y" {
+		t.Errorf("expected shorthand 'y', got %q", yesFlag.Shorthand)
+	}
+}
+
+func TestCommandRunCmd_YesFlag_BoolType(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandRunCmd(flags)
+
+	yesFlag := cmd.Flags().Lookup("yes")
+	if yesFlag == nil {
+		t.Fatal("--yes flag not found")
+	}
+
+	// Verify flag is a boolean type
+	if yesFlag.Value.Type() != "bool" {
+		t.Errorf("expected bool type, got %q", yesFlag.Value.Type())
+	}
+}
