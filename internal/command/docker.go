@@ -184,6 +184,15 @@ func newDockerExecCmd(flags *rootFlags) *cobra.Command {
 		Use:                "exec <service> [-- cmd...]",
 		Short:              "Execute a command in a running compose service",
 		DisableFlagParsing: true,
+		Long: `Execute a command in a running compose service.
+
+All arguments after the service name (including --) are forwarded verbatim to
+docker compose exec. Use -- to separate the service name from the command:
+
+	devbox docker exec app-main -- php artisan migrate
+
+The -- separator allows flags in the command itself to be passed through without
+being consumed by devbox's parser.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newDockerPipeline(flags, "exec")
 			if err != nil {
@@ -200,6 +209,15 @@ func newDockerRunCmd(flags *rootFlags) *cobra.Command {
 		Use:                "run <service> [-- cmd...]",
 		Short:              "Run a one-off command in a compose service",
 		DisableFlagParsing: true,
+		Long: `Run a one-off command in a compose service.
+
+All arguments after the service name (including --) are forwarded verbatim to
+docker compose run. Use -- to separate the service name from the command:
+
+	devbox docker run app-main -- composer install
+
+The -- separator allows flags in the command itself to be passed through without
+being consumed by devbox's parser.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newDockerPipeline(flags, "run")
 			if err != nil {

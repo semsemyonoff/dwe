@@ -234,3 +234,98 @@ func TestBuildArgs_MultipleExtraArgs(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildArgs_DoubleDashSeparatorExec verifies that -- separator in docker exec
+// is preserved in the correct position: between service name and command.
+func TestBuildArgs_DoubleDashSeparatorExec(t *testing.T) {
+	c := &Compose{
+		ProjectName: "proj",
+		Files:       []string{"compose.yaml"},
+		GlobalArgs:  []string{},
+		CommandArgs: map[string][]string{
+			"exec": {"-T"},
+		},
+	}
+
+	// Test: docker exec <svc> -- <cmd with flags>
+	args := c.BuildArgs("exec", "db", "--", "mariadb", "-u", "root", "-h", "localhost")
+
+	// Verify -- is at position 4 (after "exec" and "db")
+	dashDashIndex := -1
+	for i, arg := range args {
+		if arg == "--" {
+			dashDashIndex = i
+			break
+		}
+	}
+
+	if dashDashIndex < 0 {
+		t.Fatal("-- separator not found in args")
+	}
+
+	// The order should be: compose, -p proj, -f compose.yaml, exec, -T, db, --, mariadb, ...
+	expected := []string{
+		"compose",
+		"-p", "proj",
+		"-f", "compose.yaml",
+		"exec",
+		"-T",
+		"db", "--", "mariadb", "-u", "root", "-h", "localhost",
+	}
+
+	if len(args) != len(expected) {
+		t.Fatalf("BuildArgs length = %d, want %d\nGot:  %v\nWant: %v", len(args), len(expected), args, expected)
+	}
+	for i, got := range args {
+		if got != expected[i] {
+			t.Errorf("BuildArgs[%d] = %q, want %q", i, got, expected[i])
+		}
+	}
+}
+
+// TestBuildArgs_DoubleDashSeparatorRun verifies that -- separator in docker run
+// is preserved in the correct position: between service name and command.
+func TestBuildArgs_DoubleDashSeparatorRun(t *testing.T) {
+	c := &Compose{
+		ProjectName: "proj",
+		Files:       []string{"compose.yaml"},
+		GlobalArgs:  []string{},
+		CommandArgs: map[string][]string{
+			"run": {"--rm"},
+		},
+	}
+
+	// Test: docker run <svc> -- <cmd with flags>
+	args := c.BuildArgs("run", "app-main", "--", "composer", "install", "--prefer-dist")
+
+	// Verify -- is present and flags after it are preserved
+	dashDashIndex := -1
+	for i, arg := range args {
+		if arg == "--" {
+			dashDashIndex = i
+			break
+		}
+	}
+
+	if dashDashIndex < 0 {
+		t.Fatal("-- separator not found in args")
+	}
+
+	expected := []string{
+		"compose",
+		"-p", "proj",
+		"-f", "compose.yaml",
+		"run",
+		"--rm",
+		"app-main", "--", "composer", "install", "--prefer-dist",
+	}
+
+	if len(args) != len(expected) {
+		t.Fatalf("BuildArgs length = %d, want %d\nGot:  %v\nWant: %v", len(args), len(expected), args, expected)
+	}
+	for i, got := range args {
+		if got != expected[i] {
+			t.Errorf("BuildArgs[%d] = %q, want %q", i, got, expected[i])
+		}
+	}
+}
