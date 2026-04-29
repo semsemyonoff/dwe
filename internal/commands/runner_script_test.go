@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"devbox-cli/internal/tpl"
 )
@@ -471,5 +472,236 @@ func TestNewRunner_Returns_ScriptRunner(t *testing.T) {
 	}
 	if _, ok := runner.(*ScriptRunner); !ok {
 		t.Errorf("expected *ScriptRunner, got %T", runner)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Files directive integration tests
+// ---------------------------------------------------------------------------
+
+func TestScriptRunner_FilesWrite_EnvInjection(t *testing.T) {
+	dir := t.TempDir()
+	// Script writes hello to the env var pointing to a file
+	scriptPath := writeScript(t, dir, "write.sh", `printf 'hello' > "$DUMP_FILE"`)
+
+	dumpDir := filepath.Join(dir, "dumps")
+	dumpFile := filepath.Join(dumpDir, "db.sql.gz")
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.dump-write",
+		Script: &ScriptDef{Path: scriptPath},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access:    FileAccessWrite,
+				Path:      filepath.Join(dumpDir, "db.sql.gz"),
+				Mkdir:     true,
+				Overwrite: true,
+				OnError:   FileOnErrorRemove,
+				Env:       "DUMP_FILE",
+			},
+		},
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: dir,
+		Stdout:      &outBuf,
+		Stderr:      &errBuf,
+	}
+
+	err := RunCommand(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// File should exist
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("dump file not created: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Errorf("expected 'hello', got %q", string(data))
+	}
+}
+
+func TestScriptRunner_FilesRead_GlobMatchSort(t *testing.T) {
+	dir := t.TempDir()
+	dumpsDir := filepath.Join(dir, "dumps")
+	if err := os.MkdirAll(dumpsDir, 0o755); err != nil {
+		t.Fatalf("mkdir dumps: %v", err)
+	}
+
+	// Create multiple dated dump files with different modification times
+	files := []struct {
+		name string
+		time time.Time
+	}{
+		{"db_2026-04-27.sql.gz", time.Date(2026, 4, 27, 10, 0, 0, 0, time.Local)},
+		{"db_2026-04-28.sql.gz", time.Date(2026, 4, 28, 10, 0, 0, 0, time.Local)},
+		{"db_2026-04-29.sql.gz", time.Date(2026, 4, 29, 10, 0, 0, 0, time.Local)},
+	}
+	for _, f := range files {
+		path := filepath.Join(dumpsDir, f.name)
+		if err := os.WriteFile(path, []byte("dump data"), 0o644); err != nil {
+			t.Fatalf("write file %s: %v", f.name, err)
+		}
+		// Set modification time to match the date in the filename
+		if err := os.Chtimes(path, f.time, f.time); err != nil {
+			t.Fatalf("chtimes for %s: %v", f.name, err)
+		}
+	}
+
+	// Script reads from DUMP_FILE env var
+	scriptPath := writeScript(t, dir, "read.sh", `
+if [ -f "$DUMP_FILE" ]; then
+  basename "$DUMP_FILE"
+else
+  exit 1
+fi
+`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.dump-read",
+		Script: &ScriptDef{Path: scriptPath},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{
+						Glob:  "dumps/db_*.sql.gz",
+						Match: `db_\d{4}-\d{2}-\d{2}`,
+						Sort:  FileSortModtimeDesc,
+					},
+				},
+				Required: true,
+				Env:      "DUMP_FILE",
+			},
+		},
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: dir,
+		Stdout:      &outBuf,
+		Stderr:      &errBuf,
+	}
+
+	err := RunCommand(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := outBuf.String()
+	// The newest file (by modtime) should be selected; this is db_2026-04-29.sql.gz
+	if !strings.Contains(out, "db_2026-04-29.sql.gz") {
+		t.Errorf("expected newest file to be selected; got output: %q", out)
+	}
+}
+
+func TestScriptRunner_FilesOnError_RemovesFailed(t *testing.T) {
+	dir := t.TempDir()
+	dumpDir := filepath.Join(dir, "dumps")
+	dumpFile := filepath.Join(dumpDir, "db.sql.gz")
+
+	// Script fails after creating the file
+	scriptPath := writeScript(t, dir, "fail.sh", `
+touch "$DUMP_FILE"
+exit 1
+`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.dump-fail",
+		Script: &ScriptDef{Path: scriptPath},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access:    FileAccessWrite,
+				Path:      dumpFile,
+				Mkdir:     true,
+				Overwrite: true,
+				OnError:   FileOnErrorRemove,
+				Env:       "DUMP_FILE",
+			},
+		},
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: dir,
+		Stdout:      &outBuf,
+		Stderr:      &errBuf,
+	}
+
+	err := RunCommand(ctx)
+	if err == nil {
+		t.Fatal("expected error from failing script")
+	}
+
+	// File should have been removed by on_error cleanup
+	if _, err := os.Stat(dumpFile); !os.IsNotExist(err) {
+		t.Errorf("expected dump file to be removed on error; still exists")
+	}
+}
+
+func TestScriptRunner_FilesOnError_PreservesExisting(t *testing.T) {
+	dir := t.TempDir()
+	dumpDir := filepath.Join(dir, "dumps")
+	dumpFile := filepath.Join(dumpDir, "db.sql.gz")
+
+	// Pre-create the file
+	if err := os.MkdirAll(dumpDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(dumpFile, []byte("existing data"), 0o644); err != nil {
+		t.Fatalf("write existing file: %v", err)
+	}
+
+	// Script fails
+	scriptPath := writeScript(t, dir, "fail.sh", `exit 1`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.dump-fail-existing",
+		Script: &ScriptDef{Path: scriptPath},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access:    FileAccessWrite,
+				Path:      dumpFile,
+				Overwrite: true,
+				OnError:   FileOnErrorRemove,
+				Env:       "DUMP_FILE",
+			},
+		},
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: dir,
+		Stdout:      &outBuf,
+		Stderr:      &errBuf,
+	}
+
+	err := RunCommand(ctx)
+	if err == nil {
+		t.Fatal("expected error from failing script")
+	}
+
+	// File should still exist (pre-existing, not removed)
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("expected file to be preserved; got error: %v", err)
+	}
+	if string(data) != "existing data" {
+		t.Errorf("expected 'existing data'; got %q", string(data))
 	}
 }

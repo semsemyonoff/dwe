@@ -281,3 +281,154 @@ func TestLoadCommandFile_FileNotFound(t *testing.T) {
 		t.Error("expected error for missing file, got nil")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Files directive
+// ---------------------------------------------------------------------------
+
+func TestLoadCommandFile_FilesDirective(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "db.yml", `
+commands:
+  dump-create:
+    type: script
+    description: Create database dump
+    script:
+      path: devbox/scripts/db/dump-create.sh
+    files:
+      dump:
+        access: write
+        path: runtime/dumps/db_{{ date }}.sql.gz
+        mkdir: true
+        overwrite: true
+        on_error: remove
+        env: DUMP_FILE
+      backup:
+        access: read
+        path: runtime/backups/db.sql
+        required: false
+        env: BACKUP_FILE
+`)
+
+	cf, err := LoadCommandFile(absPath, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cmd, ok := cf.Commands["dump-create"]
+	if !ok {
+		t.Fatal("command 'dump-create' not found")
+	}
+
+	// Verify Files field was unmarshalled correctly
+	if len(cmd.Files) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(cmd.Files))
+	}
+
+	// Check dump file spec
+	dumpSpec, ok := cmd.Files["dump"]
+	if !ok {
+		t.Fatal("files.dump not found")
+	}
+	if dumpSpec.Access != FileAccessWrite {
+		t.Errorf("dump.Access = %q, want %q", dumpSpec.Access, FileAccessWrite)
+	}
+	if dumpSpec.Path != "runtime/dumps/db_{{ date }}.sql.gz" {
+		t.Errorf("dump.Path = %q, want %q", dumpSpec.Path, "runtime/dumps/db_{{ date }}.sql.gz")
+	}
+	if !dumpSpec.Mkdir {
+		t.Error("dump.Mkdir should be true")
+	}
+	if !dumpSpec.Overwrite {
+		t.Error("dump.Overwrite should be true")
+	}
+	if dumpSpec.OnError != FileOnErrorRemove {
+		t.Errorf("dump.OnError = %q, want %q", dumpSpec.OnError, FileOnErrorRemove)
+	}
+	if dumpSpec.Env != "DUMP_FILE" {
+		t.Errorf("dump.Env = %q, want %q", dumpSpec.Env, "DUMP_FILE")
+	}
+
+	// Check backup file spec
+	backupSpec, ok := cmd.Files["backup"]
+	if !ok {
+		t.Fatal("files.backup not found")
+	}
+	if backupSpec.Access != FileAccessRead {
+		t.Errorf("backup.Access = %q, want %q", backupSpec.Access, FileAccessRead)
+	}
+	if backupSpec.Path != "runtime/backups/db.sql" {
+		t.Errorf("backup.Path = %q, want %q", backupSpec.Path, "runtime/backups/db.sql")
+	}
+	if backupSpec.Required {
+		t.Error("backup.Required should be false")
+	}
+	if backupSpec.Env != "BACKUP_FILE" {
+		t.Errorf("backup.Env = %q, want %q", backupSpec.Env, "BACKUP_FILE")
+	}
+}
+
+func TestLoadCommandFile_FilesCandidates(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "db.yml", `
+commands:
+  dump-deploy:
+    type: script
+    description: Restore database dump
+    script:
+      path: devbox/scripts/db/dump-deploy.sh
+    files:
+      dump:
+        access: read
+        candidates:
+          - glob: "runtime/dumps/db_*.sql.gz"
+            match: "db_\\d{4}-\\d{2}-\\d{2}"
+            sort: modtime_desc
+          - path: "runtime/dumps/db.sql.gz"
+        required: true
+        env: DUMP_FILE
+`)
+
+	cf, err := LoadCommandFile(absPath, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cmd, ok := cf.Commands["dump-deploy"]
+	if !ok {
+		t.Fatal("command 'dump-deploy' not found")
+	}
+
+	dumpSpec, ok := cmd.Files["dump"]
+	if !ok {
+		t.Fatal("files.dump not found")
+	}
+
+	if dumpSpec.Access != FileAccessRead {
+		t.Errorf("dump.Access = %q, want %q", dumpSpec.Access, FileAccessRead)
+	}
+	if !dumpSpec.Required {
+		t.Error("dump.Required should be true")
+	}
+	if len(dumpSpec.Candidates) != 2 {
+		t.Fatalf("expected 2 candidates, got %d", len(dumpSpec.Candidates))
+	}
+
+	// First candidate: glob+match+sort
+	cand0 := dumpSpec.Candidates[0]
+	if cand0.Glob != "runtime/dumps/db_*.sql.gz" {
+		t.Errorf("candidates[0].Glob = %q, want %q", cand0.Glob, "runtime/dumps/db_*.sql.gz")
+	}
+	if cand0.Match != `db_\d{4}-\d{2}-\d{2}` {
+		t.Errorf("candidates[0].Match = %q", cand0.Match)
+	}
+	if cand0.Sort != FileSortModtimeDesc {
+		t.Errorf("candidates[0].Sort = %q, want %q", cand0.Sort, FileSortModtimeDesc)
+	}
+
+	// Second candidate: path
+	cand1 := dumpSpec.Candidates[1]
+	if cand1.Path != "runtime/dumps/db.sql.gz" {
+		t.Errorf("candidates[1].Path = %q, want %q", cand1.Path, "runtime/dumps/db.sql.gz")
+	}
+}
