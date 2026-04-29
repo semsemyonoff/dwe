@@ -166,6 +166,37 @@ func TestDockerCommandSubcommands(t *testing.T) {
 	}
 }
 
+func TestStripDockerCommandSeparator(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "removes separator before command",
+			args: []string{"db", "--", "mariadb", "-e", "SELECT 1"},
+			want: []string{"db", "mariadb", "-e", "SELECT 1"},
+		},
+		{
+			name: "leaves args without separator unchanged",
+			args: []string{"db", "mariadb", "-e", "SELECT 1"},
+			want: []string{"db", "mariadb", "-e", "SELECT 1"},
+		},
+		{
+			name: "removes only first separator",
+			args: []string{"app", "--", "sh", "-lc", "printf -- hello"},
+			want: []string{"app", "sh", "-lc", "printf -- hello"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripDockerCommandSeparator(tt.args)
+			assertArgs(t, tt.name, got, tt.want)
+		})
+	}
+}
+
 func assertArgs(t *testing.T, label string, got, expected []string) {
 	t.Helper()
 	if len(got) != len(expected) {

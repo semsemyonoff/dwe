@@ -93,7 +93,28 @@ func (c *Compose) Exec(command string, extraArgs ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = c.BuildEnv()
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %w", formatCommand(append([]string{"docker"}, args...)), err)
+	}
+	return nil
+}
+
+func formatCommand(args []string) string {
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = quoteArg(arg)
+	}
+	return strings.Join(quoted, " ")
+}
+
+func quoteArg(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	if strings.ContainsAny(arg, " \t\n\"'\\$`|&;()<>*?[#~=%") {
+		return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+	}
+	return arg
 }
 
 // MergeEnv returns the current process environment with overrides applied.

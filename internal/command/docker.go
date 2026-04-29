@@ -198,7 +198,7 @@ being consumed by devbox's parser.`,
 			if err != nil {
 				return err
 			}
-			return p.compose.Exec("exec", args...)
+			return p.compose.Exec("exec", stripDockerCommandSeparator(args)...)
 		},
 		SilenceUsage: true,
 	}
@@ -223,10 +223,22 @@ being consumed by devbox's parser.`,
 			if err != nil {
 				return err
 			}
-			return p.compose.Exec("run", args...)
+			return p.compose.Exec("run", stripDockerCommandSeparator(args)...)
 		},
 		SilenceUsage: true,
 	}
+}
+
+func stripDockerCommandSeparator(args []string) []string {
+	for i, arg := range args {
+		if arg == "--" {
+			stripped := make([]string, 0, len(args)-1)
+			stripped = append(stripped, args[:i]...)
+			stripped = append(stripped, args[i+1:]...)
+			return stripped
+		}
+	}
+	return args
 }
 
 func newDockerWaitCmd(flags *rootFlags) *cobra.Command {

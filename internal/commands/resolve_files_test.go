@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -786,6 +787,48 @@ func TestPrepareFileEffects_CleanupOnlyNewFiles(t *testing.T) {
 	// New file should be removed
 	if _, err := os.Stat(testFile2); err == nil {
 		t.Fatalf("new file should be removed by cleanup")
+	}
+}
+
+func TestPrepareFileEffects_CleanupIgnoresMissingFile(t *testing.T) {
+	tmpdir := t.TempDir()
+	var errBuf bytes.Buffer
+
+	cmd := &CommandDef{
+		ID:   "test.cleanup-missing",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"output": {
+				Access:  FileAccessWrite,
+				Path:    "missing-output.txt",
+				OnError: FileOnErrorRemove,
+			},
+		},
+	}
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Stderr:      &errBuf,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+	cleanups, err := PrepareFileEffects(ctx, paths)
+	if err != nil {
+		t.Fatalf("PrepareFileEffects: %v", err)
+	}
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
+	}
+	if got := errBuf.String(); got != "" {
+		t.Fatalf("missing file cleanup should be silent, got %q", got)
 	}
 }
 

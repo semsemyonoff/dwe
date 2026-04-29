@@ -409,6 +409,9 @@ func PrepareFileEffects(ctx RunContext, paths map[string]tpl.ResolvedFile) ([]fu
 				fileToClean := absPath
 				cleanups = append(cleanups, func() {
 					if err := os.Remove(fileToClean); err != nil {
+						if os.IsNotExist(err) {
+							return
+						}
 						_, _ = fmt.Fprintf(stderr, "cleanup: failed to remove %s: %v\n", fileToClean, err)
 					}
 				})

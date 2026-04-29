@@ -651,6 +651,34 @@ exit 1
 	}
 }
 
+func TestScriptRunner_ExitErrorIncludesScriptPath(t *testing.T) {
+	dir := t.TempDir()
+	scriptPath := writeScript(t, dir, "missing-command.sh", `definitely-not-a-devbox-test-command`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.missing-command",
+		Script: &ScriptDef{Path: scriptPath, Shell: "sh"},
+	}
+
+	err := (&ScriptRunner{}).Run(RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: dir,
+		Stderr:      &bytes.Buffer{},
+	})
+	if err == nil {
+		t.Fatal("expected script error")
+	}
+	got := err.Error()
+	if !strings.Contains(got, scriptPath) {
+		t.Fatalf("error should include script path; got %q", got)
+	}
+	if !strings.Contains(got, "exit 127 usually means a command was not found") {
+		t.Fatalf("error should explain exit 127; got %q", got)
+	}
+}
+
 func TestScriptRunner_FilesOnError_PreservesExisting(t *testing.T) {
 	dir := t.TempDir()
 	dumpDir := filepath.Join(dir, "dumps")

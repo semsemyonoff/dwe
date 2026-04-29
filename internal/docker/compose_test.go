@@ -329,3 +329,22 @@ func TestBuildArgs_DoubleDashSeparatorRun(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatCommandQuotesUnsafeArgs(t *testing.T) {
+	got := formatCommand([]string{
+		"docker",
+		"compose",
+		"exec",
+		"-e",
+		"MYSQL_PWD",
+		"db",
+		"--",
+		"sh",
+		"-c",
+		"echo 'hello world'",
+	})
+	want := "docker compose exec -e MYSQL_PWD db -- sh -c 'echo '\\''hello world'\\'''"
+	if got != want {
+		t.Fatalf("formatCommand = %q, want %q", got, want)
+	}
+}

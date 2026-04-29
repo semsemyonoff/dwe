@@ -154,6 +154,16 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 		scriptPath = filepath.Join(ctx.ProjectRoot, scriptPath)
 	}
 
+	if _, err := exec.LookPath(shell); err != nil {
+		return fmt.Errorf("script runner: shell %q not found in PATH: %w", shell, err)
+	}
+	if _, err := os.Stat(scriptPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("script runner: script not found: %s", scriptPath)
+		}
+		return fmt.Errorf("script runner: stat script %s: %w", scriptPath, err)
+	}
+
 	c := exec.Command(shell, scriptPath) //nolint:gosec
 
 	if ctx.ProjectRoot != "" {
@@ -175,5 +185,14 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 	c.Stderr = stderr(ctx)
 	c.Stdin = os.Stdin
 
-	return c.Run()
+	if err := c.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 127 {
+				return fmt.Errorf("script %s failed: %w (exit 127 usually means a command was not found; check the script and commands it invokes)", scriptPath, err)
+			}
+			return fmt.Errorf("script %s failed: %w", scriptPath, err)
+		}
+		return fmt.Errorf("script %s failed: %w", scriptPath, err)
+	}
+	return nil
 }
