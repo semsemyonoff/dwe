@@ -759,3 +759,222 @@ func TestScriptRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
 		t.Errorf("expected DEVBOX_NONINTERACTIVE=1 when NonInteractive=true; got %q", out)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Workdir support
+// ---------------------------------------------------------------------------
+
+func TestScriptRunner_Workdir_AbsolutePath(t *testing.T) {
+	projectRoot := t.TempDir()
+	workdirAbs := t.TempDir()
+
+	// Resolve symlinks for consistent comparison (macOS)
+	workdirAbs, _ = filepath.EvalSymlinks(workdirAbs)
+
+	// Create a script in projectRoot that checks pwd
+	scriptPath := writeScript(t, projectRoot, "check_pwd.sh", `pwd`)
+
+	cmd := &CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "test.workdir-abs",
+		Workdir: workdirAbs,
+		Script:  &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: projectRoot,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out = strings.TrimSpace(out)
+	expected, _ := filepath.EvalSymlinks(out)
+	if expected != workdirAbs {
+		t.Errorf("expected pwd=%q; got %q", workdirAbs, expected)
+	}
+}
+
+func TestScriptRunner_Workdir_RelativePath(t *testing.T) {
+	projectRoot := t.TempDir()
+	subdir := filepath.Join(projectRoot, "subdir")
+	if err := os.Mkdir(subdir, 0o755); err != nil {
+		t.Fatalf("mkdir subdir: %v", err)
+	}
+
+	scriptPath := writeScript(t, projectRoot, "check_pwd.sh", `pwd`)
+
+	cmd := &CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "test.workdir-rel",
+		Workdir: "subdir",
+		Script:  &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: projectRoot,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out = strings.TrimSpace(out)
+	expectedPwd, _ := filepath.EvalSymlinks(subdir)
+	outResolved, _ := filepath.EvalSymlinks(out)
+	if outResolved != expectedPwd {
+		t.Errorf("expected pwd=%q; got %q", expectedPwd, outResolved)
+	}
+}
+
+func TestScriptRunner_Workdir_ScriptPathIsProjectRootRelative(t *testing.T) {
+	projectRoot := t.TempDir()
+	workdirAbs := t.TempDir()
+
+	// Create script in projectRoot/scripts/
+	scriptsDir := filepath.Join(projectRoot, "scripts")
+	if err := os.Mkdir(scriptsDir, 0o755); err != nil {
+		t.Fatalf("mkdir scripts: %v", err)
+	}
+
+	// Script that checks both its location (via $0) and current working directory
+	_ = writeScript(t, scriptsDir, "check_paths.sh", `echo "$0"; pwd`)
+
+	cmd := &CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "test.script-path-abs",
+		Workdir: workdirAbs,
+		Script:  &ScriptDef{Path: "scripts/check_paths.sh"},
+	}
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: projectRoot,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected 2+ lines of output; got %q", out)
+	}
+
+	scriptPathOutput := lines[0]
+	pwdOutput := strings.Join(lines[1:], "\n")
+
+	// Script should still be referenced from project root perspective
+	if !strings.Contains(scriptPathOutput, "scripts/check_paths.sh") && !strings.Contains(scriptPathOutput, "check_paths.sh") {
+		t.Errorf("expected script path to include 'check_paths.sh'; got %q", scriptPathOutput)
+	}
+
+	// But pwd should reflect workdir (resolved for symlinks on macOS)
+	pwdResolved, _ := filepath.EvalSymlinks(pwdOutput)
+	workdirResolved, _ := filepath.EvalSymlinks(workdirAbs)
+	if pwdResolved != workdirResolved {
+		t.Errorf("expected pwd=%q; got %q", workdirResolved, pwdResolved)
+	}
+}
+
+func TestScriptRunner_Workdir_TemplateRendering(t *testing.T) {
+	projectRoot := t.TempDir()
+	subdir := filepath.Join(projectRoot, "mydir")
+	if err := os.Mkdir(subdir, 0o755); err != nil {
+		t.Fatalf("mkdir mydir: %v", err)
+	}
+
+	scriptPath := writeScript(t, projectRoot, "check_pwd.sh", `pwd`)
+
+	cmd := &CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "test.workdir-template",
+		Workdir: "${param.dir}",
+		Script:  &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd: cmd,
+		Render: &tpl.RenderContext{
+			Params:  map[string]any{"dir": "mydir"},
+			Context: map[string]any{},
+		},
+		ProjectRoot: projectRoot,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out = strings.TrimSpace(out)
+	expected, _ := filepath.EvalSymlinks(subdir)
+	outResolved, _ := filepath.EvalSymlinks(out)
+	if outResolved != expected {
+		t.Errorf("expected pwd=%q (from template); got %q", expected, outResolved)
+	}
+}
+
+func TestScriptRunner_Workdir_RenderError(t *testing.T) {
+	projectRoot := t.TempDir()
+	scriptPath := writeScript(t, projectRoot, "check_pwd.sh", `pwd`)
+
+	// Use invalid Go template syntax to trigger a parse error
+	cmd := &CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "test.workdir-render-err",
+		Workdir: "{{ .Invalid.Unclosed",
+		Script:  &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd: cmd,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+		ProjectRoot: projectRoot,
+	}
+
+	_, _, err := captureOutput(t, ctx)
+	if err == nil {
+		t.Fatal("expected error when workdir template fails to render")
+	}
+	if !strings.Contains(err.Error(), "render workdir") {
+		t.Errorf("expected 'render workdir' in error; got %q", err)
+	}
+}
+
+func TestScriptRunner_Workdir_Empty_FallsBackToProjectRoot(t *testing.T) {
+	projectRoot := t.TempDir()
+	scriptPath := writeScript(t, projectRoot, "check_pwd.sh", `pwd`)
+
+	cmd := &CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "test.workdir-empty",
+		Workdir: "",
+		Script:  &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{Params: map[string]any{}, Context: map[string]any{}},
+		ProjectRoot: projectRoot,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out = strings.TrimSpace(out)
+	expected, _ := filepath.EvalSymlinks(projectRoot)
+	outResolved, _ := filepath.EvalSymlinks(out)
+	if outResolved != expected {
+		t.Errorf("expected pwd=%q (project root); got %q", expected, outResolved)
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"devbox-cli/internal/tpl"
 )
 
 // ScriptRunner executes type=script commands by running one or more script files.
@@ -149,6 +151,7 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 }
 
 // execScript runs a single script file using the given shell interpreter.
+// Note: script.path is always resolved against ctx.ProjectRoot, not against workdir.
 func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, contractEnv []string) error {
 	if !filepath.IsAbs(scriptPath) && ctx.ProjectRoot != "" {
 		scriptPath = filepath.Join(ctx.ProjectRoot, scriptPath)
@@ -166,8 +169,23 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 
 	c := exec.Command(shell, scriptPath) //nolint:gosec
 
-	if ctx.ProjectRoot != "" {
-		c.Dir = ctx.ProjectRoot
+	// Determine working directory: render workdir if set, otherwise use project root.
+	workdir := ctx.ProjectRoot
+	if ctx.Cmd != nil && ctx.Cmd.Workdir != "" {
+		rendered, err := tpl.RenderCommand(ctx.Cmd.Workdir, ctx.Render)
+		if err != nil {
+			return fmt.Errorf("script runner: render workdir: %w", err)
+		}
+		// Normalize relative paths against project root.
+		if !filepath.IsAbs(rendered) && ctx.ProjectRoot != "" {
+			workdir = filepath.Join(ctx.ProjectRoot, rendered)
+		} else {
+			workdir = rendered
+		}
+	}
+
+	if workdir != "" {
+		c.Dir = workdir
 	}
 
 	// Inherit host env, overlay command env, then apply contract vars.
