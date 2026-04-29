@@ -68,6 +68,8 @@ env | grep -E '^DEVBOX_' | sort
 		"DEVBOX_NONINTERACTIVE=",
 		"DEVBOX_PARAMS_JSON=",
 		"DEVBOX_CONTEXT_JSON=",
+		"DEVBOX_BIN=",
+		"DEVBOX_FILES_JSON=",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in output; got:\n%s", want, out)
@@ -133,6 +135,101 @@ func TestScriptRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 	}
 	if decoded["db"] != "mydb" {
 		t.Errorf("expected db=mydb in context JSON; got %v", decoded)
+	}
+}
+
+func TestScriptRunner_ContractEnvVars_DevboxBin(t *testing.T) {
+	dir := t.TempDir()
+	scriptPath := writeScript(t, dir, "bin.sh", `printf '%s' "$DEVBOX_BIN"`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.bin",
+		Script: &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{},
+		ProjectRoot: dir,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if out == "" {
+		t.Error("DEVBOX_BIN is empty")
+	}
+	if !filepath.IsAbs(out) {
+		t.Errorf("DEVBOX_BIN is not absolute; got %q", out)
+	}
+}
+
+func TestScriptRunner_ContractEnvVars_FilesJSON_Empty(t *testing.T) {
+	dir := t.TempDir()
+	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DEVBOX_FILES_JSON"`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.files-empty",
+		Script: &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{},
+		ProjectRoot: dir,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("DEVBOX_FILES_JSON is not valid JSON: %v\ngot: %s", err, out)
+	}
+	if len(decoded) != 0 {
+		t.Errorf("expected empty files JSON; got %v", decoded)
+	}
+}
+
+func TestScriptRunner_ContractEnvVars_FilesJSON_WithFiles(t *testing.T) {
+	dir := t.TempDir()
+	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DEVBOX_FILES_JSON"`)
+
+	cmd := &CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "test.files-with",
+		Script: &ScriptDef{Path: scriptPath},
+	}
+	ctx := RunContext{
+		Cmd: cmd,
+		Render: &tpl.RenderContext{
+			Files: map[string]tpl.ResolvedFile{
+				"dump": {Path: "/tmp/db_2026-04-29.sql.gz"},
+				"log":  {Path: "/tmp/app.log"},
+			},
+		},
+		ProjectRoot: dir,
+	}
+
+	out, _, err := captureOutput(t, ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var decoded map[string]map[string]string
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("DEVBOX_FILES_JSON is not valid JSON: %v\ngot: %s", err, out)
+	}
+
+	if decoded["dump"]["path"] != "/tmp/db_2026-04-29.sql.gz" {
+		t.Errorf("expected dump path in files JSON; got %v", decoded)
+	}
+	if decoded["log"]["path"] != "/tmp/app.log" {
+		t.Errorf("expected log path in files JSON; got %v", decoded)
 	}
 }
 

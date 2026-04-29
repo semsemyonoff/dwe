@@ -23,6 +23,8 @@ import (
 //	DEVBOX_NONINTERACTIVE  "1" when running without a TTY / in CI, "0" otherwise
 //	DEVBOX_PARAMS_JSON     resolved params as a JSON object
 //	DEVBOX_CONTEXT_JSON    resolved context values as a JSON object
+//	DEVBOX_BIN             absolute path to the devbox executable
+//	DEVBOX_FILES_JSON      JSON object mapping file IDs to resolved paths
 type ScriptRunner struct{}
 
 // Run executes the script command described by ctx.
@@ -107,6 +109,31 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 		return nil, fmt.Errorf("script runner: marshal context: %w", err)
 	}
 
+	// Resolve devbox binary path.
+	devboxBin, err := os.Executable()
+	if err != nil {
+		// Fallback to os.Args[0] (the command name) and make it absolute.
+		devboxBin = os.Args[0]
+		if !filepath.IsAbs(devboxBin) {
+			absPath, err := filepath.Abs(devboxBin)
+			if err == nil {
+				devboxBin = absPath
+			}
+		}
+	}
+
+	// Build DEVBOX_FILES_JSON from ctx.Render.Files.
+	filesMap := map[string]map[string]string{}
+	if ctx.Render != nil && ctx.Render.Files != nil {
+		for id, resolved := range ctx.Render.Files {
+			filesMap[id] = map[string]string{"path": resolved.Path}
+		}
+	}
+	filesJSON, err := json.Marshal(filesMap)
+	if err != nil {
+		return nil, fmt.Errorf("script runner: marshal files: %w", err)
+	}
+
 	return []string{
 		"DEVBOX_ROOT=" + root,
 		"DEVBOX_COMMAND_ID=" + ctx.Cmd.ID,
@@ -114,6 +141,8 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 		"DEVBOX_NONINTERACTIVE=" + nonInteractive,
 		"DEVBOX_PARAMS_JSON=" + string(paramsJSON),
 		"DEVBOX_CONTEXT_JSON=" + string(contextJSON),
+		"DEVBOX_BIN=" + devboxBin,
+		"DEVBOX_FILES_JSON=" + string(filesJSON),
 	}, nil
 }
 
