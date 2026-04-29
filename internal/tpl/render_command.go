@@ -10,6 +10,12 @@ import (
 	"text/template"
 )
 
+// ResolvedFile represents a single resolved file path artifact.
+// Minimal DTO to avoid import cycles from tpl → commands.
+type ResolvedFile struct {
+	Path string
+}
+
 // RenderContext holds all data available during command template evaluation.
 type RenderContext struct {
 	// Raw is the merged devbox config map (devbox.yml + defaults.yml + local.yml).
@@ -18,6 +24,8 @@ type RenderContext struct {
 	Params map[string]any
 	// Context holds resolved context values (keyed by context name).
 	Context map[string]any
+	// Files holds resolved file paths (keyed by file id).
+	Files map[string]ResolvedFile
 	// Host provides runtime host information.
 	Host HostInfo
 }
@@ -63,6 +71,10 @@ var varPattern = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}`)
 //	${param.key}     →  {{ resolveMap .Params "key" }}
 //	${context.key}   →  {{ resolveMap .Context "key" }}
 //
+// The special namespace "files" resolves file artifacts:
+//
+//	${files.id.path} →  {{ resolveFile .Files "id" "path" }}
+//
 // The special namespace "host" resolves runtime helpers:
 //
 //	${host.uid}      →  {{ .Host.UID }}
@@ -79,6 +91,14 @@ func CompileVarSyntax(input string) string {
 		head, tail, hasTail := strings.Cut(inner, ".")
 
 		switch head {
+		case "files":
+			if hasTail {
+				// files.<id>.<subkey>
+				id, subkey, hasSubkey := strings.Cut(tail, ".")
+				if hasSubkey {
+					return fmt.Sprintf(`{{ resolveFile .Files %q %q }}`, id, subkey)
+				}
+			}
 		case "host":
 			if hasTail {
 				switch tail {
@@ -124,11 +144,12 @@ func RenderCommand(expr string, data *RenderContext) (string, error) {
 }
 
 // commandFuncMap returns the FuncMap used in command template evaluation.
-// It extends the base FuncMap with resolve and resolveMap helpers.
+// It extends the base FuncMap with resolve, resolveMap, and resolveFile helpers.
 func commandFuncMap() template.FuncMap {
 	fm := FuncMap()
 	fm["resolve"] = resolveRaw
 	fm["resolveMap"] = resolveMap
+	fm["resolveFile"] = resolveFile
 	return fm
 }
 
@@ -155,6 +176,24 @@ func resolveMap(m map[string]any, key string) any {
 		return v
 	}
 	return ""
+}
+
+// resolveFile resolves a subkey in a ResolvedFile from the Files map.
+// Returns "" when the file id or subkey is not found.
+func resolveFile(files map[string]ResolvedFile, id string, subkey string) any {
+	if files == nil {
+		return ""
+	}
+	f, ok := files[id]
+	if !ok {
+		return ""
+	}
+	switch subkey {
+	case "path":
+		return f.Path
+	default:
+		return ""
+	}
 }
 
 // resolveMapPath walks a dot-separated path in a nested map.

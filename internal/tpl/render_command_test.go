@@ -403,3 +403,110 @@ func TestRenderCommand_baseDirChained(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// ---- Files namespace ----
+
+func TestCompileVarSyntax_filesPath(t *testing.T) {
+	got := CompileVarSyntax("${files.dump.path}")
+	want := `{{ resolveFile .Files "dump" "path" }}`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestCompileVarSyntax_filesPathInContext(t *testing.T) {
+	in := "backup at ${files.dump.path}"
+	got := CompileVarSyntax(in)
+	if !strings.Contains(got, `{{ resolveFile .Files "dump" "path" }}`) {
+		t.Errorf("files path not compiled in %q", got)
+	}
+}
+
+func TestCompileVarSyntax_filesHyphenNotMatched(t *testing.T) {
+	// File IDs with hyphens should NOT match (they're not in the grammar)
+	// so ${files.foo-bar.path} should be left as a literal string.
+	in := "${files.foo-bar.path}"
+	got := CompileVarSyntax(in)
+	// The varPattern doesn't match identifiers with hyphens, so it returns unchanged
+	if got != in {
+		t.Errorf("hyphenated file id was matched; got %q, want %q", got, in)
+	}
+}
+
+func TestRenderCommand_filesResolution(t *testing.T) {
+	ctx := &RenderContext{
+		Files: map[string]ResolvedFile{
+			"dump": {Path: "/tmp/db_2026-04-29.sql.gz"},
+		},
+	}
+	got, err := RenderCommand("${files.dump.path}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "/tmp/db_2026-04-29.sql.gz" {
+		t.Errorf("got %q, want /tmp/db_2026-04-29.sql.gz", got)
+	}
+}
+
+func TestRenderCommand_filesMissingID(t *testing.T) {
+	ctx := &RenderContext{
+		Files: map[string]ResolvedFile{},
+	}
+	got, err := RenderCommand("${files.missing.path}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// missing file id → empty string
+	if got != "" {
+		t.Errorf("got %q, want empty string for missing file id", got)
+	}
+}
+
+func TestRenderCommand_filesUnknownSubkey(t *testing.T) {
+	ctx := &RenderContext{
+		Files: map[string]ResolvedFile{
+			"dump": {Path: "/tmp/db.sql.gz"},
+		},
+	}
+	got, err := RenderCommand("${files.dump.unknown}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// unknown subkey → empty string
+	if got != "" {
+		t.Errorf("got %q, want empty string for unknown subkey", got)
+	}
+}
+
+func TestRenderCommand_filesNilMap(t *testing.T) {
+	ctx := &RenderContext{
+		Files: nil,
+	}
+	got, err := RenderCommand("${files.dump.path}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Errorf("got %q, want empty string for nil files", got)
+	}
+}
+
+func TestRenderCommand_filesMixedVars(t *testing.T) {
+	ctx := &RenderContext{
+		Files: map[string]ResolvedFile{
+			"dump": {Path: "/backup/db.sql.gz"},
+		},
+		Params: map[string]any{
+			"database": "production",
+		},
+	}
+	expr := "Restoring ${param.database} from ${files.dump.path}"
+	got, err := RenderCommand(expr, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Restoring production from /backup/db.sql.gz"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
