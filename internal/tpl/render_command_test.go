@@ -3,6 +3,7 @@ package tpl
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---- CompileVarSyntax ----
@@ -282,5 +283,123 @@ func TestResolveMapPath_nilMap(t *testing.T) {
 	got := resolveMapPath(nil, "a.b")
 	if got != nil {
 		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// ---- New template functions (date, datetime, base, dir) ----
+
+func TestRenderCommand_dateFunc(t *testing.T) {
+	// Stub the time function for deterministic testing
+	defer func(orig func() time.Time) { nowFn = orig }(nowFn)
+	nowFn = func() time.Time {
+		t, _ := time.Parse(time.RFC3339, "2026-04-29T15:30:45Z")
+		return t
+	}
+
+	ctx := &RenderContext{}
+	got, err := RenderCommand("{{ date }}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "2026-04-29"
+	if got != want {
+		t.Errorf("date = %q, want %q", got, want)
+	}
+}
+
+func TestRenderCommand_datetimeFunc(t *testing.T) {
+	// Stub the time function for deterministic testing
+	defer func(orig func() time.Time) { nowFn = orig }(nowFn)
+	nowFn = func() time.Time {
+		t, _ := time.Parse(time.RFC3339, "2026-04-29T15:30:45Z")
+		return t
+	}
+
+	ctx := &RenderContext{}
+	got, err := RenderCommand("{{ datetime }}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "2026-04-29_15-30-45"
+	if got != want {
+		t.Errorf("datetime = %q, want %q", got, want)
+	}
+}
+
+func TestRenderCommand_baseFunc(t *testing.T) {
+	ctx := &RenderContext{}
+	cases := []struct {
+		expr string
+		want string
+	}{
+		{`{{ base "/a/b/c.txt" }}`, "c.txt"},
+		{`{{ base "file.txt" }}`, "file.txt"},
+		{`{{ base "/path/" }}`, "path"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			got, err := RenderCommand(tc.expr, ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRenderCommand_dirFunc(t *testing.T) {
+	ctx := &RenderContext{}
+	cases := []struct {
+		expr string
+		want string
+	}{
+		{`{{ dir "/a/b/c.txt" }}`, "/a/b"},
+		{`{{ dir "file.txt" }}`, "."},
+		{`{{ dir "/a/b/" }}`, "/a/b"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			got, err := RenderCommand(tc.expr, ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRenderCommand_templateFuncsInExpression(t *testing.T) {
+	// Stub the time function for deterministic testing
+	defer func(orig func() time.Time) { nowFn = orig }(nowFn)
+	nowFn = func() time.Time {
+		t, _ := time.Parse(time.RFC3339, "2026-04-29T00:00:00Z")
+		return t
+	}
+
+	ctx := &RenderContext{}
+	got, err := RenderCommand("backup_{{ date }}.sql", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "backup_2026-04-29.sql"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestRenderCommand_baseDirChained(t *testing.T) {
+	ctx := &RenderContext{}
+	// Test {{ dir (base "/a/b/c.txt") }} which should give us "." since base returns just "c.txt"
+	got, err := RenderCommand(`{{ dir (base "/a/b/c.txt") }}`, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "."
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
