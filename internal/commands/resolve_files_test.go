@@ -1105,6 +1105,140 @@ func TestComputeFilePaths_DumpDeployFallback(t *testing.T) {
 	}
 }
 
+// TestComputeFilePaths_CandidatesNameAsc tests name ascending sort (A-Z picks first alphabetically).
+func TestComputeFilePaths_CandidatesNameAsc(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	for _, name := range []string{"c.sql.gz", "a.sql.gz", "b.sql.gz"} {
+		if err := os.WriteFile(filepath.Join(tmpdir, name), []byte{}, 0o644); err != nil {
+			t.Fatalf("create test file: %v", err)
+		}
+	}
+
+	cmd := &CommandDef{
+		ID:   "test.name_asc",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"first": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Glob: "*.sql.gz", Sort: FileSortNameAsc},
+				},
+				Required: true,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	expected := filepath.Join(tmpdir, "a.sql.gz")
+	if resolved, ok := paths["first"]; !ok {
+		t.Fatalf("expected path with id 'first', not found")
+	} else if resolved.Path != expected {
+		t.Fatalf("expected %s (first alphabetically), got %s", expected, resolved.Path)
+	}
+}
+
+// TestComputeFilePaths_CandidatesModtimeAsc tests modtime ascending sort (oldest first).
+func TestComputeFilePaths_CandidatesModtimeAsc(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	// old.txt gets the earliest modtime, new.txt gets the latest — same layout as modtime_desc test.
+	files := []struct {
+		name string
+		path string
+	}{
+		{"old.txt", filepath.Join(tmpdir, "old.txt")},
+		{"mid.txt", filepath.Join(tmpdir, "mid.txt")},
+		{"new.txt", filepath.Join(tmpdir, "new.txt")},
+	}
+
+	for i, f := range files {
+		if err := os.WriteFile(f.path, []byte{}, 0o644); err != nil {
+			t.Fatalf("create test file: %v", err)
+		}
+		mt := time.Now().Add(time.Duration(-1000+i*100) * time.Second)
+		if err := os.Chtimes(f.path, mt, mt); err != nil {
+			t.Fatalf("chtimes: %v", err)
+		}
+	}
+
+	cmd := &CommandDef{
+		ID:   "test.modtime_asc",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"oldest": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Glob: "*.txt", Sort: FileSortModtimeAsc},
+				},
+				Required: true,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	// old.txt has the oldest modtime (i=2, most negative offset)
+	expected := filepath.Join(tmpdir, "old.txt")
+	if resolved, ok := paths["oldest"]; !ok {
+		t.Fatalf("expected path with id 'oldest', not found")
+	} else if resolved.Path != expected {
+		t.Fatalf("expected %s (oldest by modtime), got %s", expected, resolved.Path)
+	}
+}
+
+// TestComputeFilePaths_CandidatesInvalidRegex tests that a malformed match pattern aborts immediately.
+func TestComputeFilePaths_CandidatesInvalidRegex(t *testing.T) {
+	tmpdir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpdir, "db.sql.gz"), []byte{}, 0o644); err != nil {
+		t.Fatalf("create test file: %v", err)
+	}
+
+	cmd := &CommandDef{
+		ID:   "test.invalid_regex",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Glob: "*.sql.gz", Match: "[invalid"},
+				},
+				Required: true,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
+	}
+
+	_, err := ComputeFilePaths(ctx)
+	if err == nil {
+		t.Fatalf("expected error for invalid regex match pattern, got nil")
+	}
+}
+
 // Helper function to check if a string contains a substring.
 func contains(s, substr string) bool {
 	for i := range s {

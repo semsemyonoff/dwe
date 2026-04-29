@@ -5,9 +5,15 @@ package commands
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	reFileID   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	rePosixEnv = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 )
 
 // CommandType identifies the execution strategy for a command.
@@ -463,7 +469,6 @@ func (c *CommandDef) validateFiles() error {
 	}
 
 	// File ID regex: [a-zA-Z_][a-zA-Z0-9_]* (no hyphens)
-	fileIDRegex := `^[a-zA-Z_][a-zA-Z0-9_]*$`
 
 	// Collect all env names to detect conflicts
 	allEnvNames := make(map[string]string) // name -> source
@@ -496,7 +501,7 @@ func (c *CommandDef) validateFiles() error {
 	// Validate each file spec and collect env names
 	for fid, fspec := range c.Files {
 		// Validate file ID grammar
-		if !matchesPattern(fid, fileIDRegex) {
+		if !reFileID.MatchString(fid) {
 			return fmt.Errorf("files.%s: id must match ^[a-zA-Z_][a-zA-Z0-9_]*$ (got %q)", fid, fid)
 		}
 
@@ -572,7 +577,7 @@ func (c *CommandDef) validateFiles() error {
 
 		// Validate env name if set
 		if fspec.Env != "" {
-			if !matchesPattern(fspec.Env, `^[A-Z_][A-Z0-9_]*$`) {
+			if !rePosixEnv.MatchString(fspec.Env) {
 				return fmt.Errorf("files.%s: env must be a valid POSIX env name like MY_VAR (got %q)", fid, fspec.Env)
 			}
 
@@ -585,59 +590,6 @@ func (c *CommandDef) validateFiles() error {
 	}
 
 	return nil
-}
-
-// matchesPattern is a simple regex matcher for validation.
-// Returns true if s matches the pattern (using a basic implementation).
-func matchesPattern(s, pattern string) bool {
-	// Simple implementation for the patterns we use:
-	// ^[a-zA-Z_][a-zA-Z0-9_]*$ and ^[A-Z_][A-Z0-9_]*$
-	if len(s) == 0 {
-		return false
-	}
-
-	// Handle patterns for identifier validation
-	if pattern == `^[a-zA-Z_][a-zA-Z0-9_]*$` {
-		// First char must be letter or underscore
-		if !isLetterOrUnderscore(rune(s[0])) {
-			return false
-		}
-		// Rest must be alphanumeric or underscore
-		for _, ch := range s[1:] {
-			if !isAlphanumericOrUnderscore(ch) {
-				return false
-			}
-		}
-		return true
-	}
-
-	if pattern == `^[A-Z_][A-Z0-9_]*$` {
-		// First char must be uppercase letter or underscore
-		if (s[0] < 'A' || s[0] > 'Z') && s[0] != '_' {
-			return false
-		}
-		// Rest must be uppercase alphanumeric or underscore
-		for _, ch := range s[1:] {
-			if !isUpperAlphanumericOrUnderscore(ch) {
-				return false
-			}
-		}
-		return true
-	}
-
-	return false
-}
-
-func isLetterOrUnderscore(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
-}
-
-func isAlphanumericOrUnderscore(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
-}
-
-func isUpperAlphanumericOrUnderscore(ch rune) bool {
-	return (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }
 
 // CommandFile is the top-level structure of a command YAML file.
