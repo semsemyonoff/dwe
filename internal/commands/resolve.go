@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/tpl"
 )
 
 // ResolveParams resolves parameter values for a command invocation.
@@ -117,12 +118,17 @@ func isEmpty(v any) bool {
 // The map is assembled in the following priority order (later wins):
 //  1. env vars declared via context entries (ContextDef.Env → resolved value)
 //  2. env vars declared via params (ParamDef.Env → resolved value)
-//  3. command-level env map (CommandDef.Env entries, kept as raw template strings)
+//  3. env vars declared via files (FileSpec.Env → resolved path)
+//  4. command-level env map (CommandDef.Env entries, kept as raw template strings)
 //
 // Entries with an empty Env key are silently skipped.
 // The command-level env values are stored as-is (callers render templates later).
-func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any) map[string]string {
+//
+// Returns an error if an env name is declared twice in any of the sources (context, params, files, or command-level env).
+// This is defensive — load-time validation already rejects such conflicts, but this guards against programmatic constructions.
+func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any, files map[string]tpl.ResolvedFile) (map[string]string, error) {
 	env := make(map[string]string)
+	sources := make(map[string]string) // Track which source declared each env var for conflict detection.
 
 	// 1. Context env vars.
 	for name, def := range cmd.Context {
@@ -130,7 +136,11 @@ func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any) map[st
 			continue
 		}
 		if v, ok := ctx[name]; ok {
+			if existing, exists := sources[def.Env]; exists {
+				return nil, fmt.Errorf("env conflict: %q declared by %s and context.%s", def.Env, existing, name)
+			}
 			env[def.Env] = fmt.Sprintf("%v", v)
+			sources[def.Env] = "context." + name
 		}
 	}
 
@@ -140,16 +150,38 @@ func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any) map[st
 			continue
 		}
 		if v, ok := params[name]; ok {
+			if existing, exists := sources[def.Env]; exists {
+				return nil, fmt.Errorf("env conflict: %q declared by %s and params.%s", def.Env, existing, name)
+			}
 			env[def.Env] = fmt.Sprintf("%v", v)
+			sources[def.Env] = "params." + name
 		}
 	}
 
-	// 3. Command-level env map (raw, may contain ${...} expressions).
+	// 3. File env vars.
+	for id, spec := range cmd.Files {
+		if spec.Env == "" {
+			continue
+		}
+		if file, ok := files[id]; ok {
+			if existing, exists := sources[spec.Env]; exists {
+				return nil, fmt.Errorf("env conflict: %q declared by %s and files.%s", spec.Env, existing, id)
+			}
+			env[spec.Env] = file.Path
+			sources[spec.Env] = "files." + id
+		}
+	}
+
+	// 4. Command-level env map (raw, may contain ${...} expressions).
 	for k, v := range cmd.Env {
 		if k != "" {
+			if existing, exists := sources[k]; exists {
+				return nil, fmt.Errorf("env conflict: %q declared by %s and env block", k, existing)
+			}
 			env[k] = v
+			sources[k] = "env block"
 		}
 	}
 
-	return env
+	return env, nil
 }

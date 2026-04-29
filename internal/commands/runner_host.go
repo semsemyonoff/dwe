@@ -137,7 +137,14 @@ func (r *HostRunner) Run(ctx RunContext) error {
 // buildRenderedEnv renders all env values (which may contain ${...} expressions)
 // and returns the final string→string map.
 func buildRenderedEnv(cmd *CommandDef, ctx RunContext) (map[string]string, error) {
-	raw := BuildEnv(cmd, ctx.Params, ctx.Context)
+	files := make(map[string]tpl.ResolvedFile)
+	if ctx.Render != nil && ctx.Render.Files != nil {
+		files = ctx.Render.Files
+	}
+	raw, err := BuildEnv(cmd, ctx.Params, ctx.Context, files)
+	if err != nil {
+		return nil, err
+	}
 	result := make(map[string]string, len(raw))
 	for k, v := range raw {
 		rendered, err := tpl.RenderCommand(v, ctx.Render)

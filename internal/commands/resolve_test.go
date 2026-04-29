@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/tpl"
 )
 
 // --- helpers -----------------------------------------------------------------
@@ -297,7 +298,10 @@ func TestBuildEnv_ParamEnv(t *testing.T) {
 		},
 	}
 	params := map[string]any{"db_name": "mydb"}
-	env := BuildEnv(cmd, params, nil)
+	env, err := BuildEnv(cmd, params, nil, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if env["DB_DATABASE"] != "mydb" {
 		t.Errorf("expected DB_DATABASE=mydb, got %v", env["DB_DATABASE"])
 	}
@@ -312,7 +316,10 @@ func TestBuildEnv_ContextEnv(t *testing.T) {
 		},
 	}
 	ctx := map[string]any{"container": "devbox-laravel-main"}
-	env := BuildEnv(cmd, nil, ctx)
+	env, err := BuildEnv(cmd, nil, ctx, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if env["APP_CONTAINER"] != "devbox-laravel-main" {
 		t.Errorf("expected APP_CONTAINER=devbox-laravel-main, got %v", env["APP_CONTAINER"])
 	}
@@ -324,14 +331,17 @@ func TestBuildEnv_CommandLevelEnv(t *testing.T) {
 		Run:  "echo",
 		Env:  map[string]string{"DEVBOX_ROOT": "${project.name}"},
 	}
-	env := BuildEnv(cmd, nil, nil)
+	env, err := BuildEnv(cmd, nil, nil, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if env["DEVBOX_ROOT"] != "${project.name}" {
 		t.Errorf("expected raw template string, got %v", env["DEVBOX_ROOT"])
 	}
 }
 
-func TestBuildEnv_CommandLevelEnvOverridesParamEnv(t *testing.T) {
-	// Command-level env wins over param env for the same key.
+func TestBuildEnv_CommandLevelEnvConflictWithParamEnv(t *testing.T) {
+	// With the conflict guard, command-level env declaring the same name as param env is rejected.
 	cmd := &CommandDef{
 		Type: CommandTypeCommand,
 		Run:  "echo",
@@ -341,9 +351,12 @@ func TestBuildEnv_CommandLevelEnvOverridesParamEnv(t *testing.T) {
 		Env: map[string]string{"MY_VAR": "override"},
 	}
 	params := map[string]any{"val": "from-param"}
-	env := BuildEnv(cmd, params, nil)
-	if env["MY_VAR"] != "override" {
-		t.Errorf("expected override, got %v", env["MY_VAR"])
+	_, err := BuildEnv(cmd, params, nil, map[string]tpl.ResolvedFile{})
+	if err == nil {
+		t.Fatalf("expected error for env conflict")
+	}
+	if !containsString(err.Error(), "MY_VAR") || !containsString(err.Error(), "conflict") {
+		t.Errorf("error message should mention conflict and MY_VAR, got: %v", err)
 	}
 }
 
@@ -356,7 +369,10 @@ func TestBuildEnv_ParamWithoutEnvSkipped(t *testing.T) {
 		},
 	}
 	params := map[string]any{"hidden": "value"}
-	env := BuildEnv(cmd, params, nil)
+	env, err := BuildEnv(cmd, params, nil, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if _, ok := env["hidden"]; ok {
 		t.Errorf("param without Env should not appear in env map")
 	}
@@ -367,7 +383,10 @@ func TestBuildEnv_EmptyCommandNoError(t *testing.T) {
 		Type: CommandTypeCommand,
 		Run:  "echo",
 	}
-	env := BuildEnv(cmd, nil, nil)
+	env, err := BuildEnv(cmd, nil, nil, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(env) != 0 {
 		t.Errorf("expected empty env map, got %v", env)
 	}
@@ -382,7 +401,10 @@ func TestBuildEnv_BoolParamInEnv(t *testing.T) {
 		},
 	}
 	params := map[string]any{"debug": true}
-	env := BuildEnv(cmd, params, nil)
+	env, err := BuildEnv(cmd, params, nil, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if env["DEBUG"] != "true" {
 		t.Errorf("expected DEBUG=true, got %v", env["DEBUG"])
 	}
@@ -397,8 +419,158 @@ func TestBuildEnv_IntParamInEnv(t *testing.T) {
 		},
 	}
 	params := map[string]any{"workers": 4}
-	env := BuildEnv(cmd, params, nil)
+	env, err := BuildEnv(cmd, params, nil, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if env["WORKERS"] != "4" {
 		t.Errorf("expected WORKERS=4, got %v", env["WORKERS"])
 	}
+}
+
+func TestBuildEnv_FileEnv(t *testing.T) {
+	cmd := &CommandDef{
+		Type: CommandTypeCommand,
+		Run:  "echo",
+		Files: map[string]FileSpec{
+			"dump": {Env: "DUMP_FILE"},
+		},
+	}
+	files := map[string]tpl.ResolvedFile{
+		"dump": {Path: "/tmp/dump.sql.gz"},
+	}
+	env, err := BuildEnv(cmd, nil, nil, files)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if env["DUMP_FILE"] != "/tmp/dump.sql.gz" {
+		t.Errorf("expected DUMP_FILE=/tmp/dump.sql.gz, got %v", env["DUMP_FILE"])
+	}
+}
+
+func TestBuildEnv_EmptyFilesMap_Regression(t *testing.T) {
+	// When no files are declared, BuildEnv should behave identically to before the change.
+	cmd := &CommandDef{
+		Type: CommandTypeCommand,
+		Run:  "echo",
+		Params: map[string]ParamDef{
+			"db_name": {Env: "DB_DATABASE"},
+		},
+		Env: map[string]string{"MY_VAR": "value"},
+	}
+	params := map[string]any{"db_name": "mydb"}
+	env, err := BuildEnv(cmd, params, nil, map[string]tpl.ResolvedFile{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if env["DB_DATABASE"] != "mydb" {
+		t.Errorf("expected DB_DATABASE=mydb, got %v", env["DB_DATABASE"])
+	}
+	if env["MY_VAR"] != "value" {
+		t.Errorf("expected MY_VAR=value, got %v", env["MY_VAR"])
+	}
+}
+
+func TestBuildEnv_ConflictBetweenFileAndParam(t *testing.T) {
+	cmd := &CommandDef{
+		Type: CommandTypeCommand,
+		Run:  "echo",
+		Params: map[string]ParamDef{
+			"val": {Env: "MY_VAR"},
+		},
+		Files: map[string]FileSpec{
+			"file1": {Env: "MY_VAR"},
+		},
+	}
+	params := map[string]any{"val": "from-param"}
+	files := map[string]tpl.ResolvedFile{
+		"file1": {Path: "/tmp/file"},
+	}
+	_, err := BuildEnv(cmd, params, nil, files)
+	if err == nil {
+		t.Fatalf("expected error for env conflict")
+	}
+	if !containsString(err.Error(), "MY_VAR") || !containsString(err.Error(), "conflict") {
+		t.Errorf("error message should mention conflict and MY_VAR, got: %v", err)
+	}
+}
+
+func TestBuildEnv_ConflictBetweenFileAndCommandEnv(t *testing.T) {
+	cmd := &CommandDef{
+		Type: CommandTypeCommand,
+		Run:  "echo",
+		Files: map[string]FileSpec{
+			"file1": {Env: "MY_VAR"},
+		},
+		Env: map[string]string{"MY_VAR": "value"},
+	}
+	files := map[string]tpl.ResolvedFile{
+		"file1": {Path: "/tmp/file"},
+	}
+	_, err := BuildEnv(cmd, nil, nil, files)
+	if err == nil {
+		t.Fatalf("expected error for env conflict")
+	}
+	if !containsString(err.Error(), "MY_VAR") || !containsString(err.Error(), "conflict") {
+		t.Errorf("error message should mention conflict and MY_VAR, got: %v", err)
+	}
+}
+
+func TestBuildEnv_ConflictBetweenFileAndContext(t *testing.T) {
+	cmd := &CommandDef{
+		Type: CommandTypeCommand,
+		Run:  "echo",
+		Context: map[string]ContextDef{
+			"ctx": {From: "some.path", Env: "MY_VAR"},
+		},
+		Files: map[string]FileSpec{
+			"file1": {Env: "MY_VAR"},
+		},
+	}
+	ctx := map[string]any{"ctx": "value"}
+	files := map[string]tpl.ResolvedFile{
+		"file1": {Path: "/tmp/file"},
+	}
+	_, err := BuildEnv(cmd, nil, ctx, files)
+	if err == nil {
+		t.Fatalf("expected error for env conflict")
+	}
+	if !containsString(err.Error(), "MY_VAR") || !containsString(err.Error(), "conflict") {
+		t.Errorf("error message should mention conflict and MY_VAR, got: %v", err)
+	}
+}
+
+func TestBuildEnv_MultipleFileEnvs(t *testing.T) {
+	cmd := &CommandDef{
+		Type: CommandTypeCommand,
+		Run:  "echo",
+		Files: map[string]FileSpec{
+			"dump": {Env: "DUMP_FILE"},
+			"log":  {Env: "LOG_FILE"},
+		},
+	}
+	files := map[string]tpl.ResolvedFile{
+		"dump": {Path: "/tmp/dump.sql.gz"},
+		"log":  {Path: "/tmp/app.log"},
+	}
+	env, err := BuildEnv(cmd, nil, nil, files)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if env["DUMP_FILE"] != "/tmp/dump.sql.gz" {
+		t.Errorf("expected DUMP_FILE=/tmp/dump.sql.gz, got %v", env["DUMP_FILE"])
+	}
+	if env["LOG_FILE"] != "/tmp/app.log" {
+		t.Errorf("expected LOG_FILE=/tmp/app.log, got %v", env["LOG_FILE"])
+	}
+}
+
+// containsString is a helper to check if a string contains a substring.
+func containsString(haystack, needle string) bool {
+	for i := 0; i <= len(haystack)-len(needle); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return true
+		}
+	}
+	return false
 }
