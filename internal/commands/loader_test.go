@@ -432,3 +432,101 @@ commands:
 		t.Errorf("candidates[1].Path = %q, want %q", cand1.Path, "runtime/dumps/db.sql.gz")
 	}
 }
+
+func TestLoadCommandFile_DumpCreateFixture(t *testing.T) {
+	// Load and validate the dump-create fixture to ensure it parses and validates
+	// This verifies that YAML fixtures can define complex files directives.
+	dir := t.TempDir()
+	fixtureContent := `
+commands:
+  dump-create:
+    type: script
+    description: Create a database dump file (test fixture)
+    params:
+      database:
+        type: string
+        description: Database name to dump
+        default: mydb
+      dump_dir:
+        type: string
+        description: Directory to store the dump file
+        default: /tmp/dumps
+      dump_date:
+        type: bool
+        description: Include date suffix in filename
+        default: true
+    env:
+      DB_NAME: "${param.database}"
+      DB_USER: "${db.user}"
+      DB_PASSWORD: "${db.password}"
+      DUMP_LOCATION: "${files.dump.path}"
+    files:
+      dump:
+        access: write
+        path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ date }}{{ end }}.sql.gz"
+        mkdir: true
+        overwrite: true
+        on_error: remove
+        env: DUMP_FILE
+    script:
+      path: devbox/scripts/db/dump-create.sh
+    messages:
+      success: "Database dump created at ${files.dump.path}"
+      error: "Failed to create database dump"
+`
+	absPath := writeYAML(t, dir, "db.yml", fixtureContent)
+
+	cf, err := LoadCommandFile(absPath, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cmd, ok := cf.Commands["dump-create"]
+	if !ok {
+		t.Fatal("command 'dump-create' not found")
+	}
+
+	// Verify Files field was unmarshalled correctly
+	if len(cmd.Files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(cmd.Files))
+	}
+
+	// Check dump file spec
+	dumpSpec, ok := cmd.Files["dump"]
+	if !ok {
+		t.Fatal("files.dump not found")
+	}
+	if dumpSpec.Access != FileAccessWrite {
+		t.Errorf("dump.Access = %q, want %q", dumpSpec.Access, FileAccessWrite)
+	}
+	if !dumpSpec.Mkdir {
+		t.Error("dump.Mkdir should be true")
+	}
+	if !dumpSpec.Overwrite {
+		t.Error("dump.Overwrite should be true")
+	}
+	if dumpSpec.OnError != FileOnErrorRemove {
+		t.Errorf("dump.OnError = %q, want %q", dumpSpec.OnError, FileOnErrorRemove)
+	}
+	if dumpSpec.Env != "DUMP_FILE" {
+		t.Errorf("dump.Env = %q, want %q", dumpSpec.Env, "DUMP_FILE")
+	}
+
+	// Verify params
+	if len(cmd.Params) != 3 {
+		t.Fatalf("expected 3 params, got %d", len(cmd.Params))
+	}
+	if cmd.Params["database"].Default != "mydb" {
+		t.Errorf("database.Default = %q, want %q", cmd.Params["database"].Default, "mydb")
+	}
+
+	// Verify env references files directive
+	if cmd.Env["DUMP_LOCATION"] != "${files.dump.path}" {
+		t.Errorf("env.DUMP_LOCATION = %q, want %q", cmd.Env["DUMP_LOCATION"], "${files.dump.path}")
+	}
+
+	// Verify success message references files directive
+	if cmd.Messages.Success != "Database dump created at ${files.dump.path}" {
+		t.Errorf("messages.success = %q", cmd.Messages.Success)
+	}
+}

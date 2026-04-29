@@ -1,0 +1,33 @@
+type: script
+description: Create a database dump file (test fixture)
+params:
+  database:
+    type: string
+    description: Database name to dump
+    default: mydb
+  dump_dir:
+    type: string
+    description: Directory to store the dump file
+    default: /tmp/dumps
+  dump_date:
+    type: bool
+    description: Include date suffix in filename
+    default: true
+env:
+  DB_NAME: "${param.database}"
+  DB_USER: "${db.user}"
+  DB_PASSWORD: "${db.password}"
+  DUMP_LOCATION: "${files.dump.path}"
+files:
+  dump:
+    access: write
+    path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ date }}{{ end }}.sql.gz"
+    mkdir: true
+    overwrite: true
+    on_error: remove
+    env: DUMP_FILE
+script:
+  path: devbox/scripts/db/dump-create.sh
+messages:
+  success: "Database dump created at ${files.dump.path}"
+  error: "Failed to create database dump"

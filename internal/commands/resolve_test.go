@@ -565,6 +565,91 @@ func TestBuildEnv_MultipleFileEnvs(t *testing.T) {
 	}
 }
 
+func TestBuildEnv_DumpCreateFixture(t *testing.T) {
+	// Test the dump-create fixture: file env + param env + context env + command-level env
+	// BuildEnv merges these sources without rendering; rendering happens later in the pipeline
+	cmd := &CommandDef{
+		Type: CommandTypeScript,
+		Params: map[string]ParamDef{
+			"database": {Type: ParamTypeString, Default: "mydb", Env: "DB_NAME"},
+			"dump_dir": {Type: ParamTypeString, Default: "/tmp/dumps"},
+		},
+		Context: map[string]ContextDef{
+			"db_user": {From: "db.user", Env: "DB_USER"},
+		},
+		Env: map[string]string{
+			"DB_PASSWORD": "${db.password}",
+		},
+		Files: map[string]FileSpec{
+			"dump": {Env: "DUMP_FILE"},
+		},
+	}
+
+	params := map[string]any{
+		"database": "mydb",
+		"dump_dir": "/tmp/dumps",
+	}
+
+	context := map[string]any{
+		"db_user": "root",
+	}
+
+	files := map[string]tpl.ResolvedFile{
+		"dump": {Path: "/tmp/dumps/mydb_2026-04-29.sql.gz"},
+	}
+
+	env, err := BuildEnv(cmd, params, context, files)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify file env is set correctly (file path)
+	if env["DUMP_FILE"] != "/tmp/dumps/mydb_2026-04-29.sql.gz" {
+		t.Errorf("expected DUMP_FILE=/tmp/dumps/mydb_2026-04-29.sql.gz, got %v", env["DUMP_FILE"])
+	}
+
+	// Verify param env is injected (resolved param value)
+	if env["DB_NAME"] != "mydb" {
+		t.Errorf("expected DB_NAME=mydb, got %v", env["DB_NAME"])
+	}
+
+	// Verify context env is injected (resolved context value)
+	if env["DB_USER"] != "root" {
+		t.Errorf("expected DB_USER=root, got %v", env["DB_USER"])
+	}
+
+	// Verify command-level env contains raw template string (rendered later)
+	if env["DB_PASSWORD"] != "${db.password}" {
+		t.Errorf("expected DB_PASSWORD=${db.password} (raw template), got %v", env["DB_PASSWORD"])
+	}
+}
+
+func TestBuildEnv_FileEnvConflictWithParamEnv(t *testing.T) {
+	// Verify env-conflict guard rejects duplicate names
+	cmd := &CommandDef{
+		Type: CommandTypeScript,
+		Params: map[string]ParamDef{
+			"database": {Type: ParamTypeString, Env: "DUMP_FILE"},
+		},
+		Files: map[string]FileSpec{
+			"dump": {Env: "DUMP_FILE"},
+		},
+	}
+
+	params := map[string]any{"database": "mydb"}
+	files := map[string]tpl.ResolvedFile{
+		"dump": {Path: "/tmp/dump.sql.gz"},
+	}
+
+	_, err := BuildEnv(cmd, params, nil, files)
+	if err == nil {
+		t.Error("expected env conflict error, got nil")
+	}
+	if !containsString(err.Error(), "DUMP_FILE") {
+		t.Errorf("expected error to mention DUMP_FILE, got: %v", err)
+	}
+}
+
 // containsString is a helper to check if a string contains a substring.
 func containsString(haystack, needle string) bool {
 	for i := 0; i <= len(haystack)-len(needle); i++ {
