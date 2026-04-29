@@ -606,6 +606,300 @@ func TestResolveRelative_EmptyProjectRoot(t *testing.T) {
 	}
 }
 
+// TestPrepareFileEffects_MkdirCreatesParent tests mkdir creates parent directories.
+func TestPrepareFileEffects_MkdirCreatesParent(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	cmd := &CommandDef{
+		ID:   "test.mkdir",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"output": {
+				Access:    FileAccessWrite,
+				Path:      "subdir/nested/output.txt",
+				Mkdir:     true,
+				Overwrite: false,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+	}
+
+	// Compute paths first
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	// Prepare effects (should create directories)
+	_, err = PrepareFileEffects(ctx, paths)
+	if err != nil {
+		t.Fatalf("PrepareFileEffects: %v", err)
+	}
+
+	// Verify parent directories were created
+	parentDir := filepath.Join(tmpdir, "subdir", "nested")
+	if _, err := os.Stat(parentDir); err != nil {
+		t.Fatalf("expected parent directory to exist: %v", err)
+	}
+}
+
+// TestPrepareFileEffects_OverwriteFalseExisting tests overwrite=false with existing file returns error.
+func TestPrepareFileEffects_OverwriteFalseExisting(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	// Create an existing file
+	testFile := filepath.Join(tmpdir, "output.txt")
+	if err := os.WriteFile(testFile, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("create existing file: %v", err)
+	}
+
+	cmd := &CommandDef{
+		ID:   "test.overwrite",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"output": {
+				Access:    FileAccessWrite,
+				Path:      "output.txt",
+				Overwrite: false,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	// Prepare should fail due to overwrite constraint
+	_, err = PrepareFileEffects(ctx, paths)
+	if err == nil {
+		t.Fatalf("expected error for overwrite=false with existing file")
+	}
+	if !contains(err.Error(), "already exists") || !contains(err.Error(), "overwrite") {
+		t.Fatalf("expected overwrite error, got: %v", err)
+	}
+}
+
+// TestPrepareFileEffects_CleanupOnlyNewFiles tests on_error=remove only cleans newly-created files.
+func TestPrepareFileEffects_CleanupOnlyNewFiles(t *testing.T) {
+	tmpdir := t.TempDir()
+	testFile := filepath.Join(tmpdir, "output.txt")
+
+	// Test 1: existing file should NOT be cleaned up
+	if err := os.WriteFile(testFile, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("create existing file: %v", err)
+	}
+
+	cmd := &CommandDef{
+		ID:   "test.cleanup",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"output": {
+				Access:    FileAccessWrite,
+				Path:      "output.txt",
+				Overwrite: true,
+				OnError:   FileOnErrorRemove,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	cleanups, err := PrepareFileEffects(ctx, paths)
+	if err != nil {
+		t.Fatalf("PrepareFileEffects: %v", err)
+	}
+
+	// Invoke cleanups (simulating a failed run)
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
+	}
+
+	// Existing file should still exist (cleanup should not remove it)
+	if _, err := os.Stat(testFile); err != nil {
+		t.Fatalf("existing file should not be removed: %v", err)
+	}
+
+	// Test 2: new file SHOULD be cleaned up
+	testFile2 := filepath.Join(tmpdir, "newfile.txt")
+	cmd.Files = map[string]FileSpec{
+		"output": {
+			Access:  FileAccessWrite,
+			Path:    "newfile.txt",
+			OnError: FileOnErrorRemove,
+		},
+	}
+
+	ctx.Cmd = cmd
+	paths, err = ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	cleanups, err = PrepareFileEffects(ctx, paths)
+	if err != nil {
+		t.Fatalf("PrepareFileEffects: %v", err)
+	}
+
+	// Create the file (simulating a successful write by runner)
+	if err := os.WriteFile(testFile2, []byte("new"), 0o644); err != nil {
+		t.Fatalf("create test file: %v", err)
+	}
+
+	// Invoke cleanups
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
+	}
+
+	// New file should be removed
+	if _, err := os.Stat(testFile2); err == nil {
+		t.Fatalf("new file should be removed by cleanup")
+	}
+}
+
+// TestPrepareFileEffects_OnErrorKeep tests on_error=keep never removes files.
+func TestPrepareFileEffects_OnErrorKeep(t *testing.T) {
+	tmpdir := t.TempDir()
+	testFile := filepath.Join(tmpdir, "output.txt")
+
+	cmd := &CommandDef{
+		ID:   "test.keep",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"output": {
+				Access:  FileAccessWrite,
+				Path:    "output.txt",
+				OnError: FileOnErrorKeep,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	cleanups, err := PrepareFileEffects(ctx, paths)
+	if err != nil {
+		t.Fatalf("PrepareFileEffects: %v", err)
+	}
+
+	// Create the file (simulating a successful write by runner)
+	if err := os.WriteFile(testFile, []byte("content"), 0o644); err != nil {
+		t.Fatalf("create test file: %v", err)
+	}
+
+	// Invoke cleanups (should do nothing)
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
+	}
+
+	// File should still exist
+	if _, err := os.Stat(testFile); err != nil {
+		t.Fatalf("file should not be removed when on_error=keep: %v", err)
+	}
+}
+
+// TestPrepareFileEffects_ReadWriteNoCleanup tests read_write mode never registers cleanup.
+func TestPrepareFileEffects_ReadWriteNoCleanup(t *testing.T) {
+	tmpdir := t.TempDir()
+	testFile := filepath.Join(tmpdir, "inout.txt")
+
+	// Create the file (read_write requires it to exist)
+	if err := os.WriteFile(testFile, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("create test file: %v", err)
+	}
+
+	cmd := &CommandDef{
+		ID:   "test.readwrite",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"inout": {
+				Access:  FileAccessReadWrite,
+				Path:    "inout.txt",
+				OnError: FileOnErrorRemove, // Should be ignored for read_write
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{},
+			Context: map[string]any{},
+		},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	cleanups, err := PrepareFileEffects(ctx, paths)
+	if err != nil {
+		t.Fatalf("PrepareFileEffects: %v", err)
+	}
+
+	// No cleanups should be registered for read_write
+	if len(cleanups) != 0 {
+		t.Fatalf("expected no cleanups for read_write, got %d", len(cleanups))
+	}
+
+	// Invoke cleanups (none to invoke)
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
+	}
+
+	// File should still exist (no cleanup happened)
+	if _, err := os.Stat(testFile); err != nil {
+		t.Fatalf("file should not be removed: %v", err)
+	}
+}
+
 // Helper function to check if a string contains a substring.
 func contains(s, substr string) bool {
 	for i := range s {

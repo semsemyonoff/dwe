@@ -322,3 +322,89 @@ func resolveRelative(projectRoot, p string) (string, error) {
 
 	return filepath.Clean(filepath.Join(root, p)), nil
 }
+
+// PrepareFileEffects performs post-confirmation mutations for file specs:
+// - For write entries with mkdir=true: create parent directories
+// - For write entries: check overwrite constraint (fail if exists and overwrite=false)
+// - Track whether each file existed before (used for safe on_error cleanup)
+// - Return cleanup callbacks only for files created by this invocation (existedBefore=false)
+//
+// Cleanup callbacks are registered only when:
+// - The file entry has on_error: remove
+// - The file did not exist before this invocation (existedBefore=false)
+// For read_write mode, existedBefore is always true (file must pre-exist), so
+// cleanup is never registered, protecting pre-existing files from deletion.
+//
+// Returns (cleanups, nil) on success, where cleanups is a slice of callbacks
+// to invoke on runner failure (in LIFO order). Returns ("", err) if any
+// overwrite/mkdir check fails.
+func PrepareFileEffects(ctx RunContext, paths map[string]tpl.ResolvedFile) ([]func(), error) {
+	if len(ctx.Cmd.Files) == 0 {
+		return []func(){}, nil
+	}
+
+	cleanups := []func(){}
+	stderr := ctx.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	for fid, fspec := range ctx.Cmd.Files {
+		// Only process write and read_write modes
+		if fspec.Access != FileAccessWrite && fspec.Access != FileAccessReadWrite {
+			continue
+		}
+
+		path, ok := paths[fid]
+		if !ok {
+			// File was not resolved (should not happen for write/read_write)
+			continue
+		}
+
+		absPath := path.Path
+
+		// For write mode: handle mkdir and overwrite checks
+		if fspec.Access == FileAccessWrite {
+			// Create parent directories if mkdir=true
+			if fspec.Mkdir {
+				parentDir := filepath.Dir(absPath)
+				if err := os.MkdirAll(parentDir, 0o755); err != nil {
+					return nil, fmt.Errorf("files.%s: mkdir %s: %w", fid, parentDir, err)
+				}
+			}
+
+			// Check if file exists
+			_, err := os.Stat(absPath)
+			existedBefore := err == nil
+			if err != nil && !os.IsNotExist(err) {
+				// Real error (permission denied, etc.)
+				return nil, fmt.Errorf("files.%s: stat %s: %w", fid, absPath, err)
+			}
+
+			// Check overwrite constraint
+			if existedBefore && !fspec.Overwrite {
+				return nil, fmt.Errorf("files.%s: file already exists at %s and overwrite=false", fid, absPath)
+			}
+
+			// Register cleanup callback only if file didn't exist before
+			// and on_error is set to remove
+			if !existedBefore && fspec.OnError == FileOnErrorRemove {
+				// Capture absPath in closure
+				fileToClean := absPath
+				cleanups = append(cleanups, func() {
+					if err := os.Remove(fileToClean); err != nil {
+						_, _ = fmt.Fprintf(stderr, "cleanup: failed to remove %s: %v\n", fileToClean, err)
+					}
+				})
+			}
+		}
+
+		// For read_write mode: existence already guaranteed by ComputeFilePaths,
+		// so we just track that it always existed before.
+		// Cleanup is never registered for read_write (existedBefore=true always).
+		// No mutations needed: file must pre-exist, no mkdir, no overwrite check,
+		// and on_error=remove is a no-op since existedBefore=true always.
+	}
+
+	return cleanups, nil
+}
