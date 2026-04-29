@@ -24,6 +24,7 @@ files:
     path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ date }}{{ end }}.sql.gz"
     mkdir: true
     overwrite: true
+    on_error: remove
     env: DUMP_FILE
 script:
   path: devbox/scripts/db/dump-create.sh

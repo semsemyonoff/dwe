@@ -608,6 +608,44 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 		}
 	}
 
+	if len(def.Files) > 0 {
+		sub("Files")
+		var fids []string
+		for fid := range def.Files {
+			fids = append(fids, fid)
+		}
+		sort.Strings(fids)
+		for _, fid := range fids {
+			f := def.Files[fid]
+			desc := string(f.Access)
+			if f.Path != "" {
+				desc += "  path: " + f.Path
+			} else if len(f.Candidates) > 0 {
+				desc += fmt.Sprintf("  candidates: %d", len(f.Candidates))
+			}
+			if f.Env != "" {
+				desc += "  env: " + f.Env
+			}
+			var flags []string
+			if f.Required {
+				flags = append(flags, "required")
+			}
+			if f.Mkdir {
+				flags = append(flags, "mkdir")
+			}
+			if f.Overwrite {
+				flags = append(flags, "overwrite")
+			}
+			if f.OnError != "" {
+				flags = append(flags, "on_error: "+string(f.OnError))
+			}
+			if len(flags) > 0 {
+				desc += "  [" + strings.Join(flags, ", ") + "]"
+			}
+			def2(fid, desc, 4)
+		}
+	}
+
 	_, _ = fmt.Fprintln(w, ui.RenderSectionTitle(""))
 }
 
