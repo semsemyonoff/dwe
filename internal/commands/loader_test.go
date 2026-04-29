@@ -531,6 +531,35 @@ commands:
 	}
 }
 
+func TestLoadCommandFile_DumpCreateEnvConflict(t *testing.T) {
+	// Adding params.database.env: DUMP_FILE conflicts with files.dump.env: DUMP_FILE.
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "db.yml", `
+commands:
+  dump-create:
+    type: script
+    description: Create a database dump file
+    params:
+      database:
+        type: string
+        description: Database name to dump
+        default: mydb
+        env: DUMP_FILE
+    files:
+      dump:
+        access: write
+        path: /tmp/dumps/mydb.sql.gz
+        env: DUMP_FILE
+    script:
+      path: devbox/scripts/db/dump-create.sh
+`)
+
+	_, err := LoadCommandFile(absPath, dir)
+	if err == nil {
+		t.Fatal("expected env-conflict error when params.database.env and files.dump.env both declare DUMP_FILE, got nil")
+	}
+}
+
 func TestLoadCommandFile_DumpDeployFixture(t *testing.T) {
 	// Load and validate the dump-deploy fixture with read-mode candidates and glob+match+sort.
 	dir := t.TempDir()

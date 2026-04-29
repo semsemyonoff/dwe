@@ -659,3 +659,84 @@ func containsString(haystack, needle string) bool {
 	}
 	return false
 }
+
+func TestResolveParams_PatternValid(t *testing.T) {
+	defs := map[string]ParamDef{
+		"db": {Type: ParamTypeString, Pattern: `^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`},
+	}
+	for _, v := range []string{"mydb", "my_db", "my-db", "MyDB123", "a"} {
+		_, err := ResolveParams(defs, map[string]string{"db": v}, nil)
+		if err != nil {
+			t.Errorf("value %q should be valid: %v", v, err)
+		}
+	}
+}
+
+func TestResolveParams_PatternInvalid(t *testing.T) {
+	defs := map[string]ParamDef{
+		"db": {Type: ParamTypeString, Pattern: `^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`},
+	}
+	for _, v := range []string{"`mydb`", "my db", "db;drop", "foo`bar", "-startswith"} {
+		_, err := ResolveParams(defs, map[string]string{"db": v}, nil)
+		if err == nil {
+			t.Errorf("value %q should fail pattern validation", v)
+		}
+	}
+}
+
+func TestResolveParams_PatternEmptyValueSkipped(t *testing.T) {
+	// An empty string bypasses pattern validation (it's the zero-value for optional params).
+	defs := map[string]ParamDef{
+		"db": {Type: ParamTypeString, Pattern: `^[a-zA-Z0-9_]+$`},
+	}
+	_, err := ResolveParams(defs, map[string]string{"db": ""}, nil)
+	if err != nil {
+		t.Errorf("empty value should skip pattern validation: %v", err)
+	}
+}
+
+func TestResolveParams_PatternIgnoredForBool(t *testing.T) {
+	// Pattern is silently ignored for bool params.
+	defs := map[string]ParamDef{
+		"flag": {Type: ParamTypeBool, Pattern: `^[a-z]+$`},
+	}
+	_, err := ResolveParams(defs, map[string]string{"flag": "true"}, nil)
+	if err != nil {
+		t.Errorf("pattern should be ignored for bool params: %v", err)
+	}
+}
+
+func TestResolveParams_PatternIgnoredForInt(t *testing.T) {
+	// Pattern is silently ignored for int params.
+	defs := map[string]ParamDef{
+		"count": {Type: ParamTypeInt, Pattern: `^[a-z]+$`},
+	}
+	_, err := ResolveParams(defs, map[string]string{"count": "42"}, nil)
+	if err != nil {
+		t.Errorf("pattern should be ignored for int params: %v", err)
+	}
+}
+
+func TestResolveParams_PatternInvalidRegex(t *testing.T) {
+	defs := map[string]ParamDef{
+		"db": {Type: ParamTypeString, Pattern: `[invalid`},
+	}
+	_, err := ResolveParams(defs, map[string]string{"db": "mydb"}, nil)
+	if err == nil {
+		t.Error("invalid regex pattern should return an error")
+	}
+}
+
+func TestResolveParams_PatternPathType(t *testing.T) {
+	defs := map[string]ParamDef{
+		"dir": {Type: ParamTypePath, Pattern: `^/[a-z/]+$`},
+	}
+	_, err := ResolveParams(defs, map[string]string{"dir": "/tmp/foo"}, nil)
+	if err != nil {
+		t.Errorf("valid path should pass pattern: %v", err)
+	}
+	_, err = ResolveParams(defs, map[string]string{"dir": "/TMP/FOO"}, nil)
+	if err == nil {
+		t.Error("invalid path should fail pattern")
+	}
+}

@@ -195,7 +195,10 @@ it runs directly without showing a selector.`,
 				Context: ctx,
 				Host:    tpl.CurrentHostInfo(),
 			}
-			projectRoot := filepath.Dir(flags.configPath)
+			projectRoot, err := filepath.Abs(filepath.Dir(flags.configPath))
+			if err != nil {
+				return fmt.Errorf("resolving project root: %w", err)
+			}
 			dockerCfg, err := config.LoadDockerConfig(projectRoot, cfg)
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)

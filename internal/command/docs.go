@@ -506,6 +506,50 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 		sb.WriteString("\n")
 	}
 
+	if len(def.Files) > 0 {
+		sb.WriteString("## Files\n\n")
+		var fileIDs []string
+		for id := range def.Files {
+			fileIDs = append(fileIDs, id)
+		}
+		sort.Strings(fileIDs)
+		for _, id := range fileIDs {
+			f := def.Files[id]
+			attrs := string(f.Access)
+			if f.Required {
+				attrs += ", required"
+			}
+			fmt.Fprintf(&sb, "### `%s` (%s)\n\n", id, attrs)
+			if f.Env != "" {
+				fmt.Fprintf(&sb, "**Env:** `%s`\n\n", f.Env)
+			}
+			if f.Path != "" {
+				fmt.Fprintf(&sb, "**Path:** `%s`\n\n", f.Path)
+			}
+			if len(f.Candidates) > 0 {
+				sb.WriteString("**Candidates:**\n\n")
+				for i, c := range f.Candidates {
+					if c.Glob != "" {
+						line := fmt.Sprintf("%d. glob: `%s`", i+1, c.Glob)
+						if c.Match != "" {
+							line += fmt.Sprintf(" (match: `%s`", c.Match)
+							if c.Sort != "" {
+								line += fmt.Sprintf(", sort: %s", string(c.Sort))
+							}
+							line += ")"
+						} else if c.Sort != "" {
+							line += fmt.Sprintf(" (sort: %s)", string(c.Sort))
+						}
+						sb.WriteString(line + "\n")
+					} else if c.Path != "" {
+						fmt.Fprintf(&sb, "%d. path: `%s`\n", i+1, c.Path)
+					}
+				}
+				sb.WriteString("\n")
+			}
+		}
+	}
+
 	if len(def.Env) > 0 {
 		sb.WriteString("## Environment Variables\n\n")
 		sb.WriteString("| Name | Value |\n|---|---|\n")

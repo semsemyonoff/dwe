@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 
 	"devbox-cli/internal/tpl"
 )
@@ -68,7 +67,7 @@ func resolveFileSpec(ctx RunContext, fid string, fspec FileSpec) (string, error)
 // Presence is required only if Required=true.
 func resolveReadFile(ctx RunContext, fid string, fspec FileSpec) (string, error) {
 	if fspec.Path != "" {
-		path, err := resolvePathCandidate(ctx, fid, fspec.Path)
+		path, abs, err := resolvePathCandidate(ctx, fid, fspec.Path)
 		if err != nil {
 			return "", err
 		}
@@ -77,7 +76,7 @@ func resolveReadFile(ctx RunContext, fid string, fspec FileSpec) (string, error)
 		}
 		// Path was rendered but file does not exist
 		if fspec.Required {
-			return "", fmt.Errorf("files.%s: required file not found at %s", fid, fspec.Path)
+			return "", fmt.Errorf("files.%s: required file not found at %s", fid, abs)
 		}
 		return "", nil // Optional file, not found — omit from result
 	}
@@ -121,13 +120,13 @@ func resolveWriteFile(ctx RunContext, fid string, fspec FileSpec) (string, error
 // read_write mode ALWAYS requires the file to exist, regardless of the Required field.
 func resolveReadWriteFile(ctx RunContext, fid string, fspec FileSpec) (string, error) {
 	if fspec.Path != "" {
-		path, err := resolvePathCandidate(ctx, fid, fspec.Path)
+		path, abs, err := resolvePathCandidate(ctx, fid, fspec.Path)
 		if err != nil {
 			return "", err
 		}
 		if path == "" {
 			// read_write requires presence; no file found
-			return "", fmt.Errorf("files.%s: read_write access requires file to exist; not found at %s", fid, fspec.Path)
+			return "", fmt.Errorf("files.%s: read_write access requires file to exist; not found at %s", fid, abs)
 		}
 		return path, nil
 	}
@@ -149,35 +148,37 @@ func resolveReadWriteFile(ctx RunContext, fid string, fspec FileSpec) (string, e
 }
 
 // resolvePathCandidate attempts to resolve a single path candidate.
-// Returns (path, nil) if the file exists, ("", nil) if not found, or ("", err) on error.
-func resolvePathCandidate(ctx RunContext, fid string, pathTemplate string) (string, error) {
+// Returns (found, resolved, nil) where found is the absolute path if the file exists ("" if not),
+// and resolved is the rendered absolute path (available even when the file is absent, for error messages).
+// Returns ("", "", err) on render/stat error.
+func resolvePathCandidate(ctx RunContext, fid string, pathTemplate string) (found string, resolved string, err error) {
 	path, err := renderPath(ctx, pathTemplate)
 	if err != nil {
-		return "", fmt.Errorf("files.%s: render path: %w", fid, err)
+		return "", "", fmt.Errorf("files.%s: render path: %w", fid, err)
 	}
 
 	abs, err := resolveRelative(ctx.ProjectRoot, path)
 	if err != nil {
-		return "", fmt.Errorf("files.%s: resolve path: %w", fid, err)
+		return "", "", fmt.Errorf("files.%s: resolve path: %w", fid, err)
 	}
 
 	// Check if file exists
 	if _, err := os.Stat(abs); err != nil {
 		if os.IsNotExist(err) {
-			return "", nil // File does not exist; not an error for candidates
+			return "", abs, nil // File does not exist; return resolved path for error messages
 		}
 		// Other errors (permission denied, etc.) are real errors
-		return "", fmt.Errorf("files.%s: stat %s: %w", fid, abs, err)
+		return "", "", fmt.Errorf("files.%s: stat %s: %w", fid, abs, err)
 	}
 
-	return abs, nil
+	return abs, abs, nil
 }
 
 // resolveCandidate attempts to resolve a single candidate (path or glob).
 // Returns (path, nil) on success, ("", nil) on miss, or ("", err) on error.
 func resolveCandidate(ctx RunContext, fid string, candIdx int, cand FileCandidate) (string, error) {
 	if cand.Path != "" {
-		path, err := resolvePathCandidate(ctx, fid, cand.Path)
+		path, _, err := resolvePathCandidate(ctx, fid, cand.Path)
 		if err != nil {
 			return "", fmt.Errorf("candidates[%d]: %w", candIdx, err)
 		}
@@ -185,7 +186,7 @@ func resolveCandidate(ctx RunContext, fid string, candIdx int, cand FileCandidat
 	}
 
 	if cand.Glob != "" {
-		path, err := resolveGlobCandidate(ctx, fid, candIdx, cand)
+		path, err := resolveGlobCandidate(ctx, cand)
 		if err != nil {
 			return "", fmt.Errorf("candidates[%d]: %w", candIdx, err)
 		}
@@ -197,7 +198,7 @@ func resolveCandidate(ctx RunContext, fid string, candIdx int, cand FileCandidat
 
 // resolveGlobCandidate expands a glob pattern, filters by match regex, sorts, and returns first.
 // Returns (path, nil) on success, ("", nil) on no matches, or ("", err) on error.
-func resolveGlobCandidate(ctx RunContext, fid string, candIdx int, cand FileCandidate) (string, error) {
+func resolveGlobCandidate(ctx RunContext, cand FileCandidate) (string, error) {
 	globPattern, err := renderPath(ctx, cand.Glob)
 	if err != nil {
 		return "", fmt.Errorf("render glob: %w", err)
@@ -221,9 +222,13 @@ func resolveGlobCandidate(ctx RunContext, fid string, candIdx int, cand FileCand
 
 	// Filter by match regex (applied to basename)
 	if cand.Match != "" {
-		matchRegex, err := regexp.Compile(cand.Match)
+		renderedMatch, err := renderPath(ctx, cand.Match)
 		if err != nil {
-			return "", fmt.Errorf("match regex %q: %w", cand.Match, err)
+			return "", fmt.Errorf("render match: %w", err)
+		}
+		matchRegex, err := regexp.Compile(renderedMatch)
+		if err != nil {
+			return "", fmt.Errorf("match regex %q: %w", renderedMatch, err)
 		}
 
 		filtered := []string{}
@@ -258,34 +263,39 @@ func sortMatches(matches []string, sortMode FileSort) {
 		sort.Slice(matches, func(i, j int) bool {
 			return filepath.Base(matches[i]) > filepath.Base(matches[j])
 		})
-	case FileSortModtimeAsc:
-		sort.Slice(matches, func(i, j int) bool {
-			infoI, errI := os.Stat(matches[i])
-			infoJ, errJ := os.Stat(matches[j])
-			if errI != nil || errJ != nil {
-				return false // Preserve order on stat error
+	case FileSortModtimeAsc, FileSortModtimeDesc:
+		type fileWithModtime struct {
+			path    string
+			modtime int64 // UnixNano; 0 if stat failed
+		}
+		infos := make([]fileWithModtime, len(matches))
+		for i, m := range matches {
+			infos[i].path = m
+			if fi, err := os.Stat(m); err == nil {
+				infos[i].modtime = fi.ModTime().UnixNano()
 			}
-			return infoI.ModTime().Before(infoJ.ModTime())
-		})
-	case FileSortModtimeDesc:
-		sort.Slice(matches, func(i, j int) bool {
-			infoI, errI := os.Stat(matches[i])
-			infoJ, errJ := os.Stat(matches[j])
-			if errI != nil || errJ != nil {
-				return false // Preserve order on stat error
-			}
-			return infoI.ModTime().After(infoJ.ModTime())
-		})
+		}
+		if sortMode == FileSortModtimeAsc {
+			sort.SliceStable(infos, func(i, j int) bool {
+				return infos[i].modtime < infos[j].modtime
+			})
+		} else {
+			sort.SliceStable(infos, func(i, j int) bool {
+				return infos[i].modtime > infos[j].modtime
+			})
+		}
+		for i, info := range infos {
+			matches[i] = info.path
+		}
 	default:
-		// No sorting (should not happen, validated at load time)
+		// No sort directive — preserve filesystem/glob order.
 	}
 }
 
 // renderPath renders a path template string using the render context.
 // Returns the rendered string (may be relative or absolute).
 func renderPath(ctx RunContext, path string) (string, error) {
-	if ctx.Render == nil || !strings.Contains(path, "${") {
-		// No templates to render
+	if ctx.Render == nil {
 		return path, nil
 	}
 
@@ -318,6 +328,12 @@ func resolveRelative(projectRoot, p string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("getwd: %w", err)
 		}
+	} else if !filepath.IsAbs(root) {
+		var err error
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return "", fmt.Errorf("abs project root: %w", err)
+		}
 	}
 
 	return filepath.Clean(filepath.Join(root, p)), nil
@@ -336,7 +352,7 @@ func resolveRelative(projectRoot, p string) (string, error) {
 // cleanup is never registered, protecting pre-existing files from deletion.
 //
 // Returns (cleanups, nil) on success, where cleanups is a slice of callbacks
-// to invoke on runner failure (in LIFO order). Returns ("", err) if any
+// to invoke on runner failure (in LIFO order). Returns (nil, err) if any
 // overwrite/mkdir check fails.
 func PrepareFileEffects(ctx RunContext, paths map[string]tpl.ResolvedFile) ([]func(), error) {
 	if len(ctx.Cmd.Files) == 0 {

@@ -1197,12 +1197,63 @@ func TestComputeFilePaths_CandidatesModtimeAsc(t *testing.T) {
 		t.Fatalf("ComputeFilePaths: %v", err)
 	}
 
-	// old.txt has the oldest modtime (i=2, most negative offset)
+	// old.txt has the oldest modtime (i=0, offset=-1000s)
 	expected := filepath.Join(tmpdir, "old.txt")
 	if resolved, ok := paths["oldest"]; !ok {
 		t.Fatalf("expected path with id 'oldest', not found")
 	} else if resolved.Path != expected {
 		t.Fatalf("expected %s (oldest by modtime), got %s", expected, resolved.Path)
+	}
+}
+
+// TestComputeFilePaths_GoTemplateSyntaxWithoutDollar tests that pure {{ }} template syntax
+// (without any ${...} expressions) is rendered correctly by renderPath.
+// Regression: renderPath previously skipped rendering when the path contained no "${",
+// which meant paths like `{{ date }}.sql.gz` or `output_{{ resolveMap .Params "x" }}.txt`
+// were returned as literal strings instead of being evaluated.
+func TestComputeFilePaths_GoTemplateSyntaxWithoutDollar(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	testFile := filepath.Join(tmpdir, "output_testval.txt")
+	if err := os.WriteFile(testFile, []byte{}, 0o644); err != nil {
+		t.Fatalf("create test file: %v", err)
+	}
+
+	cmd := &CommandDef{
+		ID:   "test.gotemplate",
+		Type: CommandTypeScript,
+		Files: map[string]FileSpec{
+			"output": {
+				Access:   FileAccessRead,
+				Path:     `output_{{ resolveMap .Params "name" }}.txt`,
+				Required: true,
+			},
+		},
+	}
+
+	ctx := RunContext{
+		Cmd:         cmd,
+		ProjectRoot: tmpdir,
+		Render: &tpl.RenderContext{
+			Raw:     map[string]any{},
+			Params:  map[string]any{"name": "testval"},
+			Context: map[string]any{},
+		},
+	}
+
+	paths, err := ComputeFilePaths(ctx)
+	if err != nil {
+		t.Fatalf("ComputeFilePaths: %v", err)
+	}
+
+	if len(paths) != 1 {
+		t.Fatalf("expected 1 path, got %d", len(paths))
+	}
+
+	if resolved, ok := paths["output"]; !ok {
+		t.Fatalf("expected path with id 'output', not found")
+	} else if resolved.Path != testFile {
+		t.Fatalf("expected path %s, got %s", testFile, resolved.Path)
 	}
 }
 

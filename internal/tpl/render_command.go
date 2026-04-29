@@ -98,6 +98,10 @@ func CompileVarSyntax(input string) string {
 				if hasSubkey {
 					return fmt.Sprintf(`{{ resolveFile .Files %q %q }}`, id, subkey)
 				}
+				// files.<id> with no subkey: route through resolveFile to avoid
+				// accidentally resolving against the raw config map. resolveFile
+				// returns "" for an unknown subkey, which is the correct no-op.
+				return fmt.Sprintf(`{{ resolveFile .Files %q "" }}`, id)
 			}
 		case "host":
 			if hasTail {

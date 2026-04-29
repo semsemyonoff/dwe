@@ -1378,6 +1378,50 @@ func TestValidate_Files_MultipleFilesEnvConflict(t *testing.T) {
 	}
 }
 
+func TestValidate_NoFiles_EnvConflictParamVsEnvBlock(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Env:    map[string]string{"MY_VAR": "value"},
+		Params: map[string]ParamDef{
+			"p": {Env: "MY_VAR"},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "env conflict") {
+		t.Errorf("expected env conflict error without files block, got %v", err)
+	}
+}
+
+func TestValidate_NoFiles_EnvConflictContextVsEnvBlock(t *testing.T) {
+	cmd := CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "g.f",
+		Script:  &ScriptDef{Path: "s.sh"},
+		Env:     map[string]string{"MY_VAR": "value"},
+		Context: map[string]ContextDef{"c": {Env: "MY_VAR"}},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "env conflict") {
+		t.Errorf("expected env conflict error without files block, got %v", err)
+	}
+}
+
+func TestValidate_NoFiles_EnvConflictParamVsContext(t *testing.T) {
+	cmd := CommandDef{
+		Type:    CommandTypeScript,
+		ID:      "g.f",
+		Script:  &ScriptDef{Path: "s.sh"},
+		Params:  map[string]ParamDef{"p": {Env: "MY_VAR"}},
+		Context: map[string]ContextDef{"c": {Env: "MY_VAR"}},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "env conflict") {
+		t.Errorf("expected env conflict error without files block, got %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

@@ -168,6 +168,10 @@ type ParamDef struct {
 	// Env is the environment variable name used to expose this param to the process.
 	// When empty the param is not injected as an env var (only available for templating).
 	Env string `yaml:"env"`
+	// Pattern is an optional anchored regular expression that the resolved string
+	// value must fully match. Applied only to string and path params; ignored for
+	// bool and int params. An empty Pattern skips validation.
+	Pattern string `yaml:"pattern"`
 }
 
 // ContextDef defines a single named context value derived from the merged config.
@@ -358,7 +362,12 @@ func (c *CommandDef) Validate() error {
 		return fmt.Errorf("command %q: unknown type %q", c.ID, c.Type)
 	}
 
-	// Validate file specs and check for env conflicts.
+	// Validate env name conflicts across params, context, env block, and files.
+	if err := c.validateEnvConflicts(); err != nil {
+		return fmt.Errorf("command %q: %w", c.ID, err)
+	}
+
+	// Validate file specs (shapes, IDs, access modes, etc.).
 	if err := c.validateFiles(); err != nil {
 		return fmt.Errorf("command %q: %w", c.ID, err)
 	}
@@ -463,22 +472,15 @@ func (c *CommandDef) validateWorkflowType() error {
 	return nil
 }
 
-func (c *CommandDef) validateFiles() error {
-	if len(c.Files) == 0 {
-		return nil
-	}
-
-	// File ID regex: [a-zA-Z_][a-zA-Z0-9_]* (no hyphens)
-
-	// Collect all env names to detect conflicts
+// validateEnvConflicts checks for duplicate env variable names across params,
+// context, command-level env block, and files. Called unconditionally from Validate().
+func (c *CommandDef) validateEnvConflicts() error {
 	allEnvNames := make(map[string]string) // name -> source
 
-	// Add env names from command-level env block
 	for name := range c.Env {
 		allEnvNames[name] = "env block"
 	}
 
-	// Add env names from params
 	for pname, pdef := range c.Params {
 		if pdef.Env != "" {
 			if existing, ok := allEnvNames[pdef.Env]; ok {
@@ -488,7 +490,6 @@ func (c *CommandDef) validateFiles() error {
 		}
 	}
 
-	// Add env names from context
 	for cname, cdef := range c.Context {
 		if cdef.Env != "" {
 			if existing, ok := allEnvNames[cdef.Env]; ok {
@@ -498,7 +499,24 @@ func (c *CommandDef) validateFiles() error {
 		}
 	}
 
-	// Validate each file spec and collect env names
+	for fid, fspec := range c.Files {
+		if fspec.Env != "" {
+			if existing, ok := allEnvNames[fspec.Env]; ok {
+				return fmt.Errorf("env conflict: %q declared by files.%s and %s", fspec.Env, fid, existing)
+			}
+			allEnvNames[fspec.Env] = fmt.Sprintf("files.%s", fid)
+		}
+	}
+
+	return nil
+}
+
+func (c *CommandDef) validateFiles() error {
+	if len(c.Files) == 0 {
+		return nil
+	}
+
+	// Validate each file spec
 	for fid, fspec := range c.Files {
 		// Validate file ID grammar
 		if !reFileID.MatchString(fid) {
@@ -575,17 +593,11 @@ func (c *CommandDef) validateFiles() error {
 			return fmt.Errorf("files.%s: on_error is not valid for access=read", fid)
 		}
 
-		// Validate env name if set
+		// Validate env name format if set (conflict check is in validateEnvConflicts)
 		if fspec.Env != "" {
 			if !rePosixEnv.MatchString(fspec.Env) {
 				return fmt.Errorf("files.%s: env must be a valid POSIX env name like MY_VAR (got %q)", fid, fspec.Env)
 			}
-
-			// Check for conflicts
-			if existing, ok := allEnvNames[fspec.Env]; ok {
-				return fmt.Errorf("env conflict: %q declared by files.%s and %s", fspec.Env, fid, existing)
-			}
-			allEnvNames[fspec.Env] = fmt.Sprintf("files.%s", fid)
 		}
 	}
 

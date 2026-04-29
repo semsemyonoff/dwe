@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -45,6 +46,18 @@ func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *co
 		coerced, err := coerceParam(name, raw, def.Type)
 		if err != nil {
 			return nil, err
+		}
+		// Validate pattern for string/path params when a pattern is declared.
+		if def.Pattern != "" && (def.Type == ParamTypeString || def.Type == ParamTypePath || def.Type == "") {
+			if raw != "" {
+				re, err := regexp.Compile(def.Pattern)
+				if err != nil {
+					return nil, fmt.Errorf("param %q: invalid pattern %q: %w", name, def.Pattern, err)
+				}
+				if loc := re.FindStringIndex(raw); loc == nil || loc[0] != 0 || loc[1] != len(raw) {
+					return nil, fmt.Errorf("param %q: value %q does not match required pattern %q", name, raw, def.Pattern)
+				}
+			}
 		}
 		result[name] = coerced
 	}
