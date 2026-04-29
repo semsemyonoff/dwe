@@ -201,7 +201,7 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 
 	c.Stdout = stdout(ctx)
 	c.Stderr = stderr(ctx)
-	c.Stdin = os.Stdin
+	c.Stdin = stdinOrOS(ctx)
 
 	if err := c.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

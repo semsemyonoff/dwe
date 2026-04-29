@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
@@ -62,6 +63,14 @@ type RunContext struct {
 	// NonInteractive, when true, forces non-interactive code paths
 	// regardless of TTY attachment (e.g., in workflow confirm steps and script env).
 	NonInteractive bool
+}
+
+// stdinOrOS returns ctx.Stdin if set, otherwise os.Stdin.
+func stdinOrOS(ctx RunContext) io.Reader {
+	if ctx.Stdin != nil {
+		return ctx.Stdin
+	}
+	return os.Stdin
 }
 
 // NewRunner returns the appropriate Runner implementation for the given command type.

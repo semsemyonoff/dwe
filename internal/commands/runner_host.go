@@ -51,7 +51,7 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 
 	cmd.Stdout = stdout(ctx)
 	cmd.Stderr = stderr(ctx)
-	cmd.Stdin = os.Stdin
+	cmd.Stdin = stdinOrOS(ctx)
 	return cmd.Run()
 }
 
@@ -130,7 +130,7 @@ func (r *HostRunner) Run(ctx RunContext) error {
 	}
 	c.Stdout = stdout(ctx)
 	c.Stderr = stderr(ctx)
-	c.Stdin = os.Stdin
+	c.Stdin = stdinOrOS(ctx)
 	return c.Run()
 }
 

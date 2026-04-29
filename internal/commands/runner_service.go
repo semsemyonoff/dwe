@@ -2,7 +2,7 @@ package commands
 
 import (
 	"fmt"
-	"os"
+	"maps"
 	"os/exec"
 	"strings"
 
@@ -69,7 +69,7 @@ func (r *ServiceExecRunner) Run(ctx RunContext) error {
 	}
 	c.Stdout = stdout(ctx)
 	c.Stderr = stderr(ctx)
-	c.Stdin = os.Stdin
+	c.Stdin = stdinOrOS(ctx)
 	return c.Run()
 }
 
@@ -110,7 +110,7 @@ func (r *ServiceRunRunner) Run(ctx RunContext) error {
 	}
 	c.Stdout = stdout(ctx)
 	c.Stderr = stderr(ctx)
-	c.Stdin = os.Stdin
+	c.Stdin = stdinOrOS(ctx)
 	return c.Run()
 }
 
@@ -278,9 +278,11 @@ func buildDockerComposeCmd(
 		args = append(args, "--workdir", workdir)
 	}
 
-	// Env vars passed via -e flags (each value is a separate argument, never shell-interpreted).
-	for k, v := range envVars {
-		args = append(args, "-e", k+"="+v)
+	// Env vars: inject into the docker process environment and pass -e KEY
+	// (name only) so docker compose forwards them into the container.
+	// This avoids exposing secret values in argv (visible via ps/procfs).
+	for k := range envVars {
+		args = append(args, "-e", k)
 	}
 
 	// Service name.
@@ -290,7 +292,12 @@ func buildDockerComposeCmd(
 	args = append(args, serviceArgv...)
 
 	cmd := exec.Command("docker", append([]string{"compose"}, args...)...) //nolint:gosec
-	cmd.Env = compose.BuildEnv()
+	// Merge compose process env with command-level env vars so that -e KEY
+	// (name only) above picks up the actual values from the process environment.
+	combined := make(map[string]string, len(compose.ProcessEnv)+len(envVars))
+	maps.Copy(combined, compose.ProcessEnv)
+	maps.Copy(combined, envVars)
+	cmd.Env = docker.MergeEnv(combined)
 	return cmd
 }
 

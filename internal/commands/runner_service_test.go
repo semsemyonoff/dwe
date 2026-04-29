@@ -427,9 +427,8 @@ func TestServiceExecRunner_BuildCommand_ComposeArgsEmpty(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	args := strings.Join(c.Args, " ")
-	// Should not have any extra flags
-	if strings.Count(args, " ") < strings.Count("docker compose exec app-main", " ") {
-		t.Logf("args: %s", args)
+	if !strings.Contains(args, "exec") || !strings.Contains(args, "app-main") {
+		t.Errorf("expected exec command targeting app-main, got: %s", args)
 	}
 }
 
