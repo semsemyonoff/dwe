@@ -754,6 +754,631 @@ commands:
 }
 
 // ---------------------------------------------------------------------------
+// File spec validation tests
+// ---------------------------------------------------------------------------
+
+func TestFileAccessConstants(t *testing.T) {
+	modes := []FileAccess{FileAccessRead, FileAccessWrite, FileAccessReadWrite}
+	want := []string{"read", "write", "read_write"}
+	for i, m := range modes {
+		if string(m) != want[i] {
+			t.Errorf("FileAccess[%d] = %q, want %q", i, m, want[i])
+		}
+	}
+}
+
+func TestFileSortConstants(t *testing.T) {
+	sorts := []FileSort{
+		FileSortNameAsc, FileSortNameDesc,
+		FileSortModtimeAsc, FileSortModtimeDesc,
+	}
+	want := []string{"name_asc", "name_desc", "modtime_asc", "modtime_desc"}
+	for i, s := range sorts {
+		if string(s) != want[i] {
+			t.Errorf("FileSort[%d] = %q, want %q", i, s, want[i])
+		}
+	}
+}
+
+func TestFileOnErrorConstants(t *testing.T) {
+	errs := []FileOnError{FileOnErrorKeep, FileOnErrorRemove}
+	want := []string{"keep", "remove"}
+	for i, e := range errs {
+		if string(e) != want[i] {
+			t.Errorf("FileOnError[%d] = %q, want %q", i, e, want[i])
+		}
+	}
+}
+
+// Test valid file specs with different access modes.
+func TestValidate_Files_WriteWithPath(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/dump.sql",
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Files_ReadWithPath(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"config": {
+				Access:   FileAccessRead,
+				Path:     "/etc/config.ini",
+				Required: true,
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Files_ReadWriteWithPath(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"db": {
+				Access: FileAccessReadWrite,
+				Path:   "/var/lib/db.sqlite",
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Files_ReadWithCandidates(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Path: "/tmp/dump.sql"},
+					{Glob: "/backups/db_*.sql.gz", Match: ".*", Sort: FileSortNameDesc},
+				},
+				Required: true,
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Files_WriteWithMkdir(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"out": {
+				Access: FileAccessWrite,
+				Path:   "/data/output/file.txt",
+				Mkdir:  true,
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Files_WriteWithEnv(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/dump.sql",
+				Env:    "DUMP_FILE",
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Files_ReadWriteIgnoresRequired(t *testing.T) {
+	// read_write with required: false should still validate (runtime enforces presence)
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"db": {
+				Access:   FileAccessReadWrite,
+				Path:     "/var/lib/db.sqlite",
+				Required: false, // ignored at validation, enforced at runtime
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// Test invalid file specs.
+func TestValidate_Files_BadIDWithHyphen(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump-file": { // invalid: hyphen not allowed
+				Access: FileAccessRead,
+				Path:   "/tmp/dump.sql",
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "id must match") {
+		t.Errorf("expected id validation error, got %v", err)
+	}
+}
+
+func TestValidate_Files_BadIDStartsWithNumber(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"1dump": { // invalid: starts with number
+				Access: FileAccessRead,
+				Path:   "/tmp/dump.sql",
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "id must match") {
+		t.Errorf("expected id validation error, got %v", err)
+	}
+}
+
+func TestValidate_Files_MissingAccess(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Path: "/tmp/dump.sql",
+				// access not set
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "access is required") {
+		t.Errorf("expected access required error, got %v", err)
+	}
+}
+
+func TestValidate_Files_InvalidAccess(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccess("invalid"),
+				Path:   "/tmp/dump.sql",
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "access must be one of") {
+		t.Errorf("expected invalid access error, got %v", err)
+	}
+}
+
+func TestValidate_Files_WriteMissingPath(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				// path not set
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "path is required") {
+		t.Errorf("expected path required for write error, got %v", err)
+	}
+}
+
+func TestValidate_Files_WriteWithCandidates(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/dump.sql",
+				Candidates: []FileCandidate{
+					{Path: "/backup/dump.sql"},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "candidates are not allowed") {
+		t.Errorf("expected candidates not allowed error, got %v", err)
+	}
+}
+
+func TestValidate_Files_ReadMissingPathAndCandidates(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				// neither path nor candidates
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "one of path or candidates") {
+		t.Errorf("expected one of path or candidates error, got %v", err)
+	}
+}
+
+func TestValidate_Files_PathAndCandidatesBothSet(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Path:   "/tmp/dump.sql",
+				Candidates: []FileCandidate{
+					{Path: "/backup/dump.sql"},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutually exclusive error, got %v", err)
+	}
+}
+
+func TestValidate_Files_CandidatePathAndGlobBothSet(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Path: "/tmp/a.sql", Glob: "/tmp/*.sql"},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutually exclusive error, got %v", err)
+	}
+}
+
+func TestValidate_Files_CandidateNeitherPathNorGlob(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{}, // neither path nor glob
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "one of path or glob") {
+		t.Errorf("expected one of path or glob error, got %v", err)
+	}
+}
+
+func TestValidate_Files_CandidatePathWithMatch(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Path: "/tmp/dump.sql", Match: ".*"}, // match only valid with glob
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "only valid with glob") {
+		t.Errorf("expected match only with glob error, got %v", err)
+	}
+}
+
+func TestValidate_Files_CandidatePathWithSort(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Path: "/tmp/dump.sql", Sort: FileSortNameDesc}, // sort only valid with glob
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "only valid with glob") {
+		t.Errorf("expected sort only with glob error, got %v", err)
+	}
+}
+
+func TestValidate_Files_InvalidSort(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Candidates: []FileCandidate{
+					{Glob: "/tmp/*.sql", Sort: FileSort("invalid-sort")},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "sort must be one of") {
+		t.Errorf("expected invalid sort error, got %v", err)
+	}
+}
+
+func TestValidate_Files_MkdirForRead(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessRead,
+				Path:   "/tmp/dump.sql",
+				Mkdir:  true, // invalid for read
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mkdir is only valid") {
+		t.Errorf("expected mkdir only for write error, got %v", err)
+	}
+}
+
+func TestValidate_Files_OverwriteForRead(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access:    FileAccessRead,
+				Path:      "/tmp/dump.sql",
+				Overwrite: true, // invalid for read
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "overwrite is only valid") {
+		t.Errorf("expected overwrite only for write error, got %v", err)
+	}
+}
+
+func TestValidate_Files_OnErrorForRead(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access:  FileAccessRead,
+				Path:    "/tmp/dump.sql",
+				OnError: FileOnErrorRemove, // invalid for read
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "on_error is not valid") {
+		t.Errorf("expected on_error not valid for read error, got %v", err)
+	}
+}
+
+func TestValidate_Files_InvalidOnError(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access:  FileAccessWrite,
+				Path:    "/tmp/dump.sql",
+				OnError: FileOnError("invalid"),
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "on_error must be one of") {
+		t.Errorf("expected invalid on_error error, got %v", err)
+	}
+}
+
+func TestValidate_Files_InvalidEnvName(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/dump.sql",
+				Env:    "dump-file", // invalid: has hyphen, lowercase
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "valid POSIX env name") {
+		t.Errorf("expected env name validation error, got %v", err)
+	}
+}
+
+func TestValidate_Files_EnvConflictWithEnvBlock(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Env: map[string]string{
+			"DUMP_FILE": "value",
+		},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/dump.sql",
+				Env:    "DUMP_FILE", // conflict with Env block
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "env conflict") {
+		t.Errorf("expected env conflict error, got %v", err)
+	}
+}
+
+func TestValidate_Files_EnvConflictWithParamEnv(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Params: map[string]ParamDef{
+			"file": {Env: "DUMP_FILE"},
+		},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/dump.sql",
+				Env:    "DUMP_FILE", // conflict with param env
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "env conflict") {
+		t.Errorf("expected env conflict error, got %v", err)
+	}
+}
+
+func TestValidate_Files_EnvConflictWithContextEnv(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Context: map[string]ContextDef{
+			"file": {Env: "DUMP_FILE"},
+		},
+		Files: map[string]FileSpec{
+			"dump": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/dump.sql",
+				Env:    "DUMP_FILE", // conflict with context env
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "env conflict") {
+		t.Errorf("expected env conflict error, got %v", err)
+	}
+}
+
+func TestValidate_Files_MultipleFilesWithUniqueEnvs(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"input": {
+				Access: FileAccessRead,
+				Path:   "/tmp/input.sql",
+				Env:    "INPUT_FILE",
+			},
+			"output": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/output.sql",
+				Env:    "OUTPUT_FILE",
+			},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Files_MultipleFilesEnvConflict(t *testing.T) {
+	cmd := CommandDef{
+		Type:   CommandTypeScript,
+		ID:     "g.f",
+		Script: &ScriptDef{Path: "s.sh"},
+		Files: map[string]FileSpec{
+			"input": {
+				Access: FileAccessRead,
+				Path:   "/tmp/input.sql",
+				Env:    "FILE_PATH",
+			},
+			"output": {
+				Access: FileAccessWrite,
+				Path:   "/tmp/output.sql",
+				Env:    "FILE_PATH", // conflict with other file
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "env conflict") {
+		t.Errorf("expected env conflict error, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

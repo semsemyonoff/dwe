@@ -67,6 +67,78 @@ const (
 	ExecModeExecOrRun ExecMode = "exec-or-run"
 )
 
+// FileAccess specifies whether a file is read, written, or both.
+type FileAccess string
+
+const (
+	// FileAccessRead means the file must exist before the command runs.
+	FileAccessRead FileAccess = "read"
+	// FileAccessWrite means the command will create or modify the file.
+	FileAccessWrite FileAccess = "write"
+	// FileAccessReadWrite means the file must pre-exist and the command may modify it.
+	FileAccessReadWrite FileAccess = "read_write"
+)
+
+// FileSort specifies the sort order for glob-matched file candidates.
+type FileSort string
+
+const (
+	// FileSortNameAsc sorts candidates by basename, ascending (A-Z).
+	FileSortNameAsc FileSort = "name_asc"
+	// FileSortNameDesc sorts candidates by basename, descending (Z-A).
+	FileSortNameDesc FileSort = "name_desc"
+	// FileSortModtimeAsc sorts candidates by modification time, oldest first.
+	FileSortModtimeAsc FileSort = "modtime_asc"
+	// FileSortModtimeDesc sorts candidates by modification time, newest first.
+	FileSortModtimeDesc FileSort = "modtime_desc"
+)
+
+// FileOnError specifies what happens to a file if the command fails.
+type FileOnError string
+
+const (
+	// FileOnErrorKeep preserves the file even if the command fails.
+	FileOnErrorKeep FileOnError = "keep"
+	// FileOnErrorRemove deletes the file if the command fails (only if not pre-existing).
+	FileOnErrorRemove FileOnError = "remove"
+)
+
+// FileCandidate is one candidate path or glob in a file spec's fallback chain.
+type FileCandidate struct {
+	// Path is a literal file path (mutually exclusive with Glob).
+	Path string `yaml:"path"`
+	// Glob is a glob pattern to match multiple files (mutually exclusive with Path).
+	Glob string `yaml:"glob"`
+	// Match is a regex pattern applied to basenames when Glob is used.
+	Match string `yaml:"match"`
+	// Sort specifies the sort order for glob matches. Only valid with Glob.
+	Sort FileSort `yaml:"sort"`
+}
+
+// FileSpec declares a file artefact that a command reads or produces.
+// Required field stays a plain bool (no *bool) for simplicity; when access is
+// read_write, presence is always enforced at runtime regardless of what required says.
+type FileSpec struct {
+	// Access is the access mode (read, write, read_write). Required.
+	Access FileAccess `yaml:"access"`
+	// Path is a literal file path (for read/read_write, mutually exclusive with Candidates).
+	// For write, this is required and candidates is rejected.
+	Path string `yaml:"path"`
+	// Candidates is an ordered list of fallback paths/globs (for read/read_write only).
+	Candidates []FileCandidate `yaml:"candidates"`
+	// Required indicates the file must be resolved. For read: respected.
+	// For write: n/a (write always creates). For read_write: always true at runtime.
+	Required bool `yaml:"required"`
+	// Mkdir creates parent directories for write mode (mkdir only valid for write).
+	Mkdir bool `yaml:"mkdir"`
+	// Overwrite allows overwriting an existing file in write mode (only valid for write).
+	Overwrite bool `yaml:"overwrite"`
+	// OnError specifies what to do with the file if the command fails (write/read_write only).
+	OnError FileOnError `yaml:"on_error"`
+	// Env is the environment variable name to inject with the resolved file path.
+	Env string `yaml:"env"`
+}
+
 // GroupMeta holds optional metadata about a command group, declared at the top of a
 // command file under the `group` key.
 type GroupMeta struct {
@@ -205,6 +277,8 @@ type CommandDef struct {
 	// Env is additional environment variables injected into the process,
 	// supporting ${...} template interpolation.
 	Env map[string]string `yaml:"env"`
+	// Files declares file artefacts the command reads or produces.
+	Files map[string]FileSpec `yaml:"files"`
 	// Messages holds optional centralized success/error output for the command.
 	Messages CommandMessages `yaml:"messages"`
 
@@ -277,6 +351,12 @@ func (c *CommandDef) Validate() error {
 	default:
 		return fmt.Errorf("command %q: unknown type %q", c.ID, c.Type)
 	}
+
+	// Validate file specs and check for env conflicts.
+	if err := c.validateFiles(); err != nil {
+		return fmt.Errorf("command %q: %w", c.ID, err)
+	}
+
 	return nil
 }
 
@@ -375,6 +455,189 @@ func (c *CommandDef) validateWorkflowType() error {
 		}
 	}
 	return nil
+}
+
+func (c *CommandDef) validateFiles() error {
+	if len(c.Files) == 0 {
+		return nil
+	}
+
+	// File ID regex: [a-zA-Z_][a-zA-Z0-9_]* (no hyphens)
+	fileIDRegex := `^[a-zA-Z_][a-zA-Z0-9_]*$`
+
+	// Collect all env names to detect conflicts
+	allEnvNames := make(map[string]string) // name -> source
+
+	// Add env names from command-level env block
+	for name := range c.Env {
+		allEnvNames[name] = "env block"
+	}
+
+	// Add env names from params
+	for pname, pdef := range c.Params {
+		if pdef.Env != "" {
+			if existing, ok := allEnvNames[pdef.Env]; ok {
+				return fmt.Errorf("env conflict: %q declared by params.%s and %s", pdef.Env, pname, existing)
+			}
+			allEnvNames[pdef.Env] = fmt.Sprintf("params.%s", pname)
+		}
+	}
+
+	// Add env names from context
+	for cname, cdef := range c.Context {
+		if cdef.Env != "" {
+			if existing, ok := allEnvNames[cdef.Env]; ok {
+				return fmt.Errorf("env conflict: %q declared by context.%s and %s", cdef.Env, cname, existing)
+			}
+			allEnvNames[cdef.Env] = fmt.Sprintf("context.%s", cname)
+		}
+	}
+
+	// Validate each file spec and collect env names
+	for fid, fspec := range c.Files {
+		// Validate file ID grammar
+		if !matchesPattern(fid, fileIDRegex) {
+			return fmt.Errorf("files.%s: id must match ^[a-zA-Z_][a-zA-Z0-9_]*$ (got %q)", fid, fid)
+		}
+
+		// Validate access is required and valid
+		if fspec.Access == "" {
+			return fmt.Errorf("files.%s: access is required", fid)
+		}
+		if fspec.Access != FileAccessRead && fspec.Access != FileAccessWrite && fspec.Access != FileAccessReadWrite {
+			return fmt.Errorf("files.%s: access must be one of read, write, read_write (got %q)", fid, fspec.Access)
+		}
+
+		// Validate path/candidates shape based on access mode
+		hasPath := fspec.Path != ""
+		hasCandidates := len(fspec.Candidates) > 0
+
+		switch fspec.Access {
+		case FileAccessWrite:
+			if !hasPath {
+				return fmt.Errorf("files.%s: path is required for access=write", fid)
+			}
+			if hasCandidates {
+				return fmt.Errorf("files.%s: candidates are not allowed for access=write", fid)
+			}
+
+		case FileAccessRead, FileAccessReadWrite:
+			if hasPath && hasCandidates {
+				return fmt.Errorf("files.%s: path and candidates are mutually exclusive", fid)
+			}
+			if !hasPath && !hasCandidates {
+				return fmt.Errorf("files.%s: one of path or candidates must be set for access=%s", fid, fspec.Access)
+			}
+		}
+
+		// Validate candidates
+		for i, cand := range fspec.Candidates {
+			candHasPath := cand.Path != ""
+			candHasGlob := cand.Glob != ""
+
+			if candHasPath && candHasGlob {
+				return fmt.Errorf("files.%s: candidates[%d]: path and glob are mutually exclusive", fid, i)
+			}
+			if !candHasPath && !candHasGlob {
+				return fmt.Errorf("files.%s: candidates[%d]: one of path or glob must be set", fid, i)
+			}
+
+			if candHasPath && (cand.Match != "" || cand.Sort != "") {
+				return fmt.Errorf("files.%s: candidates[%d]: match and sort are only valid with glob", fid, i)
+			}
+
+			if candHasGlob && cand.Sort != "" {
+				if cand.Sort != FileSortNameAsc && cand.Sort != FileSortNameDesc &&
+					cand.Sort != FileSortModtimeAsc && cand.Sort != FileSortModtimeDesc {
+					return fmt.Errorf("files.%s: candidates[%d]: sort must be one of name_asc, name_desc, modtime_asc, modtime_desc (got %q)", fid, i, cand.Sort)
+				}
+			}
+		}
+
+		// Validate mkdir/overwrite are only for write
+		if fspec.Mkdir && fspec.Access != FileAccessWrite {
+			return fmt.Errorf("files.%s: mkdir is only valid for access=write", fid)
+		}
+		if fspec.Overwrite && fspec.Access != FileAccessWrite {
+			return fmt.Errorf("files.%s: overwrite is only valid for access=write", fid)
+		}
+
+		// Validate on_error is only for write/read_write
+		if fspec.OnError != "" && fspec.OnError != FileOnErrorKeep && fspec.OnError != FileOnErrorRemove {
+			return fmt.Errorf("files.%s: on_error must be one of keep, remove (got %q)", fid, fspec.OnError)
+		}
+		if fspec.OnError != "" && fspec.Access == FileAccessRead {
+			return fmt.Errorf("files.%s: on_error is not valid for access=read", fid)
+		}
+
+		// Validate env name if set
+		if fspec.Env != "" {
+			if !matchesPattern(fspec.Env, `^[A-Z_][A-Z0-9_]*$`) {
+				return fmt.Errorf("files.%s: env must be a valid POSIX env name like MY_VAR (got %q)", fid, fspec.Env)
+			}
+
+			// Check for conflicts
+			if existing, ok := allEnvNames[fspec.Env]; ok {
+				return fmt.Errorf("env conflict: %q declared by files.%s and %s", fspec.Env, fid, existing)
+			}
+			allEnvNames[fspec.Env] = fmt.Sprintf("files.%s", fid)
+		}
+	}
+
+	return nil
+}
+
+// matchesPattern is a simple regex matcher for validation.
+// Returns true if s matches the pattern (using a basic implementation).
+func matchesPattern(s, pattern string) bool {
+	// Simple implementation for the patterns we use:
+	// ^[a-zA-Z_][a-zA-Z0-9_]*$ and ^[A-Z_][A-Z0-9_]*$
+	if len(s) == 0 {
+		return false
+	}
+
+	// Handle patterns for identifier validation
+	if pattern == `^[a-zA-Z_][a-zA-Z0-9_]*$` {
+		// First char must be letter or underscore
+		if !isLetterOrUnderscore(rune(s[0])) {
+			return false
+		}
+		// Rest must be alphanumeric or underscore
+		for _, ch := range s[1:] {
+			if !isAlphanumericOrUnderscore(ch) {
+				return false
+			}
+		}
+		return true
+	}
+
+	if pattern == `^[A-Z_][A-Z0-9_]*$` {
+		// First char must be uppercase letter or underscore
+		if (s[0] < 'A' || s[0] > 'Z') && s[0] != '_' {
+			return false
+		}
+		// Rest must be uppercase alphanumeric or underscore
+		for _, ch := range s[1:] {
+			if !isUpperAlphanumericOrUnderscore(ch) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
+func isLetterOrUnderscore(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+func isAlphanumericOrUnderscore(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
+}
+
+func isUpperAlphanumericOrUnderscore(ch rune) bool {
+	return (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }
 
 // CommandFile is the top-level structure of a command YAML file.
