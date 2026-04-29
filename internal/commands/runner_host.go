@@ -60,7 +60,7 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 //   - run:  the command string is passed to `sh -c` for shell evaluation.
 //   - argv: the argument vector is exec'd directly without a shell.
 //
-// The cwd and env fields support ${...} template interpolation.
+// The workdir and env fields support ${...} template interpolation.
 type HostRunner struct{}
 
 // BuildCommand constructs the exec.Cmd that would be run for the given context.
@@ -94,10 +94,10 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 	c := exec.Command(argv[0], argv[1:]...) //nolint:gosec
 
 	// Resolve working directory.
-	if cmd.Cwd != "" {
-		rendered, err := tpl.RenderCommand(cmd.Cwd, ctx.Render)
+	if cmd.Workdir != "" {
+		rendered, err := tpl.RenderCommand(cmd.Workdir, ctx.Render)
 		if err != nil {
-			return nil, fmt.Errorf("render cwd: %w", err)
+			return nil, fmt.Errorf("render workdir: %w", err)
 		}
 		if !filepath.IsAbs(rendered) && ctx.ProjectRoot != "" {
 			rendered = filepath.Join(ctx.ProjectRoot, rendered)

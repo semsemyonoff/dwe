@@ -481,8 +481,8 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)
 		}
-		if def.Cwd != "" {
-			def2("cwd", def.Cwd, 2)
+		if def.Workdir != "" {
+			def2("workdir", def.Workdir, 2)
 		}
 	case commands.CommandTypeServiceExec, commands.CommandTypeServiceRun:
 		if def.Service != "" {

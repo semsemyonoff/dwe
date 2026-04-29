@@ -308,8 +308,6 @@ type CommandDef struct {
 	// Argv is the raw argument vector (no shell quoting).
 	// Mutually exclusive with Run.
 	Argv []string `yaml:"argv"`
-	// Cwd is the working directory for the process (supports ${...} interpolation).
-	Cwd string `yaml:"cwd"`
 
 	// --- type=service_exec / service_run fields ---
 	// Service is the Docker Compose service name.
@@ -397,25 +395,36 @@ func (c *CommandDef) EffectiveConfirmationText() string {
 }
 
 func (c *CommandDef) validateCommandType() error {
-	hasRun := c.Run != ""
-	hasArgv := len(c.Argv) > 0
-	if hasRun && hasArgv {
-		return fmt.Errorf("run and argv are mutually exclusive")
+	// For type=devbox, run and argv are not used (run field is used by DevboxRunner but it's not validated here)
+	// For type=command, exactly one of run or argv must be set
+	if c.Type == CommandTypeCommand {
+		hasRun := c.Run != ""
+		hasArgv := len(c.Argv) > 0
+		if hasRun && hasArgv {
+			return fmt.Errorf("run and argv are mutually exclusive")
+		}
+		if !hasRun && !hasArgv {
+			return fmt.Errorf("one of run or argv must be set")
+		}
 	}
-	if !hasRun && !hasArgv {
-		return fmt.Errorf("one of run or argv must be set")
-	}
+
 	if c.Script != nil {
-		return fmt.Errorf("script field is not valid for type=command")
+		return fmt.Errorf("script field is not valid for type=%s", c.Type)
 	}
 	if len(c.Steps) > 0 {
-		return fmt.Errorf("steps field is not valid for type=command")
+		return fmt.Errorf("steps field is not valid for type=%s", c.Type)
 	}
 	if c.Service != "" {
-		return fmt.Errorf("service field is not valid for type=command")
+		return fmt.Errorf("service field is not valid for type=%s", c.Type)
 	}
 	if len(c.ComposeArgs) > 0 {
-		return fmt.Errorf("compose_args field is not valid for type=command")
+		return fmt.Errorf("compose_args field is not valid for type=%s", c.Type)
+	}
+	if c.WorkdirFrom != "" {
+		return fmt.Errorf("workdir_from is not valid for type=%s", c.Type)
+	}
+	if c.Type == CommandTypeDevbox && c.Workdir != "" {
+		return fmt.Errorf("workdir is not valid for type=devbox")
 	}
 	return nil
 }
@@ -435,6 +444,9 @@ func (c *CommandDef) validateScriptType() error {
 	}
 	if len(c.ComposeArgs) > 0 {
 		return fmt.Errorf("compose_args field is not valid for type=script")
+	}
+	if c.WorkdirFrom != "" {
+		return fmt.Errorf("workdir_from is not valid for type=script")
 	}
 	return nil
 }
@@ -484,6 +496,12 @@ func (c *CommandDef) validateWorkflowType() error {
 	}
 	if len(c.ComposeArgs) > 0 {
 		return fmt.Errorf("compose_args field is not valid for type=workflow")
+	}
+	if c.Workdir != "" {
+		return fmt.Errorf("workdir is not valid for type=workflow")
+	}
+	if c.WorkdirFrom != "" {
+		return fmt.Errorf("workdir_from is not valid for type=workflow")
 	}
 	for i, step := range c.Steps {
 		if err := step.Validate(); err != nil {

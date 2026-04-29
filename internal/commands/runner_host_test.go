@@ -56,13 +56,13 @@ func TestHostRunner_BuildCommand_Argv(t *testing.T) {
 	}
 }
 
-func TestHostRunner_BuildCommand_CwdAbsolute(t *testing.T) {
+func TestHostRunner_BuildCommand_WorkdirAbsolute(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type: CommandTypeCommand,
-			Run:  "pwd",
-			Cwd:  "/tmp/mydir",
+			Type:    CommandTypeCommand,
+			Run:     "pwd",
+			Workdir: "/tmp/mydir",
 		},
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
@@ -76,13 +76,13 @@ func TestHostRunner_BuildCommand_CwdAbsolute(t *testing.T) {
 	}
 }
 
-func TestHostRunner_BuildCommand_CwdRelative(t *testing.T) {
+func TestHostRunner_BuildCommand_WorkdirRelative(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type: CommandTypeCommand,
-			Run:  "pwd",
-			Cwd:  "subdir",
+			Type:    CommandTypeCommand,
+			Run:     "pwd",
+			Workdir: "subdir",
 		},
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
@@ -96,7 +96,7 @@ func TestHostRunner_BuildCommand_CwdRelative(t *testing.T) {
 	}
 }
 
-func TestHostRunner_BuildCommand_DefaultCwd(t *testing.T) {
+func TestHostRunner_BuildCommand_DefaultWorkdir(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
@@ -157,6 +157,54 @@ func TestHostRunner_BuildCommand_RunWithTemplateInterpolation(t *testing.T) {
 	}
 	if !strings.Contains(c.Args[2], "world") {
 		t.Errorf("expected rendered 'world' in run arg, got %q", c.Args[2])
+	}
+}
+
+func TestHostRunner_BuildCommand_WorkdirWithTemplate(t *testing.T) {
+	r := &HostRunner{}
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeCommand,
+			Run:     "pwd",
+			Workdir: "${param.dir}",
+		},
+		Params:  map[string]any{"dir": "mydir"},
+		Context: map[string]any{},
+		Render: &tpl.RenderContext{
+			Params: map[string]any{"dir": "mydir"},
+		},
+		ProjectRoot: "/project",
+	}
+	c, err := r.BuildCommand(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.Dir != "/project/mydir" {
+		t.Errorf("expected /project/mydir, got %q", c.Dir)
+	}
+}
+
+func TestHostRunner_BuildCommand_WorkdirAbsoluteTemplate(t *testing.T) {
+	r := &HostRunner{}
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeCommand,
+			Run:     "pwd",
+			Workdir: "/tmp/${param.suffix}",
+		},
+		Params:  map[string]any{"suffix": "test"},
+		Context: map[string]any{},
+		Render: &tpl.RenderContext{
+			Params: map[string]any{"suffix": "test"},
+		},
+		ProjectRoot: "/project",
+	}
+	c, err := r.BuildCommand(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.Dir != "/tmp/test" {
+		t.Errorf("expected /tmp/test, got %q", c.Dir)
 	}
 }
 

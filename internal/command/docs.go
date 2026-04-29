@@ -413,8 +413,8 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 		if len(def.Argv) > 0 {
 			sb.WriteString("## Argv\n\n```\n" + strings.Join(def.Argv, " ") + "\n```\n\n")
 		}
-		if def.Cwd != "" {
-			fmt.Fprintf(&sb, "**Working directory:** `%s`\n\n", def.Cwd)
+		if def.Workdir != "" {
+			fmt.Fprintf(&sb, "**Working directory:** `%s`\n\n", def.Workdir)
 		}
 	case commands.CommandTypeServiceExec, commands.CommandTypeServiceRun:
 		if def.Service != "" {

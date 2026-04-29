@@ -97,7 +97,7 @@ commands:
     type: command
     description: Install dependencies
     run: composer install --no-interaction
-    cwd: /var/www/html
+    workdir: /var/www/html
     env:
       COMPOSER_HOME: /tmp/composer
 `
@@ -112,8 +112,8 @@ commands:
 	if cmd.Run != "composer install --no-interaction" {
 		t.Errorf("Run = %q, unexpected", cmd.Run)
 	}
-	if cmd.Cwd != "/var/www/html" {
-		t.Errorf("Cwd = %q, unexpected", cmd.Cwd)
+	if cmd.Workdir != "/var/www/html" {
+		t.Errorf("Workdir = %q, unexpected", cmd.Workdir)
 	}
 	if cmd.Env["COMPOSER_HOME"] != "/tmp/composer" {
 		t.Errorf("Env[COMPOSER_HOME] = %q, unexpected", cmd.Env["COMPOSER_HOME"])
@@ -1601,6 +1601,88 @@ func TestValidate_ComposeArgsRejectedOnDevbox(t *testing.T) {
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "compose_args") {
 		t.Errorf("expected compose_args rejection for type=devbox, got %v", err)
+	}
+}
+
+func TestValidate_WorkdirFromRejectedOnCommand(t *testing.T) {
+	cmd := CommandDef{
+		Type:        CommandTypeCommand,
+		ID:          "g.cmd",
+		Run:         "echo hello",
+		WorkdirFrom: "some.path",
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "workdir_from") {
+		t.Errorf("expected workdir_from rejection for type=command, got %v", err)
+	}
+}
+
+func TestValidate_WorkdirFromRejectedOnScript(t *testing.T) {
+	cmd := CommandDef{
+		Type:        CommandTypeScript,
+		ID:          "g.s",
+		Script:      &ScriptDef{Path: "s.sh"},
+		WorkdirFrom: "some.path",
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "workdir_from") {
+		t.Errorf("expected workdir_from rejection for type=script, got %v", err)
+	}
+}
+
+func TestValidate_WorkdirFromRejectedOnWorkflow(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeWorkflow,
+		ID:   "g.w",
+		Steps: []WorkflowStep{
+			{Command: "g.step1"},
+		},
+		WorkdirFrom: "some.path",
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "workdir_from") {
+		t.Errorf("expected workdir_from rejection for type=workflow, got %v", err)
+	}
+}
+
+func TestValidate_WorkdirFromRejectedOnDevbox(t *testing.T) {
+	cmd := CommandDef{
+		Type:        CommandTypeDevbox,
+		ID:          "g.devbox",
+		Run:         "info",
+		WorkdirFrom: "some.path",
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "workdir_from") {
+		t.Errorf("expected workdir_from rejection for type=devbox, got %v", err)
+	}
+}
+
+func TestValidate_WorkdirRejectedOnWorkflow(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeWorkflow,
+		ID:   "g.w",
+		Steps: []WorkflowStep{
+			{Command: "g.step1"},
+		},
+		Workdir: "/some/path",
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "workdir") {
+		t.Errorf("expected workdir rejection for type=workflow, got %v", err)
+	}
+}
+
+func TestValidate_WorkdirRejectedOnDevbox(t *testing.T) {
+	cmd := CommandDef{
+		Type:    CommandTypeDevbox,
+		ID:      "g.devbox",
+		Run:     "info",
+		Workdir: "/some/path",
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "workdir") {
+		t.Errorf("expected workdir rejection for type=devbox, got %v", err)
 	}
 }
 
