@@ -1,6 +1,7 @@
 package tpl
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -508,5 +509,196 @@ func TestRenderCommand_filesMixedVars(t *testing.T) {
 	want := "Restoring production from /backup/db.sql.gz"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// ---- EvalCommandCondition ----
+
+func TestEvalCommandCondition_emptyExpr(t *testing.T) {
+	ctx := &RenderContext{}
+	ok, err := EvalCommandCondition("", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("empty expr should return true")
+	}
+}
+
+func TestEvalCommandCondition_paramTruthy(t *testing.T) {
+	ctx := &RenderContext{
+		Params: map[string]any{
+			"enabled": "true",
+		},
+	}
+	ok, err := EvalCommandCondition("${param.enabled}", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("${param.enabled}=true should return true")
+	}
+}
+
+func TestEvalCommandCondition_paramFalsy(t *testing.T) {
+	ctx := &RenderContext{
+		Params: map[string]any{
+			"enabled": "false",
+		},
+	}
+	ok, err := EvalCommandCondition("${param.enabled}", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Error("${param.enabled}=false should return false")
+	}
+}
+
+func TestEvalCommandCondition_paramOne(t *testing.T) {
+	ctx := &RenderContext{
+		Params: map[string]any{
+			"count": "1",
+		},
+	}
+	ok, err := EvalCommandCondition("${param.count}", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("${param.count}=1 should return true")
+	}
+}
+
+func TestEvalCommandCondition_paramZero(t *testing.T) {
+	ctx := &RenderContext{
+		Params: map[string]any{
+			"count": "0",
+		},
+	}
+	ok, err := EvalCommandCondition("${param.count}", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Error("${param.count}=0 should return false")
+	}
+}
+
+func TestEvalCommandCondition_paramEmpty(t *testing.T) {
+	ctx := &RenderContext{
+		Params: map[string]any{
+			"optional": "",
+		},
+	}
+	ok, err := EvalCommandCondition("${param.optional}", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Error("${param.optional}=empty should return false")
+	}
+}
+
+func TestEvalCommandCondition_builtinDirExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	ctx := &RenderContext{}
+	ok, err := EvalCommandCondition("dir-exists "+tmpDir, ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("dir-exists for existing dir should return true")
+	}
+}
+
+func TestEvalCommandCondition_builtinDirMissing(t *testing.T) {
+	ctx := &RenderContext{}
+	ok, err := EvalCommandCondition("dir-missing /nonexistent/path", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("dir-missing for nonexistent path should return true")
+	}
+}
+
+func TestEvalCommandCondition_builtinFileExistsInTemplate(t *testing.T) {
+	tmpFile := t.TempDir() + "/test.txt"
+	// Create the temp file
+	if err := os.WriteFile(tmpFile, []byte("test"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx := &RenderContext{
+		Params: map[string]any{
+			"path": tmpFile,
+		},
+	}
+	ok, err := EvalCommandCondition("file-exists ${param.path}", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("file-exists for existing file should return true")
+	}
+}
+
+func TestEvalCommandCondition_cmdTrue(t *testing.T) {
+	ctx := &RenderContext{}
+	ok, err := EvalCommandCondition("cmd: true", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("cmd: true should return true")
+	}
+}
+
+func TestEvalCommandCondition_cmdFalse(t *testing.T) {
+	ctx := &RenderContext{}
+	ok, err := EvalCommandCondition("cmd: false", ctx, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Error("cmd: false should return false")
+	}
+}
+
+func TestEvalCommandCondition_renderError(t *testing.T) {
+	ctx := &RenderContext{
+		Params: nil,
+	}
+	// Invalid go template
+	_, err := EvalCommandCondition("{{ .Unclosed", ctx, "/tmp")
+	if err == nil {
+		t.Error("expected error for invalid template")
+	}
+	if !strings.Contains(err.Error(), "eval when") {
+		t.Errorf("error should start with 'eval when', got %q", err.Error())
+	}
+}
+
+func TestEvalCommandCondition_malformedBuiltin(t *testing.T) {
+	ctx := &RenderContext{}
+	// dir-empty with no path argument
+	_, err := EvalCommandCondition("dir-empty", ctx, "/tmp")
+	if err == nil {
+		t.Error("expected error for malformed builtin")
+	}
+	if !strings.Contains(err.Error(), "eval when") {
+		t.Errorf("error should be wrapped with 'eval when', got %q", err.Error())
+	}
+}
+
+func TestEvalCommandCondition_typoOnBuiltinVerb(t *testing.T) {
+	ctx := &RenderContext{}
+	// dir-emty (typo) instead of dir-empty
+	_, err := EvalCommandCondition("dir-emty /tmp", ctx, "/tmp")
+	if err == nil {
+		t.Error("expected error for typo in builtin verb")
+	}
+	if !strings.Contains(err.Error(), "unknown builtin predicate") {
+		t.Errorf("error should mention unknown predicate, got %q", err.Error())
 	}
 }

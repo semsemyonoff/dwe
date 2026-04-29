@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"text/template"
+
+	"devbox-cli/internal/condition"
 )
 
 // ResolvedFile represents a single resolved file path artifact.
@@ -218,4 +220,52 @@ func resolveMapPath(m map[string]any, path string) any {
 		return nil
 	}
 	return resolveMapPath(sub, tail)
+}
+
+// EvalCommandCondition evaluates a workflow when-expression, which may contain
+// ${...} template syntax (unlike deploy/lifecycle conditions which use Go templates).
+//
+// Evaluation flow:
+// 1. Empty expr → true
+// 2. Render ${...} and {{ }} against RenderContext
+// 3. Classify the rendered result (cmd:, builtin predicate, or literal)
+// 4. For literals, apply boolean-value fast-path (true/1 → true; false/0/"" → false)
+// 5. For predicates/commands, delegate to condition.EvalBuiltin/EvalCmd
+//
+// Returns wrapped errors prefixed with "eval when %q" for render errors or
+// unknown/malformed predicates (so typos fail loudly, matching deploy behavior).
+func EvalCommandCondition(expr string, ctx *RenderContext, projectRoot string) (bool, error) {
+	if expr == "" {
+		return true, nil
+	}
+
+	// Render ${...} and {{ }} against command template context
+	rendered, err := RenderCommand(expr, ctx)
+	if err != nil {
+		return false, fmt.Errorf("eval when %q: %w", expr, err)
+	}
+
+	// After rendering, check for literal boolean values first (from ${param.*} or ${context.*})
+	switch strings.TrimSpace(rendered) {
+	case "", "false", "0":
+		return false, nil
+	case "true", "1":
+		return true, nil
+	}
+
+	// Not a literal boolean; classify as cmd: or builtin predicate
+	kind, payload := condition.Classify(rendered)
+
+	switch kind {
+	case condition.KindCmd:
+		return condition.EvalCmd(payload, projectRoot)
+	case condition.KindBuiltin:
+		ok, err := condition.EvalBuiltin(payload, projectRoot)
+		if err != nil {
+			return false, fmt.Errorf("eval when %q: %w", expr, err)
+		}
+		return ok, nil
+	default: // KindTemplate — unreachable post-render, but defend against it
+		return false, fmt.Errorf("eval when %q: unexpected residual template", expr)
+	}
 }

@@ -230,9 +230,16 @@ type WorkflowStep struct {
 	// Confirm is a message displayed to the user before continuing.
 	// The workflow is aborted if the user declines.
 	Confirm string `yaml:"confirm"`
+	// When is an optional skip condition evaluated before the step runs.
+	// Supports ${...} syntax and cmd: / builtin predicates.
+	When string `yaml:"when"`
+	// ContinueOnError allows a command step to fail without aborting the workflow.
+	// Not valid on confirm steps (a confirmation that is ignored is meaningless).
+	ContinueOnError bool `yaml:"continue_on_error"`
 }
 
-// Validate checks that exactly one of Command or Confirm is set.
+// Validate checks that exactly one of Command or Confirm is set, and that
+// ContinueOnError is only used with command steps.
 func (s *WorkflowStep) Validate() error {
 	hasCommand := s.Command != ""
 	hasConfirm := s.Confirm != ""
@@ -243,6 +250,8 @@ func (s *WorkflowStep) Validate() error {
 		return fmt.Errorf("workflow step: one of command or confirm must be set")
 	case hasConfirm && len(s.With) > 0:
 		return fmt.Errorf("workflow step: with may not be combined with confirm")
+	case hasConfirm && s.ContinueOnError:
+		return fmt.Errorf("workflow step: continue_on_error is not valid on confirm steps")
 	}
 	return nil
 }

@@ -734,6 +734,84 @@ func TestValidate_WorkflowStep_ConfirmWithWith(t *testing.T) {
 	}
 }
 
+func TestValidate_WorkflowStep_ContinueOnErrorWithConfirm(t *testing.T) {
+	step := WorkflowStep{Confirm: "Sure?", ContinueOnError: true}
+	err := step.Validate()
+	if err == nil || !strings.Contains(err.Error(), "continue_on_error") {
+		t.Errorf("expected 'continue_on_error' error, got %v", err)
+	}
+}
+
+func TestParseYAML_WorkflowStep_WithWhen(t *testing.T) {
+	yaml := `
+commands:
+  bootstrap:
+    type: workflow
+    steps:
+      - command: db.create
+        when: "${param.migrate}"
+      - command: db.seed
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["bootstrap"]
+	if len(cmd.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(cmd.Steps))
+	}
+	if cmd.Steps[0].When != "${param.migrate}" {
+		t.Errorf("Step[0].When = %q, want %q", cmd.Steps[0].When, "${param.migrate}")
+	}
+	if cmd.Steps[1].When != "" {
+		t.Errorf("Step[1].When = %q, want empty", cmd.Steps[1].When)
+	}
+}
+
+func TestParseYAML_WorkflowStep_WithContinueOnError(t *testing.T) {
+	yaml := `
+commands:
+  cleanup:
+    type: workflow
+    steps:
+      - command: logs.clean
+        continue_on_error: true
+      - command: db.reset
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["cleanup"]
+	if len(cmd.Steps) != 2 {
+		t.Fatalf("expected 2 steps, got %d", len(cmd.Steps))
+	}
+	if !cmd.Steps[0].ContinueOnError {
+		t.Errorf("Step[0].ContinueOnError = %v, want true", cmd.Steps[0].ContinueOnError)
+	}
+	if cmd.Steps[1].ContinueOnError {
+		t.Errorf("Step[1].ContinueOnError = %v, want false", cmd.Steps[1].ContinueOnError)
+	}
+}
+
+func TestParseYAML_WorkflowStep_WhenAndContinueOnError(t *testing.T) {
+	yaml := `
+commands:
+  deploy:
+    type: workflow
+    steps:
+      - command: app.build
+        when: "${param.rebuild}"
+        continue_on_error: true
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["deploy"]
+	if len(cmd.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(cmd.Steps))
+	}
+	step := cmd.Steps[0]
+	if step.When != "${param.rebuild}" {
+		t.Errorf("When = %q, want %q", step.When, "${param.rebuild}")
+	}
+	if !step.ContinueOnError {
+		t.Errorf("ContinueOnError = %v, want true", step.ContinueOnError)
+	}
+}
+
 func TestValidate_CommandFile_MultipleErrors(t *testing.T) {
 	cf := mustParse(t, `
 commands:

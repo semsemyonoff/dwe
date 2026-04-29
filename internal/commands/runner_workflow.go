@@ -29,6 +29,19 @@ func (r *WorkflowRunner) Run(ctx RunContext) error {
 	}
 
 	for i, step := range ctx.Cmd.Steps {
+		// Evaluate the when condition before dispatching the step
+		if step.When != "" {
+			ok, err := tpl.EvalCommandCondition(step.When, ctx.Render, ctx.ProjectRoot)
+			if err != nil {
+				return fmt.Errorf("workflow %q step[%d]: %w", ctx.Cmd.ID, i, err)
+			}
+			if !ok {
+				_, _ = fmt.Fprintf(stderr(ctx), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
+					ctx.Cmd.ID, i, step.When)
+				continue
+			}
+		}
+
 		if step.Confirm != "" {
 			if err := r.runConfirmStep(ctx, step.Confirm); err != nil {
 				return fmt.Errorf("workflow %q step[%d] confirm: %w", ctx.Cmd.ID, i, err)
@@ -37,6 +50,11 @@ func (r *WorkflowRunner) Run(ctx RunContext) error {
 		}
 
 		if err := r.runCommandStep(ctx, i, step); err != nil {
+			if step.ContinueOnError {
+				_, _ = fmt.Fprintf(stderr(ctx), "  ⚠ workflow %q step[%d] %q: continue_on_error: %v\n",
+					ctx.Cmd.ID, i, step.Command, err)
+				continue
+			}
 			return err
 		}
 	}
