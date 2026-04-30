@@ -31,14 +31,12 @@ func defaultRunSelectForm(title string, opts []huh.Option[int]) (int, error) {
 	field := huh.NewSelect[int]().
 		Options(opts...).
 		Title(title).
-		Description("enter: select · q/esc: quit without choosing").
+		Description("enter: select · esc: quit without choosing").
 		Value(&idx).
 		Height(height)
 
 	keymap := huh.NewDefaultKeyMap()
-	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "q", "esc"), key.WithHelp("q/esc", "quit"))
-	// Disable filter so 'q' is never swallowed by filter input.
-	keymap.Select.Filter = key.NewBinding(key.WithDisabled())
+	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
 
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithTheme(Theme()).

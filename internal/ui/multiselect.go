@@ -38,14 +38,14 @@ func defaultRunMultiSelectForm(title string, opts []huh.Option[string]) ([]strin
 	field := huh.NewMultiSelect[string]().
 		Options(opts...).
 		Title(title).
-		Description("enter: confirm · q/esc: quit without saving").
+		Description("enter: confirm · esc: quit without saving").
 		Value(&keys).
-		Filterable(false).
+		Filterable(true).
 		Height(height)
 
 	keymap := huh.NewDefaultKeyMap()
 	// Bind q and esc to abort so users can leave the form without saving.
-	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "q", "esc"), key.WithHelp("q/esc", "quit"))
+	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
 
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithTheme(Theme()).
