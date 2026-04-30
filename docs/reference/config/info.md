@@ -2,6 +2,27 @@
 
 Info dashboard configuration.
 
+## Contents
+
+- [Purpose](#purpose)
+- [Structure](#structure)
+- [Top-level fields](#top-level-fields)
+- [Section fields](#section-fields)
+- [Item types](#item-types)
+  - [`subheader`](#subheader)
+  - [`definition`](#definition)
+  - [`info`](#info)
+  - [`warning`](#warning)
+  - [`separator`](#separator)
+- [Template expressions](#template-expressions)
+  - [Available template data](#available-template-data)
+  - [Template functions](#template-functions)
+  - [`when` conditions](#when-conditions)
+- [`footer`](#footer)
+- [Example: full info.yml](#example-full-infoyml)
+- [Common pitfalls](#common-pitfalls)
+- [Related commands](#related-commands)
+
 ## Purpose
 
 `devbox/info.yml` declares the content of the `devbox info` dashboard: sections, items, conditional visibility, and template expressions. It is rendered by `ui.RenderInfo()` using Lipgloss.
@@ -13,13 +34,22 @@ Loaded separately by `LoadInfoConfig()`. Not merged with the 3-layer config.
 ```yaml
 sections:
   - id: <section-id>
-    title: "Optional Section Title"   # shown as a bordered box header
+    title: "Optional Section Title" # shown as a bordered box header
     items:
       - type: <item-type>
         <item-fields>
 
 footer: true
 ```
+
+## Top-level fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `sections` | list | — | Ordered list of section definitions. |
+| `footer` | bool | `false` | When `true`, a closing table-header line is rendered after all sections. |
+
+> The struct exposes a `settings.line_width` knob, but the current Lipgloss-based renderer ignores it — terminal width is detected automatically. The field is kept reserved; do not rely on it.
 
 ## Section fields
 
@@ -30,6 +60,16 @@ footer: true
 | `items` | list | Ordered list of item definitions |
 
 ## Item types
+
+| Type | Renders as | Required fields |
+|------|-----------|-----------------|
+| `subheader` | Coloured sub-section label inside a section | `text` |
+| `definition` | `Label — Value` row, with optional icon | `name`, `value` |
+| `info` | Info-coloured text line | `text` |
+| `warning` | Warning-coloured text line | `text` |
+| `separator` | Blank line spacer | — |
+
+All items accept an optional `when:` (Go template expression). Items with a falsy `when` are dropped from the rendered output.
 
 ### `subheader`
 
@@ -55,6 +95,7 @@ A label + value pair, rendered as `Label — Value`.
   name: Project
   value: "{{ .Project.FullName }}"
   icon: "🔗"
+  indent: 2
   when: "{{ .State }}"
 ```
 
@@ -63,6 +104,7 @@ A label + value pair, rendered as `Label — Value`.
 | `name` | Label text |
 | `value` | Value text (plain string or template expression) |
 | `icon` | Optional emoji or symbol prepended to value |
+| `indent` | Optional leading whitespace count. Default for definition items is `2`; pass `0` to flush left. Negative values are rejected. |
 | `when` | Condition; item hidden if falsy |
 
 ### `info`
@@ -72,12 +114,14 @@ An informational text line.
 ```yaml
 - type: info
   text: "127.0.0.1\t{{ .Runtime.Hosts.Main }}"
+  indent: 0
   when: "{{ .Tools.Adminer.Enabled }}"
 ```
 
 | Field | Description |
 |-------|-------------|
 | `text` | Message text (plain string or template expression) |
+| `indent` | Optional leading whitespace count |
 | `when` | Condition; item hidden if falsy |
 
 ### `warning`
@@ -93,6 +137,16 @@ A warning text line (rendered in warning color).
 |-------|-------------|
 | `text` | Warning text (plain string or template expression) |
 | `when` | Condition; item hidden if falsy |
+
+### `separator`
+
+A blank line used to space content within a section.
+
+```yaml
+- type: separator
+```
+
+No fields. Useful when two adjacent subheaders or definitions need visual breathing room without introducing a new section.
 
 ## Template expressions
 
@@ -120,9 +174,15 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 
 ### Template functions
 
+The same `FuncMap` is shared by `info.yml` templates, the `message` builtin, and `${...}` expressions inside declarative commands.
+
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `appURL` | `appURL host port useHTTPS [path...]` | Build a URL from host, port, HTTPS flag, and optional path |
+| `appURL` | `appURL host port useHTTPS [path]` | Build a URL from host, port, HTTPS flag, and optional path. The port is omitted when it matches the scheme default (80 for http, 443 for https). |
+| `date` | `date` | Local current date as `YYYY-MM-DD`. |
+| `datetime` | `datetime` | Local current date and time as `YYYY-MM-DD_HH-MM-SS`. |
+| `base` | `base path` | `filepath.Base(path)` — strip the directory portion. |
+| `dir` | `dir path` | `filepath.Dir(path)` — strip the file portion. |
 
 Example:
 ```yaml
@@ -130,6 +190,8 @@ value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
 ```
 
 Renders as `http://laravel.localhost` or `https://laravel.localhost` depending on `use_https`.
+
+`date` and `datetime` are most useful in command files (e.g. dump filenames `db_{{ date }}.sql.gz`); they work in `info.yml` too but the dashboard rarely needs them.
 
 ### `when` conditions
 

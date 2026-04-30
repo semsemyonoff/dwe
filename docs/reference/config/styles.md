@@ -2,6 +2,19 @@
 
 UI styles configuration: ASCII header, color palette, and separator.
 
+## Contents
+
+- [Purpose](#purpose)
+- [Structure](#structure)
+- [Field reference](#field-reference)
+  - [`header`](#header)
+  - [`colors`](#colors)
+  - [`separator`](#separator)
+- [Omitting the file](#omitting-the-file)
+- [Customizing colors](#customizing-colors)
+- [Common pitfalls](#common-pitfalls)
+- [Related commands](#related-commands)
+
 ## Purpose
 
 `devbox/styles.yml` controls the visual appearance of the `devbox` CLI: the ASCII art header shown at startup, the ANSI 256-color palette used throughout the UI, and the separator character used in definition lists.

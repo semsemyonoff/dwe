@@ -2,6 +2,94 @@
 
 The three layers of the merged devbox config.
 
+## Contents
+
+- [Merge overview](#merge-overview)
+- [What belongs in each layer](#what-belongs-in-each-layer)
+- [Dot-path resolution](#dot-path-resolution)
+  - [Where service fields come from](#where-service-fields-come-from)
+- [devbox.yml](#devboxyml)
+  - [Field reference](#field-reference)
+- [devbox/defaults.yml](#devboxdefaultsyml)
+  - [`tools`](#tools)
+  - [`services`](#services)
+  - [`debug`](#debug)
+  - [`runtime`](#runtime)
+  - [`state`](#state)
+  - [`exports.env`](#exportsenv)
+  - [`db`](#db)
+  - [`compose`](#compose)
+  - [`ide`](#ide)
+- [devbox/local.yml](#devboxlocalyml)
+- [Common pitfalls](#common-pitfalls)
+- [Related commands](#related-commands)
+
+## Merge overview
+
+```mermaid
+flowchart TB
+  L1["1 · devbox.yml<br/>tracked · structural skeleton"]
+  L2["2 · devbox/defaults.yml<br/>tracked · versioned defaults"]
+  L3["3 · devbox/local.yml<br/>gitignored · per-user overrides"]
+  R[(Effective DevboxConfig<br/>+ DevboxConfig.Raw)]
+
+  L1 -- "merged into" --> L2
+  L2 -- "overridden by<br/>(local wins)" --> L3
+  L3 -- "deepMerge result" --> R
+
+  R --> ENV[devbox render env → .env]
+  R --> DASH[devbox info]
+  R --> RES[ResolvePath dot-paths<br/>exports, docker.yml,<br/>commands, info templates]
+```
+
+Read top-to-bottom: each arrow is "next layer applied on top". `local.yml` sits at the end, so any key it sets shadows the same key from `defaults.yml` or `devbox.yml`. Keys absent from `local.yml` fall through to `defaults.yml`, then to `devbox.yml`, then to the typed Go zero value.
+
+The three files share a single namespace — the same key in different layers is the same setting. Layer 1 establishes structure, Layer 2 fills in defaults, Layer 3 overrides for the local machine. None of the three is required to declare every key; missing keys simply fall through to whatever lower layer set them, with type-zero values as the ultimate fallback.
+
+`devbox/local.yml` is optional: when absent, the merge silently skips layer 3.
+
+## What belongs in each layer
+
+| Concern | Layer |
+|---------|-------|
+| Project name and prefix | `devbox.yml` |
+| Schema version | `devbox.yml` |
+| Port defaults | `defaults.yml` |
+| Host defaults | `defaults.yml` |
+| Tool defaults (enabled/disabled) | `defaults.yml` |
+| Optional service defaults (enabled/disabled) | `defaults.yml` |
+| Export rules (`exports.env`) | `defaults.yml` |
+| Compose overlay map (`compose.overlays`) | `defaults.yml` |
+| IDE config defaults | `defaults.yml` |
+| `db` block defaults | `defaults.yml` |
+| Active state | `local.yml` |
+| Personal port overrides | `local.yml` |
+| Personal credentials (`db.user`, `db.password`) | `local.yml` |
+| Enabling debug / optional services | `local.yml` |
+
+Service definitions themselves live in [`devbox/services.yml`](services.md), which is loaded separately and not part of this merge.
+
+## Dot-path resolution
+
+The CLI stores the merged result in two places: a typed `DevboxConfig` struct (with fields like `DevboxConfig.Runtime.Ports.App`) and a plain `DevboxConfig.Raw` map. The Raw map drives dot-path resolution.
+
+A dot-path is a `.`-separated key chain that navigates the merged YAML map. Examples:
+
+- `runtime.ports.app` → `80`
+- `tools.adminer.enabled` → `false`
+- `services.main.container` → `"app-main"` (injected from `services.yml`)
+
+Dot-paths are consumed by:
+
+- export rules in `defaults.yml` (`from:`, `when:`)
+- `${...}` template expressions in `docker.yml` (`project_name`)
+- `${...}` template expressions in declarative commands (`devbox/commands/`)
+- `{{ ... }}` Go templates in `info.yml` (via the typed struct, not Raw)
+
+### Where service fields come from
+
+`services.<name>.*` paths in the merged map are populated by `LoadConfig`. After parsing the 3 layers it loads `devbox/services.yml`, resolves `enabled` against the merged map (mandatory services force `enabled: true`), then injects each service's `type`, `container`, `mandatory`, `enabled`, `dir`, `dir_internal`, `work_dir_internal`, `compose`, and `configs` into `raw["services"]`. Export rules can therefore use both `services.main.container` and `services.second.enabled` without separate awareness of `services.yml`.
+
 ## devbox.yml
 
 **Purpose**: Project identity and structural skeleton. Tracked by git. Rarely changes after initial setup.
@@ -143,19 +231,40 @@ exports:
 | `when` | string | Dot-path; rule skipped when value is falsy |
 | `comment` | string | Written as `# comment` above the variable |
 
+#### Implicit system variables
+
+`devbox render env` always emits three variables before any rule runs, regardless of `exports.env`:
+
+| Variable | Source | Notes |
+|----------|--------|-------|
+| `PROJECT` | `project.name` | Used by Docker labels and Make targets |
+| `UID` | host UID | Hard-coded to `1000` on macOS, real UID on Linux/WSL — keeps container builds deterministic across hosts |
+| `GID` | host GID | Same logic as `UID` |
+
+These are managed by the CLI; do not redeclare them as export rules.
+
 ### `db`
 
-Database credentials for the project.
+Database settings for the project. The keys are not interpreted by the CLI directly — they are exposed via dot-paths and consumed by export rules in `defaults.yml` (`DB_DATABASE`, `DB_USER`, `DB_PASSWORD`, etc.) and by declarative commands.
 
 ```yaml
 db:
   database: laravel
   second_database: laravel_second
-  password: root
   user: root
+  password: root
+  backup_dir: backups/db
 ```
 
-These are referenced in export rules and available via dot-paths.
+| Field | Description |
+|-------|-------------|
+| `db.database` | Primary database name (exported as `DB_DATABASE`) |
+| `db.second_database` | Optional secondary database name, referenced by per-service `db.create` commands when the `second` service is enabled |
+| `db.user` | Database user (exported as `DB_USER`) |
+| `db.password` | Database password (exported as `DB_PASSWORD`) |
+| `db.backup_dir` | Project-relative directory for SQL dumps used by `db.dump-create` / `db.dump-deploy` commands |
+
+Add new fields here whenever a command or export rule needs project-wide DB metadata; the YAML map is open-ended.
 
 ### `compose`
 
@@ -228,10 +337,11 @@ If `local.yml` does not exist, layer 3 is silently skipped.
 
 ## Common pitfalls
 
-- Editing `defaults.yml` for personal settings — use `local.yml` instead.
-- Committing `local.yml` — it is gitignored for a reason (may contain credentials).
-- Setting `state:` in `defaults.yml` — state is inherently per-user, put it in `local.yml`.
-- Forgetting that lists replace rather than merge — if you override `runtime.ports` you must include all ports you care about.
+- **Editing `defaults.yml` for personal settings** — changes are tracked and affect every team member. Personal overrides always go in `local.yml`.
+- **Committing `local.yml`** — it is gitignored for a reason (may contain credentials).
+- **Setting `state:` in `defaults.yml`** — state is inherently per-user, put it in `local.yml`.
+- **Scalar collision** — if `defaults.yml` sets `state: ""` and `local.yml` sets `state: staging`, the effective value is `staging`. If `local.yml` omits `state`, the `defaults.yml` value wins.
+- **Lists replace, maps merge** — maps are deep-merged: redeclaring `runtime.ports` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `args.global: ["--ansi", "always"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
 
 ## Related commands
 
@@ -239,3 +349,4 @@ If `local.yml` does not exist, layer 3 is silently skipped.
 - `devbox info` — show dashboard (uses merged config + `info.yml`)
 - `devbox services list` — show services with enabled/disabled status
 - `devbox tools list` — show tools with enabled/disabled status
+- `devbox compose argv` — show the effective compose command with all flags (useful for debugging dot-path resolution into `docker.yml`)

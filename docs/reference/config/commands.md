@@ -46,22 +46,35 @@ This page is the configuration reference: it lists every directive, explains how
 
 ## File layout and command IDs
 
-The directory layout determines the **group** prefix and the file's basename determines the leaf segment.
+The directory layout determines the **group** prefix and the file's basename determines the leaf segment. Files and subdirectories are entirely up to the project — names below are illustrative, and any number of files at any depth may exist.
+
+```
+devbox/commands/
+├── <top-group>.yml              → group: <top-group>
+├── …                            → any number of top-level groups
+└── <parent-group>/              → optional subdirectory expands a group
+    ├── <child>.yml              → group: <parent-group>.<child>
+    ├── <child>/                 → optional deeper subdirectory
+    │   └── <leaf>.yml           → group: <parent-group>.<child>.<leaf>
+    └── …                        → any number of children, any depth
+```
+
+Concretely, a project might lay things out like this — every name here is the project's choice, not a convention enforced by the CLI:
 
 ```
 devbox/commands/
 ├── db.yml                       → group: db
 ├── app.yml                      → group: app
 └── services/
-    ├── main.yml                 → group: services.main
-    ├── main/
-    │   └── db.yml               → group: services.main.db
-    └── catalog.yml              → group: services.catalog
+    ├── <service-a>.yml          → group: services.<service-a>
+    ├── <service-a>/
+    │   └── db.yml               → group: services.<service-a>.db
+    └── <service-b>.yml          → group: services.<service-b>
 ```
 
 Each command's full ID is `<group>.<name>` where `<name>` is its key inside the file's `commands:` map.
 
-Pattern: put the **core** commands of a group in a single file named after the group (`services/main.yml`), and split larger groups into a sibling subdirectory only when there are enough commands to warrant logical sub-groups (`services/main/db.yml`, `services/main/cache.yml`). The subdirectory is optional — small groups stay in one file.
+Pattern: put the **core** commands of a group in a single file named after the group (`services/<service>.yml`), and split larger groups into a sibling subdirectory only when there are enough commands to warrant logical sub-groups (`services/<service>/db.yml`, `services/<service>/cache.yml`). The subdirectory is optional — small groups stay in one file. There are no required files: a project may have zero, one, or dozens of groups at any depth.
 
 ```yaml
 # devbox/commands/db.yml  →  group "db"
@@ -119,10 +132,10 @@ flowchart TD
 
 Phases:
 
-1. **Resolve params** — apply provided values, `default`, then `default_from`; coerce types; validate `pattern`.
+1. **Resolve params** — for each declared parameter try, in order: caller-supplied value → `default_from` (dot-path into the merged config; empty result is treated as missing) → literal `default` → required-error. Then coerce to the declared type and validate `pattern`.
 2. **Resolve context** — read each `context.<key>.from` dot-path out of the merged config.
 3. **Compute file paths** — render `path` / `candidates` templates, normalise to absolute, discover files. Non-mutating.
-4. **Confirmation** — prompt the user when `confirmation: true` (skipped by `--yes` and in non-interactive contexts).
+4. **Confirmation** — when `confirmation: true`, prompt the user; the prompt is bypassed only by `SkipConfirm` (set by `--yes` / `-y` and inherited by workflow children). Otherwise dispatch is by stdin: TTY → `huh.Confirm`, non-TTY → plain Y/n fallback that auto-answers "yes" when `CI=1`. Refusal aborts the command. See [Confirmation flow](#confirmation-flow) for the full decision tree.
 5. **Prepare file effects** — `mkdir`, `overwrite` checks, register cleanup callbacks.
 6. **Run** — dispatch to the type-specific runner (host shell, devbox CLI, container exec/run, script, or workflow).
 7. **Success / error** — emit `messages.success` or `messages.error`. On error, registered cleanups fire in LIFO order before the error message.
@@ -146,11 +159,13 @@ The directives below are common to **all** command types unless the table notes 
 | `confirmation` | bool | `false` | If true, prompt the user before executing |
 | `confirmation_text` | string | `Are you sure?` | Prompt shown when `confirmation: true`; supports `${...}` templates |
 
-The confirmation gate is bypassed when:
+The prompt is bypassed only when `SkipConfirm` is set on the in-process `RunContext`. That happens for:
 
-- `commands run --yes` (or `-y`) is set,
-- the parent workflow already confirmed and `DEVBOX_NONINTERACTIVE=1` is exported,
-- stdin is not a TTY and no fallback Y/n input is available.
+- `commands run --yes` / `-y`,
+- workflow children inheriting `SkipConfirm` from a parent that was started with `--yes`,
+- callers in tests that construct a `RunContext{SkipConfirm: true}` directly.
+
+A non-TTY stdin does **not** skip the prompt — it routes through the plain Y/n fallback (`render.Writer.Confirm`). That fallback auto-answers "yes" when the `CI` environment variable is set; otherwise an answer other than `y` aborts the command.
 
 ```yaml
 db.drop:
@@ -465,13 +480,14 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ date }}{
 
 | Location | Templated |
 |----------|-----------|
-| `description`, `messages.success`, `messages.error` | yes |
+| `messages.success`, `messages.error` | yes |
 | `confirmation_text` | yes |
 | `run`, `argv`, `workdir`, `compose_args` | yes |
 | `env:` map values | yes |
 | `files.*.path`, `files.*.candidates[].path/glob/match` | yes |
 | `params.*.default_from`, `context.*.from` | no — plain dot-paths only |
 | Workflow `steps[].with[<key>]`, `steps[].when` | yes |
+| `description`, `group.title`, `group.description` | no — printed verbatim by `commands list` / `commands inspect` / completion |
 
 ## Type: command
 
@@ -585,7 +601,7 @@ The runner always injects the following env vars into the script process:
 | `DEVBOX_BIN` | Absolute path to the running devbox binary |
 | `DEVBOX_COMMAND_ID` | Full ID of this invocation |
 | `DEVBOX_TEMP_DIR` | Writable temp dir scoped to this invocation (auto-removed) |
-| `DEVBOX_NONINTERACTIVE` | `1` when running under `--yes` / no TTY / nested non-interactive |
+| `DEVBOX_NONINTERACTIVE` | `1` when the parent `RunContext` has `NonInteractive: true` (set by `commands run --yes` / `-y`) **or** the runner inherits `DEVBOX_NONINTERACTIVE=1` from its own environment (e.g. nested invocations). Otherwise `0`. TTY detection alone does not flip this — scripts that need to behave differently on a non-TTY should test their own stdin. |
 | `DEVBOX_PARAMS_JSON` | Resolved params as a JSON object |
 | `DEVBOX_CONTEXT_JSON` | Resolved context as a JSON object |
 | `DEVBOX_FILES_JSON` | JSON object mapping file IDs to `{path}` |
@@ -701,7 +717,7 @@ artisan-tinker:
   argv: [php, artisan, tinker]
 ```
 
-`mode` is rejected for `service_run` (always implicit run).
+`mode` is fixed to `run` for this type — the field may be omitted (default) or set explicitly to `run`; any other value is rejected at load time.
 
 ### Runner override block
 
@@ -862,8 +878,9 @@ flowchart TD
 
 Operational notes:
 
-- `commands run --yes` sets `SkipConfirm` and exports `DEVBOX_NONINTERACTIVE=1` to subprocesses.
-- Inside a workflow, child commands inherit `NonInteractive` and `SkipConfirm` from the parent.
+- `commands run --yes` sets `SkipConfirm` and `NonInteractive` on the in-process `RunContext` so every confirm call (top-level command, builtin `confirm`, workflow confirm steps) skips the prompt for the duration of the invocation.
+- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DEVBOX_NONINTERACTIVE=1` (along with `DEVBOX_BIN`, `DEVBOX_PARAMS_JSON`, etc.) into the script's environment. `type: command`, `devbox`, `service_exec`, and `service_run` do not export this variable — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
+- Inside a workflow, child commands inherit `NonInteractive` and `SkipConfirm` from the parent `RunContext`.
 - The non-TTY fallback is `render.Writer.Confirm`; under `CI=1` it auto-confirms.
 
 ## Visibility, registration, and discovery
