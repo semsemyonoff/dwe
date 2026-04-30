@@ -13,9 +13,11 @@ import (
 // ResolveParams resolves parameter values for a command invocation.
 //
 // For each declared parameter:
-//  1. Use the value from provided (caller-supplied) if present.
-//  2. Fall back to ParamDef.Default (literal string).
-//  3. Fall back to ParamDef.DefaultFrom (dot-path into cfg.Raw).
+//  1. Use the value from provided (caller-supplied) if present and non-empty.
+//  2. Fall back to ParamDef.DefaultFrom (dot-path into cfg.Raw); a missing
+//     path or an empty resolved value is treated as not-found and continues
+//     to the next step.
+//  3. Fall back to ParamDef.Default (literal string).
 //  4. If Required and still no value, return an error.
 //
 // Values are type-coerced according to ParamDef.Type before being returned.
@@ -24,19 +26,23 @@ func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *co
 	for name, def := range defs {
 		raw, ok := provided[name]
 		if !ok || raw == "" {
-			// Try literal default.
-			if def.Default != "" {
-				raw = def.Default
-				ok = true
+			// Try default_from dot-path. Empty resolved value is treated as not-found
+			// so the literal default below acts as a true safety net.
+			if def.DefaultFrom != "" && cfg != nil {
+				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found {
+					s := fmt.Sprintf("%v", v)
+					if s != "" {
+						raw = s
+						ok = true
+					}
+				}
 			}
 		}
 		if !ok || raw == "" {
-			// Try default_from dot-path.
-			if def.DefaultFrom != "" && cfg != nil {
-				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found {
-					raw = fmt.Sprintf("%v", v)
-					ok = true
-				}
+			// Fall back to literal default.
+			if def.Default != "" {
+				raw = def.Default
+				ok = true
 			}
 		}
 		if (!ok || raw == "") && def.Required {

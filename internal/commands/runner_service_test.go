@@ -250,6 +250,128 @@ func TestServiceExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 	}
 }
 
+func TestServiceExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T) {
+	// When both workdir and workdir_from are set, the config-driven path wins.
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:        CommandTypeServiceExec,
+			Service:     "app-main",
+			Workdir:     "/literal/fallback",
+			WorkdirFrom: "services.main.dir_internal",
+			Mode:        ExecModeExec,
+			Run:         "ls",
+		},
+		Render: &tpl.RenderContext{},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Raw: map[string]any{
+				"services": map[string]any{
+					"main": map[string]any{"dir_internal": "/var/www/html"},
+				},
+			},
+		},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--workdir /var/www/html") {
+		t.Errorf("expected workdir_from to win, got: %s", args)
+	}
+	if strings.Contains(args, "/literal/fallback") {
+		t.Errorf("literal workdir should not be used when workdir_from resolves, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *testing.T) {
+	// When workdir_from path is missing in config, fall back to the literal.
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:        CommandTypeServiceExec,
+			Service:     "app-main",
+			Workdir:     "/literal/fallback",
+			WorkdirFrom: "does.not.exist",
+			Mode:        ExecModeExec,
+			Run:         "ls",
+		},
+		Render:  &tpl.RenderContext{},
+		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}, Raw: map[string]any{}},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--workdir /literal/fallback") {
+		t.Errorf("expected literal workdir fallback, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *testing.T) {
+	// When workdir_from resolves to an empty string, fall back to the literal.
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:        CommandTypeServiceExec,
+			Service:     "app-main",
+			Workdir:     "/literal/fallback",
+			WorkdirFrom: "services.main.dir_internal",
+			Mode:        ExecModeExec,
+			Run:         "ls",
+		},
+		Render: &tpl.RenderContext{},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Raw: map[string]any{
+				"services": map[string]any{"main": map[string]any{"dir_internal": ""}},
+			},
+		},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--workdir /literal/fallback") {
+		t.Errorf("expected literal workdir fallback for empty config value, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T) {
+	// A non-string value at workdir_from is a hard error (configuration bug).
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:        CommandTypeServiceExec,
+			Service:     "app-main",
+			WorkdirFrom: "services.main.dir_internal",
+			Mode:        ExecModeExec,
+			Run:         "ls",
+		},
+		Render: &tpl.RenderContext{},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Raw: map[string]any{
+				"services": map[string]any{"main": map[string]any{"dir_internal": 42}},
+			},
+		},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	if _, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil)); err == nil {
+		t.Fatal("expected error for non-string workdir_from value, got nil")
+	}
+}
+
 func TestServiceExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 	files := []string{"compose.yaml", "compose/services/second/app.yml"}
 	ctx := RunContext{

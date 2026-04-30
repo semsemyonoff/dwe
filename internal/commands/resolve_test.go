@@ -74,6 +74,69 @@ func TestResolveParams_ProvidedOverridesDefault(t *testing.T) {
 	}
 }
 
+func TestResolveParams_DefaultFromBeatsLiteralDefault(t *testing.T) {
+	// When both default and default_from are set and the config path resolves
+	// to a non-empty value, default_from wins. The literal default acts as a
+	// safety net only when the config path is missing or empty.
+	cfg := makeConfig(map[string]any{
+		"db": map[string]any{"database": "from_config"},
+	})
+	defs := map[string]ParamDef{
+		"database": {
+			Type:        ParamTypeString,
+			Default:     "literal_fallback",
+			DefaultFrom: "db.database",
+		},
+	}
+	got, err := ResolveParams(defs, nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got["database"] != "from_config" {
+		t.Errorf("expected default_from to win, got %v", got["database"])
+	}
+}
+
+func TestResolveParams_DefaultFromEmptyFallsBackToLiteralDefault(t *testing.T) {
+	// When default_from resolves but to an empty string, fall back to the
+	// literal default rather than treating empty as a deliberate value.
+	cfg := makeConfig(map[string]any{
+		"db": map[string]any{"database": ""},
+	})
+	defs := map[string]ParamDef{
+		"database": {
+			Type:        ParamTypeString,
+			Default:     "literal_fallback",
+			DefaultFrom: "db.database",
+		},
+	}
+	got, err := ResolveParams(defs, nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got["database"] != "literal_fallback" {
+		t.Errorf("expected literal default fallback, got %v", got["database"])
+	}
+}
+
+func TestResolveParams_DefaultFromMissingFallsBackToLiteralDefault(t *testing.T) {
+	cfg := makeConfig(map[string]any{})
+	defs := map[string]ParamDef{
+		"database": {
+			Type:        ParamTypeString,
+			Default:     "literal_fallback",
+			DefaultFrom: "db.database",
+		},
+	}
+	got, err := ResolveParams(defs, nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got["database"] != "literal_fallback" {
+		t.Errorf("expected literal default fallback, got %v", got["database"])
+	}
+}
+
 func TestResolveParams_RequiredMissing(t *testing.T) {
 	defs := map[string]ParamDef{
 		"token": {Type: ParamTypeString, Required: true},

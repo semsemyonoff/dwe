@@ -116,16 +116,26 @@ func (r *ServiceRunRunner) Run(ctx RunContext) error {
 
 // resolveServiceFields returns the effective service, user, workdir, and mode
 // for the command, applying runner overrides when present.
+//
+// Workdir precedence (config wins, literal is the safety net):
+//  1. workdir_from (resolved against merged config); a missing path or empty
+//     resolved value is treated as not-found and falls back to the next step.
+//  2. workdir (literal).
+//  3. unset — the runner does not pass --workdir.
+//
+// A workdir_from path that resolves to a non-string value is a hard error
+// (configuration bug) and does not fall back.
 func resolveServiceFields(ctx RunContext) (svc string, user UserMode, workdir string, mode ExecMode, err error) {
 	cmd := ctx.Cmd
 
 	// Start with top-level fields.
 	svc = cmd.Service
 	user = cmd.User
-	workdir = cmd.Workdir
 	mode = cmd.Mode
 
-	// Apply runner override when present.
+	// Apply runner override when present (non-zero fields win over top-level).
+	wdLiteral := cmd.Workdir
+	wdFrom := cmd.WorkdirFrom
 	if cmd.Runner != nil {
 		if cmd.Runner.Service != "" {
 			svc = cmd.Runner.Service
@@ -136,21 +146,25 @@ func resolveServiceFields(ctx RunContext) (svc string, user UserMode, workdir st
 		if cmd.Runner.Mode != "" {
 			mode = cmd.Runner.Mode
 		}
-		// runner.workdir takes precedence over runner.workdir_from.
 		if cmd.Runner.Workdir != "" {
-			workdir = cmd.Runner.Workdir
-		} else if cmd.Runner.WorkdirFrom != "" {
-			workdir, err = resolveWorkdirFrom(cmd.Runner.WorkdirFrom, ctx)
-			if err != nil {
-				return
-			}
+			wdLiteral = cmd.Runner.Workdir
 		}
-	} else if cmd.WorkdirFrom != "" && workdir == "" {
-		// Top-level workdir_from fallback.
-		workdir, err = resolveWorkdirFrom(cmd.WorkdirFrom, ctx)
+		if cmd.Runner.WorkdirFrom != "" {
+			wdFrom = cmd.Runner.WorkdirFrom
+		}
+	}
+
+	// Resolve workdir: prefer workdir_from (config), fall back to literal.
+	if wdFrom != "" {
+		var resolved string
+		resolved, err = resolveWorkdirFrom(wdFrom, ctx)
 		if err != nil {
 			return
 		}
+		workdir = resolved
+	}
+	if workdir == "" {
+		workdir = wdLiteral
 	}
 
 	if svc == "" {
@@ -160,14 +174,16 @@ func resolveServiceFields(ctx RunContext) (svc string, user UserMode, workdir st
 }
 
 // resolveWorkdirFrom resolves a dot-path into the config Raw map and returns
-// the string value.
+// the string value. A missing path or an empty string resolves to "" (the
+// caller treats this as "not found" and falls back to the literal workdir).
+// A non-string value is a hard error.
 func resolveWorkdirFrom(dotPath string, ctx RunContext) (string, error) {
 	if ctx.Config == nil {
-		return "", fmt.Errorf("workdir_from %q: config is nil", dotPath)
+		return "", nil
 	}
 	v, found := config.ResolvePath(ctx.Config.Raw, dotPath)
 	if !found {
-		return "", fmt.Errorf("workdir_from %q: path not found in config", dotPath)
+		return "", nil
 	}
 	s, ok := v.(string)
 	if !ok {
