@@ -32,16 +32,12 @@ func DiscoverCommandFiles(baseDir string) ([]string, error) {
 // Rules:
 //   - Strip the .yml extension.
 //   - Replace path separators with dots.
-//   - When the final segment is "index", drop it (so services/main/index.yml
-//     yields group "services.main", not "services.main.index").
 //
 // Examples:
 //
 //	db.yml               → "db"
 //	services/main.yml    → "services.main"
 //	services/main/db.yml → "services.main.db"
-//	services/main/index.yml → "services.main"
-//	index.yml            → ""  (root group)
 func ComputeGroup(relPath string) string {
 	// Normalise separator so we handle both / and OS-specific separators.
 	relPath = filepath.ToSlash(relPath)
@@ -49,15 +45,8 @@ func ComputeGroup(relPath string) string {
 	// Strip .yml extension.
 	relPath = strings.TrimSuffix(relPath, ".yml")
 
-	// Split into segments.
-	parts := strings.Split(relPath, "/")
-
-	// Drop trailing "index" segment.
-	if len(parts) > 0 && parts[len(parts)-1] == "index" {
-		parts = parts[:len(parts)-1]
-	}
-
-	return strings.Join(parts, ".")
+	// Split into segments and join with dots.
+	return strings.Join(strings.Split(relPath, "/"), ".")
 }
 
 // ComputeCommandID builds the fully-qualified command ID from a group prefix and

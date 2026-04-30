@@ -18,11 +18,10 @@ func TestComputeGroup(t *testing.T) {
 		{"db.yml", "db"},
 		{"services/main.yml", "services.main"},
 		{"services/main/db.yml", "services.main.db"},
-		{"services/main/index.yml", "services.main"},
-		{"index.yml", ""},
 		{"app.yml", "app"},
-		{"services/second.yml", "services.second"},
-		{"services/second/db.yml", "services.second.db"},
+		{"services/catalog.yml", "services.catalog"},
+		{"services/catalog/db.yml", "services.catalog.db"},
+		{"services/main/index.yml", "services.main.index"},
 	}
 
 	for _, tc := range tests {
@@ -71,9 +70,9 @@ func TestDiscoverCommandFiles(t *testing.T) {
 		"app.yml",
 		"services/main.yml",
 		"services/main/db.yml",
-		"services/main/index.yml",
+		"services/main/cache.yml",
 		"services/main/README.md", // should be ignored
-		"services/second.yml",
+		"services/catalog.yml",
 	}
 	for _, f := range files {
 		full := filepath.Join(dir, f)
@@ -192,32 +191,6 @@ func TestLoadCommandFile_Basic(t *testing.T) {
 	wait := cf.Commands["wait"]
 	if !wait.Private {
 		t.Error("wait command should be private")
-	}
-}
-
-func TestLoadCommandFile_IndexYML(t *testing.T) {
-	dir := t.TempDir()
-	absPath := writeYAML(t, dir, "services/main/index.yml", `
-commands:
-  bootstrap:
-    type: workflow
-    description: Bootstrap main service
-    steps:
-      - command: services.main.composer-install
-`)
-
-	cf, err := LoadCommandFile(absPath, dir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cf.GroupID != "services.main" {
-		t.Errorf("GroupID = %q, want %q", cf.GroupID, "services.main")
-	}
-
-	cmd := cf.Commands["bootstrap"]
-	if cmd.ID != "services.main.bootstrap" {
-		t.Errorf("bootstrap.ID = %q, want %q", cmd.ID, "services.main.bootstrap")
 	}
 }
 

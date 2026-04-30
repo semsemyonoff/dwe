@@ -112,33 +112,6 @@ func TestLoadRegistry_EmptyDir(t *testing.T) {
 	}
 }
 
-func TestLoadRegistry_DuplicateID(t *testing.T) {
-	// Two files that would produce the same command ID.
-	_, err := buildTestRegistry(t, map[string]string{
-		"db.yml": `
-commands:
-  up:
-    type: command
-    run: "echo a"
-`,
-		// index.yml at root level also produces group "" — but that still gives
-		// a different group.  Instead use two files with the same group path
-		// by creating db/index.yml which also yields group "db".
-		"db/index.yml": `
-commands:
-  up:
-    type: command
-    run: "echo b"
-`,
-	})
-	if err == nil {
-		t.Error("expected duplicate ID error, got nil")
-	}
-	if !strings.Contains(err.Error(), "duplicate command ID") {
-		t.Errorf("error should mention duplicate ID, got: %v", err)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Get
 // ---------------------------------------------------------------------------
@@ -315,7 +288,7 @@ func TestRegistry_Groups_Commands(t *testing.T) {
 func TestRegistry_Validate_Valid(t *testing.T) {
 	reg := mustRegistry(t, map[string]string{
 		"services/main.yml":       mainYAML,
-		"services/main/index.yml": workflowYAML,
+		"services/main/workflows.yml": workflowYAML,
 	})
 	if err := reg.Validate(); err != nil {
 		t.Errorf("expected no validation error, got: %v", err)
@@ -326,7 +299,7 @@ func TestRegistry_Validate_MissingWorkflowRef(t *testing.T) {
 	// Workflow references a command ID that doesn't exist.
 	// LoadRegistry succeeds (validation is lazy); Validate() must catch the bad ref.
 	reg, err := buildTestRegistry(t, map[string]string{
-		"services/main/index.yml": `
+		"services/main/workflows.yml": `
 commands:
   bootstrap:
     type: workflow
@@ -345,7 +318,7 @@ commands:
 
 func TestRegistry_Validate_MissingRef_Direct(t *testing.T) {
 	reg := mustRegistry(t, map[string]string{
-		"services/main/index.yml": `
+		"services/main/workflows.yml": `
 commands:
   bootstrap:
     type: workflow
@@ -367,7 +340,7 @@ func TestRegistry_Validate_PrivateRef_Allowed(t *testing.T) {
 	// Workflows may reference private commands.
 	reg := mustRegistry(t, map[string]string{
 		"db.yml": dbYAML, // db.up and db.wait are private
-		"services/main/index.yml": `
+		"services/main/workflows.yml": `
 commands:
   start:
     type: workflow
