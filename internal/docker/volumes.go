@@ -11,24 +11,30 @@ import (
 // EnsureVolumes creates any declared volumes that do not yet exist.
 // It is idempotent: existing volumes are left untouched.
 // Only volumes whose ensure_before list contains command are processed.
-func EnsureVolumes(resources config.DockerResourcesConfig, command string, w *render.Writer) error {
+//
+// projectName is the resolved compose project name (from DockerConfig.ProjectName);
+// it is used to prefix non-shared volume names so the runtime matches the
+// "<project>_<name>" scheme that Docker Compose itself applies to named
+// volumes. Shared volumes ignore the prefix.
+func EnsureVolumes(resources config.DockerResourcesConfig, projectName, command string, w *render.Writer) error {
 	for _, vol := range resources.Volumes {
 		if !slices.Contains(vol.EnsureBefore, command) {
 			continue
 		}
-		exists, err := volumeExists(vol.Name)
+		name := vol.ResolveName(projectName)
+		exists, err := volumeExists(name)
 		if err != nil {
 			return err
 		}
 		if exists {
-			w.Success("Volume " + vol.Name + " exists")
+			w.Success("Volume " + name + " exists")
 			continue
 		}
-		w.Info("Creating volume " + vol.Name + "...")
-		if err := exec.Command("docker", "volume", "create", vol.Name).Run(); err != nil {
+		w.Info("Creating volume " + name + "...")
+		if err := exec.Command("docker", "volume", "create", name).Run(); err != nil {
 			return err
 		}
-		w.Success("Volume " + vol.Name + " created")
+		w.Success("Volume " + name + " created")
 	}
 	return nil
 }

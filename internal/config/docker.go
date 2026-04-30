@@ -49,14 +49,34 @@ type DockerResourcesConfig struct {
 
 // DockerVolumeConfig describes a Docker volume that devbox should ensure exists.
 type DockerVolumeConfig struct {
-	// Name is the actual Docker volume name to create.
+	// Name is the base volume name as declared in the YAML.
+	// For shared volumes this is the literal Docker volume name.
+	// For non-shared (project-scoped) volumes the runtime prefixes Name with
+	// the compose project name to match Docker Compose's own naming convention
+	// — see DockerVolumeConfig.ResolveName.
 	Name string `yaml:"name"`
-	// Shared marks the volume as project-independent (not prefixed with project name).
-	// Shared volumes persist across project resets.
+	// Shared marks the volume as project-independent. When true, the volume
+	// uses Name verbatim and persists across project resets and across
+	// projects that declare the same name. When false (default), the volume
+	// is scoped to the current project and the resolved Docker name is
+	// "<project_name>_<Name>" — same scheme that Docker Compose uses for
+	// named volumes declared inside compose.yaml.
 	Shared bool `yaml:"shared"`
 	// EnsureBefore lists the devbox docker/deploy commands that trigger idempotent creation.
 	// Supported values: up, deploy.
 	EnsureBefore []string `yaml:"ensure_before"`
+}
+
+// ResolveName returns the actual Docker volume name to create / look up, given
+// the compose project name. Shared volumes return Name verbatim; non-shared
+// volumes are prefixed with "<projectName>_" so they share their lifecycle and
+// scope with the project. An empty projectName disables prefixing (useful for
+// tests and as a defensive fallback when policy resolution failed upstream).
+func (v DockerVolumeConfig) ResolveName(projectName string) string {
+	if v.Shared || projectName == "" {
+		return v.Name
+	}
+	return projectName + "_" + v.Name
 }
 
 // DockerArgs holds global and per-command default arguments.

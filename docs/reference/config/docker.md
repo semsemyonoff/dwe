@@ -2,13 +2,37 @@
 
 Compose execution policy for the devbox project.
 
+## Contents
+
+- [Purpose](#purpose)
+- [devbox docker vs devbox compose](#devbox-docker-vs-devbox-compose)
+- [Structure](#structure)
+- [Field reference](#field-reference)
+  - [`project_name`](#project_name)
+  - [`args`](#args)
+  - [`process_env`](#process_env)
+  - [`env`](#env)
+  - [`topology`](#topology)
+  - [`resources`](#resources)
+- [docker.local.yml](#dockerlocalyml)
+- [Common pitfalls](#common-pitfalls)
+- [Related commands](#related-commands)
+
 ## Purpose
 
 `devbox/docker.yml` controls how `devbox docker` builds and executes `docker compose` commands: the project name, per-subcommand args, process environment, and automatic `.env` generation triggers.
 
 It is loaded separately by `LoadDockerConfig()` and is not merged with the 3-layer config.
 
-Local overrides go in `devbox/docker.local.yml` (gitignored). Template in `devbox/docker.local.example.yml`.
+Local overrides go in `devbox/docker.local.yml` (gitignored). Template in `devbox/docker.local.example.yml`. Local overrides are deep-merged into `docker.yml` before unmarshalling — local wins on key conflicts, lists replace.
+
+```mermaid
+flowchart LR
+  A["devbox/docker.yml"] --> M(["deepMerge"])
+  B["devbox/docker.local.yml<br/>optional, gitignored"] --> M
+  M --> P(["resolveVarTemplate<br/>$#123;...#125; against DevboxConfig.Raw"])
+  P --> R[("DockerConfig")]
+```
 
 ## devbox docker vs devbox compose
 
@@ -78,7 +102,7 @@ args:
   run: ["--rm"]
 ```
 
-Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`, `wait`.
+Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`. (Health-poll args for `devbox docker wait` are not user-configurable — the wait command builds its own poll loop in Go.)
 
 When overriding in `docker.local.yml`, the list replaces the tracked default entirely (lists do not merge):
 
@@ -150,9 +174,24 @@ resources:
 
 | Field | Description |
 |-------|-------------|
-| `volumes.<key>.name` | Docker volume name |
-| `volumes.<key>.shared` | If true, volume is shared across projects (not prefixed with project name) |
-| `volumes.<key>.ensure_before` | Subcommands/actions that trigger volume creation if missing |
+| `volumes.<key>.name` | Base volume name. The actual Docker name depends on `shared`: shared volumes use `name` verbatim; non-shared volumes are stored as `<project_name>_<name>` so they share their lifecycle and scope with the compose project (matching the convention Docker Compose uses for named volumes declared inside `compose.yaml`). |
+| `volumes.<key>.shared` | When `true`, the volume is project-independent: the actual Docker name equals `name` and the volume persists across project resets. When `false` (default), the volume is project-scoped — the runtime prepends `<project_name>_` and `docker_remove_project_volumes` (the reset builtin) cleans it up alongside the project. |
+| `volumes.<key>.ensure_before` | Triggers that idempotently create the volume if missing. Supported values: `up`, `deploy`. |
+
+```yaml
+resources:
+  volumes:
+    composer_cache:                 # logical key
+      name: devbox_composer_cache   # actual Docker name (shared)
+      shared: true
+      ensure_before: [up, deploy]
+
+    build_artifacts:                # actual Docker name = "<project_name>_build_artifacts"
+      name: build_artifacts
+      ensure_before: [deploy]
+```
+
+`docker_remove_project_volumes` (the reset builtin) removes every volume whose name starts with `<project_name>_`, so non-shared volumes are reset with the project while shared ones survive.
 
 ## docker.local.yml
 
