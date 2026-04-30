@@ -17,6 +17,7 @@ Overview of all configuration files in the devbox system.
 | `devbox/docker.local.yml` | no (gitignored) | standalone | Local compose policy overrides |
 | `devbox/styles.yml` | yes | standalone | ASCII header, color palette, separator |
 | `devbox/info.yml` | yes | standalone | Info dashboard sections |
+| `devbox/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
 
 ## Merged vs standalone
 
@@ -33,6 +34,7 @@ Overview of all configuration files in the devbox system.
 - [docker.yml](docker.md) — Compose execution policy, project name, env triggers
 - [styles.yml](styles.md) — ASCII header, color palette, separator
 - [info.yml](info.md) — info dashboard sections, template expressions
+- [commands/](commands.md) — declarative commands: types, params, context, files, workflows, templates
 
 ## Related commands
 
