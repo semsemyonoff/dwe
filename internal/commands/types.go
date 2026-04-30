@@ -395,8 +395,9 @@ func (c *CommandDef) EffectiveConfirmationText() string {
 }
 
 func (c *CommandDef) validateCommandType() error {
-	// For type=devbox, run and argv are not used (run field is used by DevboxRunner but it's not validated here)
-	// For type=command, exactly one of run or argv must be set
+	// For type=command, exactly one of run or argv must be set.
+	// For type=devbox, run is required and argv is not supported (DevboxRunner
+	// only consumes the rendered run string).
 	if c.Type == CommandTypeCommand {
 		hasRun := c.Run != ""
 		hasArgv := len(c.Argv) > 0
@@ -405,6 +406,14 @@ func (c *CommandDef) validateCommandType() error {
 		}
 		if !hasRun && !hasArgv {
 			return fmt.Errorf("one of run or argv must be set")
+		}
+	}
+	if c.Type == CommandTypeDevbox {
+		if c.Run == "" {
+			return fmt.Errorf("run is required for type=devbox")
+		}
+		if len(c.Argv) > 0 {
+			return fmt.Errorf("argv is not valid for type=devbox; use run")
 		}
 	}
 
