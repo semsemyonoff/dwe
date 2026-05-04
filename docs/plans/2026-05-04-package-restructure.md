@@ -219,11 +219,13 @@ Extract `.env` rendering so cobra is not the only entry point. Unblocks `localco
 
 ### Task 10: Slim `internal/command` to cobra adapters and update docs
 
-- [ ] verify each file under `internal/command/` contains only cobra wiring + small adapter functions; flag any leftover business logic for relocation (a follow-up checkbox here, or a ➕ task)
-- [ ] update `AGENTS.md` package list under "Project Structure & Module Organization" to describe the new layout (deploy/reset/lifecycle/stack/envfile/localconfig + usercommands subpackages); confirm `CLAUDE.md` symlink still points to it
-- [ ] regenerate reference: `./bin/devbox docs generate`
-- [ ] run `make test` && `make lint`
-- [ ] run `make build` and smoke-test: `./bin/devbox info`, `./bin/devbox status --help`, `./bin/devbox deploy plan --help`
+- [x] verify each file under `internal/command/` contains only cobra wiring + small adapter functions; flag any leftover business logic for relocation (a follow-up checkbox here, or a ➕ task)
+  - ➕ `service.go` still contains `pickServiceToEnable/Disable`, `runServiceList`, `applyServiceTogglesBatch`, `setServiceEnabled`, `resolveProjectName` — could move to `localconfig` or a new `internal/service` package in a future task
+  - ➕ `service_cli.go` still contains `resolveShellOptions`, `runServicesCLI`, `dockerExecCLI`, `composeRunCLI` — shell/exec helpers; could move to a `internal/shell` package in a future task
+- [x] update `AGENTS.md` package list under "Project Structure & Module Organization" to describe the new layout (deploy/reset/lifecycle/stack/envfile/localconfig + usercommands subpackages); confirm `CLAUDE.md` symlink still points to it
+- [x] regenerate reference: `./bin/devbox docs generate`
+- [x] run `make test` && `make lint`
+- [x] run `make build` and smoke-test: `./bin/devbox info`, `./bin/devbox status --help`, `./bin/devbox deploy plan --help`
 
 ### Task 11: Verify acceptance criteria
 

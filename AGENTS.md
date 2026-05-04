@@ -17,9 +17,20 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
 - `internal/git/` — git update probe: `Probe(workDir, fetch)` returns `Status` (IsRepo, Dirty, Behind, Ahead, FetchOK, FetchErr); `PullFFOnly(workDir)` returns `moved bool`; `Decide(status, mode, isInteractive)` encodes the safety matrix (dirty/no-upstream/fetch-failed → warn; behind + auto → pull; behind + prompt + TTY → prompt-pull; behind + check → warn). Runner interface for unit-test stubbing.
 - `internal/tpl/` — Go template engine with `Render()`, `EvalCondition()`, `EvalCommandCondition()` (render-first condition evaluator for workflow `when` expressions, resolves `${...}` before classifying/dispatching), custom `FuncMap` (`appURL`, `date`, `datetime`, `base`, `dir`); template funcs available in `${...}` expressions in command definitions
 - `internal/builtin/` — builtin step registry: `Builtin` interface (`Validate`, `Describe`, `Run`), `ExecContext` carrier; registered builtins: `configs_copy`, `confirm`, `volumes_create`, `service_dirs_ensure` (creates service hub dirs with skip/error/recreate modes), `message` (outputs text at info/success/warning/error level with Go template support)
-- `internal/pipeline/` — deploy/reset reporter abstraction: `Reporter` interface (StartPipeline, EnterPhase, SkipPhase, StartStep, SkipStep, FinishStep, FailStep, FinishPipeline, SuspendForExec, ResumeAfterExec); `PlainReporter` — the sole reporter; outputs icons (✓ ✗ ◎ ·), suppresses untracked phase output, prints elapsed time in `FinishPipeline`
-- `internal/commands/` — declarative command system: `CommandFile`, `Registry`, `HostRunner`, `DevboxRunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`, param/context resolution, `${...}` template sugar. Script contract env: `DEVBOX_BIN` (path to current devbox binary), `DEVBOX_FILES_JSON` (JSON object mapping file IDs to `{path}`), `DEVBOX_NONINTERACTIVE` (set when running non-interactively via `--yes` flag)
-- `internal/command/` — cobra commands with Fang integration and command groups (root summary, lifecycle, services/tools, deploy/reset, docker/compose, docs)
+- `internal/pipeline/` — deploy/reset reporter abstraction: `Reporter` interface (StartPipeline, EnterPhase, SkipPhase, StartStep, SkipStep, FinishStep, FailStep, FinishPipeline, SuspendForExec, ResumeAfterExec); `PlainReporter` — the sole reporter; outputs icons (✓ ✗ ◎ ·), suppresses untracked phase output, prints elapsed time in `FinishPipeline`; `Run(cfg, reporter, steps, ...)` generic executor
+- `internal/deploy/` — deploy plan resolution: `ResolvePlan`, `ResolveServicePlan`, `FindStep`; assembles `DeployConfig` phases into executable steps
+- `internal/reset/` — reset plan resolution: `ResolvePlan`, `FindStep`; mirrors deploy for the reset pipeline
+- `internal/lifecycle/` — lifecycle pipeline execution: `RunPhases(cfg, lifecycleCfg, ...)` drives run/stop pipelines from `devbox/lifecycle.yml`
+- `internal/stack/` — Docker Compose topology + health: `AggregateHealth`, `FetchTopology`, `ParseTopologyFromFiles`; augments compose state with devbox service config
+- `internal/envfile/` — `.env` file generation: `BuildContent(cfg)`, `Regenerate(configPath)`; no cobra or UI dependencies
+- `internal/localconfig/` — local YAML toggle helpers: `LoadLocalYAML`, `WriteLocalYAML`, `SetEntryEnabled`, `ValidateServiceToggle`; no envfile dependency
+- `internal/usercommands/` — declarative command system facade (re-exports all public symbols from subpackages):
+  - `usercommands/model/` — pure types: `CommandDef`, `CommandFile`, `ParamDef`, `ContextDef`, `FileSpec`, `WorkflowStep`, all enums (`CommandType`, `ParamType`, `ExecMode`, `UserMode`, `FileAccess`, `FileSort`, `FileOnError`)
+  - `usercommands/loader/` — YAML discovery and parsing: `DiscoverCommandFiles`, `LoadCommandFile`, `ComputeGroup`, `ComputeCommandID`
+  - `usercommands/registry/` — command registry: `Registry`, `LoadRegistry`, `GroupNode` tree, cross-ref validation
+  - `usercommands/resolve/` — param/context/env resolution: `Params`, `Context`, `BuildEnv`
+  - `usercommands/runtime/` — runners and execution: `RunContext`, `Runner` interface, `NewRunner`, `RunCommand`, `ConfirmCommand`, `HostRunner`, `DevboxRunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`, file path computation. Script contract env: `DEVBOX_BIN`, `DEVBOX_FILES_JSON`, `DEVBOX_NONINTERACTIVE`
+- `internal/command/` — cobra commands with Fang integration and command groups (root summary, lifecycle, services/tools, deploy/reset, docker/compose, docs); thin adapters delegating to domain packages
 
 ## Configuration Documentation
 
@@ -34,7 +45,7 @@ Keep behavior and docs aligned. Devbox configuration documentation lives in `doc
 - `make tidy` updates `go.mod` and `go.sum`.
 - `make clean` removes the built binary from `bin/`.
 
-Use `go test ./internal/command` or `go test ./internal/commands -run TestName` for focused work.
+Use `go test ./internal/command` or `go test ./internal/usercommands/... -run TestName` for focused work.
 
 ## Coding Style & Naming Conventions
 
