@@ -8,6 +8,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 )
 
@@ -76,7 +77,7 @@ func TestBuildServiceRows_sortedByName(t *testing.T) {
 
 func TestBuildToolRows_allDisabled(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-	rows := buildToolRows(cfg)
+	rows := stack.BuildToolRows(cfg)
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 tool rows, got %d", len(rows))
 	}
@@ -102,7 +103,7 @@ func TestBuildToolRows_someEnabled(t *testing.T) {
 		Mailpit:      "mail.localhost",
 	})
 
-	rows := buildToolRows(cfg)
+	rows := stack.BuildToolRows(cfg)
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}

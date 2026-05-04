@@ -74,6 +74,16 @@ func ApplyServiceTogglesToYAML(cfg *config.DevboxConfig, local map[string]any, t
 	return nil
 }
 
+// SetServiceEnabledInYAML sets a single service's enabled state in the local config map.
+func SetServiceEnabledInYAML(local map[string]any, name string, enabled bool) {
+	svcMap, ok := local["services"].(map[string]any)
+	if !ok {
+		svcMap = make(map[string]any)
+		local["services"] = svcMap
+	}
+	SetLocalEntryEnabled(svcMap, name, enabled)
+}
+
 func disableWord(enabled bool) string {
 	if enabled {
 		return "enabled"

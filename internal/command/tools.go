@@ -11,6 +11,7 @@ import (
 	"devbox-cli/internal/envfile"
 	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -100,7 +101,7 @@ the read-only status table.`,
 			}
 
 			// TTY: build multi-select items from tool rows.
-			rows := buildToolRows(cfg)
+			rows := stack.BuildToolRows(cfg)
 			items := make([]ui.MultiSelectItem, len(rows))
 			for i, row := range rows {
 				items[i] = ui.MultiSelectItem{
@@ -155,7 +156,7 @@ the read-only status table.`,
 
 // runToolList prints the tool list as a styled Lipgloss table.
 func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCheckFn) error {
-	toolData := buildToolRows(cfg)
+	toolData := stack.BuildToolRows(cfg)
 	projectFull := cfg.Project.FullName()
 
 	rows := make([]ui.ToolTableRow, len(toolData))
@@ -262,8 +263,8 @@ enabled tools.`,
 // If no disabled tools exist, returns an error.
 // Otherwise the selector is called.
 func pickToolToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
-	var candidates []toolRow
-	for _, row := range buildToolRows(cfg) {
+	var candidates []stack.ToolRow
+	for _, row := range stack.BuildToolRows(cfg) {
 		if !row.Enabled {
 			candidates = append(candidates, row)
 		}
@@ -275,8 +276,8 @@ func pickToolToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string
 // If no enabled tools exist, returns an error.
 // Otherwise the selector is called.
 func pickToolToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
-	var candidates []toolRow
-	for _, row := range buildToolRows(cfg) {
+	var candidates []stack.ToolRow
+	for _, row := range stack.BuildToolRows(cfg) {
 		if row.Enabled {
 			candidates = append(candidates, row)
 		}
@@ -287,7 +288,7 @@ func pickToolToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (strin
 // pickToolCandidates resolves a tool name from a candidate list.
 // - Empty list → error mentioning statusLabel.
 // - One or more → selector is always invoked.
-func pickToolCandidates(rows []toolRow, statusLabel, title string, selector selectToggleFn) (string, error) {
+func pickToolCandidates(rows []stack.ToolRow, statusLabel, title string, selector selectToggleFn) (string, error) {
 	if len(rows) == 0 {
 		return "", fmt.Errorf("no %s tools found", statusLabel)
 	}

@@ -16,15 +16,6 @@ type serviceRow struct {
 	Enabled   bool
 }
 
-// toolRow holds a single row of the tools topology table.
-type toolRow struct {
-	Name      string
-	Enabled   bool
-	Port      int
-	Host      string
-	Container string
-}
-
 // buildServiceRows returns an ordered list of service rows from cfg.
 func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 	rows := make([]serviceRow, 0, len(cfg.Services))
@@ -43,33 +34,6 @@ func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 		})
 	}
 	return rows
-}
-
-// buildToolRows returns the fixed tool rows with enabled state, port, host, and container name.
-func buildToolRows(cfg *config.DevboxConfig) []toolRow {
-	return []toolRow{
-		{
-			Name:      "adminer",
-			Enabled:   cfg.Tools.Adminer.Enabled,
-			Port:      cfg.Runtime.Ports.Adminer,
-			Host:      cfg.Runtime.Hosts.Adminer,
-			Container: "adminer",
-		},
-		{
-			Name:      "redis_insight",
-			Enabled:   cfg.Tools.RedisInsight.Enabled,
-			Port:      cfg.Runtime.Ports.RedisInsight,
-			Host:      cfg.Runtime.Hosts.RedisInsight,
-			Container: "redis-insight",
-		},
-		{
-			Name:      "mailpit",
-			Enabled:   cfg.Tools.Mailpit.Enabled,
-			Port:      cfg.Runtime.Ports.Mailpit,
-			Host:      cfg.Runtime.Hosts.Mailpit,
-			Container: "mailpit",
-		},
-	}
 }
 
 // sortedKeys returns the map keys sorted alphabetically.

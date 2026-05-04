@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -112,7 +113,7 @@ func SourceDotEnv(path string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -129,6 +130,9 @@ func SourceDotEnv(path string) error {
 		if err := os.Setenv(strings.TrimSpace(key), val); err != nil {
 			return fmt.Errorf("setenv %s: %w", key, err)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scan %s: %w", path, err)
 	}
 	return nil
 }
