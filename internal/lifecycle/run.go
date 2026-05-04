@@ -6,11 +6,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/git"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 )
 
 // GitProbeFunc is a package-level variable so tests can inject stubs without
@@ -161,12 +161,12 @@ func RunRestart(ctx RunContext) error {
 
 // loadRegistry loads the command registry from devbox/commands/ relative to configPath.
 // Returns an empty registry when the directory does not exist.
-func loadRegistry(configPath string) (*commands.Registry, error) {
+func loadRegistry(configPath string) (*usercommands.Registry, error) {
 	commandsDir := filepath.Join(filepath.Dir(configPath), "devbox", "commands")
 	if _, statErr := os.Stat(commandsDir); errors.Is(statErr, os.ErrNotExist) {
-		return commands.NewEmptyRegistry(), nil
+		return usercommands.NewEmptyRegistry(), nil
 	}
-	reg, err := commands.LoadRegistry(commandsDir)
+	reg, err := usercommands.LoadRegistry(commandsDir)
 	if err != nil {
 		return nil, fmt.Errorf("loading command registry: %w", err)
 	}

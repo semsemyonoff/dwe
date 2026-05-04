@@ -191,12 +191,12 @@ Extract `.env` rendering so cobra is not the only entry point. Unblocks `localco
 
 ### Task 8: Rename `internal/commands` → `internal/usercommands` (flat move)
 
-- [ ] `git mv internal/commands internal/usercommands`
-- [ ] update package declaration `package commands` → `package usercommands` across all files (production + tests)
-- [ ] update every importer (`internal/command/*.go`, `internal/builtin/*.go`, `internal/pipeline/*.go`, `cmd/devbox/main.go`) — search for `"<modulepath>/internal/commands"` and replace with `internal/usercommands`
-- [ ] update local identifier references where callers use `commands.X` → `usercommands.X` (or keep an alias `import commands "...usercommands"` only if a follow-up step in this task removes it)
-- [ ] run `make build && make test` — must pass before Task 9
-- [ ] run `make lint` — must pass before Task 9
+- [x] `git mv internal/commands internal/usercommands`
+- [x] update package declaration `package commands` → `package usercommands` across all files (production + tests)
+- [x] update every importer (`internal/command/*.go`, `internal/builtin/*.go`, `internal/pipeline/*.go`, `cmd/devbox/main.go`) — search for `"<modulepath>/internal/commands"` and replace with `internal/usercommands`
+- [x] update local identifier references where callers use `commands.X` → `usercommands.X` (or keep an alias `import commands "...usercommands"` only if a follow-up step in this task removes it)
+- [x] run `make build && make test` — must pass before Task 9
+- [x] run `make lint` — must pass before Task 9
 
 ### Task 9: Split `internal/usercommands` into subpackages
 

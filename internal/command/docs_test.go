@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/commands"
+	"devbox-cli/internal/usercommands"
 )
 
 // TestValidateDocsFlags checks that invalid flag values are rejected.
@@ -98,7 +98,7 @@ func TestResolveScopes(t *testing.T) {
 	})
 }
 
-// TestGenRegistryMarkdown checks that markdown files are written for commands.
+// TestGenRegistryMarkdown checks that markdown files are written for usercommands.
 func TestGenRegistryMarkdown(t *testing.T) {
 	reg := buildTestRegistryForDocs(t)
 
@@ -217,13 +217,13 @@ func TestGenTopLevelIndexCliOnly(t *testing.T) {
 
 // TestWriteCommandMarkdown_Workflow checks workflow step rendering.
 func TestWriteCommandMarkdown_Workflow(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:          "db.bootstrap",
 		Group:       "db",
 		LocalName:   "bootstrap",
-		Type:        commands.CommandTypeWorkflow,
+		Type:        usercommands.CommandTypeWorkflow,
 		Description: "Bootstrap the database",
-		Steps: []commands.WorkflowStep{
+		Steps: []usercommands.WorkflowStep{
 			{Command: "db.create"},
 			{Command: "db.migrate", With: map[string]string{"env": "test"}},
 		},
@@ -250,15 +250,15 @@ func TestWriteCommandMarkdown_Workflow(t *testing.T) {
 
 // TestWriteCommandMarkdown_Params checks parameter table rendering.
 func TestWriteCommandMarkdown_Params(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:        "app.install",
 		Group:     "app",
 		LocalName: "install",
-		Type:      commands.CommandTypeCommand,
+		Type:      usercommands.CommandTypeCommand,
 		Run:       "composer install",
-		Params: map[string]commands.ParamDef{
+		Params: map[string]usercommands.ParamDef{
 			"env": {
-				Type:        commands.ParamTypeString,
+				Type:        usercommands.ParamTypeString,
 				Description: "Target environment",
 				Default:     "local",
 			},
@@ -379,7 +379,7 @@ func TestCLIIndexNotGeneratedWithoutMarkdown(t *testing.T) {
 //
 //	services/main.yml          → group "services.main"  → command "services.main.migrate"
 //	services/main/db.yml       → group "services.main.db" → command "services.main.db.create"
-func buildTestRegistryForDocs(t *testing.T) *commands.Registry {
+func buildTestRegistryForDocs(t *testing.T) *usercommands.Registry {
 	t.Helper()
 
 	baseDir := t.TempDir()
@@ -418,7 +418,7 @@ func buildTestRegistryForDocs(t *testing.T) *commands.Registry {
 		t.Fatal(err)
 	}
 
-	reg, err := commands.LoadRegistry(baseDir)
+	reg, err := usercommands.LoadRegistry(baseDir)
 	if err != nil {
 		t.Fatalf("LoadRegistry: %v", err)
 	}

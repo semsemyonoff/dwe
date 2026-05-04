@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"devbox-cli/internal/commands"
+	"devbox-cli/internal/usercommands"
 )
 
 // --- parseSetFlags ---
@@ -71,7 +71,7 @@ func TestParseSetFlags_emptyKey(t *testing.T) {
 
 func TestBuildTreeNodes_emptyRegistry(t *testing.T) {
 	// An empty root GroupNode should produce no nodes.
-	root := &commands.GroupNode{}
+	root := &usercommands.GroupNode{}
 	nodes := buildTreeNodes(root, "", false)
 	if len(nodes) != 0 {
 		t.Errorf("expected empty nodes, got %d", len(nodes))
@@ -79,10 +79,10 @@ func TestBuildTreeNodes_emptyRegistry(t *testing.T) {
 }
 
 func TestBuildTreeNodes_publicCommandsOnly(t *testing.T) {
-	root := &commands.GroupNode{
-		Commands: []*commands.CommandDef{
-			{ID: "services.main.migrate", LocalName: "migrate", Type: commands.CommandTypeServiceExec, Private: false},
-			{ID: "services.main.secret", LocalName: "secret", Type: commands.CommandTypeCommand, Private: true},
+	root := &usercommands.GroupNode{
+		Commands: []*usercommands.CommandDef{
+			{ID: "services.main.migrate", LocalName: "migrate", Type: usercommands.CommandTypeServiceExec, Private: false},
+			{ID: "services.main.secret", LocalName: "secret", Type: usercommands.CommandTypeCommand, Private: true},
 		},
 	}
 	nodes := buildTreeNodes(root, "", false)
@@ -95,10 +95,10 @@ func TestBuildTreeNodes_publicCommandsOnly(t *testing.T) {
 }
 
 func TestBuildTreeNodes_includePrivate(t *testing.T) {
-	root := &commands.GroupNode{
-		Commands: []*commands.CommandDef{
-			{LocalName: "migrate", Type: commands.CommandTypeServiceExec, Private: false},
-			{LocalName: "secret", Type: commands.CommandTypeCommand, Private: true},
+	root := &usercommands.GroupNode{
+		Commands: []*usercommands.CommandDef{
+			{LocalName: "migrate", Type: usercommands.CommandTypeServiceExec, Private: false},
+			{LocalName: "secret", Type: usercommands.CommandTypeCommand, Private: true},
 		},
 	}
 	nodes := buildTreeNodes(root, "", true)
@@ -108,19 +108,19 @@ func TestBuildTreeNodes_includePrivate(t *testing.T) {
 }
 
 func TestBuildTreeNodes_nestedGroups(t *testing.T) {
-	main := &commands.GroupNode{
+	main := &usercommands.GroupNode{
 		ID:   "services.main",
 		Name: "main",
-		Commands: []*commands.CommandDef{
-			{ID: "services.main.migrate", LocalName: "migrate", Type: commands.CommandTypeServiceExec},
+		Commands: []*usercommands.CommandDef{
+			{ID: "services.main.migrate", LocalName: "migrate", Type: usercommands.CommandTypeServiceExec},
 		},
 	}
-	services := &commands.GroupNode{
+	services := &usercommands.GroupNode{
 		ID:       "services",
 		Name:     "services",
-		Children: []*commands.GroupNode{main},
+		Children: []*usercommands.GroupNode{main},
 	}
-	root := &commands.GroupNode{Children: []*commands.GroupNode{services}}
+	root := &usercommands.GroupNode{Children: []*usercommands.GroupNode{services}}
 
 	nodes := buildTreeNodes(root, "", false)
 	if len(nodes) != 1 {
@@ -146,9 +146,9 @@ func TestBuildTreeNodes_nestedGroups(t *testing.T) {
 }
 
 func TestBuildTreeNodes_groupFilterMissing(t *testing.T) {
-	root := &commands.GroupNode{
-		Commands: []*commands.CommandDef{
-			{LocalName: "migrate", Type: commands.CommandTypeServiceExec},
+	root := &usercommands.GroupNode{
+		Commands: []*usercommands.CommandDef{
+			{LocalName: "migrate", Type: usercommands.CommandTypeServiceExec},
 		},
 	}
 	nodes := buildTreeNodes(root, "nonexistent", false)
@@ -158,19 +158,19 @@ func TestBuildTreeNodes_groupFilterMissing(t *testing.T) {
 }
 
 func TestBuildTreeNodes_groupFilter(t *testing.T) {
-	main := &commands.GroupNode{
+	main := &usercommands.GroupNode{
 		ID:   "services.main",
 		Name: "main",
-		Commands: []*commands.CommandDef{
-			{ID: "services.main.migrate", LocalName: "migrate", Type: commands.CommandTypeServiceExec},
+		Commands: []*usercommands.CommandDef{
+			{ID: "services.main.migrate", LocalName: "migrate", Type: usercommands.CommandTypeServiceExec},
 		},
 	}
-	services := &commands.GroupNode{
+	services := &usercommands.GroupNode{
 		ID:       "services",
 		Name:     "services",
-		Children: []*commands.GroupNode{main},
+		Children: []*usercommands.GroupNode{main},
 	}
-	root := &commands.GroupNode{Children: []*commands.GroupNode{services}}
+	root := &usercommands.GroupNode{Children: []*usercommands.GroupNode{services}}
 
 	// Filter to "services.main" — should return migrate directly.
 	nodes := buildTreeNodes(root, "services.main", false)
@@ -184,14 +184,14 @@ func TestBuildTreeNodes_groupFilter(t *testing.T) {
 
 func TestBuildTreeNodes_privateGroupHiddenWhenAllPrivate(t *testing.T) {
 	// A sub-group containing only private commands should be hidden in non-all mode.
-	inner := &commands.GroupNode{
+	inner := &usercommands.GroupNode{
 		ID:   "db",
 		Name: "db",
-		Commands: []*commands.CommandDef{
-			{LocalName: "create", Type: commands.CommandTypeServiceExec, Private: true},
+		Commands: []*usercommands.CommandDef{
+			{LocalName: "create", Type: usercommands.CommandTypeServiceExec, Private: true},
 		},
 	}
-	root := &commands.GroupNode{Children: []*commands.GroupNode{inner}}
+	root := &usercommands.GroupNode{Children: []*usercommands.GroupNode{inner}}
 	nodes := buildTreeNodes(root, "", false)
 	if len(nodes) != 0 {
 		t.Errorf("expected 0 nodes (private-only group should be hidden), got %d", len(nodes))
@@ -201,10 +201,10 @@ func TestBuildTreeNodes_privateGroupHiddenWhenAllPrivate(t *testing.T) {
 // --- commandDefToTreeNode ---
 
 func TestCommandDefToTreeNode_public(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:          "services.main.migrate",
 		LocalName:   "migrate",
-		Type:        commands.CommandTypeServiceExec,
+		Type:        usercommands.CommandTypeServiceExec,
 		Description: "Run migrations",
 		Private:     false,
 	}
@@ -222,9 +222,9 @@ func TestCommandDefToTreeNode_public(t *testing.T) {
 }
 
 func TestCommandDefToTreeNode_private(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		LocalName: "create",
-		Type:      commands.CommandTypeServiceExec,
+		Type:      usercommands.CommandTypeServiceExec,
 		Private:   true,
 	}
 	node := commandDefToTreeNode(def)
@@ -242,11 +242,11 @@ func TestCommandDefToTreeNode_private(t *testing.T) {
 // --- printCommandInspect ---
 
 func TestPrintCommandInspect_workflow(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:          "services.main.bootstrap",
-		Type:        commands.CommandTypeWorkflow,
+		Type:        usercommands.CommandTypeWorkflow,
 		Description: "Full bootstrap workflow",
-		Steps: []commands.WorkflowStep{
+		Steps: []usercommands.WorkflowStep{
 			{Command: "services.main.composer-install"},
 			{Command: "services.main.migrate"},
 		},
@@ -269,11 +269,11 @@ func TestPrintCommandInspect_workflow(t *testing.T) {
 }
 
 func TestPrintCommandInspect_serviceExec(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:      "services.main.migrate",
-		Type:    commands.CommandTypeServiceExec,
+		Type:    usercommands.CommandTypeServiceExec,
 		Service: "app-main",
-		Mode:    commands.ExecModeExecOrRun,
+		Mode:    usercommands.ExecModeExecOrRun,
 		Run:     "php artisan migrate",
 	}
 	buf := &testBuf{}
@@ -291,12 +291,12 @@ func TestPrintCommandInspect_serviceExec(t *testing.T) {
 }
 
 func TestPrintCommandInspect_withParams(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:   "services.main.cli",
-		Type: commands.CommandTypeCommand,
+		Type: usercommands.CommandTypeCommand,
 		Run:  "echo hello",
-		Params: map[string]commands.ParamDef{
-			"env": {Type: commands.ParamTypeString, Description: "target env", Required: true},
+		Params: map[string]usercommands.ParamDef{
+			"env": {Type: usercommands.ParamTypeString, Description: "target env", Required: true},
 		},
 	}
 	buf := &testBuf{}
@@ -314,9 +314,9 @@ func TestPrintCommandInspect_withParams(t *testing.T) {
 }
 
 func TestPrintCommandInspect_withConfirmation(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:               "db.reset",
-		Type:             commands.CommandTypeCommand,
+		Type:             usercommands.CommandTypeCommand,
 		Run:              "echo reset",
 		Confirmation:     true,
 		ConfirmationText: "Drop database?",
@@ -333,11 +333,11 @@ func TestPrintCommandInspect_withConfirmation(t *testing.T) {
 }
 
 func TestPrintCommandInspect_withMessages(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:   "db.create",
-		Type: commands.CommandTypeCommand,
+		Type: usercommands.CommandTypeCommand,
 		Run:  "echo create",
-		Messages: commands.CommandMessages{
+		Messages: usercommands.CommandMessages{
 			Success: "Database created.",
 			Error:   "Database create failed.",
 		},
@@ -387,7 +387,7 @@ func contains(s, substr string) bool {
 
 // noopSelector is a selectCommandFn that always returns the first item's ID.
 // Used to test that the selector is called without actually running a TUI.
-func noopSelector(defs []*commands.CommandDef, _ string) (string, error) {
+func noopSelector(defs []*usercommands.CommandDef, _ string) (string, error) {
 	if len(defs) == 0 {
 		return "", fmt.Errorf("no commands")
 	}
@@ -400,7 +400,7 @@ type captureSelector struct {
 	title      string
 }
 
-func (c *captureSelector) selector(defs []*commands.CommandDef, title string) (string, error) {
+func (c *captureSelector) selector(defs []*usercommands.CommandDef, title string) (string, error) {
 	c.title = title
 	for _, d := range defs {
 		c.calledWith = append(c.calledWith, d.ID)
@@ -414,12 +414,12 @@ func (c *captureSelector) selector(defs []*commands.CommandDef, title string) (s
 func TestResolveCommandID_exactID(t *testing.T) {
 	// When the arg matches a full command ID, return it directly without calling selector.
 	selectorCalled := false
-	mockSelector := func(defs []*commands.CommandDef, title string) (string, error) {
+	mockSelector := func(defs []*usercommands.CommandDef, title string) (string, error) {
 		selectorCalled = true
 		return defs[0].ID, nil
 	}
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
 
 	got, err := resolveCommandID(reg, []string{"db.up"}, false, mockSelector)
 	if err != nil {
@@ -434,11 +434,11 @@ func TestResolveCommandID_exactID(t *testing.T) {
 }
 
 func TestResolveCommandID_noArg_callsSelector(t *testing.T) {
-	// When no arg is given, selector is called with all public commands.
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
-	reg.AddCommandForTest(&commands.CommandDef{ID: "app.install", LocalName: "install", Group: "app", Type: commands.CommandTypeCommand, Private: false})
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: commands.CommandTypeCommand, Private: true})
+	// When no arg is given, selector is called with all public usercommands.
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "app.install", LocalName: "install", Group: "app", Type: usercommands.CommandTypeCommand, Private: false})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: usercommands.CommandTypeCommand, Private: true})
 
 	cs := &captureSelector{}
 	_, err := resolveCommandID(reg, []string{}, false, cs.selector)
@@ -457,10 +457,10 @@ func TestResolveCommandID_noArg_callsSelector(t *testing.T) {
 }
 
 func TestResolveCommandID_noArg_includePrivate(t *testing.T) {
-	// When includePrivate is true and no arg, selector gets all commands.
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: commands.CommandTypeCommand, Private: true})
+	// When includePrivate is true and no arg, selector gets all usercommands.
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: usercommands.CommandTypeCommand, Private: true})
 
 	cs := &captureSelector{}
 	_, err := resolveCommandID(reg, []string{}, true, cs.selector)
@@ -473,11 +473,11 @@ func TestResolveCommandID_noArg_includePrivate(t *testing.T) {
 }
 
 func TestResolveCommandID_groupPrefix_callsFilteredSelector(t *testing.T) {
-	// When arg is a group prefix, selector is called with only those group commands.
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "services.main.migrate", LocalName: "migrate", Group: "services.main", Type: commands.CommandTypeServiceExec, Private: false})
-	reg.AddCommandForTest(&commands.CommandDef{ID: "services.main.seed", LocalName: "seed", Group: "services.main", Type: commands.CommandTypeServiceExec, Private: false})
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	// When arg is a group prefix, selector is called with only those group usercommands.
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "services.main.migrate", LocalName: "migrate", Group: "services.main", Type: usercommands.CommandTypeServiceExec, Private: false})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "services.main.seed", LocalName: "seed", Group: "services.main", Type: usercommands.CommandTypeServiceExec, Private: false})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
 
 	cs := &captureSelector{}
 	_, err := resolveCommandID(reg, []string{"services.main"}, false, cs.selector)
@@ -501,8 +501,8 @@ func TestResolveCommandID_groupPrefix_callsFilteredSelector(t *testing.T) {
 
 func TestResolveCommandID_unknownArg_error(t *testing.T) {
 	// When arg is neither a command ID nor a group prefix, return an error.
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
 
 	_, err := resolveCommandID(reg, []string{"nonexistent"}, false, noopSelector)
 	if err == nil {
@@ -512,7 +512,7 @@ func TestResolveCommandID_unknownArg_error(t *testing.T) {
 
 func TestResolveCommandID_noArg_emptyRegistry_error(t *testing.T) {
 	// When no arg and no commands exist, return an error.
-	reg := commands.NewEmptyRegistry()
+	reg := usercommands.NewEmptyRegistry()
 	_, err := resolveCommandID(reg, []string{}, false, noopSelector)
 	if err == nil {
 		t.Fatal("expected error for empty registry, got nil")
@@ -521,10 +521,10 @@ func TestResolveCommandID_noArg_emptyRegistry_error(t *testing.T) {
 
 func TestResolveCommandID_nonInteractiveSelector_noArg_returnsError(t *testing.T) {
 	// When a non-TTY selector is passed and no exact ID is given, it returns an error.
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
 
-	nonTTYSelector := func(_ []*commands.CommandDef, _ string) (string, error) {
+	nonTTYSelector := func(_ []*usercommands.CommandDef, _ string) (string, error) {
 		return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 	}
 	_, err := resolveCommandID(reg, []string{}, false, nonTTYSelector)
@@ -535,10 +535,10 @@ func TestResolveCommandID_nonInteractiveSelector_noArg_returnsError(t *testing.T
 
 func TestResolveCommandID_nonInteractiveSelector_groupPrefix_returnsError(t *testing.T) {
 	// When a non-TTY selector is passed and a group prefix is given (not exact ID), it returns an error.
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
 
-	nonTTYSelector := func(_ []*commands.CommandDef, _ string) (string, error) {
+	nonTTYSelector := func(_ []*usercommands.CommandDef, _ string) (string, error) {
 		return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 	}
 	_, err := resolveCommandID(reg, []string{"db"}, false, nonTTYSelector)
@@ -549,11 +549,11 @@ func TestResolveCommandID_nonInteractiveSelector_groupPrefix_returnsError(t *tes
 
 func TestResolveCommandID_nonInteractiveSelector_exactID_succeeds(t *testing.T) {
 	// When an exact ID is given, the selector is never called even in non-TTY mode.
-	reg := commands.NewEmptyRegistry()
-	reg.AddCommandForTest(&commands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: commands.CommandTypeCommand, Private: false})
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeCommand, Private: false})
 
 	selectorCalled := false
-	nonTTYSelector := func(_ []*commands.CommandDef, _ string) (string, error) {
+	nonTTYSelector := func(_ []*usercommands.CommandDef, _ string) (string, error) {
 		selectorCalled = true
 		return "", fmt.Errorf("not interactive")
 	}

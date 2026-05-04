@@ -1,4 +1,4 @@
-package commands
+package usercommands
 
 import (
 	"strings"

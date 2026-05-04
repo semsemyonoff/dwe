@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands"
 )
 
 // RunPhases resolves and executes a set of lifecycle pipeline phases.
@@ -21,7 +21,7 @@ import (
 // the failure). Returns other errors for config/IO failures.
 func RunPhases(
 	cfg *config.DevboxConfig,
-	reg *commands.Registry,
+	reg *usercommands.Registry,
 	workDir string,
 	phases []config.DeployPhase,
 	name string,

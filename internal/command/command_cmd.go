@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -47,7 +47,7 @@ func newCommandListCmd(flags *rootFlags) *cobra.Command {
 		Long: `List all available declarative commands from devbox/commands/.
 
 An optional group filter narrows the output to a specific command group (e.g. 'db', 'services.main').
-Use --all to include private commands.`,
+Use --all to include private usercommands.`,
 		Example: `  devbox commands list
   devbox commands list db
   devbox commands list --all`,
@@ -84,7 +84,7 @@ func newCommandInspectCmd(flags *rootFlags) *cobra.Command {
 
 Displays type, run/argv, params, context variables, env, and workflow steps.
 
-When called without an argument, an interactive selector lists all commands.
+When called without an argument, an interactive selector lists all usercommands.
 When called with a group prefix (e.g. 'services.main'), the selector is
 filtered to that group.  When called with a full command ID, it inspects
 directly without showing a selector.`,
@@ -100,7 +100,7 @@ directly without showing a selector.`,
 			}
 			selector := selectCommandFn(defaultSelectCommand)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-				selector = func(_ []*commands.CommandDef, _ string) (string, error) {
+				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 				}
 			}
@@ -138,7 +138,7 @@ Use --yes to skip confirmation prompts (intended for non-interactive use).
 Private commands cannot be run directly.
 
 When called without an argument, an interactive selector lists all public
-commands.  When called with a group prefix (e.g. 'services.main'), the
+usercommands.  When called with a group prefix (e.g. 'services.main'), the
 selector is filtered to that group.  When called with a full command ID,
 it runs directly without showing a selector.`,
 		Example: `  devbox commands run
@@ -159,7 +159,7 @@ it runs directly without showing a selector.`,
 			}
 			selector := selectCommandFn(defaultSelectCommand)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-				selector = func(_ []*commands.CommandDef, _ string) (string, error) {
+				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 				}
 			}
@@ -181,11 +181,11 @@ it runs directly without showing a selector.`,
 			if err != nil {
 				return err
 			}
-			params, err := commands.ResolveParams(def.Params, provided, cfg)
+			params, err := usercommands.ResolveParams(def.Params, provided, cfg)
 			if err != nil {
 				return fmt.Errorf("resolving params: %w", err)
 			}
-			ctx, err := commands.ResolveContext(def.Context, cfg)
+			ctx, err := usercommands.ResolveContext(def.Context, cfg)
 			if err != nil {
 				return fmt.Errorf("resolving context: %w", err)
 			}
@@ -212,7 +212,7 @@ it runs directly without showing a selector.`,
 				shouldSkip = true
 			}
 
-			if err := commands.RunCommand(commands.RunContext{
+			if err := usercommands.RunCommand(usercommands.RunContext{
 				Cmd:            def,
 				Params:         params,
 				Context:        ctx,
@@ -240,12 +240,12 @@ it runs directly without showing a selector.`,
 
 // loadCommandRegistry loads the command registry from devbox/commands/ relative
 // to the config file. Returns an empty registry when the directory does not exist.
-func loadCommandRegistry(configPath string) (*commands.Registry, error) {
+func loadCommandRegistry(configPath string) (*usercommands.Registry, error) {
 	commandsDir := filepath.Join(filepath.Dir(configPath), "devbox", "commands")
 	if _, statErr := os.Stat(commandsDir); errors.Is(statErr, os.ErrNotExist) {
-		return commands.NewEmptyRegistry(), nil
+		return usercommands.NewEmptyRegistry(), nil
 	}
-	reg, err := commands.LoadRegistry(commandsDir)
+	reg, err := usercommands.LoadRegistry(commandsDir)
 	if err != nil {
 		return nil, fmt.Errorf("loading command registry: %w", err)
 	}
@@ -257,10 +257,10 @@ func loadCommandRegistry(configPath string) (*commands.Registry, error) {
 
 // selectCommandFn is the function signature for interactive command selection.
 // It receives a slice of CommandDefs and a display title, and returns the chosen ID.
-type selectCommandFn func(defs []*commands.CommandDef, title string) (string, error)
+type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string, error)
 
 // defaultSelectCommand shows an interactive selector via ui.RunSelector.
-func defaultSelectCommand(defs []*commands.CommandDef, title string) (string, error) {
+func defaultSelectCommand(defs []*usercommands.CommandDef, title string) (string, error) {
 	items := make([]ui.SelectorItem, len(defs))
 	for i, d := range defs {
 		items[i] = ui.SelectorItem{
@@ -277,12 +277,12 @@ func defaultSelectCommand(defs []*commands.CommandDef, title string) (string, er
 
 // resolveCommandID determines the target command ID from optional positional args.
 //
-//   - No args: calls selector with all public (or all when includePrivate is true) commands.
+//   - No args: calls selector with all public (or all when includePrivate is true) usercommands.
 //   - One arg that is a full command ID (registry.Get succeeds): returns it directly.
 //   - One arg that is a group prefix (registry.List returns results): calls selector
 //     filtered to that group.
 //   - One arg that is neither: returns an error.
-func resolveCommandID(reg *commands.Registry, args []string, includePrivate bool, selector selectCommandFn) (string, error) {
+func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate bool, selector selectCommandFn) (string, error) {
 	if len(args) == 1 {
 		arg := args[0]
 		// Exact command ID — use directly without selector.
@@ -290,7 +290,7 @@ func resolveCommandID(reg *commands.Registry, args []string, includePrivate bool
 			return arg, nil
 		}
 		// Try as a group prefix.
-		var defs []*commands.CommandDef
+		var defs []*usercommands.CommandDef
 		if includePrivate {
 			defs = reg.ListAll(arg)
 		} else {
@@ -302,7 +302,7 @@ func resolveCommandID(reg *commands.Registry, args []string, includePrivate bool
 		return selector(defs, "Select command ("+arg+")")
 	}
 	// No arg — show full list.
-	var defs []*commands.CommandDef
+	var defs []*usercommands.CommandDef
 	if includePrivate {
 		defs = reg.ListAll("")
 	} else {
@@ -333,7 +333,7 @@ func parseSetFlags(flags []string) (map[string]string, error) {
 // buildTreeNodes converts a GroupNode tree to render.TreeNode slices.
 // When groupFilter is non-empty, only the matching sub-tree is rendered.
 // Private commands are excluded when includePrivate is false.
-func buildTreeNodes(root *commands.GroupNode, groupFilter string, includePrivate bool) []*render.TreeNode {
+func buildTreeNodes(root *usercommands.GroupNode, groupFilter string, includePrivate bool) []*render.TreeNode {
 	if groupFilter != "" {
 		target := findGroupNode(root, groupFilter)
 		if target == nil {
@@ -345,7 +345,7 @@ func buildTreeNodes(root *commands.GroupNode, groupFilter string, includePrivate
 }
 
 // findGroupNode searches the tree for a node with the given dot-separated ID.
-func findGroupNode(node *commands.GroupNode, id string) *commands.GroupNode {
+func findGroupNode(node *usercommands.GroupNode, id string) *usercommands.GroupNode {
 	if node.ID == id {
 		return node
 	}
@@ -360,7 +360,7 @@ func findGroupNode(node *commands.GroupNode, id string) *commands.GroupNode {
 // groupNodeToChildren converts a GroupNode's contents into render.TreeNode slices,
 // adding sub-groups and commands as children. Sub-groups without visible content
 // are omitted when includePrivate is false.
-func groupNodeToChildren(gn *commands.GroupNode, includePrivate bool) []*render.TreeNode {
+func groupNodeToChildren(gn *usercommands.GroupNode, includePrivate bool) []*render.TreeNode {
 	var nodes []*render.TreeNode
 	for _, child := range gn.Children {
 		childNode := groupNodeToSingleNode(child, includePrivate)
@@ -379,7 +379,7 @@ func groupNodeToChildren(gn *commands.GroupNode, includePrivate bool) []*render.
 
 // groupNodeToSingleNode converts a GroupNode into a single render.TreeNode.
 // Returns nil when the group has no visible content (after private filtering).
-func groupNodeToSingleNode(gn *commands.GroupNode, includePrivate bool) *render.TreeNode {
+func groupNodeToSingleNode(gn *usercommands.GroupNode, includePrivate bool) *render.TreeNode {
 	children := groupNodeToChildren(gn, includePrivate)
 	if !includePrivate && len(children) == 0 {
 		return nil
@@ -393,7 +393,7 @@ func groupNodeToSingleNode(gn *commands.GroupNode, includePrivate bool) *render.
 }
 
 // commandDefToTreeNode converts a CommandDef into a leaf render.TreeNode.
-func commandDefToTreeNode(cmd *commands.CommandDef) *render.TreeNode {
+func commandDefToTreeNode(cmd *usercommands.CommandDef) *render.TreeNode {
 	var tags []string
 	if cmd.Private {
 		tags = append(tags, "private")
@@ -420,7 +420,7 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}
-		var defs []*commands.CommandDef
+		var defs []*usercommands.CommandDef
 		if includePrivate {
 			defs = reg.ListAll("")
 		} else {
@@ -443,7 +443,7 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 }
 
 // printCommandInspect writes a detailed view of a command definition using Lipgloss styles.
-func printCommandInspect(w io.Writer, def *commands.CommandDef) {
+func printCommandInspect(w io.Writer, def *usercommands.CommandDef) {
 	def2 := func(name, value string, indent int) {
 		_, _ = fmt.Fprintln(w, ui.RenderDefinition(name, value, indent, ""))
 	}
@@ -474,7 +474,7 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 	}
 
 	switch def.Type {
-	case commands.CommandTypeCommand:
+	case usercommands.CommandTypeCommand:
 		if def.Run != "" {
 			def2("run", def.Run, 2)
 		}
@@ -484,7 +484,7 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 		if def.Workdir != "" {
 			def2("workdir", def.Workdir, 2)
 		}
-	case commands.CommandTypeServiceExec, commands.CommandTypeServiceRun:
+	case usercommands.CommandTypeServiceExec, usercommands.CommandTypeServiceRun:
 		if def.Service != "" {
 			def2("service", def.Service, 2)
 		}
@@ -512,7 +512,7 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)
 		}
-	case commands.CommandTypeScript:
+	case usercommands.CommandTypeScript:
 		if def.Script != nil {
 			shell := def.Script.Shell
 			if shell == "" {
@@ -535,7 +535,7 @@ func printCommandInspect(w io.Writer, def *commands.CommandDef) {
 		if def.Workdir != "" {
 			def2("workdir", def.Workdir, 2)
 		}
-	case commands.CommandTypeWorkflow:
+	case usercommands.CommandTypeWorkflow:
 		sub("Steps")
 		for i, step := range def.Steps {
 			if step.Confirm != "" {

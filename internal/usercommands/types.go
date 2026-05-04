@@ -1,7 +1,7 @@
 // Package commands provides types, loading, and execution for the devbox command system.
 // Commands are defined in YAML files under devbox/commands/ and organised into groups
 // derived from the directory structure.
-package commands
+package usercommands
 
 import (
 	"fmt"

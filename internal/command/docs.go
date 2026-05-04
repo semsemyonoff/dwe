@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/commands"
+	"devbox-cli/internal/usercommands"
 
 	cobradoc "github.com/spf13/cobra/doc"
 
@@ -286,7 +286,7 @@ func walkAllCommands(cmd *cobra.Command, fn func(*cobra.Command) error) error {
 	return nil
 }
 
-// genCLIIndex writes a markdown index of all CLI commands.
+// genCLIIndex writes a markdown index of all CLI usercommands.
 func genCLIIndex(root *cobra.Command, dir string, includeHidden bool) error {
 	var sb strings.Builder
 	sb.WriteString("# CLI Reference\n\n")
@@ -325,7 +325,7 @@ func writeCLIIndexEntries(sb *strings.Builder, cmd *cobra.Command, includeHidden
 }
 
 // genRegistryDocs generates documentation for each registry command.
-func genRegistryDocs(reg *commands.Registry, dir, format string, includePrivate bool) error {
+func genRegistryDocs(reg *usercommands.Registry, dir, format string, includePrivate bool) error {
 	// We always use markdown for the registry; yaml/man are CLI-specific.
 	// For non-markdown formats we skip (registry has no cobra representation).
 	if format != "markdown" {
@@ -336,8 +336,8 @@ func genRegistryDocs(reg *commands.Registry, dir, format string, includePrivate 
 
 // genRegistryMarkdown writes one markdown file per command group and one file
 // per command. Private commands are only written when includePrivate is true.
-func genRegistryMarkdown(reg *commands.Registry, dir string, includePrivate bool) error {
-	var all []*commands.CommandDef
+func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate bool) error {
+	var all []*usercommands.CommandDef
 	if includePrivate {
 		all = reg.ListAll("")
 	} else {
@@ -345,7 +345,7 @@ func genRegistryMarkdown(reg *commands.Registry, dir string, includePrivate bool
 	}
 
 	// Group by group ID.
-	byGroup := make(map[string][]*commands.CommandDef)
+	byGroup := make(map[string][]*usercommands.CommandDef)
 	var groups []string
 	for _, def := range all {
 		g := def.Group
@@ -375,7 +375,7 @@ func genRegistryMarkdown(reg *commands.Registry, dir string, includePrivate bool
 }
 
 // writeCommandMarkdown writes a single command's documentation to a markdown file.
-func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
+func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "# %s\n\n", def.ID)
@@ -406,7 +406,7 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 
 	// Type-specific details.
 	switch def.Type {
-	case commands.CommandTypeCommand, commands.CommandTypeDevbox:
+	case usercommands.CommandTypeCommand, usercommands.CommandTypeDevbox:
 		if def.Run != "" {
 			sb.WriteString("## Command\n\n```sh\n" + def.Run + "\n```\n\n")
 		}
@@ -416,7 +416,7 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 		if def.Workdir != "" {
 			fmt.Fprintf(&sb, "**Working directory:** `%s`\n\n", def.Workdir)
 		}
-	case commands.CommandTypeServiceExec, commands.CommandTypeServiceRun:
+	case usercommands.CommandTypeServiceExec, usercommands.CommandTypeServiceRun:
 		if def.Service != "" {
 			fmt.Fprintf(&sb, "**Service:** `%s`\n\n", def.Service)
 		}
@@ -429,7 +429,7 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 		if len(def.ComposeArgs) > 0 {
 			fmt.Fprintf(&sb, "**Compose args:** `%s`\n\n", strings.Join(def.ComposeArgs, " "))
 		}
-	case commands.CommandTypeScript:
+	case usercommands.CommandTypeScript:
 		if def.Script != nil {
 			shell := def.Script.Shell
 			if shell == "" {
@@ -446,7 +446,7 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 		if def.Workdir != "" {
 			fmt.Fprintf(&sb, "**Workdir:** `%s`\n\n", def.Workdir)
 		}
-	case commands.CommandTypeWorkflow:
+	case usercommands.CommandTypeWorkflow:
 		if len(def.Steps) > 0 {
 			sb.WriteString("## Steps\n\n")
 			for i, step := range def.Steps {
@@ -581,8 +581,8 @@ func writeCommandMarkdown(def *commands.CommandDef, dir string) error {
 }
 
 // genCommandsIndex writes the commands reference index.
-func genCommandsIndex(reg *commands.Registry, dir string, includePrivate bool) error {
-	var defs []*commands.CommandDef
+func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate bool) error {
+	var defs []*usercommands.CommandDef
 	if includePrivate {
 		defs = reg.ListAll("")
 	} else {
@@ -597,7 +597,7 @@ func genCommandsIndex(reg *commands.Registry, dir string, includePrivate bool) e
 		sb.WriteString("No commands defined.\n")
 	} else {
 		// Group by group.
-		byGroup := make(map[string][]*commands.CommandDef)
+		byGroup := make(map[string][]*usercommands.CommandDef)
 		var groups []string
 		for _, def := range defs {
 			g := def.Group

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/commands"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -173,9 +173,9 @@ func TestLoadCommandRegistry_WithCommands(t *testing.T) {
 // --- printCommandInspect ---
 
 func TestPrintCommandInspect_BasicCommand(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:          "db.up",
-		Type:        commands.CommandTypeCommand,
+		Type:        usercommands.CommandTypeCommand,
 		Description: "Start the database",
 		Run:         "docker compose up db",
 	}
@@ -190,9 +190,9 @@ func TestPrintCommandInspect_BasicCommand(t *testing.T) {
 }
 
 func TestPrintCommandInspect_PrivateCommand(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:      "db.create",
-		Type:    commands.CommandTypeCommand,
+		Type:    usercommands.CommandTypeCommand,
 		Private: true,
 		Run:     "mysql -e 'CREATE DATABASE'",
 	}
@@ -205,9 +205,9 @@ func TestPrintCommandInspect_PrivateCommand(t *testing.T) {
 }
 
 func TestPrintCommandInspect_ServiceExec(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:      "services.main.migrate",
-		Type:    commands.CommandTypeServiceExec,
+		Type:    usercommands.CommandTypeServiceExec,
 		Service: "app-main",
 		Run:     "php artisan migrate",
 	}
@@ -222,10 +222,10 @@ func TestPrintCommandInspect_ServiceExec(t *testing.T) {
 }
 
 func TestPrintCommandInspect_WorkflowWithSteps(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:   "db.bootstrap",
-		Type: commands.CommandTypeWorkflow,
-		Steps: []commands.WorkflowStep{
+		Type: usercommands.CommandTypeWorkflow,
+		Steps: []usercommands.WorkflowStep{
 			{Command: "db.create"},
 			{Command: "db.migrate", With: map[string]string{"env": "test"}},
 			{Confirm: "Are you sure?"},
@@ -246,13 +246,13 @@ func TestPrintCommandInspect_WorkflowWithSteps(t *testing.T) {
 }
 
 func TestPrintCommandInspect_WithParams(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:   "app.install",
-		Type: commands.CommandTypeCommand,
+		Type: usercommands.CommandTypeCommand,
 		Run:  "composer install",
-		Params: map[string]commands.ParamDef{
+		Params: map[string]usercommands.ParamDef{
 			"env": {
-				Type:        commands.ParamTypeString,
+				Type:        usercommands.ParamTypeString,
 				Description: "Target env",
 				Default:     "local",
 				Required:    false,
@@ -274,11 +274,11 @@ func TestPrintCommandInspect_WithParams(t *testing.T) {
 }
 
 func TestPrintCommandInspect_WithContext(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:   "app.install",
-		Type: commands.CommandTypeCommand,
+		Type: usercommands.CommandTypeCommand,
 		Run:  "make install",
-		Context: map[string]commands.ContextDef{
+		Context: map[string]usercommands.ContextDef{
 			"app_url": {From: "project.url", Required: true, Env: "APP_URL"},
 		},
 	}
@@ -294,9 +294,9 @@ func TestPrintCommandInspect_WithContext(t *testing.T) {
 }
 
 func TestPrintCommandInspect_WithEnv(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:   "app.run",
-		Type: commands.CommandTypeCommand,
+		Type: usercommands.CommandTypeCommand,
 		Run:  "php artisan serve",
 		Env:  map[string]string{"APP_ENV": "local", "DEBUG": "true"},
 	}
@@ -312,10 +312,10 @@ func TestPrintCommandInspect_WithEnv(t *testing.T) {
 }
 
 func TestPrintCommandInspect_Script(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:   "app.build",
-		Type: commands.CommandTypeScript,
-		Script: &commands.ScriptDef{
+		Type: usercommands.CommandTypeScript,
+		Script: &usercommands.ScriptDef{
 			Shell:   "bash",
 			Run:     "npm run build",
 			Cleanup: "rm -rf tmp/",
@@ -334,10 +334,10 @@ func TestPrintCommandInspect_Script(t *testing.T) {
 }
 
 func TestPrintCommandInspect_ScriptNilShellDefaultsSh(t *testing.T) {
-	def := &commands.CommandDef{
+	def := &usercommands.CommandDef{
 		ID:     "app.build",
-		Type:   commands.CommandTypeScript,
-		Script: &commands.ScriptDef{Run: "make build"},
+		Type:   usercommands.CommandTypeScript,
+		Script: &usercommands.ScriptDef{Run: "make build"},
 	}
 	var buf bytes.Buffer
 	printCommandInspect(&buf, def)
@@ -400,7 +400,7 @@ func TestWalkAllCommands_VisitsAll(t *testing.T) {
 
 func TestGenHiddenCLIMarkdown_NoHidden(t *testing.T) {
 	dir := t.TempDir()
-	// Build a simple command with no hidden subcommands.
+	// Build a simple command with no hidden subusercommands.
 	root := NewRootCmd()
 	if err := genHiddenCLIMarkdown(root, dir); err != nil {
 		t.Fatalf("genHiddenCLIMarkdown: %v", err)
@@ -470,7 +470,7 @@ func TestGenHiddenCLIMarkdown_WithHiddenCommands(t *testing.T) {
 	if err := genHiddenCLIMarkdown(root, dir); err != nil {
 		t.Fatalf("genHiddenCLIMarkdown: %v", err)
 	}
-	// At least some files should be written if there are hidden commands.
+	// At least some files should be written if there are hidden usercommands.
 	entries, _ := os.ReadDir(dir)
 	t.Logf("written %d files for hidden markdown", len(entries))
 }

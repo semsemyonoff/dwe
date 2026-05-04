@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -23,7 +23,7 @@ func TestRegistryIDCompletion_emptyRegistry(t *testing.T) {
 	//
 	// Because registryIDCompletion loads from disk, we test the public contract
 	// through a fake: build a cobra command and simulate what the function does.
-	reg := commands.NewEmptyRegistry()
+	reg := usercommands.NewEmptyRegistry()
 	completions := buildRegistryCompletions(reg.List(""), false)
 	if len(completions) != 0 {
 		t.Errorf("expected 0 completions for empty registry, got %d", len(completions))
@@ -32,7 +32,7 @@ func TestRegistryIDCompletion_emptyRegistry(t *testing.T) {
 }
 
 func TestRegistryIDCompletion_publicOnly(t *testing.T) {
-	defs := []*commands.CommandDef{
+	defs := []*usercommands.CommandDef{
 		{ID: "services.main.migrate", Description: "Run migrations", Private: false},
 		{ID: "services.main.create-db", Description: "Create database", Private: true},
 	}
@@ -47,7 +47,7 @@ func TestRegistryIDCompletion_publicOnly(t *testing.T) {
 }
 
 func TestRegistryIDCompletion_includePrivate(t *testing.T) {
-	defs := []*commands.CommandDef{
+	defs := []*usercommands.CommandDef{
 		{ID: "services.main.migrate", Description: "Run migrations", Private: false},
 		{ID: "services.main.create-db", Description: "Create database", Private: true},
 	}
@@ -59,7 +59,7 @@ func TestRegistryIDCompletion_includePrivate(t *testing.T) {
 }
 
 func TestRegistryIDCompletion_withDescriptions(t *testing.T) {
-	defs := []*commands.CommandDef{
+	defs := []*usercommands.CommandDef{
 		{ID: "app.install", Description: "Run the installer", Private: false},
 	}
 	completions := buildRegistryCompletions(defs, false)
@@ -87,10 +87,10 @@ func TestRegistryIDCompletion_noSecondArgCompletion(t *testing.T) {
 
 // buildRegistryCompletions is a testable helper that mirrors the completion
 // logic inside registryIDCompletion, bypassing disk access.
-func buildRegistryCompletions(defs []*commands.CommandDef, includePrivate bool) []string {
+func buildRegistryCompletions(defs []*usercommands.CommandDef, includePrivate bool) []string {
 	var completions []string
 	if !includePrivate {
-		var filtered []*commands.CommandDef
+		var filtered []*usercommands.CommandDef
 		for _, d := range defs {
 			if !d.Private {
 				filtered = append(filtered, d)

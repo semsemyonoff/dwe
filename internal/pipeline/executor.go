@@ -11,11 +11,11 @@ import (
 	"syscall"
 
 	"devbox-cli/internal/builtin"
-	"devbox-cli/internal/commands"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/usercommands"
 )
 
 // buildDevboxCmd constructs an exec.Cmd for a devbox: pipeline step.
@@ -44,7 +44,7 @@ func buildDevboxCmd(devboxArg, workDir string) *exec.Cmd {
 // Signal handling: the child inherits devbox's terminal foreground process group,
 // so Ctrl+C is delivered by the terminal to the entire group. devbox suppresses
 // its own SIGINT handler while waiting so it does not exit before the child finishes.
-func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer, skipConfirm bool) error {
+func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
 	if step.Builtin != "" {
 		return execBuiltinStep(step, workDir, cfg, logWriter, skipConfirm)
 	}
@@ -118,7 +118,7 @@ func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 }
 
 // execCommandStep executes a command: pipeline step via the command runner.
-func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *commands.Registry, logWriter io.Writer) error {
+func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer) error {
 	if reg == nil {
 		return fmt.Errorf("command registry not available for step %q (command: %s)", step.Name, step.Command)
 	}
@@ -131,11 +131,11 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 	for k, v := range step.With {
 		strWith[k] = fmt.Sprintf("%v", v)
 	}
-	params, err := commands.ResolveParams(def.Params, strWith, cfg)
+	params, err := usercommands.ResolveParams(def.Params, strWith, cfg)
 	if err != nil {
 		return fmt.Errorf("step %q: resolving params: %w", step.Name, err)
 	}
-	ctx, err := commands.ResolveContext(def.Context, cfg)
+	ctx, err := usercommands.ResolveContext(def.Context, cfg)
 	if err != nil {
 		return fmt.Errorf("step %q: resolving context: %w", step.Name, err)
 	}
@@ -156,7 +156,7 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		stdout = io.MultiWriter(os.Stdout, logStripped)
 		stderr = io.MultiWriter(os.Stderr, logStripped)
 	}
-	if err := commands.RunCommand(commands.RunContext{
+	if err := usercommands.RunCommand(usercommands.RunContext{
 		Cmd:          def,
 		Params:       params,
 		Context:      ctx,
@@ -187,7 +187,7 @@ func Run(
 	rep Reporter,
 	name string,
 	cfg *config.DevboxConfig,
-	reg *commands.Registry,
+	reg *usercommands.Registry,
 	workDir string,
 	logWriter io.Writer,
 	skipConfirm bool,
