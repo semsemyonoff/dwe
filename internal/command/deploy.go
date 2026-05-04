@@ -69,7 +69,7 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			var steps []resolvedStep
+			var steps []pipeline.ResolvedStep
 			if serviceName != "" {
 				if _, ok := cfg.Services[serviceName]; !ok {
 					return fmt.Errorf("service %q not found in config", serviceName)
@@ -86,7 +86,7 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 			case "shell":
 				printDeployPlanShell(steps, cmd.OutOrStdout())
 			default:
-				printDeployPlanTable(steps, render.Stdout())
+				pipeline.PrintPlanTable(steps, render.Stdout())
 			}
 			return nil
 		},
@@ -103,13 +103,13 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 // Steps whose when condition evaluates to false are excluded.
 // Phases with deploy_services=true are expanded by inlining per-service
 // deploy pipelines in topological dependency order.
-func resolveDeployPlan(cfg *config.DevboxConfig) ([]resolvedStep, error) {
+func resolveDeployPlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
 	// Implicit first step — no associated phase.
-	implicit := resolvedStep{
-		phase: config.DeployPhase{Name: "env", Description: "Environment"},
-		step:  implicitEnvStep,
+	implicit := pipeline.ResolvedStep{
+		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
+		Step:  implicitEnvStep,
 	}
-	result := []resolvedStep{implicit}
+	result := []pipeline.ResolvedStep{implicit}
 
 	for _, phase := range cfg.Deploy.Phases {
 		if phase.DeployServices {
@@ -120,7 +120,7 @@ func resolveDeployPlan(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 			result = append(result, serviceSteps...)
 			continue
 		}
-		resolved, err := resolvePhaseSteps(cfg, phase, "")
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, "")
 		if err != nil {
 			return nil, err
 		}
@@ -132,13 +132,13 @@ func resolveDeployPlan(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 
 // resolveServiceDeployPlan builds the step list for a single service.
 // Used by --service flag to deploy only one service.
-func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]resolvedStep, error) {
+func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]pipeline.ResolvedStep, error) {
 	// Implicit first step.
-	implicit := resolvedStep{
-		phase: config.DeployPhase{Name: "env", Description: "Environment"},
-		step:  implicitEnvStep,
+	implicit := pipeline.ResolvedStep{
+		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
+		Step:  implicitEnvStep,
 	}
-	result := []resolvedStep{implicit}
+	result := []pipeline.ResolvedStep{implicit}
 
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
@@ -157,7 +157,7 @@ func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]r
 	}
 
 	for _, phase := range svcDeploy.Phases {
-		resolved, err := resolvePhaseSteps(cfg, phase, serviceName)
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, serviceName)
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +168,7 @@ func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]r
 
 // resolveServicesDeploy loads all per-service deploy pipelines, sorts them
 // by dependency order, and returns their steps inlined.
-func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
+func resolveServicesDeploy(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
 		return nil, fmt.Errorf("internal: __configPath missing from config")
@@ -201,11 +201,11 @@ func resolveServicesDeploy(cfg *config.DevboxConfig) ([]resolvedStep, error) {
 		return nil, err
 	}
 
-	var result []resolvedStep
+	var result []pipeline.ResolvedStep
 	for _, name := range sorted {
 		deploy := svcDeploys[name]
 		for _, phase := range deploy.Phases {
-			resolved, err := resolvePhaseSteps(cfg, phase, name)
+			resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, name)
 			if err != nil {
 				return nil, err
 			}
@@ -255,7 +255,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 				return fmt.Errorf("ensuring volumes: %w", err)
 			}
 
-			var steps []resolvedStep
+			var steps []pipeline.ResolvedStep
 			if serviceName != "" {
 				if _, ok := cfg.Services[serviceName]; !ok {
 					return fmt.Errorf("service %q not found in config", serviceName)
@@ -274,7 +274,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 			}
 
 			logEnabled := cfg.Deploy.LogEnabled()
-			w, logWriter, logPath, cleanup, err := openPipelineLog(workDir, "deploy", logEnabled)
+			w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "deploy", logEnabled)
 			if err != nil {
 				return err
 			}
@@ -290,7 +290,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 				},
 			}
 
-			if err := runPipeline(steps, rep, "deploy", cfg, reg, workDir, logWriter, false, postStepHooks); err != nil {
+			if err := pipeline.Run(steps, rep, "deploy", cfg, reg, workDir, logWriter, false, postStepHooks); err != nil {
 				if errors.Is(err, ErrSilent) && logEnabled {
 					w.Warning("Full output saved to: " + logPath)
 				}
@@ -422,10 +422,10 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}
 			for _, s := range steps {
-				addr := s.stepAddress()
-				desc := s.step.Description
+				addr := s.StepAddress()
+				desc := s.Step.Description
 				if desc == "" {
-					desc = s.step.Name
+					desc = s.Step.Name
 				}
 				completions = append(completions, cobra.CompletionWithDesc(addr, desc))
 			}
@@ -463,7 +463,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 				}
 			}
 
-			resolved := stepCommand(step)
+			resolved := pipeline.StepCommand(step)
 			if dryRun {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
 				return nil
@@ -474,7 +474,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
-			if err := execStep(step, workDir, cfg, reg, nil, false); err != nil {
+			if err := pipeline.ExecStep(step, workDir, cfg, reg, nil, false); err != nil {
 				return err
 			}
 

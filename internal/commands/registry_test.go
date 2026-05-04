@@ -287,7 +287,7 @@ func TestRegistry_Groups_Commands(t *testing.T) {
 
 func TestRegistry_Validate_Valid(t *testing.T) {
 	reg := mustRegistry(t, map[string]string{
-		"services/main.yml":       mainYAML,
+		"services/main.yml":           mainYAML,
 		"services/main/workflows.yml": workflowYAML,
 	})
 	if err := reg.Validate(); err != nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
@@ -155,8 +156,8 @@ func RunCommand(ctx RunContext) error {
 	// Phase 6: Run, handling cleanup on error
 	if err := runner.Run(ctx); err != nil {
 		// Invoke cleanups in LIFO order (last registered, first cleaned)
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
+		for _, cleanup := range slices.Backward(cleanups) {
+			cleanup()
 		}
 		// Emit error message
 		if msgErr := emitCommandMessage(ctx, ctx.Cmd.Messages.Error, false); msgErr != nil {

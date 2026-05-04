@@ -10,6 +10,7 @@ import (
 
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/config"
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 )
 
@@ -62,11 +63,11 @@ func TestResolveDeployPlan_implicitEnvStepAlwaysFirst(t *testing.T) {
 	if len(steps) != 1 {
 		t.Fatalf("want 1 step (implicit), got %d", len(steps))
 	}
-	if steps[0].step.Name != "render-env" {
-		t.Errorf("first step name = %q, want render-env", steps[0].step.Name)
+	if steps[0].Step.Name != "render-env" {
+		t.Errorf("first step name = %q, want render-env", steps[0].Step.Name)
 	}
-	if steps[0].step.Devbox != "render env -o .env" {
-		t.Errorf("first step devbox = %q, want render env -o .env", steps[0].step.Devbox)
+	if steps[0].Step.Devbox != "render env -o .env" {
+		t.Errorf("first step devbox = %q, want render env -o .env", steps[0].Step.Devbox)
 	}
 }
 
@@ -96,11 +97,11 @@ func TestResolveDeployPlan_noWhenAlwaysIncluded(t *testing.T) {
 	if len(steps) != 3 {
 		t.Fatalf("want 3 steps, got %d", len(steps))
 	}
-	if steps[1].step.Name != "create-dirs" {
-		t.Errorf("steps[1].name = %q, want create-dirs", steps[1].step.Name)
+	if steps[1].Step.Name != "create-dirs" {
+		t.Errorf("steps[1].name = %q, want create-dirs", steps[1].Step.Name)
 	}
-	if steps[2].step.Name != "up" {
-		t.Errorf("steps[2].name = %q, want up", steps[2].step.Name)
+	if steps[2].Step.Name != "up" {
+		t.Errorf("steps[2].name = %q, want up", steps[2].Step.Name)
 	}
 }
 
@@ -121,8 +122,8 @@ func TestResolveDeployPlan_truthyWhenIncluded(t *testing.T) {
 	if len(steps) != 2 {
 		t.Fatalf("want 2 steps, got %d", len(steps))
 	}
-	if steps[1].step.Name != "debug-step" {
-		t.Errorf("expected debug-step included, got %q", steps[1].step.Name)
+	if steps[1].Step.Name != "debug-step" {
+		t.Errorf("expected debug-step included, got %q", steps[1].Step.Name)
 	}
 }
 
@@ -145,7 +146,7 @@ func TestResolveDeployPlan_falsyWhenExcluded(t *testing.T) {
 		t.Fatalf("want 2 steps (implicit + always), got %d: %v", len(steps), steps)
 	}
 	for _, rs := range steps {
-		if rs.step.Name == "conditional" {
+		if rs.Step.Name == "conditional" {
 			t.Error("conditional step should have been excluded")
 		}
 	}
@@ -166,25 +167,9 @@ func TestResolveDeployPlan_multiplePhasesPreserveOrder(t *testing.T) {
 	}
 	wantNames := []string{"render-env", "s1", "s2", "m1", "m2"}
 	for i, want := range wantNames {
-		if steps[i].step.Name != want {
-			t.Errorf("steps[%d].name = %q, want %q", i, steps[i].step.Name, want)
+		if steps[i].Step.Name != want {
+			t.Errorf("steps[%d].name = %q, want %q", i, steps[i].Step.Name, want)
 		}
-	}
-}
-
-// --- stepBadge tests ---
-
-func TestStepBadge_cmdStep(t *testing.T) {
-	s := config.DeployStep{Run: "echo hello"}
-	if got := stepBadge(s); got != "[run]" {
-		t.Errorf("got %q, want [run]", got)
-	}
-}
-
-func TestStepBadge_commandStep(t *testing.T) {
-	s := config.DeployStep{Command: "services.main.migrate"}
-	if got := stepBadge(s); got != "[command]" {
-		t.Errorf("got %q, want [command]", got)
 	}
 }
 
@@ -192,14 +177,14 @@ func TestStepBadge_commandStep(t *testing.T) {
 
 func TestStepCommand_cmdReturnsRaw(t *testing.T) {
 	s := config.DeployStep{Run: "mkdir -p services/main/src"}
-	if got := stepCommand(s); got != "mkdir -p services/main/src" {
+	if got := pipeline.StepCommand(s); got != "mkdir -p services/main/src" {
 		t.Errorf("got %q, want raw cmd", got)
 	}
 }
 
 func TestStepCommand_commandReturnsDevboxRunCmd(t *testing.T) {
 	s := config.DeployStep{Command: "services.main.migrate"}
-	if got := stepCommand(s); got != "./bin/devbox commands run services.main.migrate" {
+	if got := pipeline.StepCommand(s); got != "./bin/devbox commands run services.main.migrate" {
 		t.Errorf("got %q, want './bin/devbox commands run services.main.migrate'", got)
 	}
 }
@@ -208,8 +193,8 @@ func TestStepCommand_commandReturnsDevboxRunCmd(t *testing.T) {
 
 func TestPrintDeployPlanShell_startsWithSetE(t *testing.T) {
 	var buf bytes.Buffer
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env"}, Step: implicitEnvStep},
 	}
 	printDeployPlanShell(steps, &buf)
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
@@ -220,9 +205,9 @@ func TestPrintDeployPlanShell_startsWithSetE(t *testing.T) {
 
 func TestPrintDeployPlanShell_cmdStepAsIs(t *testing.T) {
 	var buf bytes.Buffer
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
-		{phase: phaseWith("setup"), step: cmdStep("create-dirs", "mkdir -p services/main/src")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env"}, Step: implicitEnvStep},
+		{Phase: phaseWith("setup"), Step: cmdStep("create-dirs", "mkdir -p services/main/src")},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
@@ -233,8 +218,8 @@ func TestPrintDeployPlanShell_cmdStepAsIs(t *testing.T) {
 
 func TestPrintDeployPlanShell_commandStepAsDevboxRun(t *testing.T) {
 	var buf bytes.Buffer
-	steps := []resolvedStep{
-		{phase: phaseWith("start"), step: commandStep("migrate", "services.main.migrate")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: phaseWith("start"), Step: commandStep("migrate", "services.main.migrate")},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
@@ -245,9 +230,9 @@ func TestPrintDeployPlanShell_commandStepAsDevboxRun(t *testing.T) {
 
 func TestPrintDeployPlanShell_sourcesEnvAfterImplicitStep(t *testing.T) {
 	var buf bytes.Buffer
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
-		{phase: phaseWith("setup"), step: cmdStep("create-dirs", "mkdir -p services/main/src")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env"}, Step: implicitEnvStep},
+		{Phase: phaseWith("setup"), Step: cmdStep("create-dirs", "mkdir -p services/main/src")},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
@@ -263,7 +248,7 @@ func TestPrintDeployPlanShell_sourcesEnvAfterImplicitStep(t *testing.T) {
 	mkdirIdx := -1
 	for i, l := range lines {
 		switch l {
-		case stepCommand(implicitEnvStep):
+		case pipeline.StepCommand(implicitEnvStep):
 			renderIdx = i
 		case ". .env":
 			sourceIdx = i
@@ -290,9 +275,9 @@ func TestPrintDeployPlanShell_sourcesEnvAfterImplicitStep(t *testing.T) {
 
 func TestPrintDeployPlanShell_noEnvSourceForNonImplicitSteps(t *testing.T) {
 	var buf bytes.Buffer
-	steps := []resolvedStep{
-		{phase: phaseWith("start"), step: commandStep("up", "up")},
-		{phase: phaseWith("init"), step: commandStep("migrate", "services.main.migrate")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: phaseWith("start"), Step: commandStep("up", "up")},
+		{Phase: phaseWith("init"), Step: commandStep("migrate", "services.main.migrate")},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
@@ -307,11 +292,11 @@ func TestPrintDeployPlanTable_showsPhaseHeader(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
 
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env", Description: "Environment"}, step: implicitEnvStep},
-		{phase: config.DeployPhase{Name: "setup", Description: "Setup phase"}, step: cmdStep("create-dirs", "mkdir")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env", Description: "Environment"}, Step: implicitEnvStep},
+		{Phase: config.DeployPhase{Name: "setup", Description: "Setup phase"}, Step: cmdStep("create-dirs", "mkdir")},
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	if !strings.Contains(out, "env: Environment") {
@@ -326,10 +311,10 @@ func TestPrintDeployPlanTable_showsStepBadgeAndName(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
 
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "start"}, step: commandStep("up", "up")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "start"}, Step: commandStep("up", "up")},
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	if !strings.Contains(out, "[command]") {
@@ -351,7 +336,7 @@ func TestPrintDeployPlanTable_showsImplicitStepFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	// The implicit step's command should appear
@@ -421,7 +406,7 @@ func TestFindStep_invalidAddress(t *testing.T) {
 
 func TestDeployStep_dryRunPrintsCmdCommand(t *testing.T) {
 	step := cmdStep("create-dirs", "mkdir -p services/main/src")
-	got := stepCommand(step)
+	got := pipeline.StepCommand(step)
 	if got != "mkdir -p services/main/src" {
 		t.Errorf("dry-run cmd output = %q, want raw command", got)
 	}
@@ -429,7 +414,7 @@ func TestDeployStep_dryRunPrintsCmdCommand(t *testing.T) {
 
 func TestDeployStep_dryRunPrintsCommandRef(t *testing.T) {
 	step := commandStep("migrate", "services.main.migrate")
-	got := stepCommand(step)
+	got := pipeline.StepCommand(step)
 	if got != "./bin/devbox commands run services.main.migrate" {
 		t.Errorf("dry-run command output = %q, want './bin/devbox commands run services.main.migrate'", got)
 	}
@@ -485,9 +470,9 @@ func TestStepCommand_allTypes(t *testing.T) {
 			`builtin: remove_paths(paths=[services/])`},
 	}
 	for _, tc := range cases {
-		got := stepCommand(tc.step)
+		got := pipeline.StepCommand(tc.step)
 		if got != tc.want {
-			t.Errorf("stepCommand(%+v) = %q, want %q", tc.step, got, tc.want)
+			t.Errorf("pipeline.StepCommand(%+v) = %q, want %q", tc.step, got, tc.want)
 		}
 	}
 }
@@ -497,26 +482,10 @@ func TestStepCommand_commandWithWith(t *testing.T) {
 		Command: "services.main.migrate",
 		With:    map[string]any{"db": "mydb"},
 	}
-	got := stepCommand(step)
+	got := pipeline.StepCommand(step)
 	want := "./bin/devbox commands run services.main.migrate --set db=mydb"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-// Verify stepBadge for all step types.
-func TestStepBadge_allTypes(t *testing.T) {
-	if got := stepBadge(config.DeployStep{Run: "x"}); got != "[run]" {
-		t.Errorf("got %q want [run]", got)
-	}
-	if got := stepBadge(config.DeployStep{Command: "x"}); got != "[command]" {
-		t.Errorf("got %q want [command]", got)
-	}
-	if got := stepBadge(config.DeployStep{Devbox: "docker down"}); got != "[devbox]" {
-		t.Errorf("got %q want [devbox]", got)
-	}
-	if got := stepBadge(config.DeployStep{Builtin: "service_configs_copy"}); got != "[builtin]" {
-		t.Errorf("got %q want [builtin]", got)
 	}
 }
 
@@ -542,13 +511,13 @@ func TestPrintDeployPlanTable_showsCheck(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
 
-	steps := []resolvedStep{
+	steps := []pipeline.ResolvedStep{
 		{
-			phase: config.DeployPhase{Name: "setup"},
-			step:  checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
+			Phase: config.DeployPhase{Name: "setup"},
+			Step:  checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
 		},
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	if !strings.Contains(out, "[check: file-exists services/main/configs/.env]") {
@@ -560,11 +529,10 @@ func TestPrintDeployPlanTable_showsCheck(t *testing.T) {
 func TestPrintDeployPlanShell_showsCheckComment(t *testing.T) {
 	var buf bytes.Buffer
 
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env"}, Step: implicitEnvStep},
 		{
-			phase: config.DeployPhase{Name: "setup"},
-			step:  checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
+			Phase: config.DeployPhase{Name: "setup"}, Step: checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
 		},
 	}
 	printDeployPlanShell(steps, &buf)
@@ -580,9 +548,9 @@ func TestPrintDeployPlanShell_checkCommentAfterCommand(t *testing.T) {
 	var buf bytes.Buffer
 
 	step := checkStep("copy-configs", "echo copy", "file-exists services/main/configs/.env")
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
-		{phase: config.DeployPhase{Name: "setup"}, step: step},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env"}, Step: implicitEnvStep},
+		{Phase: config.DeployPhase{Name: "setup"}, Step: step},
 	}
 	printDeployPlanShell(steps, &buf)
 	lines := strings.Split(buf.String(), "\n")
@@ -632,11 +600,11 @@ func TestPrintDeployPlanTable_samePhaseNotRepeated(t *testing.T) {
 	w := render.NewWriter(&buf)
 
 	phase := config.DeployPhase{Name: "setup", Description: "Setup"}
-	steps := []resolvedStep{
-		{phase: phase, step: cmdStep("step1", "cmd1")},
-		{phase: phase, step: cmdStep("step2", "cmd2")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: phase, Step: cmdStep("step1", "cmd1")},
+		{Phase: phase, Step: cmdStep("step2", "cmd2")},
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	// Phase header should appear only once
@@ -931,11 +899,11 @@ func TestResolveDeployPlan_runtimeWhenPassesThrough(t *testing.T) {
 		t.Fatalf("want 2 steps (implicit + install), got %d", len(steps))
 	}
 	install := steps[1]
-	if install.step.Name != "install" {
-		t.Errorf("step name = %q, want install", install.step.Name)
+	if install.Step.Name != "install" {
+		t.Errorf("step name = %q, want install", install.Step.Name)
 	}
-	if install.runtimeWhen != "dir-empty services/main/src" {
-		t.Errorf("runtimeWhen = %q, want dir-empty services/main/src", install.runtimeWhen)
+	if install.RuntimeWhen != "dir-empty services/main/src" {
+		t.Errorf("runtimeWhen = %q, want dir-empty services/main/src", install.RuntimeWhen)
 	}
 }
 
@@ -952,8 +920,8 @@ func TestResolveDeployPlan_cmdWhenPassesThrough(t *testing.T) {
 	if len(steps) != 2 {
 		t.Fatalf("want 2 steps, got %d", len(steps))
 	}
-	if steps[1].runtimeWhen != "cmd: test -f marker" {
-		t.Errorf("runtimeWhen = %q, want cmd: test -f marker", steps[1].runtimeWhen)
+	if steps[1].RuntimeWhen != "cmd: test -f marker" {
+		t.Errorf("runtimeWhen = %q, want cmd: test -f marker", steps[1].RuntimeWhen)
 	}
 }
 
@@ -974,8 +942,8 @@ func TestResolveDeployPlan_templateWhenFalseFiltered(t *testing.T) {
 	if len(steps) != 2 {
 		t.Fatalf("want 2 steps, got %d", len(steps))
 	}
-	if steps[1].step.Name != "always" {
-		t.Errorf("step name = %q, want always", steps[1].step.Name)
+	if steps[1].Step.Name != "always" {
+		t.Errorf("step name = %q, want always", steps[1].Step.Name)
 	}
 }
 
@@ -991,8 +959,8 @@ func TestResolveDeployPlan_runtimeWhenHasEmptyRuntimeWhenForTemplateStep(t *test
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, rs := range steps {
-		if rs.runtimeWhen != "" {
-			t.Errorf("step %q: runtimeWhen = %q, want empty", rs.step.Name, rs.runtimeWhen)
+		if rs.RuntimeWhen != "" {
+			t.Errorf("step %q: runtimeWhen = %q, want empty", rs.Step.Name, rs.RuntimeWhen)
 		}
 	}
 }
@@ -1056,11 +1024,11 @@ func TestResolvePhaseSteps_phaseRuntimeWhenPropagatedToSteps(t *testing.T) {
 	}
 	// Both steps should carry the phase condition in phaseWhen, not runtimeWhen.
 	for _, rs := range steps[1:] {
-		if rs.phaseWhen != "dir-empty services/main/src" {
-			t.Errorf("step %q: phaseWhen = %q, want dir-empty services/main/src", rs.step.Name, rs.phaseWhen)
+		if rs.PhaseWhen != "dir-empty services/main/src" {
+			t.Errorf("step %q: phaseWhen = %q, want dir-empty services/main/src", rs.Step.Name, rs.PhaseWhen)
 		}
-		if rs.runtimeWhen != "" {
-			t.Errorf("step %q: runtimeWhen = %q, want empty (no step-level condition)", rs.step.Name, rs.runtimeWhen)
+		if rs.RuntimeWhen != "" {
+			t.Errorf("step %q: runtimeWhen = %q, want empty (no step-level condition)", rs.Step.Name, rs.RuntimeWhen)
 		}
 	}
 }
@@ -1085,18 +1053,18 @@ func TestResolvePhaseSteps_stepOwnRuntimeWhenTakesPriority(t *testing.T) {
 	install := steps[2]
 
 	// plain has no step-level condition — phase condition goes into phaseWhen.
-	if plain.phaseWhen != "dir-empty services/main/src" {
-		t.Errorf("plain: phaseWhen = %q, want phase condition", plain.phaseWhen)
+	if plain.PhaseWhen != "dir-empty services/main/src" {
+		t.Errorf("plain: phaseWhen = %q, want phase condition", plain.PhaseWhen)
 	}
-	if plain.runtimeWhen != "" {
-		t.Errorf("plain: runtimeWhen = %q, want empty", plain.runtimeWhen)
+	if plain.RuntimeWhen != "" {
+		t.Errorf("plain: runtimeWhen = %q, want empty", plain.RuntimeWhen)
 	}
 	// install has its own step condition in runtimeWhen; phaseWhen still carries the phase condition.
-	if install.runtimeWhen != "dir-empty services/main/src/special" {
-		t.Errorf("install: runtimeWhen = %q, want step's own condition", install.runtimeWhen)
+	if install.RuntimeWhen != "dir-empty services/main/src/special" {
+		t.Errorf("install: runtimeWhen = %q, want step's own condition", install.RuntimeWhen)
 	}
-	if install.phaseWhen != "dir-empty services/main/src" {
-		t.Errorf("install: phaseWhen = %q, want phase condition", install.phaseWhen)
+	if install.PhaseWhen != "dir-empty services/main/src" {
+		t.Errorf("install: phaseWhen = %q, want phase condition", install.PhaseWhen)
 	}
 }
 
@@ -1104,13 +1072,12 @@ func TestPrintDeployPlanTable_showsPhaseWhenInHeader(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
 
-	steps := []resolvedStep{
+	steps := []pipeline.ResolvedStep{
 		{
-			phase: config.DeployPhase{Name: "setup", Description: "Setup", When: "dir-empty services/main/src"},
-			step:  cmdStep("create-dirs", "mkdir"),
+			Phase: config.DeployPhase{Name: "setup", Description: "Setup", When: "dir-empty services/main/src"}, Step: cmdStep("create-dirs", "mkdir"),
 		},
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	if !strings.Contains(out, "[when: dir-empty services/main/src]") {
@@ -1121,12 +1088,10 @@ func TestPrintDeployPlanTable_showsPhaseWhenInHeader(t *testing.T) {
 func TestPrintDeployPlanShell_showsPhaseWhenComment(t *testing.T) {
 	var buf bytes.Buffer
 
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env"}, step: implicitEnvStep},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env"}, Step: implicitEnvStep},
 		{
-			phase:     config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"},
-			step:      cmdStep("create-dirs", "mkdir"),
-			phaseWhen: "dir-empty services/main/src",
+			Phase: config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"}, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: "dir-empty services/main/src",
 		},
 	}
 	printDeployPlanShell(steps, &buf)
@@ -1142,8 +1107,8 @@ func TestPrintDeployPlanShell_stepWhenNotDuplicatedWhenSameAsPhase(t *testing.T)
 	var buf bytes.Buffer
 
 	phase := config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"}
-	steps := []resolvedStep{
-		{phase: phase, step: cmdStep("create-dirs", "mkdir"), phaseWhen: "dir-empty services/main/src"},
+	steps := []pipeline.ResolvedStep{
+		{Phase: phase, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: "dir-empty services/main/src"},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
@@ -1162,11 +1127,11 @@ func TestPrintDeployPlanTable_showsRuntimeWhenAnnotation(t *testing.T) {
 	w := render.NewWriter(&buf)
 
 	phase := config.DeployPhase{Name: "setup", Description: "Setup"}
-	steps := []resolvedStep{
-		{phase: phase, step: runtimeWhenStep("install", "make app-install", "dir-empty services/main/src"), runtimeWhen: "dir-empty services/main/src"},
-		{phase: phase, step: cmdStep("always", "echo always")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: phase, Step: runtimeWhenStep("install", "make app-install", "dir-empty services/main/src"), RuntimeWhen: "dir-empty services/main/src"},
+		{Phase: phase, Step: cmdStep("always", "echo always")},
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	if !strings.Contains(out, "[when: dir-empty services/main/src]") {
@@ -1182,9 +1147,9 @@ func TestPrintDeployPlanShell_runtimeWhenComment(t *testing.T) {
 	var buf bytes.Buffer
 
 	phase := config.DeployPhase{Name: "setup"}
-	steps := []resolvedStep{
-		{phase: phase, step: runtimeWhenStep("install", "make -f Makefile app-install", "dir-empty services/main/src"), runtimeWhen: "dir-empty services/main/src"},
-		{phase: phase, step: cmdStep("always", "echo always")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: phase, Step: runtimeWhenStep("install", "make -f Makefile app-install", "dir-empty services/main/src"), RuntimeWhen: "dir-empty services/main/src"},
+		{Phase: phase, Step: cmdStep("always", "echo always")},
 	}
 	printDeployPlanShell(steps, &buf)
 	out := buf.String()
@@ -1317,22 +1282,19 @@ func TestDeployConfigCheckCmd_emptyConfigsListReturnsNil(t *testing.T) {
 // --- stepAddress tests ---
 
 func TestStepAddress_orchestratorStep(t *testing.T) {
-	rs := resolvedStep{
-		phase: config.DeployPhase{Name: "start"},
-		step:  cmdStep("up", "make up"),
+	rs := pipeline.ResolvedStep{
+		Phase: config.DeployPhase{Name: "start"}, Step: cmdStep("up", "make up"),
 	}
-	if got := rs.stepAddress(); got != "start/up" {
+	if got := rs.StepAddress(); got != "start/up" {
 		t.Errorf("stepAddress() = %q, want start/up", got)
 	}
 }
 
 func TestStepAddress_serviceStep(t *testing.T) {
-	rs := resolvedStep{
-		phase:   config.DeployPhase{Name: "init"},
-		step:    commandStep("migrate", "services.main.migrate"),
-		service: "main",
+	rs := pipeline.ResolvedStep{
+		Phase: config.DeployPhase{Name: "init"}, Step: commandStep("migrate", "services.main.migrate"), Service: "main",
 	}
-	if got := rs.stepAddress(); got != "main/init/migrate" {
+	if got := rs.StepAddress(); got != "main/init/migrate" {
 		t.Errorf("stepAddress() = %q, want main/init/migrate", got)
 	}
 }
@@ -1425,27 +1387,27 @@ func TestResolveDeployPlan_deployServicesInlines(t *testing.T) {
 	if len(steps) != 4 {
 		var names []string
 		for _, s := range steps {
-			names = append(names, s.stepAddress())
+			names = append(names, s.StepAddress())
 		}
 		t.Fatalf("want 4 steps, got %d: %v", len(steps), names)
 	}
 
 	// Service steps should have service="main"
-	if steps[1].service != "main" {
-		t.Errorf("steps[1].service = %q, want main", steps[1].service)
+	if steps[1].Service != "main" {
+		t.Errorf("steps[1].Service = %q, want main", steps[1].Service)
 	}
-	if steps[1].stepAddress() != "main/setup/create-dirs" {
-		t.Errorf("steps[1] address = %q, want main/setup/create-dirs", steps[1].stepAddress())
+	if steps[1].StepAddress() != "main/setup/create-dirs" {
+		t.Errorf("steps[1] address = %q, want main/setup/create-dirs", steps[1].StepAddress())
 	}
-	if steps[2].stepAddress() != "main/init/migrate" {
-		t.Errorf("steps[2] address = %q, want main/init/migrate", steps[2].stepAddress())
+	if steps[2].StepAddress() != "main/init/migrate" {
+		t.Errorf("steps[2] address = %q, want main/init/migrate", steps[2].StepAddress())
 	}
 	// Orchestrator step should have empty service
-	if steps[3].service != "" {
-		t.Errorf("steps[3].service = %q, want empty", steps[3].service)
+	if steps[3].Service != "" {
+		t.Errorf("steps[3].Service = %q, want empty", steps[3].Service)
 	}
-	if steps[3].stepAddress() != "start/up" {
-		t.Errorf("steps[3] address = %q, want start/up", steps[3].stepAddress())
+	if steps[3].StepAddress() != "start/up" {
+		t.Errorf("steps[3] address = %q, want start/up", steps[3].StepAddress())
 	}
 }
 
@@ -1475,8 +1437,8 @@ func TestResolveServiceDeployPlan_singleService(t *testing.T) {
 	if len(steps) != 3 {
 		t.Fatalf("want 3 steps, got %d", len(steps))
 	}
-	if steps[1].service != "main" {
-		t.Errorf("steps[1].service = %q, want main", steps[1].service)
+	if steps[1].Service != "main" {
+		t.Errorf("steps[1].Service = %q, want main", steps[1].Service)
 	}
 }
 
@@ -1510,12 +1472,12 @@ func TestPrintDeployPlanTable_serviceStepsIndented(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
 
-	steps := []resolvedStep{
-		{phase: config.DeployPhase{Name: "env", Description: "Environment"}, step: implicitEnvStep},
-		{phase: config.DeployPhase{Name: "setup", Description: "Setup"}, step: cmdStep("create-dirs", "mkdir"), service: "main"},
-		{phase: config.DeployPhase{Name: "start", Description: "Start"}, step: commandStep("up", "up")},
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "env", Description: "Environment"}, Step: implicitEnvStep},
+		{Phase: config.DeployPhase{Name: "setup", Description: "Setup"}, Step: cmdStep("create-dirs", "mkdir"), Service: "main"},
+		{Phase: config.DeployPhase{Name: "start", Description: "Start"}, Step: commandStep("up", "up")},
 	}
-	printDeployPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w)
 	out := buf.String()
 
 	if !strings.Contains(out, "service: main") {
@@ -1543,14 +1505,14 @@ func TestResolveDeployPlan_commandStepIncluded(t *testing.T) {
 	if len(steps) != 3 {
 		t.Fatalf("want 3 steps, got %d", len(steps))
 	}
-	if steps[1].step.Command != "services.main.migrate" {
-		t.Errorf("steps[1].Command = %q, want services.main.migrate", steps[1].step.Command)
+	if steps[1].Step.Command != "services.main.migrate" {
+		t.Errorf("steps[1].Command = %q, want services.main.migrate", steps[1].Step.Command)
 	}
-	if steps[2].step.Command != "services.main.seed" {
-		t.Errorf("steps[2].Command = %q, want services.main.seed", steps[2].step.Command)
+	if steps[2].Step.Command != "services.main.seed" {
+		t.Errorf("steps[2].Command = %q, want services.main.seed", steps[2].Step.Command)
 	}
-	if steps[2].step.With["env"] != "test" {
-		t.Errorf("steps[2].With[env] = %q, want test", steps[2].step.With["env"])
+	if steps[2].Step.With["env"] != "test" {
+		t.Errorf("steps[2].With[env] = %q, want test", steps[2].Step.With["env"])
 	}
 }
 
@@ -1559,7 +1521,7 @@ func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 		Command: "services.main.migrate",
 		With:    map[string]any{"z": "last", "a": "first", "m": "mid"},
 	}
-	got := stepCommand(step)
+	got := pipeline.StepCommand(step)
 	want := "./bin/devbox commands run services.main.migrate --set a=first --set m=mid --set z=last"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1568,7 +1530,7 @@ func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 
 func TestStepCommand_commandWithEmptyWith(t *testing.T) {
 	step := config.DeployStep{Command: "services.main.migrate", With: map[string]any{}}
-	got := stepCommand(step)
+	got := pipeline.StepCommand(step)
 	want := "./bin/devbox commands run services.main.migrate"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1610,18 +1572,18 @@ func TestResolveDeployPlan_postDeployPhaseIncludedLast(t *testing.T) {
 	}
 	// Last two steps should be from post-deploy phase.
 	last := steps[len(steps)-1]
-	if last.phase.Name != "post-deploy" {
-		t.Errorf("last step phase = %q, want post-deploy", last.phase.Name)
+	if last.Phase.Name != "post-deploy" {
+		t.Errorf("last step phase = %q, want post-deploy", last.Phase.Name)
 	}
-	if last.step.Name != "success" {
-		t.Errorf("last step name = %q, want success", last.step.Name)
+	if last.Step.Name != "success" {
+		t.Errorf("last step name = %q, want success", last.Step.Name)
 	}
 	secondLast := steps[len(steps)-2]
-	if secondLast.phase.Name != "post-deploy" {
-		t.Errorf("second-last step phase = %q, want post-deploy", secondLast.phase.Name)
+	if secondLast.Phase.Name != "post-deploy" {
+		t.Errorf("second-last step phase = %q, want post-deploy", secondLast.Phase.Name)
 	}
-	if secondLast.step.Name != "info" {
-		t.Errorf("second-last step name = %q, want info", secondLast.step.Name)
+	if secondLast.Step.Name != "info" {
+		t.Errorf("second-last step name = %q, want info", secondLast.Step.Name)
 	}
 }
 
@@ -1645,8 +1607,8 @@ func TestResolveDeployPlan_postDeployPhasePreserved(t *testing.T) {
 	if len(steps) != 2 {
 		t.Fatalf("want 2 steps, got %d", len(steps))
 	}
-	if steps[1].phase.Name != "post-deploy" {
-		t.Errorf("phase Name = %q, want post-deploy", steps[1].phase.Name)
+	if steps[1].Phase.Name != "post-deploy" {
+		t.Errorf("phase Name = %q, want post-deploy", steps[1].Phase.Name)
 	}
 }
 
@@ -1670,7 +1632,7 @@ func TestResolveDeployPlan_postDeployStepsAreInPlan(t *testing.T) {
 	// earlier step fails (abort-on-first-failure contract).
 	hasPostDeploy := false
 	for _, rs := range steps {
-		if rs.phase.Name == "post-deploy" {
+		if rs.Phase.Name == "post-deploy" {
 			hasPostDeploy = true
 			break
 		}
@@ -1689,23 +1651,19 @@ func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "unknown builtin name",
-			step:    config.DeployStep{Builtin: "typo_name"},
+			name: "unknown builtin name", step: config.DeployStep{Builtin: "typo_name"},
 			wantErr: `invalid builtin "typo_name"`,
 		},
 		{
-			name:    "remove_paths missing paths param",
-			step:    config.DeployStep{Builtin: "remove_paths", With: map[string]any{}},
+			name: "remove_paths missing paths param", step: config.DeployStep{Builtin: "remove_paths", With: map[string]any{}},
 			wantErr: `invalid builtin "remove_paths"`,
 		},
 		{
-			name:    "remove_paths with root-equivalent path",
-			step:    config.DeployStep{Builtin: "remove_paths", With: map[string]any{"paths": []any{"."}}},
+			name: "remove_paths with root-equivalent path", step: config.DeployStep{Builtin: "remove_paths", With: map[string]any{"paths": []any{"."}}},
 			wantErr: `invalid builtin "remove_paths"`,
 		},
 		{
-			name: "service_configs_copy with invalid mode",
-			step: config.DeployStep{
+			name: "service_configs_copy with invalid mode", step: config.DeployStep{
 				Builtin: "service_configs_copy",
 				With:    map[string]any{"service": "main", "mode": "bogus"},
 			},
@@ -1714,7 +1672,7 @@ func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := execBuiltinStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, false)
+			err := pipeline.ExecStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, nil, false)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}

@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
@@ -757,10 +758,10 @@ func TestPrintResetPlanShell_Empty(t *testing.T) {
 }
 
 func TestPrintResetPlanShell_WithBuiltin(t *testing.T) {
-	steps := []resolvedStep{
+	steps := []pipeline.ResolvedStep{
 		{
-			phase: config.DeployPhase{Name: "init"},
-			step:  config.DeployStep{Name: "ensure-dirs", Builtin: "service_dirs_ensure"},
+			Phase: config.DeployPhase{Name: "init"},
+			Step:  config.DeployStep{Name: "ensure-dirs", Builtin: "service_dirs_ensure"},
 		},
 	}
 	var buf bytes.Buffer
@@ -772,10 +773,10 @@ func TestPrintResetPlanShell_WithBuiltin(t *testing.T) {
 }
 
 func TestPrintResetPlanShell_WithPhaseWhen(t *testing.T) {
-	steps := []resolvedStep{
+	steps := []pipeline.ResolvedStep{
 		{
-			phase: config.DeployPhase{Name: "setup", When: "env.SKIP != true"},
-			step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
+			Phase: config.DeployPhase{Name: "setup", When: "env.SKIP != true"},
+			Step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
 		},
 	}
 	var buf bytes.Buffer
@@ -787,11 +788,11 @@ func TestPrintResetPlanShell_WithPhaseWhen(t *testing.T) {
 }
 
 func TestPrintResetPlanShell_WithRuntimeWhen(t *testing.T) {
-	steps := []resolvedStep{
+	steps := []pipeline.ResolvedStep{
 		{
-			phase:       config.DeployPhase{Name: "setup"},
-			step:        config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
-			runtimeWhen: "cmd:some-check",
+			Phase:       config.DeployPhase{Name: "setup"},
+			Step:        config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
+			RuntimeWhen: "cmd:some-check",
 		},
 	}
 	var buf bytes.Buffer
@@ -803,10 +804,10 @@ func TestPrintResetPlanShell_WithRuntimeWhen(t *testing.T) {
 }
 
 func TestPrintResetPlanShell_WithCheck(t *testing.T) {
-	steps := []resolvedStep{
+	steps := []pipeline.ResolvedStep{
 		{
-			phase: config.DeployPhase{Name: "setup"},
-			step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate", Check: "php artisan migrate:status"},
+			Phase: config.DeployPhase{Name: "setup"},
+			Step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate", Check: "php artisan migrate:status"},
 		},
 	}
 	var buf bytes.Buffer
@@ -835,44 +836,6 @@ func TestFindResetStep_MissingConfigPath(t *testing.T) {
 	_, _, err := findResetStep(cfg, "phase/step")
 	if err == nil {
 		t.Fatal("expected error when __configPath missing")
-	}
-}
-
-// --- ansiStripper.Write ---
-
-func TestAnsiStripper_Write_StripsEscapes(t *testing.T) {
-	var buf bytes.Buffer
-	s := &ansiStripper{w: &buf}
-	input := "\x1b[32mhello\x1b[0m world"
-	n, err := s.Write([]byte(input))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if n != len(input) {
-		t.Errorf("expected n=%d, got %d", len(input), n)
-	}
-	out := buf.String()
-	if strings.Contains(out, "\x1b") {
-		t.Errorf("expected ANSI escapes stripped, got: %q", out)
-	}
-	if !strings.Contains(out, "hello") || !strings.Contains(out, "world") {
-		t.Errorf("expected text preserved, got: %q", out)
-	}
-}
-
-func TestAnsiStripper_Write_PlainText(t *testing.T) {
-	var buf bytes.Buffer
-	s := &ansiStripper{w: &buf}
-	input := "plain text"
-	n, err := s.Write([]byte(input))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if n != len(input) {
-		t.Errorf("expected n=%d, got %d", len(input), n)
-	}
-	if buf.String() != input {
-		t.Errorf("expected output unchanged, got: %q", buf.String())
 	}
 }
 

@@ -29,16 +29,16 @@ func runLifecyclePhases(
 	skipConfirm bool,
 	logEnabled bool,
 ) error {
-	var steps []resolvedStep
+	var steps []pipeline.ResolvedStep
 	for _, phase := range phases {
-		resolved, err := resolvePhaseSteps(cfg, phase, "")
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, "")
 		if err != nil {
 			return fmt.Errorf("resolving lifecycle phases: %w", err)
 		}
 		steps = append(steps, resolved...)
 	}
 
-	w, logWriter, logPath, cleanup, err := openPipelineLog(workDir, logFileName, logEnabled)
+	w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, logFileName, logEnabled)
 	if err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func runLifecyclePhases(
 
 	rep := pipeline.NewPlainReporter(w)
 
-	if err := runPipeline(steps, rep, name, cfg, reg, workDir, logWriter, skipConfirm, nil); err != nil {
+	if err := pipeline.Run(steps, rep, name, cfg, reg, workDir, logWriter, skipConfirm, nil); err != nil {
 		if errors.Is(err, ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}

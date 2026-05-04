@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -744,8 +745,8 @@ func TestPrepareFileEffects_CleanupOnlyNewFiles(t *testing.T) {
 	}
 
 	// Invoke cleanups (simulating a failed run)
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
+	for _, cleanup := range slices.Backward(cleanups) {
+		cleanup()
 	}
 
 	// Existing file should still exist (cleanup should not remove it)
@@ -780,8 +781,8 @@ func TestPrepareFileEffects_CleanupOnlyNewFiles(t *testing.T) {
 	}
 
 	// Invoke cleanups
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
+	for _, cleanup := range slices.Backward(cleanups) {
+		cleanup()
 	}
 
 	// New file should be removed
@@ -824,8 +825,8 @@ func TestPrepareFileEffects_CleanupIgnoresMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrepareFileEffects: %v", err)
 	}
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
+	for _, cleanup := range slices.Backward(cleanups) {
+		cleanup()
 	}
 	if got := errBuf.String(); got != "" {
 		t.Fatalf("missing file cleanup should be silent, got %q", got)
@@ -875,8 +876,8 @@ func TestPrepareFileEffects_OnErrorKeep(t *testing.T) {
 	}
 
 	// Invoke cleanups (should do nothing)
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
+	for _, cleanup := range slices.Backward(cleanups) {
+		cleanup()
 	}
 
 	// File should still exist
@@ -933,8 +934,8 @@ func TestPrepareFileEffects_ReadWriteNoCleanup(t *testing.T) {
 	}
 
 	// Invoke cleanups (none to invoke)
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
+	for _, cleanup := range slices.Backward(cleanups) {
+		cleanup()
 	}
 
 	// File should still exist (no cleanup happened)
