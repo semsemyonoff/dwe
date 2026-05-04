@@ -11,6 +11,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -940,7 +941,7 @@ func TestRunStatusViaCfg(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := runStatus(w, cfg, neverRunning, nil, nil); err != nil {
+	if err := stack.RunStatus(w, cfg, neverRunning, nil, nil); err != nil {
 		t.Fatalf("runStatus error: %v", err)
 	}
 	out := buf.String()

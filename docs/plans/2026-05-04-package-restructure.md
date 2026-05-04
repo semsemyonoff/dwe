@@ -139,15 +139,15 @@ Move generic executor pieces **and** the generic table printer. Verified by grep
 
 ### Task 5: Create `internal/stack` package
 
-- [ ] create `internal/stack/rows.go` for service-row construction helpers used by status
-- [ ] create `internal/stack/health.go` with `AggregateHealth`, `AggregateHealthFromTopo`, `HasRuntimeStatuses`, `StackHealth` type (move from `internal/command/status.go`)
-- [ ] create `internal/stack/topology.go` with `FetchComposeTopology`, `ParseTopologyFromFiles`, `ComposeNodeStatuses`, `DisabledNodes`, `AugmentWithDisabled`, `RemoveHiddenNodes`, `BuildNodeCategories`, `BuildComposeArgs`
-- [ ] create `internal/stack/status.go` with `RunStatus` core (rendering still goes through `ui.Render*` and `render.Writer`)
-- [ ] move `internal/command/status_test.go` and `status_extra_test.go` cases into `internal/stack/*_test.go`
-- [ ] reduce `internal/command/status.go` to `newStatusCmd` cobra wiring that calls `stack.RunStatus`
-- [ ] update imports
-- [ ] run `make test` — must pass before Task 6
-- [ ] run `make lint` — must pass before Task 6
+- [x] create `internal/stack/rows.go` for service-row construction helpers used by status
+- [x] create `internal/stack/health.go` with `AggregateHealth`, `AggregateHealthFromTopo`, `HasRuntimeStatuses`, `Health` type (renamed from `StackHealth` to avoid stutter; move from `internal/command/status.go`)
+- [x] create `internal/stack/topology.go` with `FetchComposeTopology`, `ParseTopologyFromFiles`, `ComposeNodeStatuses`, `DisabledNodes`, `AugmentWithDisabled`, `RemoveHiddenNodes`, `BuildNodeCategories`, `BuildComposeArgs`, `ResolveProjectAndDocker`
+- [x] create `internal/stack/status.go` with `RunStatus` core (rendering still goes through `ui.Render*` and `render.Writer`)
+- [x] move `internal/command/status_test.go` and `status_extra_test.go` cases into `internal/stack/*_test.go`
+- [x] reduce `internal/command/status.go` to `newStatusCmd` cobra wiring that calls `stack.RunStatus`
+- [x] update imports
+- [x] run `make test` — must pass before Task 6
+- [x] run `make lint` — must pass before Task 6
 
 ### Task 6: Create `internal/envfile` package
 
