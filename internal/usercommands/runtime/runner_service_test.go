@@ -676,3 +676,48 @@ func TestServiceExecRunner_BuildCommand_ComposeArgsPositioning(t *testing.T) {
 		t.Errorf("compose_args (-d) should be between run and --user, got indices: run=%d, -d=%d, --user=%d", runIdx, dIdx, userIdx)
 	}
 }
+
+// TestBuildServiceArgv_ShellFromConfig verifies that buildServiceArgv uses
+// cfg.Binaries.Shell instead of a hardcoded "sh".
+func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		cfg       *config.DevboxConfig
+		wantShell string
+	}{
+		{
+			name:      "nil config defaults to sh",
+			cfg:       nil,
+			wantShell: "sh",
+		},
+		{
+			name:      "empty config defaults to sh",
+			cfg:       &config.DevboxConfig{},
+			wantShell: "sh",
+		},
+		{
+			name:      "explicit bash",
+			cfg:       &config.DevboxConfig{Binaries: config.BinariesConfig{Shell: "bash"}},
+			wantShell: "bash",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := RunContext{
+				Cmd: &CommandDef{
+					Type: CommandTypeServiceExec,
+					Run:  "echo hello",
+				},
+				Config: tc.cfg,
+				Render: &tpl.RenderContext{},
+			}
+			argv, err := buildServiceArgv(ctx)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(argv) == 0 || argv[0] != tc.wantShell {
+				t.Errorf("argv[0] = %q, want %q", argv[0], tc.wantShell)
+			}
+		})
+	}
+}

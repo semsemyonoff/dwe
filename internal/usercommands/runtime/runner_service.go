@@ -204,7 +204,7 @@ func buildServiceArgv(ctx RunContext) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("render run: %w", err)
 		}
-		return []string{"sh", "-c", rendered}, nil
+		return []string{config.ShellBin(ctx.Config), "-c", rendered}, nil
 	}
 	rendered := make([]string, len(cmd.Argv))
 	for i, arg := range cmd.Argv {

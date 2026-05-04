@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/tpl"
 )
 
@@ -253,5 +254,57 @@ func TestNewRunner_Unsupported_Type(t *testing.T) {
 	}
 	if unsup.Type != "unknown_type" {
 		t.Errorf("expected 'unknown_type' in error, got %q", unsup.Type)
+	}
+}
+
+// TestHostRunner_BuildCommand_ShellFromConfig verifies that HostRunner uses
+// cfg.Binaries.Shell instead of a hardcoded "sh".
+func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		cfg       *config.DevboxConfig
+		wantShell string
+	}{
+		{
+			name:      "nil config defaults to sh",
+			cfg:       nil,
+			wantShell: "sh",
+		},
+		{
+			name:      "empty config defaults to sh",
+			cfg:       &config.DevboxConfig{},
+			wantShell: "sh",
+		},
+		{
+			name:      "explicit bash",
+			cfg:       &config.DevboxConfig{Binaries: config.BinariesConfig{Shell: "bash"}},
+			wantShell: "bash",
+		},
+		{
+			name:      "explicit zsh",
+			cfg:       &config.DevboxConfig{Binaries: config.BinariesConfig{Shell: "zsh"}},
+			wantShell: "zsh",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &HostRunner{}
+			ctx := RunContext{
+				Cmd: &CommandDef{
+					Type: CommandTypeCommand,
+					Run:  "echo hello",
+				},
+				Config:      tc.cfg,
+				Render:      &tpl.RenderContext{},
+				ProjectRoot: "/project",
+			}
+			c, err := r.BuildCommand(ctx)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(c.Args) == 0 || c.Args[0] != tc.wantShell {
+				t.Errorf("Args[0] = %q, want %q", c.Args[0], tc.wantShell)
+			}
+		})
 	}
 }

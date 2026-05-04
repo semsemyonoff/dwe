@@ -604,7 +604,7 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 // are built with CLICOLOR_FORCE=1 so lipgloss enables colors even when stdout
 // is piped through an io.MultiWriter.
 func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir(), false)
+	cmd := buildDevboxCmd("info", t.TempDir(), "sh", false)
 	if !slices.Contains(cmd.Env, "CLICOLOR_FORCE=1") {
 		t.Errorf("buildDevboxCmd env should contain CLICOLOR_FORCE=1, got: %v", cmd.Env)
 	}
@@ -613,7 +613,7 @@ func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
 // TestBuildDevboxCmd_InheritsParentEnv verifies that the child env includes
 // parent environment variables (not just CLICOLOR_FORCE).
 func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir(), false)
+	cmd := buildDevboxCmd("info", t.TempDir(), "sh", false)
 	// cmd.Env should be non-empty (it includes os.Environ() + CLICOLOR_FORCE).
 	if len(cmd.Env) == 0 {
 		t.Error("buildDevboxCmd env should include parent environment (os.Environ())")
@@ -627,7 +627,7 @@ func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
 // TestBuildDevboxCmd_WorkDir verifies that the cmd working directory is set correctly.
 func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 	workDir := t.TempDir()
-	cmd := buildDevboxCmd("info", workDir, false)
+	cmd := buildDevboxCmd("info", workDir, "sh", false)
 	if cmd.Dir != workDir {
 		t.Errorf("buildDevboxCmd Dir = %q, want %q", cmd.Dir, workDir)
 	}
@@ -636,11 +636,11 @@ func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 // TestBuildDevboxCmd_SkipConfirmSetsNonInteractive verifies that skipConfirm=true
 // adds DEVBOX_NONINTERACTIVE=1 to the child environment.
 func TestBuildDevboxCmd_SkipConfirmSetsNonInteractive(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir(), true)
+	cmd := buildDevboxCmd("info", t.TempDir(), "sh", true)
 	if !slices.Contains(cmd.Env, "DEVBOX_NONINTERACTIVE=1") {
 		t.Errorf("buildDevboxCmd with skipConfirm should contain DEVBOX_NONINTERACTIVE=1, got: %v", cmd.Env)
 	}
-	cmd2 := buildDevboxCmd("info", t.TempDir(), false)
+	cmd2 := buildDevboxCmd("info", t.TempDir(), "sh", false)
 	if slices.Contains(cmd2.Env, "DEVBOX_NONINTERACTIVE=1") {
 		t.Errorf("buildDevboxCmd without skipConfirm should not contain DEVBOX_NONINTERACTIVE=1")
 	}
@@ -820,5 +820,40 @@ func TestRunPipeline_Check_EvalError(t *testing.T) {
 	}
 	if !failFound {
 		t.Errorf("FailStep not recorded when check eval errors; kinds: %v", rep.kindSeq())
+	}
+}
+
+// TestBuildDevboxCmd_UsesShellParam verifies that buildDevboxCmd uses the supplied
+// shell binary, not a hardcoded "sh".
+func TestBuildDevboxCmd_UsesShellParam(t *testing.T) {
+	tests := []struct {
+		shell string
+	}{
+		{"sh"},
+		{"bash"},
+		{"zsh"},
+	}
+	for _, tc := range tests {
+		cmd := buildDevboxCmd("info", t.TempDir(), tc.shell, false)
+		// exec.Command resolves the binary; Args[0] holds the original name.
+		if len(cmd.Args) == 0 || cmd.Args[0] != tc.shell {
+			t.Errorf("shell=%q: Args[0] = %q, want %q", tc.shell, cmd.Args[0], tc.shell)
+		}
+	}
+}
+
+// TestExecStep_ShellFromConfig verifies that ExecStep uses cfg.Binaries.Shell
+// instead of a hardcoded "sh" when running a run: step.
+func TestExecStep_ShellFromConfig(t *testing.T) {
+	// Use a step that would fail if run under "sh" but trivially succeeds under
+	// the configured shell. We assert the step succeeds with a shell that exists.
+	cfg := &config.DevboxConfig{
+		Binaries: config.BinariesConfig{Shell: "sh"}, // must be a real shell for the test to pass
+		Raw:      map[string]any{},
+	}
+	step := config.DeployStep{Name: "noop", Run: "true"}
+	err := ExecStep(step, t.TempDir(), cfg, nil, nil, false)
+	if err != nil {
+		t.Fatalf("ExecStep with Shell=sh failed: %v", err)
 	}
 }

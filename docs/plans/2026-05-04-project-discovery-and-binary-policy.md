@@ -238,17 +238,17 @@ Goal: every `exec.Command("docker", ...)` becomes `exec.Command(config.DockerBin
 
 All call sites read the shell via `config.ShellBin(cfg)` — never `cfg.Binaries.Shell` directly — so nil cfgs and zero-value structs in tests stay safe.
 
-- [ ] `internal/pipeline/executor.go`:
+- [x] `internal/pipeline/executor.go`:
   - `buildDevboxCmd` gains a `shell string` param (callers pass `config.ShellBin(cfg)`). Replace literal `"sh"` at lines 33, 64.
-- [ ] `internal/usercommands/runtime/runner_host.go`:
+- [x] `internal/usercommands/runtime/runner_host.go`:
   - `DevboxRunner.Run` (line 31) and `HostRunner.BuildCommand` (line 67): replace `"sh"` with `config.ShellBin(ctx.Config)`. Verify `RunContext` carries `*config.DevboxConfig`; if not, add the field (see existing `runtime/types.go`).
-- [ ] `internal/usercommands/runtime/runner_service.go:207`:
+- [x] `internal/usercommands/runtime/runner_service.go:207`:
   - replace with `config.ShellBin(ctx.Config)`.
-- [ ] do **not** touch `internal/usercommands/runtime/runner_script.go` (per-command `script.shell` is the user-facing knob there) or `internal/condition/condition.go` (predicate evaluator should stay on `sh` for predictability — leave a one-line comment noting why).
-- [ ] update tests:
+- [x] do **not** touch `internal/usercommands/runtime/runner_script.go` (per-command `script.shell` is the user-facing knob there) or `internal/condition/condition.go` (predicate evaluator should stay on `sh` for predictability — leave a one-line comment noting why).
+- [x] update tests:
   - `pipeline/executor_test.go`: verify the shell name is taken from `cfg.Binaries.Shell` (assert via `cmd.Path` or via a buildable variant of `buildDevboxCmd`).
   - `runner_host_test.go`, `runner_service_test.go`: same pattern.
-- [ ] `make test` and `make lint` — must pass before next task.
+- [x] `make test` and `make lint` — must pass before next task.
 
 ### Task 8: Route devbox binary through `BinariesConfig`
 

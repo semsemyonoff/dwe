@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/resolve"
@@ -28,7 +29,7 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 		return fmt.Errorf("render run: %w", err)
 	}
 
-	cmd := exec.Command("sh", "-c", bin+" "+rendered) //nolint:gosec
+	cmd := exec.Command(config.ShellBin(ctx.Config), "-c", bin+" "+rendered) //nolint:gosec
 	if ctx.ProjectRoot != "" {
 		cmd.Dir = ctx.ProjectRoot
 	}
@@ -64,7 +65,7 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 		if err != nil {
 			return nil, fmt.Errorf("render run: %w", err)
 		}
-		argv = []string{"sh", "-c", rendered}
+		argv = []string{config.ShellBin(ctx.Config), "-c", rendered}
 	} else {
 		rendered := make([]string, len(cmd.Argv))
 		for i, arg := range cmd.Argv {
