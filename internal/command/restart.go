@@ -1,6 +1,10 @@
 package command
 
-import "github.com/spf13/cobra"
+import (
+	"devbox-cli/internal/lifecycle"
+
+	"github.com/spf13/cobra"
+)
 
 func newRestartCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
@@ -17,17 +21,14 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRestart(cmd, flags, yes)
+			return lifecycle.RunRestart(lifecycle.RunContext{
+				ConfigPath: flags.configPath,
+				Yes:        yes,
+				ShowInfo:   func() error { return runInfo(cmd, flags) },
+			})
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
 	return cmd
-}
-
-func runRestart(cmd *cobra.Command, flags *rootFlags, yes bool) error {
-	if err := runStop(flags, yes); err != nil {
-		return err
-	}
-	return runRun(cmd, flags, true /* noUpdate */, "", yes)
 }

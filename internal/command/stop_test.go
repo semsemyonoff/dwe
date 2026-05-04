@@ -71,7 +71,6 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
-	// lifecycle.yml with only run: section, no stop:
 	lifecycleYAML := "run:\n  final_message: ready\n  phases: []\n"
 	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
@@ -89,24 +88,5 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "stop:") && !strings.Contains(err.Error(), "stop` section") {
 		t.Errorf("error should mention missing stop section, got: %v", err)
-	}
-}
-
-func TestRunStop_HappyPath(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
-
-	devboxDir := filepath.Join(dir, "devbox")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
-	}
-	lifecycleYAML := "stop:\n  final_message: \"Goodbye!\"\n  phases:\n    - name: down\n      steps:\n        - name: noop\n          run: \"true\"\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
-		t.Fatalf("writing lifecycle.yml: %v", err)
-	}
-
-	flags := &rootFlags{configPath: cfgPath}
-	if err := runStop(flags, false); err != nil {
-		t.Errorf("unexpected error on happy path: %v", err)
 	}
 }

@@ -1,4 +1,4 @@
-package command
+package lifecycle
 
 import (
 	"errors"
@@ -6,10 +6,10 @@ import (
 
 	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
-	pipeline "devbox-cli/internal/pipeline"
+	"devbox-cli/internal/pipeline"
 )
 
-// runLifecyclePhases resolves and executes a set of lifecycle pipeline phases.
+// RunPhases resolves and executes a set of lifecycle pipeline phases.
 //
 // name is the human-readable label passed to the reporter (e.g. "run", "stop").
 // logFileName is the base name (without extension) for the log file written to logs/.
@@ -17,9 +17,9 @@ import (
 // goes only to stdout and no log file is created.
 // Phases are resolved with an empty service (lifecycle is orchestrator-only).
 //
-// Returns ErrSilent when any aborting step fails (reporter has already printed
+// Returns pipeline.ErrSilent when any aborting step fails (reporter has already printed
 // the failure). Returns other errors for config/IO failures.
-func runLifecyclePhases(
+func RunPhases(
 	cfg *config.DevboxConfig,
 	reg *commands.Registry,
 	workDir string,
@@ -47,7 +47,7 @@ func runLifecyclePhases(
 	rep := pipeline.NewPlainReporter(w)
 
 	if err := pipeline.Run(steps, rep, name, cfg, reg, workDir, logWriter, skipConfirm, nil); err != nil {
-		if errors.Is(err, ErrSilent) && logEnabled {
+		if errors.Is(err, pipeline.ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}
 		return err

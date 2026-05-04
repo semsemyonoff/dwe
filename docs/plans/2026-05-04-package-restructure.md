@@ -124,18 +124,18 @@ Move generic executor pieces **and** the generic table printer. Verified by grep
 
 `runRun` calls `runInfo(cmd, flags)` for the post-up info dashboard, and `runRestart` calls `runStop`+`runRun`. Both are cobra-shaped. To keep `lifecycle` free of `internal/command` imports, the moved functions accept callbacks for the cobra-specific bits.
 
-- [ ] create `internal/lifecycle/phases.go` with `RunLifecyclePhases` (from `internal/command/lifecycle.go`)
-- [ ] create `internal/lifecycle/run.go` with:
+- [x] create `internal/lifecycle/phases.go` with `RunLifecyclePhases` (from `internal/command/lifecycle.go`)
+- [x] create `internal/lifecycle/run.go` with:
   - `ResolveUpdateMode(cfg *config.LifecycleRunConfig, noUpdate bool, updateFlag string) string`
   - `RunRun(ctx RunContext) error` where `RunContext` (defined in this package) carries `WorkDir`, `ConfigPath`, `NoUpdate`, `UpdateMode`, `Yes`, and an injected `ShowInfo func() error` callback used in place of the direct `runInfo` call
-- [ ] create `internal/lifecycle/stop.go` with `RunStop(ctx StopContext) error` (or the same `RunContext` minus update fields)
-- [ ] add `RunRestart(ctx RunContext) error` to `run.go` — implementation calls `RunStop` then `RunRun` with `NoUpdate=true`; the caller still supplies `ShowInfo`
-- [ ] in `internal/command/run.go` / `restart.go` / `stop.go`, build the context, set `ShowInfo: func() error { return runInfo(cmd, flags) }`, and call into `lifecycle.*`
-- [ ] move tests: `internal/command/lifecycle_test.go`, `lifecycle_phases_test.go`, `run_test.go`, `stop_test.go`, `restart_test.go` lifecycle-related cases → `internal/lifecycle/*_test.go`; tests inject a stub `ShowInfo` to avoid dragging the cobra info renderer in
-- [ ] reduce `internal/command/run.go`, `stop.go`, `restart.go`, `lifecycle.go` to cobra adapters that call `lifecycle.*`
-- [ ] update imports
-- [ ] run `make test` — must pass before Task 5
-- [ ] run `make lint` — must pass before Task 5
+- [x] create `internal/lifecycle/stop.go` with `RunStop(ctx StopContext) error` (or the same `RunContext` minus update fields)
+- [x] add `RunRestart(ctx RunContext) error` to `run.go` — implementation calls `RunStop` then `RunRun` with `NoUpdate=true`; the caller still supplies `ShowInfo`
+- [x] in `internal/command/run.go` / `restart.go` / `stop.go`, build the context, set `ShowInfo: func() error { return runInfo(cmd, flags) }`, and call into `lifecycle.*`
+- [x] move tests: `internal/command/lifecycle_test.go`, `lifecycle_phases_test.go`, `run_test.go`, `stop_test.go`, `restart_test.go` lifecycle-related cases → `internal/lifecycle/*_test.go`; tests inject a stub `ShowInfo` to avoid dragging the cobra info renderer in
+- [x] reduce `internal/command/run.go`, `stop.go`, `restart.go`, `lifecycle.go` to cobra adapters that call `lifecycle.*`
+- [x] update imports
+- [x] run `make test` — must pass before Task 5
+- [x] run `make lint` — must pass before Task 5
 
 ### Task 5: Create `internal/stack` package
 
