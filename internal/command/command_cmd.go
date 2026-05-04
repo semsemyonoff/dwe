@@ -241,18 +241,7 @@ it runs directly without showing a selector.`,
 // loadCommandRegistry loads the command registry from devbox/commands/ relative
 // to the config file. Returns an empty registry when the directory does not exist.
 func loadCommandRegistry(configPath string) (*usercommands.Registry, error) {
-	commandsDir := filepath.Join(filepath.Dir(configPath), "devbox", "commands")
-	if _, statErr := os.Stat(commandsDir); errors.Is(statErr, os.ErrNotExist) {
-		return usercommands.NewEmptyRegistry(), nil
-	}
-	reg, err := usercommands.LoadRegistry(commandsDir)
-	if err != nil {
-		return nil, fmt.Errorf("loading command registry: %w", err)
-	}
-	if err := reg.Validate(); err != nil {
-		return nil, fmt.Errorf("command registry validation: %w", err)
-	}
-	return reg, nil
+	return usercommands.LoadRegistryFromConfigPath(configPath)
 }
 
 // selectCommandFn is the function signature for interactive command selection.

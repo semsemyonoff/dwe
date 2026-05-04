@@ -162,16 +162,5 @@ func RunRestart(ctx RunContext) error {
 // loadRegistry loads the command registry from devbox/commands/ relative to configPath.
 // Returns an empty registry when the directory does not exist.
 func loadRegistry(configPath string) (*usercommands.Registry, error) {
-	commandsDir := filepath.Join(filepath.Dir(configPath), "devbox", "commands")
-	if _, statErr := os.Stat(commandsDir); errors.Is(statErr, os.ErrNotExist) {
-		return usercommands.NewEmptyRegistry(), nil
-	}
-	reg, err := usercommands.LoadRegistry(commandsDir)
-	if err != nil {
-		return nil, fmt.Errorf("loading command registry: %w", err)
-	}
-	if err := reg.Validate(); err != nil {
-		return nil, fmt.Errorf("command registry validation: %w", err)
-	}
-	return reg, nil
+	return usercommands.LoadRegistryFromConfigPath(configPath)
 }

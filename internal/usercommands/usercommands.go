@@ -6,6 +6,11 @@
 package usercommands
 
 import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands/loader"
@@ -130,6 +135,24 @@ func NewEmptyRegistry() *Registry {
 // assembles a Registry.
 func LoadRegistry(baseDir string) (*Registry, error) {
 	return registry.LoadRegistry(baseDir)
+}
+
+// LoadRegistryFromConfigPath loads the command registry from devbox/commands/
+// relative to configPath. Returns an empty registry when the directory does not
+// exist. Validates the registry before returning.
+func LoadRegistryFromConfigPath(configPath string) (*Registry, error) {
+	commandsDir := filepath.Join(filepath.Dir(configPath), "devbox", "commands")
+	if _, statErr := os.Stat(commandsDir); errors.Is(statErr, os.ErrNotExist) {
+		return registry.NewEmptyRegistry(), nil
+	}
+	reg, err := registry.LoadRegistry(commandsDir)
+	if err != nil {
+		return nil, fmt.Errorf("loading command registry: %w", err)
+	}
+	if err := reg.Validate(); err != nil {
+		return nil, fmt.Errorf("command registry validation: %w", err)
+	}
+	return reg, nil
 }
 
 // ---- Functions (loader) ----
