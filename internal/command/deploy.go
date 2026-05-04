@@ -125,7 +125,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)
 			}
-			if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", render.Stdout()); err != nil {
+			if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
 				return fmt.Errorf("ensuring volumes: %w", err)
 			}
 

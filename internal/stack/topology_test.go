@@ -9,6 +9,21 @@ import (
 	"devbox-cli/internal/ui"
 )
 
+// --- FetchComposeTopology bin parameter ---
+
+func TestFetchComposeTopology_EmptyFiles_NilRegardlessOfBin(t *testing.T) {
+	// No files → nil regardless of which binary is requested.
+	if got := FetchComposeTopology(nil, "proj", nil, "podman"); got != nil {
+		t.Errorf("expected nil for empty file list, got %v", got)
+	}
+}
+
+func TestComposeNodeStatuses_EmptyFiles_NilRegardlessOfBin(t *testing.T) {
+	if got := ComposeNodeStatuses(nil, "proj", nil, "podman"); got != nil {
+		t.Errorf("expected nil for empty file list, got %v", got)
+	}
+}
+
 // --- BuildComposeArgs ---
 
 func TestBuildComposeArgs_WithProjectName(t *testing.T) {

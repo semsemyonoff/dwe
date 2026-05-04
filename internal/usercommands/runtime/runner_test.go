@@ -8,6 +8,28 @@ import (
 	"devbox-cli/internal/tpl"
 )
 
+// --- RunContext.Compose bin propagation ---
+
+func TestRunContext_Compose_NilConfigNilDockerConfig_DefaultBin(t *testing.T) {
+	ctx := RunContext{}
+	c := ctx.Compose()
+	if c.BinName() != "docker" {
+		t.Errorf("Compose().BinName() = %q, want %q", c.BinName(), "docker")
+	}
+}
+
+func TestRunContext_Compose_CustomDockerBin_NoDockerConfig(t *testing.T) {
+	ctx := RunContext{
+		Config: &config.DevboxConfig{
+			Binaries: config.BinariesConfig{Docker: "podman"},
+		},
+	}
+	c := ctx.Compose()
+	if c.BinName() != "podman" {
+		t.Errorf("Compose().BinName() = %q, want %q", c.BinName(), "podman")
+	}
+}
+
 // TestRunCommand_DefensiveInitNilRender verifies that RunCommand does not panic when Render is nil.
 func TestRunCommand_DefensiveInitNilRender(t *testing.T) {
 	cmd := &CommandDef{

@@ -211,28 +211,28 @@ Sites confirmed today (verified by grep — file/line accuracy matters because t
 
 Goal: every `exec.Command("docker", ...)` becomes `exec.Command(config.DockerBin(cfg), ...)`. Always go through the accessor — never read `cfg.Binaries.Docker` directly.
 
-- [ ] `internal/docker/compose.go`:
+- [x] `internal/docker/compose.go`:
   - add `Bin string` field to `Compose` struct.
   - `NewCompose(cfg, dockerCfg)` populates `Bin` via `config.DockerBin(cfg)` (which handles nil cfg and empty fields).
   - **also** add a method `func (c *Compose) BinName() string { if c == nil || c.Bin == "" { return "docker" }; return c.Bin }`. Use it everywhere the struct field is read internally (line 91, 97, 182). This way any direct `&docker.Compose{...}` literal construction (test fixtures, the `RunContext.Compose()` minimal path — see [runner.go:188-200](/Users/s/Projects/devbox/next-laravel/devbox-cli/internal/usercommands/runtime/runner.go)) cannot produce `exec.Command("")`.
-- [ ] `internal/usercommands/runtime/runner.go` — `RunContext.Compose()` minimal-construction branch (when `DockerConfig` or `Config` is nil):
+- [x] `internal/usercommands/runtime/runner.go` — `RunContext.Compose()` minimal-construction branch (when `DockerConfig` or `Config` is nil):
   - explicitly set `c.Bin = config.DockerBin(ctx.Config)` on the literal `&docker.Compose{...}` — even though `BinName()` would handle the empty case, setting it here keeps observability consistent (anyone inspecting `c.Bin` sees the right value).
   - add a regression test: `RunContext{Config: nil, DockerConfig: nil}.Compose().BinName() == "docker"`; `RunContext{Config: &DevboxConfig{Binaries: BinariesConfig{Docker: "podman"}}, DockerConfig: nil}.Compose().BinName() == "podman"`.
-- [ ] `internal/docker/volumes.go`:
+- [x] `internal/docker/volumes.go`:
   - existing helpers take a `Compose` already? Verify and either thread `*Compose` or pass a `bin string` argument. (Read the file in this task.) Replace lines 34, 44 — call site uses `config.DockerBin(cfg)` when no `Compose` is in scope.
-- [ ] `internal/builtin/volumes.go`:
+- [x] `internal/builtin/volumes.go`:
   - replace lines 33, 54 with `config.DockerBin(ctx.Config)` (the builtin has `*config.DevboxConfig` via `ExecContext`, but the accessor protects against nil).
-- [ ] `internal/stack/topology.go`:
+- [x] `internal/stack/topology.go`:
   - functions take a config or compose; thread the binary through via `config.DockerBin(cfg)` (replace lines 27, 77, 92).
-- [ ] `internal/usercommands/runtime/runner_service.go`:
+- [x] `internal/usercommands/runtime/runner_service.go`:
   - replace lines 282, 294 with `compose.BinName()` (handles nil-compose and empty-Bin defensively; `compose` is in scope already).
-- [ ] `internal/command/compose.go`, `service_cli.go`, `service.go`:
+- [x] `internal/command/compose.go`, `service_cli.go`, `service.go`:
   - swap the literals; use **`config.DockerBin(cfg)` or `compose.BinName()` only** — never the raw `compose.Bin` field. The whole point of adding `BinName()` is to keep `exec.Command("")` impossible even when a caller hands us a zero-value `Compose`. Direct field reads bypass that guard.
-- [ ] update tests:
+- [x] update tests:
   - `compose_test.go`: assert `Compose.BinName()` returns `docker` for `&Compose{}`, `&Compose{Bin: ""}`, and `nil`; returns `Bin` when set; `NewCompose(cfg, dockerCfg)` populates `Bin` from `cfg.Binaries.Docker` (and defaults when omitted).
   - regression test (new): the no-`Bin` literal construction path — exercise `RunContext.Compose()` with nil `DockerConfig` and confirm `BinName()` is non-empty (no `exec.Command("")` possible).
   - add tests in `stack`, `builtin/volumes`, and `docker/volumes` for binary substitution where feasible (table-driven on a `bin string` parameter).
-- [ ] `make test` and `make lint` — must pass before next task.
+- [x] `make test` and `make lint` — must pass before next task.
 
 ### Task 7: Route shell binary through `BinariesConfig`
 

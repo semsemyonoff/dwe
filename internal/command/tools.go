@@ -58,8 +58,9 @@ func newToolStatusCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			dockerBin := config.DockerBin(cfg)
 			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container)
+				return containerRunning(projectName, container, dockerBin)
 			}
 			return runToolList(render.Stdout(), cfg, isRunning)
 		},
@@ -94,8 +95,9 @@ the read-only status table.`,
 				if err != nil {
 					return err
 				}
+				dockerBin := config.DockerBin(cfg)
 				isRunning := func(_, container string) bool {
-					return containerRunning(projectName, container)
+					return containerRunning(projectName, container, dockerBin)
 				}
 				return runToolList(render.Stdout(), cfg, isRunning)
 			}

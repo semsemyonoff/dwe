@@ -29,8 +29,10 @@ func (dockerRemoveProjectVolumesBuiltin) Run(with map[string]any, ctx ExecContex
 		return fmt.Errorf("could not resolve project name — cannot remove volumes safely")
 	}
 
+	dockerBin := config.DockerBin(ctx.Config)
+
 	// List all volumes.
-	out, err := exec.Command("docker", "volume", "ls", "-q").Output()
+	out, err := exec.Command(dockerBin, "volume", "ls", "-q").Output() //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("listing docker volumes: %w", err)
 	}
@@ -51,7 +53,7 @@ func (dockerRemoveProjectVolumesBuiltin) Run(with map[string]any, ctx ExecContex
 
 	ctx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
 	args := append([]string{"volume", "rm"}, toRemove...)
-	cmd := exec.Command("docker", args...) //nolint:gosec
+	cmd := exec.Command(dockerBin, args...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

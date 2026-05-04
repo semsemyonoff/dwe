@@ -197,8 +197,8 @@ var errContainerNotFound = fmt.Errorf("container not found")
 //
 // Uses raw JSON output from docker inspect to avoid Docker's template engine
 // raising "map has no entry for key" errors on containers without a State field.
-func containerStateStatus(containerName string, processEnv []string) (string, error) {
-	cmd := exec.Command("docker", "inspect", containerName)
+func containerStateStatus(containerName string, processEnv []string, dockerBin string) (string, error) {
+	cmd := exec.Command(dockerBin, "inspect", containerName) //nolint:gosec
 	cmd.Env = processEnv
 	out, err := cmd.Output()
 	if err != nil {
@@ -228,7 +228,7 @@ func containerStateStatus(containerName string, processEnv []string) (string, er
 
 // dockerExecCLI runs an interactive shell in a running container via docker exec.
 // processEnv is the OS-level environment for the docker process itself (e.g. DOCKER_CLI_HINTS=false).
-func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string, processEnv []string) error {
+func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string, processEnv []string, dockerBin string) error {
 	args := []string{"exec", "-it"}
 	if u != "" {
 		args = append(args, "-u", u)
@@ -242,7 +242,7 @@ func dockerExecCLI(containerName, shell, u, workDir string, env map[string]strin
 	args = append(args, containerName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("exec → %s", containerName))
-	return runInteractive(processEnv, "docker", args...)
+	return runInteractive(processEnv, dockerBin, args...)
 }
 
 // composeRunCLI starts a new temporary container via docker compose run --rm.
@@ -269,7 +269,7 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 	args = append(args, serviceName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("run → %s (new container)", serviceName))
-	return runInteractive(compose.BuildEnv(), "docker", args...)
+	return runInteractive(compose.BuildEnv(), compose.BinName(), args...)
 }
 
 // runInteractive executes a command with the current process's stdin/stdout/stderr,

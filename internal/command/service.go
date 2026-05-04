@@ -59,8 +59,9 @@ func newServiceStatusCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			dockerBin := config.DockerBin(cfg)
 			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container)
+				return containerRunning(projectName, container, dockerBin)
 			}
 			return runServiceList(render.Stdout(), cfg, isRunning)
 		},
@@ -96,8 +97,9 @@ the read-only status table.`,
 				if err != nil {
 					return err
 				}
+				dockerBin := config.DockerBin(cfg)
 				isRunning := func(_, container string) bool {
-					return containerRunning(projectName, container)
+					return containerRunning(projectName, container, dockerBin)
 				}
 				return runServiceList(render.Stdout(), cfg, isRunning)
 			}
@@ -192,10 +194,11 @@ type containerCheckFn func(projectFullName, containerName string) bool
 // containerRunning checks if a Docker container is running by full container name.
 // Uses docker inspect to get an exact name match (docker ps name filter uses substring
 // matching against the full /name path which is not portable across Docker versions).
-func containerRunning(projectFullName, containerName string) bool {
+// dockerBin is the Docker-compatible binary (e.g. "docker", "podman").
+func containerRunning(projectFullName, containerName, dockerBin string) bool {
 	fullName := projectFullName + "-" + containerName
 	out, err := exec.Command(
-		"docker", "inspect",
+		dockerBin, "inspect", //nolint:gosec
 		"--format", "{{.State.Status}}",
 		fullName,
 	).Output()

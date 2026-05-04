@@ -19,12 +19,14 @@ import (
 // available, no compose files, etc.) so callers can degrade gracefully.
 // processEnv is applied to the docker process so that DOCKER_HOST / DOCKER_CONTEXT
 // overrides from docker.yml process_env are honoured.
-func FetchComposeTopology(composeFiles []string, projectName string, processEnv []string) map[string][]string {
+// bin is the Docker-compatible binary (e.g. "docker", "podman"); pass
+// config.DockerBin(cfg) at the call site.
+func FetchComposeTopology(composeFiles []string, projectName string, processEnv []string, bin string) map[string][]string {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	args := BuildComposeArgs(projectName, composeFiles, "config")
-	cmd := exec.Command("docker", args...)
+	cmd := exec.Command(bin, args...) //nolint:gosec
 	cmd.Env = processEnv
 	out, err := cmd.Output()
 	if err != nil {
@@ -69,12 +71,14 @@ func ParseTopologyFromFiles(composeFiles []string) map[string][]string {
 // returns a map of compose service name → NodeStatus. Returns nil on any error.
 // processEnv is applied to the docker process so that DOCKER_HOST / DOCKER_CONTEXT
 // overrides from docker.yml process_env are honoured.
-func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv []string) map[string]ui.NodeStatus {
+// bin is the Docker-compatible binary (e.g. "docker", "podman"); pass
+// config.DockerBin(cfg) at the call site.
+func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv []string, bin string) map[string]ui.NodeStatus {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	runningArgs := BuildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--filter", "status=running")
-	runningCmd := exec.Command("docker", runningArgs...)
+	runningCmd := exec.Command(bin, runningArgs...) //nolint:gosec
 	runningCmd.Env = processEnv
 	runningOut, err := runningCmd.Output()
 	if err != nil {
@@ -89,7 +93,7 @@ func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv [
 	}
 
 	allArgs := BuildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--all")
-	allCmd := exec.Command("docker", allArgs...)
+	allCmd := exec.Command(bin, allArgs...) //nolint:gosec
 	allCmd.Env = processEnv
 	allOut, err := allCmd.Output()
 	if err != nil {

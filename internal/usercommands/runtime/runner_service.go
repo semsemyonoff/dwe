@@ -279,7 +279,7 @@ func buildDockerComposeCmd(
 	args = append(args, svc)
 	args = append(args, serviceArgv...)
 
-	cmd := exec.Command("docker", append([]string{"compose"}, args...)...) //nolint:gosec
+	cmd := exec.Command(compose.BinName(), append([]string{"compose"}, args...)...) //nolint:gosec
 	combined := make(map[string]string, len(compose.ProcessEnv)+len(envVars))
 	maps.Copy(combined, compose.ProcessEnv)
 	maps.Copy(combined, envVars)
@@ -291,7 +291,7 @@ func buildDockerComposeCmd(
 func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
 	args := compose.BuildInternalArgs("ps", "--status", "running", "--format", "json", service)
 
-	cmd := exec.Command("docker", args...) //nolint:gosec
+	cmd := exec.Command(compose.BinName(), args...) //nolint:gosec
 	cmd.Env = compose.BuildEnv()
 	out, err := cmd.Output()
 	if err != nil {

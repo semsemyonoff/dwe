@@ -16,13 +16,16 @@ import (
 // it is used to prefix non-shared volume names so the runtime matches the
 // "<project>_<name>" scheme that Docker Compose itself applies to named
 // volumes. Shared volumes ignore the prefix.
-func EnsureVolumes(resources config.DockerResourcesConfig, projectName, command string, w *render.Writer) error {
+//
+// bin is the Docker-compatible binary (e.g. "docker", "podman"); pass
+// config.DockerBin(cfg) at the call site.
+func EnsureVolumes(resources config.DockerResourcesConfig, projectName, command, bin string, w *render.Writer) error {
 	for _, vol := range resources.Volumes {
 		if !slices.Contains(vol.EnsureBefore, command) {
 			continue
 		}
 		name := vol.ResolveName(projectName)
-		exists, err := volumeExists(name)
+		exists, err := volumeExists(bin, name)
 		if err != nil {
 			return err
 		}
@@ -31,7 +34,7 @@ func EnsureVolumes(resources config.DockerResourcesConfig, projectName, command 
 			continue
 		}
 		w.Info("Creating volume " + name + "...")
-		if err := exec.Command("docker", "volume", "create", name).Run(); err != nil {
+		if err := exec.Command(bin, "volume", "create", name).Run(); err != nil { //nolint:gosec
 			return err
 		}
 		w.Success("Volume " + name + " created")
@@ -40,8 +43,8 @@ func EnsureVolumes(resources config.DockerResourcesConfig, projectName, command 
 }
 
 // volumeExists reports whether a Docker volume with the given name exists.
-func volumeExists(name string) (bool, error) {
-	err := exec.Command("docker", "volume", "inspect", name).Run()
+func volumeExists(bin, name string) (bool, error) {
+	err := exec.Command(bin, "volume", "inspect", name).Run() //nolint:gosec
 	if err == nil {
 		return true, nil
 	}

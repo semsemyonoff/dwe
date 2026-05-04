@@ -190,6 +190,7 @@ func (ctx RunContext) Compose() *docker.Compose {
 		return docker.NewCompose(ctx.Config, ctx.DockerConfig)
 	}
 	c := &docker.Compose{
+		Bin:         config.DockerBin(ctx.Config),
 		CommandArgs: map[string][]string{},
 	}
 	if ctx.Config != nil {

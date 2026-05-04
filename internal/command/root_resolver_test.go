@@ -35,7 +35,7 @@ func makeV1Project(t *testing.T, dir string) string {
 
 // runRootWithConfig builds and executes a root command with an explicit --config flag.
 // Returns the cobra error (if any) and the combined stdout+stderr output.
-func runRootWithConfig(args []string, configPath string) (err error, out string) {
+func runRootWithConfig(args []string, configPath string) (string, error) {
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -43,11 +43,11 @@ func runRootWithConfig(args []string, configPath string) (err error, out string)
 	root.SetArgs(args)
 	if configPath != "" {
 		if e := root.PersistentFlags().Set("config", configPath); e != nil {
-			return e, ""
+			return "", e
 		}
 	}
-	err = root.Execute()
-	return err, buf.String()
+	err := root.Execute()
+	return buf.String(), err
 }
 
 // TestRootResolver_ExplicitGoodPathV2 verifies that an explicit --config pointing
@@ -56,7 +56,7 @@ func TestRootResolver_ExplicitGoodPathV2(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeV2Project(t, dir)
 
-	err, _ := runRootWithConfig([]string{"info"}, cfgPath)
+	_, err := runRootWithConfig([]string{"info"}, cfgPath)
 	// info will fail because info.yml is missing, but the error should NOT be schema-related.
 	if err != nil && strings.Contains(err.Error(), "schema_version") {
 		t.Errorf("expected schema validation to pass for v2 project, got: %v", err)
@@ -71,7 +71,7 @@ func TestRootResolver_ExplicitGoodPathV2(t *testing.T) {
 func TestRootResolver_ExplicitBadPath_AlwaysFatal(t *testing.T) {
 	badPath := filepath.Join(t.TempDir(), "nonexistent.yml")
 
-	err, _ := runRootWithConfig([]string{"version"}, badPath)
+	_, err := runRootWithConfig([]string{"version"}, badPath)
 	if err == nil {
 		t.Fatal("expected fatal error for explicit bad config path on allowlisted command, got nil")
 	}
@@ -90,7 +90,7 @@ func TestRootResolver_ExplicitV1Path_SchemaError(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeV1Project(t, dir)
 
-	err, _ := runRootWithConfig([]string{"version"}, cfgPath)
+	_, err := runRootWithConfig([]string{"version"}, cfgPath)
 	if err == nil {
 		t.Fatal("expected schema error for v1 project on allowlisted command, got nil")
 	}

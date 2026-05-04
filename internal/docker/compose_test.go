@@ -330,6 +330,62 @@ func TestBuildArgs_DoubleDashSeparatorRun(t *testing.T) {
 	}
 }
 
+// --- BinName ---
+
+func TestBinName_ZeroValue(t *testing.T) {
+	c := &Compose{}
+	if got := c.BinName(); got != "docker" {
+		t.Errorf("BinName() on zero-value Compose = %q, want %q", got, "docker")
+	}
+}
+
+func TestBinName_NilReceiver(t *testing.T) {
+	var c *Compose
+	if got := c.BinName(); got != "docker" {
+		t.Errorf("BinName() on nil Compose = %q, want %q", got, "docker")
+	}
+}
+
+func TestBinName_EmptyString(t *testing.T) {
+	c := &Compose{Bin: ""}
+	if got := c.BinName(); got != "docker" {
+		t.Errorf("BinName() on empty Bin = %q, want %q", got, "docker")
+	}
+}
+
+func TestBinName_CustomBin(t *testing.T) {
+	c := &Compose{Bin: "podman"}
+	if got := c.BinName(); got != "podman" {
+		t.Errorf("BinName() = %q, want %q", got, "podman")
+	}
+}
+
+func TestNewCompose_PopulatesBinFromConfig(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose:  config.ComposeConfig{Base: "compose.yaml"},
+		Binaries: config.BinariesConfig{Docker: "podman"},
+	}
+	dockerCfg := &config.DockerConfig{ProjectName: "test"}
+	c := NewCompose(cfg, dockerCfg)
+	if c.Bin != "podman" {
+		t.Errorf("NewCompose Bin = %q, want %q", c.Bin, "podman")
+	}
+	if c.BinName() != "podman" {
+		t.Errorf("NewCompose BinName() = %q, want %q", c.BinName(), "podman")
+	}
+}
+
+func TestNewCompose_DefaultBinWhenNotSet(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{Base: "compose.yaml"},
+	}
+	dockerCfg := &config.DockerConfig{ProjectName: "test"}
+	c := NewCompose(cfg, dockerCfg)
+	if c.BinName() != "docker" {
+		t.Errorf("NewCompose BinName() = %q, want %q", c.BinName(), "docker")
+	}
+}
+
 func TestFormatCommandQuotesUnsafeArgs(t *testing.T) {
 	got := formatCommand([]string{
 		"docker",

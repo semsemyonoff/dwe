@@ -15,6 +15,9 @@ import (
 
 // Compose encapsulates the state needed to build and execute docker compose commands.
 type Compose struct {
+	// Bin is the Docker-compatible binary name (e.g. "docker", "podman").
+	// Always read via BinName() — never access the field directly.
+	Bin         string
 	ProjectName string
 	Files       []string
 	GlobalArgs  []string
@@ -23,6 +26,15 @@ type Compose struct {
 	// docker compose process (e.g. DOCKER_CLI_HINTS=false).
 	// Keys are sorted for deterministic ordering when building os.Environ slices.
 	ProcessEnv map[string]string
+}
+
+// BinName returns the Docker-compatible binary name. Safe on nil receivers and
+// empty Bin fields — both return "docker" so exec.Command never gets an empty name.
+func (c *Compose) BinName() string {
+	if c == nil || c.Bin == "" {
+		return "docker"
+	}
+	return c.Bin
 }
 
 // NewCompose creates a Compose from the resolved devbox config and docker policy.
@@ -39,6 +51,7 @@ func NewCompose(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig) *Compo
 	}
 
 	return &Compose{
+		Bin:         config.DockerBin(cfg),
 		ProjectName: dockerCfg.ProjectName,
 		Files:       cfg.ComposeFiles(),
 		GlobalArgs:  dockerCfg.Args.Global,
@@ -88,13 +101,14 @@ func (c *Compose) BuildArgs(command string, extraArgs ...string) []string {
 // ProcessEnv variables are merged on top of the current process environment.
 func (c *Compose) Exec(command string, extraArgs ...string) error {
 	args := c.BuildArgs(command, extraArgs...)
-	cmd := exec.Command("docker", args...)
+	bin := c.BinName()
+	cmd := exec.Command(bin, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = c.BuildEnv()
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s: %w", formatCommand(append([]string{"docker"}, args...)), err)
+		return fmt.Errorf("%s: %w", formatCommand(append([]string{bin}, args...)), err)
 	}
 	return nil
 }
@@ -179,7 +193,7 @@ func (c *Compose) BuildInternalArgs(command string, extraArgs ...string) []strin
 // ProcessEnv is applied so that daemon/context overrides (e.g. DOCKER_HOST)
 // are consistent with Exec-based lifecycle commands.
 func (c *Compose) output(args []string) ([]byte, error) {
-	cmd := exec.Command("docker", args...)
+	cmd := exec.Command(c.BinName(), args...)
 	cmd.Env = c.BuildEnv()
 	return cmd.Output()
 }

@@ -40,12 +40,13 @@ a tools table with live container status, and a compose topology tree.`,
 				processEnv = docker.MergeEnv(dockerCfg.ProcessEnv)
 			}
 
-			topo := stack.FetchComposeTopology(composeFiles, projectName, processEnv)
+			dockerBin := config.DockerBin(cfg)
+			topo := stack.FetchComposeTopology(composeFiles, projectName, processEnv, dockerBin)
 			var topoStatus map[string]ui.NodeStatus
 			if topo == nil {
 				topo = stack.ParseTopologyFromFiles(composeFiles)
 			} else {
-				topoStatus = stack.ComposeNodeStatuses(composeFiles, projectName, processEnv)
+				topoStatus = stack.ComposeNodeStatuses(composeFiles, projectName, processEnv, dockerBin)
 				if topoStatus != nil {
 					for name := range topo {
 						if _, ok := topoStatus[name]; !ok {
@@ -62,7 +63,7 @@ a tools table with live container status, and a compose topology tree.`,
 			}
 
 			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container)
+				return containerRunning(projectName, container, dockerBin)
 			}
 			return stack.RunStatus(render.Stdout(), cfg, isRunning, topo, topoStatus)
 		},
