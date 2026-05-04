@@ -17,7 +17,7 @@ devbox [flags]
 ### Options
 
 ```
-  -c, --config string   path to devbox.yml (default "devbox.yml")
+  -c, --config string   path to devbox.yml (default: auto-discover from cwd upward)
   -h, --help            help for devbox
 ```
 

@@ -27,7 +27,7 @@ They can be shell commands, scripts, service exec/run operations, or multi-step 
 ### Options inherited from parent commands
 
 ```
-  -c, --config string   path to devbox.yml (default "devbox.yml")
+  -c, --config string   path to devbox.yml (default: auto-discover from cwd upward)
 ```
 
 ### SEE ALSO

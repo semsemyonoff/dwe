@@ -30,7 +30,7 @@ func buildDevboxCmd(devboxArg, workDir, shell, devboxBin string, skipConfirm boo
 	if err != nil {
 		bin = devboxBin
 	}
-	cmd := exec.Command(shell, "-c", bin+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
+	cmd := exec.Command(shell, "-c", shellQuote(bin)+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
 	if skipConfirm {
@@ -316,4 +316,10 @@ func Run(
 
 	success = true
 	return nil
+}
+
+// shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.
+// Embedded single quotes are escaped via the '\\” idiom.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

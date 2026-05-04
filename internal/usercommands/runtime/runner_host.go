@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/tpl"
@@ -29,7 +30,7 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 		return fmt.Errorf("render run: %w", err)
 	}
 
-	cmd := exec.Command(config.ShellBin(ctx.Config), "-c", bin+" "+rendered) //nolint:gosec
+	cmd := exec.Command(config.ShellBin(ctx.Config), "-c", shellQuote(bin)+" "+rendered) //nolint:gosec
 	if ctx.ProjectRoot != "" {
 		cmd.Dir = ctx.ProjectRoot
 	}
@@ -158,4 +159,10 @@ func stderr(ctx RunContext) io.Writer {
 		return ctx.Stderr
 	}
 	return os.Stderr
+}
+
+// shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.
+// Embedded single quotes are escaped via the '\\” idiom.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

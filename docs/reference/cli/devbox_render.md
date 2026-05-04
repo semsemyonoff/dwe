@@ -26,7 +26,7 @@ Subcommands:
 ### Options inherited from parent commands
 
 ```
-  -c, --config string   path to devbox.yml (default "devbox.yml")
+  -c, --config string   path to devbox.yml (default: auto-discover from cwd upward)
 ```
 
 ### SEE ALSO

@@ -333,7 +333,7 @@ Mode controls copy behavior: 'default' skips existing files, 'update' copies alw
 // newDeployConfigCheckCmd creates the `devbox deploy config-check <service>` command.
 // It verifies that all config files declared in services.<service>.configs exist in
 // services/<service>/configs/. Exits non-zero and prints missing files if any are absent.
-// Intended for use as a step check: "cmd: ./bin/devbox deploy config-check <service>".
+// Intended for use as a step check: "cmd: devbox deploy config-check <service>".
 func newDeployConfigCheckCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "config-check <service>",
@@ -342,7 +342,7 @@ func newDeployConfigCheckCmd(flags *rootFlags) *cobra.Command {
 services/<service>/configs/<file>. Exits non-zero if any files are missing.
 
 Intended as a deploy step check condition:
-  check: "cmd: ./bin/devbox deploy config-check <service>"`,
+  check: "cmd: devbox deploy config-check <service>"`,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

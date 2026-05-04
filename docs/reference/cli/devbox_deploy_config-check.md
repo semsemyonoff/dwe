@@ -8,7 +8,7 @@ Check that every file listed in services.<service>.configs exists at
 services/<service>/configs/<file>. Exits non-zero if any files are missing.
 
 Intended as a deploy step check condition:
-  check: "cmd: ./bin/devbox deploy config-check <service>"
+  check: "cmd: devbox deploy config-check <service>"
 
 ```
 devbox deploy config-check <service> [flags]
@@ -23,7 +23,7 @@ devbox deploy config-check <service> [flags]
 ### Options inherited from parent commands
 
 ```
-  -c, --config string   path to devbox.yml (default "devbox.yml")
+  -c, --config string   path to devbox.yml (default: auto-discover from cwd upward)
 ```
 
 ### SEE ALSO
