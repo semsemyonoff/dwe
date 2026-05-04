@@ -252,7 +252,10 @@ func newDockerWaitCmd(flags *rootFlags) *cobra.Command {
 			}
 			attempts := max(int(timeout/interval), 1)
 
-			return waitContainersHealthy(ids, dockerHealthStatus, attempts, interval, render.Stdout())
+			bin := config.DockerBin(p.cfg)
+			return waitContainersHealthy(ids, func(id string) (string, error) {
+				return dockerHealthStatus(bin, id)
+			}, attempts, interval, render.Stdout())
 		},
 		SilenceUsage: true,
 	}

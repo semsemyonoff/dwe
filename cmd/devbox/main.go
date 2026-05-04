@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"io"
 	"os"
+	"path/filepath"
 
 	"charm.land/fang/v2"
 	lipglossv2 "charm.land/lipgloss/v2"
@@ -83,7 +84,7 @@ func loadHelpColorScheme(configPath string, explicit bool) fang.ColorSchemeFunc 
 	if err != nil || !found {
 		return nil
 	}
-	stylesPath := resolved.Root + "/devbox/styles.yml"
+	stylesPath := filepath.Join(resolved.Root, "devbox", "styles.yml")
 	stylesCfg, err := config.LoadStylesConfig(stylesPath)
 	if err != nil || stylesCfg == nil {
 		return nil

@@ -173,7 +173,7 @@ func RemoveHiddenNodes(topo map[string][]string, status map[string]ui.NodeStatus
 		delete(status, name)
 	}
 	for name, deps := range topo {
-		filtered := deps[:0]
+		filtered := make([]string, 0, len(deps))
 		for _, d := range deps {
 			if !hide[d] {
 				filtered = append(filtered, d)

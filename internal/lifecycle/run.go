@@ -33,9 +33,9 @@ type RunContext struct {
 	ShowInfo func() error
 }
 
-// ResolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
+// resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
 // Precedence: NoUpdate > UpdateMode flag > LifecycleRunConfig.EffectiveMode()
-func ResolveUpdateMode(cfg *config.LifecycleRunConfig, noUpdate bool, updateFlag string) string {
+func resolveUpdateMode(cfg *config.LifecycleRunConfig, noUpdate bool, updateFlag string) string {
 	mode := cfg.EffectiveMode()
 	if updateFlag != "" {
 		mode = updateFlag
@@ -71,7 +71,7 @@ func RunRun(ctx RunContext) error {
 		return fmt.Errorf("invalid --update mode %q: must be one of: prompt, auto, check, off", ctx.UpdateMode)
 	}
 
-	effectiveMode := ResolveUpdateMode(lifecycleCfg.Run, ctx.NoUpdate, ctx.UpdateMode)
+	effectiveMode := resolveUpdateMode(lifecycleCfg.Run, ctx.NoUpdate, ctx.UpdateMode)
 
 	w := render.Stdout()
 	var pulled bool
@@ -126,7 +126,7 @@ func RunRun(ctx RunContext) error {
 		}
 	}
 
-	reg, err := loadRegistry(ctx.ConfigPath)
+	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
@@ -157,10 +157,4 @@ func RunRestart(ctx RunContext) error {
 	ctx.NoUpdate = true
 	ctx.UpdateMode = ""
 	return RunRun(ctx)
-}
-
-// loadRegistry loads the command registry from devbox/commands/ relative to configPath.
-// Returns an empty registry when the directory does not exist.
-func loadRegistry(configPath string) (*usercommands.Registry, error) {
-	return usercommands.LoadRegistryFromConfigPath(configPath)
 }

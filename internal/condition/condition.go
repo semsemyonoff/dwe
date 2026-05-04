@@ -101,6 +101,8 @@ func EvalBuiltin(predicate, projectRoot string) (bool, error) {
 
 // EvalCmd runs the shell command in projectRoot via "sh -c <command>".
 // Returns true if the command exits with code 0.
+// Intentionally uses the POSIX-portable "sh" rather than config.ShellBin — conditions
+// must be predictably portable regardless of the project's configured shell.
 func EvalCmd(command, projectRoot string) (bool, error) {
 	command = strings.TrimSpace(command)
 	if command == "" {

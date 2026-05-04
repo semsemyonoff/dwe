@@ -194,9 +194,10 @@ func waitContainersHealthy(ids []string, getHealth healthGetFn, attempts int, in
 
 // dockerHealthStatus returns the health status of a single container by ID.
 // Returns "none" when the container has no healthcheck configured.
-func dockerHealthStatus(id string) (string, error) {
+// bin is the docker binary name (e.g. "docker" or "podman").
+func dockerHealthStatus(bin, id string) (string, error) {
 	out, err := exec.Command(
-		"docker", "inspect",
+		bin, "inspect",
 		"--format", `{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}`,
 		id,
 	).Output()

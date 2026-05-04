@@ -22,7 +22,7 @@ const (
 
 // ErrNotFound is returned by Resolve when no devbox.yml is found during upward discovery
 // (discovery mode only — explicit -c paths produce a wrapped os.ErrNotExist instead).
-var ErrNotFound = errors.New("no devbox.yml found in cwd or any parent directory")
+var ErrNotFound = errors.New("no devbox.yml found")
 
 // Resolved holds the result of a successful project location.
 type Resolved struct {

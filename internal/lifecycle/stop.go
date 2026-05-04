@@ -8,6 +8,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/usercommands"
 )
 
 // StopContext carries all parameters for the stop lifecycle entry point.
@@ -37,7 +38,7 @@ func RunStop(ctx StopContext) error {
 		return fmt.Errorf("lifecycle.yml has no `stop:` section — see devbox/lifecycle.example.yml")
 	}
 
-	reg, err := loadRegistry(ctx.ConfigPath)
+	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
