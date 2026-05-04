@@ -286,8 +286,8 @@ Goal: replace `./bin/devbox` literals; nested devbox calls use `os.Executable()`
 
 ### Task 10: [Final] Documentation pass
 
-- [ ] update `docs/reference/config/` if generated content didn't cover the new `binaries:` schema key — add a short snippet explaining defaults and that the block is read pre-merge.
-- [ ] note in the top-level `CLAUDE.md` (Config section) that `devbox.yml` now requires `schema_version: "2"` and supports a top-level `binaries:` block (engine policy, not layered).
+- [x] update `docs/reference/config/` if generated content didn't cover the new `binaries:` schema key — add a short snippet explaining defaults and that the block is read pre-merge.
+- [x] note in the top-level `CLAUDE.md` (Config section) that `devbox.yml` now requires `schema_version: "2"` and supports a top-level `binaries:` block (engine policy, not layered).
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
 

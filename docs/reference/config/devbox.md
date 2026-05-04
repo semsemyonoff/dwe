@@ -54,6 +54,7 @@ The three files share a single namespace — the same key in different layers is
 |---------|-------|
 | Project name and prefix | `devbox.yml` |
 | Schema version | `devbox.yml` |
+| Binary overrides (`binaries:`) | `devbox.yml` only (engine policy, not layered) |
 | Port defaults | `defaults.yml` |
 | Host defaults | `defaults.yml` |
 | Tool defaults (enabled/disabled) | `defaults.yml` |
@@ -98,7 +99,7 @@ Dot-paths are consumed by:
 
 **Example**:
 ```yaml
-schema_version: "1"
+schema_version: "2"
 
 project:
   name: laravel
@@ -109,11 +110,36 @@ project:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema_version` | string | Config schema version (currently `"1"`) |
+| `schema_version` | string | Config schema version. Must be `"2"` — the CLI rejects v1 projects with a clear error. |
 | `project.name` | string | Short project identifier (used in container names, `.env`) |
 | `project.prefix` | string | Prefix for Docker project name and container labels |
+| `binaries.devbox` | string | Devbox binary name for nested calls and plan display. Default: `devbox`. |
+| `binaries.docker` | string | Docker binary name used for all `docker compose` execution. Default: `docker`. Override with `podman` or any OCI-compatible binary. |
+| `binaries.shell` | string | Shell used for host-side script and lifecycle step execution. Default: `sh`. |
 
 `project.prefix` and `project.name` combine to form the Docker Compose project name via the template in `docker.yml` (`${project.prefix}-${project.name}`).
+
+### `binaries` block
+
+The optional `binaries:` block overrides the executables devbox shells out to. It is read from `devbox.yml` only — values set in `defaults.yml` or `local.yml` are silently ignored.
+
+```yaml
+binaries:
+  devbox: devbox          # nested devbox calls and plan display
+  docker: docker          # all docker compose execution
+  shell: sh               # host-side script / lifecycle step execution
+```
+
+All three keys are optional; any key omitted uses its default. Partial overrides are safe:
+
+```yaml
+binaries:
+  docker: podman          # only substitute docker; devbox and shell stay at defaults
+```
+
+The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}`, and `${binaries.shell}` in template expressions (commands, docker.yml project_name, export rules).
+
+> **Engine policy, not user state.** The `binaries:` block controls which executables the CLI itself invokes — it is part of the project's engine contract, not per-user configuration. Commit it in `devbox.yml`; do not put it in `local.yml`.
 
 ---
 
