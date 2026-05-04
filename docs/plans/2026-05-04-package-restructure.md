@@ -229,14 +229,14 @@ Extract `.env` rendering so cobra is not the only entry point. Unblocks `localco
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] verify `internal/command` imports domain packages but no domain package imports `internal/command` (`go list -deps ./internal/...` and grep)
-- [ ] verify `internal/envfile` imports only `internal/config` and stdlib (no cobra, no ui, no usercommands)
-- [ ] verify `internal/localconfig` imports only `internal/config` and stdlib (no envfile, no command)
-- [ ] verify `internal/usercommands/runtime` is the only subpackage that holds runners
-- [ ] verify `internal/commands` no longer exists
-- [ ] run full test suite: `go test ./...`
-- [ ] run linter: `make lint` — all issues fixed
-- [ ] verify reference docs regenerate cleanly
+- [x] verify `internal/command` imports domain packages but no domain package imports `internal/command` (`go list -deps ./internal/...` and grep)
+- [x] verify `internal/envfile` imports only `internal/config` and stdlib (no cobra, no ui, no usercommands)
+- [x] verify `internal/localconfig` imports only `internal/config` and stdlib (no envfile, no command)
+- [x] verify `internal/usercommands/runtime` is the only subpackage that holds runners (`RunnerDef` in model is a YAML config struct, not a runner impl)
+- [x] verify `internal/commands` no longer exists
+- [x] run full test suite: `go test ./...`
+- [x] run linter: `make lint` — all issues fixed
+- [x] verify reference docs regenerate cleanly
 
 ## Technical Details
 
