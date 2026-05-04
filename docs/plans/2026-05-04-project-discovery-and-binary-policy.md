@@ -180,7 +180,7 @@ Sites confirmed today (verified by grep — file/line accuracy matters because t
 
 ### Task 5: Add `BinariesConfig` to the config layer
 
-- [ ] in `internal/config/devbox.go`:
+- [x] in `internal/config/devbox.go`:
   - define `type BinariesConfig struct { Devbox, Docker, Shell string }` with `yaml:"devbox"`, `yaml:"docker"`, `yaml:"shell"` tags.
   - add `Binaries BinariesConfig` to `DevboxConfig`.
   - add `applyBinariesDefaults(*BinariesConfig)` — fills empty fields with `devbox`, `docker`, `sh`.
@@ -194,18 +194,18 @@ Sites confirmed today (verified by grep — file/line accuracy matters because t
     7. **normalize `cfg.Raw["binaries"]`**: overwrite with `map[string]any{"devbox": cfg.Binaries.Devbox, "docker": cfg.Binaries.Docker, "shell": cfg.Binaries.Shell}`. Any `binaries:` block from layered files is silently discarded from `Raw` so dot-path lookups (`${binaries.docker}` in template/export rules) read the same effective values as Go callers.
   - rationale for the order: standalone read happens *after* the merged unmarshal so the assignment cleanly overwrites; defaults applied *after* the assignment so a partial top-level (`binaries: { docker: podman }`) still gets `devbox: devbox`/`shell: sh` defaults; Raw normalization *after* defaults so templates see the exact same string as `cfg.Binaries.*`.
   - document the field with a doc comment that names the ordering and explains "engine policy, not layered."
-- [ ] add nil/zero-value-safe accessors in `internal/config/devbox.go` so call sites never have to check for `nil` cfg or empty fields:
+- [x] add nil/zero-value-safe accessors in `internal/config/devbox.go` so call sites never have to check for `nil` cfg or empty fields:
   - `func DevboxBin(cfg *DevboxConfig) string` — returns `cfg.Binaries.Devbox` if non-empty, else `"devbox"`. Handles `cfg == nil`.
   - `func DockerBin(cfg *DevboxConfig) string` — same pattern, default `"docker"`.
   - `func ShellBin(cfg *DevboxConfig) string` — same pattern, default `"sh"`.
   - All three are the **only** way the rest of the codebase reads binary names. Tasks 6–8 use these accessors instead of dereferencing `cfg.Binaries.*` directly. This protects test fixtures that build `DevboxConfig{}` manually and runtime paths where `RunContext.Config` may be nil.
-- [ ] write tests in `internal/config/devbox_test.go`:
+- [x] write tests in `internal/config/devbox_test.go`:
   - all three keys defaulted when omitted (both `cfg.Binaries.*` and `cfg.Raw["binaries"]` reflect defaults).
   - explicit overrides preserved (`binaries: { devbox: my-devbox, docker: podman, shell: bash }`); `cfg.Raw["binaries"]` matches.
   - `defaults.yml` containing a `binaries:` block is *ignored*: even when `defaults.yml` sets `binaries.docker: podman`, the resulting `cfg.Binaries.Docker` and `cfg.Raw["binaries"].(map[string]any)["docker"]` are the top-level value (or default if top-level omits it). Same check for `local.yml`.
   - partial override: only `docker:` set in top-level → other two get defaults; Raw mirrors the effective values.
   - accessor tests: `DevboxBin(nil) == "devbox"`, `DockerBin(&DevboxConfig{}) == "docker"`, `ShellBin(&DevboxConfig{Binaries: BinariesConfig{Shell: "bash"}}) == "bash"`.
-- [ ] `make test` — must pass before next task.
+- [x] `make test` — must pass before next task.
 
 ### Task 6: Route Docker binary through `BinariesConfig`
 

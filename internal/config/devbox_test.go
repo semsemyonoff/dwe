@@ -1935,6 +1935,178 @@ stop:
 	}
 }
 
+// --- BinariesConfig ---
+
+func TestLoadConfig_binariesAllDefaulted(t *testing.T) {
+	// No binaries: block in any layer — all three fields get built-in defaults.
+	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Binaries.Devbox != "devbox" {
+		t.Errorf("Binaries.Devbox = %q, want devbox", cfg.Binaries.Devbox)
+	}
+	if cfg.Binaries.Docker != "docker" {
+		t.Errorf("Binaries.Docker = %q, want docker", cfg.Binaries.Docker)
+	}
+	if cfg.Binaries.Shell != "sh" {
+		t.Errorf("Binaries.Shell = %q, want sh", cfg.Binaries.Shell)
+	}
+	// Raw map must also reflect defaults.
+	rawBin, ok := cfg.Raw["binaries"].(map[string]any)
+	if !ok {
+		t.Fatal("cfg.Raw[\"binaries\"] is not map[string]any")
+	}
+	if rawBin["devbox"] != "devbox" {
+		t.Errorf("Raw[binaries][devbox] = %v, want devbox", rawBin["devbox"])
+	}
+	if rawBin["docker"] != "docker" {
+		t.Errorf("Raw[binaries][docker] = %v, want docker", rawBin["docker"])
+	}
+	if rawBin["shell"] != "sh" {
+		t.Errorf("Raw[binaries][shell] = %v, want sh", rawBin["shell"])
+	}
+}
+
+func TestLoadConfig_binariesExplicitOverrides(t *testing.T) {
+	devboxYML := `
+schema_version: "1"
+project:
+  name: laravel
+  prefix: devbox
+binaries:
+  devbox: my-devbox
+  docker: podman
+  shell: bash
+`
+	path := writeLayeredFixture(t, devboxYML, sampleDefaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Binaries.Devbox != "my-devbox" {
+		t.Errorf("Binaries.Devbox = %q, want my-devbox", cfg.Binaries.Devbox)
+	}
+	if cfg.Binaries.Docker != "podman" {
+		t.Errorf("Binaries.Docker = %q, want podman", cfg.Binaries.Docker)
+	}
+	if cfg.Binaries.Shell != "bash" {
+		t.Errorf("Binaries.Shell = %q, want bash", cfg.Binaries.Shell)
+	}
+	rawBin, ok := cfg.Raw["binaries"].(map[string]any)
+	if !ok {
+		t.Fatal("cfg.Raw[\"binaries\"] is not map[string]any")
+	}
+	if rawBin["docker"] != "podman" {
+		t.Errorf("Raw[binaries][docker] = %v, want podman", rawBin["docker"])
+	}
+}
+
+func TestLoadConfig_binariesIgnoredFromDefaultsLayer(t *testing.T) {
+	// Even when defaults.yml sets binaries.docker: podman, the resulting value
+	// comes from top-level devbox.yml only (or the built-in default when absent).
+	defaultsWithBinaries := sampleDefaultsYML + `
+binaries:
+  docker: podman
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithBinaries, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// devbox.yml has no binaries block, so the default "docker" must win over defaults.yml.
+	if cfg.Binaries.Docker != "docker" {
+		t.Errorf("Binaries.Docker = %q, want docker (defaults.yml binaries must be ignored)", cfg.Binaries.Docker)
+	}
+	rawBin, _ := cfg.Raw["binaries"].(map[string]any)
+	if rawBin["docker"] != "docker" {
+		t.Errorf("Raw[binaries][docker] = %v, want docker", rawBin["docker"])
+	}
+}
+
+func TestLoadConfig_binariesIgnoredFromLocalLayer(t *testing.T) {
+	// local.yml binaries block must also be ignored.
+	localWithBinaries := `
+binaries:
+  docker: nerdctl
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, localWithBinaries)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Binaries.Docker != "docker" {
+		t.Errorf("Binaries.Docker = %q, want docker (local.yml binaries must be ignored)", cfg.Binaries.Docker)
+	}
+}
+
+func TestLoadConfig_binariesPartialOverride(t *testing.T) {
+	// Only docker: set in top-level — other two get built-in defaults.
+	devboxYML := `
+schema_version: "1"
+project:
+  name: laravel
+  prefix: devbox
+binaries:
+  docker: podman
+`
+	path := writeLayeredFixture(t, devboxYML, sampleDefaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Binaries.Devbox != "devbox" {
+		t.Errorf("Binaries.Devbox = %q, want devbox (default)", cfg.Binaries.Devbox)
+	}
+	if cfg.Binaries.Docker != "podman" {
+		t.Errorf("Binaries.Docker = %q, want podman", cfg.Binaries.Docker)
+	}
+	if cfg.Binaries.Shell != "sh" {
+		t.Errorf("Binaries.Shell = %q, want sh (default)", cfg.Binaries.Shell)
+	}
+	rawBin, _ := cfg.Raw["binaries"].(map[string]any)
+	if rawBin["devbox"] != "devbox" {
+		t.Errorf("Raw[binaries][devbox] = %v, want devbox", rawBin["devbox"])
+	}
+	if rawBin["docker"] != "podman" {
+		t.Errorf("Raw[binaries][docker] = %v, want podman", rawBin["docker"])
+	}
+	if rawBin["shell"] != "sh" {
+		t.Errorf("Raw[binaries][shell] = %v, want sh", rawBin["shell"])
+	}
+}
+
+func TestBinariesAccessors(t *testing.T) {
+	// DevboxBin(nil) == "devbox"
+	if got := DevboxBin(nil); got != "devbox" {
+		t.Errorf("DevboxBin(nil) = %q, want devbox", got)
+	}
+	// DockerBin(&DevboxConfig{}) == "docker"
+	if got := DockerBin(&DevboxConfig{}); got != "docker" {
+		t.Errorf("DockerBin(&DevboxConfig{}) = %q, want docker", got)
+	}
+	// ShellBin(nil) == "sh"
+	if got := ShellBin(nil); got != "sh" {
+		t.Errorf("ShellBin(nil) = %q, want sh", got)
+	}
+	// ShellBin with explicit value
+	cfg := &DevboxConfig{Binaries: BinariesConfig{Shell: "bash"}}
+	if got := ShellBin(cfg); got != "bash" {
+		t.Errorf("ShellBin(cfg) = %q, want bash", got)
+	}
+	// DevboxBin with explicit value
+	cfg2 := &DevboxConfig{Binaries: BinariesConfig{Devbox: "my-devbox"}}
+	if got := DevboxBin(cfg2); got != "my-devbox" {
+		t.Errorf("DevboxBin(cfg2) = %q, want my-devbox", got)
+	}
+	// DockerBin with explicit value
+	cfg3 := &DevboxConfig{Binaries: BinariesConfig{Docker: "podman"}}
+	if got := DockerBin(cfg3); got != "podman" {
+		t.Errorf("DockerBin(cfg3) = %q, want podman", got)
+	}
+}
+
 // TestLoadLifecycleConfig_logExplicit verifies that `log: true` is respected
 // for both run and stop.
 func TestLoadLifecycleConfig_logExplicit(t *testing.T) {

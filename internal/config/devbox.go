@@ -13,18 +13,73 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// BinariesConfig holds binary overrides for engine policy.
+//
+// Fields are read from the top-level devbox.yml only — not layered with
+// defaults.yml or local.yml. Empty fields fall back to built-in defaults
+// (devbox, docker, sh). Use DevboxBin/DockerBin/ShellBin accessors to read.
+type BinariesConfig struct {
+	Devbox string `yaml:"devbox"`
+	Docker string `yaml:"docker"`
+	Shell  string `yaml:"shell"`
+}
+
+// DevboxBin returns the configured devbox binary name (default: "devbox").
+// Safe when cfg is nil.
+func DevboxBin(cfg *DevboxConfig) string {
+	if cfg == nil || cfg.Binaries.Devbox == "" {
+		return "devbox"
+	}
+	return cfg.Binaries.Devbox
+}
+
+// DockerBin returns the configured docker binary name (default: "docker").
+// Safe when cfg is nil.
+func DockerBin(cfg *DevboxConfig) string {
+	if cfg == nil || cfg.Binaries.Docker == "" {
+		return "docker"
+	}
+	return cfg.Binaries.Docker
+}
+
+// ShellBin returns the configured shell binary name (default: "sh").
+// Safe when cfg is nil.
+func ShellBin(cfg *DevboxConfig) string {
+	if cfg == nil || cfg.Binaries.Shell == "" {
+		return "sh"
+	}
+	return cfg.Binaries.Shell
+}
+
+// applyBinariesDefaults fills empty BinariesConfig fields with built-in defaults.
+func applyBinariesDefaults(b *BinariesConfig) {
+	if b.Devbox == "" {
+		b.Devbox = "devbox"
+	}
+	if b.Docker == "" {
+		b.Docker = "docker"
+	}
+	if b.Shell == "" {
+		b.Shell = "sh"
+	}
+}
+
 // DevboxConfig is the merged top-level devbox configuration.
 // It is produced by layering devbox.yml → devbox/defaults.yml → devbox/local.yml.
+//
+// Binaries is engine policy read from the top-level devbox.yml only — it is
+// not layered with defaults.yml or local.yml. See BinariesConfig for details.
 type DevboxConfig struct {
-	SchemaVersion string        `yaml:"schema_version"`
-	Project       ProjectConfig `yaml:"project"`
-	Tools         ToolsConfig   `yaml:"tools"`
-	Runtime       RuntimeConfig `yaml:"runtime"`
-	State         string        `yaml:"state"`
-	Exports       ExportsConfig `yaml:"exports"`
-	Compose       ComposeConfig `yaml:"compose"`
-	IDE           IDEConfig     `yaml:"ide"`
-	Deploy        DeployConfig  `yaml:"-"`
+	SchemaVersion string         `yaml:"schema_version"`
+	Project       ProjectConfig  `yaml:"project"`
+	Tools         ToolsConfig    `yaml:"tools"`
+	Runtime       RuntimeConfig  `yaml:"runtime"`
+	State         string         `yaml:"state"`
+	Exports       ExportsConfig  `yaml:"exports"`
+	Compose       ComposeConfig  `yaml:"compose"`
+	IDE           IDEConfig      `yaml:"ide"`
+	Deploy        DeployConfig   `yaml:"-"`
+	Binaries      BinariesConfig `yaml:"binaries"`
 
 	// Services holds the fully resolved service definitions loaded from
 	// devbox/services.yml with Enabled populated from the 3-layer config merge.
@@ -454,9 +509,32 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
+
+	// Binaries are engine policy: read from top-level devbox.yml only, never layered.
+	// Re-parse the base file to get the raw binaries block, overwriting whatever the
+	// merged unmarshal produced. Defaults are applied after so a partial top-level
+	// block (e.g. only docker: podman) still gets sensible values for the other fields.
+	var topView struct {
+		Binaries BinariesConfig `yaml:"binaries"`
+	}
+	if topBytes, err := os.ReadFile(devboxPath); err == nil {
+		_ = yaml.Unmarshal(topBytes, &topView) // best-effort; parse errors fall back to defaults
+	}
+	cfg.Binaries = topView.Binaries
+	applyBinariesDefaults(&cfg.Binaries)
+
 	cfg.Raw = merged
 	// Store config path so deploy resolution can find service deploy files.
 	cfg.Raw["__configPath"] = devboxPath
+
+	// Normalize Raw["binaries"] so dot-path lookups (e.g. ${binaries.docker} in
+	// export rules) see the same effective values as cfg.Binaries.* Go callers.
+	// Any binaries: block from defaults.yml or local.yml is silently discarded here.
+	cfg.Raw["binaries"] = map[string]any{
+		"devbox": cfg.Binaries.Devbox,
+		"docker": cfg.Binaries.Docker,
+		"shell":  cfg.Binaries.Shell,
+	}
 
 	// Load devbox/services.yml separately (not merged with config layers).
 	servicesPath := filepath.Join(baseDir, "devbox", "services.yml")
