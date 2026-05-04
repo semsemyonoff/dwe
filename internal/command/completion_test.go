@@ -1,6 +1,7 @@
 package command
 
 import (
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -179,7 +180,10 @@ func TestOptionalServiceNameCompletion_filtersOutMandatory(t *testing.T) {
 // --- toolNameCompletion ---
 
 func TestToolNameCompletion_returnsKnownTools(t *testing.T) {
-	completions, directive := toolNameCompletion(nil, []string{}, "")
+	// Set projectRoot to trigger the fast path in completionConfigPath (no disk access).
+	flags := &rootFlags{configPath: "/fake/devbox.yml", projectRoot: "/fake"}
+	fn := toolNameCompletion(flags)
+	completions, directive := fn(nil, []string{}, "")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
 	}
@@ -205,7 +209,10 @@ func TestToolNameCompletion_returnsKnownTools(t *testing.T) {
 }
 
 func TestToolNameCompletion_noSecondArg(t *testing.T) {
-	completions, directive := toolNameCompletion(nil, []string{"already"}, "")
+	// The len(args) != 0 guard fires before any config access, so cmd can be nil.
+	flags := &rootFlags{configPath: "/fake/devbox.yml", projectRoot: "/fake"}
+	fn := toolNameCompletion(flags)
+	completions, directive := fn(nil, []string{"already"}, "")
 	if len(completions) != 0 {
 		t.Errorf("expected 0 completions when arg already set, got %d", len(completions))
 	}
@@ -312,5 +319,139 @@ func TestToolDisableCmdHasValidArgsFunction(t *testing.T) {
 	cmd := newToolDisableCmd(flags)
 	if cmd.ValidArgsFunction == nil {
 		t.Error("tools disable should have a ValidArgsFunction for dynamic completion")
+	}
+}
+
+// --- completionConfigPath integration tests ---
+//
+// These tests exercise the __complete path: ValidArgsFunction callbacks are
+// invoked without PersistentPreRunE having run, so completionConfigPath must
+// resolve the project itself.
+
+// buildRootCmdForCompletion builds a root cobra.Command with a persistent --config
+// flag. When configPath is non-empty the flag is marked as Changed (explicit mode).
+func buildRootCmdForCompletion(flags *rootFlags, configPath string) *cobra.Command {
+	root := &cobra.Command{Use: "devbox"}
+	root.PersistentFlags().StringVarP(&flags.configPath, "config", "c", "", "")
+	if configPath != "" {
+		_ = root.PersistentFlags().Set("config", configPath)
+	}
+	return root
+}
+
+// TestCompletionConfigPath_subdirDiscovery verifies that completionConfigPath
+// finds a v2 devbox.yml when invoked from a subdirectory of the project.
+func TestCompletionConfigPath_subdirDiscovery(t *testing.T) {
+	projectDir := t.TempDir()
+	makeV2Project(t, projectDir)
+
+	subdir := projectDir + "/services/main"
+	if err := os.MkdirAll(subdir, 0755); err != nil {
+		t.Fatalf("creating subdir: %v", err)
+	}
+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	if err := os.Chdir(subdir); err != nil {
+		t.Fatalf("chdir into subdir: %v", err)
+	}
+
+	flags := &rootFlags{} // projectRoot not set — simulates __complete path
+	root := buildRootCmdForCompletion(flags, "")
+
+	configPath, projectRoot, err := completionConfigPath(flags, root)
+	if err != nil {
+		t.Fatalf("expected no error from subdir, got: %v", err)
+	}
+	if configPath == "" || projectRoot == "" {
+		t.Error("expected non-empty configPath and projectRoot from subdir discovery")
+	}
+}
+
+// TestCompletionConfigPath_noProject verifies that completionConfigPath returns
+// ErrNotFound (and no panic) when there is no devbox.yml in any parent directory.
+func TestCompletionConfigPath_noProject(t *testing.T) {
+	emptyDir := t.TempDir()
+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	if err := os.Chdir(emptyDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	flags := &rootFlags{}
+	root := buildRootCmdForCompletion(flags, "")
+
+	_, _, err = completionConfigPath(flags, root)
+	if err == nil {
+		t.Fatal("expected error when no project exists, got nil")
+	}
+}
+
+// TestCompletionConfigPath_explicitBadPath verifies that an explicit --config
+// pointing to a non-existent file returns an error (no panic, no terminal noise).
+func TestCompletionConfigPath_explicitBadPath(t *testing.T) {
+	badPath := t.TempDir() + "/nonexistent.yml"
+
+	flags := &rootFlags{}
+	root := buildRootCmdForCompletion(flags, badPath)
+
+	_, _, err := completionConfigPath(flags, root)
+	if err == nil {
+		t.Fatal("expected error for explicit bad path, got nil")
+	}
+}
+
+// TestCompletionConfigPath_legacyV1_noCompletions verifies that completionConfigPath
+// returns an error for a v1 project so callbacks correctly return no completions.
+func TestCompletionConfigPath_legacyV1_noCompletions(t *testing.T) {
+	projectDir := t.TempDir()
+	makeV1Project(t, projectDir)
+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	flags := &rootFlags{}
+	root := buildRootCmdForCompletion(flags, "")
+
+	_, _, err = completionConfigPath(flags, root)
+	if err == nil {
+		t.Fatal("expected schema error for v1 project, got nil")
+	}
+	if !strings.Contains(err.Error(), "schema_version") {
+		t.Errorf("expected schema_version error, got: %v", err)
+	}
+
+	// Verify that optionalServiceNameCompletion returns no completions for v1.
+	completions, directive := optionalServiceNameCompletion(flags)(root, []string{}, "")
+	if len(completions) != 0 {
+		t.Errorf("expected 0 completions from optionalServiceNameCompletion for v1 project, got %d", len(completions))
+	}
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
+	}
+
+	// Verify that toolNameCompletion also returns no completions for v1.
+	toolCompletions, toolDirective := toolNameCompletion(flags)(root, []string{}, "")
+	if len(toolCompletions) != 0 {
+		t.Errorf("expected 0 completions from toolNameCompletion for v1 project, got %d", len(toolCompletions))
+	}
+	if toolDirective != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", toolDirective)
 	}
 }

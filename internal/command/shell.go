@@ -181,7 +181,11 @@ func serviceNameCompletion(flags *rootFlags) func(*cobra.Command, []string, stri
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		cfg, err := config.LoadConfig(flags.configPath)
+		configPath, _, err := completionConfigPath(flags, cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}

@@ -401,7 +401,11 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		reg, err := loadCommandRegistry(flags.configPath)
+		configPath, _, err := completionConfigPath(flags, cmd)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		reg, err := loadCommandRegistry(configPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}

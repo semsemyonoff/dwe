@@ -202,7 +202,11 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			}
 			var completions []string
 			completions = cobra.AppendActiveHelp(completions, "Use 'devbox deploy plan' to see available phase/step addresses")
-			cfg, err := config.LoadConfig(flags.configPath)
+			configPath, _, err := completionConfigPath(flags, cmd)
+			if err != nil {
+				return completions, cobra.ShellCompDirectiveNoFileComp
+			}
+			cfg, err := config.LoadConfig(configPath)
 			if err != nil {
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}

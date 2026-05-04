@@ -158,25 +158,25 @@ Sites confirmed today (verified by grep — file/line accuracy matters because t
 - `internal/command/shell.go` (or wherever `newShellCmd` lives) — `devbox shell <service>` ValidArgsFunction (test ref at `completion_test.go:278-282`).
 - final pass: `grep -rn 'ValidArgsFunction' internal/command/` and audit each callback for direct `flags.configPath` / `LoadConfig` usage.
 
-- [ ] add a small completion helper in `internal/command/` (e.g. `completionConfigPath(flags *rootFlags, cmd *cobra.Command) (string, string, error)`) that:
+- [x] add a small completion helper in `internal/command/` (e.g. `completionConfigPath(flags *rootFlags, cmd *cobra.Command) (string, string, error)`) that:
   - if `flags.configPath` is already populated *and* `flags.projectRoot` is set (e.g. `PersistentPreRunE` ran for some reason), returns them as-is.
   - otherwise calls `project.Resolve` (not `Locate`) using the same explicit/default detection as Task 3 (`cmd.Root().PersistentFlags().Lookup("config").Changed`). **Important**: `project.Locate` does not validate schema, so using `Locate` alone here would let `__complete` happily load and resolve completions for an unsupported legacy v1 project (silently giving the user the impression that the project works). `Resolve` composes `Locate` + `ValidateSchema` and is the right choice — a v1 project produces the legacy schema error, which the helper drops on the floor (returning empty completions). If you really want the no-validation variant for some narrow reason, use `Locate` + an explicit `project.ValidateSchema(path)` call before returning the path.
   - on `Resolve` returning `errors.Is(err, project.ErrNotFound)` (discovery miss): return empty strings + the sentinel so the caller can render no-completions silently.
   - on schema error or any other resolve error (including the wrapped `os.ErrNotExist` from an explicit `-c /bad/path`): return empty strings + that error. Completion callbacks drop the error and return `cobra.ShellCompDirectiveNoFileComp` (no spam in the user's terminal during tab-complete; legacy projects simply yield no suggestions, which surfaces the problem the next time the user runs the actual command and gets the colored schema error).
-- [ ] update every `ValidArgsFunction` callback to call the helper before any config-dependent work:
+- [x] update every `ValidArgsFunction` callback to call the helper before any config-dependent work:
   - `deploy.go:199-222`
-  - `reset.go` (sweep — likely the same pattern as deploy)
+  - `reset.go` (sweep — no ValidArgsFunction found; no change needed)
   - `service.go` (`optionalServiceNameCompletion` and any direct `LoadConfig` callers — lines 54, 88, 304, 344, 378)
   - `tools.go` (`toolNameCompletion` at line 309 + the two `ValidArgsFunction:` registrations at 195, 235) — distinct file from `service.go`.
   - `command_cmd.go` for `commands inspect` / `commands run` ID completion (registry load).
   - `shell.go` for `devbox shell <service>`.
   - any other site found via `grep -rn 'ValidArgsFunction' internal/command/`.
-- [ ] write tests in `internal/command/completion_test.go`:
+- [x] write tests in `internal/command/completion_test.go`:
   - simulate the `__complete` path by invoking the `ValidArgsFunction` directly with a chdir into a subdir of a temp v2 project; assert completions are produced (subdir resolution works for tab-complete).
   - same callback with `os.Chdir("/tmp")` (no project anywhere): assert no completions, no panic, no error spew on stderr.
   - explicit `-c /bad/path` for completion: assert empty completions, no terminal noise.
   - **legacy schema gating**: chdir into a subdir of a temp project whose `devbox.yml` has `schema_version: "1"`; assert the completion returns no completions (the helper drops the schema error). This prevents legacy projects from silently appearing functional through tab-completion. Add the same case for `tools enable`/`services enable` callbacks so the behavior is uniform across files.
-- [ ] `make test` — must pass before next task.
+- [x] `make test` — must pass before next task.
 
 ### Task 5: Add `BinariesConfig` to the config layer
 

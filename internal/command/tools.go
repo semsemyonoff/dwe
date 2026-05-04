@@ -192,7 +192,7 @@ When no tool name is given, an interactive selector shows all currently
 disabled tools.`,
 		Example:           "  devbox tools enable adminer",
 		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: toolNameCompletion,
+		ValidArgsFunction: toolNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -232,7 +232,7 @@ When no tool name is given, an interactive selector shows all currently
 enabled tools.`,
 		Example:           "  devbox tools disable adminer",
 		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: toolNameCompletion,
+		ValidArgsFunction: toolNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -306,17 +306,26 @@ func pickToolCandidates(rows []stack.ToolRow, statusLabel, title string, selecto
 	return rows[idx].Name, nil
 }
 
-// toolNameCompletion completes tool names from the known tools set.
-func toolNameCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) != 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+// toolNameCompletion returns a ValidArgsFunction that completes tool names from the
+// known tools set. It gates on schema validation so that legacy v1 projects do not
+// appear functional through tab-completion.
+func toolNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		// Gate on project discovery + schema validation even though tool names are a
+		// static set — a v1 project should not appear functional through tab-completion.
+		if _, _, err := completionConfigPath(flags, cmd); err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		names := make([]string, 0, len(knownTools))
+		for name := range knownTools {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		return names, cobra.ShellCompDirectiveNoFileComp
 	}
-	names := make([]string, 0, len(knownTools))
-	for name := range knownTools {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
 // knownTools is the set of valid tool names.
