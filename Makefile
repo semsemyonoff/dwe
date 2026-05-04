@@ -1,5 +1,5 @@
 BINARY_NAME := devbox
-BIN_DIR     := ../bin
+BIN_DIR     := ./bin
 MODULE      := devbox-cli
 
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
