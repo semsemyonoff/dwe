@@ -295,7 +295,7 @@ func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
 	cmd.Env = compose.BuildEnv()
 	out, err := cmd.Output()
 	if err != nil {
-		return false, fmt.Errorf("docker compose ps: %w", err)
+		return false, fmt.Errorf("%s compose ps: %w", compose.BinName(), err)
 	}
 	return strings.TrimSpace(string(out)) != "", nil
 }

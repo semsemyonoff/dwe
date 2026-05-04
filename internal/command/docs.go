@@ -77,7 +77,11 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		// No project found — only --scope cli is allowed without a project.
 		requestedScopes := resolveScopes(df.scope)
 		if requestedScopes["commands"] {
-			return fmt.Errorf("commands scope requires a devbox project; use --scope cli to generate CLI reference docs without a project")
+			scopeLabel := "commands scope"
+			if df.scope == "all" {
+				scopeLabel = "all scope (which includes commands)"
+			}
+			return fmt.Errorf("%s requires a devbox project; use --scope cli to generate CLI reference docs without a project", scopeLabel)
 		}
 		var cwdErr error
 		projectRoot, cwdErr = os.Getwd()

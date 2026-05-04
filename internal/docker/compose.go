@@ -205,7 +205,7 @@ func (c *Compose) ContainerIDs() ([]string, error) {
 
 	out, err := c.output(args)
 	if err != nil {
-		return nil, fmt.Errorf("docker compose ps -q: %w", err)
+		return nil, fmt.Errorf("%s compose ps -q: %w", c.BinName(), err)
 	}
 
 	var ids []string

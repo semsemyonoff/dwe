@@ -237,6 +237,30 @@ func TestRootResolver_DocsScope_NoProject_CommandsFails(t *testing.T) {
 	}
 }
 
+// TestRootResolver_DocsScope_NoProject_AllFails verifies that docs generate
+// --scope all fails with a clear error when no project is found, and that the
+// error message names "all scope" rather than just "commands scope".
+func TestRootResolver_DocsScope_NoProject_AllFails(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"docs", "generate", "--scope", "all"})
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("docs generate --scope all without project should fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "devbox project") {
+		t.Errorf("error should mention 'devbox project', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "all scope") {
+		t.Errorf("error should mention 'all scope', got: %v", err)
+	}
+}
+
 // TestRootResolver_FlagsPopulated verifies that after PersistentPreRunE runs,
 // flags.configPath is the absolute path and flags.projectRoot is the directory.
 // We test this indirectly through a command that would fail if the path were wrong.

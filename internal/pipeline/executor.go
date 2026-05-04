@@ -83,7 +83,8 @@ func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		if _, ok := <-sigCh; ok {
-			signal.Reset(syscall.SIGINT, syscall.SIGTERM)
+			// Stop only this channel's notifications, not all handlers for these signals.
+			signal.Stop(sigCh)
 		}
 	}()
 
