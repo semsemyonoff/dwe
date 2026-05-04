@@ -21,7 +21,7 @@ type DevboxRunner struct{}
 func (r *DevboxRunner) Run(ctx RunContext) error {
 	bin, err := os.Executable()
 	if err != nil {
-		bin = "./bin/devbox"
+		bin = config.DevboxBin(ctx.Config)
 	}
 
 	rendered, err := tpl.RenderCommand(ctx.Cmd.Run, ctx.Render)

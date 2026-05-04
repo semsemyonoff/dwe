@@ -9,7 +9,8 @@ import (
 
 // PrintPlanShell emits shell commands for the reset plan.
 // Unlike the deploy plan shell output, there is no implicit .env step.
-func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer) {
+// devboxBin is the configured binary name used in emitted commands (e.g. "devbox").
+func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, devboxBin string) {
 	_, _ = fmt.Fprintln(w, "set -e")
 	lastPhaseKey := ""
 	for _, rs := range steps {
@@ -24,13 +25,13 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer) {
 		}
 		switch {
 		case rs.Step.Builtin != "" && rs.Step.ContinueOnError:
-			_, _ = fmt.Fprintf(w, "./bin/devbox reset step %s || true\n", rs.StepAddress())
+			_, _ = fmt.Fprintf(w, "%s reset step %s || true\n", devboxBin, rs.StepAddress())
 		case rs.Step.Builtin != "":
-			_, _ = fmt.Fprintf(w, "./bin/devbox reset step %s\n", rs.StepAddress())
+			_, _ = fmt.Fprintf(w, "%s reset step %s\n", devboxBin, rs.StepAddress())
 		case rs.Step.ContinueOnError:
-			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step)+" || true")
+			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, devboxBin)+" || true")
 		default:
-			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step))
+			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, devboxBin))
 		}
 		if rs.Step.Check != "" {
 			_, _ = fmt.Fprintf(w, "# check: %s\n", rs.Step.Check)

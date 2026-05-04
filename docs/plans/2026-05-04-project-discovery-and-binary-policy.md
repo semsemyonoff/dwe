@@ -254,24 +254,24 @@ All call sites read the shell via `config.ShellBin(cfg)` — never `cfg.Binaries
 
 Goal: replace `./bin/devbox` literals; nested devbox calls use `os.Executable()` then fall back to the accessor; plan display uses the *configured* name.
 
-- [ ] `internal/pipeline/executor.go:28-39` (`buildDevboxCmd`):
+- [x] `internal/pipeline/executor.go:28-39` (`buildDevboxCmd`):
   - keep `os.Executable()` as the *runtime* preference (so a nested call uses the same binary that's currently running) but replace the `"./bin/devbox"` fallback with `config.DevboxBin(cfg)`.
-- [ ] `internal/usercommands/runtime/runner_host.go:23` (`DevboxRunner.Run`):
+- [x] `internal/usercommands/runtime/runner_host.go:23` (`DevboxRunner.Run`):
   - same pattern: `os.Executable()` first, then `config.DevboxBin(ctx.Config)`.
-- [ ] `internal/pipeline/step.go:52-79` (`StepCommand`):
+- [x] `internal/pipeline/step.go:52-79` (`StepCommand`):
   - **plan display** is purely informational — it should print `binaries.devbox` (the *configured* name a user will see in their shell), not the absolute path of the currently-running binary. Change signature: `StepCommand(step config.DeployStep, devboxBin string) string`. Update callers.
-- [ ] `internal/pipeline/print.go` (`PrintPlanTable`):
+- [x] `internal/pipeline/print.go` (`PrintPlanTable`):
   - `PrintPlanTable` calls `StepCommand` internally (line 54) and currently has no path to a configured binary. Change signature: `PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string)` and forward the binary into the internal `StepCommand` call.
   - update both deploy/reset table-output call sites (likely in `internal/command/deploy.go` `runDeployPlan` and `internal/command/reset.go` `runResetPlan`) to pass `config.DevboxBin(cfg)`.
-- [ ] `internal/deploy/print.go:35,37` (`PrintPlanShell`):
+- [x] `internal/deploy/print.go:35,37` (`PrintPlanShell`):
   - signature change: `PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, devboxBin string)`. Emit `<bin> deploy step ...` instead of `./bin/devbox deploy step ...`. Forward `devboxBin` into the internal `pipeline.StepCommand` call.
   - update callers in `internal/command/deploy.go` and `internal/command/reset.go` to pass `config.DevboxBin(cfg)`.
-- [ ] update / add tests:
+- [x] update / add tests:
   - `internal/pipeline/step_test.go` (new or extended): `StepCommand` with `Devbox: "docker down"` and `bin: "devbox"` → `"devbox docker down"`; with `bin: "/usr/local/bin/devbox"` → uses that path.
   - `internal/pipeline/print_test.go` (new): table-driven `PrintPlanTable` test that pins binary substitution in the rendered output.
   - `internal/deploy/plan_test.go`: update fixtures from `./bin/devbox` to `devbox`. (Deliberate test churn.)
   - `internal/deploy/print_test.go`: same churn; add a case asserting `PrintPlanShell(..., "podman-devbox")` produces `podman-devbox deploy step ...`.
-- [ ] `make test` and `make lint` — must pass before next task.
+- [x] `make test` and `make lint` — must pass before next task.
 
 ### Task 9: Verify acceptance criteria
 

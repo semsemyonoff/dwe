@@ -73,11 +73,12 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 				return fmt.Errorf("resolving deploy plan: %w", err)
 			}
 
+			devboxBin := config.DevboxBin(cfg)
 			switch format {
 			case "shell":
-				deploy.PrintPlanShell(steps, cmd.OutOrStdout())
+				deploy.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
 			default:
-				pipeline.PrintPlanTable(steps, render.Stdout())
+				pipeline.PrintPlanTable(steps, render.Stdout(), devboxBin)
 			}
 			return nil
 		},
@@ -256,7 +257,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 				}
 			}
 
-			resolved := pipeline.StepCommand(step)
+			resolved := pipeline.StepCommand(step, config.DevboxBin(cfg))
 			if dryRun {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
 				return nil

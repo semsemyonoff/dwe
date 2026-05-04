@@ -47,11 +47,12 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolving reset plan: %w", err)
 			}
+			devboxBin := config.DevboxBin(cfg)
 			switch format {
 			case "shell":
-				reset.PrintPlanShell(steps, cmd.OutOrStdout())
+				reset.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
 			default:
-				pipeline.PrintPlanTable(steps, render.Stdout())
+				pipeline.PrintPlanTable(steps, render.Stdout(), devboxBin)
 			}
 			return nil
 		},
@@ -165,7 +166,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 				}
 			}
 
-			resolved := pipeline.StepCommand(step)
+			resolved := pipeline.StepCommand(step, config.DevboxBin(cfg))
 			if dryRun {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
 				return nil

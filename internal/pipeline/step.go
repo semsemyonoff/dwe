@@ -50,14 +50,17 @@ func stepBadge(step config.DeployStep) string {
 }
 
 // StepCommand returns the resolved command or action string for plan display.
-//   - command: steps — "devbox commands run <id> [--set key=value...]"
+//   - command: steps — "<devboxBin> commands run <id> [--set key=value...]"
 //   - builtin: steps — builtin description from registry (e.g. "builtin: confirm(...)")
-//   - devbox: steps  — "./bin/devbox <args>"
+//   - devbox: steps  — "<devboxBin> <args>"
 //   - run: steps     — raw shell command
-func StepCommand(step config.DeployStep) string {
+//
+// devboxBin is the configured binary name (from BinariesConfig.Devbox, e.g. "devbox").
+// It is used only for display — actual execution uses os.Executable() with this as fallback.
+func StepCommand(step config.DeployStep, devboxBin string) string {
 	switch {
 	case step.Command != "":
-		parts := []string{"./bin/devbox", "commands", "run", strings.TrimSpace(step.Command)}
+		parts := []string{devboxBin, "commands", "run", strings.TrimSpace(step.Command)}
 		if len(step.With) > 0 {
 			keys := make([]string, 0, len(step.With))
 			for k := range step.With {
@@ -72,7 +75,7 @@ func StepCommand(step config.DeployStep) string {
 	case step.Builtin != "":
 		return builtin.Describe(step.Builtin, step.With)
 	case step.Devbox != "":
-		return "./bin/devbox " + strings.TrimSpace(step.Devbox)
+		return devboxBin + " " + strings.TrimSpace(step.Devbox)
 	default:
 		return strings.TrimSpace(step.Run)
 	}

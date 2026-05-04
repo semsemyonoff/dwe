@@ -421,15 +421,15 @@ func TestStepAddress_serviceStep(t *testing.T) {
 
 func TestStepCommand_cmdReturnsRaw(t *testing.T) {
 	s := config.DeployStep{Run: "mkdir -p services/main/src"}
-	if got := pipeline.StepCommand(s); got != "mkdir -p services/main/src" {
+	if got := pipeline.StepCommand(s, "devbox"); got != "mkdir -p services/main/src" {
 		t.Errorf("got %q, want raw cmd", got)
 	}
 }
 
 func TestStepCommand_commandReturnsDevboxRunCmd(t *testing.T) {
 	s := config.DeployStep{Command: "services.main.migrate"}
-	if got := pipeline.StepCommand(s); got != "./bin/devbox commands run services.main.migrate" {
-		t.Errorf("got %q, want './bin/devbox commands run services.main.migrate'", got)
+	if got := pipeline.StepCommand(s, "devbox"); got != "devbox commands run services.main.migrate" {
+		t.Errorf("got %q, want 'devbox commands run services.main.migrate'", got)
 	}
 }
 
@@ -439,10 +439,10 @@ func TestStepCommand_allTypes(t *testing.T) {
 		want string
 	}{
 		{config.DeployStep{Run: "echo hello"}, "echo hello"},
-		{config.DeployStep{Command: "services.main.migrate"}, "./bin/devbox commands run services.main.migrate"},
-		{config.DeployStep{Command: "  services.main.migrate  "}, "./bin/devbox commands run services.main.migrate"},
+		{config.DeployStep{Command: "services.main.migrate"}, "devbox commands run services.main.migrate"},
+		{config.DeployStep{Command: "  services.main.migrate  "}, "devbox commands run services.main.migrate"},
 		{config.DeployStep{Run: "  mkdir -p x  "}, "mkdir -p x"},
-		{config.DeployStep{Devbox: "docker down"}, "./bin/devbox docker down"},
+		{config.DeployStep{Devbox: "docker down"}, "devbox docker down"},
 		{config.DeployStep{Builtin: "service_configs_copy", With: map[string]any{"service": "main", "mode": "replace"}},
 			`builtin: service_configs_copy(service=main, mode=replace)`},
 		{config.DeployStep{Builtin: "docker_remove_project_volumes"},
@@ -451,7 +451,7 @@ func TestStepCommand_allTypes(t *testing.T) {
 			`builtin: remove_paths(paths=[services/])`},
 	}
 	for _, tc := range cases {
-		got := pipeline.StepCommand(tc.step)
+		got := pipeline.StepCommand(tc.step, "devbox")
 		if got != tc.want {
 			t.Errorf("pipeline.StepCommand(%+v) = %q, want %q", tc.step, got, tc.want)
 		}
@@ -463,8 +463,8 @@ func TestStepCommand_commandWithWith(t *testing.T) {
 		Command: "services.main.migrate",
 		With:    map[string]any{"db": "mydb"},
 	}
-	got := pipeline.StepCommand(step)
-	want := "./bin/devbox commands run services.main.migrate --set db=mydb"
+	got := pipeline.StepCommand(step, "devbox")
+	want := "devbox commands run services.main.migrate --set db=mydb"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -475,8 +475,8 @@ func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 		Command: "services.main.migrate",
 		With:    map[string]any{"z": "last", "a": "first", "m": "mid"},
 	}
-	got := pipeline.StepCommand(step)
-	want := "./bin/devbox commands run services.main.migrate --set a=first --set m=mid --set z=last"
+	got := pipeline.StepCommand(step, "devbox")
+	want := "devbox commands run services.main.migrate --set a=first --set m=mid --set z=last"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -484,8 +484,8 @@ func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 
 func TestStepCommand_commandWithEmptyWith(t *testing.T) {
 	step := config.DeployStep{Command: "services.main.migrate", With: map[string]any{}}
-	got := pipeline.StepCommand(step)
-	want := "./bin/devbox commands run services.main.migrate"
+	got := pipeline.StepCommand(step, "devbox")
+	want := "devbox commands run services.main.migrate"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -493,7 +493,7 @@ func TestStepCommand_commandWithEmptyWith(t *testing.T) {
 
 func TestDeployStep_dryRunPrintsCmdCommand(t *testing.T) {
 	step := cmdStep("create-dirs", "mkdir -p services/main/src")
-	got := pipeline.StepCommand(step)
+	got := pipeline.StepCommand(step, "devbox")
 	if got != "mkdir -p services/main/src" {
 		t.Errorf("dry-run cmd output = %q, want raw command", got)
 	}
@@ -501,9 +501,27 @@ func TestDeployStep_dryRunPrintsCmdCommand(t *testing.T) {
 
 func TestDeployStep_dryRunPrintsCommandRef(t *testing.T) {
 	step := commandStep("migrate", "services.main.migrate")
-	got := pipeline.StepCommand(step)
-	if got != "./bin/devbox commands run services.main.migrate" {
-		t.Errorf("dry-run command output = %q, want './bin/devbox commands run services.main.migrate'", got)
+	got := pipeline.StepCommand(step, "devbox")
+	if got != "devbox commands run services.main.migrate" {
+		t.Errorf("dry-run command output = %q, want 'devbox commands run services.main.migrate'", got)
+	}
+}
+
+func TestStepCommand_customBin(t *testing.T) {
+	cases := []struct {
+		step config.DeployStep
+		bin  string
+		want string
+	}{
+		{config.DeployStep{Devbox: "docker down"}, "/usr/local/bin/devbox", "/usr/local/bin/devbox docker down"},
+		{config.DeployStep{Command: "services.main.migrate"}, "my-devbox", "my-devbox commands run services.main.migrate"},
+		{config.DeployStep{Run: "echo hi"}, "anything", "echo hi"},
+	}
+	for _, tc := range cases {
+		got := pipeline.StepCommand(tc.step, tc.bin)
+		if got != tc.want {
+			t.Errorf("StepCommand with bin=%q: got %q, want %q", tc.bin, got, tc.want)
+		}
 	}
 }
 

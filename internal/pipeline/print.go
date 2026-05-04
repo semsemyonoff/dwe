@@ -8,7 +8,8 @@ import (
 )
 
 // PrintPlanTable prints the plan in human-readable table format.
-func PrintPlanTable(steps []ResolvedStep, w *render.Writer) {
+// devboxBin is forwarded to StepCommand for display (e.g. "devbox" or a custom configured name).
+func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 	out := w.Writer()
 	lastPhaseKey := ""
 	lastService := ""
@@ -51,7 +52,7 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer) {
 		badge := stepBadge(rs.Step)
 		name := rs.Step.Name
 		desc := rs.Step.Description
-		cmd := StepCommand(rs.Step)
+		cmd := StepCommand(rs.Step, devboxBin)
 
 		if desc != "" {
 			_, _ = fmt.Fprintln(out, ui.RenderDefinition(badge+" "+name, desc, len(indent), ""))

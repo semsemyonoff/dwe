@@ -25,10 +25,10 @@ import (
 // as a pipe rather than a TTY). The log tee via ansiStripper is unaffected.
 // When skipConfirm is true, DEVBOX_NONINTERACTIVE=1 is added so that nested
 // devbox subcommands also skip confirmation prompts.
-func buildDevboxCmd(devboxArg, workDir, shell string, skipConfirm bool) *exec.Cmd {
+func buildDevboxCmd(devboxArg, workDir, shell, devboxBin string, skipConfirm bool) *exec.Cmd {
 	bin, err := os.Executable()
 	if err != nil {
-		bin = "./bin/devbox"
+		bin = devboxBin
 	}
 	cmd := exec.Command(shell, "-c", bin+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
 	cmd.Dir = workDir
@@ -60,7 +60,7 @@ func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 	shell := config.ShellBin(cfg)
 	var cmd *exec.Cmd
 	if step.Devbox != "" {
-		cmd = buildDevboxCmd(step.Devbox, workDir, shell, skipConfirm)
+		cmd = buildDevboxCmd(step.Devbox, workDir, shell, config.DevboxBin(cfg), skipConfirm)
 	} else {
 		cmd = exec.Command(shell, "-c", strings.TrimSpace(step.Run)) //nolint:gosec
 		cmd.Dir = workDir

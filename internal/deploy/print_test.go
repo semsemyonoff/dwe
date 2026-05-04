@@ -18,7 +18,7 @@ func TestPrintPlanShell_startsWithSetE(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{Phase: config.DeployPhase{Name: "env"}, Step: deploy.ImplicitEnvStep},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if lines[0] != "set -e" {
 		t.Errorf("first line = %q, want set -e", lines[0])
@@ -31,7 +31,7 @@ func TestPrintPlanShell_cmdStepAsIs(t *testing.T) {
 		{Phase: config.DeployPhase{Name: "env"}, Step: deploy.ImplicitEnvStep},
 		{Phase: phaseWith("setup"), Step: cmdStep("create-dirs", "mkdir -p services/main/src")},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 	if !strings.Contains(out, "mkdir -p services/main/src") {
 		t.Errorf("shell output missing cmd step, got: %q", out)
@@ -43,9 +43,9 @@ func TestPrintPlanShell_commandStepAsDevboxRun(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{Phase: phaseWith("start"), Step: commandStep("migrate", "services.main.migrate")},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
-	if !strings.Contains(out, "./bin/devbox commands run services.main.migrate") {
+	if !strings.Contains(out, "devbox commands run services.main.migrate") {
 		t.Errorf("shell output missing command step, got: %q", out)
 	}
 }
@@ -56,7 +56,7 @@ func TestPrintPlanShell_sourcesEnvAfterImplicitStep(t *testing.T) {
 		{Phase: config.DeployPhase{Name: "env"}, Step: deploy.ImplicitEnvStep},
 		{Phase: phaseWith("setup"), Step: cmdStep("create-dirs", "mkdir -p services/main/src")},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 
@@ -69,7 +69,7 @@ func TestPrintPlanShell_sourcesEnvAfterImplicitStep(t *testing.T) {
 	mkdirIdx := -1
 	for i, l := range lines {
 		switch l {
-		case pipeline.StepCommand(deploy.ImplicitEnvStep):
+		case pipeline.StepCommand(deploy.ImplicitEnvStep, "devbox"):
 			renderIdx = i
 		case ". .env":
 			sourceIdx = i
@@ -100,7 +100,7 @@ func TestPrintPlanShell_noEnvSourceForNonImplicitSteps(t *testing.T) {
 		{Phase: phaseWith("start"), Step: commandStep("up", "up")},
 		{Phase: phaseWith("init"), Step: commandStep("migrate", "services.main.migrate")},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 	if strings.Contains(out, ". .env") {
 		t.Errorf("expected no '. .env' sourcing when implicit step is absent, got: %q", out)
@@ -116,7 +116,7 @@ func TestPrintPlanShell_showsCheckComment(t *testing.T) {
 			Phase: config.DeployPhase{Name: "setup"}, Step: checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
 		},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "# check: file-exists services/main/configs/.env") {
@@ -132,7 +132,7 @@ func TestPrintPlanShell_checkCommentAfterCommand(t *testing.T) {
 		{Phase: config.DeployPhase{Name: "env"}, Step: deploy.ImplicitEnvStep},
 		{Phase: config.DeployPhase{Name: "setup"}, Step: step},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	lines := strings.Split(buf.String(), "\n")
 
 	cmdIdx, checkIdx := -1, -1
@@ -164,7 +164,7 @@ func TestPrintPlanShell_showsPhaseWhenComment(t *testing.T) {
 			Phase: config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"}, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: "dir-empty services/main/src",
 		},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "# phase setup [when: dir-empty services/main/src]") {
@@ -179,7 +179,7 @@ func TestPrintPlanShell_stepWhenNotDuplicatedWhenSameAsPhase(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{Phase: phase, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: "dir-empty services/main/src"},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
 	if strings.Count(out, "# when:") != 0 {
@@ -198,7 +198,7 @@ func TestPrintPlanShell_runtimeWhenComment(t *testing.T) {
 		{Phase: phase, Step: runtimeWhenStep("install", "make -f Makefile app-install", "dir-empty services/main/src"), RuntimeWhen: "dir-empty services/main/src"},
 		{Phase: phase, Step: cmdStep("always", "echo always")},
 	}
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "# when: dir-empty services/main/src") {
@@ -217,7 +217,7 @@ func TestPrintPlanShell_ContinueOnError(t *testing.T) {
 	}
 
 	var buf strings.Builder
-	deploy.PrintPlanShell(steps, &buf)
+	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
 	if strings.Contains(out, "echo hello || true") {
@@ -243,7 +243,7 @@ func TestPrintPlanTable_showsPhaseHeader(t *testing.T) {
 		{Phase: config.DeployPhase{Name: "env", Description: "Environment"}, Step: deploy.ImplicitEnvStep},
 		{Phase: config.DeployPhase{Name: "setup", Description: "Setup phase"}, Step: cmdStep("create-dirs", "mkdir")},
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "env: Environment") {
@@ -261,7 +261,7 @@ func TestPrintPlanTable_showsStepBadgeAndName(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{Phase: config.DeployPhase{Name: "start"}, Step: commandStep("up", "up")},
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "[command]") {
@@ -283,7 +283,7 @@ func TestPrintPlanTable_showsImplicitStepFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "render-env") {
@@ -301,7 +301,7 @@ func TestPrintPlanTable_showsCheck(t *testing.T) {
 			Step:  checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
 		},
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "[check: file-exists services/main/configs/.env]") {
@@ -318,7 +318,7 @@ func TestPrintPlanTable_samePhaseNotRepeated(t *testing.T) {
 		{Phase: phase, Step: cmdStep("step1", "cmd1")},
 		{Phase: phase, Step: cmdStep("step2", "cmd2")},
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	count := strings.Count(out, "setup: Setup")
@@ -336,7 +336,7 @@ func TestPrintPlanTable_showsPhaseWhenInHeader(t *testing.T) {
 			Phase: config.DeployPhase{Name: "setup", Description: "Setup", When: "dir-empty services/main/src"}, Step: cmdStep("create-dirs", "mkdir"),
 		},
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "[when: dir-empty services/main/src]") {
@@ -353,7 +353,7 @@ func TestPrintPlanTable_showsRuntimeWhenAnnotation(t *testing.T) {
 		{Phase: phase, Step: runtimeWhenStep("install", "make app-install", "dir-empty services/main/src"), RuntimeWhen: "dir-empty services/main/src"},
 		{Phase: phase, Step: cmdStep("always", "echo always")},
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "[when: dir-empty services/main/src]") {
@@ -373,7 +373,7 @@ func TestPrintPlanTable_serviceStepsIndented(t *testing.T) {
 		{Phase: config.DeployPhase{Name: "setup", Description: "Setup"}, Step: cmdStep("create-dirs", "mkdir"), Service: "main"},
 		{Phase: config.DeployPhase{Name: "start", Description: "Start"}, Step: commandStep("up", "up")},
 	}
-	pipeline.PrintPlanTable(steps, w)
+	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "service: main") {
@@ -381,5 +381,38 @@ func TestPrintPlanTable_serviceStepsIndented(t *testing.T) {
 	}
 	if !strings.Contains(out, "main/setup") {
 		t.Errorf("expected 'main/setup' phase, got:\n%s", out)
+	}
+}
+
+func TestPrintPlanTable_binarySubstitution(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "start"}, Step: commandStep("migrate", "services.main.migrate")},
+	}
+	pipeline.PrintPlanTable(steps, w, "my-devbox")
+	out := buf.String()
+
+	if !strings.Contains(out, "my-devbox") {
+		t.Errorf("expected 'my-devbox' binary name in table output, got:\n%s", out)
+	}
+}
+
+func TestPrintPlanShell_binarySubstitution(t *testing.T) {
+	var buf bytes.Buffer
+
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "start"}, Step: commandStep("migrate", "services.main.migrate")},
+		{Phase: config.DeployPhase{Name: "setup"}, Step: config.DeployStep{Name: "ensure", Builtin: "service_dirs_ensure"}},
+	}
+	deploy.PrintPlanShell(steps, &buf, "podman-devbox")
+	out := buf.String()
+
+	if !strings.Contains(out, "podman-devbox commands run services.main.migrate") {
+		t.Errorf("expected 'podman-devbox commands run' in shell output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "podman-devbox deploy step") {
+		t.Errorf("expected 'podman-devbox deploy step' for builtin in shell output, got:\n%s", out)
 	}
 }

@@ -604,7 +604,7 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 // are built with CLICOLOR_FORCE=1 so lipgloss enables colors even when stdout
 // is piped through an io.MultiWriter.
 func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir(), "sh", false)
+	cmd := buildDevboxCmd("info", t.TempDir(), "sh", "devbox", false)
 	if !slices.Contains(cmd.Env, "CLICOLOR_FORCE=1") {
 		t.Errorf("buildDevboxCmd env should contain CLICOLOR_FORCE=1, got: %v", cmd.Env)
 	}
@@ -613,7 +613,7 @@ func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
 // TestBuildDevboxCmd_InheritsParentEnv verifies that the child env includes
 // parent environment variables (not just CLICOLOR_FORCE).
 func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir(), "sh", false)
+	cmd := buildDevboxCmd("info", t.TempDir(), "sh", "devbox", false)
 	// cmd.Env should be non-empty (it includes os.Environ() + CLICOLOR_FORCE).
 	if len(cmd.Env) == 0 {
 		t.Error("buildDevboxCmd env should include parent environment (os.Environ())")
@@ -627,7 +627,7 @@ func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
 // TestBuildDevboxCmd_WorkDir verifies that the cmd working directory is set correctly.
 func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 	workDir := t.TempDir()
-	cmd := buildDevboxCmd("info", workDir, "sh", false)
+	cmd := buildDevboxCmd("info", workDir, "sh", "devbox", false)
 	if cmd.Dir != workDir {
 		t.Errorf("buildDevboxCmd Dir = %q, want %q", cmd.Dir, workDir)
 	}
@@ -636,11 +636,11 @@ func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 // TestBuildDevboxCmd_SkipConfirmSetsNonInteractive verifies that skipConfirm=true
 // adds DEVBOX_NONINTERACTIVE=1 to the child environment.
 func TestBuildDevboxCmd_SkipConfirmSetsNonInteractive(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir(), "sh", true)
+	cmd := buildDevboxCmd("info", t.TempDir(), "sh", "devbox", true)
 	if !slices.Contains(cmd.Env, "DEVBOX_NONINTERACTIVE=1") {
 		t.Errorf("buildDevboxCmd with skipConfirm should contain DEVBOX_NONINTERACTIVE=1, got: %v", cmd.Env)
 	}
-	cmd2 := buildDevboxCmd("info", t.TempDir(), "sh", false)
+	cmd2 := buildDevboxCmd("info", t.TempDir(), "sh", "devbox", false)
 	if slices.Contains(cmd2.Env, "DEVBOX_NONINTERACTIVE=1") {
 		t.Errorf("buildDevboxCmd without skipConfirm should not contain DEVBOX_NONINTERACTIVE=1")
 	}
@@ -834,7 +834,7 @@ func TestBuildDevboxCmd_UsesShellParam(t *testing.T) {
 		{"zsh"},
 	}
 	for _, tc := range tests {
-		cmd := buildDevboxCmd("info", t.TempDir(), tc.shell, false)
+		cmd := buildDevboxCmd("info", t.TempDir(), tc.shell, "devbox", false)
 		// exec.Command resolves the binary; Args[0] holds the original name.
 		if len(cmd.Args) == 0 || cmd.Args[0] != tc.shell {
 			t.Errorf("shell=%q: Args[0] = %q, want %q", tc.shell, cmd.Args[0], tc.shell)
@@ -855,5 +855,28 @@ func TestExecStep_ShellFromConfig(t *testing.T) {
 	err := ExecStep(step, t.TempDir(), cfg, nil, nil, false)
 	if err != nil {
 		t.Fatalf("ExecStep with Shell=sh failed: %v", err)
+	}
+}
+
+// TestBuildDevboxCmd_DevboxBinParam verifies that buildDevboxCmd accepts a devboxBin
+// fallback parameter and produces a non-empty shell command for any non-empty devboxBin.
+// At runtime, os.Executable() is preferred; devboxBin is only used when it fails.
+func TestBuildDevboxCmd_DevboxBinParam(t *testing.T) {
+	cases := []string{"devbox", "my-devbox", "/usr/local/bin/devbox"}
+	for _, bin := range cases {
+		cmd := buildDevboxCmd("info", t.TempDir(), "sh", bin, false)
+		// The shell command is: sh -c "<resolved_binary> info"
+		if len(cmd.Args) < 3 {
+			t.Fatalf("bin=%q: expected at least 3 args, got %v", bin, cmd.Args)
+		}
+		// The third arg is the shell -c string. It must contain "info" (the devboxArg).
+		shellCmd := cmd.Args[2]
+		if !strings.Contains(shellCmd, "info") {
+			t.Errorf("bin=%q: shell cmd %q should contain devboxArg 'info'", bin, shellCmd)
+		}
+		// The shell -c string must not be empty (ensures no exec.Command("") regression).
+		if shellCmd == "" {
+			t.Errorf("bin=%q: shell cmd is empty", bin)
+		}
 	}
 }

@@ -12,7 +12,7 @@ import (
 
 func TestPrintPlanShell_Empty(t *testing.T) {
 	var buf bytes.Buffer
-	reset.PrintPlanShell(nil, &buf)
+	reset.PrintPlanShell(nil, &buf, "devbox")
 	out := buf.String()
 	if !strings.Contains(out, "set -e") {
 		t.Errorf("expected 'set -e' in output, got: %q", out)
@@ -27,9 +27,9 @@ func TestPrintPlanShell_WithBuiltin(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	reset.PrintPlanShell(steps, &buf)
+	reset.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
-	if !strings.Contains(out, "./bin/devbox reset step") {
+	if !strings.Contains(out, "devbox reset step") {
 		t.Errorf("expected builtin to delegate to CLI, got: %q", out)
 	}
 }
@@ -42,7 +42,7 @@ func TestPrintPlanShell_WithPhaseWhen(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	reset.PrintPlanShell(steps, &buf)
+	reset.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 	if !strings.Contains(out, "# phase setup") {
 		t.Errorf("expected phase comment in output, got: %q", out)
@@ -58,7 +58,7 @@ func TestPrintPlanShell_WithRuntimeWhen(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	reset.PrintPlanShell(steps, &buf)
+	reset.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 	if !strings.Contains(out, "# when:") {
 		t.Errorf("expected runtime when comment in output, got: %q", out)
@@ -73,7 +73,7 @@ func TestPrintPlanShell_WithCheck(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	reset.PrintPlanShell(steps, &buf)
+	reset.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 	if !strings.Contains(out, "# check:") {
 		t.Errorf("expected check comment in output, got: %q", out)
@@ -88,7 +88,7 @@ func TestPrintPlanShell_ContinueOnError(t *testing.T) {
 	}
 
 	var buf strings.Builder
-	reset.PrintPlanShell(steps, &buf)
+	reset.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
 	if !strings.Contains(out, "|| true") {
@@ -107,7 +107,7 @@ func TestPrintPlanShell_NoEnvSourceStep(t *testing.T) {
 		{Phase: phaseWith("cleanup"), Step: commandStep("reset-db", "services.main.db.create")},
 	}
 	var buf bytes.Buffer
-	reset.PrintPlanShell(steps, &buf)
+	reset.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 	if strings.Contains(out, ". .env") {
 		t.Errorf("reset plan should not source .env, got:\n%s", out)
