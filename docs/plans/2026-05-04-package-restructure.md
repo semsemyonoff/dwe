@@ -99,15 +99,15 @@ Move generic executor pieces **and** the generic table printer. Verified by grep
 
 ### Task 2: Create `internal/deploy` package
 
-- [ ] create `internal/deploy/plan.go` with `ResolvePlan`, `FindStep`, `SourceDotEnv`, `IsRegularFile`, and the deploy-specific `ImplicitEnvStep` (all exported — the cobra adapter in `internal/command/deploy.go` keeps the run/config-check entry points and calls these helpers; orchestration does **not** move into `deploy` in this task)
-- [ ] create `internal/deploy/service_plan.go` with `ResolveServicePlan`, `ResolveServicesPlan`
-- [ ] create `internal/deploy/print.go` with `PrintPlanShell` only — the deploy-aware shell printer that emits `. .env` after `ImplicitEnvStep`. The plan table view is rendered by `pipeline.PrintPlanTable` (Task 1), called directly from the cobra adapter
-- [ ] create `internal/deploy/step.go` for any deploy-specific step helpers separated from generic pipeline.go
-- [ ] move corresponding `*_test.go` cases from `internal/command/deploy_test.go` into `internal/deploy/*_test.go` (split file along the function boundary)
-- [ ] keep `internal/command/deploy.go` as cobra adapters only (`newDeployCmd`, `newDeployPlanCmd`, `newDeployRunCmd`, `newDeployStepCmd`, `newDeployConfigCmd`, `newDeployConfigCheckCmd`) calling into `deploy.*` and `pipeline.PrintPlanTable`
-- [ ] update imports across the codebase
-- [ ] run `make test` — must pass before Task 3
-- [ ] run `make lint` — must pass before Task 3
+- [x] create `internal/deploy/plan.go` with `ResolvePlan`, `FindStep`, `SourceDotEnv`, `IsRegularFile`, and the deploy-specific `ImplicitEnvStep` (all exported — the cobra adapter in `internal/command/deploy.go` keeps the run/config-check entry points and calls these helpers; orchestration does **not** move into `deploy` in this task)
+- [x] create `internal/deploy/service_plan.go` with `ResolveServicePlan`, `ResolveServicesPlan`
+- [x] create `internal/deploy/print.go` with `PrintPlanShell` only — the deploy-aware shell printer that emits `. .env` after `ImplicitEnvStep`. The plan table view is rendered by `pipeline.PrintPlanTable` (Task 1), called directly from the cobra adapter
+- [x] create `internal/deploy/step.go` for any deploy-specific step helpers separated from generic pipeline.go (no deploy-specific step helpers found; `plan.go`, `service_plan.go`, `print.go` cover all cases)
+- [x] move corresponding `*_test.go` cases from `internal/command/deploy_test.go` into `internal/deploy/*_test.go` (split file along the function boundary)
+- [x] keep `internal/command/deploy.go` as cobra adapters only (`newDeployCmd`, `newDeployPlanCmd`, `newDeployRunCmd`, `newDeployStepCmd`, `newDeployConfigCmd`, `newDeployConfigCheckCmd`) calling into `deploy.*` and `pipeline.PrintPlanTable`
+- [x] update imports across the codebase
+- [x] run `make test` — must pass before Task 3
+- [x] run `make lint` — must pass before Task 3
 
 ### Task 3: Create `internal/reset` package
 

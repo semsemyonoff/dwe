@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/commands"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy"
 	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 
@@ -81,8 +82,8 @@ func TestSourceDotEnv_Basic(t *testing.T) {
 	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := sourceDotEnv(envFile); err != nil {
-		t.Fatalf("sourceDotEnv: %v", err)
+	if err := deploy.SourceDotEnv(envFile); err != nil {
+		t.Fatalf("SourceDotEnv: %v", err)
 	}
 	if os.Getenv("TEST_VAR_SRCENV") != "hello" {
 		t.Errorf("expected TEST_VAR_SRCENV=hello, got %q", os.Getenv("TEST_VAR_SRCENV"))
@@ -100,8 +101,8 @@ func TestSourceDotEnv_QuotedValues(t *testing.T) {
 	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := sourceDotEnv(envFile); err != nil {
-		t.Fatalf("sourceDotEnv: %v", err)
+	if err := deploy.SourceDotEnv(envFile); err != nil {
+		t.Fatalf("SourceDotEnv: %v", err)
 	}
 	if os.Getenv("QUOTED_VAR") != "quoted value" {
 		t.Errorf("expected unquoted value, got %q", os.Getenv("QUOTED_VAR"))
@@ -113,7 +114,7 @@ func TestSourceDotEnv_QuotedValues(t *testing.T) {
 }
 
 func TestSourceDotEnv_MissingFile(t *testing.T) {
-	err := sourceDotEnv("/nonexistent/.env")
+	err := deploy.SourceDotEnv("/nonexistent/.env")
 	if err == nil {
 		t.Fatal("expected error for missing .env file")
 	}
@@ -126,8 +127,8 @@ func TestSourceDotEnv_EmptyLines(t *testing.T) {
 	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := sourceDotEnv(envFile); err != nil {
-		t.Fatalf("sourceDotEnv with only comments/blanks: %v", err)
+	if err := deploy.SourceDotEnv(envFile); err != nil {
+		t.Fatalf("SourceDotEnv with only comments/blanks: %v", err)
 	}
 }
 

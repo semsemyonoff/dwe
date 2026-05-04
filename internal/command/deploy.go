@@ -1,16 +1,15 @@
 package command
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/docker"
 	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
@@ -18,14 +17,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-// implicitEnvStep is always the first step of any deploy plan.
-// It regenerates .env from the current config before any phase runs.
-var implicitEnvStep = config.DeployStep{
-	Name:        "render-env",
-	Devbox:      "render env -o .env",
-	Description: "Generate .env from config (implicit first step)",
-}
 
 func newDeployCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -74,9 +65,9 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 				if _, ok := cfg.Services[serviceName]; !ok {
 					return fmt.Errorf("service %q not found in config", serviceName)
 				}
-				steps, err = resolveServiceDeployPlan(cfg, serviceName)
+				steps, err = deploy.ResolveServicePlan(cfg, serviceName)
 			} else {
-				steps, err = resolveDeployPlan(cfg)
+				steps, err = deploy.ResolvePlan(cfg)
 			}
 			if err != nil {
 				return fmt.Errorf("resolving deploy plan: %w", err)
@@ -84,7 +75,7 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 
 			switch format {
 			case "shell":
-				printDeployPlanShell(steps, cmd.OutOrStdout())
+				deploy.PrintPlanShell(steps, cmd.OutOrStdout())
 			default:
 				pipeline.PrintPlanTable(steps, render.Stdout())
 			}
@@ -96,123 +87,6 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table or shell")
 	cmd.Flags().StringVar(&serviceName, "service", "", "show plan for a single service only")
 	return cmd
-}
-
-// resolveDeployPlan builds the ordered list of active steps from cfg.Deploy.
-// The implicit .env generation step is always prepended as step 0 (no phase).
-// Steps whose when condition evaluates to false are excluded.
-// Phases with deploy_services=true are expanded by inlining per-service
-// deploy pipelines in topological dependency order.
-func resolveDeployPlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
-	// Implicit first step — no associated phase.
-	implicit := pipeline.ResolvedStep{
-		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
-		Step:  implicitEnvStep,
-	}
-	result := []pipeline.ResolvedStep{implicit}
-
-	for _, phase := range cfg.Deploy.Phases {
-		if phase.DeployServices {
-			serviceSteps, err := resolveServicesDeploy(cfg)
-			if err != nil {
-				return nil, fmt.Errorf("resolving services deploy: %w", err)
-			}
-			result = append(result, serviceSteps...)
-			continue
-		}
-		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, "")
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, resolved...)
-	}
-
-	return result, nil
-}
-
-// resolveServiceDeployPlan builds the step list for a single service.
-// Used by --service flag to deploy only one service.
-func resolveServiceDeployPlan(cfg *config.DevboxConfig, serviceName string) ([]pipeline.ResolvedStep, error) {
-	// Implicit first step.
-	implicit := pipeline.ResolvedStep{
-		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
-		Step:  implicitEnvStep,
-	}
-	result := []pipeline.ResolvedStep{implicit}
-
-	cfgPath, ok := cfg.Raw["__configPath"].(string)
-	if !ok {
-		return nil, fmt.Errorf("internal: __configPath missing from config")
-	}
-	baseDir := filepath.Dir(cfgPath)
-	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
-		serviceName: cfg.Services[serviceName],
-	})
-	if err != nil {
-		return nil, err
-	}
-	svcDeploy, ok := svcDeploys[serviceName]
-	if !ok {
-		return nil, fmt.Errorf("no deploy pipeline found for service %q (expected devbox/deploy/%s.yml)", serviceName, serviceName)
-	}
-
-	for _, phase := range svcDeploy.Phases {
-		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, serviceName)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, resolved...)
-	}
-	return result, nil
-}
-
-// resolveServicesDeploy loads all per-service deploy pipelines, sorts them
-// by dependency order, and returns their steps inlined.
-func resolveServicesDeploy(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
-	cfgPath, ok := cfg.Raw["__configPath"].(string)
-	if !ok {
-		return nil, fmt.Errorf("internal: __configPath missing from config")
-	}
-	baseDir := filepath.Dir(cfgPath)
-
-	// Only deploy enabled services.
-	enabled := make(map[string]config.ServiceConfig)
-	for name, svc := range cfg.Services {
-		if svc.Enabled {
-			enabled[name] = svc
-		}
-	}
-
-	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, enabled)
-	if err != nil {
-		return nil, err
-	}
-	if len(svcDeploys) == 0 {
-		return nil, nil
-	}
-
-	// Collect names that have deploy files and toposort.
-	var names []string
-	for name := range svcDeploys {
-		names = append(names, name)
-	}
-	sorted, err := config.TopoSortServices(names, cfg.Services)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []pipeline.ResolvedStep
-	for _, name := range sorted {
-		deploy := svcDeploys[name]
-		for _, phase := range deploy.Phases {
-			resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, name)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, resolved...)
-		}
-	}
-	return result, nil
 }
 
 // newDeployRunCmd creates the `devbox deploy run` command.
@@ -260,9 +134,9 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 				if _, ok := cfg.Services[serviceName]; !ok {
 					return fmt.Errorf("service %q not found in config", serviceName)
 				}
-				steps, err = resolveServiceDeployPlan(cfg, serviceName)
+				steps, err = deploy.ResolveServicePlan(cfg, serviceName)
 			} else {
-				steps, err = resolveDeployPlan(cfg)
+				steps, err = deploy.ResolvePlan(cfg)
 			}
 			if err != nil {
 				return fmt.Errorf("resolving deploy plan: %w", err)
@@ -285,8 +159,8 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 			// After .env is regenerated, load it into the current process
 			// environment so subsequent cmd: steps can reference its variables.
 			postStepHooks := map[string]func() error{
-				implicitEnvStep.Name: func() error {
-					return sourceDotEnv(filepath.Join(workDir, ".env"))
+				deploy.ImplicitEnvStep.Name: func() error {
+					return deploy.SourceDotEnv(filepath.Join(workDir, ".env"))
 				},
 			}
 
@@ -306,91 +180,6 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 
 	cmd.Flags().StringVar(&serviceName, "service", "", "deploy a single service only")
 	return cmd
-}
-
-// sourceDotEnv reads a .env file and sets each KEY=VALUE pair as an OS
-// environment variable so that subsequent exec.Cmd calls (with Env: nil)
-// inherit them. Blank lines and comments are skipped.
-func sourceDotEnv(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		val := strings.TrimSpace(value)
-		if n := len(val); n >= 2 && val[0] == val[n-1] && (val[0] == '"' || val[0] == '\'') {
-			val = val[1 : n-1]
-		}
-		if err := os.Setenv(strings.TrimSpace(key), val); err != nil {
-			return fmt.Errorf("setenv %s: %w", key, err)
-		}
-	}
-	return nil
-}
-
-// findStep looks up a step by address in the deploy config.
-// Supports two forms:
-//   - "<phase>/<step>"          — orchestrator step
-//   - "<service>/<phase>/<step>" — per-service step (loaded from devbox/deploy/<service>.yml)
-func findStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, config.DeployStep, error) {
-	parts := strings.Split(address, "/")
-	switch len(parts) {
-	case 2:
-		// Orchestrator step: <phase>/<step>
-		phaseName, stepName := parts[0], parts[1]
-		for _, phase := range cfg.Deploy.Phases {
-			if phase.Name != phaseName {
-				continue
-			}
-			for _, step := range phase.Steps {
-				if step.Name == stepName {
-					return phase, step, nil
-				}
-			}
-			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("step %q not found in phase %q", stepName, phaseName)
-		}
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("phase %q not found", phaseName)
-
-	case 3:
-		// Service step: <service>/<phase>/<step>
-		serviceName, phaseName, stepName := parts[0], parts[1], parts[2]
-		if _, ok := cfg.Services[serviceName]; !ok {
-			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("service %q not found", serviceName)
-		}
-		cfgPath, ok := cfg.Raw["__configPath"].(string)
-		if !ok {
-			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("internal: __configPath missing from config")
-		}
-		baseDir := filepath.Dir(cfgPath)
-		svcDeploy, err := config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy", serviceName+".yml"))
-		if err != nil {
-			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("loading deploy config for service %q: %w", serviceName, err)
-		}
-		for _, phase := range svcDeploy.Phases {
-			if phase.Name != phaseName {
-				continue
-			}
-			for _, step := range phase.Steps {
-				if step.Name == stepName {
-					return phase, step, nil
-				}
-			}
-			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("step %q not found in phase %q of service %q", stepName, phaseName, serviceName)
-		}
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("phase %q not found in service %q", phaseName, serviceName)
-
-	default:
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("invalid step address %q: expected <phase>/<step> or <service>/<phase>/<step>", address)
-	}
 }
 
 func newDeployStepCmd(flags *rootFlags) *cobra.Command {
@@ -417,7 +206,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			if err != nil {
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}
-			steps, err := resolveDeployPlan(cfg)
+			steps, err := deploy.ResolvePlan(cfg)
 			if err != nil {
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}
@@ -438,7 +227,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			}
 
 			address := args[0]
-			phase, step, err := findStep(cfg, address)
+			phase, step, err := deploy.FindStep(cfg, address)
 			if err != nil {
 				return err
 			}
@@ -569,7 +358,7 @@ Intended as a deploy step check condition:
 			var missing []string
 			for _, entry := range svc.Configs {
 				dest := filepath.Join(destDir, entry.File)
-				if !isRegularFile(dest) {
+				if !deploy.IsRegularFile(dest) {
 					missing = append(missing, filepath.Join(svc.Dir, "configs", entry.File))
 				}
 			}
@@ -584,10 +373,4 @@ Intended as a deploy step check condition:
 			return nil
 		},
 	}
-}
-
-// isRegularFile reports whether path exists and is a regular file.
-func isRegularFile(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.Mode().IsRegular()
 }
