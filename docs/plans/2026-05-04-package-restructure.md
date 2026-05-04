@@ -153,21 +153,21 @@ Move generic executor pieces **and** the generic table printer. Verified by grep
 
 Extract `.env` rendering so cobra is not the only entry point. Unblocks `localconfig` (Task 7), docker auto-generation, and `devbox render env` from sharing one implementation.
 
-- [ ] create `internal/envfile/render.go` with:
+- [x] create `internal/envfile/render.go` with:
   - `BuildContent(cfg *config.DevboxConfig) (string, error)` (moved from `buildEnvContent`)
   - `IsTruthy(v any) bool` (moved from `isTruthy`)
   - `FormatValue(v any, format string) string` (moved from `formatValue`)
   - `HostUID() string`, `HostGID() string` (moved from `hostUID`, `hostGID`)
-- [ ] create `internal/envfile/write.go` with:
+- [x] create `internal/envfile/write.go` with:
   - `Write(cfg *config.DevboxConfig, outputPath string) error` — writes the rendered content to the given path (mkdir parents, atomic-ish replace)
   - `Regenerate(configPath string) (string, error)` — reloads config from `configPath`, writes `.env` next to it, returns the absolute path; replaces `regenEnv(configPath, baseDir)` (`baseDir` is implied by `configPath`'s directory)
-- [ ] no cobra, no UI, no prompts; `envfile` imports only `internal/config` and stdlib
-- [ ] move env-rendering tests from `internal/command/env_test.go` to `internal/envfile/render_test.go` and `write_test.go`; keep cobra-shaped `runRenderEnv` tests in `internal/command/env_test.go`
-- [ ] reduce `internal/command/env.go` to cobra wiring only: `newRenderCmd`, `newRenderEnvCmd`, `runRenderEnv` (which now calls `envfile.Write` after loading config)
-- [ ] update `internal/command/service.go` and `internal/command/tools.go` callers of `regenEnv(configPath, baseDir)` to call `envfile.Regenerate(configPath)`; the Task 7 toggle orchestrators inherit this call site
-- [ ] update any docker auto-generation path (`internal/docker` or `internal/command/docker.go`) that triggers `.env` regeneration to call `envfile.Regenerate`
-- [ ] run `make test` — must pass before Task 7
-- [ ] run `make lint` — must pass before Task 7
+- [x] no cobra, no UI, no prompts; `envfile` imports only `internal/config` and stdlib
+- [x] move env-rendering tests from `internal/command/env_test.go` to `internal/envfile/render_test.go` and `write_test.go`; keep cobra-shaped `runRenderEnv` tests in `internal/command/env_test.go`
+- [x] reduce `internal/command/env.go` to cobra wiring only: `newRenderCmd`, `newRenderEnvCmd`, `runRenderEnv` (which now calls `envfile.Write` after loading config)
+- [x] update `internal/command/service.go` and `internal/command/tools.go` callers of `regenEnv(configPath, baseDir)` to call `envfile.Regenerate(configPath)`; the Task 7 toggle orchestrators inherit this call site
+- [x] update any docker auto-generation path (`internal/docker` or `internal/command/docker.go`) that triggers `.env` regeneration to call `envfile.Regenerate`
+- [x] run `make test` — must pass before Task 7
+- [x] run `make lint` — must pass before Task 7
 
 ### Task 7: Create `internal/localconfig` package
 

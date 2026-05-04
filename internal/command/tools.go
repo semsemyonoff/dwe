@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/envfile"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
@@ -122,7 +123,6 @@ the read-only status table.`,
 				return nil
 			}
 
-			baseDir := filepath.Dir(flags.configPath)
 			if err := applyToolTogglesBatch(flags.configPath, toEnable, toDisable); err != nil {
 				return err
 			}
@@ -137,7 +137,12 @@ the read-only status table.`,
 			}
 			render.Stdout().Success(strings.Join(parts, "; "))
 
-			return regenEnv(flags.configPath, baseDir)
+			envPath, err := envfile.Regenerate(flags.configPath)
+			if err != nil {
+				return err
+			}
+			render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
+			return nil
 		},
 		SilenceUsage: true,
 	}
@@ -373,5 +378,10 @@ func setToolEnabled(configPath string, name string, enabled bool) error {
 	} else {
 		w.Success(fmt.Sprintf("tool %q disabled (written to %s)", name, localPath))
 	}
-	return regenEnv(configPath, baseDir)
+	envPath, err := envfile.Regenerate(configPath)
+	if err != nil {
+		return err
+	}
+	render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
+	return nil
 }

@@ -1,11 +1,10 @@
-package command
+package envfile
 
 import (
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/envfile"
 )
 
 // makeEnvCfg builds a DevboxConfig with the given export rules and raw map.
@@ -17,9 +16,9 @@ func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DevboxCon
 	}
 }
 
-func TestBuildEnvContent_alwaysEmitsProjectAndHeader(t *testing.T) {
+func TestBuildContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 	cfg := makeEnvCfg(nil, map[string]any{})
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -31,12 +30,12 @@ func TestBuildEnvContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_simpleStringRule(t *testing.T) {
+func TestBuildContent_simpleStringRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "MY_VAR", From: "state"},
 	}, map[string]any{"state": "staging"})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -45,14 +44,14 @@ func TestBuildEnvContent_simpleStringRule(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_boolFormatTrue(t *testing.T) {
+func TestBuildContent_boolFormatTrue(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "USE_HTTPS", From: "runtime.use_https", Format: "bool"},
 	}, map[string]any{
 		"runtime": map[string]any{"use_https": true},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,14 +60,14 @@ func TestBuildEnvContent_boolFormatTrue(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_boolFormatFalse(t *testing.T) {
+func TestBuildContent_boolFormatFalse(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "USE_HTTPS", From: "runtime.use_https", Format: "bool"},
 	}, map[string]any{
 		"runtime": map[string]any{"use_https": false},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -77,7 +76,7 @@ func TestBuildEnvContent_boolFormatFalse(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_intFormat(t *testing.T) {
+func TestBuildContent_intFormat(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "APP_PORT", From: "runtime.ports.app", Format: "int"},
 	}, map[string]any{
@@ -86,7 +85,7 @@ func TestBuildEnvContent_intFormat(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,12 +94,12 @@ func TestBuildEnvContent_intFormat(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_defaultFallback(t *testing.T) {
+func TestBuildContent_defaultFallback(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "MISSING_VAR", From: "no.such.path", Default: "fallback"},
 	}, map[string]any{})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,12 +108,12 @@ func TestBuildEnvContent_defaultFallback(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_requiredMissingReturnsError(t *testing.T) {
+func TestBuildContent_requiredMissingReturnsError(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "REQUIRED_VAR", From: "no.such.path", Required: true},
 	}, map[string]any{})
 
-	_, err := envfile.BuildContent(cfg)
+	_, err := BuildContent(cfg)
 	if err == nil {
 		t.Error("expected error for required missing path, got nil")
 	}
@@ -123,7 +122,7 @@ func TestBuildEnvContent_requiredMissingReturnsError(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_whenFalsySkipsRule(t *testing.T) {
+func TestBuildContent_whenFalsySkipsRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "TOOL_ADMINER", From: "tools.adminer.enabled", When: "tools.adminer.enabled", Format: "bool"},
 	}, map[string]any{
@@ -132,7 +131,7 @@ func TestBuildEnvContent_whenFalsySkipsRule(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -141,7 +140,7 @@ func TestBuildEnvContent_whenFalsySkipsRule(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_whenTruthyIncludesRule(t *testing.T) {
+func TestBuildContent_whenTruthyIncludesRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "TOOL_ADMINER", From: "tools.adminer.enabled", When: "tools.adminer.enabled", Format: "bool"},
 	}, map[string]any{
@@ -150,7 +149,7 @@ func TestBuildEnvContent_whenTruthyIncludesRule(t *testing.T) {
 		},
 	})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -159,12 +158,12 @@ func TestBuildEnvContent_whenTruthyIncludesRule(t *testing.T) {
 	}
 }
 
-func TestBuildEnvContent_commentEmitted(t *testing.T) {
+func TestBuildContent_commentEmitted(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "MY_VAR", From: "state", Comment: "Active state"},
 	}, map[string]any{"state": "staging"})
 
-	out, err := envfile.BuildContent(cfg)
+	out, err := BuildContent(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -193,7 +192,7 @@ func TestIsTruthy(t *testing.T) {
 		{map[string]any{}, true}, // unknown type → truthy
 	}
 	for _, tc := range cases {
-		got := envfile.IsTruthy(tc.v)
+		got := IsTruthy(tc.v)
 		if got != tc.want {
 			t.Errorf("IsTruthy(%#v) = %v, want %v", tc.v, got, tc.want)
 		}
@@ -203,32 +202,32 @@ func TestIsTruthy(t *testing.T) {
 // --- FormatValue tests ---
 
 func TestFormatValue_boolTrue(t *testing.T) {
-	if got := envfile.FormatValue(true, "bool"); got != "true" {
+	if got := FormatValue(true, "bool"); got != "true" {
 		t.Errorf("FormatValue(true, bool) = %q, want true", got)
 	}
 }
 
 func TestFormatValue_boolFalse(t *testing.T) {
-	if got := envfile.FormatValue(false, "bool"); got != "false" {
+	if got := FormatValue(false, "bool"); got != "false" {
 		t.Errorf("FormatValue(false, bool) = %q, want false", got)
 	}
 }
 
 func TestFormatValue_intFormat(t *testing.T) {
-	if got := envfile.FormatValue(8080, "int"); got != "8080" {
+	if got := FormatValue(8080, "int"); got != "8080" {
 		t.Errorf("FormatValue(8080, int) = %q, want 8080", got)
 	}
 }
 
 func TestFormatValue_stringPassthrough(t *testing.T) {
-	if got := envfile.FormatValue("hello", ""); got != "hello" {
+	if got := FormatValue("hello", ""); got != "hello" {
 		t.Errorf("FormatValue(hello, ) = %q, want hello", got)
 	}
 }
 
 func TestFormatValue_boolFormatNonBoolValue(t *testing.T) {
 	// When format is bool but value is not a bool, falls through to Sprintf.
-	if got := envfile.FormatValue("yes", "bool"); got != "yes" {
+	if got := FormatValue("yes", "bool"); got != "yes" {
 		t.Errorf("FormatValue(yes, bool) = %q, want yes", got)
 	}
 }
