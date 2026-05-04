@@ -11,6 +11,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SchemaField is the YAML key for the schema version gate in devbox.yml.
+// SupportedSchema is the only accepted schema_version value.
+// ConfigFilename is the standard project config filename.
 const (
 	SchemaField     = "schema_version"
 	SupportedSchema = "2"

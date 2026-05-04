@@ -6,7 +6,6 @@ import (
 	"image/color"
 	"io"
 	"os"
-	"path/filepath"
 
 	"charm.land/fang/v2"
 	lipglossv2 "charm.land/lipgloss/v2"
@@ -14,6 +13,7 @@ import (
 
 	"devbox-cli/internal/command"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/project"
 	"devbox-cli/internal/version"
 )
 
@@ -37,7 +37,8 @@ func main() {
 
 	// Load styles.yml early to customise the Fang help color scheme.
 	// Resolve relative to the --config flag so it works from any directory.
-	if cs := loadHelpColorScheme(configPathFromArgs()); cs != nil {
+	configPath, explicit := configPathFromArgs()
+	if cs := loadHelpColorScheme(configPath, explicit); cs != nil {
 		opts = append(opts, fang.WithColorSchemeFunc(cs))
 	}
 
@@ -53,22 +54,36 @@ func main() {
 
 // configPathFromArgs extracts the --config / -c flag value from os.Args before
 // cobra parses them. Uses pflag (the same parser Cobra uses internally) so flag
-// semantics match exactly. Returns the default "devbox.yml" when the flag is
-// absent or unparseable.
-func configPathFromArgs() string {
+// semantics match exactly. Returns ("", false) when the flag is absent or
+// unparseable, and (path, true) when explicitly supplied.
+func configPathFromArgs() (path string, explicit bool) {
 	fs := pflag.NewFlagSet("pre-parse", pflag.ContinueOnError)
 	fs.ParseErrorsAllowlist.UnknownFlags = true
 	fs.SetOutput(io.Discard)
-	cp := fs.StringP("config", "c", "devbox.yml", "")
+	cp := fs.StringP("config", "c", "", "")
 	_ = fs.Parse(os.Args[1:])
-	return *cp
+	f := fs.Lookup("config")
+	if f != nil && f.Changed {
+		return *cp, true
+	}
+	return "", false
 }
 
-// loadHelpColorScheme loads devbox/styles.yml relative to configPath and returns
-// a fang ColorSchemeFunc if any help colors are configured. Returns nil when no
-// overrides are set or the file cannot be read.
-func loadHelpColorScheme(configPath string) fang.ColorSchemeFunc {
-	stylesPath := filepath.Join(filepath.Dir(configPath), "devbox", "styles.yml")
+// loadHelpColorScheme loads devbox/styles.yml relative to the located project root
+// and returns a fang ColorSchemeFunc if any help colors are configured. Returns nil
+// when no overrides are set, the file cannot be read, or no project is found.
+// This function is intentionally silent under all failure modes — it runs before
+// cobra parses flags, so Fang's default colors apply whenever styles cannot be loaded.
+func loadHelpColorScheme(configPath string, explicit bool) fang.ColorSchemeFunc {
+	locatePath := ""
+	if explicit {
+		locatePath = configPath
+	}
+	resolved, found, err := project.Locate(locatePath)
+	if err != nil || !found {
+		return nil
+	}
+	stylesPath := resolved.Root + "/devbox/styles.yml"
 	stylesCfg, err := config.LoadStylesConfig(stylesPath)
 	if err != nil || stylesCfg == nil {
 		return nil

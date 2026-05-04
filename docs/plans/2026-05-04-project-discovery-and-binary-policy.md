@@ -111,17 +111,17 @@ Goal: a small package with one function used by every command to find `devbox.ym
 
 This stage must be **silent** under all failure modes — Fang's help/version output runs even with no project, and a missing/unreadable `styles.yml` already falls back to Fang defaults today. Schema validation is not the right concern here either: a legacy v1 project should still get its colored error in Task 3, so the pre-parse must locate the file regardless of schema.
 
-- [ ] update `configPathFromArgs` to also detect whether `--config` was actually supplied (return `(path string, explicit bool)`). Keep using `pflag` since cobra hasn't run yet.
-- [ ] in `loadHelpColorScheme`, replace the literal `filepath.Dir(configPath)` derivation with a `project.Locate` call:
+- [x] update `configPathFromArgs` to also detect whether `--config` was actually supplied (return `(path string, explicit bool)`). Keep using `pflag` since cobra hasn't run yet.
+- [x] in `loadHelpColorScheme`, replace the literal `filepath.Dir(configPath)` derivation with a `project.Locate` call:
   - if explicit → `project.Locate(configPath)`; else → `project.Locate("")` (walks upward from cwd).
   - if `Locate` returns `found=false` or any error → silently return nil (no color override; Fang defaults apply). Do **not** validate schema here.
   - if found → resolve `devbox/styles.yml` against `resolved.Root`. The existing "no styles file → return nil" path stays unchanged.
-- [ ] write tests in `cmd/devbox/main_test.go` (or a new file if none exists):
+- [x] write tests in `cmd/devbox/main_test.go` (or a new file if none exists):
   - subdir invocation finds `devbox/styles.yml` two levels up.
   - no project anywhere → `loadHelpColorScheme` returns nil silently (no panic, no log).
   - explicit `--config /tmp/foo/devbox.yml` resolves styles relative to `/tmp/foo/devbox/styles.yml`.
   - legacy v1 project → still locates and loads `styles.yml` (so the eventual schema error from Task 3 gets colored).
-- [ ] `make test` — must pass before next task.
+- [x] `make test` — must pass before next task.
 
 ### Task 3: Wire resolver into root command
 
