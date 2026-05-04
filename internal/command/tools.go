@@ -49,7 +49,7 @@ func newToolStatusCmd(flags *rootFlags) *cobra.Command {
 		Example: "  devbox tools status",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.configPath, cmd.ErrOrStderr())
+			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
@@ -82,7 +82,7 @@ the read-only status table.`,
   devbox tools list | cat   # non-TTY: prints the table`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.configPath, cmd.ErrOrStderr())
+			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)

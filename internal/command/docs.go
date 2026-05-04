@@ -71,8 +71,20 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		return err
 	}
 
-	// Resolve output dir relative to project root (same dir as devbox.yml).
-	projectRoot := filepath.Dir(rflags.configPath)
+	// Resolve output dir relative to project root.
+	projectRoot := rflags.ProjectRoot()
+	if projectRoot == "" {
+		// No project found — only --scope cli is allowed without a project.
+		requestedScopes := resolveScopes(df.scope)
+		if requestedScopes["commands"] {
+			return fmt.Errorf("commands scope requires a devbox project; use --scope cli to generate CLI reference docs without a project")
+		}
+		var cwdErr error
+		projectRoot, cwdErr = os.Getwd()
+		if cwdErr != nil {
+			return fmt.Errorf("getwd: %w", cwdErr)
+		}
+	}
 	outDir := df.output
 	if !filepath.IsAbs(outDir) {
 		outDir = filepath.Join(projectRoot, outDir)

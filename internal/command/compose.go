@@ -3,7 +3,6 @@ package command
 import (
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -48,7 +47,7 @@ func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 			}
 
 			// Use docker policy project name for consistency with devbox docker commands.
-			baseDir := filepath.Dir(flags.configPath)
+			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)
@@ -109,7 +108,7 @@ func newComposeArgvCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			baseDir := filepath.Dir(flags.configPath)
+			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)

@@ -3,7 +3,6 @@ package command
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
@@ -85,7 +84,7 @@ the top of devbox/reset.yml; output will be written to logs/reset.log.`,
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			workDir := filepath.Dir(flags.configPath)
+			workDir := flags.ProjectRoot()
 
 			resetCfg, steps, err := reset.LoadAndResolvePlan(cfg)
 			if err != nil {
@@ -153,7 +152,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 					err error
 				)
 				if condition.IsRuntime(step.When) {
-					ok, err = condition.EvalRuntime(step.When, filepath.Dir(flags.configPath))
+					ok, err = condition.EvalRuntime(step.When, flags.ProjectRoot())
 				} else {
 					ok, err = tpl.EvalCondition(step.When, cfg)
 				}
@@ -172,7 +171,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 				return nil
 			}
 
-			workDir := filepath.Dir(flags.configPath)
+			workDir := flags.ProjectRoot()
 			reg, err := loadCommandRegistry(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)

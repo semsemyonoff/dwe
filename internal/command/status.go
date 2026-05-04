@@ -23,7 +23,7 @@ a tools table with live container status, and a compose topology tree.`,
 		Example:      "  devbox status",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.configPath, cmd.ErrOrStderr())
+			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)

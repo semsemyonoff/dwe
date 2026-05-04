@@ -34,13 +34,13 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	infoPath := filepath.Join(filepath.Dir(flags.configPath), "devbox", "info.yml")
+	infoPath := filepath.Join(flags.ProjectRoot(), "devbox", "info.yml")
 	infoCfg, err := config.LoadInfoConfig(infoPath)
 	if err != nil {
 		return fmt.Errorf("loading devbox/info.yml: %w", err)
 	}
 
-	stylesCfg := applyStyles(flags.configPath, cmd.ErrOrStderr())
+	stylesCfg := applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 
 	// Render ASCII art header from styles config if lines are set.
 	if stylesCfg != nil && len(stylesCfg.Header.Lines) > 0 {

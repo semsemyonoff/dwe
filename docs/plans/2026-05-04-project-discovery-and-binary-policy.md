@@ -125,8 +125,8 @@ This stage must be **silent** under all failure modes — Fang's help/version ou
 
 ### Task 3: Wire resolver into root command
 
-- [ ] add `projectRoot string` to `rootFlags` in `internal/command/root.go`.
-- [ ] convert `PersistentPreRun` to `PersistentPreRunE`. Resolve the project before any subcommand:
+- [x] add `projectRoot string` to `rootFlags` in `internal/command/root.go`.
+- [x] convert `PersistentPreRun` to `PersistentPreRunE`. Resolve the project before any subcommand:
   - detect whether `--config/-c` was actually supplied. **Important**: Cobra calls a root `PersistentPreRunE` with the *leaf* command (e.g. for `devbox info`, `cmd` is the `info` command, not root). The persistent flag is defined on root ([root.go:59](/Users/s/Projects/devbox/next-laravel/devbox-cli/internal/command/root.go)), so `cmd.Flags().Lookup("config")` works only because Cobra's flag inheritance merges persistent flags into leaf flag sets — but to be unambiguous and robust, look it up on root: `cmd.Root().PersistentFlags().Lookup("config").Changed`. Capture into a local `explicit bool`. Do **not** rely on string comparison against `"devbox.yml"` — a user passing `--config devbox.yml` explicitly must be treated as an explicit path, not as the default sentinel.
   - if `explicit` → `project.Resolve(flags.configPath)`; else → `project.Resolve("")` (upward walk).
   - on success, set `flags.configPath` to the absolute resolved path and `flags.projectRoot` to `filepath.Dir(...)`.
@@ -134,15 +134,15 @@ This stage must be **silent** under all failure modes — Fang's help/version ou
   - on error: distinguish discovery miss from explicit-bad-path. Use `errors.Is(err, project.ErrNotFound)` — only that sentinel triggers the allowlist fallback. Any other error (including the wrapped `os.ErrNotExist` from an explicit `-c /bad/path`) is fatal regardless of which subcommand was invoked.
   - on `project.ErrNotFound`: most subcommands need the project, but `version`, `completion`, `print`, and root with no args (`runRoot`) should still work without a project. Tag those commands via a small allowlist so the discovery miss is not fatal for them — print a hint via `runRoot` like today's "config not found, skipping summary". `docs generate` is **not** in the allowlist by default (see next bullet).
   - `docs generate`: keep project-bound by default (it resolves output relative to `projectRoot` and `--scope all` loads the command registry — see [docs.go:75,126](/Users/s/Projects/devbox/next-laravel/devbox-cli/internal/command/docs.go)). For the "no project" case, allow only `--scope cli`: detect the no-project state in the docs runner and reject `--scope all`/`--scope commands` with a clear error ("commands scope requires a devbox project; use --scope cli to generate CLI reference docs without a project"). When `--scope cli` is used without a project, default `--output` to cwd instead of `projectRoot`.
-- [ ] update `runRoot` and `applyStyles` to use `flags.projectRoot` instead of `filepath.Dir(flags.configPath)`.
-- [ ] sweep `internal/command/*.go` for callers that compute paths from `flags.configPath` or use `os.Getwd()` for the project root: replace with `flags.projectRoot`. (Likely sites: `deploy.go`, `reset.go`, `run.go`, `stop.go`, `restart.go`, `services.go`, `tools.go`, `commands run`, `render env`, `render ide`, `info`, `status`, `shell`, `up`, `down`, `logs`, `ps`, `wait`, `compose`, `docker`.)
-- [ ] write/update tests:
+- [x] update `runRoot` and `applyStyles` to use `flags.projectRoot` instead of `filepath.Dir(flags.configPath)`.
+- [x] sweep `internal/command/*.go` for callers that compute paths from `flags.configPath` or use `os.Getwd()` for the project root: replace with `flags.ProjectRoot()`. (Likely sites: `deploy.go`, `reset.go`, `run.go`, `stop.go`, `restart.go`, `services.go`, `tools.go`, `commands run`, `render env`, `render ide`, `info`, `status`, `shell`, `up`, `down`, `logs`, `ps`, `wait`, `compose`, `docker`.) Added `ProjectRoot()` method to `rootFlags` that falls back to `filepath.Dir(configPath)` for tests that construct `rootFlags` directly.
+- [x] write/update tests:
   - new `internal/command/root_resolver_test.go` (or extend `root_test.go`) with table-driven cases that build a temp dir tree, chdir into a subdir, and verify `flags.configPath`/`flags.projectRoot` after `PersistentPreRunE` runs.
   - explicit `-c` with a relative path resolves correctly when invoked from a different cwd.
   - explicit `-c devbox.yml` (matching the default value) is treated as explicit — the resolver does **not** walk upward in that case. Pin via `cmd.Root().PersistentFlags().Lookup("config").Changed`.
   - **explicit bad path is always fatal**: `devbox -c /bad/path version` (an allowlisted command) must still fail with the wrapped `os.ErrNotExist` error, not silently continue. The allowlist only catches `project.ErrNotFound`.
   - allowlisted commands (`version`, `completion`, `print`) succeed with no project (no `-c` flag, discovery miss); `docs generate --scope cli` succeeds with no project; `docs generate --scope all` and `--scope commands` fail with a clear error when no project.
-- [ ] `make test` — must pass before next task.
+- [x] `make test` — must pass before next task.
 
 ### Task 4: Wire resolver into completion helpers (`ValidArgsFunction`)
 

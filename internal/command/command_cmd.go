@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -195,10 +194,7 @@ it runs directly without showing a selector.`,
 				Context: ctx,
 				Host:    tpl.CurrentHostInfo(),
 			}
-			projectRoot, err := filepath.Abs(filepath.Dir(flags.configPath))
-			if err != nil {
-				return fmt.Errorf("resolving project root: %w", err)
-			}
+			projectRoot := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(projectRoot, cfg)
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)

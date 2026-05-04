@@ -116,21 +116,22 @@ func TestRootCmdRunEIsSet(t *testing.T) {
 	}
 }
 
-// TestRootCmdNoConfigShowsHelp verifies that running root without a config file
-// still produces help output (no error, no crash).
+// TestRootCmdNoConfigShowsHelp verifies that running root from a directory with
+// no devbox.yml still produces help output (no error, no crash).
+// The root command is allowlisted for the project.ErrNotFound case.
 func TestRootCmdNoConfigShowsHelp(t *testing.T) {
+	// Run from a temp dir with no devbox.yml so discovery mode returns ErrNotFound.
+	t.Chdir(t.TempDir())
+
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	root.SetArgs([]string{})
-	if err := root.PersistentFlags().Set("config", "/tmp/nonexistent-devbox-xyz-123.yml"); err != nil {
-		t.Fatalf("setting config flag: %v", err)
-	}
 
-	// Execute must not return an error when config is missing.
+	// Execute must not return an error when no project is found via discovery.
 	if err := root.Execute(); err != nil {
-		t.Errorf("root command returned unexpected error when config missing: %v", err)
+		t.Errorf("root command returned unexpected error when no project found: %v", err)
 	}
 	out := buf.String()
 	if !strings.Contains(out, "devbox") {
@@ -143,7 +144,8 @@ func TestRootCmdNoConfigShowsHelp(t *testing.T) {
 func TestRootCmdWithConfigShowsSummaryAndHelp(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "devbox.yml")
-	cfgYAML := `project:
+	cfgYAML := `schema_version: "2"
+project:
   name: testproject
   prefix: devbox
 `
@@ -196,7 +198,7 @@ func TestRootCmdInfoIsNotDuplicated(t *testing.T) {
 func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "devbox.yml")
-	if err := os.WriteFile(cfgPath, []byte("project:\n  name: styletest\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: styletest\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 	// No devbox/styles.yml — must not cause an error.
@@ -223,7 +225,7 @@ func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "devbox.yml")
-	if err := os.WriteFile(cfgPath, []byte("project:\n  name: headertest\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: headertest\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 	devboxDir := filepath.Join(dir, "devbox")

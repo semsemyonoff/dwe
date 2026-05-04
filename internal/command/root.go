@@ -7,8 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/project"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
@@ -26,8 +28,22 @@ const (
 
 // rootFlags holds flags shared across all commands.
 type rootFlags struct {
-	configPath string
-	stylesCfg  *config.StylesConfig // populated by PersistentPreRun before any command runs
+	configPath  string
+	projectRoot string
+	stylesCfg   *config.StylesConfig // populated by PersistentPreRunE before any command runs
+}
+
+// ProjectRoot returns the resolved project root directory. Falls back to
+// filepath.Dir(configPath) so tests that construct rootFlags directly without
+// going through PersistentPreRunE (which sets projectRoot) still work.
+func (f *rootFlags) ProjectRoot() string {
+	if f.projectRoot != "" {
+		return f.projectRoot
+	}
+	if f.configPath != "" {
+		return filepath.Dir(f.configPath)
+	}
+	return ""
 }
 
 // NewRootCmd builds and returns the root cobra.Command.
@@ -42,11 +58,39 @@ func NewRootCmd() *cobra.Command {
 It provides config validation, rendering, topology inspection, and project info display.
 Run 'devbox' with no arguments to display a compact project summary and available commands.
 Run 'devbox info' for the full info dashboard.`,
-		// PersistentPreRun applies the styles theme before any subcommand runs,
-		// so all ui output (commands list/inspect, info, deploy plan, etc.) uses
-		// the palette from devbox/styles.yml.
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			flags.stylesCfg = applyStyles(flags.configPath, cmd.ErrOrStderr())
+		// PersistentPreRunE resolves the project root before any subcommand runs.
+		// It walks upward from cwd (discovery mode) or uses the explicit -c path,
+		// validates schema_version, and populates flags.configPath / flags.projectRoot.
+		// Commands that work without a project (version, completion, print, docs) are
+		// allowed through when no project is found via discovery.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Detect whether --config/-c was explicitly supplied.
+			// Read from root to be unambiguous: PersistentPreRunE receives the leaf command.
+			explicit := cmd.Root().PersistentFlags().Lookup("config").Changed
+
+			var configArg string
+			if explicit {
+				configArg = flags.configPath
+			}
+
+			resolved, err := project.Resolve(configArg)
+			if err != nil {
+				if errors.Is(err, project.ErrNotFound) {
+					// Discovery miss — only allowlisted commands proceed without a project.
+					if allowedWithoutProject(cmd) {
+						flags.stylesCfg = applyStyles("", cmd.ErrOrStderr())
+						return nil
+					}
+					return err
+				}
+				// Explicit bad path or schema error — always fatal.
+				return err
+			}
+
+			flags.configPath = resolved.ConfigPath
+			flags.projectRoot = resolved.Root
+			flags.stylesCfg = applyStyles(flags.projectRoot, cmd.ErrOrStderr())
+			return nil
 		},
 		// Running 'devbox' with no subcommand shows project summary + help.
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -59,8 +103,8 @@ Run 'devbox info' for the full info dashboard.`,
 	root.PersistentFlags().StringVarP(
 		&flags.configPath,
 		"config", "c",
-		"devbox.yml",
-		"path to devbox.yml",
+		"",
+		"path to devbox.yml (default: auto-discover from cwd upward)",
 	)
 
 	// Define command groups for organized help output.
@@ -123,12 +167,32 @@ func addCmd(parent *cobra.Command, groupID string, cmd *cobra.Command) {
 	parent.AddCommand(cmd)
 }
 
-// applyStyles loads devbox/styles.yml relative to configPath, applies the
-// palette to ui, and warns on error. errW is used for warning output so that
-// Cobra stderr redirection (cmd.ErrOrStderr()) is respected. Returns the
-// config (never nil).
-func applyStyles(configPath string, errW io.Writer) *config.StylesConfig {
-	stylesPath := filepath.Join(filepath.Dir(configPath), "devbox", "styles.yml")
+// allowedWithoutProject returns true for commands that can run without a project.
+// These commands are allowed through when no devbox.yml is found via upward discovery.
+// Note: explicit -c /bad/path is still fatal even for these commands — the allowlist
+// only catches project.ErrNotFound (discovery miss), not os.ErrNotExist or schema errors.
+func allowedWithoutProject(cmd *cobra.Command) bool {
+	path := cmd.CommandPath()
+	return path == "devbox" ||
+		path == "devbox version" ||
+		strings.HasPrefix(path, "devbox completion") ||
+		strings.HasPrefix(path, "devbox print") ||
+		strings.HasPrefix(path, "devbox docs")
+}
+
+// applyStyles loads devbox/styles.yml from projectRoot, applies the palette to ui,
+// and warns on error. projectRoot is the directory containing devbox.yml; an empty
+// string means no project was found and styles fall back to defaults silently.
+// errW is used for warning output so that Cobra stderr redirection is respected.
+// Returns the loaded config (never nil).
+func applyStyles(projectRoot string, errW io.Writer) *config.StylesConfig {
+	if projectRoot == "" {
+		// No project root — apply defaults silently.
+		stylesCfg := &config.StylesConfig{}
+		ui.ApplyStyles(stylesCfg)
+		return stylesCfg
+	}
+	stylesPath := filepath.Join(projectRoot, "devbox", "styles.yml")
 	stylesCfg, err := config.LoadStylesConfig(stylesPath)
 	ui.ApplyStyles(stylesCfg)
 	if err != nil {
@@ -141,7 +205,12 @@ func applyStyles(configPath string, errW io.Writer) *config.StylesConfig {
 // It prints an ASCII header and compact project summary (when a config is
 // found), followed by the Cobra/Fang help output.
 func runRoot(cmd *cobra.Command, flags *rootFlags) error {
-	stylesCfg := flags.stylesCfg // already applied by PersistentPreRun
+	stylesCfg := flags.stylesCfg // already applied by PersistentPreRunE
+
+	if flags.projectRoot == "" {
+		// No project found via discovery — skip summary, show help only.
+		return cmd.Help()
+	}
 
 	cfg, err := config.LoadConfig(flags.configPath)
 	switch {

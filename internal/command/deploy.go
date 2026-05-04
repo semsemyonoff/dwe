@@ -120,7 +120,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			workDir := filepath.Dir(flags.configPath)
+			workDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)
@@ -239,7 +239,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 					err error
 				)
 				if condition.IsRuntime(step.When) {
-					ok, err = condition.EvalRuntime(step.When, filepath.Dir(flags.configPath))
+					ok, err = condition.EvalRuntime(step.When, flags.ProjectRoot())
 				} else {
 					ok, err = tpl.EvalCondition(step.When, cfg)
 				}
@@ -258,7 +258,7 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 				return nil
 			}
 
-			workDir := filepath.Dir(flags.configPath)
+			workDir := flags.ProjectRoot()
 			reg, err := loadCommandRegistry(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
@@ -309,7 +309,7 @@ Mode controls copy behavior: 'default' skips existing files, 'update' copies alw
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			projectRoot := filepath.Dir(flags.configPath)
+			projectRoot := flags.ProjectRoot()
 			ctx := builtin.ExecContext{
 				Config:      cfg,
 				ProjectRoot: projectRoot,
@@ -352,7 +352,7 @@ Intended as a deploy step check condition:
 				return fmt.Errorf("service %q not found in config", serviceName)
 			}
 
-			projectRoot := filepath.Dir(flags.configPath)
+			projectRoot := flags.ProjectRoot()
 			destDir := filepath.Join(projectRoot, svc.Dir, "configs")
 
 			var missing []string

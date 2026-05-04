@@ -48,7 +48,7 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			projectRoot := filepath.Dir(flags.configPath)
+			projectRoot := flags.ProjectRoot()
 			w := render.Stdout()
 
 			// Determine which services to process.

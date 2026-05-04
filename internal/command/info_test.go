@@ -24,7 +24,8 @@ func writeMinimalInfoYML(t *testing.T, dir, content string) {
 func writeMinimalDevboxYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "devbox.yml")
-	cfgYAML := `project:
+	cfgYAML := `schema_version: "2"
+project:
   name: infotest
   prefix: devbox
 `

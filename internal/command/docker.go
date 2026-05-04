@@ -2,7 +2,6 @@ package command
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"devbox-cli/internal/config"
@@ -46,7 +45,7 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 
-	baseDir := filepath.Dir(flags.configPath)
+	baseDir := flags.ProjectRoot()
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("loading docker config: %w", err)
@@ -274,7 +273,7 @@ func newDockerProjectNameCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			baseDir := filepath.Dir(flags.configPath)
+			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
 				return fmt.Errorf("loading docker config: %w", err)

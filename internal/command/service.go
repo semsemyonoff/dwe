@@ -50,7 +50,7 @@ func newServiceStatusCmd(flags *rootFlags) *cobra.Command {
 		Example: "  devbox services status",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.configPath, cmd.ErrOrStderr())
+			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
@@ -84,7 +84,7 @@ the read-only status table.`,
   devbox services list | cat   # non-TTY: prints the table`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.configPath, cmd.ErrOrStderr())
+			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)

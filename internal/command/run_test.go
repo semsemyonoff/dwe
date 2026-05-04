@@ -76,7 +76,7 @@ func TestRunCmd_InEnvironmentGroup(t *testing.T) {
 func makeMinimalDevboxYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "devbox.yml")
-	content := "project:\n  name: test\n  prefix: devbox\n"
+	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
 	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
 		t.Fatalf("writing devbox.yml: %v", err)
 	}
