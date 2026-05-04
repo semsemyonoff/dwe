@@ -10,7 +10,7 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
 
 - `cmd/devbox/main.go` — entry point (uses `fang.Execute` for styled help/errors)
 - `internal/version/` — `Version`, `Commit`, `Date`, `BuiltBy` vars; `Info()` formatter; injected via `-ldflags -X` at build time
-- `internal/config/` — `DevboxConfig` struct, layered `LoadConfig()`, `LoadDeployConfig()`, `LoadDockerConfig()`, `LoadLifecycleConfig()`, `ResolvePath()`, `ExportRule`, `ComposeConfig`, `DockerConfig`, `DeployConfig`, `LifecycleConfig`, `IDEConfig`, `InfoConfig`, `LoadInfoConfig()`, `StylesConfig`, `LoadStylesConfig()`
+- `internal/config/` — `DevboxConfig` struct, layered `LoadConfig()`, `LoadDeployConfig()`, `LoadDockerConfig()`, `LoadLifecycleConfig()`, `ResolvePath()`, `ExportRule`, `ComposeConfig`, `DockerConfig`, `DeployConfig`, `LifecycleConfig`, `IDEConfig`, `InfoConfig`, `LoadInfoConfig()`, `StylesConfig`, `LoadStylesConfig()`; `BinariesConfig` (devbox/docker/shell binary overrides, read from top-level `devbox.yml` only — not layered); nil-safe accessors `DevboxBin`, `DockerBin`, `ShellBin` (always go through these, never `cfg.Binaries.*` directly)
 - `internal/docker/` — `Compose` struct for building and executing `docker compose` commands with policy args
 - `internal/render/` — `Writer` with ANSI output methods (Success, Error, Warning, Info, Definition, TableHeader, ASCII art); plain passthrough for logs/deploy output; `Writer.Confirm` is the documented non-TTY fallback for Y/n prompts (piped stdin, CI)
 - `internal/ui/` — Lipgloss styled output: `RenderSummary(cfg)` for compact root summary, `RenderInfo(cfg, infoCfg)` for full info dashboard, `RenderServiceTable()` and `RenderToolTable()` for Lipgloss tables, `RenderTopology()` for dependency tree; `ApplyStyles(stylesCfg)` to hot-apply palette from `styles.yml` (also rebuilds the huh theme); terminal width detection; huh-backed interactive primitives: `RunSelector(title, items)` (single-pick), `RunMultiSelect(title, items)` (multi-toggle), `RunConfirm(title, affirmative, negative)` (confirmation); `Theme()` accessor for the project-palette `huh.Theme`; `IsInteractiveFn(stdin)` TTY-detection helper used by all interactive callers
@@ -31,6 +31,7 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
   - `usercommands/resolve/` — param/context/env resolution: `Params`, `Context`, `BuildEnv`
   - `usercommands/runtime/` — runners and execution: `RunContext`, `Runner` interface, `NewRunner`, `RunCommand`, `ConfirmCommand`, `HostRunner`, `DevboxRunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`, file path computation. Script contract env: `DEVBOX_BIN`, `DEVBOX_FILES_JSON`, `DEVBOX_NONINTERACTIVE`
 - `internal/command/` — cobra commands with Fang integration and command groups (root summary, lifecycle, services/tools, deploy/reset, docker/compose, docs); thin adapters delegating to domain packages
+- `internal/project/` — project discovery: `Locate(flag)` (upward walk from cwd; explicit mode when flag non-empty), `ValidateSchema(path)` (schema_version must be "2"), `Resolve(flag)` (compose Locate + ValidateSchema); `ErrNotFound` sentinel; constants `ConfigFilename`, `SchemaField`, `SupportedSchema`
 
 ## Configuration Documentation
 

@@ -275,14 +275,14 @@ Goal: replace `./bin/devbox` literals; nested devbox calls use `os.Executable()`
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] targeted grep for residual hard-coded executions — broad string greps would flag legitimate help text, error messages, and YAML keys, so check only actual `exec.Command` call sites:
+- [x] targeted grep for residual hard-coded executions — broad string greps would flag legitimate help text, error messages, and YAML keys, so check only actual `exec.Command` call sites:
   - `grep -rn 'exec.Command("docker"' internal/ cmd/` — must be empty in non-test files. (Note: `docker` as a *YAML key*, in cobra `Use:` strings, in error messages, and in the `internal/command/docker.go` subcommand wiring is fine — those are not binary invocations.)
   - `grep -rn 'exec.Command("sh"' internal/ cmd/` — non-test hits limited to the documented exceptions: `internal/condition/condition.go` (predicate evaluator) and `internal/usercommands/runtime/runner_script.go` (per-command shell knob). Any other hit is a regression.
   - `grep -rn '"\./bin/devbox"' internal/ cmd/` — must be empty everywhere except `_test.go` fixtures that have been deliberately kept (none expected after Task 8).
   - bonus targeted searches: `grep -rn 'exec.Command(.[^c]' internal/ cmd/` (catches anything other than `c.Bin`/`config.*Bin(...)` patterns) — visually inspect.
-- [ ] `cd devbox-cli && make build && make test && make lint` — all green.
-- [ ] regenerate reference docs: `./bin/devbox docs generate` (project root) — review the diff (config-reference may pick up `binaries:`).
-- [ ] update `devbox-cli/AGENTS.md` (and via symlink, `CLAUDE.md`) and the top-level `CLAUDE.md` if either documents the resolver or binary defaults — currently `CLAUDE.md` describes config layers; add a sentence about `schema_version` gating and `binaries` policy.
+- [x] `cd devbox-cli && make build && make test && make lint` — all green.
+- [x] regenerate reference docs: `./bin/devbox docs generate` (project root) — review the diff (config-reference may pick up `binaries:`).
+- [x] update `devbox-cli/AGENTS.md` (and via symlink, `CLAUDE.md`) and the top-level `CLAUDE.md` if either documents the resolver or binary defaults — currently `CLAUDE.md` describes config layers; add a sentence about `schema_version` gating and `binaries` policy.
 
 ### Task 10: [Final] Documentation pass
 
