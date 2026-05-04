@@ -1,0 +1,9 @@
+# Binaries
+bin/
+
+# IDE & OS
+.idea/
+.vscode/
+.zed/
+*~
+.DS_Store
