@@ -11,11 +11,11 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/envfile"
+	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newServiceCmd(flags *rootFlags) *cobra.Command {
@@ -133,7 +133,11 @@ the read-only status table.`,
 				return err
 			}
 
-			toEnable, toDisable := diffServiceSelection(rows, result.Kept)
+			selections := make([]localconfig.ServiceSelection, len(rows))
+			for i, row := range rows {
+				selections[i] = localconfig.ServiceSelection{Name: row.Name, Enabled: row.Enabled, Mandatory: row.Mandatory}
+			}
+			toEnable, toDisable := localconfig.DiffServiceSelection(selections, result.Kept)
 			if len(toEnable) == 0 && len(toDisable) == 0 {
 				return nil
 			}
@@ -391,92 +395,19 @@ func optionalServiceNameCompletion(flags *rootFlags) func(*cobra.Command, []stri
 // or none are — eliminating partial-state risk if a later validation fails after
 // earlier ones already wrote to disk.
 func applyServiceTogglesBatch(configPath string, cfg *config.DevboxConfig, toEnable, toDisable []string) error {
-	for _, name := range toEnable {
-		if err := validateServiceToggle(cfg, name, true); err != nil {
-			return err
-		}
-	}
-	for _, name := range toDisable {
-		if err := validateServiceToggle(cfg, name, false); err != nil {
-			return err
-		}
-	}
-
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	local, err := loadLocalYAML(localPath)
+	local, err := localconfig.LoadLocalYAML(localPath)
 	if err != nil {
 		return err
 	}
 
-	svcMap, ok := local["services"].(map[string]any)
-	if !ok {
-		svcMap = make(map[string]any)
-		local["services"] = svcMap
-	}
-	for _, name := range toEnable {
-		setLocalEntryEnabled(svcMap, name, true)
-	}
-	for _, name := range toDisable {
-		setLocalEntryEnabled(svcMap, name, false)
+	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
+		return err
 	}
 
-	return writeLocalYAML(localPath, local)
-}
-
-// validateServiceToggle returns an error if the service is unknown or mandatory.
-func validateServiceToggle(cfg *config.DevboxConfig, name string, enabled bool) error {
-	svc, ok := cfg.Services[name]
-	if !ok {
-		return fmt.Errorf("service %q not found", name)
-	}
-	if svc.Mandatory {
-		return fmt.Errorf("service %q is mandatory and cannot be %s", name, disableWord(enabled))
-	}
-	return nil
-}
-
-// loadLocalYAML reads and parses devbox/local.yml. A missing file is not an error.
-func loadLocalYAML(localPath string) (map[string]any, error) {
-	local := make(map[string]any)
-	data, err := os.ReadFile(localPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return local, nil
-		}
-		return nil, fmt.Errorf("read %s: %w", localPath, err)
-	}
-	if err := yaml.Unmarshal(data, &local); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", localPath, err)
-	}
-	if local == nil {
-		local = make(map[string]any)
-	}
-	return local, nil
-}
-
-// writeLocalYAML marshals and atomically writes the local config map.
-func writeLocalYAML(localPath string, local map[string]any) error {
-	data, err := yaml.Marshal(local)
-	if err != nil {
-		return fmt.Errorf("marshal local config: %w", err)
-	}
-	if err := os.WriteFile(localPath, data, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", localPath, err)
-	}
-	return nil
-}
-
-// setLocalEntryEnabled sets the "enabled" field on the named entry within a
-// services/tools subtree, creating the entry map if absent.
-func setLocalEntryEnabled(subtree map[string]any, name string, enabled bool) {
-	entry, ok := subtree[name].(map[string]any)
-	if !ok {
-		entry = make(map[string]any)
-		subtree[name] = entry
-	}
-	entry["enabled"] = enabled
+	return localconfig.WriteLocalYAML(localPath, local)
 }
 
 // setServiceEnabled writes services.<name>.enabled = value to devbox/local.yml,
@@ -506,11 +437,4 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 	}
 	render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
 	return nil
-}
-
-func disableWord(enabled bool) string {
-	if enabled {
-		return "enabled"
-	}
-	return "disabled"
 }

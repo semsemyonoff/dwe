@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/envfile"
+	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
@@ -118,7 +119,11 @@ the read-only status table.`,
 				return err
 			}
 
-			toEnable, toDisable := diffToolSelection(rows, result.Kept)
+			toolSelections := make([]localconfig.ToolSelection, len(rows))
+			for i, row := range rows {
+				toolSelections[i] = localconfig.ToolSelection{Name: row.Name, Enabled: row.Enabled}
+			}
+			toEnable, toDisable := localconfig.DiffToolSelection(toolSelections, result.Kept)
 			if len(toEnable) == 0 && len(toDisable) == 0 {
 				return nil
 			}
@@ -323,38 +328,19 @@ var knownTools = map[string]bool{
 // applyToolTogglesBatch loads devbox/local.yml once, validates and applies all
 // toggles in-memory, then writes the file once. See applyServiceTogglesBatch.
 func applyToolTogglesBatch(configPath string, toEnable, toDisable []string) error {
-	for _, name := range toEnable {
-		if !knownTools[name] {
-			return fmt.Errorf("tool %q not found", name)
-		}
-	}
-	for _, name := range toDisable {
-		if !knownTools[name] {
-			return fmt.Errorf("tool %q not found", name)
-		}
-	}
-
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	local, err := loadLocalYAML(localPath)
+	local, err := localconfig.LoadLocalYAML(localPath)
 	if err != nil {
 		return err
 	}
 
-	toolsMap, ok := local["tools"].(map[string]any)
-	if !ok {
-		toolsMap = make(map[string]any)
-		local["tools"] = toolsMap
-	}
-	for _, name := range toEnable {
-		setLocalEntryEnabled(toolsMap, name, true)
-	}
-	for _, name := range toDisable {
-		setLocalEntryEnabled(toolsMap, name, false)
+	if err := localconfig.ApplyToolTogglesToYAML(knownTools, local, toEnable, toDisable); err != nil {
+		return err
 	}
 
-	return writeLocalYAML(localPath, local)
+	return localconfig.WriteLocalYAML(localPath, local)
 }
 
 // setToolEnabled writes tools.<name>.enabled = value to devbox/local.yml,

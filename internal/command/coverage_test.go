@@ -731,20 +731,6 @@ func TestCommandInspectCmd_RunE_NotFoundID(t *testing.T) {
 	}
 }
 
-// --- disableWord ---
-
-func TestDisableWord_Enabled(t *testing.T) {
-	if disableWord(true) != "enabled" {
-		t.Errorf("expected 'enabled' for true")
-	}
-}
-
-func TestDisableWord_Disabled(t *testing.T) {
-	if disableWord(false) != "disabled" {
-		t.Errorf("expected 'disabled' for false")
-	}
-}
-
 // --- newPrint* RunE (success/warning/info) ---
 
 func TestNewPrintSuccessCmd_RunE(t *testing.T) {

@@ -173,21 +173,21 @@ Extract `.env` rendering so cobra is not the only entry point. Unblocks `localco
 
 `localconfig` mutates `devbox/local.yml` only. It does **not** call `envfile.Regenerate` — keep the "load → mutate → write → print → regenerate .env" composition in the cobra adapter so `localconfig` stays reusable by any future caller that doesn't want a side-effect on `.env`. Dependency rule: `localconfig` imports `internal/config` (for `DevboxConfig` validation types) and stdlib; nothing else.
 
-- [ ] create `internal/localconfig/local_yaml.go` with `LoadLocalYAML`, `WriteLocalYAML`, `SetLocalEntryEnabled` (move from `internal/command/service.go`)
-- [ ] create `internal/localconfig/services.go` with the **pure** mutators only: `ApplyServiceTogglesToYAML(local map[string]any, toEnable, toDisable []string)`, `SetServiceEnabledInYAML(local map[string]any, name string, enabled bool)`, `ValidateServiceToggle(cfg *config.DevboxConfig, name string, enabled bool) error`, `DiffServiceSelection(selections []ServiceSelection, kept []string) (toEnable, toDisable []string)`
-- [ ] create `internal/localconfig/tools.go` with the equivalent pure tool toggle helpers (`DiffToolSelection(selections []ToolSelection, kept []string) (toEnable, toDisable []string)`, `ApplyToolTogglesToYAML`, `SetToolEnabledInYAML`, `ValidateToolToggle`)
-- [ ] **Selection-row ownership decision**: define minimal input structs in `localconfig`:
+- [x] create `internal/localconfig/local_yaml.go` with `LoadLocalYAML`, `WriteLocalYAML`, `SetLocalEntryEnabled` (move from `internal/command/service.go`)
+- [x] create `internal/localconfig/services.go` with the **pure** mutators only: `ApplyServiceTogglesToYAML(local map[string]any, toEnable, toDisable []string)`, `SetServiceEnabledInYAML(local map[string]any, name string, enabled bool)`, `ValidateServiceToggle(cfg *config.DevboxConfig, name string, enabled bool) error`, `DiffServiceSelection(selections []ServiceSelection, kept []string) (toEnable, toDisable []string)`
+- [x] create `internal/localconfig/tools.go` with the equivalent pure tool toggle helpers (`DiffToolSelection(selections []ToolSelection, kept []string) (toEnable, toDisable []string)`, `ApplyToolTogglesToYAML`, `SetToolEnabledInYAML`, `ValidateToolToggle`)
+- [x] **Selection-row ownership decision**: define minimal input structs in `localconfig`:
   ```go
   type ServiceSelection struct { Name string; Enabled bool; Mandatory bool }
   type ToolSelection    struct { Name string; Enabled bool }
   ```
   These contain only the fields the diff/validate logic reads. Presentation-rich types (`serviceRow`, `toolRow` with `Type`/`Dir`/`Container`/`Port`/`Host`) stay in `internal/command/services.go` because they are pure UI shape; callers project at the call site (`localconfig.DiffServiceSelection(rowsToSelections(rows), kept)`). `ui.ServiceTableRow` / `ui.ToolTableRow` (the Lipgloss table inputs) stay in `internal/ui/`.
-- [ ] keep the high-level "load → mutate → write → print → regenerate .env" orchestration (`applyServiceTogglesBatch`, `setServiceEnabled`, and tool equivalents) in `internal/command/service.go` / `tools.go`. The orchestrator becomes a thin wrapper: project rows → selections, read with `localconfig.LoadLocalYAML`, mutate with `localconfig.ApplyServiceTogglesToYAML`, write with `localconfig.WriteLocalYAML`, then call `envfile.Regenerate(flags.configPath)` (introduced in Task 6)
-- [ ] move related tests (`service_toggle_test.go`, `tool_toggle_test.go`, the diff/validate cases from `services_test.go` / `tools_test.go`) into `internal/localconfig/*_test.go`
-- [ ] keep cobra-shaped integration tests (covering toggle + envfile regeneration end-to-end) in `internal/command/`
-- [ ] update imports
-- [ ] run `make test` — must pass before Task 8
-- [ ] run `make lint` — must pass before Task 8
+- [x] keep the high-level "load → mutate → write → print → regenerate .env" orchestration (`applyServiceTogglesBatch`, `setServiceEnabled`, and tool equivalents) in `internal/command/service.go` / `tools.go`. The orchestrator becomes a thin wrapper: project rows → selections, read with `localconfig.LoadLocalYAML`, mutate with `localconfig.ApplyServiceTogglesToYAML`, write with `localconfig.WriteLocalYAML`, then call `envfile.Regenerate(flags.configPath)` (introduced in Task 6)
+- [x] move related tests (`service_toggle_test.go`, `tool_toggle_test.go`, the diff/validate cases from `services_test.go` / `tools_test.go`) into `internal/localconfig/*_test.go`
+- [x] keep cobra-shaped integration tests (covering toggle + envfile regeneration end-to-end) in `internal/command/`
+- [x] update imports
+- [x] run `make test` — must pass before Task 8
+- [x] run `make lint` — must pass before Task 8
 
 ### Task 8: Rename `internal/commands` → `internal/usercommands` (flat move)
 
