@@ -7,7 +7,7 @@ List available commands
 List all available declarative commands from devbox/commands/.
 
 An optional group filter narrows the output to a specific command group (e.g. 'db', 'services.main').
-Use --all to include private usercommands.
+Use --all to include private commands.
 
 ```
 devbox commands list [group] [flags]

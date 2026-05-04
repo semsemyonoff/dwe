@@ -6,4 +6,3 @@ Generated reference documentation for devbox.
 
 - [CLI Reference](cli/index.md) — `devbox` command tree
 - [Commands Reference](commands/index.md) — declarative command registry
-

@@ -8,7 +8,7 @@ Show the full definition of a declarative command by its dot-separated ID.
 
 Displays type, run/argv, params, context variables, env, and workflow steps.
 
-When called without an argument, an interactive selector lists all usercommands.
+When called without an argument, an interactive selector lists all commands.
 When called with a group prefix (e.g. 'services.main'), the selector is
 filtered to that group.  When called with a full command ID, it inspects
 directly without showing a selector.

@@ -11,7 +11,7 @@ Use --yes to skip confirmation prompts (intended for non-interactive use).
 Private commands cannot be run directly.
 
 When called without an argument, an interactive selector lists all public
-usercommands.  When called with a group prefix (e.g. 'services.main'), the
+commands.  When called with a group prefix (e.g. 'services.main'), the
 selector is filtered to that group.  When called with a full command ID,
 it runs directly without showing a selector.
 
