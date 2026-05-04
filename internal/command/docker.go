@@ -2,13 +2,12 @@ package command
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/envfile"
 	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
@@ -55,7 +54,7 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 
 	// Auto-generate .env if configured for this command.
 	if dockerCfg.Env.ShouldGenerateEnv(command) {
-		if err := generateEnv(flags); err != nil {
+		if _, err := envfile.Regenerate(flags.configPath); err != nil {
 			return nil, fmt.Errorf("generating .env: %w", err)
 		}
 	}
@@ -72,21 +71,6 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 		dockerCfg: dockerCfg,
 		compose:   compose,
 	}, nil
-}
-
-// generateEnv runs the equivalent of `devbox render env -o .env`.
-// The output path is resolved relative to the config file's directory
-// so that it works correctly when invoked from a different working directory.
-func generateEnv(flags *rootFlags) error {
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("finding executable: %w", err)
-	}
-	envPath := filepath.Join(filepath.Dir(flags.configPath), ".env")
-	cmd := exec.Command(exe, "-c", flags.configPath, "render", "env", "-o", envPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 func newDockerUpCmd(flags *rootFlags) *cobra.Command {

@@ -47,7 +47,7 @@ func newCommandListCmd(flags *rootFlags) *cobra.Command {
 		Long: `List all available declarative commands from devbox/commands/.
 
 An optional group filter narrows the output to a specific command group (e.g. 'db', 'services.main').
-Use --all to include private usercommands.`,
+Use --all to include private commands.`,
 		Example: `  devbox commands list
   devbox commands list db
   devbox commands list --all`,
@@ -84,7 +84,7 @@ func newCommandInspectCmd(flags *rootFlags) *cobra.Command {
 
 Displays type, run/argv, params, context variables, env, and workflow steps.
 
-When called without an argument, an interactive selector lists all usercommands.
+When called without an argument, an interactive selector lists all commands.
 When called with a group prefix (e.g. 'services.main'), the selector is
 filtered to that group.  When called with a full command ID, it inspects
 directly without showing a selector.`,
@@ -138,7 +138,7 @@ Use --yes to skip confirmation prompts (intended for non-interactive use).
 Private commands cannot be run directly.
 
 When called without an argument, an interactive selector lists all public
-usercommands.  When called with a group prefix (e.g. 'services.main'), the
+commands.  When called with a group prefix (e.g. 'services.main'), the
 selector is filtered to that group.  When called with a full command ID,
 it runs directly without showing a selector.`,
 		Example: `  devbox commands run

@@ -21,9 +21,9 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
 - `internal/deploy/` — deploy plan resolution: `ResolvePlan`, `ResolveServicePlan`, `FindStep`; assembles `DeployConfig` phases into executable steps
 - `internal/reset/` — reset plan resolution: `ResolvePlan`, `FindStep`; mirrors deploy for the reset pipeline
 - `internal/lifecycle/` — lifecycle pipeline execution: `RunPhases(cfg, lifecycleCfg, ...)` drives run/stop pipelines from `devbox/lifecycle.yml`
-- `internal/stack/` — Docker Compose topology + health: `AggregateHealth`, `FetchTopology`, `ParseTopologyFromFiles`; augments compose state with devbox service config
+- `internal/stack/` — Docker Compose topology + health: `AggregateHealth`, `FetchComposeTopology`, `ParseTopologyFromFiles`; augments compose state with devbox service config
 - `internal/envfile/` — `.env` file generation: `BuildContent(cfg)`, `Regenerate(configPath)`; no cobra or UI dependencies
-- `internal/localconfig/` — local YAML toggle helpers: `LoadLocalYAML`, `WriteLocalYAML`, `SetEntryEnabled`, `ValidateServiceToggle`; no envfile dependency
+- `internal/localconfig/` — local YAML toggle helpers: `LoadLocalYAML`, `WriteLocalYAML`, `SetLocalEntryEnabled`, `ValidateServiceToggle`; no envfile dependency
 - `internal/usercommands/` — declarative command system facade (re-exports all public symbols from subpackages):
   - `usercommands/model/` — pure types: `CommandDef`, `CommandFile`, `ParamDef`, `ContextDef`, `FileSpec`, `WorkflowStep`, all enums (`CommandType`, `ParamType`, `ExecMode`, `UserMode`, `FileAccess`, `FileSort`, `FileOnError`)
   - `usercommands/loader/` — YAML discovery and parsing: `DiscoverCommandFiles`, `LoadCommandFile`, `ComputeGroup`, `ComputeCommandID`
