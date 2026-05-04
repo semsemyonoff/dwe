@@ -604,7 +604,7 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 // are built with CLICOLOR_FORCE=1 so lipgloss enables colors even when stdout
 // is piped through an io.MultiWriter.
 func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir())
+	cmd := buildDevboxCmd("info", t.TempDir(), false)
 	if !slices.Contains(cmd.Env, "CLICOLOR_FORCE=1") {
 		t.Errorf("buildDevboxCmd env should contain CLICOLOR_FORCE=1, got: %v", cmd.Env)
 	}
@@ -613,7 +613,7 @@ func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
 // TestBuildDevboxCmd_InheritsParentEnv verifies that the child env includes
 // parent environment variables (not just CLICOLOR_FORCE).
 func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
-	cmd := buildDevboxCmd("info", t.TempDir())
+	cmd := buildDevboxCmd("info", t.TempDir(), false)
 	// cmd.Env should be non-empty (it includes os.Environ() + CLICOLOR_FORCE).
 	if len(cmd.Env) == 0 {
 		t.Error("buildDevboxCmd env should include parent environment (os.Environ())")
@@ -627,9 +627,22 @@ func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
 // TestBuildDevboxCmd_WorkDir verifies that the cmd working directory is set correctly.
 func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 	workDir := t.TempDir()
-	cmd := buildDevboxCmd("info", workDir)
+	cmd := buildDevboxCmd("info", workDir, false)
 	if cmd.Dir != workDir {
 		t.Errorf("buildDevboxCmd Dir = %q, want %q", cmd.Dir, workDir)
+	}
+}
+
+// TestBuildDevboxCmd_SkipConfirmSetsNonInteractive verifies that skipConfirm=true
+// adds DEVBOX_NONINTERACTIVE=1 to the child environment.
+func TestBuildDevboxCmd_SkipConfirmSetsNonInteractive(t *testing.T) {
+	cmd := buildDevboxCmd("info", t.TempDir(), true)
+	if !slices.Contains(cmd.Env, "DEVBOX_NONINTERACTIVE=1") {
+		t.Errorf("buildDevboxCmd with skipConfirm should contain DEVBOX_NONINTERACTIVE=1, got: %v", cmd.Env)
+	}
+	cmd2 := buildDevboxCmd("info", t.TempDir(), false)
+	if slices.Contains(cmd2.Env, "DEVBOX_NONINTERACTIVE=1") {
+		t.Errorf("buildDevboxCmd without skipConfirm should not contain DEVBOX_NONINTERACTIVE=1")
 	}
 }
 

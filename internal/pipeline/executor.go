@@ -23,7 +23,9 @@ import (
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
 // as a pipe rather than a TTY). The log tee via ansiStripper is unaffected.
-func buildDevboxCmd(devboxArg, workDir string) *exec.Cmd {
+// When skipConfirm is true, DEVBOX_NONINTERACTIVE=1 is added so that nested
+// devbox subcommands also skip confirmation prompts.
+func buildDevboxCmd(devboxArg, workDir string, skipConfirm bool) *exec.Cmd {
 	bin, err := os.Executable()
 	if err != nil {
 		bin = "./bin/devbox"
@@ -31,6 +33,9 @@ func buildDevboxCmd(devboxArg, workDir string) *exec.Cmd {
 	cmd := exec.Command("sh", "-c", bin+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
+	if skipConfirm {
+		cmd.Env = append(cmd.Env, "DEVBOX_NONINTERACTIVE=1")
+	}
 	return cmd
 }
 
@@ -49,12 +54,12 @@ func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 		return execBuiltinStep(step, workDir, cfg, logWriter, skipConfirm)
 	}
 	if step.Command != "" {
-		return execCommandStep(step, workDir, cfg, reg, logWriter)
+		return execCommandStep(step, workDir, cfg, reg, logWriter, skipConfirm)
 	}
 
 	var cmd *exec.Cmd
 	if step.Devbox != "" {
-		cmd = buildDevboxCmd(step.Devbox, workDir)
+		cmd = buildDevboxCmd(step.Devbox, workDir, skipConfirm)
 	} else {
 		cmd = exec.Command("sh", "-c", strings.TrimSpace(step.Run)) //nolint:gosec
 		cmd.Dir = workDir
@@ -118,7 +123,7 @@ func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 }
 
 // execCommandStep executes a command: pipeline step via the command runner.
-func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer) error {
+func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
 	if reg == nil {
 		return fmt.Errorf("command registry not available for step %q (command: %s)", step.Name, step.Command)
 	}
@@ -157,17 +162,19 @@ func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxC
 		stderr = io.MultiWriter(os.Stderr, logStripped)
 	}
 	if err := usercommands.RunCommand(usercommands.RunContext{
-		Cmd:          def,
-		Params:       params,
-		Context:      ctx,
-		Render:       rctx,
-		Config:       cfg,
-		DockerConfig: dockerCfg,
-		Registry:     reg,
-		ProjectRoot:  workDir,
-		Stdout:       stdout,
-		Stderr:       stderr,
-		Stdin:        os.Stdin,
+		Cmd:            def,
+		Params:         params,
+		Context:        ctx,
+		Render:         rctx,
+		Config:         cfg,
+		DockerConfig:   dockerCfg,
+		Registry:       reg,
+		ProjectRoot:    workDir,
+		Stdout:         stdout,
+		Stderr:         stderr,
+		Stdin:          os.Stdin,
+		SkipConfirm:    skipConfirm,
+		NonInteractive: skipConfirm,
 	}); err != nil {
 		return fmt.Errorf("step %q: %w", step.Name, err)
 	}
