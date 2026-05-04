@@ -200,22 +200,22 @@ Extract `.env` rendering so cobra is not the only entry point. Unblocks `localco
 
 ### Task 9: Split `internal/usercommands` into subpackages
 
-- [ ] create `internal/usercommands/model/` and move pure types from `types.go`: `CommandType`, `ParamType`, `UserMode`, `ExecMode`, `CommandDef`, `ParamDef`, `ContextDef`, `FileSpec` and friends (`FileCandidate`, `FileAccess`, `FileSort`, `FileOnError`), `ScriptDef`, `WorkflowStep`, `CommandMessages`, `CommandFile`, `GroupMeta`, plus their validation methods (`validation.go`)
-- [ ] create `internal/usercommands/loader/` and move `DiscoverCommandFiles`, `LoadCommandFile`, `parseCommandFile`, `ComputeGroup`, `ComputeCommandID` (from `loader.go`)
-- [ ] create `internal/usercommands/registry/` and move `Registry`, `LoadRegistry`, `GroupNode`, group-tree construction, cross-registry validation (from `registry.go`)
-- [ ] create `internal/usercommands/resolve/` and move `ResolveParams`, `ResolveContext`, `BuildEnv`, `ComputeFilePaths`, `PrepareFileEffects`, render/relative path helpers (from `resolve.go`, `resolve_files.go`)
-- [ ] create `internal/usercommands/runtime/` and move `RunContext`, `Runner` interface, `NewRunner`, `RunCommand`, `ConfirmCommand`, `emitCommandMessage`, stdio helpers, `RunContext.Compose`, plus `HostRunner`, `DevboxRunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`
-- [ ] keep `internal/usercommands/usercommands.go` as a facade re-exporting **every** public symbol that callers outside `internal/usercommands` currently use, so no caller needs to import the new subpackages directly. Required re-exports (verified by grepping `commands.X` across `internal/` and `cmd/` before this task):
+- [x] create `internal/usercommands/model/` and move pure types from `types.go`: `CommandType`, `ParamType`, `UserMode`, `ExecMode`, `CommandDef`, `ParamDef`, `ContextDef`, `FileSpec` and friends (`FileCandidate`, `FileAccess`, `FileSort`, `FileOnError`), `ScriptDef`, `WorkflowStep`, `CommandMessages`, `CommandFile`, `GroupMeta`, plus their validation methods (`validation.go`)
+- [x] create `internal/usercommands/loader/` and move `DiscoverCommandFiles`, `LoadCommandFile`, `parseCommandFile`, `ComputeGroup`, `ComputeCommandID` (from `loader.go`)
+- [x] create `internal/usercommands/registry/` and move `Registry`, `LoadRegistry`, `GroupNode`, group-tree construction, cross-registry validation (from `registry.go`)
+- [x] create `internal/usercommands/resolve/` and move `ResolveParams`, `ResolveContext`, `BuildEnv`, `ComputeFilePaths`, `PrepareFileEffects`, render/relative path helpers (from `resolve.go`, `resolve_files.go`)
+- [x] create `internal/usercommands/runtime/` and move `RunContext`, `Runner` interface, `NewRunner`, `RunCommand`, `ConfirmCommand`, `emitCommandMessage`, stdio helpers, `RunContext.Compose`, plus `HostRunner`, `DevboxRunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`
+- [x] keep `internal/usercommands/usercommands.go` as a facade re-exporting **every** public symbol that callers outside `internal/usercommands` currently use, so no caller needs to import the new subpackages directly. Required re-exports (verified by grepping `commands.X` across `internal/` and `cmd/` before this task):
   - **Types** (alias via `type X = subpkg.X`): `CommandFile`, `CommandDef`, `CommandMessages`, `ParamDef`, `ContextDef`, `ScriptDef`, `WorkflowStep`, `GroupNode`, `Registry`, `RunContext`, `Runner`
   - **Constants** (alias via `const X = subpkg.X`): `CommandTypeCommand`, `CommandTypeDevbox`, `CommandTypeScript`, `CommandTypeServiceExec`, `CommandTypeServiceRun`, `CommandTypeWorkflow`, `ParamTypeString`, `ExecModeExecOrRun`
   - **Functions / constructors**: `LoadRegistry`, `NewEmptyRegistry`, `NewRunner`, `RunCommand`, `ResolveContext`, `ResolveParams`
   - run `grep -rEoh '\bcommands\.[A-Z][A-Za-z0-9_]*' internal cmd | sort -u` after the rename in Task 8 and **before** this task; every symbol in that list must appear in `usercommands.go`. Anything missed will surface as a compile error during this task — add it to the facade rather than rewriting the caller
-- [ ] move each subpackage's `*_test.go` files alongside the production code; adjust package declarations and imports
-- [ ] handle import cycles: if `runtime/` needs `model/`, `resolve/`, `registry/` that's fine (one-way); if a cycle appears (e.g. resolve ↔ runtime), keep the cycling helper in `runtime/` per the design rule "all runners together"
-- [ ] update external importers — many call sites should keep working through `usercommands.*` aliases
-- [ ] run `make build && make test` — must pass before Task 10
-- [ ] run `make lint` — must pass before Task 10
-- [ ] run `./bin/devbox docs generate` and verify `docs/reference/` regenerates without missing commands
+- [x] move each subpackage's `*_test.go` files alongside the production code; adjust package declarations and imports
+- [x] handle import cycles: if `runtime/` needs `model/`, `resolve/`, `registry/` that's fine (one-way); if a cycle appears (e.g. resolve ↔ runtime), keep the cycling helper in `runtime/` per the design rule "all runners together"
+- [x] update external importers — many call sites should keep working through `usercommands.*` aliases
+- [x] run `make build && make test` — must pass before Task 10
+- [x] run `make lint` — must pass before Task 10
+- [x] run `./bin/devbox docs generate` and verify `docs/reference/` regenerates without missing commands
 
 ### Task 10: Slim `internal/command` to cobra adapters and update docs
 

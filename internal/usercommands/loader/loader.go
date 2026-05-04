@@ -1,10 +1,13 @@
-package usercommands
+// Package loader discovers and loads command YAML files from a directory.
+package loader
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"devbox-cli/internal/usercommands/model"
 )
 
 // DiscoverCommandFiles walks baseDir recursively and returns the absolute paths of
@@ -39,13 +42,8 @@ func DiscoverCommandFiles(baseDir string) ([]string, error) {
 //	services/main.yml    → "services.main"
 //	services/main/db.yml → "services.main.db"
 func ComputeGroup(relPath string) string {
-	// Normalise separator so we handle both / and OS-specific separators.
 	relPath = filepath.ToSlash(relPath)
-
-	// Strip .yml extension.
 	relPath = strings.TrimSuffix(relPath, ".yml")
-
-	// Split into segments and join with dots.
 	return strings.Join(strings.Split(relPath, "/"), ".")
 }
 
@@ -66,18 +64,17 @@ func ComputeCommandID(group, localName string) string {
 //
 // absPath must be an absolute path. baseDir is the commands root directory
 // used to derive the relative path for group computation.
-func LoadCommandFile(absPath, baseDir string) (*CommandFile, error) {
+func LoadCommandFile(absPath, baseDir string) (*model.CommandFile, error) {
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("read command file %s: %w", absPath, err)
 	}
 
-	cf, err := parseCommandFile(data)
+	cf, err := model.ParseCommandFile(data)
 	if err != nil {
 		return nil, fmt.Errorf("parse command file %s: %w", absPath, err)
 	}
 
-	// Compute relative path and group.
 	rel, err := filepath.Rel(baseDir, absPath)
 	if err != nil {
 		return nil, fmt.Errorf("compute relative path for %s: %w", absPath, err)
@@ -85,7 +82,6 @@ func LoadCommandFile(absPath, baseDir string) (*CommandFile, error) {
 	cf.FilePath = absPath
 	cf.GroupID = ComputeGroup(rel)
 
-	// Populate computed fields on every CommandDef.
 	for name, cmd := range cf.Commands {
 		cmd.LocalName = name
 		cmd.Group = cf.GroupID
@@ -93,7 +89,6 @@ func LoadCommandFile(absPath, baseDir string) (*CommandFile, error) {
 		cf.Commands[name] = cmd
 	}
 
-	// Validate after IDs are set so error messages include the full ID.
 	if err := cf.Validate(); err != nil {
 		return nil, err
 	}

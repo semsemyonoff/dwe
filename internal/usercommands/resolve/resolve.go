@@ -1,4 +1,5 @@
-package usercommands
+// Package resolve contains parameter, context, and environment resolution helpers.
+package resolve
 
 import (
 	"fmt"
@@ -8,9 +9,10 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/usercommands/model"
 )
 
-// ResolveParams resolves parameter values for a command invocation.
+// Params resolves parameter values for a command invocation.
 //
 // For each declared parameter:
 //  1. Use the value from provided (caller-supplied) if present and non-empty.
@@ -21,13 +23,11 @@ import (
 //  4. If Required and still no value, return an error.
 //
 // Values are type-coerced according to ParamDef.Type before being returned.
-func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *config.DevboxConfig) (map[string]any, error) {
+func Params(defs map[string]model.ParamDef, provided map[string]string, cfg *config.DevboxConfig) (map[string]any, error) {
 	result := make(map[string]any, len(defs))
 	for name, def := range defs {
 		raw, ok := provided[name]
 		if !ok || raw == "" {
-			// Try default_from dot-path. Empty resolved value is treated as not-found
-			// so the literal default below acts as a true safety net.
 			if def.DefaultFrom != "" && cfg != nil {
 				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found {
 					s := fmt.Sprintf("%v", v)
@@ -39,7 +39,6 @@ func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *co
 			}
 		}
 		if !ok || raw == "" {
-			// Fall back to literal default.
 			if def.Default != "" {
 				raw = def.Default
 				ok = true
@@ -48,13 +47,11 @@ func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *co
 		if (!ok || raw == "") && def.Required {
 			return nil, fmt.Errorf("param %q is required but was not provided", name)
 		}
-		// Coerce to declared type.
 		coerced, err := coerceParam(name, raw, def.Type)
 		if err != nil {
 			return nil, err
 		}
-		// Validate pattern for string/path params when a pattern is declared.
-		if def.Pattern != "" && (def.Type == ParamTypeString || def.Type == ParamTypePath || def.Type == "") {
+		if def.Pattern != "" && (def.Type == model.ParamTypeString || def.Type == model.ParamTypePath || def.Type == "") {
 			if raw != "" {
 				re, err := regexp.Compile(def.Pattern)
 				if err != nil {
@@ -72,9 +69,9 @@ func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *co
 
 // coerceParam converts a raw string value to the Go type implied by pt.
 // An empty raw string coerces to the zero value of the type.
-func coerceParam(name, raw string, pt ParamType) (any, error) {
+func coerceParam(name, raw string, pt model.ParamType) (any, error) {
 	switch pt {
-	case ParamTypeBool:
+	case model.ParamTypeBool:
 		if raw == "" {
 			return false, nil
 		}
@@ -83,7 +80,7 @@ func coerceParam(name, raw string, pt ParamType) (any, error) {
 			return nil, fmt.Errorf("param %q: cannot parse %q as bool", name, raw)
 		}
 		return b, nil
-	case ParamTypeInt:
+	case model.ParamTypeInt:
 		if raw == "" {
 			return 0, nil
 		}
@@ -93,17 +90,16 @@ func coerceParam(name, raw string, pt ParamType) (any, error) {
 		}
 		return i, nil
 	default:
-		// ParamTypeString and ParamTypePath are kept as strings.
 		return raw, nil
 	}
 }
 
-// ResolveContext resolves context values for a command invocation.
+// Context resolves context values for a command invocation.
 //
 // For each declared context entry the value is looked up via ContextDef.From
 // (a dot-path into cfg.Raw).  When Required is true and the path resolves to
 // nil or an empty string, an error is returned.
-func ResolveContext(defs map[string]ContextDef, cfg *config.DevboxConfig) (map[string]any, error) {
+func Context(defs map[string]model.ContextDef, cfg *config.DevboxConfig) (map[string]any, error) {
 	result := make(map[string]any, len(defs))
 	for name, def := range defs {
 		var val any
@@ -121,7 +117,6 @@ func ResolveContext(defs map[string]ContextDef, cfg *config.DevboxConfig) (map[s
 }
 
 // isEmpty returns true for nil or empty string.
-// Used to test whether a required context value is considered missing.
 func isEmpty(v any) bool {
 	if v == nil {
 		return true
@@ -139,17 +134,10 @@ func isEmpty(v any) bool {
 //  2. env vars declared via params (ParamDef.Env → resolved value)
 //  3. env vars declared via files (FileSpec.Env → resolved path)
 //  4. command-level env map (CommandDef.Env entries, kept as raw template strings)
-//
-// Entries with an empty Env key are silently skipped.
-// The command-level env values are stored as-is (callers render templates later).
-//
-// Returns an error if an env name is declared twice in any of the sources (context, params, files, or command-level env).
-// This is defensive — load-time validation already rejects such conflicts, but this guards against programmatic constructions.
-func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any, files map[string]tpl.ResolvedFile) (map[string]string, error) {
+func BuildEnv(cmd *model.CommandDef, params map[string]any, ctx map[string]any, files map[string]tpl.ResolvedFile) (map[string]string, error) {
 	env := make(map[string]string)
-	sources := make(map[string]string) // Track which source declared each env var for conflict detection.
+	sources := make(map[string]string)
 
-	// 1. Context env vars.
 	for name, def := range cmd.Context {
 		if def.Env == "" {
 			continue
@@ -163,7 +151,6 @@ func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any, files 
 		}
 	}
 
-	// 2. Param env vars.
 	for name, def := range cmd.Params {
 		if def.Env == "" {
 			continue
@@ -177,7 +164,6 @@ func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any, files 
 		}
 	}
 
-	// 3. File env vars.
 	for id, spec := range cmd.Files {
 		if spec.Env == "" {
 			continue
@@ -191,7 +177,6 @@ func BuildEnv(cmd *CommandDef, params map[string]any, ctx map[string]any, files 
 		}
 	}
 
-	// 4. Command-level env map (raw, may contain ${...} expressions).
 	for k, v := range cmd.Env {
 		if k != "" {
 			if existing, exists := sources[k]; exists {

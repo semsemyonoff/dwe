@@ -1,4 +1,4 @@
-package usercommands
+package runtime
 
 import (
 	"strings"

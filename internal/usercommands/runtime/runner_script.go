@@ -1,4 +1,4 @@
-package usercommands
+package runtime
 
 import (
 	"encoding/json"
@@ -41,7 +41,6 @@ func (r *ScriptRunner) Run(ctx RunContext) error {
 		shell = "sh"
 	}
 
-	// Create a temp directory for DEVBOX_TEMP_DIR and ensure cleanup.
 	tmpDir, err := os.MkdirTemp("", "devbox-script-*")
 	if err != nil {
 		return fmt.Errorf("script runner: create temp dir: %w", err)
@@ -54,11 +53,9 @@ func (r *ScriptRunner) Run(ctx RunContext) error {
 	}
 
 	if s.Path != "" {
-		// Simple mode — single script file.
 		return r.execScript(ctx, shell, s.Path, contractEnv)
 	}
 
-	// Phased mode.
 	if s.Plan != "" {
 		if err := r.execScript(ctx, shell, s.Plan, contractEnv); err != nil {
 			return fmt.Errorf("script plan phase: %w", err)
@@ -69,7 +66,6 @@ func (r *ScriptRunner) Run(ctx RunContext) error {
 
 	if s.Cleanup != "" {
 		if cleanErr := r.execScript(ctx, shell, s.Cleanup, contractEnv); cleanErr != nil {
-			// Log cleanup failure but do not mask the run error.
 			_, _ = fmt.Fprintf(stderr(ctx), "script runner: cleanup phase error: %v\n", cleanErr)
 		}
 	}
@@ -113,10 +109,8 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 		return nil, fmt.Errorf("script runner: marshal context: %w", err)
 	}
 
-	// Resolve devbox binary path.
 	devboxBin, err := os.Executable()
 	if err != nil {
-		// Fallback to os.Args[0] (the command name) and make it absolute.
 		devboxBin = os.Args[0]
 		if !filepath.IsAbs(devboxBin) {
 			absPath, err := filepath.Abs(devboxBin)
@@ -126,7 +120,6 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 		}
 	}
 
-	// Build DEVBOX_FILES_JSON from ctx.Render.Files.
 	filesMap := map[string]map[string]string{}
 	if ctx.Render != nil && ctx.Render.Files != nil {
 		for id, resolved := range ctx.Render.Files {
@@ -169,14 +162,12 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 
 	c := exec.Command(shell, scriptPath) //nolint:gosec
 
-	// Determine working directory: render workdir if set, otherwise use project root.
 	workdir := ctx.ProjectRoot
 	if ctx.Cmd != nil && ctx.Cmd.Workdir != "" {
 		rendered, err := tpl.RenderCommand(ctx.Cmd.Workdir, ctx.Render)
 		if err != nil {
 			return fmt.Errorf("script runner: render workdir: %w", err)
 		}
-		// Normalize relative paths against project root.
 		if !filepath.IsAbs(rendered) && ctx.ProjectRoot != "" {
 			workdir = filepath.Join(ctx.ProjectRoot, rendered)
 		} else {
@@ -188,7 +179,6 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 		c.Dir = workdir
 	}
 
-	// Inherit host env, overlay command env, then apply contract vars.
 	envMap, err := buildRenderedEnv(ctx.Cmd, ctx)
 	if err != nil {
 		return err

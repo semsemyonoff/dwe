@@ -1,4 +1,4 @@
-package usercommands
+package runtime
 
 import (
 	"errors"
@@ -8,6 +8,8 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands/model"
+	"devbox-cli/internal/usercommands/resolve"
 )
 
 // WorkflowRunner executes type=workflow commands by running each step in sequence.
@@ -29,7 +31,6 @@ func (r *WorkflowRunner) Run(ctx RunContext) error {
 	}
 
 	for i, step := range ctx.Cmd.Steps {
-		// Evaluate the when condition before dispatching the step
 		if step.When != "" {
 			ok, err := tpl.EvalCommandCondition(step.When, ctx.Render, ctx.ProjectRoot)
 			if err != nil {
@@ -62,9 +63,7 @@ func (r *WorkflowRunner) Run(ctx RunContext) error {
 	return nil
 }
 
-// runConfirmStep handles a confirm step. In non-interactive mode the prompt is
-// skipped (auto-confirmed). In interactive mode huh.Confirm is used. Otherwise
-// the plain [y/N] stdin fallback is used.
+// runConfirmStep handles a confirm step.
 func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 	if ctx.NonInteractive || isNonInteractive() {
 		return nil
@@ -89,8 +88,6 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 		return nil
 	}
 
-	// Non-TTY fallback: route through render.Writer.Confirm so CI=1 auto-confirm
-	// behavior matches the builtin/print confirm paths.
 	if render.NewWriter(stdout(ctx)).Confirm(message, stdin) {
 		return nil
 	}
@@ -98,15 +95,12 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 }
 
 // runCommandStep resolves and executes a single command-reference step.
-func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step WorkflowStep) error {
+func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step model.WorkflowStep) error {
 	cmd, err := ctx.Registry.Get(step.Command)
 	if err != nil {
 		return fmt.Errorf("workflow %q step[%d]: %w", ctx.Cmd.ID, stepIdx, err)
 	}
 
-	// Build params map from step-level `with` values.
-	// Render ${...} templates in with: values using the parent render context so that
-	// config references like "${db.database}" resolve to their actual values.
 	provided := make(map[string]string, len(step.With))
 	for k, v := range step.With {
 		rendered, err := tpl.RenderCommand(v, ctx.Render)
@@ -116,20 +110,18 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step Workfl
 		provided[k] = rendered
 	}
 
-	// Resolve params and context for the sub-command.
-	resolvedParams, err := ResolveParams(cmd.Params, provided, ctx.Config)
+	resolvedParams, err := resolve.Params(cmd.Params, provided, ctx.Config)
 	if err != nil {
 		return fmt.Errorf("workflow %q step[%d] %q: resolve params: %w",
 			ctx.Cmd.ID, stepIdx, step.Command, err)
 	}
 
-	resolvedCtx, err := ResolveContext(cmd.Context, ctx.Config)
+	resolvedCtx, err := resolve.Context(cmd.Context, ctx.Config)
 	if err != nil {
 		return fmt.Errorf("workflow %q step[%d] %q: resolve context: %w",
 			ctx.Cmd.ID, stepIdx, step.Command, err)
 	}
 
-	// Build the render context for template interpolation.
 	renderCtx := &tpl.RenderContext{
 		Params:  resolvedParams,
 		Context: resolvedCtx,

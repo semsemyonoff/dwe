@@ -1,4 +1,4 @@
-package usercommands
+package runtime
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/usercommands/model"
 )
 
 // ServiceExecRunner executes type=service_exec commands via `docker compose exec`.
@@ -25,7 +26,7 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, compose *docker.Compose
 		return nil, err
 	}
 	if mode == "" {
-		mode = ExecModeExec
+		mode = model.ExecModeExec
 	}
 
 	argv, err := buildServiceArgv(ctx)
@@ -38,15 +39,13 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, compose *docker.Compose
 		return nil, err
 	}
 
-	// Determine exec vs run.
 	useExec := true
 	switch mode {
-	case ExecModeRun:
+	case model.ExecModeRun:
 		useExec = false
-	case ExecModeExecOrRun:
+	case model.ExecModeExecOrRun:
 		running, checkErr := isContainerRunning(compose, svc)
 		if checkErr != nil {
-			// On check failure, fall back to exec (let docker report the real error).
 			running = true
 		}
 		useExec = running
@@ -116,24 +115,13 @@ func (r *ServiceRunRunner) Run(ctx RunContext) error {
 
 // resolveServiceFields returns the effective service, user, workdir, and mode
 // for the command, applying runner overrides when present.
-//
-// Workdir precedence (config wins, literal is the safety net):
-//  1. workdir_from (resolved against merged config); a missing path or empty
-//     resolved value is treated as not-found and falls back to the next step.
-//  2. workdir (literal).
-//  3. unset — the runner does not pass --workdir.
-//
-// A workdir_from path that resolves to a non-string value is a hard error
-// (configuration bug) and does not fall back.
-func resolveServiceFields(ctx RunContext) (svc string, user UserMode, workdir string, mode ExecMode, err error) {
+func resolveServiceFields(ctx RunContext) (svc string, user model.UserMode, workdir string, mode model.ExecMode, err error) {
 	cmd := ctx.Cmd
 
-	// Start with top-level fields.
 	svc = cmd.Service
 	user = cmd.User
 	mode = cmd.Mode
 
-	// Apply runner override when present (non-zero fields win over top-level).
 	wdLiteral := cmd.Workdir
 	wdFrom := cmd.WorkdirFrom
 	if cmd.Runner != nil {
@@ -154,7 +142,6 @@ func resolveServiceFields(ctx RunContext) (svc string, user UserMode, workdir st
 		}
 	}
 
-	// Resolve workdir: prefer workdir_from (config), fall back to literal.
 	if wdFrom != "" {
 		var resolved string
 		resolved, err = resolveWorkdirFrom(wdFrom, ctx)
@@ -174,9 +161,7 @@ func resolveServiceFields(ctx RunContext) (svc string, user UserMode, workdir st
 }
 
 // resolveWorkdirFrom resolves a dot-path into the config Raw map and returns
-// the string value. A missing path or an empty string resolves to "" (the
-// caller treats this as "not found" and falls back to the literal workdir).
-// A non-string value is a hard error.
+// the string value.
 func resolveWorkdirFrom(dotPath string, ctx RunContext) (string, error) {
 	if ctx.Config == nil {
 		return "", nil
@@ -211,7 +196,7 @@ func buildRenderedComposeArgs(ctx RunContext) ([]string, error) {
 }
 
 // buildServiceArgv renders the run/argv fields of the command and returns the
-// argument slice (the part that follows the service name in the compose command).
+// argument slice.
 func buildServiceArgv(ctx RunContext) ([]string, error) {
 	cmd := ctx.Cmd
 	if cmd.Run != "" {
@@ -232,13 +217,12 @@ func buildServiceArgv(ctx RunContext) ([]string, error) {
 	return rendered, nil
 }
 
-// buildDockerComposeCmd assembles the full docker compose exec/run command
-// using the shared Compose struct for project name, file list, and global args.
+// buildDockerComposeCmd assembles the full docker compose exec/run command.
 func buildDockerComposeCmd(
 	ctx RunContext,
 	compose *docker.Compose,
 	svc string,
-	user UserMode,
+	user model.UserMode,
 	workdir string,
 	serviceArgv []string,
 	envVars map[string]string,
@@ -254,34 +238,29 @@ func buildDockerComposeCmd(
 		args = append(args, "-f", f)
 	}
 
-	// Global args from docker policy (e.g. --ansi always --progress tty).
 	args = append(args, compose.GlobalArgs...)
 
 	if useExec {
 		args = append(args, "exec")
-		// Per-command default args from docker policy.
 		if defaults, ok := compose.CommandArgs["exec"]; ok {
 			args = append(args, defaults...)
 		}
 	} else {
 		args = append(args, "run")
-		// Per-command default args from docker policy.
 		if defaults, ok := compose.CommandArgs["run"]; ok {
 			args = append(args, defaults...)
 		}
 		args = append(args, "--no-deps", "--entrypoint", "")
 	}
 
-	// Custom compose args from command definition (e.g. -T, --name, -d, --rm).
 	args = append(args, composeArgs...)
 
-	// User flag.
 	switch user {
-	case UserModeCurrent:
+	case model.UserModeCurrent:
 		if ctx.Render != nil {
 			args = append(args, "--user", ctx.Render.Host.UID+":"+ctx.Render.Host.GID)
 		}
-	case UserModeRoot:
+	case model.UserModeRoot:
 		args = append(args, "--user", "root")
 	case "":
 		// No user flag.
@@ -289,27 +268,18 @@ func buildDockerComposeCmd(
 		args = append(args, "--user", string(user))
 	}
 
-	// Workdir flag.
 	if workdir != "" {
 		args = append(args, "--workdir", workdir)
 	}
 
-	// Env vars: inject into the docker process environment and pass -e KEY
-	// (name only) so docker compose forwards them into the container.
-	// This avoids exposing secret values in argv (visible via ps/procfs).
 	for k := range envVars {
 		args = append(args, "-e", k)
 	}
 
-	// Service name.
 	args = append(args, svc)
-
-	// Command arguments.
 	args = append(args, serviceArgv...)
 
 	cmd := exec.Command("docker", append([]string{"compose"}, args...)...) //nolint:gosec
-	// Merge compose process env with command-level env vars so that -e KEY
-	// (name only) above picks up the actual values from the process environment.
 	combined := make(map[string]string, len(compose.ProcessEnv)+len(envVars))
 	maps.Copy(combined, compose.ProcessEnv)
 	maps.Copy(combined, envVars)
@@ -317,8 +287,7 @@ func buildDockerComposeCmd(
 	return cmd
 }
 
-// isContainerRunning checks whether the named service container is running
-// in the given compose project using the shared Compose struct.
+// isContainerRunning checks whether the named service container is running.
 func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
 	args := compose.BuildInternalArgs("ps", "--status", "running", "--format", "json", service)
 
@@ -328,6 +297,5 @@ func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("docker compose ps: %w", err)
 	}
-	// If output contains any non-whitespace the container is running.
 	return strings.TrimSpace(string(out)) != "", nil
 }

@@ -1,7 +1,5 @@
-// Package commands provides types, loading, and execution for the devbox command system.
-// Commands are defined in YAML files under devbox/commands/ and organised into groups
-// derived from the directory structure.
-package usercommands
+// Package model contains the core types and constants for the devbox command system.
+package model
 
 import (
 	"fmt"
@@ -394,10 +392,10 @@ func (c *CommandDef) EffectiveConfirmationText() string {
 	return DefaultConfirmationText
 }
 
+// DefaultConfirmationText is the fallback prompt for confirmation-enabled commands.
+const DefaultConfirmationText = "Are you sure?"
+
 func (c *CommandDef) validateCommandType() error {
-	// For type=command, exactly one of run or argv must be set.
-	// For type=devbox, run is required and argv is not supported (DevboxRunner
-	// only consumes the rendered run string).
 	if c.Type == CommandTypeCommand {
 		hasRun := c.Run != ""
 		hasArgv := len(c.Argv) > 0
@@ -461,8 +459,6 @@ func (c *CommandDef) validateScriptType() error {
 }
 
 func (c *CommandDef) validateServiceType() error {
-	// service field is required at the command level or via runner override.
-	// We check here that if runner does not provide a service, top-level service is set.
 	effectiveService := c.Service
 	if c.Runner != nil && c.Runner.Service != "" {
 		effectiveService = c.Runner.Service
@@ -520,10 +516,8 @@ func (c *CommandDef) validateWorkflowType() error {
 	return nil
 }
 
-// validateEnvConflicts checks for duplicate env variable names across params,
-// context, command-level env block, and files. Called unconditionally from Validate().
 func (c *CommandDef) validateEnvConflicts() error {
-	allEnvNames := make(map[string]string) // name -> source
+	allEnvNames := make(map[string]string)
 
 	for name := range c.Env {
 		allEnvNames[name] = "env block"
@@ -564,14 +558,11 @@ func (c *CommandDef) validateFiles() error {
 		return nil
 	}
 
-	// Validate each file spec
 	for fid, fspec := range c.Files {
-		// Validate file ID grammar
 		if !reFileID.MatchString(fid) {
 			return fmt.Errorf("files.%s: id must match ^[a-zA-Z_][a-zA-Z0-9_]*$ (got %q)", fid, fid)
 		}
 
-		// Validate access is required and valid
 		if fspec.Access == "" {
 			return fmt.Errorf("files.%s: access is required", fid)
 		}
@@ -579,7 +570,6 @@ func (c *CommandDef) validateFiles() error {
 			return fmt.Errorf("files.%s: access must be one of read, write, read_write (got %q)", fid, fspec.Access)
 		}
 
-		// Validate path/candidates shape based on access mode
 		hasPath := fspec.Path != ""
 		hasCandidates := len(fspec.Candidates) > 0
 
@@ -601,7 +591,6 @@ func (c *CommandDef) validateFiles() error {
 			}
 		}
 
-		// Validate candidates
 		for i, cand := range fspec.Candidates {
 			candHasPath := cand.Path != ""
 			candHasGlob := cand.Glob != ""
@@ -625,7 +614,6 @@ func (c *CommandDef) validateFiles() error {
 			}
 		}
 
-		// Validate mkdir/overwrite are only for write
 		if fspec.Mkdir && fspec.Access != FileAccessWrite {
 			return fmt.Errorf("files.%s: mkdir is only valid for access=write", fid)
 		}
@@ -633,7 +621,6 @@ func (c *CommandDef) validateFiles() error {
 			return fmt.Errorf("files.%s: overwrite is only valid for access=write", fid)
 		}
 
-		// Validate on_error is only for write/read_write
 		if fspec.OnError != "" && fspec.OnError != FileOnErrorKeep && fspec.OnError != FileOnErrorRemove {
 			return fmt.Errorf("files.%s: on_error must be one of keep, remove (got %q)", fid, fspec.OnError)
 		}
@@ -641,7 +628,6 @@ func (c *CommandDef) validateFiles() error {
 			return fmt.Errorf("files.%s: on_error is not valid for access=read", fid)
 		}
 
-		// Validate env name format if set (conflict check is in validateEnvConflicts)
 		if fspec.Env != "" {
 			if !rePosixEnv.MatchString(fspec.Env) {
 				return fmt.Errorf("files.%s: env must be a valid POSIX env name like MY_VAR (got %q)", fid, fspec.Env)
@@ -686,9 +672,8 @@ func (f *CommandFile) Validate() error {
 	return nil
 }
 
-// parseCommandFile is a helper used in tests and LoadCommandFile to unmarshal YAML bytes
-// into a CommandFile and run basic field validation.
-func parseCommandFile(data []byte) (*CommandFile, error) {
+// ParseCommandFile unmarshals YAML bytes into a CommandFile and runs basic field validation.
+func ParseCommandFile(data []byte) (*CommandFile, error) {
 	var cf CommandFile
 	if err := yaml.Unmarshal(data, &cf); err != nil {
 		return nil, fmt.Errorf("YAML parse error: %w", err)

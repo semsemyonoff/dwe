@@ -1,4 +1,4 @@
-package usercommands
+package loader
 
 import (
 	"os"

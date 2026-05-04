@@ -18,6 +18,14 @@ linters:
         - name: exported
           severity: warning
 
+  exclusions:
+    rules:
+      # usercommands.go is a re-export facade; real docs live on the source types.
+      - linters:
+          - revive
+        path: internal/usercommands/usercommands\.go
+        text: "exported"
+
 formatters:
   enable:
     - gofmt

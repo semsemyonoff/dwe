@@ -1,4 +1,4 @@
-package usercommands
+package resolve
 
 import (
 	"testing"
@@ -13,13 +13,13 @@ func makeConfig(raw map[string]any) *config.DevboxConfig {
 	return &config.DevboxConfig{Raw: raw}
 }
 
-// --- ResolveParams -----------------------------------------------------------
+// --- Params -----------------------------------------------------------
 
-func TestResolveParams_ProvidedValue(t *testing.T) {
+func TestParams_ProvidedValue(t *testing.T) {
 	defs := map[string]ParamDef{
 		"name": {Type: ParamTypeString},
 	}
-	got, err := ResolveParams(defs, map[string]string{"name": "world"}, nil)
+	got, err := Params(defs, map[string]string{"name": "world"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,11 +28,11 @@ func TestResolveParams_ProvidedValue(t *testing.T) {
 	}
 }
 
-func TestResolveParams_LiteralDefault(t *testing.T) {
+func TestParams_LiteralDefault(t *testing.T) {
 	defs := map[string]ParamDef{
 		"env": {Type: ParamTypeString, Default: "production"},
 	}
-	got, err := ResolveParams(defs, nil, nil)
+	got, err := Params(defs, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestResolveParams_LiteralDefault(t *testing.T) {
 	}
 }
 
-func TestResolveParams_DefaultFrom(t *testing.T) {
+func TestParams_DefaultFrom(t *testing.T) {
 	cfg := makeConfig(map[string]any{
 		"runtime": map[string]any{
 			"ports": map[string]any{
@@ -52,7 +52,7 @@ func TestResolveParams_DefaultFrom(t *testing.T) {
 	defs := map[string]ParamDef{
 		"port": {Type: ParamTypeString, DefaultFrom: "runtime.ports.app"},
 	}
-	got, err := ResolveParams(defs, nil, cfg)
+	got, err := Params(defs, nil, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,11 +61,11 @@ func TestResolveParams_DefaultFrom(t *testing.T) {
 	}
 }
 
-func TestResolveParams_ProvidedOverridesDefault(t *testing.T) {
+func TestParams_ProvidedOverridesDefault(t *testing.T) {
 	defs := map[string]ParamDef{
 		"env": {Type: ParamTypeString, Default: "production"},
 	}
-	got, err := ResolveParams(defs, map[string]string{"env": "staging"}, nil)
+	got, err := Params(defs, map[string]string{"env": "staging"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestResolveParams_ProvidedOverridesDefault(t *testing.T) {
 	}
 }
 
-func TestResolveParams_DefaultFromBeatsLiteralDefault(t *testing.T) {
+func TestParams_DefaultFromBeatsLiteralDefault(t *testing.T) {
 	// When both default and default_from are set and the config path resolves
 	// to a non-empty value, default_from wins. The literal default acts as a
 	// safety net only when the config path is missing or empty.
@@ -88,7 +88,7 @@ func TestResolveParams_DefaultFromBeatsLiteralDefault(t *testing.T) {
 			DefaultFrom: "db.database",
 		},
 	}
-	got, err := ResolveParams(defs, nil, cfg)
+	got, err := Params(defs, nil, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestResolveParams_DefaultFromBeatsLiteralDefault(t *testing.T) {
 	}
 }
 
-func TestResolveParams_DefaultFromEmptyFallsBackToLiteralDefault(t *testing.T) {
+func TestParams_DefaultFromEmptyFallsBackToLiteralDefault(t *testing.T) {
 	// When default_from resolves but to an empty string, fall back to the
 	// literal default rather than treating empty as a deliberate value.
 	cfg := makeConfig(map[string]any{
@@ -110,7 +110,7 @@ func TestResolveParams_DefaultFromEmptyFallsBackToLiteralDefault(t *testing.T) {
 			DefaultFrom: "db.database",
 		},
 	}
-	got, err := ResolveParams(defs, nil, cfg)
+	got, err := Params(defs, nil, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestResolveParams_DefaultFromEmptyFallsBackToLiteralDefault(t *testing.T) {
 	}
 }
 
-func TestResolveParams_DefaultFromMissingFallsBackToLiteralDefault(t *testing.T) {
+func TestParams_DefaultFromMissingFallsBackToLiteralDefault(t *testing.T) {
 	cfg := makeConfig(map[string]any{})
 	defs := map[string]ParamDef{
 		"database": {
@@ -128,7 +128,7 @@ func TestResolveParams_DefaultFromMissingFallsBackToLiteralDefault(t *testing.T)
 			DefaultFrom: "db.database",
 		},
 	}
-	got, err := ResolveParams(defs, nil, cfg)
+	got, err := Params(defs, nil, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -137,21 +137,21 @@ func TestResolveParams_DefaultFromMissingFallsBackToLiteralDefault(t *testing.T)
 	}
 }
 
-func TestResolveParams_RequiredMissing(t *testing.T) {
+func TestParams_RequiredMissing(t *testing.T) {
 	defs := map[string]ParamDef{
 		"token": {Type: ParamTypeString, Required: true},
 	}
-	_, err := ResolveParams(defs, nil, nil)
+	_, err := Params(defs, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing required param")
 	}
 }
 
-func TestResolveParams_RequiredProvidedIsOK(t *testing.T) {
+func TestParams_RequiredProvidedIsOK(t *testing.T) {
 	defs := map[string]ParamDef{
 		"token": {Type: ParamTypeString, Required: true},
 	}
-	got, err := ResolveParams(defs, map[string]string{"token": "abc"}, nil)
+	got, err := Params(defs, map[string]string{"token": "abc"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestResolveParams_RequiredProvidedIsOK(t *testing.T) {
 	}
 }
 
-func TestResolveParams_TypeCoercionBool(t *testing.T) {
+func TestParams_TypeCoercionBool(t *testing.T) {
 	defs := map[string]ParamDef{
 		"flag": {Type: ParamTypeBool},
 	}
@@ -174,7 +174,7 @@ func TestResolveParams_TypeCoercionBool(t *testing.T) {
 		{"1", true},
 		{"0", false},
 	} {
-		got, err := ResolveParams(defs, map[string]string{"flag": tc.raw}, nil)
+		got, err := Params(defs, map[string]string{"flag": tc.raw}, nil)
 		if err != nil {
 			t.Fatalf("raw=%q unexpected error: %v", tc.raw, err)
 		}
@@ -184,21 +184,21 @@ func TestResolveParams_TypeCoercionBool(t *testing.T) {
 	}
 }
 
-func TestResolveParams_TypeCoercionBoolInvalid(t *testing.T) {
+func TestParams_TypeCoercionBoolInvalid(t *testing.T) {
 	defs := map[string]ParamDef{
 		"flag": {Type: ParamTypeBool},
 	}
-	_, err := ResolveParams(defs, map[string]string{"flag": "notabool"}, nil)
+	_, err := Params(defs, map[string]string{"flag": "notabool"}, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid bool value")
 	}
 }
 
-func TestResolveParams_TypeCoercionInt(t *testing.T) {
+func TestParams_TypeCoercionInt(t *testing.T) {
 	defs := map[string]ParamDef{
 		"count": {Type: ParamTypeInt},
 	}
-	got, err := ResolveParams(defs, map[string]string{"count": "42"}, nil)
+	got, err := Params(defs, map[string]string{"count": "42"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -207,21 +207,21 @@ func TestResolveParams_TypeCoercionInt(t *testing.T) {
 	}
 }
 
-func TestResolveParams_TypeCoercionIntInvalid(t *testing.T) {
+func TestParams_TypeCoercionIntInvalid(t *testing.T) {
 	defs := map[string]ParamDef{
 		"count": {Type: ParamTypeInt},
 	}
-	_, err := ResolveParams(defs, map[string]string{"count": "nan"}, nil)
+	_, err := Params(defs, map[string]string{"count": "nan"}, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid int value")
 	}
 }
 
-func TestResolveParams_TypeCoercionPath(t *testing.T) {
+func TestParams_TypeCoercionPath(t *testing.T) {
 	defs := map[string]ParamDef{
 		"dir": {Type: ParamTypePath},
 	}
-	got, err := ResolveParams(defs, map[string]string{"dir": "/tmp/foo"}, nil)
+	got, err := Params(defs, map[string]string{"dir": "/tmp/foo"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -230,8 +230,8 @@ func TestResolveParams_TypeCoercionPath(t *testing.T) {
 	}
 }
 
-func TestResolveParams_EmptyDefsNoError(t *testing.T) {
-	got, err := ResolveParams(nil, nil, nil)
+func TestParams_EmptyDefsNoError(t *testing.T) {
+	got, err := Params(nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -240,11 +240,11 @@ func TestResolveParams_EmptyDefsNoError(t *testing.T) {
 	}
 }
 
-func TestResolveParams_BoolZeroDefault(t *testing.T) {
+func TestParams_BoolZeroDefault(t *testing.T) {
 	defs := map[string]ParamDef{
 		"flag": {Type: ParamTypeBool},
 	}
-	got, err := ResolveParams(defs, nil, nil)
+	got, err := Params(defs, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -253,11 +253,11 @@ func TestResolveParams_BoolZeroDefault(t *testing.T) {
 	}
 }
 
-func TestResolveParams_IntZeroDefault(t *testing.T) {
+func TestParams_IntZeroDefault(t *testing.T) {
 	defs := map[string]ParamDef{
 		"count": {Type: ParamTypeInt},
 	}
-	got, err := ResolveParams(defs, nil, nil)
+	got, err := Params(defs, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -266,16 +266,16 @@ func TestResolveParams_IntZeroDefault(t *testing.T) {
 	}
 }
 
-// --- ResolveContext ----------------------------------------------------------
+// --- Context ----------------------------------------------------------
 
-func TestResolveContext_FromPath(t *testing.T) {
+func TestContext_FromPath(t *testing.T) {
 	cfg := makeConfig(map[string]any{
 		"project": map[string]any{"name": "laravel"},
 	})
 	defs := map[string]ContextDef{
 		"project_name": {From: "project.name"},
 	}
-	got, err := ResolveContext(defs, cfg)
+	got, err := Context(defs, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -284,12 +284,12 @@ func TestResolveContext_FromPath(t *testing.T) {
 	}
 }
 
-func TestResolveContext_MissingPathNotRequired(t *testing.T) {
+func TestContext_MissingPathNotRequired(t *testing.T) {
 	cfg := makeConfig(map[string]any{})
 	defs := map[string]ContextDef{
 		"thing": {From: "does.not.exist"},
 	}
-	got, err := ResolveContext(defs, cfg)
+	got, err := Context(defs, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -298,18 +298,18 @@ func TestResolveContext_MissingPathNotRequired(t *testing.T) {
 	}
 }
 
-func TestResolveContext_RequiredMissing(t *testing.T) {
+func TestContext_RequiredMissing(t *testing.T) {
 	cfg := makeConfig(map[string]any{})
 	defs := map[string]ContextDef{
 		"container": {From: "services.main.container", Required: true},
 	}
-	_, err := ResolveContext(defs, cfg)
+	_, err := Context(defs, cfg)
 	if err == nil {
 		t.Fatal("expected error for missing required context")
 	}
 }
 
-func TestResolveContext_RequiredPresentIsOK(t *testing.T) {
+func TestContext_RequiredPresentIsOK(t *testing.T) {
 	cfg := makeConfig(map[string]any{
 		"services": map[string]any{
 			"main": map[string]any{"container": "devbox-laravel-main"},
@@ -318,7 +318,7 @@ func TestResolveContext_RequiredPresentIsOK(t *testing.T) {
 	defs := map[string]ContextDef{
 		"container": {From: "services.main.container", Required: true},
 	}
-	got, err := ResolveContext(defs, cfg)
+	got, err := Context(defs, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -327,11 +327,11 @@ func TestResolveContext_RequiredPresentIsOK(t *testing.T) {
 	}
 }
 
-func TestResolveContext_NilConfig(t *testing.T) {
+func TestContext_NilConfig(t *testing.T) {
 	defs := map[string]ContextDef{
 		"thing": {From: "some.path"},
 	}
-	got, err := ResolveContext(defs, nil)
+	got, err := Context(defs, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -340,8 +340,8 @@ func TestResolveContext_NilConfig(t *testing.T) {
 	}
 }
 
-func TestResolveContext_EmptyDefsNoError(t *testing.T) {
-	got, err := ResolveContext(nil, nil)
+func TestContext_EmptyDefsNoError(t *testing.T) {
+	got, err := Context(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -723,82 +723,82 @@ func containsString(haystack, needle string) bool {
 	return false
 }
 
-func TestResolveParams_PatternValid(t *testing.T) {
+func TestParams_PatternValid(t *testing.T) {
 	defs := map[string]ParamDef{
 		"db": {Type: ParamTypeString, Pattern: `^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`},
 	}
 	for _, v := range []string{"mydb", "my_db", "my-db", "MyDB123", "a"} {
-		_, err := ResolveParams(defs, map[string]string{"db": v}, nil)
+		_, err := Params(defs, map[string]string{"db": v}, nil)
 		if err != nil {
 			t.Errorf("value %q should be valid: %v", v, err)
 		}
 	}
 }
 
-func TestResolveParams_PatternInvalid(t *testing.T) {
+func TestParams_PatternInvalid(t *testing.T) {
 	defs := map[string]ParamDef{
 		"db": {Type: ParamTypeString, Pattern: `^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`},
 	}
 	for _, v := range []string{"`mydb`", "my db", "db;drop", "foo`bar", "-startswith"} {
-		_, err := ResolveParams(defs, map[string]string{"db": v}, nil)
+		_, err := Params(defs, map[string]string{"db": v}, nil)
 		if err == nil {
 			t.Errorf("value %q should fail pattern validation", v)
 		}
 	}
 }
 
-func TestResolveParams_PatternEmptyValueSkipped(t *testing.T) {
+func TestParams_PatternEmptyValueSkipped(t *testing.T) {
 	// An empty string bypasses pattern validation (it's the zero-value for optional params).
 	defs := map[string]ParamDef{
 		"db": {Type: ParamTypeString, Pattern: `^[a-zA-Z0-9_]+$`},
 	}
-	_, err := ResolveParams(defs, map[string]string{"db": ""}, nil)
+	_, err := Params(defs, map[string]string{"db": ""}, nil)
 	if err != nil {
 		t.Errorf("empty value should skip pattern validation: %v", err)
 	}
 }
 
-func TestResolveParams_PatternIgnoredForBool(t *testing.T) {
+func TestParams_PatternIgnoredForBool(t *testing.T) {
 	// Pattern is silently ignored for bool params.
 	defs := map[string]ParamDef{
 		"flag": {Type: ParamTypeBool, Pattern: `^[a-z]+$`},
 	}
-	_, err := ResolveParams(defs, map[string]string{"flag": "true"}, nil)
+	_, err := Params(defs, map[string]string{"flag": "true"}, nil)
 	if err != nil {
 		t.Errorf("pattern should be ignored for bool params: %v", err)
 	}
 }
 
-func TestResolveParams_PatternIgnoredForInt(t *testing.T) {
+func TestParams_PatternIgnoredForInt(t *testing.T) {
 	// Pattern is silently ignored for int params.
 	defs := map[string]ParamDef{
 		"count": {Type: ParamTypeInt, Pattern: `^[a-z]+$`},
 	}
-	_, err := ResolveParams(defs, map[string]string{"count": "42"}, nil)
+	_, err := Params(defs, map[string]string{"count": "42"}, nil)
 	if err != nil {
 		t.Errorf("pattern should be ignored for int params: %v", err)
 	}
 }
 
-func TestResolveParams_PatternInvalidRegex(t *testing.T) {
+func TestParams_PatternInvalidRegex(t *testing.T) {
 	defs := map[string]ParamDef{
 		"db": {Type: ParamTypeString, Pattern: `[invalid`},
 	}
-	_, err := ResolveParams(defs, map[string]string{"db": "mydb"}, nil)
+	_, err := Params(defs, map[string]string{"db": "mydb"}, nil)
 	if err == nil {
 		t.Error("invalid regex pattern should return an error")
 	}
 }
 
-func TestResolveParams_PatternPathType(t *testing.T) {
+func TestParams_PatternPathType(t *testing.T) {
 	defs := map[string]ParamDef{
 		"dir": {Type: ParamTypePath, Pattern: `^/[a-z/]+$`},
 	}
-	_, err := ResolveParams(defs, map[string]string{"dir": "/tmp/foo"}, nil)
+	_, err := Params(defs, map[string]string{"dir": "/tmp/foo"}, nil)
 	if err != nil {
 		t.Errorf("valid path should pass pattern: %v", err)
 	}
-	_, err = ResolveParams(defs, map[string]string{"dir": "/TMP/FOO"}, nil)
+	_, err = Params(defs, map[string]string{"dir": "/TMP/FOO"}, nil)
 	if err == nil {
 		t.Error("invalid path should fail pattern")
 	}

@@ -1,4 +1,4 @@
-package usercommands
+package model
 
 import (
 	"strings"
@@ -11,7 +11,7 @@ import (
 
 func mustParse(t *testing.T, yaml string) *CommandFile {
 	t.Helper()
-	cf, err := parseCommandFile([]byte(yaml))
+	cf, err := ParseCommandFile([]byte(yaml))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}

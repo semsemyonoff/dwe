@@ -1,4 +1,4 @@
-package usercommands
+package runtime
 
 import (
 	"bytes"
@@ -18,15 +18,9 @@ import (
 // buildWorkflowRegistry creates a Registry with the given commands pre-loaded
 // without going through YAML files.
 func buildWorkflowRegistry(cmds ...*CommandDef) *Registry {
-	reg := &Registry{
-		byID:   make(map[string]*CommandDef),
-		groups: make(map[string]*GroupNode),
-	}
-	reg.root = reg.ensureGroup("")
+	reg := newEmptyRegistry()
 	for _, cmd := range cmds {
-		reg.byID[cmd.ID] = cmd
-		gn := reg.ensureGroup(cmd.Group)
-		gn.Commands = append(gn.Commands, cmd)
+		reg.AddCommandForTest(cmd)
 	}
 	return reg
 }

@@ -1,4 +1,4 @@
-package usercommands
+package runtime
 
 import (
 	"errors"
@@ -10,9 +10,6 @@ import (
 	"devbox-cli/internal/ui"
 )
 
-// DefaultConfirmationText is the fallback prompt for confirmation-enabled commands.
-const DefaultConfirmationText = "Are you sure?"
-
 // runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
 var runConfirm = ui.RunConfirm
 
@@ -22,7 +19,6 @@ func ConfirmCommand(ctx RunContext) error {
 		return nil
 	}
 
-	// Tier 1: SkipConfirm flag set — no prompt
 	if ctx.SkipConfirm {
 		return nil
 	}

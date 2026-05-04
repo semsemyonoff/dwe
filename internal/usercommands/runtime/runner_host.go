@@ -1,4 +1,4 @@
-package usercommands
+package runtime
 
 import (
 	"fmt"
@@ -8,17 +8,12 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/usercommands/model"
+	"devbox-cli/internal/usercommands/resolve"
 )
 
 // DevboxRunner executes type=devbox commands by invoking the current devbox
-// executable with the run: string as its arguments. This avoids hard-coding
-// the binary path (./bin/devbox) in command definitions.
-//
-// The run: field contains only the subcommand and its arguments, e.g.:
-//
-//	run: "compose run -- up -d db"
-//
-// At runtime this becomes: <devbox-executable> compose run -- up -d db
+// executable with the run: string as its arguments.
 type DevboxRunner struct{}
 
 // Run executes the devbox subcommand described by ctx.Run.
@@ -56,11 +51,6 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 }
 
 // HostRunner executes type=command commands on the host machine.
-// It supports two execution modes:
-//   - run:  the command string is passed to `sh -c` for shell evaluation.
-//   - argv: the argument vector is exec'd directly without a shell.
-//
-// The workdir and env fields support ${...} template interpolation.
 type HostRunner struct{}
 
 // BuildCommand constructs the exec.Cmd that would be run for the given context.
@@ -68,7 +58,6 @@ type HostRunner struct{}
 func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 	cmd := ctx.Cmd
 
-	// Determine effective run/argv (runner field has no effect for type=command).
 	var argv []string
 	if cmd.Run != "" {
 		rendered, err := tpl.RenderCommand(cmd.Run, ctx.Render)
@@ -93,7 +82,6 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 	}
 	c := exec.Command(argv[0], argv[1:]...) //nolint:gosec
 
-	// Resolve working directory.
 	if cmd.Workdir != "" {
 		rendered, err := tpl.RenderCommand(cmd.Workdir, ctx.Render)
 		if err != nil {
@@ -107,7 +95,6 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 		c.Dir = ctx.ProjectRoot
 	}
 
-	// Build environment: inherit host env, then overlay command env.
 	envMap, err := buildRenderedEnv(cmd, ctx)
 	if err != nil {
 		return nil, err
@@ -136,12 +123,12 @@ func (r *HostRunner) Run(ctx RunContext) error {
 
 // buildRenderedEnv renders all env values (which may contain ${...} expressions)
 // and returns the final string→string map.
-func buildRenderedEnv(cmd *CommandDef, ctx RunContext) (map[string]string, error) {
+func buildRenderedEnv(cmd *model.CommandDef, ctx RunContext) (map[string]string, error) {
 	files := make(map[string]tpl.ResolvedFile)
 	if ctx.Render != nil && ctx.Render.Files != nil {
 		files = ctx.Render.Files
 	}
-	raw, err := BuildEnv(cmd, ctx.Params, ctx.Context, files)
+	raw, err := resolve.BuildEnv(cmd, ctx.Params, ctx.Context, files)
 	if err != nil {
 		return nil, err
 	}

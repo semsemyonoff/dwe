@@ -1,6 +1,8 @@
-package usercommands
+package registry
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -8,6 +10,18 @@ import (
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+func writeYAML(t *testing.T, dir, relPath, content string) string {
+	t.Helper()
+	full := filepath.Join(dir, relPath)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return full
+}
 
 // buildTestRegistry creates a temp dir with the given YAML files and loads a
 // Registry from it.  fileMap maps relative path → YAML content.
