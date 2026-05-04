@@ -3,14 +3,13 @@ package command
 import (
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
-	"strings"
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/reset"
 	"devbox-cli/internal/tpl"
 
 	"github.com/spf13/cobra"
@@ -45,13 +44,13 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			steps, err := resolveResetPlan(cfg)
+			steps, err := reset.ResolvePlan(cfg)
 			if err != nil {
 				return fmt.Errorf("resolving reset plan: %w", err)
 			}
 			switch format {
 			case "shell":
-				printResetPlanShell(steps, cmd.OutOrStdout())
+				reset.PrintPlanShell(steps, cmd.OutOrStdout())
 			default:
 				pipeline.PrintPlanTable(steps, render.Stdout())
 			}
@@ -88,7 +87,7 @@ the top of devbox/reset.yml; output will be written to logs/reset.log.`,
 			}
 			workDir := filepath.Dir(flags.configPath)
 
-			resetCfg, steps, err := loadAndResolveResetPlan(cfg)
+			resetCfg, steps, err := reset.LoadAndResolvePlan(cfg)
 			if err != nil {
 				return fmt.Errorf("resolving reset plan: %w", err)
 			}
@@ -142,7 +141,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 			}
 
 			address := args[0]
-			phase, step, err := findResetStep(cfg, address)
+			phase, step, err := reset.FindStep(cfg, address)
 			if err != nil {
 				return err
 			}
@@ -219,7 +218,7 @@ func newResetConfigCheckCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			steps, err := resolveResetPlan(cfg)
+			steps, err := reset.ResolvePlan(cfg)
 			if err != nil {
 				return err
 			}
@@ -232,103 +231,4 @@ func newResetConfigCheckCmd(flags *rootFlags) *cobra.Command {
 
 	parent.AddCommand(checkCmd)
 	return parent
-}
-
-// resolveResetPlan builds the ordered step list from the reset pipeline config.
-// Loads devbox/reset.yml and resolves all phases/steps.
-func resolveResetPlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
-	_, steps, err := loadAndResolveResetPlan(cfg)
-	return steps, err
-}
-
-// loadAndResolveResetPlan loads devbox/reset.yml and resolves its phases.
-// Returns the loaded reset config (for inspecting fields like Log) alongside
-// the resolved step list.
-func loadAndResolveResetPlan(cfg *config.DevboxConfig) (*config.DeployConfig, []pipeline.ResolvedStep, error) {
-	cfgPath, ok := cfg.Raw["__configPath"].(string)
-	if !ok {
-		return nil, nil, fmt.Errorf("internal: __configPath missing from config")
-	}
-	baseDir := filepath.Dir(cfgPath)
-	resetPath := filepath.Join(baseDir, "devbox", "reset.yml")
-
-	resetCfg, err := config.LoadResetConfig(resetPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading reset config %s: %w", resetPath, err)
-	}
-
-	var result []pipeline.ResolvedStep
-	for _, phase := range resetCfg.Phases {
-		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, "")
-		if err != nil {
-			return nil, nil, err
-		}
-		result = append(result, resolved...)
-	}
-	return resetCfg, result, nil
-}
-
-// findResetStep looks up a step by <phase>/<step> address in the reset config.
-func findResetStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, config.DeployStep, error) {
-	parts := strings.Split(address, "/")
-	if len(parts) != 2 {
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("invalid step address %q: expected <phase>/<step>", address)
-	}
-	phaseName, stepName := parts[0], parts[1]
-
-	cfgPath, ok := cfg.Raw["__configPath"].(string)
-	if !ok {
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("internal: __configPath missing from config")
-	}
-	baseDir := filepath.Dir(cfgPath)
-	resetCfg, err := config.LoadResetConfig(filepath.Join(baseDir, "devbox", "reset.yml"))
-	if err != nil {
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("loading reset config: %w", err)
-	}
-
-	for _, phase := range resetCfg.Phases {
-		if phase.Name != phaseName {
-			continue
-		}
-		for _, step := range phase.Steps {
-			if step.Name == stepName {
-				return phase, step, nil
-			}
-		}
-		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("step %q not found in phase %q", stepName, phaseName)
-	}
-	return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("phase %q not found in reset config", phaseName)
-}
-
-// printResetPlanShell emits shell commands for the reset plan.
-// Unlike the deploy plan shell output, there is no implicit .env step.
-func printResetPlanShell(steps []pipeline.ResolvedStep, w io.Writer) {
-	_, _ = fmt.Fprintln(w, "set -e")
-	lastPhaseKey := ""
-	for _, rs := range steps {
-		if rs.Phase.Name != lastPhaseKey {
-			if rs.Phase.When != "" {
-				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.Phase.Name, rs.Phase.When)
-			}
-			lastPhaseKey = rs.Phase.Name
-		}
-		if rs.RuntimeWhen != "" {
-			_, _ = fmt.Fprintf(w, "# when: %s\n", rs.RuntimeWhen)
-		}
-		switch {
-		case rs.Step.Builtin != "" && rs.Step.ContinueOnError:
-			// Builtins are in-process Go; delegate to the CLI step runner so the
-			// generated script remains executable and behaviorally equivalent.
-			_, _ = fmt.Fprintf(w, "./bin/devbox reset step %s || true\n", rs.StepAddress())
-		case rs.Step.Builtin != "":
-			_, _ = fmt.Fprintf(w, "./bin/devbox reset step %s\n", rs.StepAddress())
-		case rs.Step.ContinueOnError:
-			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step)+" || true")
-		default:
-			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step))
-		}
-		if rs.Step.Check != "" {
-			_, _ = fmt.Fprintf(w, "# check: %s\n", rs.Step.Check)
-		}
-	}
 }

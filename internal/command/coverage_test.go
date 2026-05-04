@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/commands"
-	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
-	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
@@ -744,99 +742,6 @@ func TestDisableWord_Enabled(t *testing.T) {
 func TestDisableWord_Disabled(t *testing.T) {
 	if disableWord(false) != "disabled" {
 		t.Errorf("expected 'disabled' for false")
-	}
-}
-
-// --- printResetPlanShell ---
-
-func TestPrintResetPlanShell_Empty(t *testing.T) {
-	var buf bytes.Buffer
-	printResetPlanShell(nil, &buf)
-	out := buf.String()
-	if !strings.Contains(out, "set -e") {
-		t.Errorf("expected 'set -e' in output, got: %q", out)
-	}
-}
-
-func TestPrintResetPlanShell_WithBuiltin(t *testing.T) {
-	steps := []pipeline.ResolvedStep{
-		{
-			Phase: config.DeployPhase{Name: "init"},
-			Step:  config.DeployStep{Name: "ensure-dirs", Builtin: "service_dirs_ensure"},
-		},
-	}
-	var buf bytes.Buffer
-	printResetPlanShell(steps, &buf)
-	out := buf.String()
-	if !strings.Contains(out, "./bin/devbox reset step") {
-		t.Errorf("expected builtin to delegate to CLI, got: %q", out)
-	}
-}
-
-func TestPrintResetPlanShell_WithPhaseWhen(t *testing.T) {
-	steps := []pipeline.ResolvedStep{
-		{
-			Phase: config.DeployPhase{Name: "setup", When: "env.SKIP != true"},
-			Step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
-		},
-	}
-	var buf bytes.Buffer
-	printResetPlanShell(steps, &buf)
-	out := buf.String()
-	if !strings.Contains(out, "# phase setup") {
-		t.Errorf("expected phase comment in output, got: %q", out)
-	}
-}
-
-func TestPrintResetPlanShell_WithRuntimeWhen(t *testing.T) {
-	steps := []pipeline.ResolvedStep{
-		{
-			Phase:       config.DeployPhase{Name: "setup"},
-			Step:        config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
-			RuntimeWhen: "cmd:some-check",
-		},
-	}
-	var buf bytes.Buffer
-	printResetPlanShell(steps, &buf)
-	out := buf.String()
-	if !strings.Contains(out, "# when:") {
-		t.Errorf("expected runtime when comment in output, got: %q", out)
-	}
-}
-
-func TestPrintResetPlanShell_WithCheck(t *testing.T) {
-	steps := []pipeline.ResolvedStep{
-		{
-			Phase: config.DeployPhase{Name: "setup"},
-			Step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate", Check: "php artisan migrate:status"},
-		},
-	}
-	var buf bytes.Buffer
-	printResetPlanShell(steps, &buf)
-	out := buf.String()
-	if !strings.Contains(out, "# check:") {
-		t.Errorf("expected check comment in output, got: %q", out)
-	}
-}
-
-// --- findResetStep invalid address ---
-
-func TestFindResetStep_InvalidAddress(t *testing.T) {
-	cfg := &config.DevboxConfig{}
-	_, _, err := findResetStep(cfg, "no-slash")
-	if err == nil {
-		t.Fatal("expected error for address without slash")
-	}
-	if !strings.Contains(err.Error(), "invalid step address") {
-		t.Errorf("expected 'invalid step address' error, got: %v", err)
-	}
-}
-
-func TestFindResetStep_MissingConfigPath(t *testing.T) {
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
-	_, _, err := findResetStep(cfg, "phase/step")
-	if err == nil {
-		t.Fatal("expected error when __configPath missing")
 	}
 }
 

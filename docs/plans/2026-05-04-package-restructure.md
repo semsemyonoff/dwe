@@ -111,14 +111,14 @@ Move generic executor pieces **and** the generic table printer. Verified by grep
 
 ### Task 3: Create `internal/reset` package
 
-- [ ] create `internal/reset/plan.go` with `ResolvePlan`, `LoadAndResolvePlan`, `FindStep`, `PrintPlanShell` (moved from `internal/command/reset.go`)
-- [ ] reset's plan table view uses the generic `pipeline.PrintPlanTable` directly from the cobra adapter — no dependency on `internal/deploy` (the previous draft routed reset through `deploy.PrintPlanTable`, which would be an unnecessary domain-to-domain edge)
-- [ ] create `internal/reset/step.go` for reset-specific step helpers if any
-- [ ] split `internal/command/reset_test.go` (if present) and any reset cases inside shared test files into `internal/reset/*_test.go`
-- [ ] reduce `internal/command/reset.go` to cobra adapters only (`newResetCmd`, `newResetPlanCmd`, `newResetRunCmd`, `newResetStepCmd`, `newResetConfigCheckCmd`)
-- [ ] update imports
-- [ ] run `make test` — must pass before Task 4
-- [ ] run `make lint` — must pass before Task 4
+- [x] create `internal/reset/plan.go` with `ResolvePlan`, `LoadAndResolvePlan`, `FindStep`, `PrintPlanShell` (moved from `internal/command/reset.go`)
+- [x] reset's plan table view uses the generic `pipeline.PrintPlanTable` directly from the cobra adapter — no dependency on `internal/deploy` (the previous draft routed reset through `deploy.PrintPlanTable`, which would be an unnecessary domain-to-domain edge)
+- [x] create `internal/reset/step.go` for reset-specific step helpers if any (no reset-specific step helpers found; `plan.go` and `print.go` cover all cases)
+- [x] split `internal/command/reset_test.go` (if present) and any reset cases inside shared test files into `internal/reset/*_test.go`
+- [x] reduce `internal/command/reset.go` to cobra adapters only (`newResetCmd`, `newResetPlanCmd`, `newResetRunCmd`, `newResetStepCmd`, `newResetConfigCheckCmd`)
+- [x] update imports
+- [x] run `make test` — must pass before Task 4
+- [x] run `make lint` — must pass before Task 4
 
 ### Task 4: Create `internal/lifecycle` package
 
