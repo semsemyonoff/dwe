@@ -18,16 +18,16 @@ import (
 // executable with the run: string as its arguments.
 type DevboxRunner struct{}
 
-// Run executes the devbox subcommand described by ctx.Run.
+// Run executes the devbox subcommand described by ctx.Cmd.
 func (r *DevboxRunner) Run(ctx RunContext) error {
 	bin, err := os.Executable()
 	if err != nil {
 		bin = config.DevboxBin(ctx.Config)
 	}
 
-	rendered, err := tpl.RenderCommand(ctx.Cmd.Run, ctx.Render)
+	rendered, err := tpl.RenderCommand(ctx.Cmd.Cmd, ctx.Render)
 	if err != nil {
-		return fmt.Errorf("render run: %w", err)
+		return fmt.Errorf("render cmd: %w", err)
 	}
 
 	cmd := exec.Command(config.ShellBin(ctx.Config), "-c", shellQuote(bin)+" "+rendered) //nolint:gosec
@@ -61,10 +61,10 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 	cmd := ctx.Cmd
 
 	var argv []string
-	if cmd.Run != "" {
-		rendered, err := tpl.RenderCommand(cmd.Run, ctx.Render)
+	if cmd.Cmd != "" {
+		rendered, err := tpl.RenderCommand(cmd.Cmd, ctx.Render)
 		if err != nil {
-			return nil, fmt.Errorf("render run: %w", err)
+			return nil, fmt.Errorf("render cmd: %w", err)
 		}
 		argv = []string{config.ShellBin(ctx.Config), "-c", rendered}
 	} else {

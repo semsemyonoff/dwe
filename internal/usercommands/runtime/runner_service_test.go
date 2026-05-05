@@ -43,7 +43,7 @@ func makeServiceExecCtx(svc string, user UserMode, workdir string, mode ExecMode
 			User:    user,
 			Workdir: workdir,
 			Mode:    mode,
-			Run:     run,
+			Cmd:     run,
 			Argv:    argv,
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
@@ -161,7 +161,7 @@ func TestServiceRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceRun,
 			Service: "app-main",
-			Run:     "composer install",
+			Cmd:     "composer install",
 		},
 		Render:  &tpl.RenderContext{},
 		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
@@ -189,7 +189,7 @@ func TestServiceExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
 			Service: "app-main",
 			User:    UserModeRoot,
 			Mode:    ExecModeExec,
-			Run:     "composer install",
+			Cmd:     "composer install",
 			Runner: &RunnerDef{
 				Service: "app-installer",
 				User:    UserModeCurrent,
@@ -223,7 +223,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 			Service:     "app-main",
 			WorkdirFrom: "services.main.dir_internal",
 			Mode:        ExecModeExec,
-			Run:         "ls",
+			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DevboxConfig{
@@ -259,7 +259,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T)
 			Workdir:     "/literal/fallback",
 			WorkdirFrom: "services.main.dir_internal",
 			Mode:        ExecModeExec,
-			Run:         "ls",
+			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DevboxConfig{
@@ -296,7 +296,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *
 			Workdir:     "/literal/fallback",
 			WorkdirFrom: "does.not.exist",
 			Mode:        ExecModeExec,
-			Run:         "ls",
+			Cmd:         "ls",
 		},
 		Render:  &tpl.RenderContext{},
 		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}, Raw: map[string]any{}},
@@ -323,7 +323,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *te
 			Workdir:     "/literal/fallback",
 			WorkdirFrom: "services.main.dir_internal",
 			Mode:        ExecModeExec,
-			Run:         "ls",
+			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DevboxConfig{
@@ -354,7 +354,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T)
 			Service:     "app-main",
 			WorkdirFrom: "services.main.dir_internal",
 			Mode:        ExecModeExec,
-			Run:         "ls",
+			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DevboxConfig{
@@ -379,7 +379,7 @@ func TestServiceExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 			Type:    CommandTypeServiceExec,
 			Service: "app-second",
 			Mode:    ExecModeExec,
-			Run:     "composer install",
+			Cmd:     "composer install",
 		},
 		Render: &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
 		Config: &config.DevboxConfig{
@@ -415,7 +415,7 @@ func TestServiceRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceRun,
 			Service: "app-second",
-			Run:     "composer install",
+			Cmd:     "composer install",
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DevboxConfig{
@@ -470,7 +470,7 @@ func TestServiceRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceRun,
 			Service: "app-main",
-			Run:     "composer install",
+			Cmd:     "composer install",
 		},
 		Render:  &tpl.RenderContext{},
 		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
@@ -594,7 +594,7 @@ func TestServiceRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 		Cmd: &CommandDef{
 			Type:        CommandTypeServiceRun,
 			Service:     "app-main",
-			Run:         "php -v",
+			Cmd:         "php -v",
 			ComposeArgs: []string{"-d", "--rm"},
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
@@ -706,7 +706,7 @@ func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {
 			ctx := RunContext{
 				Cmd: &CommandDef{
 					Type: CommandTypeServiceExec,
-					Run:  "echo hello",
+					Cmd:  "echo hello",
 				},
 				Config: tc.cfg,
 				Render: &tpl.RenderContext{},

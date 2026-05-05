@@ -463,9 +463,9 @@ func printCommandInspect(w io.Writer, def *usercommands.CommandDef) {
 	}
 
 	switch def.Type {
-	case usercommands.CommandTypeCommand:
-		if def.Run != "" {
-			def2("run", def.Run, 2)
+	case usercommands.CommandTypeShell:
+		if def.Cmd != "" {
+			def2("cmd", def.Cmd, 2)
 		}
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)
@@ -495,8 +495,8 @@ func printCommandInspect(w io.Writer, def *usercommands.CommandDef) {
 		if len(def.ComposeArgs) > 0 {
 			def2("compose_args", strings.Join(def.ComposeArgs, " "), 2)
 		}
-		if def.Run != "" {
-			def2("run", def.Run, 2)
+		if def.Cmd != "" {
+			def2("cmd", def.Cmd, 2)
 		}
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)

@@ -19,9 +19,9 @@ func TestRunCommand_Confirmation_NonTTY_YInputRunsCommand(t *testing.T) {
 	logFile := dir + "/run.log"
 	cmd := &CommandDef{
 		ID:           "test.confirmed",
-		Type:         CommandTypeCommand,
+		Type:         CommandTypeShell,
 		Confirmation: true,
-		Run:          `printf 'ran\n' >> ` + logFile,
+		Cmd:          `printf 'ran\n' >> ` + logFile,
 	}
 
 	var out bytes.Buffer
@@ -50,9 +50,9 @@ func TestRunCommand_Confirmation_NonTTY_NInputAbortsCommand(t *testing.T) {
 	logFile := dir + "/run.log"
 	cmd := &CommandDef{
 		ID:           "test.denied",
-		Type:         CommandTypeCommand,
+		Type:         CommandTypeShell,
 		Confirmation: true,
-		Run:          `printf 'ran\n' >> ` + logFile,
+		Cmd:          `printf 'ran\n' >> ` + logFile,
 	}
 
 	var out bytes.Buffer
@@ -80,9 +80,9 @@ func TestRunCommand_Confirmation_DefaultText(t *testing.T) {
 
 	cmd := &CommandDef{
 		ID:           "test.default-text",
-		Type:         CommandTypeCommand,
+		Type:         CommandTypeShell,
 		Confirmation: true,
-		Run:          "true",
+		Cmd:          "true",
 	}
 
 	var out bytes.Buffer
@@ -116,10 +116,10 @@ func TestRunCommand_Confirmation_TTYUsesCustomText(t *testing.T) {
 
 	cmd := &CommandDef{
 		ID:               "test.custom-text",
-		Type:             CommandTypeCommand,
+		Type:             CommandTypeShell,
 		Confirmation:     true,
 		ConfirmationText: "Run ${param.task}?",
-		Run:              "true",
+		Cmd:              "true",
 	}
 
 	err := RunCommand(RunContext{
@@ -153,9 +153,9 @@ func TestRunCommand_Confirmation_SkipConfirmSkipsPrompt(t *testing.T) {
 	logFile := dir + "/run.log"
 	cmd := &CommandDef{
 		ID:           "test.skip-confirm",
-		Type:         CommandTypeCommand,
+		Type:         CommandTypeShell,
 		Confirmation: true,
-		Run:          `printf 'ran\n' >> ` + logFile,
+		Cmd:          `printf 'ran\n' >> ` + logFile,
 	}
 
 	err := RunCommand(RunContext{

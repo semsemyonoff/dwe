@@ -55,7 +55,7 @@ type ErrUnsupportedType = runtime.ErrUnsupportedType
 // ---- CommandType constants ----
 
 const (
-	CommandTypeCommand     = model.CommandTypeCommand
+	CommandTypeShell       = model.CommandTypeShell
 	CommandTypeScript      = model.CommandTypeScript
 	CommandTypeServiceExec = model.CommandTypeServiceExec
 	CommandTypeServiceRun  = model.CommandTypeServiceRun

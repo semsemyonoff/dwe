@@ -34,9 +34,9 @@ func TestRunContext_Compose_CustomDockerBin_NoDockerConfig(t *testing.T) {
 func TestRunCommand_DefensiveInitNilRender(t *testing.T) {
 	cmd := &CommandDef{
 		ID:    "test.simple",
-		Type:  CommandTypeCommand,
+		Type:  CommandTypeShell,
 		Files: map[string]FileSpec{},
-		Run:   "true",
+		Cmd:   "true",
 	}
 
 	ctx := RunContext{
@@ -55,9 +55,9 @@ func TestRunCommand_DefensiveInitNilRender(t *testing.T) {
 func TestRunCommand_DefensiveInitRawCopy(t *testing.T) {
 	cmd := &CommandDef{
 		ID:    "test.with_config",
-		Type:  CommandTypeCommand,
+		Type:  CommandTypeShell,
 		Files: map[string]FileSpec{},
-		Run:   "true",
+		Cmd:   "true",
 	}
 
 	raw := map[string]any{"db": map[string]any{"host": "localhost"}}

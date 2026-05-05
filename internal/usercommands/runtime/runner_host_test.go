@@ -13,8 +13,8 @@ func TestHostRunner_BuildCommand_Run(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type: CommandTypeCommand,
-			Run:  "echo hello",
+			Type: CommandTypeShell,
+			Cmd:  "echo hello",
 		},
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
@@ -38,7 +38,7 @@ func TestHostRunner_BuildCommand_Argv(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type: CommandTypeCommand,
+			Type: CommandTypeShell,
 			Argv: []string{"git", "status"},
 		},
 		Render:      &tpl.RenderContext{},
@@ -61,8 +61,8 @@ func TestHostRunner_BuildCommand_WorkdirAbsolute(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type:    CommandTypeCommand,
-			Run:     "pwd",
+			Type:    CommandTypeShell,
+			Cmd:     "pwd",
 			Workdir: "/tmp/mydir",
 		},
 		Render:      &tpl.RenderContext{},
@@ -81,8 +81,8 @@ func TestHostRunner_BuildCommand_WorkdirRelative(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type:    CommandTypeCommand,
-			Run:     "pwd",
+			Type:    CommandTypeShell,
+			Cmd:     "pwd",
 			Workdir: "subdir",
 		},
 		Render:      &tpl.RenderContext{},
@@ -101,8 +101,8 @@ func TestHostRunner_BuildCommand_DefaultWorkdir(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type: CommandTypeCommand,
-			Run:  "ls",
+			Type: CommandTypeShell,
+			Cmd:  "ls",
 		},
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
@@ -120,8 +120,8 @@ func TestHostRunner_BuildCommand_EnvRendered(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type: CommandTypeCommand,
-			Run:  "env",
+			Type: CommandTypeShell,
+			Cmd:  "env",
 			Env:  map[string]string{"MY_VAR": "hello"},
 		},
 		Params:      map[string]any{},
@@ -142,8 +142,8 @@ func TestHostRunner_BuildCommand_RunWithTemplateInterpolation(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type: CommandTypeCommand,
-			Run:  "echo ${param.name}",
+			Type: CommandTypeShell,
+			Cmd:  "echo ${param.name}",
 		},
 		Params:  map[string]any{"name": "world"},
 		Context: map[string]any{},
@@ -165,8 +165,8 @@ func TestHostRunner_BuildCommand_WorkdirWithTemplate(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type:    CommandTypeCommand,
-			Run:     "pwd",
+			Type:    CommandTypeShell,
+			Cmd:     "pwd",
 			Workdir: "${param.dir}",
 		},
 		Params:  map[string]any{"dir": "mydir"},
@@ -189,8 +189,8 @@ func TestHostRunner_BuildCommand_WorkdirAbsoluteTemplate(t *testing.T) {
 	r := &HostRunner{}
 	ctx := RunContext{
 		Cmd: &CommandDef{
-			Type:    CommandTypeCommand,
-			Run:     "pwd",
+			Type:    CommandTypeShell,
+			Cmd:     "pwd",
 			Workdir: "/tmp/${param.suffix}",
 		},
 		Params:  map[string]any{"suffix": "test"},
@@ -210,7 +210,7 @@ func TestHostRunner_BuildCommand_WorkdirAbsoluteTemplate(t *testing.T) {
 }
 
 func TestNewRunner_Returns_HostRunner(t *testing.T) {
-	cmd := &CommandDef{Type: CommandTypeCommand}
+	cmd := &CommandDef{Type: CommandTypeShell}
 	runner, err := NewRunner(cmd)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -291,8 +291,8 @@ func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 			r := &HostRunner{}
 			ctx := RunContext{
 				Cmd: &CommandDef{
-					Type: CommandTypeCommand,
-					Run:  "echo hello",
+					Type: CommandTypeShell,
+					Cmd:  "echo hello",
 				},
 				Config:      tc.cfg,
 				Render:      &tpl.RenderContext{},

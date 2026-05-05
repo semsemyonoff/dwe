@@ -195,14 +195,14 @@ func buildRenderedComposeArgs(ctx RunContext) ([]string, error) {
 	return rendered, nil
 }
 
-// buildServiceArgv renders the run/argv fields of the command and returns the
+// buildServiceArgv renders the cmd/argv fields of the command and returns the
 // argument slice.
 func buildServiceArgv(ctx RunContext) ([]string, error) {
 	cmd := ctx.Cmd
-	if cmd.Run != "" {
-		rendered, err := tpl.RenderCommand(cmd.Run, ctx.Render)
+	if cmd.Cmd != "" {
+		rendered, err := tpl.RenderCommand(cmd.Cmd, ctx.Render)
 		if err != nil {
-			return nil, fmt.Errorf("render run: %w", err)
+			return nil, fmt.Errorf("render cmd: %w", err)
 		}
 		return []string{config.ShellBin(ctx.Config), "-c", rendered}, nil
 	}

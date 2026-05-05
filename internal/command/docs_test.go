@@ -254,8 +254,8 @@ func TestWriteCommandMarkdown_Params(t *testing.T) {
 		ID:        "app.install",
 		Group:     "app",
 		LocalName: "install",
-		Type:      usercommands.CommandTypeCommand,
-		Run:       "composer install",
+		Type:      usercommands.CommandTypeShell,
+		Cmd:       "composer install",
 		Params: map[string]usercommands.ParamDef{
 			"env": {
 				Type:        usercommands.ParamTypeString,
@@ -399,7 +399,7 @@ func buildTestRegistryForDocs(t *testing.T) *usercommands.Registry {
     type: service_exec
     description: Run database migrations
     service: app-main
-    run: php artisan migrate
+    cmd: php artisan migrate
 `
 	if err := os.WriteFile(filepath.Join(servicesDir, "main.yml"), []byte(mainYML), 0o644); err != nil {
 		t.Fatal(err)
@@ -411,7 +411,7 @@ func buildTestRegistryForDocs(t *testing.T) *usercommands.Registry {
     type: service_exec
     description: Create the database
     service: db
-    run: mysql -e "CREATE DATABASE IF NOT EXISTS laravel"
+    cmd: mysql -e "CREATE DATABASE IF NOT EXISTS laravel"
     private: true
 `
 	if err := os.WriteFile(filepath.Join(mainSubDir, "db.yml"), []byte(dbYML), 0o644); err != nil {

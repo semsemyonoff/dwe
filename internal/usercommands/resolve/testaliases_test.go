@@ -14,7 +14,7 @@ type (
 )
 
 const (
-	CommandTypeCommand = model.CommandTypeCommand
+	CommandTypeShell = model.CommandTypeShell
 	CommandTypeScript  = model.CommandTypeScript
 	ParamTypeString    = model.ParamTypeString
 	ParamTypeBool      = model.ParamTypeBool

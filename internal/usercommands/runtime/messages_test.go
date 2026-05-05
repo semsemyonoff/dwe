@@ -11,8 +11,8 @@ import (
 func TestRunCommand_Messages_NoMessagesNoExtraOutput(t *testing.T) {
 	cmd := &CommandDef{
 		ID:   "test.no-messages",
-		Type: CommandTypeCommand,
-		Run:  "true",
+		Type: CommandTypeShell,
+		Cmd:  "true",
 	}
 
 	var out, errOut bytes.Buffer
@@ -36,12 +36,12 @@ func TestRunCommand_Messages_NoMessagesNoExtraOutput(t *testing.T) {
 func TestRunCommand_Messages_SuccessPrintedAfterSuccess(t *testing.T) {
 	cmd := &CommandDef{
 		ID:   "test.success-message",
-		Type: CommandTypeCommand,
+		Type: CommandTypeShell,
 		Messages: CommandMessages{
 			Success: "Created ${param.name}.",
 			Error:   "Failed ${param.name}.",
 		},
-		Run: "true",
+		Cmd: "true",
 	}
 
 	var out, errOut bytes.Buffer
@@ -69,12 +69,12 @@ func TestRunCommand_Messages_SuccessPrintedAfterSuccess(t *testing.T) {
 func TestRunCommand_Messages_ErrorPrintedAfterFailure(t *testing.T) {
 	cmd := &CommandDef{
 		ID:   "test.error-message",
-		Type: CommandTypeCommand,
+		Type: CommandTypeShell,
 		Messages: CommandMessages{
 			Success: "Created ${param.name}.",
 			Error:   "Failed ${param.name}.",
 		},
-		Run: "false",
+		Cmd: "false",
 	}
 
 	var out, errOut bytes.Buffer

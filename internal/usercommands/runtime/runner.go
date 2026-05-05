@@ -81,7 +81,7 @@ func stdinOrOS(ctx RunContext) io.Reader {
 // An error is returned for unknown command types.
 func NewRunner(cmd *model.CommandDef) (Runner, error) {
 	switch cmd.Type {
-	case model.CommandTypeCommand:
+	case model.CommandTypeShell:
 		return &HostRunner{}, nil
 	case model.CommandTypeDevbox:
 		return &DevboxRunner{}, nil

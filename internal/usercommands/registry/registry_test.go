@@ -55,14 +55,14 @@ group:
 
 commands:
   up:
-    type: command
+    type: shell
     description: Start db container
-    run: "docker compose up -d db"
+    cmd: "docker compose up -d db"
     private: true
   wait:
-    type: command
+    type: shell
     description: Wait for db to be ready
-    run: "echo waiting"
+    cmd: "echo waiting"
     private: true
 `
 
@@ -72,12 +72,12 @@ commands:
     type: service_exec
     description: Run migrations
     service: app-main
-    run: "php artisan migrate"
+    cmd: "php artisan migrate"
   composer-install:
     type: service_exec
     description: Install composer deps
     service: app-main
-    run: "composer install"
+    cmd: "composer install"
 `
 
 const mainDBYAML = `
@@ -86,7 +86,7 @@ commands:
     type: service_exec
     description: Create the database
     service: db
-    run: "echo create"
+    cmd: "echo create"
     private: true
 `
 

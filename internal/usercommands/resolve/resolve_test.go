@@ -354,8 +354,8 @@ func TestContext_EmptyDefsNoError(t *testing.T) {
 
 func TestBuildEnv_ParamEnv(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Params: map[string]ParamDef{
 			"db_name": {Env: "DB_DATABASE"},
 		},
@@ -372,8 +372,8 @@ func TestBuildEnv_ParamEnv(t *testing.T) {
 
 func TestBuildEnv_ContextEnv(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Context: map[string]ContextDef{
 			"container": {From: "services.main.container", Env: "APP_CONTAINER"},
 		},
@@ -390,8 +390,8 @@ func TestBuildEnv_ContextEnv(t *testing.T) {
 
 func TestBuildEnv_CommandLevelEnv(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Env:  map[string]string{"DEVBOX_ROOT": "${project.name}"},
 	}
 	env, err := BuildEnv(cmd, nil, nil, map[string]tpl.ResolvedFile{})
@@ -406,8 +406,8 @@ func TestBuildEnv_CommandLevelEnv(t *testing.T) {
 func TestBuildEnv_CommandLevelEnvConflictWithParamEnv(t *testing.T) {
 	// With the conflict guard, command-level env declaring the same name as param env is rejected.
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Params: map[string]ParamDef{
 			"val": {Env: "MY_VAR"},
 		},
@@ -425,8 +425,8 @@ func TestBuildEnv_CommandLevelEnvConflictWithParamEnv(t *testing.T) {
 
 func TestBuildEnv_ParamWithoutEnvSkipped(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Params: map[string]ParamDef{
 			"hidden": {Type: ParamTypeString}, // no Env set
 		},
@@ -443,8 +443,8 @@ func TestBuildEnv_ParamWithoutEnvSkipped(t *testing.T) {
 
 func TestBuildEnv_EmptyCommandNoError(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 	}
 	env, err := BuildEnv(cmd, nil, nil, map[string]tpl.ResolvedFile{})
 	if err != nil {
@@ -457,8 +457,8 @@ func TestBuildEnv_EmptyCommandNoError(t *testing.T) {
 
 func TestBuildEnv_BoolParamInEnv(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Params: map[string]ParamDef{
 			"debug": {Type: ParamTypeBool, Env: "DEBUG"},
 		},
@@ -475,8 +475,8 @@ func TestBuildEnv_BoolParamInEnv(t *testing.T) {
 
 func TestBuildEnv_IntParamInEnv(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Params: map[string]ParamDef{
 			"workers": {Type: ParamTypeInt, Env: "WORKERS"},
 		},
@@ -493,8 +493,8 @@ func TestBuildEnv_IntParamInEnv(t *testing.T) {
 
 func TestBuildEnv_FileEnv(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Files: map[string]FileSpec{
 			"dump": {Env: "DUMP_FILE"},
 		},
@@ -514,8 +514,8 @@ func TestBuildEnv_FileEnv(t *testing.T) {
 func TestBuildEnv_EmptyFilesMap_Regression(t *testing.T) {
 	// When no files are declared, BuildEnv should behave identically to before the change.
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Params: map[string]ParamDef{
 			"db_name": {Env: "DB_DATABASE"},
 		},
@@ -536,8 +536,8 @@ func TestBuildEnv_EmptyFilesMap_Regression(t *testing.T) {
 
 func TestBuildEnv_ConflictBetweenFileAndParam(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Params: map[string]ParamDef{
 			"val": {Env: "MY_VAR"},
 		},
@@ -560,8 +560,8 @@ func TestBuildEnv_ConflictBetweenFileAndParam(t *testing.T) {
 
 func TestBuildEnv_ConflictBetweenFileAndCommandEnv(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Files: map[string]FileSpec{
 			"file1": {Env: "MY_VAR"},
 		},
@@ -581,8 +581,8 @@ func TestBuildEnv_ConflictBetweenFileAndCommandEnv(t *testing.T) {
 
 func TestBuildEnv_ConflictBetweenFileAndContext(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Context: map[string]ContextDef{
 			"ctx": {From: "some.path", Env: "MY_VAR"},
 		},
@@ -605,8 +605,8 @@ func TestBuildEnv_ConflictBetweenFileAndContext(t *testing.T) {
 
 func TestBuildEnv_MultipleFileEnvs(t *testing.T) {
 	cmd := &CommandDef{
-		Type: CommandTypeCommand,
-		Run:  "echo",
+		Type: CommandTypeShell,
+		Cmd:  "echo",
 		Files: map[string]FileSpec{
 			"dump": {Env: "DUMP_FILE"},
 			"log":  {Env: "LOG_FILE"},

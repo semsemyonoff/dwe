@@ -84,18 +84,18 @@ func TestWorkflowRunner_StepSequencing(t *testing.T) {
 	logFile := dir + "/order.log"
 
 	step1 := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step1",
 		Group:     "wf",
 		LocalName: "step1",
-		Run:       `printf 'step1\n' >> ` + logFile,
+		Cmd:       `printf 'step1\n' >> ` + logFile,
 	}
 	step2 := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step2",
 		Group:     "wf",
 		LocalName: "step2",
-		Run:       `printf 'step2\n' >> ` + logFile,
+		Cmd:       `printf 'step2\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -134,14 +134,14 @@ func TestWorkflowRunner_WithParamOverride(t *testing.T) {
 
 	// A command that prints the value of a param via env var.
 	echoCmd := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.echo",
 		Group:     "wf",
 		LocalName: "echo",
 		Params: map[string]ParamDef{
 			"msg": {Type: ParamTypeString, Default: "default-msg"},
 		},
-		Run: `printf '%s' "$MSG" > ` + outFile,
+		Cmd: `printf '%s' "$MSG" > ` + outFile,
 		Env: map[string]string{"MSG": "${param.msg}"},
 	}
 	wf := &CommandDef{
@@ -171,14 +171,14 @@ func TestWorkflowRunner_WithParam_DefaultWhenNotProvided(t *testing.T) {
 	outFile := dir + "/param.txt"
 
 	echoCmd := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.echo2",
 		Group:     "wf",
 		LocalName: "echo2",
 		Params: map[string]ParamDef{
 			"msg": {Type: ParamTypeString, Default: "default-msg"},
 		},
-		Run: `printf '%s' "$MSG" > ` + outFile,
+		Cmd: `printf '%s' "$MSG" > ` + outFile,
 		Env: map[string]string{"MSG": "${param.msg}"},
 	}
 	wf := &CommandDef{
@@ -212,12 +212,12 @@ func TestWorkflowRunner_PrivateCommand_Callable(t *testing.T) {
 	logFile := dir + "/private.log"
 
 	privateCmd := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.internal",
 		Group:     "wf",
 		LocalName: "internal",
 		Private:   true,
-		Run:       `printf 'private-ran\n' >> ` + logFile,
+		Cmd:       `printf 'private-ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -252,11 +252,11 @@ func TestWorkflowRunner_ConfirmStep_NonInteractive_AutoSkip(t *testing.T) {
 	logFile := dir + "/confirm.log"
 
 	step := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.after-confirm",
 		Group:     "wf",
 		LocalName: "after-confirm",
-		Run:       `printf 'ran\n' >> ` + logFile,
+		Cmd:       `printf 'ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -526,11 +526,11 @@ func TestWorkflowRunner_ConfirmStep_NonInteractiveContext_SkipsConfirm(t *testin
 	logFile := dir + "/step.log"
 
 	step := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.after-confirm",
 		Group:     "wf",
 		LocalName: "after-confirm",
-		Run:       `printf 'ran\n' >> ` + logFile,
+		Cmd:       `printf 'ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -577,11 +577,11 @@ func TestWorkflowRunner_WhenParam_Truthy_Runs(t *testing.T) {
 	logFile := dir + "/when.log"
 
 	step := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step",
 		Group:     "wf",
 		LocalName: "step",
-		Run:       `printf 'ran\n' >> ` + logFile,
+		Cmd:       `printf 'ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -622,11 +622,11 @@ func TestWorkflowRunner_WhenParam_Falsy_Skips(t *testing.T) {
 	logFile := dir + "/when.log"
 
 	step := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step",
 		Group:     "wf",
 		LocalName: "step",
-		Run:       `printf 'ran\n' >> ` + logFile,
+		Cmd:       `printf 'ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -668,11 +668,11 @@ func TestWorkflowRunner_WhenCmd_True_Runs(t *testing.T) {
 	logFile := dir + "/when-cmd.log"
 
 	step := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step",
 		Group:     "wf",
 		LocalName: "step",
-		Run:       `printf 'ran\n' >> ` + logFile,
+		Cmd:       `printf 'ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -717,11 +717,11 @@ func TestWorkflowRunner_WhenBuiltin_FileExistsInTemplate(t *testing.T) {
 	}
 
 	step := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step",
 		Group:     "wf",
 		LocalName: "step",
-		Run:       `printf 'ran\n' >> ` + logFile,
+		Cmd:       `printf 'ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -760,11 +760,11 @@ func TestWorkflowRunner_WhenBuiltin_FileExistsInTemplate(t *testing.T) {
 
 func TestWorkflowRunner_WhenInvalidExpr_Error(t *testing.T) {
 	step := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step",
 		Group:     "wf",
 		LocalName: "step",
-		Run:       `echo hi`,
+		Cmd:       `echo hi`,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -795,18 +795,18 @@ func TestWorkflowRunner_ContinueOnError_True_Continues(t *testing.T) {
 	logFile := dir + "/order.log"
 
 	failStep := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.fail",
 		Group:     "wf",
 		LocalName: "fail",
-		Run:       `exit 1`,
+		Cmd:       `exit 1`,
 	}
 	successStep := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.success",
 		Group:     "wf",
 		LocalName: "success",
-		Run:       `printf 'success-ran\n' >> ` + logFile,
+		Cmd:       `printf 'success-ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -833,18 +833,18 @@ func TestWorkflowRunner_ContinueOnError_True_Continues(t *testing.T) {
 
 func TestWorkflowRunner_ContinueOnError_False_Aborts(t *testing.T) {
 	failStep := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.fail",
 		Group:     "wf",
 		LocalName: "fail",
-		Run:       `exit 1`,
+		Cmd:       `exit 1`,
 	}
 	successStep := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.success",
 		Group:     "wf",
 		LocalName: "success",
-		Run:       `echo success`,
+		Cmd:       `echo success`,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -869,18 +869,18 @@ func TestWorkflowRunner_ContinueOnError_SkippedWithFalsyWhen(t *testing.T) {
 	logFile := dir + "/order.log"
 
 	step1 := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step1",
 		Group:     "wf",
 		LocalName: "step1",
-		Run:       `exit 1`,
+		Cmd:       `exit 1`,
 	}
 	step2 := &CommandDef{
-		Type:      CommandTypeCommand,
+		Type:      CommandTypeShell,
 		ID:        "wf.step2",
 		Group:     "wf",
 		LocalName: "step2",
-		Run:       `printf 'step2-ran\n' >> ` + logFile,
+		Cmd:       `printf 'step2-ran\n' >> ` + logFile,
 	}
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,

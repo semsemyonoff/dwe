@@ -24,13 +24,13 @@ func mustParse(t *testing.T, yaml string) *CommandFile {
 
 func TestCommandTypeConstants(t *testing.T) {
 	types := []CommandType{
-		CommandTypeCommand,
+		CommandTypeShell,
 		CommandTypeScript,
 		CommandTypeServiceExec,
 		CommandTypeServiceRun,
 		CommandTypeWorkflow,
 	}
-	want := []string{"command", "script", "service_exec", "service_run", "workflow"}
+	want := []string{"shell", "script", "service_exec", "service_run", "workflow"}
 	for i, ct := range types {
 		if string(ct) != want[i] {
 			t.Errorf("CommandType[%d] = %q, want %q", i, ct, want[i])
@@ -78,8 +78,8 @@ group:
   description: "Database management commands"
 commands:
   wait:
-    type: command
-    run: echo waiting
+    type: shell
+    cmd: echo waiting
 `
 	cf := mustParse(t, yaml)
 	if cf.Group.Title != "Database" {
@@ -90,13 +90,13 @@ commands:
 	}
 }
 
-func TestParseCommandFile_CommandType_Run(t *testing.T) {
+func TestParseCommandFile_CommandType_Cmd(t *testing.T) {
 	yaml := `
 commands:
   install:
-    type: command
+    type: shell
     description: Install dependencies
-    run: composer install --no-interaction
+    cmd: composer install --no-interaction
     workdir: /var/www/html
     env:
       COMPOSER_HOME: /tmp/composer
@@ -106,11 +106,11 @@ commands:
 	if !ok {
 		t.Fatal("command 'install' not found")
 	}
-	if cmd.Type != CommandTypeCommand {
-		t.Errorf("Type = %q, want command", cmd.Type)
+	if cmd.Type != CommandTypeShell {
+		t.Errorf("Type = %q, want shell", cmd.Type)
 	}
-	if cmd.Run != "composer install --no-interaction" {
-		t.Errorf("Run = %q, unexpected", cmd.Run)
+	if cmd.Cmd != "composer install --no-interaction" {
+		t.Errorf("Cmd = %q, unexpected", cmd.Cmd)
 	}
 	if cmd.Workdir != "/var/www/html" {
 		t.Errorf("Workdir = %q, unexpected", cmd.Workdir)
@@ -124,7 +124,7 @@ func TestParseCommandFile_CommandType_Argv(t *testing.T) {
 	yaml := `
 commands:
   echo:
-    type: command
+    type: shell
     argv:
       - echo
       - hello world
@@ -143,10 +143,10 @@ func TestParseCommandFile_ConfirmationFields(t *testing.T) {
 	yaml := `
 commands:
   reset:
-    type: command
+    type: shell
     confirmation: true
     confirmation_text: "Drop local data?"
-    run: echo reset
+    cmd: echo reset
 `
 	cf := mustParse(t, yaml)
 	cmd := cf.Commands["reset"]
@@ -165,11 +165,11 @@ func TestParseCommandFile_Messages(t *testing.T) {
 	yaml := `
 commands:
   create:
-    type: command
+    type: shell
     messages:
       success: "Created ${param.name}"
       error: "Failed ${param.name}"
-    run: echo create
+    cmd: echo create
 `
 	cf := mustParse(t, yaml)
 	cmd := cf.Commands["create"]
@@ -198,7 +198,7 @@ commands:
     user: current
     workdir: /var/www/html
     mode: exec-or-run
-    run: php artisan migrate --force
+    cmd: php artisan migrate --force
     params:
       fresh:
         type: bool
@@ -253,7 +253,7 @@ commands:
   create-db:
     type: service_run
     service: app-main
-    run: php artisan db:create
+    cmd: php artisan db:create
 `
 	cf := mustParse(t, yaml)
 	cmd := cf.Commands["create-db"]
@@ -351,9 +351,9 @@ func TestParseCommandFile_PrivateCommand(t *testing.T) {
 	yaml := `
 commands:
   internal-task:
-    type: command
+    type: shell
     private: true
-    run: echo internal
+    cmd: echo internal
 `
 	cf := mustParse(t, yaml)
 	cmd := cf.Commands["internal-task"]
@@ -368,7 +368,7 @@ commands:
   root-task:
     type: service_exec
     service: app-main
-    run: whoami
+    cmd: whoami
     runner:
       user: root
       workdir: /
@@ -393,7 +393,7 @@ commands:
   connect:
     type: service_exec
     service: app-main
-    run: mysql
+    cmd: mysql
     params:
       db:
         type: string
@@ -409,7 +409,7 @@ commands:
 }
 
 func TestParseCommandFile_EmptyFile(t *testing.T) {
-	cf := mustParse(t, "")
+	cf := mustParse(t, "{}")
 	if len(cf.Commands) != 0 {
 		t.Errorf("Commands len = %d, want 0", len(cf.Commands))
 	}
@@ -419,12 +419,12 @@ func TestParseCommandFile_EmptyFile(t *testing.T) {
 // Validation — valid cases
 // ---------------------------------------------------------------------------
 
-func TestValidate_CommandRun(t *testing.T) {
+func TestValidate_CommandShellCmd(t *testing.T) {
 	cf := mustParse(t, `
 commands:
   test:
-    type: command
-    run: echo ok
+    type: shell
+    cmd: echo ok
 `)
 	cf.Commands["test"] = setID(cf.Commands["test"], "grp.test")
 	cmd := cf.Commands["test"]
@@ -433,8 +433,8 @@ commands:
 	}
 }
 
-func TestValidate_CommandArgv(t *testing.T) {
-	cmd := CommandDef{Type: CommandTypeCommand, Argv: []string{"ls", "-la"}, ID: "g.ls"}
+func TestValidate_CommandShellArgv(t *testing.T) {
+	cmd := CommandDef{Type: CommandTypeShell, Argv: []string{"ls", "-la"}, ID: "g.ls"}
 	if err := cmd.Validate(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestValidate_ServiceExec(t *testing.T) {
 		Type:    CommandTypeServiceExec,
 		ID:      "g.e",
 		Service: "app-main",
-		Run:     "php artisan migrate",
+		Cmd:     "php artisan migrate",
 	}
 	if err := cmd.Validate(); err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -479,7 +479,7 @@ func TestValidate_ServiceExecWithRunnerOverride(t *testing.T) {
 	cmd := CommandDef{
 		Type: CommandTypeServiceExec,
 		ID:   "g.e",
-		Run:  "whoami",
+		Cmd:  "whoami",
 		Runner: &RunnerDef{
 			Service: "app-main",
 			User:    UserModeRoot,
@@ -509,7 +509,7 @@ func TestValidate_Workflow(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestValidate_MissingType(t *testing.T) {
-	cmd := CommandDef{ID: "g.bad", Run: "echo"}
+	cmd := CommandDef{ID: "g.bad", Cmd: "echo"}
 	err := cmd.Validate()
 	if err == nil {
 		t.Error("expected error for missing type")
@@ -524,11 +524,11 @@ func TestValidate_UnknownType(t *testing.T) {
 	}
 }
 
-func TestValidate_Command_RunAndArgvBothSet(t *testing.T) {
+func TestValidate_Command_CmdAndArgvBothSet(t *testing.T) {
 	cmd := CommandDef{
-		Type: CommandTypeCommand,
+		Type: CommandTypeShell,
 		ID:   "g.bad",
-		Run:  "echo",
+		Cmd:  "echo",
 		Argv: []string{"echo"},
 	}
 	err := cmd.Validate()
@@ -537,19 +537,19 @@ func TestValidate_Command_RunAndArgvBothSet(t *testing.T) {
 	}
 }
 
-func TestValidate_Command_NeitherRunNorArgv(t *testing.T) {
-	cmd := CommandDef{Type: CommandTypeCommand, ID: "g.bad"}
+func TestValidate_Command_NeitherCmdNorArgv(t *testing.T) {
+	cmd := CommandDef{Type: CommandTypeShell, ID: "g.bad"}
 	err := cmd.Validate()
-	if err == nil || !strings.Contains(err.Error(), "one of run or argv") {
-		t.Errorf("expected 'one of run or argv' error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "one of cmd or argv") {
+		t.Errorf("expected 'one of cmd or argv' error, got %v", err)
 	}
 }
 
 func TestValidate_Command_ScriptFieldSet(t *testing.T) {
 	cmd := CommandDef{
-		Type:   CommandTypeCommand,
+		Type:   CommandTypeShell,
 		ID:     "g.bad",
-		Run:    "echo",
+		Cmd:    "echo",
 		Script: &ScriptDef{Path: "s.sh"},
 	}
 	err := cmd.Validate()
@@ -560,9 +560,9 @@ func TestValidate_Command_ScriptFieldSet(t *testing.T) {
 
 func TestValidate_Command_StepsFieldSet(t *testing.T) {
 	cmd := CommandDef{
-		Type:  CommandTypeCommand,
+		Type:  CommandTypeShell,
 		ID:    "g.bad",
-		Run:   "echo",
+		Cmd:   "echo",
 		Steps: []WorkflowStep{{Command: "g.x"}},
 	}
 	err := cmd.Validate()
@@ -573,9 +573,9 @@ func TestValidate_Command_StepsFieldSet(t *testing.T) {
 
 func TestValidate_Command_ServiceFieldSet(t *testing.T) {
 	cmd := CommandDef{
-		Type:    CommandTypeCommand,
+		Type:    CommandTypeShell,
 		ID:      "g.bad",
-		Run:     "echo",
+		Cmd:     "echo",
 		Service: "app-main",
 	}
 	err := cmd.Validate()
@@ -629,19 +629,19 @@ func TestValidate_Script_NeitherPathNorRun(t *testing.T) {
 }
 
 func TestValidate_ServiceExec_NoService(t *testing.T) {
-	cmd := CommandDef{Type: CommandTypeServiceExec, ID: "g.bad", Run: "echo"}
+	cmd := CommandDef{Type: CommandTypeServiceExec, ID: "g.bad", Cmd: "echo"}
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "service is required") {
 		t.Errorf("expected service required error, got %v", err)
 	}
 }
 
-func TestValidate_ServiceExec_RunAndArgvBothSet(t *testing.T) {
+func TestValidate_ServiceExec_CmdAndArgvBothSet(t *testing.T) {
 	cmd := CommandDef{
 		Type:    CommandTypeServiceExec,
 		ID:      "g.bad",
 		Service: "app-main",
-		Run:     "echo",
+		Cmd:     "echo",
 		Argv:    []string{"echo"},
 	}
 	err := cmd.Validate()
@@ -650,15 +650,15 @@ func TestValidate_ServiceExec_RunAndArgvBothSet(t *testing.T) {
 	}
 }
 
-func TestValidate_ServiceExec_NoRunOrArgv(t *testing.T) {
+func TestValidate_ServiceExec_NoCmdOrArgv(t *testing.T) {
 	cmd := CommandDef{
 		Type:    CommandTypeServiceExec,
 		ID:      "g.bad",
 		Service: "app-main",
 	}
 	err := cmd.Validate()
-	if err == nil || !strings.Contains(err.Error(), "one of run or argv") {
-		t.Errorf("expected run/argv required error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "one of cmd or argv") {
+		t.Errorf("expected cmd/argv required error, got %v", err)
 	}
 }
 
@@ -667,7 +667,7 @@ func TestValidate_ServiceRun_ModeMismatch(t *testing.T) {
 		Type:    CommandTypeServiceRun,
 		ID:      "g.bad",
 		Service: "app-main",
-		Run:     "echo",
+		Cmd:     "echo",
 		Mode:    ExecModeExec, // invalid for service_run
 	}
 	err := cmd.Validate()
@@ -684,16 +684,16 @@ func TestValidate_Workflow_NoSteps(t *testing.T) {
 	}
 }
 
-func TestValidate_Workflow_RunFieldSet(t *testing.T) {
+func TestValidate_Workflow_CmdFieldSet(t *testing.T) {
 	cmd := CommandDef{
 		Type:  CommandTypeWorkflow,
 		ID:    "g.bad",
-		Run:   "echo",
+		Cmd:   "echo",
 		Steps: []WorkflowStep{{Command: "g.x"}},
 	}
 	err := cmd.Validate()
-	if err == nil || !strings.Contains(err.Error(), "run/argv") {
-		t.Errorf("expected run/argv error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "cmd/argv") {
+		t.Errorf("expected cmd/argv error, got %v", err)
 	}
 }
 
@@ -1510,7 +1510,7 @@ commands:
   exec_custom:
     type: service_exec
     service: app-main
-    run: php -v
+    cmd: php -v
     compose_args:
       - "-T"
       - "--name"
@@ -1535,7 +1535,7 @@ commands:
   run_bg:
     type: service_run
     service: app-main
-    run: sleep 300
+    cmd: sleep 300
     compose_args:
       - "-d"
       - "--rm"
@@ -1550,16 +1550,16 @@ commands:
 	}
 }
 
-func TestValidate_ComposeArgsRejectedOnCommand(t *testing.T) {
+func TestValidate_ComposeArgsRejectedOnShell(t *testing.T) {
 	cmd := CommandDef{
-		Type:        CommandTypeCommand,
+		Type:        CommandTypeShell,
 		ID:          "g.cmd",
-		Run:         "echo ok",
+		Cmd:         "echo ok",
 		ComposeArgs: []string{"-T"},
 	}
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "compose_args") {
-		t.Errorf("expected compose_args rejection for type=command, got %v", err)
+		t.Errorf("expected compose_args rejection for type=shell, got %v", err)
 	}
 }
 
@@ -1595,7 +1595,7 @@ func TestValidate_ComposeArgsRejectedOnDevbox(t *testing.T) {
 	cmd := CommandDef{
 		Type:        CommandTypeDevbox,
 		ID:          "g.devbox",
-		Run:         "info",
+		Cmd:         "info",
 		ComposeArgs: []string{"-T"},
 	}
 	err := cmd.Validate()
@@ -1604,16 +1604,16 @@ func TestValidate_ComposeArgsRejectedOnDevbox(t *testing.T) {
 	}
 }
 
-func TestValidate_WorkdirFromRejectedOnCommand(t *testing.T) {
+func TestValidate_WorkdirFromRejectedOnShell(t *testing.T) {
 	cmd := CommandDef{
-		Type:        CommandTypeCommand,
+		Type:        CommandTypeShell,
 		ID:          "g.cmd",
-		Run:         "echo hello",
+		Cmd:         "echo hello",
 		WorkdirFrom: "some.path",
 	}
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "workdir_from") {
-		t.Errorf("expected workdir_from rejection for type=command, got %v", err)
+		t.Errorf("expected workdir_from rejection for type=shell, got %v", err)
 	}
 }
 
@@ -1649,7 +1649,7 @@ func TestValidate_WorkdirFromRejectedOnDevbox(t *testing.T) {
 	cmd := CommandDef{
 		Type:        CommandTypeDevbox,
 		ID:          "g.devbox",
-		Run:         "info",
+		Cmd:         "info",
 		WorkdirFrom: "some.path",
 	}
 	err := cmd.Validate()
@@ -1677,12 +1677,64 @@ func TestValidate_WorkdirRejectedOnDevbox(t *testing.T) {
 	cmd := CommandDef{
 		Type:    CommandTypeDevbox,
 		ID:      "g.devbox",
-		Run:     "info",
+		Cmd:     "info",
 		Workdir: "/some/path",
 	}
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "workdir") {
 		t.Errorf("expected workdir rejection for type=devbox, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Strict YAML decode — legacy field rejection
+// ---------------------------------------------------------------------------
+
+func TestParseCommandFile_StrictDecode_LegacyRunField(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    run: echo hello
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for legacy 'run:' field, got nil")
+	}
+	if !strings.Contains(err.Error(), "run") || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'field run not found' error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_StrictDecode_UnknownField(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo hello
+    unknown_field: value
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for unknown field, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown_field") {
+		t.Errorf("expected 'unknown_field' in error, got %v", err)
+	}
+}
+
+func TestValidate_LegacyCommandType(t *testing.T) {
+	cmd := CommandDef{
+		Type: "command",
+		ID:   "g.cmd",
+		Cmd:  "echo",
+	}
+	err := cmd.Validate()
+	if err == nil {
+		t.Error("expected validation error for legacy type=command")
+	}
+	if !strings.Contains(err.Error(), "unknown type") {
+		t.Errorf("expected 'unknown type' error, got %v", err)
 	}
 }
 

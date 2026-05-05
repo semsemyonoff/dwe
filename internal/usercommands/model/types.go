@@ -2,6 +2,7 @@
 package model
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strings"
@@ -18,8 +19,8 @@ var (
 type CommandType string
 
 const (
-	// CommandTypeCommand runs a shell command or argv on the host.
-	CommandTypeCommand CommandType = "command"
+	// CommandTypeShell runs a shell command or argv on the host.
+	CommandTypeShell CommandType = "shell"
 	// CommandTypeScript runs one or more script files.
 	CommandTypeScript CommandType = "script"
 	// CommandTypeServiceExec runs inside an existing container via docker compose exec.
@@ -29,7 +30,7 @@ const (
 	// CommandTypeWorkflow executes a sequence of command references.
 	CommandTypeWorkflow CommandType = "workflow"
 	// CommandTypeDevbox runs a devbox subcommand using the current executable.
-	// The run: field contains the subcommand and its arguments (without the binary path).
+	// The cmd: field contains the subcommand and its arguments (without the binary path).
 	CommandTypeDevbox CommandType = "devbox"
 )
 
@@ -299,12 +300,12 @@ type CommandDef struct {
 	// Messages holds optional centralized success/error output for the command.
 	Messages CommandMessages `yaml:"messages"`
 
-	// --- type=command fields ---
-	// Run is a shell command string executed via `sh -c`.
+	// --- type=shell fields ---
+	// Cmd is a shell command string executed via `sh -c`.
 	// Mutually exclusive with Argv.
-	Run string `yaml:"run"`
+	Cmd string `yaml:"cmd"`
 	// Argv is the raw argument vector (no shell quoting).
-	// Mutually exclusive with Run.
+	// Mutually exclusive with Cmd.
 	Argv []string `yaml:"argv"`
 
 	// --- type=service_exec / service_run fields ---
@@ -350,7 +351,7 @@ func (c *CommandDef) Validate() error {
 	}
 
 	switch c.Type {
-	case CommandTypeCommand, CommandTypeDevbox:
+	case CommandTypeShell, CommandTypeDevbox:
 		if err := c.validateCommandType(); err != nil {
 			return fmt.Errorf("command %q: %w", c.ID, err)
 		}
@@ -396,22 +397,22 @@ func (c *CommandDef) EffectiveConfirmationText() string {
 const DefaultConfirmationText = "Are you sure?"
 
 func (c *CommandDef) validateCommandType() error {
-	if c.Type == CommandTypeCommand {
-		hasRun := c.Run != ""
+	if c.Type == CommandTypeShell {
+		hasCmd := c.Cmd != ""
 		hasArgv := len(c.Argv) > 0
-		if hasRun && hasArgv {
-			return fmt.Errorf("run and argv are mutually exclusive")
+		if hasCmd && hasArgv {
+			return fmt.Errorf("cmd and argv are mutually exclusive")
 		}
-		if !hasRun && !hasArgv {
-			return fmt.Errorf("one of run or argv must be set")
+		if !hasCmd && !hasArgv {
+			return fmt.Errorf("one of cmd or argv must be set")
 		}
 	}
 	if c.Type == CommandTypeDevbox {
-		if c.Run == "" {
-			return fmt.Errorf("run is required for type=devbox")
+		if c.Cmd == "" {
+			return fmt.Errorf("cmd is required for type=devbox")
 		}
 		if len(c.Argv) > 0 {
-			return fmt.Errorf("argv is not valid for type=devbox; use run")
+			return fmt.Errorf("argv is not valid for type=devbox; use cmd")
 		}
 	}
 
@@ -443,8 +444,8 @@ func (c *CommandDef) validateScriptType() error {
 	if err := c.Script.Validate(); err != nil {
 		return err
 	}
-	if c.Run != "" || len(c.Argv) > 0 {
-		return fmt.Errorf("run/argv fields are not valid for type=script")
+	if c.Cmd != "" || len(c.Argv) > 0 {
+		return fmt.Errorf("cmd/argv fields are not valid for type=script")
 	}
 	if len(c.Steps) > 0 {
 		return fmt.Errorf("steps field is not valid for type=script")
@@ -472,13 +473,13 @@ func (c *CommandDef) validateServiceType() error {
 	if len(c.Steps) > 0 {
 		return fmt.Errorf("steps field is not valid for type=%s", c.Type)
 	}
-	hasRun := c.Run != ""
+	hasCmd := c.Cmd != ""
 	hasArgv := len(c.Argv) > 0
-	if hasRun && hasArgv {
-		return fmt.Errorf("run and argv are mutually exclusive")
+	if hasCmd && hasArgv {
+		return fmt.Errorf("cmd and argv are mutually exclusive")
 	}
-	if !hasRun && !hasArgv {
-		return fmt.Errorf("one of run or argv must be set")
+	if !hasCmd && !hasArgv {
+		return fmt.Errorf("one of cmd or argv must be set")
 	}
 	if c.Type == CommandTypeServiceRun && c.Mode != "" && c.Mode != ExecModeRun {
 		return fmt.Errorf("mode is not applicable for type=service_run (always runs a new container)")
@@ -490,8 +491,8 @@ func (c *CommandDef) validateWorkflowType() error {
 	if len(c.Steps) == 0 {
 		return fmt.Errorf("steps is required and must be non-empty for type=workflow")
 	}
-	if c.Run != "" || len(c.Argv) > 0 {
-		return fmt.Errorf("run/argv fields are not valid for type=workflow")
+	if c.Cmd != "" || len(c.Argv) > 0 {
+		return fmt.Errorf("cmd/argv fields are not valid for type=workflow")
 	}
 	if c.Script != nil {
 		return fmt.Errorf("script field is not valid for type=workflow")
@@ -675,7 +676,9 @@ func (f *CommandFile) Validate() error {
 // ParseCommandFile unmarshals YAML bytes into a CommandFile and runs basic field validation.
 func ParseCommandFile(data []byte) (*CommandFile, error) {
 	var cf CommandFile
-	if err := yaml.Unmarshal(data, &cf); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cf); err != nil {
 		return nil, fmt.Errorf("YAML parse error: %w", err)
 	}
 	return &cf, nil

@@ -148,13 +148,13 @@ group:
 
 commands:
   up:
-    type: command
+    type: shell
     description: Start database
-    run: "echo start"
+    cmd: "echo start"
   wait:
-    type: command
+    type: shell
     description: Wait for database
-    run: "echo wait"
+    cmd: "echo wait"
     private: true
 `
 
@@ -202,7 +202,7 @@ commands:
     type: service_exec
     description: Create database
     service: db
-    run: "echo create"
+    cmd: "echo create"
     private: true
 `)
 
@@ -233,12 +233,12 @@ func TestLoadCommandFile_InvalidYAML(t *testing.T) {
 
 func TestLoadCommandFile_ValidationError(t *testing.T) {
 	dir := t.TempDir()
-	// command type with both run and argv set — should fail validation.
+	// shell type with both cmd and argv set — should fail validation.
 	absPath := writeYAML(t, dir, "bad.yml", `
 commands:
   broken:
-    type: command
-    run: "echo hi"
+    type: shell
+    cmd: "echo hi"
     argv: ["echo", "hi"]
 `)
 

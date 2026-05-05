@@ -422,9 +422,9 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 
 	// Type-specific details.
 	switch def.Type {
-	case usercommands.CommandTypeCommand, usercommands.CommandTypeDevbox:
-		if def.Run != "" {
-			sb.WriteString("## Command\n\n```sh\n" + def.Run + "\n```\n\n")
+	case usercommands.CommandTypeShell, usercommands.CommandTypeDevbox:
+		if def.Cmd != "" {
+			sb.WriteString("## Command\n\n```sh\n" + def.Cmd + "\n```\n\n")
 		}
 		if len(def.Argv) > 0 {
 			sb.WriteString("## Argv\n\n```\n" + strings.Join(def.Argv, " ") + "\n```\n\n")
@@ -436,8 +436,8 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 		if def.Service != "" {
 			fmt.Fprintf(&sb, "**Service:** `%s`\n\n", def.Service)
 		}
-		if def.Run != "" {
-			sb.WriteString("## Command\n\n```sh\n" + def.Run + "\n```\n\n")
+		if def.Cmd != "" {
+			sb.WriteString("## Command\n\n```sh\n" + def.Cmd + "\n```\n\n")
 		}
 		if len(def.Argv) > 0 {
 			sb.WriteString("## Argv\n\n```\n" + strings.Join(def.Argv, " ") + "\n```\n\n")

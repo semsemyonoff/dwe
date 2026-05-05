@@ -153,9 +153,9 @@ func TestLoadCommandRegistry_WithCommands(t *testing.T) {
 	}
 	yml := `commands:
   up:
-    type: command
+    type: shell
     description: Start services
-    run: docker compose up
+    cmd: docker compose up
 `
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
@@ -175,14 +175,14 @@ func TestLoadCommandRegistry_WithCommands(t *testing.T) {
 func TestPrintCommandInspect_BasicCommand(t *testing.T) {
 	def := &usercommands.CommandDef{
 		ID:          "db.up",
-		Type:        usercommands.CommandTypeCommand,
+		Type:        usercommands.CommandTypeShell,
 		Description: "Start the database",
-		Run:         "docker compose up db",
+		Cmd:         "docker compose up db",
 	}
 	var buf bytes.Buffer
 	printCommandInspect(&buf, def)
 	out := buf.String()
-	for _, want := range []string{"db.up", "command", "Start the database", "docker compose up db"} {
+	for _, want := range []string{"db.up", "shell", "Start the database", "docker compose up db"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in output:\n%s", want, out)
 		}
@@ -192,9 +192,9 @@ func TestPrintCommandInspect_BasicCommand(t *testing.T) {
 func TestPrintCommandInspect_PrivateCommand(t *testing.T) {
 	def := &usercommands.CommandDef{
 		ID:      "db.create",
-		Type:    usercommands.CommandTypeCommand,
+		Type:    usercommands.CommandTypeShell,
 		Private: true,
-		Run:     "mysql -e 'CREATE DATABASE'",
+		Cmd:     "mysql -e 'CREATE DATABASE'",
 	}
 	var buf bytes.Buffer
 	printCommandInspect(&buf, def)
@@ -209,7 +209,7 @@ func TestPrintCommandInspect_ServiceExec(t *testing.T) {
 		ID:      "services.main.migrate",
 		Type:    usercommands.CommandTypeServiceExec,
 		Service: "app-main",
-		Run:     "php artisan migrate",
+		Cmd:     "php artisan migrate",
 	}
 	var buf bytes.Buffer
 	printCommandInspect(&buf, def)
@@ -248,8 +248,8 @@ func TestPrintCommandInspect_WorkflowWithSteps(t *testing.T) {
 func TestPrintCommandInspect_WithParams(t *testing.T) {
 	def := &usercommands.CommandDef{
 		ID:   "app.install",
-		Type: usercommands.CommandTypeCommand,
-		Run:  "composer install",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "composer install",
 		Params: map[string]usercommands.ParamDef{
 			"env": {
 				Type:        usercommands.ParamTypeString,
@@ -276,8 +276,8 @@ func TestPrintCommandInspect_WithParams(t *testing.T) {
 func TestPrintCommandInspect_WithContext(t *testing.T) {
 	def := &usercommands.CommandDef{
 		ID:   "app.install",
-		Type: usercommands.CommandTypeCommand,
-		Run:  "make install",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "make install",
 		Context: map[string]usercommands.ContextDef{
 			"app_url": {From: "project.url", Required: true, Env: "APP_URL"},
 		},
@@ -296,8 +296,8 @@ func TestPrintCommandInspect_WithContext(t *testing.T) {
 func TestPrintCommandInspect_WithEnv(t *testing.T) {
 	def := &usercommands.CommandDef{
 		ID:   "app.run",
-		Type: usercommands.CommandTypeCommand,
-		Run:  "php artisan serve",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "php artisan serve",
 		Env:  map[string]string{"APP_ENV": "local", "DEBUG": "true"},
 	}
 	var buf bytes.Buffer
@@ -541,9 +541,9 @@ func TestCommandListCmd_RunE_WithCommands(t *testing.T) {
 	}
 	yml := `commands:
   up:
-    type: command
+    type: shell
     description: Start services
-    run: docker compose up
+    cmd: docker compose up
 `
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
@@ -565,8 +565,8 @@ func TestCommandListCmd_RunE_WithGroupFilter(t *testing.T) {
 	}
 	yml := `commands:
   up:
-    type: command
-    run: echo up
+    type: shell
+    cmd: echo up
 `
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
@@ -592,9 +592,9 @@ func TestCommandInspectCmd_RunE_DirectID(t *testing.T) {
 	}
 	yml := `commands:
   up:
-    type: command
+    type: shell
     description: Start services
-    run: docker compose up
+    cmd: docker compose up
 `
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)

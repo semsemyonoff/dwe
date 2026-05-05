@@ -14,11 +14,12 @@ type (
 )
 
 const (
-	CommandTypeCommand     = model.CommandTypeCommand
+	CommandTypeShell       = model.CommandTypeShell
 	CommandTypeScript      = model.CommandTypeScript
 	CommandTypeServiceExec = model.CommandTypeServiceExec
 	CommandTypeServiceRun  = model.CommandTypeServiceRun
 	CommandTypeWorkflow    = model.CommandTypeWorkflow
+	CommandTypeDevbox      = model.CommandTypeDevbox
 	FileAccessWrite        = model.FileAccessWrite
 	FileAccessRead         = model.FileAccessRead
 	FileAccessReadWrite    = model.FileAccessReadWrite
