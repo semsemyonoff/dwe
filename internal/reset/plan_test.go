@@ -59,7 +59,8 @@ phases:
   - name: cleanup
     steps:
       - name: remove-dirs
-        run: rm -rf services/main/src
+        type: shell
+        cmd: rm -rf services/main/src
 `)
 	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
 	steps, err := reset.ResolvePlan(cfg)
@@ -83,9 +84,11 @@ phases:
   - name: cleanup
     steps:
       - name: remove-dirs
-        run: rm -rf services/main/src
+        type: shell
+        cmd: rm -rf services/main/src
       - name: reset-db
-        command: services.main.db.create
+        type: command
+        cmd: services.main.db.create
 `)
 	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
 	phase, step, err := reset.FindStep(cfg, "cleanup/reset-db")
