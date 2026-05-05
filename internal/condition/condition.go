@@ -16,6 +16,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Kind classifies a when expression.
@@ -167,4 +169,86 @@ func isExitError(err error, target **exec.ExitError) bool {
 		*target = e
 	}
 	return ok
+}
+
+// Type is the kind of a typed condition.
+type Type string
+
+const (
+	// TypeBuiltin resolves to a predicate name in the condition registry.
+	// Example: {Type: "builtin", Cmd: "dir-empty foo"}.
+	TypeBuiltin Type = "builtin"
+
+	// TypeShell runs a shell command via sh -c; exit 0 = true.
+	// Example: {Type: "shell", Cmd: "test -f foo"}.
+	TypeShell Type = "shell"
+
+	// TypeTemplate is a Go template expression, evaluated at plan time.
+	// Example: {Type: "template", Expr: "{{ .Services.main.Enabled }}"}.
+	TypeTemplate Type = "template"
+)
+
+// Condition is a typed when-condition for deploy/reset/lifecycle steps.
+// Exactly one of Cmd (for builtin/shell) or Expr (for template) must be set.
+type Condition struct {
+	Type Type           `yaml:"type"`
+	Cmd  string         `yaml:"cmd,omitempty"`
+	Expr string         `yaml:"expr,omitempty"`
+	With map[string]any `yaml:"with,omitempty"` // reserved; predicate args today live in Cmd
+}
+
+// UnmarshalYAML rejects string shorthand (legacy syntax) with a clear error.
+// Only the mapping form {type: ..., cmd: ..., expr: ...} is accepted.
+func (c *Condition) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("when: must be a mapping (e.g., {type: builtin, cmd: dir-empty foo}), not a scalar string")
+	}
+	type conditionAlias Condition
+	var ca conditionAlias
+	if err := node.Decode(&ca); err != nil {
+		return err
+	}
+	*c = Condition(ca)
+	return nil
+}
+
+// Validate checks that the Condition is well-formed.
+// - builtin or shell: Cmd must be non-empty
+// - template: Expr must be non-empty
+func (c *Condition) Validate() error {
+	switch c.Type {
+	case TypeBuiltin, TypeShell:
+		if c.Cmd == "" {
+			return fmt.Errorf("condition type %q requires non-empty cmd", c.Type)
+		}
+	case TypeTemplate:
+		if c.Expr == "" {
+			return fmt.Errorf("condition type %q requires non-empty expr", c.Type)
+		}
+	default:
+		return fmt.Errorf("unknown condition type %q", c.Type)
+	}
+	return nil
+}
+
+// IsRuntime reports whether this condition requires runtime (execution-time) evaluation.
+// Template conditions are evaluated at plan time; builtin and shell conditions are runtime.
+func (c *Condition) IsRuntime() bool {
+	return c.Type == TypeBuiltin || c.Type == TypeShell
+}
+
+// EvalRuntimeTyped evaluates a runtime-kind typed condition.
+// Returns error if called with a template condition (which should be evaluated at plan time by the caller).
+func EvalRuntimeTyped(c *Condition, projectRoot string) (bool, error) {
+	if c == nil {
+		return true, nil
+	}
+	switch c.Type {
+	case TypeBuiltin:
+		return EvalBuiltin(c.Cmd, projectRoot)
+	case TypeShell:
+		return EvalCmd(c.Cmd, projectRoot)
+	default:
+		return false, fmt.Errorf("EvalRuntimeTyped: %s is not a runtime kind", c.Type)
+	}
 }
