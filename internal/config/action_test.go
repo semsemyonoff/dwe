@@ -98,6 +98,17 @@ func TestAction_RejectBareString(t *testing.T) {
 	}
 }
 
+func TestAction_RejectUnknownField(t *testing.T) {
+	data := `type: shell
+cmd: echo hello
+typo: oops`
+	var a config.Action
+	err := yaml.Unmarshal([]byte(data), &a)
+	if err == nil {
+		t.Error("expected error for unknown field, got nil")
+	}
+}
+
 // --- Validation ---
 
 func TestAction_ValidateShell_OK(t *testing.T) {

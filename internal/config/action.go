@@ -22,10 +22,16 @@ type Action struct {
 }
 
 // UnmarshalYAML enforces that only the mapping form is accepted (defense-in-depth on top of
-// strict file-level decode). Rejects string shorthand with a clear error.
+// strict file-level decode). Rejects string shorthand and unknown keys with clear errors.
 func (a *Action) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind != yaml.MappingNode {
 		return fmt.Errorf("action must be a mapping (e.g., {type: shell, cmd: ...}), not a scalar string")
+	}
+	known := map[string]bool{"type": true, "cmd": true, "with": true}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		if key := node.Content[i].Value; !known[key] {
+			return fmt.Errorf("action: unknown field %q", key)
+		}
 	}
 	type actionAlias Action
 	var aa actionAlias

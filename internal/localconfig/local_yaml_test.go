@@ -79,6 +79,18 @@ func TestWriteLocalYAML_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteLocalYAML_CreatesParentDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "devbox", "local.yml")
+	local := map[string]any{"services": map[string]any{}}
+	if err := WriteLocalYAML(path, local); err != nil {
+		t.Fatalf("expected parent dir to be created, got error: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("file not created: %v", err)
+	}
+}
+
 func TestSetLocalEntryEnabled_CreatesEntry(t *testing.T) {
 	subtree := map[string]any{}
 	SetLocalEntryEnabled(subtree, "second", true)

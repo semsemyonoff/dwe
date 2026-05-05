@@ -786,8 +786,8 @@ func TestRunPipeline_Check_Fails(t *testing.T) {
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 
-	// "dir-missing /": root always exists, so dir-missing returns false.
-	step := config.DeployStep{Name: "check-step", Type: "shell", Cmd: "true", Check: &config.Action{Type: "builtin", Cmd: "dir-missing /"}}
+	// Shell check that exits non-zero → check returns false.
+	step := config.DeployStep{Name: "check-step", Type: "shell", Cmd: "true", Check: &config.Action{Type: "shell", Cmd: "false"}}
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)

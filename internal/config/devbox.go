@@ -950,6 +950,12 @@ func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
 					return fmt.Errorf("step %q (phase %q) check: %w", step.Name, phase.Name, err)
 				}
 			}
+			// Validate when condition if present.
+			if step.When != nil {
+				if err := step.When.Validate(); err != nil {
+					return fmt.Errorf("step %q (phase %q) when: %w", step.Name, phase.Name, err)
+				}
+			}
 		}
 	}
 	return nil

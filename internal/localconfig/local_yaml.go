@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,9 @@ func WriteLocalYAML(localPath string, local map[string]any) error {
 	data, err := yaml.Marshal(local)
 	if err != nil {
 		return fmt.Errorf("marshal local config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+		return fmt.Errorf("create directory for %s: %w", localPath, err)
 	}
 	if err := os.WriteFile(localPath, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", localPath, err)

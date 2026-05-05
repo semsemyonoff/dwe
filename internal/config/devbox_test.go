@@ -781,6 +781,31 @@ phases:
 	}
 }
 
+func TestLoadDeployConfig_invalidWhenType(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	invalidYAML := `
+phases:
+  - name: setup
+    steps:
+      - name: test
+        type: shell
+        cmd: echo hello
+        when:
+          type: bogus
+          cmd: something
+`
+	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Errorf("LoadDeployConfig expected error for invalid when type, got nil")
+	} else if !strings.Contains(err.Error(), "when") {
+		t.Errorf("error should mention 'when': %v", err)
+	}
+}
+
 func TestLoadDeployConfig_strictDecodeUnknownField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
