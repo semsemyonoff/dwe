@@ -23,8 +23,8 @@ func TestResolvePlan_implicitEnvStepAlwaysFirst(t *testing.T) {
 	if steps[0].Step.Name != "render-env" {
 		t.Errorf("first step name = %q, want render-env", steps[0].Step.Name)
 	}
-	if steps[0].Step.Devbox != "render env -o .env" {
-		t.Errorf("first step devbox = %q, want render env -o .env", steps[0].Step.Devbox)
+	if steps[0].Step.Type != "devbox" || steps[0].Step.Cmd != "render env -o .env" {
+		t.Errorf("first step devbox = type %q cmd %q, want type devbox cmd 'render env -o .env'", steps[0].Step.Type, steps[0].Step.Cmd)
 	}
 }
 
@@ -324,8 +324,8 @@ func TestFindStep_findsExistingStep(t *testing.T) {
 	if step.Name != "migrate" {
 		t.Errorf("step.Name = %q, want migrate", step.Name)
 	}
-	if step.Command != "services.main.migrate" {
-		t.Errorf("step.Command = %q, want services.main.migrate", step.Command)
+	if step.Type != "command" || step.Cmd != "services.main.migrate" {
+		t.Errorf("step type/cmd = %q/%q, want command/services.main.migrate", step.Type, step.Cmd)
 	}
 }
 
@@ -460,8 +460,9 @@ func TestStepCommand_allTypes(t *testing.T) {
 
 func TestStepCommand_commandWithWith(t *testing.T) {
 	step := config.DeployStep{
-		Command: "services.main.migrate",
-		With:    map[string]any{"db": "mydb"},
+		Type: "command",
+		Cmd:  "services.main.migrate",
+		With: map[string]any{"db": "mydb"},
 	}
 	got := pipeline.StepCommand(step, "devbox")
 	want := "devbox commands run services.main.migrate --set db=mydb"
@@ -472,8 +473,9 @@ func TestStepCommand_commandWithWith(t *testing.T) {
 
 func TestStepCommand_commandWithMultipleWithSorted(t *testing.T) {
 	step := config.DeployStep{
-		Command: "services.main.migrate",
-		With:    map[string]any{"z": "last", "a": "first", "m": "mid"},
+		Type: "command",
+		Cmd:  "services.main.migrate",
+		With: map[string]any{"z": "last", "a": "first", "m": "mid"},
 	}
 	got := pipeline.StepCommand(step, "devbox")
 	want := "devbox commands run services.main.migrate --set a=first --set m=mid --set z=last"
@@ -527,10 +529,10 @@ func TestStepCommand_customBin(t *testing.T) {
 
 func TestDeployStep_checkPreservedInConfig(t *testing.T) {
 	step := config.DeployStep{
-		Check: "file-exists services/main/configs/.env",
+		Check: &config.Action{Type: "shell", Cmd: "test -f services/main/configs/.env"},
 	}
-	if step.Check != "file-exists services/main/configs/.env" {
-		t.Errorf("Check = %q, want file-exists ...", step.Check)
+	if step.Check == nil || step.Check.Cmd != "test -f services/main/configs/.env" {
+		t.Errorf("Check is not preserved")
 	}
 }
 
@@ -541,10 +543,11 @@ func TestResolvePlan_postDeployPhaseIncludedLast(t *testing.T) {
 		phaseWith("setup", cmdStep("create-dirs", "mkdir -p services/main/src")),
 		phaseWith("init", commandStep("migrate", "services.main.migrate")),
 		phaseWithUI("post-deploy", "plain",
-			config.DeployStep{Name: "info", Devbox: "info", Description: "Show info"},
+			config.DeployStep{Name: "info", Type: "devbox", Cmd: "info", Description: "Show info"},
 			config.DeployStep{
 				Name:        "success",
-				Builtin:     "message",
+				Type:        "builtin",
+				Cmd:         "message",
 				With:        map[string]any{"level": "success", "text": "Deploy completed"},
 				Description: "Print success",
 			},
@@ -579,7 +582,7 @@ func TestResolvePlan_postDeployPhasePreserved(t *testing.T) {
 			Name:        "post-deploy",
 			Description: "post-deploy phase",
 			Steps: []config.DeployStep{
-				{Name: "info", Devbox: "info", Description: "Show info"},
+				{Name: "info", Type: "devbox", Cmd: "info", Description: "Show info"},
 			},
 		},
 	})
@@ -599,7 +602,7 @@ func TestResolvePlan_postDeployStepsAreInPlan(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("start", cmdStep("up", "docker up")),
 		phaseWithUI("post-deploy", "plain",
-			config.DeployStep{Name: "summary", Devbox: "info", Description: "Summary"},
+			config.DeployStep{Name: "summary", Type: "devbox", Cmd: "info", Description: "Summary"},
 		),
 	})
 	steps, err := deploy.ResolvePlan(cfg)
@@ -634,11 +637,11 @@ func TestResolvePlan_commandStepIncluded(t *testing.T) {
 	if len(steps) != 3 {
 		t.Fatalf("want 3 steps, got %d", len(steps))
 	}
-	if steps[1].Step.Command != "services.main.migrate" {
-		t.Errorf("steps[1].Command = %q, want services.main.migrate", steps[1].Step.Command)
+	if steps[1].Step.Type != "command" || steps[1].Step.Cmd != "services.main.migrate" {
+		t.Errorf("steps[1] type/cmd = %q/%q, want command/services.main.migrate", steps[1].Step.Type, steps[1].Step.Cmd)
 	}
-	if steps[2].Step.Command != "services.main.seed" {
-		t.Errorf("steps[2].Command = %q, want services.main.seed", steps[2].Step.Command)
+	if steps[2].Step.Type != "command" || steps[2].Step.Cmd != "services.main.seed" {
+		t.Errorf("steps[2] type/cmd = %q/%q, want command/services.main.seed", steps[2].Step.Type, steps[2].Step.Cmd)
 	}
 	if steps[2].Step.With["env"] != "test" {
 		t.Errorf("steps[2].With[env] = %q, want test", steps[2].Step.With["env"])

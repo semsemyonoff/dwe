@@ -633,10 +633,12 @@ phases:
     description: Prepare directories
     steps:
       - name: create-dirs
-        run: mkdir -p services/main/{src,configs}
+        type: shell
+        cmd: mkdir -p services/main/{src,configs}
         description: Create service hub directories
       - name: copy-configs
-        run: devbox deploy config main
+        type: shell
+        cmd: devbox deploy config main
         description: Copy template configs
         when:
           type: template
@@ -645,7 +647,8 @@ phases:
     description: Start containers
     steps:
       - name: up
-        command: up
+        type: command
+        cmd: up
         description: Start all containers
 `
 
@@ -703,11 +706,11 @@ func TestLoadDeployConfig_stepWithCmd(t *testing.T) {
 	if step.Name != "create-dirs" {
 		t.Errorf("step.Name = %q, want create-dirs", step.Name)
 	}
-	if step.Run == "" {
-		t.Error("step.Run should be set for cmd: steps")
+	if step.Cmd == "" {
+		t.Error("step.Cmd should be set for shell: steps")
 	}
-	if step.Command != "" {
-		t.Error("step.Command should be empty for cmd: steps")
+	if step.Type != "shell" {
+		t.Error("step.Type should be 'shell' for cmd: steps")
 	}
 }
 
@@ -725,11 +728,11 @@ func TestLoadDeployConfig_stepWithCommand(t *testing.T) {
 	if step.Name != "up" {
 		t.Errorf("step.Name = %q, want up", step.Name)
 	}
-	if step.Command == "" {
-		t.Error("step.Command should be set for command: steps")
+	if step.Cmd == "" {
+		t.Error("step.Cmd should be set for command: steps")
 	}
-	if step.Run != "" {
-		t.Error("step.Run should be empty for command: steps")
+	if step.Type != "command" {
+		t.Error("step.Type should be 'command' for command: steps")
 	}
 }
 
@@ -761,7 +764,8 @@ phases:
   - name: setup
     steps:
       - name: test
-        run: echo hello
+        type: shell
+        cmd: echo hello
         when: "{{.Runtime.UseHTTPS}}"
 `
 	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
@@ -783,7 +787,8 @@ phases:
   - name: setup
     steps:
       - name: test
-        run: echo hello
+        type: shell
+        cmd: echo hello
         notafield: value
 `
 	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
@@ -915,14 +920,11 @@ func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 	}
 	step := cfg.Phases[0].Steps[0]
 	// Legacy service_configs_copy is converted to builtin at load time.
-	if step.Builtin != "service_configs_copy" {
-		t.Errorf("Builtin = %q, want service_configs_copy", step.Builtin)
+	if step.Type != "builtin" {
+		t.Errorf("Type = %q, want builtin", step.Type)
 	}
-	if step.ServiceConfigsCopy != "" {
-		t.Errorf("ServiceConfigsCopy should be empty after normalization, got %q", step.ServiceConfigsCopy)
-	}
-	if step.Mode != "" {
-		t.Errorf("Mode should be empty after normalization, got %q", step.Mode)
+	if step.Cmd != "service_configs_copy" {
+		t.Errorf("Cmd = %q, want service_configs_copy", step.Cmd)
 	}
 	service, _ := step.With["service"].(string)
 	if service != "main" {
@@ -955,8 +957,11 @@ func TestLoadDeployConfig_stepWithCommandAndWith(t *testing.T) {
 		t.Fatalf("LoadDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
-	if step.Command != "services.main.migrate" {
-		t.Errorf("Command = %q, want services.main.migrate", step.Command)
+	if step.Type != "command" {
+		t.Errorf("Type = %q, want command", step.Type)
+	}
+	if step.Cmd != "services.main.migrate" {
+		t.Errorf("Cmd = %q, want services.main.migrate", step.Cmd)
 	}
 	if step.With["db"] != "mydb" {
 		t.Errorf("With[db] = %q, want mydb", step.With["db"])
@@ -2139,7 +2144,7 @@ func TestBinariesAccessors(t *testing.T) {
 		t.Errorf("ShellBin(cfg) = %q, want bash", got)
 	}
 	// DevboxBin with explicit value
-	cfg2 := &DevboxConfig{Binaries: BinariesConfig{Type: "devbox", Cmd: "my-devbox"}}
+	cfg2 := &DevboxConfig{Binaries: BinariesConfig{Devbox: "my-devbox"}}
 	if got := DevboxBin(cfg2); got != "my-devbox" {
 		t.Errorf("DevboxBin(cfg2) = %q, want my-devbox", got)
 	}

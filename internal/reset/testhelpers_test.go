@@ -25,11 +25,11 @@ func phaseWith(name string, steps ...config.DeployStep) config.DeployPhase {
 }
 
 func cmdStep(name, cmd string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: cmd, Description: name + " description"}
+	return config.DeployStep{Name: name, Type: "shell", Cmd: cmd, Description: name + " description"}
 }
 
 func commandStep(name, id string) config.DeployStep {
-	return config.DeployStep{Name: name, Command: id, Description: name + " description"}
+	return config.DeployStep{Name: name, Type: "command", Cmd: id, Description: name + " description"}
 }
 
 // parseWhenString converts a legacy when string to a typed condition.

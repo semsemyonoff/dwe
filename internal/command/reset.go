@@ -178,17 +178,21 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
 			// Single-step execution: no --yes flag, so confirm prompts are shown.
-			if err := pipeline.ExecStep(step, workDir, cfg, reg, nil, false); err != nil {
+			actx := pipeline.ActionContext{
+				WorkDir:     workDir,
+				Cfg:         cfg,
+				Reg:         reg,
+				LogWriter:   nil,
+				SkipConfirm: false,
+			}
+
+			if err := pipeline.ExecAction(step.Action(), actx); err != nil {
 				return err
 			}
 
-			if step.Check != "" {
-				ok, err := condition.EvalRuntime(step.Check, workDir)
-				if err != nil {
-					return fmt.Errorf("step %s: check error: %w", address, err)
-				}
-				if !ok {
-					return fmt.Errorf("step %s: check did not pass (%s)", address, step.Check)
+			if step.Check != nil {
+				if err := pipeline.ExecAction(*step.Check, actx); err != nil {
+					return fmt.Errorf("step %s: check failed: %w", address, err)
 				}
 			}
 

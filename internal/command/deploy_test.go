@@ -23,21 +23,22 @@ func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "unknown builtin name", step: config.DeployStep{Builtin: "typo_name"},
+			name: "unknown builtin name", step: config.DeployStep{Type: "builtin", Cmd: "typo_name"},
 			wantErr: `invalid builtin "typo_name"`,
 		},
 		{
-			name: "remove_paths missing paths param", step: config.DeployStep{Builtin: "remove_paths", With: map[string]any{}},
+			name: "remove_paths missing paths param", step: config.DeployStep{Type: "builtin", Cmd: "remove_paths", With: map[string]any{}},
 			wantErr: `invalid builtin "remove_paths"`,
 		},
 		{
-			name: "remove_paths with root-equivalent path", step: config.DeployStep{Builtin: "remove_paths", With: map[string]any{"paths": []any{"."}}},
+			name: "remove_paths with root-equivalent path", step: config.DeployStep{Type: "builtin", Cmd: "remove_paths", With: map[string]any{"paths": []any{"."}}},
 			wantErr: `invalid builtin "remove_paths"`,
 		},
 		{
 			name: "service_configs_copy with invalid mode", step: config.DeployStep{
-				Builtin: "service_configs_copy",
-				With:    map[string]any{"service": "main", "mode": "bogus"},
+				Type: "builtin",
+				Cmd:  "service_configs_copy",
+				With: map[string]any{"service": "main", "mode": "bogus"},
 			},
 			wantErr: `invalid builtin "service_configs_copy"`,
 		},

@@ -23,7 +23,7 @@ func TestPrintPlanShell_WithBuiltin(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{
 			Phase: config.DeployPhase{Name: "init"},
-			Step:  config.DeployStep{Name: "ensure-dirs", Builtin: "service_dirs_ensure"},
+			Step:  config.DeployStep{Name: "ensure-dirs", Type: "builtin", Cmd: "service_dirs_ensure"},
 		},
 	}
 	var buf bytes.Buffer
@@ -38,7 +38,7 @@ func TestPrintPlanShell_WithPhaseWhen(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{
 			Phase: config.DeployPhase{Name: "setup", When: parseWhenString("env.SKIP != true")},
-			Step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
+			Step:  config.DeployStep{Name: "migrate", Type: "shell", Cmd: "php artisan migrate"},
 		},
 	}
 	var buf bytes.Buffer
@@ -53,7 +53,7 @@ func TestPrintPlanShell_WithRuntimeWhen(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{
 			Phase:       config.DeployPhase{Name: "setup"},
-			Step:        config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
+			Step:        config.DeployStep{Name: "migrate", Type: "shell", Cmd: "php artisan migrate"},
 			RuntimeWhen: parseWhenString("cmd:some-check"),
 		},
 	}
@@ -69,7 +69,12 @@ func TestPrintPlanShell_WithCheck(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{
 			Phase: config.DeployPhase{Name: "setup"},
-			Step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate", Check: "php artisan migrate:status"},
+			Step: config.DeployStep{
+				Name:  "migrate",
+				Type:  "shell",
+				Cmd:   "php artisan migrate",
+				Check: &config.Action{Type: "shell", Cmd: "php artisan migrate:status"},
+			},
 		},
 	}
 	var buf bytes.Buffer
@@ -83,8 +88,8 @@ func TestPrintPlanShell_WithCheck(t *testing.T) {
 func TestPrintPlanShell_ContinueOnError(t *testing.T) {
 	phase := config.DeployPhase{Name: "cleanup"}
 	steps := []pipeline.ResolvedStep{
-		{Phase: phase, Step: config.DeployStep{Name: "normal", Run: "echo ok"}},
-		{Phase: phase, Step: config.DeployStep{Name: "optional-builtin", Builtin: "confirm", ContinueOnError: true}},
+		{Phase: phase, Step: config.DeployStep{Name: "normal", Type: "shell", Cmd: "echo ok"}},
+		{Phase: phase, Step: config.DeployStep{Name: "optional-builtin", Type: "builtin", Cmd: "confirm", ContinueOnError: true}},
 	}
 
 	var buf strings.Builder

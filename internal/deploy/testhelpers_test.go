@@ -21,23 +21,23 @@ func phaseWithWhen(name, when string, steps ...config.DeployStep) config.DeployP
 }
 
 func cmdStep(name, cmd string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: cmd, Description: name + " description"}
+	return config.DeployStep{Name: name, Type: "shell", Cmd: cmd, Description: name + " description"}
 }
 
 func commandStep(name, id string) config.DeployStep {
-	return config.DeployStep{Name: name, Command: id, Description: name + " description"}
+	return config.DeployStep{Name: name, Type: "command", Cmd: id, Description: name + " description"}
 }
 
 func commandStepWith(name, id string, with map[string]any) config.DeployStep {
-	return config.DeployStep{Name: name, Command: id, With: with, Description: name + " description"}
+	return config.DeployStep{Name: name, Type: "command", Cmd: id, With: with, Description: name + " description"}
 }
 
 func whenStep(name, cmd, when string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: parseWhenString(when)}
+	return config.DeployStep{Name: name, Type: "shell", Cmd: cmd, Description: name + " description", When: parseWhenString(when)}
 }
 
 func runtimeWhenStep(name, cmd, when string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: parseWhenString(when)}
+	return config.DeployStep{Name: name, Type: "shell", Cmd: cmd, Description: name + " description", When: parseWhenString(when)}
 }
 
 // parseWhenString converts a legacy when string to a typed condition.
@@ -63,7 +63,7 @@ func parseWhenString(when string) *condition.Condition {
 }
 
 func checkStep(name, cmd, check string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", Check: check}
+	return config.DeployStep{Name: name, Type: "shell", Cmd: cmd, Description: name + " description", Check: &config.Action{Type: "shell", Cmd: check}}
 }
 
 func phaseWithUI(name, _ string, steps ...config.DeployStep) config.DeployPhase {

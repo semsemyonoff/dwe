@@ -66,19 +66,22 @@ func TestResolvePlan_deployServicesInlines(t *testing.T) {
     description: Start
     steps:
       - name: up
-        run: make up
+        type: shell
+        cmd: make up
 `
 	serviceDeploy := `phases:
   - name: setup
     description: Setup main
     steps:
       - name: create-dirs
-        run: mkdir -p services/main/src
+        type: shell
+        cmd: mkdir -p services/main/src
   - name: init
     description: Init main
     steps:
       - name: migrate
-        command: services.main.migrate
+        type: command
+        cmd: services.main.migrate
 `
 	devboxPath := writeServiceDeployFixture(t, orchestrator, serviceDeploy)
 	cfg, err := config.LoadConfig(devboxPath)
@@ -121,11 +124,13 @@ func TestResolveServicePlan_singleService(t *testing.T) {
   - name: setup
     steps:
       - name: create-dirs
-        run: mkdir -p services/main/src
+        type: shell
+        cmd: mkdir -p services/main/src
   - name: init
     steps:
       - name: migrate
-        command: services.main.migrate
+        type: command
+        cmd: services.main.migrate
 `
 	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
 	cfg, err := config.LoadConfig(devboxPath)
@@ -151,7 +156,8 @@ func TestFindStep_threePartAddress(t *testing.T) {
   - name: init
     steps:
       - name: migrate
-        command: services.main.migrate
+        type: command
+        cmd: services.main.migrate
         description: Run migrations
 `
 	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
@@ -167,7 +173,7 @@ func TestFindStep_threePartAddress(t *testing.T) {
 	if phase.Name != "init" {
 		t.Errorf("phase.Name = %q, want init", phase.Name)
 	}
-	if step.Command != "services.main.migrate" {
-		t.Errorf("step.Command = %q, want services.main.migrate", step.Command)
+	if step.Type != "command" || step.Cmd != "services.main.migrate" {
+		t.Errorf("step type/cmd = %q/%q, want command/services.main.migrate", step.Type, step.Cmd)
 	}
 }

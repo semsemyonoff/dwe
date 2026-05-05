@@ -212,8 +212,8 @@ func TestPrintPlanShell_runtimeWhenComment(t *testing.T) {
 func TestPrintPlanShell_ContinueOnError(t *testing.T) {
 	phase := config.DeployPhase{Name: "hooks"}
 	steps := []pipeline.ResolvedStep{
-		{Phase: phase, Step: config.DeployStep{Name: "normal", Run: "echo hello"}},
-		{Phase: phase, Step: config.DeployStep{Name: "optional", Run: "echo bye", ContinueOnError: true}},
+		{Phase: phase, Step: config.DeployStep{Name: "normal", Type: "shell", Cmd: "echo hello"}},
+		{Phase: phase, Step: config.DeployStep{Name: "optional", Type: "shell", Cmd: "echo bye", ContinueOnError: true}},
 	}
 
 	var buf strings.Builder
@@ -404,7 +404,7 @@ func TestPrintPlanShell_binarySubstitution(t *testing.T) {
 
 	steps := []pipeline.ResolvedStep{
 		{Phase: config.DeployPhase{Name: "start"}, Step: commandStep("migrate", "services.main.migrate")},
-		{Phase: config.DeployPhase{Name: "setup"}, Step: config.DeployStep{Name: "ensure", Builtin: "service_dirs_ensure"}},
+		{Phase: config.DeployPhase{Name: "setup"}, Step: config.DeployStep{Name: "ensure", Type: "builtin", Cmd: "service_dirs_ensure"}},
 	}
 	deploy.PrintPlanShell(steps, &buf, "podman-devbox")
 	out := buf.String()

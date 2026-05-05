@@ -19,7 +19,7 @@ func TestRunPhases_HappyPath(t *testing.T) {
 		{
 			Name: "start",
 			Steps: []config.DeployStep{
-				{Name: "noop", Run: "echo lifecycle-marker"},
+				{Name: "noop", Type: "shell", Cmd: "echo lifecycle-marker"},
 			},
 		},
 	}
@@ -50,7 +50,7 @@ func TestRunPhases_AbortingStepFails(t *testing.T) {
 		{
 			Name: "start",
 			Steps: []config.DeployStep{
-				{Name: "fail", Run: "exit 1"},
+				{Name: "fail", Type: "shell", Cmd: "exit 1"},
 			},
 		},
 	}
@@ -74,8 +74,8 @@ func TestRunPhases_ContinueOnError(t *testing.T) {
 		{
 			Name: "hooks",
 			Steps: []config.DeployStep{
-				{Name: "optional", Run: "exit 1", ContinueOnError: true},
-				{Name: "main", Run: "true"},
+				{Name: "optional", Type: "shell", Cmd: "exit 1", ContinueOnError: true},
+				{Name: "main", Type: "shell", Cmd: "true"},
 			},
 		},
 	}
@@ -91,7 +91,7 @@ func TestRunPhases_LogFileNameUsed(t *testing.T) {
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
-		{Name: "stop", Steps: []config.DeployStep{{Name: "noop", Run: "true"}}},
+		{Name: "stop", Steps: []config.DeployStep{{Name: "noop", Type: "shell", Cmd: "true"}}},
 	}
 
 	err := RunPhases(cfg, nil, workDir, phases, "stop", "stop", false, true)
@@ -129,7 +129,7 @@ func TestRunPhases_LogDisabled(t *testing.T) {
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
-		{Name: "start", Steps: []config.DeployStep{{Name: "noop", Run: "true"}}},
+		{Name: "start", Steps: []config.DeployStep{{Name: "noop", Type: "shell", Cmd: "true"}}},
 	}
 
 	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, false)
@@ -152,7 +152,7 @@ func TestRunPhases_LogDisabledFailingStep(t *testing.T) {
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
-		{Name: "start", Steps: []config.DeployStep{{Name: "fail", Run: "exit 1"}}},
+		{Name: "start", Steps: []config.DeployStep{{Name: "fail", Type: "shell", Cmd: "exit 1"}}},
 	}
 
 	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, false)
