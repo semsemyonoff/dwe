@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"devbox-cli/internal/condition"
@@ -119,11 +120,13 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 
 			workDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
-			if err != nil {
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("loading docker config: %w", err)
 			}
-			if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
-				return fmt.Errorf("ensuring volumes: %w", err)
+			if dockerCfg != nil {
+				if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
+					return fmt.Errorf("ensuring volumes: %w", err)
+				}
 			}
 
 			var steps []pipeline.ResolvedStep

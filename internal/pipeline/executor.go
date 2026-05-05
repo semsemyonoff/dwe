@@ -90,8 +90,11 @@ func execShellAction(a config.Action, actx ActionContext) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		if _, ok := <-sigCh; ok {
+		if sig, ok := <-sigCh; ok {
 			signal.Stop(sigCh)
+			if cmd.Process != nil {
+				_ = cmd.Process.Signal(sig)
+			}
 		}
 	}()
 
@@ -129,8 +132,11 @@ func execDevboxAction(a config.Action, actx ActionContext) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		if _, ok := <-sigCh; ok {
+		if sig, ok := <-sigCh; ok {
 			signal.Stop(sigCh)
+			if cmd.Process != nil {
+				_ = cmd.Process.Signal(sig)
+			}
 		}
 	}()
 
