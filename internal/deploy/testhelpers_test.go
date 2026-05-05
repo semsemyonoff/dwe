@@ -63,7 +63,18 @@ func parseWhenString(when string) *condition.Condition {
 }
 
 func checkStep(name, cmd, check string) config.DeployStep {
-	return config.DeployStep{Name: name, Type: "shell", Cmd: cmd, Description: name + " description", Check: &config.Action{Type: "shell", Cmd: check}}
+	// Parse the check string as a builtin predicate or shell command
+	checkType := "shell"
+	kind, payload := condition.Classify(check)
+	switch kind {
+	case condition.KindBuiltin:
+		checkType = "builtin"
+		check = payload
+	case condition.KindCmd:
+		checkType = "shell"
+		check = payload
+	}
+	return config.DeployStep{Name: name, Type: "shell", Cmd: cmd, Description: name + " description", Check: &config.Action{Type: checkType, Cmd: check}}
 }
 
 func phaseWithUI(name, _ string, steps ...config.DeployStep) config.DeployPhase {

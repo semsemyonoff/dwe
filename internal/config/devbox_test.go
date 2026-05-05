@@ -748,10 +748,12 @@ func TestLoadDeployConfig_stepWithWhen(t *testing.T) {
 	}
 	step := cfg.Phases[0].Steps[1]
 	if step.When == nil {
-		t.Errorf("step.When is nil, want a Condition")
-	} else if step.When.Type != "template" {
+		t.Fatalf("step.When is nil, want a Condition")
+	}
+	if step.When.Type != "template" {
 		t.Errorf("step.When.Type = %q, want template", step.When.Type)
-	} else if step.When.Expr != "{{.Runtime.UseHTTPS}}" {
+	}
+	if step.When.Expr != "{{.Runtime.UseHTTPS}}" {
 		t.Errorf("step.When.Expr = %q, want {{.Runtime.UseHTTPS}}", step.When.Expr)
 	}
 }

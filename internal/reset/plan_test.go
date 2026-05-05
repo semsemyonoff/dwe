@@ -110,7 +110,8 @@ phases:
   - name: cleanup
     steps:
       - name: remove-dirs
-        run: rm -rf services/main/src
+        type: shell
+        cmd: rm -rf services/main/src
 `)
 	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
 	_, _, err := reset.FindStep(cfg, "cleanup/nonexistent")
@@ -126,7 +127,8 @@ phases:
   - name: cleanup
     steps:
       - name: remove-dirs
-        run: rm -rf services/main/src
+        type: shell
+        cmd: rm -rf services/main/src
 `)
 	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
 	_, _, err := reset.FindStep(cfg, "nonexistent/remove-dirs")

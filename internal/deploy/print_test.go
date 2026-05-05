@@ -119,7 +119,7 @@ func TestPrintPlanShell_showsCheckComment(t *testing.T) {
 	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
-	if !strings.Contains(out, "# check: file-exists services/main/configs/.env") {
+	if !strings.Contains(out, "# check: builtin file-exists services/main/configs/.env") {
 		t.Errorf("shell plan missing check comment, got:\n%s", out)
 	}
 }
@@ -304,7 +304,7 @@ func TestPrintPlanTable_showsCheck(t *testing.T) {
 	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
-	if !strings.Contains(out, "[check: file-exists services/main/configs/.env]") {
+	if !strings.Contains(out, "[check: builtin file-exists services/main/configs/.env]") {
 		t.Errorf("plan table missing check annotation, got:\n%s", out)
 	}
 }

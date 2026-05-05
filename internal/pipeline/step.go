@@ -21,9 +21,9 @@ import (
 type ResolvedStep struct {
 	Phase       config.DeployPhase
 	Step        config.DeployStep
-	Service     string                 // non-empty for per-service steps (e.g. "main")
-	RuntimeWhen *condition.Condition   // step-level runtime when condition; nil otherwise
-	PhaseWhen   *condition.Condition   // phase-level runtime when condition; nil otherwise
+	Service     string               // non-empty for per-service steps (e.g. "main")
+	RuntimeWhen *condition.Condition // step-level runtime when condition; nil otherwise
+	PhaseWhen   *condition.Condition // phase-level runtime when condition; nil otherwise
 }
 
 // StepAddress returns the full address of a step for display and lookup:
