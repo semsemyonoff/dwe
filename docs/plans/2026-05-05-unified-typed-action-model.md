@@ -216,12 +216,12 @@ Rename host-shell type and the payload field, and switch command-file loading to
 
 Port the verification logic out of the soon-to-be-removed CLI command into an engine builtin so deploy pipelines can use it as a `check:` action.
 
-- [ ] create `internal/builtin/configs_check.go`: implement `serviceConfigsCheckBuiltin` satisfying `Builtin` (`Validate`, `Describe`, `Run`)
-- [ ] reuse the body of `newDeployConfigCheckCmd` (currently `internal/command/deploy.go:337-381`): accept `with.service` (string, required), look up service in `cfg.Services`, iterate declared `configs`, verify each `services/<svc>/configs/<file>` exists; return error listing missing files
-- [ ] register `"service_configs_check": serviceConfigsCheckBuiltin{}` in `internal/builtin/builtin.go`
-- [ ] write `internal/builtin/configs_check_test.go` — table-driven on the builtin's `Run`: missing service, no configs declared, all present, some missing, with mountpoints
-- [ ] add a **builtin-specific** executor integration test in `internal/pipeline/executor_test.go` (or `internal/deploy/plan_test.go`) wiring `service_configs_check` as a `check:` on a `service_configs_copy` step: success when configs were copied; failure when a config file is absent. Generic check-orchestration semantics (pass/fail/abort/`continue_on_error`) are already covered by Task 3's tests — don't duplicate them here
-- [ ] run `make test` — must pass before Task 6
+- [x] create `internal/builtin/configs_check.go`: implement `serviceConfigsCheckBuiltin` satisfying `Builtin` (`Validate`, `Describe`, `Run`)
+- [x] reuse the body of `newDeployConfigCheckCmd` (currently `internal/command/deploy.go:337-381`): accept `with.service` (string, required), look up service in `cfg.Services`, iterate declared `configs`, verify each `services/<svc>/configs/<file>` exists; return error listing missing files
+- [x] register `"service_configs_check": serviceConfigsCheckBuiltin{}` in `internal/builtin/builtin.go`
+- [x] write `internal/builtin/configs_check_test.go` — table-driven on the builtin's `Run`: missing service, no configs declared, all present, some missing, with mountpoints
+- [x] add a **builtin-specific** executor integration test in `internal/pipeline/executor_test.go` (or `internal/deploy/plan_test.go`) wiring `service_configs_check` as a `check:` on a `service_configs_copy` step: success when configs were copied; failure when a config file is absent. Generic check-orchestration semantics (pass/fail/abort/`continue_on_error`) are already covered by Task 3's tests — don't duplicate them here
+- [x] run `make test` — must pass before Task 6
 
 ### Task 6: Remove `devbox deploy config` and `devbox deploy config-check` CLI commands
 

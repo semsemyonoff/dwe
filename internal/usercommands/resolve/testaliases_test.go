@@ -14,12 +14,12 @@ type (
 )
 
 const (
-	CommandTypeShell = model.CommandTypeShell
-	CommandTypeScript  = model.CommandTypeScript
-	ParamTypeString    = model.ParamTypeString
-	ParamTypeBool      = model.ParamTypeBool
-	ParamTypeInt       = model.ParamTypeInt
-	ParamTypePath      = model.ParamTypePath
-	FileAccessWrite    = model.FileAccessWrite
-	FileAccessRead     = model.FileAccessRead
+	CommandTypeShell  = model.CommandTypeShell
+	CommandTypeScript = model.CommandTypeScript
+	ParamTypeString   = model.ParamTypeString
+	ParamTypeBool     = model.ParamTypeBool
+	ParamTypeInt      = model.ParamTypeInt
+	ParamTypePath     = model.ParamTypePath
+	FileAccessWrite   = model.FileAccessWrite
+	FileAccessRead    = model.FileAccessRead
 )

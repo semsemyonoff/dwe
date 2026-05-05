@@ -833,6 +833,99 @@ func TestRunPipeline_Check_EvalError(t *testing.T) {
 	}
 }
 
+// TestRunPipeline_ServiceConfigsCheckBuiltin verifies that service_configs_check builtin
+// works correctly as a check action on a deploy step.
+func TestRunPipeline_ServiceConfigsCheckBuiltin(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create service directory structure with configs
+	svcDir := filepath.Join(tmpDir, "services", "main", "configs")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatalf("failed to create service dir: %v", err)
+	}
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{
+		Raw: map[string]any{},
+		Services: map[string]config.ServiceConfig{
+			"main": {
+				Dir: "services/main",
+				Configs: []config.ServiceConfigEntry{
+					{File: "app.env"},
+					{File: "db.env"},
+				},
+			},
+		},
+	}
+	phase := config.DeployPhase{Name: "setup"}
+
+	// Test 1: Check passes when all config files exist
+	t.Run("check_passes_when_configs_exist", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(svcDir, "app.env"), []byte("KEY=value"), 0o644); err != nil {
+			t.Fatalf("failed to write app.env: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "db.env"), []byte("DB_HOST=localhost"), 0o644); err != nil {
+			t.Fatalf("failed to write db.env: %v", err)
+		}
+
+		step := config.DeployStep{
+			Name:  "copy-configs",
+			Type:  "shell",
+			Cmd:   "true",
+			Check: &config.Action{Type: "builtin", Cmd: "service_configs_check", With: map[string]any{"service": "main"}},
+		}
+		steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+		err := Run(steps, rep, "test", cfg, nil, tmpDir, nil, false, nil)
+		if err != nil {
+			t.Fatalf("Run with passing check failed: %v", err)
+		}
+
+		// Verify FinishStep was called (step succeeded)
+		finishFound := false
+		for _, e := range rep.events {
+			if e.kind == "FinishStep" && e.step.Name == "copy-configs" {
+				finishFound = true
+			}
+		}
+		if !finishFound {
+			t.Errorf("FinishStep not recorded when check passes; kinds: %v", rep.kindSeq())
+		}
+	})
+
+	// Test 2: Check fails when config files are missing
+	t.Run("check_fails_when_configs_missing", func(t *testing.T) {
+		// Clean up from previous test
+		_ = os.Remove(filepath.Join(svcDir, "app.env"))
+		_ = os.Remove(filepath.Join(svcDir, "db.env"))
+
+		rep := &mockReporter{}
+		step := config.DeployStep{
+			Name:  "copy-configs",
+			Type:  "shell",
+			Cmd:   "true",
+			Check: &config.Action{Type: "builtin", Cmd: "service_configs_check", With: map[string]any{"service": "main"}},
+		}
+		steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+		err := Run(steps, rep, "test", cfg, nil, tmpDir, nil, false, nil)
+		if !errors.Is(err, ErrSilent) {
+			t.Fatalf("want ErrSilent when check fails, got %v", err)
+		}
+
+		// Verify FailStep was called (check failed)
+		failFound := false
+		for _, e := range rep.events {
+			if e.kind == "FailStep" && e.step.Name == "copy-configs" {
+				failFound = true
+			}
+		}
+		if !failFound {
+			t.Errorf("FailStep not recorded when check fails; kinds: %v", rep.kindSeq())
+		}
+	})
+}
+
 // TestBuildDevboxCmd_UsesShellParam verifies that buildDevboxCmd uses the supplied
 // shell binary, not a hardcoded "sh".
 func TestBuildDevboxCmd_UsesShellParam(t *testing.T) {

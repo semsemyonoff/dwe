@@ -14,6 +14,7 @@
 // Canonical builtins:
 //   - confirm                      — interactive user confirmation prompt
 //   - service_configs_copy         — copy service template configs into the hub
+//   - service_configs_check        — verify service config files exist
 //   - docker_remove_project_volumes — remove all Docker volumes for the project
 //   - remove_paths                 — delete declared paths inside the project root
 package builtin
@@ -62,6 +63,7 @@ var registry = map[string]Builtin{
 	"confirm":                       confirmBuiltin{},
 	"message":                       messageBuiltin{},
 	"service_configs_copy":          serviceConfigsCopyBuiltin{},
+	"service_configs_check":         serviceConfigsCheckBuiltin{},
 	"service_dirs_ensure":           serviceDirsEnsureBuiltin{},
 	"docker_remove_project_volumes": dockerRemoveProjectVolumesBuiltin{},
 	"remove_paths":                  removePathsBuiltin{},
