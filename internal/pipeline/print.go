@@ -31,8 +31,8 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 			if rs.Phase.Description != "" {
 				phaseLine += ": " + rs.Phase.Description
 			}
-			if rs.Phase.When != "" {
-				phaseLine += " [when: " + rs.Phase.When + "]"
+			if rs.Phase.When != nil {
+				phaseLine += " [when: " + FormatCondition(rs.Phase.When) + "]"
 			}
 			indent := ""
 			if rs.Service != "" {
@@ -62,8 +62,8 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 		if cmd != "" {
 			_, _ = fmt.Fprintln(out, detailIndent+cmd)
 		}
-		if rs.RuntimeWhen != "" {
-			_, _ = fmt.Fprintln(out, detailIndent+"[when: "+rs.RuntimeWhen+"]")
+		if rs.RuntimeWhen != nil {
+			_, _ = fmt.Fprintln(out, detailIndent+"[when: "+FormatCondition(rs.RuntimeWhen)+"]")
 		}
 		if rs.Step.Check != "" {
 			_, _ = fmt.Fprintln(out, detailIndent+"[check: "+rs.Step.Check+"]")

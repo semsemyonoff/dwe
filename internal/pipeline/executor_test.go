@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 )
 
@@ -240,7 +241,10 @@ func TestRunPipeline_StepSkippedByRuntimeWhen(t *testing.T) {
 
 	// "dir-empty <workDir>" → false because workDir is not empty → step is skipped.
 	steps := []ResolvedStep{
-		{Phase: phase, Step: noopStep("do-thing"), RuntimeWhen: "dir-empty " + workDir},
+		{Phase: phase, Step: noopStep("do-thing"), RuntimeWhen: &condition.Condition{
+			Type: condition.TypeBuiltin,
+			Cmd:  "dir-empty " + workDir,
+		}},
 	}
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
@@ -257,8 +261,9 @@ func TestRunPipeline_StepSkippedByRuntimeWhen(t *testing.T) {
 	if len(skipEvents) != 1 {
 		t.Fatalf("want 1 SkipStep event, got %d (kinds: %v)", len(skipEvents), rep.kindSeq())
 	}
-	if skipEvents[0].reason != "when: dir-empty "+workDir {
-		t.Errorf("SkipStep reason = %q, want 'when: dir-empty %s'", skipEvents[0].reason, workDir)
+	expectedReason := "when: builtin dir-empty " + workDir
+	if skipEvents[0].reason != expectedReason {
+		t.Errorf("SkipStep reason = %q, want %q", skipEvents[0].reason, expectedReason)
 	}
 }
 
@@ -274,9 +279,13 @@ func TestRunPipeline_PhaseSkipped_AllStepsSkipped(t *testing.T) {
 	phase := config.DeployPhase{Name: "cond-phase"}
 
 	phaseWhenExpr := "dir-empty " + workDir
+	phaseWhenCond := &condition.Condition{
+		Type: condition.TypeBuiltin,
+		Cmd:  phaseWhenExpr,
+	}
 	steps := []ResolvedStep{
-		{Phase: phase, Step: noopStep("step-a"), PhaseWhen: phaseWhenExpr},
-		{Phase: phase, Step: noopStep("step-b"), PhaseWhen: phaseWhenExpr},
+		{Phase: phase, Step: noopStep("step-a"), PhaseWhen: phaseWhenCond},
+		{Phase: phase, Step: noopStep("step-b"), PhaseWhen: phaseWhenCond},
 	}
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)

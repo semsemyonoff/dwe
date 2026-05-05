@@ -238,21 +238,21 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			}
 
 			// Evaluate when condition.
-			if step.When != "" {
+			if step.When != nil {
 				var (
 					ok  bool
 					err error
 				)
-				if condition.IsRuntime(step.When) {
-					ok, err = condition.EvalRuntime(step.When, flags.ProjectRoot())
-				} else {
-					ok, err = tpl.EvalCondition(step.When, cfg)
+				if step.When.IsRuntime() {
+					ok, err = condition.EvalRuntimeTyped(step.When, flags.ProjectRoot())
+				} else if step.When.Type == condition.TypeTemplate {
+					ok, err = tpl.EvalCondition(step.When.Expr, cfg)
 				}
 				if err != nil {
 					return fmt.Errorf("evaluating when condition for %s: %w", address, err)
 				}
 				if !ok {
-					render.Stdout().Warning(fmt.Sprintf("skipping step %s/%s: when condition is false (%s)", phase.Name, step.Name, step.When))
+					render.Stdout().Warning(fmt.Sprintf("skipping step %s/%s: when condition is false", phase.Name, step.Name))
 					return nil
 				}
 			}

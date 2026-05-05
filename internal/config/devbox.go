@@ -2,6 +2,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/condition"
 	"gopkg.in/yaml.v3"
 )
 
@@ -141,12 +143,12 @@ func (c *DeployConfig) LogEnabled() bool {
 // all output for untracked steps (except failures, which are always printed).
 // Useful for post-deploy summary phases that run after the main work is done.
 type DeployPhase struct {
-	Name           string       `yaml:"name"`
-	Description    string       `yaml:"description"`
-	When           string       `yaml:"when"`
-	Untracked      bool         `yaml:"untracked"`
-	Steps          []DeployStep `yaml:"steps"`
-	DeployServices bool         `yaml:"deploy_services"`
+	Name           string               `yaml:"name"`
+	Description    string               `yaml:"description"`
+	When           *condition.Condition `yaml:"when,omitempty"`
+	Untracked      bool                 `yaml:"untracked"`
+	Steps          []DeployStep         `yaml:"steps"`
+	DeployServices bool                 `yaml:"deploy_services"`
 }
 
 // DeployStep is a single atomic pipeline action.
@@ -174,16 +176,16 @@ type DeployPhase struct {
 //     and Check are skipped for the failed step. Useful for optional hook phases
 //     where failure should be visible but not block the main scenario.
 type DeployStep struct {
-	Name            string         `yaml:"name"`
-	Run             string         `yaml:"run"`
-	Devbox          string         `yaml:"devbox"`
-	Command         string         `yaml:"command"`
-	Builtin         string         `yaml:"builtin"`
-	With            map[string]any `yaml:"with"`
-	Description     string         `yaml:"description"`
-	When            string         `yaml:"when"`
-	Check           string         `yaml:"check"`
-	ContinueOnError bool           `yaml:"continue_on_error"`
+	Name            string               `yaml:"name"`
+	Run             string               `yaml:"run"`
+	Devbox          string               `yaml:"devbox"`
+	Command         string               `yaml:"command"`
+	Builtin         string               `yaml:"builtin"`
+	With            map[string]any       `yaml:"with"`
+	Description     string               `yaml:"description"`
+	When            *condition.Condition `yaml:"when,omitempty"`
+	Check           string               `yaml:"check"`
+	ContinueOnError bool                 `yaml:"continue_on_error"`
 
 	// Deprecated: use builtin: service_configs_copy with with.service and with.mode.
 	// Automatically converted to Builtin at load time for backward compatibility.
@@ -829,7 +831,9 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 		return nil, err
 	}
 	var cfg LifecycleConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if cfg.Run != nil {
@@ -908,7 +912,9 @@ func loadPipelineConfig(path string, allowDeployServices bool, defaultLog bool) 
 		return nil, err
 	}
 	var cfg DeployConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := validatePhaseSteps(cfg.Phases, allowDeployServices); err != nil {

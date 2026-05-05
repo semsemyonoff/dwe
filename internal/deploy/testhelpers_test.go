@@ -1,6 +1,7 @@
 package deploy_test
 
 import (
+	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 )
 
@@ -16,7 +17,7 @@ func phaseWith(name string, steps ...config.DeployStep) config.DeployPhase {
 }
 
 func phaseWithWhen(name, when string, steps ...config.DeployStep) config.DeployPhase {
-	return config.DeployPhase{Name: name, Description: name + " phase", When: when, Steps: steps}
+	return config.DeployPhase{Name: name, Description: name + " phase", When: parseWhenString(when), Steps: steps}
 }
 
 func cmdStep(name, cmd string) config.DeployStep {
@@ -32,11 +33,33 @@ func commandStepWith(name, id string, with map[string]any) config.DeployStep {
 }
 
 func whenStep(name, cmd, when string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: when}
+	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: parseWhenString(when)}
 }
 
 func runtimeWhenStep(name, cmd, when string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: when}
+	return config.DeployStep{Name: name, Run: cmd, Description: name + " description", When: parseWhenString(when)}
+}
+
+// parseWhenString converts a legacy when string to a typed condition.
+// Supports:
+// - "{{...}}" → template
+// - "cmd: ..." → shell
+// - "dir-empty ..." → builtin
+func parseWhenString(when string) *condition.Condition {
+	if when == "" {
+		return nil
+	}
+	kind, payload := condition.Classify(when)
+	switch kind {
+	case condition.KindTemplate:
+		return &condition.Condition{Type: condition.TypeTemplate, Expr: payload}
+	case condition.KindBuiltin:
+		return &condition.Condition{Type: condition.TypeBuiltin, Cmd: payload}
+	case condition.KindCmd:
+		return &condition.Condition{Type: condition.TypeShell, Cmd: payload}
+	default:
+		return nil
+	}
 }
 
 func checkStep(name, cmd, check string) config.DeployStep {

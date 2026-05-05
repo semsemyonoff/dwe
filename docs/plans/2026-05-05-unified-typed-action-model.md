@@ -144,21 +144,21 @@ Introduce the new typed types without removing the legacy string-condition machi
 
 Scope of this task: typed `Condition` for `When:` only. **`DeployStep.Check` stays a `string` for the duration of this task** and continues to use the existing string-classified evaluator. This keeps every test green without stubs and avoids cross-task dependency on `ExecAction`. Typed `Action` adoption for `Check:` and step bodies happens together in Task 3.
 
-- [ ] change `DeployPhase.When` and `DeployStep.When` from `string` to `*condition.Condition` in `internal/config/devbox.go` (nil = unconditional)
-- [ ] **leave `DeployStep.Check` as `string`** — typed `*Action` adoption is in Task 3 (paired with `ExecAction`)
-- [ ] **`WorkflowStep.When` stays `string`** — workflow out of scope
-- [ ] change `ResolvedStep.RuntimeWhen` and `ResolvedStep.PhaseWhen` from `string` to `*condition.Condition` in `internal/pipeline/step.go:24-25`; nil = no runtime when (template + plan-time-evaluated cases)
-- [ ] update `internal/pipeline/resolve.go` (~22-77): for phase/step `When` of `type: template`, render `c.Expr` via `tpl` in the caller, truthy → include / falsy → skip; for runtime kinds (`builtin`/`shell`), store the `*Condition` on `ResolvedStep.RuntimeWhen` / `PhaseWhen`
-- [ ] update `internal/pipeline/executor.go` `Run` loop (lines 237-275): replace string-keyed `condition.EvalRuntime(rs.RuntimeWhen, workDir)` with `condition.EvalRuntimeTyped(*rs.RuntimeWhen, workDir)` (nil-check first); same for `PhaseWhen`. The skip-message string in `rep.SkipStep` (line 275) currently embeds the raw `RuntimeWhen` string — derive a short human-readable form from the typed condition (e.g. `"when: builtin dir-empty foo"` / `"when: shell test -f x"`)
-- [ ] update `internal/pipeline/print.go:65-66` to render the typed `RuntimeWhen` (use the same human-readable formatter as the skip message); update `internal/deploy/print.go` and `internal/reset/print.go` similarly wherever they render `RuntimeWhen` / `PhaseWhen`
-- [ ] update `internal/deploy/plan_test.go:158-272` and any reset/lifecycle tests that assert on `RuntimeWhen` / `PhaseWhen` string values to compare against typed `Condition` values
-- [ ] **leave the existing string-form `Check:` evaluation untouched** — it keeps using `condition.Classify` + `EvalBuiltin(string)` / `EvalCmd(string)` for now
-- [ ] **switch pipeline loaders to strict decode**: in `internal/config/devbox.go` (`LoadDeployConfig` ~509, `LoadResetConfig`, `LoadLifecycleConfig`) replace `yaml.Unmarshal(data, &x)` with `dec := yaml.NewDecoder(bytes.NewReader(data)); dec.KnownFields(true); err := dec.Decode(&x)`. Other loaders (info / styles / docker) stay loose unless touching them is incidentally necessary; strictness for command files is wired in Task 4
-- [ ] update `internal/config/devbox_test.go` to use typed `Condition` in fixtures
-- [ ] update `internal/pipeline/{executor,resolve}_test.go` and `internal/deploy/plan_test.go` to use typed conditions
-- [ ] add a strict-decode test that loads a deploy YAML with a string-form `when:` and confirms it fails with a clear unmarshal error pointing at the new mapping form
-- [ ] add a strict-decode test that loads a deploy YAML with an unknown top-level field on `DeployStep` (e.g. `notafield: x`) and confirms it fails as an unknown field
-- [ ] run `make test` — must pass before Task 3
+- [x] change `DeployPhase.When` and `DeployStep.When` from `string` to `*condition.Condition` in `internal/config/devbox.go` (nil = unconditional)
+- [x] **leave `DeployStep.Check` as `string`** — typed `*Action` adoption is in Task 3 (paired with `ExecAction`)
+- [x] **`WorkflowStep.When` stays `string`** — workflow out of scope
+- [x] change `ResolvedStep.RuntimeWhen` and `ResolvedStep.PhaseWhen` from `string` to `*condition.Condition` in `internal/pipeline/step.go:24-25`; nil = no runtime when (template + plan-time-evaluated cases)
+- [x] update `internal/pipeline/resolve.go` (~22-77): for phase/step `When` of `type: template`, render `c.Expr` via `tpl` in the caller, truthy → include / falsy → skip; for runtime kinds (`builtin`/`shell`), store the `*Condition` on `ResolvedStep.RuntimeWhen` / `PhaseWhen`
+- [x] update `internal/pipeline/executor.go` `Run` loop (lines 237-275): replace string-keyed `condition.EvalRuntime(rs.RuntimeWhen, workDir)` with `condition.EvalRuntimeTyped(*rs.RuntimeWhen, workDir)` (nil-check first); same for `PhaseWhen`. The skip-message string in `rep.SkipStep` (line 275) currently embeds the raw `RuntimeWhen` string — derive a short human-readable form from the typed condition (e.g. `"when: builtin dir-empty foo"` / `"when: shell test -f x"`)
+- [x] update `internal/pipeline/print.go:65-66` to render the typed `RuntimeWhen` (use the same human-readable formatter as the skip message); update `internal/deploy/print.go` and `internal/reset/print.go` similarly wherever they render `RuntimeWhen` / `PhaseWhen`
+- [x] update `internal/deploy/plan_test.go:158-272` and any reset/lifecycle tests that assert on `RuntimeWhen` / `PhaseWhen` string values to compare against typed `Condition` values
+- [x] **leave the existing string-form `Check:` evaluation untouched** — it keeps using `condition.Classify` + `EvalBuiltin(string)` / `EvalCmd(string)` for now
+- [x] **switch pipeline loaders to strict decode**: in `internal/config/devbox.go` (`LoadDeployConfig` ~509, `LoadResetConfig`, `LoadLifecycleConfig`) replace `yaml.Unmarshal(data, &x)` with `dec := yaml.NewDecoder(bytes.NewReader(data)); dec.KnownFields(true); err := dec.Decode(&x)`. Other loaders (info / styles / docker) stay loose unless touching them is incidentally necessary; strictness for command files is wired in Task 4
+- [x] update `internal/config/devbox_test.go` to use typed `Condition` in fixtures
+- [x] update `internal/pipeline/{executor,resolve}_test.go` and `internal/deploy/plan_test.go` to use typed conditions
+- [x] add a strict-decode test that loads a deploy YAML with a string-form `when:` and confirms it fails with a clear unmarshal error pointing at the new mapping form
+- [x] add a strict-decode test that loads a deploy YAML with an unknown top-level field on `DeployStep` (e.g. `notafield: x`) and confirms it fails as an unknown field
+- [x] run `make test` — must pass before Task 3
 
 ### Task 3: Typed `DeployStep` body (`type` / `cmd` / `with`), `Check` → `*Action`, shared `ExecAction` dispatcher
 

@@ -219,7 +219,7 @@ func Run(
 
 	lastPhaseKey := ""
 	phaseSkipped := false
-	phaseWhen := ""
+	phaseWhenMsg := ""
 	trackedIndex := 0
 
 	for _, rs := range steps {
@@ -232,17 +232,17 @@ func Run(
 			rep.EnterPhase(phaseKey, rs.Phase)
 			lastPhaseKey = phaseKey
 			phaseSkipped = false
-			phaseWhen = ""
+			phaseWhenMsg = ""
 
-			if rs.PhaseWhen != "" {
-				ok, err := condition.EvalRuntime(rs.PhaseWhen, workDir)
+			if rs.PhaseWhen != nil {
+				ok, err := condition.EvalRuntimeTyped(rs.PhaseWhen, workDir)
 				if err != nil {
 					return fmt.Errorf("evaluating when condition for phase %s: %w", phaseKey, err)
 				}
 				if !ok {
 					phaseSkipped = true
-					phaseWhen = rs.PhaseWhen
-					rep.SkipPhase(phaseKey, rs.Phase, "when: "+phaseWhen)
+					phaseWhenMsg = FormatCondition(rs.PhaseWhen)
+					rep.SkipPhase(phaseKey, rs.Phase, "when: "+phaseWhenMsg)
 				}
 			}
 		}
@@ -260,19 +260,19 @@ func Run(
 		// Phase-level when condition was false — skip all steps in this phase.
 		if phaseSkipped {
 			rep.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			rep.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhen)
+			rep.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhenMsg)
 			continue
 		}
 
 		// Step-level runtime when condition.
-		if rs.RuntimeWhen != "" {
-			ok, err := condition.EvalRuntime(rs.RuntimeWhen, workDir)
+		if rs.RuntimeWhen != nil {
+			ok, err := condition.EvalRuntimeTyped(rs.RuntimeWhen, workDir)
 			if err != nil {
 				return fmt.Errorf("evaluating when condition for %s: %w", addr, err)
 			}
 			if !ok {
 				rep.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				rep.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+rs.RuntimeWhen)
+				rep.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
 				continue
 			}
 		}
@@ -319,8 +319,25 @@ func Run(
 	return nil
 }
 
+// FormatCondition returns a short human-readable form of a typed condition for display.
+func FormatCondition(c *condition.Condition) string {
+	if c == nil {
+		return ""
+	}
+	switch c.Type {
+	case condition.TypeBuiltin:
+		return "builtin " + c.Cmd
+	case condition.TypeShell:
+		return "shell " + c.Cmd
+	case condition.TypeTemplate:
+		return "template " + c.Expr
+	default:
+		return string(c.Type)
+	}
+}
+
 // shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.
-// Embedded single quotes are escaped via the '\\” idiom.
+// Embedded single quotes are escaped via the \' idiom.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

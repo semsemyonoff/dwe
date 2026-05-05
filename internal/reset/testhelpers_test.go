@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 )
 
@@ -29,4 +30,26 @@ func cmdStep(name, cmd string) config.DeployStep {
 
 func commandStep(name, id string) config.DeployStep {
 	return config.DeployStep{Name: name, Command: id, Description: name + " description"}
+}
+
+// parseWhenString converts a legacy when string to a typed condition.
+// Supports:
+// - "{{...}}" → template
+// - "cmd: ..." → shell
+// - "dir-empty ..." → builtin
+func parseWhenString(when string) *condition.Condition {
+	if when == "" {
+		return nil
+	}
+	kind, payload := condition.Classify(when)
+	switch kind {
+	case condition.KindTemplate:
+		return &condition.Condition{Type: condition.TypeTemplate, Expr: payload}
+	case condition.KindBuiltin:
+		return &condition.Condition{Type: condition.TypeBuiltin, Cmd: payload}
+	case condition.KindCmd:
+		return &condition.Condition{Type: condition.TypeShell, Cmd: payload}
+	default:
+		return nil
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/builtin"
+	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 )
 
@@ -13,16 +14,16 @@ import (
 // after when-condition filtering.
 //
 // Service is non-empty for steps that belong to a per-service deploy pipeline.
-// RuntimeWhen is non-empty when the step's When condition is a runtime expression
-// (builtin predicate or cmd:). Such conditions are NOT evaluated at plan-resolution
+// RuntimeWhen is non-nil when the step's When condition is a runtime expression
+// (builtin predicate or shell cmd). Such conditions are NOT evaluated at plan-resolution
 // time — they are checked immediately before the step executes.
 // PhaseWhen carries the phase-level runtime when condition; evaluated once per phase.
 type ResolvedStep struct {
 	Phase       config.DeployPhase
 	Step        config.DeployStep
-	Service     string // non-empty for per-service steps (e.g. "main")
-	RuntimeWhen string // step-level runtime when condition; empty otherwise
-	PhaseWhen   string // phase-level runtime when condition; evaluated once per phase
+	Service     string                 // non-empty for per-service steps (e.g. "main")
+	RuntimeWhen *condition.Condition   // step-level runtime when condition; nil otherwise
+	PhaseWhen   *condition.Condition   // phase-level runtime when condition; nil otherwise
 }
 
 // StepAddress returns the full address of a step for display and lookup:

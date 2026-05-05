@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -637,7 +638,9 @@ phases:
       - name: copy-configs
         run: devbox deploy config main
         description: Copy template configs
-        when: "{{.Runtime.UseHTTPS}}"
+        when:
+          type: template
+          expr: "{{.Runtime.UseHTTPS}}"
   - name: start
     description: Start containers
     steps:
@@ -741,8 +744,56 @@ func TestLoadDeployConfig_stepWithWhen(t *testing.T) {
 		t.Fatalf("LoadDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[1]
-	if step.When != "{{.Runtime.UseHTTPS}}" {
-		t.Errorf("step.When = %q, want {{.Runtime.UseHTTPS}}", step.When)
+	if step.When == nil {
+		t.Errorf("step.When is nil, want a Condition")
+	} else if step.When.Type != "template" {
+		t.Errorf("step.When.Type = %q, want template", step.When.Type)
+	} else if step.When.Expr != "{{.Runtime.UseHTTPS}}" {
+		t.Errorf("step.When.Expr = %q, want {{.Runtime.UseHTTPS}}", step.When.Expr)
+	}
+}
+
+func TestLoadDeployConfig_strictDecodeStringWhen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	invalidYAML := `
+phases:
+  - name: setup
+    steps:
+      - name: test
+        run: echo hello
+        when: "{{.Runtime.UseHTTPS}}"
+`
+	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Errorf("LoadDeployConfig expected error for string-form when:, got nil")
+	} else if !strings.Contains(err.Error(), "when") {
+		t.Errorf("error should mention 'when' field: %v", err)
+	}
+}
+
+func TestLoadDeployConfig_strictDecodeUnknownField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	invalidYAML := `
+phases:
+  - name: setup
+    steps:
+      - name: test
+        run: echo hello
+        notafield: value
+`
+	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Errorf("LoadDeployConfig expected error for unknown field, got nil")
+	} else if !strings.Contains(err.Error(), "notafield") && !strings.Contains(err.Error(), "unknown") {
+		t.Errorf("error should mention 'notafield' or 'unknown': %v", err)
 	}
 }
 
@@ -956,9 +1007,8 @@ func TestLoadDeployConfig_deployServicesWithStepsError(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_phaseUIFieldIgnored(t *testing.T) {
-	// The ui: field was removed from DeployPhase. YAML with ui: must still load
-	// without error (backward compatibility — unknown fields are silently ignored).
+func TestLoadDeployConfig_phaseUIFieldRejected(t *testing.T) {
+	// The ui: field was removed from DeployPhase. Strict decode rejects unknown fields.
 	yml := `phases:
   - name: setup
     description: Setup phase
@@ -967,24 +1017,18 @@ func TestLoadDeployConfig_phaseUIFieldIgnored(t *testing.T) {
       - name: create-dirs
         run: mkdir -p services/main/src
         description: Create directories
-  - name: post-deploy
-    description: Post-deploy phase
-    steps:
-      - name: info
-        devbox: "info"
-        description: Show info
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
-	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Fatalf("LoadDeployConfig expected error for unknown field ui, got nil")
 	}
-	if len(cfg.Phases) != 2 {
-		t.Fatalf("Phases len = %d, want 2", len(cfg.Phases))
+	if !strings.Contains(err.Error(), "ui") && !strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("error should mention ui or unknown field: %v", err)
 	}
 }
 
@@ -1021,7 +1065,6 @@ func TestLoadDeployConfig_phaseUntrackedField(t *testing.T) {
         run: mkdir -p services/main/src
   - name: post-deploy
     description: Post-deploy phase
-    ui: plain
     untracked: true
     steps:
       - name: info

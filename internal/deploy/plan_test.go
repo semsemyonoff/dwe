@@ -155,8 +155,8 @@ func TestResolvePlan_runtimeWhenPassesThrough(t *testing.T) {
 	if install.Step.Name != "install" {
 		t.Errorf("step name = %q, want install", install.Step.Name)
 	}
-	if install.RuntimeWhen != "dir-empty services/main/src" {
-		t.Errorf("runtimeWhen = %q, want dir-empty services/main/src", install.RuntimeWhen)
+	if install.RuntimeWhen == nil || install.RuntimeWhen.Type != "builtin" || install.RuntimeWhen.Cmd != "dir-empty services/main/src" {
+		t.Errorf("runtimeWhen not set correctly, want builtin condition with cmd 'dir-empty services/main/src'")
 	}
 }
 
@@ -173,8 +173,8 @@ func TestResolvePlan_cmdWhenPassesThrough(t *testing.T) {
 	if len(steps) != 2 {
 		t.Fatalf("want 2 steps, got %d", len(steps))
 	}
-	if steps[1].RuntimeWhen != "cmd: test -f marker" {
-		t.Errorf("runtimeWhen = %q, want cmd: test -f marker", steps[1].RuntimeWhen)
+	if steps[1].RuntimeWhen == nil || steps[1].RuntimeWhen.Type != "shell" || steps[1].RuntimeWhen.Cmd != "test -f marker" {
+		t.Errorf("runtimeWhen not set correctly, want shell condition with cmd 'test -f marker'")
 	}
 }
 
@@ -208,8 +208,8 @@ func TestResolvePlan_runtimeWhenHasEmptyRuntimeWhenForTemplateStep(t *testing.T)
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, rs := range steps {
-		if rs.RuntimeWhen != "" {
-			t.Errorf("step %q: runtimeWhen = %q, want empty", rs.Step.Name, rs.RuntimeWhen)
+		if rs.RuntimeWhen != nil {
+			t.Errorf("step %q: runtimeWhen should be nil", rs.Step.Name)
 		}
 	}
 }
@@ -265,11 +265,11 @@ func TestResolvePhaseSteps_phaseRuntimeWhenPropagatedToSteps(t *testing.T) {
 		t.Fatalf("want 3 steps, got %d", len(steps))
 	}
 	for _, rs := range steps[1:] {
-		if rs.PhaseWhen != "dir-empty services/main/src" {
-			t.Errorf("step %q: phaseWhen = %q, want dir-empty services/main/src", rs.Step.Name, rs.PhaseWhen)
+		if rs.PhaseWhen == nil || rs.PhaseWhen.Type != "builtin" || rs.PhaseWhen.Cmd != "dir-empty services/main/src" {
+			t.Errorf("step %q: phaseWhen not set correctly, want builtin condition", rs.Step.Name)
 		}
-		if rs.RuntimeWhen != "" {
-			t.Errorf("step %q: runtimeWhen = %q, want empty (no step-level condition)", rs.Step.Name, rs.RuntimeWhen)
+		if rs.RuntimeWhen != nil {
+			t.Errorf("step %q: runtimeWhen should be nil (no step-level condition)", rs.Step.Name)
 		}
 	}
 }
@@ -292,17 +292,17 @@ func TestResolvePhaseSteps_stepOwnRuntimeWhenTakesPriority(t *testing.T) {
 	plain := steps[1]
 	install := steps[2]
 
-	if plain.PhaseWhen != "dir-empty services/main/src" {
-		t.Errorf("plain: phaseWhen = %q, want phase condition", plain.PhaseWhen)
+	if plain.PhaseWhen == nil || plain.PhaseWhen.Type != "builtin" || plain.PhaseWhen.Cmd != "dir-empty services/main/src" {
+		t.Errorf("plain: phaseWhen not set correctly, want phase condition")
 	}
-	if plain.RuntimeWhen != "" {
-		t.Errorf("plain: runtimeWhen = %q, want empty", plain.RuntimeWhen)
+	if plain.RuntimeWhen != nil {
+		t.Errorf("plain: runtimeWhen should be nil")
 	}
-	if install.RuntimeWhen != "dir-empty services/main/src/special" {
-		t.Errorf("install: runtimeWhen = %q, want step's own condition", install.RuntimeWhen)
+	if install.RuntimeWhen == nil || install.RuntimeWhen.Type != "builtin" || install.RuntimeWhen.Cmd != "dir-empty services/main/src/special" {
+		t.Errorf("install: runtimeWhen not set correctly, want step's own condition")
 	}
-	if install.PhaseWhen != "dir-empty services/main/src" {
-		t.Errorf("install: phaseWhen = %q, want phase condition", install.PhaseWhen)
+	if install.PhaseWhen == nil || install.PhaseWhen.Type != "builtin" || install.PhaseWhen.Cmd != "dir-empty services/main/src" {
+		t.Errorf("install: phaseWhen not set correctly, want phase condition")
 	}
 }
 
@@ -373,8 +373,8 @@ func TestFindStep_whenFalseIsSkippedByCallerLogic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if step.When == "" {
-		t.Error("expected step to carry When field, got empty")
+	if step.When == nil {
+		t.Error("expected step to carry When field, got nil")
 	}
 }
 

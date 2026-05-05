@@ -37,7 +37,7 @@ func TestPrintPlanShell_WithBuiltin(t *testing.T) {
 func TestPrintPlanShell_WithPhaseWhen(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{
-			Phase: config.DeployPhase{Name: "setup", When: "env.SKIP != true"},
+			Phase: config.DeployPhase{Name: "setup", When: parseWhenString("env.SKIP != true")},
 			Step:  config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
 		},
 	}
@@ -54,7 +54,7 @@ func TestPrintPlanShell_WithRuntimeWhen(t *testing.T) {
 		{
 			Phase:       config.DeployPhase{Name: "setup"},
 			Step:        config.DeployStep{Name: "migrate", Run: "php artisan migrate"},
-			RuntimeWhen: "cmd:some-check",
+			RuntimeWhen: parseWhenString("cmd:some-check"),
 		},
 	}
 	var buf bytes.Buffer

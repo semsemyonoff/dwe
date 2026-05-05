@@ -161,13 +161,13 @@ func TestPrintPlanShell_showsPhaseWhenComment(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{Phase: config.DeployPhase{Name: "env"}, Step: deploy.ImplicitEnvStep},
 		{
-			Phase: config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"}, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: "dir-empty services/main/src",
+			Phase: config.DeployPhase{Name: "setup", When: parseWhenString("dir-empty services/main/src")}, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: parseWhenString("dir-empty services/main/src"),
 		},
 	}
 	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
-	if !strings.Contains(out, "# phase setup [when: dir-empty services/main/src]") {
+	if !strings.Contains(out, "# phase setup [when: builtin dir-empty services/main/src]") {
 		t.Errorf("expected phase when comment in shell output, got:\n%s", out)
 	}
 }
@@ -175,9 +175,9 @@ func TestPrintPlanShell_showsPhaseWhenComment(t *testing.T) {
 func TestPrintPlanShell_stepWhenNotDuplicatedWhenSameAsPhase(t *testing.T) {
 	var buf bytes.Buffer
 
-	phase := config.DeployPhase{Name: "setup", When: "dir-empty services/main/src"}
+	phase := config.DeployPhase{Name: "setup", When: parseWhenString("dir-empty services/main/src")}
 	steps := []pipeline.ResolvedStep{
-		{Phase: phase, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: "dir-empty services/main/src"},
+		{Phase: phase, Step: cmdStep("create-dirs", "mkdir"), PhaseWhen: parseWhenString("dir-empty services/main/src")},
 	}
 	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
@@ -185,7 +185,7 @@ func TestPrintPlanShell_stepWhenNotDuplicatedWhenSameAsPhase(t *testing.T) {
 	if strings.Count(out, "# when:") != 0 {
 		t.Errorf("step-level when comment should not appear for phase-only condition, got:\n%s", out)
 	}
-	if !strings.Contains(out, "# phase setup [when: dir-empty services/main/src]") {
+	if !strings.Contains(out, "# phase setup [when: builtin dir-empty services/main/src]") {
 		t.Errorf("phase when comment missing:\n%s", out)
 	}
 }
@@ -195,13 +195,13 @@ func TestPrintPlanShell_runtimeWhenComment(t *testing.T) {
 
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []pipeline.ResolvedStep{
-		{Phase: phase, Step: runtimeWhenStep("install", "make -f Makefile app-install", "dir-empty services/main/src"), RuntimeWhen: "dir-empty services/main/src"},
+		{Phase: phase, Step: runtimeWhenStep("install", "make -f Makefile app-install", "dir-empty services/main/src"), RuntimeWhen: parseWhenString("dir-empty services/main/src")},
 		{Phase: phase, Step: cmdStep("always", "echo always")},
 	}
 	deploy.PrintPlanShell(steps, &buf, "devbox")
 	out := buf.String()
 
-	if !strings.Contains(out, "# when: dir-empty services/main/src") {
+	if !strings.Contains(out, "# when: builtin dir-empty services/main/src") {
 		t.Errorf("expected '# when:' comment in shell output, got:\n%s", out)
 	}
 	if strings.Count(out, "# when:") != 1 {
@@ -333,13 +333,13 @@ func TestPrintPlanTable_showsPhaseWhenInHeader(t *testing.T) {
 
 	steps := []pipeline.ResolvedStep{
 		{
-			Phase: config.DeployPhase{Name: "setup", Description: "Setup", When: "dir-empty services/main/src"}, Step: cmdStep("create-dirs", "mkdir"),
+			Phase: config.DeployPhase{Name: "setup", Description: "Setup", When: parseWhenString("dir-empty services/main/src")}, Step: cmdStep("create-dirs", "mkdir"),
 		},
 	}
 	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
-	if !strings.Contains(out, "[when: dir-empty services/main/src]") {
+	if !strings.Contains(out, "[when: builtin dir-empty services/main/src]") {
 		t.Errorf("expected phase when annotation in header, got:\n%s", out)
 	}
 }
@@ -350,13 +350,13 @@ func TestPrintPlanTable_showsRuntimeWhenAnnotation(t *testing.T) {
 
 	phase := config.DeployPhase{Name: "setup", Description: "Setup"}
 	steps := []pipeline.ResolvedStep{
-		{Phase: phase, Step: runtimeWhenStep("install", "make app-install", "dir-empty services/main/src"), RuntimeWhen: "dir-empty services/main/src"},
+		{Phase: phase, Step: runtimeWhenStep("install", "make app-install", "dir-empty services/main/src"), RuntimeWhen: parseWhenString("dir-empty services/main/src")},
 		{Phase: phase, Step: cmdStep("always", "echo always")},
 	}
 	pipeline.PrintPlanTable(steps, w, "devbox")
 	out := buf.String()
 
-	if !strings.Contains(out, "[when: dir-empty services/main/src]") {
+	if !strings.Contains(out, "[when: builtin dir-empty services/main/src]") {
 		t.Errorf("expected runtime when annotation in output, got:\n%s", out)
 	}
 	if strings.Contains(out, "[when: ]") {

@@ -15,13 +15,13 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, devboxBin string
 	lastPhaseKey := ""
 	for _, rs := range steps {
 		if rs.Phase.Name != lastPhaseKey {
-			if rs.Phase.When != "" {
-				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.Phase.Name, rs.Phase.When)
+			if rs.Phase.When != nil {
+				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.Phase.Name, pipeline.FormatCondition(rs.Phase.When))
 			}
 			lastPhaseKey = rs.Phase.Name
 		}
-		if rs.RuntimeWhen != "" {
-			_, _ = fmt.Fprintf(w, "# when: %s\n", rs.RuntimeWhen)
+		if rs.RuntimeWhen != nil {
+			_, _ = fmt.Fprintf(w, "# when: %s\n", pipeline.FormatCondition(rs.RuntimeWhen))
 		}
 		switch {
 		case rs.Step.Builtin != "" && rs.Step.ContinueOnError:

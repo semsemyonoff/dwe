@@ -18,12 +18,12 @@ import (
 //     own runtime when condition. The phase condition is stored in PhaseWhen and
 //     evaluated before each such step at execution time.
 func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, service string) ([]ResolvedStep, error) {
-	phaseRuntimeWhen := ""
-	if phase.When != "" {
-		if condition.IsRuntime(phase.When) {
+	var phaseRuntimeWhen *condition.Condition
+	if phase.When != nil {
+		if phase.When.IsRuntime() {
 			phaseRuntimeWhen = phase.When
-		} else {
-			ok, err := tpl.EvalCondition(phase.When, cfg)
+		} else if phase.When.Type == condition.TypeTemplate {
+			ok, err := tpl.EvalCondition(phase.When.Expr, cfg)
 			if err != nil {
 				prefix := phase.Name
 				if service != "" {
@@ -39,8 +39,10 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 
 	var result []ResolvedStep
 	for _, step := range phase.Steps {
-		if step.When != "" {
-			if condition.IsRuntime(step.When) {
+		var stepRuntimeWhen *condition.Condition
+		if step.When != nil {
+			if step.When.IsRuntime() {
+				stepRuntimeWhen = step.When
 				if step.Builtin != "" {
 					if err := builtin.Validate(step.Builtin, step.With); err != nil {
 						prefix := phase.Name + "/" + step.Name
@@ -50,19 +52,20 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 						return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
 					}
 				}
-				result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: step.When, PhaseWhen: phaseRuntimeWhen})
+				result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen})
 				continue
-			}
-			ok, err := tpl.EvalCondition(step.When, cfg)
-			if err != nil {
-				prefix := phase.Name + "/" + step.Name
-				if service != "" {
-					prefix = service + "/" + prefix
+			} else if step.When.Type == condition.TypeTemplate {
+				ok, err := tpl.EvalCondition(step.When.Expr, cfg)
+				if err != nil {
+					prefix := phase.Name + "/" + step.Name
+					if service != "" {
+						prefix = service + "/" + prefix
+					}
+					return nil, fmt.Errorf("evaluating when condition for step %s: %w", prefix, err)
 				}
-				return nil, fmt.Errorf("evaluating when condition for step %s: %w", prefix, err)
-			}
-			if !ok {
-				continue
+				if !ok {
+					continue
+				}
 			}
 		}
 		if step.Builtin != "" {
@@ -74,7 +77,7 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 				return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
 			}
 		}
-		result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, PhaseWhen: phaseRuntimeWhen})
+		result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen})
 	}
 	return result, nil
 }
