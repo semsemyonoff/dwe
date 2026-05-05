@@ -905,8 +905,11 @@ func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
   - name: setup
     steps:
       - name: copy-configs
-        service_configs_copy: main
-        mode: replace
+        type: builtin
+        cmd: service_configs_copy
+        with:
+          service: main
+          mode: replace
         description: Copy configs
 `
 	dir := t.TempDir()
@@ -941,7 +944,8 @@ func TestLoadDeployConfig_stepWithCommandAndWith(t *testing.T) {
   - name: init
     steps:
       - name: migrate
-        command: services.main.migrate
+        type: command
+        cmd: services.main.migrate
         with:
           db: mydb
           env: testing
@@ -1044,7 +1048,8 @@ func TestLoadDeployConfig_phaseUntrackedDefaultFalseSimple(t *testing.T) {
     description: Start phase
     steps:
       - name: up
-        devbox: "docker up"
+        type: devbox
+        cmd: "docker up"
         description: Start containers
 `
 	dir := t.TempDir()
@@ -1067,13 +1072,15 @@ func TestLoadDeployConfig_phaseUntrackedField(t *testing.T) {
     description: Setup phase
     steps:
       - name: create-dirs
-        run: mkdir -p services/main/src
+        type: shell
+        cmd: mkdir -p services/main/src
   - name: post-deploy
     description: Post-deploy phase
     untracked: true
     steps:
       - name: info
-        devbox: "info"
+        type: devbox
+        cmd: "info"
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
@@ -1101,7 +1108,8 @@ func TestLoadDeployConfig_phaseUntrackedDefaultFalse(t *testing.T) {
     description: Start phase
     steps:
       - name: up
-        devbox: "docker up"
+        type: devbox
+        cmd: "docker up"
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
@@ -1206,7 +1214,8 @@ func TestLoadServiceDeployConfigs_loadsExisting(t *testing.T) {
   - name: setup
     steps:
       - name: create-dirs
-        run: mkdir -p services/main/src
+        type: shell
+        cmd: mkdir -p services/main/src
 `
 	if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte(mainDeploy), 0644); err != nil {
 		t.Fatal(err)
@@ -1527,16 +1536,19 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
         - name: wait
-          devbox: "docker wait"
+          type: devbox
+          cmd: "docker wait"
 stop:
   final_message: "Project is stopped. Have a nice day!"
   phases:
     - name: stop
       steps:
         - name: down
-          devbox: "docker down"
+          type: devbox
+          cmd: "docker down"
 `
 
 func writeLifecycleFixture(t *testing.T, content string) string {
