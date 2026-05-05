@@ -1,12 +1,14 @@
 package builtin
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/render"
 )
 
 func TestServiceConfigsCheckBuiltin_Validate(t *testing.T) {
@@ -189,5 +191,48 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestServiceConfigsCheckBuiltin_Run_OutputWriterLogsErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"main": {
+				Dir: "services/main",
+				Configs: []config.ServiceConfigEntry{
+					{File: "app.env"},
+					{File: "db.env"},
+				},
+			},
+		},
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, "services/main"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	b := serviceConfigsCheckBuiltin{}
+	ctx := ExecContext{
+		Config:      cfg,
+		ProjectRoot: tmpDir,
+		Output:      w,
+	}
+
+	err := b.Run(map[string]any{"service": "main"}, ctx)
+	if err == nil {
+		t.Fatal("expected error for missing config files")
+	}
+	if !strings.Contains(err.Error(), "missing config files") {
+		t.Errorf("error %v should contain 'missing config files'", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "app.env") {
+		t.Errorf("output %q should mention missing file app.env", out)
+	}
+	if !strings.Contains(out, "db.env") {
+		t.Errorf("output %q should mention missing file db.env", out)
 	}
 }

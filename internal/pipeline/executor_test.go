@@ -945,6 +945,22 @@ func TestBuildDevboxCmd_UsesShellParam(t *testing.T) {
 	}
 }
 
+// TestExecAction_UnknownType verifies that ExecAction returns an error for unknown action types.
+func TestExecAction_UnknownType(t *testing.T) {
+	a := config.Action{Type: "bogus", Cmd: "echo hi"}
+	actx := ActionContext{
+		WorkDir: t.TempDir(),
+		Cfg:     &config.DevboxConfig{Raw: map[string]any{}},
+	}
+	err := ExecAction(a, actx)
+	if err == nil {
+		t.Fatal("expected error for unknown action type, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown action type") {
+		t.Errorf("error %q should contain 'unknown action type'", err.Error())
+	}
+}
+
 // TestExecStep_ShellFromConfig verifies that ExecStep uses cfg.Binaries.Shell
 // instead of a hardcoded "sh" when running a run: step.
 func TestExecStep_ShellFromConfig(t *testing.T) {

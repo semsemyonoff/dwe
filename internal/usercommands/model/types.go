@@ -368,6 +368,9 @@ func (c *CommandDef) Validate() error {
 			return fmt.Errorf("command %q: %w", c.ID, err)
 		}
 	default:
+		if c.Type == "command" {
+			return fmt.Errorf("command %q: unknown type %q (use type: shell for host shell commands)", c.ID, c.Type)
+		}
 		return fmt.Errorf("command %q: unknown type %q", c.ID, c.Type)
 	}
 

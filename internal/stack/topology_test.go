@@ -299,10 +299,12 @@ func TestResolveProjectAndDocker_WithDockerYML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if projectName == "" {
-		t.Error("expected non-empty project name")
+	if projectName != "devbox-test" {
+		t.Errorf("expected project name %q from docker.yml, got %q", "devbox-test", projectName)
 	}
-	_ = dockerCfg
+	if dockerCfg == nil {
+		t.Error("expected non-nil dockerCfg")
+	}
 }
 
 func TestResolveProjectAndDocker_NoDockerYML(t *testing.T) {

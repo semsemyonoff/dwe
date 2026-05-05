@@ -197,7 +197,10 @@ func execCommandAction(a config.Action, actx ActionContext) error {
 	}
 	dockerCfg, err := config.LoadDockerConfig(actx.WorkDir, actx.Cfg)
 	if err != nil {
-		return fmt.Errorf("loading docker config: %w", err)
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("loading docker config: %w", err)
+		}
+		dockerCfg = &config.DockerConfig{}
 	}
 	stdout := io.Writer(os.Stdout)
 	stderr := io.Writer(os.Stderr)

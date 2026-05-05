@@ -39,6 +39,7 @@ func (a *Action) UnmarshalYAML(node *yaml.Node) error {
 // Validate checks that the Action is well-formed.
 // Type must be one of {shell, devbox, command, builtin}.
 // Cmd must be non-empty.
+// shell and devbox types do not accept with.
 func (a *Action) Validate() error {
 	switch a.Type {
 	case "shell", "devbox", "command", "builtin":
@@ -47,6 +48,9 @@ func (a *Action) Validate() error {
 	}
 	if a.Cmd == "" {
 		return fmt.Errorf("action type %q requires non-empty cmd", a.Type)
+	}
+	if (a.Type == "shell" || a.Type == "devbox") && len(a.With) > 0 {
+		return fmt.Errorf("action type %q does not accept with", a.Type)
 	}
 	return nil
 }

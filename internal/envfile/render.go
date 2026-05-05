@@ -94,6 +94,8 @@ func IsTruthy(v any) bool {
 		return val
 	case int:
 		return val != 0
+	case float64:
+		return val != 0
 	case string:
 		return val != "" && val != "false" && val != "0"
 	default:

@@ -52,7 +52,7 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 	return cmd.Run()
 }
 
-// HostRunner executes type=command commands on the host machine.
+// HostRunner executes type=shell commands on the host machine.
 type HostRunner struct{}
 
 // BuildCommand constructs the exec.Cmd that would be run for the given context.
