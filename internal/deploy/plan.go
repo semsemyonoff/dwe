@@ -16,7 +16,8 @@ import (
 // It regenerates .env from the current config before any phase runs.
 var ImplicitEnvStep = config.DeployStep{
 	Name:        "render-env",
-	Devbox:      "render env -o .env",
+	Type:        "devbox",
+	Cmd:         "render env -o .env",
 	Description: "Generate .env from config (implicit first step)",
 }
 

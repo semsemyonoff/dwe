@@ -18,6 +18,16 @@ import (
 	"devbox-cli/internal/usercommands"
 )
 
+// ActionContext carries the inputs needed by ExecAction.
+// It is constructed once per step by Run and reused for both body and check.
+type ActionContext struct {
+	WorkDir     string
+	Cfg         *config.DevboxConfig
+	Reg         *usercommands.Registry
+	LogWriter   io.Writer
+	SkipConfirm bool
+}
+
 // buildDevboxCmd constructs an exec.Cmd for a devbox: pipeline step.
 //
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
@@ -39,35 +49,33 @@ func buildDevboxCmd(devboxArg, workDir, shell, devboxBin string, skipConfirm boo
 	return cmd
 }
 
-// ExecStep executes a pipeline step in workDir.
-// Dispatches to the appropriate handler based on step type:
-//   - builtin: — execBuiltinStep
-//   - command: — execCommandStep
-//   - devbox:  — runs ./devbox <args> via sh
-//   - run:     — runs shell command via sh
-//
-// Signal handling: the child inherits devbox's terminal foreground process group,
-// so Ctrl+C is delivered by the terminal to the entire group. devbox suppresses
-// its own SIGINT handler while waiting so it does not exit before the child finishes.
-func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
-	if step.Builtin != "" {
-		return execBuiltinStep(step, workDir, cfg, logWriter, skipConfirm)
+// ExecAction executes a typed action (used in step bodies and checks).
+// It dispatches based on action type: shell, devbox, command, or builtin.
+// Does NOT handle reporter calls, when evaluation, hooks, or check orchestration —
+// those stay in Run.
+func ExecAction(a config.Action, actx ActionContext) error {
+	switch a.Type {
+	case "builtin":
+		return execBuiltinAction(a, actx)
+	case "command":
+		return execCommandAction(a, actx)
+	case "devbox":
+		return execDevboxAction(a, actx)
+	case "shell":
+		return execShellAction(a, actx)
+	default:
+		return fmt.Errorf("unknown action type %q", a.Type)
 	}
-	if step.Command != "" {
-		return execCommandStep(step, workDir, cfg, reg, logWriter, skipConfirm)
-	}
+}
 
-	shell := config.ShellBin(cfg)
-	var cmd *exec.Cmd
-	if step.Devbox != "" {
-		cmd = buildDevboxCmd(step.Devbox, workDir, shell, config.DevboxBin(cfg), skipConfirm)
-	} else {
-		cmd = exec.Command(shell, "-c", strings.TrimSpace(step.Run)) //nolint:gosec
-		cmd.Dir = workDir
-	}
+// execShellAction runs a shell command via sh -c.
+func execShellAction(a config.Action, actx ActionContext) error {
+	shell := config.ShellBin(actx.Cfg)
+	cmd := exec.Command(shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
+	cmd.Dir = actx.WorkDir
 	cmd.Stdin = os.Stdin
-	if logWriter != nil {
-		logStripped := &ansiStripper{logWriter}
+	if actx.LogWriter != nil {
+		logStripped := &ansiStripper{actx.LogWriter}
 		cmd.Stdout = io.MultiWriter(os.Stdout, logStripped)
 		cmd.Stderr = io.MultiWriter(os.Stderr, logStripped)
 	} else {
@@ -83,7 +91,6 @@ func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		if _, ok := <-sigCh; ok {
-			// Stop only this channel's notifications, not all handlers for these signals.
 			signal.Stop(sigCh)
 		}
 	}()
@@ -101,86 +108,132 @@ func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 	return nil
 }
 
-// execBuiltinStep executes a builtin: pipeline step directly in Go.
-// Validates builtin params before running so that single-step execution
-// (devbox deploy step / devbox reset step) enforces the same contract as
-// full-pipeline plan resolution.
-func execBuiltinStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, logWriter io.Writer, skipConfirm bool) error {
-	if err := builtin.Validate(step.Builtin, step.With); err != nil {
-		return fmt.Errorf("invalid builtin %q: %w", step.Builtin, err)
+// execDevboxAction runs a devbox subcommand.
+func execDevboxAction(a config.Action, actx ActionContext) error {
+	shell := config.ShellBin(actx.Cfg)
+	cmd := buildDevboxCmd(a.Cmd, actx.WorkDir, shell, config.DevboxBin(actx.Cfg), actx.SkipConfirm)
+	cmd.Stdin = os.Stdin
+	if actx.LogWriter != nil {
+		logStripped := &ansiStripper{actx.LogWriter}
+		cmd.Stdout = io.MultiWriter(os.Stdout, logStripped)
+		cmd.Stderr = io.MultiWriter(os.Stderr, logStripped)
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 	}
-	var out io.Writer = os.Stdout
-	if logWriter != nil {
-		out = io.MultiWriter(os.Stdout, &ansiStripper{logWriter})
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start: %w", err)
 	}
-	ctx := builtin.ExecContext{
-		Config:      cfg,
-		ProjectRoot: workDir,
-		Output:      render.NewWriter(out),
-		LogWriter:   logWriter,
-		Stdin:       os.Stdin,
-		SkipConfirm: skipConfirm,
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		if _, ok := <-sigCh; ok {
+			signal.Stop(sigCh)
+		}
+	}()
+
+	waitErr := cmd.Wait()
+	signal.Stop(sigCh)
+	close(sigCh)
+
+	if waitErr != nil {
+		if exitErr, ok := errors.AsType[*exec.ExitError](waitErr); ok {
+			return fmt.Errorf("exit status %d", exitErr.ExitCode())
+		}
+		return waitErr
 	}
-	return builtin.Run(step.Builtin, step.With, ctx)
+	return nil
 }
 
-// execCommandStep executes a command: pipeline step via the command runner.
-func execCommandStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
-	if reg == nil {
-		return fmt.Errorf("command registry not available for step %q (command: %s)", step.Name, step.Command)
+// execBuiltinAction executes a builtin action.
+func execBuiltinAction(a config.Action, actx ActionContext) error {
+	if err := builtin.Validate(a.Cmd, a.With); err != nil {
+		return fmt.Errorf("invalid builtin %q: %w", a.Cmd, err)
 	}
-	def, err := reg.Get(step.Command)
+	var out io.Writer = os.Stdout
+	if actx.LogWriter != nil {
+		out = io.MultiWriter(os.Stdout, &ansiStripper{actx.LogWriter})
+	}
+	ctx := builtin.ExecContext{
+		Config:      actx.Cfg,
+		ProjectRoot: actx.WorkDir,
+		Output:      render.NewWriter(out),
+		LogWriter:   actx.LogWriter,
+		Stdin:       os.Stdin,
+		SkipConfirm: actx.SkipConfirm,
+	}
+	return builtin.Run(a.Cmd, a.With, ctx)
+}
+
+// execCommandAction executes a registered user command.
+func execCommandAction(a config.Action, actx ActionContext) error {
+	if actx.Reg == nil {
+		return fmt.Errorf("command registry not available for command %q", a.Cmd)
+	}
+	def, err := actx.Reg.Get(a.Cmd)
 	if err != nil {
-		return fmt.Errorf("step %q: %w", step.Name, err)
+		return fmt.Errorf("command %q: %w", a.Cmd, err)
 	}
 	// Convert With map[string]any → map[string]string for command param resolution.
-	strWith := make(map[string]string, len(step.With))
-	for k, v := range step.With {
+	strWith := make(map[string]string, len(a.With))
+	for k, v := range a.With {
 		strWith[k] = fmt.Sprintf("%v", v)
 	}
-	params, err := usercommands.ResolveParams(def.Params, strWith, cfg)
+	params, err := usercommands.ResolveParams(def.Params, strWith, actx.Cfg)
 	if err != nil {
-		return fmt.Errorf("step %q: resolving params: %w", step.Name, err)
+		return fmt.Errorf("resolving params: %w", err)
 	}
-	ctx, err := usercommands.ResolveContext(def.Context, cfg)
+	ctx, err := usercommands.ResolveContext(def.Context, actx.Cfg)
 	if err != nil {
-		return fmt.Errorf("step %q: resolving context: %w", step.Name, err)
+		return fmt.Errorf("resolving context: %w", err)
 	}
 	rctx := &tpl.RenderContext{
-		Raw:     cfg.Raw,
+		Raw:     actx.Cfg.Raw,
 		Params:  params,
 		Context: ctx,
 		Host:    tpl.CurrentHostInfo(),
 	}
-	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+	dockerCfg, err := config.LoadDockerConfig(actx.WorkDir, actx.Cfg)
 	if err != nil {
-		return fmt.Errorf("step %q: loading docker config: %w", step.Name, err)
+		return fmt.Errorf("loading docker config: %w", err)
 	}
 	stdout := io.Writer(os.Stdout)
 	stderr := io.Writer(os.Stderr)
-	if logWriter != nil {
-		logStripped := &ansiStripper{logWriter}
+	if actx.LogWriter != nil {
+		logStripped := &ansiStripper{actx.LogWriter}
 		stdout = io.MultiWriter(os.Stdout, logStripped)
 		stderr = io.MultiWriter(os.Stderr, logStripped)
 	}
-	if err := usercommands.RunCommand(usercommands.RunContext{
+	return usercommands.RunCommand(usercommands.RunContext{
 		Cmd:            def,
 		Params:         params,
 		Context:        ctx,
 		Render:         rctx,
-		Config:         cfg,
+		Config:         actx.Cfg,
 		DockerConfig:   dockerCfg,
-		Registry:       reg,
-		ProjectRoot:    workDir,
+		Registry:       actx.Reg,
+		ProjectRoot:    actx.WorkDir,
 		Stdout:         stdout,
 		Stderr:         stderr,
 		Stdin:          os.Stdin,
-		SkipConfirm:    skipConfirm,
-		NonInteractive: skipConfirm,
-	}); err != nil {
-		return fmt.Errorf("step %q: %w", step.Name, err)
+		SkipConfirm:    actx.SkipConfirm,
+		NonInteractive: actx.SkipConfirm,
+	})
+}
+
+// ExecStep is a deprecated wrapper for backward compatibility.
+// New code should use ExecAction directly.
+func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
+	actx := ActionContext{
+		WorkDir:     workDir,
+		Cfg:         cfg,
+		Reg:         reg,
+		LogWriter:   logWriter,
+		SkipConfirm: skipConfirm,
 	}
-	return nil
+	return ExecAction(step.Action(), actx)
 }
 
 // Run executes a resolved step list, calling rep for all lifecycle events.
@@ -299,15 +352,23 @@ func Run(
 			}
 		}
 
-		// Evaluate check condition after successful execution.
-		if rs.Step.Check != "" {
-			ok, err := condition.EvalRuntime(rs.Step.Check, workDir)
-			if err != nil {
-				rep.FailStep(addr, rs.Step, stepIndex, stepTotal, fmt.Errorf("check error: %w", err))
-				return ErrSilent
+		// Execute check action after successful execution.
+		if rs.Step.Check != nil {
+			actx := ActionContext{
+				WorkDir:     workDir,
+				Cfg:         cfg,
+				Reg:         reg,
+				LogWriter:   logWriter,
+				SkipConfirm: skipConfirm,
 			}
-			if !ok {
-				rep.FailStep(addr, rs.Step, stepIndex, stepTotal, fmt.Errorf("check did not pass (%s)", rs.Step.Check))
+			checkErr := ExecAction(*rs.Step.Check, actx)
+			if checkErr != nil {
+				rep.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
+				if rs.Step.ContinueOnError {
+					// Check failed but step is marked continue_on_error: report the failure
+					// and proceed to the next step.
+					continue
+				}
 				return ErrSilent
 			}
 		}
@@ -334,6 +395,14 @@ func FormatCondition(c *condition.Condition) string {
 	default:
 		return string(c.Type)
 	}
+}
+
+// FormatAction returns a short human-readable form of a typed action for display.
+func FormatAction(a *config.Action) string {
+	if a == nil {
+		return ""
+	}
+	return a.Type + " " + a.Cmd
 }
 
 // shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.

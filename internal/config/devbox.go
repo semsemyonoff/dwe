@@ -152,46 +152,28 @@ type DeployPhase struct {
 }
 
 // DeployStep is a single atomic pipeline action.
-// Exactly one of Run, Devbox, Command, or Builtin must be set.
+// DeployStep is a step in a phase, using the typed action model.
 //
-//   - Run             — shell command executed directly via os/exec
-//   - Devbox          — public devbox CLI subcommand (e.g. "docker down"); invoked as "devbox <subcommand>"
-//   - Command         — devbox command ID (e.g. "services.main.migrate"); dispatched via command runner
-//   - Builtin         — engine-internal action name (e.g. "confirm", "remove_paths"); executed directly in Go
-//   - With            — parameters for Command or Builtin steps (string values for Command, any type for Builtin)
-//   - When            — skip condition; three expression kinds are supported:
-//     1. Go template (contains "{{") — evaluated against DevboxConfig at plan-resolution time;
-//     step is excluded from the plan when the rendered result is falsy ("", "false", "0").
-//     2. Builtin predicate — evaluated at step-execution time:
-//     "dir-exists <path>", "dir-missing <path>",
-//     "dir-empty <path>", "dir-not-empty <path>",
-//     "file-exists <path>", "file-missing <path>".
-//     3. Shell command prefixed "cmd: <command>" — evaluated at step-execution time;
-//     exits 0 → true (run step), non-zero → false (skip step).
-//   - Check           — post-condition evaluated after the step succeeds; same expression kinds
-//     as When (builtin predicates and "cmd: <command>"), but no Go templates.
-//     Pipeline is aborted with an error when the check returns false.
-//   - ContinueOnError — when true, a failed step is reported via FailStep but the pipeline
-//     does not abort; the next step runs as if nothing happened. The post-step hook
-//     and Check are skipped for the failed step. Useful for optional hook phases
-//     where failure should be visible but not block the main scenario.
+//   - Type            — executor: shell, devbox, command, or builtin
+//   - Cmd             — the action payload (command string or builtin name)
+//   - With            — optional parameters for command or builtin actions
+//   - When            — optional skip condition (type: template|builtin|shell)
+//   - Check           — optional post-execution action (same type/cmd/with shape)
+//   - ContinueOnError — when true, a failed step or check is reported but pipeline continues
 type DeployStep struct {
 	Name            string               `yaml:"name"`
-	Run             string               `yaml:"run"`
-	Devbox          string               `yaml:"devbox"`
-	Command         string               `yaml:"command"`
-	Builtin         string               `yaml:"builtin"`
-	With            map[string]any       `yaml:"with"`
-	Description     string               `yaml:"description"`
+	Type            string               `yaml:"type"`
+	Cmd             string               `yaml:"cmd"`
+	With            map[string]any       `yaml:"with,omitempty"`
+	Description     string               `yaml:"description,omitempty"`
 	When            *condition.Condition `yaml:"when,omitempty"`
-	Check           string               `yaml:"check"`
-	ContinueOnError bool                 `yaml:"continue_on_error"`
+	Check           *Action              `yaml:"check,omitempty"`
+	ContinueOnError bool                 `yaml:"continue_on_error,omitempty"`
+}
 
-	// Deprecated: use builtin: service_configs_copy with with.service and with.mode.
-	// Automatically converted to Builtin at load time for backward compatibility.
-	ServiceConfigsCopy string `yaml:"service_configs_copy"`
-	// Deprecated: paired with ServiceConfigsCopy; use with.mode in the builtin form.
-	Mode string `yaml:"mode"`
+// Action returns the action-shaped representation of this step for ExecAction callers.
+func (s DeployStep) Action() Action {
+	return Action{Type: s.Type, Cmd: s.Cmd, With: s.With}
 }
 
 // ComposeConfig holds Docker Compose file declarations.
@@ -927,9 +909,8 @@ func loadPipelineConfig(path string, allowDeployServices bool, defaultLog bool) 
 	return &cfg, nil
 }
 
-// validatePhaseSteps validates and normalizes a slice of DeployPhase values.
+// validatePhaseSteps validates a slice of DeployPhase values.
 // When allowDeployServices is false, deploy_services phases are rejected.
-// Deprecated service_configs_copy steps are normalized to builtin form in place.
 func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
 	for pi := range phases {
 		phase := &phases[pi]
@@ -944,42 +925,29 @@ func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
 		}
 		for si := range phase.Steps {
 			step := &phase.Steps[si]
-			// Normalize deprecated service_configs_copy into builtin form.
-			if step.ServiceConfigsCopy != "" {
-				if step.Builtin != "" || step.Run != "" || step.Devbox != "" || step.Command != "" {
-					return fmt.Errorf("step %q (phase %q): service_configs_copy cannot be combined with other step types", step.Name, phase.Name)
+			// Validate step body: exactly one of the four types with non-empty cmd.
+			if step.Type == "" {
+				return fmt.Errorf("step %q (phase %q): type is required", step.Name, phase.Name)
+			}
+			if step.Cmd == "" {
+				return fmt.Errorf("step %q (phase %q): cmd is required", step.Name, phase.Name)
+			}
+			switch step.Type {
+			case "shell", "devbox":
+				// shell and devbox do not accept with
+				if len(step.With) > 0 {
+					return fmt.Errorf("step %q (phase %q): type %q does not accept with", step.Name, phase.Name, step.Type)
 				}
-				mode := step.Mode
-				if mode == "" {
-					mode = "replace"
+			case "command", "builtin":
+				// command and builtin may accept with (optional)
+			default:
+				return fmt.Errorf("step %q (phase %q): unknown type %q", step.Name, phase.Name, step.Type)
+			}
+			// Validate check if present.
+			if step.Check != nil {
+				if err := step.Check.Validate(); err != nil {
+					return fmt.Errorf("step %q (phase %q) check: %w", step.Name, phase.Name, err)
 				}
-				if step.With == nil {
-					step.With = make(map[string]any)
-				}
-				step.With["service"] = step.ServiceConfigsCopy
-				step.With["mode"] = mode
-				step.Builtin = "service_configs_copy"
-				step.ServiceConfigsCopy = ""
-				step.Mode = ""
-			}
-			set := 0
-			if step.Run != "" {
-				set++
-			}
-			if step.Devbox != "" {
-				set++
-			}
-			if step.Command != "" {
-				set++
-			}
-			if step.Builtin != "" {
-				set++
-			}
-			if set > 1 {
-				return fmt.Errorf("step %q (phase %q): only one of run, devbox, command, or builtin may be set", step.Name, phase.Name)
-			}
-			if set == 0 {
-				return fmt.Errorf("step %q (phase %q): exactly one of run, devbox, command, or builtin must be set", step.Name, phase.Name)
 			}
 		}
 	}

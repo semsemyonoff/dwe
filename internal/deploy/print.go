@@ -32,9 +32,9 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, devboxBin string
 			_, _ = fmt.Fprintf(w, "# when: %s\n", pipeline.FormatCondition(rs.RuntimeWhen))
 		}
 		switch {
-		case rs.Step.Builtin != "" && rs.Step.ContinueOnError:
+		case rs.Step.Type == "builtin" && rs.Step.ContinueOnError:
 			_, _ = fmt.Fprintf(w, "%s deploy step %s || true\n", devboxBin, rs.StepAddress())
-		case rs.Step.Builtin != "":
+		case rs.Step.Type == "builtin":
 			_, _ = fmt.Fprintf(w, "%s deploy step %s\n", devboxBin, rs.StepAddress())
 		case rs.Step.ContinueOnError:
 			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, devboxBin)+" || true")
@@ -44,8 +44,8 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, devboxBin string
 		if rs.Step.Name == ImplicitEnvStep.Name {
 			_, _ = fmt.Fprintln(w, ". .env")
 		}
-		if rs.Step.Check != "" {
-			_, _ = fmt.Fprintf(w, "# check: %s\n", rs.Step.Check)
+		if rs.Step.Check != nil {
+			_, _ = fmt.Fprintf(w, "# check: %s\n", pipeline.FormatAction(rs.Step.Check))
 		}
 	}
 }

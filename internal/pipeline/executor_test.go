@@ -83,7 +83,7 @@ func (m *mockReporter) eventAt(i int) reporterEvent {
 
 // noopStep returns a step that runs a no-op shell command.
 func noopStep(name string) config.DeployStep {
-	return config.DeployStep{Name: name, Run: "true"}
+	return config.DeployStep{Name: name, Type: "shell", Cmd: "true"}
 }
 
 // buildResolvedSteps creates resolved steps from phase+step pairs.
@@ -188,7 +188,7 @@ func TestRunPipeline_StepFailure_ReporterCalled(t *testing.T) {
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{
-		{Name: "fail", Run: "exit 1"},
+		{Name: "fail", Type: "shell", Cmd: "exit 1"},
 	})
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
@@ -346,7 +346,7 @@ func TestRunPipeline_PostStepHook_NotCalledOnFailure(t *testing.T) {
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "env"}
-	steps := buildResolvedSteps(phase, []config.DeployStep{{Name: "render-env", Run: "exit 1"}})
+	steps := buildResolvedSteps(phase, []config.DeployStep{{Name: "render-env", Type: "shell", Cmd: "exit 1"}})
 
 	hookCalled := false
 	hooks := map[string]func() error{
@@ -447,7 +447,7 @@ func TestRunPipeline_PostDeploySkippedOnFailure(t *testing.T) {
 	phase2 := config.DeployPhase{Name: "post-deploy"}
 
 	steps := []ResolvedStep{
-		{Phase: phase1, Step: config.DeployStep{Name: "fail-step", Run: "exit 1"}},
+		{Phase: phase1, Step: config.DeployStep{Name: "fail-step", Type: "shell", Cmd: "exit 1"}},
 		{Phase: phase2, Step: noopStep("notify")},
 	}
 
@@ -596,7 +596,7 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 
 	phase := config.DeployPhase{Name: "pre"}
 	steps := []ResolvedStep{
-		{Phase: phase, Step: config.DeployStep{Name: "confirm", Builtin: "confirm"}},
+		{Phase: phase, Step: config.DeployStep{Name: "confirm", Type: "builtin", Cmd: "confirm"}},
 	}
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, true, nil)
@@ -663,7 +663,7 @@ func TestRunPipeline_ContinueOnError_Continues(t *testing.T) {
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "hooks"}
 
-	failStep := config.DeployStep{Name: "optional-hook", Run: "exit 1", ContinueOnError: true}
+	failStep := config.DeployStep{Name: "optional-hook", Type: "shell", Cmd: "exit 1", ContinueOnError: true}
 	nextStep := noopStep("after-hook")
 	steps := buildResolvedSteps(phase, []config.DeployStep{failStep, nextStep})
 
@@ -711,9 +711,10 @@ func TestRunPipeline_ContinueOnError_SkipsHookAndCheck(t *testing.T) {
 
 	failStep := config.DeployStep{
 		Name:            "optional-hook",
-		Run:             "exit 1",
+		Type:            "shell",
+		Cmd:             "exit 1",
 		ContinueOnError: true,
-		Check:           "dir-missing /this-path-should-not-be-checked",
+		Check:           &config.Action{Type: "shell", Cmd: "false"},
 	}
 	steps := buildResolvedSteps(phase, []config.DeployStep{failStep})
 
@@ -747,7 +748,7 @@ func TestRunPipeline_NoContinueOnError_AbortsAsUsual(t *testing.T) {
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{
-		{Name: "fail", Run: "exit 1", ContinueOnError: false},
+		{Name: "fail", Type: "shell", Cmd: "exit 1", ContinueOnError: false},
 	})
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
@@ -786,7 +787,7 @@ func TestRunPipeline_Check_Fails(t *testing.T) {
 	phase := config.DeployPhase{Name: "setup"}
 
 	// "dir-missing /": root always exists, so dir-missing returns false.
-	step := config.DeployStep{Name: "check-step", Run: "true", Check: "dir-missing /"}
+	step := config.DeployStep{Name: "check-step", Type: "shell", Cmd: "true", Check: &config.Action{Type: "builtin", Cmd: "dir-missing /"}}
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
@@ -813,7 +814,7 @@ func TestRunPipeline_Check_EvalError(t *testing.T) {
 	phase := config.DeployPhase{Name: "setup"}
 
 	// An invalid/unknown condition function name causes EvalRuntime to error.
-	step := config.DeployStep{Name: "check-step", Run: "true", Check: "unknown-condition-fn /some/path"}
+	step := config.DeployStep{Name: "check-step", Type: "shell", Cmd: "true", Check: &config.Action{Type: "builtin", Cmd: "unknown-condition-fn /some/path"}}
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
@@ -860,7 +861,7 @@ func TestExecStep_ShellFromConfig(t *testing.T) {
 		Binaries: config.BinariesConfig{Shell: "sh"}, // must be a real shell for the test to pass
 		Raw:      map[string]any{},
 	}
-	step := config.DeployStep{Name: "noop", Run: "true"}
+	step := config.DeployStep{Name: "noop", Type: "shell", Cmd: "true"}
 	err := ExecStep(step, t.TempDir(), cfg, nil, nil, false)
 	if err != nil {
 		t.Fatalf("ExecStep with Shell=sh failed: %v", err)

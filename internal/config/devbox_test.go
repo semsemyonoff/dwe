@@ -2139,7 +2139,7 @@ func TestBinariesAccessors(t *testing.T) {
 		t.Errorf("ShellBin(cfg) = %q, want bash", got)
 	}
 	// DevboxBin with explicit value
-	cfg2 := &DevboxConfig{Binaries: BinariesConfig{Devbox: "my-devbox"}}
+	cfg2 := &DevboxConfig{Binaries: BinariesConfig{Type: "devbox", Cmd: "my-devbox"}}
 	if got := DevboxBin(cfg2); got != "my-devbox" {
 		t.Errorf("DevboxBin(cfg2) = %q, want my-devbox", got)
 	}

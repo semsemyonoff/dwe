@@ -43,8 +43,8 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 		if step.When != nil {
 			if step.When.IsRuntime() {
 				stepRuntimeWhen = step.When
-				if step.Builtin != "" {
-					if err := builtin.Validate(step.Builtin, step.With); err != nil {
+				if step.Type == "builtin" {
+					if err := builtin.Validate(step.Cmd, step.With); err != nil {
 						prefix := phase.Name + "/" + step.Name
 						if service != "" {
 							prefix = service + "/" + prefix
@@ -68,8 +68,8 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 				}
 			}
 		}
-		if step.Builtin != "" {
-			if err := builtin.Validate(step.Builtin, step.With); err != nil {
+		if step.Type == "builtin" {
+			if err := builtin.Validate(step.Cmd, step.With); err != nil {
 				prefix := phase.Name + "/" + step.Name
 				if service != "" {
 					prefix = service + "/" + prefix

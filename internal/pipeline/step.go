@@ -38,15 +38,17 @@ func (rs ResolvedStep) StepAddress() string {
 
 // stepBadge returns the display badge for a step based on its type.
 func stepBadge(step config.DeployStep) string {
-	switch {
-	case step.Command != "":
+	switch step.Type {
+	case "command":
 		return "[command]"
-	case step.Builtin != "":
+	case "builtin":
 		return "[builtin]"
-	case step.Devbox != "":
+	case "devbox":
 		return "[devbox]"
+	case "shell":
+		return "[shell]"
 	default:
-		return "[run]"
+		return "[" + step.Type + "]"
 	}
 }
 
@@ -54,14 +56,14 @@ func stepBadge(step config.DeployStep) string {
 //   - command: steps — "<devboxBin> commands run <id> [--set key=value...]"
 //   - builtin: steps — builtin description from registry (e.g. "builtin: confirm(...)")
 //   - devbox: steps  — "<devboxBin> <args>"
-//   - run: steps     — raw shell command
+//   - shell: steps   — raw shell command
 //
 // devboxBin is the configured binary name (from BinariesConfig.Devbox, e.g. "devbox").
 // It is used only for display — actual execution uses os.Executable() with this as fallback.
 func StepCommand(step config.DeployStep, devboxBin string) string {
-	switch {
-	case step.Command != "":
-		parts := []string{devboxBin, "commands", "run", strings.TrimSpace(step.Command)}
+	switch step.Type {
+	case "command":
+		parts := []string{devboxBin, "commands", "run", strings.TrimSpace(step.Cmd)}
 		if len(step.With) > 0 {
 			keys := make([]string, 0, len(step.With))
 			for k := range step.With {
@@ -73,11 +75,13 @@ func StepCommand(step config.DeployStep, devboxBin string) string {
 			}
 		}
 		return strings.Join(parts, " ")
-	case step.Builtin != "":
-		return builtin.Describe(step.Builtin, step.With)
-	case step.Devbox != "":
-		return devboxBin + " " + strings.TrimSpace(step.Devbox)
+	case "builtin":
+		return builtin.Describe(step.Cmd, step.With)
+	case "devbox":
+		return devboxBin + " " + strings.TrimSpace(step.Cmd)
+	case "shell":
+		return strings.TrimSpace(step.Cmd)
 	default:
-		return strings.TrimSpace(step.Run)
+		return step.Type + ": " + strings.TrimSpace(step.Cmd)
 	}
 }

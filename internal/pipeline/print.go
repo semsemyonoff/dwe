@@ -65,8 +65,8 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 		if rs.RuntimeWhen != nil {
 			_, _ = fmt.Fprintln(out, detailIndent+"[when: "+FormatCondition(rs.RuntimeWhen)+"]")
 		}
-		if rs.Step.Check != "" {
-			_, _ = fmt.Fprintln(out, detailIndent+"[check: "+rs.Step.Check+"]")
+		if rs.Step.Check != nil {
+			_, _ = fmt.Fprintln(out, detailIndent+"[check: "+FormatAction(rs.Step.Check)+"]")
 		}
 		if rs.Step.ContinueOnError {
 			_, _ = fmt.Fprintln(out, detailIndent+"[continue_on_error]")
