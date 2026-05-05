@@ -274,14 +274,14 @@ Single source of truth for the new schema. Describe only the current state — n
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] run full `make test` — all packages green
-- [ ] run `make lint` — zero issues; fix findings rather than suppressing
-- [ ] `make build && ./bin/devbox info` smoke check
-- [ ] grep verification (Go source): zero references to `step.Run`, `step.Devbox`, `step.Command`, `step.Builtin`, `step.ServiceConfigsCopy`, `step.Mode`, `CommandTypeCommand`, `cmd.Run` (on `CommandDef`). **Do NOT grep for `WorkflowStep.Command` / `WorkflowStep.Confirm` / `condition.Classify` / `condition.EvalBuiltin` / `condition.EvalCmd`** — those legitimately survive on the workflow string-condition path
-- [ ] grep verification (YAML fixtures): zero matches for legacy DeployStep keys (`run:`, `devbox:`, `command:`, `builtin:`, `service_configs_copy:`, `mode:`) indented under `steps:` in `internal/{config,pipeline,deploy,reset,lifecycle}/testdata/`; zero legacy CommandDef `run:` paired with `type: command`; zero string-form `when:`/`check:` in deploy/reset/lifecycle fixtures
-- [ ] verify each requirement from Overview maps to a concrete code change
-- [ ] confirm `service_configs_check` is reachable as `check: {type: builtin, cmd: service_configs_check, with: {service: main}}` from a deploy step (covered by the integration test added in Task 5)
-- [ ] confirm strict-decode error path: a deliberately-broken fixture with `run:` on a DeployStep produces a clear error message naming the field
+- [x] run full `make test` — all packages green
+- [x] run `make lint` — zero issues; fix findings rather than suppressing
+- [x] `make build && ./bin/devbox info` smoke check
+- [x] grep verification (Go source): zero references to `step.Run`, `step.Devbox`, `step.Command`, `step.Builtin`, `step.ServiceConfigsCopy`, `step.Mode`, `CommandTypeCommand`, `cmd.Run` (on `CommandDef`). **Do NOT grep for `WorkflowStep.Command` / `WorkflowStep.Confirm` / `condition.Classify` / `condition.EvalBuiltin` / `condition.EvalCmd`** — those legitimately survive on the workflow string-condition path
+- [x] grep verification (YAML fixtures): zero matches for legacy DeployStep keys (`run:`, `devbox:`, `command:`, `builtin:`, `service_configs_copy:`, `mode:`) indented under `steps:` in `internal/{config,pipeline,deploy,reset,lifecycle}/testdata/`; zero legacy CommandDef `run:` paired with `type: command`; zero string-form `when:`/`check:` in deploy/reset/lifecycle fixtures
+- [x] verify each requirement from Overview maps to a concrete code change (Tasks 1-8 implement all Overview requirements; verification-only, manual review)
+- [x] confirm `service_configs_check` is reachable as `check: {type: builtin, cmd: service_configs_check, with: {service: main}}` from a deploy step (covered by the integration test added in Task 5)
+- [x] confirm strict-decode error path: a deliberately-broken fixture with `run:` on a DeployStep produces a clear error message naming the field (covered by Task 2/7 strict-decode tests)
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
 
