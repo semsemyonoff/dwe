@@ -225,7 +225,6 @@ func TestCopyConfigFile_updateCreatesWhenDestMissing(t *testing.T) {
 	}
 }
 
-
 // --- envLineKey / parseEnvKeys tests ---
 
 func TestEnvLineKey(t *testing.T) {

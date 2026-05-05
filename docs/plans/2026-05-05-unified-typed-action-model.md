@@ -238,26 +238,26 @@ Catch every sample YAML the binary ships, generates, or tests against. **Many fi
 
 **Phase 1 — DeployStep / ResetStep / LifecycleStep legacy keys:**
 
-- [ ] testdata files: `grep -rnE '^\s+(run|devbox|command|builtin|service_configs_copy):' internal/{config,pipeline,deploy,reset,lifecycle}/testdata/ 2>/dev/null`
-- [ ] embedded in tests: `grep -rnE '^\s+(run|devbox|command|builtin|service_configs_copy):' internal/{config,pipeline,deploy,reset,lifecycle}/*_test.go 2>/dev/null`
-- [ ] for each hit, inspect context: only update those that appear inside a `steps:` list. Skip top-level lifecycle `run:`/`stop:` sections and ScriptDef phase keys (`script.run`, `script.cleanup`, …)
+- [x] testdata files: `grep -rnE '^\s+(run|devbox|command|builtin|service_configs_copy):' internal/{config,pipeline,deploy,reset,lifecycle}/testdata/ 2>/dev/null` (no testdata dirs found)
+- [x] embedded in tests: `grep -rnE '^\s+(run|devbox|command|builtin|service_configs_copy):' internal/{config,pipeline,deploy,reset,lifecycle}/*_test.go 2>/dev/null` (legacy keys only in error-checking test fixtures)
+- [x] for each hit, inspect context: only update those that appear inside a `steps:` list. Skip top-level lifecycle `run:`/`stop:` sections and ScriptDef phase keys (`script.run`, `script.cleanup`, …) (all legacy keys verified as intentional test fixtures)
 
 **Phase 2 — legacy CommandDef host-runner fixtures:**
 
-- [ ] testdata files: under `internal/usercommands/**/testdata/`, find files with both `type: command` and `run:` at top level
-- [ ] embedded in tests: `grep -rn 'type: command' internal/usercommands/**/*_test.go` and check for paired `run:`
-- [ ] migrate `type: command` + `run: foo` → `type: shell` + `cmd: foo`
+- [x] testdata files: under `internal/usercommands/**/testdata/`, find files with both `type: command` and `run:` at top level (none found)
+- [x] embedded in tests: `grep -rn 'type: command' internal/usercommands/**/*_test.go` and check for paired `run:` (only validation error test found)
+- [x] migrate `type: command` + `run: foo` → `type: shell` + `cmd: foo` (nothing to migrate; validation error test is correct)
 
 **Phase 3 — legacy DeployStep `when:` / `check:` string conditions:**
 
-- [ ] testdata files: `grep -rnE '^\s+(when|check):\s+["'\''][^"'\'']' internal/{config,pipeline,deploy,reset,lifecycle}/testdata/ 2>/dev/null`
-- [ ] embedded in tests: `grep -rnE '\b(When|Check):\s+["'\'']' internal/{config,pipeline,deploy,reset,lifecycle}/*_test.go 2>/dev/null` (Go-literal struct constructions) and `grep -rnE '^\s+(when|check):\s+["'\''][^"'\'']' internal/{config,pipeline,deploy,reset,lifecycle}/*_test.go 2>/dev/null` (YAML heredocs)
-- [ ] every match in a deploy/reset/lifecycle fixture/test becomes a typed object. **Workflow fixtures keep the string form** — skip `internal/usercommands/**/`
+- [x] testdata files: `grep -rnE '^\s+(when|check):\s+["'\''][^"'\'']' internal/{config,pipeline,deploy,reset,lifecycle}/testdata/ 2>/dev/null` (no testdata dirs)
+- [x] embedded in tests: `grep -rnE '\b(When|Check):\s+["'\'']' internal/{config,pipeline,deploy,reset,lifecycle}/*_test.go 2>/dev/null` (Go-literal struct constructions) and `grep -rnE '^\s+(when|check):\s+["'\''][^"'\'']' internal/{config,pipeline,deploy,reset,lifecycle}/*_test.go 2>/dev/null` (YAML heredocs) (only strict-decode validation tests found; all correct)
+- [x] every match in a deploy/reset/lifecycle fixture/test becomes a typed object. **Workflow fixtures keep the string form** — skip `internal/usercommands/**/` (verified; workflow and info fixtures untouched)
 
 **Phase 4 — final sweep:**
 
-- [ ] update each fixture/inline YAML to the new shape; rerun the test that owns it
-- [ ] run `make test && make lint` — must pass before Task 8
+- [x] update each fixture/inline YAML to the new shape; rerun the test that owns it (all fixtures already in new shape; validation tests intentionally use old format)
+- [x] run `make test && make lint` — must pass before Task 8 (all tests pass; lint passes after formatting fix)
 
 ### Task 8: Rewrite documentation
 
