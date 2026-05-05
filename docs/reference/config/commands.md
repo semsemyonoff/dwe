@@ -20,8 +20,8 @@ Declarative command definitions for the devbox project.
   - [Namespaces](#namespaces)
   - [Go templates](#go-templates)
   - [Where templates are evaluated](#where-templates-are-evaluated)
-- [Command types](#type-command)
-  - [`type: command`](#type-command)
+- [Command types](#command-types)
+  - [`type: shell`](#type-shell)
   - [`type: devbox`](#type-devbox)
   - [`type: script`](#type-script)
   - [`type: service_exec`](#type-service_exec)
@@ -148,7 +148,7 @@ The directives below are common to **all** command types unless the table notes 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `type` | enum | required | One of `command`, `devbox`, `script`, `service_exec`, `service_run`, `workflow` |
+| `type` | enum | required | One of `shell`, `devbox`, `script`, `service_exec`, `service_run`, `workflow` |
 | `description` | string | — | Human-readable description shown in the devbox CLI (selectors, `commands list`, `commands inspect`) |
 | `private` | bool | `false` | Hides from `devbox commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
 
@@ -482,33 +482,48 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ date }}{
 |----------|-----------|
 | `messages.success`, `messages.error` | yes |
 | `confirmation_text` | yes |
-| `run`, `argv`, `workdir`, `compose_args` | yes |
+| `cmd`, `argv`, `workdir`, `compose_args` | yes |
 | `env:` map values | yes |
 | `files.*.path`, `files.*.candidates[].path/glob/match` | yes |
 | `params.*.default_from`, `context.*.from` | no — plain dot-paths only |
 | Workflow `steps[].with[<key>]`, `steps[].when` | yes |
 | `description`, `group.title`, `group.description` | no — printed verbatim by `commands list` / `commands inspect` / completion |
 
-## Type: command
+## Command types
+
+The six command types define different execution contexts:
+
+| Type | Executor | Payload | Use case |
+|------|----------|---------|----------|
+| `shell` | Host shell | `cmd` or `argv` | Host tasks (scripts, git, build) |
+| `devbox` | Devbox CLI | `cmd` | Subcommand invocation |
+| `script` | Script runner | `script:` block | Structured multi-phase execution |
+| `service_exec` | Docker Compose exec/run | `cmd` or `argv` | Container operations on existing/new containers |
+| `service_run` | Docker Compose run | `cmd` or `argv` | Throwaway container execution |
+| `workflow` | Command orchestrator | `steps[]` | Multi-command sequences (separate syntax, see below) |
+
+All types except `script` use the canonical `cmd:` field for their payload. `type: script` is the structured exception, using its own `script:` block with `run`, `plan`, `cleanup` phases. **Workflow steps (`type: workflow`) are out of scope for the typed action model** — they keep their existing `command:` / `confirm:` / `with:` / `when:` (string) syntax and will be migrated in a separate plan.
+
+## Type: shell
 
 Runs a shell command on the **host** machine. Use this for tasks that don't need a container or the devbox binary.
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `run` | one of run/argv | Shell command string passed to `sh -c` (full shell semantics) |
-| `argv` | one of run/argv | Argument vector executed directly without a shell |
+| `cmd` | one of cmd/argv | Shell command string passed to `sh -c` (full shell semantics) |
+| `argv` | one of cmd/argv | Argument vector executed directly without a shell |
 | `workdir` | optional | Working directory; relative paths resolve against project root |
 
 ```yaml
 chmod-scripts:
-  type: command
+  type: shell
   description: Make all scripts executable
-  run: chmod +x devbox/scripts/**/*.sh
+  cmd: chmod +x devbox/scripts/**/*.sh
 ```
 
 ```yaml
 commit-config:
-  type: command
+  type: shell
   description: Commit a generated config file
   argv:
     - git
@@ -523,7 +538,7 @@ commit-config:
       required: true
 ```
 
-`run` and `argv` are mutually exclusive.
+`cmd` and `argv` are mutually exclusive.
 
 ## Type: devbox
 
@@ -531,26 +546,26 @@ Invokes another devbox subcommand using the currently running binary. This avoid
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `run` | yes | Subcommand string (without binary path); passed through `sh -c` |
+| `cmd` | yes | Subcommand string (without binary path); passed through `sh -c` |
 
 ```yaml
 db.up:
   type: devbox
   private: true
   description: Start the database container in the background
-  run: "docker up db"
+  cmd: "docker up db"
 
 app.install:
   type: devbox
   description: Install the Laravel application via installer container
-  run: "compose raw --bare -- --progress tty -f compose/installer.yml run --rm -u ${host.uid}:${host.gid} app-install"
+  cmd: "compose raw --bare -- --progress tty -f compose/installer.yml run --rm -u ${host.uid}:${host.gid} app-install"
 ```
 
 `workdir` is not allowed for `type: devbox` (the subcommand inherits the project root).
 
 ## Type: script
 
-Executes a shell script file with a strict environment contract injected by the runner.
+Executes a shell script file with a strict environment contract injected by the runner. **Scripts are the structured exception in the command system** — the `type: script` command uses its own `script:` block with `run`, `plan`, `cleanup` fields rather than the canonical `cmd:` field. This is intentional: scripts are configurations of a run, not individual commands.
 
 ```yaml
 db.dump-create:
@@ -654,7 +669,7 @@ Runs a command inside an existing container via `docker compose exec`. With `mod
 | Field | Required | Description |
 |-------|----------|-------------|
 | `service` | yes | Compose service name |
-| `run` / `argv` | one of | Shell command string OR raw argv |
+| `cmd` / `argv` | one of | Shell command string OR raw argv |
 | `mode` | optional | `exec` (default), `run`, or `exec-or-run` |
 | `user` | optional | `current` (host UID:GID), `root`, or any literal `--user` value |
 | `workdir` | optional | Container workdir; rendered with templates |
@@ -686,7 +701,7 @@ db.create:
     database: { required: true, pattern: ^[a-zA-Z0-9_-]+$ }
   env:
     MYSQL_PWD: "${db.password}"
-  run: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
+  cmd: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
 ```
 
 ### compose_args
@@ -737,6 +752,8 @@ queue-worker:
 ## Type: workflow
 
 A workflow runs an ordered sequence of other commands, with optional confirmations and conditional steps. Workflows are the only way to compose multiple commands behind a single ID.
+
+**Note:** Workflow step syntax is intentionally **out of scope** for the typed action model described in this documentation. Workflow steps keep their existing `command:` / `confirm:` / `with:` / `when:` (string) syntax. The `when:` conditions inside workflows remain string-based mini-language expressions; they are distinct from the typed `when:` / `check:` used in pipeline steps (see [deploy.yml](deploy.md)). Workflow steps will be migrated in a separate plan.
 
 ```yaml
 bootstrap:
@@ -893,7 +910,7 @@ Operational notes:
 db.up:
   type: devbox
   private: true              # used only inside db.start workflow
-  run: "docker up db"
+  cmd: "docker up db"
 ```
 
 ## Command-template space (the full reference)
@@ -935,7 +952,7 @@ db.create:
   messages:
     success: "Database `${param.database}` is ready."
     error: "Failed to create database `${param.database}`."
-  run: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"
+  cmd: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"
 ```
 
 ### A script command with file artefacts

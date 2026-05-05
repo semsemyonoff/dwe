@@ -48,7 +48,7 @@ flowchart LR
   end
 ```
 
-`docker up` and `docker wait` are issued as `devbox: "docker up"` / `devbox: "docker wait"` steps inside the `start` phase. They are not magical — the pipeline executor invokes them like any other step, so they pick up policy from `docker.yml`.
+`docker up` and `docker wait` are issued as `type: devbox` steps with `cmd: "docker up"` / `cmd: "docker wait"` inside the `start` phase. They are not magical — the pipeline executor invokes them like any other step, so they pick up policy from `docker.yml`.
 
 ## Structure
 
@@ -63,8 +63,16 @@ run:
   phases:
     - name: <phase>
       description: <text>
+      when:             # optional: typed condition (see deploy.md)
+        type: builtin|shell|template
+        cmd: <string>
+        expr: <string>
       steps:
-        - <step>
+        - name: <step>
+          type: shell|devbox|command|builtin
+          cmd: <value>
+          with:         # optional: parameters
+            key: value
 
 stop:
   final_message: "Project is stopped. Have a nice day!"
@@ -72,11 +80,19 @@ stop:
   phases:
     - name: <phase>
       description: <text>
+      when:             # optional: typed condition
+        type: builtin|shell|template
+        cmd: <string>
+        expr: <string>
       steps:
-        - <step>
+        - name: <step>
+          type: shell|devbox|command|builtin
+          cmd: <value>
+          with:         # optional: parameters
+            key: value
 ```
 
-Phases and steps use the same shape as [deploy.yml](deploy.md): `name`, `description`, `when`, `untracked`, `steps[]`, plus per-step `run` / `devbox` / `command` / `builtin`, `with`, `when`, `check`, `continue_on_error`. See the deploy reference for the complete step grammar.
+Phases and steps use the same shape as [deploy.yml](deploy.md): `name`, `description`, `when`, `untracked`, `steps[]`, plus per-step `type` / `cmd` / `with`, `when`, `check`, `continue_on_error`. See the deploy reference for the complete step grammar.
 
 `deploy_services: true` is **not** allowed in lifecycle pipelines.
 
@@ -137,22 +153,26 @@ run:
       description: Before-run hooks (continue on failure)
       steps:
         - name: before-run
-          command: project.before-run
+          type: command
+          cmd: project.before-run
           continue_on_error: true
 
     - name: start
       description: Start containers and wait for health
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
         - name: wait
-          devbox: "docker wait"
+          type: devbox
+          cmd: "docker wait"
 
     - name: post
       description: After-run hooks (continue on failure)
       steps:
         - name: after-run
-          command: project.after-run
+          type: command
+          cmd: project.after-run
           continue_on_error: true
 ```
 
@@ -173,9 +193,11 @@ run:
       description: Start containers and wait for health
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
         - name: wait
-          devbox: "docker wait"
+          type: devbox
+          cmd: "docker wait"
 
 stop:
   final_message: "Project is stopped. Have a nice day!"
@@ -184,7 +206,8 @@ stop:
       description: Stop and remove containers
       steps:
         - name: down
-          devbox: "docker down"
+          type: devbox
+          cmd: "docker down"
 ```
 
 A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
@@ -193,7 +216,7 @@ A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
 
 `LoadLifecycleConfig()` enforces:
 
-- Each step in `run.phases` and `stop.phases` sets exactly one of `run`, `devbox`, `command`, `builtin`.
+- Each step in `run.phases` and `stop.phases` has a `type:` field with one of `shell`, `devbox`, `command`, `builtin`.
 - `update.mode`, when set, is one of `prompt`, `auto`, `check`, `off`.
 - `deploy_services: true` is rejected (only valid in `deploy.yml`).
 - `final_message` and `log` are normalized to defaults when absent.
@@ -202,8 +225,9 @@ A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
 
 - **Forgetting `continue_on_error: true` on hook steps** — without it, a failing pre-stop hook aborts the entire stop sequence and containers are never stopped.
 - **Using `update: {}` to disable the probe** — empty block opts in (Enabled defaults to `true`). Use `mode: off`, `enabled: false`, or omit the `update:` key entirely.
-- **Adding `deploy_services` phases** — they are deploy-only. Lifecycle pipelines call services via `command:` references instead.
-- **Editing `lifecycle.yml` to swap `docker up` for `docker compose up`** — the public API is `devbox: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
+- **Adding `deploy_services` phases** — they are deploy-only. Lifecycle pipelines call services via `type: command` references instead.
+- **Editing `lifecycle.yml` to use direct `docker compose` calls** — the public API is `type: devbox` with `cmd: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
+- **Using the old syntax** — `run:`, `devbox:`, `command:`, `builtin:` are no longer valid. Use `type:` / `cmd:` instead.
 
 ## Related commands
 

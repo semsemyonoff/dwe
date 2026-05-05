@@ -74,6 +74,7 @@ flowchart LR
 - [services.yml](services.md) — service declarations, extends, dirs, cli config
 - [deploy.yml / reset.yml](deploy.md) — deploy and reset pipelines, steps, builtins, file logging
 - [lifecycle.yml](lifecycle.md) — run/stop pipelines, update probe, hook phases
+- [Conditions and Actions](conditions.md) — typed conditions for `when:`, typed actions for `check:` and step bodies, predicate vs engine-builtin distinction
 - [docker.yml](docker.md) — Compose execution policy, project name, env triggers
 - [styles.yml](styles.md) — ASCII header, color palette, separator
 - [info.yml](info.md) — info dashboard sections, template expressions

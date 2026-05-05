@@ -18,8 +18,6 @@ Generated reference for the `devbox` command tree.
   - [devbox compose files](devbox_compose_files.md) — Print resolved compose file list (base + enabled overlays), one per line
   - [devbox compose raw](devbox_compose_raw.md) — Run docker compose directly with resolved file list and project name (escape hatch)
 - [devbox deploy](devbox_deploy.md) — Deploy pipeline commands
-  - [devbox deploy config](devbox_deploy_config.md) — Copy template configs to service directory
-  - [devbox deploy config-check](devbox_deploy_config-check.md) — Verify that all declared service configs exist in the service directory
   - [devbox deploy plan](devbox_deploy_plan.md) — Show resolved deploy plan
   - [devbox deploy run](devbox_deploy_run.md) — Execute the deploy plan
   - [devbox deploy step](devbox_deploy_step.md) — Run a single deploy step by <phase>/<step> address

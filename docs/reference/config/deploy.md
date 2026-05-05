@@ -11,18 +11,21 @@ Deploy and reset pipeline declarations.
 - [Phase fields](#phase-fields)
 - [Step fields](#step-fields)
 - [Step execution types](#step-execution-types)
-  - [`run: <shell command>`](#run-shell-command)
-  - [`devbox: "<subcommand>"`](#devbox-subcommand)
-  - [`command: <id>`](#command-id)
-  - [`builtin: <name>`](#builtin-name)
+  - [`type: shell`](#type-shell)
+  - [`type: devbox`](#type-devbox)
+  - [`type: command`](#type-command)
+  - [`type: builtin`](#type-builtin)
 - [Available builtins](#available-builtins)
   - [`service_dirs_ensure`](#service_dirs_ensure)
   - [`service_configs_copy`](#service_configs_copy)
+  - [`service_configs_check`](#service_configs_check)
   - [`message`](#message)
   - [`confirm`](#confirm)
   - [`docker_remove_project_volumes`](#docker_remove_project_volumes)
   - [`remove_paths`](#remove_paths)
-- [Conditions (`when` / `check`)](#conditions-when--check)
+- [Conditions and checks](#conditions-and-checks)
+  - [`when:` (pre-condition)](#when-pre-condition)
+  - [`check:` (post-condition)](#check-post-condition)
 - [Post-deploy semantics](#post-deploy-semantics)
 - [`deploy_services` marker](#deploy_services-marker)
 - [Example: orchestrator pipeline](#example-orchestrator-pipeline)
@@ -73,17 +76,28 @@ log: true                          # optional: tee output to logs/<pipeline>.log
 phases:
   - name: <phase-name>
     description: Human-readable description
-    when: "<condition>"            # optional: skip phase if false
+    when:                          # optional: pre-condition (typed condition)
+      type: builtin|shell|template
+      cmd: <string>                # for builtin/shell
+      expr: <string>               # for template
     untracked: true                # optional: suppress step output for this phase
     deploy_services: true          # orchestrator marker (deploy.yml only)
     steps:
       - name: <step-name>
         description: Human-readable description
-        when: "<condition>"        # optional: skip step if false
-        check: "<check-expr>"      # optional: post-condition; abort pipeline if false
+        type: shell|devbox|command|builtin  # execution type (required)
+        cmd: <value>               # command payload (required)
+        when:                      # optional: pre-condition (typed condition)
+          type: builtin|shell|template
+          cmd: <string>            # for builtin/shell
+          expr: <string>           # for template
+        check:                     # optional: post-condition (typed action)
+          type: shell|devbox|command|builtin
+          cmd: <value>
+          with:                    # optional: parameters
+            key: value
         continue_on_error: true    # optional: failure does not abort the pipeline
-        <type>: <value>
-        with:                      # parameters (for builtin: and command: types)
+        with:                      # parameters (for command and builtin types)
           key: value
 ```
 
@@ -100,7 +114,7 @@ phases:
 |-------|------|---------|-------------|
 | `name` | string | required | Unique phase key within the pipeline |
 | `description` | string | optional | Shown in `deploy plan` output |
-| `when` | string | — | Condition expression; phase skipped if falsy |
+| `when` | typed condition | — | Pre-condition; phase skipped if falsy (see [Conditions and checks](#conditions-and-checks)) |
 | `untracked` | bool | false | If true, phase steps are excluded from the step counter and produce no system output |
 | `deploy_services` | bool | false | Orchestrator marker: CLI inlines per-service pipelines here in dependency order |
 
@@ -110,65 +124,74 @@ phases:
 |-------|------|-------------|
 | `name` | string | Unique step key within the phase |
 | `description` | string | Shown in `deploy plan` output |
-| `when` | string | Condition expression; step skipped if falsy |
-| `check` | string | Post-condition evaluated after the step succeeds; pipeline aborts when the expression is false. Same expression kinds as `when` except Go templates. Skipped when `continue_on_error: true` and the step failed. |
-| `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](lifecycle.md). |
-
-Exactly one execution type field must be set per step.
+| `type` | enum | Execution type: one of `shell`, `devbox`, `command`, `builtin` (required) |
+| `cmd` | string | Command payload (required); content depends on `type` |
+| `with` | mapping | Parameters passed to command or builtin (optional; required for most builtins) |
+| `when` | typed condition | Pre-condition evaluated before the step runs; step skipped if falsy |
+| `check` | typed action | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. |
+| `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](lifecycle.md). **Behavior change:** when the step body succeeds but `check:` fails, and `continue_on_error: true`, the step is reported as failed and the pipeline continues to the next step (symmetric with body-failure semantics). |
 
 ## Step execution types
 
-### `run: <shell command>`
+### `type: shell`
 
 Executes a shell command via `sh -c`. Full shell semantics apply: environment variable expansion, globbing, pipes, redirection, and `&&`/`||` operators all work as expected.
 
 ```yaml
 - name: chmod-scripts
-  run: chmod +x scripts/deploy.sh
+  type: shell
+  cmd: chmod +x scripts/deploy.sh
 ```
 
-### `devbox: "<subcommand>"`
+### `type: devbox`
 
 Invokes a devbox CLI subcommand. The binary path is resolved automatically.
 
 ```yaml
 - name: up
-  devbox: "docker up"
+  type: devbox
+  cmd: "docker up"
 
 - name: info
-  devbox: "info"
+  type: devbox
+  cmd: "info"
 
 - name: render-ide
-  devbox: "render ide main"
+  type: devbox
+  cmd: "render ide main"
 ```
 
-### `command: <id>`
+### `type: command`
 
 Dispatches a declarative command by ID from the command registry (`devbox/commands/`).
 
 ```yaml
 - name: composer-install
-  command: services.main.composer-install
+  type: command
+  cmd: services.main.composer-install
 
 - name: db-create
-  command: services.main.db.create
+  type: command
+  cmd: services.main.db.create
   with:
     database: laravel_test
 ```
 
-### `builtin: <name>`
+### `type: builtin`
 
 Executes an engine-internal Go function. Builtins run in-process and have access to the full config.
 
 ```yaml
 - name: create-dirs
-  builtin: service_dirs_ensure
+  type: builtin
+  cmd: service_dirs_ensure
   with:
     service: main
     mode: skip
 
 - name: success-msg
-  builtin: message
+  type: builtin
+  cmd: message
   with:
     level: success
     text: "Deploy completed"
@@ -176,12 +199,13 @@ Executes an engine-internal Go function. Builtins run in-process and have access
 
 ## Available builtins
 
-The full registry lives in `internal/builtin/`. Six builtins ship today:
+The full registry lives in `internal/builtin/`. Seven builtins ship today:
 
 | Builtin | Purpose |
 |---------|---------|
 | `service_dirs_ensure` | Create service hub directories |
 | `service_configs_copy` | Copy template config files into the service hub |
+| `service_configs_check` | Verify that template config files exist in the service hub |
 | `message` | Print a styled message at info/success/warning/error level |
 | `confirm` | Interactive Y/n prompt (skipped under `--yes`) |
 | `docker_remove_project_volumes` | Remove all volumes whose name is prefixed with the compose project name |
@@ -227,6 +251,30 @@ Mode behaviour:
 
 When the corresponding `configs[]` entry has a `mountpoint`, the builtin also touches an empty file at `<service-dir>/<mountpoint>` so Docker Desktop virtiofs can place a nested file bind mount over it.
 
+### `service_configs_check`
+
+Verifies that all template config files declared in `services.yml` exist in the service hub after a `service_configs_copy` step. Use as a `check:` action to assert that configs were successfully deployed.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `service` | string | required | Service key |
+
+Returns an error listing any missing files, which causes the check to fail. Typically used as the post-check of a `service_configs_copy` step:
+
+```yaml
+- name: copy-configs
+  type: builtin
+  cmd: service_configs_copy
+  with:
+    service: main
+    mode: replace
+  check:
+    type: builtin
+    cmd: service_configs_check
+    with:
+      service: main
+```
+
 ### `message`
 
 Prints a message to deploy output.
@@ -238,7 +286,8 @@ Prints a message to deploy output.
 
 ```yaml
 - name: done
-  builtin: message
+  type: builtin
+  cmd: message
   with:
     level: success
     text: "Deploy of {{ .Project.Name }} completed"
@@ -246,7 +295,7 @@ Prints a message to deploy output.
 
 ### `confirm`
 
-Prompts the user for confirmation before continuing. Skipped when `--yes` flag is set or when `ExecContext.SkipConfirm` is on. On a TTY uses huh.Confirm; on a piped/CI stdin falls back to plain Y/n.
+Prompts the user for confirmation before continuing. Skipped when `--yes` flag is set or when the step is being confirmed via `ExecContext.SkipConfirm`. On a TTY uses huh.Confirm; on a piped/CI stdin falls back to plain Y/n.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -266,25 +315,79 @@ Removes paths from the filesystem.
 |-----------|------|-------------|
 | `paths` | list of strings | Project-relative paths to remove. Each must be relative and must not escape the project root; absolute paths and `..` traversal are rejected at validate time. |
 
-## Conditions (`when` / `check`)
+## Conditions and checks
 
-`when:` is a **pre-condition**. It is evaluated before the step runs; a falsy result skips the step.
+### `when:` (pre-condition)
 
-```yaml
-when: "dir-empty services/main/src"    # true if directory exists and is empty
-when: "{{ .Services.Second.Enabled }}" # template expression against config
-```
+`when:` is a **pre-condition** evaluated before a phase or step runs. A falsy result skips the phase/step without executing it. It is a **typed condition** with three forms:
 
-`check:` is a **post-condition**. It runs after the step succeeds and **aborts the pipeline** when the expression is false. The same expression kinds as `when` are supported, except Go templates. Use `check:` to assert that a step had its intended effect — e.g. that a migration produced a certain file or that a service became reachable. Use `when:` for idempotency (skip when already done).
+**Builtin predicates** — test filesystem state using the predicate registry:
 
 ```yaml
-- name: composer-install
-  command: services.main.composer-install
-  when: "file-missing services/main/src/vendor/autoload.php"   # skip if already installed
-  check: "file-exists services/main/src/vendor/autoload.php"   # abort if it didn't appear
+when:
+  type: builtin
+  cmd: "dir-empty services/main/src"
 ```
 
-If `continue_on_error: true` is set on the same step, a failed `check:` is **not** evaluated — the step has already been reported as failed and execution moves on.
+Available predicates: `dir-exists`, `dir-missing`, `dir-empty`, `dir-not-empty`, `file-exists`, `file-missing`. These are distinct from the *engine builtins* (`service_configs_copy`, etc.) used in step bodies and `check:` actions — a known scope-narrowing documented here explicitly. The predicate registry is intentionally POSIX-portable (uses hardcoded `sh -c`) for consistency regardless of the project's configured shell.
+
+**Shell commands** — execute a shell command; exit 0 = true, non-zero = false:
+
+```yaml
+when:
+  type: shell
+  cmd: "test -f services/main/src/vendor/autoload.php"
+```
+
+Shell commands also use hardcoded `sh -c` (not `ShellBin`) for portability.
+
+**Template expressions** — Go template syntax evaluated at plan time:
+
+```yaml
+when:
+  type: template
+  expr: "{{ .Services.Second.Enabled }}"
+```
+
+Template conditions do not support `check:` in the same step (no side effects at plan time). They are purely for idempotency checks like "skip this phase if the feature is not enabled" where the result is known before execution.
+
+### `check:` (post-condition)
+
+`check:` is a **post-action** evaluated after a step succeeds. It is a **typed action** — the same `type:` / `cmd:` / `with:` shape as step bodies, but its success/failure determines whether the step is reported as passed or failed.
+
+Use `check:` to assert that a step had its intended effect — e.g. that a migration produced a certain file, that a service became reachable, or that configs were copied successfully.
+
+**Example: verify configs were deployed**
+
+```yaml
+- name: copy-configs
+  type: builtin
+  cmd: service_configs_copy
+  with:
+    service: main
+    mode: replace
+  check:
+    type: builtin
+    cmd: service_configs_check
+    with:
+      service: main
+```
+
+**Example: verify a shell command produces expected output**
+
+```yaml
+- name: run-migration
+  type: command
+  cmd: services.main.migrate
+  check:
+    type: shell
+    cmd: "test -f services/main/src/migrations/.done"
+```
+
+**Behavior of `continue_on_error` with `check:`:**
+
+- When a step body fails and `continue_on_error: true` is set, `check:` is **not** evaluated. The step is reported as failed and the pipeline continues.
+- When a step body succeeds but `check:` fails, the step is reported as failed. If `continue_on_error: true`, the pipeline continues; otherwise it aborts. **This is a behavior change from prior versions**, where check failure always aborted regardless of `continue_on_error`.
 
 ## Post-deploy semantics
 
@@ -298,9 +401,11 @@ Use `untracked: true` on the `post-deploy` phase to suppress system step message
   untracked: true
   steps:
     - name: info
-      devbox: "info"
+      type: devbox
+      cmd: "info"
     - name: success
-      builtin: message
+      type: builtin
+      cmd: message
       with:
         level: success
         text: Deploy completed successfully
@@ -330,18 +435,22 @@ phases:
     description: Start containers
     steps:
       - name: up
-        devbox: "docker up"
+        type: devbox
+        cmd: "docker up"
       - name: wait-healthy
-        devbox: "docker wait"
+        type: devbox
+        cmd: "docker wait"
 
   - name: post-deploy
     description: Post-deploy summary
     untracked: true
     steps:
       - name: info
-        devbox: "info"
+        type: devbox
+        cmd: "info"
       - name: success
-        builtin: message
+        type: builtin
+        cmd: message
         with:
           level: success
           text: Deploy completed successfully
@@ -354,44 +463,59 @@ phases:
 phases:
   - name: setup
     description: Create dirs and install
-    when: "dir-empty services/main/src"
+    when:
+      type: builtin
+      cmd: "dir-empty services/main/src"
     steps:
       - name: create-dirs
-        builtin: service_dirs_ensure
+        type: builtin
+        cmd: service_dirs_ensure
         with:
           service: main
       - name: install
-        command: app.install
+        type: command
+        cmd: app.install
       - name: copy-configs
-        builtin: service_configs_copy
+        type: builtin
+        cmd: service_configs_copy
         with:
           service: main
           mode: replace
+        check:
+          type: builtin
+          cmd: service_configs_check
+          with:
+            service: main
 
   - name: init
     description: Initialize application
     steps:
       - name: db-create
-        command: services.main.db.create
+        type: command
+        cmd: services.main.db.create
       - name: composer-install
-        command: services.main.composer-install
+        type: command
+        cmd: services.main.composer-install
       - name: migrate
-        command: services.main.migrate
+        type: command
+        cmd: services.main.migrate
 
   - name: finalize
     description: Generate IDE config
     steps:
       - name: render-ide
-        devbox: "render ide main"
+        type: devbox
+        cmd: "render ide main"
 ```
 
 ## Common pitfalls
 
-- **Direct `docker compose` in `run:`** — use `devbox:` with a `docker` subcommand instead. Docker policy (project name, args) is applied automatically.
+- **Using `devbox:` style instead of `type: devbox`** — the old multi-field syntax is no longer supported. Use `type:` + `cmd:` instead.
 - **Missing `with:` for builtin parameters** — builtins require `with:` for their parameters; passing them as top-level step fields does not work.
 - **`deploy_services` in `reset.yml`** — rejected at load time. The reset pipeline does not iterate services; if you need per-service cleanup, declare it explicitly in the reset phases.
 - **Forgetting `log: false` for noisy reset runs** — reset defaults to `log: false`, deploy defaults to `log: true`. Set the field explicitly when you want behaviour different from the default.
 - **Using `continue_on_error` to mask real failures in core phases** — it is meant for hook phases (pre/post). A failed `docker up` should always abort.
+- **Confusing `when:` and `check:` with the new types** — `when:` is evaluated before the step runs (pre-condition); `check:` is evaluated after success (post-action). Both use the typed `type: builtin|shell|template` / `cmd:` shape for `when:`, and the typed `type: shell|devbox|command|builtin` shape for `check:`.
 
 ## Related commands
 
