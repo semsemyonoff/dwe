@@ -1075,6 +1075,28 @@ func TestLoadDeployConfig_deployServicesWithStepsError(t *testing.T) {
 	}
 }
 
+func TestLoadDeployConfig_deployServicesWithWhenError(t *testing.T) {
+	yml := `phases:
+  - name: services
+    deploy_services: true
+    when:
+      type: shell
+      cmd: "test -f marker"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Fatal("expected error for deploy_services phase with when, got nil")
+	}
+	if !strings.Contains(err.Error(), "does not support when") {
+		t.Errorf("error should mention 'does not support when', got: %v", err)
+	}
+}
+
 func TestLoadDeployConfig_phaseUIFieldRejected(t *testing.T) {
 	// The ui: field was removed from DeployPhase. Strict decode rejects unknown fields.
 	yml := `phases:

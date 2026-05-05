@@ -922,6 +922,9 @@ func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
 			if len(phase.Steps) > 0 {
 				return fmt.Errorf("phase %q: deploy_services phase must not contain steps", phase.Name)
 			}
+			if phase.When != nil {
+				return fmt.Errorf("phase %q: deploy_services phase does not support when", phase.Name)
+			}
 			continue
 		}
 		if phase.When != nil {

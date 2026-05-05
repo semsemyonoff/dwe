@@ -74,6 +74,7 @@ Every service declared in `services.yml` may contribute its own `devbox/deploy/<
 log: true                          # optional: tee output to logs/<pipeline>.log
 
 phases:
+  # Normal phase: supports when, untracked, and steps
   - name: <phase-name>
     description: Human-readable description
     when:                          # optional: pre-condition (typed condition)
@@ -81,7 +82,6 @@ phases:
       cmd: <string>                # for builtin/shell
       expr: <string>               # for template
     untracked: true                # optional: suppress step output for this phase
-    deploy_services: true          # orchestrator marker (deploy.yml only)
     steps:
       - name: <step-name>
         description: Human-readable description
@@ -99,6 +99,11 @@ phases:
         continue_on_error: true    # optional: failure does not abort the pipeline
         with:                      # parameters (for command and builtin types)
           key: value
+
+  # deploy_services phase (deploy.yml only): no steps or when allowed
+  - name: services
+    description: Human-readable description
+    deploy_services: true          # orchestrator marker; mutually exclusive with steps and when
 ```
 
 ## Top-level fields
@@ -114,9 +119,9 @@ phases:
 |-------|------|---------|-------------|
 | `name` | string | required | Unique phase key within the pipeline |
 | `description` | string | optional | Shown in `deploy plan` output |
-| `when` | typed condition | — | Pre-condition; phase skipped if falsy (see [Conditions and checks](#conditions-and-checks)) |
+| `when` | typed condition | — | Pre-condition; phase skipped if falsy (see [Conditions and checks](#conditions-and-checks)). Not allowed on `deploy_services` phases. |
 | `untracked` | bool | false | If true, phase steps are excluded from the step counter and produce no system output |
-| `deploy_services` | bool | false | Orchestrator marker: CLI inlines per-service pipelines here in dependency order |
+| `deploy_services` | bool | false | Orchestrator marker: CLI inlines per-service pipelines here in dependency order. A `deploy_services` phase must not contain `steps` or a `when` condition — both are hard errors at load time. |
 
 ## Step fields
 

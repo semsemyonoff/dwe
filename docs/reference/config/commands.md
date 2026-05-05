@@ -328,7 +328,7 @@ Cleanup safety: `on_error: remove` only deletes files that did **not** exist bef
 
 #### Templating in file paths
 
-`path`, `candidates[].path`, `candidates[].glob`, and `candidates[].match` all support templates. They are rendered before existence checks. The resolved paths become available to subsequent templates via `${files.<id>.path}` (in `confirmation_text`, `run`, `argv`, `workdir`, `env:`, etc.).
+`path`, `candidates[].path`, `candidates[].glob`, and `candidates[].match` all support templates. They are rendered before existence checks. The resolved paths become available to subsequent templates via `${files.<id>.path}` (in `confirmation_text`, `cmd`, `argv`, `workdir`, `env:`, etc.).
 
 ## Templating
 
@@ -396,7 +396,7 @@ env:
 
 ```yaml
 # fall back to a literal when a value is empty/missing
-run: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
+cmd: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
 
 # inline default
 env:
@@ -418,7 +418,7 @@ env:
 `{{- ... -}}` trims surrounding whitespace. Useful when a multi-line block is rendered into a single shell argument.
 
 ```yaml
-run: |-
+cmd: |-
   echo "{{- if .Params.verbose -}}verbose{{- else -}}quiet{{- end -}}"
 ```
 
@@ -852,7 +852,7 @@ Confirm steps are silently skipped under `--yes` or `DEVBOX_NONINTERACTIVE=1`. O
 
 ## Workdir resolution
 
-`workdir` accepts a templated path. Relative paths resolve against the project root for host runners (`type: command`, `type: script`) and against the container filesystem for service runners.
+`workdir` accepts a templated path. Relative paths resolve against the project root for host runners (`type: shell`, `type: script`) and against the container filesystem for service runners.
 
 `workdir_from` is **only** valid for `service_exec` / `service_run` and reads a string out of the merged config:
 
@@ -896,7 +896,7 @@ flowchart TD
 Operational notes:
 
 - `commands run --yes` sets `SkipConfirm` and `NonInteractive` on the in-process `RunContext` so every confirm call (top-level command, builtin `confirm`, workflow confirm steps) skips the prompt for the duration of the invocation.
-- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DEVBOX_NONINTERACTIVE=1` (along with `DEVBOX_BIN`, `DEVBOX_PARAMS_JSON`, etc.) into the script's environment. `type: command`, `devbox`, `service_exec`, and `service_run` do not export this variable — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
+- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DEVBOX_NONINTERACTIVE=1` (along with `DEVBOX_BIN`, `DEVBOX_PARAMS_JSON`, etc.) into the script's environment. `type: shell`, `devbox`, `service_exec`, and `service_run` do not export this variable — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
 - Inside a workflow, child commands inherit `NonInteractive` and `SkipConfirm` from the parent `RunContext`.
 - The non-TTY fallback is `render.Writer.Confirm`; under `CI=1` it auto-confirms.
 
@@ -1067,9 +1067,9 @@ db.start:
 The loader enforces these rules and reports the offending file + field on failure:
 
 - `type` is required and must be one of the documented values.
-- `type: command` requires exactly one of `run` / `argv`; `service_*` requires exactly one of `run` / `argv` plus `service`.
+- `type: shell` requires exactly one of `cmd` / `argv`; `service_*` requires exactly one of `cmd` / `argv` plus `service`.
 - `type: script` requires a `script:` block in either simple (`path`) or phased (`run` + optional `plan` / `cleanup`) form.
-- `type: workflow` requires a non-empty `steps:` and forbids type-specific fields (`run`, `argv`, `service`, `script`, `workdir`, etc.).
+- `type: workflow` requires a non-empty `steps:` and forbids type-specific fields (`cmd`, `argv`, `service`, `script`, `workdir`, etc.).
 - Each workflow step has exactly one of `command` / `confirm`; `with` / `continue_on_error` are valid only on command steps.
 - Env variable names must be unique across `params.*.env`, `context.*.env`, `files.*.env`, and the `env:` block.
 - File IDs must match `^[a-zA-Z_][a-zA-Z0-9_]*$`.
