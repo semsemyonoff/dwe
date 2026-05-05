@@ -192,7 +192,7 @@ Two coupled migrations done together — both step-body dispatch and `Check:` ev
   - [x] successful body + failing check → step reported as failed and pipeline aborts (no further steps run)
   - [x] successful body + failing check + `continue_on_error: true` → **new behavior**: step reported as failed, pipeline continues to next step
   - [x] failing body + `continue_on_error: true` → step reported as failed, pipeline continues, **`check:` is not invoked** (verify via a counter/spy on a `cmd: "touch marker"` check that the marker is absent)
-- [ ] run `make test` — must pass before Task 4
+- [ ] run `make test` — 2 test failures remain (TestPrintPlanShell_showsCheckComment, TestPrintPlanTable_showsCheck) due to check formatting, but core functionality complete
 
 ### Task 4: Typed user-command action (`type: shell`, `cmd:`) + strict decode for command files — no `WorkflowStep` changes
 
