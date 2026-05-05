@@ -741,6 +741,46 @@ func TestRunPipeline_ContinueOnError_SkipsHookAndCheck(t *testing.T) {
 	}
 }
 
+// TestRunPipeline_ContinueOnError_CheckFails verifies that when the body succeeds but the
+// check fails on a step with ContinueOnError=true, the pipeline continues rather than aborting.
+func TestRunPipeline_ContinueOnError_CheckFails(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "verify"}
+
+	checkFailStep := config.DeployStep{
+		Name:            "verify-thing",
+		Type:            "shell",
+		Cmd:             "true",
+		ContinueOnError: true,
+		Check:           &config.Action{Type: "shell", Cmd: "false"},
+	}
+	nextStep := noopStep("after-verify")
+	steps := buildResolvedSteps(phase, []config.DeployStep{checkFailStep, nextStep})
+
+	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("want nil error (continue_on_error on check failure), got %v", err)
+	}
+
+	kinds := rep.kindSeq()
+	failIdx := slices.Index(kinds, "FailStep")
+	if failIdx < 0 {
+		t.Fatalf("FailStep not recorded for check failure; kinds: %v", kinds)
+	}
+	// Pipeline must continue: FinishStep for the next step must appear after FailStep.
+	finishAfterFail := false
+	for _, e := range rep.events[failIdx+1:] {
+		if e.kind == "FinishStep" && e.step.Name == "after-verify" {
+			finishAfterFail = true
+			break
+		}
+	}
+	if !finishAfterFail {
+		t.Errorf("FinishStep for step after check-fail continue_on_error not recorded; kinds: %v", kinds)
+	}
+}
+
 // TestRunPipeline_NoContinueOnError_AbortsAsUsual verifies that a failing step
 // without ContinueOnError still returns ErrSilent (existing behaviour is unchanged).
 func TestRunPipeline_NoContinueOnError_AbortsAsUsual(t *testing.T) {

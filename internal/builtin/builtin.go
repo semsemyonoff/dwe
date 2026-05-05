@@ -3,11 +3,12 @@
 // A builtin is an action described in a pipeline YAML step as:
 //
 //   - name: some-step
-//     builtin: <name>
+//     type: builtin
+//     cmd: <name>
 //     with:
 //     key: value
 //
-// Unlike run: (shell), command: (registry), and devbox: (CLI), a builtin is
+// Unlike type: shell, type: command (registry), and type: devbox (CLI), a builtin is
 // executed directly in Go — no subprocess is spawned. This makes destructive
 // and file-system operations safe, auditable, and visible in plan output.
 //

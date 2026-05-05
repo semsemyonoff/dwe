@@ -924,6 +924,11 @@ func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
 			}
 			continue
 		}
+		if phase.When != nil {
+			if err := phase.When.Validate(); err != nil {
+				return fmt.Errorf("phase %q when: %w", phase.Name, err)
+			}
+		}
 		for si := range phase.Steps {
 			step := &phase.Steps[si]
 			// Validate step body: exactly one of the four types with non-empty cmd.
