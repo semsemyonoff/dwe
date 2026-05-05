@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
@@ -114,7 +115,10 @@ service exists, or shows an interactive selector when multiple services are enab
 			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
-				return fmt.Errorf("loading docker config: %w", err)
+				if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("loading docker config: %w", err)
+				}
+				dockerCfg = &config.DockerConfig{}
 			}
 			compose := docker.NewCompose(cfg, dockerCfg)
 

@@ -197,7 +197,10 @@ it runs directly without showing a selector.`,
 			projectRoot := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(projectRoot, cfg)
 			if err != nil {
-				return fmt.Errorf("loading docker config: %w", err)
+				if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("loading docker config: %w", err)
+				}
+				dockerCfg = &config.DockerConfig{}
 			}
 
 			// Determine if we should skip confirmation:

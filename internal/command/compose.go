@@ -1,7 +1,9 @@
 package command
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -50,7 +52,10 @@ func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
-				return fmt.Errorf("loading docker config: %w", err)
+				if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("loading docker config: %w", err)
+				}
+				dockerCfg = &config.DockerConfig{}
 			}
 
 			composeArgs := []string{"-p", dockerCfg.ProjectName}
@@ -111,7 +116,10 @@ func newComposeArgvCmd(flags *rootFlags) *cobra.Command {
 			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
-				return fmt.Errorf("loading docker config: %w", err)
+				if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("loading docker config: %w", err)
+				}
+				dockerCfg = &config.DockerConfig{}
 			}
 
 			compose := docker.NewCompose(cfg, dockerCfg)

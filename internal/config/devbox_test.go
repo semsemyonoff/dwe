@@ -890,7 +890,7 @@ func TestLoadDeployConfig_emptyPhases(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepBothCmdAndCommand(t *testing.T) {
+func TestLoadDeployConfig_legacyRunAndCommandFieldsRejected(t *testing.T) {
 	yml := `phases:
   - name: setup
     steps:
@@ -905,7 +905,39 @@ func TestLoadDeployConfig_stepBothCmdAndCommand(t *testing.T) {
 	}
 	_, err := LoadDeployConfig(path)
 	if err == nil {
-		t.Fatal("LoadDeployConfig: expected error for step with both cmd and command, got nil")
+		t.Fatal("LoadDeployConfig: expected strict-decode error for removed legacy fields 'run' and 'command', got nil")
+	}
+}
+
+func TestLoadDeployConfig_checkBadTypeProducesWrappedError(t *testing.T) {
+	yml := `phases:
+  - name: setup
+    steps:
+      - name: my-step
+        type: shell
+        cmd: echo hi
+        check:
+          type: badtype
+          cmd: some-check
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write deploy.yml: %v", err)
+	}
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Fatal("LoadDeployConfig: expected validation error for bad check type, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "my-step") {
+		t.Errorf("error %q does not contain step name 'my-step'", msg)
+	}
+	if !strings.Contains(msg, "setup") {
+		t.Errorf("error %q does not contain phase name 'setup'", msg)
+	}
+	if !strings.Contains(msg, "check") {
+		t.Errorf("error %q does not contain 'check'", msg)
 	}
 }
 

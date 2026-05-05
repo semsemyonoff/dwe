@@ -203,6 +203,12 @@ func (c *Condition) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind != yaml.MappingNode {
 		return fmt.Errorf("when: must be a mapping (e.g., {type: builtin, cmd: dir-empty foo}), not a scalar string")
 	}
+	known := map[string]bool{"type": true, "cmd": true, "expr": true, "with": true}
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		if key := node.Content[i].Value; !known[key] {
+			return fmt.Errorf("when: unknown field %q", key)
+		}
+	}
 	type conditionAlias Condition
 	var ca conditionAlias
 	if err := node.Decode(&ca); err != nil {
