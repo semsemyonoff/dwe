@@ -198,19 +198,19 @@ Two coupled migrations done together — both step-body dispatch and `Check:` ev
 
 Rename host-shell type and the payload field, and switch command-file loading to strict decode so legacy `run:` produces a clear unknown-field error rather than silently falling through to a "cmd required" semantic-validation error. **`WorkflowStep` is intentionally untouched** — its `command:` / `confirm:` / `with:` / `when:` (string) syntax remains.
 
-- [ ] in `internal/usercommands/model/types.go`: rename constant `CommandTypeCommand = "command"` → `CommandTypeShell = "shell"`; update doc comment to "host shell command"
-- [ ] rename `CommandDef.Run` field → `CommandDef.Cmd` (yaml tag `cmd`); applies to types `shell`, `devbox`, `service_exec`, `service_run`
-- [ ] keep `CommandDef.Argv` as the alternate raw-argv form for `type: shell` and `type: service_exec`/`service_run` (mutually exclusive with `Cmd`); document in the type doc comment
-- [ ] keep `CommandDef.Script` (`ScriptDef`) untouched — `type: script` carries structured config, not a single command string; document this exception in `commands.md`
-- [ ] update `internal/usercommands/runtime/runner.go` `NewRunner` dispatch: case `CommandTypeShell` → `HostRunner`, etc.
-- [ ] update `runner_host.go`, `runner_devbox.go`, `runner_service.go` (exec + run), `runner_workflow.go` to read `Cmd` instead of `Run`. **`runner_workflow.go` itself is unchanged in shape** — it still references `WorkflowStep.Command` / `WorkflowStep.Confirm`; only its calls into other runners (which now read `Cmd`) shift
-- [ ] **switch command-file decode to strict**: in `internal/usercommands/model/types.go` `ParseCommandFile` (line 676; this is where the `yaml.Unmarshal` actually lives) replace `yaml.Unmarshal(data, &cf)` with `dec := yaml.NewDecoder(bytes.NewReader(data)); dec.KnownFields(true); err := dec.Decode(&cf)`. **`LoadCommandFile` lives in `internal/usercommands/loader/loader.go:67` and just calls `model.ParseCommandFile`** — no decoder change needed there, but verify its error wrapping still surfaces the file path through the strict-decode error
-- [ ] add a `ParseCommandFile` test in `internal/usercommands/model/types_test.go`: legacy `run:` produces an unknown-field error (NOT a later `cmd required` semantic error)
-- [ ] add a `LoadCommandFile` test in `internal/usercommands/loader/loader_test.go`: same broken file, error must include the file path
-- [ ] add a validation test that a CommandDef with `type: command` (legacy host-shell name) fails type validation with a useful error pointing at `type: shell`
-- [ ] grep for any remaining `Run:` field accesses on `CommandDef`; update all callers
-- [ ] update `internal/usercommands/model/types_test.go` and `runtime/runner*_test.go` table-driven cases
-- [ ] run `make test` — must pass before Task 5
+- [x] in `internal/usercommands/model/types.go`: rename constant `CommandTypeCommand = "command"` → `CommandTypeShell = "shell"`; update doc comment to "host shell command"
+- [x] rename `CommandDef.Run` field → `CommandDef.Cmd` (yaml tag `cmd`); applies to types `shell`, `devbox`, `service_exec`, `service_run`
+- [x] keep `CommandDef.Argv` as the alternate raw-argv form for `type: shell` and `type: service_exec`/`service_run` (mutually exclusive with `Cmd`); document in the type doc comment
+- [x] keep `CommandDef.Script` (`ScriptDef`) untouched — `type: script` carries structured config, not a single command string; document this exception in `commands.md`
+- [x] update `internal/usercommands/runtime/runner.go` `NewRunner` dispatch: case `CommandTypeShell` → `HostRunner`, etc.
+- [x] update `runner_host.go`, `runner_devbox.go`, `runner_service.go` (exec + run), `runner_workflow.go` to read `Cmd` instead of `Run`. **`runner_workflow.go` itself is unchanged in shape** — it still references `WorkflowStep.Command` / `WorkflowStep.Confirm`; only its calls into other runners (which now read `Cmd`) shift
+- [x] **switch command-file decode to strict**: in `internal/usercommands/model/types.go` `ParseCommandFile` (line 676; this is where the `yaml.Unmarshal` actually lives) replace `yaml.Unmarshal(data, &cf)` with `dec := yaml.NewDecoder(bytes.NewReader(data)); dec.KnownFields(true); err := dec.Decode(&cf)`. **`LoadCommandFile` lives in `internal/usercommands/loader/loader.go:67` and just calls `model.ParseCommandFile`** — no decoder change needed there, but verify its error wrapping still surfaces the file path through the strict-decode error
+- [x] add a `ParseCommandFile` test in `internal/usercommands/model/types_test.go`: legacy `run:` produces an unknown-field error (NOT a later `cmd required` semantic error)
+- [x] add a `LoadCommandFile` test in `internal/usercommands/loader/loader_test.go`: same broken file, error must include the file path
+- [x] add a validation test that a CommandDef with `type: command` (legacy host-shell name) fails type validation with a useful error pointing at `type: shell`
+- [x] grep for any remaining `Run:` field accesses on `CommandDef`; update all callers
+- [x] update `internal/usercommands/model/types_test.go` and `runtime/runner*_test.go` table-driven cases
+- [x] run `make test` — must pass before Task 5
 
 ### Task 5: Add `service_configs_check` builtin
 
