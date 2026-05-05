@@ -1613,7 +1613,8 @@ run:
     - name: start
       steps:
         - name: bad
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
           run: echo hello
 `
 	path := writeLifecycleFixture(t, yml)
@@ -1647,7 +1648,8 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
 	cfg, err := LoadLifecycleConfig(path)
@@ -1669,7 +1671,8 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
 	_, err := LoadLifecycleConfig(path)
@@ -1686,13 +1689,15 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
 stop:
   phases:
     - name: stop
       steps:
         - name: down
-          devbox: "docker down"
+          type: devbox
+          cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)
 	cfg, err := LoadLifecycleConfig(path)
@@ -1740,14 +1745,16 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
 stop:
   final_message: "Custom stop message"
   phases:
     - name: stop
       steps:
         - name: down
-          devbox: "docker down"
+          type: devbox
+          cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)
 	cfg, err := LoadLifecycleConfig(path)
@@ -1772,7 +1779,8 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
 	cfg, err := LoadLifecycleConfig(path)
@@ -1974,13 +1982,15 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
 stop:
   phases:
     - name: stop
       steps:
         - name: down
-          devbox: "docker down"
+          type: devbox
+          cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)
 	cfg, err := LoadLifecycleConfig(path)
@@ -2177,14 +2187,16 @@ run:
     - name: start
       steps:
         - name: up
-          devbox: "docker up"
+          type: devbox
+          cmd: "docker up"
 stop:
   log: true
   phases:
     - name: stop
       steps:
         - name: down
-          devbox: "docker down"
+          type: devbox
+          cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)
 	cfg, err := LoadLifecycleConfig(path)
