@@ -225,12 +225,12 @@ Port the verification logic out of the soon-to-be-removed CLI command into an en
 
 ### Task 6: Remove `devbox deploy config` and `devbox deploy config-check` CLI commands
 
-- [ ] delete `newDeployConfigCmd()` (`internal/command/deploy.go:298-331`)
-- [ ] delete `newDeployConfigCheckCmd()` (`internal/command/deploy.go:337-381`)
-- [ ] remove their `AddCommand` registrations in `newDeployCmd()` (~37-38)
-- [ ] delete obsoleted helper functions if no longer referenced
-- [ ] update `internal/command/deploy_test.go` — remove tests for the deleted commands
-- [ ] run `make test` — must pass before Task 7
+- [x] delete `newDeployConfigCmd()` (`internal/command/deploy.go:298-331`)
+- [x] delete `newDeployConfigCheckCmd()` (`internal/command/deploy.go:337-381`)
+- [x] remove their `AddCommand` registrations in `newDeployCmd()` (~37-38)
+- [x] delete obsoleted helper functions if no longer referenced
+- [x] update `internal/command/deploy_test.go` — remove tests for the deleted commands
+- [x] run `make test` — must pass before Task 7
 
 ### Task 7: Sweep fixtures and embedded YAML in test files
 

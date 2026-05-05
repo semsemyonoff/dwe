@@ -3,10 +3,8 @@ package command
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
@@ -34,8 +32,6 @@ application services. Use 'devbox deploy plan' to preview before running.`,
 	cmd.AddCommand(newDeployPlanCmd(flags))
 	cmd.AddCommand(newDeployRunCmd(flags))
 	cmd.AddCommand(newDeployStepCmd(flags))
-	cmd.AddCommand(newDeployConfigCmd(flags))
-	cmd.AddCommand(newDeployConfigCheckCmd(flags))
 	return cmd
 }
 
@@ -293,93 +289,4 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command without executing")
 	return cmd
-}
-
-// newDeployConfigCmd creates the `devbox deploy config <service>` command.
-// It copies all config files declared in services.<service>.configs from
-// configs/services/<service>/ to services/<service>/configs/ using the given mode.
-// Delegates to the service_configs_copy builtin for the actual copy logic.
-func newDeployConfigCmd(flags *rootFlags) *cobra.Command {
-	var mode string
-
-	cmd := &cobra.Command{
-		Use:   "config <service>",
-		Short: "Copy template configs to service directory",
-		Long: `Copy config file templates declared in services.<service>.configs from
-configs/services/<service>/ to services/<service>/configs/.
-
-Mode controls copy behavior: 'default' skips existing files, 'update' copies always, 'replace' overwrites.`,
-		Example: `  devbox deploy config main
-  devbox deploy config main --mode update`,
-		Args:         cobra.ExactArgs(1),
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			projectRoot := flags.ProjectRoot()
-			ctx := builtin.ExecContext{
-				Config:      cfg,
-				ProjectRoot: projectRoot,
-				Output:      render.Stdout(),
-				Stdin:       os.Stdin,
-			}
-			with := map[string]any{"service": args[0], "mode": mode}
-			return builtin.Run("service_configs_copy", with, ctx)
-		},
-	}
-
-	cmd.Flags().StringVar(&mode, "mode", "replace", "copy mode: default, update, or replace")
-	return cmd
-}
-
-// newDeployConfigCheckCmd creates the `devbox deploy config-check <service>` command.
-// It verifies that all config files declared in services.<service>.configs exist in
-// services/<service>/configs/. Exits non-zero and prints missing files if any are absent.
-// Intended for use as a step check: "cmd: devbox deploy config-check <service>".
-func newDeployConfigCheckCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "config-check <service>",
-		Short: "Verify that all declared service configs exist in the service directory",
-		Long: `Check that every file listed in services.<service>.configs exists at
-services/<service>/configs/<file>. Exits non-zero if any files are missing.
-
-Intended as a deploy step check condition:
-  check: "cmd: devbox deploy config-check <service>"`,
-		Args:         cobra.ExactArgs(1),
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-
-			serviceName := args[0]
-			svc, ok := cfg.Services[serviceName]
-			if !ok {
-				return fmt.Errorf("service %q not found in config", serviceName)
-			}
-
-			projectRoot := flags.ProjectRoot()
-			destDir := filepath.Join(projectRoot, svc.Dir, "configs")
-
-			var missing []string
-			for _, entry := range svc.Configs {
-				dest := filepath.Join(destDir, entry.File)
-				if !deploy.IsRegularFile(dest) {
-					missing = append(missing, filepath.Join(svc.Dir, "configs", entry.File))
-				}
-			}
-
-			if len(missing) > 0 {
-				w := render.Stdout()
-				for _, f := range missing {
-					w.Error("missing config: " + f)
-				}
-				return ErrSilent
-			}
-			return nil
-		},
-	}
 }
