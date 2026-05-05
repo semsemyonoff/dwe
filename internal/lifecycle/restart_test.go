@@ -83,7 +83,8 @@ func TestRunRestart_NoUpdatePropagated(t *testing.T) {
     - name: s
       steps:
         - name: noop
-          run: "true"
+          type: shell
+          cmd: "true"
 run:
   update:
     enabled: true
@@ -93,7 +94,8 @@ run:
     - name: s
       steps:
         - name: noop
-          run: "true"
+          type: shell
+          cmd: "true"
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)

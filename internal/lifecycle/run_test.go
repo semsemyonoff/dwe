@@ -204,7 +204,7 @@ func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
 	enabled := "true"
-	yaml := "run:\n  update:\n    enabled: " + enabled + "\n    mode: auto\n  phases:\n    - name: s\n      steps:\n        - name: n\n          run: \"true\"\n"
+	yaml := "run:\n  update:\n    enabled: " + enabled + "\n    mode: auto\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
 	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
-	yaml := "run:\n  phases:\n    - name: s\n      steps:\n        - name: n\n          run: \"true\"\n"
+	yaml := "run:\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
 	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}

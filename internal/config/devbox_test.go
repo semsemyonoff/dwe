@@ -1720,7 +1720,8 @@ run:
     - name: hooks
       steps:
         - name: optional-hook
-          run: echo hello
+          type: shell
+          cmd: echo hello
           continue_on_error: true
 `
 	path := writeLifecycleFixture(t, yml)
