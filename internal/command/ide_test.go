@@ -675,7 +675,7 @@ func TestResolveIDETemplate(t *testing.T) {
 			svc: config.ServiceConfig{
 				Type:    "app",
 				Enabled: true,
-				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: "../escape"},
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: ".."},
 			},
 			serviceName:  "main",
 			fileBase:     "devcontainer.json",
@@ -710,7 +710,7 @@ func TestResolveIDETemplate(t *testing.T) {
 				Enabled: true,
 				IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
 			},
-			serviceName:  "../oops",
+			serviceName:  "..",
 			fileBase:     "devcontainer.json",
 			wantErrInMsg: ".. segment",
 		},
@@ -1187,11 +1187,11 @@ func simulateExplicitArgValidation(name string, services map[string]config.Servi
 	if !ok {
 		return fmt.Errorf("service %q not found in config", name)
 	}
-	if strings.TrimSpace(svc.Dir) == "" {
-		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
-	}
 	if !svc.Enabled {
 		return fmt.Errorf("service %q is disabled at the project level", name)
+	}
+	if strings.TrimSpace(svc.Dir) == "" {
+		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
 	}
 	enabled, explicit := svc.IDERenderEnabledExplicit()
 	if !enabled {

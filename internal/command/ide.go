@@ -186,14 +186,14 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 					return fmt.Errorf("service %q not found in config", name)
 				}
 
-				// Check Dir is not empty
-				if strings.TrimSpace(svc.Dir) == "" {
-					return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
-				}
-
 				// Check if service is disabled at project level
 				if !svc.Enabled {
 					return fmt.Errorf("service %q is disabled at the project level", name)
+				}
+
+				// Check Dir is not empty
+				if strings.TrimSpace(svc.Dir) == "" {
+					return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
 				}
 
 				// Check IDE rendering policy
@@ -245,8 +245,8 @@ func validateIDETemplateKey(s string) error {
 	if s == "" {
 		return nil // empty is valid (field is optional)
 	}
-	// Reject .. segments first (appears anywhere in the string)
-	if strings.Contains(s, "..") {
+	// Reject the ".." path traversal segment
+	if s == ".." {
 		return fmt.Errorf("template key %q contains .. segment", s)
 	}
 	// Reject path separators
@@ -317,6 +317,9 @@ func checkNoSymlinks(absRoot, absDir string) error {
 	rel, err := filepath.Rel(absRoot, absDir)
 	if err != nil {
 		return fmt.Errorf("relative path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path %q is not under root %q", absDir, absRoot)
 	}
 	current := absRoot
 	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
@@ -433,11 +436,17 @@ func renderIDETemplate(tplStr, name string, data ideTemplateData, dest, absRoot 
 	}
 
 	destDir := filepath.Dir(dest)
+	// Guard against symlinks in the destination path before creating any directories.
+	// checkNoSymlinks walks existing components only, so it catches a pre-existing
+	// .devcontainer -> /tmp/outside symlink before MkdirAll follows it.
+	if err := checkNoSymlinks(absRoot, destDir); err != nil {
+		return fmt.Errorf("destination path check: %w", err)
+	}
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return fmt.Errorf("create dir for %s: %w", dest, err)
 	}
 
-	// Verify the real directory resolves inside the project root.
+	// Verify the real directory resolves inside the project root after creation.
 	// MkdirAll follows symlinks, so a .devcontainer -> /tmp/outside symlink
 	// would succeed silently without this check.
 	// Both paths are resolved via EvalSymlinks so the comparison works on
