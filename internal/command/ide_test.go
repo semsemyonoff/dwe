@@ -1187,11 +1187,11 @@ func simulateExplicitArgValidation(name string, services map[string]config.Servi
 	if !ok {
 		return fmt.Errorf("service %q not found in config", name)
 	}
-	if !svc.Enabled {
-		return fmt.Errorf("service %q is disabled at the project level", name)
-	}
 	if strings.TrimSpace(svc.Dir) == "" {
 		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
+	}
+	if !svc.Enabled {
+		return fmt.Errorf("service %q is disabled at the project level", name)
 	}
 	enabled, explicit := svc.IDERenderEnabledExplicit()
 	if !enabled {
@@ -1290,12 +1290,12 @@ func TestCheckNoSymlinks(t *testing.T) {
 	}
 
 	// Non-existent path should be fine (no symlinks possible in non-existent path)
-	if err := checkNoSymlinks(root, filepath.Join(root, "nonexistent", "path")); err != nil {
+	if err := checkNoSymlinks(root, filepath.Join(root, "nonexistent", "path"), "test path"); err != nil {
 		t.Errorf("non-existent path: unexpected error: %v", err)
 	}
 
 	// Real existing path should be fine
-	if err := checkNoSymlinks(root, realSub); err != nil {
+	if err := checkNoSymlinks(root, realSub, "test path"); err != nil {
 		t.Errorf("real path: unexpected error: %v", err)
 	}
 
@@ -1306,12 +1306,12 @@ func TestCheckNoSymlinks(t *testing.T) {
 	}
 
 	// Path through symlink should be rejected
-	if err := checkNoSymlinks(root, filepath.Join(linkPath, "sub")); err == nil {
+	if err := checkNoSymlinks(root, filepath.Join(linkPath, "sub"), "test path"); err == nil {
 		t.Errorf("path through symlink: expected error, got nil")
 	}
 
 	// Symlink itself as target should be rejected
-	if err := checkNoSymlinks(root, linkPath); err == nil {
+	if err := checkNoSymlinks(root, linkPath, "test path"); err == nil {
 		t.Errorf("symlink as target: expected error, got nil")
 	}
 }

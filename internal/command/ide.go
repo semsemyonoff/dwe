@@ -186,14 +186,14 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 					return fmt.Errorf("service %q not found in config", name)
 				}
 
-				// Check if service is disabled at project level
-				if !svc.Enabled {
-					return fmt.Errorf("service %q is disabled at the project level", name)
-				}
-
 				// Check Dir is not empty
 				if strings.TrimSpace(svc.Dir) == "" {
 					return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
+				}
+
+				// Check if service is disabled at project level
+				if !svc.Enabled {
+					return fmt.Errorf("service %q is disabled at the project level", name)
 				}
 
 				// Check IDE rendering policy
@@ -313,7 +313,8 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 
 // checkNoSymlinks verifies that no existing path component between absRoot and absDir
 // is a symlink. It stops at the first non-existent component (which cannot be a symlink).
-func checkNoSymlinks(absRoot, absDir string) error {
+// The label parameter appears in the error message to identify what is being checked.
+func checkNoSymlinks(absRoot, absDir, label string) error {
 	rel, err := filepath.Rel(absRoot, absDir)
 	if err != nil {
 		return fmt.Errorf("relative path: %w", err)
@@ -335,7 +336,7 @@ func checkNoSymlinks(absRoot, absDir string) error {
 			return fmt.Errorf("stat %s: %w", current, err)
 		}
 		if fi.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("service dir contains symlink at %q; symlinked service directories are not supported", current)
+			return fmt.Errorf("%s contains symlink at %q; symlinked paths are not supported", label, current)
 		}
 	}
 	return nil
@@ -363,7 +364,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	if !strings.HasPrefix(absDir+string(filepath.Separator), absRoot+string(filepath.Separator)) {
 		return fmt.Errorf("service dir %q escapes project root", svc.Dir)
 	}
-	if err := checkNoSymlinks(absRoot, absDir); err != nil {
+	if err := checkNoSymlinks(absRoot, absDir, "service dir"); err != nil {
 		return err
 	}
 
@@ -439,8 +440,8 @@ func renderIDETemplate(tplStr, name string, data ideTemplateData, dest, absRoot 
 	// Guard against symlinks in the destination path before creating any directories.
 	// checkNoSymlinks walks existing components only, so it catches a pre-existing
 	// .devcontainer -> /tmp/outside symlink before MkdirAll follows it.
-	if err := checkNoSymlinks(absRoot, destDir); err != nil {
-		return fmt.Errorf("destination path check: %w", err)
+	if err := checkNoSymlinks(absRoot, destDir, "destination dir"); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return fmt.Errorf("create dir for %s: %w", dest, err)
