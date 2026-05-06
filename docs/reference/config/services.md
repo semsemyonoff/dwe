@@ -12,6 +12,7 @@ Service declarations for the devbox project.
   - [`configs` field](#configs-field)
   - [`dirs` field](#dirs-field)
   - [`cli` block](#cli-block)
+  - [`ide` block](#ide-block)
 - [Inheritance via `extends`](#inheritance-via-extends)
 - [Example: full service definition](#example-full-service-definition)
 - [Common pitfalls](#common-pitfalls)
@@ -63,6 +64,9 @@ services:
       workdir: /workspace/src
       env:
         - KEY=value
+    ide:
+      enabled: true|false          # enable IDE rendering for this service
+      template: <template-dir-name> # service-specific template directory
 ```
 
 ## Field reference
@@ -80,6 +84,7 @@ services:
 | `extends` | string | no | Inherit fields from another service key |
 | `depends_on` | list | no | Ordered dependency on other services (affects deploy order) |
 | `compose` | list | no | Additional compose overlay files active when service is enabled |
+| `ide` | block | no | IDE rendering configuration (see [`ide` block](#ide-block)) |
 
 ### `configs` field
 
@@ -159,6 +164,63 @@ cli:
 
 The list form is convenient when copy-pasting from a `.env` file; the map form is friendlier for inheriting and overriding individual keys via `extends:`.
 
+### `ide` block
+
+Controls whether and how IDE rendering generates `.devcontainer/devcontainer.json` for this service.
+
+```yaml
+ide:
+  enabled: true          # opt in to IDE rendering for this service
+  template: main-debug   # use custom template subdirectory
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in IDE rendering. `devbox render ide` respects this setting; see **Activation** below. |
+| `template` | — | Optional custom template subdirectory name. Must be a single directory key under `devbox/templates/ide/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then global templates. |
+
+#### IDE activation rules
+
+IDE rendering requires **both** activation and policy conditions:
+
+1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; mandatory services are always enabled).
+2. **IDE policy**: The `ide.enabled` setting must be `true`.
+
+A service is rendered only if both are satisfied. Disabling either suppresses rendering.
+
+**Default policy**: `type: app` services default to `ide.enabled: true` (opt-out); all other types default to `false` (opt-in).
+
+#### Template resolution
+
+`devbox render ide` searches for templates in this order; the first match is used:
+
+1. `devbox/templates/ide/<template>/devcontainer.json.tpl` (if `template` is set)
+2. `devbox/templates/ide/<service-name>/devcontainer.json.tpl`
+3. `devbox/templates/ide/devcontainer.json.tpl` (global fallback)
+
+If none exist, rendering is skipped with a warning.
+
+#### Collision resolution
+
+When multiple services share the same `dir` (e.g., `main` and `main-debug` both pointing to `./services/main`), only the most-derived service (deepest in the `extends` chain) renders IDE files. The others are reported as skipped with a collision warning.
+
+```yaml
+services:
+  main:
+    type: app
+    dir: ./services/main
+    # ide.enabled defaults to true
+
+  main-debug:
+    type: app
+    extends: main      # same dir as parent
+    dir: ./services/main
+    # IDE files go to ./services/main/.devcontainer/devcontainer.json
+    # (main-debug wins because it extends main)
+```
+
+In this example, `devbox render ide` produces one file (`main-debug`'s variant) in `./services/main/.devcontainer/devcontainer.json`, and emits a warning that `main` was skipped due to collision.
+
 ## Inheritance via `extends`
 
 A child service inherits all fields from the named parent. The child then overrides only the fields it declares. Multi-level chains are supported and resolved in topological order — a grandchild gets the parent's defaults indirectly via its direct parent.
@@ -176,6 +238,7 @@ Resolution rules:
 - `dirs` — parent's list comes first; child entries are appended; duplicates are removed (parent order preserved).
 - `configs` — child wholly replaces parent when set (child has its own list); parent's list is used only when child omits the key.
 - `cli.env` — recursive map merge: parent provides defaults, child overrides per key.
+- `ide.enabled` and `ide.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit IDE settings indirectly.
 - `container`, `mandatory`, `compose`, `depends_on` — never inherited. A child that omits `container` keeps an empty value, which is rejected at runtime; declare it explicitly. The same applies to `compose` and `depends_on`: each child specifies its own.
 
 ```yaml
@@ -188,9 +251,11 @@ services:
     cli:
       shell: bash
       user: www-data
+    ide:
+      enabled: true
 
   main-debug:
-    extends: main            # inherits dir, dirs, cli, etc.
+    extends: main            # inherits dir, dirs, cli, ide, etc.
     container: app-main-debug
     mandatory: false
     compose:
@@ -198,9 +263,11 @@ services:
     cli:
       env:
         - XDEBUG_CONFIG="cli_color=1"
+    ide:
+      template: main-debug  # override template, keep enabled: true from parent
 ```
 
-`main-debug` gets `dir`, `dirs`, and base `cli` fields from `main`, and adds its own `compose` overlay and extra env.
+`main-debug` gets `dir`, `dirs`, base `cli`, and `ide.enabled: true` from `main`. It overrides `ide.template` to use a custom template subdirectory (`devbox/templates/ide/main-debug/`), and adds its own `compose` overlay and extra env. When `devbox render ide` runs, both services share `dir: ./services/main`, so the most-derived (`main-debug`) wins and renders its custom template; `main` is skipped with a collision warning.
 
 ## Example: full service definition
 
@@ -224,6 +291,8 @@ services:
       shell: bash
       user: www-data
       workdir: /workspace/src
+    ide:
+      enabled: true
 ```
 
 ## Common pitfalls
@@ -232,6 +301,7 @@ services:
 - **Absolute paths in `dirs`** — dirs entries must be relative paths. Absolute paths or paths containing `..` are rejected by `service_dirs_ensure` as a security check.
 - **Missing `container` in child** — `container` is **not** inherited via `extends:`. A child without an explicit `container` carries an empty value, which fails at runtime. Always declare `container` per service.
 - **Forgetting `compose:` and `depends_on:` on a child** — also not inherited. Optional services that need their own overlay or dependency must declare it explicitly.
+- **Non-`app` services no longer get IDE files by default** — Previously, `devbox render ide` rendered files for all enabled services regardless of type. Now only `type: app` services default to `ide.enabled: true`; other types (`db`, `cache`, `queue`, `tool`) default to `false`. If IDE rendering is needed for a non-`app` service, set `ide.enabled: true` explicitly. This is a breaking change; existing projects using IDE files for non-`app` services must be updated.
 
 ## Related commands
 

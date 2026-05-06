@@ -118,12 +118,12 @@ This aligns IDE rendering with the broader architectural goals: explicit policy 
 - [x] run `go test ./internal/command/...` — must pass before Task 5
 
 ### Task 5: Update services config docs
-- [ ] in `docs/reference/config/services.md`, add an `ide:` subsection documenting the schema (`enabled`, `template`), the default-by-type policy, the inheritance rule (children inherit `ide.enabled` and `ide.template` from `extends` parent unless overridden — matches existing field-by-field inheritance docs), the extends-aware collision rule, and the `ide.template` constraints (single directory key — no separators, no `..`, no absolute paths, no leading `.`)
-- [ ] add a short example showing two services sharing a `dir` and which renders
-- [ ] document that selection requires both `enabled: true` (project activation, computed from the 3-layer merge) **and** `ide.enabled: true` (IDE policy) — disabling either suppresses rendering
-- [ ] document the explicit-arg error matrix (project-disabled vs ide-disabled-explicit vs ide-disabled-default vs empty-dir)
-- [ ] note the **breaking** behavior change: services without an explicit `ide.enabled` whose `type` is not `app` will no longer get IDE files written; users who want them must set `ide.enabled: true`
-- [ ] no test required for this task (docs only)
+- [x] in `docs/reference/config/services.md`, add an `ide:` subsection documenting the schema (`enabled`, `template`), the default-by-type policy, the inheritance rule (children inherit `ide.enabled` and `ide.template` from `extends` parent unless overridden — matches existing field-by-field inheritance docs), the extends-aware collision rule, and the `ide.template` constraints (single directory key — no separators, no `..`, no absolute paths, no leading `.`)
+- [x] add a short example showing two services sharing a `dir` and which renders
+- [x] document that selection requires both `enabled: true` (project activation, computed from the 3-layer merge) **and** `ide.enabled: true` (IDE policy) — disabling either suppresses rendering
+- [x] document the explicit-arg error matrix (project-disabled vs ide-disabled-explicit vs ide-disabled-default vs empty-dir)
+- [x] note the **breaking** behavior change: services without an explicit `ide.enabled` whose `type` is not `app` will no longer get IDE files written; users who want them must set `ide.enabled: true`
+- [x] no test required for this task (docs only)
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify all four decisions from Overview are implemented (ide block, template fallback, extends-aware collision, default-by-type)
