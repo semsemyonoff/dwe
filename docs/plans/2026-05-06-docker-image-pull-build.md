@@ -159,22 +159,22 @@ Baseline: config=85.1%, docker=36.6%, command=58.2%
 
 ### Task 4: Add `devbox docker build` cobra command
 
-- [ ] in `internal/command/docker.go`, add a pure helper `resolveBuildInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*docker.Compose, []string)` that returns the `*Compose` (NewCompose vs NewComposeAll based on `all`) and the extra args slice. When `force` is true, the extra args begin with `"--no-cache", "--pull"` followed by `services`; otherwise just `services`
-- [ ] in `internal/command/docker.go`, add `newDockerBuildCmd(flags *rootFlags) *cobra.Command`:
+- [x] in `internal/command/docker.go`, add a pure helper `resolveBuildInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*docker.Compose, []string)` that returns the `*Compose` (NewCompose vs NewComposeAll based on `all`) and the extra args slice. When `force` is true, the extra args begin with `"--no-cache", "--pull"` followed by `services`; otherwise just `services`
+- [x] in `internal/command/docker.go`, add `newDockerBuildCmd(flags *rootFlags) *cobra.Command`:
   - `Use: "build [services...]"`, short description, `SilenceUsage: true`
   - bool flag `--all`
   - bool flag `--force`
   - `RunE`: build pipeline with `"build"`; pass into `resolveBuildInvocation`; call `compose.Exec("build", extraArgs...)`
-- [ ] register it in `newDockerCmd` directly after the `pull` registration from Task 3 (so the order ends `... wait, pull, build, project-name`)
-- [ ] update `internal/command/lifecycle_test.go` `TestDockerGroupStillIntact` `want` slice (now updated for `pull` in Task 3) to also include `"build"`
-- [ ] add tests in `internal/command/docker_test.go`:
+- [x] register it in `newDockerCmd` directly after the `pull` registration from Task 3 (so the order ends `... wait, pull, build, project-name`)
+- [x] update `internal/command/lifecycle_test.go` `TestDockerGroupStillIntact` `want` slice (now updated for `pull` in Task 3) to also include `"build"`
+- [x] add tests in `internal/command/docker_test.go`:
   - command registers under `devbox docker build`
   - `resolveBuildInvocation(cfg, dockerCfg, false, false, nil)`: `Compose.Files == cfg.ComposeFiles()`, extraArgs is empty
   - `resolveBuildInvocation(cfg, dockerCfg, true, false, []string{"svc"})`: `Compose.Files == cfg.ComposeFilesAll()`, extraArgs `[]string{"svc"}`
   - `resolveBuildInvocation(cfg, dockerCfg, false, true, []string{"svc"})`: `Compose.Files == cfg.ComposeFiles()`, extraArgs `[]string{"--no-cache", "--pull", "svc"}`
   - `resolveBuildInvocation(cfg, dockerCfg, true, true, []string{"svc"})`: `Compose.Files == cfg.ComposeFilesAll()`, extraArgs `[]string{"--no-cache", "--pull", "svc"}`
   - end-to-end shape: feed the returned `(compose, extraArgs)` into `compose.BuildArgs("build", extraArgs...)` and assert that any configured `args.build` defaults sit before the force flags, and the force flags sit before positional services (i.e. `... build <args.build> --no-cache --pull svc`)
-- [ ] run `go test ./internal/command/...` — must pass before next task
+- [x] run `go test ./internal/command/...` — must pass before next task
 
 ### Task 5 (Task N-1): Verify acceptance criteria
 

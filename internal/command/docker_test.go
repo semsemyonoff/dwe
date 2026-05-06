@@ -147,7 +147,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	dockerCmd := newDockerCmd(flags)
 
-	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "pull", "project-name"}
+	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "pull", "build", "project-name"}
 	commands := dockerCmd.Commands()
 
 	if len(commands) != len(expectedSubs) {
@@ -305,6 +305,328 @@ func TestDockerPullArgs(t *testing.T) {
 		"svc",
 	}
 	assertArgs(t, "pull args", args, expected)
+}
+
+// TestResolveBuildInvocation verifies the build resolver logic.
+func TestResolveBuildInvocation(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+			Overlays: map[string]string{
+				"dev":  "compose.dev.yaml",
+				"test": "compose.test.yaml",
+			},
+		},
+		Services: map[string]config.ServiceConfig{
+			"api": {
+				Enabled: false,
+				Compose: []string{"compose.api.yaml"},
+			},
+			"cache": {
+				Enabled: true,
+				Compose: []string{"compose.cache.yaml"},
+			},
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "test-project",
+		Args: config.DockerArgs{
+			Build: []string{"--parallel", "4"},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		all      bool
+		force    bool
+		services []string
+		check    func(*docker.Compose) bool
+		wantArg  []string
+	}{
+		{
+			name:     "build without flags uses ComposeFiles",
+			all:      false,
+			force:    false,
+			services: nil,
+			check: func(c *docker.Compose) bool {
+				activeFiles := cfg.ComposeFiles()
+				return len(c.Files) == len(activeFiles)
+			},
+			wantArg: []string{},
+		},
+		{
+			name:     "build with --all uses ComposeFilesAll",
+			all:      true,
+			force:    false,
+			services: []string{"svc"},
+			check: func(c *docker.Compose) bool {
+				allFiles := cfg.ComposeFilesAll()
+				return len(c.Files) == len(allFiles)
+			},
+			wantArg: []string{"svc"},
+		},
+		{
+			name:     "build with --force prepends --no-cache --pull",
+			all:      false,
+			force:    true,
+			services: []string{"svc"},
+			check: func(c *docker.Compose) bool {
+				activeFiles := cfg.ComposeFiles()
+				return len(c.Files) == len(activeFiles)
+			},
+			wantArg: []string{"--no-cache", "--pull", "svc"},
+		},
+		{
+			name:     "build with --all and --force uses ComposeFilesAll and force flags",
+			all:      true,
+			force:    true,
+			services: []string{"svc"},
+			check: func(c *docker.Compose) bool {
+				allFiles := cfg.ComposeFilesAll()
+				return len(c.Files) == len(allFiles)
+			},
+			wantArg: []string{"--no-cache", "--pull", "svc"},
+		},
+		{
+			name:     "build with multiple services",
+			all:      false,
+			force:    false,
+			services: []string{"svc1", "svc2"},
+			check: func(c *docker.Compose) bool {
+				activeFiles := cfg.ComposeFiles()
+				return len(c.Files) == len(activeFiles)
+			},
+			wantArg: []string{"svc1", "svc2"},
+		},
+		{
+			name:     "build force with multiple services",
+			all:      true,
+			force:    true,
+			services: []string{"svc1", "svc2"},
+			check: func(c *docker.Compose) bool {
+				allFiles := cfg.ComposeFilesAll()
+				return len(c.Files) == len(allFiles)
+			},
+			wantArg: []string{"--no-cache", "--pull", "svc1", "svc2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compose, extraArgs := resolveBuildInvocation(cfg, dockerCfg, tt.all, tt.force, tt.services)
+			if !tt.check(compose) {
+				t.Errorf("resolveBuildInvocation file set mismatch")
+			}
+			assertArgs(t, tt.name, extraArgs, tt.wantArg)
+		})
+	}
+}
+
+// TestDockerBuildCmd verifies build command registration and flag parsing.
+func TestDockerBuildCmd(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	buildCmd := newDockerBuildCmd(flags)
+
+	if buildCmd.Name() != "build" {
+		t.Errorf("build command name = %q, want %q", buildCmd.Name(), "build")
+	}
+
+	// Verify that --all and --force are recognized.
+	err := buildCmd.Flags().Parse([]string{"--all", "--force"})
+	if err != nil {
+		t.Errorf("build command should accept --all and --force, but got error: %v", err)
+	}
+}
+
+// TestDockerBuildArgs verifies that build builds correct docker compose arguments.
+func TestDockerBuildArgs(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "test-project",
+		Args: config.DockerArgs{
+			Global: []string{"--ansi", "always"},
+			Build:  []string{"--parallel", "4"},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		extraArgs []string
+		expected  []string
+	}{
+		{
+			name:      "build without force",
+			extraArgs: []string{"svc"},
+			expected: []string{
+				"compose",
+				"-p", "test-project",
+				"-f", "compose.yaml",
+				"--ansi", "always",
+				"build",
+				"--parallel", "4",
+				"svc",
+			},
+		},
+		{
+			name:      "build with force flags",
+			extraArgs: []string{"--no-cache", "--pull", "svc"},
+			expected: []string{
+				"compose",
+				"-p", "test-project",
+				"-f", "compose.yaml",
+				"--ansi", "always",
+				"build",
+				"--parallel", "4",
+				"--no-cache", "--pull",
+				"svc",
+			},
+		},
+		{
+			name:      "build multiple services",
+			extraArgs: []string{"svc1", "svc2"},
+			expected: []string{
+				"compose",
+				"-p", "test-project",
+				"-f", "compose.yaml",
+				"--ansi", "always",
+				"build",
+				"--parallel", "4",
+				"svc1", "svc2",
+			},
+		},
+	}
+
+	compose := docker.NewCompose(cfg, dockerCfg)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := compose.BuildArgs("build", tt.extraArgs...)
+			assertArgs(t, tt.name, args, tt.expected)
+		})
+	}
+}
+
+// TestLegacyImageCommandMapping verifies legacy make targets map to new commands.
+func TestLegacyImageCommandMapping(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+			Overlays: map[string]string{
+				"dev": "compose.dev.yaml",
+			},
+		},
+		Services: map[string]config.ServiceConfig{
+			"api": {
+				Enabled: false,
+				Compose: []string{"compose.api.yaml"},
+			},
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "test-project",
+		Args: config.DockerArgs{
+			Pull:  []string{},
+			Build: []string{},
+		},
+	}
+
+	tests := []struct {
+		name            string
+		legacyTarget    string
+		allFlag         bool
+		forceFlag       bool
+		services        []string
+		expectedCompose func(*docker.Compose) bool
+		expectedArgs    []string
+	}{
+		{
+			name:         "image_pull -> devbox docker pull",
+			legacyTarget: "image_pull",
+			allFlag:      false,
+			forceFlag:    false,
+			services:     []string{},
+			expectedCompose: func(c *docker.Compose) bool {
+				return len(c.Files) == len(cfg.ComposeFiles())
+			},
+			expectedArgs: []string{},
+		},
+		{
+			name:         "image_pull_all -> devbox docker pull --all",
+			legacyTarget: "image_pull_all",
+			allFlag:      true,
+			forceFlag:    false,
+			services:     []string{},
+			expectedCompose: func(c *docker.Compose) bool {
+				return len(c.Files) == len(cfg.ComposeFilesAll())
+			},
+			expectedArgs: []string{},
+		},
+		{
+			name:         "image_rebuild -> devbox docker build",
+			legacyTarget: "image_rebuild",
+			allFlag:      false,
+			forceFlag:    false,
+			services:     []string{},
+			expectedCompose: func(c *docker.Compose) bool {
+				return len(c.Files) == len(cfg.ComposeFiles())
+			},
+			expectedArgs: []string{},
+		},
+		{
+			name:         "image_rebuild_force -> devbox docker build --force",
+			legacyTarget: "image_rebuild_force",
+			allFlag:      false,
+			forceFlag:    true,
+			services:     []string{},
+			expectedCompose: func(c *docker.Compose) bool {
+				return len(c.Files) == len(cfg.ComposeFiles())
+			},
+			expectedArgs: []string{"--no-cache", "--pull"},
+		},
+		{
+			name:         "image_rebuild_all -> devbox docker build --all",
+			legacyTarget: "image_rebuild_all",
+			allFlag:      true,
+			forceFlag:    false,
+			services:     []string{},
+			expectedCompose: func(c *docker.Compose) bool {
+				return len(c.Files) == len(cfg.ComposeFilesAll())
+			},
+			expectedArgs: []string{},
+		},
+		{
+			name:         "image_rebuild_all_force -> devbox docker build --all --force",
+			legacyTarget: "image_rebuild_all_force",
+			allFlag:      true,
+			forceFlag:    true,
+			services:     []string{},
+			expectedCompose: func(c *docker.Compose) bool {
+				return len(c.Files) == len(cfg.ComposeFilesAll())
+			},
+			expectedArgs: []string{"--no-cache", "--pull"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.legacyTarget, func(t *testing.T) {
+			var compose *docker.Compose
+			var extraArgs []string
+
+			if tt.legacyTarget == "image_pull" || tt.legacyTarget == "image_pull_all" {
+				compose, extraArgs = resolvePullInvocation(cfg, dockerCfg, tt.allFlag, tt.services)
+			} else {
+				compose, extraArgs = resolveBuildInvocation(cfg, dockerCfg, tt.allFlag, tt.forceFlag, tt.services)
+			}
+
+			if !tt.expectedCompose(compose) {
+				t.Errorf("%s: compose files mismatch", tt.legacyTarget)
+			}
+			assertArgs(t, tt.legacyTarget, extraArgs, tt.expectedArgs)
+		})
+	}
 }
 
 func assertArgs(t *testing.T, label string, got, expected []string) {

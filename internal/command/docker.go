@@ -28,6 +28,7 @@ func newDockerCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newDockerRunCmd(flags))
 	cmd.AddCommand(newDockerWaitCmd(flags))
 	cmd.AddCommand(newDockerPullCmd(flags))
+	cmd.AddCommand(newDockerBuildCmd(flags))
 	cmd.AddCommand(newDockerProjectNameCmd(flags))
 	return cmd
 }
@@ -295,6 +296,50 @@ func newDockerPullCmd(flags *rootFlags) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "pull images from all configured overlays, not just enabled ones")
+	return cmd
+}
+
+// resolveBuildInvocation returns the Compose instance and extra args for a build command.
+// When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
+// When force is true, prepends --no-cache --pull to the extra args.
+// The returned extra args include the force flags (if applicable) and service names.
+func resolveBuildInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*docker.Compose, []string) {
+	var compose *docker.Compose
+	if all {
+		compose = docker.NewComposeAll(cfg, dockerCfg)
+	} else {
+		compose = docker.NewCompose(cfg, dockerCfg)
+	}
+
+	extraArgs := make([]string, 0, len(services)+2)
+	if force {
+		extraArgs = append(extraArgs, "--no-cache", "--pull")
+	}
+	extraArgs = append(extraArgs, services...)
+	return compose, extraArgs
+}
+
+func newDockerBuildCmd(flags *rootFlags) *cobra.Command {
+	var all bool
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "build [services...]",
+		Short: "Build compose service images",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newDockerPipeline(flags, "build")
+			if err != nil {
+				return err
+			}
+
+			compose, extraArgs := resolveBuildInvocation(p.cfg, p.dockerCfg, all, force, args)
+			return compose.Exec("build", extraArgs...)
+		},
+		SilenceUsage: true,
+	}
+
+	cmd.Flags().BoolVar(&all, "all", false, "build images from all configured overlays, not just enabled ones")
+	cmd.Flags().BoolVar(&force, "force", false, "rebuild without cache and re-pull base images (--no-cache --pull)")
 	return cmd
 }
 
