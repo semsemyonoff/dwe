@@ -10,6 +10,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/charmbracelet/x/term"
+	"github.com/creack/pty"
+
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
@@ -17,6 +20,69 @@ import (
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands"
 )
+
+// stdoutIsTTY reports whether os.Stdout is attached to a terminal.
+// Overridable for tests.
+var stdoutIsTTY = func() bool {
+	return term.IsTerminal(os.Stdout.Fd())
+}
+
+// childIO returns the (stdout, stderr) writers a step should hand to a child
+// process, plus a cleanup func that must be called after the child exits.
+//
+// Three paths, picked by (logWriter, stdout-is-tty):
+//
+//   - logWriter == nil → pass-through: os.Stdout / os.Stderr verbatim so the
+//     child inherits the real terminal fd.
+//
+//   - logWriter != nil, stdout NOT a TTY → MultiWriter tee. Stdout was not a
+//     TTY anyway, so docker compose would have used plain mode regardless.
+//
+//   - logWriter != nil, stdout IS a TTY → PTY. The child sees the tty slave as
+//     its stdout/stderr (real terminal — docker compose's interactive UI
+//     works), and a goroutine copies pty master output to (real os.Stdout +
+//     log file with ANSI stripped). Cleanup closes the parent's tty fd and
+//     waits for the copy goroutine to drain before closing the master. If
+//     pty allocation fails, falls back transparently to the MultiWriter path
+//     so log capture still happens (just without the TUI).
+func childIO(logWriter io.Writer) (stdout, stderr io.Writer, cleanup func()) {
+	if logWriter == nil {
+		return os.Stdout, os.Stderr, func() {}
+	}
+
+	if !stdoutIsTTY() {
+		logStripped := &ansiStripper{logWriter}
+		return io.MultiWriter(os.Stdout, logStripped), io.MultiWriter(os.Stderr, logStripped), func() {}
+	}
+
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		// Fall back to MultiWriter — interactive UI is lost but log capture works.
+		logStripped := &ansiStripper{logWriter}
+		return io.MultiWriter(os.Stdout, logStripped), io.MultiWriter(os.Stderr, logStripped), func() {}
+	}
+
+	// Match the parent's terminal size so the child's TUI lays out correctly.
+	_ = pty.InheritSize(os.Stdin, ptmx)
+
+	done := make(chan struct{})
+	sink := io.MultiWriter(os.Stdout, &ansiStripper{logWriter})
+	go func() {
+		defer close(done)
+		_, _ = io.Copy(sink, ptmx)
+	}()
+
+	cleanup = func() {
+		// Close parent's slave fd; when the child has also exited (its slave
+		// fd closed by the kernel), the master gets EOF and the copy
+		// goroutine returns. We wait for it before closing the master.
+		_ = tty.Close()
+		<-done
+		_ = ptmx.Close()
+	}
+
+	return tty, tty, cleanup
+}
 
 // ActionContext carries the inputs needed by ExecAction.
 // It is constructed once per step by Run and reused for both body and check.
@@ -74,14 +140,9 @@ func execShellAction(a config.Action, actx ActionContext) error {
 	cmd := exec.Command(shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
 	cmd.Dir = actx.WorkDir
 	cmd.Stdin = os.Stdin
-	if actx.LogWriter != nil {
-		logStripped := &ansiStripper{actx.LogWriter}
-		cmd.Stdout = io.MultiWriter(os.Stdout, logStripped)
-		cmd.Stderr = io.MultiWriter(os.Stderr, logStripped)
-	} else {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
+	stdout, stderr, cleanup := childIO(actx.LogWriter)
+	defer cleanup()
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start: %w", err)
@@ -116,14 +177,9 @@ func execDevboxAction(a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
 	cmd := buildDevboxCmd(a.Cmd, actx.WorkDir, shell, config.DevboxBin(actx.Cfg), actx.SkipConfirm)
 	cmd.Stdin = os.Stdin
-	if actx.LogWriter != nil {
-		logStripped := &ansiStripper{actx.LogWriter}
-		cmd.Stdout = io.MultiWriter(os.Stdout, logStripped)
-		cmd.Stderr = io.MultiWriter(os.Stderr, logStripped)
-	} else {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
+	stdout, stderr, cleanup := childIO(actx.LogWriter)
+	defer cleanup()
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start: %w", err)
@@ -208,13 +264,8 @@ func execCommandAction(a config.Action, actx ActionContext) error {
 		}
 		dockerCfg = &config.DockerConfig{}
 	}
-	stdout := io.Writer(os.Stdout)
-	stderr := io.Writer(os.Stderr)
-	if actx.LogWriter != nil {
-		logStripped := &ansiStripper{actx.LogWriter}
-		stdout = io.MultiWriter(os.Stdout, logStripped)
-		stderr = io.MultiWriter(os.Stderr, logStripped)
-	}
+	stdout, stderr, cleanup := childIO(actx.LogWriter)
+	defer cleanup()
 	return usercommands.RunCommand(usercommands.RunContext{
 		Cmd:            def,
 		Params:         params,

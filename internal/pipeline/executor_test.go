@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -606,6 +607,69 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 
 	if !slices.Contains(rep.kindSeq(), "SuspendForExec") {
 		t.Errorf("SuspendForExec must be called for confirm step, kinds: %v", rep.kindSeq())
+	}
+}
+
+// TestChildIO_TTY_AllocatesPTY verifies that when stdout is a TTY and a log
+// writer is set, childIO allocates a pty: the returned writers are *os.File
+// (the tty slave), so the child process sees a real terminal fd. Output
+// written to the slave is mirrored through the goroutine to both real stdout
+// and the log writer.
+func TestChildIO_TTY_AllocatesPTY(t *testing.T) {
+	prev := stdoutIsTTY
+	stdoutIsTTY = func() bool { return true }
+	defer func() { stdoutIsTTY = prev }()
+
+	logBuf := &bytes.Buffer{}
+	stdout, stderr, cleanup := childIO(logBuf)
+	if _, ok := stdout.(*os.File); !ok {
+		t.Fatalf("expected *os.File (pty slave) for stdout, got %T", stdout)
+	}
+	if stdout != stderr {
+		t.Errorf("expected stdout and stderr to be the same pty slave, got distinct values")
+	}
+	if stdout == os.Stdout {
+		t.Error("pty path must not return os.Stdout — child needs the slave fd, not the parent's terminal")
+	}
+	cleanup()
+}
+
+// TestChildIO_NonTTY_TeesToLog verifies that when stdout is not a TTY, childIO
+// returns a MultiWriter that tees to the log writer — preserving the
+// log-capture behavior for CI and redirected runs where there is no TTY to
+// destroy.
+func TestChildIO_NonTTY_TeesToLog(t *testing.T) {
+	prev := stdoutIsTTY
+	stdoutIsTTY = func() bool { return false }
+	defer func() { stdoutIsTTY = prev }()
+
+	logBuf := &bytes.Buffer{}
+	stdout, _, cleanup := childIO(logBuf)
+	defer cleanup()
+	if stdout == os.Stdout {
+		t.Error("expected MultiWriter when non-TTY, got os.Stdout directly")
+	}
+	if _, err := stdout.Write([]byte("hello")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := logBuf.String(); got != "hello" {
+		t.Errorf("log buffer = %q, want %q", got, "hello")
+	}
+}
+
+// TestChildIO_NilLogWriter_PassesThrough verifies that when the log writer is
+// nil (logging disabled), childIO returns os.Stdout/os.Stderr regardless of
+// TTY state.
+func TestChildIO_NilLogWriter_PassesThrough(t *testing.T) {
+	for _, tty := range []bool{true, false} {
+		prev := stdoutIsTTY
+		stdoutIsTTY = func() bool { return tty }
+		stdout, stderr, cleanup := childIO(nil)
+		stdoutIsTTY = prev
+		cleanup()
+		if stdout != os.Stdout || stderr != os.Stderr {
+			t.Errorf("tty=%v: expected pass-through, got stdout=%T stderr=%T", tty, stdout, stderr)
+		}
 	}
 }
 
