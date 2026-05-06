@@ -187,11 +187,11 @@ Baseline: config=85.1%, docker=36.6%, command=58.2%
 
 ### Task 6: [Final] Update documentation
 
-- [ ] in `docs/reference/config/docker.md`:
-  - update `args` section (around line 95) to list `pull` and `build` as available subcommand keys
-  - add a "Subcommand reference" or extend the existing `devbox docker ...` table with `pull` and `build` rows, including `--all` and `--force` semantics
-  - call out that `--all` is a per-invocation file-set override and does NOT modify `devbox/local.yml`
-- [ ] if `env.commands` example mentions specific subcommands, add `pull` / `build` to the example as candidates worth auto-regenerating `.env` for (no behavior change — `ShouldGenerateEnv` already key-matches strings)
+- [x] in `docs/reference/config/docker.md`:
+  - [x] update `args` section (around line 95) to list `pull` and `build` as available subcommand keys
+  - [x] add a "Subcommand reference" or extend the existing `devbox docker ...` table with `pull` and `build` rows, including `--all` and `--force` semantics
+  - [x] call out that `--all` is a per-invocation file-set override and does NOT modify `devbox/local.yml`
+- [x] if `env.commands` example mentions specific subcommands, add `pull` / `build` to the example as candidates worth auto-regenerating `.env` for (no behavior change — `ShouldGenerateEnv` already key-matches strings)
 
 ## Technical Details
 

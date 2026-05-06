@@ -55,13 +55,15 @@ args:
   up: ["-d", "--remove-orphans"]
   logs: ["-f"]
   run: ["--rm"]
+  pull: []
+  build: []
 
 process_env:
   DOCKER_CLI_HINTS: "false"
 
 env:
   auto_generate: true
-  commands: [up, run, exec, restart]
+  commands: [up, run, exec, restart, pull, build]
 
 topology:
   hidden: [redis-insight-setup]
@@ -102,7 +104,7 @@ args:
   run: ["--rm"]
 ```
 
-Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`. (Health-poll args for `devbox docker wait` are not user-configurable — the wait command builds its own poll loop in Go.)
+Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`, `pull`, `build`. (Health-poll args for `devbox docker wait` are not user-configurable — the wait command builds its own poll loop in Go.)
 
 When overriding in `docker.local.yml`, the list replaces the tracked default entirely (lists do not merge):
 
@@ -111,6 +113,24 @@ When overriding in `docker.local.yml`, the list replaces the tracked default ent
 args:
   global: ["--ansi", "always"]
 ```
+
+**Image management subcommands (`pull` and `build`)**
+
+The `pull` and `build` subcommands include optional flags to control file set and cache behavior:
+
+- `devbox docker pull [--all] [services...]` — Pull images for services. By default, uses the active compose file set (base + enabled overlays). The `--all` flag pulls against all configured overlays, regardless of local enable state, without modifying `devbox/local.yml`.
+
+- `devbox docker build [--all] [--force] [services...]` — Build images for services. Default behavior same as pull. The `--force` flag appends `--no-cache --pull` to bypass Docker's layer cache and re-pull base layers. `--all` and `--force` can be combined.
+
+When configuring `args.pull` or `args.build`, they are applied before positional services or force flags. Example:
+
+```yaml
+args:
+  pull: ["--policy", "always"]
+  build: ["--progress", "plain"]
+```
+
+The `--all` flag is a per-invocation override only — it does NOT modify `devbox/local.yml` and does not persist across commands.
 
 ### `process_env`
 
@@ -130,7 +150,7 @@ Controls automatic `.env` generation before specific subcommands.
 ```yaml
 env:
   auto_generate: true
-  commands: [up, run, exec, restart]
+  commands: [up, run, exec, restart, pull, build]
 ```
 
 | Field | Description |
@@ -225,7 +245,7 @@ process_env:
 
 ## Related commands
 
-- `devbox docker up|down|stop|restart|logs|ps|exec|run|wait` — lifecycle commands
+- `devbox docker up|down|stop|restart|logs|ps|exec|run|wait|pull|build` — lifecycle and image-management commands
 - `devbox compose files` — show active compose file list
 - `devbox compose argv` — show full effective argv
 - `devbox render env` — manually regenerate `.env`
