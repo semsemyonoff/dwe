@@ -31,7 +31,7 @@ func setupIDETemplates(t *testing.T, dir string) {
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(tplDir, name), []byte(content), 0o644); err != nil {
-			t.Fatalf("write template %s: %v", name, content)
+			t.Fatalf("write template %s: %v", name, err)
 		}
 	}
 }
@@ -469,6 +469,11 @@ func TestValidateIDETemplateKey(t *testing.T) {
 		{
 			name:    "dot slash - rejected",
 			key:     "./foo",
+			wantErr: true,
+		},
+		{
+			name:    "single dot - rejected",
+			key:     ".",
 			wantErr: true,
 		},
 	}
