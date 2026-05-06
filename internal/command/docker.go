@@ -27,6 +27,7 @@ func newDockerCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newDockerExecCmd(flags))
 	cmd.AddCommand(newDockerRunCmd(flags))
 	cmd.AddCommand(newDockerWaitCmd(flags))
+	cmd.AddCommand(newDockerPullCmd(flags))
 	cmd.AddCommand(newDockerProjectNameCmd(flags))
 	return cmd
 }
@@ -262,6 +263,38 @@ func newDockerWaitCmd(flags *rootFlags) *cobra.Command {
 
 	cmd.Flags().DurationVar(&timeout, "timeout", 60*time.Second, "total wait timeout")
 	cmd.Flags().DurationVar(&interval, "interval", 2*time.Second, "poll interval")
+	return cmd
+}
+
+// resolvePullInvocation returns the Compose instance and extra args for a pull command.
+// When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
+// The returned extra args are just the service names (pull doesn't have flags like --force).
+func resolvePullInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*docker.Compose, []string) {
+	if all {
+		return docker.NewComposeAll(cfg, dockerCfg), services
+	}
+	return docker.NewCompose(cfg, dockerCfg), services
+}
+
+func newDockerPullCmd(flags *rootFlags) *cobra.Command {
+	var all bool
+
+	cmd := &cobra.Command{
+		Use:   "pull [services...]",
+		Short: "Pull compose service images",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newDockerPipeline(flags, "pull")
+			if err != nil {
+				return err
+			}
+
+			compose, extraArgs := resolvePullInvocation(p.cfg, p.dockerCfg, all, args)
+			return compose.Exec("pull", extraArgs...)
+		},
+		SilenceUsage: true,
+	}
+
+	cmd.Flags().BoolVar(&all, "all", false, "pull images from all configured overlays, not just enabled ones")
 	return cmd
 }
 

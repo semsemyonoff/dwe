@@ -58,7 +58,7 @@ func TestDockerGroupStillIntact(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	dockerCmd := newDockerCmd(flags)
 
-	want := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "project-name"}
+	want := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "pull", "project-name"}
 
 	nameSet := make(map[string]bool)
 	for _, c := range dockerCmd.Commands() {

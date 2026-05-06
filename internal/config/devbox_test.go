@@ -2339,9 +2339,9 @@ compose:
 	// Verify ComposeFilesAll includes all overlays in sorted key order.
 	want := []string{
 		"compose.yaml",
-		"compose/tools/adminer.yml",           // sorted first, even though disabled
-		"compose/tools/mailpit.yml",           // sorted
-		"compose/tools/redis_insight.yml",     // sorted
+		"compose/tools/adminer.yml",       // sorted first, even though disabled
+		"compose/tools/mailpit.yml",       // sorted
+		"compose/tools/redis_insight.yml", // sorted
 	}
 	if len(allFiles) != len(want) {
 		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)
@@ -2462,7 +2462,7 @@ compose:
 		"compose/tools/mailpit.yml",
 		"compose/tools/redis_insight.yml",
 		// Service composes in sorted service name order (main, main-debug)
-		"compose/services/main/debug.yml",  // from main-debug service in sampleServicesYML
+		"compose/services/main/debug.yml", // from main-debug service in sampleServicesYML
 	}
 	if len(allFiles) != len(want) {
 		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)

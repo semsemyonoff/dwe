@@ -143,19 +143,19 @@ Baseline: config=85.1%, docker=36.6%, command=58.2%
 
 ### Task 3: Add `devbox docker pull` cobra command
 
-- [ ] in `internal/command/docker.go`, add a pure helper `resolvePullInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*docker.Compose, []string)` that returns the `*Compose` (built via `NewCompose` or `NewComposeAll` based on `all`) and the extra args slice (just `services` for pull) — no Exec call inside the helper
-- [ ] in `internal/command/docker.go`, add `newDockerPullCmd(flags *rootFlags) *cobra.Command`:
+- [x] in `internal/command/docker.go`, add a pure helper `resolvePullInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*docker.Compose, []string)` that returns the `*Compose` (built via `NewCompose` or `NewComposeAll` based on `all`) and the extra args slice (just `services` for pull) — no Exec call inside the helper
+- [x] in `internal/command/docker.go`, add `newDockerPullCmd(flags *rootFlags) *cobra.Command`:
   - `Use: "pull [services...]"`, short description, `SilenceUsage: true`
   - bool flag `--all` (default false)
   - `RunE`: call `newDockerPipeline(flags, "pull")`; pass `p.cfg, p.dockerCfg, all, args` into `resolvePullInvocation`; call `compose.Exec("pull", extraArgs...)` on the result
-- [ ] register it in `newDockerCmd` (in `internal/command/docker.go`, around line 21–31). Place it after `newDockerWaitCmd` and before `newDockerProjectNameCmd` — pull/build are image-management primitives and group naturally at the end of the lifecycle list before the diagnostic `project-name` command
-- [ ] update `internal/command/lifecycle_test.go` `TestDockerGroupStillIntact` (line 57): extend the `want` slice at line 61 to include `"pull"` (currently `[]string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "project-name"}`). Without this update, registering pull breaks the test.
-- [ ] add tests in `internal/command/docker_test.go`:
+- [x] register it in `newDockerCmd` (in `internal/command/docker.go`, around line 21–31). Place it after `newDockerWaitCmd` and before `newDockerProjectNameCmd` — pull/build are image-management primitives and group naturally at the end of the lifecycle list before the diagnostic `project-name` command
+- [x] update `internal/command/lifecycle_test.go` `TestDockerGroupStillIntact` (line 57): extend the `want` slice at line 61 to include `"pull"` (currently `[]string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "project-name"}`). Without this update, registering pull breaks the test.
+- [x] add tests in `internal/command/docker_test.go`:
   - command registers under `devbox docker pull`
   - `resolvePullInvocation(cfg, dockerCfg, false, []string{"svc"})` returns a `*Compose` whose `Files == cfg.ComposeFiles()` and extra args `[]string{"svc"}`
   - `resolvePullInvocation(cfg, dockerCfg, true, []string{"svc"})` returns a `*Compose` whose `Files == cfg.ComposeFilesAll()`
   - `newDockerPullCmd(flags).ParseFlags([]string{"--force"})` returns an error (cobra rejects unknown flag before `RunE`); confirms `--force` is build-only and cannot leak onto pull
-- [ ] run `go test ./internal/command/...` — must pass before next task
+- [x] run `go test ./internal/command/...` — must pass before next task
 
 ### Task 4: Add `devbox docker build` cobra command
 

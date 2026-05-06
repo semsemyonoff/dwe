@@ -147,7 +147,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	dockerCmd := newDockerCmd(flags)
 
-	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "project-name"}
+	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "pull", "project-name"}
 	commands := dockerCmd.Commands()
 
 	if len(commands) != len(expectedSubs) {
@@ -195,6 +195,116 @@ func TestStripDockerCommandSeparator(t *testing.T) {
 			assertArgs(t, tt.name, got, tt.want)
 		})
 	}
+}
+
+// TestResolvePullInvocation verifies the pull resolver logic.
+func TestResolvePullInvocation(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+			Overlays: map[string]string{
+				"dev":  "compose.dev.yaml",
+				"test": "compose.test.yaml",
+			},
+		},
+		Services: map[string]config.ServiceConfig{
+			"api": {
+				Enabled: false,
+				Compose: []string{"compose.api.yaml"},
+			},
+			"cache": {
+				Enabled: true,
+				Compose: []string{"compose.cache.yaml"},
+			},
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "test-project",
+		Args: config.DockerArgs{
+			Pull: []string{"--policy", "always"},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		all     bool
+		want    func(*docker.Compose) bool
+		wantArg []string
+	}{
+		{
+			name: "pull without --all uses ComposeFiles",
+			all:  false,
+			want: func(c *docker.Compose) bool {
+				activeFiles := cfg.ComposeFiles()
+				return len(c.Files) == len(activeFiles)
+			},
+			wantArg: []string{"svc"},
+		},
+		{
+			name: "pull with --all uses ComposeFilesAll",
+			all:  true,
+			want: func(c *docker.Compose) bool {
+				allFiles := cfg.ComposeFilesAll()
+				return len(c.Files) == len(allFiles)
+			},
+			wantArg: []string{"svc"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compose, extraArgs := resolvePullInvocation(cfg, dockerCfg, tt.all, []string{"svc"})
+			if !tt.want(compose) {
+				t.Errorf("resolvePullInvocation(%v) file count mismatch", tt.all)
+			}
+			assertArgs(t, tt.name, extraArgs, tt.wantArg)
+		})
+	}
+}
+
+// TestDockerPullCmd verifies pull command registration and flag parsing.
+func TestDockerPullCmd(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	pullCmd := newDockerPullCmd(flags)
+
+	if pullCmd.Name() != "pull" {
+		t.Errorf("pull command name = %q, want %q", pullCmd.Name(), "pull")
+	}
+
+	// Verify that --force is rejected (it's build-only).
+	err := pullCmd.Flags().Parse([]string{"--force"})
+	if err == nil {
+		t.Error("pull command should reject --force flag, but did not")
+	}
+}
+
+// TestDockerPullArgs verifies that pull builds correct docker compose arguments.
+func TestDockerPullArgs(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "test-project",
+		Args: config.DockerArgs{
+			Global: []string{"--ansi", "always"},
+			Pull:   []string{"--policy", "always"},
+		},
+	}
+
+	compose := docker.NewCompose(cfg, dockerCfg)
+	args := compose.BuildArgs("pull", "svc")
+	expected := []string{
+		"compose",
+		"-p", "test-project",
+		"-f", "compose.yaml",
+		"--ansi", "always",
+		"pull",
+		"--policy", "always",
+		"svc",
+	}
+	assertArgs(t, "pull args", args, expected)
 }
 
 func assertArgs(t *testing.T, label string, got, expected []string) {
