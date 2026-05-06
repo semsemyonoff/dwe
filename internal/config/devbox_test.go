@@ -2292,3 +2292,267 @@ stop:
 		t.Errorf("stop log should be enabled when log: true")
 	}
 }
+
+// --- ComposeFilesAll ---
+
+func TestComposeFilesAll_baseOnly(t *testing.T) {
+	// Only base file, no overlays or service composes.
+	defaultsWithCompose := sampleDefaultsYML + `
+compose:
+  base: compose.yaml
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	got := cfg.ComposeFilesAll()
+	want := []string{"compose.yaml"}
+	if len(got) != len(want) {
+		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(got), len(want), got)
+	}
+	if got[0] != want[0] {
+		t.Errorf("ComposeFilesAll[0] = %q, want %q", got[0], want[0])
+	}
+}
+
+func TestComposeFilesAll_baseAndDisabledToolOverlay(t *testing.T) {
+	// Base + disabled tool overlay. ComposeFilesAll must include disabled overlays.
+	defaultsWithCompose := sampleDefaultsYML + `
+compose:
+  base: compose.yaml
+  overlays:
+    adminer: compose/tools/adminer.yml
+    redis_insight: compose/tools/redis_insight.yml
+    mailpit: compose/tools/mailpit.yml
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// Note: adminer is disabled in sampleDefaultsYML, redis_insight and mailpit enabled.
+	// ComposeFilesAll must include all, ComposeFiles only includes enabled.
+	allFiles := cfg.ComposeFilesAll()
+	activeFiles := cfg.ComposeFiles()
+
+	// Verify ComposeFilesAll includes all overlays in sorted key order.
+	want := []string{
+		"compose.yaml",
+		"compose/tools/adminer.yml",           // sorted first, even though disabled
+		"compose/tools/mailpit.yml",           // sorted
+		"compose/tools/redis_insight.yml",     // sorted
+	}
+	if len(allFiles) != len(want) {
+		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)
+	}
+	for i, w := range want {
+		if allFiles[i] != w {
+			t.Errorf("ComposeFilesAll[%d] = %q, want %q", i, allFiles[i], w)
+		}
+	}
+
+	// Verify ComposeFiles only includes enabled overlays (redis_insight, mailpit, but not adminer).
+	wantActive := []string{
+		"compose.yaml",
+		"compose/tools/mailpit.yml",       // sorted
+		"compose/tools/redis_insight.yml", // sorted
+	}
+	if len(activeFiles) != len(wantActive) {
+		t.Fatalf("ComposeFiles len = %d, want %d: %v", len(activeFiles), len(wantActive), activeFiles)
+	}
+	for i, w := range wantActive {
+		if activeFiles[i] != w {
+			t.Errorf("ComposeFiles[%d] = %q, want %q", i, activeFiles[i], w)
+		}
+	}
+}
+
+func TestComposeFilesAll_baseAndDisabledServiceOverlay(t *testing.T) {
+	// Base + service composes, with mixed enabled/disabled services.
+	defaultsWithCompose := sampleDefaultsYML + `
+compose:
+  base: compose.yaml
+`
+	servicesYML := `
+services:
+  main:
+    type: app
+    container: app-main
+    mandatory: true
+    dir: ./services/main
+    dir_internal: /workspace
+    work_dir_internal: /workspace/src
+    enabled: true
+    compose:
+      - compose/services/main/base.yml
+  worker:
+    type: app
+    container: app-worker
+    mandatory: false
+    dir: ./services/worker
+    dir_internal: /workspace
+    work_dir_internal: /workspace/src
+    enabled: false
+    compose:
+      - compose/services/worker/base.yml
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", servicesYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	// ComposeFilesAll includes all services' composes, regardless of enabled state.
+	allFiles := cfg.ComposeFilesAll()
+	want := []string{
+		"compose.yaml",
+		"compose/services/main/base.yml",
+		"compose/services/worker/base.yml",
+	}
+	if len(allFiles) != len(want) {
+		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)
+	}
+	for i, w := range want {
+		if allFiles[i] != w {
+			t.Errorf("ComposeFilesAll[%d] = %q, want %q", i, allFiles[i], w)
+		}
+	}
+
+	// ComposeFiles only includes enabled services.
+	activeFiles := cfg.ComposeFiles()
+	wantActive := []string{
+		"compose.yaml",
+		"compose/services/main/base.yml",
+	}
+	if len(activeFiles) != len(wantActive) {
+		t.Fatalf("ComposeFiles len = %d, want %d: %v", len(activeFiles), len(wantActive), activeFiles)
+	}
+	for i, w := range wantActive {
+		if activeFiles[i] != w {
+			t.Errorf("ComposeFiles[%d] = %q, want %q", i, activeFiles[i], w)
+		}
+	}
+}
+
+func TestComposeFilesAll_fullMixedScenario(t *testing.T) {
+	// Base + tool overlays (some disabled) + service composes (some disabled).
+	// Verify all are included in ComposeFilesAll, in correct order.
+	defaultsWithCompose := sampleDefaultsYML + `
+compose:
+  base: compose.yaml
+  overlays:
+    adminer: compose/tools/adminer.yml
+    mailpit: compose/tools/mailpit.yml
+    redis_insight: compose/tools/redis_insight.yml
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", sampleServicesYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	allFiles := cfg.ComposeFilesAll()
+
+	// Expected: base, all tool overlays in sorted key order, all service composes in sorted name order.
+	want := []string{
+		"compose.yaml",
+		// Tool overlays in sorted key order (adminer, mailpit, redis_insight)
+		"compose/tools/adminer.yml",
+		"compose/tools/mailpit.yml",
+		"compose/tools/redis_insight.yml",
+		// Service composes in sorted service name order (main, main-debug)
+		"compose/services/main/debug.yml",  // from main-debug service in sampleServicesYML
+	}
+	if len(allFiles) != len(want) {
+		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)
+	}
+	for i, w := range want {
+		if allFiles[i] != w {
+			t.Errorf("ComposeFilesAll[%d] = %q, want %q", i, allFiles[i], w)
+		}
+	}
+}
+
+func TestComposeFilesAll_noBase(t *testing.T) {
+	// Tool and service overlays without a base file. ComposeFilesAll must still work.
+	defaultsWithCompose := sampleDefaultsYML + `
+compose:
+  overlays:
+    adminer: compose/tools/adminer.yml
+    mailpit: compose/tools/mailpit.yml
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	allFiles := cfg.ComposeFilesAll()
+	want := []string{
+		"compose/tools/adminer.yml",
+		"compose/tools/mailpit.yml",
+	}
+	if len(allFiles) != len(want) {
+		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)
+	}
+	for i, w := range want {
+		if allFiles[i] != w {
+			t.Errorf("ComposeFilesAll[%d] = %q, want %q", i, allFiles[i], w)
+		}
+	}
+}
+
+func TestComposeFilesAll_empty(t *testing.T) {
+	// No compose section at all.
+	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	allFiles := cfg.ComposeFilesAll()
+	if len(allFiles) != 0 {
+		t.Errorf("ComposeFilesAll should be empty when no compose section, got %v", allFiles)
+	}
+}
+
+func TestComposeFilesAll_serviceMultipleComposeFiles(t *testing.T) {
+	// Service with multiple compose files. They should all be included, in order.
+	serviceYML := `
+services:
+  multi:
+    type: app
+    container: multi
+    mandatory: true
+    dir: ./services/multi
+    dir_internal: /workspace
+    work_dir_internal: /workspace/src
+    compose:
+      - compose/services/multi/base.yml
+      - compose/services/multi/debug.yml
+      - compose/services/multi/test.yml
+`
+	defaultsWithCompose := sampleDefaultsYML + `
+compose:
+  base: compose.yaml
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", serviceYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	allFiles := cfg.ComposeFilesAll()
+	want := []string{
+		"compose.yaml",
+		"compose/services/multi/base.yml",
+		"compose/services/multi/debug.yml",
+		"compose/services/multi/test.yml",
+	}
+	if len(allFiles) != len(want) {
+		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)
+	}
+	for i, w := range want {
+		if allFiles[i] != w {
+			t.Errorf("ComposeFilesAll[%d] = %q, want %q", i, allFiles[i], w)
+		}
+	}
+}

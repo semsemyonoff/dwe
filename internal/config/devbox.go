@@ -236,6 +236,42 @@ func (c *DevboxConfig) ComposeFiles() []string {
 	return files
 }
 
+// ComposeFilesAll returns the ordered list of all configured compose files,
+// regardless of whether overlays are enabled: base file first, then all tool
+// overlays (sorted by key), then all service overlays (sorted by service name).
+// This is used by --all flags to override the active set.
+func (c *DevboxConfig) ComposeFilesAll() []string {
+	var files []string
+	if c.Compose.Base != "" {
+		files = append(files, c.Compose.Base)
+	}
+
+	// All tool overlays from compose.overlays in sorted key order.
+	keys := make([]string, 0, len(c.Compose.Overlays))
+	for k := range c.Compose.Overlays {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		files = append(files, c.Compose.Overlays[key])
+	}
+
+	// All service overlays from services with compose_overlay set.
+	svcNames := make([]string, 0, len(c.Services))
+	for name := range c.Services {
+		svcNames = append(svcNames, name)
+	}
+	sort.Strings(svcNames)
+	for _, name := range svcNames {
+		svc := c.Services[name]
+		if len(svc.Compose) > 0 {
+			files = append(files, svc.Compose...)
+		}
+	}
+
+	return files
+}
+
 // toolOverlayEnabled reports whether the overlay with the given key is active.
 func (c *DevboxConfig) toolOverlayEnabled(key string) bool {
 	switch key {

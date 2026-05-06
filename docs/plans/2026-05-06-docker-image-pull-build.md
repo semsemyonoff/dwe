@@ -122,12 +122,12 @@ Baseline: config=85.1%, docker=36.6%, command=58.2%
 
 ### Task 1: Add `ComposeFilesAll()` to DevboxConfig
 
-- [ ] in `internal/config/devbox.go`, add method `(c *DevboxConfig) ComposeFilesAll() []string` next to `ComposeFiles()` (~line 205). It must:
+- [x] in `internal/config/devbox.go`, add method `(c *DevboxConfig) ComposeFilesAll() []string` next to `ComposeFiles()` (~line 205). It must:
   - emit `Compose.Base` first when non-empty
   - iterate `Compose.Overlays` in sorted key order, appending each overlay path unconditionally (no `toolOverlayEnabled` gate)
   - iterate `Services` in sorted name order, appending each service's `Compose` paths unconditionally (no `Enabled` gate)
-- [ ] add table-driven tests in `internal/config/devbox_test.go` (config-package coverage) covering: base only, base + disabled tool overlay, base + disabled service overlay, mixed enabled/disabled across both, missing base. Note: `internal/command/compose_test.go` exercises `ComposeFiles()` from the command-package side; new `ComposeFilesAll()` coverage belongs in the config package and should NOT be added to `internal/command/compose_test.go`.
-- [ ] run `go test ./internal/config/...` — must pass before next task
+- [x] add table-driven tests in `internal/config/devbox_test.go` (config-package coverage) covering: base only, base + disabled tool overlay, base + disabled service overlay, mixed enabled/disabled across both, missing base. Note: `internal/command/compose_test.go` exercises `ComposeFiles()` from the command-package side; new `ComposeFilesAll()` coverage belongs in the config package and should NOT be added to `internal/command/compose_test.go`.
+- [x] run `go test ./internal/config/...` — must pass before next task
 
 ### Task 2: Wire `pull`/`build` into Compose policy args
 
