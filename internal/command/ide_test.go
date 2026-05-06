@@ -31,7 +31,7 @@ func setupIDETemplates(t *testing.T, dir string) {
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(tplDir, name), []byte(content), 0o644); err != nil {
-			t.Fatalf("write template %s: %v", name, err)
+			t.Fatalf("write template %s: %v", name, content)
 		}
 	}
 }
@@ -43,6 +43,7 @@ func makeIDECfg(vscodeEnabled, devcontainerEnabled bool) *config.DevboxConfig {
 		Services: map[string]config.ServiceConfig{
 			"main": {
 				Type:            "app",
+				Enabled:         true,
 				Dir:             "./services/main",
 				Container:       "app-main",
 				DirInternal:     "/workspace",
@@ -965,5 +966,149 @@ func TestSelectIDEServices(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestRenderIDEConfigs_collisionResolution verifies that when two services share a dir,
+// the most-derived (deepest extends chain) wins and renders, while the other is skipped.
+func TestRenderIDEConfigs_collisionResolution(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
+	cfg := &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
+		Services: map[string]config.ServiceConfig{
+			"main": {
+				Type:            "app",
+				Enabled:         true,
+				Dir:             "./services/main",
+				Container:       "app-main",
+				DirInternal:     "/workspace",
+				WorkDirInternal: "/workspace/src",
+			},
+			"main-debug": {
+				Type:            "app",
+				Enabled:         true,
+				Extends:         "main",
+				Dir:             "./services/main",
+				Container:       "app-main-debug",
+				DirInternal:     "/workspace",
+				WorkDirInternal: "/workspace/src",
+			},
+		},
+		Runtime: config.RuntimeConfig{
+			Ports: config.RuntimePorts{App: 80},
+		},
+		IDE: config.IDEConfig{
+			VSCode:       config.IDEEditorConfig{Enabled: false},
+			Devcontainer: config.IDEEditorConfig{Enabled: true},
+		},
+		Raw: map[string]any{},
+	}
+
+	var output strings.Builder
+	w := render.NewWriter(&output)
+
+	// Select services and render
+	selected, skipped := selectIDEServices(cfg.Services)
+	if len(selected) != 1 || selected[0] != "main-debug" {
+		t.Errorf("expected only main-debug selected, got %v", selected)
+	}
+	if len(skipped) != 1 || skipped[0].Name != "main" {
+		t.Errorf("expected main to be skipped, got %v", skipped)
+	}
+
+	// Render the selected service
+	if err := renderIDEConfigs(projectRoot, "main-debug", cfg.Services["main-debug"], cfg, w); err != nil {
+		t.Fatalf("renderIDEConfigs: %v", err)
+	}
+
+	// Check that devcontainer was written for main-debug
+	devcontainerPath := filepath.Join(projectRoot, "services", "main", ".devcontainer", "devcontainer.json")
+	content, err := os.ReadFile(devcontainerPath)
+	if err != nil {
+		t.Fatalf("read devcontainer.json: %v", err)
+	}
+	s := string(content)
+
+	// Should contain main-debug's container name
+	if !strings.Contains(s, "app-main-debug") {
+		t.Errorf("devcontainer.json should contain main-debug container, got:\n%s", s)
+	}
+}
+
+// TestRenderIDECmd_collisionResolutionWithDisable verifies behavior when one
+// service in a collision is disabled.
+func TestRenderIDECmd_collisionResolutionWithDisable(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
+	falseVal := false
+	cfg := &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
+		Services: map[string]config.ServiceConfig{
+			"main": {
+				Type:            "app",
+				Enabled:         true,
+				Dir:             "./services/main",
+				Container:       "app-main",
+				DirInternal:     "/workspace",
+				WorkDirInternal: "/workspace/src",
+			},
+			"main-debug": {
+				Type:            "app",
+				Enabled:         true,
+				Extends:         "main",
+				Dir:             "./services/main",
+				Container:       "app-main-debug",
+				DirInternal:     "/workspace",
+				WorkDirInternal: "/workspace/src",
+				IDE:             config.ServiceIDEConfig{Enabled: &falseVal},
+			},
+		},
+		Runtime: config.RuntimeConfig{
+			Ports: config.RuntimePorts{App: 80},
+		},
+		IDE: config.IDEConfig{
+			VSCode:       config.IDEEditorConfig{Enabled: false},
+			Devcontainer: config.IDEEditorConfig{Enabled: true},
+		},
+		Raw: map[string]any{},
+	}
+
+	var output strings.Builder
+	w := render.NewWriter(&output)
+
+	// Select services
+	selected, skipped := selectIDEServices(cfg.Services)
+	if len(selected) != 1 || selected[0] != "main" {
+		t.Errorf("expected only main selected, got %v", selected)
+	}
+
+	// Verify main-debug was skipped by policy, not collision
+	skippedByName := make(map[string]skippedService)
+	for _, s := range skipped {
+		skippedByName[s.Name] = s
+	}
+	if debugSkip, ok := skippedByName["main-debug"]; !ok || debugSkip.Reason != "disabled-by-policy" {
+		t.Errorf("expected main-debug skipped by policy, got %v", skippedByName)
+	}
+
+	// Render the selected service
+	if err := renderIDEConfigs(projectRoot, "main", cfg.Services["main"], cfg, w); err != nil {
+		t.Fatalf("renderIDEConfigs: %v", err)
+	}
+
+	// Check that devcontainer was written for main
+	devcontainerPath := filepath.Join(projectRoot, "services", "main", ".devcontainer", "devcontainer.json")
+	content, err := os.ReadFile(devcontainerPath)
+	if err != nil {
+		t.Fatalf("read devcontainer.json: %v", err)
+	}
+	s := string(content)
+
+	// Should contain main's container name (not main-debug)
+	if !strings.Contains(s, "app-main") || strings.Contains(s, "app-main-debug") {
+		t.Errorf("devcontainer.json should contain main (not debug) container, got:\n%s", s)
 	}
 }

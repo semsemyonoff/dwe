@@ -103,19 +103,19 @@ This aligns IDE rendering with the broader architectural goals: explicit policy 
 - [x] run `go test ./internal/command/...` — must pass before Task 4
 
 ### Task 4: Wire selector and resolver into `render ide`
-- [ ] in `newRenderIDECmd.RunE`, when no service argument is given, call `selected, skipped := selectIDEServices(cfg.Services)` and use `selected` as the iteration list. For each `skipped` entry, emit a `w.Warning` with a reason-specific message: `disabled-by-policy` → `"ide [<name>] — skipped (ide.enabled is false or service is disabled)"`; `empty-dir` → `"ide [<name>] — skipped (service has no dir)"`; `lost-collision` → `"ide [<name>] — skipped (dir <dir> rendered by <winner>)"`
-- [ ] when an explicit service argument is given:
+- [x] in `newRenderIDECmd.RunE`, when no service argument is given, call `selected, skipped := selectIDEServices(cfg.Services)` and use `selected` as the iteration list. For each `skipped` entry, emit a `w.Warning` with a reason-specific message: `disabled-by-policy` → `"ide [<name>] — skipped (ide.enabled is false or service is disabled)"`; `empty-dir` → `"ide [<name>] — skipped (service has no dir)"`; `lost-collision` → `"ide [<name>] — skipped (dir <dir> rendered by <winner>)"`
+- [x] when an explicit service argument is given:
   - validate it exists in `cfg.Services` (existing behavior)
   - if `strings.TrimSpace(svc.Dir) == ""`, return error `service %q has no dir; cannot render IDE files`
   - if `svc.Enabled == false`, return error `service %q is disabled at the project level`
   - if `IDERenderEnabled()` is false, distinguish via `IDERenderEnabledExplicit`: explicit-false → `service %q has ide.enabled: false`; default-by-type-false → `service %q (type: %s) does not participate in IDE rendering by default; set ide.enabled: true to opt in`
   - do not silently rewrite to its parent — explicit naming is explicit
-- [ ] in `renderIDEConfigs`, replace each `loadIDETemplate(projectRoot, "<base>")` call with `resolveIDETemplate(projectRoot, svc, name, "<base>")`
-- [ ] keep existing `errors.Is(err, os.ErrNotExist)` warning paths for missing templates
-- [ ] update existing tests in `internal/command/ide_test.go` that constructed services without setting `Type` — set `Type: "app"` (or explicit `IDE.Enabled: ptr(true)`) so they continue to render under the new default
-- [ ] add an integration test: cfg with `main` (`type: app`, `dir: services/main`, `Enabled: true`) and `main-debug` (`type: app`, `extends: main`, `dir: services/main`, `Enabled: true`) — render writes the `main-debug` variant to `services/main/.devcontainer/devcontainer.json` and emits a `lost-collision` warning for `main`; flip `main-debug.IDE.Enabled` to `&falseVal` and re-render, expect `main` variant and a `disabled-by-policy` warning for `main-debug`
-- [ ] add integration tests for explicit-arg error paths: disabled-by-`Enabled`, disabled-by-`ide.enabled: false` (explicit), disabled-by-default-for-non-app (omitted on `type: db`), empty `Dir`. Assert the error messages distinguish the four cases
-- [ ] run `go test ./internal/command/...` — must pass before Task 5
+- [x] in `renderIDEConfigs`, replace each `loadIDETemplate(projectRoot, "<base>")` call with `resolveIDETemplate(projectRoot, svc, name, "<base>")`
+- [x] keep existing `errors.Is(err, os.ErrNotExist)` warning paths for missing templates
+- [x] update existing tests in `internal/command/ide_test.go` that constructed services without setting `Type` — set `Type: "app"` (or explicit `IDE.Enabled: ptr(true)`) so they continue to render under the new default
+- [x] add an integration test: cfg with `main` (`type: app`, `dir: services/main`, `Enabled: true`) and `main-debug` (`type: app`, `extends: main`, `dir: services/main`, `Enabled: true`) — render writes the `main-debug` variant to `services/main/.devcontainer/devcontainer.json` and emits a `lost-collision` warning for `main`; flip `main-debug.IDE.Enabled` to `&falseVal` and re-render, expect `main` variant and a `disabled-by-policy` warning for `main-debug`
+- [x] add integration tests for explicit-arg error paths: disabled-by-`Enabled`, disabled-by-`ide.enabled: false` (explicit), disabled-by-default-for-non-app (omitted on `type: db`), empty `Dir`. Assert the error messages distinguish the four cases
+- [x] run `go test ./internal/command/...` — must pass before Task 5
 
 ### Task 5: Update services config docs
 - [ ] in `docs/reference/config/services.md`, add an `ide:` subsection documenting the schema (`enabled`, `template`), the default-by-type policy, the inheritance rule (children inherit `ide.enabled` and `ide.template` from `extends` parent unless overridden — matches existing field-by-field inheritance docs), the extends-aware collision rule, and the `ide.template` constraints (single directory key — no separators, no `..`, no absolute paths, no leading `.`)
