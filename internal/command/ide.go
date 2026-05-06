@@ -190,6 +190,81 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 	}
 }
 
+// validateIDETemplateKey validates that s is a single directory key without path traversal.
+// It rejects path separators, absolute paths, leading dots, and .. segments.
+func validateIDETemplateKey(s string) error {
+	if s == "" {
+		return nil // empty is valid (field is optional)
+	}
+	// Reject .. segments first (appears anywhere in the string)
+	if strings.Contains(s, "..") {
+		return fmt.Errorf("template key %q contains .. segment", s)
+	}
+	// Reject path separators
+	if strings.ContainsAny(s, "/\\") {
+		return fmt.Errorf("template key %q contains path separator", s)
+	}
+	// Reject absolute paths
+	if filepath.IsAbs(s) {
+		return fmt.Errorf("template key %q is absolute", s)
+	}
+	// Reject leading dots
+	if strings.HasPrefix(s, ".") {
+		return fmt.Errorf("template key %q starts with dot", s)
+	}
+	return nil
+}
+
+// resolveIDETemplate resolves the IDE template file via 3-step fallback:
+// 1. <root>/devbox/templates/ide/<svc.IDE.Template>/<fileBase>.tpl (if Template is set)
+// 2. <root>/devbox/templates/ide/<serviceName>/<fileBase>.tpl
+// 3. <root>/devbox/templates/ide/<fileBase>.tpl (global fallback)
+//
+// Returns (path, contents, err). If all three paths are missing, returns a wrapped
+// os.ErrNotExist so existing skip-with-warning logic can check errors.Is(err, os.ErrNotExist).
+// If a template key or service name fails validation, returns a non-ErrNotExist error
+// so the caller surfaces it instead of silently skipping.
+func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceName, fileBase string) (string, []byte, error) {
+	// Validate template keys
+	if err := validateIDETemplateKey(svc.IDE.Template); err != nil {
+		return "", nil, fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
+	}
+	if err := validateIDETemplateKey(serviceName); err != nil {
+		return "", nil, fmt.Errorf("invalid service name %q: %w", serviceName, err)
+	}
+
+	var lastErr error
+
+	// Step 1: explicit template override (if set)
+	if svc.IDE.Template != "" {
+		path := filepath.Join(projectRoot, "devbox", "templates", "ide", svc.IDE.Template, fileBase+".tpl")
+		data, err := os.ReadFile(path)
+		if err == nil {
+			return path, data, nil
+		}
+		lastErr = err
+	}
+
+	// Step 2: by-service-name template
+	path := filepath.Join(projectRoot, "devbox", "templates", "ide", serviceName, fileBase+".tpl")
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return path, data, nil
+	}
+	lastErr = err
+
+	// Step 3: global template (fallback)
+	path = filepath.Join(projectRoot, "devbox", "templates", "ide", fileBase+".tpl")
+	data, err = os.ReadFile(path)
+	if err == nil {
+		return path, data, nil
+	}
+	lastErr = err
+
+	// All three paths are missing; wrap the error to preserve os.ErrNotExist semantics
+	return "", nil, fmt.Errorf("ide template for %s: %w", fileBase, lastErr)
+}
+
 // loadIDETemplate reads a template from devbox/templates/ide/<name>.tpl
 // relative to the project root.
 func loadIDETemplate(projectRoot, templateName string) (string, error) {

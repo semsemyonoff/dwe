@@ -2556,3 +2556,195 @@ compose:
 		}
 	}
 }
+
+// --- ServiceConfig.IDE field ---
+
+// TestServiceConfig_IDERenderEnabledExplicit tests the tristate logic for IDE rendering.
+func TestServiceConfig_IDERenderEnabledExplicit(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      ServiceConfig
+		wantBool bool
+		wantExp  bool // wantExp indicates whether the value is explicit
+	}{
+		{
+			name:     "explicit true",
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(true)}},
+			wantBool: true,
+			wantExp:  true,
+		},
+		{
+			name:     "explicit false",
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(false)}},
+			wantBool: false,
+			wantExp:  true,
+		},
+		{
+			name:     "omitted on app type",
+			svc:      ServiceConfig{Type: "app"},
+			wantBool: true,
+			wantExp:  false,
+		},
+		{
+			name:     "omitted on db type",
+			svc:      ServiceConfig{Type: "db"},
+			wantBool: false,
+			wantExp:  false,
+		},
+		{
+			name:     "omitted on empty type",
+			svc:      ServiceConfig{Type: ""},
+			wantBool: false,
+			wantExp:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotExp := tt.svc.IDERenderEnabledExplicit()
+			if got != tt.wantBool {
+				t.Errorf("IDERenderEnabledExplicit() bool = %v, want %v", got, tt.wantBool)
+			}
+			if gotExp != tt.wantExp {
+				t.Errorf("IDERenderEnabledExplicit() explicit = %v, want %v", gotExp, tt.wantExp)
+			}
+		})
+	}
+}
+
+// TestServiceConfig_IDERenderEnabled tests the simple bool wrapper.
+func TestServiceConfig_IDERenderEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      ServiceConfig
+		wantBool bool
+	}{
+		{
+			name:     "explicit true",
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(true)}},
+			wantBool: true,
+		},
+		{
+			name:     "explicit false",
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(false)}},
+			wantBool: false,
+		},
+		{
+			name:     "app default true",
+			svc:      ServiceConfig{Type: "app"},
+			wantBool: true,
+		},
+		{
+			name:     "db default false",
+			svc:      ServiceConfig{Type: "db"},
+			wantBool: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.svc.IDERenderEnabled(); got != tt.wantBool {
+				t.Errorf("IDERenderEnabled() = %v, want %v", got, tt.wantBool)
+			}
+		})
+	}
+}
+
+// TestLoadServicesConfig_IDEEnabled tests IDE block inheritance.
+func TestLoadServicesConfig_IDEEnabled(t *testing.T) {
+	yml := `
+services:
+  parent:
+    type: app
+    container: parent
+    mandatory: true
+    dir: ./services/parent
+    ide:
+      enabled: false
+      template: parent-tmpl
+  child-inherit:
+    type: app
+    container: child-inherit
+    mandatory: false
+    extends: parent
+  child-override-enabled:
+    type: app
+    container: child-override-enabled
+    mandatory: false
+    extends: parent
+    ide:
+      enabled: true
+  child-override-template:
+    type: app
+    container: child-override-template
+    mandatory: false
+    extends: parent
+    ide:
+      template: child-tmpl
+  child-override-both:
+    type: app
+    container: child-override-both
+    mandatory: false
+    extends: parent
+    ide:
+      enabled: true
+      template: both-tmpl
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+
+	// Parent has explicit false and template
+	parent := services["parent"]
+	if parent.IDE.Enabled == nil || *parent.IDE.Enabled != false {
+		t.Errorf("parent IDE.Enabled should be false, got %v", parent.IDE.Enabled)
+	}
+	if parent.IDE.Template != "parent-tmpl" {
+		t.Errorf("parent IDE.Template = %q, want parent-tmpl", parent.IDE.Template)
+	}
+
+	// Child inherits both parent's enabled and template
+	childInh := services["child-inherit"]
+	if childInh.IDE.Enabled == nil || *childInh.IDE.Enabled != false {
+		t.Errorf("child-inherit IDE.Enabled should inherit false from parent, got %v", childInh.IDE.Enabled)
+	}
+	if childInh.IDE.Template != "parent-tmpl" {
+		t.Errorf("child-inherit IDE.Template should inherit parent-tmpl, got %q", childInh.IDE.Template)
+	}
+
+	// Child overrides enabled but inherits template
+	childOvrE := services["child-override-enabled"]
+	if childOvrE.IDE.Enabled == nil || *childOvrE.IDE.Enabled != true {
+		t.Errorf("child-override-enabled IDE.Enabled should be true, got %v", childOvrE.IDE.Enabled)
+	}
+	if childOvrE.IDE.Template != "parent-tmpl" {
+		t.Errorf("child-override-enabled IDE.Template should inherit parent-tmpl, got %q", childOvrE.IDE.Template)
+	}
+
+	// Child overrides template but inherits enabled
+	childOvrT := services["child-override-template"]
+	if childOvrT.IDE.Enabled == nil || *childOvrT.IDE.Enabled != false {
+		t.Errorf("child-override-template IDE.Enabled should inherit false from parent, got %v", childOvrT.IDE.Enabled)
+	}
+	if childOvrT.IDE.Template != "child-tmpl" {
+		t.Errorf("child-override-template IDE.Template = %q, want child-tmpl", childOvrT.IDE.Template)
+	}
+
+	// Child overrides both
+	childOvrB := services["child-override-both"]
+	if childOvrB.IDE.Enabled == nil || *childOvrB.IDE.Enabled != true {
+		t.Errorf("child-override-both IDE.Enabled should be true, got %v", childOvrB.IDE.Enabled)
+	}
+	if childOvrB.IDE.Template != "both-tmpl" {
+		t.Errorf("child-override-both IDE.Template = %q, want both-tmpl", childOvrB.IDE.Template)
+	}
+}
+
+// ptrBool is a helper to create a pointer to a bool value.
+func ptrBool(b bool) *bool {
+	return &b
+}

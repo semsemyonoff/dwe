@@ -300,6 +300,12 @@ func (e *ServiceConfigEntry) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// ServiceIDEConfig holds IDE rendering settings for a service.
+type ServiceIDEConfig struct {
+	Enabled  *bool  `yaml:"enabled"`
+	Template string `yaml:"template"`
+}
+
 // ServiceConfig describes a single application service.
 // Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
 // from the 3-layer config merge (mandatory services are always enabled).
@@ -317,6 +323,24 @@ type ServiceConfig struct {
 	DependsOn       []string             `yaml:"depends_on"`
 	Compose         []string             `yaml:"compose"`
 	CLI             ServiceCLIConfig     `yaml:"cli"`
+	IDE             ServiceIDEConfig     `yaml:"ide"`
+}
+
+// IDERenderEnabledExplicit returns the IDE render enabled state and whether it was explicitly set.
+// If Enabled is non-nil, returns its value and true.
+// If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
+func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) {
+	if s.IDE.Enabled != nil {
+		return *s.IDE.Enabled, true
+	}
+	return s.Type == "app", false
+}
+
+// IDERenderEnabled returns whether this service should participate in IDE rendering.
+// It's a simple wrapper around IDERenderEnabledExplicit that discards the explicit flag.
+func (s ServiceConfig) IDERenderEnabled() bool {
+	enabled, _ := s.IDERenderEnabledExplicit()
+	return enabled
 }
 
 // ServiceCLIConfig holds defaults for the `services cli` command.
@@ -632,6 +656,13 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		}
 		// Merge dirs: parent dirs come first, child dirs appended (deduplicated).
 		svc.Dirs = mergeDeduplicatedStrings(parent.Dirs, svc.Dirs)
+		// IDE block inheritance: child inherits from parent if not explicitly set.
+		if svc.IDE.Enabled == nil {
+			svc.IDE.Enabled = parent.IDE.Enabled
+		}
+		if svc.IDE.Template == "" {
+			svc.IDE.Template = parent.IDE.Template
+		}
 		f.Services[name] = svc
 	}
 

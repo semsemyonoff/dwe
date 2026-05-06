@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -392,6 +393,288 @@ func TestExtendsDepth(t *testing.T) {
 			}
 			if capped != tt.wantCapped {
 				t.Errorf("capped: want %v, got %v", tt.wantCapped, capped)
+			}
+		})
+	}
+}
+
+// TestValidateIDETemplateKey tests the template key validation logic.
+func TestValidateIDETemplateKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     string
+		wantErr bool
+	}{
+		{
+			name:    "empty key is valid",
+			key:     "",
+			wantErr: false,
+		},
+		{
+			name:    "simple key",
+			key:     "main",
+			wantErr: false,
+		},
+		{
+			name:    "alphanumeric with dash",
+			key:     "main-debug",
+			wantErr: false,
+		},
+		{
+			name:    "forward slash - rejected",
+			key:     "foo/bar",
+			wantErr: true,
+		},
+		{
+			name:    "backslash - rejected",
+			key:     "foo\\bar",
+			wantErr: true,
+		},
+		{
+			name:    "absolute path - rejected",
+			key:     "/abs/path",
+			wantErr: true,
+		},
+		{
+			name:    "dot at start - rejected",
+			key:     ".hidden",
+			wantErr: true,
+		},
+		{
+			name:    "double dot - rejected",
+			key:     "..",
+			wantErr: true,
+		},
+		{
+			name:    "double dot in path - rejected",
+			key:     "foo/../bar",
+			wantErr: true,
+		},
+		{
+			name:    "double dot segment - rejected",
+			key:     "../escape",
+			wantErr: true,
+		},
+		{
+			name:    "dot slash - rejected",
+			key:     "./foo",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateIDETemplateKey(tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateIDETemplateKey(%q): want err=%v, got %v", tt.key, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+// TestResolveIDETemplate tests the 3-step template fallback resolution.
+func TestResolveIDETemplate(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	// Create template directory structure
+	tplDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
+	if err := os.MkdirAll(tplDir, 0o755); err != nil {
+		t.Fatalf("create template dir: %v", err)
+	}
+
+	// Create test templates
+	templates := map[string]string{
+		// Global templates
+		filepath.Join(tplDir, "devcontainer.json.tpl"):              "global-devcontainer",
+		filepath.Join(tplDir, "vscode_launch.json.tpl"):             "global-vscode-launch",
+		// By-name templates
+		filepath.Join(tplDir, "main", "devcontainer.json.tpl"):     "main-devcontainer",
+		filepath.Join(tplDir, "main-debug", "devcontainer.json.tpl"): "main-debug-devcontainer",
+		// Explicit override templates
+		filepath.Join(tplDir, "custom", "devcontainer.json.tpl"):   "custom-devcontainer",
+	}
+
+	for path, content := range templates {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("create dir for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write template %s: %v", path, err)
+		}
+	}
+
+	trueVal := true
+
+	tests := []struct {
+		name           string
+		svc            config.ServiceConfig
+		serviceName    string
+		fileBase       string
+		wantPath       string
+		wantContent    string
+		wantErrType    error
+		wantErrInMsg   string
+	}{
+		{
+			name: "only global exists - used",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+			},
+			serviceName: "unknown",
+			fileBase:    "vscode_launch.json",
+			wantContent: "global-vscode-launch",
+		},
+		{
+			name: "only by-name exists - used",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+			},
+			serviceName: "main",
+			fileBase:    "devcontainer.json",
+			wantContent: "main-devcontainer",
+		},
+		{
+			name: "only explicit template exists - used",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: "custom"},
+			},
+			serviceName: "anything",
+			fileBase:    "devcontainer.json",
+			wantContent: "custom-devcontainer",
+		},
+		{
+			name: "explicit beats by-name beats global precedence",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: "custom"},
+			},
+			serviceName: "main",
+			fileBase:    "devcontainer.json",
+			wantContent: "custom-devcontainer",
+		},
+		{
+			name: "by-name beats global",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+			},
+			serviceName: "main-debug",
+			fileBase:    "devcontainer.json",
+			wantContent: "main-debug-devcontainer",
+		},
+		{
+			name: "none exist - returns wrapped ErrNotExist",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+			},
+			serviceName:  "nonexistent",
+			fileBase:     "unknown.json",
+			wantErrType:  os.ErrNotExist,
+			wantErrInMsg: "ide template for unknown.json",
+		},
+		{
+			name: "empty ide.template skips step 1",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: ""},
+			},
+			serviceName: "main",
+			fileBase:    "devcontainer.json",
+			wantContent: "main-devcontainer",
+		},
+		{
+			name: "invalid ide.template (with slash) - non-ErrNotExist error",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: "foo/bar"},
+			},
+			serviceName:  "main",
+			fileBase:     "devcontainer.json",
+			wantErrInMsg: "path separator",
+		},
+		{
+			name: "invalid ide.template (with ..) - non-ErrNotExist error",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: "../escape"},
+			},
+			serviceName:  "main",
+			fileBase:     "devcontainer.json",
+			wantErrInMsg: ".. segment",
+		},
+		{
+			name: "invalid ide.template (leading dot) - non-ErrNotExist error",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: ".hidden"},
+			},
+			serviceName:  "main",
+			fileBase:     "devcontainer.json",
+			wantErrInMsg: "starts with dot",
+		},
+		{
+			name: "invalid service name - non-ErrNotExist error",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+			},
+			serviceName:  "a/b",
+			fileBase:     "devcontainer.json",
+			wantErrInMsg: "path separator",
+		},
+		{
+			name: "invalid service name with .. - non-ErrNotExist error",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+			},
+			serviceName:  "../oops",
+			fileBase:     "devcontainer.json",
+			wantErrInMsg: ".. segment",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, content, err := resolveIDETemplate(projectRoot, tt.svc, tt.serviceName, tt.fileBase)
+
+			if tt.wantErrType != nil || tt.wantErrInMsg != "" {
+				if err == nil {
+					t.Fatalf("want error, got nil")
+				}
+				if tt.wantErrInMsg != "" && !strings.Contains(err.Error(), tt.wantErrInMsg) {
+					t.Errorf("error message: want to contain %q, got %q", tt.wantErrInMsg, err.Error())
+				}
+				if tt.wantErrType != nil && !errors.Is(err, tt.wantErrType) {
+					t.Errorf("error type: want %v, got %v", tt.wantErrType, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("want no error, got %v", err)
+			}
+			if string(content) != tt.wantContent {
+				t.Errorf("content: want %q, got %q", tt.wantContent, string(content))
+			}
+			if path == "" {
+				t.Errorf("path should not be empty")
 			}
 		})
 	}
