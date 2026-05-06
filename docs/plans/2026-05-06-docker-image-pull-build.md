@@ -131,15 +131,15 @@ Baseline: config=85.1%, docker=36.6%, command=58.2%
 
 ### Task 2: Wire `pull`/`build` into Compose policy args
 
-- [ ] in `internal/config/docker.go`, extend `DockerArgs` struct with `Pull []string` (yaml: `pull`) and `Build []string` (yaml: `build`)
-- [ ] in `internal/docker/compose.go`, extend the `cmdArgs` map inside `NewCompose` to register `"pull": dockerCfg.Args.Pull` and `"build": dockerCfg.Args.Build`
-- [ ] add `NewComposeAll(cfg, dockerCfg)` in `internal/docker/compose.go` that builds the same `Compose` as `NewCompose` but populates `Files` from `cfg.ComposeFilesAll()`. Internally factor out a private builder so `NewCompose`/`NewComposeAll` differ only in the file source — no code duplication of the `cmdArgs` map
-- [ ] add YAML loader coverage in `internal/config/docker_test.go` (the file already exercises `args.up` parsing and override behavior at lines ~12 and ~117): assert `LoadDockerConfig` populates `Args.Pull` and `Args.Build` from `args.pull` / `args.build`, and assert that `docker.local.yml` replaces (does not merge) the tracked list — matching the existing `args.up` override test case
-- [ ] add tests in `internal/docker/compose_test.go`:
+- [x] in `internal/config/docker.go`, extend `DockerArgs` struct with `Pull []string` (yaml: `pull`) and `Build []string` (yaml: `build`)
+- [x] in `internal/docker/compose.go`, extend the `cmdArgs` map inside `NewCompose` to register `"pull": dockerCfg.Args.Pull` and `"build": dockerCfg.Args.Build`
+- [x] add `NewComposeAll(cfg, dockerCfg)` in `internal/docker/compose.go` that builds the same `Compose` as `NewCompose` but populates `Files` from `cfg.ComposeFilesAll()`. Internally factor out a private builder so `NewCompose`/`NewComposeAll` differ only in the file source — no code duplication of the `cmdArgs` map
+- [x] add YAML loader coverage in `internal/config/docker_test.go` (the file already exercises `args.up` parsing and override behavior at lines ~12 and ~117): assert `LoadDockerConfig` populates `Args.Pull` and `Args.Build` from `args.pull` / `args.build`, and assert that `docker.local.yml` replaces (does not merge) the tracked list — matching the existing `args.up` override test case
+- [x] add tests in `internal/docker/compose_test.go`:
   - `NewComposeAll` populates `Files` from `ComposeFilesAll()` (covering a fixture where enabled vs all differs)
   - `BuildArgs("pull", "svc")` emits configured `args.pull` defaults before `"svc"`
   - `BuildArgs("build", "--no-cache", "--pull", "svc")` places those after `args.build` defaults
-- [ ] run `go test ./internal/config/... ./internal/docker/...` — must pass before next task
+- [x] run `go test ./internal/config/... ./internal/docker/...` — must pass before next task
 
 ### Task 3: Add `devbox docker pull` cobra command
 

@@ -289,3 +289,84 @@ func TestResolveVarTemplate_Errors(t *testing.T) {
 		t.Error("expected error for unclosed ${")
 	}
 }
+
+func TestLoadDockerConfig_PullAndBuildArgs(t *testing.T) {
+	yml := `
+project_name: "test"
+args:
+  global: []
+  up: []
+  pull: ["--policy", "always"]
+  build: ["--progress", "plain"]
+env: {}
+`
+	baseDir := writeDockerFixture(t, yml, "")
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+
+	// Pull args
+	wantPull := []string{"--policy", "always"}
+	if len(dcfg.Args.Pull) != len(wantPull) {
+		t.Fatalf("Pull args len = %d, want %d", len(dcfg.Args.Pull), len(wantPull))
+	}
+	for i, v := range wantPull {
+		if dcfg.Args.Pull[i] != v {
+			t.Errorf("Pull[%d] = %q, want %q", i, dcfg.Args.Pull[i], v)
+		}
+	}
+
+	// Build args
+	wantBuild := []string{"--progress", "plain"}
+	if len(dcfg.Args.Build) != len(wantBuild) {
+		t.Fatalf("Build args len = %d, want %d", len(dcfg.Args.Build), len(wantBuild))
+	}
+	for i, v := range wantBuild {
+		if dcfg.Args.Build[i] != v {
+			t.Errorf("Build[%d] = %q, want %q", i, dcfg.Args.Build[i], v)
+		}
+	}
+}
+
+func TestLoadDockerConfig_PullAndBuildLocalOverride(t *testing.T) {
+	baseYML := `
+project_name: "test"
+args:
+  global: []
+  up: []
+  pull: ["--policy", "always"]
+  build: ["--progress", "plain"]
+env: {}
+`
+	localYML := `
+args:
+  pull: ["--policy", "missing"]
+  build: []
+`
+	baseDir := writeDockerFixture(t, baseYML, localYML)
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+
+	// Pull overridden
+	wantPull := []string{"--policy", "missing"}
+	if len(dcfg.Args.Pull) != len(wantPull) {
+		t.Fatalf("Pull args len = %d, want %d", len(dcfg.Args.Pull), len(wantPull))
+	}
+	for i, v := range wantPull {
+		if dcfg.Args.Pull[i] != v {
+			t.Errorf("Pull[%d] = %q, want %q", i, dcfg.Args.Pull[i], v)
+		}
+	}
+
+	// Build overridden to empty
+	if len(dcfg.Args.Build) != 0 {
+		t.Errorf("Build args len = %d, want 0", len(dcfg.Args.Build))
+	}
+}

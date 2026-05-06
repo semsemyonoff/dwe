@@ -404,3 +404,115 @@ func TestFormatCommandQuotesUnsafeArgs(t *testing.T) {
 		t.Fatalf("formatCommand = %q, want %q", got, want)
 	}
 }
+
+func TestNewComposeAll(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+			Overlays: map[string]string{
+				"adminer": "compose/tools/adminer.yml",
+			},
+		},
+		Services: map[string]config.ServiceConfig{
+			"api": {
+				Compose: []string{"compose/services/api.yml"},
+			},
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "devbox-test",
+		Args: config.DockerArgs{
+			Global: []string{"--ansi", "always"},
+			Pull:   []string{"--policy", "always"},
+			Build:  []string{"--progress", "plain"},
+		},
+	}
+
+	c := NewComposeAll(cfg, dockerCfg)
+
+	// Verify Files come from ComposeFilesAll() instead of ComposeFiles()
+	wantFiles := cfg.ComposeFilesAll()
+	if len(c.Files) != len(wantFiles) {
+		t.Fatalf("NewComposeAll Files len = %d, want %d\nGot:  %v\nWant: %v",
+			len(c.Files), len(wantFiles), c.Files, wantFiles)
+	}
+	for i, f := range c.Files {
+		if f != wantFiles[i] {
+			t.Errorf("Files[%d] = %q, want %q", i, f, wantFiles[i])
+		}
+	}
+
+	// Verify pull and build are in CommandArgs
+	if pull := c.CommandArgs["pull"]; len(pull) != 2 || pull[0] != "--policy" || pull[1] != "always" {
+		t.Errorf("CommandArgs[pull] = %v, want [--policy always]", pull)
+	}
+	if build := c.CommandArgs["build"]; len(build) != 2 || build[0] != "--progress" || build[1] != "plain" {
+		t.Errorf("CommandArgs[build] = %v, want [--progress plain]", build)
+	}
+}
+
+func TestBuildArgs_Pull(t *testing.T) {
+	c := &Compose{
+		ProjectName: "myproject",
+		Files:       []string{"compose.yaml"},
+		GlobalArgs:  []string{"--ansi", "always"},
+		CommandArgs: map[string][]string{
+			"pull": {"--policy", "always"},
+		},
+	}
+
+	args := c.BuildArgs("pull", "redis")
+
+	expected := []string{
+		"compose",
+		"-p", "myproject",
+		"-f", "compose.yaml",
+		"--ansi", "always",
+		"pull",
+		"--policy", "always",
+		"redis",
+	}
+
+	if len(args) != len(expected) {
+		t.Fatalf("BuildArgs length = %d, want %d\nGot:  %v\nWant: %v", len(args), len(expected), args, expected)
+	}
+	for i, got := range args {
+		if got != expected[i] {
+			t.Errorf("BuildArgs[%d] = %q, want %q", i, got, expected[i])
+		}
+	}
+}
+
+func TestBuildArgs_BuildWithForceFlags(t *testing.T) {
+	c := &Compose{
+		ProjectName: "myproject",
+		Files:       []string{"compose.yaml"},
+		GlobalArgs:  []string{"--ansi", "always"},
+		CommandArgs: map[string][]string{
+			"build": {"--progress", "plain"},
+		},
+	}
+
+	// Simulating --force flags appended by caller
+	args := c.BuildArgs("build", "--no-cache", "--pull", "api")
+
+	expected := []string{
+		"compose",
+		"-p", "myproject",
+		"-f", "compose.yaml",
+		"--ansi", "always",
+		"build",
+		"--progress", "plain",
+		"--no-cache", "--pull",
+		"api",
+	}
+
+	if len(args) != len(expected) {
+		t.Fatalf("BuildArgs length = %d, want %d\nGot:  %v\nWant: %v", len(args), len(expected), args, expected)
+	}
+	for i, got := range args {
+		if got != expected[i] {
+			t.Errorf("BuildArgs[%d] = %q, want %q", i, got, expected[i])
+		}
+	}
+}

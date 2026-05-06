@@ -90,6 +90,8 @@ type DockerArgs struct {
 	Ps      []string `yaml:"ps"`
 	Exec    []string `yaml:"exec"`
 	Run     []string `yaml:"run"`
+	Pull    []string `yaml:"pull"`
+	Build   []string `yaml:"build"`
 }
 
 // DockerEnvConfig controls automatic .env generation.
