@@ -337,3 +337,350 @@ func TestRenderIDEConfigs_missingTemplates(t *testing.T) {
 		t.Errorf("expected warning about missing template, got: %s", buf.String())
 	}
 }
+
+// TestExtendsDepth tests the extends chain depth computation.
+func TestExtendsDepth(t *testing.T) {
+	tests := []struct {
+		name       string
+		services   map[string]config.ServiceConfig
+		svcName    string
+		wantDepth  int
+		wantCapped bool
+	}{
+		{
+			name: "no extends",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app"},
+			},
+			svcName:   "main",
+			wantDepth: 0,
+		},
+		{
+			name: "one level",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app"},
+				"debug": {Type: "app", Extends: "main"},
+			},
+			svcName:   "debug",
+			wantDepth: 1,
+		},
+		{
+			name: "three-level chain",
+			services: map[string]config.ServiceConfig{
+				"a": {Type: "app"},
+				"b": {Type: "app", Extends: "a"},
+				"c": {Type: "app", Extends: "b"},
+			},
+			svcName:   "c",
+			wantDepth: 2,
+		},
+		{
+			name: "unknown service - treated as depth 0",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app"},
+			},
+			svcName:   "unknown",
+			wantDepth: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			depth, capped := extendsDepth(tt.services, tt.svcName)
+			if depth != tt.wantDepth {
+				t.Errorf("depth: want %d, got %d", tt.wantDepth, depth)
+			}
+			if capped != tt.wantCapped {
+				t.Errorf("capped: want %v, got %v", tt.wantCapped, capped)
+			}
+		})
+	}
+}
+
+// TestSelectIDEServices tests the service selection and collision resolution logic.
+func TestSelectIDEServices(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name           string
+		services       map[string]config.ServiceConfig
+		wantSelected   []string
+		wantSkippedMap map[string]skippedService // name -> expected skipped entry
+	}{
+		{
+			name: "all enabled distinct dirs - all kept",
+			services: map[string]config.ServiceConfig{
+				"svc1": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/svc1",
+				},
+				"svc2": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/svc2",
+				},
+			},
+			wantSelected: []string{"svc1", "svc2"},
+		},
+		{
+			name: "service with IDERenderEnabled=false dropped",
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+					// IDE.Enabled is nil, Type="app", so IDERenderEnabled()=true
+				},
+				"db": {
+					Type:    "db",
+					Enabled: true,
+					Dir:     "./services/db",
+					// IDE.Enabled is nil, Type="db", so IDERenderEnabled()=false
+				},
+			},
+			wantSelected: []string{"main"},
+			wantSkippedMap: map[string]skippedService{
+				"db": {Name: "db", Reason: "disabled-by-policy"},
+			},
+		},
+		{
+			name: "service with Enabled=false dropped (even if IDERenderEnabled=true)",
+			services: map[string]config.ServiceConfig{
+				"app": {
+					Type:    "app",
+					Enabled: false,
+					Dir:     "./services/app",
+				},
+				"main": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+				},
+			},
+			wantSelected: []string{"main"},
+			wantSkippedMap: map[string]skippedService{
+				"app": {Name: "app", Reason: "disabled-by-policy"},
+			},
+		},
+		{
+			name: "explicit IDE.Enabled=true overrides default",
+			services: map[string]config.ServiceConfig{
+				"db": {
+					Type:    "db",
+					Enabled: true,
+					Dir:     "./services/db",
+					IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+				},
+			},
+			wantSelected: []string{"db"},
+		},
+		{
+			name: "explicit IDE.Enabled=false overrides type-based default",
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+					IDE:     config.ServiceIDEConfig{Enabled: &falseVal},
+				},
+			},
+			wantSkippedMap: map[string]skippedService{
+				"main": {Name: "main", Reason: "disabled-by-policy"},
+			},
+		},
+		{
+			name: "two services share dir - child extends parent - child wins",
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+				},
+				"main-debug": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+					Extends: "main",
+				},
+			},
+			wantSelected: []string{"main-debug"},
+			wantSkippedMap: map[string]skippedService{
+				"main": {
+					Name:   "main",
+					Reason: "lost-collision",
+					Dir:    filepath.Join(".", "services", "main"),
+					Winner: "main-debug",
+				},
+			},
+		},
+		{
+			name: "dir normalization: ./services/main vs services/main",
+			services: map[string]config.ServiceConfig{
+				"svc-a": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+				},
+				"svc-b": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "services/main",
+					Extends: "svc-a",
+				},
+			},
+			wantSelected: []string{"svc-b"},
+			wantSkippedMap: map[string]skippedService{
+				"svc-a": {
+					Name:   "svc-a",
+					Reason: "lost-collision",
+					Dir:    filepath.Join(".", "services", "main"),
+					Winner: "svc-b",
+				},
+			},
+		},
+		{
+			name: "three-level extends chain - c extends b extends a",
+			services: map[string]config.ServiceConfig{
+				"a": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+				},
+				"b": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+					Extends: "a",
+				},
+				"c": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+					Extends: "b",
+				},
+			},
+			wantSelected: []string{"c"},
+			wantSkippedMap: map[string]skippedService{
+				"a": {
+					Name:   "a",
+					Reason: "lost-collision",
+					Dir:    filepath.Join(".", "services", "main"),
+					Winner: "c",
+				},
+				"b": {
+					Name:   "b",
+					Reason: "lost-collision",
+					Dir:    filepath.Join(".", "services", "main"),
+					Winner: "c",
+				},
+			},
+		},
+		{
+			name: "tie on equal depth - lexicographic winner",
+			services: map[string]config.ServiceConfig{
+				"zebra": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/shared",
+				},
+				"apple": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/shared",
+				},
+			},
+			wantSelected: []string{"apple"},
+			wantSkippedMap: map[string]skippedService{
+				"zebra": {
+					Name:   "zebra",
+					Reason: "lost-collision",
+					Dir:    filepath.Join(".", "services", "shared"),
+					Winner: "apple",
+				},
+			},
+		},
+		{
+			name: "empty Dir dropped",
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "",
+				},
+				"other": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/other",
+				},
+			},
+			wantSelected: []string{"other"},
+			wantSkippedMap: map[string]skippedService{
+				"main": {Name: "main", Reason: "empty-dir"},
+			},
+		},
+		{
+			name: "whitespace-only Dir treated as empty",
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "   ",
+				},
+				"other": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/other",
+				},
+			},
+			wantSelected: []string{"other"},
+			wantSkippedMap: map[string]skippedService{
+				"main": {Name: "main", Reason: "empty-dir"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selected, skipped := selectIDEServices(tt.services)
+
+			// Check selected
+			if len(selected) != len(tt.wantSelected) {
+				t.Errorf("selected count: want %d, got %d (%v)", len(tt.wantSelected), len(selected), selected)
+			}
+			for i, name := range selected {
+				if i < len(tt.wantSelected) && name != tt.wantSelected[i] {
+					t.Errorf("selected[%d]: want %q, got %q", i, tt.wantSelected[i], name)
+				}
+			}
+
+			// Check skipped
+			skippedMap := make(map[string]skippedService)
+			for _, s := range skipped {
+				skippedMap[s.Name] = s
+			}
+			if len(skippedMap) != len(tt.wantSkippedMap) {
+				t.Errorf("skipped count: want %d, got %d (%v)", len(tt.wantSkippedMap), len(skippedMap), skippedMap)
+			}
+			for name, want := range tt.wantSkippedMap {
+				got, ok := skippedMap[name]
+				if !ok {
+					t.Errorf("skipped[%q]: expected but not found", name)
+					continue
+				}
+				if got.Reason != want.Reason {
+					t.Errorf("skipped[%q].Reason: want %q, got %q", name, want.Reason, got.Reason)
+				}
+				if want.Reason == "lost-collision" {
+					if got.Dir != want.Dir {
+						t.Errorf("skipped[%q].Dir: want %q, got %q", name, want.Dir, got.Dir)
+					}
+					if got.Winner != want.Winner {
+						t.Errorf("skipped[%q].Winner: want %q, got %q", name, want.Winner, got.Winner)
+					}
+				}
+			}
+		})
+	}
+}

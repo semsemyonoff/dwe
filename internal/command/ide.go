@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"text/template"
 
 	"devbox-cli/internal/config"
@@ -13,6 +15,122 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// skippedService carries information about a service that was skipped during IDE rendering.
+type skippedService struct {
+	Name   string // service name
+	Reason string // "disabled-by-policy" | "empty-dir" | "lost-collision"
+	Dir    string // set for "lost-collision" only
+	Winner string // set for "lost-collision" only (name of the winning service)
+}
+
+// extendsDepth computes the depth of a service's extends chain.
+// Returns (depth, capped): depth is the number of hops to the root;
+// capped is true if depth hit the 32-hop limit (defense-in-depth cycle guard).
+func extendsDepth(services map[string]config.ServiceConfig, name string) (int, bool) {
+	const maxDepth = 32
+	depth := 0
+	current := name
+	for {
+		if depth >= maxDepth {
+			return maxDepth, true
+		}
+		svc, ok := services[current]
+		if !ok || svc.Extends == "" {
+			return depth, false
+		}
+		current = svc.Extends
+		depth++
+	}
+}
+
+// selectIDEServices filters and resolves IDE-enabled services.
+// It returns a list of selected service names (sorted lexicographically) and
+// a list of services that were skipped with reason-specific context.
+//
+// Selection logic (in order):
+// 1. Gate on both flags: services where svc.Enabled==false or svc.IDERenderEnabled()==false are dropped.
+// 2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
+// 3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
+//    share the same Dir, the deepest extends chain wins; ties are broken lexicographically.
+func selectIDEServices(services map[string]config.ServiceConfig) (selected []string, skipped []skippedService) {
+	var allSkipped []skippedService
+
+	// Step A: gate on both Enabled and IDERenderEnabled.
+	enabled := make(map[string]config.ServiceConfig)
+	for name, svc := range services {
+		if !svc.Enabled || !svc.IDERenderEnabled() {
+			reason := "disabled-by-policy"
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: reason})
+			continue
+		}
+		enabled[name] = svc
+	}
+
+	// Step B: drop services with empty Dir.
+	dirNormalized := make(map[string]config.ServiceConfig)
+	for name, svc := range enabled {
+		if strings.TrimSpace(svc.Dir) == "" {
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "empty-dir"})
+			continue
+		}
+		dirNormalized[name] = svc
+	}
+
+	// Step C: group by filepath.Clean(Dir) and resolve collisions.
+	dirGroups := make(map[string][]string)
+	for name, svc := range dirNormalized {
+		cleanDir := filepath.Clean(svc.Dir)
+		dirGroups[cleanDir] = append(dirGroups[cleanDir], name)
+	}
+
+	// For each group, pick the winner (deepest extends chain; tie-break by name).
+	selectedSet := make(map[string]bool)
+	for dir, names := range dirGroups {
+		if len(names) == 1 {
+			selectedSet[names[0]] = true
+			continue
+		}
+
+		// Multiple services share this dir: find the deepest extends chain.
+		sort.Strings(names) // tie-break: lexicographically first among deepest
+		var deepest string
+		maxDepth := -1
+		for _, name := range names {
+			depth, _ := extendsDepth(dirNormalized, name)
+			if depth > maxDepth {
+				maxDepth = depth
+				deepest = name
+			}
+		}
+
+		selectedSet[deepest] = true
+		for _, name := range names {
+			if name != deepest {
+				allSkipped = append(allSkipped, skippedService{
+					Name:   name,
+					Reason: "lost-collision",
+					Dir:    dir,
+					Winner: deepest,
+				})
+			}
+		}
+	}
+
+	// Collect selected names and sort.
+	for name := range selectedSet {
+		selected = append(selected, name)
+	}
+	sort.Strings(selected)
+
+	// Sort skipped by name for determinism.
+	sort.Slice(allSkipped, func(i, j int) bool {
+		return allSkipped[i].Name < allSkipped[j].Name
+	})
+	skipped = allSkipped
+
+	return selected, skipped
+}
 
 // ideTemplateData is passed to IDE config templates.
 type ideTemplateData struct {
