@@ -372,7 +372,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		_, tplData, err := resolveIDETemplate(projectRoot, svc, name, "devcontainer.json")
 		switch {
 		case errors.Is(err, os.ErrNotExist):
-			w.Warning("ide [devcontainer] — template not found, skipping (add devbox/templates/ide/devcontainer.json.tpl)")
+			w.Warning(fmt.Sprintf("ide [%s][devcontainer] — template not found, skipping (add devbox/templates/ide/devcontainer.json.tpl)", name))
 		case err != nil:
 			return err
 		default:
@@ -392,7 +392,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		_, launchData, err := resolveIDETemplate(projectRoot, svc, name, "vscode_launch.json")
 		switch {
 		case errors.Is(err, os.ErrNotExist):
-			w.Warning("ide [vscode] — template not found, skipping (add devbox/templates/ide/vscode_launch.json.tpl)")
+			w.Warning(fmt.Sprintf("ide [%s][vscode] — template not found, skipping (add devbox/templates/ide/vscode_launch.json.tpl)", name))
 		case err != nil:
 			return err
 		default:
@@ -406,7 +406,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		_, settingsData, err := resolveIDETemplate(projectRoot, svc, name, "vscode_settings.json")
 		switch {
 		case errors.Is(err, os.ErrNotExist):
-			w.Warning("ide [vscode] — template not found, skipping (add devbox/templates/ide/vscode_settings.json.tpl)")
+			w.Warning(fmt.Sprintf("ide [%s][vscode] — template not found, skipping (add devbox/templates/ide/vscode_settings.json.tpl)", name))
 		case err != nil:
 			return err
 		default:
