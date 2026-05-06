@@ -384,6 +384,16 @@ func TestExtendsDepth(t *testing.T) {
 			svcName:   "unknown",
 			wantDepth: 0,
 		},
+		{
+			name: "cycle - capped at 32",
+			services: map[string]config.ServiceConfig{
+				"a": {Type: "app", Extends: "b"},
+				"b": {Type: "app", Extends: "a"},
+			},
+			svcName:    "a",
+			wantDepth:  32,
+			wantCapped: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -511,7 +521,6 @@ func TestResolveIDETemplate(t *testing.T) {
 		svc          config.ServiceConfig
 		serviceName  string
 		fileBase     string
-		wantPath     string
 		wantContent  string
 		wantErrType  error
 		wantErrInMsg string
@@ -675,7 +684,7 @@ func TestResolveIDETemplate(t *testing.T) {
 				t.Errorf("content: want %q, got %q", tt.wantContent, string(content))
 			}
 			if path == "" {
-				t.Errorf("path should not be empty")
+				t.Errorf("resolveIDETemplate returned empty path for successful lookup")
 			}
 		})
 	}

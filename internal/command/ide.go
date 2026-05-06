@@ -97,7 +97,7 @@ func selectIDEServices(services map[string]config.ServiceConfig) (selected []str
 		var deepest string
 		maxDepth := -1
 		for _, name := range names {
-			depth, _ := extendsDepth(dirNormalized, name)
+			depth, _ := extendsDepth(services, name)
 			if depth > maxDepth {
 				maxDepth = depth
 				deepest = name
@@ -242,10 +242,6 @@ func validateIDETemplateKey(s string) error {
 	if strings.ContainsAny(s, "/\\") {
 		return fmt.Errorf("template key %q contains path separator", s)
 	}
-	// Reject absolute paths
-	if filepath.IsAbs(s) {
-		return fmt.Errorf("template key %q is absolute", s)
-	}
 	// Reject leading dots
 	if strings.HasPrefix(s, ".") {
 		return fmt.Errorf("template key %q starts with dot", s)
@@ -278,6 +274,9 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 		if err == nil {
 			return path, data, nil
 		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", nil, fmt.Errorf("read ide template %s: %w", path, err)
+		}
 	}
 
 	// Step 2: by-service-name template
@@ -285,6 +284,9 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 	data, err := os.ReadFile(path)
 	if err == nil {
 		return path, data, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", nil, fmt.Errorf("read ide template %s: %w", path, err)
 	}
 
 	// Step 3: global template (fallback)
