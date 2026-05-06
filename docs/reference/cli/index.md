@@ -22,11 +22,13 @@ Generated reference for the `devbox` command tree.
   - [devbox deploy run](devbox_deploy_run.md) — Execute the deploy plan
   - [devbox deploy step](devbox_deploy_step.md) — Run a single deploy step by <phase>/<step> address
 - [devbox docker](devbox_docker.md) — Docker Compose lifecycle commands
+  - [devbox docker build](devbox_docker_build.md) — Build compose service images
   - [devbox docker down](devbox_docker_down.md) — Stop and remove compose services
   - [devbox docker exec](devbox_docker_exec.md) — Execute a command in a running compose service
   - [devbox docker logs](devbox_docker_logs.md) — View compose service logs
   - [devbox docker project-name](devbox_docker_project-name.md) — Print the resolved compose project name
   - [devbox docker ps](devbox_docker_ps.md) — List compose containers
+  - [devbox docker pull](devbox_docker_pull.md) — Pull compose service images
   - [devbox docker restart](devbox_docker_restart.md) — Restart compose services
   - [devbox docker run](devbox_docker_run.md) — Run a one-off command in a compose service
   - [devbox docker stop](devbox_docker_stop.md) — Stop compose services

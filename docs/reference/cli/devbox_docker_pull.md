@@ -1,15 +1,16 @@
-## devbox docker stop
+## devbox docker pull
 
-Stop compose services
+Pull compose service images
 
 ```
-devbox docker stop [services...] [flags]
+devbox docker pull [services...] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for stop
+      --all    pull images from all configured overlays, not just enabled ones
+  -h, --help   help for pull
 ```
 
 ### Options inherited from parent commands

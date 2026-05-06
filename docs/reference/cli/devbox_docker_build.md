@@ -1,15 +1,17 @@
-## devbox docker stop
+## devbox docker build
 
-Stop compose services
+Build compose service images
 
 ```
-devbox docker stop [services...] [flags]
+devbox docker build [services...] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for stop
+      --all     build images from all configured overlays, not just enabled ones
+      --force   rebuild without cache and re-pull base images (--no-cache --pull)
+  -h, --help    help for build
 ```
 
 ### Options inherited from parent commands
