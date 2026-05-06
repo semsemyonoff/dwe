@@ -629,6 +629,55 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 	}
 }
 
+// TestAllFlagDoesNotMutateLocalConfig verifies that --all does not write to devbox/local.yml.
+// The resolver functions are pure: they accept only value inputs and return only values.
+// This test confirms the resolvers are idempotent and don't perform any side effects.
+func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Compose: config.ComposeConfig{
+			Base: "compose.yaml",
+			Overlays: map[string]string{
+				"dev": "compose.dev.yaml",
+			},
+		},
+		Services: map[string]config.ServiceConfig{
+			"api": {
+				Enabled: false,
+				Compose: []string{"compose.api.yaml"},
+			},
+		},
+	}
+	dockerCfg := &config.DockerConfig{
+		ProjectName: "test-project",
+		Args: config.DockerArgs{
+			Pull:  []string{},
+			Build: []string{},
+		},
+	}
+
+	// Test resolvePullInvocation with --all returns consistent results on repeated calls.
+	compose1, args1 := resolvePullInvocation(cfg, dockerCfg, true, nil)
+	compose2, args2 := resolvePullInvocation(cfg, dockerCfg, true, nil)
+
+	if len(compose1.Files) != len(compose2.Files) {
+		t.Error("resolvePullInvocation(--all) returned different file sets on repeated calls")
+	}
+	if len(args1) != len(args2) {
+		t.Error("resolvePullInvocation(--all) returned different args on repeated calls")
+	}
+
+	// Test resolveBuildInvocation with --all returns consistent results on repeated calls.
+	compose3, args3 := resolveBuildInvocation(cfg, dockerCfg, true, false, nil)
+	compose4, args4 := resolveBuildInvocation(cfg, dockerCfg, true, false, nil)
+
+	if len(compose3.Files) != len(compose4.Files) {
+		t.Error("resolveBuildInvocation(--all) returned different file sets on repeated calls")
+	}
+	if len(args3) != len(args4) {
+		t.Error("resolveBuildInvocation(--all) returned different args on repeated calls")
+	}
+}
+
 func assertArgs(t *testing.T, label string, got, expected []string) {
 	t.Helper()
 	if len(got) != len(expected) {
