@@ -740,7 +740,7 @@ func TestSelectIDEServices(t *testing.T) {
 			},
 			wantSelected: []string{"main"},
 			wantSkippedMap: map[string]skippedService{
-				"db": {Name: "db", Reason: "disabled-by-policy"},
+				"db": {Name: "db", Reason: "ide-policy"},
 			},
 		},
 		{
@@ -759,7 +759,7 @@ func TestSelectIDEServices(t *testing.T) {
 			},
 			wantSelected: []string{"main"},
 			wantSkippedMap: map[string]skippedService{
-				"app": {Name: "app", Reason: "disabled-by-policy"},
+				"app": {Name: "app", Reason: "service-disabled"},
 			},
 		},
 		{
@@ -785,7 +785,7 @@ func TestSelectIDEServices(t *testing.T) {
 				},
 			},
 			wantSkippedMap: map[string]skippedService{
-				"main": {Name: "main", Reason: "disabled-by-policy"},
+				"main": {Name: "main", Reason: "ide-policy"},
 			},
 		},
 		{
@@ -1104,7 +1104,7 @@ func TestRenderIDECmd_collisionResolutionWithDisable(t *testing.T) {
 	for _, s := range skipped {
 		skippedByName[s.Name] = s
 	}
-	if debugSkip, ok := skippedByName["main-debug"]; !ok || debugSkip.Reason != "disabled-by-policy" {
+	if debugSkip, ok := skippedByName["main-debug"]; !ok || debugSkip.Reason != "ide-policy" {
 		t.Errorf("expected main-debug skipped by policy, got %v", skippedByName)
 	}
 

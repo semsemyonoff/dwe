@@ -19,7 +19,7 @@ import (
 // skippedService carries information about a service that was skipped during IDE rendering.
 type skippedService struct {
 	Name   string // service name
-	Reason string // "disabled-by-policy" | "empty-dir" | "lost-collision"
+	Reason string // "service-disabled" | "ide-policy" | "empty-dir" | "lost-collision"
 	Dir    string // set for "lost-collision" only
 	Winner string // set for "lost-collision" only (name of the winning service)
 }
@@ -59,9 +59,12 @@ func selectIDEServices(services map[string]config.ServiceConfig) (selected []str
 	// Step A: gate on both Enabled and IDERenderEnabled.
 	enabled := make(map[string]config.ServiceConfig)
 	for name, svc := range services {
-		if !svc.Enabled || !svc.IDERenderEnabled() {
-			reason := "disabled-by-policy"
-			allSkipped = append(allSkipped, skippedService{Name: name, Reason: reason})
+		if !svc.Enabled {
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "service-disabled"})
+			continue
+		}
+		if !svc.IDERenderEnabled() {
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "ide-policy"})
 			continue
 		}
 		enabled[name] = svc
@@ -207,13 +210,20 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 				// Emit warnings for skipped services
 				for _, skip := range skipped {
 					switch skip.Reason {
-					case "disabled-by-policy":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (ide.enabled is false or service is disabled)", skip.Name))
+					case "service-disabled":
+						w.Warning(fmt.Sprintf("ide [%s] — skipped (service is disabled)", skip.Name))
+					case "ide-policy":
+						w.Warning(fmt.Sprintf("ide [%s] — skipped (service type does not participate in IDE rendering; set ide.enabled: true to opt in)", skip.Name))
 					case "empty-dir":
 						w.Warning(fmt.Sprintf("ide [%s] — skipped (service has no dir)", skip.Name))
 					case "lost-collision":
 						w.Warning(fmt.Sprintf("ide [%s] — skipped (dir %s rendered by %s)", skip.Name, skip.Dir, skip.Winner))
 					}
+				}
+
+				if len(serviceNames) == 0 {
+					w.Info("no services match the IDE rendering policy")
+					return nil
 				}
 			}
 
@@ -345,20 +355,20 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 				return err
 			}
 			w.Success(fmt.Sprintf("ide [vscode]       → %s", launchDest))
+		}
 
-			_, settingsData, err := resolveIDETemplate(projectRoot, svc, name, "vscode_settings.json")
-			switch {
-			case errors.Is(err, os.ErrNotExist):
-				w.Warning("ide [vscode] — template not found, skipping (add devbox/templates/ide/vscode_settings.json.tpl)")
-			case err != nil:
+		_, settingsData, err := resolveIDETemplate(projectRoot, svc, name, "vscode_settings.json")
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			w.Warning("ide [vscode] — template not found, skipping (add devbox/templates/ide/vscode_settings.json.tpl)")
+		case err != nil:
+			return err
+		default:
+			settingsDest := filepath.Join(serviceDir, ".vscode", "settings.json")
+			if err := renderIDETemplate(string(settingsData), "settings.json", data, settingsDest); err != nil {
 				return err
-			default:
-				settingsDest := filepath.Join(serviceDir, ".vscode", "settings.json")
-				if err := renderIDETemplate(string(settingsData), "settings.json", data, settingsDest); err != nil {
-					return err
-				}
-				w.Success(fmt.Sprintf("ide [vscode]       → %s", settingsDest))
 			}
+			w.Success(fmt.Sprintf("ide [vscode]       → %s", settingsDest))
 		}
 	}
 

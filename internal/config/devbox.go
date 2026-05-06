@@ -657,8 +657,9 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		// Merge dirs: parent dirs come first, child dirs appended (deduplicated).
 		svc.Dirs = mergeDeduplicatedStrings(parent.Dirs, svc.Dirs)
 		// IDE block inheritance: child inherits from parent if not explicitly set.
-		if svc.IDE.Enabled == nil {
-			svc.IDE.Enabled = parent.IDE.Enabled
+		if svc.IDE.Enabled == nil && parent.IDE.Enabled != nil {
+			v := *parent.IDE.Enabled
+			svc.IDE.Enabled = &v
 		}
 		if svc.IDE.Template == "" {
 			svc.IDE.Template = parent.IDE.Template
