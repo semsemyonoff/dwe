@@ -126,12 +126,12 @@ This aligns IDE rendering with the broader architectural goals: explicit policy 
 - [x] no test required for this task (docs only)
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify all four decisions from Overview are implemented (ide block, template fallback, extends-aware collision, default-by-type)
-- [ ] verify breaking-change behavior is documented and tested
-- [ ] run `make test` — full suite must pass
-- [ ] run `make lint` — all issues must be fixed
-- [ ] run `make build` — binary builds cleanly
-- [ ] manually inspect `selectIDEServices` and `resolveIDETemplate` for unused branches or dead code (the simplify pattern)
+- [x] verify all four decisions from Overview are implemented (ide block, template fallback, extends-aware collision, default-by-type)
+- [x] verify breaking-change behavior is documented and tested
+- [x] run `make test` — full suite must pass
+- [x] run `make lint` — all issues must be fixed
+- [x] run `make build` — binary builds cleanly
+- [x] manually inspect `selectIDEServices` and `resolveIDETemplate` for unused branches or dead code (the simplify pattern)
 
 ## Technical Details
 

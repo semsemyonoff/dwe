@@ -2569,13 +2569,13 @@ func TestServiceConfig_IDERenderEnabledExplicit(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(true)}},
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(true)}}, //nolint:modernize
 			wantBool: true,
 			wantExp:  true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(false)}},
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(false)}}, //nolint:modernize
 			wantBool: false,
 			wantExp:  true,
 		},
@@ -2620,12 +2620,12 @@ func TestServiceConfig_IDERenderEnabled(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(true)}},
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(true)}}, //nolint:modernize
 			wantBool: true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptrBool(false)}},
+			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(false)}}, //nolint:modernize
 			wantBool: false,
 		},
 		{
@@ -2744,7 +2744,8 @@ services:
 	}
 }
 
-// ptrBool is a helper to create a pointer to a bool value.
-func ptrBool(b bool) *bool {
-	return &b
+// ptr is a helper to create a pointer to a value.
+// nolint: unused,modernize // used in test table initialization
+func ptr[T any](v T) *T {
+	return &v
 }

@@ -49,10 +49,10 @@ func extendsDepth(services map[string]config.ServiceConfig, name string) (int, b
 // a list of services that were skipped with reason-specific context.
 //
 // Selection logic (in order):
-// 1. Gate on both flags: services where svc.Enabled==false or svc.IDERenderEnabled()==false are dropped.
-// 2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
-// 3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
-//    share the same Dir, the deepest extends chain wins; ties are broken lexicographically.
+//  1. Gate on both flags: services where svc.Enabled==false or svc.IDERenderEnabled()==false are dropped.
+//  2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
+//  3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
+//     share the same Dir, the deepest extends chain wins; ties are broken lexicographically.
 func selectIDEServices(services map[string]config.ServiceConfig) (selected []string, skipped []skippedService) {
 	var allSkipped []skippedService
 
@@ -271,8 +271,6 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 		return "", nil, fmt.Errorf("invalid service name %q: %w", serviceName, err)
 	}
 
-	var lastErr error
-
 	// Step 1: explicit template override (if set)
 	if svc.IDE.Template != "" {
 		path := filepath.Join(projectRoot, "devbox", "templates", "ide", svc.IDE.Template, fileBase+".tpl")
@@ -280,7 +278,6 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 		if err == nil {
 			return path, data, nil
 		}
-		lastErr = err
 	}
 
 	// Step 2: by-service-name template
@@ -289,7 +286,6 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 	if err == nil {
 		return path, data, nil
 	}
-	lastErr = err
 
 	// Step 3: global template (fallback)
 	path = filepath.Join(projectRoot, "devbox", "templates", "ide", fileBase+".tpl")
@@ -297,21 +293,9 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 	if err == nil {
 		return path, data, nil
 	}
-	lastErr = err
 
 	// All three paths are missing; wrap the error to preserve os.ErrNotExist semantics
-	return "", nil, fmt.Errorf("ide template for %s: %w", fileBase, lastErr)
-}
-
-// loadIDETemplate reads a template from devbox/templates/ide/<name>.tpl
-// relative to the project root.
-func loadIDETemplate(projectRoot, templateName string) (string, error) {
-	path := filepath.Join(projectRoot, "devbox", "templates", "ide", templateName+".tpl")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read ide template %s: %w", templateName, err)
-	}
-	return string(data), nil
+	return "", nil, fmt.Errorf("ide template for %s: %w", fileBase, err)
 }
 
 // renderIDEConfigs generates IDE config files for a single service.

@@ -360,7 +360,7 @@ func TestExtendsDepth(t *testing.T) {
 		{
 			name: "one level",
 			services: map[string]config.ServiceConfig{
-				"main": {Type: "app"},
+				"main":  {Type: "app"},
 				"debug": {Type: "app", Extends: "main"},
 			},
 			svcName:   "debug",
@@ -486,13 +486,13 @@ func TestResolveIDETemplate(t *testing.T) {
 	// Create test templates
 	templates := map[string]string{
 		// Global templates
-		filepath.Join(tplDir, "devcontainer.json.tpl"):              "global-devcontainer",
-		filepath.Join(tplDir, "vscode_launch.json.tpl"):             "global-vscode-launch",
+		filepath.Join(tplDir, "devcontainer.json.tpl"):  "global-devcontainer",
+		filepath.Join(tplDir, "vscode_launch.json.tpl"): "global-vscode-launch",
 		// By-name templates
-		filepath.Join(tplDir, "main", "devcontainer.json.tpl"):     "main-devcontainer",
+		filepath.Join(tplDir, "main", "devcontainer.json.tpl"):       "main-devcontainer",
 		filepath.Join(tplDir, "main-debug", "devcontainer.json.tpl"): "main-debug-devcontainer",
 		// Explicit override templates
-		filepath.Join(tplDir, "custom", "devcontainer.json.tpl"):   "custom-devcontainer",
+		filepath.Join(tplDir, "custom", "devcontainer.json.tpl"): "custom-devcontainer",
 	}
 
 	for path, content := range templates {
@@ -507,14 +507,14 @@ func TestResolveIDETemplate(t *testing.T) {
 	trueVal := true
 
 	tests := []struct {
-		name           string
-		svc            config.ServiceConfig
-		serviceName    string
-		fileBase       string
-		wantPath       string
-		wantContent    string
-		wantErrType    error
-		wantErrInMsg   string
+		name         string
+		svc          config.ServiceConfig
+		serviceName  string
+		fileBase     string
+		wantPath     string
+		wantContent  string
+		wantErrType  error
+		wantErrInMsg string
 	}{
 		{
 			name: "only global exists - used",
