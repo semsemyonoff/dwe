@@ -102,6 +102,8 @@ args:
   up: ["-d", "--remove-orphans"]
   logs: ["-f"]
   run: ["--rm"]
+  pull: ["--policy", "always"]
+  build: ["--progress", "plain"]
 ```
 
 Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`, `pull`, `build`. (Health-poll args for `devbox docker wait` are not user-configurable — the wait command builds its own poll loop in Go.)

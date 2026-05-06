@@ -203,37 +203,7 @@ func (p ProjectConfig) FullName() string {
 // service overlays (sorted by service name). This is the canonical file list
 // used by all compose-aware CLI operations.
 func (c *DevboxConfig) ComposeFiles() []string {
-	var files []string
-	if c.Compose.Base != "" {
-		files = append(files, c.Compose.Base)
-	}
-
-	// Tool overlays from compose.overlays in sorted key order.
-	keys := make([]string, 0, len(c.Compose.Overlays))
-	for k := range c.Compose.Overlays {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		if c.toolOverlayEnabled(key) {
-			files = append(files, c.Compose.Overlays[key])
-		}
-	}
-
-	// Service overlays from services with compose_overlay set.
-	svcNames := make([]string, 0, len(c.Services))
-	for name := range c.Services {
-		svcNames = append(svcNames, name)
-	}
-	sort.Strings(svcNames)
-	for _, name := range svcNames {
-		svc := c.Services[name]
-		if svc.Enabled && len(svc.Compose) > 0 {
-			files = append(files, svc.Compose...)
-		}
-	}
-
-	return files
+	return c.composeFiles(false)
 }
 
 // ComposeFilesAll returns the ordered list of all configured compose files,
@@ -241,22 +211,26 @@ func (c *DevboxConfig) ComposeFiles() []string {
 // overlays (sorted by key), then all service overlays (sorted by service name).
 // This is used by --all flags to override the active set.
 func (c *DevboxConfig) ComposeFilesAll() []string {
+	return c.composeFiles(true)
+}
+
+func (c *DevboxConfig) composeFiles(all bool) []string {
 	var files []string
 	if c.Compose.Base != "" {
 		files = append(files, c.Compose.Base)
 	}
 
-	// All tool overlays from compose.overlays in sorted key order.
 	keys := make([]string, 0, len(c.Compose.Overlays))
 	for k := range c.Compose.Overlays {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		files = append(files, c.Compose.Overlays[key])
+		if all || c.toolOverlayEnabled(key) {
+			files = append(files, c.Compose.Overlays[key])
+		}
 	}
 
-	// All service overlays from services with compose_overlay set.
 	svcNames := make([]string, 0, len(c.Services))
 	for name := range c.Services {
 		svcNames = append(svcNames, name)
@@ -264,7 +238,7 @@ func (c *DevboxConfig) ComposeFilesAll() []string {
 	sort.Strings(svcNames)
 	for _, name := range svcNames {
 		svc := c.Services[name]
-		if len(svc.Compose) > 0 {
+		if (all || svc.Enabled) && len(svc.Compose) > 0 {
 			files = append(files, svc.Compose...)
 		}
 	}

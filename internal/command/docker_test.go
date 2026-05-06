@@ -1,6 +1,7 @@
 package command
 
 import (
+	"reflect"
 	"testing"
 
 	"devbox-cli/internal/config"
@@ -235,8 +236,7 @@ func TestResolvePullInvocation(t *testing.T) {
 			name: "pull without --all uses ComposeFiles",
 			all:  false,
 			want: func(c *docker.Compose) bool {
-				activeFiles := cfg.ComposeFiles()
-				return len(c.Files) == len(activeFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{"svc"},
 		},
@@ -244,8 +244,7 @@ func TestResolvePullInvocation(t *testing.T) {
 			name: "pull with --all uses ComposeFilesAll",
 			all:  true,
 			want: func(c *docker.Compose) bool {
-				allFiles := cfg.ComposeFilesAll()
-				return len(c.Files) == len(allFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"svc"},
 		},
@@ -349,8 +348,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			force:    false,
 			services: nil,
 			check: func(c *docker.Compose) bool {
-				activeFiles := cfg.ComposeFiles()
-				return len(c.Files) == len(activeFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{},
 		},
@@ -360,8 +358,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			force:    false,
 			services: []string{"svc"},
 			check: func(c *docker.Compose) bool {
-				allFiles := cfg.ComposeFilesAll()
-				return len(c.Files) == len(allFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"svc"},
 		},
@@ -371,8 +368,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			force:    true,
 			services: []string{"svc"},
 			check: func(c *docker.Compose) bool {
-				activeFiles := cfg.ComposeFiles()
-				return len(c.Files) == len(activeFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{"--no-cache", "--pull", "svc"},
 		},
@@ -382,8 +378,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			force:    true,
 			services: []string{"svc"},
 			check: func(c *docker.Compose) bool {
-				allFiles := cfg.ComposeFilesAll()
-				return len(c.Files) == len(allFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"--no-cache", "--pull", "svc"},
 		},
@@ -393,8 +388,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			force:    false,
 			services: []string{"svc1", "svc2"},
 			check: func(c *docker.Compose) bool {
-				activeFiles := cfg.ComposeFiles()
-				return len(c.Files) == len(activeFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{"svc1", "svc2"},
 		},
@@ -404,8 +398,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			force:    true,
 			services: []string{"svc1", "svc2"},
 			check: func(c *docker.Compose) bool {
-				allFiles := cfg.ComposeFilesAll()
-				return len(c.Files) == len(allFiles)
+				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"--no-cache", "--pull", "svc1", "svc2"},
 		},
@@ -549,7 +542,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			forceFlag:    false,
 			services:     []string{},
 			expectedCompose: func(c *docker.Compose) bool {
-				return len(c.Files) == len(cfg.ComposeFiles())
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			expectedArgs: []string{},
 		},
@@ -560,7 +553,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			forceFlag:    false,
 			services:     []string{},
 			expectedCompose: func(c *docker.Compose) bool {
-				return len(c.Files) == len(cfg.ComposeFilesAll())
+				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			expectedArgs: []string{},
 		},
@@ -571,9 +564,20 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			forceFlag:    false,
 			services:     []string{},
 			expectedCompose: func(c *docker.Compose) bool {
-				return len(c.Files) == len(cfg.ComposeFiles())
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			expectedArgs: []string{},
+		},
+		{
+			name:         "image_rebuild_% -> devbox docker build <service>",
+			legacyTarget: "image_rebuild_%",
+			allFlag:      false,
+			forceFlag:    false,
+			services:     []string{"svc-x"},
+			expectedCompose: func(c *docker.Compose) bool {
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
+			},
+			expectedArgs: []string{"svc-x"},
 		},
 		{
 			name:         "image_rebuild_force -> devbox docker build --force",
@@ -582,7 +586,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			forceFlag:    true,
 			services:     []string{},
 			expectedCompose: func(c *docker.Compose) bool {
-				return len(c.Files) == len(cfg.ComposeFiles())
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			expectedArgs: []string{"--no-cache", "--pull"},
 		},
@@ -593,7 +597,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			forceFlag:    false,
 			services:     []string{},
 			expectedCompose: func(c *docker.Compose) bool {
-				return len(c.Files) == len(cfg.ComposeFilesAll())
+				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			expectedArgs: []string{},
 		},
@@ -604,7 +608,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			forceFlag:    true,
 			services:     []string{},
 			expectedCompose: func(c *docker.Compose) bool {
-				return len(c.Files) == len(cfg.ComposeFilesAll())
+				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			expectedArgs: []string{"--no-cache", "--pull"},
 		},
@@ -629,9 +633,9 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 	}
 }
 
-// TestAllFlagDoesNotMutateLocalConfig verifies that --all does not write to devbox/local.yml.
-// The resolver functions are pure: they accept only value inputs and return only values.
-// This test confirms the resolvers are idempotent and don't perform any side effects.
+// TestAllFlagDoesNotMutateLocalConfig verifies that --all returns the full compose file set
+// (including disabled services) without modifying any external state. The resolver functions
+// are pure value functions; this test confirms --all expands the file set beyond the active set.
 func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Compose: config.ComposeConfig{
@@ -655,26 +659,32 @@ func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
 		},
 	}
 
-	// Test resolvePullInvocation with --all returns consistent results on repeated calls.
-	compose1, args1 := resolvePullInvocation(cfg, dockerCfg, true, nil)
-	compose2, args2 := resolvePullInvocation(cfg, dockerCfg, true, nil)
+	// --all should return ComposeFilesAll() (includes disabled "api" service).
+	withAll, _ := resolvePullInvocation(cfg, dockerCfg, true, nil)
+	withoutAll, _ := resolvePullInvocation(cfg, dockerCfg, false, nil)
 
-	if len(compose1.Files) != len(compose2.Files) {
-		t.Error("resolvePullInvocation(--all) returned different file sets on repeated calls")
+	if !reflect.DeepEqual(withAll.Files, cfg.ComposeFilesAll()) {
+		t.Errorf("resolvePullInvocation(--all) files = %v, want %v", withAll.Files, cfg.ComposeFilesAll())
 	}
-	if len(args1) != len(args2) {
-		t.Error("resolvePullInvocation(--all) returned different args on repeated calls")
+	if !reflect.DeepEqual(withoutAll.Files, cfg.ComposeFiles()) {
+		t.Errorf("resolvePullInvocation(no --all) files = %v, want %v", withoutAll.Files, cfg.ComposeFiles())
+	}
+	if len(withAll.Files) <= len(withoutAll.Files) {
+		t.Errorf("--all should include disabled services: got %d files (--all) vs %d (active only)", len(withAll.Files), len(withoutAll.Files))
 	}
 
-	// Test resolveBuildInvocation with --all returns consistent results on repeated calls.
-	compose3, args3 := resolveBuildInvocation(cfg, dockerCfg, true, false, nil)
-	compose4, args4 := resolveBuildInvocation(cfg, dockerCfg, true, false, nil)
+	// Same assertions for build.
+	buildWithAll, _ := resolveBuildInvocation(cfg, dockerCfg, true, false, nil)
+	buildWithoutAll, _ := resolveBuildInvocation(cfg, dockerCfg, false, false, nil)
 
-	if len(compose3.Files) != len(compose4.Files) {
-		t.Error("resolveBuildInvocation(--all) returned different file sets on repeated calls")
+	if !reflect.DeepEqual(buildWithAll.Files, cfg.ComposeFilesAll()) {
+		t.Errorf("resolveBuildInvocation(--all) files = %v, want %v", buildWithAll.Files, cfg.ComposeFilesAll())
 	}
-	if len(args3) != len(args4) {
-		t.Error("resolveBuildInvocation(--all) returned different args on repeated calls")
+	if !reflect.DeepEqual(buildWithoutAll.Files, cfg.ComposeFiles()) {
+		t.Errorf("resolveBuildInvocation(no --all) files = %v, want %v", buildWithoutAll.Files, cfg.ComposeFiles())
+	}
+	if len(buildWithAll.Files) <= len(buildWithoutAll.Files) {
+		t.Errorf("build --all should include disabled services: got %d files (--all) vs %d (active only)", len(buildWithAll.Files), len(buildWithoutAll.Files))
 	}
 }
 

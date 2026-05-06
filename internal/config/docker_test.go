@@ -369,4 +369,13 @@ args:
 	if len(dcfg.Args.Build) != 0 {
 		t.Errorf("Build args len = %d, want 0", len(dcfg.Args.Build))
 	}
+
+	// Non-overridden fields from base should survive the merge.
+	if len(dcfg.Args.Global) != 0 {
+		t.Errorf("Global args = %v, want [] (base value should survive)", dcfg.Args.Global)
+	}
+	wantUp := []string{}
+	if len(dcfg.Args.Up) != len(wantUp) {
+		t.Errorf("Up args = %v, want %v (base value should survive)", dcfg.Args.Up, wantUp)
+	}
 }
