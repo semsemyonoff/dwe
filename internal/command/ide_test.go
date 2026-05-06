@@ -80,7 +80,7 @@ func TestRenderIDETemplate_devcontainer(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "devcontainer.json")
 
-	if err := renderIDETemplate(minimalDevcontainerTpl, "devcontainer.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalDevcontainerTpl, "devcontainer.json", data, dest, dir); err != nil {
 		t.Fatalf("renderIDETemplate: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func TestRenderIDETemplate_vscodeLaunch(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "launch.json")
 
-	if err := renderIDETemplate(minimalVscodeLaunchTpl, "launch.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalVscodeLaunchTpl, "launch.json", data, dest, dir); err != nil {
 		t.Fatalf("renderIDETemplate: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func TestRenderIDETemplate_vscodeSettings(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "settings.json")
 
-	if err := renderIDETemplate(minimalVscodeSettingsTpl, "settings.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalVscodeSettingsTpl, "settings.json", data, dest, dir); err != nil {
 		t.Fatalf("renderIDETemplate: %v", err)
 	}
 
@@ -167,11 +167,61 @@ func TestRenderIDETemplate_createsParentDirs(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "nested", "deep", "file.json")
 
-	if err := renderIDETemplate(minimalVscodeLaunchTpl, "file.json", data, dest); err != nil {
+	if err := renderIDETemplate(minimalVscodeLaunchTpl, "file.json", data, dest, dir); err != nil {
 		t.Fatalf("renderIDETemplate should create parent dirs: %v", err)
 	}
 	if _, err := os.Stat(dest); err != nil {
 		t.Errorf("expected file to exist at %s: %v", dest, err)
+	}
+}
+
+// TestRenderIDETemplate_symlinkDir verifies that a symlinked intermediate directory
+// that points outside the project root is rejected.
+func TestRenderIDETemplate_symlinkDir(t *testing.T) {
+	projectRoot := t.TempDir()
+	outside := t.TempDir()
+
+	svcDir := filepath.Join(projectRoot, "services", "main")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// .devcontainer -> outside the project root
+	if err := os.Symlink(outside, filepath.Join(svcDir, ".devcontainer")); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := filepath.Join(svcDir, ".devcontainer", "devcontainer.json")
+	absRoot, _ := filepath.Abs(projectRoot)
+	err := renderIDETemplate("{}", "devcontainer.json", ideTemplateData{}, dest, absRoot)
+	if err == nil {
+		t.Fatal("expected error when destination dir is a symlink outside project root")
+	}
+}
+
+// TestRenderIDETemplate_symlinkFile verifies that a symlinked destination file
+// is rejected even when the parent directory is safe.
+func TestRenderIDETemplate_symlinkFile(t *testing.T) {
+	projectRoot := t.TempDir()
+	outside := t.TempDir()
+
+	svcDir := filepath.Join(projectRoot, "services", "main", ".devcontainer")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// devcontainer.json -> file outside the project root
+	target := filepath.Join(outside, "evil.json")
+	if err := os.WriteFile(target, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(svcDir, "devcontainer.json")
+	if err := os.Symlink(target, dest); err != nil {
+		t.Fatal(err)
+	}
+
+	absRoot, _ := filepath.Abs(projectRoot)
+	err := renderIDETemplate("{}", "devcontainer.json", ideTemplateData{}, dest, absRoot)
+	if err == nil {
+		t.Fatal("expected error when destination file is a symlink")
 	}
 }
 
@@ -797,7 +847,7 @@ func TestSelectIDEServices(t *testing.T) {
 				},
 			},
 			wantSkippedMap: map[string]skippedService{
-				"main": {Name: "main", Reason: "ide-policy"},
+				"main": {Name: "main", Reason: "ide-disabled"},
 			},
 		},
 		{
@@ -1206,8 +1256,8 @@ func TestRenderIDECmd_collisionResolutionWithDisable(t *testing.T) {
 	for _, s := range skipped {
 		skippedByName[s.Name] = s
 	}
-	if debugSkip, ok := skippedByName["main-debug"]; !ok || debugSkip.Reason != "ide-policy" {
-		t.Errorf("expected main-debug skipped by policy, got %v", skippedByName)
+	if debugSkip, ok := skippedByName["main-debug"]; !ok || debugSkip.Reason != "ide-disabled" {
+		t.Errorf("expected main-debug skipped with ide-disabled reason, got %v", skippedByName)
 	}
 
 	// Render the selected service
@@ -1226,5 +1276,105 @@ func TestRenderIDECmd_collisionResolutionWithDisable(t *testing.T) {
 	// Should contain main's container name (not main-debug)
 	if !strings.Contains(s, "app-main") || strings.Contains(s, "app-main-debug") {
 		t.Errorf("devcontainer.json should contain main (not debug) container, got:\n%s", s)
+	}
+}
+
+// TestCheckNoSymlinks verifies the symlink detection helper.
+func TestCheckNoSymlinks(t *testing.T) {
+	root := t.TempDir()
+
+	// Create a real subdirectory: root/real/sub
+	realSub := filepath.Join(root, "real", "sub")
+	if err := os.MkdirAll(realSub, 0o755); err != nil {
+		t.Fatalf("create real dir: %v", err)
+	}
+
+	// Non-existent path should be fine (no symlinks possible in non-existent path)
+	if err := checkNoSymlinks(root, filepath.Join(root, "nonexistent", "path")); err != nil {
+		t.Errorf("non-existent path: unexpected error: %v", err)
+	}
+
+	// Real existing path should be fine
+	if err := checkNoSymlinks(root, realSub); err != nil {
+		t.Errorf("real path: unexpected error: %v", err)
+	}
+
+	// Create a symlink component: root/link -> root/real
+	linkPath := filepath.Join(root, "link")
+	if err := os.Symlink(filepath.Join(root, "real"), linkPath); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	// Path through symlink should be rejected
+	if err := checkNoSymlinks(root, filepath.Join(linkPath, "sub")); err == nil {
+		t.Errorf("path through symlink: expected error, got nil")
+	}
+
+	// Symlink itself as target should be rejected
+	if err := checkNoSymlinks(root, linkPath); err == nil {
+		t.Errorf("symlink as target: expected error, got nil")
+	}
+}
+
+// TestRenderIDEConfigs_symlink verifies that renderIDEConfigs rejects service dirs
+// containing symlink components, even when the lexical containment check passes.
+func TestRenderIDEConfigs_symlink(t *testing.T) {
+	projectRoot := t.TempDir()
+	setupIDETemplates(t, projectRoot)
+
+	// Create a real dir outside project root
+	outside := t.TempDir()
+
+	// Create a symlink inside project root pointing outside
+	symlinkDir := filepath.Join(projectRoot, "services")
+	if err := os.Symlink(outside, symlinkDir); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	cfg := makeIDECfg(false, true)
+	svc := cfg.Services["main"] // Dir: ./services/main — goes through the symlink
+
+	var buf strings.Builder
+	w := render.NewWriter(&buf)
+
+	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
+	if err == nil {
+		t.Fatal("expected error for symlinked service dir, got nil")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected error mentioning symlink, got: %v", err)
+	}
+}
+
+// TestSelectIDEServices_ideDisabledReason verifies that explicit ide.enabled:false
+// produces "ide-disabled" reason, while default-by-type false produces "ide-policy".
+func TestSelectIDEServices_ideDisabledReason(t *testing.T) {
+	falseVal := false
+	services := map[string]config.ServiceConfig{
+		"explicit-false": {
+			Type:    "app",
+			Enabled: true,
+			Dir:     "./services/a",
+			IDE:     config.ServiceIDEConfig{Enabled: &falseVal},
+		},
+		"default-false": {
+			Type:    "db",
+			Enabled: true,
+			Dir:     "./services/b",
+			// IDE.Enabled is nil, Type="db" → default false
+		},
+	}
+
+	_, skipped := selectIDEServices(services)
+	byName := make(map[string]skippedService)
+	for _, s := range skipped {
+		byName[s.Name] = s
+	}
+
+	if got := byName["explicit-false"].Reason; got != "ide-disabled" {
+		t.Errorf("explicit false: want reason %q, got %q", "ide-disabled", got)
+	}
+	if got := byName["default-false"].Reason; got != "ide-policy" {
+		t.Errorf("default false: want reason %q, got %q", "ide-policy", got)
 	}
 }

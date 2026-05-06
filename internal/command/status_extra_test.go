@@ -19,7 +19,7 @@ func TestRenderIDETemplate_InvalidTemplate(t *testing.T) {
 	dest := filepath.Join(dir, "out.json")
 	tplStr := `{{.Invalid`
 	data := ideTemplateData{}
-	err := renderIDETemplate(tplStr, "out.json", data, dest)
+	err := renderIDETemplate(tplStr, "out.json", data, dest, dir)
 	if err == nil {
 		t.Fatal("expected error for invalid template")
 	}

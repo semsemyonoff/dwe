@@ -63,8 +63,12 @@ func selectIDEServices(services map[string]config.ServiceConfig) (selected []str
 			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "service-disabled"})
 			continue
 		}
-		if !svc.IDERenderEnabled() {
-			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "ide-policy"})
+		if ideEnabled, explicit := svc.IDERenderEnabledExplicit(); !ideEnabled {
+			reason := "ide-policy"
+			if explicit {
+				reason = "ide-disabled"
+			}
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: reason})
 			continue
 		}
 		enabled[name] = svc
@@ -212,8 +216,10 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 					switch skip.Reason {
 					case "service-disabled":
 						w.Warning(fmt.Sprintf("ide [%s] — skipped (service is disabled)", skip.Name))
+					case "ide-disabled":
+						w.Warning(fmt.Sprintf("ide [%s] — skipped (ide.enabled is explicitly set to false)", skip.Name))
 					case "ide-policy":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (service type does not participate in IDE rendering; set ide.enabled: true to opt in)", skip.Name))
+						w.Warning(fmt.Sprintf("ide [%s] — skipped (service type does not participate in IDE rendering by default; set ide.enabled: true to opt in)", skip.Name))
 					case "empty-dir":
 						w.Warning(fmt.Sprintf("ide [%s] — skipped (service has no dir)", skip.Name))
 					case "lost-collision":
@@ -310,6 +316,33 @@ func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceNam
 	return "", nil, fmt.Errorf("ide template for %s: %w", fileBase, err)
 }
 
+// checkNoSymlinks verifies that no existing path component between absRoot and absDir
+// is a symlink. It stops at the first non-existent component (which cannot be a symlink).
+func checkNoSymlinks(absRoot, absDir string) error {
+	rel, err := filepath.Rel(absRoot, absDir)
+	if err != nil {
+		return fmt.Errorf("relative path: %w", err)
+	}
+	current := absRoot
+	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
+		if part == "." || part == "" {
+			continue
+		}
+		current = filepath.Join(current, part)
+		fi, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return fmt.Errorf("stat %s: %w", current, err)
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("service dir contains symlink at %q; symlinked service directories are not supported", current)
+		}
+	}
+	return nil
+}
+
 // renderIDEConfigs generates IDE config files for a single service.
 func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
 	data := ideTemplateData{
@@ -332,6 +365,9 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	if !strings.HasPrefix(absDir+string(filepath.Separator), absRoot+string(filepath.Separator)) {
 		return fmt.Errorf("service dir %q escapes project root", svc.Dir)
 	}
+	if err := checkNoSymlinks(absRoot, absDir); err != nil {
+		return err
+	}
 
 	if cfg.IDE.Devcontainer.Enabled {
 		_, tplData, err := resolveIDETemplate(projectRoot, svc, name, "devcontainer.json")
@@ -342,7 +378,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 			return err
 		default:
 			dest := filepath.Join(serviceDir, ".devcontainer", "devcontainer.json")
-			if err := renderIDETemplate(string(tplData), "devcontainer.json", data, dest); err != nil {
+			if err := renderIDETemplate(string(tplData), "devcontainer.json", data, dest, absRoot); err != nil {
 				return err
 			}
 			w.Success(fmt.Sprintf("ide [devcontainer] → %s", dest))
@@ -362,7 +398,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 			return err
 		default:
 			launchDest := filepath.Join(serviceDir, ".vscode", "launch.json")
-			if err := renderIDETemplate(string(launchData), "launch.json", data, launchDest); err != nil {
+			if err := renderIDETemplate(string(launchData), "launch.json", data, launchDest, absRoot); err != nil {
 				return err
 			}
 			w.Success(fmt.Sprintf("ide [vscode]       → %s", launchDest))
@@ -376,7 +412,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 			return err
 		default:
 			settingsDest := filepath.Join(serviceDir, ".vscode", "settings.json")
-			if err := renderIDETemplate(string(settingsData), "settings.json", data, settingsDest); err != nil {
+			if err := renderIDETemplate(string(settingsData), "settings.json", data, settingsDest, absRoot); err != nil {
 				return err
 			}
 			w.Success(fmt.Sprintf("ide [vscode]       → %s", settingsDest))
@@ -388,7 +424,9 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 
 // renderIDETemplate executes a Go template string against data and writes the
 // result to dest, creating parent directories as needed.
-func renderIDETemplate(tplStr, name string, data ideTemplateData, dest string) error {
+// absRoot is the resolved absolute project root; the function verifies that
+// the destination directory does not escape it via symlinks.
+func renderIDETemplate(tplStr, name string, data ideTemplateData, dest, absRoot string) error {
 	t, err := template.New(name).Parse(tplStr)
 	if err != nil {
 		return fmt.Errorf("parse template %s: %w", name, err)
@@ -399,8 +437,31 @@ func renderIDETemplate(tplStr, name string, data ideTemplateData, dest string) e
 		return fmt.Errorf("render template %s: %w", name, err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+	destDir := filepath.Dir(dest)
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return fmt.Errorf("create dir for %s: %w", dest, err)
+	}
+
+	// Verify the real directory resolves inside the project root.
+	// MkdirAll follows symlinks, so a .devcontainer -> /tmp/outside symlink
+	// would succeed silently without this check.
+	// Both paths are resolved via EvalSymlinks so the comparison works on
+	// systems (macOS) where the temp dir itself is under a symlinked prefix.
+	realRoot, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root: %w", err)
+	}
+	realDir, err := filepath.EvalSymlinks(destDir)
+	if err != nil {
+		return fmt.Errorf("resolve dir for %s: %w", dest, err)
+	}
+	if !strings.HasPrefix(realDir+string(filepath.Separator), realRoot+string(filepath.Separator)) {
+		return fmt.Errorf("destination dir for %q resolves outside project root via symlink", dest)
+	}
+
+	// Refuse to write through a symlinked destination file.
+	if fi, err := os.Lstat(dest); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("destination %q is a symlink; will not overwrite", dest)
 	}
 
 	if err := os.WriteFile(dest, buf.Bytes(), 0o644); err != nil {
