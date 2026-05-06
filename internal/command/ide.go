@@ -321,6 +321,17 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	}
 
 	serviceDir := filepath.Join(projectRoot, svc.Dir)
+	absRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root: %w", err)
+	}
+	absDir, err := filepath.Abs(serviceDir)
+	if err != nil {
+		return fmt.Errorf("resolve service dir: %w", err)
+	}
+	if !strings.HasPrefix(absDir+string(filepath.Separator), absRoot+string(filepath.Separator)) {
+		return fmt.Errorf("service dir %q escapes project root", svc.Dir)
+	}
 
 	if cfg.IDE.Devcontainer.Enabled {
 		_, tplData, err := resolveIDETemplate(projectRoot, svc, name, "devcontainer.json")

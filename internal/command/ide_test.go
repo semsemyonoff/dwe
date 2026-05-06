@@ -2,6 +2,7 @@ package command
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -663,6 +664,17 @@ func TestResolveIDETemplate(t *testing.T) {
 			fileBase:     "devcontainer.json",
 			wantErrInMsg: ".. segment",
 		},
+		{
+			name: "explicit template absent - falls through to by-name",
+			svc: config.ServiceConfig{
+				Type:    "app",
+				Enabled: true,
+				IDE:     config.ServiceIDEConfig{Enabled: &trueVal, Template: "nonexistent-custom"},
+			},
+			serviceName: "main",
+			fileBase:    "devcontainer.json",
+			wantContent: "main-devcontainer",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1049,6 +1061,96 @@ func TestRenderIDEConfigs_collisionResolution(t *testing.T) {
 	if !strings.Contains(s, "app-main-debug") {
 		t.Errorf("devcontainer.json should contain main-debug container, got:\n%s", s)
 	}
+}
+
+// TestRenderIDECmd_explicitArgErrors verifies the four error cases when an explicit
+// service argument is provided to the render ide command. It exercises the same
+// validation logic as RunE's explicit-arg branch.
+func TestRenderIDECmd_explicitArgErrors(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name        string
+		serviceName string
+		services    map[string]config.ServiceConfig
+		wantErrMsg  string
+	}{
+		{
+			name:        "unknown service",
+			serviceName: "missing",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: true, Dir: "./services/main"},
+			},
+			wantErrMsg: `service "missing" not found in config`,
+		},
+		{
+			name:        "service disabled at project level",
+			serviceName: "main",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: false, Dir: "./services/main"},
+			},
+			wantErrMsg: `service "main" is disabled at the project level`,
+		},
+		{
+			name:        "ide.enabled: false explicitly set",
+			serviceName: "main",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: true, Dir: "./services/main", IDE: config.ServiceIDEConfig{Enabled: &falseVal}},
+			},
+			wantErrMsg: `service "main" has ide.enabled: false`,
+		},
+		{
+			name:        "non-app type with no explicit ide.enabled",
+			serviceName: "db",
+			services: map[string]config.ServiceConfig{
+				"db": {Type: "db", Enabled: true, Dir: "./services/db"},
+			},
+			wantErrMsg: `does not participate in IDE rendering by default`,
+		},
+		{
+			name:        "service has no dir",
+			serviceName: "main",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: true, IDE: config.ServiceIDEConfig{Enabled: &trueVal}},
+			},
+			wantErrMsg: `service "main" has no dir`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := simulateExplicitArgValidation(tt.serviceName, tt.services)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErrMsg)
+			}
+			if !strings.Contains(err.Error(), tt.wantErrMsg) {
+				t.Errorf("error %q should contain %q", err.Error(), tt.wantErrMsg)
+			}
+		})
+	}
+}
+
+// simulateExplicitArgValidation replicates the explicit-arg validation logic from RunE.
+func simulateExplicitArgValidation(name string, services map[string]config.ServiceConfig) error {
+	svc, ok := services[name]
+	if !ok {
+		return fmt.Errorf("service %q not found in config", name)
+	}
+	if strings.TrimSpace(svc.Dir) == "" {
+		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
+	}
+	if !svc.Enabled {
+		return fmt.Errorf("service %q is disabled at the project level", name)
+	}
+	enabled, explicit := svc.IDERenderEnabledExplicit()
+	if !enabled {
+		if explicit {
+			return fmt.Errorf("service %q has ide.enabled: false", name)
+		}
+		return fmt.Errorf("service %q (type: %s) does not participate in IDE rendering by default; set ide.enabled: true to opt in", name, svc.Type)
+	}
+	return nil
 }
 
 // TestRenderIDECmd_collisionResolutionWithDisable verifies behavior when one

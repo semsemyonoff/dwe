@@ -192,7 +192,7 @@ func serviceNameCompletion(flags *rootFlags) func(*cobra.Command, []string, stri
 		}
 		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		names := sortedKeys(cfg.Services)
 		return names, cobra.ShellCompDirectiveNoFileComp
