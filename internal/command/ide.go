@@ -181,28 +181,8 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 			if len(args) == 1 {
 				// Explicit service argument: validate thoroughly
 				name := args[0]
-				svc, ok := cfg.Services[name]
-				if !ok {
-					return fmt.Errorf("service %q not found in config", name)
-				}
-
-				// Check Dir is not empty
-				if strings.TrimSpace(svc.Dir) == "" {
-					return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
-				}
-
-				// Check if service is disabled at project level
-				if !svc.Enabled {
-					return fmt.Errorf("service %q is disabled at the project level", name)
-				}
-
-				// Check IDE rendering policy
-				enabled, explicit := svc.IDERenderEnabledExplicit()
-				if !enabled {
-					if explicit {
-						return fmt.Errorf("service %q has ide.enabled: false", name)
-					}
-					return fmt.Errorf("service %q (type: %s) does not participate in IDE rendering by default; set ide.enabled: true to opt in", name, svc.Type)
+				if err := validateExplicitIDEArg(name, cfg.Services); err != nil {
+					return err
 				}
 
 				serviceNames = []string{name}
@@ -239,21 +219,41 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 	}
 }
 
+// validateExplicitIDEArg validates the explicit service argument for `devbox render ide <service>`.
+// Checks in priority order: not-found → disabled → no-dir → IDE policy.
+// Returns nil when the service is valid and renderable.
+func validateExplicitIDEArg(name string, services map[string]config.ServiceConfig) error {
+	svc, ok := services[name]
+	if !ok {
+		return fmt.Errorf("service %q not found in config", name)
+	}
+	if !svc.Enabled {
+		return fmt.Errorf("service %q is disabled at the project level", name)
+	}
+	if strings.TrimSpace(svc.Dir) == "" {
+		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
+	}
+	enabled, explicit := svc.IDERenderEnabledExplicit()
+	if !enabled {
+		if explicit {
+			return fmt.Errorf("service %q has ide.enabled: false", name)
+		}
+		return fmt.Errorf("service %q (type: %s) does not participate in IDE rendering by default; set ide.enabled: true to opt in", name, svc.Type)
+	}
+	return nil
+}
+
 // validateIDETemplateKey validates that s is a single directory key without path traversal.
-// It rejects path separators, absolute paths, leading dots, and .. segments.
+// It rejects path separators, absolute paths, and leading dots (which subsumes "..").
 func validateIDETemplateKey(s string) error {
 	if s == "" {
 		return nil // empty is valid (field is optional)
-	}
-	// Reject the ".." path traversal segment
-	if s == ".." {
-		return fmt.Errorf("template key %q contains .. segment", s)
 	}
 	// Reject path separators
 	if strings.ContainsAny(s, "/\\") {
 		return fmt.Errorf("template key %q contains path separator", s)
 	}
-	// Reject leading dots
+	// Reject leading dots (subsumes ".." and hidden-file keys)
 	if strings.HasPrefix(s, ".") {
 		return fmt.Errorf("template key %q starts with dot", s)
 	}

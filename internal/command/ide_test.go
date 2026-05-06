@@ -2,7 +2,6 @@ package command
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -679,7 +678,7 @@ func TestResolveIDETemplate(t *testing.T) {
 			},
 			serviceName:  "main",
 			fileBase:     "devcontainer.json",
-			wantErrInMsg: ".. segment",
+			wantErrInMsg: "starts with dot",
 		},
 		{
 			name: "invalid ide.template (leading dot) - non-ErrNotExist error",
@@ -712,7 +711,7 @@ func TestResolveIDETemplate(t *testing.T) {
 			},
 			serviceName:  "..",
 			fileBase:     "devcontainer.json",
-			wantErrInMsg: ".. segment",
+			wantErrInMsg: "starts with dot",
 		},
 		{
 			name: "explicit template absent - falls through to by-name",
@@ -1170,7 +1169,7 @@ func TestRenderIDECmd_explicitArgErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := simulateExplicitArgValidation(tt.serviceName, tt.services)
+			err := validateExplicitIDEArg(tt.serviceName, tt.services)
 			if err == nil {
 				t.Fatalf("expected error containing %q, got nil", tt.wantErrMsg)
 			}
@@ -1179,28 +1178,6 @@ func TestRenderIDECmd_explicitArgErrors(t *testing.T) {
 			}
 		})
 	}
-}
-
-// simulateExplicitArgValidation replicates the explicit-arg validation logic from RunE.
-func simulateExplicitArgValidation(name string, services map[string]config.ServiceConfig) error {
-	svc, ok := services[name]
-	if !ok {
-		return fmt.Errorf("service %q not found in config", name)
-	}
-	if strings.TrimSpace(svc.Dir) == "" {
-		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
-	}
-	if !svc.Enabled {
-		return fmt.Errorf("service %q is disabled at the project level", name)
-	}
-	enabled, explicit := svc.IDERenderEnabledExplicit()
-	if !enabled {
-		if explicit {
-			return fmt.Errorf("service %q has ide.enabled: false", name)
-		}
-		return fmt.Errorf("service %q (type: %s) does not participate in IDE rendering by default; set ide.enabled: true to opt in", name, svc.Type)
-	}
-	return nil
 }
 
 // TestRenderIDECmd_collisionResolutionWithDisable verifies behavior when one
