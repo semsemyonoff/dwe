@@ -19,7 +19,7 @@ import (
 // skippedService carries information about a service that was skipped during IDE rendering.
 type skippedService struct {
 	Name   string // service name
-	Reason string // "service-disabled" | "ide-policy" | "empty-dir" | "lost-collision"
+	Reason string // "service-disabled" | "ide-disabled" | "ide-policy" | "empty-dir" | "lost-collision"
 	Dir    string // set for "lost-collision" only
 	Winner string // set for "lost-collision" only (name of the winning service)
 }
@@ -211,15 +211,10 @@ Templates are read from devbox/templates/ide/ in the project root.`,
 				selected, skipped := selectIDEServices(cfg.Services)
 				serviceNames = selected
 
-				// Emit warnings for skipped services
+				// Emit warnings only for actionable skips; policy-based skips
+				// (service-disabled, ide-disabled, ide-policy) are expected and not reported.
 				for _, skip := range skipped {
 					switch skip.Reason {
-					case "service-disabled":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (service is disabled)", skip.Name))
-					case "ide-disabled":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (ide.enabled is explicitly set to false)", skip.Name))
-					case "ide-policy":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (service type does not participate in IDE rendering by default; set ide.enabled: true to opt in)", skip.Name))
 					case "empty-dir":
 						w.Warning(fmt.Sprintf("ide [%s] — skipped (service has no dir)", skip.Name))
 					case "lost-collision":
