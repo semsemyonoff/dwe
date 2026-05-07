@@ -501,6 +501,10 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	if err != nil {
 		return err
 	}
+	if len(entries) == 0 {
+		w.Warning(fmt.Sprintf("ide [%s] — pack %q has no .tpl files; nothing rendered", name, pack))
+		return nil
+	}
 
 	for _, entry := range entries {
 		dest := filepath.Join(absDir, entry.RelPath)
@@ -531,7 +535,7 @@ func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir
 
 	// Parse template using basename as name for error messages
 	name := filepath.Base(sourcePath)
-	t, err := template.New(name).Parse(string(tplBytes))
+	t, err := template.New(name).Option("missingkey=error").Parse(string(tplBytes))
 	if err != nil {
 		return fmt.Errorf("parse template %s: %w", name, err)
 	}

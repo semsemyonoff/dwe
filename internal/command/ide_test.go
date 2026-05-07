@@ -344,11 +344,6 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 			serviceName: "unknown",
 			wantPack:    "default",
 		},
-		{
-			name:        "service pack wins over default",
-			serviceName: "default", // there's a pack named "default"
-			wantPack:    "default",
-		},
 	}
 
 	for _, tt := range tests {
@@ -370,6 +365,25 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestResolveIDETemplatePack_allMissing verifies that an error is returned when
+// neither the service-name pack nor the default pack exists.
+func TestResolveIDETemplatePack_allMissing(t *testing.T) {
+	projectRoot := t.TempDir()
+	// No packs set up at all
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "myservice")
+	if err == nil {
+		t.Fatal("expected error when no packs exist, got nil")
 	}
 }
 
