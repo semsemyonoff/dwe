@@ -161,16 +161,16 @@ What stays unchanged:
 - [x] run `make test` — must pass before next task
 
 ### Task 3: Update CLI help text and documentation
-- [ ] rewrite the Cobra `Long`/`Short` text in `newRenderIDECmd` (`internal/command/ide.go:155`):
+- [x] rewrite the Cobra `Long`/`Short` text in `newRenderIDECmd` (`internal/command/ide.go:155`):
   - drop the hardcoded list (`devcontainer: .devcontainer/devcontainer.json`, `vscode: .vscode/launch.json` …)
   - drop the line about `ide:` in `devbox/defaults.yml` (the top-level block no longer exists)
   - explain the new model: walks the chosen template pack under `devbox/templates/ide/<pack>/` and renders each `*.tpl` to the matching relative path inside the service dir
   - state the explicit-strict / implicit-fallback resolution rules
-- [ ] rewrite `docs/reference/config/services.md:167`–`223` IDE section: remove mentions of devcontainer/vscode/jetbrains-specific behavior; describe the pack convention with mirrored relative paths; document explicit-is-strict vs implicit-fallback resolution
-- [ ] add a worked example showing `devbox/templates/ide/default/...` and `devbox/templates/ide/main-debug/...` directory layouts and the resulting service-dir output (note: service definitions live in `devbox/services.yml`, not `devbox.yml`)
-- [ ] remove any reference to top-level `ide:` block from any docs (search `docs/` for `ide:` at top-level / `devbox/defaults.yml`)
-- [ ] regenerate `docs/reference/cli/devbox_render_ide.md` via `make build && bin/devbox docs generate --scope cli` so the CLI help reflects the new Long/Short text
-- [ ] run `make test` — must pass before final verification
+- [x] rewrite `docs/reference/config/services.md:167`–`223` IDE section: remove mentions of devcontainer/vscode/jetbrains-specific behavior; describe the pack convention with mirrored relative paths; document explicit-is-strict vs implicit-fallback resolution
+- [x] add a worked example showing `devbox/templates/ide/default/...` and `devbox/templates/ide/main-debug/...` directory layouts and the resulting service-dir output (note: service definitions live in `devbox/services.yml`, not `devbox.yml`)
+- [x] remove any reference to top-level `ide:` block from any docs (search `docs/` for `ide:` at top-level / `devbox/defaults.yml`)
+- [x] regenerate `docs/reference/cli/devbox_render_ide.md` via `make build && bin/devbox docs generate --scope cli` so the CLI help reflects the new Long/Short text
+- [x] run `make test` — must pass before final verification
 
 ### Task 4: Verify acceptance criteria
 - [ ] verify Overview goal achieved: no editor names appear in `internal/command/ide.go`

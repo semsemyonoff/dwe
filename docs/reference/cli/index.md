@@ -42,7 +42,7 @@ Generated reference for the `devbox` command tree.
 - [devbox ps](devbox_ps.md) — List compose containers
 - [devbox render](devbox_render.md) — Render derived artifacts from the merged devbox config
   - [devbox render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --output <file>)
-  - [devbox render ide](devbox_render_ide.md) — Generate IDE configs into service directories
+  - [devbox render ide](devbox_render_ide.md) — Generate IDE configs from template packs
 - [devbox reset](devbox_reset.md) — Reset pipeline commands
   - [devbox reset config](devbox_reset_config.md) — Reset config subcommands
     - [devbox reset config check](devbox_reset_config_check.md) — Validate the reset pipeline config (devbox/reset.yml)

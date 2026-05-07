@@ -166,18 +166,18 @@ The list form is convenient when copy-pasting from a `.env` file; the map form i
 
 ### `ide` block
 
-Controls whether and how IDE rendering generates `.devcontainer/devcontainer.json` for this service.
+Controls whether and how IDE rendering generates config files for this service from template packs.
 
 ```yaml
 ide:
   enabled: true          # opt in to IDE rendering for this service
-  template: main-debug   # use custom template subdirectory
+  template: main-debug   # use custom template pack
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `enabled` | `true` for `type: app`; `false` otherwise | Include this service in IDE rendering. `devbox render ide` respects this setting; see **Activation** below. |
-| `template` | — | Optional custom template subdirectory name. Must be a single directory key under `devbox/templates/ide/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then global templates. |
+| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/ide/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then global packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
 #### IDE activation rules
 
@@ -190,15 +190,27 @@ A service is rendered only if both are satisfied. Disabling either suppresses re
 
 **Default policy**: `type: app` services default to `ide.enabled: true` (opt-out); all other types default to `false` (opt-in).
 
-#### Template resolution
+#### Template pack resolution
 
-`devbox render ide` searches for templates in this order; the first match is used:
+`devbox render ide` searches for template packs in this order; the first match is used:
 
-1. `devbox/templates/ide/<template>/devcontainer.json.tpl` (if `template` is set)
-2. `devbox/templates/ide/<service-name>/devcontainer.json.tpl`
-3. `devbox/templates/ide/devcontainer.json.tpl` (global fallback)
+1. `devbox/templates/ide/<template>/` (if `template` is set) — **strict**: pack must exist
+2. `devbox/templates/ide/<service-name>/` (if `template` is not set)
+3. `devbox/templates/ide/default/` (final fallback)
 
-If none exist, rendering is skipped with a warning.
+If none exist, rendering is skipped with an error.
+
+Once a pack is selected, the command walks every `*.tpl` file in the pack and renders it to the matching relative path in the service directory. For example:
+
+```
+devbox/templates/ide/default/.devcontainer/devcontainer.json.tpl
+→ services/main/.devcontainer/devcontainer.json
+
+devbox/templates/ide/default/.vscode/settings.json.tpl
+→ services/main/.vscode/settings.json
+```
+
+This pack-based model lets you add support for any IDE or tool (`.cursor/`, `.zed/`, `.envrc`, etc.) without modifying the code — just add the corresponding `*.tpl` file to your template pack.
 
 #### Collision resolution
 
@@ -215,11 +227,61 @@ services:
     type: app
     extends: main      # same dir as parent
     dir: ./services/main
-    # IDE files go to ./services/main/.devcontainer/devcontainer.json
+    ide:
+      template: main-debug  # use a different template pack
+    # IDE files go to ./services/main/ with content from main-debug pack
     # (main-debug wins because it extends main)
 ```
 
-In this example, `devbox render ide` produces one file (`main-debug`'s variant) in `./services/main/.devcontainer/devcontainer.json`, and emits a warning that `main` was skipped due to collision.
+In this example, `devbox render ide` produces files in `./services/main/` using the `main-debug` template pack, and emits a warning that `main` was skipped due to collision.
+
+#### Worked example: template pack layout
+
+This example shows how template packs are organized and the resulting files generated in the service directory.
+
+**Project structure:**
+
+```
+devbox/services.yml
+devbox/templates/ide/
+  default/
+    .devcontainer/devcontainer.json.tpl
+    .vscode/settings.json.tpl
+  main-debug/
+    .devcontainer/devcontainer.json.tpl
+    .vscode/settings.json.tpl
+    .vscode/launch.json.tpl
+```
+
+**Service definitions (devbox/services.yml):**
+
+```yaml
+services:
+  main:
+    type: app
+    dir: ./services/main
+    # ide.enabled defaults to true; renders using default pack
+
+  main-debug:
+    extends: main
+    container: app-main-debug
+    dir: ./services/main
+    ide:
+      template: main-debug  # override to use main-debug pack
+```
+
+**After `devbox render ide`:**
+
+```
+services/main/
+  .devcontainer/
+    devcontainer.json    ← rendered from main-debug/.devcontainer/devcontainer.json.tpl
+  .vscode/
+    settings.json        ← rendered from main-debug/.vscode/settings.json.tpl
+    launch.json          ← rendered from main-debug/.vscode/launch.json.tpl
+```
+
+Note that `main` is skipped due to collision (same `dir` as `main-debug`), so only `main-debug`'s template pack is rendered.
 
 ## Inheritance via `extends`
 

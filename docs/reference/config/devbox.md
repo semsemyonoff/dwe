@@ -310,22 +310,6 @@ compose:
 | `compose.base` | Base compose file (always included) |
 | `compose.overlays` | Map of overlay key → file path; overlay is active when the corresponding tool/service is enabled |
 
-### `ide`
-
-IDE config generation settings.
-
-```yaml
-ide:
-  vscode:
-    enabled: true
-  jetbrains:
-    enabled: false
-  devcontainer:
-    enabled: true
-```
-
-Used by `devbox render ide` to determine which editor configs to generate.
-
 ---
 
 ## devbox/local.yml
