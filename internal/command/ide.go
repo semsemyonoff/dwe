@@ -493,7 +493,10 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return fmt.Errorf("resolve service dir: %w", err)
 	}
 	relDir, err := filepath.Rel(absRoot, absDir)
-	if err != nil || relDir == "." || relDir == ".." || strings.HasPrefix(relDir, ".."+string(filepath.Separator)) || filepath.IsAbs(relDir) {
+	if err != nil {
+		return fmt.Errorf("service dir %q escapes project root", svc.Dir)
+	}
+	if relDir == "." || relDir == ".." || strings.HasPrefix(relDir, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("service dir %q escapes project root", svc.Dir)
 	}
 	if err := checkNoSymlinks(absRoot, absDir, "service dir"); err != nil {
@@ -512,7 +515,8 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 	if len(entries) == 0 {
-		w.Warning(fmt.Sprintf("ide [%s] — pack %q has no .tpl files; nothing rendered", name, pack))
+		packRel, _ := filepath.Rel(absRoot, pack)
+		w.Warning(fmt.Sprintf("ide [%s] — pack %q has no .tpl files; nothing rendered", name, packRel))
 		return nil
 	}
 
@@ -566,7 +570,7 @@ func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir
 	if err != nil {
 		return fmt.Errorf("dest %q outside service dir: %w", dest, err)
 	}
-	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("dest %q escapes service dir %q", dest, absDir)
 	}
 
