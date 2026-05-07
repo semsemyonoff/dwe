@@ -210,7 +210,7 @@ Services that participate in IDE rendering:
 				for _, skip := range skipped {
 					switch skip.Reason {
 					case "empty-dir":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (service has no dir)", skip.Name))
+						w.Warning(fmt.Sprintf("ide [%s] — skipped (service has no dir or dir is project root)", skip.Name))
 					case "lost-collision":
 						w.Warning(fmt.Sprintf("ide [%s] — skipped (dir %s rendered by %s)", skip.Name, skip.Dir, skip.Winner))
 					}
@@ -274,6 +274,22 @@ func validateIDETemplateKey(s string) error {
 	return nil
 }
 
+// validateServiceNameAsPackKey validates that a service name is safe to use as an
+// implicit IDE template pack directory name. Less restrictive than validateIDETemplateKey:
+// allows leading dots since service names are YAML map keys, not user-typed path components.
+func validateServiceNameAsPackKey(s string) error {
+	if s == "" {
+		return fmt.Errorf("service name is empty")
+	}
+	if strings.ContainsAny(s, "/\\") {
+		return fmt.Errorf("service name %q contains path separator", s)
+	}
+	if s == ".." || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "..\\") {
+		return fmt.Errorf("service name %q is a path traversal", s)
+	}
+	return nil
+}
+
 // resolveIDETemplatePack resolves a template pack directory for a service.
 // Returns the absolute path to a directory under devbox/templates/ide/.
 // Explicit is strict: if svc.IDE.Template is set and does not exist, returns an error.
@@ -288,8 +304,8 @@ func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName s
 	if err := validateIDETemplateKey(svc.IDE.Template); err != nil {
 		return "", fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
 	}
-	if err := validateIDETemplateKey(serviceName); err != nil {
-		return "", fmt.Errorf("service name %q cannot be used as an implicit template pack key: %w", serviceName, err)
+	if err := validateServiceNameAsPackKey(serviceName); err != nil {
+		return "", fmt.Errorf("service name cannot be used as implicit template pack key: %w", err)
 	}
 
 	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)

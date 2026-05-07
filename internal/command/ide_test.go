@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -706,8 +707,51 @@ func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error for invalid service name, got nil")
 	}
-	if !strings.Contains(err.Error(), "cannot be used as an implicit template pack key") {
+	if !strings.Contains(err.Error(), "cannot be used as implicit template pack key") {
 		t.Errorf("want error mentioning template pack key, got %q", err.Error())
+	}
+}
+
+// TestResolveIDETemplatePack_emptyServiceName verifies that an empty service name
+// is rejected at the resolver level (not silently collapsed by filepath.Join).
+func TestResolveIDETemplatePack_emptyServiceName(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "")
+	if err == nil {
+		t.Fatal("want error for empty service name, got nil")
+	}
+	if !strings.Contains(err.Error(), "service name is empty") {
+		t.Errorf("want error mentioning empty service name, got %q", err.Error())
+	}
+}
+
+// TestResolveIDETemplatePack_leadingDotServiceName verifies that a service name with a
+// leading dot is allowed (leading dots are valid YAML map keys, unlike ide.template values).
+func TestResolveIDETemplatePack_leadingDotServiceName(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/hidden",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	// No packs exist; we expect "not found" wrapping os.ErrNotExist, not a validation error.
+	_, err := resolveIDETemplatePack(svc, projectRoot, ".hidden")
+	if err == nil {
+		t.Fatal("want error (no pack found), got nil")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("want os.ErrNotExist for missing pack, got %v", err)
 	}
 }
 
