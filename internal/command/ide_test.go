@@ -229,6 +229,9 @@ func TestRenderIDETemplateFile_symlinkDir(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when destination dir is a symlink outside project root")
 	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink error, got: %v", err)
+	}
 }
 
 // TestRenderIDETemplateFile_symlinkFile verifies that a symlinked destination
@@ -264,6 +267,9 @@ func TestRenderIDETemplateFile_symlinkFile(t *testing.T) {
 	err := renderIDETemplateFile(srcPath, data, dest, absDir, absRoot)
 	if err == nil {
 		t.Fatal("expected error when destination file is a symlink")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink error, got: %v", err)
 	}
 }
 
@@ -364,6 +370,34 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestResolveIDETemplatePack_implicitPriority verifies that a service-name pack
+// takes precedence over the default pack when both exist on disk.
+func TestResolveIDETemplatePack_implicitPriority(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
+		".vscode/settings.json.tpl": `{"source":"default"}`,
+	})
+	setupIDEPackTemplates(t, projectRoot, "main", map[string]string{
+		".vscode/settings.json.tpl": `{"source":"main"}`,
+	})
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(pack, "main") {
+		t.Errorf("want pack ending with 'main', got %q (service-name pack should beat default)", pack)
 	}
 }
 
@@ -535,6 +569,64 @@ func TestWalkIDEPack_symlinkFileRejected(t *testing.T) {
 	_, err := walkIDEPack(packDir)
 	if err == nil {
 		t.Fatal("expected error when pack contains symlinked .tpl file")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink error, got: %v", err)
+	}
+}
+
+// TestWalkIDEPack_symlinkNonTplFileRejected verifies that a symlinked non-.tpl file
+// is rejected, proving the symlink check runs before the suffix filter.
+func TestWalkIDEPack_symlinkNonTplFileRejected(t *testing.T) {
+	projectRoot := t.TempDir()
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("create pack dir: %v", err)
+	}
+
+	outside := t.TempDir()
+	realFile := filepath.Join(outside, "real.txt")
+	if err := os.WriteFile(realFile, []byte("text"), 0o644); err != nil {
+		t.Fatalf("write real file: %v", err)
+	}
+
+	// Symlink a non-.tpl file inside the pack
+	if err := os.Symlink(realFile, filepath.Join(packDir, "readme.txt")); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	_, err := walkIDEPack(packDir)
+	if err == nil {
+		t.Fatal("expected error when pack contains symlinked non-.tpl file")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink error, got: %v", err)
+	}
+}
+
+// TestWalkIDEPack_symlinkDirRejected verifies that a symlinked directory inside
+// the pack is rejected.
+func TestWalkIDEPack_symlinkDirRejected(t *testing.T) {
+	projectRoot := t.TempDir()
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("create pack dir: %v", err)
+	}
+
+	// Create a real directory outside the pack with a template file
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "settings.json.tpl"), []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write tpl: %v", err)
+	}
+
+	// Symlink the outside directory inside the pack as a subdirectory
+	if err := os.Symlink(outside, filepath.Join(packDir, ".vscode")); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	_, err := walkIDEPack(packDir)
+	if err == nil {
+		t.Fatal("expected error when pack contains symlinked directory")
 	}
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("expected symlink error, got: %v", err)
@@ -1177,6 +1269,11 @@ func TestCheckNoSymlinks(t *testing.T) {
 	if err := checkNoSymlinks(root, linkPath, "test path"); err == nil {
 		t.Errorf("symlink as target: expected error, got nil")
 	}
+
+	// Path outside root: checkNoSymlinks should reject it
+	if err := checkNoSymlinks(root, filepath.Dir(root), "test path"); err == nil {
+		t.Errorf("path outside root: expected error, got nil")
+	}
 }
 
 // TestValidateExplicitIDEArg tests explicit service argument validation.
@@ -1188,8 +1285,15 @@ func TestValidateExplicitIDEArg(t *testing.T) {
 		name        string
 		serviceName string
 		services    map[string]config.ServiceConfig
-		wantErrMsg  string
+		wantErrMsg  string // empty means success expected
 	}{
+		{
+			name:        "valid app service - success",
+			serviceName: "main",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: true, Dir: "./services/main"},
+			},
+		},
 		{
 			name:        "unknown service",
 			serviceName: "missing",
@@ -1235,6 +1339,12 @@ func TestValidateExplicitIDEArg(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateExplicitIDEArg(tt.serviceName, tt.services)
+			if tt.wantErrMsg == "" {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				return
+			}
 			if err == nil {
 				t.Fatalf("expected error containing %q, got nil", tt.wantErrMsg)
 			}

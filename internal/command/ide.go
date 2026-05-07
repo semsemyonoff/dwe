@@ -359,12 +359,9 @@ func walkIDEPack(packDir string) ([]packEntry, error) {
 			return walkErr
 		}
 
-		// Reject any symlink (file or directory) before processing further
-		fi, err := os.Lstat(path)
-		if err != nil {
-			return fmt.Errorf("lstat %s: %w", path, err)
-		}
-		if fi.Mode()&os.ModeSymlink != 0 {
+		// Reject any symlink (file or directory) before processing further.
+		// d.Type() is populated by WalkDir's own lstat — no extra syscall needed.
+		if d.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("ide template pack contains symlink: %s", path)
 		}
 
