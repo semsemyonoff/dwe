@@ -173,13 +173,13 @@ What stays unchanged:
 - [x] run `make test` — must pass before final verification
 
 ### Task 4: Verify acceptance criteria
-- [ ] verify Overview goal achieved: no editor names appear in `internal/command/ide.go`
-- [ ] verify `cfg.IDE` no longer exists anywhere in the codebase (`grep -rn 'cfg\.IDE\.' internal/ cmd/`)
-- [ ] verify `selectIDEServices` policy is unchanged (existing tests still pass)
-- [ ] verify symlink and path-escape security tests still pass
-- [ ] run full `make test` and `make lint`
-- [ ] verify no orphan symbols remain (delete `resolveIDETemplate` if fully replaced; remove `ideTemplateData.IDE`)
-- [ ] verify `internal/command/ide_test.go` no longer references removed types
+- [x] verify Overview goal achieved: no editor names appear in `internal/command/ide.go`
+- [x] verify `cfg.IDE` no longer exists anywhere in the codebase (`grep -rn 'cfg\.IDE\.' internal/ cmd/`)
+- [x] verify `selectIDEServices` policy is unchanged (existing tests still pass)
+- [x] verify symlink and path-escape security tests still pass
+- [x] run full `make test` and `make lint`
+- [x] verify no orphan symbols remain (delete `resolveIDETemplate` if fully replaced; remove `ideTemplateData.IDE`)
+- [x] verify `internal/command/ide_test.go` no longer references removed types
 
 ## Technical Details
 

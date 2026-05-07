@@ -2266,7 +2266,7 @@ func TestBinariesAccessors(t *testing.T) {
 func TestLoadConfig_noTopLevelIDEField(t *testing.T) {
 	// Verify that the DevboxConfig struct does not carry top-level IDE state.
 	// Reflection check: IDE field should not exist in the struct.
-	cfgStructType := reflect.TypeOf((*DevboxConfig)(nil)).Elem()
+	cfgStructType := reflect.TypeFor[DevboxConfig]()
 	if _, ok := cfgStructType.FieldByName("IDE"); ok {
 		t.Error("DevboxConfig should not have an IDE field")
 	}

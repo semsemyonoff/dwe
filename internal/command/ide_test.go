@@ -446,11 +446,11 @@ func TestWalkIDEPack_emptyPack(t *testing.T) {
 func TestWalkIDEPack_nested(t *testing.T) {
 	projectRoot := t.TempDir()
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl":    "dc",
-		".vscode/settings.json.tpl":              "vs-settings",
-		".vscode/launch.json.tpl":                "vs-launch",
-		".idea/custom.xml.tpl":                   "idea",
-		".zed/settings.json.tpl":                 "zed-settings",
+		".devcontainer/devcontainer.json.tpl": "dc",
+		".vscode/settings.json.tpl":           "vs-settings",
+		".vscode/launch.json.tpl":             "vs-launch",
+		".idea/custom.xml.tpl":                "idea",
+		".zed/settings.json.tpl":              "zed-settings",
 	})
 
 	packPath := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
@@ -603,7 +603,11 @@ func TestWalkIDEPack_absoluteSourcePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	defer os.Chdir(oldCwd)
+	defer func() {
+		if err := os.Chdir(oldCwd); err != nil {
+			t.Errorf("chdir back to original: %v", err)
+		}
+	}()
 
 	if err := os.Chdir(projectRoot); err != nil {
 		t.Fatalf("chdir: %v", err)
