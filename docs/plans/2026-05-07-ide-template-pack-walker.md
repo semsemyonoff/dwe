@@ -153,12 +153,12 @@ What stays unchanged:
 ### Task 2: Delete IDEConfig from config schema
 *All references in `internal/command/` were eliminated in Task 1, so this task is a pure schema deletion + test cleanup. After this task `IDEConfig` does not exist anywhere in the codebase.*
 
-- [ ] delete `IDEConfig` and `IDEEditorConfig` types in `internal/config/devbox.go:99`
-- [ ] delete the `IDE IDEConfig \`yaml:"ide"\`` field from `DevboxConfig`
-- [ ] sweep the rest of the codebase for any remaining references with `grep -rn 'IDEConfig\|IDEEditorConfig\|cfg\.IDE\b\|\.IDE\.Devcontainer\|\.IDE\.VSCode\|\.IDE\.JetBrains' internal/ cmd/` — must be empty
-- [ ] update `internal/config` tests that reference `IDEConfig`/`IDE.{Devcontainer,VSCode,JetBrains}.Enabled` to drop those assertions
-- [ ] write/update test asserting that the typed config no longer carries any IDE state — i.e. the resulting `*DevboxConfig` has no `IDE` field, and no code path reads top-level IDE behavior. Note: `cfg.Raw` will still retain a top-level `ide:` key if a user leaves one in `devbox.yml` / `devbox/defaults.yml` (lenient layered loader behavior is intentional and preserved); we do not special-case-delete it. The test should assert "not mapped into typed config / no `cfg.IDE` behavior remains", not "key disappears from `cfg.Raw`".
-- [ ] run `make test` — must pass before next task
+- [x] delete `IDEConfig` and `IDEEditorConfig` types in `internal/config/devbox.go:99`
+- [x] delete the `IDE IDEConfig \`yaml:"ide"\`` field from `DevboxConfig`
+- [x] sweep the rest of the codebase for any remaining references with `grep -rn 'IDEConfig\|IDEEditorConfig\|cfg\.IDE\b\|\.IDE\.Devcontainer\|\.IDE\.VSCode\|\.IDE\.JetBrains' internal/ cmd/` — must be empty
+- [x] update `internal/config` tests that reference `IDEConfig`/`IDE.{Devcontainer,VSCode,JetBrains}.Enabled` to drop those assertions
+- [x] write/update test asserting that the typed config no longer carries any IDE state — i.e. the resulting `*DevboxConfig` has no `IDE` field, and no code path reads top-level IDE behavior. Note: `cfg.Raw` will still retain a top-level `ide:` key if a user leaves one in `devbox.yml` / `devbox/defaults.yml` (lenient layered loader behavior is intentional and preserved); we do not special-case-delete it. The test should assert "not mapped into typed config / no `cfg.IDE` behavior remains", not "key disappears from `cfg.Raw`".
+- [x] run `make test` — must pass before next task
 
 ### Task 3: Update CLI help text and documentation
 - [ ] rewrite the Cobra `Long`/`Short` text in `newRenderIDECmd` (`internal/command/ide.go:155`):

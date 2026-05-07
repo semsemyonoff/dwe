@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -2256,6 +2257,18 @@ func TestBinariesAccessors(t *testing.T) {
 	cfg3 := &DevboxConfig{Binaries: BinariesConfig{Docker: "podman"}}
 	if got := DockerBin(cfg3); got != "podman" {
 		t.Errorf("DockerBin(cfg3) = %q, want podman", got)
+	}
+}
+
+// TestLoadConfig_noTopLevelIDEField verifies that the top-level IDE config
+// has been removed from DevboxConfig. The IDE field is no longer part of the
+// typed configuration and cfg.IDE does not exist.
+func TestLoadConfig_noTopLevelIDEField(t *testing.T) {
+	// Verify that the DevboxConfig struct does not carry top-level IDE state.
+	// Reflection check: IDE field should not exist in the struct.
+	cfgStructType := reflect.TypeOf((*DevboxConfig)(nil)).Elem()
+	if _, ok := cfgStructType.FieldByName("IDE"); ok {
+		t.Error("DevboxConfig should not have an IDE field")
 	}
 }
 

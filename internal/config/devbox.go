@@ -80,7 +80,6 @@ type DevboxConfig struct {
 	State         string         `yaml:"state"`
 	Exports       ExportsConfig  `yaml:"exports"`
 	Compose       ComposeConfig  `yaml:"compose"`
-	IDE           IDEConfig      `yaml:"ide"`
 	Deploy        DeployConfig   `yaml:"-"`
 	Binaries      BinariesConfig `yaml:"binaries"`
 
@@ -92,19 +91,6 @@ type DevboxConfig struct {
 	// Raw holds the merged config as a plain map, used for dot-path resolution
 	// in export rules. Populated only by LoadConfig; not serialized.
 	Raw map[string]any `yaml:"-"`
-}
-
-// IDEConfig holds per-editor IDE config generation settings.
-// Used by `devbox render ide` to determine which editor configs to generate.
-type IDEConfig struct {
-	VSCode       IDEEditorConfig `yaml:"vscode"`
-	JetBrains    IDEEditorConfig `yaml:"jetbrains"`
-	Devcontainer IDEEditorConfig `yaml:"devcontainer"`
-}
-
-// IDEEditorConfig holds the enabled flag for a single editor target.
-type IDEEditorConfig struct {
-	Enabled bool `yaml:"enabled"`
 }
 
 // DeployConfig holds the full deploy pipeline loaded from devbox/deploy.yml.
