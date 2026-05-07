@@ -690,6 +690,84 @@ func TestResolveIDETemplatePack_byServiceOnly(t *testing.T) {
 	}
 }
 
+// TestResolveIDETemplatePack_invalidServiceName verifies that an invalid service name
+// (e.g. containing a path separator) causes an error at the resolver level.
+func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "foo/bar")
+	if err == nil {
+		t.Fatal("want error for invalid service name, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid service name") {
+		t.Errorf("want error mentioning 'invalid service name', got %q", err.Error())
+	}
+}
+
+// TestResolveIDETemplatePack_explicitOnlyPack verifies that when only the explicit pack
+// exists (no service-name or default pack), it resolves correctly.
+func TestResolveIDETemplatePack_explicitOnlyPack(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	// Only set up the explicit pack; no service-name pack, no default pack.
+	setupIDEPackTemplates(t, projectRoot, "custom", map[string]string{
+		".vscode/settings.json.tpl": `{"source":"custom"}`,
+	})
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{Template: "custom"},
+	}
+
+	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(pack, "custom") {
+		t.Errorf("want pack ending with 'custom', got %q", pack)
+	}
+}
+
+// TestResolveIDETemplatePack_explicitBeatsServiceNameAndDefault verifies that when all
+// three packs exist (explicit, service-name, and default), the explicit pack wins.
+func TestResolveIDETemplatePack_explicitBeatsServiceNameAndDefault(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	setupIDEPackTemplates(t, projectRoot, "main", map[string]string{
+		".vscode/settings.json.tpl": `{"source":"main"}`,
+	})
+	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
+		".vscode/settings.json.tpl": `{"source":"default"}`,
+	})
+	setupIDEPackTemplates(t, projectRoot, "custom", map[string]string{
+		".vscode/settings.json.tpl": `{"source":"custom"}`,
+	})
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{Template: "custom"},
+	}
+
+	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(pack, "custom") {
+		t.Errorf("want explicit 'custom' pack, got %q", pack)
+	}
+}
+
 // TestWalkIDEPack_noDuplicateRelPath verifies that a well-formed pack with unique
 // RelPaths walks without error. A true RelPath collision cannot arise on a
 // case-sensitive filesystem (two files cannot share the same name in the same dir),

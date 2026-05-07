@@ -169,7 +169,7 @@ directory. For example:
   devbox/templates/ide/default/.vscode/settings.json.tpl
   → services/main/.vscode/settings.json
 
-Template pack resolution (implicit fallback):
+Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If ide.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try devbox/templates/ide/<service-name>/
   3. If not found, use devbox/templates/ide/default/
@@ -292,7 +292,7 @@ func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName s
 		return "", fmt.Errorf("invalid service name %q: %w", serviceName, err)
 	}
 
-	// Explicit candidate (strict — no fallthrough unless not exists)
+	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)
 	if svc.IDE.Template != "" {
 		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", svc.IDE.Template)
 		fi, err := os.Lstat(candidate)
@@ -441,7 +441,7 @@ func checkNoSymlinks(absRoot, absDir, label string) error {
 	if err != nil {
 		return fmt.Errorf("relative path: %w", err)
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return fmt.Errorf("path %q is not under root %q", absDir, absRoot)
 	}
 	current := absRoot
@@ -467,6 +467,10 @@ func checkNoSymlinks(absRoot, absDir, label string) error {
 // renderIDEConfigs generates IDE config files for a single service by walking
 // the resolved template pack and rendering all .tpl entries.
 func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
+	if strings.TrimSpace(svc.Dir) == "" {
+		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
+	}
+
 	data := ideTemplateData{
 		Project:    cfg.Project,
 		Service:    name,
