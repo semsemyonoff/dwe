@@ -74,10 +74,10 @@ func selectIDEServices(services map[string]config.ServiceConfig) (selected []str
 		enabled[name] = svc
 	}
 
-	// Step B: drop services with empty Dir.
+	// Step B: drop services with empty Dir or dir equal to project root (".").
 	dirNormalized := make(map[string]config.ServiceConfig)
 	for name, svc := range enabled {
-		if strings.TrimSpace(svc.Dir) == "" {
+		if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "empty-dir"})
 			continue
 		}
@@ -244,7 +244,7 @@ func validateExplicitIDEArg(name string, services map[string]config.ServiceConfi
 	if !svc.Enabled {
 		return fmt.Errorf("service %q is disabled at the project level", name)
 	}
-	if strings.TrimSpace(svc.Dir) == "" {
+	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
 	}
 	enabled, explicit := svc.IDERenderEnabledExplicit()
@@ -289,7 +289,7 @@ func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName s
 		return "", fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
 	}
 	if err := validateIDETemplateKey(serviceName); err != nil {
-		return "", fmt.Errorf("invalid service name %q: %w", serviceName, err)
+		return "", fmt.Errorf("service name %q cannot be used as an implicit template pack key: %w", serviceName, err)
 	}
 
 	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)
@@ -492,7 +492,8 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	if err != nil {
 		return fmt.Errorf("resolve service dir: %w", err)
 	}
-	if !strings.HasPrefix(absDir+string(filepath.Separator), absRoot+string(filepath.Separator)) {
+	relDir, err := filepath.Rel(absRoot, absDir)
+	if err != nil || relDir == "." || relDir == ".." || strings.HasPrefix(relDir, ".."+string(filepath.Separator)) || filepath.IsAbs(relDir) {
 		return fmt.Errorf("service dir %q escapes project root", svc.Dir)
 	}
 	if err := checkNoSymlinks(absRoot, absDir, "service dir"); err != nil {

@@ -706,8 +706,29 @@ func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error for invalid service name, got nil")
 	}
-	if !strings.Contains(err.Error(), "invalid service name") {
-		t.Errorf("want error mentioning 'invalid service name', got %q", err.Error())
+	if !strings.Contains(err.Error(), "cannot be used as an implicit template pack key") {
+		t.Errorf("want error mentioning template pack key, got %q", err.Error())
+	}
+}
+
+// TestResolveIDETemplatePack_invalidExplicitTemplateKey verifies that an explicit
+// ide.template value containing a path separator is rejected before any filesystem lookup.
+func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{Template: "foo/bar"},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err == nil {
+		t.Fatal("want error for invalid ide.template key, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid ide.template") {
+		t.Errorf("want error mentioning 'invalid ide.template', got %q", err.Error())
 	}
 }
 
@@ -1135,6 +1156,31 @@ func TestRenderIDEConfigs_packNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found' in error, got: %v", err)
+	}
+}
+
+// TestRenderIDEConfigs_dotDirRejected verifies that a service with dir "." is rejected
+// to prevent writing IDE files into the project root.
+func TestRenderIDEConfigs_dotDirRejected(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
+		".devcontainer/devcontainer.json.tpl": `{}`,
+	})
+
+	cfg := makeIDECfg("main")
+	svc := cfg.Services["main"]
+	svc.Dir = "."
+
+	var buf strings.Builder
+	w := render.NewWriter(&buf)
+
+	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
+	if err == nil {
+		t.Fatal("expected error for dir '.', got nil")
+	}
+	if !strings.Contains(err.Error(), "escapes project root") {
+		t.Errorf("expected 'escapes project root' in error, got: %v", err)
 	}
 }
 
@@ -1668,6 +1714,14 @@ func TestValidateExplicitIDEArg(t *testing.T) {
 			serviceName: "main",
 			services: map[string]config.ServiceConfig{
 				"main": {Type: "app", Enabled: true, IDE: config.ServiceIDEConfig{Enabled: &trueVal}},
+			},
+			wantErrMsg: `service "main" has no dir`,
+		},
+		{
+			name:        "service dir is dot - rejected",
+			serviceName: "main",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: true, Dir: "."},
 			},
 			wantErrMsg: `service "main" has no dir`,
 		},
