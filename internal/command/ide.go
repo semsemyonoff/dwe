@@ -337,7 +337,7 @@ func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName s
 	}
 
 	// No pack found in implicit chain
-	return "", fmt.Errorf("ide template pack not found (tried %s, default)", serviceName)
+	return "", fmt.Errorf("ide template pack not found (tried %s, default): %w", serviceName, os.ErrNotExist)
 }
 
 // walkIDEPack walks the template pack directory and returns all .tpl entries.
@@ -561,7 +561,7 @@ func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir
 	if err != nil {
 		return fmt.Errorf("dest %q outside service dir: %w", dest, err)
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return fmt.Errorf("dest %q escapes service dir %q", dest, absDir)
 	}
 
