@@ -12,7 +12,7 @@ directory. For example:
   devbox/templates/ide/default/.vscode/settings.json.tpl
   → services/main/.vscode/settings.json
 
-Template pack resolution (implicit fallback):
+Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If ide.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try devbox/templates/ide/<service-name>/
   3. If not found, use devbox/templates/ide/default/

@@ -17,7 +17,7 @@ func newRenderCmd(flags *rootFlags) *cobra.Command {
 
 Subcommands:
   env  — generate .env from the exports.env spec
-  ide  — generate IDE config files for enabled editors`,
+  ide  — generate IDE config files from template packs`,
 		Example: `  devbox render env -o .env
   devbox render ide`,
 		SilenceUsage: true,

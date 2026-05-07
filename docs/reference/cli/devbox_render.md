@@ -8,7 +8,7 @@ Generate files derived from the merged devbox config (devbox.yml + defaults.yml 
 
 Subcommands:
   env  — generate .env from the exports.env spec
-  ide  — generate IDE config files for enabled editors
+  ide  — generate IDE config files from template packs
 
 ### Examples
 

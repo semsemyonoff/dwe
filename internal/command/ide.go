@@ -360,8 +360,13 @@ func walkIDEPack(packDir string) ([]packEntry, error) {
 		}
 
 		// Reject any symlink (file or directory) before processing further.
-		// d.Type() is populated by WalkDir's own lstat — no extra syscall needed.
-		if d.Type()&os.ModeSymlink != 0 {
+		// Use os.Lstat explicitly: DirEntry.Type() may return 0 on filesystems
+		// that do not populate d_type, so relying on it alone is not safe.
+		fi, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("stat pack entry: %w", err)
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("ide template pack contains symlink: %s", path)
 		}
 
