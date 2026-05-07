@@ -139,13 +139,18 @@ func selectIDEServices(services map[string]config.ServiceConfig) (selected []str
 	return selected, skipped
 }
 
+// packEntry describes a template file in the IDE pack after walking.
+type packEntry struct {
+	SourcePath string // absolute path to the .tpl file
+	RelPath    string // path inside the pack with .tpl stripped
+}
+
 // ideTemplateData is passed to IDE config templates.
 type ideTemplateData struct {
 	Project    config.ProjectConfig
 	Service    string
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
-	IDE        config.IDEConfig
 }
 
 // newRenderIDECmd creates the `devbox render ide [service]` command.
@@ -155,15 +160,24 @@ type ideTemplateData struct {
 func newRenderIDECmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ide [service]",
-		Short: "Generate IDE configs into service directories",
-		Long: `Generate IDE-specific config files for each enabled editor.
+		Short: "Generate IDE configs from template packs",
+		Long: `Generate IDE-specific config files for each enabled service from a template pack.
 
-For each service directory (services/<name>/):
-  - devcontainer:  .devcontainer/devcontainer.json
-  - vscode:        .vscode/launch.json, .vscode/settings.json
+The command walks the chosen template pack (devbox/templates/ide/<pack-name>/)
+and renders each *.tpl file into the corresponding location within the service
+directory. For example:
+  devbox/templates/ide/default/.vscode/settings.json.tpl
+  → services/main/.vscode/settings.json
 
-Enabled editors are controlled by the ide: section in devbox/defaults.yml.
-Templates are read from devbox/templates/ide/ in the project root.`,
+Template pack resolution (implicit fallback):
+  1. If ide.template is set in the service config, use that pack (explicit, strict)
+  2. Otherwise, try devbox/templates/ide/<service-name>/
+  3. If not found, use devbox/templates/ide/default/
+  4. If none exist, return an error
+
+Services that participate in IDE rendering:
+  - Type 'app' (default) has ide.enabled: true by default
+  - Other types require explicit ide.enabled: true in the config`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: serviceNameCompletion(flags),
@@ -260,55 +274,156 @@ func validateIDETemplateKey(s string) error {
 	return nil
 }
 
-// resolveIDETemplate resolves the IDE template file via 3-step fallback:
-// 1. <root>/devbox/templates/ide/<svc.IDE.Template>/<fileBase>.tpl (if Template is set)
-// 2. <root>/devbox/templates/ide/<serviceName>/<fileBase>.tpl
-// 3. <root>/devbox/templates/ide/<fileBase>.tpl (global fallback)
-//
-// Returns (path, contents, err). If all three paths are missing, returns a wrapped
-// os.ErrNotExist so existing skip-with-warning logic can check errors.Is(err, os.ErrNotExist).
-// If a template key or service name fails validation, returns a non-ErrNotExist error
-// so the caller surfaces it instead of silently skipping.
-func resolveIDETemplate(projectRoot string, svc config.ServiceConfig, serviceName, fileBase string) (string, []byte, error) {
-	// Validate template keys
+// resolveIDETemplatePack resolves a template pack directory for a service.
+// Returns the absolute path to a directory under devbox/templates/ide/.
+// Explicit is strict: if svc.IDE.Template is set and does not exist, returns an error.
+// Implicit chain: service-name → default, with fallthrough only on ErrNotExist.
+func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, error) {
+	absRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve project root: %w", err)
+	}
+
+	// Validate template key and service name
 	if err := validateIDETemplateKey(svc.IDE.Template); err != nil {
-		return "", nil, fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
+		return "", fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
 	}
 	if err := validateIDETemplateKey(serviceName); err != nil {
-		return "", nil, fmt.Errorf("invalid service name %q: %w", serviceName, err)
+		return "", fmt.Errorf("invalid service name %q: %w", serviceName, err)
 	}
 
-	// Step 1: explicit template override (if set)
+	// Explicit candidate (strict — no fallthrough unless not exists)
 	if svc.IDE.Template != "" {
-		path := filepath.Join(projectRoot, "devbox", "templates", "ide", svc.IDE.Template, fileBase+".tpl")
-		data, err := os.ReadFile(path)
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", svc.IDE.Template)
+		fi, err := os.Lstat(candidate)
 		if err == nil {
-			return path, data, nil
+			// Pack exists; validate it
+			if fi.Mode()&os.ModeSymlink != 0 {
+				return "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", svc.IDE.Template)
+			}
+			if !fi.IsDir() {
+				return "", fmt.Errorf("ide template pack %q is not a directory", svc.IDE.Template)
+			}
+			return candidate, nil
 		}
+		// Any error other than not-exists is a hard error
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", nil, fmt.Errorf("read ide template %s: %w", path, err)
+			return "", fmt.Errorf("stat ide template pack %q: %w", svc.IDE.Template, err)
 		}
+		// ErrNotExist with explicit template: strict error, no fallthrough
+		return "", fmt.Errorf("ide template pack %q not found (required by explicit ide.template setting)", svc.IDE.Template)
 	}
 
-	// Step 2: by-service-name template
-	path := filepath.Join(projectRoot, "devbox", "templates", "ide", serviceName, fileBase+".tpl")
-	data, err := os.ReadFile(path)
-	if err == nil {
-		return path, data, nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return "", nil, fmt.Errorf("read ide template %s: %w", path, err)
+	// Implicit chain: service-name → default
+	candidates := []string{serviceName, "default"}
+	for _, name := range candidates {
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", name)
+		fi, err := os.Lstat(candidate)
+		if err == nil {
+			// Candidate exists; validate it
+			if fi.Mode()&os.ModeSymlink != 0 {
+				return "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", name)
+			}
+			if !fi.IsDir() {
+				return "", fmt.Errorf("ide template pack %q is not a directory", name)
+			}
+			return candidate, nil
+		}
+		// Only ErrNotExist advances to next candidate; any other error is hard
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("stat ide template pack %q: %w", name, err)
+		}
+		// ErrNotExist: continue to next candidate
 	}
 
-	// Step 3: global template (fallback)
-	path = filepath.Join(projectRoot, "devbox", "templates", "ide", fileBase+".tpl")
-	data, err = os.ReadFile(path)
-	if err == nil {
-		return path, data, nil
+	// No pack found in implicit chain
+	return "", fmt.Errorf("ide template pack not found (tried %s, default)", serviceName)
+}
+
+// walkIDEPack walks the template pack directory and returns all .tpl entries.
+// Entries are returned with absolute SourcePath and RelPath (with .tpl stripped).
+// Returns entries sorted lexicographically by RelPath.
+// Rejection rules (any rejection is a hard error, not a silent skip):
+// 1. Any symlink anywhere in the tree (file or directory).
+// 2. Any cleaned relative path that is absolute or contains ".." segments.
+// 3. Source filename is bare ".tpl" (before or after cleaning).
+func walkIDEPack(packDir string) ([]packEntry, error) {
+	absPackDir, err := filepath.Abs(packDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve pack dir: %w", err)
 	}
 
-	// All three paths are missing; wrap the error to preserve os.ErrNotExist semantics
-	return "", nil, fmt.Errorf("ide template for %s: %w", fileBase, err)
+	var entries []packEntry
+	err = filepath.WalkDir(absPackDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		// Reject any symlink (file or directory) before processing further
+		fi, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("lstat %s: %w", path, err)
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("ide template pack contains symlink: %s", path)
+		}
+
+		// Only process files; skip directories
+		if d.IsDir() {
+			return nil
+		}
+
+		// Compute relative path from pack root (before stripping .tpl)
+		srcRelPath, err := filepath.Rel(absPackDir, path)
+		if err != nil {
+			return fmt.Errorf("relative path: %w", err)
+		}
+
+		// Suffix filter: only .tpl files
+		if !strings.HasSuffix(srcRelPath, ".tpl") {
+			return nil // skip non-.tpl files silently
+		}
+
+		// Strip .tpl suffix
+		relPath := strings.TrimSuffix(srcRelPath, ".tpl")
+
+		// Reject bare ".tpl" files
+		// Check on the filename (before cleaning) so nested "dir/.tpl" is caught
+		if strings.TrimSuffix(filepath.Base(srcRelPath), ".tpl") == "" {
+			return fmt.Errorf("ide template pack contains bare .tpl file: %s", srcRelPath)
+		}
+
+		// Clean the path and reject empty or "." results
+		cleanRelPath := filepath.Clean(relPath)
+		if cleanRelPath == "" || cleanRelPath == "." {
+			return fmt.Errorf("ide template pack entry cleans to empty path: %s", relPath)
+		}
+
+		// Reject absolute or escaping paths
+		if filepath.IsAbs(cleanRelPath) {
+			return fmt.Errorf("ide template pack entry is absolute: %s", cleanRelPath)
+		}
+		if strings.HasPrefix(cleanRelPath, ".."+string(filepath.Separator)) || cleanRelPath == ".." {
+			return fmt.Errorf("ide template pack entry escapes root: %s", cleanRelPath)
+		}
+
+		entries = append(entries, packEntry{
+			SourcePath: path,
+			RelPath:    cleanRelPath,
+		})
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort entries lexicographically by RelPath for determinism
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].RelPath < entries[j].RelPath
+	})
+
+	return entries, nil
 }
 
 // checkNoSymlinks verifies that no existing path component between absRoot and absDir
@@ -342,14 +457,14 @@ func checkNoSymlinks(absRoot, absDir, label string) error {
 	return nil
 }
 
-// renderIDEConfigs generates IDE config files for a single service.
+// renderIDEConfigs generates IDE config files for a single service by walking
+// the resolved template pack and rendering all .tpl entries.
 func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
 	data := ideTemplateData{
 		Project:    cfg.Project,
 		Service:    name,
 		ServiceCfg: svc,
 		Runtime:    cfg.Runtime,
-		IDE:        cfg.IDE,
 	}
 
 	serviceDir := filepath.Join(projectRoot, svc.Dir)
@@ -368,75 +483,73 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 
-	if cfg.IDE.Devcontainer.Enabled {
-		_, tplData, err := resolveIDETemplate(projectRoot, svc, name, "devcontainer.json")
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			w.Warning(fmt.Sprintf("ide [%s][devcontainer] — template not found, skipping (add devbox/templates/ide/devcontainer.json.tpl)", name))
-		case err != nil:
-			return err
-		default:
-			dest := filepath.Join(serviceDir, ".devcontainer", "devcontainer.json")
-			if err := renderIDETemplate(string(tplData), "devcontainer.json", data, dest, absRoot); err != nil {
-				return err
-			}
-			w.Success(fmt.Sprintf("ide [devcontainer] → %s", dest))
-		}
+	// Resolve the template pack
+	pack, err := resolveIDETemplatePack(svc, projectRoot, name)
+	if err != nil {
+		return err
 	}
 
-	if cfg.IDE.JetBrains.Enabled {
-		w.Warning("ide [jetbrains] — not yet implemented, skipping")
+	// Walk the pack and render each entry
+	entries, err := walkIDEPack(pack)
+	if err != nil {
+		return err
 	}
 
-	if cfg.IDE.VSCode.Enabled {
-		_, launchData, err := resolveIDETemplate(projectRoot, svc, name, "vscode_launch.json")
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			w.Warning(fmt.Sprintf("ide [%s][vscode] — template not found, skipping (add devbox/templates/ide/vscode_launch.json.tpl)", name))
-		case err != nil:
+	for _, entry := range entries {
+		dest := filepath.Join(absDir, entry.RelPath)
+		if err := renderIDETemplateFile(entry.SourcePath, data, dest, absDir, absRoot); err != nil {
 			return err
-		default:
-			launchDest := filepath.Join(serviceDir, ".vscode", "launch.json")
-			if err := renderIDETemplate(string(launchData), "launch.json", data, launchDest, absRoot); err != nil {
-				return err
-			}
-			w.Success(fmt.Sprintf("ide [vscode]       → %s", launchDest))
 		}
-
-		_, settingsData, err := resolveIDETemplate(projectRoot, svc, name, "vscode_settings.json")
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			w.Warning(fmt.Sprintf("ide [%s][vscode] — template not found, skipping (add devbox/templates/ide/vscode_settings.json.tpl)", name))
-		case err != nil:
-			return err
-		default:
-			settingsDest := filepath.Join(serviceDir, ".vscode", "settings.json")
-			if err := renderIDETemplate(string(settingsData), "settings.json", data, settingsDest, absRoot); err != nil {
-				return err
-			}
-			w.Success(fmt.Sprintf("ide [vscode]       → %s", settingsDest))
-		}
+		w.Success(fmt.Sprintf("ide → %s", filepath.Join(svc.Dir, entry.RelPath)))
 	}
 
 	return nil
 }
 
-// renderIDETemplate executes a Go template string against data and writes the
-// result to dest, creating parent directories as needed.
-// absRoot is the resolved absolute project root; the function verifies that
-// the destination directory does not escape it via symlinks.
-func renderIDETemplate(tplStr, name string, data ideTemplateData, dest, absRoot string) error {
-	t, err := template.New(name).Parse(tplStr)
+// renderIDETemplateFile reads a template file, renders it, and writes to dest.
+// sourcePath is the absolute path to the .tpl file.
+// data is the template context.
+// dest is the destination path (may be relative to the service dir).
+// absDir is the resolved absolute service directory.
+// absRoot is the resolved absolute project root.
+//
+// The function enforces that dest (after resolution) is contained within absDir.
+// It also enforces that absDir is contained within absRoot.
+func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir, absRoot string) error {
+	// Read template file
+	tplBytes, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read template %s: %w", sourcePath, err)
+	}
+
+	// Parse template using basename as name for error messages
+	name := filepath.Base(sourcePath)
+	t, err := template.New(name).Parse(string(tplBytes))
 	if err != nil {
 		return fmt.Errorf("parse template %s: %w", name, err)
 	}
 
+	// Render template
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
 		return fmt.Errorf("render template %s: %w", name, err)
 	}
 
 	destDir := filepath.Dir(dest)
+
+	// Service-dir containment check: ensure dest is inside absDir
+	absDest, err := filepath.Abs(dest)
+	if err != nil {
+		return fmt.Errorf("resolve destination: %w", err)
+	}
+	rel, err := filepath.Rel(absDir, absDest)
+	if err != nil {
+		return fmt.Errorf("dest %q outside service dir: %w", dest, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return fmt.Errorf("dest %q escapes service dir %q", dest, absDir)
+	}
+
 	// Guard against symlinks in the destination path before creating any directories.
 	// checkNoSymlinks walks existing components only, so it catches a pre-existing
 	// .devcontainer -> /tmp/outside symlink before MkdirAll follows it.
@@ -465,11 +578,11 @@ func renderIDETemplate(tplStr, name string, data ideTemplateData, dest, absRoot 
 	}
 
 	// Refuse to write through a symlinked destination file.
-	if fi, err := os.Lstat(dest); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+	if fi, err := os.Lstat(absDest); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("destination %q is a symlink; will not overwrite", dest)
 	}
 
-	if err := os.WriteFile(dest, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(absDest, buf.Bytes(), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", dest, err)
 	}
 	return nil
