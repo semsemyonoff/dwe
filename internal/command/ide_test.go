@@ -461,6 +461,251 @@ func TestResolveIDETemplatePack_packIsSymlink(t *testing.T) {
 	}
 }
 
+// TestResolveIDETemplatePack_explicitPackIsFile verifies that an explicit pack that
+// is a regular file (not a directory) is rejected.
+func TestResolveIDETemplatePack_explicitPackIsFile(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("create ide dir: %v", err)
+	}
+	// Create a regular file where a pack directory is expected
+	if err := os.WriteFile(filepath.Join(packDir, "custom"), []byte("not a dir"), 0o644); err != nil {
+		t.Fatalf("create file: %v", err)
+	}
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{Template: "custom"},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err == nil {
+		t.Fatal("expected error when explicit pack is a regular file")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("expected 'not a directory' error, got: %v", err)
+	}
+}
+
+// TestResolveIDETemplatePack_implicitCandidateIsFile verifies that when a service-name
+// candidate is a regular file (not a directory), it is rejected — no fallthrough to default.
+func TestResolveIDETemplatePack_implicitCandidateIsFile(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	// Set up default pack
+	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
+		".devcontainer/devcontainer.json.tpl": "default-dc",
+	})
+
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
+	// Create a regular file where "main" pack directory is expected
+	if err := os.WriteFile(filepath.Join(packDir, "main"), []byte("not a dir"), 0o644); err != nil {
+		t.Fatalf("create file: %v", err)
+	}
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err == nil {
+		t.Fatal("expected error when service-name candidate is a regular file (no fallthrough)")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("expected 'not a directory' error, got: %v", err)
+	}
+}
+
+// TestResolveIDETemplatePack_implicitCandidateIsSymlink verifies that when a service-name
+// candidate is a symlink to a directory, it is rejected — no fallthrough to default.
+func TestResolveIDETemplatePack_implicitCandidateIsSymlink(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	// Set up default pack and a real directory to link to
+	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
+		".devcontainer/devcontainer.json.tpl": "default-dc",
+	})
+	realDir := t.TempDir()
+
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
+	symlinkPath := filepath.Join(packDir, "main")
+	if err := os.Symlink(realDir, symlinkPath); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err == nil {
+		t.Fatal("expected error when service-name candidate is a symlink")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink error, got: %v", err)
+	}
+}
+
+// TestResolveIDETemplatePack_defaultIsFile verifies that when default/ is a regular
+// file it is rejected as a hard error.
+func TestResolveIDETemplatePack_defaultIsFile(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("create ide dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packDir, "default"), []byte("not a dir"), 0o644); err != nil {
+		t.Fatalf("create file: %v", err)
+	}
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "unknown-service")
+	if err == nil {
+		t.Fatal("expected error when default/ is a regular file")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("expected 'not a directory' error, got: %v", err)
+	}
+}
+
+// TestResolveIDETemplatePack_defaultIsSymlink verifies that when default/ is a symlink
+// to a directory it is rejected as a hard error.
+func TestResolveIDETemplatePack_defaultIsSymlink(t *testing.T) {
+	projectRoot := t.TempDir()
+	realDir := t.TempDir()
+
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("create ide dir: %v", err)
+	}
+	if err := os.Symlink(realDir, filepath.Join(packDir, "default")); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	_, err := resolveIDETemplatePack(svc, projectRoot, "unknown-service")
+	if err == nil {
+		t.Fatal("expected error when default/ is a symlink")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("expected symlink error, got: %v", err)
+	}
+}
+
+// TestResolveIDETemplatePack_relativeProjectRoot verifies that passing a relative
+// projectRoot still produces an absolute pack path.
+func TestResolveIDETemplatePack_relativeProjectRoot(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
+		".devcontainer/devcontainer.json.tpl": "dc",
+	})
+
+	// Compute a relative path to projectRoot from cwd
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	relRoot, err := filepath.Rel(cwd, projectRoot)
+	if err != nil {
+		t.Fatalf("rel: %v", err)
+	}
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	pack, err := resolveIDETemplatePack(svc, relRoot, "unknown")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !filepath.IsAbs(pack) {
+		t.Errorf("want absolute pack path, got %q", pack)
+	}
+}
+
+// TestResolveIDETemplatePack_byServiceOnly verifies that when only the service-name
+// pack exists (no default/), it is resolved without error.
+func TestResolveIDETemplatePack_byServiceOnly(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	// Set up only the service-name pack, no default/
+	setupIDEPackTemplates(t, projectRoot, "main", map[string]string{
+		".vscode/settings.json.tpl": `{"source":"main"}`,
+	})
+
+	svc := config.ServiceConfig{
+		Type:    "app",
+		Enabled: true,
+		Dir:     "services/main",
+		IDE:     config.ServiceIDEConfig{},
+	}
+
+	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(pack, "main") {
+		t.Errorf("want pack ending with 'main', got %q", pack)
+	}
+}
+
+// TestWalkIDEPack_noDuplicateRelPath verifies that a well-formed pack with unique
+// RelPaths walks without error. A true RelPath collision cannot arise on a
+// case-sensitive filesystem (two files cannot share the same name in the same dir),
+// so this test confirms the duplicate guard doesn't break the happy path.
+func TestWalkIDEPack_noDuplicateRelPath(t *testing.T) {
+	packDir := t.TempDir()
+
+	files := map[string]string{
+		"foo.tpl":     "a",
+		"bar/baz.tpl": "b",
+	}
+	for rel, content := range files {
+		full := filepath.Join(packDir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	entries, err := walkIDEPack(packDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("want 2 entries, got %d", len(entries))
+	}
+}
+
 // TestWalkIDEPack_emptyPack verifies that an empty pack returns no entries.
 func TestWalkIDEPack_emptyPack(t *testing.T) {
 	projectRoot := t.TempDir()

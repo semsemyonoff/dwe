@@ -420,6 +420,16 @@ func walkIDEPack(packDir string) ([]packEntry, error) {
 		return entries[i].RelPath < entries[j].RelPath
 	})
 
+	// Reject duplicate RelPaths (defensive — guards against walker bugs emitting duplicates).
+	// Raw-string equality: case-fold collisions on macOS/Windows are out of scope.
+	seen := make(map[string]struct{}, len(entries))
+	for _, e := range entries {
+		if _, dup := seen[e.RelPath]; dup {
+			return nil, fmt.Errorf("ide template pack contains duplicate entry %q", e.RelPath)
+		}
+		seen[e.RelPath] = struct{}{}
+	}
+
 	return entries, nil
 }
 
