@@ -556,13 +556,12 @@ func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir
 		return fmt.Errorf("render template %s: %w", name, err)
 	}
 
-	destDir := filepath.Dir(dest)
-
 	// Service-dir containment check: ensure dest is inside absDir
 	absDest, err := filepath.Abs(dest)
 	if err != nil {
 		return fmt.Errorf("resolve destination: %w", err)
 	}
+	destDir := filepath.Dir(absDest)
 	rel, err := filepath.Rel(absDir, absDest)
 	if err != nil {
 		return fmt.Errorf("dest %q outside service dir: %w", dest, err)
@@ -581,21 +580,30 @@ func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir
 		return fmt.Errorf("create dir for %s: %w", dest, err)
 	}
 
-	// Verify the real directory resolves inside the project root after creation.
-	// MkdirAll follows symlinks, so a .devcontainer -> /tmp/outside symlink
-	// would succeed silently without this check.
-	// Both paths are resolved via EvalSymlinks so the comparison works on
-	// systems (macOS) where the temp dir itself is under a symlinked prefix.
+	// Verify the real directory resolves inside both the project root and the
+	// service directory after creation. MkdirAll follows symlinks, so a
+	// .devcontainer -> /tmp/outside (or -> services/other) symlink would succeed
+	// silently without this check. Both paths are resolved via EvalSymlinks so
+	// the comparison works on systems (macOS) where the temp dir itself is under
+	// a symlinked prefix.
 	realRoot, err := filepath.EvalSymlinks(absRoot)
 	if err != nil {
 		return fmt.Errorf("resolve project root: %w", err)
+	}
+	realAbsDir, err := filepath.EvalSymlinks(absDir)
+	if err != nil {
+		return fmt.Errorf("resolve service dir: %w", err)
 	}
 	realDir, err := filepath.EvalSymlinks(destDir)
 	if err != nil {
 		return fmt.Errorf("resolve dir for %s: %w", dest, err)
 	}
-	if !strings.HasPrefix(realDir+string(filepath.Separator), realRoot+string(filepath.Separator)) {
+	sep := string(filepath.Separator)
+	if !strings.HasPrefix(realDir+sep, realRoot+sep) {
 		return fmt.Errorf("destination dir for %q resolves outside project root via symlink", dest)
+	}
+	if !strings.HasPrefix(realDir+sep, realAbsDir+sep) {
+		return fmt.Errorf("destination dir for %q resolves outside service dir via symlink", dest)
 	}
 
 	// Refuse to write through a symlinked destination file.
