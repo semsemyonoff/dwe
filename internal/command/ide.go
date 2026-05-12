@@ -178,7 +178,12 @@ Template pack resolution (explicit is strict; implicit chain: service-name → d
 
 Services that participate in IDE rendering:
   - Type 'app' (default) has ide.enabled: true by default
-  - Other types require explicit ide.enabled: true in the config`,
+  - Other types require explicit ide.enabled: true in the config
+
+When a service name is given, it is treated as a hub anchor: if multiple
+services share its dir (e.g. main and main-debug both point to services/main),
+the IDE collision-policy winner (deepest extends) is rendered. This means
+'render ide main' renders main-debug whenever main-debug is enabled.`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: serviceNameCompletion(flags),
@@ -194,13 +199,19 @@ Services that participate in IDE rendering:
 			// Determine which services to process.
 			var serviceNames []string
 			if len(args) == 1 {
-				// Explicit service argument: validate thoroughly
+				// Explicit service argument: validate thoroughly, then resolve
+				// hub-anchor semantics — if multiple services share this dir,
+				// the IDE collision-policy winner (deepest extends) renders.
 				name := args[0]
 				if err := validateExplicitIDEArg(name, cfg.Services); err != nil {
 					return err
 				}
 
-				serviceNames = []string{name}
+				winner := resolveIDEHubAnchor(name, cfg.Services)
+				if winner != name {
+					w.Info(fmt.Sprintf("ide [%s] — resolved to %s (hub %s)", name, winner, filepath.Clean(cfg.Services[name].Dir)))
+				}
+				serviceNames = []string{winner}
 			} else {
 				// No explicit service: use selection policy
 				selected, skipped := selectIDEServices(cfg.Services)
@@ -232,6 +243,46 @@ Services that participate in IDE rendering:
 			return nil
 		},
 	}
+}
+
+// resolveIDEHubAnchor treats name as a hub anchor and returns the IDE collision
+// winner among services that share name's Dir. Applies the same gating used by
+// selectIDEServices (Enabled + IDERenderEnabled), then picks the deepest extends
+// chain (ties broken lexicographically). Returns name unchanged when there are
+// no qualifying siblings. The caller must have already validated name via
+// validateExplicitIDEArg, so name itself is guaranteed to qualify.
+func resolveIDEHubAnchor(name string, services map[string]config.ServiceConfig) string {
+	svc := services[name]
+	cleanDir := filepath.Clean(svc.Dir)
+
+	var candidates []string
+	for n, s := range services {
+		if filepath.Clean(s.Dir) != cleanDir {
+			continue
+		}
+		if !s.Enabled {
+			continue
+		}
+		if enabled, _ := s.IDERenderEnabledExplicit(); !enabled {
+			continue
+		}
+		candidates = append(candidates, n)
+	}
+	if len(candidates) <= 1 {
+		return name
+	}
+
+	sort.Strings(candidates) // tie-break: lexicographically first among deepest
+	var deepest string
+	maxDepth := -1
+	for _, c := range candidates {
+		d, _ := extendsDepth(services, c)
+		if d > maxDepth {
+			maxDepth = d
+			deepest = c
+		}
+	}
+	return deepest
 }
 
 // validateExplicitIDEArg validates the explicit service argument for `devbox render ide <service>`.

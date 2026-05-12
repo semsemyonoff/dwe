@@ -6,32 +6,27 @@ Generate hub-level agents docs from template packs
 
 Generate agents documentation files (AGENTS.md + CLAUDE.md symlink) for the service hub.
 
-The command walks the chosen template pack (devbox/templates/agents/<pack-name>/)
+The command walks the chosen template pack (devbox/templates/ai/<pack-name>/)
 and renders templates + creates symlinks according to the pack's manifest.yml.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If ai_docs.template is set in the service config, use that pack (explicit, strict)
-  2. Otherwise, try devbox/templates/agents/<service-name>/
-  3. If not found, use devbox/templates/agents/default/
+  2. Otherwise, try devbox/templates/ai/<service-name>/
+  3. If not found, use devbox/templates/ai/default/
   4. If none exist, return an error
 
 Services that participate in agents docs rendering:
   - All service types have ai_docs.enabled: true by default
   - Set ai_docs.enabled: false to opt out
 
-When a service name is given, only that service is rendered; the command errors if the service
-does not exist, is disabled at the project level, has an empty dir, or has ai_docs.enabled: false.
-When no service name is given, all eligible services are rendered automatically.
+When a service name is given, it is treated as a hub anchor: if multiple
+services share its dir (e.g. main and main-debug both point to services/main),
+the agent-docs collision-policy winner (shallowest extends — the canonical
+hub owner) is rendered. This means 'render ai main-debug' still renders the
+parent 'main' identity for the shared hub.
 
 ```
 devbox render ai [service] [flags]
-```
-
-### Examples
-
-```
-  devbox render ai         # render for all eligible services
-  devbox render ai api     # render only the "api" service
 ```
 
 ### Options

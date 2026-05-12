@@ -1822,3 +1822,80 @@ func TestSelectIDEServices_ideDisabledReason(t *testing.T) {
 		t.Errorf("default false: want reason %q, got %q", "ide-policy", got)
 	}
 }
+
+// TestResolveIDEHubAnchor verifies hub-anchor resolution: an explicit service
+// name is treated as a hub anchor, and the IDE collision-policy winner among
+// services sharing its dir (deepest extends wins) is returned.
+func TestResolveIDEHubAnchor(t *testing.T) {
+	falseVal := false
+
+	tests := []struct {
+		name     string
+		input    string
+		services map[string]config.ServiceConfig
+		want     string
+	}{
+		{
+			name:  "no siblings: input returned unchanged",
+			input: "solo",
+			services: map[string]config.ServiceConfig{
+				"solo": {Type: "app", Enabled: true, Dir: "./services/solo"},
+			},
+			want: "solo",
+		},
+		{
+			name:  "parent and child share dir, both enabled: child (deepest) wins",
+			input: "main",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main"},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
+			},
+			want: "main-debug",
+		},
+		{
+			name:  "passing the variant name still resolves to the variant (it is the winner)",
+			input: "main-debug",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main"},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
+			},
+			want: "main-debug",
+		},
+		{
+			name:  "variant disabled: parent wins",
+			input: "main",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main"},
+				"main-debug": {Type: "app", Enabled: false, Dir: "./services/main", Extends: "main"},
+			},
+			want: "main",
+		},
+		{
+			name:  "variant has ide.enabled=false: parent wins",
+			input: "main",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main"},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main", IDE: config.ServiceIDEConfig{Enabled: &falseVal}},
+			},
+			want: "main",
+		},
+		{
+			name:  "siblings in another dir do not affect resolution",
+			input: "main",
+			services: map[string]config.ServiceConfig{
+				"main":   {Type: "app", Enabled: true, Dir: "./services/main"},
+				"second": {Type: "app", Enabled: true, Dir: "./services/second"},
+			},
+			want: "main",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveIDEHubAnchor(tt.input, tt.services)
+			if got != tt.want {
+				t.Errorf("resolveIDEHubAnchor(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

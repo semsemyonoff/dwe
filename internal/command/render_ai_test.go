@@ -22,11 +22,11 @@ func setupServicesConfig(t *testing.T, dir, yaml string) {
 	}
 }
 
-// setupAgentsPackTemplates writes an agents template pack at <dir>/devbox/templates/agents/<packName>/
+// setupAgentsPackTemplates writes an agents template pack at <dir>/devbox/templates/ai/<packName>/
 // and populates it with a directory structure of files.
 func setupAgentsPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
 	t.Helper()
-	packDir := filepath.Join(dir, "devbox", "templates", "agents", packName)
+	packDir := filepath.Join(dir, "devbox", "templates", "ai", packName)
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("create pack dir: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
 
-	expected := filepath.Join(projectRoot, "devbox", "templates", "agents", "custom")
+	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "custom")
 	if pack != expected {
 		t.Errorf("expected %q, got %q", expected, pack)
 	}
@@ -102,7 +102,7 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
 
-	expected := filepath.Join(projectRoot, "devbox", "templates", "agents", "api")
+	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "api")
 	if pack != expected {
 		t.Errorf("expected %q, got %q", expected, pack)
 	}
@@ -126,7 +126,7 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
 
-	expected := filepath.Join(projectRoot, "devbox", "templates", "agents", "default")
+	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "default")
 	if pack != expected {
 		t.Errorf("expected %q, got %q", expected, pack)
 	}
@@ -159,7 +159,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 		t.Fatalf("create real pack: %v", err)
 	}
 
-	templatesDir := filepath.Join(projectRoot, "devbox", "templates", "agents")
+	templatesDir := filepath.Join(projectRoot, "devbox", "templates", "ai")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates dir: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 // TestResolveAgentsTemplatePack_nonDirPackRejected verifies non-directories are rejected.
 func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 	projectRoot := t.TempDir()
-	templatesDir := filepath.Join(projectRoot, "devbox", "templates", "agents")
+	templatesDir := filepath.Join(projectRoot, "devbox", "templates", "ai")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates dir: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 	}
 
 	// Should pick the service-name pack, not the default
-	expected := filepath.Join(projectRoot, "devbox", "templates", "agents", "myapi")
+	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "myapi")
 	if pack != expected {
 		t.Errorf("expected %q (service-name), got %q", expected, pack)
 	}
@@ -1400,7 +1400,7 @@ func TestSelectAgentsServices(t *testing.T) {
 			},
 		},
 		{
-			name: "two services share dir - child extends parent - child wins",
+			name: "two services share dir - child extends parent - parent wins (canonical hub)",
 			services: map[string]config.ServiceConfig{
 				"main": {
 					Type:    "app",
@@ -1414,13 +1414,13 @@ func TestSelectAgentsServices(t *testing.T) {
 					Extends: "main",
 				},
 			},
-			wantSelected: []string{"main-debug"},
+			wantSelected: []string{"main"},
 			wantSkippedMap: map[string]skippedService{
-				"main": {
-					Name:   "main",
+				"main-debug": {
+					Name:   "main-debug",
 					Reason: "lost-collision",
 					Dir:    filepath.Join(".", "services", "main"),
-					Winner: "main-debug",
+					Winner: "main",
 				},
 			},
 		},
@@ -1515,5 +1515,83 @@ services:
 	}
 	if !strings.Contains(err.Error(), "refuse to overwrite") {
 		t.Errorf("error should mention 'refuse to overwrite': %v", err)
+	}
+}
+
+// TestResolveAIHubAnchor verifies hub-anchor resolution for agent docs: an
+// explicit service name is treated as a hub anchor, and the AI-docs
+// collision-policy winner among services sharing its dir (shallowest extends
+// wins — canonical hub owner) is returned.
+func TestResolveAIHubAnchor(t *testing.T) {
+	falseVal := false
+
+	tests := []struct {
+		name     string
+		input    string
+		services map[string]config.ServiceConfig
+		want     string
+	}{
+		{
+			name:  "no siblings: input returned unchanged",
+			input: "solo",
+			services: map[string]config.ServiceConfig{
+				"solo": {Type: "app", Enabled: true, Dir: "./services/solo"},
+			},
+			want: "solo",
+		},
+		{
+			name:  "parent and child share dir, both enabled: parent (shallowest) wins",
+			input: "main",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main"},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
+			},
+			want: "main",
+		},
+		{
+			name:  "passing the variant name still resolves to the parent (canonical hub)",
+			input: "main-debug",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main"},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
+			},
+			want: "main",
+		},
+		{
+			name:  "parent disabled: variant becomes the only candidate",
+			input: "main-debug",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: false, Dir: "./services/main"},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
+			},
+			want: "main-debug",
+		},
+		{
+			name:  "parent has ai_docs.enabled=false: variant wins",
+			input: "main-debug",
+			services: map[string]config.ServiceConfig{
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main", AIDocs: config.ServiceAIDocsConfig{Enabled: &falseVal}},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
+			},
+			want: "main-debug",
+		},
+		{
+			name:  "siblings in another dir do not affect resolution",
+			input: "main",
+			services: map[string]config.ServiceConfig{
+				"main":   {Type: "app", Enabled: true, Dir: "./services/main"},
+				"second": {Type: "app", Enabled: true, Dir: "./services/second"},
+			},
+			want: "main",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveAIHubAnchor(tt.input, tt.services)
+			if got != tt.want {
+				t.Errorf("resolveAIHubAnchor(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }

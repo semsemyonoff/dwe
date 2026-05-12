@@ -21,7 +21,7 @@ import (
 )
 
 // resolveAgentsTemplatePack resolves a template pack directory for a service.
-// Returns the absolute path to a directory under devbox/templates/agents/.
+// Returns the absolute path to a directory under devbox/templates/ai/.
 // Explicit is strict: if svc.AIDocs.Template is set and does not exist, returns an error.
 // Implicit chain: service-name → default, with fallthrough only on ErrNotExist.
 func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, error) {
@@ -40,7 +40,7 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 
 	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)
 	if svc.AIDocs.Template != "" {
-		candidate := filepath.Join(absRoot, "devbox", "templates", "agents", svc.AIDocs.Template)
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", svc.AIDocs.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			// Pack exists; validate it
@@ -50,7 +50,7 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 			if !fi.IsDir() {
 				return "", fmt.Errorf("agents template pack %q is not a directory", svc.AIDocs.Template)
 			}
-			// Guard against symlinks in parent path components (e.g. devbox/templates/agents -> /tmp/outside)
+			// Guard against symlinks in parent path components (e.g. devbox/templates/ai -> /tmp/outside)
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "agents template pack"); err != nil {
 				return "", err
 			}
@@ -67,7 +67,7 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 	// Implicit chain: service-name → default
 	candidates := []string{serviceName, "default"}
 	for _, name := range candidates {
-		candidate := filepath.Join(absRoot, "devbox", "templates", "agents", name)
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", name)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			// Candidate exists; validate it
@@ -77,7 +77,7 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 			if !fi.IsDir() {
 				return "", fmt.Errorf("agents template pack %q is not a directory", name)
 			}
-			// Guard against symlinks in parent path components (e.g. devbox/templates/agents -> /tmp/outside)
+			// Guard against symlinks in parent path components (e.g. devbox/templates/ai -> /tmp/outside)
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "agents template pack"); err != nil {
 				return "", err
 			}
@@ -538,13 +538,10 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 
 	// Create each symlink in the manifest
 	for _, entry := range manifest.Symlinks {
-		changed, err := ensureRelativeSymlink(entry.Link, entry.To, absHubDir, absRoot)
-		if err != nil {
+		if _, err := ensureRelativeSymlink(entry.Link, entry.To, absHubDir, absRoot); err != nil {
 			return err
 		}
-		if changed {
-			w.Success(fmt.Sprintf("ai → %s ⇒ %s", filepath.Join(svc.Dir, entry.Link), entry.To))
-		}
+		w.Success(fmt.Sprintf("ai → %s ⇒ %s", filepath.Join(svc.Dir, entry.Link), entry.To))
 	}
 
 	return nil
@@ -593,7 +590,10 @@ func selectAgentsServices(services map[string]config.ServiceConfig) (selected []
 		dirGroups[cleanDir] = append(dirGroups[cleanDir], name)
 	}
 
-	// For each group, pick the winner (deepest extends chain; tie-break by name).
+	// For each group, pick the winner (shallowest extends chain; tie-break by name).
+	// Rationale: the agent docs describe the hub's canonical identity. When a child
+	// `extends` a parent and shares its `dir`, the parent owns the hub — the child
+	// is a runtime variant, not a separate workspace.
 	selectedSet := make(map[string]bool)
 	for dir, names := range dirGroups {
 		if len(names) == 1 {
@@ -601,26 +601,26 @@ func selectAgentsServices(services map[string]config.ServiceConfig) (selected []
 			continue
 		}
 
-		// Multiple services share this dir: find the deepest extends chain.
-		sort.Strings(names) // tie-break: lexicographically first among deepest
-		var deepest string
-		maxDepth := -1
+		// Multiple services share this dir: find the shallowest extends chain.
+		sort.Strings(names) // tie-break: lexicographically first among shallowest
+		var shallowest string
+		minDepth := -1
 		for _, name := range names {
 			depth, _ := extendsDepth(services, name)
-			if depth > maxDepth {
-				maxDepth = depth
-				deepest = name
+			if minDepth == -1 || depth < minDepth {
+				minDepth = depth
+				shallowest = name
 			}
 		}
 
-		selectedSet[deepest] = true
+		selectedSet[shallowest] = true
 		for _, name := range names {
-			if name != deepest {
+			if name != shallowest {
 				allSkipped = append(allSkipped, skippedService{
 					Name:   name,
 					Reason: "lost-collision",
 					Dir:    dir,
-					Winner: deepest,
+					Winner: shallowest,
 				})
 			}
 		}
@@ -639,6 +639,46 @@ func selectAgentsServices(services map[string]config.ServiceConfig) (selected []
 	skipped = allSkipped
 
 	return selected, skipped
+}
+
+// resolveAIHubAnchor treats name as a hub anchor and returns the AI-docs
+// collision winner among services that share name's Dir. Applies the same
+// gating used by selectAgentsServices (Enabled + AIDocsRenderEnabled), then
+// picks the shallowest extends chain (ties broken lexicographically) — the
+// canonical hub owner. Returns name unchanged when there are no qualifying
+// siblings. The caller must have already validated name via validateExplicitAIArg.
+func resolveAIHubAnchor(name string, services map[string]config.ServiceConfig) string {
+	svc := services[name]
+	cleanDir := filepath.Clean(svc.Dir)
+
+	var candidates []string
+	for n, s := range services {
+		if filepath.Clean(s.Dir) != cleanDir {
+			continue
+		}
+		if !s.Enabled {
+			continue
+		}
+		if !s.AIDocsRenderEnabled() {
+			continue
+		}
+		candidates = append(candidates, n)
+	}
+	if len(candidates) <= 1 {
+		return name
+	}
+
+	sort.Strings(candidates) // tie-break: lexicographically first among shallowest
+	var shallowest string
+	minDepth := -1
+	for _, c := range candidates {
+		d, _ := extendsDepth(services, c)
+		if minDepth == -1 || d < minDepth {
+			minDepth = d
+			shallowest = c
+		}
+	}
+	return shallowest
 }
 
 // validateExplicitAIArg validates the explicit service argument for `devbox render ai <service>`.
@@ -671,18 +711,24 @@ func newRenderAICmd(flags *rootFlags) *cobra.Command {
 		Short: "Generate hub-level agents docs from template packs",
 		Long: `Generate agents documentation files (AGENTS.md + CLAUDE.md symlink) for the service hub.
 
-The command walks the chosen template pack (devbox/templates/agents/<pack-name>/)
+The command walks the chosen template pack (devbox/templates/ai/<pack-name>/)
 and renders templates + creates symlinks according to the pack's manifest.yml.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If ai_docs.template is set in the service config, use that pack (explicit, strict)
-  2. Otherwise, try devbox/templates/agents/<service-name>/
-  3. If not found, use devbox/templates/agents/default/
+  2. Otherwise, try devbox/templates/ai/<service-name>/
+  3. If not found, use devbox/templates/ai/default/
   4. If none exist, return an error
 
 Services that participate in agents docs rendering:
   - All service types have ai_docs.enabled: true by default
-  - Set ai_docs.enabled: false to opt out`,
+  - Set ai_docs.enabled: false to opt out
+
+When a service name is given, it is treated as a hub anchor: if multiple
+services share its dir (e.g. main and main-debug both point to services/main),
+the agent-docs collision-policy winner (shallowest extends — the canonical
+hub owner) is rendered. This means 'render ai main-debug' still renders the
+parent 'main' identity for the shared hub.`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: serviceNameCompletion(flags),
@@ -698,13 +744,20 @@ Services that participate in agents docs rendering:
 			// Determine which services to process.
 			var serviceNames []string
 			if len(args) == 1 {
-				// Explicit service argument: validate thoroughly
+				// Explicit service argument: validate thoroughly, then resolve
+				// hub-anchor semantics — if multiple services share this dir,
+				// the AI-docs collision-policy winner (shallowest extends, i.e.
+				// canonical hub owner) renders.
 				name := args[0]
 				if err := validateExplicitAIArg(name, cfg.Services); err != nil {
 					return err
 				}
 
-				serviceNames = []string{name}
+				winner := resolveAIHubAnchor(name, cfg.Services)
+				if winner != name {
+					w.Info(fmt.Sprintf("ai [%s] — resolved to %s (hub %s)", name, winner, filepath.Clean(cfg.Services[name].Dir)))
+				}
+				serviceNames = []string{winner}
 			} else {
 				// No explicit service: use selection policy
 				selected, skipped := selectAgentsServices(cfg.Services)

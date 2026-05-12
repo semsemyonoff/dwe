@@ -221,6 +221,8 @@ This pack-based model lets you add support for any IDE or tool (`.cursor/`, `.ze
 
 When multiple services share the same `dir` (e.g., `main` and `main-debug` both pointing to `./services/main`), only the most-derived service (deepest in the `extends` chain) renders IDE files. The others are reported as skipped with a collision warning.
 
+The explicit positional form `devbox render ide <service>` treats the argument as a **hub anchor**: it is validated as a real service, but then resolved through the same collision policy. So `devbox render ide main` actually renders `main-debug` whenever `main-debug` is enabled — useful from per-service deploy pipelines, which pass the canonical service name and expect the variant-aware result.
+
 ```yaml
 services:
   main:
@@ -301,7 +303,7 @@ ai_docs:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `enabled` | `true` (for all service types) | Include this service in `devbox render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
-| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/agents/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then default packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
+| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/ai/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then default packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
 #### Agent docs activation rules
 
@@ -318,9 +320,9 @@ A service is rendered only if both are satisfied. Disabling either suppresses re
 
 `devbox render ai` searches for template packs in this order; the first match is used:
 
-1. `devbox/templates/agents/<template>/` (if `template` is set) — **strict**: pack must exist
-2. `devbox/templates/agents/<service-name>/` (if `template` is not set)
-3. `devbox/templates/agents/default/` (final fallback)
+1. `devbox/templates/ai/<template>/` (if `template` is set) — **strict**: pack must exist
+2. `devbox/templates/ai/<service-name>/` (if `template` is not set)
+3. `devbox/templates/ai/default/` (final fallback)
 
 If none exist, rendering is skipped with an error.
 
@@ -333,7 +335,11 @@ All destinations are relative to the service hub directory (e.g. `services/main/
 
 #### Collision resolution
 
-When multiple services share the same `dir` (e.g., `main` and `main-debug` both pointing to `./services/main`), only the most-derived service (deepest in the `extends` chain) renders agent docs. The others are reported as skipped with a collision warning.
+When multiple services share the same `dir` (e.g., `main` and `main-debug` both pointing to `./services/main`), only the canonical hub owner — the **least-derived** service (shallowest in the `extends` chain) — renders agent docs. The rationale: agent docs describe the hub's identity, and when a child `extends` a parent and shares its `dir`, the parent owns the hub; the child is a runtime variant of the same workspace. The losing variants are reported as skipped with a collision warning.
+
+The explicit positional form `devbox render ai <service>` treats the argument as a **hub anchor** (same as `render ide`): the argument is validated as a real service, then resolved through the collision policy. So `devbox render ai main-debug` still renders `main` whenever both are enabled — the variant resolves to the canonical hub owner.
+
+(Note: this differs from `devbox render ide`, where the *deepest* extends chain wins because IDE configs are about per-variant overrides.)
 
 #### Worked example: template pack layout
 
@@ -343,14 +349,14 @@ This example shows how agent template packs are organized and the resulting file
 
 ```
 devbox/services.yml
-devbox/templates/agents/
+devbox/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
     .claude/CLAUDE.md.tmpl
 ```
 
-**Manifest (`devbox/templates/agents/default/manifest.yml`):**
+**Manifest (`devbox/templates/ai/default/manifest.yml`):**
 
 ```yaml
 render:

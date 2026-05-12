@@ -22,6 +22,11 @@ Services that participate in IDE rendering:
   - Type 'app' (default) has ide.enabled: true by default
   - Other types require explicit ide.enabled: true in the config
 
+When a service name is given, it is treated as a hub anchor: if multiple
+services share its dir (e.g. main and main-debug both point to services/main),
+the IDE collision-policy winner (deepest extends) is rendered. This means
+'render ide main' renders main-debug whenever main-debug is enabled.
+
 ```
 devbox render ide [service] [flags]
 ```
