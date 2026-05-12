@@ -266,6 +266,10 @@ func validateSymlinkEntry(e agentsSymlinkEntry, renderDests map[string]bool, see
 		return fmt.Errorf("%sto is required and must not be empty", prefix)
 	}
 
+	if filepath.IsAbs(e.To) {
+		return fmt.Errorf("%sto must be relative (got absolute path %q)", prefix, e.To)
+	}
+
 	// Must match one of the render destinations (keys are pre-cleaned in validateRenderEntry)
 	if !renderDests[filepath.Clean(e.To)] {
 		return fmt.Errorf("%ssymlink to %q does not match any render destination", prefix, e.To)
@@ -484,7 +488,7 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	}
 
 	// Resolve template pack
-	pack, err := resolveAgentsTemplatePack(svc, projectRoot, name)
+	pack, err := resolveAgentsTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return err
 	}

@@ -1261,6 +1261,168 @@ services:
 	}
 }
 
+// TestNewRenderAICmd_explicitServiceNoDir tests error when service has no dir configured.
+func TestNewRenderAICmd_explicitServiceNoDir(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    container: test-api
+`)
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	err := cmd.RunE(cmd, []string{"api"})
+	if err == nil {
+		t.Fatal("expected error for service with no dir")
+	}
+	if !strings.Contains(err.Error(), "no dir") {
+		t.Errorf("error should mention 'no dir': %v", err)
+	}
+}
+
+// TestSelectAgentsServices tests the service selection and collision resolution logic.
+func TestSelectAgentsServices(t *testing.T) {
+	falseVal := false
+	trueVal := true
+
+	tests := []struct {
+		name           string
+		services       map[string]config.ServiceConfig
+		wantSelected   []string
+		wantSkippedMap map[string]skippedService
+	}{
+		{
+			name: "all enabled distinct dirs - all kept",
+			services: map[string]config.ServiceConfig{
+				"svc1": {Type: "app", Enabled: true, Dir: "./services/svc1"},
+				"svc2": {Type: "db", Enabled: true, Dir: "./services/svc2"},
+			},
+			wantSelected: []string{"svc1", "svc2"},
+		},
+		{
+			name: "service with Enabled=false dropped as service-disabled",
+			services: map[string]config.ServiceConfig{
+				"off": {Type: "app", Enabled: false, Dir: "./services/off"},
+				"on":  {Type: "app", Enabled: true, Dir: "./services/on"},
+			},
+			wantSelected: []string{"on"},
+			wantSkippedMap: map[string]skippedService{
+				"off": {Name: "off", Reason: "service-disabled"},
+			},
+		},
+		{
+			name: "explicit ai_docs.enabled=false drops service as ai-disabled",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: true, Dir: "./services/main"},
+				"aux":  {Type: "app", Enabled: true, Dir: "./services/aux", AIDocs: config.ServiceAIDocsConfig{Enabled: &falseVal}},
+			},
+			wantSelected: []string{"main"},
+			wantSkippedMap: map[string]skippedService{
+				"aux": {Name: "aux", Reason: "ai-disabled"},
+			},
+		},
+		{
+			name: "ai_docs.enabled=true (explicit) keeps service",
+			services: map[string]config.ServiceConfig{
+				"main": {Type: "app", Enabled: true, Dir: "./services/main", AIDocs: config.ServiceAIDocsConfig{Enabled: &trueVal}},
+			},
+			wantSelected: []string{"main"},
+		},
+		{
+			name: "service with empty dir dropped as empty-dir",
+			services: map[string]config.ServiceConfig{
+				"nodir": {Type: "app", Enabled: true, Dir: ""},
+				"main":  {Type: "app", Enabled: true, Dir: "./services/main"},
+			},
+			wantSelected: []string{"main"},
+			wantSkippedMap: map[string]skippedService{
+				"nodir": {Name: "nodir", Reason: "empty-dir"},
+			},
+		},
+		{
+			name: "two services share dir - child extends parent - child wins",
+			services: map[string]config.ServiceConfig{
+				"main": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+				},
+				"main-debug": {
+					Type:    "app",
+					Enabled: true,
+					Dir:     "./services/main",
+					Extends: "main",
+				},
+			},
+			wantSelected: []string{"main-debug"},
+			wantSkippedMap: map[string]skippedService{
+				"main": {
+					Name:   "main",
+					Reason: "lost-collision",
+					Dir:    filepath.Join(".", "services", "main"),
+					Winner: "main-debug",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			selected, skipped := selectAgentsServices(tt.services)
+
+			if len(selected) != len(tt.wantSelected) {
+				t.Errorf("selected count: want %d, got %d (%v)", len(tt.wantSelected), len(selected), selected)
+			}
+			for i, name := range selected {
+				if i < len(tt.wantSelected) && name != tt.wantSelected[i] {
+					t.Errorf("selected[%d]: want %q, got %q", i, tt.wantSelected[i], name)
+				}
+			}
+
+			skippedMap := make(map[string]skippedService)
+			for _, s := range skipped {
+				skippedMap[s.Name] = s
+			}
+			if len(skippedMap) != len(tt.wantSkippedMap) {
+				t.Errorf("skipped count: want %d, got %d (%v)", len(tt.wantSkippedMap), len(skippedMap), skippedMap)
+			}
+			for name, want := range tt.wantSkippedMap {
+				got, ok := skippedMap[name]
+				if !ok {
+					t.Errorf("skipped[%q]: expected but not found", name)
+					continue
+				}
+				if got.Reason != want.Reason {
+					t.Errorf("skipped[%q].Reason: want %q, got %q", name, want.Reason, got.Reason)
+				}
+				if want.Reason == "lost-collision" {
+					if got.Dir != want.Dir {
+						t.Errorf("skipped[%q].Dir: want %q, got %q", name, want.Dir, got.Dir)
+					}
+					if got.Winner != want.Winner {
+						t.Errorf("skipped[%q].Winner: want %q, got %q", name, want.Winner, got.Winner)
+					}
+				}
+			}
+		})
+	}
+}
+
 // TestNewRenderAICmd_existingRegularFile tests error when regular file exists at symlink target.
 func TestNewRenderAICmd_existingRegularFile(t *testing.T) {
 	projectRoot := t.TempDir()
