@@ -321,6 +321,10 @@ func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName s
 			if !fi.IsDir() {
 				return "", fmt.Errorf("ide template pack %q is not a directory", svc.IDE.Template)
 			}
+			// Guard against symlinks in parent path components (e.g. devbox/templates/ide -> /tmp/outside)
+			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "ide template pack"); err != nil {
+				return "", err
+			}
 			return candidate, nil
 		}
 		// Any error other than not-exists is a hard error
@@ -343,6 +347,10 @@ func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName s
 			}
 			if !fi.IsDir() {
 				return "", fmt.Errorf("ide template pack %q is not a directory", name)
+			}
+			// Guard against symlinks in parent path components (e.g. devbox/templates/ide -> /tmp/outside)
+			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "ide template pack"); err != nil {
+				return "", err
 			}
 			return candidate, nil
 		}

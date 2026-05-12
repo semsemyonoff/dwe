@@ -50,6 +50,10 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 			if !fi.IsDir() {
 				return "", fmt.Errorf("agents template pack %q is not a directory", svc.AIDocs.Template)
 			}
+			// Guard against symlinks in parent path components (e.g. devbox/templates/agents -> /tmp/outside)
+			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "agents template pack"); err != nil {
+				return "", err
+			}
 			return candidate, nil
 		}
 		// Any error other than not-exists is a hard error
@@ -72,6 +76,10 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 			}
 			if !fi.IsDir() {
 				return "", fmt.Errorf("agents template pack %q is not a directory", name)
+			}
+			// Guard against symlinks in parent path components (e.g. devbox/templates/agents -> /tmp/outside)
+			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "agents template pack"); err != nil {
+				return "", err
 			}
 			return candidate, nil
 		}
@@ -264,6 +272,11 @@ func validateSymlinkEntry(e agentsSymlinkEntry, renderDests map[string]bool, see
 		return fmt.Errorf("%sduplicate symlink link %q", prefix, e.Link)
 	}
 	seenLinks[cleaned] = true
+
+	// Reject link paths that collide with render destinations: a path cannot be both a rendered file and a symlink
+	if renderDests[cleaned] {
+		return fmt.Errorf("%slink %q collides with a render destination; a path cannot be both a rendered file and a symlink", prefix, e.Link)
+	}
 
 	// Validate `to`
 	if e.To == "" {
