@@ -93,11 +93,11 @@ Move shared filesystem-guard helpers out of `internal/command/ide.go` to a small
 
 Add schema + accessor + extends-inheritance, mirroring the existing `ide` block exactly.
 
-- [ ] add `ServiceAIDocsConfig{ Enabled *bool, Template string }` in `internal/config/devbox.go` next to `ServiceIDEConfig`
-- [ ] add `AIDocs ServiceAIDocsConfig` field on `ServiceConfig` with `yaml:"ai_docs"`
-- [ ] add `(s ServiceConfig) AIDocsRenderEnabled() bool` — defaults to `true` for any service type when `Enabled` is nil
-- [ ] add `(s ServiceConfig) AIDocsRenderEnabledExplicit() (enabled, explicit bool)` mirroring `IDERenderEnabledExplicit`
-- [ ] extend the inheritance block in `LoadServicesConfig` (around `internal/config/devbox.go:645`):
+- [x] add `ServiceAIDocsConfig{ Enabled *bool, Template string }` in `internal/config/devbox.go` next to `ServiceIDEConfig`
+- [x] add `AIDocs ServiceAIDocsConfig` field on `ServiceConfig` with `yaml:"ai_docs"`
+- [x] add `(s ServiceConfig) AIDocsRenderEnabled() bool` — defaults to `true` for any service type when `Enabled` is nil
+- [x] add `(s ServiceConfig) AIDocsRenderEnabledExplicit() (enabled, explicit bool)` mirroring `IDERenderEnabledExplicit`
+- [x] extend the inheritance block in `LoadServicesConfig` (around `internal/config/devbox.go:645`):
   ```go
   if svc.AIDocs.Enabled == nil && parent.AIDocs.Enabled != nil {
       v := *parent.AIDocs.Enabled
@@ -107,7 +107,7 @@ Add schema + accessor + extends-inheritance, mirroring the existing `ide` block 
       svc.AIDocs.Template = parent.AIDocs.Template
   }
   ```
-- [ ] write tests in `internal/config/devbox_test.go`:
+- [x] write tests in `internal/config/devbox_test.go`:
   - default: `Enabled` nil → `AIDocsRenderEnabled()` true
   - explicit `enabled: false` → false, explicit=true
   - explicit `enabled: true` → true, explicit=true
@@ -115,7 +115,7 @@ Add schema + accessor + extends-inheritance, mirroring the existing `ide` block 
   - **inheritance**: child with empty `ai_docs` inherits parent's `Enabled` pointer + `Template` string
   - **inheritance override**: child with explicit `enabled: false` wins over parent's `enabled: true`
   - **inheritance via multi-hop**: grandchild → child → parent template propagation (topo-sort already gives parent-first order)
-- [ ] run `make test && make lint` — must pass before next task
+- [x] run `make test && make lint` — must pass before next task
 
 ### Task 3: Implement agents template-pack resolver
 

@@ -292,6 +292,12 @@ type ServiceIDEConfig struct {
 	Template string `yaml:"template"`
 }
 
+// ServiceAIDocsConfig holds settings for hub-level agentic doc rendering.
+type ServiceAIDocsConfig struct {
+	Enabled  *bool  `yaml:"enabled"`
+	Template string `yaml:"template"`
+}
+
 // ServiceConfig describes a single application service.
 // Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
 // from the 3-layer config merge (mandatory services are always enabled).
@@ -310,6 +316,7 @@ type ServiceConfig struct {
 	Compose         []string             `yaml:"compose"`
 	CLI             ServiceCLIConfig     `yaml:"cli"`
 	IDE             ServiceIDEConfig     `yaml:"ide"`
+	AIDocs          ServiceAIDocsConfig  `yaml:"ai_docs"`
 }
 
 // IDERenderEnabledExplicit returns the IDE render enabled state and whether it was explicitly set.
@@ -326,6 +333,23 @@ func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) 
 // It's a simple wrapper around IDERenderEnabledExplicit that discards the explicit flag.
 func (s ServiceConfig) IDERenderEnabled() bool {
 	enabled, _ := s.IDERenderEnabledExplicit()
+	return enabled
+}
+
+// AIDocsRenderEnabledExplicit returns the AI docs render enabled state and whether it was explicitly set.
+// If Enabled is non-nil, returns its value and true.
+// If Enabled is nil, returns true (default enabled for all service types) and false (not explicit).
+func (s ServiceConfig) AIDocsRenderEnabledExplicit() (enabled bool, explicit bool) {
+	if s.AIDocs.Enabled != nil {
+		return *s.AIDocs.Enabled, true
+	}
+	return true, false
+}
+
+// AIDocsRenderEnabled returns whether this service should participate in AI docs rendering.
+// It's a simple wrapper around AIDocsRenderEnabledExplicit that discards the explicit flag.
+func (s ServiceConfig) AIDocsRenderEnabled() bool {
+	enabled, _ := s.AIDocsRenderEnabledExplicit()
 	return enabled
 }
 
@@ -649,6 +673,14 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		}
 		if svc.IDE.Template == "" {
 			svc.IDE.Template = parent.IDE.Template
+		}
+		// AI docs block inheritance: child inherits from parent if not explicitly set.
+		if svc.AIDocs.Enabled == nil && parent.AIDocs.Enabled != nil {
+			v := *parent.AIDocs.Enabled
+			svc.AIDocs.Enabled = &v
+		}
+		if svc.AIDocs.Template == "" {
+			svc.AIDocs.Template = parent.AIDocs.Template
 		}
 		f.Services[name] = svc
 	}
