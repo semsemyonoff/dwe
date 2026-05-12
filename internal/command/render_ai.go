@@ -225,14 +225,14 @@ func validateRenderEntry(e agentsRenderEntry, absPackDir string, renderDests map
 		return fmt.Errorf("%sto must not escape hub directory (resolved to %q)", prefix, cleaned)
 	}
 
-	// Check for duplicates
-	if seenDests[e.To] {
+	// Check for duplicates using cleaned form so "AGENTS.md" and "./AGENTS.md" are treated as equal.
+	if seenDests[cleaned] {
 		return fmt.Errorf("%sduplicate render destination %q", prefix, e.To)
 	}
-	seenDests[e.To] = true
+	seenDests[cleaned] = true
 
 	// Track for symlink validation (cleaned so fast-path lookup in validateSymlinkEntry works)
-	renderDests[filepath.Clean(e.To)] = true
+	renderDests[cleaned] = true
 
 	return nil
 }
