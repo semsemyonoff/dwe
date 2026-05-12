@@ -285,3 +285,376 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 		t.Errorf("expected %q (service-name), got %q", expected, pack)
 	}
 }
+
+// TestLoadAgentsManifest_valid loads a valid manifest successfully.
+func TestLoadAgentsManifest_valid(t *testing.T) {
+	packDir := t.TempDir()
+	manifestContent := `render:
+  - from: AGENTS.md.tmpl
+    to: AGENTS.md
+symlinks:
+  - link: CLAUDE.md
+    to: AGENTS.md
+`
+	manifestPath := filepath.Join(packDir, "manifest.yml")
+	if err := os.WriteFile(manifestPath, []byte(manifestContent), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	m, err := loadAgentsManifest(packDir)
+	if err != nil {
+		t.Fatalf("loadAgentsManifest: %v", err)
+	}
+
+	if len(m.Render) != 1 || m.Render[0].From != "AGENTS.md.tmpl" || m.Render[0].To != "AGENTS.md" {
+		t.Errorf("unexpected render entry: %+v", m.Render)
+	}
+
+	if len(m.Symlinks) != 1 || m.Symlinks[0].Link != "CLAUDE.md" || m.Symlinks[0].To != "AGENTS.md" {
+		t.Errorf("unexpected symlink entry: %+v", m.Symlinks)
+	}
+}
+
+// TestLoadAgentsManifest_missing reports error when manifest missing.
+func TestLoadAgentsManifest_missing(t *testing.T) {
+	packDir := t.TempDir()
+
+	_, err := loadAgentsManifest(packDir)
+	if err == nil {
+		t.Fatal("expected error for missing manifest")
+	}
+	if !strings.Contains(err.Error(), "manifest") {
+		t.Errorf("error should mention manifest: %v", err)
+	}
+}
+
+// TestLoadAgentsManifest_unknownField rejects unknown YAML fields.
+func TestLoadAgentsManifest_unknownField(t *testing.T) {
+	packDir := t.TempDir()
+	manifestContent := `render:
+  - from: test.tmpl
+    to: test
+unknown_field: value
+`
+	manifestPath := filepath.Join(packDir, "manifest.yml")
+	if err := os.WriteFile(manifestPath, []byte(manifestContent), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err := loadAgentsManifest(packDir)
+	if err == nil {
+		t.Fatal("expected error for unknown field")
+	}
+}
+
+// TestValidateAgentsManifest_empty rejects empty manifest.
+func TestValidateAgentsManifest_empty(t *testing.T) {
+	m := &agentsManifest{}
+	err := validateAgentsManifest(m, t.TempDir())
+	if err == nil {
+		t.Fatal("expected error for empty manifest")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("error should mention empty: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_fromEscaping rejects `from` escaping pack dir.
+func TestValidateAgentsManifest_fromEscaping(t *testing.T) {
+	packDir := t.TempDir()
+	// Create a file outside the pack
+	outsideDir := filepath.Dir(packDir)
+	outsideFile := filepath.Join(outsideDir, "outside.tmpl")
+	if err := os.WriteFile(outsideFile, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "../outside.tmpl", To: "test"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for escaping from")
+	}
+	if !strings.Contains(err.Error(), "escape") {
+		t.Errorf("error should mention escape: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_fromNoTmplSuffix rejects `from` not ending in .tmpl.
+func TestValidateAgentsManifest_fromNoTmplSuffix(t *testing.T) {
+	packDir := t.TempDir()
+	file := filepath.Join(packDir, "test.txt")
+	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "test.txt", To: "test"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for non-.tmpl from")
+	}
+	if !strings.Contains(err.Error(), ".tmpl") {
+		t.Errorf("error should mention .tmpl: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_fromNotExist rejects non-existent `from` file.
+func TestValidateAgentsManifest_fromNotExist(t *testing.T) {
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "missing.tmpl", To: "test"},
+		},
+	}
+
+	err := validateAgentsManifest(m, t.TempDir())
+	if err == nil {
+		t.Fatal("expected error for missing from file")
+	}
+	if !strings.Contains(err.Error(), "not exist") {
+		t.Errorf("error should mention not exist: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_fromIsSymlink rejects `from` being a symlink.
+func TestValidateAgentsManifest_fromIsSymlink(t *testing.T) {
+	packDir := t.TempDir()
+	targetFile := filepath.Join(packDir, "target.tmpl")
+	if err := os.WriteFile(targetFile, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	linkPath := filepath.Join(packDir, "link.tmpl")
+	if err := os.Symlink(targetFile, linkPath); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "link.tmpl", To: "test"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for symlink from")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("error should mention symlink: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_fromSymlinkedParent rejects `from` with symlinked parent.
+func TestValidateAgentsManifest_fromSymlinkedParent(t *testing.T) {
+	packDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outsideFile := filepath.Join(outsideDir, "evil.tmpl")
+	if err := os.WriteFile(outsideFile, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+
+	symDir := filepath.Join(packDir, "symdir")
+	if err := os.Symlink(outsideDir, symDir); err != nil {
+		t.Fatalf("create symlink dir: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "symdir/evil.tmpl", To: "test"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for symlinked parent directory")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("error should mention symlink: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_fromIsDirectory rejects `from` being a directory.
+func TestValidateAgentsManifest_fromIsDirectory(t *testing.T) {
+	packDir := t.TempDir()
+	subdir := filepath.Join(packDir, "subdir.tmpl")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatalf("create subdir: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "subdir.tmpl", To: "test"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for directory from")
+	}
+	if !strings.Contains(err.Error(), "regular file") {
+		t.Errorf("error should mention regular file: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_toEscaping rejects `to` escaping hub dir.
+func TestValidateAgentsManifest_toEscaping(t *testing.T) {
+	packDir := t.TempDir()
+	file := filepath.Join(packDir, "test.tmpl")
+	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "test.tmpl", To: "../escape"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for escaping to")
+	}
+	if !strings.Contains(err.Error(), "escape") {
+		t.Errorf("error should mention escape: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_symlinkToNotMatching rejects symlink `to` not matching render.
+func TestValidateAgentsManifest_symlinkToNotMatching(t *testing.T) {
+	packDir := t.TempDir()
+	file := filepath.Join(packDir, "test.tmpl")
+	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "test.tmpl", To: "AGENTS.md"},
+		},
+		Symlinks: []agentsSymlinkEntry{
+			{Link: "CLAUDE.md", To: "nonexistent.md"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for symlink to not matching render")
+	}
+	if !strings.Contains(err.Error(), "does not match") {
+		t.Errorf("error should mention not matching: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_duplicateRenderDest rejects duplicate render destinations.
+func TestValidateAgentsManifest_duplicateRenderDest(t *testing.T) {
+	packDir := t.TempDir()
+	file1 := filepath.Join(packDir, "file1.tmpl")
+	file2 := filepath.Join(packDir, "file2.tmpl")
+	if err := os.WriteFile(file1, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write file1: %v", err)
+	}
+	if err := os.WriteFile(file2, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write file2: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "file1.tmpl", To: "AGENTS.md"},
+			{From: "file2.tmpl", To: "AGENTS.md"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for duplicate render destination")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Errorf("error should mention duplicate: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_duplicateSymlinkLink rejects duplicate symlink links.
+func TestValidateAgentsManifest_duplicateSymlinkLink(t *testing.T) {
+	packDir := t.TempDir()
+	file := filepath.Join(packDir, "test.tmpl")
+	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "test.tmpl", To: "AGENTS.md"},
+		},
+		Symlinks: []agentsSymlinkEntry{
+			{Link: "CLAUDE.md", To: "AGENTS.md"},
+			{Link: "CLAUDE.md", To: "AGENTS.md"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err == nil {
+		t.Fatal("expected error for duplicate symlink link")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Errorf("error should mention duplicate: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_nestedPaths allows nested `to`/`link` paths.
+func TestValidateAgentsManifest_nestedPaths(t *testing.T) {
+	packDir := t.TempDir()
+	file := filepath.Join(packDir, "test.tmpl")
+	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "test.tmpl", To: ".claude/AGENTS.md"},
+		},
+		Symlinks: []agentsSymlinkEntry{
+			{Link: ".claude/CLAUDE.md", To: ".claude/AGENTS.md"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err != nil {
+		t.Errorf("nested paths should be allowed: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_validFull tests a complete valid manifest.
+func TestValidateAgentsManifest_validFull(t *testing.T) {
+	packDir := t.TempDir()
+	file1 := filepath.Join(packDir, "agents.tmpl")
+	file2 := filepath.Join(packDir, "claude.tmpl")
+	if err := os.WriteFile(file1, []byte("agents"), 0o644); err != nil {
+		t.Fatalf("write file1: %v", err)
+	}
+	if err := os.WriteFile(file2, []byte("claude"), 0o644); err != nil {
+		t.Fatalf("write file2: %v", err)
+	}
+
+	m := &agentsManifest{
+		Render: []agentsRenderEntry{
+			{From: "agents.tmpl", To: "AGENTS.md"},
+			{From: "claude.tmpl", To: "CLAUDE.md"},
+		},
+		Symlinks: []agentsSymlinkEntry{
+			{Link: ".claude/AGENTS.md", To: "AGENTS.md"},
+		},
+	}
+
+	err := validateAgentsManifest(m, packDir)
+	if err != nil {
+		t.Errorf("valid manifest should not error: %v", err)
+	}
+}

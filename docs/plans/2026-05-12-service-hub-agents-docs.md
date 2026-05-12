@@ -131,12 +131,12 @@ Mirror `resolveIDETemplatePack` for agents: explicit-strict + implicit chain (se
 
 Manifest schema declares what to render and what to symlink. Strict YAML decode per repo convention for user-edited config.
 
-- [ ] in `internal/command/render_ai.go` define:
+- [x] in `internal/command/render_ai.go` define:
   - `agentsManifest{ Render []agentsRenderEntry, Symlinks []agentsSymlinkEntry }`
   - `agentsRenderEntry{ From, To string }` (yaml: `from`, `to`)
   - `agentsSymlinkEntry{ Link, To string }` (yaml: `link`, `to`)
-- [ ] add `loadAgentsManifest(packDir string) (*agentsManifest, error)` — open `<packDir>/manifest.yml`, decode with `yaml.Decoder.KnownFields(true)`. Manifest missing is a hard error.
-- [ ] add `validateAgentsManifest(m *agentsManifest, packDir string) error`:
+- [x] add `loadAgentsManifest(packDir string) (*agentsManifest, error)` — open `<packDir>/manifest.yml`, decode with `yaml.Decoder.KnownFields(true)`. Manifest missing is a hard error.
+- [x] add `validateAgentsManifest(m *agentsManifest, packDir string) error`:
   - reject **both** lists empty (no-op manifest is almost certainly a mistake)
   - for each `render`:
     - `from`: must be relative, end in `.tmpl`, must not escape `packDir`
@@ -148,7 +148,7 @@ Manifest schema declares what to render and what to symlink. Strict YAML decode 
     - `to`: must match one of the manifest's `render to` paths exactly (cleaned-form comparison). **No "exists on disk" fallback** (per locked decision §2).
   - reject duplicate `render to` paths (two renders writing the same destination)
   - reject duplicate `symlink link` paths
-- [ ] write tests in `internal/command/render_ai_test.go` with fixture packs in `internal/command/testdata/agents/`:
+- [x] write tests in `internal/command/render_ai_test.go` with fixture packs in `internal/command/testdata/agents/`:
   - valid manifest (render + symlinks)
   - unknown YAML field rejected
   - `from` escaping pack dir
@@ -161,7 +161,7 @@ Manifest schema declares what to render and what to symlink. Strict YAML decode 
   - empty manifest rejected
   - duplicate render destinations rejected
   - duplicate symlink links rejected
-- [ ] run `make test && make lint` — must pass before next task
+- [x] run `make test && make lint` — must pass before next task
 
 ### Task 5: Implement render + symlink writers
 
