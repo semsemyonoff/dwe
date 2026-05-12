@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -119,6 +120,9 @@ func loadAgentsManifest(packDir string) (*agentsManifest, error) {
 	dec := yaml.NewDecoder(f)
 	dec.KnownFields(true)
 	if err := dec.Decode(&m); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("agents manifest %s is empty", manifestPath)
+		}
 		return nil, fmt.Errorf("decode agents manifest: %w", err)
 	}
 
@@ -538,7 +542,7 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 // a list of services that were skipped with reason-specific context.
 //
 // Selection logic mirrors IDE rendering:
-//  1. Gate on both flags: services where svc.Enabled==false or svc.AIDocsRenderEnabled()==false are dropped.
+//  1. Gate on both flags: services where svc.Enabled==false or ai_docs.enabled is explicitly false are dropped.
 //  2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
 //  3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
 //     share the same Dir, the deepest extends chain wins; ties are broken lexicographically.
@@ -552,7 +556,7 @@ func selectAgentsServices(services map[string]config.ServiceConfig) (selected []
 			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "service-disabled"})
 			continue
 		}
-		if aiDocsEnabled, _ := svc.AIDocsRenderEnabledExplicit(); !aiDocsEnabled {
+		if !svc.AIDocsRenderEnabled() {
 			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "ai-disabled"})
 			continue
 		}
@@ -694,7 +698,7 @@ Services that participate in agents docs rendering:
 				serviceNames = selected
 
 				// Emit warnings only for actionable skips; policy-based skips
-				// (service-disabled, ai-disabled, ai-policy) are expected and not reported.
+				// (service-disabled, ai-disabled) are expected and not reported.
 				for _, skip := range skipped {
 					switch skip.Reason {
 					case "empty-dir":

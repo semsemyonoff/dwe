@@ -20,7 +20,7 @@ import (
 // skippedService carries information about a service that was skipped during IDE rendering.
 type skippedService struct {
 	Name   string // service name
-	Reason string // "service-disabled" | "ide-disabled" | "ide-policy" | "empty-dir" | "lost-collision"
+	Reason string // "service-disabled" | "ide-disabled" | "ide-policy" | "ai-disabled" | "empty-dir" | "lost-collision"
 	Dir    string // set for "lost-collision" only
 	Winner string // set for "lost-collision" only (name of the winning service)
 }

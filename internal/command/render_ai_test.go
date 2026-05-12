@@ -817,6 +817,39 @@ func TestRenderAgentsTemplateFile_escapingDest(t *testing.T) {
 	}
 }
 
+// TestRenderAgentsTemplateFile_symlinkInDestDir rejects a destination whose
+// directory path contains a symlink component.
+func TestRenderAgentsTemplateFile_symlinkInDestDir(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	// Create a symlink at services/api/.claude → /tmp/somewhere
+	symlinkDir := filepath.Join(hubDir, ".claude")
+	realTarget := t.TempDir()
+	if err := os.Symlink(realTarget, symlinkDir); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
+	if err := os.WriteFile(templatePath, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+
+	data := agentsTemplateData{}
+	dest := ".claude/AGENTS.md"
+
+	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected error when destination dir contains a symlink component")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("error should mention symlink: %v", err)
+	}
+}
+
 // TestEnsureRelativeSymlink_fresh creates a new symlink.
 func TestEnsureRelativeSymlink_fresh(t *testing.T) {
 	hubDir := t.TempDir()
