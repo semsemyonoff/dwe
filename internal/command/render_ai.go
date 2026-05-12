@@ -255,11 +255,11 @@ func validateSymlinkEntry(e agentsSymlinkEntry, renderDests map[string]bool, see
 		return fmt.Errorf("%slink must not escape hub directory (resolved to %q)", prefix, cleaned)
 	}
 
-	// Check for duplicates
-	if seenLinks[e.Link] {
+	// Check for duplicates using cleaned form so "CLAUDE.md" and "./CLAUDE.md" are treated as equal.
+	if seenLinks[cleaned] {
 		return fmt.Errorf("%sduplicate symlink link %q", prefix, e.Link)
 	}
-	seenLinks[e.Link] = true
+	seenLinks[cleaned] = true
 
 	// Validate `to`
 	if e.To == "" {
