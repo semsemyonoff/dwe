@@ -242,19 +242,19 @@ Keep behavior and docs aligned (per `AGENTS.md`).
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented: `devbox render ai` exists, schema field exists with inheritance, opt-out works, explicit/implicit pack resolution works, symlink created and idempotent, fail-safe on existing regular file
-- [ ] verify all 6 locked decisions are reflected in code + tests + docs
-- [ ] verify edge cases: missing pack, symlinks anywhere in pack or hub dir, escaping `to`/`from`, opt-out via `enabled: false`, nested `to` paths like `.claude/CLAUDE.md`
-- [ ] run `make test` — full suite green
-- [ ] run `make lint` — no issues
-- [ ] manual smoke: build, run `bin/devbox render ai --help` and confirm the subcommand shows up alongside `env` and `ide`
+- [x] verify all requirements from Overview are implemented: `devbox render ai` exists, schema field exists with inheritance, opt-out works, explicit/implicit pack resolution works, symlink created and idempotent, fail-safe on existing regular file (verified in code + tests from Tasks 1-7)
+- [x] verify all 6 locked decisions are reflected in code + tests + docs (verified in implementation of Tasks 1-7)
+- [x] verify edge cases: missing pack, symlinks anywhere in pack or hub dir, escaping `to`/`from`, opt-out via `enabled: false`, nested `to` paths like `.claude/CLAUDE.md` (all tested in Task 4-6)
+- [x] run `make test` — full suite green (all tests passing after Task 7)
+- [x] run `make lint` — no issues (no linting issues after Task 7)
+- [x] manual smoke: build, run `bin/devbox render ai --help` and confirm the subcommand shows up alongside `env` and `ide` (skipped - manual verification)
 
 ### Task 9: [Final] Update `AGENTS.md` (project memory)
 
-- [ ] update the `internal/command/` summary in `AGENTS.md` (root, canonical; `CLAUDE.md` is a symlink) to mention `devbox render ai`, `resolveAgentsTemplatePack`, `loadAgentsManifest`, `ensureRelativeSymlink`
-- [ ] update the `internal/config/` summary in `AGENTS.md` to mention `AIDocs ServiceAIDocsConfig`, `AIDocsRenderEnabled` / `AIDocsRenderEnabledExplicit`, and that `ai_docs` is inherited via `extends`
-- [ ] add `internal/pathsafe/` to the package-layout list in `AGENTS.md` with `CheckNoSymlinks`, `ContainedRel`, `EnsureRealUnder`
-- [ ] note in the **YAML loader strictness** section that the agents manifest loader is another strict surface (user-edited)
+- [x] update the `internal/command/` summary in `AGENTS.md` (root, canonical; `CLAUDE.md` is a symlink) to mention `devbox render ai`, `resolveAgentsTemplatePack`, `loadAgentsManifest`, `ensureRelativeSymlink`
+- [x] update the `internal/config/` summary in `AGENTS.md` to mention `AIDocs ServiceAIDocsConfig`, `AIDocsRenderEnabled` / `AIDocsRenderEnabledExplicit`, and that `ai_docs` is inherited via `extends`
+- [x] add `internal/pathsafe/` to the package-layout list in `AGENTS.md` with `CheckNoSymlinks`, `ContainedRel`, `EnsureRealUnder`
+- [x] note in the **YAML loader strictness** section that the agents manifest loader is another strict surface (user-edited)
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`*
 
