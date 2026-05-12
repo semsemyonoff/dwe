@@ -84,6 +84,7 @@ flowchart LR
 
 - `devbox render env` — generate `.env` from the merged config export rules
 - `devbox render ide` — generate IDE configs
+- `devbox render ai` — generate hub-level AGENTS.md and CLAUDE.md symlinks
 - `devbox info` — render the info dashboard from `info.yml`
 - `devbox deploy plan` — show the resolved deploy pipeline
 - `devbox compose files` — show active compose file list (diagnostic)

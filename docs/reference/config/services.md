@@ -13,6 +13,7 @@ Service declarations for the devbox project.
   - [`dirs` field](#dirs-field)
   - [`cli` block](#cli-block)
   - [`ide` block](#ide-block)
+  - [`ai_docs` block](#ai_docs-block)
 - [Inheritance via `extends`](#inheritance-via-extends)
 - [Example: full service definition](#example-full-service-definition)
 - [Common pitfalls](#common-pitfalls)
@@ -67,6 +68,9 @@ services:
     ide:
       enabled: true|false          # enable IDE rendering for this service
       template: <template-dir-name> # service-specific template directory
+    ai_docs:
+      enabled: true|false          # enable agentic docs rendering for this service
+      template: <template-dir-name> # service-specific template directory
 ```
 
 ## Field reference
@@ -85,6 +89,7 @@ services:
 | `depends_on` | list | no | Ordered dependency on other services (affects deploy order) |
 | `compose` | list | no | Additional compose overlay files active when service is enabled |
 | `ide` | block | no | IDE rendering configuration (see [`ide` block](#ide-block)) |
+| `ai_docs` | block | no | Agent docs rendering configuration (see [`ai_docs` block](#ai_docs-block)) |
 
 ### `configs` field
 
@@ -283,6 +288,114 @@ services/main/
 
 Note that `main` is skipped due to collision (same `dir` as `main-debug`), so only `main-debug`'s template pack is rendered.
 
+### `ai_docs` block
+
+Controls whether and how agentic documentation rendering generates hub-level docs for this service from template packs.
+
+```yaml
+ai_docs:
+  enabled: true          # opt in to agent docs rendering for this service
+  template: custom-docs  # use custom template pack
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `true` (for all service types) | Include this service in `devbox render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
+| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/agents/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then default packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
+
+#### Agent docs activation rules
+
+Agent docs rendering requires **both** activation and policy conditions:
+
+1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; mandatory services are always enabled).
+2. **Agent docs policy**: The `ai_docs.enabled` setting must be `true`.
+
+A service is rendered only if both are satisfied. Disabling either suppresses rendering.
+
+**Default policy**: All services default to `ai_docs.enabled: true` (opt-out). Set `enabled: false` to suppress agent docs generation for a service.
+
+#### Template pack resolution
+
+`devbox render ai` searches for template packs in this order; the first match is used:
+
+1. `devbox/templates/agents/<template>/` (if `template` is set) — **strict**: pack must exist
+2. `devbox/templates/agents/<service-name>/` (if `template` is not set)
+3. `devbox/templates/agents/default/` (final fallback)
+
+If none exist, rendering is skipped with an error.
+
+Once a pack is selected, the command reads the pack's `manifest.yml` to determine what files to render and what symlinks to create. The manifest declares:
+
+- `render`: source template files (must end in `.tmpl`) and their destination paths
+- `symlinks`: relative symlinks to create inside the service hub (must reference outputs from `render`)
+
+All destinations are relative to the service hub directory (e.g. `services/main/`). Nested paths are allowed (e.g. `.claude/CLAUDE.md`).
+
+#### Collision resolution
+
+When multiple services share the same `dir` (e.g., `main` and `main-debug` both pointing to `./services/main`), only the most-derived service (deepest in the `extends` chain) renders agent docs. The others are reported as skipped with a collision warning.
+
+#### Worked example: template pack layout
+
+This example shows how agent template packs are organized and the resulting files generated in the service directory.
+
+**Project structure:**
+
+```
+devbox/services.yml
+devbox/templates/agents/
+  default/
+    manifest.yml
+    AGENTS.md.tmpl
+    .claude/CLAUDE.md.tmpl
+```
+
+**Manifest (`devbox/templates/agents/default/manifest.yml`):**
+
+```yaml
+render:
+  - from: AGENTS.md.tmpl
+    to: AGENTS.md
+  - from: .claude/CLAUDE.md.tmpl
+    to: .claude/CLAUDE.md
+
+symlinks:
+  - link: CLAUDE.md
+    to: AGENTS.md
+```
+
+**Template example (`AGENTS.md.tmpl`):**
+
+```markdown
+# {{.Service}} Service Hub
+
+This is the {{.Service}} service running inside a devbox-managed hub.
+The application source code is at `src/`.
+
+Service container: {{.ServiceCfg.Container}}
+Workspace root: {{.ServiceCfg.DirInternal}}
+```
+
+**Service definitions (devbox/services.yml):**
+
+```yaml
+services:
+  main:
+    type: app
+    dir: ./services/main
+    # ai_docs.enabled defaults to true; renders using default pack
+```
+
+**After `devbox render ai`:**
+
+```
+services/main/
+  AGENTS.md          ← rendered from AGENTS.md.tmpl
+  CLAUDE.md          ← symlink to AGENTS.md
+  .claude/
+    CLAUDE.md        ← rendered from .claude/CLAUDE.md.tmpl
+```
+
 ## Inheritance via `extends`
 
 A child service inherits all fields from the named parent. The child then overrides only the fields it declares. Multi-level chains are supported and resolved in topological order — a grandchild gets the parent's defaults indirectly via its direct parent.
@@ -300,7 +413,7 @@ Resolution rules:
 - `dirs` — parent's list comes first; child entries are appended; duplicates are removed (parent order preserved).
 - `configs` — child wholly replaces parent when set (child has its own list); parent's list is used only when child omits the key.
 - `cli.env` — recursive map merge: parent provides defaults, child overrides per key.
-- `ide.enabled` and `ide.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit IDE settings indirectly.
+- `ide.enabled`, `ide.template`, `ai_docs.enabled`, and `ai_docs.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
 - `container`, `mandatory`, `compose`, `depends_on` — never inherited. A child that omits `container` keeps an empty value, which is rejected at runtime; declare it explicitly. The same applies to `compose` and `depends_on`: each child specifies its own.
 
 ```yaml
@@ -354,6 +467,8 @@ services:
       user: www-data
       workdir: /workspace/src
     ide:
+      enabled: true
+    ai_docs:
       enabled: true
 ```
 

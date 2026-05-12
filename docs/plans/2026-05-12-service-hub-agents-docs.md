@@ -232,13 +232,13 @@ Add the user-facing entry point under the existing `render` parent.
 
 Keep behavior and docs aligned (per `AGENTS.md`).
 
-- [ ] update `docs/reference/config/services.md` — document the `ai_docs:` block: fields (`enabled`, `template`), defaults (enabled=true for all types), opt-out semantics, template pack resolution rules (explicit-strict, implicit chain), inheritance via `extends`. Short YAML example.
-- [ ] in `docs/reference/config/services.md`, add a "Template pack layout" subsection describing `devbox/templates/agents/<name>/{AGENTS.md.tmpl,manifest.yml}` with a minimal example manifest and a short template (so projects have something to copy).
-- [ ] update `docs/reference/config/index.md` — add `devbox render ai — generate hub-level AGENTS.md / CLAUDE.md` to the commands list (currently lines 85-86 list `render env` and `render ide`); otherwise the config-docs navigation goes stale.
-- [ ] **rebuild and regenerate CLI docs**: `make build && bin/devbox docs generate --scope cli`. Without rebuilding first, the generator runs from a stale binary and `devbox_render_ai.md` won't appear. The command is project-independent per CLAUDE.md.
-- [ ] verify `docs/reference/cli/devbox_render_ai.md` is created and `docs/reference/cli/devbox_render.md` is updated to list the new `ai` subcommand alongside `env` and `ide`
-- [ ] check the docs diff — expected files: `docs/reference/config/services.md` (manually edited), `docs/reference/config/index.md` (manually edited), `docs/reference/cli/devbox_render.md` (auto-regenerated), `docs/reference/cli/devbox_render_ai.md` (auto-generated). No other files in `docs/reference/` should change.
-- [ ] run `make test && make lint` — must pass before next task
+- [x] update `docs/reference/config/services.md` — document the `ai_docs:` block: fields (`enabled`, `template`), defaults (enabled=true for all types), opt-out semantics, template pack resolution rules (explicit-strict, implicit chain), inheritance via `extends`. Short YAML example.
+- [x] in `docs/reference/config/services.md`, add a "Template pack layout" subsection describing `devbox/templates/agents/<name>/{AGENTS.md.tmpl,manifest.yml}` with a minimal example manifest and a short template (so projects have something to copy).
+- [x] update `docs/reference/config/index.md` — add `devbox render ai — generate hub-level AGENTS.md / CLAUDE.md` to the commands list (currently lines 85-86 list `render env` and `render ide`); otherwise the config-docs navigation goes stale.
+- [x] **rebuild and regenerate CLI docs**: `make build && bin/devbox docs generate --scope cli`. Without rebuilding first, the generator runs from a stale binary and `devbox_render_ai.md` won't appear. The command is project-independent per CLAUDE.md.
+- [x] verify `docs/reference/cli/devbox_render_ai.md` is created and `docs/reference/cli/devbox_render.md` is updated to list the new `ai` subcommand alongside `env` and `ide`
+- [x] check the docs diff — expected files: `docs/reference/config/services.md` (manually edited), `docs/reference/config/index.md` (manually edited), `docs/reference/cli/devbox_render.md` (auto-regenerated), `docs/reference/cli/devbox_render_ai.md` (auto-generated). No other files in `docs/reference/` should change.
+- [x] run `make test && make lint` — must pass before next task
 
 ### Task 8: Verify acceptance criteria
 

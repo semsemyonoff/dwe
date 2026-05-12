@@ -41,6 +41,7 @@ Generated reference for the `devbox` command tree.
 - [devbox logs](devbox_logs.md) — View compose service logs
 - [devbox ps](devbox_ps.md) — List compose containers
 - [devbox render](devbox_render.md) — Render derived artifacts from the merged devbox config
+  - [devbox render ai](devbox_render_ai.md) — Generate hub-level agents docs from template packs
   - [devbox render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --output <file>)
   - [devbox render ide](devbox_render_ide.md) — Generate IDE configs from template packs
 - [devbox reset](devbox_reset.md) — Reset pipeline commands
