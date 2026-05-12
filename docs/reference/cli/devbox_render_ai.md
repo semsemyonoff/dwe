@@ -4,20 +4,23 @@ Generate hub-level agents docs from template packs
 
 ### Synopsis
 
-Generate agents documentation files (AGENTS.md + CLAUDE.md symlink) for the service hub.
+Generate agents documentation files (such as AGENTS.md, CLAUDE.md) for the service hub.
 
-The command walks the chosen template pack (devbox/templates/ai/<pack-name>/)
-and renders templates + creates symlinks according to the pack's manifest.yml.
+The command reads manifest.yml from the chosen template pack
+(devbox/templates/ai/<pack-name>/) and processes only the entries it declares:
+each render entry is rendered to its destination and each symlink entry is
+created. Files inside the pack that are not referenced by the manifest are
+ignored.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
-  1. If ai_docs.template is set in the service config, use that pack (explicit, strict)
+  1. If ai.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try devbox/templates/ai/<service-name>/
   3. If not found, use devbox/templates/ai/default/
   4. If none exist, return an error
 
 Services that participate in agents docs rendering:
-  - All service types have ai_docs.enabled: true by default
-  - Set ai_docs.enabled: false to opt out
+  - All service types have ai.enabled: true by default
+  - Set ai.enabled: false to opt out
 
 When a service name is given, it is treated as a hub anchor: if multiple
 services share its dir (e.g. main and main-debug both point to services/main),

@@ -22,7 +22,7 @@ import (
 
 // resolveAgentsTemplatePack resolves a template pack directory for a service.
 // Returns the absolute path to a directory under devbox/templates/ai/.
-// Explicit is strict: if svc.AIDocs.Template is set and does not exist, returns an error.
+// Explicit is strict: if svc.AI.Template is set and does not exist, returns an error.
 // Implicit chain: service-name → default, with fallthrough only on ErrNotExist.
 func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, error) {
 	absRoot, err := filepath.Abs(projectRoot)
@@ -31,24 +31,24 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 	}
 
 	// Validate template key and service name
-	if err := validateIDETemplateKey(svc.AIDocs.Template); err != nil {
-		return "", fmt.Errorf("invalid ai_docs.template %q: %w", svc.AIDocs.Template, err)
+	if err := validateIDETemplateKey(svc.AI.Template); err != nil {
+		return "", fmt.Errorf("invalid ai.template %q: %w", svc.AI.Template, err)
 	}
 	if err := validateServiceNameAsPackKey(serviceName); err != nil {
 		return "", fmt.Errorf("service name cannot be used as implicit template pack key: %w", err)
 	}
 
 	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)
-	if svc.AIDocs.Template != "" {
-		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", svc.AIDocs.Template)
+	if svc.AI.Template != "" {
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", svc.AI.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			// Pack exists; validate it
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", fmt.Errorf("agents template pack %q is a symlink; symlinked packs are not supported", svc.AIDocs.Template)
+				return "", fmt.Errorf("agents template pack %q is a symlink; symlinked packs are not supported", svc.AI.Template)
 			}
 			if !fi.IsDir() {
-				return "", fmt.Errorf("agents template pack %q is not a directory", svc.AIDocs.Template)
+				return "", fmt.Errorf("agents template pack %q is not a directory", svc.AI.Template)
 			}
 			// Guard against symlinks in parent path components (e.g. devbox/templates/ai -> /tmp/outside)
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "agents template pack"); err != nil {
@@ -58,10 +58,10 @@ func resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceNam
 		}
 		// Any error other than not-exists is a hard error
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("stat agents template pack %q: %w", svc.AIDocs.Template, err)
+			return "", fmt.Errorf("stat agents template pack %q: %w", svc.AI.Template, err)
 		}
 		// ErrNotExist with explicit template: strict error, no fallthrough
-		return "", fmt.Errorf("agents template pack %q not found (required by explicit ai_docs.template setting)", svc.AIDocs.Template)
+		return "", fmt.Errorf("agents template pack %q not found (required by explicit ai.template setting)", svc.AI.Template)
 	}
 
 	// Implicit chain: service-name → default
@@ -465,7 +465,7 @@ func ensureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string)
 			return true, nil
 		}
 		// Not a symlink (regular file or directory)
-		return false, fmt.Errorf("refuse to overwrite non-symlink file at %s; remove it or disable via ai_docs.enabled: false", linkPath)
+		return false, fmt.Errorf("refuse to overwrite non-symlink file at %s; remove it or disable via ai.enabled: false", linkPath)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, fmt.Errorf("stat %s: %w", linkPath, err)
 	}
@@ -551,22 +551,23 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 // It returns a list of selected service names (sorted lexicographically) and
 // a list of services that were skipped with reason-specific context.
 //
-// Selection logic mirrors IDE rendering:
-//  1. Gate on both flags: services where svc.Enabled==false or ai_docs.enabled is explicitly false are dropped.
+// Selection logic mirrors IDE rendering except for the collision-resolution direction:
+//  1. Gate on both flags: services where svc.Enabled==false or ai.enabled is explicitly false are dropped.
 //  2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
 //  3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
-//     share the same Dir, the deepest extends chain wins; ties are broken lexicographically.
+//     share the same Dir, the **shallowest** extends chain wins (the canonical
+//     hub owner — opposite of IDE's deepest-wins). Ties are broken lexicographically.
 func selectAgentsServices(services map[string]config.ServiceConfig) (selected []string, skipped []skippedService) {
 	var allSkipped []skippedService
 
-	// Step A: gate on both Enabled and AIDocsRenderEnabled.
+	// Step A: gate on both Enabled and AIRenderEnabled.
 	enabled := make(map[string]config.ServiceConfig)
 	for name, svc := range services {
 		if !svc.Enabled {
 			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "service-disabled"})
 			continue
 		}
-		if !svc.AIDocsRenderEnabled() {
+		if !svc.AIRenderEnabled() {
 			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "ai-disabled"})
 			continue
 		}
@@ -643,7 +644,7 @@ func selectAgentsServices(services map[string]config.ServiceConfig) (selected []
 
 // resolveAIHubAnchor treats name as a hub anchor and returns the AI-docs
 // collision winner among services that share name's Dir. Applies the same
-// gating used by selectAgentsServices (Enabled + AIDocsRenderEnabled), then
+// gating used by selectAgentsServices (Enabled + AIRenderEnabled), then
 // picks the shallowest extends chain (ties broken lexicographically) — the
 // canonical hub owner. Returns name unchanged when there are no qualifying
 // siblings. The caller must have already validated name via validateExplicitAIArg.
@@ -659,7 +660,7 @@ func resolveAIHubAnchor(name string, services map[string]config.ServiceConfig) s
 		if !s.Enabled {
 			continue
 		}
-		if !s.AIDocsRenderEnabled() {
+		if !s.AIRenderEnabled() {
 			continue
 		}
 		candidates = append(candidates, n)
@@ -695,8 +696,8 @@ func validateExplicitAIArg(name string, services map[string]config.ServiceConfig
 	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
 	}
-	if !svc.AIDocsRenderEnabled() {
-		return fmt.Errorf("service %q has ai_docs.enabled: false", name)
+	if !svc.AIRenderEnabled() {
+		return fmt.Errorf("service %q has ai.enabled: false", name)
 	}
 	return nil
 }
@@ -709,20 +710,23 @@ func newRenderAICmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ai [service]",
 		Short: "Generate hub-level agents docs from template packs",
-		Long: `Generate agents documentation files (AGENTS.md + CLAUDE.md symlink) for the service hub.
+		Long: `Generate agents documentation files (such as AGENTS.md, CLAUDE.md) for the service hub.
 
-The command walks the chosen template pack (devbox/templates/ai/<pack-name>/)
-and renders templates + creates symlinks according to the pack's manifest.yml.
+The command reads manifest.yml from the chosen template pack
+(devbox/templates/ai/<pack-name>/) and processes only the entries it declares:
+each render entry is rendered to its destination and each symlink entry is
+created. Files inside the pack that are not referenced by the manifest are
+ignored.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
-  1. If ai_docs.template is set in the service config, use that pack (explicit, strict)
+  1. If ai.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try devbox/templates/ai/<service-name>/
   3. If not found, use devbox/templates/ai/default/
   4. If none exist, return an error
 
 Services that participate in agents docs rendering:
-  - All service types have ai_docs.enabled: true by default
-  - Set ai_docs.enabled: false to opt out
+  - All service types have ai.enabled: true by default
+  - Set ai.enabled: false to opt out
 
 When a service name is given, it is treated as a hub anchor: if multiple
 services share its dir (e.g. main and main-debug both point to services/main),

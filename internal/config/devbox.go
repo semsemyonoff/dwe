@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -292,8 +293,12 @@ type ServiceIDEConfig struct {
 	Template string `yaml:"template"`
 }
 
-// ServiceAIDocsConfig holds settings for hub-level agentic doc rendering.
-type ServiceAIDocsConfig struct {
+// ServiceAIConfig holds AI-related settings for a service. The current keys
+// (Enabled, Template) control hub-level agent documentation rendering, which
+// is the primary AI feature in devbox. Future AI subsystems should be nested
+// here as sub-blocks (e.g. ai.shell, ai.commands) rather than added as new
+// top-level keys.
+type ServiceAIConfig struct {
 	Enabled  *bool  `yaml:"enabled"`
 	Template string `yaml:"template"`
 }
@@ -316,7 +321,7 @@ type ServiceConfig struct {
 	Compose         []string             `yaml:"compose"`
 	CLI             ServiceCLIConfig     `yaml:"cli"`
 	IDE             ServiceIDEConfig     `yaml:"ide"`
-	AIDocs          ServiceAIDocsConfig  `yaml:"ai_docs"`
+	AI              ServiceAIConfig      `yaml:"ai"`
 }
 
 // IDERenderEnabledExplicit returns the IDE render enabled state and whether it was explicitly set.
@@ -336,20 +341,20 @@ func (s ServiceConfig) IDERenderEnabled() bool {
 	return enabled
 }
 
-// AIDocsRenderEnabledExplicit returns the AI docs render enabled state and whether it was explicitly set.
+// AIRenderEnabledExplicit returns the AI docs render enabled state and whether it was explicitly set.
 // If Enabled is non-nil, returns its value and true.
 // If Enabled is nil, returns true (default enabled for all service types) and false (not explicit).
-func (s ServiceConfig) AIDocsRenderEnabledExplicit() (enabled bool, explicit bool) {
-	if s.AIDocs.Enabled != nil {
-		return *s.AIDocs.Enabled, true
+func (s ServiceConfig) AIRenderEnabledExplicit() (enabled bool, explicit bool) {
+	if s.AI.Enabled != nil {
+		return *s.AI.Enabled, true
 	}
 	return true, false
 }
 
-// AIDocsRenderEnabled returns whether this service should participate in AI docs rendering.
-// It's a simple wrapper around AIDocsRenderEnabledExplicit that discards the explicit flag.
-func (s ServiceConfig) AIDocsRenderEnabled() bool {
-	enabled, _ := s.AIDocsRenderEnabledExplicit()
+// AIRenderEnabled returns whether this service should participate in AI docs rendering.
+// It's a simple wrapper around AIRenderEnabledExplicit that discards the explicit flag.
+func (s ServiceConfig) AIRenderEnabled() bool {
+	enabled, _ := s.AIRenderEnabledExplicit()
 	return enabled
 }
 
@@ -475,6 +480,19 @@ type ExportsConfig struct {
 	Env []ExportRule `yaml:"env"`
 }
 
+// ReservedExportNames lists env variable names that the renderer always emits
+// itself before any user-defined export rule runs. User rules are forbidden
+// from redeclaring them: the rendering layer reads the system values from the
+// project config and host environment, and a duplicate line in the output
+// .env would have parser-defined precedence.
+var ReservedExportNames = []string{"PROJECT", "UID", "GID"}
+
+// IsReservedExportName reports whether name is reserved by the system and
+// therefore cannot be used as an ExportRule.Name.
+func IsReservedExportName(name string) bool {
+	return slices.Contains(ReservedExportNames, name)
+}
+
 // ExportRule describes a single env variable to render.
 //
 // Fields:
@@ -551,6 +569,13 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	}
 	cfg.Binaries = topView.Binaries
 	applyBinariesDefaults(&cfg.Binaries)
+
+	for i, rule := range cfg.Exports.Env {
+		if IsReservedExportName(rule.Name) {
+			return nil, fmt.Errorf("exports.env[%d]: %q is a reserved system variable and cannot be redeclared as an export rule (reserved: %s)",
+				i, rule.Name, strings.Join(ReservedExportNames, ", "))
+		}
+	}
 
 	cfg.Raw = merged
 	// Store config path so deploy resolution can find service deploy files.
@@ -674,13 +699,13 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		if svc.IDE.Template == "" {
 			svc.IDE.Template = parent.IDE.Template
 		}
-		// AI docs block inheritance: child inherits from parent if not explicitly set.
-		if svc.AIDocs.Enabled == nil && parent.AIDocs.Enabled != nil {
-			v := *parent.AIDocs.Enabled
-			svc.AIDocs.Enabled = &v
+		// AI block inheritance: child inherits from parent if not explicitly set.
+		if svc.AI.Enabled == nil && parent.AI.Enabled != nil {
+			v := *parent.AI.Enabled
+			svc.AI.Enabled = &v
 		}
-		if svc.AIDocs.Template == "" {
-			svc.AIDocs.Template = parent.AIDocs.Template
+		if svc.AI.Template == "" {
+			svc.AI.Template = parent.AI.Template
 		}
 		f.Services[name] = svc
 	}

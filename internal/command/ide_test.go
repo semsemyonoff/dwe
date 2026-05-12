@@ -18,7 +18,7 @@ const minimalVscodeLaunchTpl = `{"type":"php","pathMappings":{"{{ .ServiceCfg.Wo
 const minimalVscodeSettingsTpl = `{"php.validate.executablePath":"/usr/local/bin/php","editor.formatOnSave":true}`
 
 // setupIDEPackTemplates writes an IDE template pack at <dir>/devbox/templates/ide/<packName>/
-// and populates it with a directory structure of .tpl files.
+// and populates it with a directory structure of .tmpl files.
 func setupIDEPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
 	t.Helper()
 	packDir := filepath.Join(dir, "devbox", "templates", "ide", packName)
@@ -79,7 +79,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 	absDir, _ := filepath.Abs(projectRoot)
 
 	// Write template file
-	srcPath := filepath.Join(projectRoot, "devcontainer.json.tpl")
+	srcPath := filepath.Join(projectRoot, "devcontainer.json.tmpl")
 	if err := os.WriteFile(srcPath, []byte(minimalDevcontainerTpl), 0o644); err != nil {
 		t.Fatalf("write template: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestRenderIDETemplateFile_createsParentDirs(t *testing.T) {
 	absRoot, _ := filepath.Abs(projectRoot)
 	absDir, _ := filepath.Abs(projectRoot)
 
-	srcPath := filepath.Join(projectRoot, "template.tpl")
+	srcPath := filepath.Join(projectRoot, "template.tmpl")
 	if err := os.WriteFile(srcPath, []byte(minimalVscodeLaunchTpl), 0o644); err != nil {
 		t.Fatalf("write template: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestRenderIDETemplateFile_serviceDirContainment(t *testing.T) {
 		t.Fatalf("create svc dir: %v", err)
 	}
 
-	srcPath := filepath.Join(projectRoot, "template.tpl")
+	srcPath := filepath.Join(projectRoot, "template.tmpl")
 	if err := os.WriteFile(srcPath, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write template: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestRenderIDETemplateFile_siblingPrefixAttack(t *testing.T) {
 		t.Fatalf("create main2 dir: %v", err)
 	}
 
-	srcPath := filepath.Join(projectRoot, "template.tpl")
+	srcPath := filepath.Join(projectRoot, "template.tmpl")
 	if err := os.WriteFile(srcPath, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write template: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestRenderIDETemplateFile_symlinkDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srcPath := filepath.Join(projectRoot, "template.tpl")
+	srcPath := filepath.Join(projectRoot, "template.tmpl")
 	if err := os.WriteFile(srcPath, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write template: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestRenderIDETemplateFile_symlinkFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srcPath := filepath.Join(projectRoot, "template.tpl")
+	srcPath := filepath.Join(projectRoot, "template.tmpl")
 	if err := os.WriteFile(srcPath, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write template: %v", err)
 	}
@@ -281,10 +281,10 @@ func TestResolveIDETemplatePack_explicit(t *testing.T) {
 
 	// Create packs
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "default-dc",
+		".devcontainer/devcontainer.json.tmpl": "default-dc",
 	})
 	setupIDEPackTemplates(t, projectRoot, "custom", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "custom-dc",
+		".devcontainer/devcontainer.json.tmpl": "custom-dc",
 	})
 
 	tests := []struct {
@@ -332,7 +332,7 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "default-dc",
+		".devcontainer/devcontainer.json.tmpl": "default-dc",
 	})
 
 	tests := []struct {
@@ -395,10 +395,10 @@ func TestResolveIDETemplatePack_implicitPriority(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".vscode/settings.json.tpl": `{"source":"default"}`,
+		".vscode/settings.json.tmpl": `{"source":"default"}`,
 	})
 	setupIDEPackTemplates(t, projectRoot, "main", map[string]string{
-		".vscode/settings.json.tpl": `{"source":"main"}`,
+		".vscode/settings.json.tmpl": `{"source":"main"}`,
 	})
 
 	svc := config.ServiceConfig{
@@ -423,7 +423,7 @@ func TestResolveIDETemplatePack_explicitStrictSemantics(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "default-dc",
+		".devcontainer/devcontainer.json.tmpl": "default-dc",
 	})
 
 	svc := config.ServiceConfig{
@@ -514,7 +514,7 @@ func TestResolveIDETemplatePack_implicitCandidateIsFile(t *testing.T) {
 
 	// Set up default pack
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "default-dc",
+		".devcontainer/devcontainer.json.tmpl": "default-dc",
 	})
 
 	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
@@ -546,7 +546,7 @@ func TestResolveIDETemplatePack_implicitCandidateIsSymlink(t *testing.T) {
 
 	// Set up default pack and a real directory to link to
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "default-dc",
+		".devcontainer/devcontainer.json.tmpl": "default-dc",
 	})
 	realDir := t.TempDir()
 
@@ -637,7 +637,7 @@ func TestResolveIDETemplatePack_relativeProjectRoot(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "dc",
+		".devcontainer/devcontainer.json.tmpl": "dc",
 	})
 
 	// Compute a relative path to projectRoot from cwd
@@ -673,7 +673,7 @@ func TestResolveIDETemplatePack_byServiceOnly(t *testing.T) {
 
 	// Set up only the service-name pack, no default/
 	setupIDEPackTemplates(t, projectRoot, "main", map[string]string{
-		".vscode/settings.json.tpl": `{"source":"main"}`,
+		".vscode/settings.json.tmpl": `{"source":"main"}`,
 	})
 
 	svc := config.ServiceConfig{
@@ -784,7 +784,7 @@ func TestResolveIDETemplatePack_explicitOnlyPack(t *testing.T) {
 
 	// Only set up the explicit pack; no service-name pack, no default pack.
 	setupIDEPackTemplates(t, projectRoot, "custom", map[string]string{
-		".vscode/settings.json.tpl": `{"source":"custom"}`,
+		".vscode/settings.json.tmpl": `{"source":"custom"}`,
 	})
 
 	svc := config.ServiceConfig{
@@ -809,13 +809,13 @@ func TestResolveIDETemplatePack_explicitBeatsServiceNameAndDefault(t *testing.T)
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "main", map[string]string{
-		".vscode/settings.json.tpl": `{"source":"main"}`,
+		".vscode/settings.json.tmpl": `{"source":"main"}`,
 	})
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".vscode/settings.json.tpl": `{"source":"default"}`,
+		".vscode/settings.json.tmpl": `{"source":"default"}`,
 	})
 	setupIDEPackTemplates(t, projectRoot, "custom", map[string]string{
-		".vscode/settings.json.tpl": `{"source":"custom"}`,
+		".vscode/settings.json.tmpl": `{"source":"custom"}`,
 	})
 
 	svc := config.ServiceConfig{
@@ -842,8 +842,8 @@ func TestWalkIDEPack_noDuplicateRelPath(t *testing.T) {
 	packDir := t.TempDir()
 
 	files := map[string]string{
-		"foo.tpl":     "a",
-		"bar/baz.tpl": "b",
+		"foo.tmpl":     "a",
+		"bar/baz.tmpl": "b",
 	}
 	for rel, content := range files {
 		full := filepath.Join(packDir, rel)
@@ -883,11 +883,11 @@ func TestWalkIDEPack_emptyPack(t *testing.T) {
 func TestWalkIDEPack_nested(t *testing.T) {
 	projectRoot := t.TempDir()
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": "dc",
-		".vscode/settings.json.tpl":           "vs-settings",
-		".vscode/launch.json.tpl":             "vs-launch",
-		".idea/custom.xml.tpl":                "idea",
-		".zed/settings.json.tpl":              "zed-settings",
+		".devcontainer/devcontainer.json.tmpl": "dc",
+		".vscode/settings.json.tmpl":           "vs-settings",
+		".vscode/launch.json.tmpl":             "vs-launch",
+		".idea/custom.xml.tmpl":                "idea",
+		".zed/settings.json.tmpl":              "zed-settings",
 	})
 
 	packPath := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
@@ -918,17 +918,17 @@ func TestWalkIDEPack_nested(t *testing.T) {
 	}
 }
 
-// TestWalkIDEPack_nonTplFilesSkipped verifies that non-.tpl files are silently skipped.
-func TestWalkIDEPack_nonTplFilesSkipped(t *testing.T) {
+// TestWalkIDEPack_nonTmplFilesSkipped verifies that non-.tmpl files are silently skipped.
+func TestWalkIDEPack_nonTmplFilesSkipped(t *testing.T) {
 	projectRoot := t.TempDir()
 	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("create pack dir: %v", err)
 	}
 
-	// Create both .tpl and non-.tpl files
-	if err := os.WriteFile(filepath.Join(packDir, "file.tpl"), []byte("tpl"), 0o644); err != nil {
-		t.Fatalf("write .tpl: %v", err)
+	// Create both .tmpl and non-.tmpl files
+	if err := os.WriteFile(filepath.Join(packDir, "file.tmpl"), []byte("tpl"), 0o644); err != nil {
+		t.Fatalf("write .tmpl: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(packDir, "file.txt"), []byte("txt"), 0o644); err != nil {
 		t.Fatalf("write .txt: %v", err)
@@ -940,14 +940,14 @@ func TestWalkIDEPack_nonTplFilesSkipped(t *testing.T) {
 	}
 
 	if len(entries) != 1 {
-		t.Errorf("want 1 entry (only .tpl), got %d", len(entries))
+		t.Errorf("want 1 entry (only .tmpl), got %d", len(entries))
 	}
 	if entries[0].RelPath != "file" {
 		t.Errorf("want RelPath=file, got %q", entries[0].RelPath)
 	}
 }
 
-// TestWalkIDEPack_symlinkFileRejected verifies that a symlinked .tpl file
+// TestWalkIDEPack_symlinkFileRejected verifies that a symlinked .tmpl file
 // is rejected (symlink check runs before suffix filter).
 func TestWalkIDEPack_symlinkFileRejected(t *testing.T) {
 	projectRoot := t.TempDir()
@@ -958,29 +958,29 @@ func TestWalkIDEPack_symlinkFileRejected(t *testing.T) {
 
 	// Create a real file outside the pack
 	outside := t.TempDir()
-	realFile := filepath.Join(outside, "real.tpl")
+	realFile := filepath.Join(outside, "real.tmpl")
 	if err := os.WriteFile(realFile, []byte("real"), 0o644); err != nil {
 		t.Fatalf("write real file: %v", err)
 	}
 
 	// Symlink it inside the pack
-	symlinkFile := filepath.Join(packDir, "file.tpl")
+	symlinkFile := filepath.Join(packDir, "file.tmpl")
 	if err := os.Symlink(realFile, symlinkFile); err != nil {
 		t.Fatalf("create symlink: %v", err)
 	}
 
 	_, err := walkIDEPack(packDir)
 	if err == nil {
-		t.Fatal("expected error when pack contains symlinked .tpl file")
+		t.Fatal("expected error when pack contains symlinked .tmpl file")
 	}
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("expected symlink error, got: %v", err)
 	}
 }
 
-// TestWalkIDEPack_symlinkNonTplFileRejected verifies that a symlinked non-.tpl file
+// TestWalkIDEPack_symlinkNonTmplFileRejected verifies that a symlinked non-.tmpl file
 // is rejected, proving the symlink check runs before the suffix filter.
-func TestWalkIDEPack_symlinkNonTplFileRejected(t *testing.T) {
+func TestWalkIDEPack_symlinkNonTmplFileRejected(t *testing.T) {
 	projectRoot := t.TempDir()
 	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
@@ -993,14 +993,14 @@ func TestWalkIDEPack_symlinkNonTplFileRejected(t *testing.T) {
 		t.Fatalf("write real file: %v", err)
 	}
 
-	// Symlink a non-.tpl file inside the pack
+	// Symlink a non-.tmpl file inside the pack
 	if err := os.Symlink(realFile, filepath.Join(packDir, "readme.txt")); err != nil {
 		t.Fatalf("create symlink: %v", err)
 	}
 
 	_, err := walkIDEPack(packDir)
 	if err == nil {
-		t.Fatal("expected error when pack contains symlinked non-.tpl file")
+		t.Fatal("expected error when pack contains symlinked non-.tmpl file")
 	}
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("expected symlink error, got: %v", err)
@@ -1018,7 +1018,7 @@ func TestWalkIDEPack_symlinkDirRejected(t *testing.T) {
 
 	// Create a real directory outside the pack with a template file
 	outside := t.TempDir()
-	if err := os.WriteFile(filepath.Join(outside, "settings.json.tpl"), []byte("{}"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(outside, "settings.json.tmpl"), []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write tpl: %v", err)
 	}
 
@@ -1036,51 +1036,51 @@ func TestWalkIDEPack_symlinkDirRejected(t *testing.T) {
 	}
 }
 
-// TestWalkIDEPack_bareTPLRejected verifies that a bare ".tpl" file is rejected.
-func TestWalkIDEPack_bareTPLRejected(t *testing.T) {
+// TestWalkIDEPack_bareTmplRejected verifies that a bare ".tmpl" file is rejected.
+func TestWalkIDEPack_bareTmplRejected(t *testing.T) {
 	projectRoot := t.TempDir()
 	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("create pack dir: %v", err)
 	}
 
-	// Create a bare ".tpl" file at pack root
-	if err := os.WriteFile(filepath.Join(packDir, ".tpl"), []byte("bad"), 0o644); err != nil {
-		t.Fatalf("write .tpl: %v", err)
+	// Create a bare ".tmpl" file at pack root
+	if err := os.WriteFile(filepath.Join(packDir, ".tmpl"), []byte("bad"), 0o644); err != nil {
+		t.Fatalf("write .tmpl: %v", err)
 	}
 
 	_, err := walkIDEPack(packDir)
 	if err == nil {
-		t.Fatal("expected error for bare .tpl file")
+		t.Fatal("expected error for bare .tmpl file")
 	}
-	if !strings.Contains(err.Error(), "bare .tpl") {
-		t.Errorf("expected 'bare .tpl' error, got: %v", err)
+	if !strings.Contains(err.Error(), "bare .tmpl") {
+		t.Errorf("expected 'bare .tmpl' error, got: %v", err)
 	}
 }
 
-// TestWalkIDEPack_nestedBareTplRejected verifies that "dir/.tpl" is rejected.
-func TestWalkIDEPack_nestedBareTplRejected(t *testing.T) {
+// TestWalkIDEPack_nestedBareTmplRejected verifies that "dir/.tmpl" is rejected.
+func TestWalkIDEPack_nestedBareTmplRejected(t *testing.T) {
 	projectRoot := t.TempDir()
 	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("create pack dir: %v", err)
 	}
 
-	// Create a nested ".tpl" file: subdir/.tpl
+	// Create a nested ".tmpl" file: subdir/.tmpl
 	subDir := filepath.Join(packDir, "subdir")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatalf("create subdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(subDir, ".tpl"), []byte("bad"), 0o644); err != nil {
-		t.Fatalf("write nested .tpl: %v", err)
+	if err := os.WriteFile(filepath.Join(subDir, ".tmpl"), []byte("bad"), 0o644); err != nil {
+		t.Fatalf("write nested .tmpl: %v", err)
 	}
 
 	_, err := walkIDEPack(packDir)
 	if err == nil {
-		t.Fatal("expected error for nested .tpl file")
+		t.Fatal("expected error for nested .tmpl file")
 	}
-	if !strings.Contains(err.Error(), "bare .tpl") {
-		t.Errorf("expected 'bare .tpl' error, got: %v", err)
+	if !strings.Contains(err.Error(), "bare .tmpl") {
+		t.Errorf("expected 'bare .tmpl' error, got: %v", err)
 	}
 }
 
@@ -1090,7 +1090,7 @@ func TestWalkIDEPack_absoluteSourcePath(t *testing.T) {
 	projectRoot := t.TempDir()
 	packName := "default"
 	setupIDEPackTemplates(t, projectRoot, packName, map[string]string{
-		"file.tpl": "content",
+		"file.tmpl": "content",
 	})
 
 	// Change to a temp directory and use relative path
@@ -1131,8 +1131,8 @@ func TestRenderIDEConfigs_packResolution(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": minimalDevcontainerTpl,
-		".vscode/settings.json.tpl":           minimalVscodeSettingsTpl,
+		".devcontainer/devcontainer.json.tmpl": minimalDevcontainerTpl,
+		".vscode/settings.json.tmpl":           minimalVscodeSettingsTpl,
 	})
 
 	cfg := makeIDECfg("main")
@@ -1210,7 +1210,7 @@ func TestRenderIDEConfigs_dotDirRejected(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": `{}`,
+		".devcontainer/devcontainer.json.tmpl": `{}`,
 	})
 
 	cfg := makeIDECfg("main")
@@ -1234,10 +1234,10 @@ func TestRenderIDEConfigs_perServiceOverride(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".vscode/settings.json.tpl": `{"default": true}`,
+		".vscode/settings.json.tmpl": `{"default": true}`,
 	})
 	setupIDEPackTemplates(t, projectRoot, "main-debug", map[string]string{
-		".vscode/settings.json.tpl": `{"debug": true}`,
+		".vscode/settings.json.tmpl": `{"debug": true}`,
 	})
 
 	cfg := makeIDECfg("main")
@@ -1268,10 +1268,10 @@ func TestRenderIDEConfigs_serviceNameFallback(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".vscode/settings.json.tpl": `{"source": "default"}`,
+		".vscode/settings.json.tmpl": `{"source": "default"}`,
 	})
 	setupIDEPackTemplates(t, projectRoot, "main", map[string]string{
-		".vscode/settings.json.tpl": `{"source": "main"}`,
+		".vscode/settings.json.tmpl": `{"source": "main"}`,
 	})
 
 	cfg := makeIDECfg("main")
@@ -1300,7 +1300,7 @@ func TestRenderIDEConfigs_defaultOnly(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".vscode/settings.json.tpl": `{"source": "default"}`,
+		".vscode/settings.json.tmpl": `{"source": "default"}`,
 	})
 
 	cfg := makeIDECfg("unknown")
@@ -1328,7 +1328,7 @@ func TestRenderIDEConfigs_substitutesTemplateValues(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
-		".devcontainer/devcontainer.json.tpl": minimalDevcontainerTpl,
+		".devcontainer/devcontainer.json.tmpl": minimalDevcontainerTpl,
 	})
 
 	cfg := makeIDECfg("main")

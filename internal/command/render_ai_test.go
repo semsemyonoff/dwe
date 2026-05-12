@@ -49,7 +49,7 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "custom",
 		},
 	}
@@ -70,7 +70,7 @@ func TestResolveAgentsTemplatePack_explicitPackMissing(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "missing",
 		},
 	}
@@ -92,7 +92,7 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "",
 		},
 	}
@@ -116,7 +116,7 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "",
 		},
 	}
@@ -137,7 +137,7 @@ func TestResolveAgentsTemplatePack_implicitBothMissing(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "",
 		},
 	}
@@ -170,7 +170,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 	}
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "linked",
 		},
 	}
@@ -198,7 +198,7 @@ func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 	}
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "file",
 		},
 	}
@@ -228,7 +228,7 @@ func TestResolveAgentsTemplatePack_invalidTemplateKey(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.label, func(t *testing.T) {
 			svc := config.ServiceConfig{
-				AIDocs: config.ServiceAIDocsConfig{
+				AI: config.ServiceAIConfig{
 					Template: test.template,
 				},
 			}
@@ -257,7 +257,7 @@ func TestResolveAgentsTemplatePack_invalidServiceName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.label, func(t *testing.T) {
 			svc := config.ServiceConfig{
-				AIDocs: config.ServiceAIDocsConfig{
+				AI: config.ServiceAIConfig{
 					Template: "",
 				},
 			}
@@ -282,7 +282,7 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AIDocs: config.ServiceAIDocsConfig{
+		AI: config.ServiceAIConfig{
 			Template: "",
 		},
 	}
@@ -1071,8 +1071,8 @@ services:
 	}
 }
 
-// TestNewRenderAICmd_explicitServiceAIDocsDisabled tests error when ai_docs.enabled: false.
-func TestNewRenderAICmd_explicitServiceAIDocsDisabled(t *testing.T) {
+// TestNewRenderAICmd_explicitServiceAIDisabled tests error when ai.enabled: false.
+func TestNewRenderAICmd_explicitServiceAIDisabled(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	devboxYAML := `schema_version: "2"
@@ -1092,7 +1092,7 @@ services:
     type: app
     dir: services/api
     container: test-api
-    ai_docs:
+    ai:
       enabled: false
 `)
 
@@ -1101,10 +1101,10 @@ services:
 
 	err := cmd.RunE(cmd, []string{"api"})
 	if err == nil {
-		t.Fatal("expected error for ai_docs.enabled: false")
+		t.Fatal("expected error for ai.enabled: false")
 	}
-	if !strings.Contains(err.Error(), "ai_docs.enabled") {
-		t.Errorf("error should mention 'ai_docs.enabled': %v", err)
+	if !strings.Contains(err.Error(), "ai.enabled") {
+		t.Errorf("error should mention 'ai.enabled': %v", err)
 	}
 }
 
@@ -1143,7 +1143,7 @@ services:
     type: app
     dir: services/ai-disabled
     container: test-ai-disabled
-    ai_docs:
+    ai:
       enabled: false
   no-dir-svc:
     type: app
@@ -1177,7 +1177,7 @@ services:
 		t.Fatalf("expected AGENTS.md in enabled service: %v", err)
 	}
 
-	// ai-disabled-svc should not have files (ai_docs.enabled: false)
+	// ai-disabled-svc should not have files (ai.enabled: false)
 	aiDisabledPath := filepath.Join(projectRoot, "services", "ai-disabled", "AGENTS.md")
 	if _, err := os.Stat(aiDisabledPath); err == nil {
 		t.Fatal("expected no AGENTS.md in ai-disabled service")
@@ -1371,10 +1371,10 @@ func TestSelectAgentsServices(t *testing.T) {
 			},
 		},
 		{
-			name: "explicit ai_docs.enabled=false drops service as ai-disabled",
+			name: "explicit ai.enabled=false drops service as ai-disabled",
 			services: map[string]config.ServiceConfig{
 				"main": {Type: "app", Enabled: true, Dir: "./services/main"},
-				"aux":  {Type: "app", Enabled: true, Dir: "./services/aux", AIDocs: config.ServiceAIDocsConfig{Enabled: &falseVal}},
+				"aux":  {Type: "app", Enabled: true, Dir: "./services/aux", AI: config.ServiceAIConfig{Enabled: &falseVal}},
 			},
 			wantSelected: []string{"main"},
 			wantSkippedMap: map[string]skippedService{
@@ -1382,9 +1382,9 @@ func TestSelectAgentsServices(t *testing.T) {
 			},
 		},
 		{
-			name: "ai_docs.enabled=true (explicit) keeps service",
+			name: "ai.enabled=true (explicit) keeps service",
 			services: map[string]config.ServiceConfig{
-				"main": {Type: "app", Enabled: true, Dir: "./services/main", AIDocs: config.ServiceAIDocsConfig{Enabled: &trueVal}},
+				"main": {Type: "app", Enabled: true, Dir: "./services/main", AI: config.ServiceAIConfig{Enabled: &trueVal}},
 			},
 			wantSelected: []string{"main"},
 		},
@@ -1567,10 +1567,10 @@ func TestResolveAIHubAnchor(t *testing.T) {
 			want: "main-debug",
 		},
 		{
-			name:  "parent has ai_docs.enabled=false: variant wins",
+			name:  "parent has ai.enabled=false: variant wins",
 			input: "main-debug",
 			services: map[string]config.ServiceConfig{
-				"main":       {Type: "app", Enabled: true, Dir: "./services/main", AIDocs: config.ServiceAIDocsConfig{Enabled: &falseVal}},
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main", AI: config.ServiceAIConfig{Enabled: &falseVal}},
 				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
 			},
 			want: "main-debug",

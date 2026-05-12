@@ -30,6 +30,34 @@ func TestBuildContent_alwaysEmitsProjectAndHeader(t *testing.T) {
 	}
 }
 
+func TestBuildContent_silentlyDropsReservedRules(t *testing.T) {
+	// Defense-in-depth: a rule with a reserved name should be silently dropped
+	// even if it slips past LoadConfig validation, so the output never has
+	// duplicate lines for PROJECT/UID/GID.
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "PROJECT", From: "state"},
+		{Name: "UID", From: "state"},
+		{Name: "GID", From: "state"},
+		{Name: "MY_VAR", From: "state"},
+	}, map[string]any{"state": "shouldnotappear"})
+
+	out, err := BuildContent(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, name := range config.ReservedExportNames {
+		if strings.Count(out, name+"=") != 1 {
+			t.Errorf("%s should appear exactly once in output, got:\n%s", name, out)
+		}
+		if strings.Contains(out, name+"=shouldnotappear") {
+			t.Errorf("rule with reserved name %s leaked its From value into the output:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(out, "MY_VAR=shouldnotappear") {
+		t.Errorf("non-reserved rule should still be emitted, got:\n%s", out)
+	}
+}
+
 func TestBuildContent_simpleStringRule(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
 		{Name: "MY_VAR", From: "state"},

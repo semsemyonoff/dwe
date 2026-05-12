@@ -7,9 +7,9 @@ Generate IDE configs from template packs
 Generate IDE-specific config files for each enabled service from a template pack.
 
 The command walks the chosen template pack (devbox/templates/ide/<pack-name>/)
-and renders each *.tpl file into the corresponding location within the service
+and renders each *.tmpl file into the corresponding location within the service
 directory. For example:
-  devbox/templates/ide/default/.vscode/settings.json.tpl
+  devbox/templates/ide/default/.vscode/settings.json.tmpl
   → services/main/.vscode/settings.json
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):

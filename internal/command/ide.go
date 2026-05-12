@@ -142,8 +142,8 @@ func selectIDEServices(services map[string]config.ServiceConfig) (selected []str
 
 // packEntry describes a template file in the IDE pack after walking.
 type packEntry struct {
-	SourcePath string // absolute path to the .tpl file
-	RelPath    string // path inside the pack with .tpl stripped
+	SourcePath string // absolute path to the .tmpl file
+	RelPath    string // path inside the pack with .tmpl stripped
 }
 
 // ideTemplateData is passed to IDE config templates.
@@ -165,9 +165,9 @@ func newRenderIDECmd(flags *rootFlags) *cobra.Command {
 		Long: `Generate IDE-specific config files for each enabled service from a template pack.
 
 The command walks the chosen template pack (devbox/templates/ide/<pack-name>/)
-and renders each *.tpl file into the corresponding location within the service
+and renders each *.tmpl file into the corresponding location within the service
 directory. For example:
-  devbox/templates/ide/default/.vscode/settings.json.tpl
+  devbox/templates/ide/default/.vscode/settings.json.tmpl
   → services/main/.vscode/settings.json
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
@@ -416,13 +416,13 @@ func resolveIDETemplatePack(svc config.ServiceConfig, projectRoot, serviceName s
 	return "", fmt.Errorf("ide template pack not found (tried %s, default): %w", serviceName, os.ErrNotExist)
 }
 
-// walkIDEPack walks the template pack directory and returns all .tpl entries.
-// Entries are returned with absolute SourcePath and RelPath (with .tpl stripped).
+// walkIDEPack walks the template pack directory and returns all .tmpl entries.
+// Entries are returned with absolute SourcePath and RelPath (with .tmpl stripped).
 // Returns entries sorted lexicographically by RelPath.
 // Rejection rules (any rejection is a hard error, not a silent skip):
 // 1. Any symlink anywhere in the tree (file or directory).
 // 2. Any cleaned relative path that is absolute or contains ".." segments.
-// 3. Source filename is bare ".tpl" (before or after cleaning).
+// 3. Source filename is bare ".tmpl" (before or after cleaning).
 func walkIDEPack(packDir string) ([]packEntry, error) {
 	absPackDir, err := filepath.Abs(packDir)
 	if err != nil {
@@ -451,24 +451,24 @@ func walkIDEPack(packDir string) ([]packEntry, error) {
 			return nil
 		}
 
-		// Compute relative path from pack root (before stripping .tpl)
+		// Compute relative path from pack root (before stripping .tmpl)
 		srcRelPath, err := filepath.Rel(absPackDir, path)
 		if err != nil {
 			return fmt.Errorf("relative path: %w", err)
 		}
 
-		// Suffix filter: only .tpl files
-		if !strings.HasSuffix(srcRelPath, ".tpl") {
-			return nil // skip non-.tpl files silently
+		// Suffix filter: only .tmpl files
+		if !strings.HasSuffix(srcRelPath, ".tmpl") {
+			return nil // skip non-.tmpl files silently
 		}
 
-		// Strip .tpl suffix
-		relPath := strings.TrimSuffix(srcRelPath, ".tpl")
+		// Strip .tmpl suffix
+		relPath := strings.TrimSuffix(srcRelPath, ".tmpl")
 
-		// Reject bare ".tpl" files
-		// Check on the filename (before cleaning) so nested "dir/.tpl" is caught
-		if strings.TrimSuffix(filepath.Base(srcRelPath), ".tpl") == "" {
-			return fmt.Errorf("ide template pack contains bare .tpl file: %s", srcRelPath)
+		// Reject bare ".tmpl" files
+		// Check on the filename (before cleaning) so nested "dir/.tmpl" is caught
+		if strings.TrimSuffix(filepath.Base(srcRelPath), ".tmpl") == "" {
+			return fmt.Errorf("ide template pack contains bare .tmpl file: %s", srcRelPath)
 		}
 
 		// Clean the path and reject empty or "." results
@@ -515,7 +515,7 @@ func walkIDEPack(packDir string) ([]packEntry, error) {
 }
 
 // renderIDEConfigs generates IDE config files for a single service by walking
-// the resolved template pack and rendering all .tpl entries.
+// the resolved template pack and rendering all .tmpl entries.
 func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
 	if strings.TrimSpace(svc.Dir) == "" {
 		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
@@ -561,7 +561,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	}
 	if len(entries) == 0 {
 		packRel, _ := filepath.Rel(absRoot, pack)
-		w.Warning(fmt.Sprintf("ide [%s] — pack %q has no .tpl files; nothing rendered", name, packRel))
+		w.Warning(fmt.Sprintf("ide [%s] — pack %q has no .tmpl files; nothing rendered", name, packRel))
 		return nil
 	}
 
@@ -577,7 +577,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 }
 
 // renderIDETemplateFile reads a template file, renders it, and writes to dest.
-// sourcePath is the absolute path to the .tpl file.
+// sourcePath is the absolute path to the .tmpl file.
 // data is the template context.
 // dest is the destination path (may be relative to the service dir).
 // absDir is the resolved absolute service directory.

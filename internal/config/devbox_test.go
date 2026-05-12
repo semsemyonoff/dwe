@@ -1347,6 +1347,43 @@ exports:
 	}
 }
 
+func TestLoadConfig_reservedExportNameRejected(t *testing.T) {
+	for _, name := range ReservedExportNames {
+		t.Run(name, func(t *testing.T) {
+			defaultsWithReservedRule := sampleDefaultsYML + `
+exports:
+  env:
+    - name: ` + name + `
+      from: runtime.ports.app
+`
+			path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithReservedRule, "")
+			_, err := LoadConfig(path)
+			if err == nil {
+				t.Fatalf("LoadConfig: expected error for reserved name %q, got nil", name)
+			}
+			if !strings.Contains(err.Error(), name) {
+				t.Errorf("error %q should mention reserved name %q", err.Error(), name)
+			}
+			if !strings.Contains(err.Error(), "reserved") {
+				t.Errorf("error %q should explain that the name is reserved", err.Error())
+			}
+		})
+	}
+}
+
+func TestIsReservedExportName(t *testing.T) {
+	for _, name := range ReservedExportNames {
+		if !IsReservedExportName(name) {
+			t.Errorf("IsReservedExportName(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"", "APP_PORT", "project", "uid", "gid", "PROJECT_NAME"} {
+		if IsReservedExportName(name) {
+			t.Errorf("IsReservedExportName(%q) = true, want false", name)
+		}
+	}
+}
+
 // --- ServiceCLIConfig: Mode and Env fields ---
 
 const sampleServicesWithCLIYML = `
@@ -2757,8 +2794,8 @@ services:
 	}
 }
 
-// TestServiceConfig_AIDocsRenderEnabledExplicit tests the tristate logic for AI docs rendering.
-func TestServiceConfig_AIDocsRenderEnabledExplicit(t *testing.T) {
+// TestServiceConfig_AIRenderEnabledExplicit tests the tristate logic for AI docs rendering.
+func TestServiceConfig_AIRenderEnabledExplicit(t *testing.T) {
 	tests := []struct {
 		name     string
 		svc      ServiceConfig
@@ -2767,13 +2804,13 @@ func TestServiceConfig_AIDocsRenderEnabledExplicit(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{AIDocs: ServiceAIDocsConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(true)}}, //nolint:modernize
 			wantBool: true,
 			wantExp:  true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{AIDocs: ServiceAIDocsConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(false)}}, //nolint:modernize
 			wantBool: false,
 			wantExp:  true,
 		},
@@ -2798,19 +2835,19 @@ func TestServiceConfig_AIDocsRenderEnabledExplicit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotExp := tt.svc.AIDocsRenderEnabledExplicit()
+			got, gotExp := tt.svc.AIRenderEnabledExplicit()
 			if got != tt.wantBool {
-				t.Errorf("AIDocsRenderEnabledExplicit() bool = %v, want %v", got, tt.wantBool)
+				t.Errorf("AIRenderEnabledExplicit() bool = %v, want %v", got, tt.wantBool)
 			}
 			if gotExp != tt.wantExp {
-				t.Errorf("AIDocsRenderEnabledExplicit() explicit = %v, want %v", gotExp, tt.wantExp)
+				t.Errorf("AIRenderEnabledExplicit() explicit = %v, want %v", gotExp, tt.wantExp)
 			}
 		})
 	}
 }
 
-// TestServiceConfig_AIDocsRenderEnabled tests the simple bool wrapper.
-func TestServiceConfig_AIDocsRenderEnabled(t *testing.T) {
+// TestServiceConfig_AIRenderEnabled tests the simple bool wrapper.
+func TestServiceConfig_AIRenderEnabled(t *testing.T) {
 	tests := []struct {
 		name     string
 		svc      ServiceConfig
@@ -2818,12 +2855,12 @@ func TestServiceConfig_AIDocsRenderEnabled(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{AIDocs: ServiceAIDocsConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(true)}}, //nolint:modernize
 			wantBool: true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{AIDocs: ServiceAIDocsConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(false)}}, //nolint:modernize
 			wantBool: false,
 		},
 		{
@@ -2839,15 +2876,15 @@ func TestServiceConfig_AIDocsRenderEnabled(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.svc.AIDocsRenderEnabled(); got != tt.wantBool {
-				t.Errorf("AIDocsRenderEnabled() = %v, want %v", got, tt.wantBool)
+			if got := tt.svc.AIRenderEnabled(); got != tt.wantBool {
+				t.Errorf("AIRenderEnabled() = %v, want %v", got, tt.wantBool)
 			}
 		})
 	}
 }
 
-// TestLoadServicesConfig_AIDocsEnabled tests AI docs block inheritance.
-func TestLoadServicesConfig_AIDocsEnabled(t *testing.T) {
+// TestLoadServicesConfig_AIEnabled tests AI docs block inheritance.
+func TestLoadServicesConfig_AIEnabled(t *testing.T) {
 	yml := `
 services:
   parent:
@@ -2855,7 +2892,7 @@ services:
     container: parent
     mandatory: true
     dir: ./services/parent
-    ai_docs:
+    ai:
       enabled: false
       template: parent-tmpl
   child-inherit:
@@ -2868,21 +2905,21 @@ services:
     container: child-override-enabled
     mandatory: false
     extends: parent
-    ai_docs:
+    ai:
       enabled: true
   child-override-template:
     type: app
     container: child-override-template
     mandatory: false
     extends: parent
-    ai_docs:
+    ai:
       template: child-tmpl
   child-override-both:
     type: app
     container: child-override-both
     mandatory: false
     extends: parent
-    ai_docs:
+    ai:
       enabled: true
       template: both-tmpl
   grandchild-multi-hop:
@@ -2903,56 +2940,56 @@ services:
 
 	// Parent has explicit false and template
 	parent := services["parent"]
-	if parent.AIDocs.Enabled == nil || *parent.AIDocs.Enabled != false {
-		t.Errorf("parent AIDocs.Enabled should be false, got %v", parent.AIDocs.Enabled)
+	if parent.AI.Enabled == nil || *parent.AI.Enabled != false {
+		t.Errorf("parent AI.Enabled should be false, got %v", parent.AI.Enabled)
 	}
-	if parent.AIDocs.Template != "parent-tmpl" {
-		t.Errorf("parent AIDocs.Template = %q, want parent-tmpl", parent.AIDocs.Template)
+	if parent.AI.Template != "parent-tmpl" {
+		t.Errorf("parent AI.Template = %q, want parent-tmpl", parent.AI.Template)
 	}
 
 	// Child inherits both parent's enabled and template
 	childInh := services["child-inherit"]
-	if childInh.AIDocs.Enabled == nil || *childInh.AIDocs.Enabled != false {
-		t.Errorf("child-inherit AIDocs.Enabled should inherit false from parent, got %v", childInh.AIDocs.Enabled)
+	if childInh.AI.Enabled == nil || *childInh.AI.Enabled != false {
+		t.Errorf("child-inherit AI.Enabled should inherit false from parent, got %v", childInh.AI.Enabled)
 	}
-	if childInh.AIDocs.Template != "parent-tmpl" {
-		t.Errorf("child-inherit AIDocs.Template should inherit parent-tmpl, got %q", childInh.AIDocs.Template)
+	if childInh.AI.Template != "parent-tmpl" {
+		t.Errorf("child-inherit AI.Template should inherit parent-tmpl, got %q", childInh.AI.Template)
 	}
 
 	// Child overrides enabled but inherits template
 	childOvrE := services["child-override-enabled"]
-	if childOvrE.AIDocs.Enabled == nil || *childOvrE.AIDocs.Enabled != true {
-		t.Errorf("child-override-enabled AIDocs.Enabled should be true, got %v", childOvrE.AIDocs.Enabled)
+	if childOvrE.AI.Enabled == nil || *childOvrE.AI.Enabled != true {
+		t.Errorf("child-override-enabled AI.Enabled should be true, got %v", childOvrE.AI.Enabled)
 	}
-	if childOvrE.AIDocs.Template != "parent-tmpl" {
-		t.Errorf("child-override-enabled AIDocs.Template should inherit parent-tmpl, got %q", childOvrE.AIDocs.Template)
+	if childOvrE.AI.Template != "parent-tmpl" {
+		t.Errorf("child-override-enabled AI.Template should inherit parent-tmpl, got %q", childOvrE.AI.Template)
 	}
 
 	// Child overrides template but inherits enabled
 	childOvrT := services["child-override-template"]
-	if childOvrT.AIDocs.Enabled == nil || *childOvrT.AIDocs.Enabled != false {
-		t.Errorf("child-override-template AIDocs.Enabled should inherit false from parent, got %v", childOvrT.AIDocs.Enabled)
+	if childOvrT.AI.Enabled == nil || *childOvrT.AI.Enabled != false {
+		t.Errorf("child-override-template AI.Enabled should inherit false from parent, got %v", childOvrT.AI.Enabled)
 	}
-	if childOvrT.AIDocs.Template != "child-tmpl" {
-		t.Errorf("child-override-template AIDocs.Template = %q, want child-tmpl", childOvrT.AIDocs.Template)
+	if childOvrT.AI.Template != "child-tmpl" {
+		t.Errorf("child-override-template AI.Template = %q, want child-tmpl", childOvrT.AI.Template)
 	}
 
 	// Child overrides both
 	childOvrB := services["child-override-both"]
-	if childOvrB.AIDocs.Enabled == nil || *childOvrB.AIDocs.Enabled != true {
-		t.Errorf("child-override-both AIDocs.Enabled should be true, got %v", childOvrB.AIDocs.Enabled)
+	if childOvrB.AI.Enabled == nil || *childOvrB.AI.Enabled != true {
+		t.Errorf("child-override-both AI.Enabled should be true, got %v", childOvrB.AI.Enabled)
 	}
-	if childOvrB.AIDocs.Template != "both-tmpl" {
-		t.Errorf("child-override-both AIDocs.Template = %q, want both-tmpl", childOvrB.AIDocs.Template)
+	if childOvrB.AI.Template != "both-tmpl" {
+		t.Errorf("child-override-both AI.Template = %q, want both-tmpl", childOvrB.AI.Template)
 	}
 
 	// Grandchild (multi-hop): inherits from child-inherit
 	grandchild := services["grandchild-multi-hop"]
-	if grandchild.AIDocs.Enabled == nil || *grandchild.AIDocs.Enabled != false {
-		t.Errorf("grandchild-multi-hop AIDocs.Enabled should inherit false from parent chain, got %v", grandchild.AIDocs.Enabled)
+	if grandchild.AI.Enabled == nil || *grandchild.AI.Enabled != false {
+		t.Errorf("grandchild-multi-hop AI.Enabled should inherit false from parent chain, got %v", grandchild.AI.Enabled)
 	}
-	if grandchild.AIDocs.Template != "parent-tmpl" {
-		t.Errorf("grandchild-multi-hop AIDocs.Template should inherit parent-tmpl, got %q", grandchild.AIDocs.Template)
+	if grandchild.AI.Template != "parent-tmpl" {
+		t.Errorf("grandchild-multi-hop AI.Template should inherit parent-tmpl, got %q", grandchild.AI.Template)
 	}
 }
 
