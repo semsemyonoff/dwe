@@ -17,13 +17,16 @@ func newRenderCmd(flags *rootFlags) *cobra.Command {
 
 Subcommands:
   env  — generate .env from the exports.env spec
-  ide  — generate IDE config files from template packs`,
+  ide  — generate IDE config files from template packs
+  ai   — generate hub-level agents documentation from template packs`,
 		Example: `  devbox render env -o .env
-  devbox render ide`,
+  devbox render ide
+  devbox render ai`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newRenderEnvCmd(flags))
 	cmd.AddCommand(newRenderIDECmd(flags))
+	cmd.AddCommand(newRenderAICmd(flags))
 	return cmd
 }
 

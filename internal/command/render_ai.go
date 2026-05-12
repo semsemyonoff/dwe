@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -14,6 +15,8 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pathsafe"
 	"devbox-cli/internal/render"
+
+	"github.com/spf13/cobra"
 )
 
 // resolveAgentsTemplatePack resolves a template pack directory for a service.
@@ -522,4 +525,200 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	}
 
 	return nil
+}
+
+// selectAgentsServices filters and resolves agents-enabled services.
+// It returns a list of selected service names (sorted lexicographically) and
+// a list of services that were skipped with reason-specific context.
+//
+// Selection logic mirrors IDE rendering:
+//  1. Gate on both flags: services where svc.Enabled==false or svc.AIDocsRenderEnabled()==false are dropped.
+//  2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
+//  3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
+//     share the same Dir, the deepest extends chain wins; ties are broken lexicographically.
+func selectAgentsServices(services map[string]config.ServiceConfig) (selected []string, skipped []skippedService) {
+	var allSkipped []skippedService
+
+	// Step A: gate on both Enabled and AIDocsRenderEnabled.
+	enabled := make(map[string]config.ServiceConfig)
+	for name, svc := range services {
+		if !svc.Enabled {
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "service-disabled"})
+			continue
+		}
+		if aiDocsEnabled, explicit := svc.AIDocsRenderEnabledExplicit(); !aiDocsEnabled {
+			reason := "ai-policy"
+			if explicit {
+				reason = "ai-disabled"
+			}
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: reason})
+			continue
+		}
+		enabled[name] = svc
+	}
+
+	// Step B: drop services with empty Dir or dir equal to project root (".").
+	dirNormalized := make(map[string]config.ServiceConfig)
+	for name, svc := range enabled {
+		if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "empty-dir"})
+			continue
+		}
+		dirNormalized[name] = svc
+	}
+
+	// Step C: group by filepath.Clean(Dir) and resolve collisions.
+	dirGroups := make(map[string][]string)
+	for name, svc := range dirNormalized {
+		cleanDir := filepath.Clean(svc.Dir)
+		dirGroups[cleanDir] = append(dirGroups[cleanDir], name)
+	}
+
+	// For each group, pick the winner (deepest extends chain; tie-break by name).
+	selectedSet := make(map[string]bool)
+	for dir, names := range dirGroups {
+		if len(names) == 1 {
+			selectedSet[names[0]] = true
+			continue
+		}
+
+		// Multiple services share this dir: find the deepest extends chain.
+		sort.Strings(names) // tie-break: lexicographically first among deepest
+		var deepest string
+		maxDepth := -1
+		for _, name := range names {
+			depth, _ := extendsDepth(services, name)
+			if depth > maxDepth {
+				maxDepth = depth
+				deepest = name
+			}
+		}
+
+		selectedSet[deepest] = true
+		for _, name := range names {
+			if name != deepest {
+				allSkipped = append(allSkipped, skippedService{
+					Name:   name,
+					Reason: "lost-collision",
+					Dir:    dir,
+					Winner: deepest,
+				})
+			}
+		}
+	}
+
+	// Collect selected names and sort.
+	for name := range selectedSet {
+		selected = append(selected, name)
+	}
+	sort.Strings(selected)
+
+	// Sort skipped by name for determinism.
+	sort.Slice(allSkipped, func(i, j int) bool {
+		return allSkipped[i].Name < allSkipped[j].Name
+	})
+	skipped = allSkipped
+
+	return selected, skipped
+}
+
+// validateExplicitAIArg validates the explicit service argument for `devbox render ai <service>`.
+// Checks in priority order: not-found → disabled → no-dir → AI docs policy.
+// Returns nil when the service is valid and renderable.
+func validateExplicitAIArg(name string, services map[string]config.ServiceConfig) error {
+	svc, ok := services[name]
+	if !ok {
+		return fmt.Errorf("service %q not found in config", name)
+	}
+	if !svc.Enabled {
+		return fmt.Errorf("service %q is disabled at the project level", name)
+	}
+	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
+		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
+	}
+	enabled, explicit := svc.AIDocsRenderEnabledExplicit()
+	if !enabled {
+		if explicit {
+			return fmt.Errorf("service %q has ai_docs.enabled: false", name)
+		}
+		return fmt.Errorf("service %q does not have agents docs enabled; set ai_docs.enabled: true to opt in", name)
+	}
+	return nil
+}
+
+// newRenderAICmd creates the `devbox render ai [service]` command.
+// It generates hub-level agentic docs into each service directory.
+// When a service name is provided only that service is processed;
+// otherwise all services matching the agents docs selection policy are processed.
+func newRenderAICmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "ai [service]",
+		Short: "Generate hub-level agents docs from template packs",
+		Long: `Generate agents documentation files (AGENTS.md + CLAUDE.md symlink) for the service hub.
+
+The command walks the chosen template pack (devbox/templates/agents/<pack-name>/)
+and renders templates + creates symlinks according to the pack's manifest.yml.
+
+Template pack resolution (explicit is strict; implicit chain: service-name → default):
+  1. If ai_docs.template is set in the service config, use that pack (explicit, strict)
+  2. Otherwise, try devbox/templates/agents/<service-name>/
+  3. If not found, use devbox/templates/agents/default/
+  4. If none exist, return an error
+
+Services that participate in agents docs rendering:
+  - All service types have ai_docs.enabled: true by default
+  - Set ai_docs.enabled: false to opt out`,
+		Args:              cobra.MaximumNArgs(1),
+		SilenceUsage:      true,
+		ValidArgsFunction: serviceNameCompletion(flags),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+
+			projectRoot := flags.ProjectRoot()
+			w := render.Stdout()
+
+			// Determine which services to process.
+			var serviceNames []string
+			if len(args) == 1 {
+				// Explicit service argument: validate thoroughly
+				name := args[0]
+				if err := validateExplicitAIArg(name, cfg.Services); err != nil {
+					return err
+				}
+
+				serviceNames = []string{name}
+			} else {
+				// No explicit service: use selection policy
+				selected, skipped := selectAgentsServices(cfg.Services)
+				serviceNames = selected
+
+				// Emit warnings only for actionable skips; policy-based skips
+				// (service-disabled, ai-disabled, ai-policy) are expected and not reported.
+				for _, skip := range skipped {
+					switch skip.Reason {
+					case "empty-dir":
+						w.Warning(fmt.Sprintf("ai [%s] — skipped (service has no dir or dir is project root)", skip.Name))
+					case "lost-collision":
+						w.Warning(fmt.Sprintf("ai [%s] — skipped (dir %s rendered by %s)", skip.Name, skip.Dir, skip.Winner))
+					}
+				}
+
+				if len(serviceNames) == 0 {
+					w.Info("no services match the ai-docs rendering policy")
+					return nil
+				}
+			}
+
+			for _, name := range serviceNames {
+				svc := cfg.Services[name]
+				if err := renderAgentsForService(projectRoot, name, svc, cfg, w); err != nil {
+					return fmt.Errorf("service %s: %w", name, err)
+				}
+			}
+			return nil
+		},
+	}
 }

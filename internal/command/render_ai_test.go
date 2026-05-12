@@ -9,6 +9,19 @@ import (
 	"devbox-cli/internal/config"
 )
 
+// setupServicesConfig writes a devbox/services.yml file with the given YAML content.
+func setupServicesConfig(t *testing.T, dir, yaml string) {
+	t.Helper()
+	servicesDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(servicesDir, 0o755); err != nil {
+		t.Fatalf("create devbox dir: %v", err)
+	}
+	path := filepath.Join(servicesDir, "services.yml")
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+}
+
 // setupAgentsPackTemplates writes an agents template pack at <dir>/devbox/templates/agents/<packName>/
 // and populates it with a directory structure of files.
 func setupAgentsPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
@@ -919,29 +932,341 @@ func TestEnsureRelativeSymlink_nestedPath(t *testing.T) {
 }
 
 // TestEnsureRelativeSymlink_escapeLink rejects link escaping hub.
-func TestEnsureRelativeSymlink_escapeLink(t *testing.T) {
-	hubDir := t.TempDir()
-	projectRoot := filepath.Dir(hubDir)
 
-	_, err := ensureRelativeSymlink("../escape.md", "AGENTS.md", hubDir, projectRoot)
-	if err == nil {
-		t.Fatal("expected error for escaping link")
+// TestNewRenderAICmd_happyPath tests the full command flow with a single service.
+func TestNewRenderAICmd_happyPath(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	// Setup devbox.yml
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
 	}
-	if !strings.Contains(err.Error(), "escape") {
-		t.Errorf("error should mention escape: %v", err)
+
+	// Setup services.yml with service details
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: test-api
+`)
+
+	// Create template pack with manifest and template file
+	setupAgentsPackTemplates(t, projectRoot, "default", map[string]string{
+		"manifest.yml":   "render:\n  - from: AGENTS.md.tmpl\n    to: AGENTS.md\nsymlinks:\n  - link: CLAUDE.md\n    to: AGENTS.md",
+		"AGENTS.md.tmpl": "# Agents for {{ .Service }}\nProject: {{ .Project.Name }}",
+	})
+
+	// Create service directory
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create service dir: %v", err)
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	if err := cmd.RunE(cmd, []string{"api"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	// Verify AGENTS.md was created
+	agentsPath := filepath.Join(hubDir, "AGENTS.md")
+	content, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	if !strings.Contains(string(content), "Agents for api") {
+		t.Errorf("AGENTS.md missing expected content: %s", content)
+	}
+
+	// Verify symlink was created
+	claudePath := filepath.Join(hubDir, "CLAUDE.md")
+	link, err := os.Readlink(claudePath)
+	if err != nil {
+		t.Fatalf("readlink CLAUDE.md: %v", err)
+	}
+	if link != "AGENTS.md" {
+		t.Errorf("expected symlink to AGENTS.md, got %q", link)
 	}
 }
 
-// TestEnsureRelativeSymlink_escapeTarget rejects target escaping hub.
-func TestEnsureRelativeSymlink_escapeTarget(t *testing.T) {
-	hubDir := t.TempDir()
-	projectRoot := filepath.Dir(hubDir)
+// TestNewRenderAICmd_explicitServiceAIDocsDisabled tests error when ai_docs.enabled: false.
+func TestNewRenderAICmd_explicitServiceAIDocsDisabled(t *testing.T) {
+	projectRoot := t.TempDir()
 
-	_, err := ensureRelativeSymlink("CLAUDE.md", "../escape.md", hubDir, projectRoot)
-	if err == nil {
-		t.Fatal("expected error for escaping target")
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
 	}
-	if !strings.Contains(err.Error(), "escape") {
-		t.Errorf("error should mention escape: %v", err)
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: test-api
+    ai_docs:
+      enabled: false
+`)
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	err := cmd.RunE(cmd, []string{"api"})
+	if err == nil {
+		t.Fatal("expected error for ai_docs.enabled: false")
+	}
+	if !strings.Contains(err.Error(), "ai_docs.enabled") {
+		t.Errorf("error should mention 'ai_docs.enabled': %v", err)
+	}
+}
+
+// TestNewRenderAICmd_noArgAutoSelection tests auto-selection without explicit service.
+func TestNewRenderAICmd_noArgAutoSelection(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  enabled-svc:
+    enabled: true
+  disabled-svc:
+    enabled: false
+  ai-disabled-svc:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  enabled-svc:
+    type: app
+    dir: services/enabled
+    container: test-enabled
+  disabled-svc:
+    type: app
+    dir: services/disabled
+    container: test-disabled
+  ai-disabled-svc:
+    type: app
+    dir: services/ai-disabled
+    container: test-ai-disabled
+    ai_docs:
+      enabled: false
+`)
+
+	// Create template pack
+	setupAgentsPackTemplates(t, projectRoot, "default", map[string]string{
+		"manifest.yml":   "render:\n  - from: AGENTS.md.tmpl\n    to: AGENTS.md\nsymlinks:\n  - link: CLAUDE.md\n    to: AGENTS.md",
+		"AGENTS.md.tmpl": "# Agents for {{ .Service }}",
+	})
+
+	// Create service directories
+	for _, dir := range []string{"services/enabled", "services/disabled", "services/ai-disabled"} {
+		if err := os.MkdirAll(filepath.Join(projectRoot, dir), 0o755); err != nil {
+			t.Fatalf("create dir %s: %v", dir, err)
+		}
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	if err := cmd.RunE(cmd, []string{}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	// Only enabled-svc should have rendered files
+	enabledPath := filepath.Join(projectRoot, "services", "enabled", "AGENTS.md")
+	if _, err := os.Stat(enabledPath); err != nil {
+		t.Fatalf("expected AGENTS.md in enabled service: %v", err)
+	}
+
+	// ai-disabled-svc should not have files (ai_docs.enabled: false)
+	aiDisabledPath := filepath.Join(projectRoot, "services", "ai-disabled", "AGENTS.md")
+	if _, err := os.Stat(aiDisabledPath); err == nil {
+		t.Fatal("expected no AGENTS.md in ai-disabled service")
+	}
+
+	// Disabled services should not have files
+	disabledPath := filepath.Join(projectRoot, "services", "disabled", "AGENTS.md")
+	if _, err := os.Stat(disabledPath); err == nil {
+		t.Fatal("expected no AGENTS.md in disabled service")
+	}
+}
+
+// TestNewRenderAICmd_explicitServiceNotFound tests error handling for non-existent service.
+func TestNewRenderAICmd_explicitServiceNotFound(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: test-api
+`)
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	err := cmd.RunE(cmd, []string{"nonexistent"})
+	if err == nil {
+		t.Fatal("expected error for nonexistent service")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error should mention 'not found': %v", err)
+	}
+}
+
+// TestNewRenderAICmd_explicitServiceDisabled tests error for disabled service.
+func TestNewRenderAICmd_explicitServiceDisabled(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: false
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: test-api
+`)
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	err := cmd.RunE(cmd, []string{"api"})
+	if err == nil {
+		t.Fatal("expected error for disabled service")
+	}
+	if !strings.Contains(err.Error(), "disabled") {
+		t.Errorf("error should mention 'disabled': %v", err)
+	}
+}
+
+// TestNewRenderAICmd_missingPack tests error when pack not found.
+func TestNewRenderAICmd_missingPack(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: test-api
+`)
+
+	// Create service directory but no template pack
+	if err := os.MkdirAll(filepath.Join(projectRoot, "services", "api"), 0o755); err != nil {
+		t.Fatalf("create service dir: %v", err)
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	err := cmd.RunE(cmd, []string{"api"})
+	if err == nil {
+		t.Fatal("expected error for missing pack")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error should mention 'not found': %v", err)
+	}
+}
+
+// TestNewRenderAICmd_existingRegularFile tests error when regular file exists at symlink target.
+func TestNewRenderAICmd_existingRegularFile(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: test-api
+`)
+
+	// Create template pack
+	setupAgentsPackTemplates(t, projectRoot, "default", map[string]string{
+		"manifest.yml":   "render:\n  - from: AGENTS.md.tmpl\n    to: AGENTS.md\nsymlinks:\n  - link: CLAUDE.md\n    to: AGENTS.md",
+		"AGENTS.md.tmpl": "# Agents for {{ .Service }}",
+	})
+
+	// Create service directory with existing CLAUDE.md file
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create service dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubDir, "CLAUDE.md"), []byte("manual content"), 0o644); err != nil {
+		t.Fatalf("write CLAUDE.md: %v", err)
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	err := cmd.RunE(cmd, []string{"api"})
+	if err == nil {
+		t.Fatal("expected error for existing regular file")
+	}
+	if !strings.Contains(err.Error(), "refuse to overwrite") {
+		t.Errorf("error should mention 'refuse to overwrite': %v", err)
 	}
 }

@@ -202,7 +202,7 @@ Runtime path: render each `from` → `to`, then create relative symlinks. Render
 
 Add the user-facing entry point under the existing `render` parent.
 
-- [ ] add `newRenderAICmd(flags *rootFlags) *cobra.Command` in `internal/command/render_ai.go`:
+- [x] add `newRenderAICmd(flags *rootFlags) *cobra.Command` in `internal/command/render_ai.go`:
   - `Use: "ai [service]"`, args: `cobra.MaximumNArgs(1)`
   - `ValidArgsFunction`: reuse `serviceNameCompletion(flags)`
   - `RunE`:
@@ -212,21 +212,21 @@ Add the user-facing entry point under the existing `render` parent.
        - if no arg: iterate `cfg.Services`, select services where `svc.Enabled` and `svc.AIDocsRenderEnabled()` and `Dir != ""`. Skip silently for default-disabled cases; emit `Warning` only for actionable skips (empty dir on an opted-in service). **Collision policy mirrors IDE rendering** (`internal/command/ide.go:54-140`): group selected services by `filepath.Clean(svc.Dir)`; for each group, the service with the **deepest `extends` chain wins** (tie-break lexicographic). This is required because `extends`-derived services legitimately share a `Dir` with their parent, and the derived child must win — picking the parent would render upstream docs over the specialized service. Extract the existing helpers (`selectIDEServices`, `extendsDepth`, `skippedService`) into something reusable, or, simpler, copy the same algorithm into a new `selectAgentsServices` function that calls the same `extendsDepth` (already package-local) and emits the same `skippedService` variants (rename to a shared name if duplication offends; otherwise keep symmetric).
        - if nothing selected → `Info("no services match the ai-docs rendering policy")`, return nil
     3. for each selected service: call `renderAgentsForService(projectRoot, name, svc, cfg, w)`
-- [ ] add `renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error`:
+- [x] add `renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error`:
   - validate `svc.Dir` non-empty
   - resolve `absRoot`, `absHubDir`; `pathsafe.ContainedRel(absRoot, absHubDir)` (hub strictly under root, not equal); `pathsafe.CheckNoSymlinks(absRoot, absHubDir, "service dir")`
   - `pack, err := resolveAgentsTemplatePack(svc, projectRoot, name)`
   - `manifest, err := loadAgentsManifest(pack)`; `validateAgentsManifest(manifest, pack)`
   - for each render entry: call `renderAgentsTemplateFile`; emit `Success(fmt.Sprintf("ai → %s", filepath.Join(svc.Dir, entry.To)))`
   - for each symlink entry: `changed, err := ensureRelativeSymlink(...)`; on error return; otherwise if `changed` emit `Success(fmt.Sprintf("ai → %s ⇒ %s", filepath.Join(svc.Dir, entry.Link), entry.To))`; if not changed, skip the success line
-- [ ] register in `internal/command/env.go`: `cmd.AddCommand(newRenderAICmd(flags))` and update the `Long`/`Example` of `newRenderCmd` to list `ai`
-- [ ] write integration-style tests in `internal/command/render_ai_test.go` exercising the full `RunE`:
+- [x] register in `internal/command/env.go`: `cmd.AddCommand(newRenderAICmd(flags))` and update the `Long`/`Example` of `newRenderCmd` to list `ai`
+- [x] write integration-style tests in `internal/command/render_ai_test.go` exercising the full `RunE`:
   - happy path: pack + manifest in fixture project, single service, asserts files + symlink
   - explicit-arg variants: not-found, disabled at project, no Dir, `ai_docs.enabled: false`
   - no-arg auto-selection: enabled services rendered, disabled services skipped, empty-dir service warns
   - missing pack (both candidates) → error
   - existing user-authored `CLAUDE.md` (regular file) → error per locked §5
-- [ ] run `make test && make lint` — must pass before next task
+- [x] run `make test && make lint` — must pass before next task
 
 ### Task 7: Documentation
 
