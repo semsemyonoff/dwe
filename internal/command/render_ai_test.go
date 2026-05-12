@@ -658,3 +658,290 @@ func TestValidateAgentsManifest_validFull(t *testing.T) {
 		t.Errorf("valid manifest should not error: %v", err)
 	}
 }
+
+// TestRenderAgentsTemplateFile_fresh writes a fresh template file.
+func TestRenderAgentsTemplateFile_fresh(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	// Create a template file
+	templateContent := "Service: {{ .Service }}, Project: {{ .Project.Name }}"
+	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
+	if err := os.WriteFile(templatePath, []byte(templateContent), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+
+	data := agentsTemplateData{
+		Project: config.ProjectConfig{Name: "myproject"},
+		Service: "api",
+	}
+
+	dest := "AGENTS.md"
+	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("renderAgentsTemplateFile: %v", err)
+	}
+
+	// Verify file was written
+	resultPath := filepath.Join(hubDir, dest)
+	content, err := os.ReadFile(resultPath)
+	if err != nil {
+		t.Fatalf("read rendered file: %v", err)
+	}
+
+	expected := "Service: api, Project: myproject"
+	if string(content) != expected {
+		t.Errorf("expected %q, got %q", expected, string(content))
+	}
+}
+
+// TestRenderAgentsTemplateFile_idempotent re-renders the same file.
+func TestRenderAgentsTemplateFile_idempotent(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	templateContent := "Content: {{ .Service }}"
+	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
+	if err := os.WriteFile(templatePath, []byte(templateContent), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+
+	data := agentsTemplateData{Service: "api"}
+	dest := "AGENTS.md"
+
+	// First render
+	if err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
+		t.Fatalf("first render: %v", err)
+	}
+
+	resultPath := filepath.Join(hubDir, dest)
+	info1, err := os.Stat(resultPath)
+	if err != nil {
+		t.Fatalf("stat after first render: %v", err)
+	}
+
+	// Second render (idempotent)
+	if err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
+		t.Fatalf("second render: %v", err)
+	}
+
+	info2, err := os.Stat(resultPath)
+	if err != nil {
+		t.Fatalf("stat after second render: %v", err)
+	}
+
+	// File should exist and be overwritten
+	if !info1.Mode().IsRegular() || !info2.Mode().IsRegular() {
+		t.Error("expected regular files")
+	}
+}
+
+// TestRenderAgentsTemplateFile_nestedPath renders to a nested destination.
+func TestRenderAgentsTemplateFile_nestedPath(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	templateContent := "Nested"
+	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
+	if err := os.WriteFile(templatePath, []byte(templateContent), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+
+	data := agentsTemplateData{}
+	dest := ".claude/AGENTS.md"
+
+	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("renderAgentsTemplateFile: %v", err)
+	}
+
+	resultPath := filepath.Join(hubDir, dest)
+	if _, err := os.Stat(resultPath); err != nil {
+		t.Fatalf("nested file not created: %v", err)
+	}
+}
+
+// TestRenderAgentsTemplateFile_escapingDest rejects destination escaping hub.
+func TestRenderAgentsTemplateFile_escapingDest(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
+	if err := os.WriteFile(templatePath, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+
+	data := agentsTemplateData{}
+	dest := "../escape.md"
+
+	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected error for escaping destination")
+	}
+	if !strings.Contains(err.Error(), "escape") {
+		t.Errorf("error should mention escape: %v", err)
+	}
+}
+
+// TestEnsureRelativeSymlink_fresh creates a new symlink.
+func TestEnsureRelativeSymlink_fresh(t *testing.T) {
+	hubDir := t.TempDir()
+	projectRoot := filepath.Dir(hubDir)
+
+	changed, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("ensureRelativeSymlink: %v", err)
+	}
+
+	if !changed {
+		t.Error("expected changed=true for new symlink")
+	}
+
+	// Verify symlink exists
+	linkPath := filepath.Join(hubDir, "CLAUDE.md")
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	if target != "AGENTS.md" {
+		t.Errorf("expected target %q, got %q", "AGENTS.md", target)
+	}
+}
+
+// TestEnsureRelativeSymlink_idempotent returns false when symlink already correct.
+func TestEnsureRelativeSymlink_idempotent(t *testing.T) {
+	hubDir := t.TempDir()
+	projectRoot := filepath.Dir(hubDir)
+
+	// First creation
+	changed1, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if !changed1 {
+		t.Error("first call should return changed=true")
+	}
+
+	// Second call (idempotent)
+	changed2, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if changed2 {
+		t.Error("second call should return changed=false")
+	}
+}
+
+// TestEnsureRelativeSymlink_targetChanged replaces when target changes.
+func TestEnsureRelativeSymlink_targetChanged(t *testing.T) {
+	hubDir := t.TempDir()
+	projectRoot := filepath.Dir(hubDir)
+
+	// Create initial symlink
+	if _, err := ensureRelativeSymlink("LINK.md", "OLD.md", hubDir, projectRoot); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+
+	// Change target
+	changed, err := ensureRelativeSymlink("LINK.md", "NEW.md", hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+
+	if !changed {
+		t.Error("expected changed=true when target changed")
+	}
+
+	linkPath := filepath.Join(hubDir, "LINK.md")
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	if target != "NEW.md" {
+		t.Errorf("expected NEW.md, got %q", target)
+	}
+}
+
+// TestEnsureRelativeSymlink_regularFileExists rejects regular file at link path.
+func TestEnsureRelativeSymlink_regularFileExists(t *testing.T) {
+	hubDir := t.TempDir()
+	projectRoot := filepath.Dir(hubDir)
+
+	// Create a regular file at the link path
+	linkPath := filepath.Join(hubDir, "CLAUDE.md")
+	if err := os.WriteFile(linkPath, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	_, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected error for existing regular file")
+	}
+	if !strings.Contains(err.Error(), "refuse") {
+		t.Errorf("error should mention refuse: %v", err)
+	}
+}
+
+// TestEnsureRelativeSymlink_nestedPath creates symlink in nested directory.
+func TestEnsureRelativeSymlink_nestedPath(t *testing.T) {
+	hubDir := t.TempDir()
+	projectRoot := filepath.Dir(hubDir)
+
+	changed, err := ensureRelativeSymlink(".claude/CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("ensureRelativeSymlink: %v", err)
+	}
+
+	if !changed {
+		t.Error("expected changed=true for new symlink")
+	}
+
+	linkPath := filepath.Join(hubDir, ".claude", "CLAUDE.md")
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	if target != "../AGENTS.md" {
+		t.Errorf("expected relative target ../AGENTS.md, got %q", target)
+	}
+}
+
+// TestEnsureRelativeSymlink_escapeLink rejects link escaping hub.
+func TestEnsureRelativeSymlink_escapeLink(t *testing.T) {
+	hubDir := t.TempDir()
+	projectRoot := filepath.Dir(hubDir)
+
+	_, err := ensureRelativeSymlink("../escape.md", "AGENTS.md", hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected error for escaping link")
+	}
+	if !strings.Contains(err.Error(), "escape") {
+		t.Errorf("error should mention escape: %v", err)
+	}
+}
+
+// TestEnsureRelativeSymlink_escapeTarget rejects target escaping hub.
+func TestEnsureRelativeSymlink_escapeTarget(t *testing.T) {
+	hubDir := t.TempDir()
+	projectRoot := filepath.Dir(hubDir)
+
+	_, err := ensureRelativeSymlink("CLAUDE.md", "../escape.md", hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected error for escaping target")
+	}
+	if !strings.Contains(err.Error(), "escape") {
+		t.Errorf("error should mention escape: %v", err)
+	}
+}

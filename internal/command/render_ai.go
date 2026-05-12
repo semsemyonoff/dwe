@@ -1,16 +1,19 @@
 package command
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pathsafe"
+	"devbox-cli/internal/render"
 )
 
 // resolveAgentsTemplatePack resolves a template pack directory for a service.
@@ -277,6 +280,244 @@ func validateSymlinkEntry(e agentsSymlinkEntry, renderDests map[string]bool, see
 		}
 		if !found {
 			return fmt.Errorf("%ssymlink to %q does not match any render destination", prefix, e.To)
+		}
+	}
+
+	return nil
+}
+
+// agentsTemplateData holds the context for rendering agents templates.
+type agentsTemplateData struct {
+	Project    config.ProjectConfig
+	Service    string
+	ServiceCfg config.ServiceConfig
+	Runtime    config.RuntimeConfig
+}
+
+// renderAgentsTemplateFile reads a template file, renders it with the given data,
+// and writes the result to dest. It enforces that dest stays inside absHubDir
+// and that absHubDir stays inside absRoot (via symlink checks and boundaries).
+//
+// sourcePath: absolute path to the template file (ends in .tmpl)
+// data: template context
+// dest: relative destination path (within hub dir)
+// absHubDir: resolved absolute service hub directory
+// absRoot: resolved absolute project root
+func renderAgentsTemplateFile(sourcePath string, data agentsTemplateData, dest, absHubDir, absRoot string) error {
+	// Read template file
+	tplBytes, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read template %s: %w", sourcePath, err)
+	}
+
+	// Parse template with missingkey=error
+	name := filepath.Base(sourcePath)
+	t, err := template.New(name).Option("missingkey=error").Parse(string(tplBytes))
+	if err != nil {
+		return fmt.Errorf("parse template %s: %w", name, err)
+	}
+
+	// Render template to buffer
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return fmt.Errorf("render template %s: %w", name, err)
+	}
+
+	// Resolve destination and check containment within hub
+	absDest, err := filepath.Abs(filepath.Join(absHubDir, dest))
+	if err != nil {
+		return fmt.Errorf("resolve destination: %w", err)
+	}
+
+	// Containment check: dest must be inside absHubDir
+	_, err = pathsafe.ContainedRel(absHubDir, absDest)
+	if err != nil {
+		return fmt.Errorf("destination %q escapes hub directory: %w", dest, err)
+	}
+
+	destDir := filepath.Dir(absDest)
+
+	// Guard against symlinks in the destination path before creating directories
+	if err := pathsafe.CheckNoSymlinks(absRoot, destDir, "destination dir"); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return fmt.Errorf("create dir for %s: %w", dest, err)
+	}
+
+	// Verify real directory resolves inside both root and hub after creation
+	realRoot, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root: %w", err)
+	}
+	realHubDir, err := filepath.EvalSymlinks(absHubDir)
+	if err != nil {
+		return fmt.Errorf("resolve hub dir: %w", err)
+	}
+	realDir, err := filepath.EvalSymlinks(destDir)
+	if err != nil {
+		return fmt.Errorf("resolve dir for %s: %w", dest, err)
+	}
+	if err := pathsafe.EnsureRealUnder(realDir, realRoot, realHubDir); err != nil {
+		return fmt.Errorf("destination dir for %q resolves outside required boundaries via symlink: %w", dest, err)
+	}
+
+	// Refuse to write through a symlinked destination file
+	if fi, err := os.Lstat(absDest); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("destination %q is a symlink; will not overwrite", dest)
+	}
+
+	if err := os.WriteFile(absDest, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", dest, err)
+	}
+
+	return nil
+}
+
+// ensureRelativeSymlink creates or updates a relative symlink. Returns (changed, error).
+// If the symlink already points to the correct target, returns (false, nil).
+// If a non-symlink regular file exists at linkPath, returns (false, error) with a user-friendly message.
+//
+// linkPath: relative path to the symlink (within hub dir)
+// targetWithinHub: the destination path as stored in manifest (also relative to hub)
+// absHubDir: resolved absolute hub directory
+// absRoot: resolved absolute project root
+func ensureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string) (changed bool, err error) {
+	// Resolve both paths to absolute form inside the hub
+	absLink := filepath.Join(absHubDir, linkPath)
+	absTarget := filepath.Join(absHubDir, targetWithinHub)
+
+	// Validate both stay inside hub
+	_, err = pathsafe.ContainedRel(absHubDir, absLink)
+	if err != nil {
+		return false, fmt.Errorf("symlink link %q escapes hub directory: %w", linkPath, err)
+	}
+	_, err = pathsafe.ContainedRel(absHubDir, absTarget)
+	if err != nil {
+		return false, fmt.Errorf("symlink target %q escapes hub directory: %w", targetWithinHub, err)
+	}
+
+	// Create parent directory for the symlink (with symlink guards)
+	linkDir := filepath.Dir(absLink)
+	if err := pathsafe.CheckNoSymlinks(absRoot, linkDir, "symlink parent dir"); err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(linkDir, 0o755); err != nil {
+		return false, fmt.Errorf("create dir for symlink %s: %w", linkPath, err)
+	}
+
+	// Compute relative target (from link's directory to absolute target)
+	relTarget, err := filepath.Rel(linkDir, absTarget)
+	if err != nil {
+		return false, fmt.Errorf("compute relative path: %w", err)
+	}
+	if relTarget == "" {
+		return false, fmt.Errorf("symlink target resolves to empty relative path")
+	}
+
+	// Inspect existing symlink
+	if fi, err := os.Lstat(absLink); err == nil {
+		// Path exists
+		if fi.Mode()&os.ModeSymlink != 0 {
+			// It's a symlink; check target
+			currentTarget, err := os.Readlink(absLink)
+			if err != nil {
+				return false, fmt.Errorf("read symlink %s: %w", linkPath, err)
+			}
+			if currentTarget == relTarget {
+				// Already points to correct target
+				return false, nil
+			}
+			// Target changed; replace it
+			if err := os.Remove(absLink); err != nil {
+				return false, fmt.Errorf("remove symlink %s: %w", linkPath, err)
+			}
+			if err := os.Symlink(relTarget, absLink); err != nil {
+				return false, fmt.Errorf("create symlink %s: %w", linkPath, err)
+			}
+			return true, nil
+		}
+		// Not a symlink (regular file or directory)
+		return false, fmt.Errorf("refuse to overwrite non-symlink file at %s; remove it or disable via ai_docs.enabled: false", linkPath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("stat %s: %w", linkPath, err)
+	}
+
+	// Path does not exist; create symlink
+	if err := os.Symlink(relTarget, absLink); err != nil {
+		return false, fmt.Errorf("create symlink %s: %w", linkPath, err)
+	}
+	return true, nil
+}
+
+// renderAgentsForService renders a single service's agents documentation.
+// It resolves the template pack, loads and validates the manifest, and renders
+// each entry in the manifest (files + symlinks).
+func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
+	// Validate that service has a directory
+	if strings.TrimSpace(svc.Dir) == "" {
+		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
+	}
+
+	// Resolve paths
+	absRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root: %w", err)
+	}
+	absHubDir := filepath.Join(absRoot, svc.Dir)
+
+	// Validate hub dir is inside root (not equal)
+	_, err = pathsafe.ContainedRel(absRoot, absHubDir)
+	if err != nil {
+		return fmt.Errorf("service dir escapes project root: %w", err)
+	}
+
+	// Check for symlinks in the hub dir path
+	if err := pathsafe.CheckNoSymlinks(absRoot, absHubDir, "service dir"); err != nil {
+		return err
+	}
+
+	// Resolve template pack
+	pack, err := resolveAgentsTemplatePack(svc, projectRoot, name)
+	if err != nil {
+		return err
+	}
+
+	// Load and validate manifest
+	manifest, err := loadAgentsManifest(pack)
+	if err != nil {
+		return err
+	}
+	if err := validateAgentsManifest(manifest, pack); err != nil {
+		return fmt.Errorf("invalid agents manifest: %w", err)
+	}
+
+	// Prepare template data
+	data := agentsTemplateData{
+		Project:    cfg.Project,
+		Service:    name,
+		ServiceCfg: svc,
+		Runtime:    cfg.Runtime,
+	}
+
+	// Render each file in the manifest
+	for _, entry := range manifest.Render {
+		sourcePath := filepath.Join(pack, entry.From)
+		if err := renderAgentsTemplateFile(sourcePath, data, entry.To, absHubDir, absRoot); err != nil {
+			return err
+		}
+		w.Success(fmt.Sprintf("ai → %s", filepath.Join(svc.Dir, entry.To)))
+	}
+
+	// Create each symlink in the manifest
+	for _, entry := range manifest.Symlinks {
+		changed, err := ensureRelativeSymlink(entry.Link, entry.To, absHubDir, absRoot)
+		if err != nil {
+			return err
+		}
+		if changed {
+			w.Success(fmt.Sprintf("ai → %s ⇒ %s", filepath.Join(svc.Dir, entry.Link), entry.To))
 		}
 	}
 

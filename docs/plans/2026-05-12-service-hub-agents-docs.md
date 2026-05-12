@@ -167,8 +167,8 @@ Manifest schema declares what to render and what to symlink. Strict YAML decode 
 
 Runtime path: render each `from` → `to`, then create relative symlinks. Render is idempotent (overwrite); symlinks are idempotent with the "no overwrite of regular file" guard (per locked decision §5).
 
-- [ ] add `agentsTemplateData{ Project config.ProjectConfig, Service string, ServiceCfg config.ServiceConfig, Runtime config.RuntimeConfig }`
-- [ ] add `renderAgentsTemplateFile(sourcePath string, data agentsTemplateData, dest, absHubDir, absRoot string) error`:
+- [x] add `agentsTemplateData{ Project config.ProjectConfig, Service string, ServiceCfg config.ServiceConfig, Runtime config.RuntimeConfig }`
+- [x] add `renderAgentsTemplateFile(sourcePath string, data agentsTemplateData, dest, absHubDir, absRoot string) error`:
   - parse with `text/template`, `Option("missingkey=error")`
   - resolve `absDest`, run `pathsafe.ContainedRel(absHubDir, absDest)` — error if outside
   - run `pathsafe.CheckNoSymlinks(absRoot, filepath.Dir(absDest), "destination dir")` before `MkdirAll`
@@ -176,7 +176,7 @@ Runtime path: render each `from` → `to`, then create relative symlinks. Render
   - `EvalSymlinks` parent dir, then `pathsafe.EnsureRealUnder(realDir, realRoot, realHub)` — both boundaries
   - refuse to write through a symlinked destination file (`os.Lstat` + `ModeSymlink` check)
   - `os.WriteFile` with `0o644`
-- [ ] add `ensureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string) (changed bool, err error)`:
+- [x] add `ensureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string) (changed bool, err error)`:
   - resolve `absLink`, run `pathsafe.ContainedRel(absHubDir, absLink)`
   - resolve `absTarget = filepath.Join(absHubDir, targetWithinHub)`, run `pathsafe.ContainedRel(absHubDir, absTarget)`
   - `MkdirAll` parent of `absLink` (with `CheckNoSymlinks` first)
@@ -186,7 +186,8 @@ Runtime path: render each `from` → `to`, then create relative symlinks. Render
     - is a symlink → if `os.Readlink` returns `relTarget` then return `(false, nil)`; else `os.Remove` + `os.Symlink` → return `(true, nil)`
     - is a regular file or dir → return `(false, error)` with the locked error message (§5)
   - the `changed` flag is consumed by `renderAgentsForService` (Task 6) to suppress the success line on no-op
-- [ ] write tests in `internal/command/render_ai_test.go`:
+- [x] add `renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error` — helper called from Task 6's cobra command
+- [x] write tests in `internal/command/render_ai_test.go`:
   - fresh render writes files + symlink
   - re-run is idempotent (symlink still points to right target; no error)
   - symlink replaced when target changes between runs
@@ -195,7 +196,7 @@ Runtime path: render each `from` → `to`, then create relative symlinks. Render
   - symlink `link` escaping hub → error
   - symlink target outside hub → error (caught by render-output validation in Task 4, but defense-in-depth here too)
   - destination path with pre-existing symlinked component (e.g. `services/api/.claude` is a symlink) → error
-- [ ] run `make test && make lint` — must pass before next task
+- [x] run `make test && make lint` — passing tests; `renderAgentsForService` flagged as unused (expected, will be called from Task 6 command handler)
 
 ### Task 6: Wire `devbox render ai` cobra subcommand
 
