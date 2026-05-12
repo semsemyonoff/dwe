@@ -1122,6 +1122,8 @@ services:
     enabled: false
   ai-disabled-svc:
     enabled: true
+  no-dir-svc:
+    enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
@@ -1143,6 +1145,9 @@ services:
     container: test-ai-disabled
     ai_docs:
       enabled: false
+  no-dir-svc:
+    type: app
+    container: test-no-dir
 `)
 
 	// Create template pack
@@ -1151,7 +1156,7 @@ services:
 		"AGENTS.md.tmpl": "# Agents for {{ .Service }}",
 	})
 
-	// Create service directories
+	// Create service directories (no-dir-svc has no directory by design)
 	for _, dir := range []string{"services/enabled", "services/disabled", "services/ai-disabled"} {
 		if err := os.MkdirAll(filepath.Join(projectRoot, dir), 0o755); err != nil {
 			t.Fatalf("create dir %s: %v", dir, err)
@@ -1161,6 +1166,7 @@ services:
 	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
 	cmd := newRenderAICmd(flags)
 
+	// Command should succeed even though no-dir-svc is skipped with a warning
 	if err := cmd.RunE(cmd, []string{}); err != nil {
 		t.Fatalf("RunE: %v", err)
 	}
@@ -1181,6 +1187,12 @@ services:
 	disabledPath := filepath.Join(projectRoot, "services", "disabled", "AGENTS.md")
 	if _, err := os.Stat(disabledPath); err == nil {
 		t.Fatal("expected no AGENTS.md in disabled service")
+	}
+
+	// no-dir-svc should not have rendered files (skipped due to empty dir, warning emitted)
+	noDirPath := filepath.Join(projectRoot, "no-dir-svc", "AGENTS.md")
+	if _, err := os.Stat(noDirPath); err == nil {
+		t.Fatal("expected no AGENTS.md for no-dir-svc")
 	}
 }
 

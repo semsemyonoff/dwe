@@ -482,7 +482,7 @@ func ensureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string)
 // each entry in the manifest (files + symlinks).
 func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
 	// Validate that service has a directory
-	if strings.TrimSpace(svc.Dir) == "" {
+	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
 	}
 
@@ -655,7 +655,7 @@ func validateExplicitAIArg(name string, services map[string]config.ServiceConfig
 	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
 	}
-	if enabled, _ := svc.AIDocsRenderEnabledExplicit(); !enabled {
+	if !svc.AIDocsRenderEnabled() {
 		return fmt.Errorf("service %q has ai_docs.enabled: false", name)
 	}
 	return nil
