@@ -68,6 +68,13 @@ func TestCheckNoSymlinks(t *testing.T) {
 			label:  "test path",
 			ok:     true,
 		},
+		{
+			name:   "path above root",
+			root:   tmpDir,
+			absDir: filepath.Dir(tmpDir),
+			label:  "test path",
+			ok:     false,
+		},
 	}
 
 	for _, tt := range tests {

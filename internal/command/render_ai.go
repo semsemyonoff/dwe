@@ -183,12 +183,8 @@ func validateRenderEntry(e agentsRenderEntry, absPackDir string, renderDests map
 
 	// Resolve and check for escaping
 	absSource := filepath.Join(absPackDir, e.From)
-	rel, err := pathsafe.ContainedRel(absPackDir, absSource)
-	if err != nil {
+	if _, err := pathsafe.ContainedRel(absPackDir, absSource); err != nil {
 		return fmt.Errorf("%sfrom escapes pack directory: %w", prefix, err)
-	}
-	if rel == "" {
-		return fmt.Errorf("%sfrom resolves to pack directory itself (must be a file)", prefix)
 	}
 
 	// Check for symlinks in the path (including parent directories)
@@ -235,8 +231,8 @@ func validateRenderEntry(e agentsRenderEntry, absPackDir string, renderDests map
 	}
 	seenDests[e.To] = true
 
-	// Track for symlink validation
-	renderDests[e.To] = true
+	// Track for symlink validation (cleaned so fast-path lookup in validateSymlinkEntry works)
+	renderDests[filepath.Clean(e.To)] = true
 
 	return nil
 }
@@ -270,20 +266,9 @@ func validateSymlinkEntry(e agentsSymlinkEntry, renderDests map[string]bool, see
 		return fmt.Errorf("%sto is required and must not be empty", prefix)
 	}
 
-	// Must match one of the render destinations (cleaned comparison)
-	toClean := filepath.Clean(e.To)
-	if !renderDests[toClean] {
-		// Check if it matches any render dest's cleaned form
-		found := false
-		for dest := range renderDests {
-			if filepath.Clean(dest) == toClean {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("%ssymlink to %q does not match any render destination", prefix, e.To)
-		}
+	// Must match one of the render destinations (keys are pre-cleaned in validateRenderEntry)
+	if !renderDests[filepath.Clean(e.To)] {
+		return fmt.Errorf("%ssymlink to %q does not match any render destination", prefix, e.To)
 	}
 
 	return nil
@@ -408,6 +393,23 @@ func ensureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string)
 	}
 	if err := os.MkdirAll(linkDir, 0o755); err != nil {
 		return false, fmt.Errorf("create dir for symlink %s: %w", linkPath, err)
+	}
+
+	// Verify linkDir resolves inside both root and hub after MkdirAll (TOCTOU guard)
+	realLinkDir, err := filepath.EvalSymlinks(linkDir)
+	if err != nil {
+		return false, fmt.Errorf("resolve symlink parent dir: %w", err)
+	}
+	realHubDir, err := filepath.EvalSymlinks(absHubDir)
+	if err != nil {
+		return false, fmt.Errorf("resolve hub dir: %w", err)
+	}
+	realRoot, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return false, fmt.Errorf("resolve project root: %w", err)
+	}
+	if err := pathsafe.EnsureRealUnder(realLinkDir, realRoot, realHubDir); err != nil {
+		return false, fmt.Errorf("symlink parent dir resolves outside required boundaries via symlink: %w", err)
 	}
 
 	// Compute relative target (from link's directory to absolute target)
@@ -546,12 +548,8 @@ func selectAgentsServices(services map[string]config.ServiceConfig) (selected []
 			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "service-disabled"})
 			continue
 		}
-		if aiDocsEnabled, explicit := svc.AIDocsRenderEnabledExplicit(); !aiDocsEnabled {
-			reason := "ai-policy"
-			if explicit {
-				reason = "ai-disabled"
-			}
-			allSkipped = append(allSkipped, skippedService{Name: name, Reason: reason})
+		if aiDocsEnabled, _ := svc.AIDocsRenderEnabledExplicit(); !aiDocsEnabled {
+			allSkipped = append(allSkipped, skippedService{Name: name, Reason: "ai-disabled"})
 			continue
 		}
 		enabled[name] = svc
@@ -636,12 +634,8 @@ func validateExplicitAIArg(name string, services map[string]config.ServiceConfig
 	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
 	}
-	enabled, explicit := svc.AIDocsRenderEnabledExplicit()
-	if !enabled {
-		if explicit {
-			return fmt.Errorf("service %q has ai_docs.enabled: false", name)
-		}
-		return fmt.Errorf("service %q does not have agents docs enabled; set ai_docs.enabled: true to opt in", name)
+	if enabled, _ := svc.AIDocsRenderEnabledExplicit(); !enabled {
+		return fmt.Errorf("service %q has ai_docs.enabled: false", name)
 	}
 	return nil
 }

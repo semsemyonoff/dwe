@@ -753,6 +753,15 @@ func TestRenderAgentsTemplateFile_idempotent(t *testing.T) {
 	if !info1.Mode().IsRegular() || !info2.Mode().IsRegular() {
 		t.Error("expected regular files")
 	}
+
+	// Content should match template rendering
+	got, err := os.ReadFile(resultPath)
+	if err != nil {
+		t.Fatalf("read after second render: %v", err)
+	}
+	if string(got) != "Content: api" {
+		t.Errorf("expected %q, got %q", "Content: api", string(got))
+	}
 }
 
 // TestRenderAgentsTemplateFile_nestedPath renders to a nested destination.
@@ -931,7 +940,38 @@ func TestEnsureRelativeSymlink_nestedPath(t *testing.T) {
 	}
 }
 
-// TestEnsureRelativeSymlink_escapeLink rejects link escaping hub.
+func TestEnsureRelativeSymlink_escapeLink(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	// Write a target file inside the hub so the target path is valid
+	if err := os.WriteFile(filepath.Join(hubDir, "AGENTS.md"), []byte("content"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	// linkPath escapes the hub directory
+	_, err := ensureRelativeSymlink("../escape.md", "AGENTS.md", hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected error for link escaping hub, got nil")
+	}
+}
+
+func TestEnsureRelativeSymlink_escapeTarget(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	// targetWithinHub escapes the hub directory
+	_, err := ensureRelativeSymlink("CLAUDE.md", "../outside.md", hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected error for target escaping hub, got nil")
+	}
+}
 
 // TestNewRenderAICmd_happyPath tests the full command flow with a single service.
 func TestNewRenderAICmd_happyPath(t *testing.T) {

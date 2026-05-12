@@ -19,8 +19,19 @@ Services that participate in agents docs rendering:
   - All service types have ai_docs.enabled: true by default
   - Set ai_docs.enabled: false to opt out
 
+When a service name is given, only that service is rendered; the command errors if the service
+does not exist, is disabled at the project level, has an empty dir, or has ai_docs.enabled: false.
+When no service name is given, all eligible services are rendered automatically.
+
 ```
 devbox render ai [service] [flags]
+```
+
+### Examples
+
+```
+  devbox render ai         # render for all eligible services
+  devbox render ai api     # render only the "api" service
 ```
 
 ### Options
