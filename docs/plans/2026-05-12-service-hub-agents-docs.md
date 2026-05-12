@@ -121,11 +121,11 @@ Add schema + accessor + extends-inheritance, mirroring the existing `ide` block 
 
 Mirror `resolveIDETemplatePack` for agents: explicit-strict + implicit chain (service-name → default), rooted at `devbox/templates/agents/`.
 
-- [ ] create `internal/command/render_ai.go` skeleton (package `command`)
-- [ ] add `resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, error)` — same shape as `resolveIDETemplatePack`, rooted at `devbox/templates/agents/`
-- [ ] reuse `validateIDETemplateKey` and `validateServiceNameAsPackKey` directly (they live in the same `command` package — no extraction needed)
-- [ ] write tests in `internal/command/render_ai_test.go`: explicit pack found, explicit missing (hard error, no fallback), implicit service-name found, implicit fallback to default, both candidates missing (error), symlinked pack rejected, non-dir pack rejected
-- [ ] run `make test && make lint` — must pass before next task
+- [x] create `internal/command/render_ai.go` skeleton (package `command`)
+- [x] add `resolveAgentsTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, error)` — same shape as `resolveIDETemplatePack`, rooted at `devbox/templates/agents/`
+- [x] reuse `validateIDETemplateKey` and `validateServiceNameAsPackKey` directly (they live in the same `command` package — no extraction needed)
+- [x] write tests in `internal/command/render_ai_test.go`: explicit pack found, explicit missing (hard error, no fallback), implicit service-name found, implicit fallback to default, both candidates missing (error), symlinked pack rejected, non-dir pack rejected
+- [x] run `make test && make lint` — must pass before next task
 
 ### Task 4: Define and parse `manifest.yml`
 
