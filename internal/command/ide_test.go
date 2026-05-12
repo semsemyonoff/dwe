@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/pathsafe"
 	"devbox-cli/internal/render"
 )
 
@@ -1676,11 +1677,11 @@ func TestCheckNoSymlinks(t *testing.T) {
 		t.Fatalf("create real dir: %v", err)
 	}
 
-	if err := checkNoSymlinks(root, filepath.Join(root, "nonexistent", "path"), "test path"); err != nil {
+	if err := pathsafe.CheckNoSymlinks(root, filepath.Join(root, "nonexistent", "path"), "test path"); err != nil {
 		t.Errorf("non-existent path: unexpected error: %v", err)
 	}
 
-	if err := checkNoSymlinks(root, realSub, "test path"); err != nil {
+	if err := pathsafe.CheckNoSymlinks(root, realSub, "test path"); err != nil {
 		t.Errorf("real path: unexpected error: %v", err)
 	}
 
@@ -1689,16 +1690,16 @@ func TestCheckNoSymlinks(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	if err := checkNoSymlinks(root, filepath.Join(linkPath, "sub"), "test path"); err == nil {
+	if err := pathsafe.CheckNoSymlinks(root, filepath.Join(linkPath, "sub"), "test path"); err == nil {
 		t.Errorf("path through symlink: expected error, got nil")
 	}
 
-	if err := checkNoSymlinks(root, linkPath, "test path"); err == nil {
+	if err := pathsafe.CheckNoSymlinks(root, linkPath, "test path"); err == nil {
 		t.Errorf("symlink as target: expected error, got nil")
 	}
 
-	// Path outside root: checkNoSymlinks should reject it
-	if err := checkNoSymlinks(root, filepath.Dir(root), "test path"); err == nil {
+	// Path outside root: CheckNoSymlinks should reject it
+	if err := pathsafe.CheckNoSymlinks(root, filepath.Dir(root), "test path"); err == nil {
 		t.Errorf("path outside root: expected error, got nil")
 	}
 }

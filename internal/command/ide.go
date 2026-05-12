@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/pathsafe"
 	"devbox-cli/internal/render"
 
 	"github.com/spf13/cobra"
@@ -454,37 +455,6 @@ func walkIDEPack(packDir string) ([]packEntry, error) {
 	return entries, nil
 }
 
-// checkNoSymlinks verifies that no existing path component between absRoot and absDir
-// is a symlink. It stops at the first non-existent component (which cannot be a symlink).
-// The label parameter appears in the error message to identify what is being checked.
-func checkNoSymlinks(absRoot, absDir, label string) error {
-	rel, err := filepath.Rel(absRoot, absDir)
-	if err != nil {
-		return fmt.Errorf("relative path: %w", err)
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return fmt.Errorf("path %q is not under root %q", absDir, absRoot)
-	}
-	current := absRoot
-	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
-		if part == "." || part == "" {
-			continue
-		}
-		current = filepath.Join(current, part)
-		fi, err := os.Lstat(current)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return fmt.Errorf("stat %s: %w", current, err)
-		}
-		if fi.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("%s contains symlink at %q; symlinked paths are not supported", label, current)
-		}
-	}
-	return nil
-}
-
 // renderIDEConfigs generates IDE config files for a single service by walking
 // the resolved template pack and rendering all .tpl entries.
 func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
@@ -515,7 +485,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 	if relDir == "." || relDir == ".." || strings.HasPrefix(relDir, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("service dir %q escapes project root", svc.Dir)
 	}
-	if err := checkNoSymlinks(absRoot, absDir, "service dir"); err != nil {
+	if err := pathsafe.CheckNoSymlinks(absRoot, absDir, "service dir"); err != nil {
 		return err
 	}
 
@@ -591,9 +561,9 @@ func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir
 	}
 
 	// Guard against symlinks in the destination path before creating any directories.
-	// checkNoSymlinks walks existing components only, so it catches a pre-existing
+	// CheckNoSymlinks walks existing components only, so it catches a pre-existing
 	// .devcontainer -> /tmp/outside symlink before MkdirAll follows it.
-	if err := checkNoSymlinks(absRoot, destDir, "destination dir"); err != nil {
+	if err := pathsafe.CheckNoSymlinks(absRoot, destDir, "destination dir"); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
@@ -618,12 +588,8 @@ func renderIDETemplateFile(sourcePath string, data ideTemplateData, dest, absDir
 	if err != nil {
 		return fmt.Errorf("resolve dir for %s: %w", dest, err)
 	}
-	sep := string(filepath.Separator)
-	if !strings.HasPrefix(realDir+sep, realRoot+sep) {
-		return fmt.Errorf("destination dir for %q resolves outside project root via symlink", dest)
-	}
-	if !strings.HasPrefix(realDir+sep, realAbsDir+sep) {
-		return fmt.Errorf("destination dir for %q resolves outside service dir via symlink", dest)
+	if err := pathsafe.EnsureRealUnder(realDir, realRoot, realAbsDir); err != nil {
+		return fmt.Errorf("destination dir for %q resolves outside required boundaries via symlink: %w", dest, err)
 	}
 
 	// Refuse to write through a symlinked destination file.
