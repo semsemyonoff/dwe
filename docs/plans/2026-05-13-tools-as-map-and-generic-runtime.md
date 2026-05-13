@@ -144,10 +144,10 @@ Go-skill notes used here:
 
 ### Task 5: Update internal/ui/summary.go
 
-- [ ] rewrite `countTools` to iterate `cfg.Tools` map and count `Enabled == true` (range over nil map is safe, returns 0)
-- [ ] update `internal/ui/summary_test.go` literals
-- [ ] add a test for `RenderSummary` with `cfg.Tools == nil` — must render "tools 0 enabled" without panic
-- [ ] run `go test ./internal/ui/...` — must pass before next task
+- [x] rewrite `countTools` to iterate `cfg.Tools` map and count `Enabled == true` (range over nil map is safe, returns 0)
+- [x] update `internal/ui/summary_test.go` literals
+- [x] add a test for `RenderSummary` with `cfg.Tools == nil` — must render "tools 0 enabled" without panic
+- [x] run `go test ./internal/ui/...` — must pass before next task
 
 ### Task 6: Update template-using tests and fixtures
 

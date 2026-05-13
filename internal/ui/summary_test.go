@@ -44,7 +44,7 @@ func TestRenderSummary_NoURL(t *testing.T) {
 		Project: config.ProjectConfig{Name: "myapp"},
 		Runtime: config.RuntimeConfig{
 			UseHTTPS: false,
-			Hosts:    config.RuntimeHosts{Main: "myapp.localhost"},
+			Hosts:    config.RuntimeHosts{"main": "myapp.localhost"},
 		},
 	}
 	out := RenderSummary(cfg)
@@ -87,9 +87,9 @@ func TestRenderSummary_ToolCounts(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Tools: config.ToolsConfig{
-			Adminer:      config.ToolConfig{Enabled: true},
-			RedisInsight: config.ToolConfig{Enabled: false},
-			Mailpit:      config.ToolConfig{Enabled: true},
+			"adminer":       {Enabled: true},
+			"redis_insight": {Enabled: false},
+			"mailpit":       {Enabled: true},
 		},
 	}
 	out := RenderSummary(cfg)
@@ -106,5 +106,16 @@ func TestRenderSummary_TwoLines(t *testing.T) {
 	lines := strings.Split(out, "\n")
 	if len(lines) != 2 {
 		t.Errorf("expected exactly 2 lines in summary, got %d:\n%s", len(lines), out)
+	}
+}
+
+func TestRenderSummary_NilTools(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "myapp"},
+		Tools:   nil,
+	}
+	out := RenderSummary(cfg)
+	if !strings.Contains(out, "tools 0 enabled") {
+		t.Errorf("expected 'tools 0 enabled' when tools are nil, got:\n%s", out)
 	}
 }
