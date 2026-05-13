@@ -568,8 +568,15 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 	if !ok {
 		return nil
 	}
-	overlays, ok := compose["overlays"].(map[string]any)
-	if !ok || len(overlays) == 0 {
+	overlaysRaw, exists := compose["overlays"]
+	if !exists || overlaysRaw == nil {
+		return nil
+	}
+	overlays, ok := overlaysRaw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual tools: tools.<name>.compose instead. See docs/reference/config/devbox.md for migration details")
+	}
+	if len(overlays) == 0 {
 		return nil
 	}
 	var keys []string

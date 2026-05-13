@@ -305,6 +305,9 @@ func pickToolCandidates(rows []stack.ToolRow, statusLabel, title string, selecto
 	if err != nil {
 		return "", err
 	}
+	if idx < 0 || idx >= len(rows) {
+		return "", fmt.Errorf("selector returned invalid index %d for %d candidates", idx, len(rows))
+	}
 	return rows[idx].Name, nil
 }
 
