@@ -287,17 +287,21 @@ func TestLegacyRemoval(t *testing.T) {
 
 func TestFuncMapCaching(t *testing.T) {
 	t.Parallel()
-	// FuncMap() returns a per-call shallow clone, so map identity differs.
-	// But the underlying function values must originate from the same cached
-	// buildFuncMap call — confirmed via reflect.ValueOf.Pointer() equality.
+	// FuncMap() returns a per-call shallow clone: mutations must not bleed across calls.
 	fm1 := FuncMap()
 	fm2 := FuncMap()
-	if &fm1 == &fm2 {
-		t.Error("FuncMap returned same map reference; shallow clone is broken")
+
+	// Mutation isolation: adding to fm1 must not affect fm2.
+	fm1["__probe__"] = func() {}
+	if _, leaked := fm2["__probe__"]; leaked {
+		t.Error("FuncMap clone is broken: mutation of fm1 polluted fm2")
 	}
+
+	// Function values must originate from the same cached buildFuncMap call.
+	fm3 := FuncMap()
 	p1 := reflect.ValueOf(fm1["appURL"]).Pointer()
-	p2 := reflect.ValueOf(fm2["appURL"]).Pointer()
-	if p1 != p2 {
+	p3 := reflect.ValueOf(fm3["appURL"]).Pointer()
+	if p1 != p3 {
 		t.Error("appURL function pointer differs across FuncMap calls; OnceValue cache is not hit")
 	}
 }

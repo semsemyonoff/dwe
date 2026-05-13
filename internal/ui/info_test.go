@@ -358,6 +358,9 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_False(t *testing.T) {
 	if !strings.Contains(out, "Should Show Title") {
 		t.Errorf("expected section title visible with hide_on_empty=false, got:\n%s", out)
 	}
+	if strings.Contains(out, "v") {
+		t.Errorf("expected filtered item value absent with hide_on_empty=false, got:\n%s", out)
+	}
 }
 
 func TestRenderInfo_HideOnEmpty_Mixed(t *testing.T) {

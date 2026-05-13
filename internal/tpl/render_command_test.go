@@ -2,6 +2,7 @@ package tpl
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -289,6 +290,23 @@ func TestResolveMapPath_nilMap(t *testing.T) {
 // ---- Sprout template functions (tested in funcs_test.go) ----
 // Legacy date, datetime, base, dir tests removed — see Task 2 of plan.
 // Sprout functions are tested in funcs_test.go with table-driven approach.
+
+func TestRenderCommand_nowDateExpression(t *testing.T) {
+	// Verify that the sprout 'now | date' pipeline works through RenderCommand,
+	// covering the command-template path (commandFuncMap inherits time functions).
+	got, err := RenderCommand(`backup_{{ now | date "2006-01-02" }}.sql`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pattern := `^backup_\d{4}-\d{2}-\d{2}\.sql$`
+	matched, err := regexp.MatchString(pattern, got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !matched {
+		t.Errorf("RenderCommand date output %q does not match expected pattern %s", got, pattern)
+	}
+}
 
 func TestRenderCommand_sproutFunctionInheritance(t *testing.T) {
 	// Prove that commandFuncMap inherits sprout functions from the base FuncMap.
