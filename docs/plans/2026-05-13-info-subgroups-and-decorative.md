@@ -181,11 +181,13 @@ Rework the `devbox info` schema so that:
 
 ### Task 5: Migrate in-tree fixtures and the canonical `info.yml` example
 
-- [ ] grep the repo for any YAML using `type: subheader` outside of test fixtures already touched in Task 2:
+- [x] grep the repo for any YAML using `type: subheader` outside of test fixtures already touched in Task 2:
   - `git grep -n -E 'type:[[:space:]]*subheader'` (POSIX character class works regardless of git grep's regex flavor; `\s` is not portable in default git grep mode).
-- [ ] for each hit, decide: convert to `type: subgroup` with the same title, or fold into the parent section title. Update accordingly.
-- [ ] if there's a canonical/example `devbox/info.yml` shipped or referenced from docs, migrate it too.
-- [ ] run `make test` — repo-wide tests must pass before next task.
+- [x] for each hit, decide: convert to `type: subgroup` with the same title, or fold into the parent section title. Update accordingly.
+- [x] if there's a canonical/example `devbox/info.yml` shipped or referenced from docs, migrate it too.
+- [x] run `make test` — repo-wide tests must pass before next task.
+- [x] update AGENTS.md to reflect new InfoItem shape (Task 7 verification item; included here to avoid extra loop iteration).
+- [x] verify CLAUDE.md symlink remains intact (symlink check passed).
 
 ### Task 6: Verify acceptance criteria
 
