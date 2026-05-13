@@ -227,7 +227,7 @@ Info templates have access to the standard devbox template surface: the `appURL`
 Example using `appURL`:
 
 ```yaml
-value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
+value: "{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}"
 # → http://laravel.localhost (or https://… when use_https is true)
 ```
 

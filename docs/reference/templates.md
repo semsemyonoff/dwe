@@ -91,7 +91,7 @@ The data exposed to a template depends on the site. All sites converge on a stru
 | `.Files` | Resolved file artefacts (map keyed by file id; each has a `.Path` field) |
 | `.Host.UID` / `.Host.GID` | Host UID/GID strings |
 
-**Info, pipelines, `message` builtin:** The merged typed `DevboxConfig` (e.g. `.Project.Name`, `.Runtime.Ports.App`, `.Services.<name>.Enabled`).
+**Info, pipelines, `message` builtin:** The merged typed `DevboxConfig` (e.g. `.Project.Name`, `.Runtime.Ports.app`, `.Services.<name>.Enabled`).
 
 **IDE / AI render packs (strict):**
 
@@ -221,7 +221,7 @@ Other sites (info, commands, pipeline conditions, `message`) use lenient renderi
 | Empty-guarded block | `{{ with .Params.database }} -D{{ . }}{{ end }}` |
 | Join list | `{{ join "," .Params.tags }}` |
 | Raw config lookup | `{{ resolve .Raw "db.host" }}` (commands only) |
-| Build URL | `{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}` |
+| Build URL | `{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}` |
 
 ## Conventions and gotchas
 

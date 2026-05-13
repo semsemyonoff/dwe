@@ -71,7 +71,7 @@ Service definitions themselves live in [`devbox/services.yml`](services.md), whi
 
 ## Dot-path resolution
 
-The CLI stores the merged result in two places: a typed `DevboxConfig` struct (with fields like `DevboxConfig.Runtime.Ports.App`) and a plain `DevboxConfig.Raw` map. The Raw map drives dot-path resolution.
+The CLI stores the merged result in two places: a typed `DevboxConfig` struct (with fields like `DevboxConfig.Runtime.Ports`, accessed via map keys like `.Runtime.Ports.app`) and a plain `DevboxConfig.Raw` map. The Raw map drives dot-path resolution.
 
 A dot-path is a `.`-separated key chain that navigates the merged YAML map. Examples:
 

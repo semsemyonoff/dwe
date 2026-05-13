@@ -200,9 +200,9 @@ Go-skill notes used here:
 
 ### Task 10: Final docs sync
 
-- [ ] re-read `AGENTS.md` "Key Patterns" and "Project Structure" sections; correct any stale typed-field references
-- [ ] ensure no orphaned mentions of `compose.overlays` remain in docs (since the map was removed)
-- [ ] run `make build && bin/devbox docs generate --scope cli` if the CLI docs are generated, to refresh the help-text-based pages
+- [x] re-read `AGENTS.md` "Key Patterns" and "Project Structure" sections; correct any stale typed-field references
+- [x] ensure no orphaned mentions of `compose.overlays` remain in docs (since the map was removed)
+- [x] run `make build && bin/devbox docs generate --scope cli` if the CLI docs are generated, to refresh the help-text-based pages
 
 ## Technical Details
 
