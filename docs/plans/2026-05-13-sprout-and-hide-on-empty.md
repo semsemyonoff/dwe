@@ -178,14 +178,14 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
 - [x] **Commit boundary** — stage Tasks 1–4 as commit `feat(tpl)!: migrate template FuncMap to go-sprout` (note the `!` — breaking change); ensure `make test` and `make lint` pass
 
 ### Task 5: Add `HideOnEmpty` to the info section model
-- [ ] in `internal/config/info.go`, add field on `InfoSection`:
+- [x] in `internal/config/info.go`, add field on `InfoSection`:
   ```go
   HideOnEmpty bool `yaml:"hide_on_empty"`
   ```
   Comment: "When true, the section (including its title) is omitted if no item survives `when:` filtering. Default false preserves legacy rendering."
-- [ ] no loader changes needed — `LoadInfoConfig` is lenient `yaml.Unmarshal`; unknown-but-now-known field decodes automatically
-- [ ] add round-trip decode test in `internal/config/info_test.go`: YAML with `hide_on_empty: true` → struct field is `true`; absence defaults to `false`
-- [ ] run `go test ./internal/config/...` — must pass before next task
+- [x] no loader changes needed — `LoadInfoConfig` is lenient `yaml.Unmarshal`; unknown-but-now-known field decodes automatically
+- [x] add round-trip decode test in `internal/config/info_test.go`: YAML with `hide_on_empty: true` → struct field is `true`; absence defaults to `false`
+- [x] run `go test ./internal/config/...` — must pass before next task
 
 ### Task 6: Apply `HideOnEmpty` in the renderer
 - [ ] refactor `RenderInfo` in `internal/ui/info.go`:

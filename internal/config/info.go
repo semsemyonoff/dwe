@@ -31,6 +31,9 @@ type InfoSection struct {
 	Title string `yaml:"title"`
 	// Items is the ordered list of content entries.
 	Items []InfoItem `yaml:"items"`
+	// HideOnEmpty, when true, the section (including its title) is omitted if no item survives when: filtering.
+	// Default false preserves legacy rendering.
+	HideOnEmpty bool `yaml:"hide_on_empty"`
 }
 
 // InfoIndent represents an optional indent value for an InfoItem.

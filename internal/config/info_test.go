@@ -140,3 +140,41 @@ func TestInfoIndent_invalidType(t *testing.T) {
 		}
 	}
 }
+
+func TestInfoSection_hideOnEmpty(t *testing.T) {
+	testCases := []struct {
+		name     string
+		yaml     string
+		wantHide bool
+	}{
+		{
+			name: "hide_on_empty true",
+			yaml: `id: test
+hide_on_empty: true`,
+			wantHide: true,
+		},
+		{
+			name: "hide_on_empty false",
+			yaml: `id: test
+hide_on_empty: false`,
+			wantHide: false,
+		},
+		{
+			name: "hide_on_empty omitted defaults to false",
+			yaml: `id: test`,
+			wantHide: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var section InfoSection
+			if err := yaml.Unmarshal([]byte(tc.yaml), &section); err != nil {
+				t.Fatalf("yaml.Unmarshal: %v", err)
+			}
+			if section.HideOnEmpty != tc.wantHide {
+				t.Errorf("HideOnEmpty = %v, want %v", section.HideOnEmpty, tc.wantHide)
+			}
+		})
+	}
+}
