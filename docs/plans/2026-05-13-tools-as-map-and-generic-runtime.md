@@ -103,16 +103,16 @@ Go-skill notes used here:
 
 ### Task 2: Update ComposeFiles to use the tool map
 
-- [ ] in `internal/config/devbox.go`, rewrite `composeFiles(all bool)`:
+- [x] in `internal/config/devbox.go`, rewrite `composeFiles(all bool)`:
       - preallocate the result slice: `make([]string, 0, 1+len(c.Tools)+len(c.Services))`
       - start with `Compose.Base`
       - iterate `Tools` map keys via `slices.Sorted(maps.Keys(c.Tools))`; for each tool with non-empty `Compose`, include the file when `all || tool.Enabled`
       - then iterate services as today (same sorted-keys pattern)
-- [ ] delete the `toolOverlayEnabled` method (no longer needed)
-- [ ] update existing tests for `ComposeFiles` / `ComposeFilesAll` in `internal/config/devbox_test.go` to use the new shape
-- [ ] add a test case where an unknown tool name with `compose` set is included when enabled
-- [ ] add a determinism test: build a config with 3+ tools whose keys would sort differently from declaration order, and assert `ComposeFiles()` returns them in sorted order across 100 invocations (locks the `slices.Sorted` contract — without it, Go's randomized map iteration would let the bug regress silently)
-- [ ] run `go test ./internal/config/...` — must pass before next task
+- [x] delete the `toolOverlayEnabled` method (no longer needed)
+- [x] update existing tests for `ComposeFiles` / `ComposeFilesAll` in `internal/config/devbox_test.go` to use the new shape
+- [x] add a test case where an unknown tool name with `compose` set is included when enabled
+- [x] add a determinism test: build a config with 3+ tools whose keys would sort differently from declaration order, and assert `ComposeFiles()` returns them in sorted order across 100 invocations (locks the `slices.Sorted` contract — without it, Go's randomized map iteration would let the bug regress silently)
+- [x] run `go test ./internal/config/...` — must pass before next task
 
 ### Task 3: Update internal/stack consumers
 

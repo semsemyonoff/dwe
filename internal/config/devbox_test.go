@@ -2803,6 +2803,144 @@ compose:
 	}
 }
 
+func TestComposeFilesAll_unknownToolWithCompose(t *testing.T) {
+	// An unknown/new tool (elasticvue) with compose file should be included
+	// when enabled. This confirms the data-driven path works for any tool key.
+	defaultsWithElasticvue := `
+schema_version: "1"
+tools:
+  elasticvue:
+    enabled: true
+    container: elasticvue
+    host: elastic.localhost
+    port: 9200
+    compose: compose/tools/elasticvue.yml
+  adminer:
+    enabled: false
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+runtime:
+  use_https: false
+  ports:
+    app: 80
+    db: 13306
+  hosts:
+    main: app.localhost
+  spx:
+    path: ""
+compose:
+  base: compose.yaml
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithElasticvue, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	allFiles := cfg.ComposeFilesAll()
+	activeFiles := cfg.ComposeFiles()
+
+	// ComposeFilesAll should include all tools (adminer disabled, but still listed).
+	wantAll := []string{
+		"compose.yaml",
+		"compose/tools/adminer.yml",      // disabled, but listed in ComposeFilesAll (zero compose entry)... wait no. adminer has no compose field, so not included
+		"compose/tools/elasticvue.yml",   // enabled, included
+	}
+	// Actually, adminer has no compose field, so it won't be included
+	wantAll = []string{
+		"compose.yaml",
+		"compose/tools/elasticvue.yml",   // enabled, included
+	}
+
+	if len(allFiles) != len(wantAll) {
+		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(wantAll), allFiles)
+	}
+	for i, w := range wantAll {
+		if allFiles[i] != w {
+			t.Errorf("ComposeFilesAll[%d] = %q, want %q", i, allFiles[i], w)
+		}
+	}
+
+	// ComposeFiles only includes enabled tools with compose files.
+	wantActive := []string{
+		"compose.yaml",
+		"compose/tools/elasticvue.yml",   // enabled, included
+	}
+	if len(activeFiles) != len(wantActive) {
+		t.Fatalf("ComposeFiles len = %d, want %d: %v", len(activeFiles), len(wantActive), activeFiles)
+	}
+	for i, w := range wantActive {
+		if activeFiles[i] != w {
+			t.Errorf("ComposeFiles[%d] = %q, want %q", i, activeFiles[i], w)
+		}
+	}
+}
+
+func TestComposeFilesAll_determinismSortedOrder(t *testing.T) {
+	// Verify that ComposeFiles returns tools in sorted key order, not declaration order.
+	// Build a config with 3+ tools whose keys sort differently from declaration order.
+	// Run 100 times to catch any non-determinism due to Go's randomized map iteration.
+	defaultsUnsorted := `
+schema_version: "1"
+tools:
+  zebra:
+    enabled: true
+    container: zebra
+    host: zebra.localhost
+    port: 8001
+    compose: compose/tools/zebra.yml
+  apple:
+    enabled: true
+    container: apple
+    host: apple.localhost
+    port: 8002
+    compose: compose/tools/apple.yml
+  mango:
+    enabled: true
+    container: mango
+    host: mango.localhost
+    port: 8003
+    compose: compose/tools/mango.yml
+runtime:
+  use_https: false
+  ports:
+    app: 80
+    db: 13306
+  hosts:
+    main: app.localhost
+  spx:
+    path: ""
+compose:
+  base: compose.yaml
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, defaultsUnsorted, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	// Expected order: sorted by key (apple, mango, zebra), not declaration order (zebra, apple, mango).
+	wantSorted := []string{
+		"compose.yaml",
+		"compose/tools/apple.yml",
+		"compose/tools/mango.yml",
+		"compose/tools/zebra.yml",
+	}
+
+	// Run ComposeFiles 100 times and verify order is always the same.
+	for i := 0; i < 100; i++ {
+		got := cfg.ComposeFiles()
+		if len(got) != len(wantSorted) {
+			t.Fatalf("iteration %d: ComposeFiles len = %d, want %d: %v", i, len(got), len(wantSorted), got)
+		}
+		for j, w := range wantSorted {
+			if got[j] != w {
+				t.Errorf("iteration %d: ComposeFiles[%d] = %q, want %q", i, j, got[j], w)
+			}
+		}
+	}
+}
+
 // --- ServiceConfig.IDE field ---
 
 // TestServiceConfig_IDERenderEnabledExplicit tests the tristate logic for IDE rendering.
