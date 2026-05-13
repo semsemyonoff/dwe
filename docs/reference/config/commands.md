@@ -252,7 +252,7 @@ context:
 ```yaml
 env:
   MYSQL_PWD: "${db.password}"
-  TIMESTAMP: "{{ datetime }}"
+  TIMESTAMP: "{{ now | date \"2006-01-02_15-04-05\" }}"
   NON_INTERACTIVE: "{{ if .Params.no_prompt }}1{{ else }}0{{ end }}"
 ```
 
@@ -273,7 +273,7 @@ A duplicate name across any of these is rejected at load time — declare each e
 files:
   dump:
     access: write
-    path: "${param.dump_dir}/${param.database}_{{ date }}.sql.gz"
+    path: "${param.dump_dir}/${param.database}_{{ now | date \"2006-01-02\" }}.sql.gz"
     mkdir: true
     overwrite: true
     on_error: remove
@@ -438,27 +438,33 @@ The standard `text/template` library provides these out of the box (full referen
 
 #### Devbox-specific helpers
 
-In addition to the standard library, devbox registers these helpers for command templates:
+In addition to the standard library, devbox registers:
 
-| Helper | Description |
-|--------|-------------|
-| `appURL host port useHTTPS [path]` | URL builder; drops default ports (80 / 443) |
-| `date` | Current local date `YYYY-MM-DD` |
-| `datetime` | Current local datetime `YYYY-MM-DD_HH-MM-SS` |
-| `base path` | `filepath.Base` |
-| `dir path` | `filepath.Dir` |
+1. **Domain helper**: `appURL host port useHTTPS [path]` — URL builder; drops default ports (80 / 443)
+2. **Sprout registries**: `std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver` — see [go-sprout docs](https://docs.atom.codes/sprout/registries/) for the full function list
+
+Common patterns:
+
+| Task | Example |
+|------|---------|
+| Current date | `{{ now \| date "2006-01-02" }}` |
+| Current datetime | `{{ now \| date "2006-01-02_15-04-05" }}` |
+| Path basename | `{{ some_path \| pathBase }}` |
+| Path directory | `{{ some_path \| pathDir }}` |
+| Conditional value | `{{ if condition }}yes{{ else }}no{{ end }}` |
+| Default/fallback | `{{ or .Params.value "default" }}` |
 
 ```yaml
 # helpers chained via pipe
 files:
   log:
     access: write
-    path: "logs/{{ .Params.task }}_{{ datetime }}.log"
+    path: "logs/{{ .Params.task }}_{{ now | date \"2006-01-02_15-04-05\" }}.log"
     mkdir: true
 
 # pipeline form: pass a value through a function
 env:
-  SCRIPT_NAME: '{{ .Params.script_path | base }}'
+  SCRIPT_NAME: '{{ .Params.script_path | pathBase }}'
 ```
 
 #### Mixing `${...}` and `{{ ... }}`
@@ -466,7 +472,7 @@ env:
 `${...}` is concise for plain lookups; `{{ ... }}` is for logic. They render against the same context and can be interleaved:
 
 ```yaml
-path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ date }}{{ end }}.sql.gz"
+path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | date \"2006-01-02\" }}{{ end }}.sql.gz"
 ```
 
 #### Further reading
@@ -577,7 +583,7 @@ db.dump-create:
   files:
     dump:
       access: write
-      path: "${param.dump_dir}/${param.database}_{{ date }}.sql.gz"
+      path: "${param.dump_dir}/${param.database}_{{ now | date \"2006-01-02\" }}.sql.gz"
       mkdir: true
       overwrite: true
       on_error: remove
@@ -928,7 +934,7 @@ When the docs say *"command template space"* this is the set of expressions avai
 | `{{ .Params.<name> }}` | Direct dot access on params |
 | `{{ .Context.<name> }}` | Direct dot access on context |
 | `{{ .Host.UID }}` | Host info (Go template form) |
-| `{{ date }}` / `{{ datetime }}` / `{{ base }}` / `{{ dir }}` / `{{ appURL ... }}` | Helper functions |
+| `{{ now \| date "..." }}` / `{{ pathBase }}` / `{{ pathDir }}` / `{{ appURL ... }}` | Helper functions (sprout + domain) |
 
 Use the simpler `${...}` form for one-off lookups; reach for `{{ ... }}` when you need conditionals, comparisons, or pipelines.
 
@@ -981,7 +987,7 @@ db.dump-create:
   files:
     dump:
       access: write
-      path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ date }}{{ end }}.sql.gz"
+      path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | date \"2006-01-02\" }}{{ end }}.sql.gz"
       mkdir: true
       overwrite: true
       on_error: remove

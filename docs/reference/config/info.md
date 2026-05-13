@@ -176,13 +176,11 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 
 The same `FuncMap` is shared by `info.yml` templates, the `message` builtin, and `${...}` expressions inside declarative commands.
 
+#### Domain helpers
+
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `appURL` | `appURL host port useHTTPS [path]` | Build a URL from host, port, HTTPS flag, and optional path. The port is omitted when it matches the scheme default (80 for http, 443 for https). |
-| `date` | `date` | Local current date as `YYYY-MM-DD`. |
-| `datetime` | `datetime` | Local current date and time as `YYYY-MM-DD_HH-MM-SS`. |
-| `base` | `base path` | `filepath.Base(path)` — strip the directory portion. |
-| `dir` | `dir path` | `filepath.Dir(path)` — strip the file portion. |
 
 Example:
 ```yaml
@@ -191,7 +189,18 @@ value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
 
 Renders as `http://laravel.localhost` or `https://laravel.localhost` depending on `use_https`.
 
-`date` and `datetime` are most useful in command files (e.g. dump filenames `db_{{ date }}.sql.gz`); they work in `info.yml` too but the dashboard rarely needs them.
+#### Sprout template registries
+
+In addition to domain helpers, the `std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, and `semver` registries from [go-sprout](https://docs.atom.codes/sprout/registries/) are available.
+
+Common patterns for info templates:
+
+| Task | Example |
+|------|---------|
+| Current date | `{{ now \| date "2006-01-02" }}` |
+| Current datetime | `{{ now \| date "2006-01-02_15-04-05" }}` |
+| Path basename | `{{ some_path \| pathBase }}` |
+| Path directory | `{{ some_path \| pathDir }}` |
 
 ### `when` conditions
 
