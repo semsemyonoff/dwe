@@ -259,3 +259,45 @@ func TestFormatValue_boolFormatNonBoolValue(t *testing.T) {
 		t.Errorf("FormatValue(yes, bool) = %q, want yes", got)
 	}
 }
+
+// --- Regression tests for data-driven tools (raw dot-path resolution) ---
+
+func TestBuildContent_toolPortResolution(t *testing.T) {
+	// Regression: verify that a tool's port can be resolved via raw dot-path
+	// (tools.adminer.port) without needing the old runtime.ports.adminer path
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "ADMINER_PORT", From: "tools.adminer.port", Format: "int"},
+	}, map[string]any{
+		"tools": map[string]any{
+			"adminer": map[string]any{"port": 8080},
+		},
+	})
+
+	out, err := BuildContent(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "ADMINER_PORT=8080") {
+		t.Errorf("expected ADMINER_PORT=8080, got:\n%s", out)
+	}
+}
+
+func TestBuildContent_toolHostResolution(t *testing.T) {
+	// Regression: verify that a tool's host can be resolved via raw dot-path
+	// (tools.adminer.host) without needing the old runtime.hosts.adminer path
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "ADMINER_HOST", From: "tools.adminer.host"},
+	}, map[string]any{
+		"tools": map[string]any{
+			"adminer": map[string]any{"host": "adminer.localhost"},
+		},
+	})
+
+	out, err := BuildContent(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "ADMINER_HOST=adminer.localhost") {
+		t.Errorf("expected ADMINER_HOST=adminer.localhost, got:\n%s", out)
+	}
+}

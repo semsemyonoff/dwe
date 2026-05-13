@@ -162,15 +162,15 @@ Go-skill notes used here:
 
 ### Task 7: Update remaining consumers and tests (incl. Raw dot-path consumers)
 
-- [ ] sweep with `go build ./...` to surface any remaining compile errors after the type changes
-- [ ] update `internal/envfile/render_test.go`: any fixture rule with `from: runtime.ports.adminer` (or other tool path under `runtime.*`) must move to `from: tools.adminer.port` / `tools.adminer.host`. Same for `when:` clauses
-- [ ] update `internal/usercommands/resolve/*_test.go` (and any fixture `commands/*.yml` under `internal/usercommands/testdata`): any `default_from:` or `from:` pointing into `runtime.{hosts,ports}.<tool>` must move under `tools.<name>.*`
-- [ ] add a regression test in `internal/envfile/render_test.go` covering an `exports.env` rule with `From: "tools.adminer.port"` (bare raw dot-path — `exports.env[*].from` and `when` are passed verbatim to `ResolvePath(cfg.Raw, ...)`, not the `${...}` template syntax) resolving to the value declared in `tools.adminer.port` — locks the new raw-path contract
-- [ ] add a regression test in `internal/usercommands/resolve` covering `default_from: tools.adminer.host` resolving correctly
-- [ ] update `internal/docker/compose_test.go`, `internal/localconfig/tools_test.go` — anything still using struct literals
-- [ ] grep production code (excluding tests) one more time with proper regex (covering both `Db` and `DB` casings the docs use): `Tools\.(Adminer|RedisInsight|Mailpit)|Runtime\.Ports\.(App|Db|DB|Redis|Adminer|RedisInsight|Mailpit)|Runtime\.Hosts\.(Main|Adminer|RedisInsight|Mailpit)` and confirm zero matches
-- [ ] grep YAML fixtures and docs for stale raw dot-paths: `runtime\.(hosts|ports)\.(adminer|redis_insight|mailpit)` and `compose\.overlays\.` — zero matches expected
-- [ ] run `go test ./...` — must pass before next task
+- [x] sweep with `go build ./...` to surface any remaining compile errors after the type changes
+- [x] update `internal/envfile/render_test.go`: any fixture rule with `from: runtime.ports.adminer` (or other tool path under `runtime.*`) must move to `from: tools.adminer.port` / `tools.adminer.host`. Same for `when:` clauses
+- [x] update `internal/usercommands/resolve/*_test.go` (and any fixture `commands/*.yml` under `internal/usercommands/testdata`): any `default_from:` or `from:` pointing into `runtime.{hosts,ports}.<tool>` must move under `tools.<name>.*`
+- [x] add a regression test in `internal/envfile/render_test.go` covering an `exports.env` rule with `From: "tools.adminer.port"` (bare raw dot-path — `exports.env[*].from` and `when` are passed verbatim to `ResolvePath(cfg.Raw, ...)`, not the `${...}` template syntax) resolving to the value declared in `tools.adminer.port` — locks the new raw-path contract
+- [x] add a regression test in `internal/usercommands/resolve` covering `default_from: tools.adminer.host` resolving correctly
+- [x] update `internal/docker/compose_test.go`, `internal/localconfig/tools_test.go` — anything still using struct literals
+- [x] grep production code (excluding tests) one more time with proper regex (covering both `Db` and `DB` casings the docs use): `Tools\.(Adminer|RedisInsight|Mailpit)|Runtime\.Ports\.(App|Db|DB|Redis|Adminer|RedisInsight|Mailpit)|Runtime\.Hosts\.(Main|Adminer|RedisInsight|Mailpit)` and confirm zero matches
+- [x] grep YAML fixtures and docs for stale raw dot-paths: `runtime\.(hosts|ports)\.(adminer|redis_insight|mailpit)` and `compose\.overlays\.` — zero matches expected
+- [x] run `go test ./...` — must pass before next task
 
 ### Task 8: Update documentation
 

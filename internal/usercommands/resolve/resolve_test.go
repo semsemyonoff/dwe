@@ -803,3 +803,25 @@ func TestParams_PatternPathType(t *testing.T) {
 		t.Error("invalid path should fail pattern")
 	}
 }
+
+// --- Regression tests for data-driven tools (raw dot-path resolution) ---
+
+func TestParams_DefaultFromToolHost(t *testing.T) {
+	// Regression: verify that a tool's host can be resolved via raw dot-path
+	// (tools.adminer.host) in default_from, without needing the old runtime.hosts.adminer path
+	cfg := makeConfig(map[string]any{
+		"tools": map[string]any{
+			"adminer": map[string]any{"host": "adminer.localhost"},
+		},
+	})
+	defs := map[string]ParamDef{
+		"tool_host": {Type: ParamTypeString, DefaultFrom: "tools.adminer.host"},
+	}
+	got, err := Params(defs, nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got["tool_host"] != "adminer.localhost" {
+		t.Errorf("expected tool_host=adminer.localhost, got %v", got["tool_host"])
+	}
+}
