@@ -216,14 +216,14 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
 - [x] **Commit boundary** — stage Tasks 5–7 as commit `feat(info): hide_on_empty for sections`; ensure `make test` and `make lint` pass
 
 ### Task 8: Verify acceptance criteria
-- [ ] verify Task 1 outcome: `go doc devbox-cli/internal/tpl` shows the new FuncMap doc, sprout is in `go.mod`
-- [ ] verify Task 5–6 outcome: a synthetic `info.yml` fixture with `hide_on_empty: true` and all items gated on a false `when:` produces empty output when rendered
-- [ ] run full `make test` — green
-- [ ] run `go test -race ./...` — green (catches accidental shared state from the OnceValue caching)
-- [ ] run `make lint` — zero issues
-- [ ] run `govulncheck ./...` — no advisories on sprout's tree (install via `go install golang.org/x/vuln/cmd/govulncheck@latest` if not present)
-- [ ] run `go mod verify` — `go.sum` checksums match
-- [ ] confirm test coverage on new code paths (sprout layering, OnceValue cache, hide_on_empty branch) at the package's existing standard
+- [x] verify Task 1 outcome: `go doc devbox-cli/internal/tpl` shows the new FuncMap doc, sprout is in `go.mod`
+- [x] verify Task 5–6 outcome: a synthetic `info.yml` fixture with `hide_on_empty: true` and all items gated on a false `when:` produces empty output when rendered
+- [x] run full `make test` — green
+- [x] run `go test -race ./...` — green (catches accidental shared state from the OnceValue caching)
+- [x] run `make lint` — zero issues
+- [x] run `govulncheck ./...` — no advisories on sprout's tree (install via `go install golang.org/x/vuln/cmd/govulncheck@latest` if not present)
+- [x] run `go mod verify` — `go.sum` checksums match
+- [x] confirm test coverage on new code paths (sprout layering, OnceValue cache, hide_on_empty branch) at the package's existing standard
 
 ## Technical Details
 
