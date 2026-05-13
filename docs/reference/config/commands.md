@@ -17,8 +17,9 @@ Declarative command definitions for the devbox project.
   - [Env](#env)
   - [Files](#files)
 - [Templating](#templating)
-  - [Namespaces](#namespaces)
-  - [Go templates](#go-templates)
+  - [Command render context](#command-render-context)
+  - [Command-scope resolvers](#command-scope-resolvers)
+  - [Examples specific to commands](#examples-specific-to-commands)
   - [Where templates are evaluated](#where-templates-are-evaluated)
 - [Command types](#command-types)
   - [`type: shell`](#type-shell)
@@ -334,132 +335,35 @@ Cleanup safety: `on_error: remove` only deletes files that did **not** exist bef
 
 Devbox uses two layers of interpolation in command definitions: the lightweight `${...}` syntax and full Go `text/template` blocks. Both are evaluated by the same engine and may be mixed freely.
 
-### Namespaces
+The full template engine — `${...}` namespaces, the render context, Go template control flow, built-in functions, sprout registries, and conventions — is documented in [Templates](../templates.md). This section only covers the parts that are specific to command files; everything else is cross-cutting.
 
-| Expression | Source |
-|------------|--------|
-| `${db.user}` | Dot-path into the merged devbox config (`Raw`) |
-| `${param.<name>}` | Resolved param value |
-| `${context.<name>}` | Resolved context value |
-| `${files.<id>.path}` | Absolute path of a resolved file |
-| `${host.uid}` / `${host.gid}` | Host UID/GID (1000:1000 on macOS, real values on Linux) |
+### Command render context
 
-Anything else (`${foo}`, `${a.b.c}`) defaults to a dot-path lookup against `Raw`.
-
-### Go templates
-
-Anything wrapped in `{{ ... }}` is evaluated by Go's [`text/template`](https://pkg.go.dev/text/template) engine. The `${...}` syntax compiles down to template calls under the hood, so you can mix both styles freely.
-
-The render context exposes:
+Templates inside `devbox/commands/` render against `RenderContext`:
 
 | Path | Contents |
 |------|----------|
 | `.Raw` | Merged `devbox.yml` + `defaults.yml` + `local.yml` as a nested map |
-| `.Params` | Map of resolved param values (keyed by param name) |
-| `.Context` | Map of resolved context values (keyed by context name) |
-| `.Files` | Map of resolved file artefacts (keyed by file id; `.Path` field) |
+| `.Params` | Resolved param values (map keyed by param name) |
+| `.Context` | Resolved context values (map keyed by context name) |
+| `.Files` | Resolved file artefacts (map keyed by file id; each has a `.Path` field) |
 | `.Host.UID` / `.Host.GID` | Host UID/GID strings |
 
-Use `{{ ... }}` whenever you need logic that `${...}` can't express: conditionals, comparisons, loops, default values, string transforms, etc.
+The `${...}` namespaces (`${db.x}`, `${param.x}`, `${context.x}`, `${files.id.path}`, `${host.uid}`) route into these same fields. See [Templates](../templates.md) for the full namespace table.
 
-#### Conditionals
+### Command-scope resolvers
 
-```yaml
-# emit a flag only when a bool param is true
-argv:
-  - php
-  - artisan
-  - migrate
-  - "{{ if .Params.fresh }}--fresh{{ end }}"
+Three template helpers are available **only** in command files; they are not registered in info or render-pack templates:
 
-# pick one of two values
-env:
-  CACHE_DRIVER: "{{ if .Params.test_mode }}array{{ else }}redis{{ end }}"
+| Helper | Use |
+|--------|-----|
+| `resolve .Raw <dot.path>` | Dot-path lookup in merged config (same as `${dot.path}`) |
+| `resolveMap .Params <key>` | Key lookup in a flat map (same as `${param.key}` / `${context.key}`) |
+| `resolveFile .Files <id> <subkey>` | Subkey lookup in a resolved file artefact |
 
-# nested if / else if / else
-env:
-  LOG_LEVEL: |-
-    {{ if eq .Params.profile "prod" }}error
-    {{ else if eq .Params.profile "stage" }}warn
-    {{ else }}debug{{ end }}
-```
+They walk maps and return `""` on miss — useful when the key has a dot or a numeric segment that breaks the direct `.Raw.x.y` form.
 
-Common comparison operators: `eq`, `ne`, `lt`, `le`, `gt`, `ge`. Boolean combinators: `and`, `or`, `not`.
-
-```yaml
-# combined predicates
-env:
-  STRICT: "{{ if and .Params.ci (not .Params.dry_run) }}1{{ else }}0{{ end }}"
-```
-
-#### Default values with `with` and `or`
-
-```yaml
-# fall back to a literal when a value is empty/missing
-cmd: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
-
-# inline default
-env:
-  REGION: "{{ or .Params.region "us-east-1" }}"
-```
-
-`{{ with X }}...{{ end }}` enters the block only if `X` is non-empty (and rebinds `.` to `X` inside). `{{ or A B }}` returns the first non-zero value.
-
-#### Loops
-
-```yaml
-# join a list param into a comma-separated env var
-env:
-  TAGS: "{{ range $i, $t := .Params.tags }}{{ if $i }},{{ end }}{{ $t }}{{ end }}"
-```
-
-#### Trimming and whitespace
-
-`{{- ... -}}` trims surrounding whitespace. Useful when a multi-line block is rendered into a single shell argument.
-
-```yaml
-cmd: |-
-  echo "{{- if .Params.verbose -}}verbose{{- else -}}quiet{{- end -}}"
-```
-
-#### Built-in template functions
-
-The standard `text/template` library provides these out of the box (full reference: [pkg.go.dev/text/template#hdr-Functions](https://pkg.go.dev/text/template#hdr-Functions)):
-
-| Function | Use |
-|----------|-----|
-| `eq`, `ne`, `lt`, `le`, `gt`, `ge` | Comparison |
-| `and`, `or`, `not` | Boolean logic |
-| `len` | Length of string / slice / map |
-| `index` | Map / slice indexing |
-| `printf` | Formatted strings (Go format verbs) |
-| `print`, `println` | Concatenation |
-| `html`, `js`, `urlquery` | Escaping |
-
-#### Devbox-specific helpers
-
-Commands have access to the full template surface:
-
-1. **Shared base** (with info.yml): `appURL` domain helper + all sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). See [info.md template functions](info.md#template-functions) for the full registry reference.
-
-2. **Command-scope resolvers** (command-only; accept raw config maps):
-   - `resolve .Raw <key>` — dot-path lookup in merged config (same as `{{ .Raw.<key> }}`)
-   - `resolveMap .Params <key>` — dot-path lookup in a flat map (e.g. params or context)
-   - `resolveFile .Files <id> <subkey>` — subkey lookup in a resolved file artifact
-
-These are injected into the template context by the command runner and provide low-level access to the raw merged config for cases where the typed `.Params`, `.Context`, `.Raw` accessors are insufficient.
-
-Common patterns:
-
-| Task | Example |
-|------|---------|
-| Current date | `{{ now \| date "2006-01-02" }}` |
-| Current datetime | `{{ now \| date "2006-01-02_15-04-05" }}` |
-| Path basename | `{{ some_path \| pathBase }}` |
-| Path directory | `{{ some_path \| pathDir }}` |
-| Conditional value | `{{ if condition }}yes{{ else }}no{{ end }}` |
-| Default/fallback | `{{ or .Params.value "default" }}` |
-| Raw config lookup | `{{ resolve .Raw "db.host" }}` |
+### Examples specific to commands
 
 ```yaml
 # helpers chained via pipe
@@ -472,35 +376,10 @@ files:
 # pipeline form: pass a value through a function
 env:
   SCRIPT_NAME: '{{ .Params.script_path | pathBase }}'
-```
 
-#### Legacy template helpers (migration guide)
-
-Prior to the sprout migration, a small set of zero-arg helpers were provided directly. They have been removed. If you are maintaining projects that use them, use this table to update your templates:
-
-| Removed helper | Replacement | Notes |
-|---|---|---|
-| `date` | `now \| date "2006-01-02"` | Sprout's `date` is a filter (piped), requires a format string |
-| `datetime` | `now \| date "2006-01-02_15-04-05"` | Same as above with a different format |
-| `base` | `pathBase` (sprout `filesystem`) | Forward-slash semantics; use `osBase` for OS-specific separator if needed |
-| `dir` | `pathDir` (sprout `filesystem`) | Forward-slash semantics; use `osDir` for OS-specific separator if needed |
-
-We recommend the `path*` variants (`pathBase`, `pathDir`) for cross-platform predictability of container paths, even on macOS hosts.
-
-#### Mixing `${...}` and `{{ ... }}`
-
-`${...}` is concise for plain lookups; `{{ ... }}` is for logic. They render against the same context and can be interleaved:
-
-```yaml
+# mixing the two syntaxes
 path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | date \"2006-01-02\" }}{{ end }}.sql.gz"
 ```
-
-#### Further reading
-
-- [`text/template` package docs](https://pkg.go.dev/text/template) — full language reference
-- [Action syntax (`{{ if }}`, `{{ range }}`, `{{ with }}`)](https://pkg.go.dev/text/template#hdr-Actions)
-- [Built-in functions reference](https://pkg.go.dev/text/template#hdr-Functions)
-- [Pipelines and the `.` cursor](https://pkg.go.dev/text/template#hdr-Pipelines)
 
 ### Where templates are evaluated
 
@@ -528,7 +407,7 @@ The six command types define different execution contexts:
 | `service_run` | Docker Compose run | `cmd` or `argv` | Throwaway container execution |
 | `workflow` | Command orchestrator | `steps[]` | Multi-command sequences (separate syntax, see below) |
 
-All types except `script` use the canonical `cmd:` field for their payload. `type: script` is the structured exception, using its own `script:` block with `run`, `plan`, `cleanup` phases. **Workflow steps (`type: workflow`) are out of scope for the typed action model** — they keep their existing `command:` / `confirm:` / `with:` / `when:` (string) syntax and will be migrated in a separate plan.
+All types except `script` and `workflow` use the canonical `cmd:` field for their payload. `type: script` uses its own `script:` block with `run`, `plan`, `cleanup` phases. `type: workflow` uses its own `steps:` block with string-based `command:` / `confirm:` / `with:` / `when:` syntax — see [Type: workflow](#type-workflow) below.
 
 ## Type: shell
 
@@ -779,7 +658,7 @@ queue-worker:
 
 A workflow runs an ordered sequence of other commands, with optional confirmations and conditional steps. Workflows are the only way to compose multiple commands behind a single ID.
 
-**Note:** Workflow step syntax is intentionally **out of scope** for the typed action model described in this documentation. Workflow steps keep their existing `command:` / `confirm:` / `with:` / `when:` (string) syntax. The `when:` conditions inside workflows remain string-based mini-language expressions; they are distinct from the typed `when:` / `check:` used in pipeline steps (see [deploy.yml](deploy.md)). Workflow steps will be migrated in a separate plan.
+**Note:** Workflow steps use a string-based `command:` / `confirm:` / `with:` / `when:` syntax. The `when:` conditions inside workflows are string mini-language expressions, distinct from the typed `when:` / `check:` used in pipeline steps (see [deploy.yml](deploy.md)).
 
 ```yaml
 bootstrap:

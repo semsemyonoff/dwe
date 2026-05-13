@@ -195,7 +195,7 @@ Path comparisons are performed on cleaned paths, so `AGENTS.md` and `./AGENTS.md
 For each `render` entry the source is the template file inside the pack and the destination is the entry's `to` path joined with the service hub directory. The renderer:
 
 1. Reads the template file.
-2. Parses it as a Go text template, with strict mode enabled — any reference to a missing field aborts rendering instead of writing a `<no value>` placeholder.
+2. Parses it as a [Go text template](../templates.md) with strict mode enabled — any reference to a missing field aborts rendering instead of writing a `<no value>` placeholder.
 3. Executes the template against the [template variables](#template-variables).
 4. Resolves the destination and runs the [path-safety guards](#path-safety-guards).
 5. Creates any missing parent directories.
@@ -214,6 +214,8 @@ Templates receive the same object shape as IDE templates:
 | `.Runtime` | merged `runtime` block |
 
 Strict-mode rendering means a typo like `{{.Servic.Name}}` aborts rendering instead of producing `<no value>`. Use `{{if ...}}` for fields that may legitimately be empty.
+
+The full set of helper functions available inside `*.tmpl` files (`appURL`, sprout registries, `text/template` built-ins) is documented in [Templates](../templates.md).
 
 ### Path-safety guards
 

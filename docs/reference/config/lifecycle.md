@@ -227,7 +227,6 @@ A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
 - **Using `update: {}` to disable the probe** — empty block opts in (Enabled defaults to `true`). Use `mode: off`, `enabled: false`, or omit the `update:` key entirely.
 - **Adding `deploy_services` phases** — they are deploy-only. Lifecycle pipelines call services via `type: command` references instead.
 - **Editing `lifecycle.yml` to use direct `docker compose` calls** — the public API is `type: devbox` with `cmd: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
-- **Using the old syntax** — `run:`, `devbox:`, `command:`, `builtin:` are no longer valid. Use `type:` / `cmd:` instead.
 
 ## Related commands
 

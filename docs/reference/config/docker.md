@@ -84,7 +84,7 @@ resources:
 project_name: "${project.prefix}-${project.name}"
 ```
 
-The Docker Compose project name passed as `-p <name>` to every compose invocation. Supports `${dot.path}` template references into the merged devbox config. Default resolves to `devbox-laravel`.
+The Docker Compose project name passed as `-p <name>` to every compose invocation. Supports `${dot.path}` lookups into the merged devbox config (see [Templates](../templates.md) — `${...}` namespaces). Default resolves to `devbox-laravel`.
 
 Override locally:
 ```yaml

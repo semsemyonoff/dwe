@@ -10,7 +10,7 @@ Typed conditions (`when:`) and typed actions (`check:` / step bodies) in pipelin
   - [`type: shell` — shell commands](#type-shell--shell-commands)
   - [`type: template` — Go templates](#type-template--go-templates)
 - [Typed actions (`check:` and step bodies)](#typed-actions-check-and-step-bodies)
-- [Known wart: two `type: builtin` registries](#known-wart-two-type-builtin-registries)
+- [Two `type: builtin` registries](#two-type-builtin-registries)
 - [Workflow conditions (string-based, separate)](#workflow-conditions-string-based-separate)
 - [Related documentation](#related-documentation)
 
@@ -20,7 +20,7 @@ Typed conditions (`when:`) and typed actions (`check:` / step bodies) in pipelin
 
 **Actions** are **payloads** that execute code. When used as `check:` (post-action), their success/failure determines whether the step passed or failed.
 
-The pipeline system uses **typed** forms for both — a `type:` field dispatches to different evaluators. This is distinct from the legacy **string-based** conditions still used in workflow steps.
+The pipeline system uses **typed** forms for both — a `type:` field dispatches to different evaluators. Workflow steps (inside command definitions) use a separate string-based `when:` form documented in [commands.md](commands.md).
 
 ```
 Pipeline steps (typed):
@@ -91,7 +91,7 @@ Template conditions are purely for idempotency checks known at plan time:
   steps: []
 ```
 
-The render context includes the full merged `DevboxConfig`, so you can reach any configuration value. See [deploy.md](deploy.md) for the template expression syntax.
+The render context includes the full merged `DevboxConfig`, so you can reach any configuration value. See [Templates](../templates.md) for the template expression syntax and helper reference.
 
 ## Typed actions (`check:` and step bodies)
 
@@ -122,14 +122,12 @@ Actions support four executor types:
 
 See [deploy.md](deploy.md) for the full action reference and the semantics of `check:` failures under `continue_on_error`.
 
-## Known wart: two `type: builtin` registries
+## Two `type: builtin` registries
 
-The pipeline system has **two separate `type: builtin` namespaces**:
+The pipeline system has **two separate `type: builtin` namespaces**, disambiguated by YAML position:
 
 1. **Predicates** — used in `when: type: builtin`. Live in `internal/condition`, e.g. `dir-empty`, `file-exists`.
 2. **Engine builtins** — used in step bodies and `check: type: builtin`. Live in `internal/builtin`, e.g. `service_configs_copy`, `service_configs_check`, `message`.
-
-This is a known scope-narrowing: the same keyword (`builtin`) resolves to different registries depending on YAML position. **It is intentional and documented here explicitly.** Merging the registries is a follow-up plan.
 
 Example of the distinction:
 
@@ -157,7 +155,7 @@ phases:
 
 ## Workflow conditions (string-based, separate)
 
-Workflow steps use a **different condition system** — string-based mini-language — which is **out of scope** for this documentation.
+Workflow steps use a separate string-based condition mini-language. The full grammar is documented in [commands.md](commands.md); this section only sketches the surface for context.
 
 ```yaml
 # Workflow (string-based, separate system)
@@ -172,10 +170,11 @@ steps:
     when: "cmd: test -d /tmp/workdir"
 ```
 
-Workflow conditions are evaluated by `internal/tpl/render_command.go` and `internal/condition` string-classification logic, which remains untouched. They will be migrated to the typed model in a separate plan.
+Workflow conditions are evaluated by `internal/tpl/render_command.go` and `internal/condition` string-classification logic. See [commands.md](commands.md) for the full workflow grammar.
 
 ## Related documentation
 
 - [deploy.md](deploy.md) — pipeline `when:` and `check:` syntax with examples
 - [lifecycle.md](lifecycle.md) — lifecycle pipelines (same step/condition grammar as deploy)
 - [commands.md](commands.md) — command definitions (separate system; workflows keep string-based `when:`)
+- [Templates](../templates.md) — Go template syntax, sprout helpers, render contexts

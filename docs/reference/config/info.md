@@ -175,50 +175,14 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 
 ### Template functions
 
-Info section templates have access to a base set of helper functions. These are the same registries used by the `message` builtin and workflow `${...}` expressions.
+Info templates have access to the standard devbox template surface: the `appURL` domain helper plus the sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). See [Templates](../templates.md) for the full helper reference.
 
-#### Domain helpers (info-scope)
+Example using `appURL`:
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `appURL` | `appURL host port useHTTPS [path]` | Build a URL from host, port, HTTPS flag, and optional path. The port is omitted when it matches the scheme default (80 for http, 443 for https). |
-
-Example:
 ```yaml
 value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
+# → http://laravel.localhost (or https://… when use_https is true)
 ```
-
-Renders as `http://laravel.localhost` or `https://laravel.localhost` depending on `use_https`.
-
-#### Sprout registries
-
-In addition to the domain helper, the following registries from [go-sprout](https://docs.atom.codes/sprout/registries/) are available:
-
-| Registry | Use | Description |
-|----------|-----|-------------|
-| `std` | `default`, `ternary`, `empty`, `coalesce` | Utilities: defaults, conditionals, emptiness checks |
-| `strings` | `hasSuffix`, `hasPrefix`, `lower`, `upper`, `trim`, etc. | String manipulation |
-| `numeric` | `add`, `max`, `min`, `mul`, `div`, etc. | Numeric operations |
-| `slices` | `first`, `last`, `slice`, `join`, `reverse`, etc. | List/array operations |
-| `maps` | `keys`, `values`, `has`, `pick`, etc. | Map/object operations |
-| `regexp` | `regexMatch`, `regexReplace`, `regexSplit` | Regular expression matching |
-| `conversion` | `toInt`, `toFloat`, `toString`, `toBool`, etc. | Type conversion |
-| `time` | `now`, `date`, `dateFormat`, etc. | Date/time operations |
-| `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Path manipulation (forward-slash and OS-specific) |
-| `semver` | `semverCompare`, `semverSort` | Semantic version operations |
-
-**Hermetic design**: No env access, no filesystem reads, no network, no crypto/random — templates are isolated by construction.
-
-Common patterns for info templates:
-
-| Task | Example |
-|------|---------|
-| Current date | `{{ now \| date "2006-01-02" }}` |
-| Current datetime | `{{ now \| date "2006-01-02_15-04-05" }}` |
-| Path basename | `{{ some_path \| pathBase }}` |
-| Path directory | `{{ some_path \| pathDir }}` |
-| Default value | `{{ .Value \| default "N/A" }}` |
-| Conditional | `{{ if eq .State "ready" }}Ready{{ else }}Not ready{{ end }}` |
 
 ### `when` conditions
 

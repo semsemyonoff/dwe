@@ -484,7 +484,7 @@ services:
 - **Absolute paths in `dirs`** — dirs entries must be relative paths. Absolute paths or paths containing `..` are rejected by `service_dirs_ensure` as a security check.
 - **Missing `container` in child** — `container` is **not** inherited via `extends:`. A child without an explicit `container` carries an empty value, which fails at runtime. Always declare `container` per service.
 - **Forgetting `compose:` and `depends_on:` on a child** — also not inherited. Optional services that need their own overlay or dependency must declare it explicitly.
-- **Non-`app` services no longer get IDE files by default** — Previously, `devbox render ide` rendered files for all enabled services regardless of type. Now only `type: app` services default to `ide.enabled: true`; other types (`db`, `cache`, `queue`, `tool`) default to `false`. If IDE rendering is needed for a non-`app` service, set `ide.enabled: true` explicitly. This is a breaking change; existing projects using IDE files for non-`app` services must be updated.
+- **Forgetting `ide.enabled: true` on non-`app` services** — only `type: app` services default to `ide.enabled: true`; `db`, `cache`, `queue`, and `tool` default to `false`. Set `ide.enabled: true` explicitly when IDE files are needed.
 - **Pre-existing non-symlink at a managed symlink path** — if `CLAUDE.md` (or another `symlinks[].link` path) already exists as a regular file, `devbox render ai` refuses to overwrite it and exits with an error: `refuse to overwrite non-symlink file at <path>; remove it or disable via ai.enabled: false`. Delete the file first, or set `ai.enabled: false` for that service.
 
 ## Related commands

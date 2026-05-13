@@ -149,7 +149,7 @@ If the pack contains zero `.tmpl` files, a warning is printed and the service is
 For each entry the destination is built by joining the service hub directory with the entry's relative path (the pack-internal path with `.tmpl` stripped). The renderer:
 
 1. Reads the template file from the pack.
-2. Parses it as a Go text template, with strict mode enabled — any reference to a missing field aborts rendering instead of writing a `<no value>` placeholder.
+2. Parses it as a [Go text template](../templates.md) with strict mode enabled — any reference to a missing field aborts rendering instead of writing a `<no value>` placeholder.
 3. Executes the template against the [template variables](#template-variables).
 4. Resolves the destination and runs the [path-safety guards](#path-safety-guards).
 5. Creates any missing parent directories.
@@ -170,6 +170,8 @@ Templates receive a single object with these top-level fields:
 | `.Runtime` | merged `runtime` block | e.g. `.Runtime.Ports.App` |
 
 Strict-mode means a typo in `{{.Servic.Name}}` aborts rendering instead of writing a `<no value>` placeholder. Use `{{if ...}}` guards for fields that may legitimately be empty.
+
+The full set of helper functions available inside `*.tmpl` files (`appURL`, sprout registries, `text/template` built-ins) is documented in [Templates](../templates.md).
 
 ### Path-safety guards
 

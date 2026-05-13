@@ -287,7 +287,7 @@ Prints a message to deploy output.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `level` | string | `info`, `success`, `warning`, or `error` (required) |
-| `text` | string | Message text (required); supports Go template expressions against `DevboxConfig` |
+| `text` | string | Message text (required); supports [Go template expressions](../templates.md) against `DevboxConfig` |
 
 ```yaml
 - name: done
@@ -334,7 +334,7 @@ when:
   cmd: "dir-empty services/main/src"
 ```
 
-Available predicates: `dir-exists`, `dir-missing`, `dir-empty`, `dir-not-empty`, `file-exists`, `file-missing`. These are distinct from the *engine builtins* (`service_configs_copy`, etc.) used in step bodies and `check:` actions — a known scope-narrowing documented here explicitly. The predicate registry is intentionally POSIX-portable (uses hardcoded `sh -c`) for consistency regardless of the project's configured shell.
+Available predicates: `dir-exists`, `dir-missing`, `dir-empty`, `dir-not-empty`, `file-exists`, `file-missing`. These are distinct from the *engine builtins* (`service_configs_copy`, etc.) used in step bodies and `check:` actions; see [conditions.md](conditions.md) for the full distinction. The predicate registry uses hardcoded `sh -c` for POSIX portability regardless of the project's configured shell.
 
 **Shell commands** — execute a shell command; exit 0 = true, non-zero = false:
 
@@ -346,7 +346,7 @@ when:
 
 Shell commands also use hardcoded `sh -c` (not `ShellBin`) for portability.
 
-**Template expressions** — Go template syntax evaluated at plan time:
+**Template expressions** — Go template syntax evaluated at plan time against the merged `DevboxConfig`:
 
 ```yaml
 when:
@@ -354,7 +354,7 @@ when:
   expr: "{{ .Services.Second.Enabled }}"
 ```
 
-Template conditions do not support `check:` in the same step (no side effects at plan time). They are purely for idempotency checks like "skip this phase if the feature is not enabled" where the result is known before execution.
+Template conditions do not support `check:` in the same step (no side effects at plan time). They are purely for idempotency checks like "skip this phase if the feature is not enabled" where the result is known before execution. See [Templates](../templates.md) for the full template surface (helpers, sprout registries, `appURL`).
 
 ### `check:` (post-condition)
 
@@ -515,12 +515,11 @@ phases:
 
 ## Common pitfalls
 
-- **Using `devbox:` style instead of `type: devbox`** — the old multi-field syntax is no longer supported. Use `type:` + `cmd:` instead.
 - **Missing `with:` for builtin parameters** — builtins require `with:` for their parameters; passing them as top-level step fields does not work.
 - **`deploy_services` in `reset.yml`** — rejected at load time. The reset pipeline does not iterate services; if you need per-service cleanup, declare it explicitly in the reset phases.
 - **Forgetting `log: false` for noisy reset runs** — reset defaults to `log: false`, deploy defaults to `log: true`. Set the field explicitly when you want behaviour different from the default.
 - **Using `continue_on_error` to mask real failures in core phases** — it is meant for hook phases (pre/post). A failed `docker up` should always abort.
-- **Confusing `when:` and `check:` with the new types** — `when:` is evaluated before the step runs (pre-condition); `check:` is evaluated after success (post-action). Both use the typed `type: builtin|shell|template` / `cmd:` shape for `when:`, and the typed `type: shell|devbox|command|builtin` shape for `check:`.
+- **Confusing `when:` and `check:`** — `when:` is evaluated before the step runs (pre-condition); `check:` is evaluated after success (post-action). `when:` uses the typed `type: builtin|shell|template` / `cmd:` shape; `check:` uses the typed `type: shell|devbox|command|builtin` shape.
 
 ## Related commands
 

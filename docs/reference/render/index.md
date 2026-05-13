@@ -72,4 +72,5 @@ Each subcommand:
 
 - [`devbox.yml` / `defaults.yml` / `local.yml`](../config/devbox.md) — merged config layers and dot-path resolution (used by `render env`)
 - [`services.yml`](../config/services.md) — service definitions, `ide` / `ai` blocks, `extends` chains
+- [Templates](../templates.md) — Go template syntax, sprout helpers, render context (shared with info / commands / pipelines)
 - CLI reference: [`devbox render`](../cli/devbox_render.md), [`devbox render env`](../cli/devbox_render_env.md), [`devbox render ide`](../cli/devbox_render_ide.md), [`devbox render ai`](../cli/devbox_render_ai.md)
