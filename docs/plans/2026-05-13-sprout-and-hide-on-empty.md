@@ -188,16 +188,16 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
 - [x] run `go test ./internal/config/...` — must pass before next task
 
 ### Task 6: Apply `HideOnEmpty` in the renderer
-- [ ] refactor `RenderInfo` in `internal/ui/info.go`:
+- [x] refactor `RenderInfo` in `internal/ui/info.go`:
   - for each section, **first** evaluate every item's `when:` and collect those that survive into a `[]config.InfoItem` slice
   - if `len(surviving) == 0 && section.HideOnEmpty` → skip the section entirely (no title, no items)
   - otherwise render title (if non-empty) then iterate the surviving slice for output (do not re-evaluate `when:`)
   - track `renderedAnySection bool`
-- [ ] adjust footer: render `infoCfg.Footer` only when `renderedAnySection == true`. This avoids a lone footer line when every section was hidden.
-- [ ] semantics decisions (record in code comment near the new logic):
+- [x] adjust footer: render `infoCfg.Footer` only when `renderedAnySection == true`. This avoids a lone footer line when every section was hidden.
+- [x] semantics decisions (record in code comment near the new logic):
   - decorative items (`warning`, `info`, `subheader`) without `when:` always survive → they count as content → such a section is never "empty"
   - errors from `when:` evaluation propagate as before (no change to error behaviour)
-- [ ] write **table-driven** tests in `internal/ui/info_test.go` (rows: `{name, infoCfg, wantContains, wantNotContains}`), each subtest `t.Parallel()`:
+- [x] write **table-driven** tests in `internal/ui/info_test.go` (rows: `{name, infoCfg, wantContains, wantNotContains}`), each subtest `t.Parallel()`:
   - section with all items filtered out + `hide_on_empty: true` → not in output (no title)
   - same setup + `hide_on_empty: false` (or omitted) → title still rendered (legacy behaviour preserved)
   - mixed: one hidden, one visible → output contains only the visible section's title/items
@@ -205,7 +205,7 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
   - at least one section rendered + `footer: true` → footer rendered (regression guard)
   - decorative warning without `when:` keeps the section visible even if everything else is filtered (asserts the "warning counts as content" rule)
   - section with items whose `when:` errors → error propagates (regression guard for existing behaviour)
-- [ ] run `go test ./internal/ui/...` — must pass before next task
+- [x] run `go test ./internal/ui/...` — must pass before next task
 
 ### Task 7: Document `hide_on_empty`
 - [ ] `docs/reference/config/info.md`:

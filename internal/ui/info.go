@@ -21,22 +21,36 @@ const defaultIndent = 2
 // fails to evaluate.
 func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, error) {
 	var sb strings.Builder
+	renderedAnySection := false
 
 	for _, section := range infoCfg.Sections {
-		if section.Title != "" {
-			sb.WriteString(renderSectionTitle(section.Title))
-			sb.WriteByte('\n')
-		}
-
+		// First pass: evaluate when: conditions for all items and collect survivors.
+		// Items without when: always survive. This ensures decorative items (warning,
+		// info, subheader) without when: are always counted as content, making a section
+		// with such items never "empty".
+		survivors := []config.InfoItem{}
 		for _, item := range section.Items {
 			show, err := tpl.EvalCondition(item.When, cfg)
 			if err != nil {
 				return "", fmt.Errorf("section %q item %q when: %w", section.ID, item.Type, err)
 			}
-			if !show {
-				continue
+			if show {
+				survivors = append(survivors, item)
 			}
+		}
 
+		// If no items survived and the section is marked hide_on_empty, skip it entirely.
+		if len(survivors) == 0 && section.HideOnEmpty {
+			continue
+		}
+
+		// Section is rendered: render title if present, then all surviving items.
+		if section.Title != "" {
+			sb.WriteString(renderSectionTitle(section.Title))
+			sb.WriteByte('\n')
+		}
+
+		for _, item := range survivors {
 			rendered, err := renderInfoItem(cfg, item)
 			if err != nil {
 				return "", fmt.Errorf("section %q: %w", section.ID, err)
@@ -44,9 +58,12 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 			sb.WriteString(rendered)
 			sb.WriteByte('\n')
 		}
+
+		renderedAnySection = true
 	}
 
-	if infoCfg.Footer {
+	// Footer is rendered only if at least one section was rendered.
+	if infoCfg.Footer && renderedAnySection {
 		sb.WriteString(renderSectionTitle(""))
 		sb.WriteByte('\n')
 	}

@@ -306,3 +306,205 @@ func TestWordWrap_NoSpaces(t *testing.T) {
 		t.Errorf("expected split of word without spaces: %v", out)
 	}
 }
+
+func TestRenderInfo_HideOnEmpty_AllFiltered_True(t *testing.T) {
+	t.Parallel()
+	// All items filtered out, hide_on_empty: true → section title and all items absent
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "hidden",
+				Title:       "Should Be Hidden",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "k", Value: "v", When: "{{if false}}yes{{end}}"},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "Should Be Hidden") {
+		t.Errorf("expected section title hidden, got:\n%s", out)
+	}
+	if strings.Contains(out, "k") || strings.Contains(out, "v") {
+		t.Errorf("expected all items hidden, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_HideOnEmpty_AllFiltered_False(t *testing.T) {
+	t.Parallel()
+	// All items filtered out, hide_on_empty: false (legacy) → section title rendered
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "visible",
+				Title:       "Should Show Title",
+				HideOnEmpty: false,
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "k", Value: "v", When: "{{if false}}yes{{end}}"},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "Should Show Title") {
+		t.Errorf("expected section title visible with hide_on_empty=false, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_HideOnEmpty_Mixed(t *testing.T) {
+	t.Parallel()
+	// One section hidden, one visible
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "hidden",
+				Title:       "Hidden Section",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "hidden_k", Value: "hidden_v", When: "{{if false}}no{{end}}"},
+				},
+			},
+			{
+				ID:          "visible",
+				Title:       "Visible Section",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "visible_k", Value: "visible_v"},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "Hidden Section") {
+		t.Errorf("expected hidden section absent, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Visible Section") {
+		t.Errorf("expected visible section present, got:\n%s", out)
+	}
+	if !strings.Contains(out, "visible_v") {
+		t.Errorf("expected visible item content, got:\n%s", out)
+	}
+	if strings.Contains(out, "hidden_v") {
+		t.Errorf("expected hidden item absent, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_Footer_NoSectionsRendered(t *testing.T) {
+	t.Parallel()
+	// All sections hidden, footer: true → footer suppressed
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "hidden",
+				Title:       "Will Be Hidden",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "k", Value: "v", When: "{{if false}}no{{end}}"},
+				},
+			},
+		},
+		Footer: true,
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Output should be empty (no sections, no footer)
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("expected empty output when all sections hidden with footer=true, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_Footer_SectionRendered(t *testing.T) {
+	t.Parallel()
+	// At least one section rendered, footer: true → footer rendered
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:    "s1",
+				Title: "Section",
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "k", Value: "v"},
+				},
+			},
+		},
+		Footer: true,
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Errorf("expected multiple lines (section + footer), got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_DecorativeWarningKeepsSectionVisible(t *testing.T) {
+	t.Parallel()
+	// Section with one filtered definition item + one unfiltered warning (decorative)
+	// → section rendered because warning counts as content
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "mixed",
+				Title:       "Mixed Section",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "k", Value: "v", When: "{{if false}}no{{end}}"},
+					{Type: "warning", Text: "important warning"},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "Mixed Section") {
+		t.Errorf("expected section title because warning counts as content, got:\n%s", out)
+	}
+	if !strings.Contains(out, "important warning") {
+		t.Errorf("expected warning in output, got:\n%s", out)
+	}
+	if strings.Contains(out, "v") {
+		t.Errorf("expected filtered definition item absent, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_WhenEvaluationError_Propagates(t *testing.T) {
+	t.Parallel()
+	// Section with an item whose when: expression causes an error
+	// → error propagates (regression guard)
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID: "error",
+				Items: []config.InfoItem{
+					{Type: "definition", Name: "k", Value: "v", When: "{{.Invalid.Field}}"},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	_, err := RenderInfo(cfg, infoCfg)
+	if err == nil {
+		t.Error("expected error from invalid when: expression, got nil")
+	}
+}

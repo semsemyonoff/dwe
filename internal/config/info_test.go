@@ -160,8 +160,8 @@ hide_on_empty: false`,
 			wantHide: false,
 		},
 		{
-			name: "hide_on_empty omitted defaults to false",
-			yaml: `id: test`,
+			name:     "hide_on_empty omitted defaults to false",
+			yaml:     `id: test`,
 			wantHide: false,
 		},
 	}
