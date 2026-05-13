@@ -150,7 +150,7 @@ A container item that groups related items and optionally displays a title.
 |-------|------|---------|-------------|
 | `title` | string | — | Optional header for the subgroup (plain string or template expression). When empty, the subgroup is rendered without a heading. |
 | `items` | list | — | Required. Ordered list of child item definitions. Can contain any item type, including nested subgroups. |
-| `when` | string | — | Condition; subgroup dropped from output if falsy. Child items are still evaluated independently for their own `when` conditions. |
+| `when` | string | — | Condition; when falsy the entire subgroup (including all children) is skipped. When truthy, each child item is evaluated for its own `when` condition. |
 | `hide_on_empty` | bool | `true` | Skip the subgroup entirely when no child item survives when-filtering. (Opposite of section default; subgroups default to `true`.) |
 | `decorative` | bool | `false` | When `true`, the subgroup never counts as content for the parent's `hide_on_empty` check, even if it produces output. |
 
