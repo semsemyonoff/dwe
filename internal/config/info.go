@@ -173,20 +173,20 @@ func ValidateInfoConfig(cfg *InfoConfig) error {
 	return nil
 }
 
-func validateItems(items []InfoItem, pathPrefix string) error {
-	validTypes := map[string]bool{
-		"info":       true,
-		"warning":    true,
-		"definition": true,
-		"separator":  true,
-		"subgroup":   true,
-	}
+var validInfoTypes = map[string]bool{
+	"info":       true,
+	"warning":    true,
+	"definition": true,
+	"separator":  true,
+	"subgroup":   true,
+}
 
+func validateItems(items []InfoItem, pathPrefix string) error {
 	for i, item := range items {
 		itemPath := fmt.Sprintf("%s.items[%d]", pathPrefix, i)
 
 		// Validate type is known
-		if !validTypes[item.Type] {
+		if !validInfoTypes[item.Type] {
 			return fmt.Errorf("info: %s: unknown type %q; valid types: info, warning, definition, separator, subgroup", itemPath, item.Type)
 		}
 

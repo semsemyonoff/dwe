@@ -503,18 +503,16 @@ func TestRenderInfo_DecorativeTrueWarningHidesSection(t *testing.T) {
 
 func TestRenderInfo_DecorativeFalseSeparatorCountsAsContent(t *testing.T) {
 	t.Parallel()
-	// decorative: false on separator → separator counts as content AND section renders.
-	// Test: section with a definition AND a non-decorative separator.
-	// The definition makes it clear the section rendered.
+	// decorative: false on separator → separator alone keeps section visible.
+	// Only item is the separator; if decorative=false is not respected, the section would be hidden.
 	decorativeFalse := false
 	infoCfg := &config.InfoConfig{
 		Sections: []config.InfoSection{
 			{
 				ID:          "sep-decorative-false",
-				Title:       "With Separator",
+				Title:       "Sep Only Section",
 				HideOnEmpty: true,
 				Items: []config.InfoItem{
-					{Type: "definition", Name: "key", Value: "value"},
 					{Type: "separator", Decorative: &decorativeFalse},
 				},
 			},
@@ -525,12 +523,9 @@ func TestRenderInfo_DecorativeFalseSeparatorCountsAsContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Section should render because separator counts as content.
-	if !strings.Contains(out, "With Separator") {
-		t.Errorf("expected section title (separator counted as content), got:\n%s", out)
-	}
-	if !strings.Contains(out, "value") {
-		t.Errorf("expected definition value, got:\n%s", out)
+	// Section should render because the separator (decorative=false) counts as content.
+	if !strings.Contains(out, "Sep Only Section") {
+		t.Errorf("expected section title rendered (separator with decorative=false counts as content), got:\n%s", out)
 	}
 }
 
@@ -559,6 +554,113 @@ func TestRenderInfo_DecorativeTrueSeparatorHidesSection(t *testing.T) {
 	// Section should be hidden (decorative separator doesn't count as content).
 	if strings.Contains(out, "Only Decorative Sep") {
 		t.Errorf("expected section hidden (decorative separator only), got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_HideOnEmpty_NilItems(t *testing.T) {
+	t.Parallel()
+	// Section with HideOnEmpty=true and no items (nil) — should be suppressed entirely.
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{ID: "empty", Title: "Empty Section", HideOnEmpty: true, Items: nil},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "Empty Section") {
+		t.Errorf("expected empty section hidden with hide_on_empty=true, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_SubgroupWhenFalse(t *testing.T) {
+	t.Parallel()
+	// when: on the subgroup item itself evaluates to false — subgroup absent from output.
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:    "s1",
+				Title: "Parent Section",
+				Items: []config.InfoItem{
+					{
+						Type:  "subgroup",
+						Title: "Filtered Subgroup",
+						When:  "{{if false}}yes{{end}}",
+						Items: []config.InfoItem{
+							{Type: "definition", Name: "k", Value: "v"},
+						},
+					},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "Filtered Subgroup") {
+		t.Errorf("expected subgroup hidden by when:false, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_SubgroupWhenTrue(t *testing.T) {
+	t.Parallel()
+	// when: on the subgroup item itself evaluates to true — subgroup renders.
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:    "s1",
+				Title: "Parent Section",
+				Items: []config.InfoItem{
+					{
+						Type:  "subgroup",
+						Title: "Visible Subgroup",
+						When:  "{{if true}}yes{{end}}",
+						Items: []config.InfoItem{
+							{Type: "definition", Name: "k", Value: "v"},
+						},
+					},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "Visible Subgroup") {
+		t.Errorf("expected subgroup rendered by when:true, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_SubgroupWhenInvalidExpr(t *testing.T) {
+	t.Parallel()
+	// Invalid when: expression on subgroup item — error propagated.
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID: "s1",
+				Items: []config.InfoItem{
+					{
+						Type:  "subgroup",
+						Title: "Bad Subgroup",
+						When:  "{{.Invalid.Field}}",
+						Items: []config.InfoItem{
+							{Type: "definition", Name: "k", Value: "v"},
+						},
+					},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	_, err := RenderInfo(cfg, infoCfg)
+	if err == nil {
+		t.Error("expected error from invalid when: on subgroup, got nil")
 	}
 }
 

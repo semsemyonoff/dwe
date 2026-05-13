@@ -70,11 +70,7 @@ func renderBlock(
 	sectionID string,
 	itemPath string,
 ) (out string, rendered bool, err error) {
-	type survivor struct {
-		str       string
-		decorated bool
-	}
-	var survivors []survivor
+	var survivors []string
 	contentCount := 0
 
 	for idx, item := range items {
@@ -119,7 +115,7 @@ func renderBlock(
 
 			// Only add to survivors if the subgroup rendered
 			if subRendered {
-				survivors = append(survivors, survivor{str: subOut, decorated: item.IsDecorative()})
+				survivors = append(survivors, subOut)
 				if !item.IsDecorative() {
 					contentCount++
 				}
@@ -130,7 +126,7 @@ func renderBlock(
 			if err != nil {
 				return "", false, fmt.Errorf("section %q %s (%s): %w", sectionID, currentPath, item.Type, err)
 			}
-			survivors = append(survivors, survivor{str: itemOut, decorated: item.IsDecorative()})
+			survivors = append(survivors, itemOut)
 			if !item.IsDecorative() {
 				contentCount++
 			}
@@ -157,7 +153,7 @@ func renderBlock(
 
 	// Write each survivor with trailing newline (even for empty separators)
 	for _, s := range survivors {
-		outSB.WriteString(s.str)
+		outSB.WriteString(s)
 		outSB.WriteByte('\n')
 	}
 

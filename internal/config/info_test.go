@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -95,6 +96,12 @@ func TestLoadInfoConfig(t *testing.T) {
 	if len(urls.Items) != 2 {
 		t.Fatalf("sections[1] items = %d, want 2 (subgroups)", len(urls.Items))
 	}
+
+	// The second subgroup (Tools) has a when: expression — verify it is parsed.
+	toolsSubgroup := urls.Items[1]
+	if toolsSubgroup.When != "{{ .Tools.AnyEnabled }}" {
+		t.Errorf("tools subgroup when = %q, want {{ .Tools.AnyEnabled }}", toolsSubgroup.When)
+	}
 }
 
 func TestLoadInfoConfig_notFound(t *testing.T) {
@@ -153,6 +160,19 @@ func TestInfoIndent_invalidType(t *testing.T) {
 		if err := yaml.Unmarshal([]byte(bad), &item); err == nil {
 			t.Errorf("expected error for %q", bad)
 		}
+	}
+}
+
+func TestInfoIndent_negativeValue(t *testing.T) {
+	var item struct {
+		Indent InfoIndent `yaml:"indent"`
+	}
+	err := yaml.Unmarshal([]byte(`indent: -1`), &item)
+	if err == nil {
+		t.Fatal("expected error for negative indent value")
+	}
+	if !strings.Contains(err.Error(), "negative") {
+		t.Errorf("error should mention 'negative': %v", err)
 	}
 }
 
@@ -384,10 +404,10 @@ sections:
 			if err == nil {
 				t.Fatal("expected error for unknown type")
 			}
-			if !contains(err.Error(), "unknown type") {
+			if !strings.Contains(err.Error(), "unknown type") {
 				t.Errorf("error should mention 'unknown type': %v", err)
 			}
-			if !contains(err.Error(), "valid types") {
+			if !strings.Contains(err.Error(), "valid types") {
 				t.Errorf("error should list valid types: %v", err)
 			}
 		})
@@ -408,7 +428,7 @@ sections:
 	if err == nil {
 		t.Fatal("expected error for empty subgroup items")
 	}
-	if !contains(err.Error(), "subgroup must declare items") {
+	if !strings.Contains(err.Error(), "subgroup must declare items") {
 		t.Errorf("error should mention 'subgroup must declare items': %v", err)
 	}
 }
@@ -429,11 +449,11 @@ sections:
 	if err == nil {
 		t.Fatal("expected error for nested unknown type")
 	}
-	if !contains(err.Error(), "unknown type") {
+	if !strings.Contains(err.Error(), "unknown type") {
 		t.Errorf("error should mention 'unknown type': %v", err)
 	}
 	// Should indicate it's nested
-	if !contains(err.Error(), ".items[") {
+	if !strings.Contains(err.Error(), ".items[") {
 		t.Errorf("error should include path with .items: %v", err)
 	}
 }
@@ -489,13 +509,4 @@ sections:
 	if len(child.Items) != 1 {
 		t.Fatalf("child should have 1 item, got %d", len(child.Items))
 	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
