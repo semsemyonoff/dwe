@@ -158,11 +158,13 @@ func renderBlock(
 	}
 
 	// Enforce rendered ⇔ out != "" biconditional.
-	// TrimRight handles the case where all survivors rendered to "" (e.g. only
-	// separators) with no title: outSB would contain only \n bytes from the
-	// trailing-newline loop, which must not be treated as real content.
+	// When contentCount > 0 the caller already decided there is real content
+	// (e.g. a non-decorative separator that renders to ""), so we must return
+	// rendered=true even if the rendered string is blank.
+	// Only apply the TrimRight guard for the all-decorative / no-title case,
+	// where outSB may contain only \n bytes that must not be treated as content.
 	result := outSB.String()
-	if strings.TrimRight(result, "\n") == "" {
+	if contentCount == 0 && strings.TrimRight(result, "\n") == "" {
 		return "", false, nil
 	}
 

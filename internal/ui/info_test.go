@@ -529,6 +529,43 @@ func TestRenderInfo_DecorativeFalseSeparatorCountsAsContent(t *testing.T) {
 	}
 }
 
+func TestRenderInfo_DecorativeFalseSeparatorTitleless(t *testing.T) {
+	t.Parallel()
+	// Titleless section with hide_on_empty=true and a single non-decorative separator.
+	// The separator renders to "" but decorative=false means it counts as content,
+	// so the section must report rendered=true even though the output string is blank.
+	decorativeFalse := false
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "titleless-sep",
+				Title:       "",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "separator", Decorative: &decorativeFalse},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	_, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The section has real content (non-decorative separator), so the footer
+	// should appear (footer presence signals at least one section rendered).
+	// Re-run with Footer=true to detect whether rendered=true propagated.
+	infoCfg.Footer = true
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Footer is only added when sb.Len() > 0, which requires at least one rendered section.
+	if out == "" {
+		t.Errorf("expected non-empty output (non-decorative separator must keep section visible), got empty string")
+	}
+}
+
 func TestRenderInfo_DecorativeTrueSeparatorHidesSection(t *testing.T) {
 	t.Parallel()
 	// Contrast: decorative: true on separator makes it NOT count as content.
