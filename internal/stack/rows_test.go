@@ -34,8 +34,8 @@ func TestBuildToolRows_NilTools(t *testing.T) {
 func TestBuildToolRows_SortedOrder(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Tools: config.ToolsConfig{
-			"zebra": {Enabled: true, Container: "zebra", Host: "z.local", Port: 9000},
-			"apple": {Enabled: false, Container: "apple", Host: "a.local", Port: 9001},
+			"zebra":  {Enabled: true, Container: "zebra", Host: "z.local", Port: 9000},
+			"apple":  {Enabled: false, Container: "apple", Host: "a.local", Port: 9001},
 			"middle": {Enabled: true, Container: "middle", Host: "m.local", Port: 9002},
 		},
 	}
@@ -130,8 +130,8 @@ func TestBuildToolRows_ArbitraryToolNames(t *testing.T) {
 func TestBuildToolRows_DeterministicOrdering_MultipleInvocations(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Tools: config.ToolsConfig{
-			"zebra": {Enabled: true, Container: "zebra", Host: "z.local", Port: 9000},
-			"apple": {Enabled: false, Container: "apple", Host: "a.local", Port: 9001},
+			"zebra":  {Enabled: true, Container: "zebra", Host: "z.local", Port: 9000},
+			"apple":  {Enabled: false, Container: "apple", Host: "a.local", Port: 9001},
 			"banana": {Enabled: true, Container: "banana", Host: "b.local", Port: 9002},
 			"middle": {Enabled: true, Container: "middle", Host: "m.local", Port: 9003},
 		},

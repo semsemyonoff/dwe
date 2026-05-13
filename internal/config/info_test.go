@@ -34,7 +34,7 @@ sections:
           - type: definition
             indent: 2
             name: URL
-            value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
+            value: "{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}"
       - type: subgroup
         title: Tools
         when: "{{ .Tools.AnyEnabled }}"
@@ -43,7 +43,7 @@ sections:
             indent: 2
             name: Adminer
             value: "adminer-url"
-            when: "{{ .Tools.Adminer.Enabled }}"
+            when: "{{ .Tools.adminer.Enabled }}"
 
 footer: true
 `
@@ -508,5 +508,38 @@ sections:
 	}
 	if len(child.Items) != 1 {
 		t.Fatalf("child should have 1 item, got %d", len(child.Items))
+	}
+}
+
+func TestLoadInfoConfig_arbitraryToolKey(t *testing.T) {
+	// Regression test: verify that an arbitrary tool key (e.g. elasticvue)
+	// not in the hardcoded original set (adminer, redis_insight, mailpit)
+	// can be referenced in templates with mixed-case syntax.
+	yml := `
+sections:
+  - id: tools
+    items:
+      - type: subgroup
+        title: Utilities
+        items:
+          - type: definition
+            name: ElasticVue
+            value: "elasticvue-dashboard"
+            when: "{{ .Tools.elasticvue.Enabled }}"
+`
+	path := writeTempYML(t, yml)
+	cfg, err := LoadInfoConfig(path)
+	if err != nil {
+		t.Fatalf("LoadInfoConfig for arbitrary tool key: %v", err)
+	}
+
+	if len(cfg.Sections) != 1 {
+		t.Fatalf("expected 1 section, got %d", len(cfg.Sections))
+	}
+
+	subgroup := cfg.Sections[0].Items[0]
+	item := subgroup.Items[0]
+	if item.When != "{{ .Tools.elasticvue.Enabled }}" {
+		t.Errorf("expected mixed-case template for arbitrary tool, got: %q", item.When)
 	}
 }

@@ -151,14 +151,14 @@ Go-skill notes used here:
 
 ### Task 6: Update template-using tests and fixtures
 
-- [ ] in `internal/condition/condition_test.go`, rewrite `{{ .Tools.Adminer.Enabled }}` → `{{ .Tools.adminer.Enabled }}` and re-anchor the `Tools` fixture as a map
-- [ ] in `internal/config/info_test.go`, apply both migrations:
+- [x] in `internal/condition/condition_test.go`, rewrite `{{ .Tools.Adminer.Enabled }}` → `{{ .Tools.adminer.Enabled }}` and re-anchor the `Tools` fixture as a map
+- [x] in `internal/config/info_test.go`, apply both migrations:
       - tool host/port refs (`.Runtime.Hosts.Adminer`, `.Runtime.Ports.Mailpit`, etc.) → `.Tools.<name>.Host` / `.Tools.<name>.Port`
       - tool-enabled refs (`.Tools.Adminer.Enabled`) → `.Tools.adminer.Enabled` (mixed-case)
       - non-tool runtime refs (`.Runtime.Hosts.Main`, `.Runtime.Ports.App`) → `.Runtime.Hosts.main`, `.Runtime.Ports.app` (fully lowercase, scalar)
-- [ ] grep all `*_test.go` and any `testdata/` YAML with a proper regex (covering both `Db` and `DB`): `Tools\.(Adminer|RedisInsight|Mailpit)|Runtime\.(Hosts|Ports)\.(Adminer|RedisInsight|Mailpit|App|Db|DB|Redis|Main)` and rewrite each match per the migration table above
-- [ ] add one regression test in `internal/config/info_test.go` exercising a tool key NOT in the original three (e.g. `elasticvue`) to lock the data-driven path
-- [ ] run `go test ./...` — must pass before next task
+- [x] grep all `*_test.go` and any `testdata/` YAML with a proper regex (covering both `Db` and `DB`): `Tools\.(Adminer|RedisInsight|Mailpit)|Runtime\.(Hosts|Ports)\.(Adminer|RedisInsight|Mailpit|App|Db|DB|Redis|Main)` and rewrite each match per the migration table above
+- [x] add one regression test in `internal/config/info_test.go` exercising a tool key NOT in the original three (e.g. `elasticvue`) to lock the data-driven path
+- [x] run `go test ./...` — must pass before next task
 
 ### Task 7: Update remaining consumers and tests (incl. Raw dot-path consumers)
 

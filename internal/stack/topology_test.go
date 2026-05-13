@@ -215,9 +215,9 @@ func TestAugmentWithDisabled_NoDisabledNoop(t *testing.T) {
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
 		config.ToolsConfig{
-			"adminer": {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+			"adminer":       {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 			"redis_insight": {Enabled: true, Container: "redis-insight", Host: "redis-insight.localhost", Port: 8081},
-			"mailpit": {Enabled: true, Container: "mailpit", Host: "mailpit.localhost", Port: 8082},
+			"mailpit":       {Enabled: true, Container: "mailpit", Host: "mailpit.localhost", Port: 8082},
 		},
 		config.RuntimePorts(nil),
 		config.RuntimeHosts(nil),

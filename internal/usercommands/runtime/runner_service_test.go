@@ -385,8 +385,7 @@ func TestServiceExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		Config: &config.DevboxConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Compose: config.ComposeConfig{
-				Base:     "compose.yaml",
-				Overlays: map[string]string{},
+				Base: "compose.yaml",
 			},
 			Services: map[string]config.ServiceConfig{
 				"second": {Enabled: true, Compose: []string{"compose/services/second/app.yml"}},
@@ -421,8 +420,7 @@ func TestServiceRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		Config: &config.DevboxConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Compose: config.ComposeConfig{
-				Base:     "compose.yaml",
-				Overlays: map[string]string{},
+				Base: "compose.yaml",
 			},
 			Services: map[string]config.ServiceConfig{
 				"second": {Enabled: true, Compose: []string{"compose/services/second/app.yml"}},

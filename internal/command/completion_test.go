@@ -184,7 +184,9 @@ func TestToolNameCompletion_returnsConfiguredTools(t *testing.T) {
 	// This test uses a real on-disk config setup.
 	tempDir := t.TempDir()
 	devboxDir := tempDir + "/devbox"
-	os.MkdirAll(devboxDir, 0755)
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
 
 	// Write a defaults.yml with tools. All required fields must be present.
 	defaultsYML := `
@@ -219,7 +221,7 @@ runtime:
 		t.Fatalf("writing devbox.yml: %v", err)
 	}
 
-	flags := &rootFlags{configPath: tempDir + "/devbox.yml"}
+	flags := &rootFlags{configPath: tempDir + "/devbox.yml", projectRoot: tempDir}
 	fn := toolNameCompletion(flags)
 	completions, directive := fn(nil, []string{}, "")
 

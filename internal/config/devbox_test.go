@@ -2841,15 +2841,11 @@ compose:
 	activeFiles := cfg.ComposeFiles()
 
 	// ComposeFilesAll should include all tools (adminer disabled, but still listed).
+	// ComposeFilesAll includes all tools with compose files (enabled or disabled).
+	// adminer has no compose field, so it's not included.
 	wantAll := []string{
 		"compose.yaml",
-		"compose/tools/adminer.yml",      // disabled, but listed in ComposeFilesAll (zero compose entry)... wait no. adminer has no compose field, so not included
-		"compose/tools/elasticvue.yml",   // enabled, included
-	}
-	// Actually, adminer has no compose field, so it won't be included
-	wantAll = []string{
-		"compose.yaml",
-		"compose/tools/elasticvue.yml",   // enabled, included
+		"compose/tools/elasticvue.yml", // enabled, included
 	}
 
 	if len(allFiles) != len(wantAll) {
@@ -2864,7 +2860,7 @@ compose:
 	// ComposeFiles only includes enabled tools with compose files.
 	wantActive := []string{
 		"compose.yaml",
-		"compose/tools/elasticvue.yml",   // enabled, included
+		"compose/tools/elasticvue.yml", // enabled, included
 	}
 	if len(activeFiles) != len(wantActive) {
 		t.Fatalf("ComposeFiles len = %d, want %d: %v", len(activeFiles), len(wantActive), activeFiles)
@@ -2928,7 +2924,7 @@ compose:
 	}
 
 	// Run ComposeFiles 100 times and verify order is always the same.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		got := cfg.ComposeFiles()
 		if len(got) != len(wantSorted) {
 			t.Fatalf("iteration %d: ComposeFiles len = %d, want %d: %v", i, len(got), len(wantSorted), got)
