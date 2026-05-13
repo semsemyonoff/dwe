@@ -466,7 +466,7 @@ func TestRenderInfo_DecorativeWarningKeepsSectionVisible(t *testing.T) {
 				Title:       "Mixed Section",
 				HideOnEmpty: true,
 				Items: []config.InfoItem{
-					{Type: "definition", Name: "k", Value: "v", When: "{{if false}}no{{end}}"},
+					{Type: "definition", Name: "k", Value: "FILTERED_VALUE", When: "{{if false}}no{{end}}"},
 					{Type: "warning", Text: "important warning"},
 				},
 			},
@@ -483,7 +483,7 @@ func TestRenderInfo_DecorativeWarningKeepsSectionVisible(t *testing.T) {
 	if !strings.Contains(out, "important warning") {
 		t.Errorf("expected warning in output, got:\n%s", out)
 	}
-	if strings.Contains(out, "v") {
+	if strings.Contains(out, "FILTERED_VALUE") {
 		t.Errorf("expected filtered definition item absent, got:\n%s", out)
 	}
 }

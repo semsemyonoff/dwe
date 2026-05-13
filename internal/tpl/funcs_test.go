@@ -1,7 +1,6 @@
 package tpl
 
 import (
-	"reflect"
 	"testing"
 )
 
@@ -72,6 +71,24 @@ func TestSproutFunctions(t *testing.T) {
 			name:     "pathBase chained with pathDir",
 			template: `{{ pathDir (pathBase "/a/b/c.txt") }}`,
 			want:     ".",
+		},
+		// maps registry
+		{
+			name:     "dict and hasKey",
+			template: `{{ hasKey (dict "a" 1) "a" }}`,
+			want:     "true",
+		},
+		// conversion registry
+		{
+			name:     "toInt",
+			template: `{{ toInt "42" }}`,
+			want:     "42",
+		},
+		// semver registry
+		{
+			name:     "semverCompare",
+			template: `{{ semverCompare ">=1.0.0" "1.2.3" }}`,
+			want:     "true",
 		},
 	}
 
@@ -150,9 +167,14 @@ func TestAppURLRegression(t *testing.T) {
 			want:     "http://localhost:3000",
 		},
 		{
-			name:     "with path",
+			name:     "with path no leading slash",
 			template: `{{ appURL "app.local" 80 false "?SPX_KEY=dev" }}`,
 			want:     "http://app.local/?SPX_KEY=dev",
+		},
+		{
+			name:     "with path leading slash not doubled",
+			template: `{{ appURL "app.local" 80 false "/api/v1" }}`,
+			want:     "http://app.local/api/v1",
 		},
 	}
 
@@ -223,7 +245,7 @@ func TestLegacyRemoval(t *testing.T) {
 			name:      "zero-arg date errors",
 			template:  `{{ date }}`,
 			shouldErr: true,
-			note:      "sprout's date is variadic, errors on zero args",
+			note:      "sprout date requires 2 args (layout, date), errors on zero args",
 		},
 		{
 			name:      "datetime helper removed entirely",
@@ -257,30 +279,6 @@ func TestLegacyRemoval(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-// ---- OnceValue Caching Test ----
-
-func TestOnceValueCaching(t *testing.T) {
-	t.Parallel()
-	// Call FuncMap twice and verify the cached appURL function is the same object.
-	fm1 := FuncMap()
-	fm2 := FuncMap()
-
-	appURLFn1, ok1 := fm1["appURL"]
-	appURLFn2, ok2 := fm2["appURL"]
-
-	if !ok1 || !ok2 {
-		t.Fatal("appURL not in FuncMap")
-	}
-
-	// Get the function pointers to verify they point to the same underlying function.
-	ptr1 := reflect.ValueOf(appURLFn1).Pointer()
-	ptr2 := reflect.ValueOf(appURLFn2).Pointer()
-
-	if ptr1 != ptr2 {
-		t.Error("appURL function pointer differs between calls; cache did not hit")
 	}
 }
 

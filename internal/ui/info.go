@@ -21,14 +21,13 @@ const defaultIndent = 2
 // fails to evaluate.
 func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, error) {
 	var sb strings.Builder
-	renderedAnySection := false
 
 	for _, section := range infoCfg.Sections {
 		// First pass: evaluate when: conditions for all items and collect survivors.
 		// Items without when: always survive. This ensures decorative items (warning,
 		// info, subheader) without when: are always counted as content, making a section
 		// with such items never "empty".
-		survivors := []config.InfoItem{}
+		var survivors []config.InfoItem
 		for _, item := range section.Items {
 			show, err := tpl.EvalCondition(item.When, cfg)
 			if err != nil {
@@ -59,11 +58,10 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 			sb.WriteByte('\n')
 		}
 
-		renderedAnySection = true
 	}
 
-	// Footer is rendered only if at least one section was rendered.
-	if infoCfg.Footer && renderedAnySection {
+	// Footer is rendered only if at least one section produced output.
+	if infoCfg.Footer && sb.Len() > 0 {
 		sb.WriteString(renderSectionTitle(""))
 		sb.WriteByte('\n')
 	}

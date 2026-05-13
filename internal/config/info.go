@@ -37,8 +37,7 @@ type InfoSection struct {
 }
 
 // InfoIndent represents an optional indent value for an InfoItem.
-// It distinguishes between "not set" (use default), an explicit int (use that),
-// and false (force zero indent).
+// It distinguishes between "not set" (use default) and an explicit non-negative int.
 type InfoIndent struct {
 	set   bool
 	value int

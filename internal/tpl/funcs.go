@@ -4,6 +4,7 @@ package tpl
 import (
 	"fmt"
 	"maps"
+	"strings"
 	"sync"
 	"text/template"
 
@@ -77,7 +78,7 @@ func appURL(host string, port int, useHTTPS bool, pathParts ...string) string {
 	}
 	path := ""
 	if len(pathParts) > 0 && pathParts[0] != "" {
-		path = "/" + pathParts[0]
+		path = "/" + strings.TrimPrefix(pathParts[0], "/")
 	}
 	if port == 0 || port == defaultPort {
 		return fmt.Sprintf("%s://%s%s", scheme, host, path)
