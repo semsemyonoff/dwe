@@ -106,16 +106,16 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
 ### Task 2: Rewrite tpl tests for the new surface
 **Context:** existing tests in `internal/tpl/` reference deleted symbols (`dateFunc`, `datetimeFunc`) and legacy template invocations (`{{ date }}`, `{{ datetime }}`, `{{ base "..." }}`, `{{ dir "..." }}`). After Task 1 the package won't even compile its own tests. Do the surgery in lock-step.
 
-- [ ] **Delete from `internal/tpl/engine_test.go`** (all stale — replaced by new tests below):
+- [x] **Delete from `internal/tpl/engine_test.go`** (all stale — replaced by new tests below):
   - `TestDateFunc` / `TestDatetimeFunc` (lines ≈158–181) — referenced removed `dateFunc`/`datetimeFunc`
   - `TestRender_dateFunc` / `TestRender_datetimeFunc` (≈183–217) — tested removed `{{ date }}` / `{{ datetime }}`
   - `TestBase*` / `TestRender_baseFunc` (≈220–250) — tested removed local `base` helper
   - `TestDir*` / `TestRender_dirFunc` (≈253–280) — tested removed local `dir` helper
-- [ ] **Delete from `internal/tpl/render_command_test.go`**:
+- [x] **Delete from `internal/tpl/render_command_test.go`**:
   - `TestRenderCommand_dateFunc` (≈line 292), `TestRenderCommand_datetimeFunc` (≈311), `TestRenderCommand_baseFunc` (≈330), `TestRenderCommand_dirFunc` (≈353), `TestRenderCommand_baseDirChained` (≈395)
   - the `backup_{{ date }}.sql` assertion at ≈line 385 — rewrite to `backup_{{ now | date "2006-01-02" }}.sql`
   - **Keep** the `dir-exists` / `dir-missing` / `dir-empty` / `file-exists` tests starting ≈line 606 — those are `EvalCommandCondition` builtin predicates, a different system from template helpers.
-- [ ] **Add new `internal/tpl/funcs_test.go`** with the sprout-coverage matrix. Table-driven, `{name, template, want}`, executed via `tpl.Render(template, nil)` (observable surface, not direct map lookup). All subtests `t.Parallel()`:
+- [x] **Add new `internal/tpl/funcs_test.go`** with the sprout-coverage matrix. Table-driven, `{name, template, want}`, executed via `tpl.Render(template, nil)` (observable surface, not direct map lookup). All subtests `t.Parallel()`:
   - `hasSuffix` from `strings`
   - `default` from `std`
   - `ternary` from `std`
@@ -125,21 +125,21 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
   - `pathBase "/a/b/c.txt"` → `"c.txt"` (replacement for the deleted `base` test)
   - `pathDir "/a/b/c.txt"` → `"/a/b"` (replacement for the deleted `dir` test)
   - chained: `{{ pathDir (pathBase "/a/b/c.txt") }}` → `"."` (replacement for `TestRenderCommand_baseDirChained`)
-- [ ] **time-rendering smoke test** in `funcs_test.go`: `tpl.Render("{{ now | date \"2006-01-02\" }}", nil)` returns a string matching `^\d{4}-\d{2}-\d{2}$`. We don't pin exact values — sprout's `now`/`date` are sprout's responsibility. `t.Parallel()` allowed (no shared state).
-- [ ] **`appURL` regression** in `funcs_test.go`, table-driven (host/port/scheme/path rows, default-port elision per `internal/tpl/funcs.go:appURL`), all subtests `t.Parallel()`.
-- [ ] **Hermetic boundary** negative tests — each must return a non-nil error from `tpl.Render`:
+- [x] **time-rendering smoke test** in `funcs_test.go`: `tpl.Render("{{ now | date \"2006-01-02\" }}", nil)` returns a string matching `^\d{4}-\d{2}-\d{2}$`. We don't pin exact values — sprout's `now`/`date` are sprout's responsibility. `t.Parallel()` allowed (no shared state).
+- [x] **`appURL` regression** in `funcs_test.go`, table-driven (host/port/scheme/path rows, default-port elision per `internal/tpl/funcs.go:appURL`), all subtests `t.Parallel()`.
+- [x] **Hermetic boundary** negative tests — each must return a non-nil error from `tpl.Render`:
   - `{{ env "PATH" }}` — `env` registry not registered
   - `{{ getHostByName "x" }}` — `network` registry not registered
   - `{{ randAlpha 8 }}` — `random` registry not registered
-- [ ] **Legacy-removal negative tests** (pin the breaking change so future "convenience re-adds" fail loudly):
+- [x] **Legacy-removal negative tests** (pin the breaking change so future "convenience re-adds" fail loudly):
   - `tpl.Render("{{ date }}", nil)` must error — sprout's `date` is variadic, errors on zero-arg invocation
   - `tpl.Render("{{ datetime }}", nil)` must error — helper deleted entirely; no sprout equivalent under that name
   - `tpl.Render(\`{{ base "/x" }}\`, nil)` must error — no generic `base`; must use `pathBase`/`osBase`
   - `tpl.Render(\`{{ dir "/x" }}\`, nil)` must error — same as above
-- [ ] **`commandFuncMap` inheritance**: in `render_command_test.go` add one new case using a sprout func (`default`) in a command template — proves the command surface inherits sprout via the cloned base map.
-- [ ] **OnceValue caching test**: call `FuncMap()` twice, assert function-value equality (via `reflect.ValueOf(...).Pointer()`) on the `appURL` entry — confirms the cache hits, not silently rebuilt. Map identity will differ (per-call shallow clone), function values come from the cached source.
-- [ ] **Isolation test** (regression guard for the cache-leak bug): call `commandFuncMap()` (which adds `resolve` entries), then call `FuncMap()`, assert `_, ok := fm["resolve"]; !ok`. Proves the shallow-clone defence holds.
-- [ ] run `go test ./internal/tpl/...` — must pass before next task
+- [x] **`commandFuncMap` inheritance**: in `render_command_test.go` add one new case using a sprout func (`default`) in a command template — proves the command surface inherits sprout via the cloned base map.
+- [x] **OnceValue caching test**: call `FuncMap()` twice, assert function-value equality (via `reflect.ValueOf(...).Pointer()`) on the `appURL` entry — confirms the cache hits, not silently rebuilt. Map identity will differ (per-call shallow clone), function values come from the cached source.
+- [x] **Isolation test** (regression guard for the cache-leak bug): call `commandFuncMap()` (which adds `resolve` entries), then call `FuncMap()`, assert `_, ok := fm["resolve"]; !ok`. Proves the shallow-clone defence holds.
+- [x] run `go test ./internal/tpl/...` — must pass before next task
 
 ### Task 3: Full-suite migration sanity
 - [ ] run `go test ./...` — full suite green; in particular `internal/usercommands/...` tests that load `testdata/files_dump_create.yml` must pass with the new `{{ now | date "..." }}` template
