@@ -1,7 +1,9 @@
 package command
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"devbox-cli/internal/config"
@@ -50,7 +52,10 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 	baseDir := flags.ProjectRoot()
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("loading docker config: %w", err)
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("loading docker config: %w", err)
+		}
+		dockerCfg = &config.DockerConfig{}
 	}
 
 	// Auto-generate .env if configured for this command.
@@ -357,10 +362,17 @@ func newDockerProjectNameCmd(flags *rootFlags) *cobra.Command {
 			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
-				return fmt.Errorf("loading docker config: %w", err)
+				if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("loading docker config: %w", err)
+				}
+				dockerCfg = &config.DockerConfig{}
 			}
 
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), dockerCfg.ProjectName)
+			name := dockerCfg.ProjectName
+			if name == "" {
+				name = cfg.Project.FullName()
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), name)
 			return err
 		},
 		SilenceUsage: true,

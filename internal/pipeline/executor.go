@@ -63,7 +63,8 @@ func childIO(logWriter io.Writer) (stdout, stderr io.Writer, cleanup func()) {
 	}
 
 	// Match the parent's terminal size so the child's TUI lays out correctly.
-	_ = pty.InheritSize(os.Stdin, ptmx)
+	// Use os.Stdout (not os.Stdin) because Stdout is the terminal when stdin is piped.
+	_ = pty.InheritSize(os.Stdout, ptmx)
 
 	done := make(chan struct{})
 	sink := io.MultiWriter(os.Stdout, &ansiStripper{logWriter})
