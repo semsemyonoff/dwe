@@ -1,6 +1,7 @@
 package tpl
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -279,6 +280,25 @@ func TestLegacyRemoval(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ---- OnceValue Caching Test ----
+
+func TestFuncMapCaching(t *testing.T) {
+	t.Parallel()
+	// FuncMap() returns a per-call shallow clone, so map identity differs.
+	// But the underlying function values must originate from the same cached
+	// buildFuncMap call — confirmed via reflect.ValueOf.Pointer() equality.
+	fm1 := FuncMap()
+	fm2 := FuncMap()
+	if &fm1 == &fm2 {
+		t.Error("FuncMap returned same map reference; shallow clone is broken")
+	}
+	p1 := reflect.ValueOf(fm1["appURL"]).Pointer()
+	p2 := reflect.ValueOf(fm2["appURL"]).Pointer()
+	if p1 != p2 {
+		t.Error("appURL function pointer differs across FuncMap calls; OnceValue cache is not hit")
 	}
 }
 
