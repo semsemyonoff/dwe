@@ -142,8 +142,8 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
 - [x] run `go test ./internal/tpl/...` — must pass before next task
 
 ### Task 3: Full-suite migration sanity
-- [ ] run `go test ./...` — full suite green; in particular `internal/usercommands/...` tests that load `testdata/files_dump_create.yml` must pass with the new `{{ now | date "..." }}` template
-- [ ] re-run the broad grep from Task 1 — must return zero hits outside `docs/plans/`:
+- [x] run `go test ./...` — full suite green; in particular `internal/usercommands/...` tests that load `testdata/files_dump_create.yml` must pass with the new `{{ now | date "..." }}` template
+- [x] re-run the broad grep from Task 1 — must return zero hits outside `docs/plans/`:
   ```
   rg '\{\{\s*(date|datetime)\s*\}\}|\{\{\s*(base|dir)\b|\|\s*(base|dir)\s*\}\}' --glob '*.yml' --glob '*.yaml' --glob '*.md'
   ```
@@ -153,7 +153,7 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
   - `{{ ... | base }}` / `{{ ... | dir }}` — piped legacy
   - The new sprout idiom `{{ now | date "..." }}` is **allowed** (no zero-arg form, `date` is not first token); `{{ pathBase ... }}` and `{{ x | pathBase }}` are allowed (word-boundary).
   **Doc convention to avoid self-matches:** the migration tables in Task 4 reference legacy helpers as backtick-wrapped identifiers (e.g. `` `base` ``, `` `date` ``) — never as full template literals `{{ base }}`. Combined with the narrowed regex above, this keeps the migration documentation out of the grep's match set without needing an exclude rule.
-- [ ] confirm no Go code references the removed helpers: `grep -rn 'FuncMap()\[\("date"\|"datetime"\|"base"\|"dir"\)\]' internal/` returns zero hits
+- [x] confirm no Go code references the removed helpers: `grep -rn 'FuncMap()\[\("date"\|"datetime"\|"base"\|"dir"\)\]' internal/` returns zero hits
 
 ### Task 4: Update template-function documentation
 - [ ] `docs/reference/config/info.md`: rewrite the "Template functions" section
