@@ -74,6 +74,7 @@ func (h *InfoIndent) UnmarshalYAML(node *yaml.Node) error {
 //   - definition: Name, Value, Indent, Icon, When.
 //   - separator: When.
 //   - subgroup: Title (header text), Items (children), When, HideOnEmpty, Decorative.
+//
 // The Title field (for subgroups) is distinct from Text (for info/warning).
 // All types support the Decorative flag to override the type's default visibility.
 type InfoItem struct {

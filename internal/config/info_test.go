@@ -244,9 +244,9 @@ func TestInfoItem_IsDecorative(t *testing.T) {
 
 func TestInfoItem_SubgroupHideOnEmpty(t *testing.T) {
 	tests := []struct {
-		name         string
-		hideOnEmpty  *bool
-		want         bool
+		name        string
+		hideOnEmpty *bool
+		want        bool
 	}{
 		{name: "nil defaults to true", hideOnEmpty: nil, want: true},
 		{name: "explicit true", hideOnEmpty: ptrBool(true), want: true},
@@ -266,13 +266,13 @@ func TestInfoItem_SubgroupHideOnEmpty(t *testing.T) {
 
 func TestInfoItem_SubgroupYAMLRoundTrip(t *testing.T) {
 	tests := []struct {
-		name     string
-		yaml     string
-		wantType string
-		wantTitle string
-		wantItemsLen int
+		name            string
+		yaml            string
+		wantType        string
+		wantTitle       string
+		wantItemsLen    int
 		wantHideOnEmpty *bool
-		wantDecorative *bool
+		wantDecorative  *bool
 	}{
 		{
 			name: "basic subgroup",
@@ -281,11 +281,11 @@ title: Tools
 items:
   - type: info
     text: hello`,
-			wantType: "subgroup",
-			wantTitle: "Tools",
-			wantItemsLen: 1,
+			wantType:        "subgroup",
+			wantTitle:       "Tools",
+			wantItemsLen:    1,
 			wantHideOnEmpty: nil,
-			wantDecorative: nil,
+			wantDecorative:  nil,
 		},
 		{
 			name: "subgroup with hide_on_empty and decorative",
@@ -297,11 +297,11 @@ items:
     value: postgres
 hide_on_empty: false
 decorative: true`,
-			wantType: "subgroup",
-			wantTitle: "Services",
-			wantItemsLen: 1,
+			wantType:        "subgroup",
+			wantTitle:       "Services",
+			wantItemsLen:    1,
 			wantHideOnEmpty: ptrBool(false),
-			wantDecorative: ptrBool(true),
+			wantDecorative:  ptrBool(true),
 		},
 		{
 			name: "nested subgroup",
@@ -313,11 +313,11 @@ items:
     items:
       - type: info
         text: nested`,
-			wantType: "subgroup",
-			wantTitle: "Outer",
-			wantItemsLen: 1,
+			wantType:        "subgroup",
+			wantTitle:       "Outer",
+			wantItemsLen:    1,
 			wantHideOnEmpty: nil,
-			wantDecorative: nil,
+			wantDecorative:  nil,
 		},
 	}
 
@@ -366,7 +366,7 @@ func TestValidateInfoConfig_unknownType(t *testing.T) {
 	}{
 		{name: "subheader is unknown", unknownType: "subheader"},
 		{name: "made_up_type is unknown", unknownType: "made_up_type"},
-		{name: "typo in definition", unknownType: "defintion"},
+		{name: "typo in type name", unknownType: "definitino"},
 	}
 
 	for _, tt := range tests {

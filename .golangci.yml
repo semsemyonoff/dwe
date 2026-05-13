@@ -25,6 +25,13 @@ linters:
           - revive
         path: internal/usercommands/usercommands\.go
         text: "exported"
+      # info_test.go uses ptrBool helper to create bool pointers in test fixtures.
+      # The modernize newexpr check suggests simplifying ptrBool(x) to new(x),
+      # but new(bool) creates a false pointer, not the intended value.
+      - linters:
+          - modernize
+        path: internal/config/info_test\.go
+        text: "newexpr"
 
 formatters:
   enable:

@@ -171,7 +171,6 @@ func TestRenderInfo_TemplateInValue(t *testing.T) {
 	}
 }
 
-
 func TestRenderInfo_Footer(t *testing.T) {
 	infoCfg := &config.InfoConfig{
 		Sections: []config.InfoSection{
@@ -608,8 +607,8 @@ func TestRenderInfo_SubgroupHideOnEmptyFalseWithTitle(t *testing.T) {
 	infoCfg := &config.InfoConfig{
 		Sections: []config.InfoSection{
 			{
-				ID:    "with-subgroup",
-				Title: "Section",
+				ID:          "with-subgroup",
+				Title:       "Section",
 				HideOnEmpty: true,
 				Items: []config.InfoItem{
 					{
@@ -1036,4 +1035,3 @@ func TestRenderInfo_WhenEvaluationError_Propagates(t *testing.T) {
 		t.Error("expected error from invalid when: expression, got nil")
 	}
 }
-
