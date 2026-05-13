@@ -68,16 +68,19 @@ func (h *InfoIndent) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // InfoItem is a single renderable element within a section.
+// Five types are valid: info, warning, definition, separator, subgroup.
+// Type-specific fields:
+//   - info, warning: Text (message body), Indent, Icon, When.
+//   - definition: Name, Value, Indent, Icon, When.
+//   - separator: When.
+//   - subgroup: Title (header text), Items (children), When, HideOnEmpty, Decorative.
+// The Title field (for subgroups) is distinct from Text (for info/warning).
+// All types support the Decorative flag to override the type's default visibility.
 type InfoItem struct {
-	// Type selects the rendering function:
-	//   subheader  — yellow "---Title---" line
-	//   definition — "  name — value" definition line
-	//   warning    — yellow warning message
-	//   info       — blue info message
-	//   separator  — blank line
+	// Type selects the rendering function: info, warning, definition, separator, subgroup.
 	Type string `yaml:"type"`
 
-	// Text is the content for: subheader, warning, info.
+	// Text is the content for: warning, info.
 	// Supports Go template expressions evaluated against DevboxConfig.
 	Text string `yaml:"text"`
 
@@ -101,6 +104,43 @@ type InfoItem struct {
 	// (non-empty, not "false", not "0").
 	// Empty When always shows the item.
 	When string `yaml:"when"`
+
+	// Title is the subgroup header text (subgroup items only).
+	// Mirrors InfoSection.Title and supports Go template expressions.
+	// Empty means the subgroup has no header.
+	Title string `yaml:"title,omitempty"`
+
+	// Items are the children of a subgroup (subgroup items only).
+	// Subgroups nest recursively.
+	Items []InfoItem `yaml:"items,omitempty"`
+
+	// HideOnEmpty controls whether a subgroup (and its title) is omitted
+	// when no item survives when: filtering. Defaults to true for subgroups.
+	HideOnEmpty *bool `yaml:"hide_on_empty,omitempty"`
+
+	// Decorative indicates whether this item counts as content for its parent's
+	// hide_on_empty check. When nil, defaults are: separator → true, all others → false.
+	// An explicit override applies to any type.
+	Decorative *bool `yaml:"decorative,omitempty"`
+}
+
+// IsDecorative returns whether this item is decorative (does not count as content).
+// When Decorative is nil, the type default is used: separator items are decorative,
+// all others are not. When Decorative is set, the explicit value is returned.
+func (i InfoItem) IsDecorative() bool {
+	if i.Decorative != nil {
+		return *i.Decorative
+	}
+	return i.Type == "separator"
+}
+
+// SubgroupHideOnEmpty returns whether a subgroup should be hidden when empty.
+// Defaults to true if HideOnEmpty is nil (subgroup default).
+func (i InfoItem) SubgroupHideOnEmpty() bool {
+	if i.HideOnEmpty != nil {
+		return *i.HideOnEmpty
+	}
+	return true
 }
 
 // LoadInfoConfig reads and parses an info.yml file at the given path.
