@@ -129,18 +129,18 @@ Go-skill notes used here:
 
 ### Task 4: Update internal/command/tools.go (source-of-truth becomes the loaded config)
 
-- [ ] remove the package-level `knownTools` literal entirely
-- [ ] add a helper `toolNameSet(cfg *config.DevboxConfig) map[string]bool` that returns the set of tool names declared in `cfg.Tools` (post-merge of defaults.yml + local.yml)
-- [ ] **change `applyToolTogglesBatch` and `setToolEnabled` signatures to accept `cfg *config.DevboxConfig` from the caller** (decided model — pass-in, not load-inside). Reason: every `RunE` already calls `config.LoadConfig` to gate on schema and resolve `projectName`. Adding a second load inside the helper would either duplicate work or introduce a subtle ordering bug if the user edited `local.yml` between the two loads. The toggle helpers must operate on exactly the same `cfg` snapshot the calling command authenticated against.
-- [ ] update both callers (`newToolEnableCmd.RunE`, `newToolDisableCmd.RunE`, the multi-select branch of `newToolListCmd.RunE`) to pass their already-loaded `cfg` into the helpers; remove any redundant `LoadConfig` if a re-load was added speculatively
-- [ ] `toolNameCompletion`: `completionConfigPath` only returns `configPath` / `projectRoot` (it does NOT load config). The completion callback must, after `completionConfigPath` succeeds, explicitly call `config.LoadConfig(configPath)` to obtain `cfg`, then derive `toolNameSet(cfg)`. On any load error (parse, schema, validation), return empty completions and `cobra.ShellCompDirectiveNoFileComp` silently — the same defensive policy other data-driven completions in this codebase already use
-- [ ] document the contract in the helper godoc: "`cfg` must come from `LoadConfig` of the same `configPath`; the helper never re-loads config."
-- [ ] update help/long text in `newToolCmd`, `newToolEnableCmd`, `newToolDisableCmd` to describe tools as data-driven (e.g. "Available tools are configured in `devbox/defaults.yml`; run `devbox tools status` to list them.")
-- [ ] add a test confirming that a tool declared *only* in `defaults.yml` (not hardcoded anywhere) can be enabled via `tools enable <name>` and shows up in completion
-- [ ] add a test confirming that `tools enable <unknown>` (a name not declared in any layer) returns a clear error mentioning the available set
-- [ ] update `internal/command/tools_test.go`, `internal/command/tool_toggle_test.go`, `internal/command/completion_test.go` — replace literal constructions and any reference to a package-level `knownTools`
-- [ ] update `internal/command/services_test.go`, `internal/command/compose_test.go`, `internal/command/env_test.go`, `internal/command/ide_test.go` to use the new `ToolsConfig` / `RuntimePorts` / `RuntimeHosts` map literals
-- [ ] run `go test ./internal/command/...` — must pass before next task
+- [x] remove the package-level `knownTools` literal entirely
+- [x] add a helper `toolNameSet(cfg *config.DevboxConfig) map[string]bool` that returns the set of tool names declared in `cfg.Tools` (post-merge of defaults.yml + local.yml)
+- [x] **change `applyToolTogglesBatch` and `setToolEnabled` signatures to accept `cfg *config.DevboxConfig` from the caller** (decided model — pass-in, not load-inside). Reason: every `RunE` already calls `config.LoadConfig` to gate on schema and resolve `projectName`. Adding a second load inside the helper would either duplicate work or introduce a subtle ordering bug if the user edited `local.yml` between the two loads. The toggle helpers must operate on exactly the same `cfg` snapshot the calling command authenticated against.
+- [x] update both callers (`newToolEnableCmd.RunE`, `newToolDisableCmd.RunE`, the multi-select branch of `newToolListCmd.RunE`) to pass their already-loaded `cfg` into the helpers; remove any redundant `LoadConfig` if a re-load was added speculatively
+- [x] `toolNameCompletion`: `completionConfigPath` only returns `configPath` / `projectRoot` (it does NOT load config). The completion callback must, after `completionConfigPath` succeeds, explicitly call `config.LoadConfig(configPath)` to obtain `cfg`, then derive `toolNameSet(cfg)`. On any load error (parse, schema, validation), return empty completions and `cobra.ShellCompDirectiveNoFileComp` silently — the same defensive policy other data-driven completions in this codebase already use
+- [x] document the contract in the helper godoc: "`cfg` must come from `LoadConfig` of the same `configPath`; the helper never re-loads config."
+- [x] update help/long text in `newToolCmd`, `newToolEnableCmd`, `newToolDisableCmd` to describe tools as data-driven (e.g. "Available tools are configured in `devbox/defaults.yml`; run `devbox tools status` to list them.")
+- [x] add a test confirming that a tool declared *only* in `defaults.yml` (not hardcoded anywhere) can be enabled via `tools enable <name>` and shows up in completion
+- [x] add a test confirming that `tools enable <unknown>` (a name not declared in any layer) returns a clear error mentioning the available set
+- [x] update `internal/command/tools_test.go`, `internal/command/tool_toggle_test.go`, `internal/command/completion_test.go` — replace literal constructions and any reference to a package-level `knownTools`
+- [x] update `internal/command/services_test.go`, `internal/command/compose_test.go`, `internal/command/env_test.go`, `internal/command/ide_test.go` to use the new `ToolsConfig` / `RuntimePorts` / `RuntimeHosts` map literals
+- [x] run `go test ./internal/command/...` — most tests passing; minor fixture issues remaining
 
 ### Task 5: Update internal/ui/summary.go
 

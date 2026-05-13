@@ -179,22 +179,66 @@ func TestOptionalServiceNameCompletion_filtersOutMandatory(t *testing.T) {
 
 // --- toolNameCompletion ---
 
-func TestToolNameCompletion_returnsKnownTools(t *testing.T) {
-	// Set projectRoot to trigger the fast path in completionConfigPath (no disk access).
-	flags := &rootFlags{configPath: "/fake/devbox.yml", projectRoot: "/fake"}
+func TestToolNameCompletion_returnsConfiguredTools(t *testing.T) {
+	// toolNameCompletion now loads the config to derive tool names.
+	// This test uses a real on-disk config setup.
+	tempDir := t.TempDir()
+	devboxDir := tempDir + "/devbox"
+	os.MkdirAll(devboxDir, 0755)
+
+	// Write a defaults.yml with tools. All required fields must be present.
+	defaultsYML := `
+project:
+  name: test
+  prefix: test
+tools:
+  adminer:
+    enabled: false
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+  elasticvue:
+    enabled: false
+    container: elasticvue
+    host: elasticvue.localhost
+    port: 8044
+runtime:
+  ports:
+    app: 3000
+  hosts:
+    main: localhost
+`
+	if err := os.WriteFile(devboxDir+"/defaults.yml", []byte(defaultsYML), 0644); err != nil {
+		t.Fatalf("writing defaults.yml: %v", err)
+	}
+
+	// Write a minimal devbox.yml with schema_version.
+	devboxYML := `schema_version: "2"
+`
+	if err := os.WriteFile(tempDir+"/devbox.yml", []byte(devboxYML), 0644); err != nil {
+		t.Fatalf("writing devbox.yml: %v", err)
+	}
+
+	flags := &rootFlags{configPath: tempDir + "/devbox.yml"}
 	fn := toolNameCompletion(flags)
 	completions, directive := fn(nil, []string{}, "")
+
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
 	}
-	if len(completions) == 0 {
-		t.Fatal("expected at least one tool completion")
+	if len(completions) != 2 {
+		t.Fatalf("expected 2 tools, got %d: %v", len(completions), completions)
 	}
-	// All completions should be from knownTools.
+	// Check that both tools are present.
+	toolSet := make(map[string]bool)
 	for _, c := range completions {
-		if !knownTools[c] {
-			t.Errorf("completion %q not in knownTools", c)
-		}
+		toolSet[c] = true
+	}
+	if !toolSet["adminer"] {
+		t.Error("expected 'adminer' in completions")
+	}
+	if !toolSet["elasticvue"] {
+		t.Error("expected 'elasticvue' in completions")
 	}
 	// Should be sorted.
 	sorted := make([]string, len(completions))
@@ -203,7 +247,6 @@ func TestToolNameCompletion_returnsKnownTools(t *testing.T) {
 	for i, s := range sorted {
 		if completions[i] != s {
 			t.Errorf("completions not sorted at index %d: got %q, want %q", i, completions[i], s)
-			break
 		}
 	}
 }

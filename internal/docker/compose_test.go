@@ -409,8 +409,10 @@ func TestNewComposeAll(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
-			Overlays: map[string]string{
-				"adminer": "compose/tools/adminer.yml",
+		},
+		Tools: config.ToolsConfig{
+			"adminer": config.ToolConfig{
+				Compose: "compose/tools/adminer.yml",
 			},
 		},
 		Services: map[string]config.ServiceConfig{

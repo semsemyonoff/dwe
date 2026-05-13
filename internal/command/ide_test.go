@@ -53,7 +53,7 @@ func makeIDECfg(name string) *config.DevboxConfig {
 			},
 		},
 		Runtime: config.RuntimeConfig{
-			Ports: config.RuntimePorts{App: 80},
+			Ports: config.RuntimePorts{"app": 80},
 		},
 		Raw: map[string]any{},
 	}
@@ -71,7 +71,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 			WorkDirInternal: "/workspace/src",
 		},
 		Runtime: config.RuntimeConfig{
-			Ports: config.RuntimePorts{App: 8080},
+			Ports: config.RuntimePorts{"app": 8080},
 		},
 	}
 	projectRoot := t.TempDir()

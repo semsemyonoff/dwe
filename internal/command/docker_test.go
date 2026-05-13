@@ -203,10 +203,6 @@ func TestResolvePullInvocation(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
-			Overlays: map[string]string{
-				"dev":  "compose.dev.yaml",
-				"test": "compose.test.yaml",
-			},
 		},
 		Services: map[string]config.ServiceConfig{
 			"api": {
@@ -311,10 +307,6 @@ func TestResolveBuildInvocation(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
-			Overlays: map[string]string{
-				"dev":  "compose.dev.yaml",
-				"test": "compose.test.yaml",
-			},
 		},
 		Services: map[string]config.ServiceConfig{
 			"api": {
@@ -507,9 +499,6 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
-			Overlays: map[string]string{
-				"dev": "compose.dev.yaml",
-			},
 		},
 		Services: map[string]config.ServiceConfig{
 			"api": {
@@ -640,9 +629,6 @@ func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
-			Overlays: map[string]string{
-				"dev": "compose.dev.yaml",
-			},
 		},
 		Services: map[string]config.ServiceConfig{
 			"api": {

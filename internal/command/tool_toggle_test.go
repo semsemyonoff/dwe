@@ -1,6 +1,7 @@
 package command
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,9 +23,27 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 	lines = append(lines, "project:")
 	lines = append(lines, "  name: test")
 	lines = append(lines, "  prefix: devbox")
+	lines = append(lines, "runtime:")
+	lines = append(lines, "  ports:")
+	lines = append(lines, "    app: 3000")
+	lines = append(lines, "  hosts:")
+	lines = append(lines, "    main: localhost")
 	lines = append(lines, "tools:")
+	toolDefs := map[string]struct {
+		container string
+		host      string
+		port      int
+	}{
+		"adminer":       {container: "adminer", host: "adminer.localhost", port: 8080},
+		"redis_insight": {container: "redis_insight", host: "redis.localhost", port: 5540},
+		"mailpit":       {container: "mailpit", host: "mail.localhost", port: 8025},
+	}
 	for _, name := range []string{"adminer", "redis_insight", "mailpit"} {
+		def := toolDefs[name]
 		lines = append(lines, "  "+name+":")
+		lines = append(lines, "    container: "+def.container)
+		lines = append(lines, "    host: "+def.host)
+		lines = append(lines, "    port: "+fmt.Sprint(def.port))
 		if tools[name] {
 			lines = append(lines, "    enabled: true")
 		}

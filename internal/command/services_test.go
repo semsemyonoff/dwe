@@ -76,7 +76,26 @@ func TestBuildServiceRows_sortedByName(t *testing.T) {
 }
 
 func TestBuildToolRows_allDisabled(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, config.ToolsConfig{
+		"adminer": config.ToolConfig{
+			Enabled:   false,
+			Container: "adminer",
+			Host:      "adminer.localhost",
+			Port:      8080,
+		},
+		"redis_insight": config.ToolConfig{
+			Enabled:   false,
+			Container: "redis_insight",
+			Host:      "redis.localhost",
+			Port:      5540,
+		},
+		"mailpit": config.ToolConfig{
+			Enabled:   false,
+			Container: "mailpit",
+			Host:      "mail.localhost",
+			Port:      8025,
+		},
+	}, config.RuntimePorts{}, config.RuntimeHosts{})
 	rows := stack.BuildToolRows(cfg)
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 tool rows, got %d", len(rows))
@@ -90,18 +109,25 @@ func TestBuildToolRows_allDisabled(t *testing.T) {
 
 func TestBuildToolRows_someEnabled(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer:      config.ToolConfig{Enabled: false},
-		RedisInsight: config.ToolConfig{Enabled: true},
-		Mailpit:      config.ToolConfig{Enabled: true},
-	}, config.RuntimePorts{
-		Adminer:      8080,
-		RedisInsight: 5540,
-		Mailpit:      8025,
-	}, config.RuntimeHosts{
-		Adminer:      "adminer.localhost",
-		RedisInsight: "redis.localhost",
-		Mailpit:      "mail.localhost",
-	})
+		"adminer": config.ToolConfig{
+			Enabled:   false,
+			Container: "adminer",
+			Host:      "adminer.localhost",
+			Port:      8080,
+		},
+		"redis_insight": config.ToolConfig{
+			Enabled:   true,
+			Container: "redis_insight",
+			Host:      "redis.localhost",
+			Port:      5540,
+		},
+		"mailpit": config.ToolConfig{
+			Enabled:   true,
+			Container: "mailpit",
+			Host:      "mail.localhost",
+			Port:      8025,
+		},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 
 	rows := stack.BuildToolRows(cfg)
 	if len(rows) != 3 {
@@ -122,23 +148,27 @@ func TestBuildToolRows_someEnabled(t *testing.T) {
 		t.Errorf("adminer.Host = %q, want adminer.localhost", adminer.Host)
 	}
 
-	ri := rows[1]
+	// rows are sorted alphabetically, so mailpit comes before redis_insight
+	mp := rows[1]
+	if mp.Name != "mailpit" {
+		t.Errorf("rows[1].Name = %q, want mailpit", mp.Name)
+	}
+	if !mp.Enabled {
+		t.Error("mailpit should be enabled")
+	}
+	if mp.Port != 8025 {
+		t.Errorf("mailpit.Port = %d, want 8025", mp.Port)
+	}
+
+	ri := rows[2]
 	if ri.Name != "redis_insight" {
-		t.Errorf("rows[1].Name = %q, want redis_insight", ri.Name)
+		t.Errorf("rows[2].Name = %q, want redis_insight", ri.Name)
 	}
 	if !ri.Enabled {
 		t.Error("redis_insight should be enabled")
 	}
 	if ri.Port != 5540 {
 		t.Errorf("redis_insight.Port = %d, want 5540", ri.Port)
-	}
-
-	mp := rows[2]
-	if mp.Name != "mailpit" {
-		t.Errorf("rows[2].Name = %q, want mailpit", mp.Name)
-	}
-	if !mp.Enabled {
-		t.Error("mailpit should be enabled")
 	}
 }
 

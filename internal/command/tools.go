@@ -21,7 +21,7 @@ func newToolCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tools",
 		Short: "Manage optional tools",
-		Long: `List, enable, or disable optional tool services (adminer, redis_insight, mailpit).
+		Long: `List, enable, or disable optional tool services.
 
 Enabling or disabling a tool writes the change to devbox/local.yml and regenerates .env.
 Use 'devbox up' to start newly enabled tools.
@@ -131,7 +131,7 @@ the read-only status table.`,
 				return nil
 			}
 
-			if err := applyToolTogglesBatch(flags.configPath, toEnable, toDisable); err != nil {
+			if err := applyToolTogglesBatch(cfg, flags.configPath, toEnable, toDisable); err != nil {
 				return err
 			}
 
@@ -187,7 +187,7 @@ func newToolEnableCmd(flags *rootFlags) *cobra.Command {
 		Short: "Enable an optional tool (writes to devbox/local.yml)",
 		Long: `Enable an optional tool by writing tools.<name>.enabled = true to devbox/local.yml.
 
-Available tools: adminer, redis_insight, mailpit.
+Available tools are configured in devbox/defaults.yml; run 'devbox tools status' to list them.
 The .env file is regenerated automatically after the change.
 
 When no tool name is given, an interactive selector shows all currently
@@ -215,7 +215,7 @@ disabled tools.`,
 					return err
 				}
 			}
-			return setToolEnabled(flags.configPath, name, true)
+			return setToolEnabled(cfg, flags.configPath, name, true)
 		},
 		SilenceUsage: true,
 	}
@@ -227,7 +227,7 @@ func newToolDisableCmd(flags *rootFlags) *cobra.Command {
 		Short: "Disable an optional tool (writes to devbox/local.yml)",
 		Long: `Disable an optional tool by writing tools.<name>.enabled = false to devbox/local.yml.
 
-Available tools: adminer, redis_insight, mailpit.
+Available tools are configured in devbox/defaults.yml; run 'devbox tools status' to list them.
 The .env file is regenerated automatically after the change.
 
 When no tool name is given, an interactive selector shows all currently
@@ -255,7 +255,7 @@ enabled tools.`,
 					return err
 				}
 			}
-			return setToolEnabled(flags.configPath, name, false)
+			return setToolEnabled(cfg, flags.configPath, name, false)
 		},
 		SilenceUsage: true,
 	}
@@ -308,21 +308,36 @@ func pickToolCandidates(rows []stack.ToolRow, statusLabel, title string, selecto
 	return rows[idx].Name, nil
 }
 
+// toolNameSet returns the set of tool names declared in cfg.Tools.
+// cfg must come from LoadConfig of the same configPath; the helper never re-loads config.
+func toolNameSet(cfg *config.DevboxConfig) map[string]bool {
+	set := make(map[string]bool, len(cfg.Tools))
+	for name := range cfg.Tools {
+		set[name] = true
+	}
+	return set
+}
+
 // toolNameCompletion returns a ValidArgsFunction that completes tool names from the
-// known tools set. It gates on schema validation so that legacy v1 projects do not
+// loaded config. It gates on schema validation so that legacy v1 projects do not
 // appear functional through tab-completion.
 func toolNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		// Gate on project discovery + schema validation even though tool names are a
-		// static set — a v1 project should not appear functional through tab-completion.
-		if _, _, err := completionConfigPath(flags, cmd); err != nil {
+		// Gate on project discovery + schema validation.
+		configPath, _, err := completionConfigPath(flags, cmd)
+		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		names := make([]string, 0, len(knownTools))
-		for name := range knownTools {
+		// Load config to derive tool names from the actual config, not a static list.
+		cfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		names := make([]string, 0, len(cfg.Tools))
+		for name := range cfg.Tools {
 			names = append(names, name)
 		}
 		sort.Strings(names)
@@ -330,16 +345,10 @@ func toolNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string)
 	}
 }
 
-// knownTools is the set of valid tool names.
-var knownTools = map[string]bool{
-	"adminer":       true,
-	"redis_insight": true,
-	"mailpit":       true,
-}
-
 // applyToolTogglesBatch loads devbox/local.yml once, validates and applies all
 // toggles in-memory, then writes the file once. See applyServiceTogglesBatch.
-func applyToolTogglesBatch(configPath string, toEnable, toDisable []string) error {
+// cfg must come from LoadConfig of the same configPath; the helper never re-loads config.
+func applyToolTogglesBatch(cfg *config.DevboxConfig, configPath string, toEnable, toDisable []string) error {
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
@@ -348,6 +357,7 @@ func applyToolTogglesBatch(configPath string, toEnable, toDisable []string) erro
 		return err
 	}
 
+	knownTools := toolNameSet(cfg)
 	if err := localconfig.ApplyToolTogglesToYAML(knownTools, local, toEnable, toDisable); err != nil {
 		return err
 	}
@@ -357,14 +367,15 @@ func applyToolTogglesBatch(configPath string, toEnable, toDisable []string) erro
 
 // setToolEnabled writes tools.<name>.enabled = value to devbox/local.yml,
 // prints a confirmation, and regenerates .env.
-func setToolEnabled(configPath string, name string, enabled bool) error {
+// cfg must come from LoadConfig of the same configPath; the helper never re-loads config.
+func setToolEnabled(cfg *config.DevboxConfig, configPath string, name string, enabled bool) error {
 	var toEnable, toDisable []string
 	if enabled {
 		toEnable = []string{name}
 	} else {
 		toDisable = []string{name}
 	}
-	if err := applyToolTogglesBatch(configPath, toEnable, toDisable); err != nil {
+	if err := applyToolTogglesBatch(cfg, configPath, toEnable, toDisable); err != nil {
 		return err
 	}
 

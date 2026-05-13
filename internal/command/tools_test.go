@@ -14,18 +14,25 @@ import (
 
 func TestRunToolList_LipglossTable(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer:      config.ToolConfig{Enabled: false},
-		RedisInsight: config.ToolConfig{Enabled: true},
-		Mailpit:      config.ToolConfig{Enabled: true},
-	}, config.RuntimePorts{
-		Adminer:      8080,
-		RedisInsight: 5540,
-		Mailpit:      8025,
-	}, config.RuntimeHosts{
-		Adminer:      "adminer.localhost",
-		RedisInsight: "redis.localhost",
-		Mailpit:      "mail.localhost",
-	})
+		"adminer": config.ToolConfig{
+			Enabled:   false,
+			Host:      "adminer.localhost",
+			Port:      8080,
+			Container: "adminer",
+		},
+		"redis_insight": config.ToolConfig{
+			Enabled:   true,
+			Host:      "redis.localhost",
+			Port:      5540,
+			Container: "redis_insight",
+		},
+		"mailpit": config.ToolConfig{
+			Enabled:   true,
+			Host:      "mail.localhost",
+			Port:      8025,
+			Container: "mailpit",
+		},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -50,12 +57,13 @@ func TestRunToolList_LipglossTable(t *testing.T) {
 
 func TestRunToolList_EnabledRunning(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer: config.ToolConfig{Enabled: true},
-	}, config.RuntimePorts{
-		Adminer: 8080,
-	}, config.RuntimeHosts{
-		Adminer: "adminer.localhost",
-	})
+		"adminer": config.ToolConfig{
+			Enabled:   true,
+			Host:      "adminer.localhost",
+			Port:      8080,
+			Container: "adminer",
+		},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 
 	alwaysRunning := func(_, _ string) bool { return true }
 
@@ -72,7 +80,11 @@ func TestRunToolList_EnabledRunning(t *testing.T) {
 }
 
 func TestRunToolList_AllDisabled(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, config.ToolsConfig{
+		"adminer":       config.ToolConfig{Enabled: false, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		"redis_insight": config.ToolConfig{Enabled: false, Container: "redis_insight", Host: "redis.localhost", Port: 5540},
+		"mailpit":       config.ToolConfig{Enabled: false, Container: "mailpit", Host: "mail.localhost", Port: 8025},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -95,15 +107,19 @@ func TestRunToolList_AllDisabled(t *testing.T) {
 
 func TestToolStatusCmd_SameOutputAsToolList(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer: config.ToolConfig{Enabled: false},
-		Mailpit: config.ToolConfig{Enabled: true},
-	}, config.RuntimePorts{
-		Adminer: 8080,
-		Mailpit: 8025,
-	}, config.RuntimeHosts{
-		Adminer: "adminer.localhost",
-		Mailpit: "mail.localhost",
-	})
+		"adminer": config.ToolConfig{
+			Enabled:   false,
+			Container: "adminer",
+			Host:      "adminer.localhost",
+			Port:      8080,
+		},
+		"mailpit": config.ToolConfig{
+			Enabled:   true,
+			Container: "mailpit",
+			Host:      "mail.localhost",
+			Port:      8025,
+		},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -139,12 +155,13 @@ func TestToolStatusCmd_Registered(t *testing.T) {
 
 func TestToolStatusCmd_ContainsExpectedColumns(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer: config.ToolConfig{Enabled: true},
-	}, config.RuntimePorts{
-		Adminer: 8080,
-	}, config.RuntimeHosts{
-		Adminer: "adminer.localhost",
-	})
+		"adminer": config.ToolConfig{
+			Enabled:   true,
+			Container: "adminer",
+			Host:      "adminer.localhost",
+			Port:      8080,
+		},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -185,9 +202,9 @@ func alwaysToolToggleFn(idx int) selectToggleFn {
 
 func TestPickToolToEnable_NoneDisabled_ReturnsError(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer:      config.ToolConfig{Enabled: true},
-		RedisInsight: config.ToolConfig{Enabled: true},
-		Mailpit:      config.ToolConfig{Enabled: true},
+		"adminer":       config.ToolConfig{Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		"redis_insight": config.ToolConfig{Enabled: true, Container: "redis_insight", Host: "redis.localhost", Port: 5540},
+		"mailpit":       config.ToolConfig{Enabled: true, Container: "mailpit", Host: "mail.localhost", Port: 8025},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	_, err := pickToolToEnable(cfg, neverToolToggleFn(t))
@@ -201,9 +218,9 @@ func TestPickToolToEnable_NoneDisabled_ReturnsError(t *testing.T) {
 
 func TestPickToolToEnable_SingleDisabled_ShowsSelector(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer:      config.ToolConfig{Enabled: false},
-		RedisInsight: config.ToolConfig{Enabled: true},
-		Mailpit:      config.ToolConfig{Enabled: true},
+		"adminer":       config.ToolConfig{Enabled: false, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		"redis_insight": config.ToolConfig{Enabled: true, Container: "redis_insight", Host: "redis.localhost", Port: 5540},
+		"mailpit":       config.ToolConfig{Enabled: true, Container: "mailpit", Host: "mail.localhost", Port: 8025},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	selectorCalled := false
@@ -229,9 +246,9 @@ func TestPickToolToEnable_SingleDisabled_ShowsSelector(t *testing.T) {
 
 func TestPickToolToEnable_MultipleDisabled_CallsSelector(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer:      config.ToolConfig{Enabled: false},
-		RedisInsight: config.ToolConfig{Enabled: false},
-		Mailpit:      config.ToolConfig{Enabled: true},
+		"adminer":       config.ToolConfig{Enabled: false, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		"redis_insight": config.ToolConfig{Enabled: false, Container: "redis_insight", Host: "redis.localhost", Port: 5540},
+		"mailpit":       config.ToolConfig{Enabled: true, Container: "mailpit", Host: "mail.localhost", Port: 8025},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	selectorCalled := false
@@ -266,21 +283,25 @@ func TestPickToolToEnable_MultipleDisabled_CallsSelector(t *testing.T) {
 }
 
 func TestPickToolToEnable_SelectorPicksSecond(t *testing.T) {
-	// buildToolRows returns: adminer, redis_insight, mailpit (all disabled)
-	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	// buildToolRows returns tools sorted by name: adminer, mailpit, redis_insight (all disabled)
+	cfg := makeServicesCfg(nil, config.ToolsConfig{
+		"adminer":       config.ToolConfig{Enabled: false, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		"mailpit":       config.ToolConfig{Enabled: false, Container: "mailpit", Host: "mail.localhost", Port: 8025},
+		"redis_insight": config.ToolConfig{Enabled: false, Container: "redis_insight", Host: "redis.localhost", Port: 5540},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 
-	// index 1 → redis_insight
+	// index 1 → mailpit (second in sorted order)
 	name, err := pickToolToEnable(cfg, alwaysToolToggleFn(1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if name != "redis_insight" {
-		t.Errorf("expected 'redis_insight' from index 1, got %q", name)
+	if name != "mailpit" {
+		t.Errorf("expected 'mailpit' from index 1, got %q", name)
 	}
 }
 
 func TestPickToolToDisable_NoneEnabled_ReturnsError(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, make(config.ToolsConfig), make(config.RuntimePorts), make(config.RuntimeHosts))
 
 	_, err := pickToolToDisable(cfg, neverToolToggleFn(t))
 	if err == nil {
@@ -293,9 +314,9 @@ func TestPickToolToDisable_NoneEnabled_ReturnsError(t *testing.T) {
 
 func TestPickToolToDisable_SingleEnabled_ShowsSelector(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer:      config.ToolConfig{Enabled: false},
-		RedisInsight: config.ToolConfig{Enabled: false},
-		Mailpit:      config.ToolConfig{Enabled: true},
+		"adminer":       config.ToolConfig{Enabled: false, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		"redis_insight": config.ToolConfig{Enabled: false, Container: "redis_insight", Host: "redis.localhost", Port: 5540},
+		"mailpit":       config.ToolConfig{Enabled: true, Container: "mailpit", Host: "mail.localhost", Port: 8025},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	selectorCalled := false
@@ -321,9 +342,9 @@ func TestPickToolToDisable_SingleEnabled_ShowsSelector(t *testing.T) {
 
 func TestPickToolToDisable_MultipleEnabled_CallsSelector(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		Adminer:      config.ToolConfig{Enabled: true},
-		RedisInsight: config.ToolConfig{Enabled: true},
-		Mailpit:      config.ToolConfig{Enabled: false},
+		"adminer":       config.ToolConfig{Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		"redis_insight": config.ToolConfig{Enabled: true, Container: "redis_insight", Host: "redis.localhost", Port: 5540},
+		"mailpit":       config.ToolConfig{Enabled: false, Container: "mailpit", Host: "mail.localhost", Port: 8025},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	selectorCalled := false
@@ -407,7 +428,9 @@ func TestToolDisableCmd_UseField(t *testing.T) {
 // TestPickToolToEnable_SelectorReturnsErrCancelled_Propagated verifies that
 // ErrCancelled from the selector propagates through pickToolToEnable.
 func TestPickToolToEnable_SelectorReturnsErrCancelled_Propagated(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, config.ToolsConfig{
+		"adminer": config.ToolConfig{Enabled: false, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
 	cancelSelector := func(title string, items []ui.SelectorItem) (int, error) {
 		return -1, ui.ErrCancelled
 	}
@@ -417,5 +440,39 @@ func TestPickToolToEnable_SelectorReturnsErrCancelled_Propagated(t *testing.T) {
 	}
 	if !errors.Is(err, ui.ErrCancelled) {
 		t.Errorf("expected errors.Is(err, ui.ErrCancelled), got: %v", err)
+	}
+}
+
+// TestToolNameSet_ArbitraryToolName verifies that toolNameSet derives tool names from config,
+// not from a hardcoded list. This test ensures that a tool like elasticvue (not in the
+// original hardcoded set) is included when declared in the config.
+func TestToolNameSet_ArbitraryToolName(t *testing.T) {
+	cfg := makeServicesCfg(nil, config.ToolsConfig{
+		"elasticvue": config.ToolConfig{Enabled: false, Container: "elasticvue", Host: "elasticvue.localhost", Port: 8044},
+		"adminer":    config.ToolConfig{Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+	}, make(config.RuntimePorts), make(config.RuntimeHosts))
+
+	set := toolNameSet(cfg)
+
+	if !set["elasticvue"] {
+		t.Error("elasticvue should be in toolNameSet")
+	}
+	if !set["adminer"] {
+		t.Error("adminer should be in toolNameSet")
+	}
+	if len(set) != 2 {
+		t.Errorf("expected 2 tools, got %d", len(set))
+	}
+}
+
+// TestToolNameSet_EmptyConfig verifies that toolNameSet returns an empty set when
+// no tools are declared in the config.
+func TestToolNameSet_EmptyConfig(t *testing.T) {
+	cfg := makeServicesCfg(nil, make(config.ToolsConfig), make(config.RuntimePorts), make(config.RuntimeHosts))
+
+	set := toolNameSet(cfg)
+
+	if len(set) != 0 {
+		t.Errorf("expected empty set, got %d tools", len(set))
 	}
 }
