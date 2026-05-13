@@ -167,9 +167,11 @@ Templates receive a single object with these top-level fields:
 | `.Project` | `project:` block from `devbox.yml` | e.g. `.Project.Name`, `.Project.Prefix` |
 | `.Service` | service name (the map key in `services:`) | |
 | `.ServiceCfg` | the effective service config after `extends` resolution | e.g. `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` |
-| `.Runtime` | merged `runtime` block | e.g. `.Runtime.Ports.App` |
+| `.Runtime` | merged `runtime` block | e.g. `.Runtime.Ports.app`, `.Runtime.Hosts.main` (non-tool roles; lowercase keys). Tool host/port use `.Tools.<name>.Host` / `.Tools.<name>.Port` instead. |
 
 Strict-mode means a typo in `{{.Servic.Name}}` aborts rendering instead of writing a `<no value>` placeholder. Use `{{if ...}}` guards for fields that may legitimately be empty.
+
+Note: Runtime roles are now lowercase scalars (`.Runtime.Ports.app`, `.Runtime.Hosts.main`). Tool references use mixed-case (`.Tools.adminer.Enabled`, `.Tools.adminer.Host`).
 
 The full set of helper functions available inside `*.tmpl` files (`appURL`, sprout registries, `text/template` built-ins) is documented in [Templates](../templates.md).
 

@@ -174,18 +174,18 @@ Go-skill notes used here:
 
 ### Task 8: Update documentation
 
-- [ ] `docs/reference/config/devbox.md`: rewrite the `tools:` / `runtime.ports:` / `runtime.hosts:` schema sections to describe the map shape (with an example showing `elasticvue:` alongside `adminer:`); document the rule that **tool host/port live on the tool entry, not in `runtime.hosts` / `runtime.ports`**; document the identifier-safe key constraint and the `compose.overlays` migration
-- [ ] `docs/reference/config/info.md`: rewrite the reference tables using the two-part migration:
+- [x] `docs/reference/config/devbox.md`: rewrite the `tools:` / `runtime.ports:` / `runtime.hosts:` schema sections to describe the map shape (with an example showing `elasticvue:` alongside `adminer:`); document the rule that **tool host/port live on the tool entry, not in `runtime.hosts` / `runtime.ports`**; document the identifier-safe key constraint and the `compose.overlays` migration
+- [x] `docs/reference/config/info.md`: rewrite the reference tables using the two-part migration:
       - tool host/port refs move to `.Tools.<name>.Host` / `.Tools.<name>.Port`
       - non-tool roles stay in `Runtime.Hosts` / `Runtime.Ports` (lowercase scalar map)
       - tool-enabled flag uses mixed-case `.Tools.<name>.Enabled`
       - add a short note pointing at `index` syntax for advanced cases
-- [ ] `docs/reference/templates.md`: rewrite the `Runtime` and `Tools` template examples; document the mixed-case rule explicitly and the tool-vs-non-tool split
-- [ ] `docs/reference/render/ide.md`: update the `.Runtime` template-context row that currently shows `.Runtime.Ports.App` — change to `.Runtime.Ports.app` and add a one-line explanation of the new map semantics; if any example uses tool host/port, migrate to `.Tools.<name>.*`
-- [ ] `docs/reference/render/env.md`: rewrite tool-related `from:` / `when:` examples (bare dot-paths into `cfg.Raw`, no wrapper) — `runtime.ports.adminer` → `tools.adminer.port`, `runtime.hosts.adminer` → `tools.adminer.host`, etc. Non-tool roles (`runtime.ports.app`, `runtime.hosts.main`) stay as-is. Add a one-line note: "Raw dot-paths in `exports.env[*].from` / `when` and in command `from:` / `default_from:` are passed verbatim to `ResolvePath(cfg.Raw, path)`; no `${...}` wrapper applies here. The `${...}` syntax is a separate template expansion used inside string values (e.g. `compose.project_name`)."
-- [ ] `docs/reference/cli/devbox_tools.md`, `docs/reference/cli/devbox_tools_enable.md`, `docs/reference/cli/devbox_tools_disable.md`: drop the "Available tools: adminer, redis_insight, mailpit" line; phrase it as "see your project's `devbox/defaults.yml`"
-- [ ] update `AGENTS.md` (and the `CLAUDE.md` symlink follows): adjust the `ToolsConfig` / `RuntimePorts` / `RuntimeHosts` descriptions in the project-structure section; document the new identifier-safe key constraint and the migration-error behavior for legacy `compose.overlays`
-- [ ] no test for docs, but verify the rendered examples in `info.md` parse against a sample template (mental check; or add one `go test` doc-example if doable cheaply)
+- [x] `docs/reference/templates.md`: rewrite the `Runtime` and `Tools` template examples; document the mixed-case rule explicitly and the tool-vs-non-tool split
+- [x] `docs/reference/render/ide.md`: update the `.Runtime` template-context row that currently shows `.Runtime.Ports.App` — change to `.Runtime.Ports.app` and add a one-line explanation of the new map semantics; if any example uses tool host/port, migrate to `.Tools.<name>.*`
+- [x] `docs/reference/render/env.md`: rewrite tool-related `from:` / `when:` examples (bare dot-paths into `cfg.Raw`, no wrapper) — `runtime.ports.adminer` → `tools.adminer.port`, `runtime.hosts.adminer` → `tools.adminer.host`, etc. Non-tool roles (`runtime.ports.app`, `runtime.hosts.main`) stay as-is. Add a one-line note: "Raw dot-paths in `exports.env[*].from` / `when` and in command `from:` / `default_from:` are passed verbatim to `ResolvePath(cfg.Raw, path)`; no `${...}` wrapper applies here. The `${...}` syntax is a separate template expansion used inside string values (e.g. `compose.project_name`)."
+- [x] `docs/reference/cli/devbox_tools.md`, `docs/reference/cli/devbox_tools_enable.md`, `docs/reference/cli/devbox_tools_disable.md`: drop the "Available tools: adminer, redis_insight, mailpit" line; phrase it as "see your project's `devbox/defaults.yml`"
+- [x] update `AGENTS.md` (and the `CLAUDE.md` symlink follows): adjust the `ToolsConfig` / `RuntimePorts` / `RuntimeHosts` descriptions in the project-structure section; document the new identifier-safe key constraint and the migration-error behavior for legacy `compose.overlays`
+- [x] no test for docs, but verify the rendered examples in `info.md` parse against a sample template (mental check; or add one `go test` doc-example if doable cheaply)
 
 ### Task 9: Verify acceptance criteria
 

@@ -49,7 +49,7 @@ The names `PROJECT`, `UID`, and `GID` are **reserved**: any export rule that tri
 
 ## Export rules
 
-Each rule maps a dot-path in the merged config to an env variable name.
+Each rule maps a dot-path in the merged config to an env variable name. Tool paths use the format `tools.<toolname>.<field>` (e.g., `tools.adminer.port`, `tools.redis_insight.host`).
 
 ```yaml
 exports:
@@ -58,9 +58,14 @@ exports:
       from: runtime.ports.app
       format: int
 
-    - name: TOOL_ADMINER
+    - name: TOOL_ADMINER_ENABLED
       from: tools.adminer.enabled
       format: bool
+      when: tools.adminer.enabled
+
+    - name: TOOL_ADMINER_PORT
+      from: tools.adminer.port
+      format: int
       when: tools.adminer.enabled
 
     - name: APP_URL
@@ -135,7 +140,9 @@ The same truthiness rule applies to both `when` and the string-format fallback:
 | `"0"` | no |
 | anything else | yes |
 
-`when: tools.adminer.enabled` therefore skips the rule whenever the tool is unset, explicitly false, or a string `"false"` / `"0"`.
+Example: `when: tools.adminer.enabled` skips the rule whenever the tool is unset, explicitly false, or a string `"false"` / `"0"`.
+
+**Dot-path syntax note:** Export rule `from:` / `when:` fields use **bare dot-paths** into the merged config, not the `{{ ... }}` template syntax. Tool paths use the format `tools.<name>.<field>` (e.g., `from: tools.adminer.port`, `when: tools.redis_insight.enabled`). Non-tool runtime roles use their bare key name (e.g., `from: runtime.ports.app`, `from: runtime.hosts.main`).
 
 ## Output format
 

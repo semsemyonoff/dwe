@@ -6,8 +6,7 @@ Disable an optional tool (writes to devbox/local.yml)
 
 Disable an optional tool by writing tools.<name>.enabled = false to devbox/local.yml.
 
-Available tools: adminer, redis_insight, mailpit.
-The .env file is regenerated automatically after the change.
+Available tools are configured in your project's `devbox/defaults.yml`. The .env file is regenerated automatically after the change.
 
 When no tool name is given, an interactive selector shows all currently
 enabled tools.

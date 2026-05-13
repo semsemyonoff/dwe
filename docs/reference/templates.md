@@ -156,10 +156,12 @@ The only project-specific helper. Builds a URL from host, port, HTTPS flag, and 
 Signature: `appURL host port useHTTPS [path]`
 
 ```yaml
-value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
+# Non-tool hostname + app port (non-tool role)
+value: "{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}"
 # → "http://laravel.localhost" or "https://laravel.localhost"
 
-value: "{{ appURL .Runtime.Hosts.Adminer .Runtime.Ports.App .Runtime.UseHTTPS \"/login\" }}"
+# Tool hostname + app port (note: tool host + reverse-proxy app port, not tool's direct port)
+value: "{{ appURL .Tools.adminer.Host .Runtime.Ports.app .Runtime.UseHTTPS \"/login\" }}"
 # → "http://adminer.localhost/login"
 ```
 

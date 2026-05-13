@@ -100,9 +100,9 @@ An informational text line.
 
 ```yaml
 - type: info
-  text: "127.0.0.1\t{{ .Runtime.Hosts.Main }}"
+  text: "127.0.0.1\t{{ .Runtime.Hosts.main }}"
   indent: 0
-  when: "{{ .Tools.Adminer.Enabled }}"
+  when: "{{ .Tools.adminer.Enabled }}"
 ```
 
 | Field | Description |
@@ -137,13 +137,13 @@ A container item that groups related items and optionally displays a title.
     - type: definition
       name: Adminer
       icon: "🛢"
-      value: '{{ appURL .Runtime.Hosts.Adminer .Runtime.Ports.App .Runtime.UseHTTPS }}'
-      when: "{{ .Tools.Adminer.Enabled }}"
+      value: '{{ appURL .Tools.adminer.Host .Runtime.Ports.app .Runtime.UseHTTPS }}'
+      when: "{{ .Tools.adminer.Enabled }}"
     - type: definition
       name: RedisInsight
       icon: "📊"
-      value: '{{ appURL .Runtime.Hosts.RedisInsight .Runtime.Ports.App .Runtime.UseHTTPS }}'
-      when: "{{ .Tools.RedisInsight.Enabled }}"
+      value: '{{ appURL .Tools.redis_insight.Host .Runtime.Ports.app .Runtime.UseHTTPS }}'
+      when: "{{ .Tools.redis_insight.Enabled }}"
 ```
 
 | Field | Type | Default | Description |
@@ -205,16 +205,19 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 | `{{ .Project.FullName }}` | string | Combined prefix + name |
 | `{{ .State }}` | string | Active state (empty if none) |
 | `{{ .Runtime.UseHTTPS }}` | bool | HTTPS enabled |
-| `{{ .Runtime.Ports.App }}` | int | App port |
-| `{{ .Runtime.Ports.DB }}` | int | DB port |
-| `{{ .Runtime.Hosts.Main }}` | string | Main app hostname |
-| `{{ .Runtime.Hosts.Adminer }}` | string | Adminer hostname |
-| `{{ .Runtime.Hosts.RedisInsight }}` | string | Redis Insight hostname |
-| `{{ .Runtime.Hosts.Mailpit }}` | string | Mailpit hostname |
+| `{{ .Runtime.Ports.app }}` | int | App port (non-tool role; lowercase key) |
+| `{{ .Runtime.Ports.db }}` | int | DB port (non-tool role; lowercase key) |
+| `{{ .Runtime.Hosts.main }}` | string | Main app hostname (non-tool role; lowercase key) |
 | `{{ .Runtime.SPX.Path }}` | string | SPX profiler path |
-| `{{ .Tools.Adminer.Enabled }}` | bool | Adminer tool enabled |
-| `{{ .Tools.RedisInsight.Enabled }}` | bool | Redis Insight enabled |
-| `{{ .Tools.Mailpit.Enabled }}` | bool | Mailpit enabled |
+| `{{ .Tools.adminer.Enabled }}` | bool | Adminer tool enabled (mixed-case: lowercase map key, PascalCase struct field) |
+| `{{ .Tools.adminer.Host }}` | string | Adminer hostname |
+| `{{ .Tools.adminer.Port }}` | int | Adminer container port |
+| `{{ .Tools.redis_insight.Enabled }}` | bool | Redis Insight enabled |
+| `{{ .Tools.redis_insight.Host }}` | string | Redis Insight hostname |
+| `{{ .Tools.redis_insight.Port }}` | int | Redis Insight container port |
+| `{{ .Tools.mailpit.Enabled }}` | bool | Mailpit enabled |
+| `{{ .Tools.mailpit.Host }}` | string | Mailpit hostname |
+| `{{ .Tools.mailpit.Port }}` | int | Mailpit container port |
 | `{{ .Tools.AnyEnabled }}` | bool | Any optional tool enabled |
 
 ### Template functions
@@ -233,9 +236,9 @@ value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
 `when` fields accept any template expression that evaluates to a truthy/falsy value. Empty string, `false`, and `0` are falsy; anything else is truthy.
 
 ```yaml
-when: "{{ .State }}"                    # show only when state is non-empty
-when: "{{ .Tools.Adminer.Enabled }}"   # show only when adminer is enabled
-when: "{{ .Runtime.SPX.Path }}"        # show only when SPX path is set
+when: "{{ .State }}"                      # show only when state is non-empty
+when: "{{ .Tools.adminer.Enabled }}"     # show only when adminer is enabled (mixed-case)
+when: "{{ .Runtime.SPX.Path }}"          # show only when SPX path is set
 ```
 
 ## `footer`
@@ -274,7 +277,7 @@ sections:
           - type: definition
             name: URL
             icon: "🔗"
-            value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
+            value: "{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}"
       - type: subgroup
         title: Tools
         when: "{{ .Tools.AnyEnabled }}"
@@ -283,8 +286,8 @@ sections:
           - type: definition
             name: Adminer
             icon: "🛢"
-            value: '{{ appURL .Runtime.Hosts.Adminer .Runtime.Ports.App .Runtime.UseHTTPS }}'
-            when: "{{ .Tools.Adminer.Enabled }}"
+            value: '{{ appURL .Tools.adminer.Host .Runtime.Ports.app .Runtime.UseHTTPS }}'
+            when: "{{ .Tools.adminer.Enabled }}"
 
   - id: hosts
     title: Hosts
@@ -292,7 +295,7 @@ sections:
       - type: warning
         text: "Add this to your /etc/hosts:"
       - type: info
-        text: "127.0.0.1\t{{ .Runtime.Hosts.Main }}"
+        text: "127.0.0.1\t{{ .Runtime.Hosts.main }}"
 
 footer: true
 ```
@@ -301,8 +304,9 @@ footer: true
 
 - **Bare `when:` values without template syntax** — `when: .State` is not valid; must be `when: "{{ .State }}"`.
 - **Missing quotes around template expressions** — YAML parses `{{ ... }}` as a flow mapping if unquoted. Always quote template strings.
+- **Mixed-case rule for tool references** — Tools are stored in a map, so the first hop (the tool key) must be lowercase: `.Tools.adminer` (not `.Tools.Adminer`). The subsequent struct field hop stays PascalCase: `.Tools.adminer.Enabled`. For non-tool runtime roles (like `main`, `app`), both the key and field are lowercase: `.Runtime.Hosts.main`, `.Runtime.Ports.app`.
 - **Using config keys not in DevboxConfig struct** — only fields exposed on the typed `DevboxConfig` struct are available in templates. Custom keys added to `defaults.yml` are in `Raw` but not in template data unless explicitly exposed.
-- **`appURL` argument order** — the order is `host`, `port`, `useHTTPS`, then optional `path`. Swapping port and useHTTPS produces incorrect URLs silently.
+- **`appURL` argument order** — the order is `host`, `port`, `useHTTPS`, then optional `path`. Swapping port and useHTTPS produces incorrect URLs silently. When using a tool, combine the tool's hostname with the app port (the reverse-proxy port), not the tool's port: `appURL .Tools.adminer.Host .Runtime.Ports.app .Runtime.UseHTTPS`.
 - **`hide_on_empty` with decorative items** — By default, content items like `definition`, `info`, and `warning` count toward section visibility, but `separator` does not. Use the `decorative` flag to override: set `decorative: true` on a content item to exclude it from the visibility calculation, or set `decorative: false` on a separator to make it count as content. A section with `hide_on_empty: true` is fully hidden if no content item (after `when` filtering) survives.
 - **Footer rendering with `hide_on_empty`** — When `footer: true`, the footer is only rendered if at least one section produced output. If all sections are hidden via `hide_on_empty`, the footer is also suppressed.
 

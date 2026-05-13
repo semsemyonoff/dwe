@@ -4,7 +4,7 @@ Manage optional tools
 
 ### Synopsis
 
-List, enable, or disable optional tool services (adminer, redis_insight, mailpit).
+List, enable, or disable optional tool services. Available tools are configured in your project's `devbox/defaults.yml`.
 
 Enabling or disabling a tool writes the change to devbox/local.yml and regenerates .env.
 Use 'devbox up' to start newly enabled tools.

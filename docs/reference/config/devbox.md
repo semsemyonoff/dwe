@@ -57,10 +57,9 @@ The three files share a single namespace — the same key in different layers is
 | Binary overrides (`binaries:`) | `devbox.yml` only (engine policy, not layered) |
 | Port defaults | `defaults.yml` |
 | Host defaults | `defaults.yml` |
-| Tool defaults (enabled/disabled) | `defaults.yml` |
+| Tool definitions and enabled state | `defaults.yml` |
 | Optional service defaults (enabled/disabled) | `defaults.yml` |
 | Export rules (`exports.env`) | `defaults.yml` |
-| Compose overlay map (`compose.overlays`) | `defaults.yml` |
 | IDE config defaults | `defaults.yml` |
 | `db` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
@@ -153,19 +152,43 @@ The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}
 
 ### `tools`
 
-Controls which optional tool containers are active.
+Declares optional tool containers. Each tool is identified by a key (e.g., `adminer`, `redis_insight`). Tool keys must be identifier-safe (`^[A-Za-z_][A-Za-z0-9_]*$` — no dashes, dots, or leading digits — so they work in Go templates with dot syntax).
 
 ```yaml
 tools:
   adminer:
     enabled: false
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+    compose: compose/tools/adminer.yml
   redis_insight:
     enabled: true
+    container: redis-insight
+    host: redis.localhost
+    port: 5540
+    compose: compose/tools/redis_insight.yml
   mailpit:
     enabled: true
+    container: mailpit
+    host: mail.localhost
+    port: 8025
+    compose: compose/tools/mailpit.yml
 ```
 
-Tool keys must correspond to overlay entries in `compose.overlays`. The CLI uses enabled tools to build the active compose file list.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | bool | yes | Whether the tool is active. Set in `defaults.yml`; override in `local.yml` via `devbox tools enable/disable`. |
+| `container` | string | yes | Docker image or container name. |
+| `host` | string | yes | Virtual hostname for the tool (used in reverse proxy, exported to templates and env). |
+| `port` | int | yes | Container port (non-zero). Exposed to templates and env for direct-container access; tool URLs use this host and the app port via reverse proxy. |
+| `compose` | string | yes | Relative path to the docker-compose overlay file that defines the tool service. Used to build the active compose file list. |
+
+All five fields are required; any tool entry (enabled or disabled) missing a field causes a config-load error. This catches mistakes early — a tool visible in `tools status` must be fully defined.
+
+Tool host/port do not go in the generic `runtime.hosts` / `runtime.ports` maps. Access them via `.Tools.<key>.Host` and `.Tools.<key>.Port` in templates, or via raw dot-paths like `tools.<key>.host` / `tools.<key>.port` in export rules.
+
+Adding a new tool requires only a YAML edit in `defaults.yml` — no Go code changes needed.
 
 ### `services`
 
@@ -194,7 +217,7 @@ debug:
 
 ### `runtime`
 
-All runtime settings that affect `.env` generation and the info dashboard.
+All runtime settings that affect `.env` generation and the info dashboard. This section holds **non-tool runtime roles only** (app, database, redis, etc.); tool-specific host/port values live under `tools:<name>` instead.
 
 ```yaml
 runtime:
@@ -203,15 +226,9 @@ runtime:
     app: 80
     db: 13306
     redis: 6379
-    adminer: 8080
-    redis_insight: 5540
-    mailpit: 8025
   hosts:
     main: laravel.localhost
     second: second.localhost
-    adminer: adminer.localhost
-    redis_insight: redis.localhost
-    mailpit: mail.localhost
   spx:
     path: ""
 ```
@@ -219,9 +236,11 @@ runtime:
 | Field | Description |
 |-------|-------------|
 | `runtime.use_https` | Whether URLs use HTTPS (exported as `USE_HTTPS`) |
-| `runtime.ports.*` | Host port mappings (exported individually to `.env`) |
-| `runtime.hosts.*` | Hostnames for nginx virtual hosting |
+| `runtime.ports.*` | Non-tool port mappings, keyed by role name (e.g., `app`, `db`, `redis`). Each key must be identifier-safe. Exported individually to `.env`. |
+| `runtime.hosts.*` | Non-tool hostnames, keyed by service/role name (e.g., `main`, `second`). Each key must be identifier-safe. |
 | `runtime.spx.path` | SPX profiler URL path (empty = disabled) |
+
+**Tool host/port:** Do not add tool-specific keys here. Each tool's `host` and `port` live under `tools.<toolname>.host` and `tools.<toolname>.port` in the `tools:` section (see above).
 
 ### `state`
 
@@ -233,7 +252,7 @@ Active state name. Empty string means no state. Exported as `STATE` in `.env`. O
 
 ### `exports.env`
 
-Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name.
+Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name. Tool paths use the format `tools.<toolname>.<field>` (e.g., `tools.adminer.port`, `tools.redis_insight.host`).
 
 ```yaml
 exports:
@@ -241,9 +260,13 @@ exports:
     - name: APP_PORT
       from: runtime.ports.app
       format: int
-    - name: TOOL_ADMINER
+    - name: TOOL_ADMINER_ENABLED
       from: tools.adminer.enabled
       format: bool
+      when: tools.adminer.enabled
+    - name: TOOL_ADMINER_PORT
+      from: tools.adminer.port
+      format: int
       when: tools.adminer.enabled
 ```
 
@@ -299,16 +322,13 @@ Compose file configuration used by the Docker control plane.
 ```yaml
 compose:
   base: compose.yaml
-  overlays:
-    adminer: compose/tools/adminer.yml
-    redis_insight: compose/tools/redis_insight.yml
-    mailpit: compose/tools/mailpit.yml
 ```
 
 | Field | Description |
 |-------|-------------|
 | `compose.base` | Base compose file (always included) |
-| `compose.overlays` | Map of overlay key → file path; overlay is active when the corresponding tool/service is enabled |
+
+Service overlays live under `services:<name>.compose` (a list of file paths per service). Tool overlays live under `tools:<name>.compose` (a single file path per tool) — see the `tools:` section above.
 
 ---
 
@@ -342,6 +362,8 @@ db:
 debug:
   idekey: VSCODE
 ```
+
+To override a tool's host or port (rare — normally set in `defaults.yml`), you would edit the tool entry directly in `local.yml`. However, the recommended practice is to keep tool definitions in `defaults.yml` and use `local.yml` only to toggle `enabled`.
 
 If `local.yml` does not exist, layer 3 is silently skipped.
 
