@@ -317,7 +317,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_True(t *testing.T) {
 				Title:       "Should Be Hidden",
 				HideOnEmpty: true,
 				Items: []config.InfoItem{
-					{Type: "definition", Name: "k", Value: "v", When: "{{if false}}yes{{end}}"},
+					{Type: "definition", Name: "HIDDEN_KEY_SENTINEL", Value: "HIDDEN_VAL_SENTINEL", When: "{{if false}}yes{{end}}"},
 				},
 			},
 		},
@@ -330,7 +330,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_True(t *testing.T) {
 	if strings.Contains(out, "Should Be Hidden") {
 		t.Errorf("expected section title hidden, got:\n%s", out)
 	}
-	if strings.Contains(out, "k") || strings.Contains(out, "v") {
+	if strings.Contains(out, "HIDDEN_KEY_SENTINEL") || strings.Contains(out, "HIDDEN_VAL_SENTINEL") {
 		t.Errorf("expected all items hidden, got:\n%s", out)
 	}
 }
@@ -345,7 +345,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_False(t *testing.T) {
 				Title:       "Should Show Title",
 				HideOnEmpty: false,
 				Items: []config.InfoItem{
-					{Type: "definition", Name: "k", Value: "v", When: "{{if false}}yes{{end}}"},
+					{Type: "definition", Name: "FILTERED_KEY_SENTINEL", Value: "FILTERED_VAL_SENTINEL", When: "{{if false}}yes{{end}}"},
 				},
 			},
 		},
@@ -358,7 +358,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_False(t *testing.T) {
 	if !strings.Contains(out, "Should Show Title") {
 		t.Errorf("expected section title visible with hide_on_empty=false, got:\n%s", out)
 	}
-	if strings.Contains(out, "v") {
+	if strings.Contains(out, "FILTERED_VAL_SENTINEL") {
 		t.Errorf("expected filtered item value absent with hide_on_empty=false, got:\n%s", out)
 	}
 }
