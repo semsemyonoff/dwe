@@ -96,7 +96,7 @@ func TestValidateServiceToggle_UnknownService(t *testing.T) {
 			"main": {Mandatory: false},
 		},
 	}
-	if err := ValidateServiceToggle(cfg, "unknown", true); err == nil {
+	if err := ValidateServiceToggle(cfg, "unknown"); err == nil {
 		t.Error("expected error for unknown service, got nil")
 	}
 }
@@ -107,7 +107,7 @@ func TestValidateServiceToggle_MandatoryService(t *testing.T) {
 			"main": {Mandatory: true},
 		},
 	}
-	if err := ValidateServiceToggle(cfg, "main", false); err == nil {
+	if err := ValidateServiceToggle(cfg, "main"); err == nil {
 		t.Error("expected error for mandatory service, got nil")
 	}
 }
@@ -118,7 +118,7 @@ func TestValidateServiceToggle_OptionalService(t *testing.T) {
 			"second": {Mandatory: false},
 		},
 	}
-	if err := ValidateServiceToggle(cfg, "second", true); err != nil {
+	if err := ValidateServiceToggle(cfg, "second"); err != nil {
 		t.Errorf("unexpected error for optional service: %v", err)
 	}
 }

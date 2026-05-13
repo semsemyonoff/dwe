@@ -35,13 +35,13 @@ func DiffServiceSelection(selections []ServiceSelection, kept []string) (toEnabl
 }
 
 // ValidateServiceToggle returns an error if the service is unknown or mandatory.
-func ValidateServiceToggle(cfg *config.DevboxConfig, name string, enabled bool) error {
+func ValidateServiceToggle(cfg *config.DevboxConfig, name string) error {
 	svc, ok := cfg.Services[name]
 	if !ok {
 		return fmt.Errorf("service %q not found", name)
 	}
 	if svc.Mandatory {
-		return fmt.Errorf("service %q is mandatory and cannot be %s", name, disableWord(enabled))
+		return fmt.Errorf("service %q is mandatory and cannot be toggled", name)
 	}
 	return nil
 }
@@ -50,12 +50,12 @@ func ValidateServiceToggle(cfg *config.DevboxConfig, name string, enabled bool) 
 // local config map in-memory. Either every change is applied or none are.
 func ApplyServiceTogglesToYAML(cfg *config.DevboxConfig, local map[string]any, toEnable, toDisable []string) error {
 	for _, name := range toEnable {
-		if err := ValidateServiceToggle(cfg, name, true); err != nil {
+		if err := ValidateServiceToggle(cfg, name); err != nil {
 			return err
 		}
 	}
 	for _, name := range toDisable {
-		if err := ValidateServiceToggle(cfg, name, false); err != nil {
+		if err := ValidateServiceToggle(cfg, name); err != nil {
 			return err
 		}
 	}
@@ -72,21 +72,4 @@ func ApplyServiceTogglesToYAML(cfg *config.DevboxConfig, local map[string]any, t
 		SetLocalEntryEnabled(svcMap, name, false)
 	}
 	return nil
-}
-
-// SetServiceEnabledInYAML sets a single service's enabled state in the local config map.
-func SetServiceEnabledInYAML(local map[string]any, name string, enabled bool) {
-	svcMap, ok := local["services"].(map[string]any)
-	if !ok {
-		svcMap = make(map[string]any)
-		local["services"] = svcMap
-	}
-	SetLocalEntryEnabled(svcMap, name, enabled)
-}
-
-func disableWord(enabled bool) string {
-	if enabled {
-		return "enabled"
-	}
-	return "disabled"
 }

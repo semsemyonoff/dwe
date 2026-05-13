@@ -70,17 +70,3 @@ func ApplyToolTogglesToYAML(knownTools map[string]bool, local map[string]any, to
 	}
 	return nil
 }
-
-// SetToolEnabledInYAML sets a single tool's enabled state in the local config map.
-func SetToolEnabledInYAML(knownTools map[string]bool, local map[string]any, name string, enabled bool) error {
-	if err := ValidateToolToggle(knownTools, name); err != nil {
-		return err
-	}
-	toolsMap, ok := local["tools"].(map[string]any)
-	if !ok {
-		toolsMap = make(map[string]any)
-		local["tools"] = toolsMap
-	}
-	SetLocalEntryEnabled(toolsMap, name, enabled)
-	return nil
-}
