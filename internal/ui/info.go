@@ -157,12 +157,16 @@ func renderBlock(
 		outSB.WriteByte('\n')
 	}
 
-	// Enforce rendered ⇔ out != "" biconditional
-	if outSB.Len() == 0 {
+	// Enforce rendered ⇔ out != "" biconditional.
+	// TrimRight handles the case where all survivors rendered to "" (e.g. only
+	// separators) with no title: outSB would contain only \n bytes from the
+	// trailing-newline loop, which must not be treated as real content.
+	result := outSB.String()
+	if strings.TrimRight(result, "\n") == "" {
 		return "", false, nil
 	}
 
-	return outSB.String(), true, nil
+	return result, true, nil
 }
 
 // RenderSectionTitle renders a section header line using Lipgloss styling.
