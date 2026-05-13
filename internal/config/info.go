@@ -70,7 +70,8 @@ func (h *InfoIndent) UnmarshalYAML(node *yaml.Node) error {
 // InfoItem is a single renderable element within a section.
 // Five types are valid: info, warning, definition, separator, subgroup.
 // Type-specific fields:
-//   - info, warning: Text (message body), Indent, Icon, When.
+//   - info: Text (message body), Indent, When.
+//   - warning: Text (message body), When.
 //   - definition: Name, Value, Indent, Icon, When.
 //   - separator: When.
 //   - subgroup: Title (header text), Items (children), When, HideOnEmpty, Decorative.
