@@ -573,6 +573,10 @@ func TestValidateConfigKeys_runtimePortsAndHosts(t *testing.T) {
 		{"invalid port key leading digit", RuntimePorts{"1port": 3000}, nil, true},
 		{"invalid host key dash", nil, RuntimeHosts{"my-host": "x.localhost"}, true},
 		{"invalid host key dot", nil, RuntimeHosts{"my.host": "x.localhost"}, true},
+		// tool name duplicated in runtime.ports must be rejected (no backward compat)
+		{"port key duplicates tool name", RuntimePorts{"test_tool": 9090}, nil, true},
+		// tool name duplicated in runtime.hosts must be rejected
+		{"host key duplicates tool name", nil, RuntimeHosts{"test_tool": "test.localhost"}, true},
 	}
 
 	for _, tt := range tests {

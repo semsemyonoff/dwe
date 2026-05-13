@@ -521,6 +521,8 @@ func validIdentifierKey(s string) bool {
 // validateConfigKeys checks that all keys in Tools, Runtime.Ports, and Runtime.Hosts
 // are identifier-safe (^[A-Za-z_][A-Za-z0-9_]*$), and that every declared tool entry
 // (enabled or disabled) has non-empty container, host, and a positive (non-zero) port.
+// It also rejects runtime.ports and runtime.hosts keys that duplicate a declared tool
+// name — tool host/port live on the tool entry, not in runtime collections.
 func validateConfigKeys(cfg *DevboxConfig) error {
 	for _, key := range slices.Sorted(maps.Keys(cfg.Tools)) {
 		if !validIdentifierKey(key) {
@@ -542,11 +544,17 @@ func validateConfigKeys(cfg *DevboxConfig) error {
 		if !validIdentifierKey(key) {
 			return fmt.Errorf("invalid runtime.ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
 		}
+		if _, isDeclaredTool := cfg.Tools[key]; isDeclaredTool {
+			return fmt.Errorf("runtime.ports key %q duplicates a declared tool name; use tools.%s.port instead", key, key)
+		}
 	}
 
 	for _, key := range slices.Sorted(maps.Keys(cfg.Runtime.Hosts)) {
 		if !validIdentifierKey(key) {
 			return fmt.Errorf("invalid runtime.hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
+		}
+		if _, isDeclaredTool := cfg.Tools[key]; isDeclaredTool {
+			return fmt.Errorf("runtime.hosts key %q duplicates a declared tool name; use tools.%s.host instead", key, key)
 		}
 	}
 
