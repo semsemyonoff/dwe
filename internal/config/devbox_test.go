@@ -607,6 +607,19 @@ func TestDetectLegacyComposeOverlays_rejectsOldFormat(t *testing.T) {
 	}
 }
 
+func TestDetectLegacyComposeOverlays_rejectsEmptyOverlays(t *testing.T) {
+	// An empty compose.overlays: {} is still a legacy key and must be rejected.
+	raw := map[string]any{
+		"compose": map[string]any{
+			"overlays": map[string]any{},
+		},
+	}
+	err := detectLegacyComposeOverlays(raw)
+	if err == nil {
+		t.Error("detectLegacyComposeOverlays should reject empty compose.overlays block")
+	}
+}
+
 func TestDetectLegacyComposeOverlays_allowsNewFormat(t *testing.T) {
 	raw := map[string]any{
 		"compose": map[string]any{
