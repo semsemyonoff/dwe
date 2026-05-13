@@ -46,7 +46,7 @@ type InfoIndent struct {
 // IsSet reports whether the indent was explicitly provided in YAML.
 func (h InfoIndent) IsSet() bool { return h.set }
 
-// Value returns the explicit indent value (0 when indent: false).
+// Value returns the explicit indent value, or 0 if not set.
 func (h InfoIndent) Value() int { return h.value }
 
 // UnmarshalYAML accepts an integer value (indent: 0, indent: 4, etc.).

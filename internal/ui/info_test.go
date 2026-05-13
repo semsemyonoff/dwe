@@ -491,6 +491,32 @@ func TestRenderInfo_DecorativeWarningKeepsSectionVisible(t *testing.T) {
 	}
 }
 
+func TestRenderInfo_HideOnEmpty_SeparatorOnly(t *testing.T) {
+	t.Parallel()
+	// Section with only a separator item and hide_on_empty: true → section hidden.
+	// Separators produce no visible output and must not prevent hide_on_empty from firing.
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "sep-only",
+				Title:       "Separator Only",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "separator"},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "Separator Only") {
+		t.Errorf("expected section hidden (separator-only + hide_on_empty), got:\n%s", out)
+	}
+}
+
 func TestRenderInfo_WhenEvaluationError_Propagates(t *testing.T) {
 	t.Parallel()
 	// Section with an item whose when: expression causes an error

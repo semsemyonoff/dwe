@@ -27,7 +27,10 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 		// Items without when: always survive. This ensures decorative items (warning,
 		// info, subheader) without when: are always counted as content, making a section
 		// with such items never "empty".
+		// Separator items are excluded from the "has content" count because they
+		// produce no visible output and should not prevent hide_on_empty from firing.
 		var survivors []config.InfoItem
+		hasContent := false
 		for _, item := range section.Items {
 			show, err := tpl.EvalCondition(item.When, cfg)
 			if err != nil {
@@ -35,11 +38,14 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 			}
 			if show {
 				survivors = append(survivors, item)
+				if item.Type != "separator" {
+					hasContent = true
+				}
 			}
 		}
 
-		// If no items survived and the section is marked hide_on_empty, skip it entirely.
-		if len(survivors) == 0 && section.HideOnEmpty {
+		// If no content items survived and the section is marked hide_on_empty, skip it entirely.
+		if !hasContent && section.HideOnEmpty {
 			continue
 		}
 
