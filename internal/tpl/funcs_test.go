@@ -221,6 +221,11 @@ func TestHermeticBoundary(t *testing.T) {
 			template:  `{{ shuffle "abc" }}`,
 			shouldErr: true,
 		},
+		{
+			name:      "hello removed from std registry",
+			template:  `{{ hello }}`,
+			shouldErr: true,
+		},
 	}
 
 	for _, tt := range cases {
