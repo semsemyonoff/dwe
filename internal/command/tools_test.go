@@ -417,6 +417,28 @@ func TestToolEnableCmd_UseField(t *testing.T) {
 	}
 }
 
+func TestSetToolEnabled_UnknownToolReturnsErrorMentioningAvailable(t *testing.T) {
+	configPath := writeTempToolConfig(t, map[string]bool{
+		"adminer": false,
+		"mailpit": true,
+	})
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	err = setToolEnabled(cfg, configPath, "nonexistent_tool", true)
+	if err == nil {
+		t.Fatal("expected error for unknown tool, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "nonexistent_tool") {
+		t.Errorf("error should mention the unknown tool name, got: %q", msg)
+	}
+	if !strings.Contains(msg, "adminer") || !strings.Contains(msg, "mailpit") {
+		t.Errorf("error should mention available tools, got: %q", msg)
+	}
+}
+
 func TestToolDisableCmd_UseField(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newToolDisableCmd(flags)

@@ -2,6 +2,8 @@ package localconfig
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 )
 
 // ToolSelection is the minimal tool state needed for diff logic.
@@ -31,7 +33,12 @@ func DiffToolSelection(selections []ToolSelection, kept []string) (toEnable, toD
 // ValidateToolToggle returns an error if the tool name is not in the known tools set.
 func ValidateToolToggle(knownTools map[string]bool, name string) error {
 	if !knownTools[name] {
-		return fmt.Errorf("tool %q not found", name)
+		available := make([]string, 0, len(knownTools))
+		for k := range knownTools {
+			available = append(available, k)
+		}
+		slices.Sort(available)
+		return fmt.Errorf("tool %q not found; available: %s", name, strings.Join(available, ", "))
 	}
 	return nil
 }

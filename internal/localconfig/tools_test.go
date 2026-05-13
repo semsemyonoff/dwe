@@ -1,6 +1,7 @@
 package localconfig
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -81,8 +82,15 @@ func TestDiffToolSelection_AllUnchecked(t *testing.T) {
 }
 
 func TestValidateToolToggle_UnknownTool(t *testing.T) {
-	if err := ValidateToolToggle(testKnownTools, "unknown"); err == nil {
-		t.Error("expected error for unknown tool, got nil")
+	err := ValidateToolToggle(testKnownTools, "unknown")
+	if err == nil {
+		t.Fatal("expected error for unknown tool, got nil")
+	}
+	msg := err.Error()
+	for _, available := range []string{"adminer", "redis_insight", "mailpit"} {
+		if !strings.Contains(msg, available) {
+			t.Errorf("error should mention available tool %q, got: %q", available, msg)
+		}
 	}
 }
 

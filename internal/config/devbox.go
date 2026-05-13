@@ -522,7 +522,7 @@ func validIdentifierKey(s string) bool {
 // are identifier-safe (^[A-Za-z_][A-Za-z0-9_]*$), and that every declared tool entry
 // (enabled or disabled) has non-empty container, host, and a positive (non-zero) port.
 func validateConfigKeys(cfg *DevboxConfig) error {
-	for key := range cfg.Tools {
+	for _, key := range slices.Sorted(maps.Keys(cfg.Tools)) {
 		if !validIdentifierKey(key) {
 			return fmt.Errorf("invalid tool key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
 		}
@@ -538,13 +538,13 @@ func validateConfigKeys(cfg *DevboxConfig) error {
 		}
 	}
 
-	for key := range cfg.Runtime.Ports {
+	for _, key := range slices.Sorted(maps.Keys(cfg.Runtime.Ports)) {
 		if !validIdentifierKey(key) {
 			return fmt.Errorf("invalid runtime.ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
 		}
 	}
 
-	for key := range cfg.Runtime.Hosts {
+	for _, key := range slices.Sorted(maps.Keys(cfg.Runtime.Hosts)) {
 		if !validIdentifierKey(key) {
 			return fmt.Errorf("invalid runtime.hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
 		}
