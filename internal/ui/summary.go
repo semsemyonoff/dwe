@@ -52,14 +52,10 @@ func countServices(cfg *config.DevboxConfig) (int, int) {
 // countTools returns the number of enabled tools.
 func countTools(cfg *config.DevboxConfig) int {
 	n := 0
-	if cfg.Tools.Adminer.Enabled {
-		n++
-	}
-	if cfg.Tools.RedisInsight.Enabled {
-		n++
-	}
-	if cfg.Tools.Mailpit.Enabled {
-		n++
+	for _, t := range cfg.Tools {
+		if t.Enabled {
+			n++
+		}
 	}
 	return n
 }

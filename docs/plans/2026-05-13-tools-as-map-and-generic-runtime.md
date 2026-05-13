@@ -116,16 +116,16 @@ Go-skill notes used here:
 
 ### Task 3: Update internal/stack consumers
 
-- [ ] rewrite `BuildToolRows` in `internal/stack/rows.go`:
+- [x] rewrite `BuildToolRows` in `internal/stack/rows.go`:
       - preallocate: `rows := make([]ToolRow, 0, len(cfg.Tools))`
       - iterate sorted keys via `slices.Sorted(maps.Keys(cfg.Tools))`
       - read `Container`, `Host`, `Port`, `Enabled` from each `ToolConfig`
-- [ ] handle nil-tools map: `BuildToolRows(cfg)` where `cfg.Tools == nil` must return an empty (non-nil) slice without panicking (range over a nil map is safe — no explicit guard needed beyond not pre-touching the map). `cfg == nil` is NOT a supported input; callers always pass a loaded config, and a nil deref is acceptable to surface that misuse loudly
-- [ ] verify topology callers (`internal/stack/topology.go:131,197`) and status caller (`internal/stack/status.go:34`) still compile and behave correctly with the new row source
-- [ ] update `internal/stack/topology_test.go` and `internal/stack/status_test.go` to construct tools via map literals
-- [ ] add a table-driven case to `BuildToolRows` test that includes a new arbitrary tool key (e.g. `elasticvue`) — confirms generality
-- [ ] add a nil-tools test: `BuildToolRows(&DevboxConfig{})` returns empty slice, no panic
-- [ ] run `go test ./internal/stack/...` — must pass before next task
+- [x] handle nil-tools map: `BuildToolRows(cfg)` where `cfg.Tools == nil` must return an empty (non-nil) slice without panicking (range over a nil map is safe — no explicit guard needed beyond not pre-touching the map). `cfg == nil` is NOT a supported input; callers always pass a loaded config, and a nil deref is acceptable to surface that misuse loudly
+- [x] verify topology callers (`internal/stack/topology.go:131,197`) and status caller (`internal/stack/status.go:34`) still compile and behave correctly with the new row source
+- [x] update `internal/stack/topology_test.go` and `internal/stack/status_test.go` to construct tools via map literals
+- [x] add a table-driven case to `BuildToolRows` test that includes a new arbitrary tool key (e.g. `elasticvue`) — confirms generality
+- [x] add a nil-tools test: `BuildToolRows(&DevboxConfig{})` returns empty slice, no panic
+- [x] run `go test ./internal/stack/...` — must pass before next task
 
 ### Task 4: Update internal/command/tools.go (source-of-truth becomes the loaded config)
 

@@ -15,9 +15,9 @@ func TestRunStatus_ContainsStackIndicator(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Dir: "./services/main", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -37,9 +37,9 @@ func TestRunStatus_StoppedIndicator(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -59,9 +59,9 @@ func TestRunStatus_RunningIndicator(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	alwaysRunning := func(_, _ string) bool { return true }
 
@@ -82,9 +82,9 @@ func TestRunStatus_PartialIndicator(t *testing.T) {
 			"main":   {Type: "app", Container: "app-main", Mandatory: true},
 			"second": {Type: "app", Container: "app-second", Enabled: true},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	partialRunning := func(_, container string) bool {
 		return container == "app-main"
@@ -107,10 +107,10 @@ func TestRunStatus_ContainsServiceAndToolTables(t *testing.T) {
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
 		config.ToolsConfig{
-			Adminer: config.ToolConfig{Enabled: true},
+			"adminer": {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 		},
-		config.RuntimePorts{Adminer: 8080},
-		config.RuntimeHosts{Adminer: "adminer.localhost"},
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -135,9 +135,9 @@ func TestRunStatus_WithTopologyShown(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -166,9 +166,9 @@ func TestRunStatus_TopologyNilSkipped(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
 
@@ -188,9 +188,9 @@ func TestRunStatus_TopologyWithStatus(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
 
