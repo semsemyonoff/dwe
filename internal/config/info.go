@@ -153,5 +153,59 @@ func LoadInfoConfig(path string) (*InfoConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	if err := ValidateInfoConfig(&cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
+}
+
+// ValidateInfoConfig checks that all item types are valid and subgroups declare items.
+// It walks sections and subgroup children recursively, building error messages with
+// paths like "section[tools].items[0]" for easy YAML location.
+func ValidateInfoConfig(cfg *InfoConfig) error {
+	for i, section := range cfg.Sections {
+		secPath := sectionPath(i, section.ID)
+		if err := validateItems(section.Items, secPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateItems(items []InfoItem, pathPrefix string) error {
+	validTypes := map[string]bool{
+		"info":       true,
+		"warning":    true,
+		"definition": true,
+		"separator":  true,
+		"subgroup":   true,
+	}
+
+	for i, item := range items {
+		itemPath := fmt.Sprintf("%s.items[%d]", pathPrefix, i)
+
+		// Validate type is known
+		if !validTypes[item.Type] {
+			return fmt.Errorf("info: %s: unknown type %q; valid types: info, warning, definition, separator, subgroup", itemPath, item.Type)
+		}
+
+		// Subgroup-specific validation
+		if item.Type == "subgroup" {
+			if len(item.Items) == 0 {
+				return fmt.Errorf("info: %s: subgroup must declare items", itemPath)
+			}
+			// Recurse into subgroup children
+			if err := validateItems(item.Items, itemPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func sectionPath(index int, id string) string {
+	if id != "" {
+		return fmt.Sprintf("section[%s]", id)
+	}
+	return fmt.Sprintf("section[%d]", index)
 }

@@ -84,18 +84,18 @@ Rework the `devbox info` schema so that:
 
 ### Task 2: Loader validation — reject unknown types, require `subgroup.items`
 
-- [ ] in `internal/config/info.go`, add a post-decode validation pass over all sections and (recursively) all subgroup children. Walk in declaration order so error messages can reference `section[<id|index>].items[<index>]` paths.
-- [ ] reject any `type` not in the valid set (`info|warning|definition|separator|subgroup`) with a single, generic error that lists the valid types. **No special-case branch for `subheader`** — it falls into the generic unknown-type path like any other typo. Removing it from the type set is the only "migration" needed; the loader doesn't owe users a custom hint.
-- [ ] reject `type: subgroup` with empty `items` with: `subgroup must declare items`.
-- [ ] keep `LoadInfoConfig` using lenient `yaml.Unmarshal` (matches the rest of the info/styles/docker loaders) — strictness here is via the explicit validator, not `KnownFields(true)`.
-- [ ] in `InfoIndent.UnmarshalYAML`, no change needed (negative-indent rejection is already enforced).
-- [ ] write tests in `internal/config/info_test.go`:
+- [x] in `internal/config/info.go`, add a post-decode validation pass over all sections and (recursively) all subgroup children. Walk in declaration order so error messages can reference `section[<id|index>].items[<index>]` paths.
+- [x] reject any `type` not in the valid set (`info|warning|definition|separator|subgroup`) with a single, generic error that lists the valid types. **No special-case branch for `subheader`** — it falls into the generic unknown-type path like any other typo. Removing it from the type set is the only "migration" needed; the loader doesn't owe users a custom hint.
+- [x] reject `type: subgroup` with empty `items` with: `subgroup must declare items`.
+- [x] keep `LoadInfoConfig` using lenient `yaml.Unmarshal` (matches the rest of the info/styles/docker loaders) — strictness here is via the explicit validator, not `KnownFields(true)`.
+- [x] in `InfoIndent.UnmarshalYAML`, no change needed (negative-indent rejection is already enforced).
+- [x] write tests in `internal/config/info_test.go`:
   - YAML containing `type: subgroup` with no `items:` returns the "must declare items" error.
   - YAML containing an unknown `type` (use `made_up_type` as the canonical case; add `subheader` as a parameterized sub-case in the same table-driven test, NOT as a dedicated test function) is rejected with the valid-types list.
   - YAML containing `type: subgroup` with a nested unknown type is also rejected (recursion through subgroup children).
   - Valid YAML (subgroup with items, decorative override, recursion) round-trips cleanly.
-- [ ] migrate the existing `info_test.go` fixture (lines 13/28/34) to use `subgroup` instead of `subheader` so the loader happy-path test still parses.
-- [ ] run `go test ./internal/config/...` — must pass before next task.
+- [x] migrate the existing `info_test.go` fixture (lines 13/28/34) to use `subgroup` instead of `subheader` so the loader happy-path test still parses.
+- [x] run `go test ./internal/config/...` — must pass before next task.
 
 ### Task 3: Rewrite `RenderInfo` around a recursive `renderBlock`
 

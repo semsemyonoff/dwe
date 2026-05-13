@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -10,35 +11,38 @@ const sampleInfoYML = `
 sections:
   - id: devbox_info
     items:
-      - type: subheader
-        text: Devbox
-      - type: definition
-        indent: 2
-        name: Project
-        value: "{{ .Project.FullName }}"
-      - type: definition
-        indent: 2
-        name: State
-        value: "{{ .State }}"
-        when: "{{ .State }}"
+      - type: subgroup
+        title: Devbox
+        items:
+          - type: definition
+            indent: 2
+            name: Project
+            value: "{{ .Project.FullName }}"
+          - type: definition
+            indent: 2
+            name: State
+            value: "{{ .State }}"
+            when: "{{ .State }}"
 
   - id: urls
     title: URLs
     items:
-      - type: subheader
-        text: Main
-      - type: definition
-        indent: 2
-        name: URL
-        value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
-      - type: subheader
-        text: Tools
+      - type: subgroup
+        title: Main
+        items:
+          - type: definition
+            indent: 2
+            name: URL
+            value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
+      - type: subgroup
+        title: Tools
         when: "{{ .Tools.AnyEnabled }}"
-      - type: definition
-        indent: 2
-        name: Adminer
-        value: "adminer-url"
-        when: "{{ .Tools.Adminer.Enabled }}"
+        items:
+          - type: definition
+            indent: 2
+            name: Adminer
+            value: "adminer-url"
+            when: "{{ .Tools.Adminer.Enabled }}"
 
 footer: true
 `
@@ -64,11 +68,22 @@ func TestLoadInfoConfig(t *testing.T) {
 	if devboxInfo.Title != "" {
 		t.Errorf("sections[0].title should be empty, got %q", devboxInfo.Title)
 	}
-	if len(devboxInfo.Items) != 3 {
-		t.Fatalf("sections[0] items = %d, want 3", len(devboxInfo.Items))
+	if len(devboxInfo.Items) != 1 {
+		t.Fatalf("sections[0] items = %d, want 1 (subgroup)", len(devboxInfo.Items))
 	}
 
-	stateItem := devboxInfo.Items[2]
+	subgroup := devboxInfo.Items[0]
+	if subgroup.Type != "subgroup" {
+		t.Errorf("sections[0].items[0].type = %q, want subgroup", subgroup.Type)
+	}
+	if subgroup.Title != "Devbox" {
+		t.Errorf("sections[0].items[0].title = %q, want Devbox", subgroup.Title)
+	}
+	if len(subgroup.Items) != 2 {
+		t.Fatalf("subgroup items = %d, want 2", len(subgroup.Items))
+	}
+
+	stateItem := subgroup.Items[1]
 	if stateItem.When != "{{ .State }}" {
 		t.Errorf("state item when = %q", stateItem.When)
 	}
@@ -77,8 +92,8 @@ func TestLoadInfoConfig(t *testing.T) {
 	if urls.Title != "URLs" {
 		t.Errorf("sections[1].title = %q", urls.Title)
 	}
-	if len(urls.Items) != 4 {
-		t.Fatalf("sections[1] items = %d, want 4", len(urls.Items))
+	if len(urls.Items) != 2 {
+		t.Fatalf("sections[1] items = %d, want 2 (subgroups)", len(urls.Items))
 	}
 }
 
@@ -342,4 +357,145 @@ func boolPtrsEqual(a, b *bool) bool {
 		return false
 	}
 	return *a == *b
+}
+
+func TestValidateInfoConfig_unknownType(t *testing.T) {
+	tests := []struct {
+		name        string
+		unknownType string
+	}{
+		{name: "subheader is unknown", unknownType: "subheader"},
+		{name: "made_up_type is unknown", unknownType: "made_up_type"},
+		{name: "typo in definition", unknownType: "defintion"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			yml := fmt.Sprintf(`
+sections:
+  - id: test
+    items:
+      - type: %s
+        text: oops
+`, tt.unknownType)
+			path := writeTempYML(t, yml)
+			_, err := LoadInfoConfig(path)
+			if err == nil {
+				t.Fatal("expected error for unknown type")
+			}
+			if !contains(err.Error(), "unknown type") {
+				t.Errorf("error should mention 'unknown type': %v", err)
+			}
+			if !contains(err.Error(), "valid types") {
+				t.Errorf("error should list valid types: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateInfoConfig_emptySubgroupItems(t *testing.T) {
+	yml := `
+sections:
+  - id: test
+    items:
+      - type: subgroup
+        title: Empty
+        items: []
+`
+	path := writeTempYML(t, yml)
+	_, err := LoadInfoConfig(path)
+	if err == nil {
+		t.Fatal("expected error for empty subgroup items")
+	}
+	if !contains(err.Error(), "subgroup must declare items") {
+		t.Errorf("error should mention 'subgroup must declare items': %v", err)
+	}
+}
+
+func TestValidateInfoConfig_nestedUnknownType(t *testing.T) {
+	yml := `
+sections:
+  - id: test
+    items:
+      - type: subgroup
+        title: Parent
+        items:
+          - type: bad_type
+            text: oops
+`
+	path := writeTempYML(t, yml)
+	_, err := LoadInfoConfig(path)
+	if err == nil {
+		t.Fatal("expected error for nested unknown type")
+	}
+	if !contains(err.Error(), "unknown type") {
+		t.Errorf("error should mention 'unknown type': %v", err)
+	}
+	// Should indicate it's nested
+	if !contains(err.Error(), ".items[") {
+		t.Errorf("error should include path with .items: %v", err)
+	}
+}
+
+func TestValidateInfoConfig_validSubgroupRecursion(t *testing.T) {
+	yml := `
+sections:
+  - id: test
+    items:
+      - type: subgroup
+        title: Parent
+        hide_on_empty: false
+        decorative: true
+        items:
+          - type: subgroup
+            title: Child
+            items:
+              - type: info
+                text: nested content
+          - type: definition
+            name: DB
+            value: postgres
+`
+	path := writeTempYML(t, yml)
+	cfg, err := LoadInfoConfig(path)
+	if err != nil {
+		t.Fatalf("valid subgroup config should parse: %v", err)
+	}
+
+	if len(cfg.Sections) != 1 {
+		t.Fatalf("expected 1 section, got %d", len(cfg.Sections))
+	}
+
+	parent := cfg.Sections[0].Items[0]
+	if parent.Type != "subgroup" || parent.Title != "Parent" {
+		t.Errorf("expected parent subgroup, got type=%q title=%q", parent.Type, parent.Title)
+	}
+	if !boolPtrsEqual(parent.HideOnEmpty, ptrBool(false)) {
+		t.Errorf("expected hide_on_empty=false, got %v", parent.HideOnEmpty)
+	}
+	if !boolPtrsEqual(parent.Decorative, ptrBool(true)) {
+		t.Errorf("expected decorative=true, got %v", parent.Decorative)
+	}
+
+	if len(parent.Items) != 2 {
+		t.Fatalf("parent should have 2 items, got %d", len(parent.Items))
+	}
+
+	child := parent.Items[0]
+	if child.Type != "subgroup" || child.Title != "Child" {
+		t.Errorf("expected child subgroup, got type=%q title=%q", child.Type, child.Title)
+	}
+	if len(child.Items) != 1 {
+		t.Fatalf("child should have 1 item, got %d", len(child.Items))
+	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
