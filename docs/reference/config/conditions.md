@@ -78,7 +78,7 @@ Template conditions are evaluated at **plan time** using Go `text/template` synt
 ```yaml
 when:
   type: template
-  expr: "{{ .Services.Second.Enabled }}"
+  expr: "{{ .Services.second.Enabled }}"
 ```
 
 Template conditions are purely for idempotency checks known at plan time:
@@ -87,7 +87,7 @@ Template conditions are purely for idempotency checks known at plan time:
 - name: setup
   when:
     type: template
-    expr: "{{ not .Services.Database.Enabled }}"
+    expr: "{{ not .Services.database.Enabled }}"
   steps: []
 ```
 

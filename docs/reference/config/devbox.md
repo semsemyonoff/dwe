@@ -182,9 +182,9 @@ tools:
 | `container` | string | yes | Docker image or container name. |
 | `host` | string | yes | Virtual hostname for the tool (used in reverse proxy, exported to templates and env). |
 | `port` | int | yes | Container port (non-zero). Exposed to templates and env for direct-container access; tool URLs use this host and the app port via reverse proxy. |
-| `compose` | string | yes | Relative path to the docker-compose overlay file that defines the tool service. Used to build the active compose file list. |
+| `compose` | string | no | Relative path to the docker-compose overlay file that defines the tool service. Used to build the active compose file list. When omitted, the tool contributes no compose overlay but still appears in `tools status` and can be enabled/disabled. |
 
-All five fields are required; any tool entry (enabled or disabled) missing a field causes a config-load error. This catches mistakes early — a tool visible in `tools status` must be fully defined.
+The `container`, `host`, and `port` fields are required; any tool entry (enabled or disabled) missing one of these causes a config-load error. This catches mistakes early — a tool visible in `tools status` must be fully defined. The `compose` field is optional.
 
 Tool host/port do not go in the generic `runtime.hosts` / `runtime.ports` maps. Access them via `.Tools.<key>.Host` and `.Tools.<key>.Port` in templates, or via raw dot-paths like `tools.<key>.host` / `tools.<key>.port` in export rules.
 

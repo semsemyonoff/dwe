@@ -351,7 +351,7 @@ Shell commands also use hardcoded `sh -c` (not `ShellBin`) for portability.
 ```yaml
 when:
   type: template
-  expr: "{{ .Services.Second.Enabled }}"
+  expr: "{{ .Services.second.Enabled }}"
 ```
 
 Template conditions do not support `check:` in the same step (no side effects at plan time). They are purely for idempotency checks like "skip this phase if the feature is not enabled" where the result is known before execution. See [Templates](../templates.md) for the full template surface (helpers, sprout registries, `appURL`).

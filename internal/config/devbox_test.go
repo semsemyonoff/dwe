@@ -523,6 +523,9 @@ func TestValidateConfigKeys_toolFieldsRequired(t *testing.T) {
 		{"missing host", ToolConfig{Enabled: true, Container: "test", Port: 8080}, true},
 		{"zero port", ToolConfig{Enabled: true, Container: "test", Host: "localhost", Port: 0}, true},
 		{"negative port", ToolConfig{Enabled: true, Container: "test", Host: "localhost", Port: -1}, true},
+		// Disabled tools are validated too — prevents tools enable from flipping a half-defined entry.
+		{"disabled missing container", ToolConfig{Enabled: false, Host: "localhost", Port: 8080}, true},
+		{"disabled zero port", ToolConfig{Enabled: false, Container: "test", Host: "localhost", Port: 0}, true},
 	}
 
 	for _, tt := range tests {
@@ -553,6 +556,36 @@ func TestValidateConfigKeys_nilMapsAreSafe(t *testing.T) {
 	err := validateConfigKeys(cfg)
 	if err != nil {
 		t.Errorf("validateConfigKeys on nil maps = %v, want nil", err)
+	}
+}
+
+func TestValidateConfigKeys_runtimePortsAndHosts(t *testing.T) {
+	validTool := ToolConfig{Enabled: false, Container: "test", Host: "localhost", Port: 8080}
+	tests := []struct {
+		name      string
+		ports     RuntimePorts
+		hosts     RuntimeHosts
+		wantError bool
+	}{
+		{"valid port key", RuntimePorts{"app": 3000}, nil, false},
+		{"valid host key", nil, RuntimeHosts{"main": "main.localhost"}, false},
+		{"invalid port key dash", RuntimePorts{"my-port": 3000}, nil, true},
+		{"invalid port key leading digit", RuntimePorts{"1port": 3000}, nil, true},
+		{"invalid host key dash", nil, RuntimeHosts{"my-host": "x.localhost"}, true},
+		{"invalid host key dot", nil, RuntimeHosts{"my.host": "x.localhost"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &DevboxConfig{
+				Tools:   ToolsConfig{"test_tool": validTool},
+				Runtime: RuntimeConfig{Ports: tt.ports, Hosts: tt.hosts},
+			}
+			err := validateConfigKeys(cfg)
+			if (err != nil) != tt.wantError {
+				t.Errorf("validateConfigKeys = %v, wantError %v", err, tt.wantError)
+			}
+		})
 	}
 }
 
@@ -595,7 +628,8 @@ project:
 		t.Fatalf("LoadConfig: %v", err)
 	}
 	// Check that AnyEnabled doesn't panic and returns false for nil/empty tools.
-	if cfg.Tools != nil && cfg.Tools.AnyEnabled() {
+	// Call without nil guard to verify the nil-safe receiver works correctly.
+	if cfg.Tools.AnyEnabled() {
 		t.Error("AnyEnabled should return false for nil/empty tools")
 	}
 }

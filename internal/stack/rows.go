@@ -17,7 +17,7 @@ type ToolRow struct {
 }
 
 // BuildToolRows returns tool rows for all declared tools in sorted order with enabled state, port, host, and container name.
-// Handles nil tools map safely; returns empty slice when no tools are declared.
+// Safe when cfg.Tools is nil (nil map iterates zero times); cfg itself must be non-nil.
 func BuildToolRows(cfg *config.DevboxConfig) []ToolRow {
 	rows := make([]ToolRow, 0, len(cfg.Tools))
 	for _, name := range slices.Sorted(maps.Keys(cfg.Tools)) {

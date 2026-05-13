@@ -520,7 +520,7 @@ func validIdentifierKey(s string) bool {
 
 // validateConfigKeys checks that all keys in Tools, Runtime.Ports, and Runtime.Hosts
 // are identifier-safe (^[A-Za-z_][A-Za-z0-9_]*$), and that every declared tool entry
-// (enabled or disabled) has non-empty container, host, and non-positive port.
+// (enabled or disabled) has non-empty container, host, and a positive (non-zero) port.
 func validateConfigKeys(cfg *DevboxConfig) error {
 	for key := range cfg.Tools {
 		if !validIdentifierKey(key) {
