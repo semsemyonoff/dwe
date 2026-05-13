@@ -23,47 +23,14 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 	var sb strings.Builder
 
 	for _, section := range infoCfg.Sections {
-		// First pass: evaluate when: conditions for all items and collect survivors.
-		// Items without when: always survive. Only known visible item types
-		// (definition, warning, info, subheader) count as content — separator and
-		// unknown types produce no visible output and must not prevent
-		// hide_on_empty from firing.
-		var survivors []config.InfoItem
-		hasContent := false
-		for _, item := range section.Items {
-			show, err := tpl.EvalCondition(item.When, cfg)
-			if err != nil {
-				return "", fmt.Errorf("section %q item %q when: %w", section.ID, item.Type, err)
-			}
-			if show {
-				survivors = append(survivors, item)
-				switch item.Type {
-				case "definition", "warning", "info", "subheader":
-					hasContent = true
-				}
-			}
+		out, rendered, err := renderBlock(cfg, section.Items, section.HideOnEmpty, section.Title, true, section.ID, "")
+		if err != nil {
+			return "", err
 		}
-
-		// If no content items survived and the section is marked hide_on_empty, skip it entirely.
-		if !hasContent && section.HideOnEmpty {
-			continue
-		}
-
-		// Section is rendered: render title if present, then all surviving items.
-		if section.Title != "" {
-			sb.WriteString(renderSectionTitle(section.Title))
+		if rendered {
+			sb.WriteString(out)
 			sb.WriteByte('\n')
 		}
-
-		for _, item := range survivors {
-			rendered, err := renderInfoItem(cfg, item)
-			if err != nil {
-				return "", fmt.Errorf("section %q: %w", section.ID, err)
-			}
-			sb.WriteString(rendered)
-			sb.WriteByte('\n')
-		}
-
 	}
 
 	// Footer is rendered only if at least one section produced output.
@@ -73,6 +40,133 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 	}
 
 	return sb.String(), nil
+}
+
+// renderBlock renders a section or a subgroup uniformly, recursively handling
+// nested subgroups. It evaluates when: conditions, counts content vs. decorative
+// items, and applies hide_on_empty.
+//
+// Parameters:
+//   - cfg: the DevboxConfig for template evaluation
+//   - items: the items to render (section items or subgroup items)
+//   - hideOnEmpty: section.HideOnEmpty for sections, item.SubgroupHideOnEmpty() for subgroups
+//   - title: section.Title for sections, item.Title for subgroups (NOT item.Text)
+//     Subgroup title should be pre-rendered via tpl.Render before passing in.
+//   - asSection: true → renderSectionTitle(title); false → styleSubheader.Render(title)
+//   - sectionID: section ID for error messages (e.g., "tools"); passed through recursion
+//   - itemPath: dot-separated path for nested items (e.g., "" → "items[0]" → "items[0].items[1]")
+//
+// Returns:
+//   - out: the rendered text (empty iff the block produced nothing)
+//   - rendered: biconditional with `out != ""` — true iff `out` is non-empty.
+//     Parent uses this to decide whether to append `out`. Does NOT imply "counts as content".
+//   - err: any template/when/recursion error, fully propagated
+func renderBlock(
+	cfg *config.DevboxConfig,
+	items []config.InfoItem,
+	hideOnEmpty bool,
+	title string,
+	asSection bool,
+	sectionID string,
+	itemPath string,
+) (out string, rendered bool, err error) {
+	type survivor struct {
+		str       string
+		decorated bool
+	}
+	var survivors []survivor
+	contentCount := 0
+
+	for idx, item := range items {
+		// Build path for error reporting
+		var currentPath string
+		if itemPath == "" {
+			currentPath = fmt.Sprintf("items[%d]", idx)
+		} else {
+			currentPath = fmt.Sprintf("%s.items[%d]", itemPath, idx)
+		}
+
+		// Evaluate when: condition
+		show, err := tpl.EvalCondition(item.When, cfg)
+		if err != nil {
+			return "", false, fmt.Errorf("section %q %s when: %w", sectionID, currentPath, err)
+		}
+		if !show {
+			continue
+		}
+
+		// Handle subgroup items specially (recursive)
+		if item.Type == "subgroup" {
+			// Render the subgroup title
+			renderedTitle, err := tpl.Render(item.Title, cfg)
+			if err != nil {
+				return "", false, fmt.Errorf("section %q %s (subgroup) title: %w", sectionID, currentPath, err)
+			}
+
+			// Recursively render the subgroup
+			subOut, subRendered, err := renderBlock(
+				cfg,
+				item.Items,
+				item.SubgroupHideOnEmpty(),
+				renderedTitle,
+				false, // subgroup, not section
+				sectionID,
+				currentPath,
+			)
+			if err != nil {
+				return "", false, err
+			}
+
+			// Only add to survivors if the subgroup rendered
+			if subRendered {
+				survivors = append(survivors, survivor{str: subOut, decorated: item.IsDecorative()})
+				if !item.IsDecorative() {
+					contentCount++
+				}
+			}
+		} else {
+			// Non-subgroup item: render via renderInfoItem
+			itemOut, err := renderInfoItem(cfg, item)
+			if err != nil {
+				return "", false, fmt.Errorf("section %q %s (%s): %w", sectionID, currentPath, item.Type, err)
+			}
+			survivors = append(survivors, survivor{str: itemOut, decorated: item.IsDecorative()})
+			if !item.IsDecorative() {
+				contentCount++
+			}
+		}
+	}
+
+	// If no content and hide_on_empty, return empty
+	if contentCount == 0 && hideOnEmpty {
+		return "", false, nil
+	}
+
+	// Build output
+	var outSB strings.Builder
+	if title != "" {
+		var head string
+		if asSection {
+			head = renderSectionTitle(title)
+		} else {
+			head = styleSubheader.Render(title)
+		}
+		outSB.WriteString(head)
+		outSB.WriteByte('\n')
+	}
+
+	// Write each survivor with trailing newline (even for empty separators)
+	for _, s := range survivors {
+		outSB.WriteString(s.str)
+		outSB.WriteByte('\n')
+	}
+
+	// Enforce rendered ⇔ out != "" biconditional
+	if outSB.Len() == 0 {
+		return "", false, nil
+	}
+
+	return outSB.String(), true, nil
 }
 
 // RenderSectionTitle renders a section header line using Lipgloss styling.
@@ -115,15 +209,9 @@ func renderSectionTitle(text string) string {
 }
 
 // renderInfoItem renders a single info item to a string (without trailing newline).
+// Subgroups are handled in renderBlock before reaching here.
 func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, error) {
 	switch item.Type {
-	case "subheader":
-		text, err := tpl.Render(item.Text, cfg)
-		if err != nil {
-			return "", err
-		}
-		return styleSubheader.Render(text), nil
-
 	case "definition":
 		value, err := tpl.Render(item.Value, cfg)
 		if err != nil {
@@ -153,9 +241,11 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 	case "separator":
 		return "", nil
 
+	case "subgroup":
+		return "", fmt.Errorf("subgroup must be handled in renderBlock, not renderInfoItem")
+
 	default:
-		// Unknown types are silently skipped for forward compatibility.
-		return "", nil
+		return "", fmt.Errorf("unknown item type %q", item.Type)
 	}
 }
 

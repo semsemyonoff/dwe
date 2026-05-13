@@ -99,7 +99,7 @@ Rework the `devbox info` schema so that:
 
 ### Task 3: Rewrite `RenderInfo` around a recursive `renderBlock`
 
-- [ ] in `internal/ui/info.go`, extract the section-loop body into a helper with this exact signature (matches the Technical Details block below — do not drift):
+- [x] in `internal/ui/info.go`, extract the section-loop body into a helper with this exact signature (matches the Technical Details block below — do not drift):
 
   ```go
   func renderBlock(
@@ -130,31 +130,31 @@ Rework the `devbox info` schema so that:
     - Recursive `renderBlock(...)` call for a subgroup → if it returns a non-nil error, return immediately, propagating the wrapped error up. **Do not discard** the third return value (no blank-identifier on the error).
     - `renderInfoItem(cfg, it)` failure → return wrapped error referencing the item's location.
     - Error messages include the path so callers can locate the offending YAML (e.g. `section "tools" > subgroup[0] > item[2]: when: ...`).
-- [ ] reshape the main `RenderInfo` loop to call `renderBlock` once per section with `hideOnEmpty=section.HideOnEmpty`. Concatenate non-empty results.
-- [ ] remove the hard-coded `case "definition", "warning", "info", "subheader"` content set — content-vs-decorative is now `IsDecorative()`.
-- [ ] drop the `case "subheader"` arm from `renderInfoItem`. The remaining arms (`definition`, `warning`, `info`, `separator`) keep their current bodies. Add a `case "subgroup"` arm? **No** — subgroups are handled in `renderBlock` before reaching `renderInfoItem`; if the renderer ever sees one in `renderInfoItem`, it's a bug (return an error rather than silently skipping).
-- [ ] remove the `default:` silent-skip in `renderInfoItem` — unknown types are now load errors, so any unknown type reaching the renderer indicates an internal bug. Return an error.
-- [ ] keep footer suppression as-is (`sb.Len() > 0` check) — semantics are preserved because a fully-hidden section now contributes zero bytes.
-- [ ] **delete or rewrite the two existing tests that encode the silent-skip contract** (they will fail otherwise):
-  - `TestRenderInfo_UnknownItemType_Ignored` at `internal/ui/info_test.go:174` — delete. Unknown types can no longer reach the renderer (loader rejects them in Task 2). Validation coverage moves to the loader test added in Task 2.
-  - `TestRenderInfo_HideOnEmpty_UnknownTypeOnly` at `internal/ui/info_test.go:541` — delete for the same reason; the loader-rejection test in Task 2 already covers the failure mode (a typo in `type:` is now a load error, not a hidden section).
-- [ ] also rework the existing `TestRenderInfo_DecorativeWarningKeepsSectionVisible` to reflect the new "decorative is explicit, not type-implied" rule (rename for clarity; keep the test direction inverted — bare `warning` still counts as content because its `decorative` default is `false`).
-- [ ] write new tests in `internal/ui/info_test.go` covering the contract changes:
-  - `decorative: true` on a `warning` + `hide_on_empty: true` on its section, when it's the only survivor → section is fully hidden.
-  - `decorative: false` on `separator` → separator counts as content AND section renders. Specifically: section with `hide_on_empty: true`, no title, and a single `decorative: false` separator → `out` is non-empty (the trailing `\n` from the per-item newline write), `rendered=true`, section appears in the final output. This test would fail if anyone ever refactored the assembly loop to `strings.Join(survivors, "\n")` — guard the per-item newline contract.
-  - Subgroup with all items filtered out by `when:` AND `hide_on_empty` default (`true`) → subgroup absent from output AND parent section does not count it.
-  - Subgroup with `hide_on_empty: false`, a non-empty `title:`, and zero surviving items + `decorative` default (`false`) → subgroup renders (title only) AND parent counts it as content. Pair test with `decorative: true` on the same subgroup → still renders (title only), but parent does NOT count it.
-  - **Title-less subgroup edge case**: subgroup with empty `title:`, `hide_on_empty: false`, and all children filtered by `when:` → subgroup produces empty output → `rendered=false` → subgroup absent from parent's output AND parent does NOT count it. This pins the `rendered ⇔ out != ""` biconditional and prevents regression to "ghost contributor" behavior. Pair with a sanity test: same subgroup but with one surviving content item → renders (no title, body only) and parent counts it.
-  - Subgroup with at least one surviving content item → subgroup rendered; parent counts it as content.
-  - Nested subgroup: inner subgroup empty → outer counts no contribution from it; inner has content → outer renders; section renders.
-  - Footer still suppressed when every section ends up hidden; rendered when at least one survives.
-  - **Error propagation tests** (guard the contract that template/`when` errors surface to the caller):
-    - bad template in subgroup `title:` → `RenderInfo` returns a non-nil error mentioning the subgroup location.
-    - bad expression in a nested item's `when:` (item lives inside a subgroup, ideally two levels deep) → error returned and includes the path through the subgroup.
-    - bad template in a nested item's `value:` (definition inside subgroup) → error returned with item path.
-    - bad template in a nested item's `text:` (info/warning inside subgroup) → error returned with item path.
-    - Each test asserts both `err != nil` AND that `err.Error()` contains the section ID / item-type / path hint, so we catch silent swallowing if it ever regresses.
-- [ ] run `go test ./internal/ui/...` — must pass before next task.
+- [x] reshape the main `RenderInfo` loop to call `renderBlock` once per section with `hideOnEmpty=section.HideOnEmpty`. Concatenate non-empty results.
+- [x] remove the hard-coded `case "definition", "warning", "info", "subheader"` content set — content-vs-decorative is now `IsDecorative()`.
+- [x] drop the `case "subheader"` arm from `renderInfoItem`. The remaining arms (`definition`, `warning`, `info`, `separator`) keep their current bodies. Add a `case "subgroup"` arm? **No** — subgroups are handled in `renderBlock` before reaching `renderInfoItem`; if the renderer ever sees one in `renderInfoItem`, it's a bug (return an error rather than silently skipping).
+- [x] remove the `default:` silent-skip in `renderInfoItem` — unknown types are now load errors, so any unknown type reaching the renderer indicates an internal bug. Return an error.
+- [x] keep footer suppression as-is (`sb.Len() > 0` check) — semantics are preserved because a fully-hidden section now contributes zero bytes.
+- [x] **delete or rewrite the two existing tests that encode the silent-skip contract** (they will fail otherwise):
+  - [x] `TestRenderInfo_UnknownItemType_Ignored` at `internal/ui/info_test.go:174` — delete. Unknown types can no longer reach the renderer (loader rejects them in Task 2). Validation coverage moves to the loader test added in Task 2.
+  - [x] `TestRenderInfo_HideOnEmpty_UnknownTypeOnly` at `internal/ui/info_test.go:541` — delete for the same reason; the loader-rejection test in Task 2 already covers the failure mode (a typo in `type:` is now a load error, not a hidden section).
+- [x] also rework the existing `TestRenderInfo_DecorativeWarningKeepsSectionVisible` to reflect the new "decorative is explicit, not type-implied" rule (rename for clarity; keep the test direction inverted — bare `warning` still counts as content because its `decorative` default is `false`).
+- [x] write new tests in `internal/ui/info_test.go` covering the contract changes:
+  - [x] `decorative: true` on a `warning` + `hide_on_empty: true` on its section, when it's the only survivor → section is fully hidden.
+  - [x] `decorative: false` on `separator` → separator counts as content AND section renders. Specifically: section with `hide_on_empty: true`, no title, and a single `decorative: false` separator → `out` is non-empty (the trailing `\n` from the per-item newline write), `rendered=true`, section appears in the final output. This test would fail if anyone ever refactored the assembly loop to `strings.Join(survivors, "\n")` — guard the per-item newline contract.
+  - [x] Subgroup with all items filtered out by `when:` AND `hide_on_empty` default (`true`) → subgroup absent from output AND parent section does not count it.
+  - [x] Subgroup with `hide_on_empty: false`, a non-empty `title:`, and zero surviving items + `decorative` default (`false`) → subgroup renders (title only) AND parent counts it as content. Pair test with `decorative: true` on the same subgroup → still renders (title only), but parent does NOT count it.
+  - [x] **Title-less subgroup edge case**: subgroup with empty `title:`, `hide_on_empty: false`, and all children filtered by `when:` → subgroup produces empty output → `rendered=false` → subgroup absent from parent's output AND parent does NOT count it. This pins the `rendered ⇔ out != ""` biconditional and prevents regression to "ghost contributor" behavior. Pair with a sanity test: same subgroup but with one surviving content item → renders (no title, body only) and parent counts it.
+  - [x] Subgroup with at least one surviving content item → subgroup rendered; parent counts it as content.
+  - [x] Nested subgroup: inner subgroup empty → outer counts no contribution from it; inner has content → outer renders; section renders.
+  - [x] Footer still suppressed when every section ends up hidden; rendered when at least one survives.
+  - [x] **Error propagation tests** (guard the contract that template/`when` errors surface to the caller):
+    - [x] bad template in subgroup `title:` → `RenderInfo` returns a non-nil error mentioning the subgroup location.
+    - [x] bad expression in a nested item's `when:` (item lives inside a subgroup, ideally two levels deep) → error returned and includes the path through the subgroup.
+    - [x] bad template in a nested item's `value:` (definition inside subgroup) → error returned with item path.
+    - [x] bad template in a nested item's `text:` (info/warning inside subgroup) → error returned with item path.
+    - [x] Each test asserts both `err != nil` AND that `err.Error()` contains the section ID / item-type / path hint, so we catch silent swallowing if it ever regresses.
+- [x] run `go test ./internal/ui/...` — must pass before next task.
 
 ### Task 4: Update docs — `docs/reference/config/info.md`
 
