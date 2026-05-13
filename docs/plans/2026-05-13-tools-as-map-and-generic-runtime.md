@@ -189,14 +189,14 @@ Go-skill notes used here:
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] all references to `Tools.Adminer|RedisInsight|Mailpit` and the typed `Runtime.{Ports,Hosts}` field selectors are gone from production code (grep with the regex from Task 7, covering both `Db` and `DB` casings)
-- [ ] all stale raw dot-paths (`runtime.{hosts,ports}.{adminer,redis_insight,mailpit}`, `compose.overlays.*`) are gone from YAML fixtures, testdata, and docs (grep)
-- [ ] adding a YAML-only `elasticvue:` block under `tools:` with a `compose:` file enables the overlay in `ComposeFiles()`, surfaces in `tools status`, accepts `tools enable elasticvue`, counts in `RenderSummary`, works in templates via `{{ .Tools.elasticvue.Enabled }}`, and resolves through raw dot-paths via `from: tools.elasticvue.port` in `exports.env` (bare path, no `${...}`) — verified by integration-style unit tests added in Tasks 1, 2, 3, 4, 5, 7
-- [ ] a YAML carrying legacy `compose.overlays:` produces a clear migration error (Task 1 test)
-- [ ] a YAML carrying an identifier-unsafe tool key (`redis-insight`, `foo.bar`, `1foo`) produces a clear validation error (Task 1 test)
-- [ ] `make test` — full suite green
-- [ ] `make lint` — clean
-- [ ] `make build` succeeds
+- [x] all references to `Tools.Adminer|RedisInsight|Mailpit` and the typed `Runtime.{Ports,Hosts}` field selectors are gone from production code (grep with the regex from Task 7, covering both `Db` and `DB` casings)
+- [x] all stale raw dot-paths (`runtime.{hosts,ports}.{adminer,redis_insight,mailpit}`, `compose.overlays.*`) are gone from YAML fixtures, testdata, and docs (grep)
+- [x] adding a YAML-only `elasticvue:` block under `tools:` with a `compose:` file enables the overlay in `ComposeFiles()`, surfaces in `tools status`, accepts `tools enable elasticvue`, counts in `RenderSummary`, works in templates via `{{ .Tools.elasticvue.Enabled }}`, and resolves through raw dot-paths via `from: tools.elasticvue.port` in `exports.env` (bare path, no `${...}`) — verified by integration-style unit tests added in Tasks 1, 2, 3, 4, 5, 7
+- [x] a YAML carrying legacy `compose.overlays:` produces a clear migration error (Task 1 test)
+- [x] a YAML carrying an identifier-unsafe tool key (`redis-insight`, `foo.bar`, `1foo`) produces a clear validation error (Task 1 test)
+- [x] `make test` — full suite green
+- [x] `make lint` — clean
+- [x] `make build` succeeds
 
 ### Task 10: Final docs sync
 
