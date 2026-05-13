@@ -918,6 +918,9 @@ func (cfg *LifecycleRunConfig) LogEnabled() bool {
 // Precedence: missing block → off; enabled:false → off; enabled:true+no mode → prompt;
 // enabled:true+mode set → that value. CLI flags (--no-update, --update) override this.
 func (cfg *LifecycleRunConfig) EffectiveMode() string {
+	if cfg == nil {
+		return "off"
+	}
 	if cfg.Update == nil {
 		return "off"
 	}
@@ -1272,6 +1275,9 @@ func mergeDeduplicatedStrings(a, b []string) []string {
 // For keys where both values are maps, it recurses. Otherwise src wins.
 func deepMerge(dst, src map[string]any) {
 	for k, sv := range src {
+		if sv == nil {
+			continue
+		}
 		dv, exists := dst[k]
 		if !exists {
 			dst[k] = sv
