@@ -438,10 +438,16 @@ The standard `text/template` library provides these out of the box (full referen
 
 #### Devbox-specific helpers
 
-In addition to the standard library, devbox registers:
+Commands have access to the full template surface:
 
-1. **Domain helper**: `appURL host port useHTTPS [path]` — URL builder; drops default ports (80 / 443)
-2. **Sprout registries**: `std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver` — see [go-sprout docs](https://docs.atom.codes/sprout/registries/) for the full function list
+1. **Shared base** (with info.yml): `appURL` domain helper + all sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). See [info.md template functions](info.md#template-functions) for the full registry reference.
+
+2. **Command-scope resolvers** (command-only; accept raw config maps):
+   - `resolve <key>` — dot-path lookup in merged config (same as `{{ .Raw.<key> }}`)
+   - `resolveMap <key>` — dot-path lookup returning a raw map
+   - `resolveFile <key>` — dot-path lookup returning a file path
+
+These are injected into the template context by the command runner and provide low-level access to the raw merged config for cases where the typed `.Params`, `.Context`, `.Raw` accessors are insufficient.
 
 Common patterns:
 
@@ -453,6 +459,7 @@ Common patterns:
 | Path directory | `{{ some_path \| pathDir }}` |
 | Conditional value | `{{ if condition }}yes{{ else }}no{{ end }}` |
 | Default/fallback | `{{ or .Params.value "default" }}` |
+| Raw config lookup | `{{ resolve "db.host" }}` |
 
 ```yaml
 # helpers chained via pipe
@@ -466,6 +473,19 @@ files:
 env:
   SCRIPT_NAME: '{{ .Params.script_path | pathBase }}'
 ```
+
+#### Legacy template helpers (migration guide)
+
+Prior to the sprout migration, a small set of zero-arg helpers were provided directly. They have been removed. If you are maintaining projects that use them, use this table to update your templates:
+
+| Removed helper | Replacement | Notes |
+|---|---|---|
+| `date` | `now \| date "2006-01-02"` | Sprout's `date` is a filter (piped), requires a format string |
+| `datetime` | `now \| date "2006-01-02_15-04-05"` | Same as above with a different format |
+| `base` | `pathBase` (sprout `filesystem`) | Forward-slash semantics; use `osBase` for OS-specific separator if needed |
+| `dir` | `pathDir` (sprout `filesystem`) | Forward-slash semantics; use `osDir` for OS-specific separator if needed |
+
+We recommend the `path*` variants (`pathBase`, `pathDir`) for cross-platform predictability of container paths, even on macOS hosts.
 
 #### Mixing `${...}` and `{{ ... }}`
 

@@ -156,12 +156,12 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
 - [x] confirm no Go code references the removed helpers: `grep -rn 'FuncMap()\[\("date"\|"datetime"\|"base"\|"dir"\)\]' internal/` returns zero hits
 
 ### Task 4: Update template-function documentation
-- [ ] `docs/reference/config/info.md`: rewrite the "Template functions" section
+- [x] `docs/reference/config/info.md`: rewrite the "Template functions" section
   - list **info-scope** domain funcs: `appURL` only — this is the single non-sprout entry in the base `FuncMap()` evaluated by `tpl.Render` against `*config.DevboxConfig`
   - list sprout registries enabled with a one-line description per family and a link to upstream sprout docs; mention common idioms like `{{ now | date "2006-01-02" }}` so users know how to do what the old `{{ date }}` did
   - explicitly: **no `env`, no filesystem reads, no network, no crypto/random** — templates are hermetic by design
   - **Do NOT list `resolve`, `resolveMap`, `resolveFile` here.** They are command-scope only (injected by `commandFuncMap()` in `internal/tpl/render_command.go`), accept command data (raw maps), and would error against info's `*config.DevboxConfig` argument. Documenting them in info.md would mislead users into writing `info.yml` entries that fail at runtime.
-- [ ] `docs/reference/config/commands.md`: cover the **command-scope superset**
+- [x] `docs/reference/config/commands.md`: cover the **command-scope superset**
   - cross-link to info.md for the shared base (`appURL` + sprout registries)
   - **here** document `resolve`, `resolveMap`, `resolveFile` with short examples showing the raw-map dot-path semantics they assume
   - migration note (one paragraph): legacy template helpers removed in this release. Document the mapping **as a table without inline `{{ ... }}` literals**, so the grep guard in Task 3 does not flag the docs themselves. Suggested wording:
@@ -174,8 +174,8 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
     >
     > `osBase`/`osDir` are also available if you need OS-specific separator semantics; we recommend the `path*` variants for cross-platform predictability.
     Pure backtick-wrapped identifiers (no `{{` / `}}`) keep the doc out of the grep's match set.
-- [ ] no test changes; doc-only task — but verify links resolve relative to repo root
-- [ ] **Commit boundary** — stage Tasks 1–4 as commit `feat(tpl)!: migrate template FuncMap to go-sprout` (note the `!` — breaking change); ensure `make test` and `make lint` pass
+- [x] no test changes; doc-only task — but verify links resolve relative to repo root
+- [x] **Commit boundary** — stage Tasks 1–4 as commit `feat(tpl)!: migrate template FuncMap to go-sprout` (note the `!` — breaking change); ensure `make test` and `make lint` pass
 
 ### Task 5: Add `HideOnEmpty` to the info section model
 - [ ] in `internal/config/info.go`, add field on `InfoSection`:

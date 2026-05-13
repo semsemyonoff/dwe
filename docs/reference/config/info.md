@@ -174,9 +174,9 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 
 ### Template functions
 
-The same `FuncMap` is shared by `info.yml` templates, the `message` builtin, and `${...}` expressions inside declarative commands.
+Info section templates have access to a base set of helper functions. These are the same registries used by the `message` builtin and workflow `${...}` expressions.
 
-#### Domain helpers
+#### Domain helpers (info-scope)
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
@@ -189,9 +189,24 @@ value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
 
 Renders as `http://laravel.localhost` or `https://laravel.localhost` depending on `use_https`.
 
-#### Sprout template registries
+#### Sprout registries
 
-In addition to domain helpers, the `std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, and `semver` registries from [go-sprout](https://docs.atom.codes/sprout/registries/) are available.
+In addition to the domain helper, the following registries from [go-sprout](https://docs.atom.codes/sprout/registries/) are available:
+
+| Registry | Use | Description |
+|----------|-----|-------------|
+| `std` | `default`, `ternary`, `empty`, `coalesce` | Utilities: defaults, conditionals, emptiness checks |
+| `strings` | `hasSuffix`, `hasPrefix`, `lower`, `upper`, `trim`, etc. | String manipulation |
+| `numeric` | `add`, `max`, `min`, `mul`, `div`, etc. | Numeric operations |
+| `slices` | `first`, `last`, `slice`, `join`, `reverse`, etc. | List/array operations |
+| `maps` | `keys`, `values`, `has`, `pick`, etc. | Map/object operations |
+| `regexp` | `regexMatch`, `regexReplace`, `regexSplit` | Regular expression matching |
+| `conversion` | `toInt`, `toFloat`, `toString`, `toBool`, etc. | Type conversion |
+| `time` | `now`, `date`, `dateFormat`, etc. | Date/time operations |
+| `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Path manipulation (forward-slash and OS-specific) |
+| `semver` | `semverCompare`, `semverSort` | Semantic version operations |
+
+**Hermetic design**: No env access, no filesystem reads, no network, no crypto/random — templates are isolated by construction.
 
 Common patterns for info templates:
 
@@ -201,6 +216,8 @@ Common patterns for info templates:
 | Current datetime | `{{ now \| date "2006-01-02_15-04-05" }}` |
 | Path basename | `{{ some_path \| pathBase }}` |
 | Path directory | `{{ some_path \| pathDir }}` |
+| Default value | `{{ .Value \| default "N/A" }}` |
+| Conditional | `{{ if eq .State "ready" }}Ready{{ else }}Not ready{{ end }}` |
 
 ### `when` conditions
 

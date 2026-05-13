@@ -147,4 +147,3 @@ func TestRender_appURLFunc(t *testing.T) {
 		t.Errorf("Render appURL = %q", got)
 	}
 }
-

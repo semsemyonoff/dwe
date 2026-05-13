@@ -174,8 +174,8 @@ func TestAppURLRegression(t *testing.T) {
 
 func TestHermeticBoundary(t *testing.T) {
 	cases := []struct {
-		name     string
-		template string
+		name      string
+		template  string
 		shouldErr bool
 	}{
 		{
