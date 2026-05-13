@@ -158,13 +158,13 @@ func renderBlock(
 	}
 
 	// Enforce rendered ⇔ out != "" biconditional.
-	// When contentCount > 0 the caller already decided there is real content
-	// (e.g. a non-decorative separator that renders to ""), so we must return
-	// rendered=true even if the rendered string is blank.
-	// Only apply the TrimRight guard for the all-decorative / no-title case,
-	// where outSB may contain only \n bytes that must not be treated as content.
+	// The hideOnEmpty short-circuit above already handled contentCount==0 &&
+	// hideOnEmpty. Here we only catch the title-less / no-survivors /
+	// hide_on_empty:false corner where nothing was actually emitted.
+	// Decorative survivors (e.g. separators) produce "\n" via the per-item
+	// newline write, so result != "" and rendered=true for them — intentional.
 	result := outSB.String()
-	if contentCount == 0 && strings.TrimRight(result, "\n") == "" {
+	if result == "" {
 		return "", false, nil
 	}
 
