@@ -18,30 +18,67 @@ project:
   prefix: devbox
 `
 
-// sampleDefaultsYML mirrors devbox/defaults.yml.
-const sampleDefaultsYML = `
+// minimalDefaultsYML has no tools with compose files, for testing base-only scenarios.
+const minimalDefaultsYML = `
 schema_version: "1"
 tools:
   adminer:
     enabled: false
+    container: adminer
+    host: adminer.localhost
+    port: 8080
   redis_insight:
-    enabled: true
+    enabled: false
+    container: redis_insight
+    host: redis.localhost
+    port: 5540
   mailpit:
-    enabled: true
+    enabled: false
+    container: mailpit
+    host: mail.localhost
+    port: 8025
 runtime:
   use_https: false
   ports:
     app: 80
     db: 13306
     redis: 6379
-    adminer: 8080
-    redis_insight: 5540
-    mailpit: 8025
   hosts:
     main: app.localhost
-    adminer: adminer.localhost
-    redis_insight: redis.localhost
-    mailpit: mail.localhost
+  spx:
+    path: ""
+state: ""
+`
+
+// sampleDefaultsYML mirrors devbox/defaults.yml.
+const sampleDefaultsYML = `
+schema_version: "1"
+tools:
+  adminer:
+    enabled: false
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+  redis_insight:
+    enabled: true
+    container: redis_insight
+    host: redis.localhost
+    port: 5540
+    compose: compose/tools/redis_insight.yml
+  mailpit:
+    enabled: true
+    container: mailpit
+    host: mail.localhost
+    port: 8025
+    compose: compose/tools/mailpit.yml
+runtime:
+  use_https: false
+  ports:
+    app: 80
+    db: 13306
+    redis: 6379
+  hosts:
+    main: app.localhost
   spx:
     path: ""
 state: ""
@@ -124,24 +161,27 @@ project:
 tools:
   adminer:
     enabled: false
+    container: adminer
+    host: adminer.localhost
+    port: 8080
   redis_insight:
     enabled: true
+    container: redis_insight
+    host: redis.localhost
+    port: 5540
   mailpit:
     enabled: true
+    container: mailpit
+    host: mail.localhost
+    port: 8025
 runtime:
   use_https: false
   ports:
     app: 80
     db: 13306
     redis: 6379
-    adminer: 8080
-    redis_insight: 5540
-    mailpit: 8025
   hosts:
     main: app.localhost
-    adminer: adminer.localhost
-    redis_insight: redis.localhost
-    mailpit: mail.localhost
   spx:
     path: ""
 state: ""
@@ -204,21 +244,21 @@ state: staging
 	}
 
 	// From defaults.yml
-	if !cfg.Tools.RedisInsight.Enabled {
+	if !cfg.Tools["redis_insight"].Enabled {
 		t.Error("tools.redis_insight.enabled should be true (from defaults)")
 	}
-	if cfg.Runtime.Ports.Mailpit != 8025 {
-		t.Errorf("runtime.ports.mailpit = %d, want 8025 (from defaults)", cfg.Runtime.Ports.Mailpit)
+	if cfg.Tools["mailpit"].Port != 8025 {
+		t.Errorf("tools.mailpit.port = %d, want 8025 (from defaults)", cfg.Tools["mailpit"].Port)
 	}
-	if cfg.Runtime.Hosts.Main != "app.localhost" {
-		t.Errorf("runtime.hosts.main = %q (from defaults)", cfg.Runtime.Hosts.Main)
+	if cfg.Runtime.Hosts["main"] != "app.localhost" {
+		t.Errorf("runtime.hosts.main = %q (from defaults)", cfg.Runtime.Hosts["main"])
 	}
 
 	// Overridden by local.yml
-	if cfg.Runtime.Ports.App != 8080 {
-		t.Errorf("runtime.ports.app = %d, want 8080 (from user)", cfg.Runtime.Ports.App)
+	if cfg.Runtime.Ports["app"] != 8080 {
+		t.Errorf("runtime.ports.app = %d, want 8080 (from user)", cfg.Runtime.Ports["app"])
 	}
-	if !cfg.Tools.Adminer.Enabled {
+	if !cfg.Tools["adminer"].Enabled {
 		t.Error("tools.adminer.enabled should be true (overridden by user)")
 	}
 	if cfg.State != "staging" {
@@ -276,7 +316,7 @@ func TestToolsAnyEnabled_allDisabled(t *testing.T) {
 
 func TestToolsAnyEnabled_oneEnabled(t *testing.T) {
 	tools := ToolsConfig{
-		Adminer: ToolConfig{Enabled: true},
+		"adminer": ToolConfig{Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 	}
 	if !tools.AnyEnabled() {
 		t.Error("AnyEnabled() should be true when at least one tool is enabled")
@@ -388,11 +428,6 @@ func TestLoadConfig_composeBasePresent(t *testing.T) {
 	defaultsWithCompose := sampleDefaultsYML + `
 compose:
   base: compose.yaml
-  overlays:
-    adminer: compose/tools/adminer.yml
-    redis_insight: compose/tools/redis_insight.yml
-    mailpit: compose/tools/mailpit.yml
-    debug: compose/services/main/debug.yml
 `
 	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
 	cfg, err := LoadConfig(path)
@@ -404,36 +439,22 @@ compose:
 	}
 }
 
-func TestLoadConfig_composeOverlaysLoaded(t *testing.T) {
-	defaultsWithCompose := sampleDefaultsYML + `
-compose:
-  base: compose.yaml
-  overlays:
-    adminer: compose/tools/adminer.yml
-    redis_insight: compose/tools/redis_insight.yml
-    mailpit: compose/tools/mailpit.yml
-    debug: compose/services/main/debug.yml
-`
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+func TestLoadConfig_toolComposesLoaded(t *testing.T) {
+	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	want := map[string]string{
-		"adminer":       "compose/tools/adminer.yml",
-		"redis_insight": "compose/tools/redis_insight.yml",
-		"mailpit":       "compose/tools/mailpit.yml",
-		"debug":         "compose/services/main/debug.yml",
+	// Check that tool compose files are loaded from tool entries.
+	if cfg.Tools["redis_insight"].Compose != "compose/tools/redis_insight.yml" {
+		t.Errorf("Tools[redis_insight].Compose = %q, want compose/tools/redis_insight.yml", cfg.Tools["redis_insight"].Compose)
 	}
-	for key, wantPath := range want {
-		got, ok := cfg.Compose.Overlays[key]
-		if !ok {
-			t.Errorf("Compose.Overlays[%q] missing", key)
-			continue
-		}
-		if got != wantPath {
-			t.Errorf("Compose.Overlays[%q] = %q, want %q", key, got, wantPath)
-		}
+	if cfg.Tools["mailpit"].Compose != "compose/tools/mailpit.yml" {
+		t.Errorf("Tools[mailpit].Compose = %q, want compose/tools/mailpit.yml", cfg.Tools["mailpit"].Compose)
+	}
+	// Adminer is disabled and has no compose, so check that empty is OK.
+	if cfg.Tools["adminer"].Compose != "" {
+		t.Errorf("Tools[adminer].Compose = %q, want empty", cfg.Tools["adminer"].Compose)
 	}
 }
 
@@ -447,8 +468,160 @@ func TestLoadConfig_composeAbsent(t *testing.T) {
 	if cfg.Compose.Base != "" {
 		t.Errorf("Compose.Base = %q, want empty when section absent", cfg.Compose.Base)
 	}
-	if len(cfg.Compose.Overlays) != 0 {
-		t.Errorf("Compose.Overlays = %v, want empty when section absent", cfg.Compose.Overlays)
+}
+
+// --- Config Validation ---
+
+func TestValidateConfigKeys_identifierSafety(t *testing.T) {
+	tests := []struct {
+		name      string
+		toolKey   string
+		wantError bool
+	}{
+		{"valid lowercase", "adminer", false},
+		{"valid underscore", "redis_insight", false},
+		{"valid leading underscore", "_private", false},
+		{"invalid dash", "redis-insight", true},
+		{"invalid dot", "redis.insight", true},
+		{"invalid leading digit", "1redis", true},
+		{"empty", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &DevboxConfig{
+				Tools: ToolsConfig{
+					tt.toolKey: ToolConfig{
+						Enabled:   false,
+						Container: "test",
+						Host:      "localhost",
+						Port:      8080,
+					},
+				},
+				Runtime: RuntimeConfig{
+					Ports: RuntimePorts{},
+					Hosts: RuntimeHosts{},
+				},
+			}
+			err := validateConfigKeys(cfg)
+			if (err != nil) != tt.wantError {
+				t.Errorf("validateConfigKeys = %v, wantError %v", err, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestValidateConfigKeys_toolFieldsRequired(t *testing.T) {
+	tests := []struct {
+		name    string
+		tool    ToolConfig
+		wantErr bool
+	}{
+		{"complete", ToolConfig{Enabled: true, Container: "test", Host: "localhost", Port: 8080}, false},
+		{"disabled but complete", ToolConfig{Enabled: false, Container: "test", Host: "localhost", Port: 8080}, false},
+		{"missing container", ToolConfig{Enabled: true, Host: "localhost", Port: 8080}, true},
+		{"missing host", ToolConfig{Enabled: true, Container: "test", Port: 8080}, true},
+		{"zero port", ToolConfig{Enabled: true, Container: "test", Host: "localhost", Port: 0}, true},
+		{"negative port", ToolConfig{Enabled: true, Container: "test", Host: "localhost", Port: -1}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &DevboxConfig{
+				Tools: ToolsConfig{"test_tool": tt.tool},
+				Runtime: RuntimeConfig{
+					Ports: RuntimePorts{},
+					Hosts: RuntimeHosts{},
+				},
+			}
+			err := validateConfigKeys(cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateConfigKeys = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateConfigKeys_nilMapsAreSafe(t *testing.T) {
+	cfg := &DevboxConfig{
+		Tools: nil,
+		Runtime: RuntimeConfig{
+			Ports: nil,
+			Hosts: nil,
+		},
+	}
+	err := validateConfigKeys(cfg)
+	if err != nil {
+		t.Errorf("validateConfigKeys on nil maps = %v, want nil", err)
+	}
+}
+
+func TestDetectLegacyComposeOverlays_rejectsOldFormat(t *testing.T) {
+	raw := map[string]any{
+		"compose": map[string]any{
+			"overlays": map[string]any{
+				"adminer": "compose/tools/adminer.yml",
+			},
+		},
+	}
+	err := detectLegacyComposeOverlays(raw)
+	if err == nil {
+		t.Error("detectLegacyComposeOverlays should reject legacy compose.overlays")
+	}
+}
+
+func TestDetectLegacyComposeOverlays_allowsNewFormat(t *testing.T) {
+	raw := map[string]any{
+		"compose": map[string]any{
+			"base": "compose.yaml",
+		},
+	}
+	err := detectLegacyComposeOverlays(raw)
+	if err != nil {
+		t.Errorf("detectLegacyComposeOverlays on new format = %v, want nil", err)
+	}
+}
+
+func TestLoadConfig_nilSafety(t *testing.T) {
+	// A minimal devbox.yml with no tools, runtime, or services should load without panic.
+	minimalYML := `
+schema_version: "1"
+project:
+  name: test
+`
+	path := writeLayeredFixture(t, minimalYML, "", "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// Check that AnyEnabled doesn't panic and returns false for nil/empty tools.
+	if cfg.Tools != nil && cfg.Tools.AnyEnabled() {
+		t.Error("AnyEnabled should return false for nil/empty tools")
+	}
+}
+
+func TestLoadConfig_arbitraryToolKey(t *testing.T) {
+	// An arbitrary new tool (elasticvue) should be preserved through the merge.
+	defaultsWithNewTool := `
+schema_version: "1"
+tools:
+  elasticvue:
+    enabled: false
+    container: elasticvue
+    host: elastic.localhost
+    port: 9200
+    compose: compose/tools/elasticvue.yml
+`
+	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithNewTool, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	tool, ok := cfg.Tools["elasticvue"]
+	if !ok {
+		t.Error("elasticvue tool not found in merged config")
+	} else if tool.Container != "elasticvue" || tool.Port != 9200 {
+		t.Errorf("elasticvue tool definition incorrect: %+v", tool)
 	}
 }
 
@@ -2346,8 +2519,8 @@ stop:
 // --- ComposeFilesAll ---
 
 func TestComposeFilesAll_baseOnly(t *testing.T) {
-	// Only base file, no overlays or service composes.
-	defaultsWithCompose := sampleDefaultsYML + `
+	// Only base file, no tool overlays or service composes.
+	defaultsWithCompose := minimalDefaultsYML + `
 compose:
   base: compose.yaml
 `
@@ -2368,20 +2541,47 @@ compose:
 
 func TestComposeFilesAll_baseAndDisabledToolOverlay(t *testing.T) {
 	// Base + disabled tool overlay. ComposeFilesAll must include disabled overlays.
-	defaultsWithCompose := sampleDefaultsYML + `
+	// Create a defaults with all tools having compose files, adminer disabled.
+	defaultsWithCompose := `
+schema_version: "1"
+tools:
+  adminer:
+    enabled: false
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+    compose: compose/tools/adminer.yml
+  mailpit:
+    enabled: true
+    container: mailpit
+    host: mail.localhost
+    port: 8025
+    compose: compose/tools/mailpit.yml
+  redis_insight:
+    enabled: true
+    container: redis_insight
+    host: redis.localhost
+    port: 5540
+    compose: compose/tools/redis_insight.yml
+runtime:
+  use_https: false
+  ports:
+    app: 80
+    db: 13306
+    redis: 6379
+  hosts:
+    main: app.localhost
+  spx:
+    path: ""
 compose:
   base: compose.yaml
-  overlays:
-    adminer: compose/tools/adminer.yml
-    redis_insight: compose/tools/redis_insight.yml
-    mailpit: compose/tools/mailpit.yml
 `
 	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	// Note: adminer is disabled in sampleDefaultsYML, redis_insight and mailpit enabled.
+	// Note: adminer is disabled, redis_insight and mailpit enabled.
 	// ComposeFilesAll must include all, ComposeFiles only includes enabled.
 	allFiles := cfg.ComposeFilesAll()
 	activeFiles := cfg.ComposeFiles()
@@ -2420,7 +2620,8 @@ compose:
 
 func TestComposeFilesAll_baseAndDisabledServiceOverlay(t *testing.T) {
 	// Base + service composes, with mixed enabled/disabled services.
-	defaultsWithCompose := sampleDefaultsYML + `
+	// Use minimalDefaultsYML to avoid tool compose files.
+	defaultsWithCompose := minimalDefaultsYML + `
 compose:
   base: compose.yaml
 `
@@ -2488,15 +2689,12 @@ services:
 func TestComposeFilesAll_fullMixedScenario(t *testing.T) {
 	// Base + tool overlays (some disabled) + service composes (some disabled).
 	// Verify all are included in ComposeFilesAll, in correct order.
-	defaultsWithCompose := sampleDefaultsYML + `
+	// Use sampleDefaultsYML which already has tool compose files.
+	defaultsWithBase := sampleDefaultsYML + `
 compose:
   base: compose.yaml
-  overlays:
-    adminer: compose/tools/adminer.yml
-    mailpit: compose/tools/mailpit.yml
-    redis_insight: compose/tools/redis_insight.yml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", sampleServicesYML)
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithBase, "", sampleServicesYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2505,10 +2703,10 @@ compose:
 	allFiles := cfg.ComposeFilesAll()
 
 	// Expected: base, all tool overlays in sorted key order, all service composes in sorted name order.
+	// From sampleDefaultsYML: adminer (disabled, no compose), mailpit (enabled), redis_insight (enabled)
 	want := []string{
 		"compose.yaml",
-		// Tool overlays in sorted key order (adminer, mailpit, redis_insight)
-		"compose/tools/adminer.yml",
+		// Tool overlays in sorted key order (mailpit, redis_insight)
 		"compose/tools/mailpit.yml",
 		"compose/tools/redis_insight.yml",
 		// Service composes in sorted service name order (main, main-debug)
@@ -2525,22 +2723,18 @@ compose:
 }
 
 func TestComposeFilesAll_noBase(t *testing.T) {
-	// Tool and service overlays without a base file. ComposeFilesAll must still work.
-	defaultsWithCompose := sampleDefaultsYML + `
-compose:
-  overlays:
-    adminer: compose/tools/adminer.yml
-    mailpit: compose/tools/mailpit.yml
-`
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+	// Tool overlays without a base file. ComposeFilesAll must still work.
+	// Use sampleDefaultsYML which has mailpit and redis_insight enabled with compose files.
+	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
 	allFiles := cfg.ComposeFilesAll()
+	// sampleDefaultsYML doesn't have compose.base, only tool compose files (sorted).
 	want := []string{
-		"compose/tools/adminer.yml",
 		"compose/tools/mailpit.yml",
+		"compose/tools/redis_insight.yml",
 	}
 	if len(allFiles) != len(want) {
 		t.Fatalf("ComposeFilesAll len = %d, want %d: %v", len(allFiles), len(want), allFiles)
@@ -2553,20 +2747,22 @@ compose:
 }
 
 func TestComposeFilesAll_empty(t *testing.T) {
-	// No compose section at all.
-	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	// No compose section at all, and no tools with compose files.
+	// Use minimalDefaultsYML which has no compose section and no enabled tools with compose files.
+	path := writeLayeredFixture(t, sampleDevboxYML, minimalDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
 	allFiles := cfg.ComposeFilesAll()
 	if len(allFiles) != 0 {
-		t.Errorf("ComposeFilesAll should be empty when no compose section, got %v", allFiles)
+		t.Errorf("ComposeFilesAll should be empty when no compose section and no tool composes, got %v", allFiles)
 	}
 }
 
 func TestComposeFilesAll_serviceMultipleComposeFiles(t *testing.T) {
 	// Service with multiple compose files. They should all be included, in order.
+	// Use minimalDefaultsYML to focus on service compose files, not tool ones.
 	serviceYML := `
 services:
   multi:
@@ -2581,7 +2777,7 @@ services:
       - compose/services/multi/debug.yml
       - compose/services/multi/test.yml
 `
-	defaultsWithCompose := sampleDefaultsYML + `
+	defaultsWithCompose := minimalDefaultsYML + `
 compose:
   base: compose.yaml
 `

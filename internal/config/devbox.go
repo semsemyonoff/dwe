@@ -165,10 +165,9 @@ func (s DeployStep) Action() Action {
 }
 
 // ComposeConfig holds Docker Compose file declarations.
-// Base is always included; Overlays are optional and keyed by a short name.
+// Base is always included; tool and service overlays live inside each tool/service entry.
 type ComposeConfig struct {
-	Base     string            `yaml:"base"`
-	Overlays map[string]string `yaml:"overlays"`
+	Base string `yaml:"base"`
 }
 
 // ProjectConfig holds project identity fields.
@@ -202,28 +201,22 @@ func (c *DevboxConfig) ComposeFilesAll() []string {
 }
 
 func (c *DevboxConfig) composeFiles(all bool) []string {
-	var files []string
+	files := make([]string, 0, 1+len(c.Tools)+len(c.Services))
 	if c.Compose.Base != "" {
 		files = append(files, c.Compose.Base)
 	}
 
-	keys := make([]string, 0, len(c.Compose.Overlays))
-	for k := range c.Compose.Overlays {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		if all || c.toolOverlayEnabled(key) {
-			files = append(files, c.Compose.Overlays[key])
+	for _, name := range slices.Sorted(maps.Keys(c.Tools)) {
+		tool := c.Tools[name]
+		if tool.Compose == "" {
+			continue
+		}
+		if all || tool.Enabled {
+			files = append(files, tool.Compose)
 		}
 	}
 
-	svcNames := make([]string, 0, len(c.Services))
-	for name := range c.Services {
-		svcNames = append(svcNames, name)
-	}
-	sort.Strings(svcNames)
-	for _, name := range svcNames {
+	for _, name := range slices.Sorted(maps.Keys(c.Services)) {
 		svc := c.Services[name]
 		if (all || svc.Enabled) && len(svc.Compose) > 0 {
 			files = append(files, svc.Compose...)
@@ -231,20 +224,6 @@ func (c *DevboxConfig) composeFiles(all bool) []string {
 	}
 
 	return files
-}
-
-// toolOverlayEnabled reports whether the overlay with the given key is active.
-func (c *DevboxConfig) toolOverlayEnabled(key string) bool {
-	switch key {
-	case "adminer":
-		return c.Tools.Adminer.Enabled
-	case "redis_insight":
-		return c.Tools.RedisInsight.Enabled
-	case "mailpit":
-		return c.Tools.Mailpit.Enabled
-	default:
-		return false
-	}
 }
 
 // ServiceConfigEntry represents one config file declared under a service's configs list.
@@ -427,21 +406,35 @@ func (c *ServiceCLIConfig) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// ToolsConfig holds the set of optional development tools.
-type ToolsConfig struct {
-	Adminer      ToolConfig `yaml:"adminer"`
-	RedisInsight ToolConfig `yaml:"redis_insight"`
-	Mailpit      ToolConfig `yaml:"mailpit"`
+// ToolConfig holds configuration for a single optional tool.
+// Keys in ToolsConfig are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$
+// (Go identifier safe) so they can be used with Go template dot syntax.
+// All fields (Enabled, Container, Host, Port) must be provided for every declared
+// tool entry, regardless of enabled state. Tools are user-visible in `tools status`
+// and toggling a tool should never flip a half-defined entry.
+type ToolConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Container string `yaml:"container"`
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	Compose   string `yaml:"compose"`
 }
+
+// ToolsConfig is a map of tool names to their configurations.
+// Keys are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$
+// (Go identifier safe) so they can be used with Go template dot syntax.
+// Examples: map[string]ToolConfig{"adminer": {...}, "elasticvue": {...}}
+type ToolsConfig map[string]ToolConfig
 
 // AnyEnabled returns true when at least one tool is enabled.
+// Safe on a nil map receiver; range over a nil map runs zero iterations.
 func (t ToolsConfig) AnyEnabled() bool {
-	return t.Adminer.Enabled || t.RedisInsight.Enabled || t.Mailpit.Enabled
-}
-
-// ToolConfig holds enabled flag for a single tool.
-type ToolConfig struct {
-	Enabled bool `yaml:"enabled"`
+	for _, tool := range t {
+		if tool.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 // RuntimeConfig describes ports, hostnames, and other runtime settings.
@@ -452,23 +445,17 @@ type RuntimeConfig struct {
 	SPX      SPXConfig    `yaml:"spx"`
 }
 
-// RuntimePorts maps service roles to host ports.
-type RuntimePorts struct {
-	App          int `yaml:"app"`
-	Db           int `yaml:"db"`
-	Redis        int `yaml:"redis"`
-	Adminer      int `yaml:"adminer"`
-	RedisInsight int `yaml:"redis_insight"`
-	Mailpit      int `yaml:"mailpit"`
-}
+// RuntimePorts maps runtime role names (e.g. "app", "db", "redis", "main") to host ports.
+// Keys are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$ (Go identifier safe)
+// so they can be used with Go template dot syntax.
+// Non-tool roles live here (app, db, redis, main); tool port references live under Tools.<name>.Port.
+type RuntimePorts map[string]int
 
-// RuntimeHosts maps service roles to virtual hostnames.
-type RuntimeHosts struct {
-	Main         string `yaml:"main"`
-	Adminer      string `yaml:"adminer"`
-	RedisInsight string `yaml:"redis_insight"`
-	Mailpit      string `yaml:"mailpit"`
-}
+// RuntimeHosts maps runtime role names (e.g. "main", "app") to virtual hostnames.
+// Keys are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$ (Go identifier safe)
+// so they can be used with Go template dot syntax.
+// Non-tool roles live here (main, app); tool host references live under Tools.<name>.Host.
+type RuntimeHosts map[string]string
 
 // SPXConfig holds SPX profiler settings.
 type SPXConfig struct {
@@ -511,6 +498,78 @@ type ExportRule struct {
 	Format   string `yaml:"format"`
 	When     string `yaml:"when"`
 	Comment  string `yaml:"comment"`
+}
+
+// validIdentifierKey reports whether s matches the Go identifier regex:
+// ^[A-Za-z_][A-Za-z0-9_]*$. These keys can be used safely with Go template dot syntax.
+func validIdentifierKey(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	if (s[0] < 'a' || s[0] > 'z') && (s[0] < 'A' || s[0] > 'Z') && s[0] != '_' {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+// validateConfigKeys checks that all keys in Tools, Runtime.Ports, and Runtime.Hosts
+// are identifier-safe (^[A-Za-z_][A-Za-z0-9_]*$), and that every declared tool entry
+// (enabled or disabled) has non-empty container, host, and non-positive port.
+func validateConfigKeys(cfg *DevboxConfig) error {
+	for key := range cfg.Tools {
+		if !validIdentifierKey(key) {
+			return fmt.Errorf("invalid tool key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
+		}
+		tool := cfg.Tools[key]
+		if tool.Container == "" {
+			return fmt.Errorf("tool %q: container is required", key)
+		}
+		if tool.Host == "" {
+			return fmt.Errorf("tool %q: host is required", key)
+		}
+		if tool.Port <= 0 {
+			return fmt.Errorf("tool %q: port must be positive, got %d", key, tool.Port)
+		}
+	}
+
+	for key := range cfg.Runtime.Ports {
+		if !validIdentifierKey(key) {
+			return fmt.Errorf("invalid runtime.ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
+		}
+	}
+
+	for key := range cfg.Runtime.Hosts {
+		if !validIdentifierKey(key) {
+			return fmt.Errorf("invalid runtime.hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
+		}
+	}
+
+	return nil
+}
+
+// detectLegacyComposeOverlays checks the merged raw YAML for a compose.overlays block.
+// If found, returns a migration error pointing users to the new per-tool compose field.
+func detectLegacyComposeOverlays(raw map[string]any) error {
+	compose, ok := raw["compose"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	overlays, ok := compose["overlays"].(map[string]any)
+	if !ok || len(overlays) == 0 {
+		return nil
+	}
+	var keys []string
+	for k := range overlays {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual tools: tools.<name>.compose instead. See docs/reference/config/devbox.md for migration details. Found overlays: %v", keys)
 }
 
 // LoadConfig loads the merged DevboxConfig by layering:
@@ -619,6 +678,14 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		cfg.Deploy = *deployCfg
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", deployPath, err)
+	}
+
+	// Validate config keys and detect legacy compose.overlays.
+	if err := detectLegacyComposeOverlays(merged); err != nil {
+		return nil, err
+	}
+	if err := validateConfigKeys(&cfg); err != nil {
+		return nil, err
 	}
 
 	return &cfg, nil
