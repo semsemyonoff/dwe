@@ -167,7 +167,6 @@ hide_on_empty: false`,
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var section InfoSection

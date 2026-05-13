@@ -537,3 +537,30 @@ func TestRenderInfo_WhenEvaluationError_Propagates(t *testing.T) {
 		t.Error("expected error from invalid when: expression, got nil")
 	}
 }
+
+func TestRenderInfo_HideOnEmpty_UnknownTypeOnly(t *testing.T) {
+	t.Parallel()
+	// Section with only an unknown item type and hide_on_empty: true → section hidden.
+	// Unknown types produce no visible output (silently skipped) and must not
+	// prevent hide_on_empty from firing. This guards against typos in type names.
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "unknown-only",
+				Title:       "Unknown Type Only",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{Type: "typo_unknown_type", Text: "invisible"},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{}
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "Unknown Type Only") {
+		t.Errorf("expected section hidden (unknown-type-only + hide_on_empty), got:\n%s", out)
+	}
+}

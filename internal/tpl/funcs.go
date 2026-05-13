@@ -60,6 +60,10 @@ func buildFuncMap() template.FuncMap {
 	}
 	fm := h.Build()
 	fm["appURL"] = appURL
+	// shuffle is exposed by the strings registry but uses a package-level
+	// math/rand.Source seeded from crypto/rand — not goroutine-safe and
+	// violates the hermetic/no-random contract. Remove it explicitly.
+	delete(fm, "shuffle")
 	return fm
 }
 

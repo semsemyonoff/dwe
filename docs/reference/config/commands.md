@@ -443,9 +443,9 @@ Commands have access to the full template surface:
 1. **Shared base** (with info.yml): `appURL` domain helper + all sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). See [info.md template functions](info.md#template-functions) for the full registry reference.
 
 2. **Command-scope resolvers** (command-only; accept raw config maps):
-   - `resolve <key>` — dot-path lookup in merged config (same as `{{ .Raw.<key> }}`)
-   - `resolveMap <key>` — dot-path lookup returning a raw map
-   - `resolveFile <key>` — dot-path lookup returning a file path
+   - `resolve .Raw <key>` — dot-path lookup in merged config (same as `{{ .Raw.<key> }}`)
+   - `resolveMap .Params <key>` — dot-path lookup in a flat map (e.g. params or context)
+   - `resolveFile .Files <id> <subkey>` — subkey lookup in a resolved file artifact
 
 These are injected into the template context by the command runner and provide low-level access to the raw merged config for cases where the typed `.Params`, `.Context`, `.Raw` accessors are insufficient.
 
@@ -459,7 +459,7 @@ Common patterns:
 | Path directory | `{{ some_path \| pathDir }}` |
 | Conditional value | `{{ if condition }}yes{{ else }}no{{ end }}` |
 | Default/fallback | `{{ or .Params.value "default" }}` |
-| Raw config lookup | `{{ resolve "db.host" }}` |
+| Raw config lookup | `{{ resolve .Raw "db.host" }}` |
 
 ```yaml
 # helpers chained via pipe

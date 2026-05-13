@@ -24,11 +24,10 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 
 	for _, section := range infoCfg.Sections {
 		// First pass: evaluate when: conditions for all items and collect survivors.
-		// Items without when: always survive. This ensures decorative items (warning,
-		// info, subheader) without when: are always counted as content, making a section
-		// with such items never "empty".
-		// Separator items are excluded from the "has content" count because they
-		// produce no visible output and should not prevent hide_on_empty from firing.
+		// Items without when: always survive. Only known visible item types
+		// (definition, warning, info, subheader) count as content — separator and
+		// unknown types produce no visible output and must not prevent
+		// hide_on_empty from firing.
 		var survivors []config.InfoItem
 		hasContent := false
 		for _, item := range section.Items {
@@ -38,7 +37,8 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 			}
 			if show {
 				survivors = append(survivors, item)
-				if item.Type != "separator" {
+				switch item.Type {
+				case "definition", "warning", "info", "subheader":
 					hasContent = true
 				}
 			}
