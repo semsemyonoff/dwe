@@ -158,9 +158,9 @@ Rework the `devbox info` schema so that:
 
 ### Task 4: Update docs — `docs/reference/config/info.md`
 
-- [ ] remove the `subheader` row from the "Item types" table and the dedicated `### Subheader` section.
-- [ ] add a `### Subgroup` section documenting: `title` (optional; mirrors `section.title`; supports templates; the field is `title:`, **not** `text:`), `when`, `items` (required, non-empty), `hide_on_empty` (default `true`), `decorative` (default `false`), recursion, and a Tools/Services example whose YAML uses `title:` for the subgroup header.
-- [ ] add a `### Decorative items` (or "Default `decorative` by type") subsection with a table:
+- [x] remove the `subheader` row from the "Item types" table and the dedicated `### Subheader` section.
+- [x] add a `### Subgroup` section documenting: `title` (optional; mirrors `section.title`; supports templates; the field is `title:`, **not** `text:`), `when`, `items` (required, non-empty), `hide_on_empty` (default `true`), `decorative` (default `false`), recursion, and a Tools/Services example whose YAML uses `title:` for the subgroup header.
+- [x] add a `### Decorative items` (or "Default `decorative` by type") subsection with a table:
 
   | Type | Default `decorative` |
   | --- | --- |
@@ -171,13 +171,13 @@ Rework the `devbox info` schema so that:
   | `subgroup` | `false` |
 
   Note that override is bidirectional (`decorative: true` makes a content item not count; `decorative: false` makes a separator count).
-- [ ] in "Section fields", cross-reference: subgroup's `hide_on_empty` defaults to `true` (opposite of section's `false`).
-- [ ] in "Common pitfalls":
+- [x] in "Section fields", cross-reference: subgroup's `hide_on_empty` defaults to `true` (opposite of section's `false`).
+- [x] in "Common pitfalls":
   - remove the bullet that says "items without `when:` always count as content" — superseded by `decorative`.
   - **Do NOT add a `subheader removed` migration note.** The type is simply gone from the valid-types list; users discover it through the generic unknown-type error like any typo. Calling it out in docs perpetuates special handling we've intentionally removed.
-- [ ] in the "Example: full info.yml" section, replace any `type: subheader` usage with a `subgroup` (e.g. the `Tools` block becomes a subgroup of definitions).
-- [ ] grep `docs/` for stray references to `subheader` *as an info item type* and update; leave general-purpose references (styles palette key) intact.
-- [ ] no checkbox for "verify docs build" — repo has no doc build step today.
+- [x] in the "Example: full info.yml" section, replace any `type: subheader` usage with a `subgroup` (e.g. the `Tools` block becomes a subgroup of definitions).
+- [x] grep `docs/` for stray references to `subheader` *as an info item type* and update; leave general-purpose references (styles palette key) intact.
+- [x] no checkbox for "verify docs build" — repo has no doc build step today.
 
 ### Task 5: Migrate in-tree fixtures and the canonical `info.yml` example
 

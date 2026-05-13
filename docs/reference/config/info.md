@@ -9,11 +9,12 @@ Info dashboard configuration.
 - [Top-level fields](#top-level-fields)
 - [Section fields](#section-fields)
 - [Item types](#item-types)
-  - [`subheader`](#subheader)
   - [`definition`](#definition)
   - [`info`](#info)
   - [`warning`](#warning)
+  - [`subgroup`](#subgroup)
   - [`separator`](#separator)
+- [Decorative items](#decorative-items)
 - [Template expressions](#template-expressions)
   - [Available template data](#available-template-data)
   - [Template functions](#template-functions)
@@ -58,34 +59,19 @@ footer: true
 | `id` | string | — | Unique identifier for the section |
 | `title` | string | — | Optional header rendered above the item list |
 | `items` | list | — | Ordered list of item definitions |
-| `hide_on_empty` | bool | `false` | Skip the section entirely (no title, no frame) when no item survives when-filtering. |
+| `hide_on_empty` | bool | `false` | Skip the section entirely (no title, no frame) when no item survives when-filtering. Note: subgroups have a different default (`true`). |
 
 ## Item types
 
 | Type | Renders as | Required fields |
 |------|-----------|-----------------|
-| `subheader` | Coloured sub-section label inside a section | `text` |
 | `definition` | `Label — Value` row, with optional icon | `name`, `value` |
 | `info` | Info-coloured text line | `text` |
 | `warning` | Warning-coloured text line | `text` |
+| `subgroup` | Container with optional title and nested items | `items` |
 | `separator` | Blank line spacer | — |
 
-All items accept an optional `when:` (Go template expression). Items with a falsy `when` are dropped from the rendered output.
-
-### `subheader`
-
-A styled sub-section label within a section.
-
-```yaml
-- type: subheader
-  text: "Main"
-  when: "{{ .SomeCondition }}"
-```
-
-| Field | Description |
-|-------|-------------|
-| `text` | Label text (plain string or template expression) |
-| `when` | Condition; item hidden if falsy |
+All items accept an optional `when:` (Go template expression). Items with a falsy `when` are dropped from the rendered output. All items support an optional `decorative` boolean flag (see [Decorative items](#decorative-items)).
 
 ### `definition`
 
@@ -139,6 +125,37 @@ A warning text line (rendered in warning color).
 | `text` | Warning text (plain string or template expression) |
 | `when` | Condition; item hidden if falsy |
 
+### `subgroup`
+
+A container item that groups related items and optionally displays a title.
+
+```yaml
+- type: subgroup
+  title: "Tools"
+  hide_on_empty: false
+  items:
+    - type: definition
+      name: Adminer
+      icon: "🛢"
+      value: '{{ appURL .Runtime.Hosts.Adminer .Runtime.Ports.App .Runtime.UseHTTPS }}'
+      when: "{{ .Tools.Adminer.Enabled }}"
+    - type: definition
+      name: RedisInsight
+      icon: "📊"
+      value: '{{ appURL .Runtime.Hosts.RedisInsight .Runtime.Ports.App .Runtime.UseHTTPS }}'
+      when: "{{ .Tools.RedisInsight.Enabled }}"
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | string | — | Optional header for the subgroup (plain string or template expression). When empty, the subgroup is rendered without a heading. |
+| `items` | list | — | Required. Ordered list of child item definitions. Can contain any item type, including nested subgroups. |
+| `when` | string | — | Condition; subgroup dropped from output if falsy. Child items are still evaluated independently for their own `when` conditions. |
+| `hide_on_empty` | bool | `true` | Skip the subgroup entirely when no child item survives when-filtering. (Opposite of section default; subgroups default to `true`.) |
+| `decorative` | bool | `false` | When `true`, the subgroup never counts as content for the parent's `hide_on_empty` check, even if it produces output. |
+
+Subgroups can be nested arbitrarily.
+
 ### `separator`
 
 A blank line used to space content within a section.
@@ -147,7 +164,34 @@ A blank line used to space content within a section.
 - type: separator
 ```
 
-No fields. Useful when two adjacent subheaders or definitions need visual breathing room without introducing a new section.
+No fields. Useful when adjacent items need visual breathing room without introducing a new section.
+
+## Decorative items
+
+By default, items fall into two categories: **content** items that count toward section visibility, and **decorative** items that do not.
+
+| Type | Default `decorative` |
+|------|----------------------|
+| `definition` | `false` |
+| `info` | `false` |
+| `warning` | `false` |
+| `subgroup` | `false` |
+| `separator` | `true` |
+
+The `decorative` flag on any item type overrides its default:
+
+```yaml
+- type: warning
+  text: "Only informational"
+  decorative: true    # Makes this warning not count as content
+```
+
+```yaml
+- type: separator
+  decorative: false   # Makes this separator count as content, keeping the section visible
+```
+
+When `hide_on_empty: true` on a section or subgroup, the block is skipped entirely if no item survives both `when` filtering and the content-vs-decorative check. A block with only decorative items (or no items) may still render if it has a title and `hide_on_empty: false`.
 
 ## Template expressions
 
@@ -208,33 +252,39 @@ When true, a footer line is rendered below all sections (typically shows help hi
 sections:
   - id: devbox_info
     items:
-      - type: subheader
-        text: Devbox
-      - type: definition
-        name: Project
-        value: "{{ .Project.FullName }}"
-      - type: definition
-        name: State
-        value: "{{ .State }}"
-        when: "{{ .State }}"
+      - type: subgroup
+        title: Devbox
+        hide_on_empty: false
+        items:
+          - type: definition
+            name: Project
+            value: "{{ .Project.FullName }}"
+          - type: definition
+            name: State
+            value: "{{ .State }}"
+            when: "{{ .State }}"
 
   - id: urls
     title: URLs
     items:
-      - type: subheader
-        text: Main
-      - type: definition
-        name: URL
-        icon: "🔗"
-        value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
-      - type: subheader
-        text: Tools
+      - type: subgroup
+        title: Main
+        hide_on_empty: false
+        items:
+          - type: definition
+            name: URL
+            icon: "🔗"
+            value: "{{ appURL .Runtime.Hosts.Main .Runtime.Ports.App .Runtime.UseHTTPS }}"
+      - type: subgroup
+        title: Tools
         when: "{{ .Tools.AnyEnabled }}"
-      - type: definition
-        name: Adminer
-        icon: "🛢"
-        value: '{{ appURL .Runtime.Hosts.Adminer .Runtime.Ports.App .Runtime.UseHTTPS }}'
-        when: "{{ .Tools.Adminer.Enabled }}"
+        hide_on_empty: true
+        items:
+          - type: definition
+            name: Adminer
+            icon: "🛢"
+            value: '{{ appURL .Runtime.Hosts.Adminer .Runtime.Ports.App .Runtime.UseHTTPS }}'
+            when: "{{ .Tools.Adminer.Enabled }}"
 
   - id: hosts
     title: Hosts
@@ -253,8 +303,8 @@ footer: true
 - **Missing quotes around template expressions** — YAML parses `{{ ... }}` as a flow mapping if unquoted. Always quote template strings.
 - **Using config keys not in DevboxConfig struct** — only fields exposed on the typed `DevboxConfig` struct are available in templates. Custom keys added to `defaults.yml` are in `Raw` but not in template data unless explicitly exposed.
 - **`appURL` argument order** — the order is `host`, `port`, `useHTTPS`, then optional `path`. Swapping port and useHTTPS produces incorrect URLs silently.
-- **`hide_on_empty` with decorative items** — Items without `when:` conditions (e.g., subheaders, warnings) always count as content, so a section with any unfiltered item stays visible even if all data items are filtered. If you want a section to truly disappear when its data is empty, every item must carry a `when:` predicate, or the decorative items themselves must be gated.
-- **Footer rendering with `hide_on_empty`** — When `footer: true`, the footer is only rendered if at least one section was rendered. If all sections are hidden via `hide_on_empty`, the footer is also suppressed.
+- **`hide_on_empty` with decorative items** — By default, content items like `definition`, `info`, and `warning` count toward section visibility, but `separator` does not. Use the `decorative` flag to override: set `decorative: true` on a content item to exclude it from the visibility calculation, or set `decorative: false` on a separator to make it count as content. A section with `hide_on_empty: true` is fully hidden if no content item (after `when` filtering) survives.
+- **Footer rendering with `hide_on_empty`** — When `footer: true`, the footer is only rendered if at least one section produced output. If all sections are hidden via `hide_on_empty`, the footer is also suppressed.
 
 ## Related commands
 
