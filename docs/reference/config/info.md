@@ -53,11 +53,12 @@ footer: true
 
 ## Section fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique identifier for the section |
-| `title` | string | Optional header rendered above the item list |
-| `items` | list | Ordered list of item definitions |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | string | — | Unique identifier for the section |
+| `title` | string | — | Optional header rendered above the item list |
+| `items` | list | — | Ordered list of item definitions |
+| `hide_on_empty` | bool | `false` | Skip the section entirely (no title, no frame) when no item survives when-filtering. |
 
 ## Item types
 
@@ -288,6 +289,8 @@ footer: true
 - **Missing quotes around template expressions** — YAML parses `{{ ... }}` as a flow mapping if unquoted. Always quote template strings.
 - **Using config keys not in DevboxConfig struct** — only fields exposed on the typed `DevboxConfig` struct are available in templates. Custom keys added to `defaults.yml` are in `Raw` but not in template data unless explicitly exposed.
 - **`appURL` argument order** — the order is `host`, `port`, `useHTTPS`, then optional `path`. Swapping port and useHTTPS produces incorrect URLs silently.
+- **`hide_on_empty` with decorative items** — Items without `when:` conditions (e.g., subheaders, warnings) always count as content, so a section with any unfiltered item stays visible even if all data items are filtered. If you want a section to truly disappear when its data is empty, every item must carry a `when:` predicate, or the decorative items themselves must be gated.
+- **Footer rendering with `hide_on_empty`** — When `footer: true`, the footer is only rendered if at least one section was rendered. If all sections are hidden via `hide_on_empty`, the footer is also suppressed.
 
 ## Related commands
 

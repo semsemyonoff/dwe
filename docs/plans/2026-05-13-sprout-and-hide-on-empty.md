@@ -208,12 +208,12 @@ Recorded per `golang-dependency-management` skill checklist before adding the de
 - [x] run `go test ./internal/ui/...` — must pass before next task
 
 ### Task 7: Document `hide_on_empty`
-- [ ] `docs/reference/config/info.md`:
+- [x] `docs/reference/config/info.md`:
   - in the "Section fields" table, add row: `hide_on_empty | bool | false | Skip the section entirely (no title, no frame) when no item survives when-filtering.`
   - add a short "Common pitfalls" note: items without `when:` always count as content; if you want a section to truly disappear when its data is empty, every item must carry a `when:` predicate.
   - add a note on footer interaction: footer is suppressed when all sections are hidden.
-- [ ] no test changes
-- [ ] **Commit boundary** — stage Tasks 5–7 as commit `feat(info): hide_on_empty for sections`; ensure `make test` and `make lint` pass
+- [x] no test changes
+- [x] **Commit boundary** — stage Tasks 5–7 as commit `feat(info): hide_on_empty for sections`; ensure `make test` and `make lint` pass
 
 ### Task 8: Verify acceptance criteria
 - [ ] verify Task 1 outcome: `go doc devbox-cli/internal/tpl` shows the new FuncMap doc, sprout is in `go.mod`
