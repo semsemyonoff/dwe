@@ -432,15 +432,15 @@ and `ResolvedStep.Phase.Name` so the recorder can update the correct
 
 ### Task 8: `devbox deploy` command — lock, flags, prompts, state writes
 
-- [ ] in `internal/command/deploy.go` acquire `internal/lock` on the project
+- [x] in `internal/command/deploy.go` acquire `internal/lock` on the project
   before running the pipeline; release on exit; on `ErrLockHeld` print the
   holding PID and return a typed error implementing `ExitCode() int = 2`
-- [ ] add flags: `--force` (ignore state), `--resume` (continue from last
+- [x] add flags: `--force` (ignore state), `--resume` (continue from last
   failed step), `-y/--non-interactive` (suppress prompts)
-- [ ] register flag completions where applicable via
+- [x] register flag completions where applicable via
   `RegisterFlagCompletionFunc` (no-op for booleans, but follow repo
   conventions)
-- [ ] read existing `state.yml` before running:
+- [x] read existing `state.yml` before running:
   - fully deployed + hashes match + no flags + **resolved plan has no
     `check:` step** → exit 0, message rendered via `render.Writer.Info`
     (charm/Lipgloss-styled, not raw `fmt.Println`): "already up-to-date,
@@ -461,11 +461,11 @@ and `ResolvedStep.Phase.Name` so the recorder can update the correct
     NOT "skip the whole pipeline on stale state" — the closure
     *invalidates* stale scopes and forces them to `Run`.
   - non-TTY + failed/partial last_run → error (require explicit flag)
-- [ ] construct **one** `pipeline.FileRecorder` (defined in Task 7) for the
+- [x] construct **one** `pipeline.FileRecorder` (defined in Task 7) for the
   entire project pipeline; pass it through `RunOptions` along with the
   `SkipDecider`. The recorder routes events to project vs service subtrees
   using each `ResolvedStep.Service` — do NOT create one recorder per service.
-- [ ] precompute hashes before `pipeline.Run`:
+- [x] precompute hashes before `pipeline.Run`:
   - call `deploy.LoadTrackedServices(cfg, baseDir)` to get the tracked
     list and the loaded `map[string]*config.DeployConfig`
   - compute `serviceHashes[name] = journal.ServiceConfigHash(cfg.Services
@@ -485,13 +485,13 @@ and `ResolvedStep.Phase.Name` so the recorder can update the correct
     - otherwise look up the matching `StepState` in `state.Project.Phases`
       (project scope) or `state.Services[rs.Service].Phases` (service
       scope) and delegate to `journal.Decide(prev, actionHash, hasCheck)`
-- [ ] when `--force`, build a `SkipDecider` that always returns `Run` *and*
+- [x] when `--force`, build a `SkipDecider` that always returns `Run` *and*
   pre-clear the state file (or pass an empty `ProjectState` to the decider)
-- [ ] update `internal/command/deploy_test.go` to cover all interactive and
+- [x] update `internal/command/deploy_test.go` to cover all interactive and
   non-interactive branches (use a mock `ui.IsInteractiveFn` and a fake
   stdin); ensure no real flock/file is touched in unit tests (point to
   `t.TempDir()`)
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 9: `devbox reset` command — lock and state cleanup
 

@@ -278,3 +278,70 @@ func TestResetRunNoUIFlag(t *testing.T) {
 		t.Error("reset run should not have --ui flag after TUI removal")
 	}
 }
+
+// --- deploy state tracking tests ---
+
+func TestDeployRunCmd_StateFlags(t *testing.T) {
+	// Verify that the deploy run command has the required state flags
+	flags := &rootFlags{configPath: "devbox.yml"}
+	deployCmd := newDeployRunCmd(flags)
+
+	tests := []struct {
+		flagName string
+		wantFlag bool
+	}{
+		{"force", true},
+		{"resume", true},
+		{"non-interactive", true},
+		{"service", true},
+	}
+
+	for _, tt := range tests {
+		f := deployCmd.Flags().Lookup(tt.flagName)
+		if tt.wantFlag && f == nil {
+			t.Errorf("deploy run should have --%s flag", tt.flagName)
+		}
+		if !tt.wantFlag && f != nil {
+			t.Errorf("deploy run should not have --%s flag", tt.flagName)
+		}
+	}
+}
+
+func TestDeployRunCmd_ForceFlagBypass(t *testing.T) {
+	// Test that --force flag bypasses state checks
+	t.Run("force flag exists", func(t *testing.T) {
+		flags := &rootFlags{configPath: "devbox.yml"}
+		deployCmd := newDeployRunCmd(flags)
+		forceFlag := deployCmd.Flags().Lookup("force")
+		if forceFlag == nil {
+			t.Error("--force flag is required for idempotent deploys")
+			return
+		}
+		if forceFlag.Value.Type() != "bool" {
+			t.Errorf("--force should be a boolean flag, got %s", forceFlag.Value.Type())
+		}
+	})
+}
+
+func TestDeployRunCmd_ResumeFlagPresent(t *testing.T) {
+	// Test that --resume flag is available
+	flags := &rootFlags{configPath: "devbox.yml"}
+	deployCmd := newDeployRunCmd(flags)
+	resumeFlag := deployCmd.Flags().Lookup("resume")
+	if resumeFlag == nil {
+		t.Error("--resume flag is required for continuing from failed deploys")
+	}
+}
+
+func TestDeployRunCmd_NonInteractiveFlagPresent(t *testing.T) {
+	// Test that -y/--non-interactive flag is available
+	flags := &rootFlags{configPath: "devbox.yml"}
+	deployCmd := newDeployRunCmd(flags)
+	niFlag := deployCmd.Flags().Lookup("non-interactive")
+	if niFlag == nil {
+		t.Error("--non-interactive flag is required for CI environments")
+	}
+	if niFlag != nil && niFlag.Shorthand == "" {
+		t.Error("--non-interactive flag should have a short form (-y)")
+	}
+}

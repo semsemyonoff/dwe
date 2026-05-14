@@ -9,10 +9,13 @@ import (
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/lock"
 	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -88,8 +91,8 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 }
 
 // newDeployRunCmd creates the `devbox deploy run` command.
-// It executes the resolved deploy plan step by step, printing phase/step
-// progress and success messages directly — without generating a shell script.
+// It executes the resolved deploy plan step by step with state tracking,
+// idempotency, and optional resumption from prior failed runs.
 //
 // File logging is controlled by the top-level `log:` field in devbox/deploy.yml
 // (default: enabled). When enabled, devbox status messages are teed to
@@ -97,6 +100,9 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 // os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var serviceName string
+	var force bool
+	var resume bool
+	var nonInteractive bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -106,80 +112,272 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 Steps are run in declaration order. The .env file is regenerated as the implicit
 first step. Use --service to run only the steps relevant to a specific service.
 
+State tracking allows idempotent deploys: steps that previously succeeded with
+matching hashes are skipped on re-run. Use --force to ignore prior state and
+re-run all steps. Use --resume to continue from the last failed step in a
+partially deployed project.
+
 File logging is enabled by default for deploy and writes to .devbox/logs/deploy.log.
 Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 		Example: `  devbox deploy run
-  devbox deploy run --service main`,
+  devbox deploy run --service main
+  devbox deploy run --force
+  devbox deploy run --resume`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-
-			workDir := flags.ProjectRoot()
-			dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("loading docker config: %w", err)
-			}
-			if dockerCfg != nil {
-				if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
-					return fmt.Errorf("ensuring volumes: %w", err)
-				}
-			}
-
-			var steps []pipeline.ResolvedStep
-			if serviceName != "" {
-				if _, ok := cfg.Services[serviceName]; !ok {
-					return fmt.Errorf("service %q not found in config", serviceName)
-				}
-				steps, err = deploy.ResolveServicePlan(cfg, serviceName)
-			} else {
-				steps, err = deploy.ResolvePlan(cfg)
-			}
-			if err != nil {
-				return fmt.Errorf("resolving deploy plan: %w", err)
-			}
-
-			reg, err := loadCommandRegistry(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading command registry: %w", err)
-			}
-
-			logEnabled := cfg.Deploy.LogEnabled()
-			w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "deploy", logEnabled)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
-
-			rep := pipeline.NewPlainReporter(w)
-
-			// After .env is regenerated, load it into the current process
-			// environment so subsequent cmd: steps can reference its variables.
-			postStepHooks := map[string]func() error{
-				deploy.ImplicitEnvStep.Name: func() error {
-					return deploy.SourceDotEnv(filepath.Join(workDir, ".env"))
-				},
-			}
-
-			if err := pipeline.Run(steps, rep, "deploy", cfg, reg, workDir, logWriter, false, postStepHooks); err != nil {
-				if errors.Is(err, ErrSilent) && logEnabled {
-					w.Warning("Full output saved to: " + logPath)
-				}
-				return err
-			}
-
-			if logEnabled {
-				w.Info("Deploy log saved to: " + logPath)
-			}
-			return nil
+			return deployRunCmd(flags, serviceName, force, resume, nonInteractive)
 		},
 	}
 
 	cmd.Flags().StringVar(&serviceName, "service", "", "deploy a single service only")
+	cmd.Flags().BoolVar(&force, "force", false, "ignore state and re-run all steps")
+	cmd.Flags().BoolVar(&resume, "resume", false, "continue from the last failed step")
+	cmd.Flags().BoolVarP(&nonInteractive, "non-interactive", "y", false, "suppress interactive prompts")
 	return cmd
+}
+
+func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool) error {
+	workDir := flags.ProjectRoot()
+	stateDir := filepath.Join(workDir, ".devbox", "deploy")
+	statePath := filepath.Join(stateDir, "state.yml")
+	lockPath := filepath.Join(stateDir, "deploy.lock")
+
+	// Acquire file lock to prevent parallel deploys
+	lck, err := lock.Acquire(lockPath)
+	if err != nil {
+		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
+			return fmt.Errorf("cannot start deploy: lock held by process %d (use --force to override or wait for that process to finish)", heldErr.PID)
+		}
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer func() {
+		_ = lck.Release()
+	}()
+
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("loading docker config: %w", err)
+	}
+	if dockerCfg != nil {
+		if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
+			return fmt.Errorf("ensuring volumes: %w", err)
+		}
+	}
+
+	var steps []pipeline.ResolvedStep
+	if serviceName != "" {
+		if _, ok := cfg.Services[serviceName]; !ok {
+			return fmt.Errorf("service %q not found in config", serviceName)
+		}
+		steps, err = deploy.ResolveServicePlan(cfg, serviceName)
+	} else {
+		steps, err = deploy.ResolvePlan(cfg)
+	}
+	if err != nil {
+		return fmt.Errorf("resolving deploy plan: %w", err)
+	}
+
+	reg, err := loadCommandRegistry(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading command registry: %w", err)
+	}
+
+	logEnabled := cfg.Deploy.LogEnabled()
+	w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "deploy", logEnabled)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	rep := pipeline.NewPlainReporter(w)
+
+	// After .env is regenerated, load it into the current process
+	// environment so subsequent cmd: steps can reference its variables.
+	postStepHooks := map[string]func() error{
+		deploy.ImplicitEnvStep.Name: func() error {
+			return deploy.SourceDotEnv(filepath.Join(workDir, ".env"))
+		},
+	}
+
+	// Load existing state if present
+	state, err := journal.Load(statePath)
+	if err != nil {
+		return fmt.Errorf("loading state: %w", err)
+	}
+
+	baseDir := filepath.Dir(flags.configPath)
+
+	// Load project-level deploy config
+	projectDeploy, err := config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
+	if err != nil {
+		return fmt.Errorf("loading project deploy config: %w", err)
+	}
+
+	// Load tracked services and their deploy configs
+	trackedServices, svcDeploys, err := deploy.LoadTrackedServices(cfg, baseDir)
+	if err != nil {
+		return fmt.Errorf("loading tracked services: %w", err)
+	}
+
+	// Precompute current hashes for all tracked services
+	serviceHashes := make(map[string]string)
+	for _, name := range trackedServices {
+		svcCfg := cfg.Services[name]
+		serviceHashes[name] = journal.ServiceConfigHash(svcCfg, svcDeploys[name])
+	}
+	projectHash := journal.ProjectConfigHash(cfg, projectDeploy, svcDeploys, trackedServices)
+
+	// Check if we need to prompt before running
+	isInteractive := ui.IsInteractiveFn(os.Stdin) && !nonInteractive
+
+	if !force && state.Project.Status == journal.StatusDeployed {
+		// Check if all hashes match and there are no check: steps
+		hasCheckSteps := false
+		for _, rs := range steps {
+			if rs.Step.Check != nil {
+				hasCheckSteps = true
+				break
+			}
+		}
+
+		if !hasCheckSteps && state.Project.ConfigHash == projectHash {
+			// All services deployed, hashes match, no check steps — skip the pipeline
+			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
+			return nil
+		}
+
+		// Config hash diverged but state is deployed
+		if state.Project.ConfigHash != projectHash {
+			if isInteractive {
+				// Prompt for action
+				choice, err := ui.RunSelector(
+					"Deployed config changed. Choose action:",
+					[]ui.SelectorItem{
+						{Label: "Apply changes (skip unchanged steps)"},
+						{Label: "Full re-deploy (re-run all steps)"},
+						{Label: "Cancel"},
+					},
+				)
+				if err != nil {
+					return err
+				}
+				if choice == 2 {
+					return errors.New("deploy cancelled")
+				}
+				if choice == 1 {
+					force = true // Full re-deploy
+				}
+				// choice == 0: apply delta (default behavior, continue)
+			}
+		}
+	}
+
+	// Check for previously failed/partial runs
+	if !force && (state.Project.Status == journal.StatusFailed || state.Project.Status == journal.StatusPartial) {
+		if isInteractive {
+			w.Warning("Last deploy run failed or was incomplete. Resume or start fresh?")
+			choice, err := ui.RunSelector(
+				"Failed deploy detected:",
+				[]ui.SelectorItem{
+					{Label: "Resume from last failed step"},
+					{Label: "Full re-run (start from beginning)"},
+					{Label: "Cancel"},
+				},
+			)
+			if err != nil {
+				return err
+			}
+			if choice == 2 {
+				return errors.New("deploy cancelled")
+			}
+			if choice == 1 {
+				force = true // Full re-run
+			}
+			// choice == 0: resume (default)
+		} else if !resume {
+			// Non-interactive mode: error unless --resume or --force
+			return fmt.Errorf("last deploy failed or was incomplete; use --resume to continue or --force to start fresh")
+		}
+	}
+
+	// Build the skip decider closure
+	skipDecider := func(addr string, rs pipeline.ResolvedStep, actionHash string) journal.Decision {
+		if force {
+			return journal.Run
+		}
+
+		// Determine scope and check config hash
+		var prevStep *journal.StepState
+
+		if rs.Service == "" {
+			// Project-scope step
+			if state.Project.ConfigHash != projectHash {
+				// Project config changed; treat as absent
+				return journal.Run
+			}
+			if state.Project.Phases != nil {
+				if phase, ok := state.Project.Phases[rs.Phase.Name]; ok {
+					if step, ok := phase.Steps[rs.Step.Name]; ok {
+						prevStep = step
+					}
+				}
+			}
+		} else if state.Services != nil {
+			// Service-scope step
+			if svcState, ok := state.Services[rs.Service]; ok {
+				if svcState.ConfigHash != serviceHashes[rs.Service] {
+					// Service config changed; treat as absent
+					return journal.Run
+				}
+				if svcState.Phases != nil {
+					if phase, ok := svcState.Phases[rs.Phase.Name]; ok {
+						if step, ok := phase.Steps[rs.Step.Name]; ok {
+							prevStep = step
+						}
+					}
+				}
+			}
+		}
+
+		hasCheck := rs.Step.Check != nil
+		return journal.Decide(prevStep, actionHash, hasCheck)
+	}
+
+	// Construct the FileRecorder
+	recorder := pipeline.NewFileRecorder(statePath, state, serviceHashes, projectHash)
+
+	// Run the pipeline with state tracking
+	opts := pipeline.RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "deploy",
+		Config:       cfg,
+		Registry:     reg,
+		WorkDir:      workDir,
+		LogWriter:    logWriter,
+		SkipConfirm:  false,
+		PostStepHook: postStepHooks,
+		Recorder:     recorder,
+		SkipDecider:  skipDecider,
+	}
+
+	if err := pipeline.RunWithOptions(opts); err != nil {
+		if errors.Is(err, ErrSilent) && logEnabled {
+			w.Warning("Full output saved to: " + logPath)
+		}
+		return err
+	}
+
+	if logEnabled {
+		w.Info("Deploy log saved to: " + logPath)
+	}
+	return nil
 }
 
 func newDeployStepCmd(flags *rootFlags) *cobra.Command {
