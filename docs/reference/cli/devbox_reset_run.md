@@ -7,7 +7,7 @@ Execute the reset pipeline
 Execute the reset pipeline from devbox/reset.yml.
 
 File logging is disabled by default for reset. Enable it with 'log: true' at
-the top of devbox/reset.yml; output will be written to logs/reset.log.
+the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.
 
 ```
 devbox reset run [flags]

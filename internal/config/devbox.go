@@ -97,7 +97,7 @@ type DevboxConfig struct {
 // DeployConfig holds the full deploy pipeline loaded from devbox/deploy.yml.
 // It is loaded separately and not part of the 3-layer config merge.
 //
-// Log enables/disables file logging at logs/<pipeline>.log for the pipeline run.
+// Log enables/disables file logging at .devbox/logs/<pipeline>.log for the pipeline run.
 // nil means "use loader default": LoadDeployConfig defaults to true,
 // LoadResetConfig defaults to false. Set explicitly via top-level `log: true|false`.
 type DeployConfig struct {

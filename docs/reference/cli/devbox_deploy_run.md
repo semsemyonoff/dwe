@@ -9,7 +9,7 @@ Execute the full deploy pipeline from devbox/deploy.yml phase by phase.
 Steps are run in declaration order. The .env file is regenerated as the implicit
 first step. Use --service to run only the steps relevant to a specific service.
 
-File logging is enabled by default for deploy and writes to logs/deploy.log.
+File logging is enabled by default for deploy and writes to .devbox/logs/deploy.log.
 Disable it with 'log: false' at the top of devbox/deploy.yml.
 
 ```

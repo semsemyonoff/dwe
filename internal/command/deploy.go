@@ -93,7 +93,7 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 //
 // File logging is controlled by the top-level `log:` field in devbox/deploy.yml
 // (default: enabled). When enabled, devbox status messages are teed to
-// logs/deploy.log; child process output (docker, make) goes directly to
+// .devbox/logs/deploy.log; child process output (docker, make) goes directly to
 // os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var serviceName string
@@ -106,7 +106,7 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 Steps are run in declaration order. The .env file is regenerated as the implicit
 first step. Use --service to run only the steps relevant to a specific service.
 
-File logging is enabled by default for deploy and writes to logs/deploy.log.
+File logging is enabled by default for deploy and writes to .devbox/logs/deploy.log.
 Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 		Example: `  devbox deploy run
   devbox deploy run --service main`,

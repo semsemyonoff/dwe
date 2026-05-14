@@ -28,6 +28,16 @@ Overview of all configuration files in the devbox system.
 | `devbox/info.yml` | yes | standalone | Info dashboard sections |
 | `devbox/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
 
+## Runtime artifacts
+
+The `.devbox/` directory contains Devbox-managed artifacts and is **gitignored**:
+
+- `.devbox/logs/` — pipeline logs (deploy, reset, lifecycle run/stop)
+- `.devbox/deploy/deploy.lock` — deployment lock file (Unix-only; prevents parallel deploys)
+- `.devbox/deploy/state.yml` — deployment state journal (tracks service deploy status and hashes)
+
+Add `.devbox/` to your project's `.gitignore` if not already present.
+
 ## Loader topology
 
 ```mermaid

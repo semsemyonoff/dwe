@@ -59,7 +59,7 @@ run:
     mode: prompt        # prompt | auto | check | off
   show_info: true
   final_message: "Project is ready for work!"
-  log: false            # tee status + child stdout/stderr to logs/run.log
+  log: false            # tee status + child stdout/stderr to .devbox/logs/run.log
   phases:
     - name: <phase>
       description: <text>
@@ -76,7 +76,7 @@ run:
 
 stop:
   final_message: "Project is stopped. Have a nice day!"
-  log: false            # tee status + child stdout/stderr to logs/stop.log
+  log: false            # tee status + child stdout/stderr to .devbox/logs/stop.log
   phases:
     - name: <phase>
       description: <text>
@@ -135,11 +135,11 @@ When the probe finds a dirty tree, no upstream, or a fetch failure it warns and 
 
 Top-level field on both `run:` and `stop:`. Defaults to `false` for lifecycle pipelines (in contrast to `deploy.yml`, where the default is `true`).
 
-When enabled, devbox status messages and child-process stdout/stderr are teed to `logs/<name>.log` (with ANSI codes stripped) — `logs/run.log` for run, `logs/stop.log` for stop.
+When enabled, devbox status messages and child-process stdout/stderr are teed to `.devbox/logs/<name>.log` (with ANSI codes stripped) — `.devbox/logs/run.log` for run, `.devbox/logs/stop.log` for stop.
 
 ```yaml
 run:
-  log: true     # tee to logs/run.log
+  log: true     # tee to .devbox/logs/run.log
 ```
 
 ## Hook phases

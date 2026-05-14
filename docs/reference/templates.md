@@ -65,10 +65,10 @@ The string between `{{ }}` is the same in every YAML form — only the wrapping 
 
 ```yaml
 # double-quoted scalar: inner " must be escaped as \"
-path: "logs/{{ now | date \"2006-01-02\" }}.log"
+path: ".devbox/logs/{{ now | date \"2006-01-02\" }}.log"
 
 # single-quoted scalar: no escaping needed (recommended for templates)
-path: 'logs/{{ now | date "2006-01-02" }}.log'
+path: '.devbox/logs/{{ now | date "2006-01-02" }}.log'
 
 # literal block scalar: no escaping needed
 cmd: |

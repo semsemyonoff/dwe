@@ -370,7 +370,7 @@ They walk maps and return `""` on miss — useful when the key has a dot or a nu
 files:
   log:
     access: write
-    path: "logs/{{ .Params.task }}_{{ now | date \"2006-01-02_15-04-05\" }}.log"
+    path: ".devbox/logs/{{ .Params.task }}_{{ now | date \"2006-01-02_15-04-05\" }}.log"
     mkdir: true
 
 # pipeline form: pass a value through a function

@@ -66,7 +66,7 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 // Use --yes to skip confirmation prompts.
 //
 // File logging is controlled by the top-level `log:` field in devbox/reset.yml
-// (default: disabled). Enable with `log: true` to write logs/reset.log.
+// (default: disabled). Enable with `log: true` to write .devbox/logs/reset.log.
 func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
 
@@ -76,7 +76,7 @@ func newResetRunCmd(flags *rootFlags) *cobra.Command {
 		Long: `Execute the reset pipeline from devbox/reset.yml.
 
 File logging is disabled by default for reset. Enable it with 'log: true' at
-the top of devbox/reset.yml; output will be written to logs/reset.log.`,
+the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

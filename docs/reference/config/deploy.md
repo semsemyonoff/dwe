@@ -61,7 +61,7 @@ flowchart TB
 
   svc --> INL
   INL -->|topo-sorted by depends_on| PLAN[Resolved plan]
-  PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>logs/deploy.log)]
+  PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>.devbox/logs/deploy.log)]
 
   R[devbox/reset.yml] --> RPLAN[Resolved plan] --> RUN2[(PlainReporter)]
 ```
@@ -71,7 +71,7 @@ Every service declared in `services.yml` may contribute its own `devbox/deploy/<
 ## Structure
 
 ```yaml
-log: true                          # optional: tee output to logs/<pipeline>.log
+log: true                          # optional: tee output to .devbox/logs/<pipeline>.log
 
 phases:
   # Normal phase: supports when, untracked, and steps
@@ -110,7 +110,7 @@ phases:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee devbox status messages and child stdout/stderr to `logs/<pipeline>.log` (ANSI codes stripped). |
+| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee devbox status messages and child stdout/stderr to `.devbox/logs/<pipeline>.log` (ANSI codes stripped). |
 | `phases` | list | — | Ordered list of phases. |
 
 ## Phase fields

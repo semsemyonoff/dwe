@@ -12,8 +12,8 @@ import (
 // RunPhases resolves and executes a set of lifecycle pipeline phases.
 //
 // name is the human-readable label passed to the reporter (e.g. "run", "stop").
-// logFileName is the base name (without extension) for the log file written to logs/.
-// logEnabled toggles file logging at logs/<logFileName>.log; when false, output
+// logFileName is the base name (without extension) for the log file written to .devbox/logs/.
+// logEnabled toggles file logging at .devbox/logs/<logFileName>.log; when false, output
 // goes only to stdout and no log file is created.
 // Phases are resolved with an empty service (lifecycle is orchestrator-only).
 //

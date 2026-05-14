@@ -24,9 +24,9 @@ func (s *ansiStripper) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// OpenPipelineLog opens (or skips) a pipeline log file at logs/<name>.log.
+// OpenPipelineLog opens (or skips) a pipeline log file at .devbox/logs/<name>.log.
 //
-// When enabled is true, it ensures the logs directory exists, creates the log
+// When enabled is true, it ensures the .devbox/logs directory exists, creates the log
 // file, and returns a Writer that tees devbox status messages to both stdout
 // and the log file (with ANSI codes stripped from the file copy). The returned
 // io.Writer is the raw log file (for child-process tee) and logPath is the
@@ -38,7 +38,7 @@ func OpenPipelineLog(workDir, name string, enabled bool) (*render.Writer, io.Wri
 	if !enabled {
 		return render.Stdout(), nil, "", func() {}, nil
 	}
-	logsDir := filepath.Join(workDir, "logs")
+	logsDir := filepath.Join(workDir, ".devbox", "logs")
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
 		return nil, nil, "", func() {}, fmt.Errorf("creating logs directory %s: %w", logsDir, err)
 	}
