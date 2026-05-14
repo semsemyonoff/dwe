@@ -407,18 +407,18 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] grep production code for the removed identifiers: `newWaitCmd`, `newDockerWaitCmd`, `newUpCmd`, `newDownCmd`, `newLogsCmd`, `newPsCmd`, `newResetConfigCheckCmd` — all must return zero matches
-- [ ] grep the docs tree and `AGENTS.md` for `devbox wait`, `devbox up`, `devbox down`, `devbox logs`, `devbox ps`, `devbox docker wait`, `devbox reset config check` — all must return zero matches outside historical changelog notes
-- [ ] verify the registry: `internal/builtin/builtin.go` `registry` map contains `"docker_wait_healthy"`
-- [ ] verify the validate command tree resolves: `bin/devbox validate --help` lists `config`, `templates`, `commands`; `bin/devbox validate config --help` lists `devbox`, `services`, `docker`, `info`, `styles`, `lifecycle`, `deploy`, `reset`, `service-deploy`; `bin/devbox validate templates --help` lists `ide`, `ai`
-- [ ] exit-code matrix verified by unit tests in Task 6:
-      - all OK → 0
-      - one warn, no `--strict` → 0
-      - one warn, `--strict` → 1
-      - one error → 1
-- [ ] `make test` — full suite green
-- [ ] `make lint` — clean
-- [ ] `make build` succeeds
+- [x] grep production code for the removed identifiers: `newWaitCmd`, `newDockerWaitCmd`, `newUpCmd`, `newDownCmd`, `newLogsCmd`, `newPsCmd`, `newResetConfigCheckCmd` — all must return zero matches
+- [x] grep the docs tree and `AGENTS.md` for `devbox wait`, `devbox up`, `devbox down`, `devbox logs`, `devbox ps`, `devbox docker wait`, `devbox reset config check` — all must return zero matches outside historical changelog notes (fixed 3 references in docs)
+- [x] verify the registry: `internal/builtin/builtin.go` `registry` map contains `"docker_wait_healthy"`
+- [x] verify the validate command tree resolves: `bin/devbox validate --help` lists `config`, `templates`, `commands`; `bin/devbox validate config --help` lists `devbox`, `services`, `docker`, `info`, `styles`, `lifecycle`, `deploy`, `reset`, `service-deploy`; `bin/devbox validate templates --help` lists `ide`, `ai`
+- [x] exit-code matrix verified by unit tests in Task 6:
+      - all OK → 0 ✓
+      - one warn, no `--strict` → 0 ✓
+      - one warn, `--strict` → 1 (verified via unit tests)
+      - one error → 1 ✓
+- [x] `make test` — full suite green (all tests passed)
+- [x] `make lint` — clean (0 issues)
+- [x] `make build` succeeds
 
 ### Task 10: Final docs sync
 

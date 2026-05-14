@@ -235,4 +235,4 @@ A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
 - `devbox run --update <mode>` — override the configured mode
 - `devbox stop` — execute the stop pipeline
 - `devbox restart` — `stop`, then `run --no-update`
-- `devbox up` / `devbox down` — raw Docker Compose passthrough (does not use this pipeline)
+- `devbox docker up` / `devbox docker down` — raw Docker Compose passthrough (does not use this pipeline)

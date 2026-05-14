@@ -106,7 +106,7 @@ args:
   build: ["--progress", "plain"]
 ```
 
-Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`, `pull`, `build`. (Health-poll args for `devbox docker wait` are not user-configurable — the wait command builds its own poll loop in Go.)
+Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`, `pull`, `build`. (Container health checks use the `docker_wait_healthy` builtin in pipeline steps, which is configurable via `timeout` and `interval` parameters.)
 
 When overriding in `docker.local.yml`, the list replaces the tracked default entirely (lists do not merge):
 
@@ -179,7 +179,7 @@ topology:
 |-------|-------------|
 | `hidden` | Compose service names excluded from the topology tree and health checks |
 
-Useful for init containers that run once and exit — hiding them prevents `devbox docker wait` from waiting on them.
+Useful for init containers that run once and exit — hiding them prevents the `docker_wait_healthy` builtin from waiting on them.
 
 ### `resources`
 
