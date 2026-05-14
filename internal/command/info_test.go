@@ -209,6 +209,36 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 	}
 }
 
+// TestInfoCmd_MissingInfoYMLIsGraceful verifies that `devbox info` does not
+// error when devbox/info.yml is absent. It should render a minimal summary
+// (project name) on stdout and a warning on stderr.
+func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	// Intentionally no info.yml written.
+
+	root := NewRootCmd()
+	var out bytes.Buffer
+	var errBuf bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errBuf)
+	root.SetArgs([]string{"info"})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+
+	if err := root.Execute(); err != nil {
+		t.Errorf("info command returned error without info.yml: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "infotest") {
+		t.Errorf("expected project name in minimal summary, got stdout:\n%s", out.String())
+	}
+	if !strings.Contains(errBuf.String(), "info.yml") {
+		t.Errorf("expected warning about missing info.yml on stderr, got:\n%s", errBuf.String())
+	}
+}
+
 // TestInfoCmd_MissingConfig returns an error when devbox.yml is not found.
 func TestInfoCmd_MissingConfig(t *testing.T) {
 	root := NewRootCmd()
