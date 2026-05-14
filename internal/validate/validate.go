@@ -126,6 +126,9 @@ func Aggregate(diags []Diagnostic) Summary {
 			summary.Infos++
 		case SeverityOK:
 			summary.OKs++
+		default:
+			// Treat unrecognized severity as an error so it triggers non-zero exit.
+			summary.Errors++
 		}
 	}
 	return summary
