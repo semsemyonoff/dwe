@@ -383,15 +383,15 @@ carry the originating `ResolvedStep.Service` (empty string = project scope)
 and `ResolvedStep.Phase.Name` so the recorder can update the correct
 `services.<name>.phases.<phase>.steps.<step>` (or project-level) entry.
 
-- [ ] create `internal/pipeline/file_recorder.go` with `FileRecorder` that
+- [x] create `internal/pipeline/file_recorder.go` with `FileRecorder` that
   implements the `Recorder` interface defined in Task 6 (no interface
   amendment needed — Task 6 already specifies the final
   `ResolvedStep`-aware shape) and uses `internal/deploy/journal` for types
   and I/O
-- [ ] no per-step `actionHash` cache — every event carries `actionHash`
+- [x] no per-step `actionHash` cache — every event carries `actionHash`
   directly per Task 6's interface, so the recorder just reads it from
   the event when stamping `StepState.ActionHash`
-- [ ] **`FileRecorder` is per-deploy-invocation, not per-scope**: construct
+- [x] **`FileRecorder` is per-deploy-invocation, not per-scope**: construct
   one instance for an entire `devbox deploy` run; it routes each step to
   the right state subtree using `rs.Service` and `rs.Phase.Name`. Empty
   `rs.Service` → updates
@@ -399,10 +399,10 @@ and `ResolvedStep.Phase.Name` so the recorder can update the correct
   ARE journaled — Task 1 adds the `project.phases` subtree for exactly
   this reason). Non-empty `rs.Service` → updates
   `services.<rs.Service>.phases.<rs.Phase.Name>.steps.<step.Name>`.
-- [ ] accumulate step results in memory; flush to disk (`journal.Save`) on
+- [x] accumulate step results in memory; flush to disk (`journal.Save`) on
   every step finish *and* on `OnPipelineFinish` so a crash mid-deploy
   leaves a usable `state.yml`
-- [ ] **`FileRecorder` constructor accepts pre-computed hashes**, never
+- [x] **`FileRecorder` constructor accepts pre-computed hashes**, never
   computes them itself:
   - `serviceConfigHashes map[string]string` — current
     `journal.ServiceConfigHash` per tracked service
@@ -410,25 +410,25 @@ and `ResolvedStep.Phase.Name` so the recorder can update the correct
   - Caller (Task 8) computes these once before `pipeline.Run` and hands
     them in. Keeps the recorder free of config-loading concerns and the
     `journal` package free of pipeline knowledge.
-- [ ] on `OnPipelineFinish`: for every service that appeared in this run,
+- [x] on `OnPipelineFinish`: for every service that appeared in this run,
   set `ServiceState.Status` (derived from its phase outcomes) and stamp
   `ServiceState.ConfigHash` from the constructor-supplied map. Stamp
   `project.config_hash` from the supplied `projectConfigHash`. Then call
   `journal.Recompute` to derive *status aggregates only*.
-- [ ] add `journal.Recompute(p *ProjectState)` — **status only, never
+- [x] add `journal.Recompute(p *ProjectState)` — **status only, never
   hashes**. Derives `project.status` from per-service statuses (all
   deployed → deployed; any failed → failed; mixed deployed+not_deployed →
   partial; none deployed → not_deployed) and `project.last_run.status`
   from per-phase outcomes. Config hashes are owned by the caller and
   passed in via the recorder constructor.
-- [ ] write tests:
+- [x] write tests:
   - mixed project+service steps in one run → state file has correct subtree
     placement
   - `FileRecorder` fills `state.yml` across ok/failed/partial scenarios
   - service appears in run but all its steps skipped → service status set
     correctly (from existing prev state, not "not_deployed")
   - `Recompute` covers the full matrix of service states
-- [ ] run `make test`, `make test-race`, and `make lint`
+- [x] run `make test`, `make test-race`, and `make lint`
 
 ### Task 8: `devbox deploy` command — lock, flags, prompts, state writes
 
