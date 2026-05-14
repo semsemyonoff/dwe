@@ -174,9 +174,11 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, scope
 	registry := buildRegistry()
 	diags := registry.Run(ctx, scope...)
 
-	// Render the diagnostics table.
+	// Render the diagnostics table (skip when no rows to avoid an empty bordered box).
 	rows := ui.FormatDiagnostics(diags, quiet)
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderDiagnosticsTable(rows))
+	if len(rows) > 0 {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderDiagnosticsTable(rows))
+	}
 
 	// Compute summary and print it.
 	summary := validate.Aggregate(diags)

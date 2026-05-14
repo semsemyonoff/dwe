@@ -79,10 +79,8 @@ Run 'devbox info' for the full info dashboard.`,
 			if isValidateCommand(cmd) {
 				loc, found, err := project.Locate(configArg)
 				if err != nil {
-					if errors.Is(err, project.ErrNotFound) && allowedWithoutProject(cmd) {
-						flags.stylesCfg = applyStyles("", cmd.ErrOrStderr())
-						return nil
-					}
+					// project.Locate never returns ErrNotFound as an error (discovery miss
+					// returns (zero, false, nil)); propagate any real error immediately.
 					return err
 				}
 				if found {
