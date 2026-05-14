@@ -354,8 +354,8 @@ func validateSymlinkEntry(e SymlinkEntry, renderDests map[string]bool, seenLinks
 	return nil
 }
 
-// agentsTemplateData holds the context for rendering agents templates.
-type agentsTemplateData struct {
+// TemplateData holds the context for rendering agents templates.
+type TemplateData struct {
 	Project    config.ProjectConfig
 	Service    string
 	ServiceCfg config.ServiceConfig
@@ -371,7 +371,7 @@ type agentsTemplateData struct {
 // dest: relative destination path (within hub dir)
 // absHubDir: resolved absolute service hub directory
 // absRoot: resolved absolute project root
-func RenderTemplateFile(sourcePath string, data agentsTemplateData, dest, absHubDir, absRoot string) error {
+func RenderTemplateFile(sourcePath string, data TemplateData, dest, absHubDir, absRoot string) error {
 	// Read template file
 	tplBytes, err := os.ReadFile(sourcePath)
 	if err != nil {

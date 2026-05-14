@@ -49,7 +49,7 @@ func WaitContainersHealthy(ids []string, getHealth HealthGetFn, attempts int, in
 		}
 
 		if allDone {
-			if w != nil {
+			if w != nil && len(warned) < len(ids) {
 				w.Success("all containers healthy")
 			}
 			return nil

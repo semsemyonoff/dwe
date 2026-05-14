@@ -349,8 +349,8 @@ func WalkPack(packDir string) ([]PackEntry, error) {
 	return entries, nil
 }
 
-// ideTemplateData is passed to IDE config templates.
-type ideTemplateData struct {
+// TemplateData is passed to IDE config templates.
+type TemplateData struct {
 	Project    config.ProjectConfig
 	Service    string
 	ServiceCfg config.ServiceConfig
@@ -366,7 +366,7 @@ type ideTemplateData struct {
 //
 // The function enforces that dest (after resolution) is contained within absDir.
 // It also enforces that absDir is contained within absRoot.
-func RenderTemplateFile(sourcePath string, data ideTemplateData, dest, absDir, absRoot string) error {
+func RenderTemplateFile(sourcePath string, data TemplateData, dest, absDir, absRoot string) error {
 	// Read template file
 	tplBytes, err := os.ReadFile(sourcePath)
 	if err != nil {

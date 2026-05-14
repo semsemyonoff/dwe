@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	aipkg "devbox-cli/internal/templates/ai"
 )
 
 // setupServicesConfig writes a devbox/services.yml file with the given YAML content.
@@ -54,7 +55,7 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 		},
 	}
 
-	pack, err := resolveAgentsTemplatePack(svc, projectRoot, "myservice")
+	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestResolveAgentsTemplatePack_explicitPackMissing(t *testing.T) {
 		},
 	}
 
-	_, err := resolveAgentsTemplatePack(svc, projectRoot, "myservice")
+	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for missing explicit pack")
 	}
@@ -97,7 +98,7 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 		},
 	}
 
-	pack, err := resolveAgentsTemplatePack(svc, projectRoot, "api")
+	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "api")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -121,7 +122,7 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 		},
 	}
 
-	pack, err := resolveAgentsTemplatePack(svc, projectRoot, "notfound")
+	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "notfound")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestResolveAgentsTemplatePack_implicitBothMissing(t *testing.T) {
 		},
 	}
 
-	_, err := resolveAgentsTemplatePack(svc, projectRoot, "myservice")
+	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error when both candidates missing")
 	}
@@ -175,7 +176,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 		},
 	}
 
-	_, err := resolveAgentsTemplatePack(svc, projectRoot, "myservice")
+	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for symlinked pack")
 	}
@@ -203,7 +204,7 @@ func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 		},
 	}
 
-	_, err := resolveAgentsTemplatePack(svc, projectRoot, "myservice")
+	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for non-dir pack")
 	}
@@ -233,7 +234,7 @@ func TestResolveAgentsTemplatePack_invalidTemplateKey(t *testing.T) {
 				},
 			}
 
-			_, err := resolveAgentsTemplatePack(svc, projectRoot, "myservice")
+			_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 			if err == nil {
 				t.Fatalf("expected error for %s", test.label)
 			}
@@ -262,7 +263,7 @@ func TestResolveAgentsTemplatePack_invalidServiceName(t *testing.T) {
 				},
 			}
 
-			_, err := resolveAgentsTemplatePack(svc, projectRoot, test.serviceName)
+			_, err := aipkg.ResolveTemplatePack(svc, projectRoot, test.serviceName)
 			if err == nil {
 				t.Fatalf("expected error for %s", test.label)
 			}
@@ -287,7 +288,7 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 		},
 	}
 
-	pack, err := resolveAgentsTemplatePack(svc, projectRoot, "myapi")
+	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myapi")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -314,7 +315,7 @@ symlinks:
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	m, err := loadAgentsManifest(packDir)
+	m, err := aipkg.LoadManifest(packDir)
 	if err != nil {
 		t.Fatalf("loadAgentsManifest: %v", err)
 	}
@@ -332,7 +333,7 @@ symlinks:
 func TestLoadAgentsManifest_missing(t *testing.T) {
 	packDir := t.TempDir()
 
-	_, err := loadAgentsManifest(packDir)
+	_, err := aipkg.LoadManifest(packDir)
 	if err == nil {
 		t.Fatal("expected error for missing manifest")
 	}
@@ -354,7 +355,7 @@ unknown_field: value
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	_, err := loadAgentsManifest(packDir)
+	_, err := aipkg.LoadManifest(packDir)
 	if err == nil {
 		t.Fatal("expected error for unknown field")
 	}
@@ -362,8 +363,8 @@ unknown_field: value
 
 // TestValidateAgentsManifest_empty rejects empty manifest.
 func TestValidateAgentsManifest_empty(t *testing.T) {
-	m := &agentsManifest{}
-	err := validateAgentsManifest(m, t.TempDir())
+	m := &aipkg.Manifest{}
+	err := aipkg.ValidateManifest(m, t.TempDir())
 	if err == nil {
 		t.Fatal("expected error for empty manifest")
 	}
@@ -382,13 +383,13 @@ func TestValidateAgentsManifest_fromEscaping(t *testing.T) {
 		t.Fatalf("write outside file: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "../outside.tmpl", To: "test"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for escaping from")
 	}
@@ -405,13 +406,13 @@ func TestValidateAgentsManifest_fromNoTmplSuffix(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "test.txt", To: "test"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for non-.tmpl from")
 	}
@@ -422,13 +423,13 @@ func TestValidateAgentsManifest_fromNoTmplSuffix(t *testing.T) {
 
 // TestValidateAgentsManifest_fromNotExist rejects non-existent `from` file.
 func TestValidateAgentsManifest_fromNotExist(t *testing.T) {
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "missing.tmpl", To: "test"},
 		},
 	}
 
-	err := validateAgentsManifest(m, t.TempDir())
+	err := aipkg.ValidateManifest(m, t.TempDir())
 	if err == nil {
 		t.Fatal("expected error for missing from file")
 	}
@@ -450,13 +451,13 @@ func TestValidateAgentsManifest_fromIsSymlink(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "link.tmpl", To: "test"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for symlink from")
 	}
@@ -479,13 +480,13 @@ func TestValidateAgentsManifest_fromSymlinkedParent(t *testing.T) {
 		t.Fatalf("create symlink dir: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "symdir/evil.tmpl", To: "test"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for symlinked parent directory")
 	}
@@ -502,13 +503,13 @@ func TestValidateAgentsManifest_fromIsDirectory(t *testing.T) {
 		t.Fatalf("create subdir: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "subdir.tmpl", To: "test"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for directory from")
 	}
@@ -525,13 +526,13 @@ func TestValidateAgentsManifest_toEscaping(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "test.tmpl", To: "../escape"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for escaping to")
 	}
@@ -548,16 +549,16 @@ func TestValidateAgentsManifest_symlinkToNotMatching(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "test.tmpl", To: "AGENTS.md"},
 		},
-		Symlinks: []agentsSymlinkEntry{
+		Symlinks: []aipkg.SymlinkEntry{
 			{Link: "CLAUDE.md", To: "nonexistent.md"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for symlink to not matching render")
 	}
@@ -578,14 +579,14 @@ func TestValidateAgentsManifest_duplicateRenderDest(t *testing.T) {
 		t.Fatalf("write file2: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "file1.tmpl", To: "AGENTS.md"},
 			{From: "file2.tmpl", To: "AGENTS.md"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for duplicate render destination")
 	}
@@ -602,17 +603,17 @@ func TestValidateAgentsManifest_duplicateSymlinkLink(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "test.tmpl", To: "AGENTS.md"},
 		},
-		Symlinks: []agentsSymlinkEntry{
+		Symlinks: []aipkg.SymlinkEntry{
 			{Link: "CLAUDE.md", To: "AGENTS.md"},
 			{Link: "CLAUDE.md", To: "AGENTS.md"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err == nil {
 		t.Fatal("expected error for duplicate symlink link")
 	}
@@ -629,16 +630,16 @@ func TestValidateAgentsManifest_nestedPaths(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "test.tmpl", To: ".claude/AGENTS.md"},
 		},
-		Symlinks: []agentsSymlinkEntry{
+		Symlinks: []aipkg.SymlinkEntry{
 			{Link: ".claude/CLAUDE.md", To: ".claude/AGENTS.md"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err != nil {
 		t.Errorf("nested paths should be allowed: %v", err)
 	}
@@ -656,17 +657,17 @@ func TestValidateAgentsManifest_validFull(t *testing.T) {
 		t.Fatalf("write file2: %v", err)
 	}
 
-	m := &agentsManifest{
-		Render: []agentsRenderEntry{
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
 			{From: "agents.tmpl", To: "AGENTS.md"},
 			{From: "claude.tmpl", To: "CLAUDE.md"},
 		},
-		Symlinks: []agentsSymlinkEntry{
+		Symlinks: []aipkg.SymlinkEntry{
 			{Link: ".claude/AGENTS.md", To: "AGENTS.md"},
 		},
 	}
 
-	err := validateAgentsManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, packDir)
 	if err != nil {
 		t.Errorf("valid manifest should not error: %v", err)
 	}
@@ -687,13 +688,13 @@ func TestRenderAgentsTemplateFile_fresh(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	data := agentsTemplateData{
+	data := aipkg.TemplateData{
 		Project: config.ProjectConfig{Name: "myproject"},
 		Service: "api",
 	}
 
 	dest := "AGENTS.md"
-	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
 	if err != nil {
 		t.Fatalf("renderAgentsTemplateFile: %v", err)
 	}
@@ -725,11 +726,11 @@ func TestRenderAgentsTemplateFile_idempotent(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	data := agentsTemplateData{Service: "api"}
+	data := aipkg.TemplateData{Service: "api"}
 	dest := "AGENTS.md"
 
 	// First render
-	if err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
+	if err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
 		t.Fatalf("first render: %v", err)
 	}
 
@@ -740,7 +741,7 @@ func TestRenderAgentsTemplateFile_idempotent(t *testing.T) {
 	}
 
 	// Second render (idempotent)
-	if err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
+	if err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
 		t.Fatalf("second render: %v", err)
 	}
 
@@ -778,10 +779,10 @@ func TestRenderAgentsTemplateFile_nestedPath(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	data := agentsTemplateData{}
+	data := aipkg.TemplateData{}
 	dest := ".claude/AGENTS.md"
 
-	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
 	if err != nil {
 		t.Fatalf("renderAgentsTemplateFile: %v", err)
 	}
@@ -805,10 +806,10 @@ func TestRenderAgentsTemplateFile_escapingDest(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	data := agentsTemplateData{}
+	data := aipkg.TemplateData{}
 	dest := "../escape.md"
 
-	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error for escaping destination")
 	}
@@ -838,10 +839,10 @@ func TestRenderAgentsTemplateFile_symlinkInDestDir(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	data := agentsTemplateData{}
+	data := aipkg.TemplateData{}
 	dest := ".claude/AGENTS.md"
 
-	err := renderAgentsTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when destination dir contains a symlink component")
 	}
@@ -855,13 +856,8 @@ func TestEnsureRelativeSymlink_fresh(t *testing.T) {
 	hubDir := t.TempDir()
 	projectRoot := filepath.Dir(hubDir)
 
-	changed, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
-	if err != nil {
-		t.Fatalf("ensureRelativeSymlink: %v", err)
-	}
-
-	if !changed {
-		t.Error("expected changed=true for new symlink")
+	if err := aipkg.EnsureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot); err != nil {
+		t.Fatalf("EnsureRelativeSymlink: %v", err)
 	}
 
 	// Verify symlink exists
@@ -875,27 +871,29 @@ func TestEnsureRelativeSymlink_fresh(t *testing.T) {
 	}
 }
 
-// TestEnsureRelativeSymlink_idempotent returns false when symlink already correct.
+// TestEnsureRelativeSymlink_idempotent verifies that calling EnsureRelativeSymlink twice is safe.
 func TestEnsureRelativeSymlink_idempotent(t *testing.T) {
 	hubDir := t.TempDir()
 	projectRoot := filepath.Dir(hubDir)
 
 	// First creation
-	changed1, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
-	if err != nil {
+	if err := aipkg.EnsureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
-	if !changed1 {
-		t.Error("first call should return changed=true")
-	}
 
-	// Second call (idempotent)
-	changed2, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
-	if err != nil {
+	// Second call (idempotent - should not error)
+	if err := aipkg.EnsureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot); err != nil {
 		t.Fatalf("second call: %v", err)
 	}
-	if changed2 {
-		t.Error("second call should return changed=false")
+
+	// Verify symlink still correct
+	linkPath := filepath.Join(hubDir, "CLAUDE.md")
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		t.Fatalf("readlink: %v", err)
+	}
+	if target != "AGENTS.md" {
+		t.Errorf("expected target %q, got %q", "AGENTS.md", target)
 	}
 }
 
@@ -905,18 +903,13 @@ func TestEnsureRelativeSymlink_targetChanged(t *testing.T) {
 	projectRoot := filepath.Dir(hubDir)
 
 	// Create initial symlink
-	if _, err := ensureRelativeSymlink("LINK.md", "OLD.md", hubDir, projectRoot); err != nil {
+	if err := aipkg.EnsureRelativeSymlink("LINK.md", "OLD.md", hubDir, projectRoot); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
 
 	// Change target
-	changed, err := ensureRelativeSymlink("LINK.md", "NEW.md", hubDir, projectRoot)
-	if err != nil {
+	if err := aipkg.EnsureRelativeSymlink("LINK.md", "NEW.md", hubDir, projectRoot); err != nil {
 		t.Fatalf("second call: %v", err)
-	}
-
-	if !changed {
-		t.Error("expected changed=true when target changed")
 	}
 
 	linkPath := filepath.Join(hubDir, "LINK.md")
@@ -940,7 +933,7 @@ func TestEnsureRelativeSymlink_regularFileExists(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	_, err := ensureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
+	err := aipkg.EnsureRelativeSymlink("CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error for existing regular file")
 	}
@@ -954,13 +947,8 @@ func TestEnsureRelativeSymlink_nestedPath(t *testing.T) {
 	hubDir := t.TempDir()
 	projectRoot := filepath.Dir(hubDir)
 
-	changed, err := ensureRelativeSymlink(".claude/CLAUDE.md", "AGENTS.md", hubDir, projectRoot)
-	if err != nil {
-		t.Fatalf("ensureRelativeSymlink: %v", err)
-	}
-
-	if !changed {
-		t.Error("expected changed=true for new symlink")
+	if err := aipkg.EnsureRelativeSymlink(".claude/CLAUDE.md", "AGENTS.md", hubDir, projectRoot); err != nil {
+		t.Fatalf("EnsureRelativeSymlink: %v", err)
 	}
 
 	linkPath := filepath.Join(hubDir, ".claude", "CLAUDE.md")
@@ -986,7 +974,7 @@ func TestEnsureRelativeSymlink_escapeLink(t *testing.T) {
 	}
 
 	// linkPath escapes the hub directory
-	_, err := ensureRelativeSymlink("../escape.md", "AGENTS.md", hubDir, projectRoot)
+	err := aipkg.EnsureRelativeSymlink("../escape.md", "AGENTS.md", hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error for link escaping hub, got nil")
 	}
@@ -1000,7 +988,7 @@ func TestEnsureRelativeSymlink_escapeTarget(t *testing.T) {
 	}
 
 	// targetWithinHub escapes the hub directory
-	_, err := ensureRelativeSymlink("CLAUDE.md", "../outside.md", hubDir, projectRoot)
+	err := aipkg.EnsureRelativeSymlink("CLAUDE.md", "../outside.md", hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error for target escaping hub, got nil")
 	}
@@ -1349,7 +1337,7 @@ func TestSelectAgentsServices(t *testing.T) {
 		name           string
 		services       map[string]config.ServiceConfig
 		wantSelected   []string
-		wantSkippedMap map[string]skippedService
+		wantSkippedMap map[string]aipkg.SkippedService
 	}{
 		{
 			name: "all enabled distinct dirs - all kept",
@@ -1366,7 +1354,7 @@ func TestSelectAgentsServices(t *testing.T) {
 				"on":  {Type: "app", Enabled: true, Dir: "./services/on"},
 			},
 			wantSelected: []string{"on"},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]aipkg.SkippedService{
 				"off": {Name: "off", Reason: "service-disabled"},
 			},
 		},
@@ -1377,7 +1365,7 @@ func TestSelectAgentsServices(t *testing.T) {
 				"aux":  {Type: "app", Enabled: true, Dir: "./services/aux", AI: config.ServiceAIConfig{Enabled: &falseVal}},
 			},
 			wantSelected: []string{"main"},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]aipkg.SkippedService{
 				"aux": {Name: "aux", Reason: "ai-disabled"},
 			},
 		},
@@ -1395,7 +1383,7 @@ func TestSelectAgentsServices(t *testing.T) {
 				"main":  {Type: "app", Enabled: true, Dir: "./services/main"},
 			},
 			wantSelected: []string{"main"},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]aipkg.SkippedService{
 				"nodir": {Name: "nodir", Reason: "empty-dir"},
 			},
 		},
@@ -1415,7 +1403,7 @@ func TestSelectAgentsServices(t *testing.T) {
 				},
 			},
 			wantSelected: []string{"main"},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]aipkg.SkippedService{
 				"main-debug": {
 					Name:   "main-debug",
 					Reason: "lost-collision",
@@ -1428,7 +1416,7 @@ func TestSelectAgentsServices(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			selected, skipped := selectAgentsServices(tt.services)
+			selected, skipped := aipkg.SelectServices(tt.services)
 
 			if len(selected) != len(tt.wantSelected) {
 				t.Errorf("selected count: want %d, got %d (%v)", len(tt.wantSelected), len(selected), selected)
@@ -1439,7 +1427,7 @@ func TestSelectAgentsServices(t *testing.T) {
 				}
 			}
 
-			skippedMap := make(map[string]skippedService)
+			skippedMap := make(map[string]aipkg.SkippedService)
 			for _, s := range skipped {
 				skippedMap[s.Name] = s
 			}

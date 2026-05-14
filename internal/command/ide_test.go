@@ -10,6 +10,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pathsafe"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/templates/ide"
 )
 
 // Minimal inline templates used by renderIDETemplateFile unit tests.
@@ -62,7 +63,7 @@ func makeIDECfg(name string) *config.DevboxConfig {
 // TestRenderIDETemplateFile_devcontainer verifies that the template
 // substitutes project name, container, workspaceFolder, and port.
 func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
-	data := ideTemplateData{
+	data := ide.TemplateData{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Service: "main",
 		ServiceCfg: config.ServiceConfig{
@@ -85,7 +86,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 	}
 
 	dest := filepath.Join(projectRoot, "devcontainer.json")
-	if err := renderIDETemplateFile(srcPath, data, dest, absDir, absRoot); err != nil {
+	if err := ide.RenderTemplateFile(srcPath, data, dest, absDir, absRoot); err != nil {
 		t.Fatalf("renderIDETemplateFile: %v", err)
 	}
 
@@ -110,7 +111,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 
 // TestRenderIDETemplateFile_createsParentDirs verifies parent directories are created.
 func TestRenderIDETemplateFile_createsParentDirs(t *testing.T) {
-	data := ideTemplateData{
+	data := ide.TemplateData{
 		ServiceCfg: config.ServiceConfig{
 			DirInternal:     "/workspace",
 			WorkDirInternal: "/workspace/src",
@@ -126,7 +127,7 @@ func TestRenderIDETemplateFile_createsParentDirs(t *testing.T) {
 	}
 
 	dest := filepath.Join(projectRoot, "nested", "deep", "file.json")
-	if err := renderIDETemplateFile(srcPath, data, dest, absDir, absRoot); err != nil {
+	if err := ide.RenderTemplateFile(srcPath, data, dest, absDir, absRoot); err != nil {
 		t.Fatalf("renderIDETemplateFile should create parent dirs: %v", err)
 	}
 	if _, err := os.Stat(dest); err != nil {
@@ -137,7 +138,7 @@ func TestRenderIDETemplateFile_createsParentDirs(t *testing.T) {
 // TestRenderIDETemplateFile_serviceDirContainment verifies that dest
 // must be contained within absDir (the service directory).
 func TestRenderIDETemplateFile_serviceDirContainment(t *testing.T) {
-	data := ideTemplateData{}
+	data := ide.TemplateData{}
 	projectRoot := t.TempDir()
 	absRoot, _ := filepath.Abs(projectRoot)
 	svcDir := filepath.Join(projectRoot, "services", "main")
@@ -155,7 +156,7 @@ func TestRenderIDETemplateFile_serviceDirContainment(t *testing.T) {
 	// Try to write outside the service dir but inside the project root
 	dest := filepath.Join(projectRoot, "services", "sibling", "file.json")
 
-	err := renderIDETemplateFile(srcPath, data, dest, absDir, absRoot)
+	err := ide.RenderTemplateFile(srcPath, data, dest, absDir, absRoot)
 	if err == nil {
 		t.Fatal("expected error when dest escapes service dir")
 	}
@@ -167,7 +168,7 @@ func TestRenderIDETemplateFile_serviceDirContainment(t *testing.T) {
 // TestRenderIDETemplateFile_siblingPrefixAttack verifies that a naive
 // HasPrefix check would fail (main2 has prefix main).
 func TestRenderIDETemplateFile_siblingPrefixAttack(t *testing.T) {
-	data := ideTemplateData{}
+	data := ide.TemplateData{}
 	projectRoot := t.TempDir()
 	absRoot, _ := filepath.Abs(projectRoot)
 
@@ -192,7 +193,7 @@ func TestRenderIDETemplateFile_siblingPrefixAttack(t *testing.T) {
 	// dest resolves to ../main2/leak, which is outside mainDir
 	dest := filepath.Join(mainDir, "..", "main2", "leak")
 
-	err := renderIDETemplateFile(srcPath, data, dest, absDir, absRoot)
+	err := ide.RenderTemplateFile(srcPath, data, dest, absDir, absRoot)
 	if err == nil {
 		t.Fatal("expected error when dest escapes to sibling service dir")
 	}
@@ -204,7 +205,7 @@ func TestRenderIDETemplateFile_siblingPrefixAttack(t *testing.T) {
 // TestRenderIDETemplateFile_symlinkDir verifies that a symlinked intermediate
 // directory pointing outside the project root is rejected.
 func TestRenderIDETemplateFile_symlinkDir(t *testing.T) {
-	data := ideTemplateData{}
+	data := ide.TemplateData{}
 	projectRoot := t.TempDir()
 	outside := t.TempDir()
 
@@ -227,7 +228,7 @@ func TestRenderIDETemplateFile_symlinkDir(t *testing.T) {
 	}
 
 	dest := filepath.Join(svcDir, ".devcontainer", "devcontainer.json")
-	err := renderIDETemplateFile(srcPath, data, dest, absDir, absRoot)
+	err := ide.RenderTemplateFile(srcPath, data, dest, absDir, absRoot)
 	if err == nil {
 		t.Fatal("expected error when destination dir is a symlink outside project root")
 	}
@@ -239,7 +240,7 @@ func TestRenderIDETemplateFile_symlinkDir(t *testing.T) {
 // TestRenderIDETemplateFile_symlinkFile verifies that a symlinked destination
 // file is rejected even when the parent directory is safe.
 func TestRenderIDETemplateFile_symlinkFile(t *testing.T) {
-	data := ideTemplateData{}
+	data := ide.TemplateData{}
 	projectRoot := t.TempDir()
 	outside := t.TempDir()
 
@@ -266,7 +267,7 @@ func TestRenderIDETemplateFile_symlinkFile(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	err := renderIDETemplateFile(srcPath, data, dest, absDir, absRoot)
+	err := ide.RenderTemplateFile(srcPath, data, dest, absDir, absRoot)
 	if err == nil {
 		t.Fatal("expected error when destination file is a symlink")
 	}
@@ -314,7 +315,7 @@ func TestResolveIDETemplatePack_explicit(t *testing.T) {
 				IDE:     config.ServiceIDEConfig{Template: tt.template},
 			}
 
-			pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+			pack, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 			if (err != nil) != tt.wantError {
 				t.Errorf("want error=%v, got %v", tt.wantError, err)
 			}
@@ -357,7 +358,7 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 				IDE:     config.ServiceIDEConfig{}, // empty template = implicit
 			}
 
-			pack, err := resolveIDETemplatePack(svc, projectRoot, tt.serviceName)
+			pack, err := ide.ResolveTemplatePack(svc, projectRoot, tt.serviceName)
 			if (err != nil) != tt.wantError {
 				t.Errorf("want error=%v, got %v", tt.wantError, err)
 			}
@@ -383,7 +384,7 @@ func TestResolveIDETemplatePack_allMissing(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "myservice")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error when no packs exist, got nil")
 	}
@@ -408,7 +409,7 @@ func TestResolveIDETemplatePack_implicitPriority(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	pack, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -433,7 +434,7 @@ func TestResolveIDETemplatePack_explicitStrictSemantics(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{Template: "main-deubg"}, // typo
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error for typo in explicit template")
 	}
@@ -468,7 +469,7 @@ func TestResolveIDETemplatePack_packIsSymlink(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{Template: "custom"},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error when pack root is a symlink")
 	}
@@ -498,7 +499,7 @@ func TestResolveIDETemplatePack_explicitPackIsFile(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{Template: "custom"},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error when explicit pack is a regular file")
 	}
@@ -530,7 +531,7 @@ func TestResolveIDETemplatePack_implicitCandidateIsFile(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error when service-name candidate is a regular file (no fallthrough)")
 	}
@@ -563,7 +564,7 @@ func TestResolveIDETemplatePack_implicitCandidateIsSymlink(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error when service-name candidate is a symlink")
 	}
@@ -592,7 +593,7 @@ func TestResolveIDETemplatePack_defaultIsFile(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "unknown-service")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "unknown-service")
 	if err == nil {
 		t.Fatal("expected error when default/ is a regular file")
 	}
@@ -622,7 +623,7 @@ func TestResolveIDETemplatePack_defaultIsSymlink(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "unknown-service")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "unknown-service")
 	if err == nil {
 		t.Fatal("expected error when default/ is a symlink")
 	}
@@ -657,7 +658,7 @@ func TestResolveIDETemplatePack_relativeProjectRoot(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	pack, err := resolveIDETemplatePack(svc, relRoot, "unknown")
+	pack, err := ide.ResolveTemplatePack(svc, relRoot, "unknown")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -683,7 +684,7 @@ func TestResolveIDETemplatePack_byServiceOnly(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	pack, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -704,7 +705,7 @@ func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "foo/bar")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "foo/bar")
 	if err == nil {
 		t.Fatal("want error for invalid service name, got nil")
 	}
@@ -725,7 +726,7 @@ func TestResolveIDETemplatePack_emptyServiceName(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "")
 	if err == nil {
 		t.Fatal("want error for empty service name, got nil")
 	}
@@ -747,7 +748,7 @@ func TestResolveIDETemplatePack_leadingDotServiceName(t *testing.T) {
 	}
 
 	// No packs exist; we expect "not found" wrapping os.ErrNotExist, not a validation error.
-	_, err := resolveIDETemplatePack(svc, projectRoot, ".hidden")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, ".hidden")
 	if err == nil {
 		t.Fatal("want error (no pack found), got nil")
 	}
@@ -768,7 +769,7 @@ func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{Template: "foo/bar"},
 	}
 
-	_, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	_, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("want error for invalid ide.template key, got nil")
 	}
@@ -794,7 +795,7 @@ func TestResolveIDETemplatePack_explicitOnlyPack(t *testing.T) {
 		IDE:     config.ServiceIDEConfig{Template: "custom"},
 	}
 
-	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	pack, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -825,7 +826,7 @@ func TestResolveIDETemplatePack_explicitBeatsServiceNameAndDefault(t *testing.T)
 		IDE:     config.ServiceIDEConfig{Template: "custom"},
 	}
 
-	pack, err := resolveIDETemplatePack(svc, projectRoot, "main")
+	pack, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -855,7 +856,7 @@ func TestWalkIDEPack_noDuplicateRelPath(t *testing.T) {
 		}
 	}
 
-	entries, err := walkIDEPack(packDir)
+	entries, err := ide.WalkPack(packDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -870,7 +871,7 @@ func TestWalkIDEPack_emptyPack(t *testing.T) {
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{})
 
 	packPath := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
-	entries, err := walkIDEPack(packPath)
+	entries, err := ide.WalkPack(packPath)
 	if err != nil {
 		t.Fatalf("walkIDEPack: %v", err)
 	}
@@ -891,7 +892,7 @@ func TestWalkIDEPack_nested(t *testing.T) {
 	})
 
 	packPath := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
-	entries, err := walkIDEPack(packPath)
+	entries, err := ide.WalkPack(packPath)
 	if err != nil {
 		t.Fatalf("walkIDEPack: %v", err)
 	}
@@ -934,7 +935,7 @@ func TestWalkIDEPack_nonTmplFilesSkipped(t *testing.T) {
 		t.Fatalf("write .txt: %v", err)
 	}
 
-	entries, err := walkIDEPack(packDir)
+	entries, err := ide.WalkPack(packDir)
 	if err != nil {
 		t.Fatalf("walkIDEPack: %v", err)
 	}
@@ -969,7 +970,7 @@ func TestWalkIDEPack_symlinkFileRejected(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	_, err := walkIDEPack(packDir)
+	_, err := ide.WalkPack(packDir)
 	if err == nil {
 		t.Fatal("expected error when pack contains symlinked .tmpl file")
 	}
@@ -998,7 +999,7 @@ func TestWalkIDEPack_symlinkNonTmplFileRejected(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	_, err := walkIDEPack(packDir)
+	_, err := ide.WalkPack(packDir)
 	if err == nil {
 		t.Fatal("expected error when pack contains symlinked non-.tmpl file")
 	}
@@ -1027,7 +1028,7 @@ func TestWalkIDEPack_symlinkDirRejected(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	_, err := walkIDEPack(packDir)
+	_, err := ide.WalkPack(packDir)
 	if err == nil {
 		t.Fatal("expected error when pack contains symlinked directory")
 	}
@@ -1049,7 +1050,7 @@ func TestWalkIDEPack_bareTmplRejected(t *testing.T) {
 		t.Fatalf("write .tmpl: %v", err)
 	}
 
-	_, err := walkIDEPack(packDir)
+	_, err := ide.WalkPack(packDir)
 	if err == nil {
 		t.Fatal("expected error for bare .tmpl file")
 	}
@@ -1075,7 +1076,7 @@ func TestWalkIDEPack_nestedBareTmplRejected(t *testing.T) {
 		t.Fatalf("write nested .tmpl: %v", err)
 	}
 
-	_, err := walkIDEPack(packDir)
+	_, err := ide.WalkPack(packDir)
 	if err == nil {
 		t.Fatal("expected error for nested .tmpl file")
 	}
@@ -1110,7 +1111,7 @@ func TestWalkIDEPack_absoluteSourcePath(t *testing.T) {
 
 	// Use relative path
 	relativePack := filepath.Join("devbox", "templates", "ide", packName)
-	entries, err := walkIDEPack(relativePack)
+	entries, err := ide.WalkPack(relativePack)
 	if err != nil {
 		t.Fatalf("walkIDEPack: %v", err)
 	}
@@ -1418,7 +1419,7 @@ func TestExtendsDepth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			depth, capped := extendsDepth(tt.services, tt.svcName)
+			depth, capped := ide.ExtendsDepth(tt.services, tt.svcName)
 			if depth != tt.wantDepth {
 				t.Errorf("depth: want %d, got %d", tt.wantDepth, depth)
 			}
@@ -1500,9 +1501,9 @@ func TestValidateIDETemplateKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateIDETemplateKey(tt.key)
+			err := ide.ValidateTemplateKey(tt.key)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateIDETemplateKey(%q): want err=%v, got %v", tt.key, tt.wantErr, err)
+				t.Errorf("ide.ValidateTemplateKey(%q): want err=%v, got %v", tt.key, tt.wantErr, err)
 			}
 		})
 	}
@@ -1517,7 +1518,7 @@ func TestSelectIDEServices(t *testing.T) {
 		name           string
 		services       map[string]config.ServiceConfig
 		wantSelected   []string
-		wantSkippedMap map[string]skippedService
+		wantSkippedMap map[string]ide.SkippedService
 	}{
 		{
 			name: "all enabled distinct dirs - all kept",
@@ -1550,7 +1551,7 @@ func TestSelectIDEServices(t *testing.T) {
 				},
 			},
 			wantSelected: []string{"main"},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]ide.SkippedService{
 				"db": {Name: "db", Reason: "ide-policy"},
 			},
 		},
@@ -1569,7 +1570,7 @@ func TestSelectIDEServices(t *testing.T) {
 				},
 			},
 			wantSelected: []string{"main"},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]ide.SkippedService{
 				"app": {Name: "app", Reason: "service-disabled"},
 			},
 		},
@@ -1595,7 +1596,7 @@ func TestSelectIDEServices(t *testing.T) {
 					IDE:     config.ServiceIDEConfig{Enabled: &falseVal},
 				},
 			},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]ide.SkippedService{
 				"main": {Name: "main", Reason: "ide-disabled"},
 			},
 		},
@@ -1615,7 +1616,7 @@ func TestSelectIDEServices(t *testing.T) {
 				},
 			},
 			wantSelected: []string{"main-debug"},
-			wantSkippedMap: map[string]skippedService{
+			wantSkippedMap: map[string]ide.SkippedService{
 				"main": {
 					Name:   "main",
 					Reason: "lost-collision",
@@ -1628,7 +1629,7 @@ func TestSelectIDEServices(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			selected, skipped := selectIDEServices(tt.services)
+			selected, skipped := ide.SelectServices(tt.services)
 
 			if len(selected) != len(tt.wantSelected) {
 				t.Errorf("selected count: want %d, got %d (%v)", len(tt.wantSelected), len(selected), selected)
@@ -1639,7 +1640,7 @@ func TestSelectIDEServices(t *testing.T) {
 				}
 			}
 
-			skippedMap := make(map[string]skippedService)
+			skippedMap := make(map[string]ide.SkippedService)
 			for _, s := range skipped {
 				skippedMap[s.Name] = s
 			}
@@ -1809,8 +1810,8 @@ func TestSelectIDEServices_ideDisabledReason(t *testing.T) {
 		},
 	}
 
-	_, skipped := selectIDEServices(services)
-	byName := make(map[string]skippedService)
+	_, skipped := ide.SelectServices(services)
+	byName := make(map[string]ide.SkippedService)
 	for _, s := range skipped {
 		byName[s.Name] = s
 	}
