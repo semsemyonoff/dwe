@@ -183,9 +183,20 @@ func buildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig
 		if svcState != nil {
 			row.Status = svcState.Status
 			if svcState.LastRun != nil && svcState.LastRun.Status != journal.StatusOk {
-				for phaseName, phase := range svcState.Phases {
-					for stepName, step := range phase.Steps {
-						if step.Status == journal.StatusFailed {
+				phaseNames := make([]string, 0, len(svcState.Phases))
+				for phaseName := range svcState.Phases {
+					phaseNames = append(phaseNames, phaseName)
+				}
+				slices.Sort(phaseNames)
+				for _, phaseName := range phaseNames {
+					phase := svcState.Phases[phaseName]
+					stepNames := make([]string, 0, len(phase.Steps))
+					for stepName := range phase.Steps {
+						stepNames = append(stepNames, stepName)
+					}
+					slices.Sort(stepNames)
+					for _, stepName := range stepNames {
+						if phase.Steps[stepName].Status == journal.StatusFailed {
 							row.LastFailedPhase = phaseName
 							row.LastFailedStep = stepName
 						}

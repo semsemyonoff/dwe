@@ -211,7 +211,9 @@ func TestFileRecorder_SkippedStep(t *testing.T) {
 		Phase:   config.DeployPhase{Name: "setup"},
 		Step:    config.DeployStep{Name: "step2", Type: "shell", Cmd: "echo skipped"},
 	}
-	rec.OnStepSkip(step2.StepAddress(), step2, "hash2", "state")
+	// Use a when-condition skip (not state-based) so the skip is recorded in the journal.
+	// State-based skips intentionally do not overwrite the previous StatusOk entry.
+	rec.OnStepSkip(step2.StepAddress(), step2, "hash2", "when: some-condition")
 
 	rec.OnPipelineFinish(true)
 

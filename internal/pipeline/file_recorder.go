@@ -172,7 +172,13 @@ func (r *FileRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash strin
 
 // OnStepSkip is called when a step is skipped.
 func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash string, reason string) {
-	// Note: skipped steps are recorded in the step state
+	// For state-based skips, do not overwrite the existing StatusOk journal entry.
+	// Overwriting with StatusSkipped would cause Decide() to return Run on the next
+	// deploy (prev.Status != StatusOk), creating an alternating run/skip cycle.
+	if reason == "state" {
+		return
+	}
+
 	now := time.Now()
 	stepState := &journal.StepState{
 		Status:     journal.StatusSkipped,
