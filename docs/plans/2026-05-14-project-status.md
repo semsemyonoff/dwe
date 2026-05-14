@@ -214,24 +214,24 @@ in `internal/pipeline/executor.go` — we are *not* introducing pre-action
 checks in this plan. Service-level config-hash invalidation is the caller's
 responsibility (see Task 6) and happens *before* `Decide` is called.
 
-- [ ] add `internal/deploy/journal/decision.go` with `Decision` enum (`Run`, `Skip`)
+- [x] add `internal/deploy/journal/decision.go` with `Decision` enum (`Run`, `Skip`)
   and `Decide(prev *StepState, currentActionHash string, hasCheck bool)
   Decision`
-- [ ] implement the table:
+- [x] implement the table:
   - prev absent → `Run`
   - prev.Status=ok + `action_hash` matches + no `check:` → `Skip`
   - prev.Status=ok + `action_hash` matches + has `check:` → `Run` (so the
     post-step check still runs and re-validates idempotency on every deploy)
   - prev.Status=ok + `action_hash` differs → `Run` (state stale)
   - prev.Status in {failed,partial,in_progress} → `Run` (resume)
-- [ ] **note**: `hasWhen` is intentionally NOT a parameter — `when:` is
+- [x] **note**: `hasWhen` is intentionally NOT a parameter — `when:` is
   evaluated by the executor *before* consulting this decider; a step whose
   `when:` is false skips via the existing path and never reaches `Decide`.
   Document this in the function godoc.
-- [ ] write exhaustive table-driven test covering every row of the table plus
+- [x] write exhaustive table-driven test covering every row of the table plus
   edge cases (nil prev, empty hash strings); add a test confirming that a
   step with `check:` is never returned as `Skip` even when hashes match
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 4: `internal/lock` — flock with stale-pid detection (Unix-only)
 
