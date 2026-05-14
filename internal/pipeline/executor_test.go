@@ -900,7 +900,7 @@ func TestRunPipeline_NoContinueOnError_AbortsAsUsual(t *testing.T) {
 }
 
 // TestRunPipeline_PostStepHook_ReturnsError verifies that when a post-step hook returns
-// an error, Run propagates it (not ErrSilent).
+// an error, Run calls FailStep on the reporter and returns ErrSilent.
 func TestRunPipeline_PostStepHook_ReturnsError(t *testing.T) {
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
@@ -913,11 +913,18 @@ func TestRunPipeline_PostStepHook_ReturnsError(t *testing.T) {
 	}
 
 	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, hooks)
-	if err == nil {
-		t.Fatal("expected error from hook, got nil")
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("expected ErrSilent from hook failure, got %v", err)
 	}
-	if !errors.Is(err, hookErr) {
-		t.Errorf("expected hook error %v, got %v", hookErr, err)
+
+	failFound := false
+	for _, e := range rep.events {
+		if e.kind == "FailStep" && e.step.Name == "render-env" {
+			failFound = true
+		}
+	}
+	if !failFound {
+		t.Error("expected FailStep to be called for the failed hook step")
 	}
 }
 

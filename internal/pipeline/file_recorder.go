@@ -272,8 +272,17 @@ func (r *FileRecorder) OnPipelineFinish(success bool) {
 		}
 		svcState.LastRun.FinishedAt = now
 
-		// Derive service status from its phases
-		if success {
+		// Derive per-service status from its own phase outcomes, not from the
+		// global pipeline success flag. A service whose steps all passed is
+		// deployed even if a project-scope step later fails the overall pipeline.
+		svcDeployed := true
+		for _, phase := range svcState.Phases {
+			if phase.Status == journal.StatusFailed {
+				svcDeployed = false
+				break
+			}
+		}
+		if svcDeployed {
 			svcState.LastRun.Status = journal.StatusOk
 			svcState.Status = journal.StatusDeployed
 		} else {

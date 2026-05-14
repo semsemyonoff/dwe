@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -189,7 +190,7 @@ func readPIDFromLockFile(path string) (int, error) {
 		return 0, errors.New("lock file is empty")
 	}
 
-	pid, err := strconv.Atoi(string(data))
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
 		return 0, fmt.Errorf("parse pid: %w", err)
 	}

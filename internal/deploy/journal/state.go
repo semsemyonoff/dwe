@@ -217,6 +217,8 @@ func Recompute(p *ProjectState) {
 		case StatusPartial:
 			hasFailed = true
 			hasDeployed = true
+		case StatusInProgress:
+			hasFailed = true
 		}
 	}
 

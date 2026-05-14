@@ -183,17 +183,12 @@ func buildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig
 		if svcState != nil {
 			row.Status = svcState.Status
 			if svcState.LastRun != nil && svcState.LastRun.Status != journal.StatusOk {
-				// Find the last failed step
-				for _, phase := range svcState.Phases {
+				for phaseName, phase := range svcState.Phases {
 					for stepName, step := range phase.Steps {
 						if step.Status == journal.StatusFailed {
-							// Keep the last failed step name
-							row.LastFailedPhase = ""
+							row.LastFailedPhase = phaseName
 							row.LastFailedStep = stepName
 						}
-					}
-					if phase.Status == journal.StatusFailed {
-						row.LastFailedPhase = ""
 					}
 				}
 			}

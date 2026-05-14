@@ -496,7 +496,9 @@ func RunWithOptions(opts RunOptions) error {
 		// Run post-step hook if registered (e.g. source .env after render-env).
 		if hook, ok := opts.PostStepHook[rs.Step.Name]; ok {
 			if err := hook(); err != nil {
-				return err
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+				opts.Recorder.OnStepFail(addr, rs, actionHash, durationMs, err)
+				return ErrSilent
 			}
 		}
 
