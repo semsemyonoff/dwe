@@ -72,7 +72,6 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 // (default: disabled). Enable with `log: true` to write .devbox/logs/reset.log.
 func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
-	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -84,16 +83,15 @@ the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return resetRunCmd(flags, yes, force)
+			return resetRunCmd(flags, yes)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
-	cmd.Flags().BoolVar(&force, "force", false, "ignore lock from other processes")
 	return cmd
 }
 
-func resetRunCmd(flags *rootFlags, yes bool, forceLock bool) error {
+func resetRunCmd(flags *rootFlags, yes bool) error {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
@@ -103,20 +101,13 @@ func resetRunCmd(flags *rootFlags, yes bool, forceLock bool) error {
 	lck, err := lock.Acquire(lockPath)
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			if !forceLock {
-				return fmt.Errorf("cannot start reset: lock held by process %d (wait for that process to finish or kill it and retry)", heldErr.PID)
-			}
-			// With --force, we still can't forcibly take the lock from a live process,
-			// but we'll proceed with a best-effort approach; the lock is primarily
-			// a safety measure to prevent concurrent operations in normal cases.
-		} else {
-			return fmt.Errorf("acquiring lock: %w", err)
+			return &lockHeldError{operation: "reset", pid: heldErr.PID}
 		}
-	} else {
-		defer func() {
-			_ = lck.Release()
-		}()
+		return fmt.Errorf("acquiring lock: %w", err)
 	}
+	defer func() {
+		_ = lck.Release()
+	}()
 
 	cfg, err := config.LoadConfig(flags.configPath)
 	if err != nil {

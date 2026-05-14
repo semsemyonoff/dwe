@@ -138,6 +138,19 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 	return cmd
 }
 
+// lockHeldError is returned when a deploy or reset lock is held by another process.
+// Implements ExitCode() int so main.go translates it to exit code 2.
+type lockHeldError struct {
+	operation string
+	pid       int
+}
+
+func (e *lockHeldError) Error() string {
+	return fmt.Sprintf("cannot start %s: lock held by process %d (wait for that process to finish or kill it and retry)", e.operation, e.pid)
+}
+
+func (e *lockHeldError) ExitCode() int { return 2 }
+
 func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool) error {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
@@ -148,7 +161,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	lck, err := lock.Acquire(lockPath)
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			return fmt.Errorf("cannot start deploy: lock held by process %d (wait for that process to finish or kill it and retry)", heldErr.PID)
+			return &lockHeldError{operation: "deploy", pid: heldErr.PID}
 		}
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
@@ -368,7 +381,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		Registry:     reg,
 		WorkDir:      workDir,
 		LogWriter:    logWriter,
-		SkipConfirm:  false,
+		SkipConfirm:  nonInteractive,
 		PostStepHook: postStepHooks,
 		Recorder:     recorder,
 		SkipDecider:  skipDecider,

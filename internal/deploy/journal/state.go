@@ -188,7 +188,8 @@ func RemoveService(path string, name string) error {
 		return Remove(path)
 	}
 
-	// Otherwise save (project aggregate will be recomputed by Task 7's Recompute)
+	// Recompute project aggregate before saving
+	Recompute(state)
 	return Save(path, state)
 }
 
@@ -233,7 +234,13 @@ func Recompute(p *ProjectState) {
 	case hasDeployed:
 		p.Project.Status = StatusDeployed
 	default:
-		p.Project.Status = StatusNotDeployed
+		// No services tracked — project-level-only deploy.
+		// Use LastRun outcome to set status so project-only deploys don't show not_deployed.
+		if p.Project.LastRun != nil && p.Project.LastRun.Status == StatusOk {
+			p.Project.Status = StatusDeployed
+		} else {
+			p.Project.Status = StatusNotDeployed
+		}
 	}
 
 	// Fix LastRun.Status when stuck in_progress (e.g. process crashed mid-deploy).

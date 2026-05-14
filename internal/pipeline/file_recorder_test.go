@@ -211,7 +211,6 @@ func TestFileRecorder_SkippedStep(t *testing.T) {
 		Phase:   config.DeployPhase{Name: "setup"},
 		Step:    config.DeployStep{Name: "step2", Type: "shell", Cmd: "echo skipped"},
 	}
-	rec.OnStepStart(step2.StepAddress(), step2, "hash2")
 	rec.OnStepSkip(step2.StepAddress(), step2, "hash2", "state")
 
 	rec.OnPipelineFinish(true)
@@ -257,7 +256,6 @@ func TestFileRecorder_ServiceAllStepsSkipped(t *testing.T) {
 		Phase:   config.DeployPhase{Name: "setup"},
 		Step:    config.DeployStep{Name: "step1", Type: "shell", Cmd: "echo ok"},
 	}
-	rec.OnStepStart(step1.StepAddress(), step1, "hash1")
 	rec.OnStepSkip(step1.StepAddress(), step1, "hash1", "state")
 
 	rec.OnPipelineFinish(true)
