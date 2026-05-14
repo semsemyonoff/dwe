@@ -127,30 +127,30 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 2: Add `docker_wait_healthy` builtin
 
-- [ ] create `internal/builtin/wait_healthy.go` with `type dockerWaitHealthyBuiltin struct{}` implementing `Validate`, `Describe`, `Run`
-- [ ] params (parsed from `with` map):
+- [x] create `internal/builtin/wait_healthy.go` with `type dockerWaitHealthyBuiltin struct{}` implementing `Validate`, `Describe`, `Run`
+- [x] params (parsed from `with` map):
       - `timeout` (string duration, default `60s`) — parsed via `time.ParseDuration`
       - `interval` (string duration, default `2s`) — parsed via `time.ParseDuration`
       - `services` (optional `[]string`) — restrict the container set to specific compose services; default = all containers in the project
-- [ ] add helper `getDurationParam(with, key, defaultVal) (time.Duration, error)` in `internal/builtin/builtin.go` near `getStringParam` (signature mirrors existing helpers); reuse from this and any future timing-aware builtin
-- [ ] `Validate`: reject negative/zero `timeout`, negative/zero `interval`, non-string services entries; reject unknown keys (parity with strict YAML decode elsewhere)
-- [ ] `Describe`: returns `"wait until <N> services are healthy (timeout: <T>, interval: <I>)"` when `services` set, else `"wait until all containers are healthy (timeout: <T>, interval: <I>)"`
-- [ ] `Run`:
+- [x] add helper `getDurationParam(with, key, defaultVal) (time.Duration, error)` in `internal/builtin/builtin.go` near `getStringParam` (signature mirrors existing helpers); reuse from this and any future timing-aware builtin
+- [x] `Validate`: reject negative/zero `timeout`, negative/zero `interval`, non-string services entries; reject unknown keys (parity with strict YAML decode elsewhere)
+- [x] `Describe`: returns `"wait until <N> services are healthy (timeout: <T>, interval: <I>)"` when `services` set, else `"wait until all containers are healthy (timeout: <T>, interval: <I>)"`
+- [x] `Run`:
       - load docker config: `dockerCfg, err := config.LoadDockerConfig(ctx.ProjectRoot, ctx.Config)`
       - build compose: `compose := docker.NewCompose(ctx.Config, dockerCfg)` (NOT `NewComposeAll` — the running stack is the active overlay set)
       - obtain container IDs: when `services` is empty, `compose.ContainerIDs()`; when non-empty, `compose.ContainerIDsFor(services)` (add this method in this task — see below)
       - empty ID set → log warning via `ctx.Output.Warning("no containers found")` and return nil (mirrors current CLI behavior; this is intentional: the user may have invoked the step before `up`)
       - compute `attempts := max(int(timeout/interval), 1)`
       - call `docker.WaitContainersHealthy(ids, compose.HealthStatus, attempts, interval, ctx.Output)`
-- [ ] add `func (c *Compose) ContainerIDsFor(services []string) ([]string, error)` to `internal/docker/compose.go` — runs `docker compose ps -q <service>...`. Unit-test against a fake exec path (or extract via an `execer` interface as elsewhere in the package, matching the existing test pattern).
-- [ ] register the builtin in `internal/builtin/builtin.go`'s `registry` map
-- [ ] update the package godoc in `internal/builtin/builtin.go` to list `docker_wait_healthy` alongside the other canonical builtins
-- [ ] write `internal/builtin/wait_healthy_test.go`:
+- [x] add `func (c *Compose) ContainerIDsFor(services []string) ([]string, error)` to `internal/docker/compose.go` — runs `docker compose ps -q <service>...`. Unit-test against a fake exec path (or extract via an `execer` interface as elsewhere in the package, matching the existing test pattern).
+- [x] register the builtin in `internal/builtin/builtin.go`'s `registry` map
+- [x] update the package godoc in `internal/builtin/builtin.go` to list `docker_wait_healthy` alongside the other canonical builtins
+- [x] write `internal/builtin/wait_healthy_test.go`:
       - `Validate`: success path, missing fields default, negative timeout error, non-string services error, unknown key error
       - `Describe`: with-services and without-services strings
       - `Run`: success path using a fake compose (inject via test seam if needed), no-containers warning path, propagates error from `WaitContainersHealthy`
-- [ ] add an integration-shaped test in `internal/builtin/wait_healthy_test.go` that invokes the public `builtin.Run("docker_wait_healthy", ...)` to confirm registry wiring
-- [ ] run `go test ./internal/builtin/... ./internal/docker/...` — must pass before next task
+- [x] add an integration-shaped test in `internal/builtin/wait_healthy_test.go` that invokes the public `builtin.Run("docker_wait_healthy", ...)` to confirm registry wiring
+- [x] run `go test ./internal/builtin/... ./internal/docker/...` — must pass before next task
 
 ### Task 3: Scaffold `internal/validate` package (types, registry, severity-gated runner)
 

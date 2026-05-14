@@ -235,3 +235,27 @@ func (c *Compose) ContainerIDs() ([]string, error) {
 func (c *Compose) HealthStatus(id string) (string, error) {
 	return HealthStatus(c.BinName(), id)
 }
+
+// ContainerIDsFor returns the IDs of running containers for the given services.
+// services is a list of compose service names; empty list returns no errors and an empty ID slice.
+func (c *Compose) ContainerIDsFor(services []string) ([]string, error) {
+	if len(services) == 0 {
+		return nil, nil
+	}
+
+	args := c.BuildInternalArgs("ps", "-q")
+	args = append(args, services...)
+
+	out, err := c.output(args)
+	if err != nil {
+		return nil, fmt.Errorf("%s compose ps -q: %w", c.BinName(), err)
+	}
+
+	var ids []string
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			ids = append(ids, line)
+		}
+	}
+	return ids, nil
+}

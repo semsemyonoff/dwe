@@ -1,0 +1,102 @@
+package builtin
+
+import (
+	"fmt"
+	"slices"
+	"time"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
+)
+
+type dockerWaitHealthyBuiltin struct{}
+
+func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
+	// Validate timeout.
+	timeout, err := getDurationParam(with, "timeout", 60*time.Second)
+	if err != nil {
+		return err
+	}
+	if timeout <= 0 {
+		return fmt.Errorf("builtin docker_wait_healthy: timeout must be positive, got %v", timeout)
+	}
+
+	// Validate interval.
+	interval, err := getDurationParam(with, "interval", 2*time.Second)
+	if err != nil {
+		return err
+	}
+	if interval <= 0 {
+		return fmt.Errorf("builtin docker_wait_healthy: interval must be positive, got %v", interval)
+	}
+
+	// Validate services if present.
+	services, err := getStringSlice(with, "services")
+	if err != nil {
+		return err
+	}
+	if slices.Contains(services, "") {
+		return fmt.Errorf("builtin docker_wait_healthy: services list contains empty string")
+	}
+
+	// Validate no unknown keys.
+	for key := range with {
+		if !slices.Contains([]string{"timeout", "interval", "services"}, key) {
+			return fmt.Errorf("builtin docker_wait_healthy: unknown key %q", key)
+		}
+	}
+
+	return nil
+}
+
+func (dockerWaitHealthyBuiltin) Describe(with map[string]any) string {
+	timeout, _ := getDurationParam(with, "timeout", 60*time.Second)
+	interval, _ := getDurationParam(with, "interval", 2*time.Second)
+	services, _ := getStringSlice(with, "services")
+
+	if len(services) > 0 {
+		return fmt.Sprintf("wait until %d services are healthy (timeout: %s, interval: %s)",
+			len(services), timeout, interval)
+	}
+	return fmt.Sprintf("wait until all containers are healthy (timeout: %s, interval: %s)",
+		timeout, interval)
+}
+
+func (dockerWaitHealthyBuiltin) Run(with map[string]any, ctx ExecContext) error {
+	// Parse parameters.
+	timeout, _ := getDurationParam(with, "timeout", 60*time.Second)
+	interval, _ := getDurationParam(with, "interval", 2*time.Second)
+	services, _ := getStringSlice(with, "services")
+
+	// Load docker config.
+	dockerCfg, err := config.LoadDockerConfig(ctx.ProjectRoot, ctx.Config)
+	if err != nil {
+		return fmt.Errorf("docker_wait_healthy: loading docker config: %w", err)
+	}
+
+	// Build compose.
+	compose := docker.NewCompose(ctx.Config, dockerCfg)
+
+	// Obtain container IDs.
+	var ids []string
+	if len(services) > 0 {
+		ids, err = compose.ContainerIDsFor(services)
+	} else {
+		ids, err = compose.ContainerIDs()
+	}
+	if err != nil {
+		return fmt.Errorf("docker_wait_healthy: getting container IDs: %w", err)
+	}
+
+	// If no containers, warn and return nil (idempotent: may run before up).
+	if len(ids) == 0 {
+		ctx.Output.Warning("no containers found")
+		return nil
+	}
+
+	// Compute attempts.
+	attempts := max(int(timeout/interval), 1)
+
+	// Wait for healthy.
+	return docker.WaitContainersHealthy(ids, compose.HealthStatus, attempts, interval, ctx.Output)
+}

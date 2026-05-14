@@ -14,9 +14,12 @@
 //
 // Canonical builtins:
 //   - confirm                      — interactive user confirmation prompt
+//   - message                      — output styled text
 //   - service_configs_copy         — copy service template configs into the hub
 //   - service_configs_check        — verify service config files exist
+//   - service_dirs_ensure          — ensure service hub directories exist
 //   - docker_remove_project_volumes — remove all Docker volumes for the project
+//   - docker_wait_healthy          — wait until containers are healthy
 //   - remove_paths                 — delete declared paths inside the project root
 package builtin
 
@@ -25,6 +28,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
@@ -67,6 +71,7 @@ var registry = map[string]Builtin{
 	"service_configs_check":         serviceConfigsCheckBuiltin{},
 	"service_dirs_ensure":           serviceDirsEnsureBuiltin{},
 	"docker_remove_project_volumes": dockerRemoveProjectVolumesBuiltin{},
+	"docker_wait_healthy":           dockerWaitHealthyBuiltin{},
 	"remove_paths":                  removePathsBuiltin{},
 }
 
@@ -152,4 +157,18 @@ func getStringSlice(with map[string]any, key string) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("param %q: expected string or list, got %T", key, v)
 	}
+}
+
+// getDurationParam returns the time.Duration value of key from with, or defaultVal if absent/nil.
+// Accepts string values parseable by time.ParseDuration.
+func getDurationParam(with map[string]any, key string, defaultVal time.Duration) (time.Duration, error) {
+	s := getStringParam(with, key, "")
+	if s == "" {
+		return defaultVal, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("param %q: invalid duration %q: %w", key, s, err)
+	}
+	return d, nil
 }
