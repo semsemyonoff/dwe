@@ -89,11 +89,7 @@ Run 'devbox info' for the full info dashboard.`,
 					flags.stylesCfg = applyStyles(flags.projectRoot, cmd.ErrOrStderr())
 					return nil
 				}
-				// Locate miss but not the root command — treat as error.
-				if allowedWithoutProject(cmd) {
-					flags.stylesCfg = applyStyles("", cmd.ErrOrStderr())
-					return nil
-				}
+				// Locate miss — validate always requires a project.
 				return project.ErrNotFound
 			}
 
@@ -206,7 +202,7 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 // report schema errors as diagnostics instead of aborting before the validator runs.
 func isValidateCommand(cmd *cobra.Command) bool {
 	path := cmd.CommandPath()
-	return strings.HasPrefix(path, "devbox validate")
+	return path == "devbox validate" || strings.HasPrefix(path, "devbox validate ")
 }
 
 // applyStyles loads devbox/styles.yml from projectRoot, applies the palette to ui,

@@ -167,10 +167,10 @@ func TestValidateExitCodeInterface(t *testing.T) {
 		strict:  false,
 	}
 
-	var ec interface{ ExitCode() int }
-	require.True(t, (ec == err) == false) // Will be false but that's OK.
+	// Compile-time interface satisfaction: assignment would fail if not satisfied.
+	var ec interface{ ExitCode() int } = err
+	require.NotNil(t, ec)
 
-	// Check that the method exists.
 	exitCode := err.ExitCode()
 	require.Equal(t, 1, exitCode)
 

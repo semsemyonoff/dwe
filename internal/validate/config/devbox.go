@@ -130,6 +130,13 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		File:     relPath(ctx.ProjectRoot, servicesPath),
 	})
 
+	// Use the fully merged service map for extends validation when available,
+	// so services defined inline in devbox.yml are visible to the check.
+	allServices := map[string]config.ServiceConfig(services)
+	if ctx.Cfg != nil && len(ctx.Cfg.Services) > 0 {
+		allServices = ctx.Cfg.Services
+	}
+
 	// Check service definitions
 	for name, svc := range services {
 		if svc.Dir == "" && svc.DirInternal == "" {
@@ -141,9 +148,9 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Message:  "service has no dir or dir_internal",
 			})
 		}
-		// Extends validation: check if parent exists
+		// Extends validation: check if parent exists in merged service set.
 		if svc.Extends != "" {
-			if _, exists := services[svc.Extends]; !exists {
+			if _, exists := allServices[svc.Extends]; !exists {
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityError,
 					Domain:   "config",
