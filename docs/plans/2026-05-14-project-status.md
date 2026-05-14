@@ -235,25 +235,25 @@ responsibility (see Task 6) and happens *before* `Decide` is called.
 
 ### Task 4: `internal/lock` — flock with stale-pid detection (Unix-only)
 
-- [ ] create `internal/lock/lock.go` with `Acquire(path string) (*Lock,
+- [x] create `internal/lock/lock.go` with `Acquire(path string) (*Lock,
   error)` and `(*Lock).Release() error`
-- [ ] use `syscall.Flock` with `LOCK_EX|LOCK_NB`; on `EWOULDBLOCK`, read PID
+- [x] use `syscall.Flock` with `LOCK_EX|LOCK_NB`; on `EWOULDBLOCK`, read PID
   from the lockfile and call `syscall.Kill(pid, 0)` — if it returns `ESRCH`
   treat as stale and retry once after truncate; otherwise return
   `ErrLockHeld` with the holding PID
-- [ ] write the current PID into the lockfile body after acquire (for stale
+- [x] write the current PID into the lockfile body after acquire (for stale
   detection by *other* processes)
-- [ ] build tag `//go:build !windows` on the implementation file; provide a
+- [x] build tag `//go:build !windows` on the implementation file; provide a
   `lock_other.go` stub that returns "unsupported on this platform" (Devbox
   targets macOS/Linux, but the build must not break)
-- [ ] write tests: parallel acquire returns `ErrLockHeld`; stale lock after
+- [x] write tests: parallel acquire returns `ErrLockHeld`; stale lock after
   faking a missing PID succeeds; release allows next acquire
-- [ ] add a `test-race` target to the `Makefile`:
+- [x] add a `test-race` target to the `Makefile`:
   `go test -race ./internal/deploy/journal ./internal/lock ./internal/pipeline` —
   used for race verification on this plan's race-sensitive tasks (4, 6, 7,
   8, 9). Standard `make test` stays plain (`go test ./...`) to preserve
   current CI behavior.
-- [ ] run `make test`, `make test-race`, and `make lint`
+- [x] run `make test`, `make test-race`, and `make lint`
 
 ### Task 5: Migrate `logs/` → `.devbox/logs/` and add `.devbox/` to gitignore guidance
 

@@ -10,7 +10,7 @@ LDFLAGS  := -X devbox-cli/internal/version.Version=$(VERSION) \
             -X devbox-cli/internal/version.Date=$(DATE) \
             -X devbox-cli/internal/version.BuiltBy=make
 
-.PHONY: build test test-v clean tidy lint
+.PHONY: build test test-v test-race clean tidy lint
 
 build: tidy
 	@mkdir -p $(BIN_DIR)
@@ -22,6 +22,9 @@ test:
 
 test-v:
 	go test -v ./...
+
+test-race:
+	go test -race ./internal/deploy/journal ./internal/lock ./internal/pipeline
 
 lint:
 	@which golangci-lint > /dev/null 2>&1 || \
