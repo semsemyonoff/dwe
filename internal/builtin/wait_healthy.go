@@ -30,7 +30,18 @@ func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
 		return fmt.Errorf("builtin docker_wait_healthy: interval must be positive, got %v", interval)
 	}
 
-	// Validate services if present.
+	// Validate services if present. Check element types before getStringSlice
+	// so that non-string entries (e.g. YAML integers) are rejected rather than
+	// silently coerced to strings.
+	if raw, ok := with["services"]; ok && raw != nil {
+		if items, ok := raw.([]any); ok {
+			for i, item := range items {
+				if _, ok := item.(string); !ok {
+					return fmt.Errorf("builtin docker_wait_healthy: services[%d]: expected string, got %T", i, item)
+				}
+			}
+		}
+	}
 	services, err := getStringSlice(with, "services")
 	if err != nil {
 		return err

@@ -62,6 +62,7 @@ Scope targets:
   devbox validate templates <ide|ai>           - specific template validator
   devbox validate commands                     - commands validator
 `,
+		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidate(cmd, flags, strict, quiet, nil)
@@ -76,6 +77,7 @@ Scope targets:
 		Use:          "config",
 		Short:        "Validate configuration files",
 		Long:         `Check devbox.yml, services.yml, deploy.yml, reset.yml, and related config files for errors.`,
+		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidate(cmd, flags, strict, quiet, []string{"config"})
@@ -99,6 +101,7 @@ Scope targets:
 		Use:          "templates",
 		Short:        "Validate template packs",
 		Long:         `Check IDE and AI template packs for validity and integrity.`,
+		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidate(cmd, flags, strict, quiet, []string{"templates"})

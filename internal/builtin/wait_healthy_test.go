@@ -93,6 +93,14 @@ func TestDockerWaitHealthyValidate(t *testing.T) {
 			errMsg:  "empty string",
 		},
 		{
+			name: "non-string service entry",
+			with: map[string]any{
+				"services": []any{123},
+			},
+			wantErr: true,
+			errMsg:  "expected string",
+		},
+		{
 			name: "unknown key",
 			with: map[string]any{
 				"timeout": "60s",
