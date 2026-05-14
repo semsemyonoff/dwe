@@ -26,9 +26,9 @@ Run / stop pipeline declarations driving `devbox run`, `devbox stop`, and `devbo
 
 It is loaded separately by `LoadLifecycleConfig()` and is **not** merged with the 3-layer config.
 
-The file is optional. When absent, `devbox run` / `devbox stop` / `devbox restart` are unavailable and only the lower-level commands (`devbox up`, `devbox down`) work.
+The file is optional. When absent, `devbox run` / `devbox stop` / `devbox restart` are unavailable and only the lower-level commands (`devbox docker up`, `devbox docker down`) work.
 
-`devbox up` and `devbox down` remain thin Docker Compose passthroughs and never use this pipeline; raw `docker compose stop` / `restart` remain accessible via `devbox docker stop` / `devbox docker restart`.
+`devbox docker up` and `devbox docker down` are thin Docker Compose passthroughs and never use this pipeline; raw `docker compose stop` / `restart` remain accessible via `devbox docker stop` / `devbox docker restart`.
 
 ## Pipeline shape
 

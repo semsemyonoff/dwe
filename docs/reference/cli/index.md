@@ -33,20 +33,14 @@ Generated reference for the `devbox` command tree.
   - [devbox docker run](devbox_docker_run.md) — Run a one-off command in a compose service
   - [devbox docker stop](devbox_docker_stop.md) — Stop compose services
   - [devbox docker up](devbox_docker_up.md) — Start compose services
-  - [devbox docker wait](devbox_docker_wait.md) — Wait for all compose containers to become healthy
 - [devbox docs](devbox_docs.md) — Generate documentation for devbox commands
   - [devbox docs generate](devbox_docs_generate.md) — Generate reference documentation
-- [devbox down](devbox_down.md) — Stop and remove compose services
 - [devbox info](devbox_info.md) — Display project info dashboard (URLs, hosts, services, tools)
-- [devbox logs](devbox_logs.md) — View compose service logs
-- [devbox ps](devbox_ps.md) — List compose containers
 - [devbox render](devbox_render.md) — Render derived artifacts from the merged devbox config
   - [devbox render ai](devbox_render_ai.md) — Generate hub-level agents docs from template packs
   - [devbox render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --output <file>)
   - [devbox render ide](devbox_render_ide.md) — Generate IDE configs from template packs
 - [devbox reset](devbox_reset.md) — Reset pipeline commands
-  - [devbox reset config](devbox_reset_config.md) — Reset config subcommands
-    - [devbox reset config check](devbox_reset_config_check.md) — Validate the reset pipeline config (devbox/reset.yml)
   - [devbox reset plan](devbox_reset_plan.md) — Show resolved reset plan
   - [devbox reset run](devbox_reset_run.md) — Execute the reset pipeline
   - [devbox reset step](devbox_reset_step.md) — Run a single reset step by <phase>/<step> address
@@ -65,6 +59,19 @@ Generated reference for the `devbox` command tree.
   - [devbox tools enable](devbox_tools_enable.md) — Enable an optional tool (writes to devbox/local.yml)
   - [devbox tools list](devbox_tools_list.md) — Toggle tools interactively (TTY) or show status table (non-TTY)
   - [devbox tools status](devbox_tools_status.md) — Show all tools and their current state (read-only table)
-- [devbox up](devbox_up.md) — Start compose services
+- [devbox validate](devbox_validate.md) — Validate project configuration and files
+  - [devbox validate commands](devbox_validate_commands.md) — Validate command definitions
+  - [devbox validate config](devbox_validate_config.md) — Validate configuration files
+    - [devbox validate config deploy](devbox_validate_config_deploy.md) — Validate devbox/deploy.yml
+    - [devbox validate config devbox](devbox_validate_config_devbox.md) — Validate main devbox.yml
+    - [devbox validate config docker](devbox_validate_config_docker.md) — Validate devbox/docker.yml
+    - [devbox validate config info](devbox_validate_config_info.md) — Validate devbox/info.yml
+    - [devbox validate config lifecycle](devbox_validate_config_lifecycle.md) — Validate devbox/lifecycle.yml
+    - [devbox validate config reset](devbox_validate_config_reset.md) — Validate devbox/reset.yml (replaces 'devbox reset config check')
+    - [devbox validate config service-deploy](devbox_validate_config_service-deploy.md) — Validate service deploy configs
+    - [devbox validate config services](devbox_validate_config_services.md) — Validate devbox/services.yml
+    - [devbox validate config styles](devbox_validate_config_styles.md) — Validate devbox/styles.yml
+  - [devbox validate templates](devbox_validate_templates.md) — Validate template packs
+    - [devbox validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
+    - [devbox validate templates ide](devbox_validate_templates_ide.md) — Validate IDE template pack
 - [devbox version](devbox_version.md) — Print version information
-- [devbox wait](devbox_wait.md) — Wait for all compose containers to become healthy

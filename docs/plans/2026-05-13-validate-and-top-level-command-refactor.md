@@ -393,17 +393,17 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 8: Update documentation
 
-- [ ] delete generated CLI docs: `docs/reference/cli/devbox_wait.md`, `devbox_up.md`, `devbox_down.md`, `devbox_logs.md`, `devbox_ps.md`, `devbox_docker_wait.md`, `devbox_reset_config.md`, `devbox_reset_config_check.md`. These regenerate from cobra metadata; running `bin/devbox docs generate --scope cli` after the build will remove them and emit the new `devbox_validate*.md` pages.
-- [ ] populate all `validate*` command pages **via cobra `Long` strings** (set in Task 6), not by hand-editing the markdown. `cobradoc.GenMarkdownTree` (`internal/command/docs.go:212`) rewrites the whole tree on every regen — any hand-written prose in `devbox_validate.md` would be wiped by Task 10's `docs generate --scope cli`. Concretely: the severity table, the scope→target map, the `--strict`/`--quiet` semantics, and the "replaces `devbox reset config check`" callout all live in cobra `Long` text on the `validate` root and on the relevant leaves.
-- [ ] update `docs/reference/config/deploy.md` (the canonical "deploy.yml / reset.yml" reference — there is no separate `reset.md`; reset is documented in the same file, header at line 1): replace any mention of `devbox reset config check` with `devbox validate config reset`; add a top-of-page note linking to `devbox validate config`
-- [ ] update `docs/reference/builtins.md` (or whichever page enumerates builtins) — add `docker_wait_healthy` with its params and an example block. If no such page exists today, add a `## docker_wait_healthy` section to `docs/reference/config/deploy.md` near the other builtin docs.
-- [ ] update `AGENTS.md`:
-      - `internal/builtin/` bullet: add `docker_wait_healthy` to the registered-builtins list
-      - `internal/docker/` bullet: add `WaitContainersHealthy`, `HealthStatus`, and the new `Compose.ContainerIDsFor` / `Compose.HealthStatus` methods
-      - `internal/command/` bullet: remove the `devbox wait`, `devbox up`, `devbox down`, `devbox logs`, `devbox ps`, `devbox docker wait`, `devbox reset config check` references; add `devbox validate` with a short description of the scope tree
-      - **Key Patterns** section: add a short "Validation" entry pointing at `internal/validate` and the registry pattern
-      - If the templates helpers moved to a new package (Task 5), update the `internal/command/` bullet accordingly and add a short `internal/templates/ide/` and `internal/templates/ai/` bullet
-- [ ] grep all docs and AGENTS.md for `devbox wait`, `devbox up`, `devbox down`, `devbox logs`, `devbox ps`, `devbox docker wait`, `devbox reset config check`; rewrite or delete each match (some are in examples that should now reference `devbox docker up`, etc., or `devbox run` for the lifecycle path)
+- [x] delete generated CLI docs: `docs/reference/cli/devbox_wait.md`, `devbox_up.md`, `devbox_down.md`, `devbox_logs.md`, `devbox_ps.md`, `devbox_docker_wait.md`, `devbox_reset_config.md`, `devbox_reset_config_check.md`. These regenerate from cobra metadata; running `bin/devbox docs generate --scope cli` after the build will remove them and emit the new `devbox_validate*.md` pages.
+- [x] populate all `validate*` command pages **via cobra `Long` strings** (set in Task 6), not by hand-editing the markdown. `cobradoc.GenMarkdownTree` (`internal/command/docs.go:212`) rewrites the whole tree on every regen — any hand-written prose in `devbox_validate.md` would be wiped by Task 10's `docs generate --scope cli`. Concretely: the severity table, the scope→target map, the `--strict`/`--quiet` semantics, and the "replaces `devbox reset config check`" callout all live in cobra `Long` text on the `validate` root and on the relevant leaves.
+- [x] update `docs/reference/config/deploy.md` (the canonical "deploy.yml / reset.yml" reference — there is no separate `reset.md`; reset is documented in the same file, header at line 1): replace any mention of `devbox reset config check` with `devbox validate config reset`; add a top-of-page note linking to `devbox validate config`
+- [x] update `docs/reference/builtins.md` (or whichever page enumerates builtins) — add `docker_wait_healthy` with its params and an example block. If no such page exists today, add a `## docker_wait_healthy` section to `docs/reference/config/deploy.md` near the other builtin docs.
+- [x] update `AGENTS.md`:
+      - [x] `internal/builtin/` bullet: add `docker_wait_healthy` to the registered-builtins list
+      - [x] `internal/docker/` bullet: add `WaitContainersHealthy`, `HealthStatus`, and the new `Compose.ContainerIDsFor` / `Compose.HealthStatus` methods
+      - [x] `internal/command/` bullet: remove the `devbox wait`, `devbox up`, `devbox down`, `devbox logs`, `devbox ps`, `devbox docker wait`, `devbox reset config check` references; add `devbox validate` with a short description of the scope tree
+      - [x] **Key Patterns** section: add a short "Validation" entry pointing at `internal/validate` and the registry pattern
+      - [x] If the templates helpers moved to a new package (Task 5), update the `internal/command/` bullet accordingly and add a short `internal/templates/ide/` and `internal/templates/ai/` bullet
+- [x] grep all docs and AGENTS.md for `devbox wait`, `devbox up`, `devbox down`, `devbox logs`, `devbox ps`, `devbox docker wait`, `devbox reset config check`; rewrite or delete each match (some are in examples that should now reference `devbox docker up`, etc., or `devbox run` for the lifecycle path)
 
 ### Task 9: Verify acceptance criteria
 

@@ -204,7 +204,7 @@ Executes an engine-internal Go function. Builtins run in-process and have access
 
 ## Available builtins
 
-The full registry lives in `internal/builtin/`. Seven builtins ship today:
+The full registry lives in `internal/builtin/`. Eight builtins ship today:
 
 | Builtin | Purpose |
 |---------|---------|
@@ -214,6 +214,7 @@ The full registry lives in `internal/builtin/`. Seven builtins ship today:
 | `message` | Print a styled message at info/success/warning/error level |
 | `confirm` | Interactive Y/n prompt (skipped under `--yes`) |
 | `docker_remove_project_volumes` | Remove all volumes whose name is prefixed with the compose project name |
+| `docker_wait_healthy` | Wait for Docker containers to reach healthy state |
 | `remove_paths` | Delete project-relative paths from the filesystem |
 
 ### `service_dirs_ensure`
@@ -311,6 +312,48 @@ Prompts the user for confirmation before continuing. Skipped when `--yes` flag i
 ### `docker_remove_project_volumes`
 
 Removes all Docker volumes whose name starts with `<project_name>_` (resolved from `docker.yml` against the merged config). No parameters. Aborts if the resolved project name is empty.
+
+### `docker_wait_healthy`
+
+Waits for Docker containers to reach a healthy state. Polls the active Docker Compose stack until all specified containers become `healthy`, or until the timeout elapses.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `timeout` | string duration | `60s` | Maximum time to wait; must be positive (e.g. `120s`, `2m`) |
+| `interval` | string duration | `2s` | Poll interval; must be positive |
+| `services` | list of strings | all | Restrict to specific compose service names; default = all containers in the active stack |
+
+**Example: wait for all containers**
+
+```yaml
+- name: wait
+  type: builtin
+  cmd: docker_wait_healthy
+  with:
+    timeout: 120s
+    interval: 2s
+```
+
+**Example: wait for specific services**
+
+```yaml
+- name: wait-app
+  type: builtin
+  cmd: docker_wait_healthy
+  with:
+    timeout: 60s
+    interval: 1s
+    services:
+      - app-main
+      - db
+```
+
+**Behavior:**
+
+- If no containers are found in the active stack (or matching the service filter), logs a warning and returns success. Idempotent for pipelines that run before `up`.
+- If a container is `unhealthy` or the timeout elapses before all containers become `healthy`, returns an error and stops the pipeline.
+- Containers with no healthcheck (status `none`) are treated as always healthy and skipped.
+- The active stack is determined by the current overlay set (default, enabled services, enabled tools). This builtin respects `ComposeFiles()`, not `ComposeFilesAll()`.
 
 ### `remove_paths`
 
