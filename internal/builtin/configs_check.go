@@ -29,12 +29,20 @@ func (serviceConfigsCheckBuiltin) Run(with map[string]any, ctx ExecContext) erro
 	if !ok {
 		return fmt.Errorf("service %q not found in config", serviceName)
 	}
+	if svc.Dir == "" {
+		return fmt.Errorf("service %q: dir is not set", serviceName)
+	}
 
 	destDir := filepath.Join(ctx.ProjectRoot, svc.Dir, "configs")
+	cleanDestDir := filepath.Clean(destDir)
 
 	var missing []string
 	for _, entry := range svc.Configs {
 		dest := filepath.Join(destDir, entry.File)
+		cleanDest := filepath.Clean(dest)
+		if cleanDest == cleanDestDir || !strings.HasPrefix(cleanDest, cleanDestDir+string(filepath.Separator)) {
+			return fmt.Errorf("service %q: config %q escapes the configs directory", serviceName, entry.File)
+		}
 		fi, err := os.Stat(dest)
 		if err != nil || !fi.Mode().IsRegular() {
 			missing = append(missing, filepath.Join(svc.Dir, "configs", entry.File))

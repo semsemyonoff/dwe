@@ -48,7 +48,7 @@ flowchart LR
   end
 ```
 
-`docker up` and `docker wait` are issued as `type: devbox` steps with `cmd: "docker up"` / `cmd: "docker wait"` inside the `start` phase. They are not magical — the pipeline executor invokes them like any other step, so they pick up policy from `docker.yml`.
+`docker up` is issued as a `type: devbox` step with `cmd: "docker up"` inside the `start` phase. Container health waiting uses a `type: builtin` step with `cmd: docker_wait_healthy`. They are not magical — the pipeline executor invokes them like any other step, so they pick up policy from `docker.yml`.
 
 ## Structure
 
@@ -164,8 +164,8 @@ run:
           type: devbox
           cmd: "docker up"
         - name: wait
-          type: devbox
-          cmd: "docker wait"
+          type: builtin
+          cmd: docker_wait_healthy
 
     - name: post
       description: After-run hooks (continue on failure)
@@ -196,8 +196,8 @@ run:
           type: devbox
           cmd: "docker up"
         - name: wait
-          type: devbox
-          cmd: "docker wait"
+          type: builtin
+          cmd: docker_wait_healthy
 
 stop:
   final_message: "Project is stopped. Have a nice day!"

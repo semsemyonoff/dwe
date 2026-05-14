@@ -486,8 +486,8 @@ phases:
         type: devbox
         cmd: "docker up"
       - name: wait-healthy
-        type: devbox
-        cmd: "docker wait"
+        type: builtin
+        cmd: docker_wait_healthy
 
   - name: post-deploy
     description: Post-deploy summary
