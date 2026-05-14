@@ -911,8 +911,8 @@ func TestPickService_SelectorReturnsErrCancelled_Propagated(t *testing.T) {
 func TestNewStatusCmd_UseField(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newStatusCmd(flags)
-	if cmd.Use != "status" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "status")
+	if cmd.Use != "status [service]" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "status [service]")
 	}
 }
 

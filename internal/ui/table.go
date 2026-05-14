@@ -201,3 +201,101 @@ func RenderToolTable(rows []ToolTableRow) string {
 
 	return t.String()
 }
+
+// DeployStatusRow holds data for one row in the deploy status table.
+// Imported from statusview, re-exported here for brevity in test utilities.
+type DeployStatusRow struct {
+	Service         string
+	Status          string // journal.Status
+	ConfigDelta     string // ConfigDelta: "ok" | "changed" | "missing"
+	PrevHashShort   string
+	CurrHashShort   string
+	LastFailedPhase string
+	LastFailedStep  string
+}
+
+// statusStyleForDelta returns the style for a config-delta cell.
+func statusStyleForDelta(delta string) lipgloss.Style {
+	switch delta {
+	case "ok":
+		return styleEnabled
+	case "changed":
+		return stylePartial
+	case "missing":
+		return styleWarn
+	default:
+		return lipgloss.NewStyle()
+	}
+}
+
+// statusStyleForStatus returns the style for a deploy status cell.
+func statusStyleForStatus(status string) lipgloss.Style {
+	switch status {
+	case "deployed":
+		return styleEnabled
+	case "partial", "in_progress":
+		return stylePartial
+	case "failed":
+		return styleRunStopped
+	case "not_deployed", "skipped":
+		return styleMuted
+	default:
+		return lipgloss.NewStyle()
+	}
+}
+
+// RenderDeployStatus renders a styled Lipgloss table of deploy status per service.
+// Columns: SERVICE, STATUS, CONFIG, PREV HASH, CURR HASH, LAST FAILED.
+func RenderDeployStatus(rows []DeployStatusRow) string {
+	stringRows := make([][]string, len(rows))
+	statusStyles := make([]string, len(rows))
+	deltaStyles := make([]string, len(rows))
+
+	for i, r := range rows {
+		lastFailedStr := "—"
+		if r.LastFailedPhase != "" {
+			lastFailedStr = r.LastFailedPhase
+			if r.LastFailedStep != "" {
+				lastFailedStr += " / " + r.LastFailedStep
+			}
+		}
+
+		stringRows[i] = []string{
+			r.Service,
+			r.Status,
+			r.ConfigDelta,
+			r.PrevHashShort,
+			r.CurrHashShort,
+			lastFailedStr,
+		}
+		statusStyles[i] = r.Status
+		deltaStyles[i] = r.ConfigDelta
+	}
+
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(styleTableBorder).
+		Headers("SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED").
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return styleTableHeader
+			}
+			if row < 0 || row >= len(statusStyles) {
+				return lipgloss.NewStyle()
+			}
+			switch col {
+			case 1: // STATUS
+				return statusStyleForStatus(statusStyles[row])
+			case 2: // CONFIG
+				return statusStyleForDelta(deltaStyles[row])
+			default:
+				return lipgloss.NewStyle()
+			}
+		})
+
+	for _, r := range stringRows {
+		t.Row(r...)
+	}
+
+	return t.String()
+}

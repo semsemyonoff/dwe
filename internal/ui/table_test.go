@@ -147,3 +147,66 @@ func TestRenderToolTable_Empty(t *testing.T) {
 		t.Error("expected header NAME in empty tool table")
 	}
 }
+
+func TestRenderDeployStatus_Basic(t *testing.T) {
+	resetStyles()
+	rows := []DeployStatusRow{
+		{
+			Service:         "main",
+			Status:          "deployed",
+			ConfigDelta:     "ok",
+			PrevHashShort:   "abc12345",
+			CurrHashShort:   "abc12345",
+			LastFailedPhase: "",
+			LastFailedStep:  "",
+		},
+		{
+			Service:         "db",
+			Status:          "failed",
+			ConfigDelta:     "changed",
+			PrevHashShort:   "old12345",
+			CurrHashShort:   "new12345",
+			LastFailedPhase: "setup",
+			LastFailedStep:  "init-db",
+		},
+	}
+	out := RenderDeployStatus(rows)
+
+	for _, want := range []string{
+		"SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED",
+		"main", "deployed", "ok",
+		"db", "failed", "changed",
+		"init-db", "setup / init-db",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderDeployStatus_Empty(t *testing.T) {
+	resetStyles()
+	out := RenderDeployStatus(nil)
+	if !strings.Contains(out, "SERVICE") {
+		t.Error("expected header SERVICE in empty deploy status table")
+	}
+}
+
+func TestRenderDeployStatus_NoFailure(t *testing.T) {
+	resetStyles()
+	rows := []DeployStatusRow{
+		{
+			Service:         "web",
+			Status:          "deployed",
+			ConfigDelta:     "ok",
+			PrevHashShort:   "hash1234",
+			CurrHashShort:   "hash1234",
+			LastFailedPhase: "",
+			LastFailedStep:  "",
+		},
+	}
+	out := RenderDeployStatus(rows)
+	if !strings.Contains(out, "—") {
+		t.Error("expected em-dash for missing last-failed when no failures")
+	}
+}

@@ -581,7 +581,7 @@ user-facing tables. `internal/ui` stays a pure renderer: it must not load
 YAML, read files, or compute hashes — the command layer assembles the view
 model and hands it in.
 
-- [ ] **view-model placement**: the `DeployStatusView` struct (and its
+- [x] **view-model placement**: the `DeployStatusView` struct (and its
   `DeployStatusRow` row type, plus enum types like `ConfigDelta`) live in
   `internal/command/statusview/` — a tiny render-model package owned by
   the command layer. `internal/ui` only receives the assembled view and
@@ -593,26 +593,26 @@ model and hands it in.
     `ConfigDelta ConfigDelta` (enum: `ok|changed|missing`),
     `PrevHashShort, CurrHashShort string`,
     `LastFailedPhase, LastFailedStep string`
-- [ ] add `RenderDeployStatus(v statusview.DeployStatusView)` to
+- [x] add `RenderDeployStatus(v statusview.DeployStatusView)` to
   `internal/ui/` — Lipgloss table mirroring `RenderServiceTable` style;
   uses the `ApplyStyles`/`Theme()` palette. UI imports `statusview` for
   the input type but never the other way around.
-- [ ] in `internal/command/status.go`: load `state.yml` and tracked
+- [x] in `internal/command/status.go`: load `state.yml` and tracked
   services, compute current `ServiceConfigHash` for each tracked service
   using `config.LoadServiceDeployConfigs`, build the
   `statusview.DeployStatusView`, pass it to `ui.RenderDeployStatus`.
   Absent `state.yml` → row per tracked
   service with `Status=not_deployed`, no hash delta.
-- [ ] support `devbox status <service>` to print per-phase / per-step
+- [x] support `devbox status <service>` to print per-phase / per-step
   breakdown from the journal. Mirror the same separation: command computes
   the view model (steps + their `action_hash` status), UI renders. Don't
   duplicate this in `devbox deploy state show` — that command stays as a
   *raw* dump.
-- [ ] write tests:
+- [x] write tests:
   - command-layer view-model assembly (fixture `state.yml` +
     services/deploy fixtures → expected `DeployStatusView`)
   - UI renderer (view model → expected table string)
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 12: Root summary — `services: N/M deployed`
 
