@@ -154,7 +154,7 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 3: Scaffold `internal/validate` package (types, registry, severity-gated runner)
 
-- [ ] create `internal/validate/validate.go` with the core types:
+- [x] create `internal/validate/validate.go` with the core types:
 
       ```go
       type Severity int
@@ -189,17 +189,17 @@ Go-skill notes used here (verified against `cc-skills-golang`):
       }
       ```
 
-- [ ] add a `Registry` with `Register(Validator)` and selector helpers:
+- [x] add a `Registry` with `Register(Validator)` and selector helpers:
       - `Run(scope ...string)` where scope is e.g. `["config"]` or `["config","deploy"]` or empty (= all)
       - `MatchScope(domain, id string, scope []string) bool` — pure function, table-tested
-- [ ] add `Aggregate(diags []Diagnostic) Summary` returning `{Errors int; Warnings int; Infos int; OKs int}` and `ExitCode(summary, strict bool) int` (0 unless errors > 0, or warnings > 0 with strict)
-- [ ] add deterministic ordering: validators run in registration order; diagnostics returned are sorted by `(Severity desc, Domain asc, Target asc, File asc, Line asc)` before render
-- [ ] write `internal/validate/validate_test.go`:
+- [x] add `Aggregate(diags []Diagnostic) Summary` returning `{Errors int; Warnings int; Infos int; OKs int}` and `ExitCode(summary, strict bool) int` (0 unless errors > 0, or warnings > 0 with strict)
+- [x] add deterministic ordering: validators run in registration order; diagnostics returned are sorted by `(Severity desc, Domain asc, Target asc, File asc, Line asc)` before render
+- [x] write `internal/validate/validate_test.go`:
       - `MatchScope` table-driven (empty matches all; single matches domain; two matches domain+id; mismatch rejects)
       - `Aggregate` / `ExitCode` table-driven (only-OKs → 0, one warn → 0, one warn with strict → 1, one error → 1)
       - sort order determinism (build a shuffled slice, run twice, assert byte-identical output)
-- [ ] no validators yet — those land in Task 4 and 5
-- [ ] run `go test ./internal/validate/...` — must pass before next task
+- [x] no validators yet — those land in Task 4 and 5
+- [x] run `go test ./internal/validate/...` — must pass before next task
 
 ### Task 4: Implement config validators
 
