@@ -24,7 +24,9 @@ func TestIDEValidator(t *testing.T) {
 				}
 			},
 			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
-				require.Empty(t, diags)
+				require.Len(t, diags, 1)
+				require.Equal(t, validate.SeverityInfo, diags[0].Severity)
+				require.Equal(t, "templates.ide", diags[0].Target)
 			},
 		},
 		{
@@ -90,7 +92,9 @@ func TestAIValidator(t *testing.T) {
 				}
 			},
 			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
-				require.Empty(t, diags)
+				require.Len(t, diags, 1)
+				require.Equal(t, validate.SeverityInfo, diags[0].Severity)
+				require.Equal(t, "templates.ai", diags[0].Target)
 			},
 		},
 		{

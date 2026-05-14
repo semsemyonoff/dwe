@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"devbox-cli/internal/usercommands/loader"
 	"devbox-cli/internal/usercommands/model"
@@ -30,7 +31,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 
 	// Discover command files
-	baseDir := fmt.Sprintf("%s/devbox/commands", ctx.ProjectRoot)
+	baseDir := filepath.Join(ctx.ProjectRoot, "devbox", "commands")
 	paths, err := loader.DiscoverCommandFiles(baseDir)
 	if err != nil {
 		// If the commands directory doesn't exist, that's OK; just no commands
@@ -67,11 +68,12 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	for _, path := range paths {
 		cf, err := loader.LoadCommandFile(path, baseDir)
 		if err != nil {
+			relFile, _ := filepath.Rel(ctx.ProjectRoot, path)
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "commands",
 				Target:   "commands",
-				File:     path,
+				File:     relFile,
 				Line:     0,
 				Message:  fmt.Sprintf("failed to parse: %v", err),
 				Hint:     "check YAML syntax and structure",

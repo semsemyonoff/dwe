@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/project"
+	"devbox-cli/internal/reset"
 	"devbox-cli/internal/validate"
 )
 
@@ -404,7 +406,29 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		File:     relPath(ctx.ProjectRoot, deployPath),
 	})
 
-	_ = deployCfg // Unused; just checking that it loads cleanly
+	_ = deployCfg
+
+	// Cross-reference: resolve the plan to catch step-level errors.
+	if ctx.Cfg != nil {
+		if _, err := deploy.ResolvePlan(ctx.Cfg); err != nil {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   "config.deploy",
+				File:     relPath(ctx.ProjectRoot, deployPath),
+				Message:  fmt.Sprintf("plan resolution failed: %v", err),
+				Hint:     "check that all phases and steps reference valid services and commands",
+			})
+		}
+	} else {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.deploy",
+			File:     relPath(ctx.ProjectRoot, deployPath),
+			Message:  "plan resolution skipped: main config did not load",
+		})
+	}
 
 	return diags
 }
@@ -452,7 +476,29 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		File:     relPath(ctx.ProjectRoot, resetPath),
 	})
 
-	_ = resetCfg // Unused; just checking that it loads cleanly
+	_ = resetCfg
+
+	// Cross-reference: resolve the plan to catch step-level errors.
+	if ctx.Cfg != nil {
+		if _, err := reset.ResolvePlan(ctx.Cfg); err != nil {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   "config.reset",
+				File:     relPath(ctx.ProjectRoot, resetPath),
+				Message:  fmt.Sprintf("plan resolution failed: %v", err),
+				Hint:     "check that all phases and steps reference valid services and commands",
+			})
+		}
+	} else {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "config",
+			Target:   "config.reset",
+			File:     relPath(ctx.ProjectRoot, resetPath),
+			Message:  "plan resolution skipped: main config did not load",
+		})
+	}
 
 	return diags
 }

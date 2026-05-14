@@ -94,7 +94,9 @@ func (dockerWaitHealthyBuiltin) Run(with map[string]any, ctx ExecContext) error 
 
 	// If no containers, warn and return nil (idempotent: may run before up).
 	if len(ids) == 0 {
-		ctx.Output.Warning("no containers found")
+		if ctx.Output != nil {
+			ctx.Output.Warning("no containers found")
+		}
 		return nil
 	}
 

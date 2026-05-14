@@ -27,7 +27,12 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 
 	if ctx.Cfg == nil {
-		return diags
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityInfo,
+			Domain:   "templates",
+			Target:   "templates.ai",
+			Message:  "AI template validation requires successful main config load; skipped",
+		}}
 	}
 
 	// Select services that participate in AI rendering

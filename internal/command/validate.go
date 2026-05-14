@@ -224,7 +224,7 @@ func loadForValidate(flags *rootFlags) (*config.DevboxConfig, string, string, er
 
 // buildRegistry assembles all validators from the three domains.
 func buildRegistry() *validate.Registry {
-	reg := &validate.Registry{}
+	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)
 	}

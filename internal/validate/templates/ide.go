@@ -28,7 +28,12 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 
 	if ctx.Cfg == nil {
-		return diags
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityInfo,
+			Domain:   "templates",
+			Target:   "templates.ide",
+			Message:  "IDE template validation requires successful main config load; skipped",
+		}}
 	}
 
 	// Select services that participate in IDE rendering

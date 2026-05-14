@@ -37,7 +37,9 @@ func WaitContainersHealthy(ids []string, getHealth HealthGetFn, attempts int, in
 				return fmt.Errorf("container %s is unhealthy", id)
 			case "none", "":
 				if !warned[id] {
-					w.Warning(fmt.Sprintf("container %s has no healthcheck, skipping", id))
+					if w != nil {
+						w.Warning(fmt.Sprintf("container %s has no healthcheck, skipping", id))
+					}
 					warned[id] = true
 				}
 				// treat as done — no healthcheck configured
@@ -47,7 +49,9 @@ func WaitContainersHealthy(ids []string, getHealth HealthGetFn, attempts int, in
 		}
 
 		if allDone {
-			w.Success("all containers healthy")
+			if w != nil {
+				w.Success("all containers healthy")
+			}
 			return nil
 		}
 	}
