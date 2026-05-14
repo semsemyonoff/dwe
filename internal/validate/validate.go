@@ -75,16 +75,14 @@ func (r *Registry) Run(ctx Context, scope ...string) []Diagnostic {
 // Single-element scope matches validators in that domain.
 // Two-element scope matches validators in that domain with that ID.
 func MatchScope(domain, id string, scope []string) bool {
-	if len(scope) == 0 {
+	switch len(scope) {
+	case 0:
 		return true
-	}
-	if len(scope) == 1 {
+	case 1:
 		return scope[0] == domain
-	}
-	if len(scope) >= 2 {
+	default:
 		return scope[0] == domain && scope[1] == id
 	}
-	return false
 }
 
 func sortDiagnostics(diags []Diagnostic) {

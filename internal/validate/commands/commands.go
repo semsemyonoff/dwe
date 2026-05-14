@@ -2,7 +2,9 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"devbox-cli/internal/usercommands/loader"
 	"devbox-cli/internal/usercommands/model"
@@ -33,7 +35,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	if err != nil {
 		// If the commands directory doesn't exist, that's OK; just no commands
 		// Any other error is a problem
-		if err.Error() != "stat devbox/commands: no such file or directory" {
+		if !errors.Is(err, os.ErrNotExist) {
 			return []validate.Diagnostic{
 				{
 					Severity: validate.SeverityError,

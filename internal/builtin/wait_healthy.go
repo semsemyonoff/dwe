@@ -55,6 +55,10 @@ func (dockerWaitHealthyBuiltin) Describe(with map[string]any) string {
 	services, _ := getStringSlice(with, "services")
 
 	if len(services) > 0 {
+		if len(services) == 1 {
+			return fmt.Sprintf("wait until 1 service is healthy (timeout: %s, interval: %s)",
+				timeout, interval)
+		}
 		return fmt.Sprintf("wait until %d services are healthy (timeout: %s, interval: %s)",
 			len(services), timeout, interval)
 	}

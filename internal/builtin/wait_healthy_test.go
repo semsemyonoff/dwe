@@ -200,7 +200,7 @@ func TestDockerWaitHealthyIntegration(t *testing.T) {
 		desc := Describe("docker_wait_healthy", map[string]any{
 			"services": []string{"app"},
 		})
-		require.Contains(t, desc, "1 services are healthy")
+		require.Contains(t, desc, "1 service is healthy")
 	})
 }
 

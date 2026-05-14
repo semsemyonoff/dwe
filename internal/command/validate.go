@@ -82,15 +82,15 @@ Scope targets:
 		},
 	}
 	configCmd.AddCommand(
-		newValidateConfigSubCmd(flags, strict, quiet, "devbox", "Validate main devbox.yml"),
-		newValidateConfigSubCmd(flags, strict, quiet, "services", "Validate devbox/services.yml"),
-		newValidateConfigSubCmd(flags, strict, quiet, "docker", "Validate devbox/docker.yml"),
-		newValidateConfigSubCmd(flags, strict, quiet, "info", "Validate devbox/info.yml"),
-		newValidateConfigSubCmd(flags, strict, quiet, "styles", "Validate devbox/styles.yml"),
-		newValidateConfigSubCmd(flags, strict, quiet, "lifecycle", "Validate devbox/lifecycle.yml"),
-		newValidateConfigSubCmd(flags, strict, quiet, "deploy", "Validate devbox/deploy.yml"),
-		newValidateConfigSubCmd(flags, strict, quiet, "reset", "Validate devbox/reset.yml (replaces 'devbox reset config check')"),
-		newValidateConfigSubCmd(flags, strict, quiet, "service-deploy", "Validate service deploy configs"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "devbox", "Validate main devbox.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "services", "Validate devbox/services.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "docker", "Validate devbox/docker.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "info", "Validate devbox/info.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "styles", "Validate devbox/styles.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "lifecycle", "Validate devbox/lifecycle.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "deploy", "Validate devbox/deploy.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "reset", "Validate devbox/reset.yml (replaces 'devbox reset config check')"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, "service-deploy", "Validate service deploy configs"),
 	)
 	cmd.AddCommand(configCmd)
 
@@ -105,8 +105,8 @@ Scope targets:
 		},
 	}
 	templatesCmd.AddCommand(
-		newValidateTemplateSubCmd(flags, strict, quiet, "ide", "Validate IDE template pack"),
-		newValidateTemplateSubCmd(flags, strict, quiet, "ai", "Validate AI template pack"),
+		newValidateTemplateSubCmd(flags, &strict, &quiet, "ide", "Validate IDE template pack"),
+		newValidateTemplateSubCmd(flags, &strict, &quiet, "ai", "Validate AI template pack"),
 	)
 	cmd.AddCommand(templatesCmd)
 
@@ -126,27 +126,27 @@ Scope targets:
 }
 
 // newValidateConfigSubCmd creates a leaf command for a single config validator.
-func newValidateConfigSubCmd(flags *rootFlags, strict, quiet bool, id, short string) *cobra.Command {
+func newValidateConfigSubCmd(flags *rootFlags, strict, quiet *bool, id, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:          id,
 		Short:        short,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, []string{"config", id})
+			return runValidate(cmd, flags, *strict, *quiet, []string{"config", id})
 		},
 	}
 }
 
 // newValidateTemplateSubCmd creates a leaf command for a single template validator.
-func newValidateTemplateSubCmd(flags *rootFlags, strict, quiet bool, id, short string) *cobra.Command {
+func newValidateTemplateSubCmd(flags *rootFlags, strict, quiet *bool, id, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:          id,
 		Short:        short,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, []string{"templates", id})
+			return runValidate(cmd, flags, *strict, *quiet, []string{"templates", id})
 		},
 	}
 }

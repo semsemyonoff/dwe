@@ -127,7 +127,7 @@ tools:
 	// Should have no errors in this well-formed project
 	for _, d := range allDiags {
 		if d.Severity == validate.SeverityError {
-			t.Logf("unexpected error: %s / %s / %s", d.Target, d.File, d.Message)
+			t.Errorf("unexpected error: %s / %s / %s", d.Target, d.File, d.Message)
 		}
 	}
 }

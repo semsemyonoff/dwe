@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -489,7 +490,14 @@ func (v *serviceDeployValidator) Run(ctx validate.Context) []validate.Diagnostic
 				})
 				return diags
 			}
-			// Error loading services; don't try to validate service deploys
+			// Error loading services; emit a diagnostic and skip service deploy validation
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   "config.service-deploy",
+				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox", "services.yml")),
+				Message:  fmt.Sprintf("failed to load services: %v", err),
+			})
 			return diags
 		}
 	}
