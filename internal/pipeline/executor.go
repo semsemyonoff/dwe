@@ -498,6 +498,9 @@ func RunWithOptions(opts RunOptions) error {
 			if err := hook(); err != nil {
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
 				opts.Recorder.OnStepFail(addr, rs, actionHash, durationMs, err)
+				if rs.Step.ContinueOnError {
+					continue
+				}
 				return ErrSilent
 			}
 		}

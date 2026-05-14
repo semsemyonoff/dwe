@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -46,14 +47,14 @@ If the state file does not exist, shows a message indicating no state.`,
 		Example: `  devbox deploy state show`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return deployStateShowCmd(flags)
+			return deployStateShowCmd(flags, cmd.OutOrStdout())
 		},
 		SilenceUsage: true,
 	}
 	return cmd
 }
 
-func deployStateShowCmd(flags *rootFlags) error {
+func deployStateShowCmd(flags *rootFlags, out io.Writer) error {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
@@ -75,7 +76,7 @@ func deployStateShowCmd(flags *rootFlags) error {
 		return fmt.Errorf("marshaling state: %w", err)
 	}
 
-	_, _ = fmt.Fprint(os.Stdout, string(data))
+	_, _ = fmt.Fprint(out, string(data))
 	return nil
 }
 

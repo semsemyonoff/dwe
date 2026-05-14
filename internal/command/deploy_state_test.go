@@ -1,6 +1,7 @@
 package command
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,7 +42,7 @@ func TestDeployStateShow(t *testing.T) {
 		flags := &rootFlags{configPath: filepath.Join(workDir, "devbox.yml")}
 
 		// Run the show command
-		err = deployStateShowCmd(flags)
+		err = deployStateShowCmd(flags, io.Discard)
 		assert.NoError(t, err)
 	})
 
@@ -50,7 +51,7 @@ func TestDeployStateShow(t *testing.T) {
 		flags := &rootFlags{configPath: filepath.Join(workDir, "devbox.yml")}
 
 		// Run the show command (file doesn't exist)
-		err := deployStateShowCmd(flags)
+		err := deployStateShowCmd(flags, io.Discard)
 		assert.NoError(t, err)
 	})
 }
