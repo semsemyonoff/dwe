@@ -10,6 +10,7 @@ func newRunCmd(flags *rootFlags) *cobra.Command {
 	var noUpdate bool
 	var updateMode string
 	var yes bool
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -31,6 +32,7 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 				NoUpdate:   noUpdate,
 				UpdateMode: updateMode,
 				Yes:        yes,
+				Force:      force,
 				ShowInfo:   func() error { return runInfo(cmd, flags) },
 			})
 		},
@@ -39,5 +41,6 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 	cmd.Flags().BoolVar(&noUpdate, "no-update", false, "disable git update probe regardless of lifecycle.yml config")
 	cmd.Flags().StringVar(&updateMode, "update", "", "override update probe mode (prompt|auto|check|off)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
+	cmd.Flags().BoolVar(&force, "force", false, "skip the deployment gate check for mandatory services")
 	return cmd
 }

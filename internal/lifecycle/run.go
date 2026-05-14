@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/git"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
@@ -27,6 +29,7 @@ type RunContext struct {
 	NoUpdate   bool
 	UpdateMode string
 	Yes        bool
+	Force      bool
 	// ShowInfo is called after the run phases complete, when lifecycle.yml has show_info: true.
 	// Callers inject this to avoid importing the cobra info renderer into this package.
 	// If nil, no info display is attempted.
@@ -126,6 +129,29 @@ func RunRun(ctx RunContext) error {
 		}
 	}
 
+	// Gate: ensure all tracked services are deployed (unless forced).
+	if !ctx.Force {
+		tracked, _, err := deploy.LoadTrackedServices(cfg, workDir)
+		if err != nil {
+			return fmt.Errorf("loading tracked services: %w", err)
+		}
+
+		if len(tracked) > 0 {
+			statePath := filepath.Join(workDir, journal.DefaultRelPath)
+			state, err := journal.Load(statePath)
+			if err != nil {
+				return fmt.Errorf("loading deploy state: %w", err)
+			}
+
+			for _, svcName := range tracked {
+				svcState, ok := state.Services[svcName]
+				if !ok || svcState.Status != journal.StatusDeployed {
+					return &deploymentGateError{service: svcName}
+				}
+			}
+		}
+	}
+
 	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
@@ -157,4 +183,18 @@ func RunRestart(ctx RunContext) error {
 	ctx.NoUpdate = true
 	ctx.UpdateMode = ""
 	return RunRun(ctx)
+}
+
+// deploymentGateError is returned when the run gate detects an undeployed tracked service.
+// It implements ExitCode() int to signal a specific exit code.
+type deploymentGateError struct {
+	service string
+}
+
+func (e *deploymentGateError) Error() string {
+	return fmt.Sprintf("service %q must be deployed — run `devbox deploy` first, or use --force to bypass", e.service)
+}
+
+func (e *deploymentGateError) ExitCode() int {
+	return 2
 }

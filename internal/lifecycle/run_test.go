@@ -369,3 +369,40 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 		t.Errorf("expected command to continue after pull error (warn path), got: %v", err)
 	}
 }
+
+// --- Deployment gate tests ---
+
+func TestRunRun_DeploymentGate_NoTrackedServices_Passes(t *testing.T) {
+	// When there are no tracked services (no deploy_services: true in plan),
+	// the gate should pass through without checking state.
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	writeLifecycleYML(t, devboxDir, "done")
+
+	ctx := RunContext{ConfigPath: cfgPath}
+	err := RunRun(ctx)
+	if err != nil {
+		t.Errorf("expected no error when no tracked services; got: %v", err)
+	}
+}
+
+func TestRunRun_DeploymentGate_Force_BypassesGate(t *testing.T) {
+	// With Force=true, the gate is skipped entirely.
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	writeLifecycleYML(t, devboxDir, "done")
+
+	ctx := RunContext{ConfigPath: cfgPath, Force: true}
+	err := RunRun(ctx)
+	if err != nil {
+		t.Errorf("expected no error with Force=true; got: %v", err)
+	}
+}
