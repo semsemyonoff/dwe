@@ -21,7 +21,6 @@ type FileRecorder struct {
 	projectConfigHash     string
 	stepStartTimes        map[string]time.Time
 	servicesSeenInThisRun map[string]bool
-	phasesSeenInThisRun   map[string]map[string]bool // service -> {phaseName -> true}
 	pipelineStartTime     time.Time
 }
 
@@ -45,7 +44,6 @@ func NewFileRecorder(
 		projectConfigHash:     projectConfigHash,
 		stepStartTimes:        make(map[string]time.Time),
 		servicesSeenInThisRun: make(map[string]bool),
-		phasesSeenInThisRun:   make(map[string]map[string]bool),
 	}
 }
 
@@ -113,12 +111,8 @@ func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash stri
 			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
 		}
 
-		// Track that we've seen this service and phase
+		// Track that we've seen this service so its config hash is stamped in OnPipelineFinish
 		r.servicesSeenInThisRun[rs.Service] = true
-		if r.phasesSeenInThisRun[rs.Service] == nil {
-			r.phasesSeenInThisRun[rs.Service] = make(map[string]bool)
-		}
-		r.phasesSeenInThisRun[rs.Service][rs.Phase.Name] = true
 	}
 }
 
@@ -135,12 +129,15 @@ func (r *FileRecorder) OnStepFinish(addr string, rs ResolvedStep, actionHash str
 	if rs.Service == "" {
 		// Project-scope step
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
-		r.state.Project.Phases[rs.Phase.Name].Status = journal.StatusOk
+		// Update phase status to ok (unless it's already in a failed state from a previous step)
+		if r.state.Project.Phases[rs.Phase.Name].Status != journal.StatusFailed {
+			r.state.Project.Phases[rs.Phase.Name].Status = journal.StatusOk
+		}
 	} else {
 		// Service-scope step
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		// Update phase status to ok (unless it's already in a failed state from a previous step)
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Status == "" {
+		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Status != journal.StatusFailed {
 			r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = journal.StatusOk
 		}
 	}
@@ -185,12 +182,45 @@ func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash strin
 	}
 
 	if rs.Service == "" {
-		// Project-scope step
+		// Project-scope step — initialize maps if not yet set up by OnStepStart
+		if r.state.Project == nil {
+			r.state.Project = &journal.ProjectLevelState{}
+		}
+		if r.state.Project.Phases == nil {
+			r.state.Project.Phases = make(map[string]*journal.PhaseState)
+		}
+		if r.state.Project.Phases[rs.Phase.Name] == nil {
+			r.state.Project.Phases[rs.Phase.Name] = &journal.PhaseState{
+				Steps: make(map[string]*journal.StepState),
+			}
+		}
+		if r.state.Project.Phases[rs.Phase.Name].Steps == nil {
+			r.state.Project.Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
+		}
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		// Note: do not update phase status for skipped steps
 	} else {
-		// Service-scope step
+		// Service-scope step — initialize maps if not yet set up by OnStepStart
+		if r.state.Services[rs.Service] == nil {
+			r.state.Services[rs.Service] = &journal.ServiceState{
+				Phases:  make(map[string]*journal.PhaseState),
+				LastRun: &journal.LastRun{},
+			}
+		}
+		if r.state.Services[rs.Service].Phases == nil {
+			r.state.Services[rs.Service].Phases = make(map[string]*journal.PhaseState)
+		}
+		if r.state.Services[rs.Service].Phases[rs.Phase.Name] == nil {
+			r.state.Services[rs.Service].Phases[rs.Phase.Name] = &journal.PhaseState{
+				Steps: make(map[string]*journal.StepState),
+			}
+		}
+		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps == nil {
+			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
+		}
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
+		// Track that we've seen this service so its config hash is stamped in OnPipelineFinish
+		r.servicesSeenInThisRun[rs.Service] = true
 	}
 
 	// Flush to disk immediately

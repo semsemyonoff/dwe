@@ -109,8 +109,8 @@ func TestBuildDeployStatusView(t *testing.T) {
 				assert.Equal(t, journal.StatusDeployed, row.Status)
 				// Hash mismatch because our test service config will compute a different hash
 				assert.True(t, row.ConfigDelta == statusview.ConfigDeltaOK || row.ConfigDelta == statusview.ConfigDeltaChanged)
-				assert.Equal(t, 8, len(row.CurrHashShort))
-				assert.Equal(t, 8, len(row.PrevHashShort))
+				assert.Equal(t, 12, len(row.CurrHashShort))
+				assert.Equal(t, 12, len(row.PrevHashShort))
 			},
 		},
 	}

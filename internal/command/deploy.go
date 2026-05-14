@@ -148,7 +148,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	lck, err := lock.Acquire(lockPath)
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			return fmt.Errorf("cannot start deploy: lock held by process %d (use --force to override or wait for that process to finish)", heldErr.PID)
+			return fmt.Errorf("cannot start deploy: lock held by process %d (wait for that process to finish or kill it and retry)", heldErr.PID)
 		}
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
@@ -279,8 +279,11 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		}
 	}
 
-	// Check for previously failed/partial runs
-	if !force && (state.Project.Status == journal.StatusFailed || state.Project.Status == journal.StatusPartial) {
+	// Check for previously failed/partial/crashed runs
+	prevIncomplete := state.Project.Status == journal.StatusFailed ||
+		state.Project.Status == journal.StatusPartial ||
+		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusInProgress)
+	if !force && prevIncomplete {
 		if isInteractive {
 			w.Warning("Last deploy run failed or was incomplete. Resume or start fresh?")
 			choice, err := ui.RunSelector(

@@ -104,7 +104,7 @@ func resetRunCmd(flags *rootFlags, yes bool, forceLock bool) error {
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
 			if !forceLock {
-				return fmt.Errorf("cannot start reset: lock held by process %d (use --force to override or wait for that process to finish)", heldErr.PID)
+				return fmt.Errorf("cannot start reset: lock held by process %d (wait for that process to finish or kill it and retry)", heldErr.PID)
 			}
 			// With --force, we still can't forcibly take the lock from a live process,
 			// but we'll proceed with a best-effort approach; the lock is primarily

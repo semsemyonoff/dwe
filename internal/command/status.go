@@ -156,7 +156,7 @@ func buildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig
 		}
 
 		currHash := journal.ServiceConfigHash(svcCfg, svcDeploy)
-		currHashShort := currHash[:8]
+		currHashShort := journal.ShortHash(currHash)
 
 		var delta statusview.ConfigDelta
 		delta = statusview.ConfigDeltaOK
@@ -166,7 +166,7 @@ func buildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig
 		if !exists {
 			delta = statusview.ConfigDeltaMissing
 		} else {
-			prevHashShort = svcState.ConfigHash[:8]
+			prevHashShort = journal.ShortHash(svcState.ConfigHash)
 			if svcState.ConfigHash != currHash {
 				delta = statusview.ConfigDeltaChanged
 			}
@@ -232,7 +232,7 @@ func renderServiceDeployDetail(w io.Writer, state *journal.ProjectState, _ *conf
 		_, _ = fmt.Fprintf(rw.Writer(), "  %s: %s\n", phaseName, phase.Status)
 		for stepName, step := range phase.Steps {
 			_, _ = fmt.Fprintf(rw.Writer(), "    %s: %s (hash=%s, duration=%dms)\n",
-				stepName, step.Status, step.ActionHash[:8], step.DurationMs)
+				stepName, step.Status, journal.ShortHash(step.ActionHash), step.DurationMs)
 		}
 	}
 
