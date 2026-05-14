@@ -556,7 +556,6 @@ func (v *serviceDeployValidator) Run(ctx validate.Context) []validate.Diagnostic
 			Severity: validate.SeverityError,
 			Domain:   "config",
 			Target:   "config.service-deploy",
-			File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox")),
 			Message:  err.Error(),
 		})
 		return diags

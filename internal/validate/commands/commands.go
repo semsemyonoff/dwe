@@ -49,10 +49,10 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 				},
 			}
 		}
-		// Directory doesn't exist; emit OK diagnostic
+		// Directory doesn't exist; emit Info diagnostic (optional directory)
 		return []validate.Diagnostic{
 			{
-				Severity: validate.SeverityOK,
+				Severity: validate.SeverityInfo,
 				Domain:   "commands",
 				Target:   "commands",
 				File:     "",
