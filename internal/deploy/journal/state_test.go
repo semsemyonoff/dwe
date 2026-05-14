@@ -95,22 +95,25 @@ func TestLoad_RoundTrip(t *testing.T) {
 	assert.Equal(t, "hash2", loaded.Services["main"].Phases["setup"].Steps["install"].ActionHash)
 }
 
-// TestLoad_UnknownFields tests that strict YAML decoding rejects unknown fields.
+// TestLoad_UnknownFields tests that state.yml uses lenient YAML decoding —
+// unknown fields are silently ignored so a newer devbox version's state file
+// can be read by an older version without error.
 func TestLoad_UnknownFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	statePath := filepath.Join(tmpDir, "bad.yml")
+	statePath := filepath.Join(tmpDir, "state.yml")
 
 	content := `schema_version: "1"
 project:
   status: deployed
-  unknown_field: should_fail
+  unknown_field: should_be_ignored
 `
 	err := os.WriteFile(statePath, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	_, err = Load(statePath)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to parse state file")
+	state, err := Load(statePath)
+	assert.NoError(t, err, "unknown fields must be ignored (lenient decode)")
+	require.NotNil(t, state)
+	assert.Equal(t, StatusDeployed, state.Project.Status)
 }
 
 // TestLoad_MalformedYAML tests that malformed YAML produces an error.

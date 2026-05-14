@@ -755,3 +755,42 @@ func TestFileRecorder_ServiceOnlyRunPreservesProjectLastRunStatus(t *testing.T) 
 	require.NotNil(t, loaded.Services["main"])
 	assert.Equal(t, "svc-hash", loaded.Services["main"].ConfigHash)
 }
+
+// TestFileRecorder_ServiceInProgressOnStepStart verifies that a service's
+// LastRun.Status is set to in_progress before the step executes, so a process
+// crash mid-deploy is detectable via journal.Recompute().
+func TestFileRecorder_ServiceInProgressOnStepStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services:      make(map[string]*journal.ServiceState),
+	}
+
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "svc-hash"}, "proj-hash", true)
+	rec.OnPipelineStart("deploy", 1)
+
+	step := ResolvedStep{
+		Service: "main",
+		Phase:   config.DeployPhase{Name: "setup"},
+		Step:    config.DeployStep{Name: "step1", Type: "shell", Cmd: "echo"},
+	}
+
+	// OnStepStart must flush in_progress to disk before the step runs.
+	rec.OnStepStart(step.StepAddress(), step, "hash1")
+
+	// Simulate a crash: read state from disk without calling OnPipelineFinish.
+	crashed, err := journal.Load(statePath)
+	require.NoError(t, err)
+	require.NotNil(t, crashed.Services["main"])
+	require.NotNil(t, crashed.Services["main"].LastRun)
+	assert.Equal(t, journal.StatusInProgress, crashed.Services["main"].LastRun.Status,
+		"service LastRun.Status must be in_progress after OnStepStart so crashes are detectable")
+
+	// After Recompute, the in_progress status is converted to failed.
+	journal.Recompute(crashed)
+	assert.Equal(t, journal.StatusFailed, crashed.Services["main"].LastRun.Status,
+		"Recompute must convert in_progress → failed for crashed services")
+}

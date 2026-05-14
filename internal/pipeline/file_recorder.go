@@ -128,6 +128,25 @@ func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash stri
 			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
 		}
 
+		// Mark the service in_progress before executing the first actual step so that a
+		// process crash before OnPipelineFinish is detectable via Recompute().
+		// We use LastRun.Status as the sentinel rather than servicesSeenInThisRun because
+		// OnStepSkip also sets servicesSeenInThisRun (for condition-based skips) — we only
+		// want to mark in_progress when a step actually starts executing.
+		svc := r.state.Services[rs.Service]
+		if svc.LastRun == nil {
+			svc.LastRun = &journal.LastRun{}
+		}
+		if svc.LastRun.Status != journal.StatusInProgress {
+			if svc.LastRun.StartedAt.IsZero() {
+				svc.LastRun.StartedAt = r.pipelineStartTime
+			}
+			svc.LastRun.Status = journal.StatusInProgress
+			if err := r.flush(); err != nil {
+				r.flushErr = err
+			}
+		}
+
 		// Track that we've seen this service so its config hash is stamped in OnPipelineFinish
 		r.servicesSeenInThisRun[rs.Service] = true
 	}
@@ -309,7 +328,7 @@ func (r *FileRecorder) OnPipelineFinish(success bool) {
 				StartedAt: r.pipelineStartTime,
 			}
 		} else if svcState.LastRun.StartedAt.IsZero() {
-			// If StartedAt wasn't set (e.g., created in OnStepStart), set it now
+			// Fallback: set StartedAt if not already set (e.g., service seen only via OnStepSkip).
 			svcState.LastRun.StartedAt = r.pipelineStartTime
 		}
 		svcState.LastRun.FinishedAt = now

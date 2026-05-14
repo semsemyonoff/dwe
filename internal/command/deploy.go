@@ -274,6 +274,10 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	// Check if we need to prompt before running
 	isInteractive := ui.IsInteractiveFn(os.Stdin) && !nonInteractive
 
+	// Set to true when the config-change dialog fires so the prevIncomplete gate
+	// doesn't show a second prompt for the same run.
+	configChangeHandled := false
+
 	if !force && state.Project.Status == journal.StatusDeployed {
 		// Check if all hashes match and there are no check: steps
 		hasCheckSteps := false
@@ -326,6 +330,9 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 					force = true // Full re-deploy
 				}
 				// choice == 0: apply delta (default behavior, continue)
+				// Mark as handled so we don't show the prevIncomplete prompt too —
+				// the user already acknowledged the state.
+				configChangeHandled = true
 			}
 		}
 	}
@@ -337,7 +344,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		state.Project.Status == journal.StatusPartial ||
 		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusInProgress) ||
 		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusFailed)
-	if !force && prevIncomplete {
+	if !force && prevIncomplete && !configChangeHandled {
 		if isInteractive {
 			w.Warning("Last deploy run failed or was incomplete. Resume or start fresh?")
 			choice, err := ui.RunSelector(
