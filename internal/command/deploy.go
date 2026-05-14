@@ -161,7 +161,9 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	lck, err := lock.Acquire(lockPath)
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			return &lockHeldError{operation: "deploy", pid: heldErr.PID}
+			lhe := &lockHeldError{operation: "deploy", pid: heldErr.PID}
+			render.Stdout().Error(lhe.Error())
+			return lhe
 		}
 		return fmt.Errorf("acquiring lock: %w", err)
 	}

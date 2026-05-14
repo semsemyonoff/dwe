@@ -183,9 +183,12 @@ func RemoveService(path string, name string) error {
 	// Delete the service
 	delete(state.Services, name)
 
-	// If no services remain, remove the file entirely
+	// If no services remain and no project-level phases exist, remove the file entirely.
+	// Preserve the file if project-scope steps were deployed.
 	if len(state.Services) == 0 {
-		return Remove(path)
+		if state.Project == nil || len(state.Project.Phases) == 0 {
+			return Remove(path)
+		}
 	}
 
 	// Recompute project aggregate before saving

@@ -101,7 +101,9 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 	lck, err := lock.Acquire(lockPath)
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			return &lockHeldError{operation: "reset", pid: heldErr.PID}
+			lhe := &lockHeldError{operation: "reset", pid: heldErr.PID}
+			render.Stdout().Error(lhe.Error())
+			return lhe
 		}
 		return fmt.Errorf("acquiring lock: %w", err)
 	}

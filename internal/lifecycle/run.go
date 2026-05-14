@@ -146,7 +146,9 @@ func RunRun(ctx RunContext) error {
 			for _, svcName := range tracked {
 				svcState, ok := state.Services[svcName]
 				if !ok || svcState.Status != journal.StatusDeployed {
-					return &deploymentGateError{service: svcName}
+					dge := &deploymentGateError{service: svcName}
+					render.Stdout().Error(dge.Error())
+					return dge
 				}
 			}
 		}

@@ -114,7 +114,9 @@ func deployStateClearCmd(flags *rootFlags, force bool) error {
 	lck, err := lock.Acquire(lockPath)
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			return &lockHeldError{operation: "clear state", pid: heldErr.PID}
+			lhe := &lockHeldError{operation: "clear state", pid: heldErr.PID}
+			render.Stdout().Error(lhe.Error())
+			return lhe
 		}
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
@@ -180,7 +182,9 @@ func deployStateRepairCmd(flags *rootFlags) error {
 	lck, err := lock.Acquire(lockPath)
 	if err != nil {
 		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			return &lockHeldError{operation: "repair state", pid: heldErr.PID}
+			lhe := &lockHeldError{operation: "repair state", pid: heldErr.PID}
+			render.Stdout().Error(lhe.Error())
+			return lhe
 		}
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
