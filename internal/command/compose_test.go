@@ -143,7 +143,7 @@ func discardWriter() *render.Writer {
 
 func TestWaitContainersHealthy_allHealthy(t *testing.T) {
 	getHealth := func(id string) (string, error) { return "healthy", nil }
-	err := waitContainersHealthy([]string{"c1", "c2"}, getHealth, 3, time.Millisecond, discardWriter())
+	err := docker.WaitContainersHealthy([]string{"c1", "c2"}, getHealth, 3, time.Millisecond, discardWriter())
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -151,7 +151,7 @@ func TestWaitContainersHealthy_allHealthy(t *testing.T) {
 
 func TestWaitContainersHealthy_unhealthyReturnsError(t *testing.T) {
 	getHealth := func(id string) (string, error) { return "unhealthy", nil }
-	err := waitContainersHealthy([]string{"c1"}, getHealth, 3, time.Millisecond, discardWriter())
+	err := docker.WaitContainersHealthy([]string{"c1"}, getHealth, 3, time.Millisecond, discardWriter())
 	if err == nil {
 		t.Error("expected error for unhealthy container, got nil")
 	}
@@ -159,7 +159,7 @@ func TestWaitContainersHealthy_unhealthyReturnsError(t *testing.T) {
 
 func TestWaitContainersHealthy_noHealthcheckSkipped(t *testing.T) {
 	getHealth := func(id string) (string, error) { return "none", nil }
-	err := waitContainersHealthy([]string{"c1", "c2"}, getHealth, 3, time.Millisecond, discardWriter())
+	err := docker.WaitContainersHealthy([]string{"c1", "c2"}, getHealth, 3, time.Millisecond, discardWriter())
 	if err != nil {
 		t.Errorf("expected nil for no-healthcheck containers, got %v", err)
 	}
@@ -174,7 +174,7 @@ func TestWaitContainersHealthy_startingThenHealthy(t *testing.T) {
 		}
 		return "healthy", nil
 	}
-	err := waitContainersHealthy([]string{"c1"}, getHealth, 5, time.Millisecond, discardWriter())
+	err := docker.WaitContainersHealthy([]string{"c1"}, getHealth, 5, time.Millisecond, discardWriter())
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -185,7 +185,7 @@ func TestWaitContainersHealthy_startingThenHealthy(t *testing.T) {
 
 func TestWaitContainersHealthy_timeout(t *testing.T) {
 	getHealth := func(id string) (string, error) { return "starting", nil }
-	err := waitContainersHealthy([]string{"c1"}, getHealth, 2, time.Millisecond, discardWriter())
+	err := docker.WaitContainersHealthy([]string{"c1"}, getHealth, 2, time.Millisecond, discardWriter())
 	if err == nil {
 		t.Error("expected timeout error, got nil")
 	}
@@ -198,7 +198,7 @@ func TestWaitContainersHealthy_mixedNoHealthcheckAndHealthy(t *testing.T) {
 		}
 		return "healthy", nil
 	}
-	err := waitContainersHealthy([]string{"c1", "c2"}, getHealth, 3, time.Millisecond, discardWriter())
+	err := docker.WaitContainersHealthy([]string{"c1", "c2"}, getHealth, 3, time.Millisecond, discardWriter())
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}

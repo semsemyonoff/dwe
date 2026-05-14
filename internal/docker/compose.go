@@ -229,3 +229,9 @@ func (c *Compose) ContainerIDs() ([]string, error) {
 	}
 	return ids, nil
 }
+
+// HealthStatus returns the health status of a container by ID, using this
+// Compose's docker binary. Wraps the package-level HealthStatus function.
+func (c *Compose) HealthStatus(id string) (string, error) {
+	return HealthStatus(c.BinName(), id)
+}

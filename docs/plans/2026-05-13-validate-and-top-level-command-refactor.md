@@ -108,22 +108,22 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 1: Extract health-wait helpers into `internal/docker`
 
-- [ ] create `internal/docker/health.go` exporting:
+- [x] create `internal/docker/health.go` exporting:
       - `type HealthGetFn func(id string) (string, error)`
       - `func WaitContainersHealthy(ids []string, get HealthGetFn, attempts int, interval time.Duration, w *render.Writer) error`
       - `func HealthStatus(bin, id string) (string, error)` (was `dockerHealthStatus`)
-- [ ] copy logic verbatim from `internal/command/compose.go:158-216`; keep the warning/success message strings byte-identical so user-visible behavior is unchanged
-- [ ] delete `healthGetFn`, `waitContainersHealthy`, `dockerHealthStatus` from `internal/command/compose.go`
-- [ ] update the two existing call sites (`internal/command/wait.go:49-51`, `internal/command/docker.go:258-260`) to call the exported names; these will be deleted in Task 7 but must compile cleanly until then
-- [ ] add `func (c *Compose) HealthStatus(id string) (string, error)` method that wraps `HealthStatus(c.BinName(), id)` — gives the builtin a clean `compose.HealthStatus` callsite without leaking `bin` plumbing
-- [ ] write `internal/docker/health_test.go` with table-driven cases for `WaitContainersHealthy`:
+- [x] copy logic verbatim from `internal/command/compose.go:158-216`; keep the warning/success message strings byte-identical so user-visible behavior is unchanged
+- [x] delete `healthGetFn`, `waitContainersHealthy`, `dockerHealthStatus` from `internal/command/compose.go`
+- [x] update the two existing call sites (`internal/command/wait.go:49-51`, `internal/command/docker.go:258-260`) to call the exported names; these will be deleted in Task 7 but must compile cleanly until then
+- [x] add `func (c *Compose) HealthStatus(id string) (string, error)` method that wraps `HealthStatus(c.BinName(), id)` — gives the builtin a clean `compose.HealthStatus` callsite without leaking `bin` plumbing
+- [x] write `internal/docker/health_test.go` with table-driven cases for `WaitContainersHealthy`:
       - all-healthy → success on first attempt
       - one starting → loops, eventually succeeds when fixture flips
       - unhealthy → returns error immediately, names container
       - no-healthcheck (`"none"`/`""`) → one-time warning, treated as done (assert warn fires exactly once per id via fake `*render.Writer` or buffer)
       - timeout → returns error after exactly `attempts` iterations
-- [ ] write a unit test for `Compose.HealthStatus` using a fake bin (an executable test helper in `testdata/` that echoes the desired status) — or mock by extracting an internal `inspectFn` indirection if shelling out is too heavy for unit tests
-- [ ] run `go test ./internal/docker/... ./internal/command/...` — must pass before next task
+- [x] write a unit test for `Compose.HealthStatus` using a fake bin (an executable test helper in `testdata/` that echoes the desired status) — or mock by extracting an internal `inspectFn` indirection if shelling out is too heavy for unit tests
+- [x] run `go test ./internal/docker/... ./internal/command/...` — must pass before next task
 
 ### Task 2: Add `docker_wait_healthy` builtin
 
