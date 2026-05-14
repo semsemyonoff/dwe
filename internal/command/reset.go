@@ -153,8 +153,10 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 
 	// After reset succeeds, clean up the deploy state entirely.
 	// Reset steps are always project-scoped (service == ""), so the whole state file is cleared.
+	// Failure here is a hard error: leaving a stale deployed state would allow
+	// devbox run to pass its gate even though services have been torn down.
 	if err := journal.Remove(statePath); err != nil {
-		w.Warning("Failed to clean deploy state: " + err.Error())
+		return fmt.Errorf("cleaning deploy state after reset: %w", err)
 	}
 
 	if logEnabled {

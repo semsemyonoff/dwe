@@ -21,7 +21,16 @@ type FileRecorder struct {
 	projectConfigHash     string
 	stepStartTimes        map[string]time.Time
 	servicesSeenInThisRun map[string]bool
+	stampProjectHash      bool
 	pipelineStartTime     time.Time
+	flushErr              error
+}
+
+// Err returns the last flush error encountered during recording, if any.
+// Callers should check this after RunWithOptions succeeds to detect cases where
+// steps ran successfully but state was not persisted to disk.
+func (r *FileRecorder) Err() error {
+	return r.flushErr
 }
 
 // NewFileRecorder constructs a FileRecorder that will record state to the given path.
@@ -31,11 +40,16 @@ type FileRecorder struct {
 // state is the loaded ProjectState (or a new one if file was absent).
 // serviceConfigHashes maps service names to their current journal.ServiceConfigHash.
 // projectConfigHash is the current journal.ProjectConfigHash.
+// stampProjectHash controls whether OnPipelineFinish stamps the project config hash.
+// Pass true only for full project deploys (serviceName == ""); a service-only run
+// includes the implicit env step (Service == "") but must not stamp the project hash
+// because the actual project deploy steps did not execute.
 func NewFileRecorder(
 	statePath string,
 	state *journal.ProjectState,
 	serviceConfigHashes map[string]string,
 	projectConfigHash string,
+	stampProjectHash bool,
 ) *FileRecorder {
 	return &FileRecorder{
 		statePath:             statePath,
@@ -44,6 +58,7 @@ func NewFileRecorder(
 		projectConfigHash:     projectConfigHash,
 		stepStartTimes:        make(map[string]time.Time),
 		servicesSeenInThisRun: make(map[string]bool),
+		stampProjectHash:      stampProjectHash,
 	}
 }
 
@@ -61,8 +76,14 @@ func (r *FileRecorder) OnPipelineStart(name string, totalSteps int) {
 		r.state.Project.Phases = make(map[string]*journal.PhaseState)
 	}
 
-	r.state.Project.LastRun.StartedAt = r.pipelineStartTime
-	r.state.Project.LastRun.Status = journal.StatusInProgress
+	// Only update project.LastRun for full deploys. A service-only run
+	// (stampProjectHash == false) must not overwrite the project's prior
+	// last_run status; doing so would clear a failure marker and allow
+	// subsequent full deploys to exit "already up-to-date" incorrectly.
+	if r.stampProjectHash {
+		r.state.Project.LastRun.StartedAt = r.pipelineStartTime
+		r.state.Project.LastRun.Status = journal.StatusInProgress
+	}
 
 	if r.state.Services == nil {
 		r.state.Services = make(map[string]*journal.ServiceState)
@@ -129,21 +150,19 @@ func (r *FileRecorder) OnStepFinish(addr string, rs ResolvedStep, actionHash str
 	if rs.Service == "" {
 		// Project-scope step
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
-		// Update phase status to ok (unless it's already in a failed state from a previous step)
-		if r.state.Project.Phases[rs.Phase.Name].Status != journal.StatusFailed {
-			r.state.Project.Phases[rs.Phase.Name].Status = journal.StatusOk
-		}
+		// Recompute phase status from all steps so a resume run can clear a previously
+		// failed phase once all its steps succeed.
+		r.state.Project.Phases[rs.Phase.Name].Status = phaseStatusFromSteps(r.state.Project.Phases[rs.Phase.Name].Steps)
 	} else {
 		// Service-scope step
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
-		// Update phase status to ok (unless it's already in a failed state from a previous step)
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Status != journal.StatusFailed {
-			r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = journal.StatusOk
-		}
+		r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = phaseStatusFromSteps(r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps)
 	}
 
 	// Flush to disk immediately
-	_ = r.flush()
+	if err := r.flush(); err != nil {
+		r.flushErr = err
+	}
 }
 
 // OnStepFail is called when a step returns an error.
@@ -167,7 +186,9 @@ func (r *FileRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash strin
 	}
 
 	// Flush to disk immediately
-	_ = r.flush()
+	if err := r.flush(); err != nil {
+		r.flushErr = err
+	}
 }
 
 // OnStepSkip is called when a step is skipped.
@@ -204,7 +225,9 @@ func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash strin
 			r.state.Project.Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
 		}
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
-		// Note: do not update phase status for skipped steps
+		// Recompute phase status so a previously-failed phase is cleared when all
+		// its steps either succeeded or were skipped in this run.
+		r.state.Project.Phases[rs.Phase.Name].Status = phaseStatusFromSteps(r.state.Project.Phases[rs.Phase.Name].Steps)
 	} else {
 		// Service-scope step — initialize maps if not yet set up by OnStepStart
 		if r.state.Services[rs.Service] == nil {
@@ -225,12 +248,17 @@ func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash strin
 			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
 		}
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
+		// Recompute phase status so a previously-failed phase is cleared when all
+		// its steps either succeeded or were skipped in this run.
+		r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = phaseStatusFromSteps(r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps)
 		// Track that we've seen this service so its config hash is stamped in OnPipelineFinish
 		r.servicesSeenInThisRun[rs.Service] = true
 	}
 
 	// Flush to disk immediately
-	_ = r.flush()
+	if err := r.flush(); err != nil {
+		r.flushErr = err
+	}
 }
 
 // OnPipelineFinish is called once after all steps complete or the first step fails.
@@ -248,13 +276,26 @@ func (r *FileRecorder) OnPipelineFinish(success bool) {
 		}
 	}
 
-	r.state.Project.ConfigHash = r.projectConfigHash
-	r.state.Project.LastRun.FinishedAt = now
-	if success {
-		r.state.Project.LastRun.Status = journal.StatusOk
-		r.state.Project.DeployedAt = now
-	} else {
-		r.state.Project.LastRun.Status = journal.StatusFailed
+	// Only stamp project config hash for full project deploys. A --service-only
+	// run includes the implicit env step (Service == "") but must not stamp the
+	// project hash; the actual project deploy steps did not execute, and
+	// stamping here would allow a subsequent full deploy to exit
+	// "already up-to-date" and skip any changed project steps permanently.
+	if r.stampProjectHash {
+		r.state.Project.ConfigHash = r.projectConfigHash
+	}
+	// Only update project.LastRun and DeployedAt for full deploys.
+	// A service-only run (stampProjectHash == false) must not overwrite the
+	// project's failure marker; the early-exit guard in the deploy command
+	// reads LastRun.Status to detect incomplete prior runs.
+	if r.stampProjectHash {
+		r.state.Project.LastRun.FinishedAt = now
+		if success {
+			r.state.Project.LastRun.Status = journal.StatusOk
+			r.state.Project.DeployedAt = now
+		} else {
+			r.state.Project.LastRun.Status = journal.StatusFailed
+		}
 	}
 
 	// Stamp service config hashes and compute service statuses
@@ -301,7 +342,22 @@ func (r *FileRecorder) OnPipelineFinish(success bool) {
 	journal.Recompute(r.state)
 
 	// Final flush to disk
-	_ = r.flush()
+	if err := r.flush(); err != nil {
+		r.flushErr = err
+	}
+}
+
+// phaseStatusFromSteps derives phase status from all current step states.
+// A phase is failed if any step failed; otherwise ok.
+// This is used by OnStepFinish to correctly handle resume runs where a
+// previously failed phase can be cleared once all its steps succeed.
+func phaseStatusFromSteps(steps map[string]*journal.StepState) journal.Status {
+	for _, s := range steps {
+		if s.Status == journal.StatusFailed {
+			return journal.StatusFailed
+		}
+	}
+	return journal.StatusOk
 }
 
 // flush writes the current state to disk.

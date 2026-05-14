@@ -248,6 +248,25 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		svcCfg := cfg.Services[name]
 		serviceHashes[name] = journal.ServiceConfigHash(svcCfg, svcDeploys[name])
 	}
+
+	// For a --service run, also hash the explicitly requested service even if it
+	// is not in the tracked set (e.g. it has a per-service deploy file but the
+	// top-level deploy.yml has no deploy_services: true phase). Without this,
+	// serviceHashes[serviceName] stays "" and the skip decider compares "" to the
+	// stored "" on every re-run, so service config changes never invalidate the
+	// journal and stale steps get skipped indefinitely.
+	if serviceName != "" {
+		if _, alreadyHashed := serviceHashes[serviceName]; !alreadyHashed {
+			extraDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
+				serviceName: cfg.Services[serviceName],
+			})
+			if err != nil {
+				return fmt.Errorf("loading deploy config for service %q: %w", serviceName, err)
+			}
+			serviceHashes[serviceName] = journal.ServiceConfigHash(cfg.Services[serviceName], extraDeploys[serviceName])
+		}
+	}
+
 	projectHash := journal.ProjectConfigHash(cfg, projectDeploy, svcDeploys, trackedServices)
 
 	// Check if we need to prompt before running
@@ -263,8 +282,22 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 			}
 		}
 
-		if !hasCheckSteps && state.Project.ConfigHash == projectHash {
-			// All services deployed, hashes match, no check steps — skip the pipeline
+		// Verify every tracked service is present and deployed with a matching hash.
+		// A --service run stamps project.status=deployed for only the services it ran,
+		// so without this check a subsequent full deploy would incorrectly skip
+		// services that were never deployed.
+		allTrackedDeployed := true
+		for _, name := range trackedServices {
+			svc, ok := state.Services[name]
+			if !ok || svc.Status != journal.StatusDeployed || svc.ConfigHash != serviceHashes[name] {
+				allTrackedDeployed = false
+				break
+			}
+		}
+
+		lastRunFailed := state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusFailed
+		if allTrackedDeployed && !hasCheckSteps && state.Project.ConfigHash == projectHash && !lastRunFailed {
+			// All services deployed, hashes match, no check steps, last run clean — skip the pipeline
 			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
 			return nil
 		}
@@ -295,10 +328,13 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		}
 	}
 
-	// Check for previously failed/partial/crashed runs
+	// Check for previously failed/partial/crashed runs.
+	// Also covers the case where all services deployed but a project-scope step failed:
+	// Recompute sets project.status=deployed (driven by service statuses) but last_run.status=failed.
 	prevIncomplete := state.Project.Status == journal.StatusFailed ||
 		state.Project.Status == journal.StatusPartial ||
-		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusInProgress)
+		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusInProgress) ||
+		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusFailed)
 	if !force && prevIncomplete {
 		if isInteractive {
 			w.Warning("Last deploy run failed or was incomplete. Resume or start fresh?")
@@ -330,6 +366,25 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	// doesn't inherit stale entries from a previous run.
 	if force {
 		state = &journal.ProjectState{SchemaVersion: "1"}
+	}
+
+	// Clear stale phase data for any scope whose config hash has changed.
+	// The skip decider correctly forces those steps to Run, but the old Steps
+	// map entries remain in the recorder's in-memory state. phaseStatusFromSteps
+	// iterates all steps in the phase, so a renamed or removed step from the
+	// previous config (still present as StatusFailed) would cause the phase to
+	// report failed even when every current step succeeds.
+	if !force {
+		if state.Project != nil && state.Project.ConfigHash != projectHash {
+			state.Project.Phases = make(map[string]*journal.PhaseState)
+		}
+		if state.Services != nil {
+			for svcName, svcState := range state.Services {
+				if svcState.ConfigHash != serviceHashes[svcName] {
+					svcState.Phases = make(map[string]*journal.PhaseState)
+				}
+			}
+		}
 	}
 
 	// Build the skip decider closure
@@ -375,8 +430,10 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		return journal.Decide(prevStep, actionHash, hasCheck)
 	}
 
-	// Construct the FileRecorder
-	recorder := pipeline.NewFileRecorder(statePath, state, serviceHashes, projectHash)
+	// Construct the FileRecorder. Only stamp project hash for full deploys;
+	// a --service run includes the implicit env step (project-scoped) but must
+	// not advance the project hash since the actual project steps did not run.
+	recorder := pipeline.NewFileRecorder(statePath, state, serviceHashes, projectHash, serviceName == "")
 
 	// Run the pipeline with state tracking
 	opts := pipeline.RunOptions{
@@ -393,11 +450,20 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		SkipDecider:  skipDecider,
 	}
 
-	if err := pipeline.RunWithOptions(opts); err != nil {
-		if errors.Is(err, ErrSilent) && logEnabled {
+	if pipeErr := pipeline.RunWithOptions(opts); pipeErr != nil {
+		if errors.Is(pipeErr, ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}
-		return err
+		if recErr := recorder.Err(); recErr != nil {
+			return errors.Join(pipeErr, fmt.Errorf("deploy state could not be saved: %w", recErr))
+		}
+		return pipeErr
+	}
+
+	// Surface any state-persistence failures even when all steps succeeded.
+	// If flush failed, idempotency guarantees are broken for the next run.
+	if err := recorder.Err(); err != nil {
+		return fmt.Errorf("deploy completed but state could not be saved: %w", err)
 	}
 
 	if logEnabled {

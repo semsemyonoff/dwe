@@ -33,7 +33,7 @@ func TestFileRecorder_MixedProjectAndServiceSteps(t *testing.T) {
 	}
 	projectHash := "project-hash"
 
-	rec := NewFileRecorder(statePath, state, serviceHashes, projectHash)
+	rec := NewFileRecorder(statePath, state, serviceHashes, projectHash, true)
 
 	// Simulate pipeline execution
 	rec.OnPipelineStart("deploy", 4)
@@ -141,7 +141,7 @@ func TestFileRecorder_FailedStep(t *testing.T) {
 		Services:      make(map[string]*journal.ServiceState),
 	}
 
-	rec := NewFileRecorder(statePath, state, map[string]string{}, "project-hash")
+	rec := NewFileRecorder(statePath, state, map[string]string{}, "project-hash", true)
 	rec.OnPipelineStart("deploy", 2)
 
 	// First step succeeds
@@ -195,7 +195,7 @@ func TestFileRecorder_SkippedStep(t *testing.T) {
 		Services:      make(map[string]*journal.ServiceState),
 	}
 
-	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash")
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash", true)
 	rec.OnPipelineStart("deploy", 2)
 
 	step1 := ResolvedStep{
@@ -249,7 +249,7 @@ func TestFileRecorder_ServiceAllStepsSkipped(t *testing.T) {
 		},
 	}
 
-	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash")
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash", true)
 	rec.OnPipelineStart("deploy", 1)
 
 	// Only step is skipped
@@ -266,6 +266,54 @@ func TestFileRecorder_ServiceAllStepsSkipped(t *testing.T) {
 	require.NoError(t, err)
 
 	// Service should retain its previous deployed status
+	assert.Equal(t, journal.StatusDeployed, loaded.Services["main"].Status)
+}
+
+// TestFileRecorder_WhenSkipClearsPriorFailedPhase tests that a non-state skip
+// (e.g. when: condition false) recomputes the phase status, so a previously-failed
+// phase is cleared when the step is conditionally skipped in a resume run.
+func TestFileRecorder_WhenSkipClearsPriorFailedPhase(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	// Pre-populate state as if a previous run left the phase failed.
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services: map[string]*journal.ServiceState{
+			"main": {
+				Status: journal.StatusFailed,
+				Phases: map[string]*journal.PhaseState{
+					"setup": {
+						Status: journal.StatusFailed,
+						Steps: map[string]*journal.StepState{
+							"step1": {Status: journal.StatusFailed, ActionHash: "hash1"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash", true)
+	rec.OnPipelineStart("deploy", 1)
+
+	// On resume run the step's when: evaluates to false — it is skipped.
+	step1 := ResolvedStep{
+		Service: "main",
+		Phase:   config.DeployPhase{Name: "setup"},
+		Step:    config.DeployStep{Name: "step1", Type: "shell", Cmd: "echo ok"},
+	}
+	rec.OnStepSkip(step1.StepAddress(), step1, "hash1", "when: env.SKIP==true")
+
+	rec.OnPipelineFinish(true)
+
+	loaded, err := journal.Load(statePath)
+	require.NoError(t, err)
+
+	// Phase status must be cleared: no step is failed any more.
+	assert.Equal(t, journal.StatusOk, loaded.Services["main"].Phases["setup"].Status)
+	// Service must be marked as deployed (OnPipelineFinish saw no failed phases).
 	assert.Equal(t, journal.StatusDeployed, loaded.Services["main"].Status)
 }
 
@@ -349,7 +397,7 @@ func TestFileRecorder_AtomicWrites(t *testing.T) {
 		Services:      make(map[string]*journal.ServiceState),
 	}
 
-	rec := NewFileRecorder(statePath, state, map[string]string{}, "project-hash")
+	rec := NewFileRecorder(statePath, state, map[string]string{}, "project-hash", true)
 	rec.OnPipelineStart("deploy", 2)
 
 	// After first step, file should exist
@@ -394,7 +442,7 @@ func TestFileRecorder_MultiPhaseService(t *testing.T) {
 		Services:      make(map[string]*journal.ServiceState),
 	}
 
-	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash")
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash", true)
 	rec.OnPipelineStart("deploy", 4)
 
 	// Execute steps across multiple phases for the same service
@@ -436,7 +484,7 @@ func TestFileRecorder_ProjectLevelOnly(t *testing.T) {
 		Services:      make(map[string]*journal.ServiceState),
 	}
 
-	rec := NewFileRecorder(statePath, state, map[string]string{}, "project-hash")
+	rec := NewFileRecorder(statePath, state, map[string]string{}, "project-hash", true)
 	rec.OnPipelineStart("deploy", 2)
 
 	step1 := ResolvedStep{
@@ -468,6 +516,62 @@ func TestFileRecorder_ProjectLevelOnly(t *testing.T) {
 	assert.NotNil(t, loaded.Project.Phases["finalize"].Steps["summary"])
 }
 
+// TestFileRecorder_ServiceDeployedWithProjectScopeFailure tests that when all
+// service steps succeed but a project-scope step fails, the recorded state
+// reflects both outcomes: services are deployed AND project.LastRun.Status is
+// failed. The deploy command relies on this to avoid falsely treating the
+// pipeline as "already up-to-date" on the next run.
+func TestFileRecorder_ServiceDeployedWithProjectScopeFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services:      make(map[string]*journal.ServiceState),
+	}
+
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "svc-hash"}, "proj-hash", true)
+	rec.OnPipelineStart("deploy", 2)
+
+	// Service step succeeds
+	svcStep := ResolvedStep{
+		Service: "main",
+		Phase:   config.DeployPhase{Name: "setup"},
+		Step:    config.DeployStep{Name: "build", Type: "shell", Cmd: "echo ok"},
+	}
+	rec.OnStepStart(svcStep.StepAddress(), svcStep, "hash1")
+	rec.OnStepFinish(svcStep.StepAddress(), svcStep, "hash1", 5)
+
+	// Project-scope step fails after service step
+	projStep := ResolvedStep{
+		Phase: config.DeployPhase{Name: "finalize"},
+		Step:  config.DeployStep{Name: "notify", Type: "shell", Cmd: "exit 1"},
+	}
+	rec.OnStepStart(projStep.StepAddress(), projStep, "hash2")
+	rec.OnStepFail(projStep.StepAddress(), projStep, "hash2", 3, fmt.Errorf("notification failed"))
+
+	rec.OnPipelineFinish(false)
+
+	loaded, err := journal.Load(statePath)
+	require.NoError(t, err)
+
+	// Service must be marked deployed — its own steps all succeeded
+	require.NotNil(t, loaded.Services["main"])
+	assert.Equal(t, journal.StatusDeployed, loaded.Services["main"].Status, "service should be deployed")
+
+	// Project status is derived from services by Recompute — deployed because all services are deployed
+	assert.Equal(t, journal.StatusDeployed, loaded.Project.Status, "project.status should be deployed (driven by services)")
+
+	// LastRun must capture the pipeline failure
+	require.NotNil(t, loaded.Project.LastRun)
+	assert.Equal(t, journal.StatusFailed, loaded.Project.LastRun.Status, "project.last_run.status must be failed")
+
+	// Failed project-scope step must be recorded
+	require.NotNil(t, loaded.Project.Phases["finalize"])
+	assert.Equal(t, journal.StatusFailed, loaded.Project.Phases["finalize"].Steps["notify"].Status)
+}
+
 // TestFileRecorder_TimestampsAreSet tests that timestamps are correctly recorded.
 func TestFileRecorder_TimestampsAreSet(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -479,7 +583,7 @@ func TestFileRecorder_TimestampsAreSet(t *testing.T) {
 		Services:      make(map[string]*journal.ServiceState),
 	}
 
-	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash")
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "hash"}, "project-hash", true)
 
 	before := time.Now()
 	rec.OnPipelineStart("deploy", 1)
@@ -519,4 +623,135 @@ func TestFileRecorder_TimestampsAreSet(t *testing.T) {
 	assert.False(t, stepState.FinishedAt.IsZero())
 	assert.True(t, stepState.FinishedAt.After(stepBefore) || stepState.FinishedAt.Equal(stepBefore))
 	assert.True(t, stepState.FinishedAt.Before(stepAfter) || stepState.FinishedAt.Equal(stepAfter))
+}
+
+// TestFileRecorder_ServiceOnlyRunDoesNotStampProjectHash verifies that a
+// service-only deploy (--service flag) does not stamp project.config_hash
+// even though the implicit env step (Service == "") is always prepended to a
+// service plan by ResolveServicePlan. The old projectStepsSeen heuristic was
+// fooled by that implicit step; the fix is to pass stampProjectHash=false
+// explicitly from deployRunCmd when serviceName != "".
+func TestFileRecorder_ServiceOnlyRunDoesNotStampProjectHash(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	// Simulate state left by a previous full deploy: project hash is old-hash.
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project: &journal.ProjectLevelState{
+			ConfigHash: "old-project-hash",
+			Status:     journal.StatusDeployed,
+		},
+		Services: make(map[string]*journal.ServiceState),
+	}
+
+	// stampProjectHash=false: caller signals this is a service-only run.
+	// The project config hash has changed to new-project-hash but must not be stamped.
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "svc-hash"}, "new-project-hash", false)
+	rec.OnPipelineStart("deploy", 2)
+
+	// The implicit env step is always first in a service plan (Service == "").
+	// This is what previously triggered projectStepsSeen=true incorrectly.
+	envStep := ResolvedStep{
+		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
+		Step:  config.DeployStep{Name: "render-env", Type: "devbox", Cmd: "render env -o .env"},
+	}
+	rec.OnStepStart(envStep.StepAddress(), envStep, "env-hash")
+	rec.OnStepFinish(envStep.StepAddress(), envStep, "env-hash", 3)
+
+	// Then the service-scope step runs.
+	svcStep := ResolvedStep{
+		Service: "main",
+		Phase:   config.DeployPhase{Name: "setup"},
+		Step:    config.DeployStep{Name: "build", Type: "shell", Cmd: "echo ok"},
+	}
+	rec.OnStepStart(svcStep.StepAddress(), svcStep, "svc-step-hash")
+	rec.OnStepFinish(svcStep.StepAddress(), svcStep, "svc-step-hash", 5)
+
+	rec.OnPipelineFinish(true)
+
+	loaded, err := journal.Load(statePath)
+	require.NoError(t, err)
+
+	// Project config hash must NOT have been updated even though the implicit
+	// env step (project-scoped) ran — stampProjectHash=false prevents it.
+	assert.Equal(t, "old-project-hash", loaded.Project.ConfigHash,
+		"service-only run must not stamp the project config hash")
+
+	// Service hash should be stamped normally.
+	require.NotNil(t, loaded.Services["main"])
+	assert.Equal(t, "svc-hash", loaded.Services["main"].ConfigHash)
+}
+
+// TestFileRecorder_ServiceOnlyRunPreservesProjectLastRunStatus verifies that a
+// successful service-only deploy does not overwrite a prior project.last_run.status
+// of "failed". The deploy command's early-exit guard reads LastRun.Status to detect
+// incomplete prior runs; clearing it would allow it to falsely skip failed project steps.
+func TestFileRecorder_ServiceOnlyRunPreservesProjectLastRunStatus(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	// Simulate state after a full deploy where service steps succeeded but a
+	// project-scope step failed: Project.Status=deployed (services all ok),
+	// but Project.LastRun.Status=failed (pipeline failed overall).
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project: &journal.ProjectLevelState{
+			ConfigHash: "proj-hash",
+			Status:     journal.StatusDeployed,
+			LastRun: &journal.LastRun{
+				Status: journal.StatusFailed,
+			},
+			Phases: map[string]*journal.PhaseState{
+				"finalize": {
+					Status: journal.StatusFailed,
+					Steps: map[string]*journal.StepState{
+						"notify": {Status: journal.StatusFailed, ActionHash: "hash-notify"},
+					},
+				},
+			},
+		},
+		Services: make(map[string]*journal.ServiceState),
+	}
+
+	// Service-only run: stampProjectHash=false.
+	rec := NewFileRecorder(statePath, state, map[string]string{"main": "svc-hash"}, "proj-hash", false)
+	rec.OnPipelineStart("deploy", 2)
+
+	// Implicit env step (project-scoped) runs first in a service plan.
+	envStep := ResolvedStep{
+		Phase: config.DeployPhase{Name: "env"},
+		Step:  config.DeployStep{Name: "render-env", Type: "devbox", Cmd: "render env"},
+	}
+	rec.OnStepStart(envStep.StepAddress(), envStep, "env-hash")
+	rec.OnStepFinish(envStep.StepAddress(), envStep, "env-hash", 2)
+
+	// Service step runs and succeeds.
+	svcStep := ResolvedStep{
+		Service: "main",
+		Phase:   config.DeployPhase{Name: "setup"},
+		Step:    config.DeployStep{Name: "build", Type: "shell", Cmd: "echo ok"},
+	}
+	rec.OnStepStart(svcStep.StepAddress(), svcStep, "svc-hash")
+	rec.OnStepFinish(svcStep.StepAddress(), svcStep, "svc-hash", 5)
+
+	// Pipeline finishes successfully (all steps in this run passed).
+	rec.OnPipelineFinish(true)
+
+	loaded, err := journal.Load(statePath)
+	require.NoError(t, err)
+
+	// The project.last_run.status must still be "failed" — the service-only run
+	// must not clear the failure marker left by the prior full deploy.
+	require.NotNil(t, loaded.Project.LastRun)
+	assert.Equal(t, journal.StatusFailed, loaded.Project.LastRun.Status,
+		"service-only run must preserve project.last_run.status=failed")
+
+	// Project config hash must also be untouched.
+	assert.Equal(t, "proj-hash", loaded.Project.ConfigHash,
+		"service-only run must not stamp the project config hash")
+
+	// Service hash is stamped normally.
+	require.NotNil(t, loaded.Services["main"])
+	assert.Equal(t, "svc-hash", loaded.Services["main"].ConfigHash)
 }

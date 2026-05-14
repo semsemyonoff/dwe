@@ -5,7 +5,6 @@ package lock
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -118,7 +117,12 @@ func Acquire(path string) (*Lock, error) {
 	return nil, &HeldError{PID: heldPID, err: ErrLockHeld}
 }
 
-// Release releases the lock and removes the lock file.
+// Release releases the lock. The lock file is intentionally left on disk so
+// that the next Acquire can reuse the same inode; removing the file after
+// LOCK_UN creates a race where another process can acquire the old inode and
+// a third process can simultaneously create and lock a new file at the path.
+// Acquire always truncates and overwrites the PID on success, so the file's
+// contents are always fresh after the next acquire.
 func (l *Lock) Release() error {
 	if l == nil || l.file == nil {
 		return nil
@@ -137,16 +141,7 @@ func (l *Lock) Release() error {
 		return fmt.Errorf("unlock file: %w", err)
 	}
 
-	if err := l.file.Close(); err != nil {
-		return fmt.Errorf("close lock file: %w", err)
-	}
-
-	// Remove the lock file
-	if err := os.Remove(l.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("remove lock file: %w", err)
-	}
-
-	return nil
+	return l.file.Close()
 }
 
 // checkAndCleanStaleLock checks if the lock is held by a stale process.

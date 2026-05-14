@@ -38,11 +38,14 @@ func TestAcquireAndRelease(t *testing.T) {
 		t.Fatalf("release failed: %v", err)
 	}
 
-	// Verify the lock file no longer exists
-	_, err = os.ReadFile(lockPath)
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("lock file should not exist after release, but got: %v", err)
+	// The lock file is intentionally left on disk after release so the next
+	// Acquire can reuse the same inode, avoiding an unlock-then-remove race.
+	// Verify a new acquire can obtain the lock.
+	lock2, err := Acquire(lockPath)
+	if err != nil {
+		t.Fatalf("re-acquire after release failed: %v", err)
 	}
+	defer func() { _ = lock2.Release() }()
 }
 
 func TestParallelAcquireReturnsError(t *testing.T) {
