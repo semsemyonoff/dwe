@@ -1,0 +1,444 @@
+// Package ide provides IDE template pack resolution and rendering.
+package ide
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"text/template"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/pathsafe"
+)
+
+// SkippedService carries information about a service that was skipped during IDE rendering.
+type SkippedService struct {
+	Name   string // service name
+	Reason string // "service-disabled" | "ide-disabled" | "ide-policy" | "empty-dir" | "lost-collision"
+	Dir    string // set for "lost-collision" only
+	Winner string // set for "lost-collision" only (name of the winning service)
+}
+
+// ExtendsDepth computes the depth of a service's extends chain.
+// Returns (depth, capped): depth is the number of hops to the root;
+// capped is true if depth hit the 32-hop limit (defense-in-depth cycle guard).
+func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, bool) {
+	const maxDepth = 32
+	depth := 0
+	current := name
+	for {
+		if depth >= maxDepth {
+			return maxDepth, true
+		}
+		svc, ok := services[current]
+		if !ok || svc.Extends == "" {
+			return depth, false
+		}
+		current = svc.Extends
+		depth++
+	}
+}
+
+// SelectServices filters and resolves IDE-enabled services.
+// It returns a list of selected service names (sorted lexicographically) and
+// a list of services that were skipped with reason-specific context.
+//
+// Selection logic (in order):
+//  1. Gate on both flags: services where svc.Enabled==false or svc.IDERenderEnabled()==false are dropped.
+//  2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
+//  3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
+//     share the same Dir, the deepest extends chain wins; ties are broken lexicographically.
+func SelectServices(services map[string]config.ServiceConfig) (selected []string, skipped []SkippedService) {
+	var allSkipped []SkippedService
+
+	// Step A: gate on both Enabled and IDERenderEnabled.
+	enabled := make(map[string]config.ServiceConfig)
+	for name, svc := range services {
+		if !svc.Enabled {
+			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: "service-disabled"})
+			continue
+		}
+		if ideEnabled, explicit := svc.IDERenderEnabledExplicit(); !ideEnabled {
+			reason := "ide-policy"
+			if explicit {
+				reason = "ide-disabled"
+			}
+			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: reason})
+			continue
+		}
+		enabled[name] = svc
+	}
+
+	// Step B: drop services with empty Dir or dir equal to project root (".").
+	dirNormalized := make(map[string]config.ServiceConfig)
+	for name, svc := range enabled {
+		if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
+			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: "empty-dir"})
+			continue
+		}
+		dirNormalized[name] = svc
+	}
+
+	// Step C: group by filepath.Clean(Dir) and resolve collisions.
+	dirGroups := make(map[string][]string)
+	for name, svc := range dirNormalized {
+		cleanDir := filepath.Clean(svc.Dir)
+		dirGroups[cleanDir] = append(dirGroups[cleanDir], name)
+	}
+
+	// For each group, pick the winner (deepest extends chain; tie-break by name).
+	selectedSet := make(map[string]bool)
+	for dir, names := range dirGroups {
+		if len(names) == 1 {
+			selectedSet[names[0]] = true
+			continue
+		}
+
+		// Multiple services share this dir: find the deepest extends chain.
+		sort.Strings(names) // tie-break: lexicographically first among deepest
+		var deepest string
+		maxDepth := -1
+		for _, name := range names {
+			depth, _ := ExtendsDepth(services, name)
+			if depth > maxDepth {
+				maxDepth = depth
+				deepest = name
+			}
+		}
+
+		selectedSet[deepest] = true
+		for _, name := range names {
+			if name != deepest {
+				allSkipped = append(allSkipped, SkippedService{
+					Name:   name,
+					Reason: "lost-collision",
+					Dir:    dir,
+					Winner: deepest,
+				})
+			}
+		}
+	}
+
+	// Collect selected names and sort.
+	for name := range selectedSet {
+		selected = append(selected, name)
+	}
+	sort.Strings(selected)
+
+	// Sort skipped by name for determinism.
+	sort.Slice(allSkipped, func(i, j int) bool {
+		return allSkipped[i].Name < allSkipped[j].Name
+	})
+	skipped = allSkipped
+
+	return selected, skipped
+}
+
+// PackEntry describes a template file in the IDE pack after walking.
+type PackEntry struct {
+	SourcePath string // absolute path to the .tmpl file
+	RelPath    string // path inside the pack with .tmpl stripped
+}
+
+// ValidateTemplateKey validates that s is a single directory key without path traversal.
+// It rejects path separators, absolute paths, and leading dots (which subsumes "..").
+func ValidateTemplateKey(s string) error {
+	if s == "" {
+		return nil // empty is valid (field is optional)
+	}
+	// Reject path separators
+	if strings.ContainsAny(s, "/\\") {
+		return fmt.Errorf("template key %q contains path separator", s)
+	}
+	// Reject leading dots (subsumes ".." and hidden-file keys)
+	if strings.HasPrefix(s, ".") {
+		return fmt.Errorf("template key %q starts with dot", s)
+	}
+	return nil
+}
+
+// ValidateServiceNameAsPackKey validates that a service name is safe to use as an
+// implicit IDE template pack directory name. Less restrictive than ValidateTemplateKey:
+// allows leading dots since service names are YAML map keys, not user-typed path components.
+func ValidateServiceNameAsPackKey(s string) error {
+	if s == "" {
+		return fmt.Errorf("service name is empty")
+	}
+	if strings.ContainsAny(s, "/\\") {
+		return fmt.Errorf("service name %q contains path separator", s)
+	}
+	if s == ".." || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "..\\") {
+		return fmt.Errorf("service name %q is a path traversal", s)
+	}
+	return nil
+}
+
+// ResolveTemplatePack resolves a template pack directory for a service.
+// Returns the absolute path to a directory under devbox/templates/ide/.
+// Explicit is strict: if svc.IDE.Template is set and does not exist, returns an error.
+// Implicit chain: service-name → default, with fallthrough only on ErrNotExist.
+func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, error) {
+	absRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve project root: %w", err)
+	}
+
+	// Validate template key and service name
+	if err := ValidateTemplateKey(svc.IDE.Template); err != nil {
+		return "", fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
+	}
+	if err := ValidateServiceNameAsPackKey(serviceName); err != nil {
+		return "", fmt.Errorf("service name cannot be used as implicit template pack key: %w", err)
+	}
+
+	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)
+	if svc.IDE.Template != "" {
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", svc.IDE.Template)
+		fi, err := os.Lstat(candidate)
+		if err == nil {
+			// Pack exists; validate it
+			if fi.Mode()&os.ModeSymlink != 0 {
+				return "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", svc.IDE.Template)
+			}
+			if !fi.IsDir() {
+				return "", fmt.Errorf("ide template pack %q is not a directory", svc.IDE.Template)
+			}
+			// Guard against symlinks in parent path components (e.g. devbox/templates/ide -> /tmp/outside)
+			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "ide template pack"); err != nil {
+				return "", err
+			}
+			return candidate, nil
+		}
+		// Any error other than not-exists is a hard error
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("stat ide template pack %q: %w", svc.IDE.Template, err)
+		}
+		// ErrNotExist with explicit template: strict error, no fallthrough
+		return "", fmt.Errorf("ide template pack %q not found (required by explicit ide.template setting)", svc.IDE.Template)
+	}
+
+	// Implicit chain: service-name → default
+	candidates := []string{serviceName, "default"}
+	for _, name := range candidates {
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", name)
+		fi, err := os.Lstat(candidate)
+		if err == nil {
+			// Candidate exists; validate it
+			if fi.Mode()&os.ModeSymlink != 0 {
+				return "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", name)
+			}
+			if !fi.IsDir() {
+				return "", fmt.Errorf("ide template pack %q is not a directory", name)
+			}
+			// Guard against symlinks in parent path components (e.g. devbox/templates/ide -> /tmp/outside)
+			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "ide template pack"); err != nil {
+				return "", err
+			}
+			return candidate, nil
+		}
+		// Only ErrNotExist advances to next candidate; any other error is hard
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("stat ide template pack %q: %w", name, err)
+		}
+		// ErrNotExist: continue to next candidate
+	}
+
+	// No pack found in implicit chain
+	return "", fmt.Errorf("ide template pack not found (tried %s, default): %w", serviceName, os.ErrNotExist)
+}
+
+// WalkPack walks the template pack directory and returns all .tmpl entries.
+// Entries are returned with absolute SourcePath and RelPath (with .tmpl stripped).
+// Returns entries sorted lexicographically by RelPath.
+// Rejection rules (any rejection is a hard error, not a silent skip):
+// 1. Any symlink anywhere in the tree (file or directory).
+// 2. Any cleaned relative path that is absolute or contains ".." segments.
+// 3. Source filename is bare ".tmpl" (before or after cleaning).
+func WalkPack(packDir string) ([]PackEntry, error) {
+	absPackDir, err := filepath.Abs(packDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve pack dir: %w", err)
+	}
+
+	var entries []PackEntry
+	err = filepath.WalkDir(absPackDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		// Reject any symlink (file or directory) before processing further.
+		// Use os.Lstat explicitly: DirEntry.Type() may return 0 on filesystems
+		// that do not populate d_type, so relying on it alone is not safe.
+		fi, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("stat pack entry: %w", err)
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("ide template pack contains symlink: %s", path)
+		}
+
+		// Only process files; skip directories
+		if d.IsDir() {
+			return nil
+		}
+
+		// Compute relative path from pack root (before stripping .tmpl)
+		srcRelPath, err := filepath.Rel(absPackDir, path)
+		if err != nil {
+			return fmt.Errorf("relative path: %w", err)
+		}
+
+		// Suffix filter: only .tmpl files
+		if !strings.HasSuffix(srcRelPath, ".tmpl") {
+			return nil // skip non-.tmpl files silently
+		}
+
+		// Strip .tmpl suffix
+		relPath := strings.TrimSuffix(srcRelPath, ".tmpl")
+
+		// Reject bare ".tmpl" files
+		// Check on the filename (before cleaning) so nested "dir/.tmpl" is caught
+		if strings.TrimSuffix(filepath.Base(srcRelPath), ".tmpl") == "" {
+			return fmt.Errorf("ide template pack contains bare .tmpl file: %s", srcRelPath)
+		}
+
+		// Clean the path and reject empty or "." results
+		cleanRelPath := filepath.Clean(relPath)
+		if cleanRelPath == "" || cleanRelPath == "." {
+			return fmt.Errorf("ide template pack entry cleans to empty path: %s", relPath)
+		}
+
+		// Reject absolute or escaping paths
+		if filepath.IsAbs(cleanRelPath) {
+			return fmt.Errorf("ide template pack entry is absolute: %s", cleanRelPath)
+		}
+		if strings.HasPrefix(cleanRelPath, ".."+string(filepath.Separator)) || cleanRelPath == ".." {
+			return fmt.Errorf("ide template pack entry escapes root: %s", cleanRelPath)
+		}
+
+		entries = append(entries, PackEntry{
+			SourcePath: path,
+			RelPath:    cleanRelPath,
+		})
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort entries lexicographically by RelPath for determinism
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].RelPath < entries[j].RelPath
+	})
+
+	// Reject duplicate RelPaths (defensive — guards against walker bugs emitting duplicates).
+	// Raw-string equality: case-fold collisions on macOS/Windows are out of scope.
+	seen := make(map[string]struct{}, len(entries))
+	for _, e := range entries {
+		if _, dup := seen[e.RelPath]; dup {
+			return nil, fmt.Errorf("ide template pack contains duplicate entry %q", e.RelPath)
+		}
+		seen[e.RelPath] = struct{}{}
+	}
+
+	return entries, nil
+}
+
+// ideTemplateData is passed to IDE config templates.
+type ideTemplateData struct {
+	Project    config.ProjectConfig
+	Service    string
+	ServiceCfg config.ServiceConfig
+	Runtime    config.RuntimeConfig
+}
+
+// RenderTemplateFile reads a template file, renders it, and writes to dest.
+// sourcePath is the absolute path to the .tmpl file.
+// data is the template context.
+// dest is the destination path (may be relative to the service dir).
+// absDir is the resolved absolute service directory.
+// absRoot is the resolved absolute project root.
+//
+// The function enforces that dest (after resolution) is contained within absDir.
+// It also enforces that absDir is contained within absRoot.
+func RenderTemplateFile(sourcePath string, data ideTemplateData, dest, absDir, absRoot string) error {
+	// Read template file
+	tplBytes, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read template %s: %w", sourcePath, err)
+	}
+
+	// Parse template using basename as name for error messages
+	name := filepath.Base(sourcePath)
+	t, err := template.New(name).Option("missingkey=error").Parse(string(tplBytes))
+	if err != nil {
+		return fmt.Errorf("parse template %s: %w", name, err)
+	}
+
+	// Render template
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return fmt.Errorf("render template %s: %w", name, err)
+	}
+
+	// Service-dir containment check: ensure dest is inside absDir
+	absDest, err := filepath.Abs(dest)
+	if err != nil {
+		return fmt.Errorf("resolve destination: %w", err)
+	}
+	destDir := filepath.Dir(absDest)
+	rel, err := filepath.Rel(absDir, absDest)
+	if err != nil {
+		return fmt.Errorf("dest %q outside service dir: %w", dest, err)
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return fmt.Errorf("dest %q escapes service dir %q", dest, absDir)
+	}
+
+	// Guard against symlinks in the destination path before creating any directories.
+	// CheckNoSymlinks walks existing components only, so it catches a pre-existing
+	// .devcontainer -> /tmp/outside symlink before MkdirAll follows it.
+	if err := pathsafe.CheckNoSymlinks(absRoot, destDir, "destination dir"); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return fmt.Errorf("create dir for %s: %w", dest, err)
+	}
+
+	// Verify the real directory resolves inside both the project root and the
+	// service directory after creation. MkdirAll follows symlinks, so a
+	// .devcontainer -> /tmp/outside (or -> services/other) symlink would succeed
+	// silently without this check. Both paths are resolved via EvalSymlinks so
+	// the comparison works on systems (macOS) where the temp dir itself is under
+	// a symlinked prefix.
+	realRoot, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root: %w", err)
+	}
+	realAbsDir, err := filepath.EvalSymlinks(absDir)
+	if err != nil {
+		return fmt.Errorf("resolve service dir: %w", err)
+	}
+	realDir, err := filepath.EvalSymlinks(destDir)
+	if err != nil {
+		return fmt.Errorf("resolve dir for %s: %w", dest, err)
+	}
+	if err := pathsafe.EnsureRealUnder(realDir, realRoot, realAbsDir); err != nil {
+		return fmt.Errorf("destination dir for %q resolves outside required boundaries via symlink: %w", dest, err)
+	}
+
+	// Refuse to write through a symlinked destination file.
+	if fi, err := os.Lstat(absDest); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("destination %q is a symlink; will not overwrite", dest)
+	}
+
+	if err := os.WriteFile(absDest, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", dest, err)
+	}
+	return nil
+}

@@ -201,3 +201,83 @@ func (r *Registry) Validate() error {
 	}
 	return nil
 }
+
+// ValidationIssue represents a single cross-reference validation issue.
+type ValidationIssue struct {
+	CommandID string // the command ID that has the issue
+	StepIndex int    // index within command's Steps slice (0-based)
+	Message   string // the validation issue message
+}
+
+// Diagnostics returns all cross-reference validation issues found in the registry.
+// Returns an empty slice if the registry is valid.
+func (r *Registry) Diagnostics() []ValidationIssue {
+	var issues []ValidationIssue
+	for _, cmd := range r.byID {
+		if cmd.Type != model.CommandTypeWorkflow {
+			continue
+		}
+		for i, step := range cmd.Steps {
+			if step.Command == "" {
+				continue
+			}
+			if _, ok := r.byID[step.Command]; !ok {
+				issues = append(issues, ValidationIssue{
+					CommandID: cmd.ID,
+					StepIndex: i,
+					Message:   fmt.Sprintf("references unknown command %q", step.Command),
+				})
+			}
+		}
+	}
+	// Sort for determinism: by command ID, then by step index
+	sort.Slice(issues, func(i, j int) bool {
+		if issues[i].CommandID != issues[j].CommandID {
+			return issues[i].CommandID < issues[j].CommandID
+		}
+		return issues[i].StepIndex < issues[j].StepIndex
+	})
+	return issues
+}
+
+// BuildRegistryFromParsed builds a registry from already-parsed command files
+// without rereading from disk. The parameter type is *model.CommandFile (return type
+// of loader.LoadCommandFile).
+func BuildRegistryFromParsed(files []*model.CommandFile) (*Registry, error) {
+	reg := &Registry{
+		byID:   make(map[string]*model.CommandDef),
+		groups: make(map[string]*GroupNode),
+	}
+
+	reg.root = reg.ensureGroup("")
+
+	// Check for duplicate command IDs across all files
+	for _, cf := range files {
+		gn := reg.ensureGroup(cf.GroupID)
+		if cf.Group.Title != "" || cf.Group.Description != "" {
+			gn.Meta = cf.Group
+		}
+
+		for name := range cf.Commands {
+			cmd := cf.Commands[name]
+			cmdCopy := cmd
+			if existing, dup := reg.byID[cmdCopy.ID]; dup {
+				return nil, fmt.Errorf("duplicate command ID %q (groups: %s and %s)",
+					cmdCopy.ID, existing.Group, cmdCopy.Group)
+			}
+			reg.byID[cmdCopy.ID] = &cmdCopy
+			gn.Commands = append(gn.Commands, &cmdCopy)
+		}
+	}
+
+	for _, gn := range reg.groups {
+		sort.Slice(gn.Commands, func(i, j int) bool {
+			return gn.Commands[i].LocalName < gn.Commands[j].LocalName
+		})
+		sort.Slice(gn.Children, func(i, j int) bool {
+			return gn.Children[i].Name < gn.Children[j].Name
+		})
+	}
+
+	return reg, nil
+}

@@ -233,7 +233,7 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 5: Implement templates and commands validators
 
-- [ ] create `internal/validate/templates/` subpackage (`package templates`; alias `valtmpl` at consumer) with validators:
+- [x] create `internal/validate/templates/` subpackage (`package templates`; alias `valtmpl` at consumer) with validators:
       - `ide` — **reuse the existing render selection policy verbatim**. The current unexported `selectIDEServices` at `internal/command/ide.go:57` already encodes the full filter (`Enabled` gate, the *two-valued* `IDERenderEnabledExplicit() (bool, bool)` predicate, empty/root-dir drop, and deepest-extends-chain collision resolution). The earlier draft's one-liner `svc.Enabled && svc.IDERenderEnabledExplicit() && svc.Dir != ""` was wrong on two counts: `IDERenderEnabledExplicit()` returns two values, and a hand-rolled predicate would not match the collision resolver — producing false positives for services the render command intentionally skips. After the helpers move to `internal/templates/ide/` they must be **exported** so consumers in another package can call them. Final API (renamed per `golang-naming` — no `IDE` prefix because the package is `ide`):
             - `func SelectServices(services map[string]config.ServiceConfig) (selected []string, skipped []SkippedService)` (was `selectIDEServices`)
             - `type SkippedService struct { Name, Reason, Dir, Winner string }` (was `skippedService`)
@@ -251,25 +251,25 @@ Go-skill notes used here (verified against `cc-skills-golang`):
             - `func RenderTemplateFile(sourcePath string, data any, dest, absHubDir, absRoot string) error` (was `renderAgentsTemplateFile`)
             - `func EnsureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string) error` (was `ensureRelativeSymlink`)
       - **Refactor required to make selection reusable** without importing `internal/command`: move the listed symbols (renamed/exported per the API above) from `internal/command/ide.go` to `internal/templates/ide/` and from `internal/command/render_ai.go` to `internal/templates/ai/`. Update the existing CLI commands (`devbox render ide`, `devbox render ai`) and the validators to import the new packages. Bodies unchanged; no behavior change. The `internal/command/ide_test.go` and `internal/command/render_ai_test.go` tests move with the helpers (renamed to point at the new package and the exported symbols).
-- [ ] create `internal/validate/commands/commands.go` (`package commands`; alias `valcmds` at consumer to avoid collision with `internal/command`) with one validator:
+- [x] create `internal/validate/commands/commands.go` (`package commands`; alias `valcmds` at consumer to avoid collision with `internal/command`) with one validator:
       - `commands` — discover via `loader.DiscoverCommandFiles(<projectRoot>/devbox/commands)`; parse each via `loader.LoadCommandFile`; collect per-file decode errors as `SeverityError` diagnostics (one per file).
       - After per-file parsing, build a registry from the **already-parsed** files (skip the bad ones) and run cross-ref validation that returns per-issue records instead of a joined error string.
-- [ ] **scope of commands validation — what is statically checkable, and what is not.** The validator covers what can be decided without runtime state:
+- [x] **scope of commands validation — what is statically checkable, and what is not.** The validator covers what can be decided without runtime state:
       - YAML structural parse (strict-decode rejections, legacy `type: command` / `run:` → hard error; already enforced by `model.ParseCommandFile`)
       - Duplicate command IDs across files
       - Workflow step `command:` references resolve to a known command ID (the existing `Registry.Validate` surface, made diagnostic-friendly via `Diagnostics()`)
       - It does **NOT** validate file-spec existence (`files:` block). File-spec resolution (`internal/usercommands/runtime/resolve_files.go:14`) depends on `params`, `context`, template expansion (`${...}`), and `tpl.ResolvedFile` plumbing that only exists at command-invocation time. A purely literal `path:` with no `${...}` could in principle be checked, but the value lives in `fspec.Path` after template-free yaml decode, and even literal paths may resolve relative to a working dir that isn't known until the command is actually invoked. Treating "missing file" as a static error would produce false negatives the moment a user adds a template. Out of scope; documented in the `Long` text.
-- [ ] **registry API additions** (`internal/usercommands/registry/registry.go`) — required because today's `LoadRegistry` is fail-fast on first bad file (line 71) and `Registry.Validate()` returns a single joined error string (line 200), neither of which can drive a diagnostic table:
+- [x] **registry API additions** (`internal/usercommands/registry/registry.go`) — required because today's `LoadRegistry` is fail-fast on first bad file (line 71) and `Registry.Validate()` returns a single joined error string (line 200), neither of which can drive a diagnostic table:
       - `func BuildRegistryFromParsed(files []*model.CommandFile) (*Registry, error)` — builds a registry from already-parsed files without rereading from disk. The parameter type is `*model.CommandFile` (return type of `loader.LoadCommandFile` at `internal/usercommands/loader/loader.go:67`; `CommandFile` is defined in `internal/usercommands/model/types.go:647`, NOT in `loader`). Duplicate IDs return an error (single error is acceptable here because duplicates are a one-shot condition). Used by the validator after it has produced its own per-file parse diagnostics.
       - `type ValidationIssue struct { CommandID string; StepIndex int; Message string }` and `func (r *Registry) Diagnostics() []ValidationIssue` — returns each cross-ref issue as a typed record so the validator can map one-to-one to `Diagnostic` rows (`Target: "commands:" + issue.CommandID`).
       - Keep the existing `LoadRegistry` and `Validate() error` as-is for backward compatibility with existing call sites; `Diagnostics()` is the new diagnostic-friendly path.
-- [ ] write unit tests for the new registry API in `internal/usercommands/registry/registry_test.go`: `BuildRegistryFromParsed` with duplicate IDs, `Diagnostics()` returning multiple cross-ref issues from a fixture with several broken workflow `command:` references.
-- [ ] **tests** for each new validator:
+- [x] write unit tests for the new registry API in `internal/usercommands/registry/registry_test.go`: `BuildRegistryFromParsed` with duplicate IDs, `Diagnostics()` returning multiple cross-ref issues from a fixture with several broken workflow `command:` references.
+- [x] **tests** for each new validator:
       - `templates/ide_test.go`: good pack (one OK), pack with bare `.tmpl`, escaping symlink, illegal key, missing pack (each → one error diagnostic with stable substring)
       - `templates/ai_test.go`: good manifest, manifest with escape attempt, missing render target for a declared symlink, unknown YAML field (strict-decode error)
       - `commands/commands_test.go`: good command file, file with `type: command` (legacy, must be rejected — already enforced by `model.ParseCommandFile`), workflow step referencing an unknown command ID (cross-ref error from `Diagnostics()`), duplicate command ID across two files. Do NOT add a "missing referenced file" case — file-spec existence is runtime-dependent (params + templates + working dir) and explicitly out of scope per the validator definition above.
-- [ ] **refactor verification**: every existing test under `internal/command/ide_test.go`, `internal/command/render_ai_test.go` continues to pass after the helper moves. Update import paths only — do not change behavior.
-- [ ] run `go test ./...` — must pass before next task
+- [x] **refactor verification**: every existing test under `internal/command/ide_test.go`, `internal/command/render_ai_test.go` continues to pass after the helper moves. Update import paths only — do not change behavior.
+- [x] run `go test ./...` — must pass before next task
 
 ### Task 6: Add `devbox validate` cobra command tree + renderer
 
