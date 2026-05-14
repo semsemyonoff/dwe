@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
@@ -183,20 +184,12 @@ func buildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig
 		if svcState != nil {
 			row.Status = svcState.Status
 			if svcState.LastRun != nil && svcState.LastRun.Status != journal.StatusOk {
-				phaseNames := make([]string, 0, len(svcState.Phases))
-				for phaseName := range svcState.Phases {
-					phaseNames = append(phaseNames, phaseName)
-				}
-				slices.Sort(phaseNames)
-				for _, phaseName := range phaseNames {
-					phase := svcState.Phases[phaseName]
-					stepNames := make([]string, 0, len(phase.Steps))
-					for stepName := range phase.Steps {
-						stepNames = append(stepNames, stepName)
-					}
-					slices.Sort(stepNames)
-					for _, stepName := range stepNames {
-						if phase.Steps[stepName].Status == journal.StatusFailed {
+				// Find the most recently failed step by FinishedAt timestamp.
+				var latestFailedAt time.Time
+				for phaseName, phase := range svcState.Phases {
+					for stepName, step := range phase.Steps {
+						if step.Status == journal.StatusFailed && step.FinishedAt.After(latestFailedAt) {
+							latestFailedAt = step.FinishedAt
 							row.LastFailedPhase = phaseName
 							row.LastFailedStep = stepName
 						}
@@ -234,9 +227,21 @@ func renderServiceDeployDetail(w io.Writer, state *journal.ProjectState, _ *conf
 	}
 	_, _ = fmt.Fprintf(rw.Writer(), "\n%s\n", ui.RenderSectionTitle("Phases"))
 
-	for phaseName, phase := range svcState.Phases {
+	phaseNames := make([]string, 0, len(svcState.Phases))
+	for phaseName := range svcState.Phases {
+		phaseNames = append(phaseNames, phaseName)
+	}
+	slices.Sort(phaseNames)
+	for _, phaseName := range phaseNames {
+		phase := svcState.Phases[phaseName]
 		_, _ = fmt.Fprintf(rw.Writer(), "  %s: %s\n", phaseName, phase.Status)
-		for stepName, step := range phase.Steps {
+		stepNames := make([]string, 0, len(phase.Steps))
+		for stepName := range phase.Steps {
+			stepNames = append(stepNames, stepName)
+		}
+		slices.Sort(stepNames)
+		for _, stepName := range stepNames {
+			step := phase.Steps[stepName]
 			_, _ = fmt.Fprintf(rw.Writer(), "    %s: %s (hash=%s, duration=%dms)\n",
 				stepName, step.Status, journal.ShortHash(step.ActionHash), step.DurationMs)
 		}

@@ -219,7 +219,11 @@ func Recompute(p *ProjectState) {
 			hasFailed = true
 			hasDeployed = true
 		case StatusInProgress:
+			// in_progress means the pipeline crashed before completing — treat as failure.
 			hasFailed = true
+		case StatusSkipped:
+			// Skipped at the service level is treated the same as not deployed.
+			hasNotDeployed = true
 		}
 	}
 

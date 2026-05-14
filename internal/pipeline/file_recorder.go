@@ -19,7 +19,6 @@ type FileRecorder struct {
 	state                 *journal.ProjectState
 	serviceConfigHashes   map[string]string
 	projectConfigHash     string
-	stepStartTimes        map[string]time.Time
 	servicesSeenInThisRun map[string]bool
 	stampProjectHash      bool
 	pipelineStartTime     time.Time
@@ -56,7 +55,6 @@ func NewFileRecorder(
 		state:                 state,
 		serviceConfigHashes:   serviceConfigHashes,
 		projectConfigHash:     projectConfigHash,
-		stepStartTimes:        make(map[string]time.Time),
 		servicesSeenInThisRun: make(map[string]bool),
 		stampProjectHash:      stampProjectHash,
 	}
@@ -92,8 +90,6 @@ func (r *FileRecorder) OnPipelineStart(name string, totalSteps int) {
 
 // OnStepStart is called immediately before a step executes.
 func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash string) {
-	r.stepStartTimes[addr] = time.Now()
-
 	// Initialize phase if not present
 	if rs.Service == "" {
 		// Project-scope step
