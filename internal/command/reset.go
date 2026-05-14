@@ -3,9 +3,12 @@ package command
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/lock"
 	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/reset"
@@ -69,6 +72,7 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 // (default: disabled). Enable with `log: true` to write .devbox/logs/reset.log.
 func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -80,47 +84,120 @@ the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			workDir := flags.ProjectRoot()
-
-			resetCfg, steps, err := reset.LoadAndResolvePlan(cfg)
-			if err != nil {
-				return fmt.Errorf("resolving reset plan: %w", err)
-			}
-
-			reg, err := loadCommandRegistry(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading command registry: %w", err)
-			}
-
-			logEnabled := resetCfg.LogEnabled()
-			w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "reset", logEnabled)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
-
-			rep := pipeline.NewPlainReporter(w)
-
-			if err := pipeline.Run(steps, rep, "reset", cfg, reg, workDir, logWriter, yes, nil); err != nil {
-				if errors.Is(err, ErrSilent) && logEnabled {
-					w.Warning("Full output saved to: " + logPath)
-				}
-				return err
-			}
-
-			if logEnabled {
-				w.Info("Reset log saved to: " + logPath)
-			}
-			return nil
+			return resetRunCmd(flags, yes, force)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
+	cmd.Flags().BoolVar(&force, "force", false, "ignore lock from other processes")
 	return cmd
+}
+
+func resetRunCmd(flags *rootFlags, yes bool, forceLock bool) error {
+	workDir := flags.ProjectRoot()
+	stateDir := filepath.Join(workDir, ".devbox", "deploy")
+	statePath := filepath.Join(stateDir, "state.yml")
+	lockPath := filepath.Join(stateDir, "deploy.lock")
+
+	// Acquire file lock to prevent parallel resets
+	lck, err := lock.Acquire(lockPath)
+	if err != nil {
+		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
+			if !forceLock {
+				return fmt.Errorf("cannot start reset: lock held by process %d (use --force to override or wait for that process to finish)", heldErr.PID)
+			}
+			// With --force, we still can't forcibly take the lock from a live process,
+			// but we'll proceed with a best-effort approach; the lock is primarily
+			// a safety measure to prevent concurrent operations in normal cases.
+		} else {
+			return fmt.Errorf("acquiring lock: %w", err)
+		}
+	} else {
+		defer func() {
+			_ = lck.Release()
+		}()
+	}
+
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg)
+	if err != nil {
+		return fmt.Errorf("resolving reset plan: %w", err)
+	}
+
+	reg, err := loadCommandRegistry(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading command registry: %w", err)
+	}
+
+	logEnabled := resetCfg.LogEnabled()
+	w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "reset", logEnabled)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	rep := pipeline.NewPlainReporter(w)
+
+	opts := pipeline.RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "reset",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   logWriter,
+		SkipConfirm: yes,
+	}
+
+	if err := pipeline.RunWithOptions(opts); err != nil {
+		if errors.Is(err, ErrSilent) && logEnabled {
+			w.Warning("Full output saved to: " + logPath)
+		}
+		return err
+	}
+
+	// After reset succeeds, clean up the deploy state
+	// Collect which services were reset based on the resolved steps
+	servicesReset := make(map[string]bool)
+	projectLevelReset := false
+
+	for _, rs := range steps {
+		if rs.Service == "" {
+			projectLevelReset = true
+		} else {
+			servicesReset[rs.Service] = true
+		}
+	}
+
+	// Clean up state for services and project
+	if projectLevelReset && len(servicesReset) == 0 {
+		// Only project-level steps; remove entire state file
+		if err := journal.Remove(statePath); err != nil {
+			w.Warning("Failed to clean deploy state: " + err.Error())
+		}
+	} else {
+		// Service-scoped reset; remove each service from state
+		for svc := range servicesReset {
+			if err := journal.RemoveService(statePath, svc); err != nil {
+				w.Warning("Failed to clean deploy state for service " + svc + ": " + err.Error())
+			}
+		}
+		// If project-level was also reset, remove project-level state
+		if projectLevelReset {
+			if err := journal.Remove(statePath); err != nil {
+				w.Warning("Failed to clean deploy state: " + err.Error())
+			}
+		}
+	}
+
+	if logEnabled {
+		w.Info("Reset log saved to: " + logPath)
+	}
+	return nil
 }
 
 // newResetStepCmd creates the `devbox reset step <phase>/<step>` command.

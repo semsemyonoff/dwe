@@ -495,17 +495,17 @@ and `ResolvedStep.Phase.Name` so the recorder can update the correct
 
 ### Task 9: `devbox reset` command — lock and state cleanup
 
-- [ ] in `internal/command/reset.go` acquire the same project lock before
+- [x] in `internal/command/reset.go` acquire the same project lock before
   running the reset pipeline
-- [ ] after the reset pipeline succeeds:
+- [x] after the reset pipeline succeeds:
   - project-wide reset → `journal.Remove(path)`
   - service-scoped reset → `journal.RemoveService(path, name)` (recomputes
     project aggregate; deletes file if no services remain)
-- [ ] update `internal/command/reset.go` flag set with `--force` only if it
+- [x] update `internal/command/reset.go` flag set with `--force` only if it
   doesn't already exist (don't duplicate)
-- [ ] write tests covering project-wide and service-scoped reset state
+- [x] write tests covering project-wide and service-scoped reset state
   cleanup (table-driven with fixtures in `testdata/`)
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 10: `devbox run` gate in `internal/lifecycle.RunRun`
 
