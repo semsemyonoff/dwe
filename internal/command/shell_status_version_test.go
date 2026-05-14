@@ -1078,12 +1078,8 @@ func TestPublicCommandsHaveLongDescription(t *testing.T) {
 		name string
 		cmd  *cobra.Command
 	}{
-		{"up", newUpCmd(flags)},
-		{"down", newDownCmd(flags)},
 		{"stop", newStopCmd(flags)},
 		{"restart", newRestartCmd(flags)},
-		{"logs", newLogsCmd(flags)},
-		{"wait", newWaitCmd(flags)},
 		{"info", newInfoCmd(flags)},
 		{"version", newVersionCmd()},
 		{"status", newStatusCmd(flags)},
@@ -1110,12 +1106,8 @@ func TestPublicCommandsHaveExamples(t *testing.T) {
 		name string
 		cmd  *cobra.Command
 	}{
-		{"up", newUpCmd(flags)},
-		{"down", newDownCmd(flags)},
 		{"stop", newStopCmd(flags)},
 		{"restart", newRestartCmd(flags)},
-		{"logs", newLogsCmd(flags)},
-		{"wait", newWaitCmd(flags)},
 		{"info", newInfoCmd(flags)},
 		{"version", newVersionCmd()},
 		{"status", newStatusCmd(flags)},

@@ -148,7 +148,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	dockerCmd := newDockerCmd(flags)
 
-	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "wait", "pull", "build", "project-name"}
+	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "pull", "build", "project-name"}
 	commands := dockerCmd.Commands()
 
 	if len(commands) != len(expectedSubs) {

@@ -24,7 +24,6 @@ func newResetCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newResetPlanCmd(flags))
 	cmd.AddCommand(newResetRunCmd(flags))
 	cmd.AddCommand(newResetStepCmd(flags))
-	cmd.AddCommand(newResetConfigCheckCmd(flags))
 	return cmd
 }
 
@@ -202,37 +201,4 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command without executing")
 	return cmd
-}
-
-// newResetConfigCheckCmd creates the `devbox reset config` command group
-// with `devbox reset config check` as a subcommand.
-func newResetConfigCheckCmd(flags *rootFlags) *cobra.Command {
-	parent := &cobra.Command{
-		Use:          "config",
-		Short:        "Reset config subcommands",
-		SilenceUsage: true,
-	}
-
-	checkCmd := &cobra.Command{
-		Use:   "check",
-		Short: "Validate the reset pipeline config (devbox/reset.yml)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			steps, err := reset.ResolvePlan(cfg)
-			if err != nil {
-				return err
-			}
-			w := render.Stdout()
-			w.Success(fmt.Sprintf("reset config OK: %d step(s) resolved", len(steps)))
-			return nil
-		},
-		SilenceUsage: true,
-	}
-
-	parent.AddCommand(checkCmd)
-	return parent
 }

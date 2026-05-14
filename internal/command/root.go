@@ -149,13 +149,8 @@ Run 'devbox info' for the full info dashboard.`,
 
 	// Environment group: lifecycle and shell access.
 	addCmd(root, groupEnvironment, newRunCmd(flags))
-	addCmd(root, groupEnvironment, newUpCmd(flags))
-	addCmd(root, groupEnvironment, newDownCmd(flags))
 	addCmd(root, groupEnvironment, newStopCmd(flags))
 	addCmd(root, groupEnvironment, newRestartCmd(flags))
-	addCmd(root, groupEnvironment, newLogsCmd(flags))
-	addCmd(root, groupEnvironment, newPsCmd(flags))
-	addCmd(root, groupEnvironment, newWaitCmd(flags))
 	addCmd(root, groupEnvironment, newShellCmd(flags))
 	addCmd(root, groupEnvironment, newStatusCmd(flags))
 

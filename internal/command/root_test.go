@@ -39,14 +39,14 @@ func TestCommandGroups(t *testing.T) {
 	}
 
 	// Environment group: lifecycle + shell + status
-	for _, name := range []string{"run", "up", "down", "stop", "restart", "logs", "ps", "wait", "shell", "status"} {
+	for _, name := range []string{"run", "stop", "restart", "shell", "status"} {
 		if cmdGroupID[name] != groupEnvironment {
 			t.Errorf("command %q groupID = %q, want %q", name, cmdGroupID[name], groupEnvironment)
 		}
 	}
 
-	// Configuration group: services, tools (render registered as "render")
-	for _, name := range []string{"services", "tools", "render"} {
+	// Configuration group: services, tools, render, validate
+	for _, name := range []string{"services", "tools", "render", "validate"} {
 		if cmdGroupID[name] != groupConfiguration {
 			t.Errorf("command %q groupID = %q, want %q", name, cmdGroupID[name], groupConfiguration)
 		}

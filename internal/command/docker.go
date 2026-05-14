@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
@@ -28,7 +27,6 @@ func newDockerCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newDockerPsCmd(flags))
 	cmd.AddCommand(newDockerExecCmd(flags))
 	cmd.AddCommand(newDockerRunCmd(flags))
-	cmd.AddCommand(newDockerWaitCmd(flags))
 	cmd.AddCommand(newDockerPullCmd(flags))
 	cmd.AddCommand(newDockerBuildCmd(flags))
 	cmd.AddCommand(newDockerProjectNameCmd(flags))
@@ -229,44 +227,6 @@ func stripDockerCommandSeparator(args []string) []string {
 		}
 	}
 	return args
-}
-
-func newDockerWaitCmd(flags *rootFlags) *cobra.Command {
-	var timeout time.Duration
-	var interval time.Duration
-
-	cmd := &cobra.Command{
-		Use:   "wait",
-		Short: "Wait for all compose containers to become healthy",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			p, err := newDockerPipeline(flags, "wait")
-			if err != nil {
-				return err
-			}
-
-			ids, err := p.compose.ContainerIDs()
-			if err != nil {
-				return fmt.Errorf("getting container IDs: %w", err)
-			}
-			if len(ids) == 0 {
-				render.Stdout().Warning("no containers found")
-				return nil
-			}
-
-			if interval <= 0 {
-				return fmt.Errorf("--interval must be greater than zero")
-			}
-			attempts := max(int(timeout/interval), 1)
-
-			return docker.WaitContainersHealthy(ids, p.compose.HealthStatus, attempts, interval, render.Stdout())
-		},
-		SilenceUsage: true,
-	}
-
-	cmd.Flags().DurationVar(&timeout, "timeout", 60*time.Second, "total wait timeout")
-	cmd.Flags().DurationVar(&interval, "interval", 2*time.Second, "poll interval")
-	return cmd
 }
 
 // resolvePullInvocation returns the Compose instance and extra args for a pull command.

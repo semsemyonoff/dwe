@@ -380,16 +380,16 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 7: Remove deprecated public commands
 
-- [ ] delete `internal/command/wait.go` (entire file)
-- [ ] delete the `newDockerWaitCmd` function from `internal/command/docker.go` and its registration in the `docker` parent command
-- [ ] delete `internal/command/up.go`, `down.go`, `logs.go`, `ps.go` (entire files)
-- [ ] remove the `newResetConfigCheckCmd` function and its parent wiring from `internal/command/reset.go`
-- [ ] remove the corresponding registrations in `internal/command/root.go:125-131` (`newUpCmd`, `newDownCmd`, `newLogsCmd`, `newPsCmd`, `newWaitCmd`)
-- [ ] grep for any orphaned imports (`time`, `render`, `config`) in `internal/command/docker.go` after removing the wait subcommand; remove unused imports
-- [ ] delete the `_test.go` files for the removed commands (`wait_test.go`, `up_test.go`, `down_test.go`, `logs_test.go`, `ps_test.go` if they exist) and the `reset config check` test
-- [ ] grep for any `bin/devbox wait`, `bin/devbox up`, etc. references in `internal/command/*_test.go` integration-style assertions; update or delete those tests
-- [ ] run `go build ./...` — must compile cleanly; any failure is a missed reference
-- [ ] run `go test ./...` — must pass before next task
+- [x] delete `internal/command/wait.go` (entire file)
+- [x] delete the `newDockerWaitCmd` function from `internal/command/docker.go` and its registration in the `docker` parent command
+- [x] delete `internal/command/up.go`, `down.go`, `logs.go`, `ps.go` (entire files)
+- [x] remove the `newResetConfigCheckCmd` function and its parent wiring from `internal/command/reset.go`
+- [x] remove the corresponding registrations in `internal/command/root.go:125-131` (`newUpCmd`, `newDownCmd`, `newLogsCmd`, `newPsCmd`, `newWaitCmd`)
+- [x] grep for any orphaned imports (`time`, `render`, `config`) in `internal/command/docker.go` after removing the wait subcommand; remove unused imports
+- [x] delete the `_test.go` files for the removed commands (`wait_test.go`, `up_test.go`, `down_test.go`, `logs_test.go`, `ps_test.go` if they exist) and the `reset config check` test
+- [x] grep for any `bin/devbox wait`, `bin/devbox up`, etc. references in `internal/command/*_test.go` integration-style assertions; update or delete those tests
+- [x] run `go build ./...` — must compile cleanly; any failure is a missed reference
+- [x] run `go test ./...` — must pass before next task
 
 ### Task 8: Update documentation
 
