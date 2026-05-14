@@ -646,21 +646,21 @@ model and hands it in.
 
 ### Task 14: Documentation
 
-- [ ] add `docs/reference/config/state.md` documenting the `state.yml` schema,
+- [x] add `docs/reference/config/state.md` documenting the `state.yml` schema,
   hash semantics, the skip-decision table, lock behavior, and
   flags `--force`/`--resume`/`-y`
-- [ ] cross-link from `docs/reference/config/deploy.md` (new section
+- [x] cross-link from `docs/reference/config/deploy.md` (new section
   "Idempotent deploy and state") and `lifecycle.md` (new note on the run gate)
-- [ ] update `docs/reference/config/index.md` to list `state.md` and to
+- [x] update `docs/reference/config/index.md` to list `state.md` and to
   document `.devbox/` as the gitignored artifact root
-- [ ] update `AGENTS.md` "Project Structure & Module Organization" with new
+- [x] update `AGENTS.md` "Project Structure & Module Organization" with new
   `internal/deploy/journal/` and `internal/lock/` blurbs and the `.devbox/` path
   conventions (matching the level of detail of existing entries)
-- [ ] regenerate all CLI reference docs via the project's own docs command
+- [x] regenerate all CLI reference docs via the project's own docs command
   (`devbox docs generate --scope cli`) — this picks up the new flags
   (`--force`, `--resume`, `-y`), the new `devbox deploy state` subtree, and
   the updated `logs/` → `.devbox/logs/` mentions in command long-descriptions
-- [ ] run `make test`, `make test-race`, and `make lint`
+- [x] run `make test`, `make test-race`, and `make lint`
 
 ### Task 15: Verify acceptance criteria
 

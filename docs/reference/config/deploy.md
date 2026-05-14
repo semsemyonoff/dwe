@@ -564,11 +564,32 @@ phases:
 - **Using `continue_on_error` to mask real failures in core phases** — it is meant for hook phases (pre/post). A failed `docker up` should always abort.
 - **Confusing `when:` and `check:`** — `when:` is evaluated before the step runs (pre-condition); `check:` is evaluated after success (post-action). `when:` uses the typed `type: builtin|shell|template` / `cmd:` shape; `check:` uses the typed `type: shell|devbox|command|builtin` shape.
 
+## Idempotent deploy and state
+
+By default, `devbox deploy run` tracks the outcome and hash of every executed step in `.devbox/deploy/state.yml`. On the next deploy run, steps that succeeded with unchanged `action_hash` values are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency).
+
+This makes deploys idempotent: re-running an unchanged project is fast (unchanged steps are skipped), while editing a step body automatically re-triggers it. Edits to `services.yml` or `deploy.yml` invalidate the affected scope and force those steps to re-run.
+
+Key behaviors:
+
+- **Step hash change** → step re-runs
+- **Service config change** → all service steps re-run
+- **Project config change** → all project-level steps re-run
+- **Has `check:` action** → step always runs (even if hash matches), so the check re-validates idempotency
+- **Previous step failed** → step re-runs on next deploy (allows `--resume` to continue from the failure)
+
+Use `devbox deploy state show` to inspect the journal, `devbox deploy state clear` to reset it, and `devbox deploy state repair` to fix corrupted aggregates.
+
+See [state.md](state.md) for full details on hashing, skip decisions, and recovery from mid-deploy crashes.
+
 ## Related commands
 
 - `devbox deploy plan` — show resolved pipeline (with inlined service phases)
-- `devbox deploy run` — execute deploy pipeline
+- `devbox deploy run` — execute deploy pipeline with state tracking
 - `devbox deploy step <phase> <step>` — run a single step (debugging)
+- `devbox deploy state show` — inspect deploy state journal
+- `devbox deploy state clear` — reset deploy state
+- `devbox deploy state repair` — rebuild state aggregates
 - `devbox reset plan` — show reset pipeline
 - `devbox reset run [--yes]` — execute reset pipeline
 - See also [lifecycle.yml](lifecycle.md) — `run` / `stop` pipelines reuse the same phase/step grammar with optional update probe and hook phases.

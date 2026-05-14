@@ -125,6 +125,21 @@ When the probe finds a dirty tree, no upstream, or a fetch failure it warns and 
 | `show_info` | bool | `false` | Append a `devbox info` render after the last phase. |
 | `final_message` | string | `Project is ready for work!` | Success message printed at the very end. |
 
+## Mandatory service deployment gate
+
+`devbox run` automatically gates on mandatory services being deployed. Before the run pipeline starts, the command checks that all **tracked** services (those appearing in the resolved deploy plan) have `status: deployed` in the state file.
+
+If any tracked service is not yet deployed, `devbox run` exits with an error: "run `devbox deploy` first". This prevents running against a partially-initialized environment.
+
+Use `--force` to bypass this gate (useful in development to test run-time hooks while skipping deployment).
+
+```bash
+devbox run           # Error if a tracked service is not deployed
+devbox run --force   # Bypass gate; run even if services are not deployed
+```
+
+For more details, see [state.md](state.md).
+
 ## `stop.final_message`
 
 | Field | Type | Default | Description |

@@ -82,8 +82,9 @@ flowchart LR
 
 - [devbox / defaults / local](devbox.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
 - [services.yml](services.md) — service declarations, extends, dirs, cli config
-- [deploy.yml / reset.yml](deploy.md) — deploy and reset pipelines, steps, builtins, file logging
-- [lifecycle.yml](lifecycle.md) — run/stop pipelines, update probe, hook phases
+- [deploy.yml / reset.yml](deploy.md) — deploy and reset pipelines, steps, builtins, file logging, idempotent deploy
+- [state.yml](state.md) — deploy state tracking, skip-decision table, hashing, lock file, recovery from crashes
+- [lifecycle.yml](lifecycle.md) — run/stop pipelines, update probe, hook phases, mandatory service gate
 - [Conditions and Actions](conditions.md) — typed conditions for `when:`, typed actions for `check:` and step bodies, predicate vs engine-builtin distinction
 - [docker.yml](docker.md) — Compose execution policy, project name, env triggers
 - [styles.yml](styles.md) — ASCII header, color palette, separator
