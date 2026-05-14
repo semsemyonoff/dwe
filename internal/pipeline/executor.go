@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/creack/pty"
@@ -16,6 +17,7 @@ import (
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands"
@@ -297,14 +299,29 @@ func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 	return ExecAction(step.Action(), actx)
 }
 
+// RunOptions carries all inputs to Run, replacing individual positional arguments.
+// This struct bundles parameters to avoid signature churn and support optional
+// state-tracking features (Recorder, SkipDecider) added after the initial pipeline design.
+type RunOptions struct {
+	Steps        []ResolvedStep
+	Reporter     Reporter
+	Name         string
+	Config       *config.DevboxConfig
+	Registry     *usercommands.Registry
+	WorkDir      string
+	LogWriter    io.Writer
+	SkipConfirm  bool
+	PostStepHook map[string]func() error
+
+	// State tracking (optional): when non-nil, the executor records step
+	// results and consults the skip decision before running each step.
+	Recorder    Recorder
+	SkipDecider SkipDecider
+}
+
 // Run executes a resolved step list, calling rep for all lifecycle events.
 //
-// name is a human-readable label passed to rep.StartPipeline (e.g. "deploy", "reset").
-// postStepHooks maps step names to callbacks invoked after successful execution
-// (before the check condition) — used e.g. to source .env after render-env.
-//
-// Returns ErrSilent when any step fails (rep.FailStep has already been called).
-// Returns other errors for config/condition evaluation failures.
+// Deprecated: Use RunWithOptions instead. This wrapper is kept for backward compatibility.
 func Run(
 	steps []ResolvedStep,
 	rep Reporter,
@@ -316,47 +333,96 @@ func Run(
 	skipConfirm bool,
 	postStepHooks map[string]func() error,
 ) error {
+	return RunWithOptions(RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         name,
+		Config:       cfg,
+		Registry:     reg,
+		WorkDir:      workDir,
+		LogWriter:    logWriter,
+		SkipConfirm:  skipConfirm,
+		PostStepHook: postStepHooks,
+		Recorder:     NopRecorder{},
+		SkipDecider:  func(addr string, rs ResolvedStep, actionHash string) journal.Decision { return journal.Run },
+	})
+}
+
+// RunWithOptions executes a resolved step list with full state-tracking support.
+//
+// name is a human-readable label passed to rep.StartPipeline (e.g. "deploy", "reset").
+// postStepHooks maps step names to callbacks invoked after successful execution
+// (before the check condition) — used e.g. to source .env after render-env.
+//
+// Recorder records step execution for state tracking; if nil, a NopRecorder is used.
+// SkipDecider returns whether a step should be skipped based on previous state
+// and action hashes. If nil, all steps are forced to Run.
+//
+// Per-step ordering for state tracking (does not affect steps without state):
+//  1. compute actionHash := journal.ActionHash(rs.Step.Action())
+//  2. evaluate when: first (unchanged) — if false, skip and continue
+//  3. consult SkipDecider(addr, rs, actionHash) — on Skip, record skip and continue
+//  4. on Run, call recorder.OnStepStart, then ExecAction, then post-step hooks,
+//     then check conditions (unchanged)
+//  5. on success: recorder.OnStepFinish
+//  6. on failure: recorder.OnStepFail
+//
+// Returns ErrSilent when any step fails (rep.FailStep has already been called).
+// Returns other errors for config/condition evaluation failures.
+func RunWithOptions(opts RunOptions) error {
+	if opts.Recorder == nil {
+		opts.Recorder = NopRecorder{}
+	}
+	if opts.SkipDecider == nil {
+		opts.SkipDecider = func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		}
+	}
 	// trackedTotal excludes steps belonging to phases with Untracked=true.
 	// These steps receive index=0, total=0 in reporter calls so PlainReporter
 	// can suppress output for them.
 	trackedTotal := 0
-	for _, rs := range steps {
+	for _, rs := range opts.Steps {
 		if !rs.Phase.Untracked {
 			trackedTotal++
 		}
 	}
 
-	rep.StartPipeline(name, trackedTotal)
+	opts.Reporter.StartPipeline(opts.Name, trackedTotal)
+	opts.Recorder.OnPipelineStart(opts.Name, len(opts.Steps))
 
 	success := false
-	defer func() { rep.FinishPipeline(success) }()
+	defer func() {
+		opts.Reporter.FinishPipeline(success)
+		opts.Recorder.OnPipelineFinish(success)
+	}()
 
 	lastPhaseKey := ""
 	phaseSkipped := false
 	phaseWhenMsg := ""
 	trackedIndex := 0
 
-	for _, rs := range steps {
+	for _, rs := range opts.Steps {
 		phaseKey := rs.Phase.Name
 		if rs.Service != "" {
 			phaseKey = rs.Service + "/" + rs.Phase.Name
 		}
 
 		if phaseKey != lastPhaseKey {
-			rep.EnterPhase(phaseKey, rs.Phase)
+			opts.Reporter.EnterPhase(phaseKey, rs.Phase)
 			lastPhaseKey = phaseKey
 			phaseSkipped = false
 			phaseWhenMsg = ""
 
 			if rs.PhaseWhen != nil {
-				ok, err := condition.EvalRuntimeTyped(rs.PhaseWhen, workDir)
+				ok, err := condition.EvalRuntimeTyped(rs.PhaseWhen, opts.WorkDir)
 				if err != nil {
 					return fmt.Errorf("evaluating when condition for phase %s: %w", phaseKey, err)
 				}
 				if !ok {
 					phaseSkipped = true
 					phaseWhenMsg = FormatCondition(rs.PhaseWhen)
-					rep.SkipPhase(phaseKey, rs.Phase, "when: "+phaseWhenMsg)
+					opts.Reporter.SkipPhase(phaseKey, rs.Phase, "when: "+phaseWhenMsg)
 				}
 			}
 		}
@@ -371,33 +437,54 @@ func Run(
 			stepIndex, stepTotal = trackedIndex, trackedTotal
 		}
 
+		// Step 1: Compute action hash early (before any skip decision).
+		actionHash := journal.ActionHash(rs.Step.Action())
+
 		// Phase-level when condition was false — skip all steps in this phase.
 		if phaseSkipped {
-			rep.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			rep.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhenMsg)
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhenMsg)
+			opts.Recorder.OnStepSkip(addr, rs, actionHash, "phase when: "+phaseWhenMsg)
 			continue
 		}
 
-		// Step-level runtime when condition.
+		// Step 2: Evaluate step-level runtime when condition (unchanged from before).
 		if rs.RuntimeWhen != nil {
-			ok, err := condition.EvalRuntimeTyped(rs.RuntimeWhen, workDir)
+			ok, err := condition.EvalRuntimeTyped(rs.RuntimeWhen, opts.WorkDir)
 			if err != nil {
 				return fmt.Errorf("evaluating when condition for %s: %w", addr, err)
 			}
 			if !ok {
-				rep.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				rep.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
+				opts.Recorder.OnStepSkip(addr, rs, actionHash, "when: "+FormatCondition(rs.RuntimeWhen))
 				continue
 			}
 		}
 
-		rep.StartStep(addr, rs.Step, stepIndex, stepTotal)
-		rep.SuspendForExec()
-		stepErr := ExecStep(rs.Step, workDir, cfg, reg, logWriter, skipConfirm)
-		rep.ResumeAfterExec()
+		// Step 3: Consult skip decision from state/config hash invalidation.
+		decision := opts.SkipDecider(addr, rs, actionHash)
+		if decision == journal.Skip {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
+			opts.Recorder.OnStepSkip(addr, rs, actionHash, "state")
+			continue
+		}
+
+		// Step 4: Execute the step.
+		opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+		opts.Recorder.OnStepStart(addr, rs, actionHash)
+		opts.Reporter.SuspendForExec()
+
+		startTime := time.Now()
+		stepErr := ExecStep(rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, opts.SkipConfirm)
+		durationMs := time.Since(startTime).Milliseconds()
+
+		opts.Reporter.ResumeAfterExec()
 
 		if stepErr != nil {
-			rep.FailStep(addr, rs.Step, stepIndex, stepTotal, stepErr)
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, stepErr)
+			opts.Recorder.OnStepFail(addr, rs, actionHash, durationMs, stepErr)
 			if rs.Step.ContinueOnError {
 				// Step failed but is marked continue_on_error: report the failure
 				// and proceed to the next step. Post-step hook and Check are skipped.
@@ -407,7 +494,7 @@ func Run(
 		}
 
 		// Run post-step hook if registered (e.g. source .env after render-env).
-		if hook, ok := postStepHooks[rs.Step.Name]; ok {
+		if hook, ok := opts.PostStepHook[rs.Step.Name]; ok {
 			if err := hook(); err != nil {
 				return err
 			}
@@ -416,15 +503,16 @@ func Run(
 		// Execute check action after successful execution.
 		if rs.Step.Check != nil {
 			actx := ActionContext{
-				WorkDir:     workDir,
-				Cfg:         cfg,
-				Reg:         reg,
-				LogWriter:   logWriter,
-				SkipConfirm: skipConfirm,
+				WorkDir:     opts.WorkDir,
+				Cfg:         opts.Config,
+				Reg:         opts.Registry,
+				LogWriter:   opts.LogWriter,
+				SkipConfirm: opts.SkipConfirm,
 			}
 			checkErr := ExecAction(*rs.Step.Check, actx)
 			if checkErr != nil {
-				rep.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
+				opts.Recorder.OnStepFail(addr, rs, actionHash, durationMs, checkErr)
 				if rs.Step.ContinueOnError {
 					// Check failed but step is marked continue_on_error: report the failure
 					// and proceed to the next step.
@@ -434,7 +522,8 @@ func Run(
 			}
 		}
 
-		rep.FinishStep(addr, rs.Step, stepIndex, stepTotal)
+		opts.Reporter.FinishStep(addr, rs.Step, stepIndex, stepTotal)
+		opts.Recorder.OnStepFinish(addr, rs, actionHash, durationMs)
 	}
 
 	success = true

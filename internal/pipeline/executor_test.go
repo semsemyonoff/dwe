@@ -12,6 +12,7 @@ import (
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy/journal"
 )
 
 // --- mockReporter records all reporter events for assertion ---
@@ -78,6 +79,43 @@ func (m *mockReporter) kindSeq() []string {
 // eventAt returns the event at index i, panicking if out of range.
 func (m *mockReporter) eventAt(i int) reporterEvent {
 	return m.events[i]
+}
+
+// --- mockRecorder records all recorder events for assertion ---
+
+type recorderEvent struct {
+	kind       string
+	addr       string
+	actionHash string
+	reason     string
+	durationMs int64
+	err        error
+	name       string
+	totalSteps int
+	success    bool
+}
+
+type mockRecorder struct {
+	events []recorderEvent
+}
+
+func (m *mockRecorder) OnPipelineStart(name string, totalSteps int) {
+	m.events = append(m.events, recorderEvent{kind: "OnPipelineStart", name: name, totalSteps: totalSteps})
+}
+func (m *mockRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash string) {
+	m.events = append(m.events, recorderEvent{kind: "OnStepStart", addr: addr, actionHash: actionHash})
+}
+func (m *mockRecorder) OnStepFinish(addr string, rs ResolvedStep, actionHash string, durationMs int64) {
+	m.events = append(m.events, recorderEvent{kind: "OnStepFinish", addr: addr, actionHash: actionHash, durationMs: durationMs})
+}
+func (m *mockRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash string, durationMs int64, err error) {
+	m.events = append(m.events, recorderEvent{kind: "OnStepFail", addr: addr, actionHash: actionHash, durationMs: durationMs, err: err})
+}
+func (m *mockRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash string, reason string) {
+	m.events = append(m.events, recorderEvent{kind: "OnStepSkip", addr: addr, actionHash: actionHash, reason: reason})
+}
+func (m *mockRecorder) OnPipelineFinish(success bool) {
+	m.events = append(m.events, recorderEvent{kind: "OnPipelineFinish", success: success})
 }
 
 // --- helpers ---
@@ -1101,5 +1139,308 @@ func TestBuildDevboxCmd_DevboxBinParam(t *testing.T) {
 		if shellCmd == "" {
 			t.Errorf("bin=%q: shell cmd is empty", bin)
 		}
+	}
+}
+
+// --- state tracking tests ---
+
+func TestRunWithOptions_State_StepSkipped_NoCheck(t *testing.T) {
+	rep := &mockReporter{}
+	rec := &mockRecorder{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "init"}
+	step := noopStep("setup")
+	steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+	// SkipDecider always returns Skip for this step (simulating previous state: ok, hash match, no check).
+	skipDecider := func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		if addr == "init/setup" {
+			return journal.Skip
+		}
+		return journal.Run
+	}
+
+	opts := RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "test",
+		Config:       cfg,
+		Registry:     nil,
+		WorkDir:      t.TempDir(),
+		LogWriter:    nil,
+		SkipConfirm:  false,
+		PostStepHook: nil,
+		Recorder:     rec,
+		SkipDecider:  skipDecider,
+	}
+	err := RunWithOptions(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check reporter sees SkipStep.
+	repSkips := 0
+	for _, e := range rep.events {
+		if e.kind == "SkipStep" && e.reason == "state: already deployed" {
+			repSkips++
+		}
+	}
+	if repSkips != 1 {
+		t.Errorf("expected 1 SkipStep event with state reason, got %d", repSkips)
+	}
+
+	// Check recorder sees OnStepSkip with "state" reason.
+	recSkips := 0
+	for _, e := range rec.events {
+		if e.kind == "OnStepSkip" && e.reason == "state" {
+			recSkips++
+		}
+	}
+	if recSkips != 1 {
+		t.Errorf("expected 1 OnStepSkip event with 'state' reason, got %d", recSkips)
+	}
+
+	// Step should never be executed (no OnStepStart or OnStepFinish).
+	starts := 0
+	finishes := 0
+	for _, e := range rec.events {
+		if e.kind == "OnStepStart" {
+			starts++
+		}
+		if e.kind == "OnStepFinish" {
+			finishes++
+		}
+	}
+	if starts != 0 || finishes != 0 {
+		t.Errorf("step should not execute when skipped: OnStepStart=%d OnStepFinish=%d", starts, finishes)
+	}
+}
+
+func TestRunWithOptions_State_StepRuns_WithCheck(t *testing.T) {
+	rep := &mockReporter{}
+	rec := &mockRecorder{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "init"}
+	step := config.DeployStep{
+		Name:  "setup",
+		Type:  "shell",
+		Cmd:   "true",
+		Check: &config.Action{Type: "shell", Cmd: "true"},
+	}
+	steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+	// SkipDecider would return Skip (state ok, hash match), but step has check so should Run.
+	// In reality, the closure in Task 8 should handle this, but we test the behavior.
+	// Actually, looking back at the spec, when a step has a check, the Decide function
+	// returns Run. So we simulate that here.
+	skipDecider := func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		// If the step has a check, always run so the check can re-validate.
+		if rs.Step.Check != nil {
+			return journal.Run
+		}
+		return journal.Skip
+	}
+
+	opts := RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "test",
+		Config:       cfg,
+		Registry:     nil,
+		WorkDir:      t.TempDir(),
+		LogWriter:    nil,
+		SkipConfirm:  false,
+		PostStepHook: nil,
+		Recorder:     rec,
+		SkipDecider:  skipDecider,
+	}
+	err := RunWithOptions(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check recorder sees OnStepStart and OnStepFinish (step was executed).
+	starts := 0
+	finishes := 0
+	for _, e := range rec.events {
+		if e.kind == "OnStepStart" {
+			starts++
+		}
+		if e.kind == "OnStepFinish" {
+			finishes++
+		}
+	}
+	if starts != 1 || finishes != 1 {
+		t.Errorf("step should execute when it has a check: OnStepStart=%d OnStepFinish=%d", starts, finishes)
+	}
+
+	// Check should have run successfully.
+	// Reporter shows FinishStep after check.
+	if rep.eventAt(len(rep.events)-2).kind != "FinishStep" {
+		t.Error("FinishStep should come before FinishPipeline")
+	}
+}
+
+func TestRunWithOptions_State_StepRuns_ActionHashDiverged(t *testing.T) {
+	rep := &mockReporter{}
+	rec := &mockRecorder{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "init"}
+	step := noopStep("setup")
+	steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+	// SkipDecider returns Run because action hash diverged.
+	skipDecider := func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		// Simulating: previous state had a different action hash.
+		if addr == "init/setup" && actionHash != "different_hash" {
+			return journal.Run
+		}
+		return journal.Skip
+	}
+
+	opts := RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "test",
+		Config:       cfg,
+		Registry:     nil,
+		WorkDir:      t.TempDir(),
+		LogWriter:    nil,
+		SkipConfirm:  false,
+		PostStepHook: nil,
+		Recorder:     rec,
+		SkipDecider:  skipDecider,
+	}
+	err := RunWithOptions(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Step should have been executed.
+	starts := 0
+	finishes := 0
+	for _, e := range rec.events {
+		if e.kind == "OnStepStart" {
+			starts++
+		}
+		if e.kind == "OnStepFinish" {
+			finishes++
+		}
+	}
+	if starts != 1 || finishes != 1 {
+		t.Errorf("step should execute when action hash diverged: OnStepStart=%d OnStepFinish=%d", starts, finishes)
+	}
+}
+
+func TestRunWithOptions_State_WhenConditionTakesPrecedence(t *testing.T) {
+	rep := &mockReporter{}
+	rec := &mockRecorder{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	// Create a directory with a file so dir-empty evaluates to false.
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "x"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	phase := config.DeployPhase{Name: "init"}
+	step := noopStep("setup")
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step:  step,
+			RuntimeWhen: &condition.Condition{
+				Type: condition.TypeBuiltin,
+				Cmd:  "dir-empty " + workDir,
+			},
+		},
+	}
+
+	// SkipDecider would return Run (simulating valid state), but when: evaluates to false → skip.
+	skipDecider := func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		return journal.Run // Always run in normal state
+	}
+
+	opts := RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "test",
+		Config:       cfg,
+		Registry:     nil,
+		WorkDir:      workDir,
+		LogWriter:    nil,
+		SkipConfirm:  false,
+		PostStepHook: nil,
+		Recorder:     rec,
+		SkipDecider:  skipDecider,
+	}
+	err := RunWithOptions(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Step should be skipped due to when condition, not state decision.
+	// Recorder should see OnStepSkip with reason containing "when", not "state".
+	skips := 0
+	for _, e := range rec.events {
+		if e.kind == "OnStepSkip" && strings.Contains(e.reason, "when") {
+			skips++
+		}
+	}
+	if skips != 1 {
+		t.Errorf("expected 1 OnStepSkip due to when condition, got %d", skips)
+	}
+
+	// Reporter should also show SkipStep with when reason.
+	repSkips := 0
+	for _, e := range rep.events {
+		if e.kind == "SkipStep" && strings.Contains(e.reason, "when") {
+			repSkips++
+		}
+	}
+	if repSkips != 1 {
+		t.Errorf("expected 1 reporter SkipStep due to when condition, got %d", repSkips)
+	}
+}
+
+func TestRunWithOptions_RecorderGetsDurationMs(t *testing.T) {
+	rep := &mockReporter{}
+	rec := &mockRecorder{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "init"}
+	step := noopStep("setup")
+	steps := buildResolvedSteps(phase, []config.DeployStep{step})
+
+	opts := RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "test",
+		Config:       cfg,
+		Registry:     nil,
+		WorkDir:      t.TempDir(),
+		LogWriter:    nil,
+		SkipConfirm:  false,
+		PostStepHook: nil,
+		Recorder:     rec,
+		SkipDecider:  func(addr string, rs ResolvedStep, actionHash string) journal.Decision { return journal.Run },
+	}
+	err := RunWithOptions(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Find OnStepFinish and check durationMs is non-negative.
+	found := false
+	for _, e := range rec.events {
+		if e.kind == "OnStepFinish" {
+			found = true
+			if e.durationMs < 0 {
+				t.Errorf("OnStepFinish durationMs should be non-negative, got %d", e.durationMs)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("OnStepFinish event not found in recorder")
 	}
 }

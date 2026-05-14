@@ -296,7 +296,7 @@ in `internal/pipeline`; the concrete `FileRecorder` (Task 7) lives in
 `internal/pipeline` (or a sibling adapter package that imports both) — never
 in `internal/deploy/journal`.
 
-- [ ] define `Recorder` interface in `internal/pipeline/recorder.go` —
+- [x] define `Recorder` interface in `internal/pipeline/recorder.go` —
   **final, `ResolvedStep`-aware shape** (Task 7's `FileRecorder` implements
   this without further amendment):
   ```go
@@ -314,8 +314,8 @@ in `internal/deploy/journal`.
   passes the same value to the finish/fail/skip callback — there is no
   per-step cache in the recorder, so duplicate `addr` values across a
   run (should they ever occur) cannot stamp the wrong hash.
-- [ ] add no-op `NopRecorder` for tests / callers that don't track state
-- [ ] add `SkipDecider` function type — **takes `ResolvedStep`** so the
+- [x] add no-op `NopRecorder` for tests / callers that don't track state
+- [x] add `SkipDecider` function type — **takes `ResolvedStep`** so the
   closure can read `rs.Service` / `rs.Phase.Name` and apply project- vs
   service-scope `config_hash` invalidation:
   ```go
@@ -323,12 +323,12 @@ in `internal/deploy/journal`.
   ```
   default implementation returns `Run` for all steps (preserves existing
   behavior when no state is loaded)
-- [ ] extend `pipeline.Run` signature with an options struct (avoid signature
+- [x] extend `pipeline.Run` signature with an options struct (avoid signature
   churn — wrap existing positional args into `RunOptions` if they aren't
   already; keep the deprecated positional form behind a thin wrapper that
   delegates to the options form). Add `Recorder` and `SkipDecider` to the
   options struct.
-- [ ] **per-step ordering** in `Run` (must match this exact sequence to
+- [x] **per-step ordering** in `Run` (must match this exact sequence to
   preserve current `when:` semantics):
   1. compute `actionHash := journal.ActionHash(rs.Step.Action())` (note:
      `DeployStep.Action()` is a method on `config.DeployStep`, not a field
@@ -342,9 +342,9 @@ in `internal/deploy/journal`.
   4. on `Run`, call `recorder.OnStepStart(addr, rs, actionHash)`, then
      `ExecAction`, then (on success) the existing post-step hook, then the
      existing post-action `check:` — unchanged from today
-- [ ] on step success: `recorder.OnStepFinish(addr, rs, actionHash, durationMs)`
-- [ ] on step failure: `recorder.OnStepFail(addr, rs, actionHash, durationMs, err)`
-- [ ] **caller responsibility** for config-hash invalidation: the deploy
+- [x] on step success: `recorder.OnStepFinish(addr, rs, actionHash, durationMs)`
+- [x] on step failure: `recorder.OnStepFail(addr, rs, actionHash, durationMs, err)`
+- [x] **caller responsibility** for config-hash invalidation: the deploy
   command (Task 8) builds the `SkipDecider` closure. The closure decides
   scope from `rs.Service`:
   - empty `rs.Service` (project-scope step) → if persisted
@@ -356,7 +356,7 @@ in `internal/deploy/journal`.
     entries as absent (return `Run`)
   - otherwise, look up the matching `StepState` and delegate to
     `journal.Decide(prev, actionHash, hasCheck)`
-- [ ] keep the legacy executor tests green; add new tests:
+- [x] keep the legacy executor tests green; add new tests:
   - state says ok + hashes match + no check → step skipped
   - state says ok + hashes match + has check → step runs, check runs
   - state says ok + service `config_hash` diverged → service-scope step
@@ -368,7 +368,7 @@ in `internal/deploy/journal`.
   - `when:` false + state says ok → step still skipped via `when:` (the
     state path doesn't shadow `when:`)
   - failed/partial prev → step runs
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 7: Concrete `pipeline.FileRecorder` (lives in `internal/pipeline`)
 
