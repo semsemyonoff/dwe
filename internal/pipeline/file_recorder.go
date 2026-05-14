@@ -246,10 +246,10 @@ func (r *FileRecorder) OnPipelineFinish(success bool) {
 	r.state.Project.LastRun.FinishedAt = now
 	if success {
 		r.state.Project.LastRun.Status = journal.StatusOk
+		r.state.Project.DeployedAt = now
 	} else {
 		r.state.Project.LastRun.Status = journal.StatusFailed
 	}
-	r.state.Project.DeployedAt = now
 
 	// Stamp service config hashes and compute service statuses
 	for serviceName := range r.servicesSeenInThisRun {
@@ -260,7 +260,6 @@ func (r *FileRecorder) OnPipelineFinish(success bool) {
 		}
 		svcState := r.state.Services[serviceName]
 		svcState.ConfigHash = r.serviceConfigHashes[serviceName]
-		svcState.DeployedAt = now
 
 		if svcState.LastRun == nil {
 			svcState.LastRun = &journal.LastRun{
@@ -285,6 +284,7 @@ func (r *FileRecorder) OnPipelineFinish(success bool) {
 		if svcDeployed {
 			svcState.LastRun.Status = journal.StatusOk
 			svcState.Status = journal.StatusDeployed
+			svcState.DeployedAt = now
 		} else {
 			svcState.LastRun.Status = journal.StatusFailed
 			svcState.Status = journal.StatusFailed

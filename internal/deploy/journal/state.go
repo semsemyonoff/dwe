@@ -235,4 +235,10 @@ func Recompute(p *ProjectState) {
 	default:
 		p.Project.Status = StatusNotDeployed
 	}
+
+	// Fix LastRun.Status when stuck in_progress (e.g. process crashed mid-deploy).
+	// Always mark failed: an in_progress status means the pipeline never completed cleanly.
+	if p.Project.LastRun != nil && p.Project.LastRun.Status == StatusInProgress {
+		p.Project.LastRun.Status = StatusFailed
+	}
 }

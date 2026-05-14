@@ -214,10 +214,13 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 
 	baseDir := filepath.Dir(flags.configPath)
 
-	// Load project-level deploy config
+	// Load project-level deploy config (absent is valid — some projects only have per-service deploy files)
 	projectDeploy, err := config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("loading project deploy config: %w", err)
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		projectDeploy = nil
 	}
 
 	// Load tracked services and their deploy configs
