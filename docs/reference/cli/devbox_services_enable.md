@@ -7,7 +7,7 @@ Enable an optional service (writes to devbox/local.yml)
 Enable an optional service by writing services.<name>.enabled = true to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox run' to start the newly enabled service (or 'devbox docker up' for a bare Docker start).
+Use 'devbox run' to start the newly enabled service.
 
 When no service name is given, an interactive selector shows all currently
 disabled optional services.

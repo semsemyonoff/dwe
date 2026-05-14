@@ -16,7 +16,7 @@ func newStopCmd(flags *rootFlags) *cobra.Command {
 
 Execution order: before-stop hooks → docker down → after-stop hooks → final message.
 
-Use 'devbox down' for a bare Docker Compose stop-and-remove without hooks.
+Use 'devbox docker down' for a bare Docker Compose stop-and-remove without hooks.
 Use 'devbox docker stop' for the low-level compose stop (no container removal).`,
 		Example:      `  devbox stop`,
 		Args:         cobra.NoArgs,

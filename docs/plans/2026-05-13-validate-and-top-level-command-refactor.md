@@ -422,9 +422,9 @@ Go-skill notes used here (verified against `cc-skills-golang`):
 
 ### Task 10: Final docs sync
 
-- [ ] regenerate CLI docs: `bin/devbox docs generate --scope cli`
-- [ ] re-read `AGENTS.md` "Key Patterns" and "Project Structure" sections; correct any stale references
-- [ ] verify no orphan mentions of removed commands remain in `docs/`
+- [x] regenerate CLI docs: `bin/devbox docs generate --scope cli`
+- [x] re-read `AGENTS.md` "Key Patterns" and "Project Structure" sections; correct any stale references
+- [x] verify no orphan mentions of removed commands remain in `docs/`
 
 ## Technical Details
 

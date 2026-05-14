@@ -19,8 +19,7 @@ func newRunCmd(flags *rootFlags) *cobra.Command {
 Execution order: optional git update probe → before-run hooks → docker up → docker wait
 → after-run hooks → optional info display → final ready message.
 
-Use 'devbox up' for a bare Docker Compose start without hooks or the update probe.
-Use 'devbox docker up' for the low-level compose control plane.`,
+Use 'devbox docker up' for a bare Docker Compose start without hooks or the update probe.`,
 		Example: `  devbox run
   devbox run --no-update
   devbox run --update auto`,

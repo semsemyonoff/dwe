@@ -298,7 +298,7 @@ func newServiceEnableCmd(flags *rootFlags) *cobra.Command {
 		Long: `Enable an optional service by writing services.<name>.enabled = true to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox up' to start the newly enabled service.
+Use 'devbox run' to start the newly enabled service.
 
 When no service name is given, an interactive selector shows all currently
 disabled optional services.`,
@@ -338,7 +338,7 @@ func newServiceDisableCmd(flags *rootFlags) *cobra.Command {
 		Long: `Disable an optional service by writing services.<name>.enabled = false to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox stop <container>' or 'devbox down' to stop the service.
+Use 'devbox stop' to stop the service.
 
 When no service name is given, an interactive selector shows all currently
 enabled optional services.`,

@@ -7,7 +7,7 @@ Manage optional tools
 List, enable, or disable optional tool services.
 
 Enabling or disabling a tool writes the change to devbox/local.yml and regenerates .env.
-Use 'devbox run' to start newly enabled tools (or 'devbox docker up' for a bare Docker start).
+Use 'devbox run' to start newly enabled tools.
 
 Use 'tools status' to display a read-only table of all tools and their current state.
 Use 'tools list' for an interactive toggle form (TTY) or the same table (non-TTY).

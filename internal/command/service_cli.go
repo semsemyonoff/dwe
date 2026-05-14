@@ -138,7 +138,7 @@ func runServicesCLI(
 			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
 		}
 		if status != "running" {
-			return fmt.Errorf("container %q is not running — start it with 'devbox up'", fullContainerName)
+			return fmt.Errorf("container %q is not running — start it with 'devbox run'", fullContainerName)
 		}
 		return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 	case "run":
@@ -157,7 +157,7 @@ func runServicesCLI(
 			return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 		default:
 			return fmt.Errorf(
-				"container %q is %s — start it first with 'devbox up'",
+				"container %q is %s — start it first with 'devbox run'",
 				fullContainerName, status,
 			)
 		}

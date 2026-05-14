@@ -7,7 +7,7 @@ Disable an optional service (writes to devbox/local.yml)
 Disable an optional service by writing services.<name>.enabled = false to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox stop' to stop the full project or 'devbox docker down' to stop just the containers.
+Use 'devbox stop' to stop the service.
 
 When no service name is given, an interactive selector shows all currently
 enabled optional services.
