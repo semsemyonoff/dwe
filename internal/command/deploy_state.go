@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/lock"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
@@ -57,15 +58,15 @@ func deployStateShowCmd(flags *rootFlags) error {
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
-	state, err := journal.Load(statePath)
-	if err != nil {
-		return fmt.Errorf("loading state: %w", err)
-	}
-
-	// Check if state file exists (Load returns a zero-value if absent)
+	// Check existence before loading to avoid printing zero-value state.
 	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
 		render.Stdout().Info("No deploy state found. Run 'devbox deploy run' to create state.")
 		return nil
+	}
+
+	state, err := journal.Load(statePath)
+	if err != nil {
+		return fmt.Errorf("loading state: %w", err)
 	}
 
 	// Marshal state to YAML and print
@@ -107,6 +108,17 @@ func deployStateClearCmd(flags *rootFlags, force bool) error {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
+	lockPath := filepath.Join(stateDir, "deploy.lock")
+
+	// Acquire deploy lock to prevent concurrent deploy from overwriting the clear.
+	lck, err := lock.Acquire(lockPath)
+	if err != nil {
+		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
+			return &lockHeldError{operation: "clear state", pid: heldErr.PID}
+		}
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer func() { _ = lck.Release() }()
 
 	// Check if state file exists
 	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
@@ -162,16 +174,27 @@ func deployStateRepairCmd(flags *rootFlags) error {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
+	lockPath := filepath.Join(stateDir, "deploy.lock")
+
+	// Acquire deploy lock to prevent racing with an in-progress deploy's flush.
+	lck, err := lock.Acquire(lockPath)
+	if err != nil {
+		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
+			return &lockHeldError{operation: "repair state", pid: heldErr.PID}
+		}
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer func() { _ = lck.Release() }()
+
+	// Check existence before loading to avoid repairing a zero-value state.
+	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
+		render.Stdout().Info("No deploy state to repair.")
+		return nil
+	}
 
 	state, err := journal.Load(statePath)
 	if err != nil {
 		return fmt.Errorf("loading state: %w", err)
-	}
-
-	// Check if state file exists
-	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
-		render.Stdout().Info("No deploy state to repair.")
-		return nil
 	}
 
 	// Recompute status aggregates

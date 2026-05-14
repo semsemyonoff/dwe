@@ -49,8 +49,8 @@ func LoadTrackedServices(cfg *config.DevboxConfig, baseDir string) ([]string, ma
 		svcPath := filepath.Join(baseDir, "devbox", "deploy", name+".yml")
 		svcDeploy, err := config.LoadDeployConfig(svcPath)
 		if err != nil {
-			// LoadDeployConfig returns no-error when the file is absent,
-			// so any error here is a real problem
+			// Tracked services always have deploy files (discovered by ResolvePlan),
+			// so any error here is a real problem.
 			return nil, nil, fmt.Errorf("loading deploy config for service %q: %w", name, err)
 		}
 		svcDeploys[name] = svcDeploy

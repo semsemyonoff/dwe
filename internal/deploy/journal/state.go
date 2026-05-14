@@ -252,4 +252,11 @@ func Recompute(p *ProjectState) {
 	if p.Project.LastRun != nil && p.Project.LastRun.Status == StatusInProgress {
 		p.Project.LastRun.Status = StatusFailed
 	}
+
+	// Fix service-level LastRun.Status stuck in_progress for the same reason.
+	for _, svc := range p.Services {
+		if svc.LastRun != nil && svc.LastRun.Status == StatusInProgress {
+			svc.LastRun.Status = StatusFailed
+		}
+	}
 }
