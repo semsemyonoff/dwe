@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"strings"
 
+	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
 )
 
-// RenderSummary returns a compact two-line project summary string.
+// RenderSummary returns a compact project summary string.
 // It shows the project name, state, and enabled service/tool counts.
+// When deploySummary is provided, also shows deploy status (N/M deployed).
 // The returned string contains no trailing newline on the last line.
-func RenderSummary(cfg *config.DevboxConfig) string {
+func RenderSummary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySummary) string {
 	var lines []string
 
 	// Line 1: project name and state.
@@ -25,14 +27,20 @@ func RenderSummary(cfg *config.DevboxConfig) string {
 
 	lines = append(lines, strings.Join(parts, "  "))
 
-	// Line 2: service and tool counts.
+	// Line 2: service and tool counts, plus deploy status if available.
 	enabledSvcs, totalSvcs := countServices(cfg)
 	enabledTools := countTools(cfg)
 
-	line2 := styleMuted.Render(fmt.Sprintf("services %d/%d enabled", enabledSvcs, totalSvcs)) +
-		"  " +
-		styleMuted.Render(fmt.Sprintf("tools %d enabled", enabledTools))
-	lines = append(lines, line2)
+	var line2Parts []string
+	line2Parts = append(line2Parts, styleMuted.Render(fmt.Sprintf("services %d/%d enabled", enabledSvcs, totalSvcs)))
+	line2Parts = append(line2Parts, styleMuted.Render(fmt.Sprintf("tools %d enabled", enabledTools)))
+
+	if deploySummary != nil && deploySummary.Total > 0 {
+		deployedStr := fmt.Sprintf("services %d/%d deployed", deploySummary.Deployed, deploySummary.Total)
+		line2Parts = append(line2Parts, styleMuted.Render(deployedStr))
+	}
+
+	lines = append(lines, strings.Join(line2Parts, "  "))
 
 	return strings.Join(lines, "\n")
 }

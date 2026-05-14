@@ -9,7 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
@@ -247,8 +250,34 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout())
 			}
 		}
+
+		// Load deploy state and build deploy summary.
+		var deploySummary *statusview.DeploySummary
+		statePath := filepath.Join(flags.projectRoot, journal.DefaultRelPath)
+		state, err := journal.Load(statePath)
+		if err == nil && state != nil {
+			// Get tracked services to know the total.
+			tracked, _, err := deploy.LoadTrackedServices(cfg, flags.projectRoot)
+			if err == nil && len(tracked) > 0 {
+				// Count how many tracked services are deployed.
+				deployedCount := 0
+				for _, svcName := range tracked {
+					if svc, ok := state.Services[svcName]; ok && svc != nil && svc.Status == journal.StatusDeployed {
+						deployedCount++
+					}
+				}
+				// Build summary view.
+				deploySummary = &statusview.DeploySummary{
+					Deployed:      deployedCount,
+					Total:         len(tracked),
+					ProjectStatus: state.Project.Status,
+				}
+			}
+		}
+		// Silently skip deploy summary if state load fails — not critical for summary.
+
 		// Print compact project summary followed by a blank separator line.
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg, deploySummary))
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 	case errors.Is(err, os.ErrNotExist):
 		// Config file not found — not an error, just skip the summary.

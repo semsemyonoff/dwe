@@ -616,19 +616,19 @@ model and hands it in.
 
 ### Task 12: Root summary — `services: N/M deployed`
 
-- [ ] add `DeploySummary` to `internal/command/statusview/` (same package
+- [x] add `DeploySummary` to `internal/command/statusview/` (same package
   as `DeployStatusView` in Task 11) — carries
   `Deployed int, Total int, ProjectStatus journal.Status`.
-- [ ] update `internal/ui.RenderSummary` to accept an optional summary
+- [x] update `internal/ui.RenderSummary` to accept an optional summary
   view-model: `RenderSummary(cfg, summary *statusview.DeploySummary)`.
   UI must NOT load files or compute hashes — same purity rule as Task 11.
   When `summary` is nil, the deploy-state line is omitted.
-- [ ] in `internal/command/root.go`: load `state.yml` and tracked services,
+- [x] in `internal/command/root.go`: load `state.yml` and tracked services,
   build the `statusview.DeploySummary`, and pass it to `ui.RenderSummary`.
   Missing `state.yml` → pass nil.
-- [ ] update `internal/command/root.go` summary path to pass the state in
-- [ ] tests for both cases (state present / absent)
-- [ ] run `make test` and `make lint`
+- [x] update `internal/command/root.go` summary path to pass the state in
+- [x] tests for both cases (state present / absent)
+- [x] run `make test` and `make lint`
 
 ### Task 13: `devbox deploy state {show,clear,repair}` subcommands
 

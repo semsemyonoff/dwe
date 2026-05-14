@@ -57,7 +57,7 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 	}
 
 	if missingInfo {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg, nil))
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 		render.NewWriter(cmd.ErrOrStderr()).Warning("devbox/info.yml not found — showing minimal summary. Run `devbox validate config info` for details.")
 		return nil
