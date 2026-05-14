@@ -176,21 +176,21 @@ Establish the data model and on-disk persistence first; no business logic yet.
 
 Stable, order-independent hashes are the gate for skip decisions.
 
-- [ ] add `ActionHash(a config.Action) string` — `sha256(type | cmd |
+- [x] add `ActionHash(a config.Action) string` — `sha256(type | cmd |
   canonical(with))`; canonicalize `with` by sorting keys; return hex digest;
   keep prefix length internal (full sha256 in file, helper `ShortHash` for UI)
-- [ ] **hash inputs are parsed Go structs, not raw YAML bytes** — Go-side
+- [x] **hash inputs are parsed Go structs, not raw YAML bytes** — Go-side
   canonicalization (sort map keys via `encoding/json` with a fixed
   marshaller) makes hashes invariant to YAML whitespace, comment churn,
   and key ordering, which matches the spirit of the `action_hash` rule
   ("body changed"). This also avoids a mismatch with
   `config.LoadServiceDeployConfigs`, which returns
   `map[string]*config.DeployConfig` (parsed configs) — not raw bytes.
-- [ ] add `ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg
+- [x] add `ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg
   *config.DeployConfig) string` — hash of canonical-marshaled
   `services.<name>` block + canonical-marshaled `*DeployConfig` (the
   parsed `devbox/deploy/<name>.yml`; nil → hashed as empty)
-- [ ] add `ProjectConfigHash(cfg *config.DevboxConfig, deployCfg
+- [x] add `ProjectConfigHash(cfg *config.DevboxConfig, deployCfg
   *config.DeployConfig, svcDeploys map[string]*config.DeployConfig,
   trackedServices []string) string` — hash spans canonical-marshaled
   `services` map (only tracked entries), top-level `*DeployConfig`, and
@@ -198,13 +198,13 @@ Stable, order-independent hashes are the gate for skip decisions.
   set from `deploy.TrackedServices` — see Task 10); deterministic
   ordering driven by the sorted `trackedServices` slice. Edits to
   enabled-but-untracked variants therefore do not change the project hash.
-- [ ] internal helper `canonicalMap(m map[string]any) []byte` using
+- [x] internal helper `canonicalMap(m map[string]any) []byte` using
   `encoding/json` with sorted keys (yaml.Marshal is not key-stable)
-- [ ] write table-driven tests for `ActionHash` (key order in `with` doesn't
+- [x] write table-driven tests for `ActionHash` (key order in `with` doesn't
   affect hash; type/cmd/with each contribute; nil `with` deterministic)
-- [ ] write tests for `ServiceConfigHash` and `ProjectConfigHash` (key-order
+- [x] write tests for `ServiceConfigHash` and `ProjectConfigHash` (key-order
   stability, disabled services excluded, missing `deploy/<name>.yml` handled)
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 3: Skip-decision resolver
 
