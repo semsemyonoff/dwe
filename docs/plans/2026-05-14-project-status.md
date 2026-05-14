@@ -632,7 +632,7 @@ model and hands it in.
 
 ### Task 13: `devbox deploy state {show,clear,repair}` subcommands
 
-- [ ] add `internal/command/deploy_state.go` with three subcommands wired
+- [x] add `internal/command/deploy_state.go` with three subcommands wired
   under the existing `deploy` command group:
   - `show` — raw dump of `state.yml` (human-readable; per-step timings and
     hashes; thin layer over `journal.Load` + a printer in `internal/ui`)
@@ -640,9 +640,9 @@ model and hands it in.
     `-y` flag for CI
   - `repair` — `journal.Load` → `journal.Recompute` → `journal.Save`; preserves
     per-step journal, rebuilds aggregates
-- [ ] add cobra command tests (`internal/command/deploy_state_test.go`)
+- [x] add cobra command tests (`internal/command/deploy_state_test.go`)
   covering all three subcommands against a temp project dir
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 14: Documentation
 

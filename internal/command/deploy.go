@@ -36,6 +36,7 @@ application services. Use 'devbox deploy plan' to preview before running.`,
 	cmd.AddCommand(newDeployPlanCmd(flags))
 	cmd.AddCommand(newDeployRunCmd(flags))
 	cmd.AddCommand(newDeployStepCmd(flags))
+	cmd.AddCommand(newDeployStateCmd(flags))
 	return cmd
 }
 
