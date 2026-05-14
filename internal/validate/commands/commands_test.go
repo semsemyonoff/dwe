@@ -12,7 +12,7 @@ import (
 	"devbox-cli/internal/validate"
 )
 
-func TestCommandsValidator(t *testing.T) {
+func TestValidator(t *testing.T) {
 	tests := []struct {
 		name      string
 		buildDir  func(t *testing.T) string
@@ -88,7 +88,7 @@ func TestCommandsValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			projectRoot := tt.buildDir(t)
-			v := &CommandsValidator{}
+			v := &Validator{}
 			ctx := validate.Context{
 				ProjectRoot: projectRoot,
 				Cfg:         nil,
@@ -99,8 +99,8 @@ func TestCommandsValidator(t *testing.T) {
 	}
 }
 
-func TestCommandsValidatorID(t *testing.T) {
-	v := &CommandsValidator{}
+func TestValidatorID(t *testing.T) {
+	v := &Validator{}
 	require.Equal(t, "commands", v.ID())
 	require.Equal(t, "commands", v.Domain())
 }

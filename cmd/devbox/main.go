@@ -22,9 +22,15 @@ func main() {
 	root := command.NewRootCmd()
 
 	// Custom error handler: suppress output for ErrSilent (command already
-	// printed its own error), otherwise delegate to Fang's default styled output.
+	// printed its own error) and for ExitCode-bearing errors (which have already
+	// printed their own diagnostics table). Otherwise delegate to Fang's default styled output.
 	errHandler := func(w io.Writer, styles fang.Styles, err error) {
 		if errors.Is(err, command.ErrSilent) {
+			return
+		}
+		var ec interface{ ExitCode() int }
+		if errors.As(err, &ec) {
+			// validation or other exit-code error: diagnostics already printed
 			return
 		}
 		fang.DefaultErrorHandler(w, styles, err)
@@ -49,6 +55,10 @@ func main() {
 		opts...,
 	)
 	if err != nil {
+		var ec interface{ ExitCode() int }
+		if errors.As(err, &ec) {
+			os.Exit(ec.ExitCode())
+		}
 		os.Exit(1)
 	}
 }

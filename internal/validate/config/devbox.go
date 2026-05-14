@@ -403,14 +403,6 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		File:     relPath(ctx.ProjectRoot, deployPath),
 	})
 
-	// Cross-ref validation: only if main config loaded successfully
-	if ctx.Cfg != nil {
-		// ResolvePlan validates step structure and references
-		// For now, we'll just note that cross-ref validation would happen here.
-		// Actual plan resolution can be expensive; validate that the structure is sound.
-		// Note: ResolvePlan is in the deploy package and requires the full config.
-	}
-
 	_ = deployCfg // Unused; just checking that it loads cleanly
 
 	return diags
@@ -458,11 +450,6 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		Target:   "config.reset",
 		File:     relPath(ctx.ProjectRoot, resetPath),
 	})
-
-	// Cross-ref validation only if main config loaded
-	if ctx.Cfg != nil {
-		// ResolvePlan would be called here for reset
-	}
 
 	_ = resetCfg // Unused; just checking that it loads cleanly
 

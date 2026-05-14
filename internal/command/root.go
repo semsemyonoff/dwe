@@ -63,6 +63,8 @@ Run 'devbox info' for the full info dashboard.`,
 		// validates schema_version, and populates flags.configPath / flags.projectRoot.
 		// Commands that work without a project (version, completion, print, docs) are
 		// allowed through when no project is found via discovery.
+		// The validate command bypasses schema validation so it can report schema errors
+		// as diagnostics instead of aborting before the validators run.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Detect whether --config/-c was explicitly supplied.
 			// Read from root to be unambiguous: PersistentPreRunE receives the leaf command.
@@ -73,6 +75,31 @@ Run 'devbox info' for the full info dashboard.`,
 				configArg = flags.configPath
 			}
 
+			// For validate commands, use Locate (no schema check) instead of Resolve.
+			if isValidateCommand(cmd) {
+				loc, found, err := project.Locate(configArg)
+				if err != nil {
+					if errors.Is(err, project.ErrNotFound) && allowedWithoutProject(cmd) {
+						flags.stylesCfg = applyStyles("", cmd.ErrOrStderr())
+						return nil
+					}
+					return err
+				}
+				if found {
+					flags.configPath = loc.ConfigPath
+					flags.projectRoot = loc.Root
+					flags.stylesCfg = applyStyles(flags.projectRoot, cmd.ErrOrStderr())
+					return nil
+				}
+				// Locate miss but not the root command — treat as error.
+				if allowedWithoutProject(cmd) {
+					flags.stylesCfg = applyStyles("", cmd.ErrOrStderr())
+					return nil
+				}
+				return project.ErrNotFound
+			}
+
+			// Normal commands: use Resolve (with schema validation).
 			resolved, err := project.Resolve(configArg)
 			if err != nil {
 				if errors.Is(err, project.ErrNotFound) {
@@ -132,10 +159,11 @@ Run 'devbox info' for the full info dashboard.`,
 	addCmd(root, groupEnvironment, newShellCmd(flags))
 	addCmd(root, groupEnvironment, newStatusCmd(flags))
 
-	// Configuration group: services, tools, rendering.
+	// Configuration group: services, tools, rendering, validation.
 	addCmd(root, groupConfiguration, newServiceCmd(flags))
 	addCmd(root, groupConfiguration, newToolCmd(flags))
 	addCmd(root, groupConfiguration, newRenderCmd(flags))
+	addCmd(root, groupConfiguration, newValidateCmd(flags))
 
 	// Pipelines group: deploy and reset.
 	addCmd(root, groupPipelines, newDeployCmd(flags))
@@ -178,6 +206,14 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 		strings.HasPrefix(path, "devbox completion") ||
 		strings.HasPrefix(path, "devbox print") ||
 		strings.HasPrefix(path, "devbox docs")
+}
+
+// isValidateCommand returns true if cmd is the validate command or a descendant.
+// The validate command is special: it must bypass schema validation so it can
+// report schema errors as diagnostics instead of aborting before the validator runs.
+func isValidateCommand(cmd *cobra.Command) bool {
+	path := cmd.CommandPath()
+	return strings.HasPrefix(path, "devbox validate")
 }
 
 // applyStyles loads devbox/styles.yml from projectRoot, applies the palette to ui,

@@ -10,21 +10,21 @@ import (
 	"devbox-cli/internal/validate"
 )
 
-// CommandsValidator validates command files for syntax and cross-references.
-type CommandsValidator struct{}
+// Validator validates command files for syntax and cross-references.
+type Validator struct{}
 
 // ID returns the validator's unique ID within its domain.
-func (v *CommandsValidator) ID() string {
+func (v *Validator) ID() string {
 	return "commands"
 }
 
 // Domain returns the domain this validator belongs to.
-func (v *CommandsValidator) Domain() string {
+func (v *Validator) Domain() string {
 	return "commands"
 }
 
 // Run validates all command files and returns a list of diagnostics.
-func (v *CommandsValidator) Run(ctx validate.Context) []validate.Diagnostic {
+func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 
 	// Discover command files
@@ -127,6 +127,6 @@ func (v *CommandsValidator) Run(ctx validate.Context) []validate.Diagnostic {
 // All returns all command validators.
 func All() []validate.Validator {
 	return []validate.Validator{
-		&CommandsValidator{},
+		&Validator{},
 	}
 }
