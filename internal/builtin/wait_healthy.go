@@ -100,8 +100,8 @@ func (dockerWaitHealthyBuiltin) Run(with map[string]any, ctx ExecContext) error 
 		return nil
 	}
 
-	// Compute attempts.
-	attempts := max(int(timeout/interval), 1)
+	// Compute attempts using ceiling division so the full timeout duration is covered.
+	attempts := max(int((timeout+interval-1)/interval), 1)
 
 	// Wait for healthy.
 	return docker.WaitContainersHealthy(ids, compose.HealthStatus, attempts, interval, ctx.Output)
