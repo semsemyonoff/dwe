@@ -7,16 +7,20 @@ Show stack health and services/tools status
 Display the running status of the entire devbox stack.
 
 Shows a health indicator (running/partial/stopped), a services table,
-a tools table with live container status, and a compose topology tree.
+a tools table with live container status, a compose topology tree,
+and deploy status per service.
+
+If a service name is provided, shows per-phase/step deploy breakdown for that service.
 
 ```
-devbox status [flags]
+devbox status [service] [flags]
 ```
 
 ### Examples
 
 ```
   devbox status
+  devbox status main
 ```
 
 ### Options

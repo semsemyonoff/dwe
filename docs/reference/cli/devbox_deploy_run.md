@@ -9,6 +9,11 @@ Execute the full deploy pipeline from devbox/deploy.yml phase by phase.
 Steps are run in declaration order. The .env file is regenerated as the implicit
 first step. Use --service to run only the steps relevant to a specific service.
 
+State tracking allows idempotent deploys: steps that previously succeeded with
+matching hashes are skipped on re-run. Use --force to ignore prior state and
+re-run all steps. Use --resume to continue from the last failed step in a
+partially deployed project.
+
 File logging is enabled by default for deploy and writes to .devbox/logs/deploy.log.
 Disable it with 'log: false' at the top of devbox/deploy.yml.
 
@@ -21,13 +26,18 @@ devbox deploy run [flags]
 ```
   devbox deploy run
   devbox deploy run --service main
+  devbox deploy run --force
+  devbox deploy run --resume
 ```
 
 ### Options
 
 ```
-  -h, --help             help for run
-      --service string   deploy a single service only
+      --force             ignore state and re-run all steps
+  -h, --help              help for run
+  -y, --non-interactive   suppress interactive prompts
+      --resume            continue from the last failed step
+      --service string    deploy a single service only
 ```
 
 ### Options inherited from parent commands

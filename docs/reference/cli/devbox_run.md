@@ -26,6 +26,7 @@ devbox run [flags]
 ### Options
 
 ```
+      --force           skip the deployment gate check for mandatory services
   -h, --help            help for run
       --no-update       disable git update probe regardless of lifecycle.yml config
       --update string   override update probe mode (prompt|auto|check|off)

@@ -326,6 +326,12 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		}
 	}
 
+	// When forcing a full re-run, start with a clean state so the FileRecorder
+	// doesn't inherit stale entries from a previous run.
+	if force {
+		state = &journal.ProjectState{SchemaVersion: "1"}
+	}
+
 	// Build the skip decider closure
 	skipDecider := func(addr string, rs pipeline.ResolvedStep, actionHash string) journal.Decision {
 		if force {

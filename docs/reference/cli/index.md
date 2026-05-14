@@ -20,6 +20,10 @@ Generated reference for the `devbox` command tree.
 - [devbox deploy](devbox_deploy.md) — Deploy pipeline commands
   - [devbox deploy plan](devbox_deploy_plan.md) — Show resolved deploy plan
   - [devbox deploy run](devbox_deploy_run.md) — Execute the deploy plan
+  - [devbox deploy state](devbox_deploy_state.md) — Manage deploy state
+    - [devbox deploy state clear](devbox_deploy_state_clear.md) — Clear the deploy state
+    - [devbox deploy state repair](devbox_deploy_state_repair.md) — Repair the deploy state
+    - [devbox deploy state show](devbox_deploy_state_show.md) — Show the current deploy state
   - [devbox deploy step](devbox_deploy_step.md) — Run a single deploy step by <phase>/<step> address
 - [devbox docker](devbox_docker.md) — Docker Compose lifecycle commands
   - [devbox docker build](devbox_docker_build.md) — Build compose service images

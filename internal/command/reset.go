@@ -151,38 +151,10 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 		return err
 	}
 
-	// After reset succeeds, clean up the deploy state
-	// Collect which services were reset based on the resolved steps
-	servicesReset := make(map[string]bool)
-	projectLevelReset := false
-
-	for _, rs := range steps {
-		if rs.Service == "" {
-			projectLevelReset = true
-		} else {
-			servicesReset[rs.Service] = true
-		}
-	}
-
-	// Clean up state for services and project
-	if projectLevelReset && len(servicesReset) == 0 {
-		// Only project-level steps; remove entire state file
-		if err := journal.Remove(statePath); err != nil {
-			w.Warning("Failed to clean deploy state: " + err.Error())
-		}
-	} else {
-		// Service-scoped reset; remove each service from state
-		for svc := range servicesReset {
-			if err := journal.RemoveService(statePath, svc); err != nil {
-				w.Warning("Failed to clean deploy state for service " + svc + ": " + err.Error())
-			}
-		}
-		// If project-level was also reset, remove project-level state
-		if projectLevelReset {
-			if err := journal.Remove(statePath); err != nil {
-				w.Warning("Failed to clean deploy state: " + err.Error())
-			}
-		}
+	// After reset succeeds, clean up the deploy state entirely.
+	// Reset steps are always project-scoped (service == ""), so the whole state file is cleared.
+	if err := journal.Remove(statePath); err != nil {
+		w.Warning("Failed to clean deploy state: " + err.Error())
 	}
 
 	if logEnabled {
