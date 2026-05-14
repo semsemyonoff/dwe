@@ -530,7 +530,7 @@ Services excluded by this rule (e.g. `main-debug` extending `main`, or
 services whose deploy is gated out by a `deploy_services` predicate
 evaluating false) cannot block `devbox run`.
 
-- [ ] **placement**: these helpers live in `internal/deploy`, NOT in
+- [x] **placement**: these helpers live in `internal/deploy`, NOT in
   `internal/deploy/journal`. Putting them in `journal` would create a
   cycle: `journal → deploy → pipeline → journal` (the recorder in
   pipeline imports journal types). `internal/deploy` already imports
@@ -538,40 +538,40 @@ evaluating false) cannot block `devbox run`.
   `journal.ProjectConfigHash` already takes a plain `trackedServices
   []string` slice (Task 2), so `journal` never needs to know about
   `ResolvedStep`.
-- [ ] add `deploy.TrackedServices(plan []pipeline.ResolvedStep) []string`
+- [x] add `deploy.TrackedServices(plan []pipeline.ResolvedStep) []string`
   returning the canonical tracked-service list — collect every distinct
   non-empty `rs.Service` in plan order, then sort. Used by the gate, the
   `ProjectConfigHash` invocation in Task 2, the recorder construction in
   Task 7, and the status renderer in Task 11 — all four call sites use
   this single function so they agree.
-- [ ] thin convenience helper `deploy.LoadTrackedServices(cfg
+- [x] thin convenience helper `deploy.LoadTrackedServices(cfg
   *config.DevboxConfig, baseDir string) ([]string,
   map[string]*config.DeployConfig, error)` that runs
   `deploy.ResolvePlan(cfg)` → `TrackedServices(plan)` → loads
   `config.LoadServiceDeployConfigs(baseDir, enabled)` filtered to the
   tracked subset. Callers that already have the resolved plan in hand
   can use `TrackedServices` directly.
-- [ ] read `state.yml` at the start of `lifecycle.RunRun`
-- [ ] if any tracked service has `status != deployed`, return a typed error
+- [x] read `state.yml` at the start of `lifecycle.RunRun`
+- [x] if any tracked service has `status != deployed`, return a typed error
   with hint "run `devbox deploy` first"; the error must implement
   `ExitCode() int` (use existing pattern from `validationFailedError`)
-- [ ] add `Force bool` to `RunContext` and bypass the gate when set
-- [ ] thread a `--force` flag through `internal/command/run.go` into
+- [x] add `Force bool` to `RunContext` and bypass the gate when set
+- [x] thread a `--force` flag through `internal/command/run.go` into
   `RunContext`
-- [ ] write tests in `internal/lifecycle/run_test.go` covering: all tracked
+- [x] write tests in `internal/lifecycle/run_test.go` covering: all tracked
   services deployed → pass; one tracked service missing → error; service
   exists but not tracked (extends-variant) → ignored; `Force=true` → bypass
-- [ ] write tests for `deploy.TrackedServices` covering plan-derived
+- [x] write tests for `deploy.TrackedServices` covering plan-derived
   cases: plan includes a step with `rs.Service="main"` → main is tracked;
   plan has no step for `main-debug` (extends-variant) → not tracked;
   service enabled but top-level `deploy.yml` has no `deploy_services:
   true` phase → plan has no service steps → service is not tracked
   (regression test for the gate-blocking-forever bug); disabled service
   → not tracked; tool → not tracked
-- [ ] write tests for `deploy.LoadTrackedServices` covering the
+- [x] write tests for `deploy.LoadTrackedServices` covering the
   plan-resolution + loader-filtering composition (a single end-to-end
   case with fixtures in `testdata/`)
-- [ ] run `make test` and `make lint`
+- [x] run `make test` and `make lint`
 
 ### Task 11: `devbox status` — fold deploy state into the existing command
 
