@@ -17,28 +17,35 @@ const (
 	iconRunning = "·"
 )
 
+// timestampLayout is the per-line clock prefix format (YY-MM-DD HH:MM:SS).
+const timestampLayout = "06-01-02 15:04:05"
+
 // PlainReporter implements Reporter with line-by-line text output.
+// Every emitted line is prefixed with a gray "[YY-MM-DD HH:MM:SS] "
+// timestamp followed by the colored message.
+//
 // Output format:
 //
-//	Phase: <phaseKey>[: <description>]
-//	  · [N/M] <stepAddr>[: <description>]
-//	  ✓ [N/M] Done: <stepAddr>
-//	  ◎ [N/M] Skipped: <stepAddr> (<reason>)
-//	✗ Deploy failed at step "<stepAddr>"
-//	  <error message>
-//	✓ Done (1m 23s)
+//	[ts] Phase: <phaseKey>[: <description>]
+//	[ts]   · [N/M] <stepAddr>[: <description>]
+//	[ts]   ✓ [N/M] Done: <stepAddr>
+//	[ts]   ◎ [N/M] Skipped: <stepAddr> (<reason>)
+//	[ts] ✗ Deploy failed at step "<stepAddr>"
+//	[ts]   <error message>
+//	[ts] ✓ Done (1m 23s)
 //
 // SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
 // need to yield or reclaim the terminal.
 type PlainReporter struct {
 	w         *render.Writer
-	name      string    // pipeline name set by StartPipeline (e.g. "deploy", "reset")
-	startTime time.Time // recorded by StartPipeline for elapsed time in FinishPipeline
+	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
+	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline
+	now       func() time.Time // injectable clock; defaults to time.Now
 }
 
 // NewPlainReporter creates a PlainReporter that writes to w.
 func NewPlainReporter(w *render.Writer) *PlainReporter {
-	return &PlainReporter{w: w}
+	return &PlainReporter{w: w, now: time.Now}
 }
 
 // StartPipeline stores the pipeline name and records the start time for
@@ -46,12 +53,12 @@ func NewPlainReporter(w *render.Writer) *PlainReporter {
 // output has no pipeline banner.
 func (r *PlainReporter) StartPipeline(name string, _ int) {
 	r.name = name
-	r.startTime = time.Now()
+	r.startTime = r.now()
 }
 
 // EnterPhase prints the phase label line:
 //
-//	Phase: <phaseKey>[: <description>]
+//	[ts] Phase: <phaseKey>[: <description>]
 //
 // Untracked phases produce no output.
 func (r *PlainReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
@@ -62,24 +69,24 @@ func (r *PlainReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
 	if phase.Description != "" {
 		label += ": " + phase.Description
 	}
-	r.w.Info(label)
+	r.emit(render.Blue, label)
 }
 
 // SkipPhase prints a warning when an entire phase is skipped:
 //
-//	Skipping phase <phaseKey> (<reason>)
+//	[ts] Skipping phase <phaseKey> (<reason>)
 //
 // Untracked phases produce no output.
 func (r *PlainReporter) SkipPhase(phaseKey string, phase config.DeployPhase, reason string) {
 	if phase.Untracked {
 		return
 	}
-	r.w.Warning(fmt.Sprintf("  Skipping phase %s (%s)", phaseKey, reason))
+	r.emit(render.Yellow, fmt.Sprintf("  Skipping phase %s (%s)", phaseKey, reason))
 }
 
 // StartStep prints the step-start info line:
 //
-//	· [N/M] <stepAddr>[: <description>]
+//	[ts]   · [N/M] <stepAddr>[: <description>]
 //
 // Untracked steps (index == 0, total == 0) produce no output.
 func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index int, total int) {
@@ -91,15 +98,15 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 		label += ": " + step.Description
 	}
 	if index > 0 {
-		r.w.Info(fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
+		r.emit(render.Blue, fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
 	} else {
-		r.w.Info(fmt.Sprintf("  %s %s", iconRunning, label))
+		r.emit(render.Blue, fmt.Sprintf("  %s %s", iconRunning, label))
 	}
 }
 
 // SkipStep prints a warning when a step is skipped due to a when condition:
 //
-//	◎ [N/M] Skipped: <stepAddr> (<reason>)
+//	[ts]   ◎ [N/M] Skipped: <stepAddr> (<reason>)
 //
 // Untracked steps (index == 0, total == 0) produce no output.
 func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int, total int, reason string) {
@@ -107,15 +114,15 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 		return
 	}
 	if index > 0 {
-		r.w.Warning(fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
+		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
 	} else {
-		r.w.Warning(fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, stepAddr, reason))
+		r.emit(render.Yellow, fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, stepAddr, reason))
 	}
 }
 
 // FinishStep prints a success line when a step completes:
 //
-//	✓ [N/M] Done: <stepAddr>
+//	[ts]   ✓ [N/M] Done: <stepAddr>
 //
 // Untracked steps (index == 0, total == 0) produce no output.
 func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
@@ -123,16 +130,16 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 		return
 	}
 	if index > 0 {
-		r.w.Success(fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
+		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
 	} else {
-		r.w.Success(fmt.Sprintf("  %s Done: %s", iconDone, stepAddr))
+		r.emit(render.Green, fmt.Sprintf("  %s Done: %s", iconDone, stepAddr))
 	}
 }
 
 // FailStep prints error lines when a step fails:
 //
-//	✗ <Name> failed at step "<stepAddr>"
-//	  <error message>
+//	[ts] ✗ <Name> failed at step "<stepAddr>"
+//	[ts]   <error message>
 //
 // The label is derived from the pipeline name set by StartPipeline (e.g.
 // "deploy" → "Deploy failed…", "reset" → "Reset failed…"). Falls back to
@@ -143,26 +150,39 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, _ int, _ 
 		label = "pipeline"
 	}
 	label = strings.ToUpper(label[:1]) + label[1:]
-	r.w.Error(fmt.Sprintf("%s %s failed at step %q", iconFailed, label, stepAddr))
+	r.emit(render.Red, fmt.Sprintf("%s %s failed at step %q", iconFailed, label, stepAddr))
 	if err != nil {
-		r.w.Error("  " + err.Error())
+		r.emit(render.Red, "  "+err.Error())
 	}
 }
 
 // FinishPipeline prints a Done message with elapsed time on success:
 //
-//	✓ Done (1m 23s)
+//	[ts] ✓ Done (1m 23s)
 //
 // On failure it is silent; the failure is already reported by FailStep.
 func (r *PlainReporter) FinishPipeline(success bool) {
 	if !success {
 		return
 	}
-	elapsed := formatElapsed(time.Since(r.startTime))
-	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s Done%s %s(%s)%s\n",
+	elapsed := formatElapsed(r.now().Sub(r.startTime))
+	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s %s Done%s %s(%s)%s\n",
+		r.timestampPrefix(),
 		render.Green, iconDone, render.Reset,
 		render.Gray, elapsed, render.Reset,
 	)
+}
+
+// emit writes a single line with the timestamp prefix and a colored body.
+// Format: "<gray>[ts]<reset> <color>msg<reset>\n".
+func (r *PlainReporter) emit(color, msg string) {
+	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s%s%s\n", r.timestampPrefix(), color, msg, render.Reset)
+}
+
+// timestampPrefix returns the gray "[YY-MM-DD HH:MM:SS] " prefix for the
+// current line. Always ends with a trailing space.
+func (r *PlainReporter) timestampPrefix() string {
+	return fmt.Sprintf("%s[%s]%s ", render.Gray, r.now().Format(timestampLayout), render.Reset)
 }
 
 // formatElapsed formats a duration as a human-readable elapsed time string.

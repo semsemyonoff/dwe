@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -11,11 +12,18 @@ import (
 	"devbox-cli/internal/render"
 )
 
+// fixedTime is the clock injected into the test reporter so timestamp
+// prefixes are deterministic.
+var fixedTime = time.Date(2026, 5, 14, 22, 36, 36, 0, time.UTC)
+
 // newBufReporter returns a PlainReporter backed by a buffer for assertions.
+// The reporter uses a fixed clock so timestamp prefixes are deterministic.
 func newBufReporter() (*PlainReporter, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	w := render.NewWriter(buf)
-	return NewPlainReporter(w), buf
+	r := NewPlainReporter(w)
+	r.now = func() time.Time { return fixedTime }
+	return r, buf
 }
 
 // stripANSI removes ANSI escape sequences from s.
@@ -33,6 +41,22 @@ func stripANSI(s string) string {
 		out = out[:start] + out[start+end+1:]
 	}
 	return out
+}
+
+// timestampPrefixRe matches the "[YY-MM-DD HH:MM:SS] " line prefix emitted
+// by PlainReporter (post-stripANSI).
+var timestampPrefixRe = regexp.MustCompile(`(?m)^\[\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] `)
+
+// stripTimestamps removes the "[YY-MM-DD HH:MM:SS] " prefix from every line in s.
+// Use after stripANSI for content assertions that don't care about the clock.
+func stripTimestamps(s string) string {
+	return timestampPrefixRe.ReplaceAllString(s, "")
+}
+
+// clean strips ANSI escapes and timestamp prefixes — the canonical
+// pre-assertion pipeline for content tests.
+func clean(s string) string {
+	return stripTimestamps(stripANSI(s))
 }
 
 // lines splits s into non-empty trimmed lines for readable assertions.
@@ -62,7 +86,7 @@ func TestPlainReporter_EnterPhase_WithDescription(t *testing.T) {
 	r, buf := newBufReporter()
 	phase := config.DeployPhase{Name: "init", Description: "Initialization"}
 	r.EnterPhase("init", phase)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "Phase: init: Initialization\n"
 	if got != want {
 		t.Errorf("EnterPhase with description: got %q, want %q", got, want)
@@ -73,7 +97,7 @@ func TestPlainReporter_EnterPhase_NoDescription(t *testing.T) {
 	r, buf := newBufReporter()
 	phase := config.DeployPhase{Name: "deploy"}
 	r.EnterPhase("deploy", phase)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "Phase: deploy\n"
 	if got != want {
 		t.Errorf("EnterPhase no description: got %q, want %q", got, want)
@@ -84,7 +108,7 @@ func TestPlainReporter_EnterPhase_ServicePrefix(t *testing.T) {
 	r, buf := newBufReporter()
 	phase := config.DeployPhase{Name: "setup", Description: "Service setup"}
 	r.EnterPhase("main/setup", phase)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "Phase: main/setup: Service setup\n"
 	if got != want {
 		t.Errorf("EnterPhase with service prefix: got %q, want %q", got, want)
@@ -97,7 +121,7 @@ func TestPlainReporter_SkipPhase(t *testing.T) {
 	r, buf := newBufReporter()
 	phase := config.DeployPhase{Name: "deploy"}
 	r.SkipPhase("deploy", phase, "when: dir-empty services/main")
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "  Skipping phase deploy (when: dir-empty services/main)\n"
 	if got != want {
 		t.Errorf("SkipPhase: got %q, want %q", got, want)
@@ -110,7 +134,7 @@ func TestPlainReporter_StartStep_WithDescription(t *testing.T) {
 	r, buf := newBufReporter()
 	step := config.DeployStep{Name: "render-env", Description: "Generate .env from config"}
 	r.StartStep("init/render-env", step, 1, 5)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "  · [1/5] init/render-env: Generate .env from config\n"
 	if got != want {
 		t.Errorf("StartStep with description: got %q, want %q", got, want)
@@ -121,7 +145,7 @@ func TestPlainReporter_StartStep_NoDescription(t *testing.T) {
 	r, buf := newBufReporter()
 	step := config.DeployStep{Name: "migrate"}
 	r.StartStep("main/setup/migrate", step, 3, 7)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "  · [3/7] main/setup/migrate\n"
 	if got != want {
 		t.Errorf("StartStep no description: got %q, want %q", got, want)
@@ -134,7 +158,7 @@ func TestPlainReporter_SkipStep_WhenCondition(t *testing.T) {
 	r, buf := newBufReporter()
 	step := config.DeployStep{Name: "migrate"}
 	r.SkipStep("init/migrate", step, 2, 4, "when: dir-empty services/main/src")
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "  ◎ [2/4] Skipped: init/migrate (when: dir-empty services/main/src)\n"
 	if got != want {
 		t.Errorf("SkipStep: got %q, want %q", got, want)
@@ -145,7 +169,7 @@ func TestPlainReporter_SkipStep_PhaseWhenCondition(t *testing.T) {
 	r, buf := newBufReporter()
 	step := config.DeployStep{Name: "key-gen"}
 	r.SkipStep("main/setup/key-gen", step, 3, 5, "phase when: cmd: check")
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "  ◎ [3/5] Skipped: main/setup/key-gen (phase when: cmd: check)\n"
 	if got != want {
 		t.Errorf("SkipStep with phase when: got %q, want %q", got, want)
@@ -158,7 +182,7 @@ func TestPlainReporter_FinishStep(t *testing.T) {
 	r, buf := newBufReporter()
 	step := config.DeployStep{Name: "render-env"}
 	r.FinishStep("init/render-env", step, 1, 5)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	want := "  ✓ [1/5] Done: init/render-env\n"
 	if got != want {
 		t.Errorf("FinishStep: got %q, want %q", got, want)
@@ -172,7 +196,7 @@ func TestPlainReporter_FailStep(t *testing.T) {
 	r.StartPipeline("deploy", 7)
 	step := config.DeployStep{Name: "migrate"}
 	r.FailStep("main/setup/migrate", step, 4, 7, errors.New("exit status 1"))
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	wantLines := []string{
 		`✗ Deploy failed at step "main/setup/migrate"`,
 		"  exit status 1",
@@ -193,7 +217,7 @@ func TestPlainReporter_FailStep_Reset(t *testing.T) {
 	r.StartPipeline("reset", 3)
 	step := config.DeployStep{Name: "stop"}
 	r.FailStep("cleanup/stop", step, 2, 3, errors.New("exit status 2"))
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	wantLines := []string{
 		`✗ Reset failed at step "cleanup/stop"`,
 		"  exit status 2",
@@ -213,7 +237,7 @@ func TestPlainReporter_FailStep_NoStartPipeline(t *testing.T) {
 	r, buf := newBufReporter()
 	step := config.DeployStep{Name: "migrate"}
 	r.FailStep("init/migrate", step, 1, 1, errors.New("timeout"))
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	wantLines := []string{
 		`✗ Pipeline failed at step "init/migrate"`,
 		"  timeout",
@@ -235,7 +259,7 @@ func TestPlainReporter_FinishPipeline_Success_PrintsDone(t *testing.T) {
 	r, buf := newBufReporter()
 	r.StartPipeline("deploy", 3)
 	r.FinishPipeline(true)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	// StartPipeline produces no output; only FinishPipeline does.
 	gotLines := lines(got)
 	if len(gotLines) != 1 {
@@ -263,7 +287,7 @@ func TestPlainReporter_FinishPipeline_NoStartPipeline(t *testing.T) {
 	r, buf := newBufReporter()
 	// Even without StartPipeline, success still prints Done (startTime is zero → large elapsed, but valid).
 	r.FinishPipeline(true)
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	if !strings.Contains(got, "✓ Done") {
 		t.Errorf("FinishPipeline without StartPipeline should still print Done, got: %q", got)
 	}
@@ -314,7 +338,7 @@ func TestPlainReporter_FullEventSequence(t *testing.T) {
 
 	r.FinishPipeline(true)
 
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	wantLines := []string{
 		"Phase: env: Environment",
 		"  · [1/4] env/render-env: Generate .env from config",
@@ -399,7 +423,7 @@ func TestPlainReporter_FailStep_Untracked_StillPrints(t *testing.T) {
 	r.StartPipeline("deploy", 0)
 	step := config.DeployStep{Name: "notify"}
 	r.FailStep("post-deploy/notify", step, 0, 0, errors.New("network error"))
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	if !strings.Contains(got, "failed at step") {
 		t.Errorf("FailStep untracked should still print failure, got: %q", got)
 	}
@@ -427,7 +451,7 @@ func TestPlainReporter_FullEventSequence_WithUntracked(t *testing.T) {
 
 	r.FinishPipeline(true)
 
-	got := stripANSI(buf.String())
+	got := clean(buf.String())
 	wantLines := []string{
 		"Phase: setup: Setup",
 		"  · [1/1] setup/migrate",
@@ -472,6 +496,45 @@ func TestFormatElapsed_HoursAndMinutes(t *testing.T) {
 	got := formatElapsed(2*time.Hour + 5*time.Minute + 30*time.Second)
 	if got != "2h 5m" {
 		t.Errorf("formatElapsed(2h5m30s): got %q, want %q", got, "2h 5m")
+	}
+}
+
+// --- Timestamp prefix ---
+
+// TestPlainReporter_TimestampPrefix_OnEveryLine asserts that every emitted
+// step output line carries the gray "[YY-MM-DD HH:MM:SS] " prefix, including
+// the per-step lines, skip lines, fail lines and the closing Done summary.
+func TestPlainReporter_TimestampPrefix_OnEveryLine(t *testing.T) {
+	r, buf := newBufReporter()
+	wantPrefix := "[26-05-14 22:36:36] "
+
+	r.StartPipeline("deploy", 2)
+	r.EnterPhase("env", config.DeployPhase{Name: "env"})
+	r.StartStep("env/render", config.DeployStep{Name: "render"}, 1, 2)
+	r.FinishStep("env/render", config.DeployStep{Name: "render"}, 1, 2)
+	r.SkipStep("env/skip", config.DeployStep{Name: "skip"}, 2, 2, "when: false")
+	r.FailStep("env/fail", config.DeployStep{Name: "fail"}, 2, 2, errors.New("boom"))
+	r.FinishPipeline(true)
+
+	got := stripANSI(buf.String())
+	for i, line := range lines(got) {
+		if !strings.HasPrefix(line, wantPrefix) {
+			t.Errorf("line %d missing timestamp prefix %q: %q", i, wantPrefix, line)
+		}
+	}
+}
+
+// TestPlainReporter_TimestampPrefix_GrayColor asserts that the timestamp is
+// wrapped in the gray ANSI color codes — the visual differentiation from the
+// colored body matters.
+func TestPlainReporter_TimestampPrefix_GrayColor(t *testing.T) {
+	r, buf := newBufReporter()
+	r.EnterPhase("env", config.DeployPhase{Name: "env"})
+
+	got := buf.String()
+	wantPrefix := render.Gray + "[26-05-14 22:36:36]" + render.Reset + " "
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Errorf("output should start with gray-wrapped timestamp; got %q", got)
 	}
 }
 
