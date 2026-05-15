@@ -29,7 +29,6 @@ type RunContext struct {
 	NoUpdate   bool
 	UpdateMode string
 	Yes        bool
-	Force      bool
 	// ShowInfo is called after the run phases complete, when lifecycle.yml has show_info: true.
 	// Callers inject this to avoid importing the cobra info renderer into this package.
 	// If nil, no info display is attempted.
@@ -129,27 +128,25 @@ func RunRun(ctx RunContext) error {
 		}
 	}
 
-	// Gate: ensure all tracked services are deployed (unless forced).
-	if !ctx.Force {
-		tracked, _, err := deploy.LoadTrackedServices(cfg, workDir)
+	// Gate: ensure all tracked services are deployed.
+	tracked, _, err := deploy.LoadTrackedServices(cfg, workDir)
+	if err != nil {
+		return fmt.Errorf("loading tracked services: %w", err)
+	}
+
+	if len(tracked) > 0 {
+		statePath := filepath.Join(workDir, journal.DefaultRelPath)
+		state, err := journal.Load(statePath)
 		if err != nil {
-			return fmt.Errorf("loading tracked services: %w", err)
+			return fmt.Errorf("loading deploy state: %w", err)
 		}
 
-		if len(tracked) > 0 {
-			statePath := filepath.Join(workDir, journal.DefaultRelPath)
-			state, err := journal.Load(statePath)
-			if err != nil {
-				return fmt.Errorf("loading deploy state: %w", err)
-			}
-
-			for _, svcName := range tracked {
-				svcState, ok := state.Services[svcName]
-				if !ok || svcState.Status != journal.StatusDeployed {
-					dge := &deploymentGateError{service: svcName}
-					render.Stdout().Error(dge.Error())
-					return dge
-				}
+		for _, svcName := range tracked {
+			svcState, ok := state.Services[svcName]
+			if !ok || svcState.Status != journal.StatusDeployed {
+				dge := &deploymentGateError{service: svcName}
+				render.Stdout().Error(dge.Error())
+				return dge
 			}
 		}
 	}
@@ -194,7 +191,7 @@ type deploymentGateError struct {
 }
 
 func (e *deploymentGateError) Error() string {
-	return fmt.Sprintf("service %q must be deployed — run `devbox deploy` first, or use --force to bypass", e.service)
+	return fmt.Sprintf("service %q must be deployed — run `devbox deploy run` first", e.service)
 }
 
 func (e *deploymentGateError) ExitCode() int {

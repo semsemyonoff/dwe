@@ -129,14 +129,7 @@ When the probe finds a dirty tree, no upstream, or a fetch failure it warns and 
 
 `devbox run` automatically gates on mandatory services being deployed. Before the run pipeline starts, the command checks that all **tracked** services (those appearing in the resolved deploy plan) have `status: deployed` in the state file.
 
-If any tracked service is not yet deployed, `devbox run` exits with an error: "run `devbox deploy` first". This prevents running against a partially-initialized environment.
-
-Use `--force` to bypass this gate (useful in development to test run-time hooks while skipping deployment).
-
-```bash
-devbox run           # Error if a tracked service is not deployed
-devbox run --force   # Bypass gate; run even if services are not deployed
-```
+If any tracked service is not yet deployed, `devbox run` exits with an error: "run `devbox deploy run` first". This prevents running against a partially-initialized environment — bypassing the gate would just hand `docker compose up` a service whose volumes/configs/database have never been provisioned, and the run would fail almost immediately with an unrelated error. Always deploy first.
 
 For more details, see [state.md](state.md).
 

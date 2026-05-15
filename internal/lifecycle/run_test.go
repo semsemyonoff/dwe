@@ -390,19 +390,3 @@ func TestRunRun_DeploymentGate_NoTrackedServices_Passes(t *testing.T) {
 	}
 }
 
-func TestRunRun_DeploymentGate_Force_BypassesGate(t *testing.T) {
-	// With Force=true, the gate is skipped entirely.
-	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
-	}
-	writeLifecycleYML(t, devboxDir, "done")
-
-	ctx := RunContext{ConfigPath: cfgPath, Force: true}
-	err := RunRun(ctx)
-	if err != nil {
-		t.Errorf("expected no error with Force=true; got: %v", err)
-	}
-}
