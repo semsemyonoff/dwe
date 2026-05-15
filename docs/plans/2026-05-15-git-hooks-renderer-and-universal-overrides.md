@@ -81,8 +81,8 @@ Extract the manifest schema into `internal/templates/manifest/` so AI, IDE, and 
 
 Centralize the per-file shadow lookup so all three renderers behave identically. The shadow lives as a sibling `.local/` pack inside the same tracked `devbox/templates/<kind>/` directory — matching the existing `*.local.yml` sibling convention.
 
-- [ ] create `internal/templates/packroot/packroot.go` with `Resolve(projectRoot, kind, packName, rel string) (path string, fromOverride bool, err error)`
-- [ ] resolution order — both candidates apply the same regular-file discipline via `os.Lstat`:
+- [x] create `internal/templates/packroot/packroot.go` with `Resolve(projectRoot, kind, packName, rel string) (path string, fromOverride bool, err error)`
+- [x] resolution order — both candidates apply the same regular-file discipline via `os.Lstat`:
   1. Override path `<projectRoot>/devbox/templates/<kind>/<packName>.local/<rel>`:
      - regular file → return with `fromOverride=true`
      - exists but NOT a regular file (directory, symlink, device, fifo) → **hard error**, do NOT silently fall back to canonical (otherwise a bad override masks itself)
@@ -91,10 +91,10 @@ Centralize the per-file shadow lookup so all three renderers behave identically.
      - regular file → return with `fromOverride=false`
      - exists but NOT a regular file → **hard error** with a clear message naming the offending path (do NOT let downstream `os.ReadFile` surface an unclear "is a directory" or "operation not supported" error)
      - does not exist → wrapped `os.ErrNotExist`
-- [ ] reuse `pathsafe.CheckNoSymlinks` + `pathsafe.ContainedRel` on both candidate paths — reject symlink components and escaping `rel`
-- [ ] write tests covering: shadow hit (regular file); fallback to in-repo pack when shadow absent; neither present; symlink in shadow path rejected; `rel` containing `..` rejected; **shadow path exists as directory → hard error (no silent fallback)**; **shadow path exists as a symlink → hard error**; **canonical path exists as directory → hard error with named path**; **canonical path exists as symlink/device → hard error** (parity with override discipline)
-- [ ] write tests for the `fromOverride` flag wiring (renderers will surface this as an info message)
-- [ ] run `make test` — must pass before next task
+- [x] reuse `pathsafe.CheckNoSymlinks` + `pathsafe.ContainedRel` on both candidate paths — reject symlink components and escaping `rel`
+- [x] write tests covering: shadow hit (regular file); fallback to in-repo pack when shadow absent; neither present; symlink in shadow path rejected; `rel` containing `..` rejected; **shadow path exists as directory → hard error (no silent fallback)**; **shadow path exists as a symlink → hard error**; **canonical path exists as directory → hard error with named path**; **canonical path exists as symlink/device → hard error** (parity with override discipline)
+- [x] write tests for the `fromOverride` flag wiring (renderers will surface this as an info message)
+- [x] run `make test` — must pass before next task
 
 ### Task 3: Migrate AI renderer to shared types and packroot resolver
 
