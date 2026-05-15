@@ -648,6 +648,35 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 	}
 }
 
+// TestRunPipeline_PerStepSkipConfirm verifies that a step with
+// SkipConfirm:true bypasses the confirmation prompt even when the pipeline-wide
+// SkipConfirm flag is false. The confirm builtin would otherwise read from
+// stdin and block in tests, so a clean exit demonstrates the per-step bypass.
+func TestRunPipeline_PerStepSkipConfirm(t *testing.T) {
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+
+	phase := config.DeployPhase{Name: "pre"}
+	steps := []ResolvedStep{
+		{Phase: phase, Step: config.DeployStep{
+			Name:        "confirm",
+			Type:        "builtin",
+			Cmd:         "confirm",
+			SkipConfirm: true,
+		}},
+	}
+
+	// Pipeline-wide skipConfirm=false; per-step SkipConfirm=true must still bypass.
+	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !slices.Contains(rep.kindSeq(), "FinishStep") {
+		t.Errorf("FinishStep should be reached when per-step SkipConfirm bypasses prompt, kinds: %v", rep.kindSeq())
+	}
+}
+
 // TestChildIO_TTY_AllocatesPTY verifies that when stdout is a TTY and a log
 // writer is set, childIO allocates a pty: the returned writers are *os.File
 // (the tty slave), so the child process sees a real terminal fd. Output

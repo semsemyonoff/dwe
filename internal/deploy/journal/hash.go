@@ -264,6 +264,7 @@ func deployConfigToMap(cfg *config.DeployConfig) map[string]any {
 						"cmd":               step.Cmd,
 						"description":       step.Description,
 						"continue_on_error": step.ContinueOnError,
+						"skip_confirm":      step.SkipConfirm,
 					}
 
 					if len(step.With) > 0 {

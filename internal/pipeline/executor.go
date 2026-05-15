@@ -476,8 +476,12 @@ func RunWithOptions(opts RunOptions) error {
 		opts.Recorder.OnStepStart(addr, rs, actionHash)
 		opts.Reporter.SuspendForExec()
 
+		// Per-step skip_confirm: ORed with the pipeline-wide flag so a step can
+		// opt in to bypass even when the pipeline was invoked without -y.
+		skipConfirm := opts.SkipConfirm || rs.Step.SkipConfirm
+
 		startTime := time.Now()
-		stepErr := ExecStep(rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, opts.SkipConfirm)
+		stepErr := ExecStep(rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, skipConfirm)
 		durationMs := time.Since(startTime).Milliseconds()
 
 		opts.Reporter.ResumeAfterExec()
@@ -512,7 +516,7 @@ func RunWithOptions(opts RunOptions) error {
 				Cfg:         opts.Config,
 				Reg:         opts.Registry,
 				LogWriter:   opts.LogWriter,
-				SkipConfirm: opts.SkipConfirm,
+				SkipConfirm: skipConfirm,
 			}
 			checkErr := ExecAction(*rs.Step.Check, actx)
 			if checkErr != nil {

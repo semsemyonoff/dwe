@@ -97,6 +97,7 @@ phases:
           with:                    # optional: parameters
             key: value
         continue_on_error: true    # optional: failure does not abort the pipeline
+        skip_confirm: true         # optional: bypass confirmation prompts for this step
         with:                      # parameters (for command and builtin types)
           key: value
 
@@ -135,6 +136,7 @@ phases:
 | `when` | typed condition | Pre-condition evaluated before the step runs; step skipped if falsy |
 | `check` | typed action | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. |
 | `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](lifecycle.md). **Behavior change:** when the step body succeeds but `check:` fails, and `continue_on_error: true`, the step is reported as failed and the pipeline continues to the next step (symmetric with body-failure semantics). |
+| `skip_confirm` | bool | When `true`, bypasses confirmation prompts for this step only — equivalent to a per-step `-y` / `--yes`. Propagates to the step body and its `check:` action. ORed with the pipeline-wide skip-confirm flag, so the step is non-interactive whenever either is set. Useful when most of the pipeline is interactive but one step (e.g. a `confirm` builtin guarding an idempotent action, or a command that re-prompts internally) should always proceed. |
 
 ## Step execution types
 

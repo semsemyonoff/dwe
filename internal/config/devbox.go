@@ -148,6 +148,8 @@ type DeployPhase struct {
 //   - When            — optional skip condition (type: template|builtin|shell)
 //   - Check           — optional post-execution action (same type/cmd/with shape)
 //   - ContinueOnError — when true, a failed step or check is reported but pipeline continues
+//   - SkipConfirm     — when true, bypasses confirmation prompts for this step only
+//     (equivalent to a per-step -y / --yes); ORed with the pipeline-wide skip-confirm flag
 type DeployStep struct {
 	Name            string               `yaml:"name"`
 	Type            string               `yaml:"type"`
@@ -157,6 +159,7 @@ type DeployStep struct {
 	When            *condition.Condition `yaml:"when,omitempty"`
 	Check           *Action              `yaml:"check,omitempty"`
 	ContinueOnError bool                 `yaml:"continue_on_error,omitempty"`
+	SkipConfirm     bool                 `yaml:"skip_confirm,omitempty"`
 }
 
 // Action returns the action-shaped representation of this step for ExecAction callers.
