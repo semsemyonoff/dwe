@@ -93,6 +93,8 @@ func NewRunner(cmd *model.CommandDef) (Runner, error) {
 		return &ScriptRunner{}, nil
 	case model.CommandTypeWorkflow:
 		return &WorkflowRunner{}, nil
+	case model.CommandTypeBuiltin:
+		return &BuiltinRunner{}, nil
 	default:
 		return nil, &ErrUnsupportedType{Type: cmd.Type}
 	}

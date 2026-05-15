@@ -28,6 +28,7 @@ Declarative command definitions for the devbox project.
   - [`type: service_exec`](#type-service_exec)
   - [`type: service_run`](#type-service_run)
   - [`type: workflow`](#type-workflow)
+  - [`type: builtin`](#type-builtin)
 - [Workdir resolution](#workdir-resolution)
 - [Confirmation flow](#confirmation-flow)
 - [Visibility, registration, and discovery](#visibility-registration-and-discovery)
@@ -406,8 +407,9 @@ The six command types define different execution contexts:
 | `service_exec` | Docker Compose exec/run | `cmd` or `argv` | Container operations on existing/new containers |
 | `service_run` | Docker Compose run | `cmd` or `argv` | Throwaway container execution |
 | `workflow` | Command orchestrator | `steps[]` | Multi-command sequences (separate syntax, see below) |
+| `builtin` | Engine-internal action | `cmd` (builtin name) + `with` | Invoke a shared engine builtin (e.g. wait-for-healthy) without a subprocess |
 
-All types except `script` and `workflow` use the canonical `cmd:` field for their payload. `type: script` uses its own `script:` block with `run`, `plan`, `cleanup` phases. `type: workflow` uses its own `steps:` block with string-based `command:` / `confirm:` / `with:` / `when:` syntax — see [Type: workflow](#type-workflow) below.
+All types except `script` and `workflow` use the canonical `cmd:` field for their payload. `type: script` uses its own `script:` block with `run`, `plan`, `cleanup` phases. `type: workflow` uses its own `steps:` block with string-based `command:` / `confirm:` / `with:` / `when:` syntax — see [Type: workflow](#type-workflow) below. `type: builtin` puts the builtin name in `cmd:` and its parameters in `with:` — see [Type: builtin](#type-builtin) below.
 
 ## Type: shell
 
@@ -755,6 +757,56 @@ steps:
 
 Confirm steps are silently skipped under `--yes` or `DEVBOX_NONINTERACTIVE=1`. Otherwise huh prompts on TTY, and a `[y/N]` stdin fallback handles piped inputs.
 
+## Type: builtin
+
+Invokes an engine-internal builtin action by name — the same registry pipelines use in `deploy.yml` / `reset.yml` / `lifecycle.yml`. No subprocess is spawned; the builtin runs in-process in Go.
+
+Use `type: builtin` whenever a command would otherwise re-implement logic the engine already provides (waiting for healthy containers, removing project volumes, ensuring service directories, …). It is the right choice for any leaf step that needs structured, auditable execution rather than a shell pipeline — and it sidesteps the trap of embedding `{{...}}` from other tools (e.g. `docker inspect --format`) inside a `type: shell` `cmd:`, which would otherwise collide with command template rendering.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `cmd` | yes | Builtin name (e.g. `docker_wait_healthy`) |
+| `with` | optional | Map of parameters passed to the builtin |
+
+```yaml
+db.wait:
+  type: builtin
+  private: true
+  description: Wait for the db container to become healthy
+  cmd: docker_wait_healthy
+  with:
+    services: [db]
+    timeout: 120s
+    interval: 2s
+```
+
+### Templating inside with
+
+String values inside `with:` — including entries in nested lists and maps — are rendered against the command template space (`${...}`, `{{ ... }}`) before the builtin sees them. This lets you parameterise a builtin with config lookups, params, or context:
+
+```yaml
+db.wait-target:
+  type: builtin
+  cmd: docker_wait_healthy
+  params:
+    service: { required: true }
+  with:
+    services: ["${param.service}"]
+    timeout: "${docker.wait_timeout}"
+```
+
+Non-string scalars (booleans, integers) pass through untouched.
+
+### Builtin registry
+
+The list of available builtins, their parameters, and their behaviour are documented once in [deploy.yml → Available builtins](deploy.md#available-builtins). The same builtins are usable from `type: builtin` commands — there is one shared registry.
+
+The most useful builtins to expose as commands tend to be the long-running, idempotent ones — `docker_wait_healthy` in particular, which is meant to be called whenever the project needs to block until the stack (or a specific service) is healthy.
+
+### Invalid fields
+
+`type: builtin` is a leaf action — it rejects every type-specific field of the other types: `argv`, `script:`, `steps:`, `service`, `compose_args`, `workdir` / `workdir_from`, `user`, `mode`, and `runner:`. Use `params:` / `context:` / `env:` / `files:` / `messages:` as on any other type for inputs, env exposure, and styled output.
+
 ## Workdir resolution
 
 `workdir` accepts a templated path. Relative paths resolve against the project root for host runners (`type: shell`, `type: script`) and against the container filesystem for service runners.
@@ -956,6 +1008,22 @@ reset-and-bootstrap:
 
 ```yaml
 # devbox/commands/db.yml
+db.up:
+  type: devbox
+  private: true
+  description: Start the database container in the background
+  cmd: "docker up db"
+
+db.wait:
+  type: builtin
+  private: true
+  description: Wait for the db container to become healthy
+  cmd: docker_wait_healthy
+  with:
+    services: [db]
+    timeout: 120s
+    interval: 2s
+
 db.start:
   type: workflow
   private: true
@@ -965,7 +1033,7 @@ db.start:
     - command: db.wait
 ```
 
-`db.start` cannot be invoked directly via `devbox commands run db.start`, but `bootstrap` can reference it from its `steps:`.
+`db.start` cannot be invoked directly via `devbox commands run db.start`, but `bootstrap` can reference it from its `steps:`. The composition above is the canonical pattern: a thin `type: devbox` for the start, a `type: builtin` for the wait, and a `type: workflow` that strings them together.
 
 ## Validation rules (cheat sheet)
 
@@ -975,6 +1043,7 @@ The loader enforces these rules and reports the offending file + field on failur
 - `type: shell` requires exactly one of `cmd` / `argv`; `service_*` requires exactly one of `cmd` / `argv` plus `service`.
 - `type: script` requires a `script:` block in either simple (`path`) or phased (`run` + optional `plan` / `cleanup`) form.
 - `type: workflow` requires a non-empty `steps:` and forbids type-specific fields (`cmd`, `argv`, `service`, `script`, `workdir`, etc.).
+- `type: builtin` requires `cmd:` (the builtin name) and rejects type-specific fields of other types (`argv`, `script:`, `steps:`, `service`, `compose_args`, `workdir` / `workdir_from`, `user`, `mode`, `runner:`).
 - Each workflow step has exactly one of `command` / `confirm`; `with` / `continue_on_error` are valid only on command steps.
 - Env variable names must be unique across `params.*.env`, `context.*.env`, `files.*.env`, and the `env:` block.
 - File IDs must match `^[a-zA-Z_][a-zA-Z0-9_]*$`.

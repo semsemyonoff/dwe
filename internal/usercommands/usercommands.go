@@ -61,6 +61,7 @@ const (
 	CommandTypeServiceRun  = model.CommandTypeServiceRun
 	CommandTypeWorkflow    = model.CommandTypeWorkflow
 	CommandTypeDevbox      = model.CommandTypeDevbox
+	CommandTypeBuiltin     = model.CommandTypeBuiltin
 )
 
 // ---- ParamType constants ----
@@ -123,6 +124,7 @@ type ScriptRunner = runtime.ScriptRunner
 type ServiceExecRunner = runtime.ServiceExecRunner
 type ServiceRunRunner = runtime.ServiceRunRunner
 type WorkflowRunner = runtime.WorkflowRunner
+type BuiltinRunner = runtime.BuiltinRunner
 
 // ---- Functions (registry) ----
 

@@ -527,6 +527,21 @@ func printCommandInspect(w io.Writer, def *usercommands.CommandDef) {
 		if def.Workdir != "" {
 			def2("workdir", def.Workdir, 2)
 		}
+	case usercommands.CommandTypeBuiltin:
+		if def.Cmd != "" {
+			def2("builtin", def.Cmd, 2)
+		}
+		if len(def.With) > 0 {
+			sub("With")
+			var keys []string
+			for k := range def.With {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				def2(k, fmt.Sprintf("%v", def.With[k]), 4)
+			}
+		}
 	case usercommands.CommandTypeWorkflow:
 		sub("Steps")
 		for i, step := range def.Steps {

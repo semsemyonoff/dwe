@@ -32,6 +32,9 @@ const (
 	// CommandTypeDevbox runs a devbox subcommand using the current executable.
 	// The cmd: field contains the subcommand and its arguments (without the binary path).
 	CommandTypeDevbox CommandType = "devbox"
+	// CommandTypeBuiltin invokes an engine-internal builtin action by name.
+	// The cmd: field holds the builtin name; with: holds its parameters.
+	CommandTypeBuiltin CommandType = "builtin"
 )
 
 // ParamType describes the expected value type of a command parameter.
@@ -329,6 +332,10 @@ type CommandDef struct {
 	// --- type=workflow fields ---
 	Steps []WorkflowStep `yaml:"steps"`
 
+	// --- type=builtin fields ---
+	// With holds the parameters passed to the builtin (e.g. timeout, services).
+	With map[string]any `yaml:"with"`
+
 	// Runner is an optional override block for service/user/workdir/mode.
 	// When set, its non-zero fields take precedence over the top-level fields.
 	Runner *RunnerDef `yaml:"runner"`
@@ -365,6 +372,10 @@ func (c *CommandDef) Validate() error {
 		}
 	case CommandTypeWorkflow:
 		if err := c.validateWorkflowType(); err != nil {
+			return fmt.Errorf("command %q: %w", c.ID, err)
+		}
+	case CommandTypeBuiltin:
+		if err := c.validateBuiltinType(); err != nil {
 			return fmt.Errorf("command %q: %w", c.ID, err)
 		}
 	default:
@@ -516,6 +527,40 @@ func (c *CommandDef) validateWorkflowType() error {
 		if err := step.Validate(); err != nil {
 			return fmt.Errorf("step[%d]: %w", i, err)
 		}
+	}
+	return nil
+}
+
+func (c *CommandDef) validateBuiltinType() error {
+	if c.Cmd == "" {
+		return fmt.Errorf("cmd is required for type=builtin (builtin name)")
+	}
+	if len(c.Argv) > 0 {
+		return fmt.Errorf("argv is not valid for type=builtin; use cmd for builtin name")
+	}
+	if c.Script != nil {
+		return fmt.Errorf("script field is not valid for type=builtin")
+	}
+	if len(c.Steps) > 0 {
+		return fmt.Errorf("steps field is not valid for type=builtin")
+	}
+	if c.Service != "" {
+		return fmt.Errorf("service field is not valid for type=builtin")
+	}
+	if len(c.ComposeArgs) > 0 {
+		return fmt.Errorf("compose_args field is not valid for type=builtin")
+	}
+	if c.Workdir != "" || c.WorkdirFrom != "" {
+		return fmt.Errorf("workdir is not valid for type=builtin")
+	}
+	if c.User != "" {
+		return fmt.Errorf("user is not valid for type=builtin")
+	}
+	if c.Mode != "" {
+		return fmt.Errorf("mode is not valid for type=builtin")
+	}
+	if c.Runner != nil {
+		return fmt.Errorf("runner is not valid for type=builtin")
 	}
 	return nil
 }

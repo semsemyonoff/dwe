@@ -462,6 +462,22 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 		if def.Workdir != "" {
 			fmt.Fprintf(&sb, "**Workdir:** `%s`\n\n", def.Workdir)
 		}
+	case usercommands.CommandTypeBuiltin:
+		if def.Cmd != "" {
+			fmt.Fprintf(&sb, "**Builtin:** `%s`\n\n", def.Cmd)
+		}
+		if len(def.With) > 0 {
+			sb.WriteString("## With\n\n")
+			var keys []string
+			for k := range def.With {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				fmt.Fprintf(&sb, "- `%s`: `%v`\n", k, def.With[k])
+			}
+			sb.WriteString("\n")
+		}
 	case usercommands.CommandTypeWorkflow:
 		if len(def.Steps) > 0 {
 			sb.WriteString("## Steps\n\n")
