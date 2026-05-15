@@ -153,8 +153,8 @@ The bulk of the new feature.
 
 Cobra subcommand wiring.
 
-- [ ] create `internal/command/render_git.go` with `newRenderGitCmd(flags *rootFlags) *cobra.Command` modeled on `render_ai.go`: `Args: cobra.MaximumNArgs(1)`, optional service-name positional, no extra flags
-- [ ] flow: `config.LoadConfig` → if positional present, validate via `validateExplicitGitArg` (mirrors AI) and resolve hub-anchor with deepest-wins; else `git.SelectServices(cfg)` → for each selected service:
+- [x] create `internal/command/render_git.go` with `newRenderGitCmd(flags *rootFlags) *cobra.Command` modeled on `render_ai.go`: `Args: cobra.MaximumNArgs(1)`, optional service-name positional, no extra flags
+- [x] flow: `config.LoadConfig` → if positional present, validate via `validateExplicitGitArg` (mirrors AI) and resolve hub-anchor with deepest-wins; else `git.SelectServices(cfg)` → for each selected service:
   1. `absHub, err := git.PrepareHub(absRoot, name, svc)` — preflight `svc.Dir` containment + symlink rejection (defined in Task 5). On error, fail fast for this service.
   2. `git.ResolveTemplatePack(svc, projectRoot, name)` — resolve pack name + abs pack dir
   3. `absHooks, status, err := git.ResolveGitHooksDir(absHub)` — branch on `DirStatus`:
@@ -164,11 +164,11 @@ Cobra subcommand wiring.
   4. `m, err := git.LoadManifest(packDir)`
   5. `err := git.ValidateManifest(m, projectRoot, packName, absHooks)` — pass `absHooks` (the actual write destination from step 3) as `destRoot`, not `absHub`. Runs shape + git-specific + source-existence checks (per Task 5). RenderHooks is NEVER called when validation fails.
   6. `git.RenderHooks(...)` with the validated manifest
-- [ ] register in `internal/command/env.go` (parent `render` cmd) alongside `ide` and `ai`
-- [ ] update `render` help text to list `git` as a subcommand
-- [ ] **completion**: use the existing `serviceNameCompletion(flags)` (defined in `internal/command/shell.go:184`) — same as `render_ai.go:181` and `ide.go:49`. This returns ALL service names, not filtered by `Enabled` / `GitRenderEnabled`. Consistent with AI/IDE precedent; filtered completion would be a separate cross-renderer improvement.
-- [ ] write tests for the cobra command: positional success; positional unknown service error; positional service with no `src/.git` warning + non-error exit; positional service with `dir: ../outside` → `PrepareHub` rejects, command errors before any `MkdirAll`; positional service with manifest missing a `from` file → `ValidateManifest` fails, `RenderHooks` is NOT entered (assert nothing was written under `src/.git/hooks/`); no positional iterates only enabled+app services; completion callback returns all service names (matches `serviceNameCompletion` behavior — do NOT assert filtering by `Enabled`/`GitRenderEnabled`)
-- [ ] run `make test` — must pass before next task
+- [x] register in `internal/command/env.go` (parent `render` cmd) alongside `ide` and `ai`
+- [x] update `render` help text to list `git` as a subcommand
+- [x] **completion**: use the existing `serviceNameCompletion(flags)` (defined in `internal/command/shell.go:184`) — same as `render_ai.go:181` and `ide.go:49`. This returns ALL service names, not filtered by `Enabled` / `GitRenderEnabled`. Consistent with AI/IDE precedent; filtered completion would be a separate cross-renderer improvement.
+- [x] write tests for the cobra command: positional success; positional unknown service error; positional service with no `src/.git` warning + non-error exit; positional service with `dir: ../outside` → `PrepareHub` rejects, command errors before any `MkdirAll`; positional service with manifest missing a `from` file → `ValidateManifest` fails, `RenderHooks` is NOT entered (assert nothing was written under `src/.git/hooks/`); no positional iterates only enabled+app services; completion callback returns all service names (matches `serviceNameCompletion` behavior — do NOT assert filtering by `Enabled`/`GitRenderEnabled`)
+- [x] run `make test` — must pass before next task
 
 ### Task 7: Add validator for git packs
 
