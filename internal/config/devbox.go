@@ -285,6 +285,12 @@ type ServiceAIConfig struct {
 	Template string `yaml:"template"`
 }
 
+// ServiceGitHooksConfig holds git-hooks rendering settings for a service.
+type ServiceGitHooksConfig struct {
+	Enabled  *bool  `yaml:"enabled"`
+	Template string `yaml:"template"`
+}
+
 // ServiceConfig describes a single application service.
 // Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
 // from the 3-layer config merge (mandatory services are always enabled).
@@ -304,6 +310,7 @@ type ServiceConfig struct {
 	CLI             ServiceCLIConfig     `yaml:"cli"`
 	IDE             ServiceIDEConfig     `yaml:"ide"`
 	AI              ServiceAIConfig      `yaml:"ai"`
+	Git             ServiceGitHooksConfig `yaml:"git"`
 }
 
 // IDERenderEnabledExplicit returns the IDE render enabled state and whether it was explicitly set.
@@ -337,6 +344,23 @@ func (s ServiceConfig) AIRenderEnabledExplicit() (enabled bool, explicit bool) {
 // It's a simple wrapper around AIRenderEnabledExplicit that discards the explicit flag.
 func (s ServiceConfig) AIRenderEnabled() bool {
 	enabled, _ := s.AIRenderEnabledExplicit()
+	return enabled
+}
+
+// GitRenderEnabledExplicit returns the git-hooks render enabled state and whether it was explicitly set.
+// If Enabled is non-nil, returns its value and true.
+// If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
+func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) {
+	if s.Git.Enabled != nil {
+		return *s.Git.Enabled, true
+	}
+	return s.Type == "app", false
+}
+
+// GitRenderEnabled returns whether this service should participate in git-hooks rendering.
+// It's a simple wrapper around GitRenderEnabledExplicit that discards the explicit flag.
+func (s ServiceConfig) GitRenderEnabled() bool {
+	enabled, _ := s.GitRenderEnabledExplicit()
 	return enabled
 }
 
@@ -788,6 +812,14 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		}
 		if svc.AI.Template == "" {
 			svc.AI.Template = parent.AI.Template
+		}
+		// Git block inheritance: child inherits from parent if not explicitly set.
+		if svc.Git.Enabled == nil && parent.Git.Enabled != nil {
+			v := *parent.Git.Enabled
+			svc.Git.Enabled = &v
+		}
+		if svc.Git.Template == "" {
+			svc.Git.Template = parent.Git.Template
 		}
 		f.Services[name] = svc
 	}

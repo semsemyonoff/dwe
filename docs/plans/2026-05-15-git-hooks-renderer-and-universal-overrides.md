@@ -114,15 +114,15 @@ Replace AI's private `Manifest`/`ValidateManifest` with the shared package, and 
 
 Wire the new per-service block into config. Inheritance through `extends` is REQUIRED — without it, child services sharing a hub will behave inconsistently with their parent (mismatching IDE/AI which already inherit `enabled`/`template`).
 
-- [ ] in `internal/config/devbox.go`, add `ServiceGitHooksConfig{Enabled *bool, Template string}` with yaml tags `enabled`, `template`
-- [ ] add `Git ServiceGitHooksConfig \`yaml:"git"\`` to `ServiceConfig`
-- [ ] add accessors `GitRenderEnabledExplicit() (bool, bool)` (mirrors IDE — `(true, false)` for `type: app` when nil, `(false, false)` otherwise; respects explicit value) and `GitRenderEnabled() bool`
-- [ ] **extend `resolveExtendsInheritance`** (the function at ~config/devbox.go:715 that handles `IDE`/`AI` inheritance at lines 776–790): add a parallel block for `Git` — `if svc.Git.Enabled == nil && parent.Git.Enabled != nil { v := *parent.Git.Enabled; svc.Git.Enabled = &v }` and `if svc.Git.Template == "" { svc.Git.Template = parent.Git.Template }`. Same shape as the existing IDE/AI inheritance, applied in the same topological pass.
-- [ ] ensure the `git.*` block is NOT injected into `raw["services"]` (same rule as `ide.*` and `ai.*`); verify by reading the relevant `LoadConfig` injection logic and confirming no change needed
-- [ ] write tests for the accessors: explicit true, explicit false, nil + app, nil + non-app
-- [ ] **write tests for `extends` inheritance**: single-hop (child inherits `enabled=true` from parent), multi-hop C→B→A (grandchild inherits from grandparent), child explicit overrides parent, child explicit `enabled: false` wins over parent `enabled: true`, child template overrides parent template
-- [ ] write a config-load test confirming `git.*` does not appear in `Raw["services"][svc]` (parity with ide/ai)
-- [ ] run `make test` — must pass before next task
+- [x] in `internal/config/devbox.go`, add `ServiceGitHooksConfig{Enabled *bool, Template string}` with yaml tags `enabled`, `template`
+- [x] add `Git ServiceGitHooksConfig \`yaml:"git"\`` to `ServiceConfig`
+- [x] add accessors `GitRenderEnabledExplicit() (bool, bool)` (mirrors IDE — `(true, false)` for `type: app` when nil, `(false, false)` otherwise; respects explicit value) and `GitRenderEnabled() bool`
+- [x] **extend `resolveExtendsInheritance`** (the function at ~config/devbox.go:715 that handles `IDE`/`AI` inheritance at lines 776–790): add a parallel block for `Git` — `if svc.Git.Enabled == nil && parent.Git.Enabled != nil { v := *parent.Git.Enabled; svc.Git.Enabled = &v }` and `if svc.Git.Template == "" { svc.Git.Template = parent.Git.Template }`. Same shape as the existing IDE/AI inheritance, applied in the same topological pass.
+- [x] ensure the `git.*` block is NOT injected into `raw["services"]` (same rule as `ide.*` and `ai.*`); verify by reading the relevant `LoadConfig` injection logic and confirming no change needed
+- [x] write tests for the accessors: explicit true, explicit false, nil + app, nil + non-app
+- [x] **write tests for `extends` inheritance**: single-hop (child inherits `enabled=true` from parent), multi-hop C→B→A (grandchild inherits from grandparent), child explicit overrides parent, child explicit `enabled: false` wins over parent `enabled: true`, child template overrides parent template
+- [x] write a config-load test confirming `git.*` does not appear in `Raw["services"][svc]` (parity with ide/ai)
+- [x] run `make test` — must pass before next task
 
 ### Task 5: Add git pack types, resolver, and renderer
 

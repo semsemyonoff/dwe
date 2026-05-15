@@ -3374,6 +3374,233 @@ services:
 	}
 }
 
+// TestServiceConfig_GitRenderEnabledExplicit tests the tristate logic for git-hooks rendering.
+func TestServiceConfig_GitRenderEnabledExplicit(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      ServiceConfig
+		wantBool bool
+		wantExp  bool
+	}{
+		{
+			name:     "explicit true",
+			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(true)}}, //nolint:modernize
+			wantBool: true,
+			wantExp:  true,
+		},
+		{
+			name:     "explicit false",
+			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(false)}}, //nolint:modernize
+			wantBool: false,
+			wantExp:  true,
+		},
+		{
+			name:     "omitted on app type",
+			svc:      ServiceConfig{Type: "app"},
+			wantBool: true,
+			wantExp:  false,
+		},
+		{
+			name:     "omitted on db type",
+			svc:      ServiceConfig{Type: "db"},
+			wantBool: false,
+			wantExp:  false,
+		},
+		{
+			name:     "omitted on empty type",
+			svc:      ServiceConfig{Type: ""},
+			wantBool: false,
+			wantExp:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotExp := tt.svc.GitRenderEnabledExplicit()
+			if got != tt.wantBool {
+				t.Errorf("GitRenderEnabledExplicit() bool = %v, want %v", got, tt.wantBool)
+			}
+			if gotExp != tt.wantExp {
+				t.Errorf("GitRenderEnabledExplicit() explicit = %v, want %v", gotExp, tt.wantExp)
+			}
+		})
+	}
+}
+
+// TestServiceConfig_GitRenderEnabled tests the simple bool wrapper.
+func TestServiceConfig_GitRenderEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      ServiceConfig
+		wantBool bool
+	}{
+		{
+			name:     "explicit true",
+			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(true)}}, //nolint:modernize
+			wantBool: true,
+		},
+		{
+			name:     "explicit false",
+			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(false)}}, //nolint:modernize
+			wantBool: false,
+		},
+		{
+			name:     "app default true",
+			svc:      ServiceConfig{Type: "app"},
+			wantBool: true,
+		},
+		{
+			name:     "db default false",
+			svc:      ServiceConfig{Type: "db"},
+			wantBool: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.svc.GitRenderEnabled(); got != tt.wantBool {
+				t.Errorf("GitRenderEnabled() = %v, want %v", got, tt.wantBool)
+			}
+		})
+	}
+}
+
+// TestLoadServicesConfig_GitEnabled tests git-hooks block inheritance through extends.
+func TestLoadServicesConfig_GitEnabled(t *testing.T) {
+	yml := `
+services:
+  parent:
+    type: app
+    container: parent
+    mandatory: true
+    dir: ./services/parent
+    git:
+      enabled: false
+      template: parent-tmpl
+  child-inherit:
+    type: app
+    container: child-inherit
+    mandatory: false
+    extends: parent
+  child-override-enabled:
+    type: app
+    container: child-override-enabled
+    mandatory: false
+    extends: parent
+    git:
+      enabled: true
+  child-override-template:
+    type: app
+    container: child-override-template
+    mandatory: false
+    extends: parent
+    git:
+      template: child-tmpl
+  child-override-both:
+    type: app
+    container: child-override-both
+    mandatory: false
+    extends: parent
+    git:
+      enabled: true
+      template: both-tmpl
+  grandchild-multi-hop:
+    type: app
+    container: grandchild
+    mandatory: false
+    extends: child-inherit
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+
+	parent := services["parent"]
+	if parent.Git.Enabled == nil || *parent.Git.Enabled != false {
+		t.Errorf("parent Git.Enabled should be false, got %v", parent.Git.Enabled)
+	}
+	if parent.Git.Template != "parent-tmpl" {
+		t.Errorf("parent Git.Template = %q, want parent-tmpl", parent.Git.Template)
+	}
+
+	childInh := services["child-inherit"]
+	if childInh.Git.Enabled == nil || *childInh.Git.Enabled != false {
+		t.Errorf("child-inherit Git.Enabled should inherit false from parent, got %v", childInh.Git.Enabled)
+	}
+	if childInh.Git.Template != "parent-tmpl" {
+		t.Errorf("child-inherit Git.Template should inherit parent-tmpl, got %q", childInh.Git.Template)
+	}
+
+	childOvrE := services["child-override-enabled"]
+	if childOvrE.Git.Enabled == nil || *childOvrE.Git.Enabled != true {
+		t.Errorf("child-override-enabled Git.Enabled should be true, got %v", childOvrE.Git.Enabled)
+	}
+	if childOvrE.Git.Template != "parent-tmpl" {
+		t.Errorf("child-override-enabled Git.Template should inherit parent-tmpl, got %q", childOvrE.Git.Template)
+	}
+
+	childOvrT := services["child-override-template"]
+	if childOvrT.Git.Enabled == nil || *childOvrT.Git.Enabled != false {
+		t.Errorf("child-override-template Git.Enabled should inherit false from parent, got %v", childOvrT.Git.Enabled)
+	}
+	if childOvrT.Git.Template != "child-tmpl" {
+		t.Errorf("child-override-template Git.Template = %q, want child-tmpl", childOvrT.Git.Template)
+	}
+
+	childOvrB := services["child-override-both"]
+	if childOvrB.Git.Enabled == nil || *childOvrB.Git.Enabled != true {
+		t.Errorf("child-override-both Git.Enabled should be true, got %v", childOvrB.Git.Enabled)
+	}
+	if childOvrB.Git.Template != "both-tmpl" {
+		t.Errorf("child-override-both Git.Template = %q, want both-tmpl", childOvrB.Git.Template)
+	}
+
+	grandchild := services["grandchild-multi-hop"]
+	if grandchild.Git.Enabled == nil || *grandchild.Git.Enabled != false {
+		t.Errorf("grandchild-multi-hop Git.Enabled should inherit false from parent chain, got %v", grandchild.Git.Enabled)
+	}
+	if grandchild.Git.Template != "parent-tmpl" {
+		t.Errorf("grandchild-multi-hop Git.Template should inherit parent-tmpl, got %q", grandchild.Git.Template)
+	}
+}
+
+// TestLoadConfig_GitNotInjectedIntoRaw confirms git.* is not injected into raw["services"]
+// for dot-path expressions (parity with ide/ai).
+func TestLoadConfig_GitNotInjectedIntoRaw(t *testing.T) {
+	svcYml := `services:
+  main:
+    type: app
+    container: main
+    mandatory: true
+    dir: ./services/main
+    git:
+      enabled: true
+      template: custom
+`
+	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", svcYml)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Services["main"].Git.Template != "custom" {
+		t.Fatalf("expected Git.Template to be loaded, got %q", cfg.Services["main"].Git.Template)
+	}
+	svcMap, ok := cfg.Raw["services"].(map[string]any)
+	if !ok {
+		t.Fatalf("raw services not a map: %T", cfg.Raw["services"])
+	}
+	main, ok := svcMap["main"].(map[string]any)
+	if !ok {
+		t.Fatalf("raw services.main not a map: %T", svcMap["main"])
+	}
+	if _, present := main["git"]; present {
+		t.Errorf("git.* should NOT be injected into raw[services][main]; got: %v", main["git"])
+	}
+}
+
 // ptr is a helper to create a pointer to a value.
 // nolint: unused,modernize // used in test table initialization
 func ptr[T any](v T) *T {
