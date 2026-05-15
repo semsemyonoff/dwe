@@ -23,6 +23,20 @@ func setupServicesConfig(t *testing.T, dir, yaml string) {
 	}
 }
 
+// setupAIPack creates an empty pack at <projectRoot>/devbox/templates/ai/test/
+// for ValidateManifest/RenderTemplateFile tests that need a real packroot
+// layout. Callers populate packDir with fixtures and call the new API with
+// (projectRoot, "test", projectRoot).
+func setupAIPack(t *testing.T) (projectRoot, packDir string) {
+	t.Helper()
+	projectRoot = t.TempDir()
+	packDir = filepath.Join(projectRoot, "devbox", "templates", "ai", "test")
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("setup ai pack: %v", err)
+	}
+	return projectRoot, packDir
+}
+
 // setupAgentsPackTemplates writes an agents template pack at <dir>/devbox/templates/ai/<packName>/
 // and populates it with a directory structure of files.
 func setupAgentsPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
@@ -55,7 +69,7 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 		},
 	}
 
-	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -76,7 +90,7 @@ func TestResolveAgentsTemplatePack_explicitPackMissing(t *testing.T) {
 		},
 	}
 
-	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for missing explicit pack")
 	}
@@ -98,7 +112,7 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 		},
 	}
 
-	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "api")
+	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "api")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -122,7 +136,7 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 		},
 	}
 
-	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "notfound")
+	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "notfound")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -143,7 +157,7 @@ func TestResolveAgentsTemplatePack_implicitBothMissing(t *testing.T) {
 		},
 	}
 
-	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error when both candidates missing")
 	}
@@ -176,7 +190,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 		},
 	}
 
-	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for symlinked pack")
 	}
@@ -204,7 +218,7 @@ func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 		},
 	}
 
-	_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for non-dir pack")
 	}
@@ -234,7 +248,7 @@ func TestResolveAgentsTemplatePack_invalidTemplateKey(t *testing.T) {
 				},
 			}
 
-			_, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+			_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 			if err == nil {
 				t.Fatalf("expected error for %s", test.label)
 			}
@@ -263,7 +277,7 @@ func TestResolveAgentsTemplatePack_invalidServiceName(t *testing.T) {
 				},
 			}
 
-			_, err := aipkg.ResolveTemplatePack(svc, projectRoot, test.serviceName)
+			_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, test.serviceName)
 			if err == nil {
 				t.Fatalf("expected error for %s", test.label)
 			}
@@ -288,7 +302,7 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 		},
 	}
 
-	pack, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myapi")
+	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myapi")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -363,8 +377,9 @@ unknown_field: value
 
 // TestValidateAgentsManifest_empty rejects empty manifest.
 func TestValidateAgentsManifest_empty(t *testing.T) {
+	projectRoot, _ := setupAIPack(t)
 	m := &aipkg.Manifest{}
-	err := aipkg.ValidateManifest(m, t.TempDir())
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for empty manifest")
 	}
@@ -375,10 +390,8 @@ func TestValidateAgentsManifest_empty(t *testing.T) {
 
 // TestValidateAgentsManifest_fromEscaping rejects `from` escaping pack dir.
 func TestValidateAgentsManifest_fromEscaping(t *testing.T) {
-	packDir := t.TempDir()
-	// Create a file outside the pack
-	outsideDir := filepath.Dir(packDir)
-	outsideFile := filepath.Join(outsideDir, "outside.tmpl")
+	projectRoot, packDir := setupAIPack(t)
+	outsideFile := filepath.Join(filepath.Dir(packDir), "outside.tmpl")
 	if err := os.WriteFile(outsideFile, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write outside file: %v", err)
 	}
@@ -389,7 +402,7 @@ func TestValidateAgentsManifest_fromEscaping(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for escaping from")
 	}
@@ -400,7 +413,7 @@ func TestValidateAgentsManifest_fromEscaping(t *testing.T) {
 
 // TestValidateAgentsManifest_fromNoTmplSuffix rejects `from` not ending in .tmpl.
 func TestValidateAgentsManifest_fromNoTmplSuffix(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	file := filepath.Join(packDir, "test.txt")
 	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
@@ -412,7 +425,7 @@ func TestValidateAgentsManifest_fromNoTmplSuffix(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for non-.tmpl from")
 	}
@@ -423,13 +436,14 @@ func TestValidateAgentsManifest_fromNoTmplSuffix(t *testing.T) {
 
 // TestValidateAgentsManifest_fromNotExist rejects non-existent `from` file.
 func TestValidateAgentsManifest_fromNotExist(t *testing.T) {
+	projectRoot, _ := setupAIPack(t)
 	m := &aipkg.Manifest{
 		Render: []aipkg.RenderEntry{
 			{From: "missing.tmpl", To: "test"},
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, t.TempDir())
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for missing from file")
 	}
@@ -440,7 +454,7 @@ func TestValidateAgentsManifest_fromNotExist(t *testing.T) {
 
 // TestValidateAgentsManifest_fromIsSymlink rejects `from` being a symlink.
 func TestValidateAgentsManifest_fromIsSymlink(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	targetFile := filepath.Join(packDir, "target.tmpl")
 	if err := os.WriteFile(targetFile, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write target: %v", err)
@@ -457,7 +471,7 @@ func TestValidateAgentsManifest_fromIsSymlink(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for symlink from")
 	}
@@ -468,7 +482,7 @@ func TestValidateAgentsManifest_fromIsSymlink(t *testing.T) {
 
 // TestValidateAgentsManifest_fromSymlinkedParent rejects `from` with symlinked parent.
 func TestValidateAgentsManifest_fromSymlinkedParent(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	outsideDir := t.TempDir()
 	outsideFile := filepath.Join(outsideDir, "evil.tmpl")
 	if err := os.WriteFile(outsideFile, []byte("test"), 0o644); err != nil {
@@ -486,7 +500,7 @@ func TestValidateAgentsManifest_fromSymlinkedParent(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for symlinked parent directory")
 	}
@@ -497,7 +511,7 @@ func TestValidateAgentsManifest_fromSymlinkedParent(t *testing.T) {
 
 // TestValidateAgentsManifest_fromIsDirectory rejects `from` being a directory.
 func TestValidateAgentsManifest_fromIsDirectory(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	subdir := filepath.Join(packDir, "subdir.tmpl")
 	if err := os.MkdirAll(subdir, 0o755); err != nil {
 		t.Fatalf("create subdir: %v", err)
@@ -509,7 +523,7 @@ func TestValidateAgentsManifest_fromIsDirectory(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for directory from")
 	}
@@ -520,10 +534,14 @@ func TestValidateAgentsManifest_fromIsDirectory(t *testing.T) {
 
 // TestValidateAgentsManifest_toEscaping rejects `to` escaping hub dir.
 func TestValidateAgentsManifest_toEscaping(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	file := filepath.Join(packDir, "test.tmpl")
 	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
+	}
+	destRoot := filepath.Join(projectRoot, "hub")
+	if err := os.MkdirAll(destRoot, 0o755); err != nil {
+		t.Fatalf("create destRoot: %v", err)
 	}
 
 	m := &aipkg.Manifest{
@@ -532,7 +550,7 @@ func TestValidateAgentsManifest_toEscaping(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", destRoot)
 	if err == nil {
 		t.Fatal("expected error for escaping to")
 	}
@@ -543,7 +561,7 @@ func TestValidateAgentsManifest_toEscaping(t *testing.T) {
 
 // TestValidateAgentsManifest_symlinkToNotMatching rejects symlink `to` not matching render.
 func TestValidateAgentsManifest_symlinkToNotMatching(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	file := filepath.Join(packDir, "test.tmpl")
 	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
@@ -558,18 +576,18 @@ func TestValidateAgentsManifest_symlinkToNotMatching(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for symlink to not matching render")
 	}
-	if !strings.Contains(err.Error(), "does not match") {
-		t.Errorf("error should mention not matching: %v", err)
+	if !strings.Contains(err.Error(), "does not reference") {
+		t.Errorf("error should mention not referencing render destination: %v", err)
 	}
 }
 
 // TestValidateAgentsManifest_duplicateRenderDest rejects duplicate render destinations.
 func TestValidateAgentsManifest_duplicateRenderDest(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	file1 := filepath.Join(packDir, "file1.tmpl")
 	file2 := filepath.Join(packDir, "file2.tmpl")
 	if err := os.WriteFile(file1, []byte("test"), 0o644); err != nil {
@@ -586,18 +604,18 @@ func TestValidateAgentsManifest_duplicateRenderDest(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for duplicate render destination")
 	}
-	if !strings.Contains(err.Error(), "duplicate") {
+	if !strings.Contains(err.Error(), "duplicate") && !strings.Contains(err.Error(), "duplicated") {
 		t.Errorf("error should mention duplicate: %v", err)
 	}
 }
 
 // TestValidateAgentsManifest_duplicateSymlinkLink rejects duplicate symlink links.
 func TestValidateAgentsManifest_duplicateSymlinkLink(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	file := filepath.Join(packDir, "test.tmpl")
 	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
@@ -613,18 +631,18 @@ func TestValidateAgentsManifest_duplicateSymlinkLink(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err == nil {
 		t.Fatal("expected error for duplicate symlink link")
 	}
-	if !strings.Contains(err.Error(), "duplicate") {
+	if !strings.Contains(err.Error(), "duplicate") && !strings.Contains(err.Error(), "duplicated") {
 		t.Errorf("error should mention duplicate: %v", err)
 	}
 }
 
 // TestValidateAgentsManifest_nestedPaths allows nested `to`/`link` paths.
 func TestValidateAgentsManifest_nestedPaths(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	file := filepath.Join(packDir, "test.tmpl")
 	if err := os.WriteFile(file, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
@@ -639,7 +657,7 @@ func TestValidateAgentsManifest_nestedPaths(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err != nil {
 		t.Errorf("nested paths should be allowed: %v", err)
 	}
@@ -647,7 +665,7 @@ func TestValidateAgentsManifest_nestedPaths(t *testing.T) {
 
 // TestValidateAgentsManifest_validFull tests a complete valid manifest.
 func TestValidateAgentsManifest_validFull(t *testing.T) {
-	packDir := t.TempDir()
+	projectRoot, packDir := setupAIPack(t)
 	file1 := filepath.Join(packDir, "agents.tmpl")
 	file2 := filepath.Join(packDir, "claude.tmpl")
 	if err := os.WriteFile(file1, []byte("agents"), 0o644); err != nil {
@@ -667,9 +685,45 @@ func TestValidateAgentsManifest_validFull(t *testing.T) {
 		},
 	}
 
-	err := aipkg.ValidateManifest(m, packDir)
+	err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot)
 	if err != nil {
 		t.Errorf("valid manifest should not error: %v", err)
+	}
+}
+
+// TestValidateAgentsManifest_overrideSatisfiesMissingFrom verifies a sibling
+// <pack>.local/ override can supply a `from` file that is absent from the
+// canonical pack. Without resolver-aware validation this test fails.
+func TestValidateAgentsManifest_overrideSatisfiesMissingFrom(t *testing.T) {
+	projectRoot, _ := setupAIPack(t)
+	// Canonical pack intentionally has NO foo.tmpl; place it only in the override pack.
+	overrideDir := filepath.Join(projectRoot, "devbox", "templates", "ai", "test.local")
+	if err := os.MkdirAll(overrideDir, 0o755); err != nil {
+		t.Fatalf("mkdir override: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(overrideDir, "foo.tmpl"), []byte("override"), 0o644); err != nil {
+		t.Fatalf("write override file: %v", err)
+	}
+
+	m := &aipkg.Manifest{
+		Render: []aipkg.RenderEntry{
+			{From: "foo.tmpl", To: "AGENTS.md"},
+		},
+	}
+	if err := aipkg.ValidateManifest(m, projectRoot, "test", projectRoot); err != nil {
+		t.Errorf("override should satisfy from existence: %v", err)
+	}
+}
+
+// writeAIPackTmpl writes a single .tmpl into <projectRoot>/devbox/templates/ai/test/<rel>.
+func writeAIPackTmpl(t *testing.T, projectRoot, rel, content string) {
+	t.Helper()
+	packDir := filepath.Join(projectRoot, "devbox", "templates", "ai", "test")
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("mkdir pack: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packDir, rel), []byte(content), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
 	}
 }
 
@@ -681,12 +735,7 @@ func TestRenderAgentsTemplateFile_fresh(t *testing.T) {
 		t.Fatalf("create hub dir: %v", err)
 	}
 
-	// Create a template file
-	templateContent := "Service: {{ .Service }}, Project: {{ .Project.Name }}"
-	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
-	if err := os.WriteFile(templatePath, []byte(templateContent), 0o644); err != nil {
-		t.Fatalf("write template: %v", err)
-	}
+	writeAIPackTmpl(t, projectRoot, "template.tmpl", "Service: {{ .Service }}, Project: {{ .Project.Name }}")
 
 	data := aipkg.TemplateData{
 		Project: config.ProjectConfig{Name: "myproject"},
@@ -694,18 +743,14 @@ func TestRenderAgentsTemplateFile_fresh(t *testing.T) {
 	}
 
 	dest := "AGENTS.md"
-	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
-	if err != nil {
+	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
 		t.Fatalf("renderAgentsTemplateFile: %v", err)
 	}
 
-	// Verify file was written
-	resultPath := filepath.Join(hubDir, dest)
-	content, err := os.ReadFile(resultPath)
+	content, err := os.ReadFile(filepath.Join(hubDir, dest))
 	if err != nil {
 		t.Fatalf("read rendered file: %v", err)
 	}
-
 	expected := "Service: api, Project: myproject"
 	if string(content) != expected {
 		t.Errorf("expected %q, got %q", expected, string(content))
@@ -720,42 +765,30 @@ func TestRenderAgentsTemplateFile_idempotent(t *testing.T) {
 		t.Fatalf("create hub dir: %v", err)
 	}
 
-	templateContent := "Content: {{ .Service }}"
-	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
-	if err := os.WriteFile(templatePath, []byte(templateContent), 0o644); err != nil {
-		t.Fatalf("write template: %v", err)
-	}
-
+	writeAIPackTmpl(t, projectRoot, "template.tmpl", "Content: {{ .Service }}")
 	data := aipkg.TemplateData{Service: "api"}
 	dest := "AGENTS.md"
 
-	// First render
-	if err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
+	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
 		t.Fatalf("first render: %v", err)
 	}
-
 	resultPath := filepath.Join(hubDir, dest)
 	info1, err := os.Stat(resultPath)
 	if err != nil {
 		t.Fatalf("stat after first render: %v", err)
 	}
 
-	// Second render (idempotent)
-	if err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot); err != nil {
+	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
 		t.Fatalf("second render: %v", err)
 	}
-
 	info2, err := os.Stat(resultPath)
 	if err != nil {
 		t.Fatalf("stat after second render: %v", err)
 	}
 
-	// File should exist and be overwritten
 	if !info1.Mode().IsRegular() || !info2.Mode().IsRegular() {
 		t.Error("expected regular files")
 	}
-
-	// Content should match template rendering
 	got, err := os.ReadFile(resultPath)
 	if err != nil {
 		t.Fatalf("read after second render: %v", err)
@@ -773,22 +806,15 @@ func TestRenderAgentsTemplateFile_nestedPath(t *testing.T) {
 		t.Fatalf("create hub dir: %v", err)
 	}
 
-	templateContent := "Nested"
-	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
-	if err := os.WriteFile(templatePath, []byte(templateContent), 0o644); err != nil {
-		t.Fatalf("write template: %v", err)
-	}
-
+	writeAIPackTmpl(t, projectRoot, "template.tmpl", "Nested")
 	data := aipkg.TemplateData{}
 	dest := ".claude/AGENTS.md"
 
-	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
-	if err != nil {
+	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
 		t.Fatalf("renderAgentsTemplateFile: %v", err)
 	}
 
-	resultPath := filepath.Join(hubDir, dest)
-	if _, err := os.Stat(resultPath); err != nil {
+	if _, err := os.Stat(filepath.Join(hubDir, dest)); err != nil {
 		t.Fatalf("nested file not created: %v", err)
 	}
 }
@@ -801,15 +827,11 @@ func TestRenderAgentsTemplateFile_escapingDest(t *testing.T) {
 		t.Fatalf("create hub dir: %v", err)
 	}
 
-	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
-	if err := os.WriteFile(templatePath, []byte("test"), 0o644); err != nil {
-		t.Fatalf("write template: %v", err)
-	}
-
+	writeAIPackTmpl(t, projectRoot, "template.tmpl", "test")
 	data := aipkg.TemplateData{}
 	dest := "../escape.md"
 
-	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error for escaping destination")
 	}
@@ -827,27 +849,55 @@ func TestRenderAgentsTemplateFile_symlinkInDestDir(t *testing.T) {
 		t.Fatalf("create hub dir: %v", err)
 	}
 
-	// Create a symlink at services/api/.claude → /tmp/somewhere
 	symlinkDir := filepath.Join(hubDir, ".claude")
 	realTarget := t.TempDir()
 	if err := os.Symlink(realTarget, symlinkDir); err != nil {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	templatePath := filepath.Join(t.TempDir(), "template.tmpl")
-	if err := os.WriteFile(templatePath, []byte("test"), 0o644); err != nil {
-		t.Fatalf("write template: %v", err)
-	}
-
+	writeAIPackTmpl(t, projectRoot, "template.tmpl", "test")
 	data := aipkg.TemplateData{}
 	dest := ".claude/AGENTS.md"
 
-	err := aipkg.RenderTemplateFile(templatePath, data, dest, hubDir, projectRoot)
+	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when destination dir contains a symlink component")
 	}
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("error should mention symlink: %v", err)
+	}
+}
+
+// TestRenderAgentsTemplateFile_overrideHit verifies a sibling <pack>.local
+// override is preferred over the canonical pack and is reported via fromOverride.
+func TestRenderAgentsTemplateFile_overrideHit(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+	writeAIPackTmpl(t, projectRoot, "foo.tmpl", "canonical")
+	overrideDir := filepath.Join(projectRoot, "devbox", "templates", "ai", "test.local")
+	if err := os.MkdirAll(overrideDir, 0o755); err != nil {
+		t.Fatalf("mkdir override: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(overrideDir, "foo.tmpl"), []byte("override"), 0o644); err != nil {
+		t.Fatalf("write override: %v", err)
+	}
+
+	fromOverride, err := aipkg.RenderTemplateFile(projectRoot, "test", "foo.tmpl", aipkg.TemplateData{}, "AGENTS.md", hubDir, projectRoot)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !fromOverride {
+		t.Error("expected fromOverride=true when override pack supplies the file")
+	}
+	got, err := os.ReadFile(filepath.Join(hubDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != "override" {
+		t.Errorf("expected override content, got %q", got)
 	}
 }
 

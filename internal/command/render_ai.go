@@ -43,17 +43,17 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	}
 
 	// Resolve template pack
-	pack, err := aipkg.ResolveTemplatePack(svc, absRoot, name)
+	_, packName, err := aipkg.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return err
 	}
 
 	// Load and validate manifest
-	manifest, err := aipkg.LoadManifest(pack)
+	m, err := aipkg.LoadManifest(filepath.Join(absRoot, "devbox", "templates", "ai", packName))
 	if err != nil {
 		return err
 	}
-	if err := aipkg.ValidateManifest(manifest, pack); err != nil {
+	if err := aipkg.ValidateManifest(m, absRoot, packName, absHubDir); err != nil {
 		return fmt.Errorf("invalid agents manifest: %w", err)
 	}
 
@@ -66,16 +66,19 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	}
 
 	// Render each file in the manifest
-	for _, entry := range manifest.Render {
-		sourcePath := filepath.Join(pack, entry.From)
-		if err := aipkg.RenderTemplateFile(sourcePath, data, entry.To, absHubDir, absRoot); err != nil {
+	for _, entry := range m.Render {
+		fromOverride, err := aipkg.RenderTemplateFile(absRoot, packName, entry.From, data, entry.To, absHubDir, absRoot)
+		if err != nil {
 			return err
+		}
+		if fromOverride {
+			w.Info(fmt.Sprintf("using local override: devbox/templates/ai/%s.local/%s", packName, entry.From))
 		}
 		w.Success(fmt.Sprintf("ai → %s", filepath.Join(svc.Dir, entry.To)))
 	}
 
 	// Create each symlink in the manifest
-	for _, entry := range manifest.Symlinks {
+	for _, entry := range m.Symlinks {
 		if err := aipkg.EnsureRelativeSymlink(entry.Link, entry.To, absHubDir, absRoot); err != nil {
 			return err
 		}

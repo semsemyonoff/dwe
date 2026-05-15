@@ -95,8 +95,18 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 // validateService validates one service's AI template pack.
 func (v *AIValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) *validate.Diagnostic {
+	absRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return &validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.ai:%s", name),
+			Message:  fmt.Sprintf("resolve project root: %v", err),
+		}
+	}
+
 	// Resolve template pack
-	packDir, err := ai.ResolveTemplatePack(svc, projectRoot, name)
+	packDir, packName, err := ai.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return &validate.Diagnostic{
 			Severity: validate.SeverityError,
@@ -110,25 +120,26 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 	}
 
 	// Load and validate manifest
-	manifest, err := ai.LoadManifest(packDir)
+	m, err := ai.LoadManifest(packDir)
 	if err != nil {
 		return &validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
-			File:     filepath.Join("devbox", "templates", "ai", filepath.Base(packDir), "manifest.yml"),
+			File:     filepath.Join("devbox", "templates", "ai", packName, "manifest.yml"),
 			Line:     0,
 			Message:  fmt.Sprintf("failed to load manifest: %v", err),
 			Hint:     "check manifest.yml syntax and structure",
 		}
 	}
 
-	if err := ai.ValidateManifest(manifest, packDir); err != nil {
+	absHubDir := filepath.Join(absRoot, svc.Dir)
+	if err := ai.ValidateManifest(m, absRoot, packName, absHubDir); err != nil {
 		return &validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
-			File:     filepath.Join("devbox", "templates", "ai", filepath.Base(packDir), "manifest.yml"),
+			File:     filepath.Join("devbox", "templates", "ai", packName, "manifest.yml"),
 			Line:     0,
 			Message:  fmt.Sprintf("invalid manifest: %v", err),
 			Hint:     "check render and symlink entries in manifest.yml",

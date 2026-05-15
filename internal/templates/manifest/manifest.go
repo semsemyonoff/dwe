@@ -145,7 +145,9 @@ func validateSymlinkShape(e SymlinkEntry, absDest string, renderDests, links map
 	}
 	links[relLink] = struct{}{}
 
-	absToTarget := filepath.Join(filepath.Dir(absLink), e.To)
+	// `to` is interpreted as destRoot-relative (matching the render side):
+	// EnsureRelativeSymlink turns it into a link-relative target at write time.
+	absToTarget := filepath.Join(absDest, e.To)
 	relTarget, err := pathsafe.ContainedRel(absDest, absToTarget)
 	if err != nil {
 		return fmt.Errorf("%sto escapes dest root: %w", prefix, err)
