@@ -279,7 +279,33 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	// doesn't show a second prompt for the same run.
 	configChangeHandled := false
 
-	if !force && state.Project.Status == journal.StatusDeployed {
+	// Compute scope-relevant state. For --service NAME, the gates below apply
+	// to that service only; otherwise they apply to the whole project.
+	// When --service targets a never-deployed service, all scope* vars stay
+	// zero so no gate fires and the deploy proceeds silently.
+	var (
+		scopeStatus        journal.Status
+		scopeConfigHash    string
+		scopeExpectedHash  string
+		scopeLastRunStatus journal.Status
+	)
+	if serviceName == "" {
+		scopeStatus = state.Project.Status
+		scopeConfigHash = state.Project.ConfigHash
+		scopeExpectedHash = projectHash
+		if state.Project.LastRun != nil {
+			scopeLastRunStatus = state.Project.LastRun.Status
+		}
+	} else if svc, ok := state.Services[serviceName]; ok {
+		scopeStatus = svc.Status
+		scopeConfigHash = svc.ConfigHash
+		scopeExpectedHash = serviceHashes[serviceName]
+		if svc.LastRun != nil {
+			scopeLastRunStatus = svc.LastRun.Status
+		}
+	}
+
+	if !force && scopeStatus == journal.StatusDeployed {
 		// Check if all hashes match and there are no check: steps
 		hasCheckSteps := false
 		for _, rs := range steps {
@@ -289,28 +315,32 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 			}
 		}
 
-		// Verify every tracked service is present and deployed with a matching hash.
-		// A --service run stamps project.status=deployed for only the services it ran,
-		// so without this check a subsequent full deploy would incorrectly skip
-		// services that were never deployed.
+		// For a project-wide deploy, also verify every tracked service is present
+		// and deployed with a matching hash. A prior --service run stamps
+		// project.status=deployed for only the services it ran, so without this
+		// check a subsequent full deploy would incorrectly skip services that
+		// were never deployed. The --service case implicitly checks the one
+		// targeted service via scopeConfigHash == scopeExpectedHash below.
 		allTrackedDeployed := true
-		for _, name := range trackedServices {
-			svc, ok := state.Services[name]
-			if !ok || svc.Status != journal.StatusDeployed || svc.ConfigHash != serviceHashes[name] {
-				allTrackedDeployed = false
-				break
+		if serviceName == "" {
+			for _, name := range trackedServices {
+				svc, ok := state.Services[name]
+				if !ok || svc.Status != journal.StatusDeployed || svc.ConfigHash != serviceHashes[name] {
+					allTrackedDeployed = false
+					break
+				}
 			}
 		}
 
-		lastRunFailed := state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusFailed
-		if allTrackedDeployed && !hasCheckSteps && state.Project.ConfigHash == projectHash && !lastRunFailed {
-			// All services deployed, hashes match, no check steps, last run clean — skip the pipeline
+		lastRunFailed := scopeLastRunStatus == journal.StatusFailed
+		if allTrackedDeployed && !hasCheckSteps && scopeConfigHash == scopeExpectedHash && !lastRunFailed {
+			// In-scope state matches and is clean — skip the pipeline
 			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
 			return nil
 		}
 
 		// Config hash diverged but state is deployed
-		if state.Project.ConfigHash != projectHash {
+		if scopeConfigHash != scopeExpectedHash {
 			if isInteractive {
 				// Prompt for action
 				w.Tip("Tip: 'when:' conditions are always re-evaluated. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
@@ -339,13 +369,16 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		}
 	}
 
-	// Check for previously failed/partial/crashed runs.
-	// Also covers the case where all services deployed but a project-scope step failed:
-	// Recompute sets project.status=deployed (driven by service statuses) but last_run.status=failed.
-	prevIncomplete := state.Project.Status == journal.StatusFailed ||
-		state.Project.Status == journal.StatusPartial ||
-		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusInProgress) ||
-		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusFailed)
+	// Check for previously failed/partial/crashed runs in the active scope.
+	// For project-wide: also covers the case where all services deployed but a
+	// project-scope step failed (Recompute sets project.status=deployed, driven
+	// by service statuses, but last_run.status=failed). For --service NAME:
+	// only the targeted service's state is consulted, so an unrelated failed
+	// project run does not block deploying a brand-new service.
+	prevIncomplete := scopeStatus == journal.StatusFailed ||
+		scopeStatus == journal.StatusPartial ||
+		scopeLastRunStatus == journal.StatusInProgress ||
+		scopeLastRunStatus == journal.StatusFailed
 	if !force && prevIncomplete && !configChangeHandled {
 		if isInteractive {
 			w.Warning("Last deploy run failed or was incomplete.")
