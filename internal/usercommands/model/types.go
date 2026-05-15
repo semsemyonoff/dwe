@@ -52,8 +52,13 @@ const (
 )
 
 // UserMode specifies which user to use inside a container.
-// Special values: "current" (pass --user with host UID:GID), "root" (--user root).
+// Special values: "current" (pass --user with host UID:GID), "root" (--user root),
+// "internal" (no --user flag, use the image's built-in USER).
 // Any other string value is passed verbatim as --user <value>.
+//
+// When the field is empty/omitted, the runner falls back to the target service's
+// services.<svc>.cli.user; if that is also empty, no --user flag is added.
+// Use "internal" to explicitly opt out of the cli.user fallback.
 type UserMode string
 
 const (
@@ -61,6 +66,9 @@ const (
 	UserModeCurrent UserMode = "current"
 	// UserModeRoot passes --user root.
 	UserModeRoot UserMode = "root"
+	// UserModeInternal skips the --user flag and bypasses the cli.user fallback,
+	// so the container runs under the image's built-in USER directive.
+	UserModeInternal UserMode = "internal"
 )
 
 // ExecMode controls how service_exec commands behave when the container state is unknown.

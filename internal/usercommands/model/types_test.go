@@ -55,6 +55,9 @@ func TestUserModeConstants(t *testing.T) {
 	if string(UserModeRoot) != "root" {
 		t.Errorf("UserModeRoot = %q, want root", UserModeRoot)
 	}
+	if string(UserModeInternal) != "internal" {
+		t.Errorf("UserModeInternal = %q, want internal", UserModeInternal)
+	}
 }
 
 func TestExecModeConstants(t *testing.T) {

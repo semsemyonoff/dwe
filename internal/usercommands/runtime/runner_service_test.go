@@ -104,6 +104,115 @@ func TestServiceExecRunner_BuildCommand_UserRoot(t *testing.T) {
 	}
 }
 
+func TestServiceExecRunner_BuildCommand_UserInternalSkipsFlag(t *testing.T) {
+	// user: internal should never emit --user, even if cli.user is set.
+	ctx := makeServiceExecCtx("app-main", UserModeInternal, "", ExecModeExec, "id", nil)
+	ctx.Config.Services = map[string]config.ServiceConfig{
+		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if strings.Contains(args, "--user") {
+		t.Errorf("expected no --user flag for internal mode, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_EmptyUserFallsBackToCLIUser(t *testing.T) {
+	// When user is omitted, services.<svc>.cli.user is used as the default.
+	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+	ctx.Config.Services = map[string]config.ServiceConfig{
+		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--user www-data") {
+		t.Errorf("expected '--user www-data' from cli.user fallback, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_EmptyUserNoCLIUserSkipsFlag(t *testing.T) {
+	// When user is omitted and cli.user is also empty, no --user flag is added.
+	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
+	ctx.Config.Services = map[string]config.ServiceConfig{
+		"main": {Container: "app-main"},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if strings.Contains(args, "--user") {
+		t.Errorf("expected no --user flag without cli.user fallback, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_ExplicitUserOverridesCLIUser(t *testing.T) {
+	// An explicit user: at the top level wins over cli.user fallback.
+	ctx := makeServiceExecCtx("app-main", UserModeRoot, "", ExecModeExec, "id", nil)
+	ctx.Config.Services = map[string]config.ServiceConfig{
+		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--user root") {
+		t.Errorf("expected explicit '--user root' to win over cli.user, got: %s", args)
+	}
+	if strings.Contains(args, "www-data") {
+		t.Errorf("cli.user should not be applied when user: is explicit, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testing.T) {
+	// runner.service redirects to a different service; cli.user fallback
+	// should resolve against that redirected service, not the original.
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeServiceExec,
+			Service: "app-main",
+			Mode:    ExecModeExec,
+			Cmd:     "id",
+			Runner: &RunnerDef{
+				Service: "app-installer",
+			},
+		},
+		Render: &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Services: map[string]config.ServiceConfig{
+				"main":      {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
+				"installer": {Container: "app-installer", CLI: config.ServiceCLIConfig{User: "root"}},
+			},
+		},
+		Params:  map[string]any{},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--user root") {
+		t.Errorf("expected cli.user of redirected service (root), got: %s", args)
+	}
+	if strings.Contains(args, "www-data") {
+		t.Errorf("original service cli.user (www-data) leaked into args: %s", args)
+	}
+}
+
 func TestServiceExecRunner_BuildCommand_UserCurrent(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", UserModeCurrent, "", ExecModeExec, "id", nil)
 	r := &ServiceExecRunner{}

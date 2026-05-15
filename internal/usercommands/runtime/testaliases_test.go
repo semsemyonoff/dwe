@@ -54,6 +54,7 @@ const (
 	ParamTypeInt            = model.ParamTypeInt
 	UserModeCurrent         = model.UserModeCurrent
 	UserModeRoot            = model.UserModeRoot
+	UserModeInternal        = model.UserModeInternal
 	DefaultConfirmationText = model.DefaultConfirmationText
 )
 

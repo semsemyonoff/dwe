@@ -578,10 +578,33 @@ Runs a command inside an existing container via `docker compose exec`. With `mod
 | `service` | yes | Compose service name |
 | `cmd` / `argv` | one of | Shell command string OR raw argv |
 | `mode` | optional | `exec` (default), `run`, or `exec-or-run` |
-| `user` | optional | `current` (host UID:GID), `root`, or any literal `--user` value |
+| `user` | optional | Container user to run as. See [User resolution](#user-resolution) for the full list of accepted values and the fallback rules. |
 | `workdir` | optional | Container workdir; rendered with templates |
 | `workdir_from` | optional | Dot-path into merged config resolving to the workdir string |
 | `compose_args` | optional | Extra flags forwarded to `docker compose exec/run` (templated) |
+
+### User resolution
+
+The `user:` field on `service_exec` / `service_run` (and on the `runner:` override block) accepts the following values:
+
+| Value | Effect |
+|-------|--------|
+| _(omitted / empty)_ | Falls back to `services.<svc>.cli.user` of the target service. If `cli.user` is also empty, no `--user` flag is passed and the container runs under the image's `USER` directive. This is the default for new commands — declare `cli.user` once on the service and every command targeting that service inherits it. |
+| `current` | Passes `--user <HOST_UID>:<HOST_GID>` so the container process runs as the host user. Use this when the command writes files into bind-mounted directories and you need them owned by the host user. |
+| `root` | Passes `--user root`. Use for one-off operations that need elevated privileges inside the container (package install, chown, etc.). |
+| `internal` | Passes **no** `--user` flag and **skips** the `cli.user` fallback. The container runs under the image's built-in `USER` directive (or `root` if the image declares none). Use this to explicitly opt out of `cli.user` for a specific command (e.g. an entrypoint that must run as the image's default user). |
+| any other string | Passed verbatim as `--user <value>`. Accepts the same forms `docker --user` accepts: a user name (`www-data`), a numeric UID (`1000`), or `UID:GID` (`1000:1000`). |
+
+Precedence, top to bottom:
+
+1. `runner.user` (if the `runner:` block sets it).
+2. Top-level `user:` on the command.
+3. `services.<svc>.cli.user` of the resolved target service (after `runner.service` redirect).
+4. No `--user` flag (image's `USER`).
+
+`runner.service` redirects the target before the `cli.user` lookup, so the fallback reads `cli.user` from the **redirected** service, not the original.
+
+Setting `user: internal` short-circuits step 3 — the resolver treats `internal` as an explicit decision and never reads `cli.user`.
 
 ```yaml
 composer-install:

@@ -76,8 +76,9 @@ const (
 // ---- UserMode constants ----
 
 const (
-	UserModeCurrent = model.UserModeCurrent
-	UserModeRoot    = model.UserModeRoot
+	UserModeCurrent  = model.UserModeCurrent
+	UserModeRoot     = model.UserModeRoot
+	UserModeInternal = model.UserModeInternal
 )
 
 // ---- ExecMode constants ----

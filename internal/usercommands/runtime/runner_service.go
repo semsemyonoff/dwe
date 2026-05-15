@@ -154,10 +154,31 @@ func resolveServiceFields(ctx RunContext) (svc string, user model.UserMode, work
 		workdir = wdLiteral
 	}
 
+	if user == "" {
+		if cliUser := lookupServiceCLIUser(ctx.Config, svc); cliUser != "" {
+			user = model.UserMode(cliUser)
+		}
+	}
+
 	if svc == "" {
 		err = fmt.Errorf("service name is empty")
 	}
 	return
+}
+
+// lookupServiceCLIUser returns services.<svc>.cli.user for the service whose
+// Container field matches the given compose service name, or "" when no match
+// is found (or the matched entry has no cli.user set).
+func lookupServiceCLIUser(cfg *config.DevboxConfig, container string) string {
+	if cfg == nil || container == "" {
+		return ""
+	}
+	for _, s := range cfg.Services {
+		if s.Container == container {
+			return s.CLI.User
+		}
+	}
+	return ""
 }
 
 // resolveWorkdirFrom resolves a dot-path into the config Raw map and returns
@@ -262,8 +283,8 @@ func buildDockerComposeCmd(
 		}
 	case model.UserModeRoot:
 		args = append(args, "--user", "root")
-	case "":
-		// No user flag.
+	case "", model.UserModeInternal:
+		// No user flag — image's built-in USER is used.
 	default:
 		args = append(args, "--user", string(user))
 	}
