@@ -7,6 +7,7 @@ const (
 	Yellow = "\033[0;33m"    // warn
 	Red    = "\033[0;31m"    // err
 	Cyan   = "\033[0;36m"    // standard cyan
+	BoldCyan = "\033[1;36m"  // bold cyan (used for tips/callouts)
 	White  = "\033[1;37m"    // bold white
 	Gray   = "\033[0;90m"    // dim/disabled
 	Reset  = "\033[0m"

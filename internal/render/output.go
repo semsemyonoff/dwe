@@ -74,6 +74,16 @@ func (w *Writer) Info(msg string) {
 	}
 }
 
+// Tip prints a callout in bold cyan, separated from surrounding output by a
+// leading blank line so it visually stands apart from preceding warnings or
+// step output. Used for actionable advice (e.g. "use 'devbox reset' for a clean install").
+func (w *Writer) Tip(msg string) {
+	_, _ = fmt.Fprintln(w.w)
+	for _, line := range wordWrap(msg, w.getLineWidth()+2) {
+		_, _ = fmt.Fprintf(w.w, "%s%s%s\n", BoldCyan, line, Reset)
+	}
+}
+
 // Definition prints a definition entry with the name in blue:
 //
 //	[icon ]name — first line of value

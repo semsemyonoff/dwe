@@ -115,8 +115,9 @@ first step. Use --service to run only the steps relevant to a specific service.
 
 State tracking allows idempotent deploys: steps that previously succeeded with
 matching hashes are skipped on re-run. Use --force to ignore prior state and
-re-run all steps. Use --resume to continue from the last failed step in a
-partially deployed project.
+re-run all steps (when: conditions are still evaluated — for a fully clean
+install run 'devbox reset run && devbox deploy run'). Use --resume to continue
+from the last failed step in a partially deployed project.
 
 File logging is enabled by default for deploy and writes to .devbox/logs/deploy.log.
 Disable it with 'log: false' at the top of devbox/deploy.yml.`,
@@ -132,7 +133,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 	}
 
 	cmd.Flags().StringVar(&serviceName, "service", "", "deploy a single service only")
-	cmd.Flags().BoolVar(&force, "force", false, "ignore state and re-run all steps")
+	cmd.Flags().BoolVar(&force, "force", false, "ignore state and re-run all steps (when: still applies; use 'devbox reset run && devbox deploy run' for a true clean install)")
 	cmd.Flags().BoolVar(&resume, "resume", false, "continue from the last failed step")
 	cmd.Flags().BoolVarP(&nonInteractive, "non-interactive", "y", false, "suppress interactive prompts")
 	return cmd
@@ -312,11 +313,12 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		if state.Project.ConfigHash != projectHash {
 			if isInteractive {
 				// Prompt for action
+				w.Tip("Tip: 'when:' conditions are always re-evaluated. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
 				choice, err := ui.RunSelector(
 					"Deployed config changed. Choose action:",
 					[]ui.SelectorItem{
-						{Label: "Apply changes (skip unchanged steps)"},
-						{Label: "Full re-deploy (re-run all steps)"},
+						{Label: "Apply changes (re-run only changed steps)"},
+						{Label: "Re-run all steps (ignore state; when: still applies)"},
 						{Label: "Cancel"},
 					},
 				)
@@ -346,12 +348,13 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		(state.Project.LastRun != nil && state.Project.LastRun.Status == journal.StatusFailed)
 	if !force && prevIncomplete && !configChangeHandled {
 		if isInteractive {
-			w.Warning("Last deploy run failed or was incomplete. Resume or start fresh?")
+			w.Warning("Last deploy run failed or was incomplete.")
+			w.Tip("Tip: 'when:' conditions are always re-evaluated, so partially-installed services may stay skipped. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
 			choice, err := ui.RunSelector(
 				"Failed deploy detected:",
 				[]ui.SelectorItem{
-					{Label: "Resume from last failed step"},
-					{Label: "Full re-run (start from beginning)"},
+					{Label: "Resume (skip steps already done)"},
+					{Label: "Re-run all steps (ignore state; when: still applies)"},
 					{Label: "Cancel"},
 				},
 			)
@@ -362,12 +365,12 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 				return errors.New("deploy cancelled")
 			}
 			if choice == 1 {
-				force = true // Full re-run
+				force = true // Re-run all steps (state ignored; when: still applies)
 			}
 			// choice == 0: resume (default)
 		} else if !resume {
 			// Non-interactive mode: error unless --resume or --force
-			return fmt.Errorf("last deploy failed or was incomplete; use --resume to continue or --force to start fresh")
+			return fmt.Errorf("last deploy failed or was incomplete; use --resume to continue, --force to re-run all steps (when: still applies), or run 'devbox reset run && devbox deploy run' for a fully clean install")
 		}
 	}
 

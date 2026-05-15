@@ -277,7 +277,7 @@ In non-interactive mode (no TTY, no `--yes` flag):
 - Without a flag, the command exits with an error (fail-safe for CI)
 
 In interactive mode (TTY without `--yes`):
-- If the last run was failed/partial, you are prompted to choose: resume, full re-run, or cancel
+- If the last run was failed/partial, you are prompted to choose: resume, re-run all steps (state ignored — `when:` still applies), or cancel
 
 ### `-y` / `--non-interactive`
 
@@ -464,6 +464,11 @@ devbox deploy run --force
 
 Clears the state file and re-runs all steps from scratch, even if they all succeeded previously.
 
+> **Note:** `--force` only ignores the deploy state. Phase- and step-level `when:` conditions are still
+> evaluated on every run. For example, `when: dir-empty services/main/src` will still skip an install step
+> once the directory has been populated by a previous successful run. To wipe service directories,
+> Docker volumes, and other artifacts so the next deploy is truly clean, use `devbox reset run && devbox deploy run`.
+
 ### Example: recover from a mid-deploy crash
 
 ```bash
@@ -476,7 +481,7 @@ $ devbox deploy run
 # Process crashed or was killed. State file recorded the failure.
 
 $ devbox deploy run  # (in interactive mode)
-# Prompted: "Failed deploy detected. Resume, full re-run, or cancel?"
+# Prompted: "Failed deploy detected: Resume / Re-run all steps / Cancel"
 # Choose: Resume
 
 ✓ Phase setup
