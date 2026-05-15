@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"devbox-cli/internal/envfile"
 	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -61,7 +61,7 @@ func newServiceStatusCmd(flags *rootFlags) *cobra.Command {
 			}
 			dockerBin := config.DockerBin(cfg)
 			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container, dockerBin)
+				return stack.ContainerRunning(projectName, container, dockerBin)
 			}
 			return runServiceList(render.Stdout(), cfg, isRunning)
 		},
@@ -99,7 +99,7 @@ the read-only status table.`,
 				}
 				dockerBin := config.DockerBin(cfg)
 				isRunning := func(_, container string) bool {
-					return containerRunning(projectName, container, dockerBin)
+					return stack.ContainerRunning(projectName, container, dockerBin)
 				}
 				return runServiceList(render.Stdout(), cfg, isRunning)
 			}
@@ -188,28 +188,8 @@ func resolveProjectName(configPath string, cfg *config.DevboxConfig) (string, er
 	return cfg.Project.FullName(), nil
 }
 
-// containerCheckFn checks whether a container with the given name is running.
-type containerCheckFn func(projectFullName, containerName string) bool
-
-// containerRunning checks if a Docker container is running by full container name.
-// Uses docker inspect to get an exact name match (docker ps name filter uses substring
-// matching against the full /name path which is not portable across Docker versions).
-// dockerBin is the Docker-compatible binary (e.g. "docker", "podman").
-func containerRunning(projectFullName, containerName, dockerBin string) bool {
-	fullName := projectFullName + "-" + containerName
-	out, err := exec.Command(
-		dockerBin, "inspect", //nolint:gosec
-		"--format", "{{.State.Status}}",
-		fullName,
-	).Output()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(out)) == "running"
-}
-
 // runServiceList prints the service list as a styled Lipgloss table.
-func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCheckFn) error {
+func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning stack.ContainerCheckFn) error {
 	names := sortedKeys(cfg.Services)
 	projectFull := cfg.Project.FullName()
 

@@ -23,7 +23,7 @@ func TestRunStatus_ContainsStackIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, neverRunning, nil, nil); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()
@@ -45,7 +45,7 @@ func TestRunStatus_StoppedIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, neverRunning, nil, nil); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()
@@ -67,7 +67,7 @@ func TestRunStatus_RunningIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, alwaysRunning, nil, nil); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: alwaysRunning}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()
@@ -92,7 +92,7 @@ func TestRunStatus_PartialIndicator(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, partialRunning, nil, nil); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: partialRunning}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()
@@ -116,7 +116,7 @@ func TestRunStatus_ContainsServiceAndToolTables(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, neverRunning, nil, nil); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()
@@ -149,7 +149,7 @@ func TestRunStatus_WithTopologyShown(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, neverRunning, topo, nil); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning, Topo: topo}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()
@@ -174,7 +174,7 @@ func TestRunStatus_TopologyNilSkipped(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, neverRunning, nil, nil); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()
@@ -205,7 +205,7 @@ func TestRunStatus_TopologyWithStatus(t *testing.T) {
 
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
-	if err := RunStatus(w, cfg, neverRunning, topo, topoStatus); err != nil {
+	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning, Topo: topo, TopoStatus: topoStatus}); err != nil {
 		t.Fatalf("RunStatus error: %v", err)
 	}
 	out := buf.String()

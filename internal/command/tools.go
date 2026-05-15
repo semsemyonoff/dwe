@@ -60,7 +60,7 @@ func newToolStatusCmd(flags *rootFlags) *cobra.Command {
 			}
 			dockerBin := config.DockerBin(cfg)
 			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container, dockerBin)
+				return stack.ContainerRunning(projectName, container, dockerBin)
 			}
 			return runToolList(render.Stdout(), cfg, isRunning)
 		},
@@ -97,7 +97,7 @@ the read-only status table.`,
 				}
 				dockerBin := config.DockerBin(cfg)
 				isRunning := func(_, container string) bool {
-					return containerRunning(projectName, container, dockerBin)
+					return stack.ContainerRunning(projectName, container, dockerBin)
 				}
 				return runToolList(render.Stdout(), cfg, isRunning)
 			}
@@ -157,7 +157,7 @@ the read-only status table.`,
 }
 
 // runToolList prints the tool list as a styled Lipgloss table.
-func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning containerCheckFn) error {
+func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning stack.ContainerCheckFn) error {
 	toolData := stack.BuildToolRows(cfg)
 	projectFull := cfg.Project.FullName()
 

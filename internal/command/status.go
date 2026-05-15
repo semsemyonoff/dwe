@@ -2,19 +2,13 @@ package command
 
 import (
 	"fmt"
-	"io"
 	"path/filepath"
-	"slices"
-	"time"
 
-	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/stack"
-	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 )
@@ -34,218 +28,47 @@ If a service name is provided, shows per-phase/step deploy breakdown for that se
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
+
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			// Load deploy state
 			statePath := filepath.Join(flags.ProjectRoot(), journal.DefaultRelPath)
 			state, err := journal.Load(statePath)
 			if err != nil {
 				return fmt.Errorf("loading deploy state: %w", err)
 			}
 
-			// Load tracked services
 			tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, flags.ProjectRoot())
 			if err != nil {
 				return fmt.Errorf("loading tracked services: %w", err)
 			}
 
-			// If a service is specified, show per-phase breakdown
 			if len(args) > 0 {
-				serviceName := args[0]
-				return renderServiceDeployDetail(cmd.OutOrStdout(), state, cfg, svcDeploys, tracked, serviceName)
+				return stack.RenderServiceDeployDetail(cmd.OutOrStdout(), state, tracked, args[0])
 			}
 
 			projectName, dockerCfg, err := stack.ResolveProjectAndDocker(flags.configPath, cfg)
 			if err != nil {
 				return err
 			}
-			composeFiles := cfg.ComposeFiles()
 
-			var processEnv []string
-			if dockerCfg != nil {
-				processEnv = docker.MergeEnv(dockerCfg.ProcessEnv)
-			}
-
+			topo, topoStatus := stack.ResolveTopology(cfg, dockerCfg, projectName)
 			dockerBin := config.DockerBin(cfg)
-			topo := stack.FetchComposeTopology(composeFiles, projectName, processEnv, dockerBin)
-			var topoStatus map[string]ui.NodeStatus
-			if topo == nil {
-				topo = stack.ParseTopologyFromFiles(composeFiles)
-			} else {
-				topoStatus = stack.ComposeNodeStatuses(composeFiles, projectName, processEnv, dockerBin)
-				if topoStatus != nil {
-					for name := range topo {
-						if _, ok := topoStatus[name]; !ok {
-							topoStatus[name] = ui.NodeStopped
-						}
-					}
-				}
-			}
-
-			topo, topoStatus = stack.AugmentWithDisabled(cfg, topo, topoStatus)
-
-			if dockerCfg != nil && len(dockerCfg.Topology.Hidden) > 0 {
-				topo, topoStatus = stack.RemoveHiddenNodes(topo, topoStatus, dockerCfg.Topology.Hidden)
-			}
-
 			isRunning := func(_, container string) bool {
-				return containerRunning(projectName, container, dockerBin)
+				return stack.ContainerRunning(projectName, container, dockerBin)
 			}
 
-			// Render existing stack status
-			if err := stack.RunStatus(render.Stdout(), cfg, isRunning, topo, topoStatus); err != nil {
-				return err
-			}
-
-			// Render deploy status
-			return renderDeployStatus(cmd.OutOrStdout(), state, cfg, svcDeploys, tracked)
+			return stack.RunStatus(render.NewWriter(cmd.OutOrStdout()), stack.StatusInput{
+				Cfg:        cfg,
+				IsRunning:  isRunning,
+				Topo:       topo,
+				TopoStatus: topoStatus,
+				State:      state,
+				SvcDeploys: svcDeploys,
+				Tracked:    tracked,
+			})
 		},
 	}
-}
-
-// renderDeployStatus builds and renders the deploy status table.
-func renderDeployStatus(w io.Writer, state *journal.ProjectState, cfg *config.DevboxConfig, svcDeploys map[string]*config.DeployConfig, tracked []string) error {
-	view, err := buildDeployStatusView(state, cfg, svcDeploys, tracked)
-	if err != nil {
-		return err
-	}
-
-	if len(view.Rows) == 0 {
-		return nil
-	}
-
-	rw := render.NewWriter(w)
-	_, _ = fmt.Fprintf(rw.Writer(), "%s\n", ui.RenderSectionTitle("Deploy Status"))
-
-	// Convert view rows to UI rows
-	uiRows := make([]ui.DeployStatusRow, len(view.Rows))
-	for i, row := range view.Rows {
-		uiRows[i] = ui.DeployStatusRow{
-			Service:         row.Service,
-			Status:          string(row.Status),
-			ConfigDelta:     string(row.ConfigDelta),
-			PrevHashShort:   row.PrevHashShort,
-			CurrHashShort:   row.CurrHashShort,
-			LastFailedPhase: row.LastFailedPhase,
-			LastFailedStep:  row.LastFailedStep,
-		}
-	}
-
-	_, _ = fmt.Fprintln(rw.Writer(), ui.RenderDeployStatus(uiRows))
-	return nil
-}
-
-// buildDeployStatusView assembles the view model from state and config.
-func buildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig, svcDeploys map[string]*config.DeployConfig, tracked []string) (*statusview.DeployStatusView, error) {
-	view := &statusview.DeployStatusView{
-		ProjectStatus:     state.Project.Status,
-		ProjectDeployedAt: state.Project.DeployedAt,
-	}
-
-	for _, serviceName := range tracked {
-		svcCfg, ok := cfg.Services[serviceName]
-		if !ok {
-			continue
-		}
-
-		svcDeploy, ok := svcDeploys[serviceName]
-		if !ok {
-			svcDeploy = nil
-		}
-
-		currHash := journal.ServiceConfigHash(svcCfg, svcDeploy)
-		currHashShort := journal.ShortHash(currHash)
-
-		var delta statusview.ConfigDelta
-		delta = statusview.ConfigDeltaOK
-		var prevHashShort string
-
-		svcState, exists := state.Services[serviceName]
-		if !exists {
-			delta = statusview.ConfigDeltaMissing
-		} else {
-			prevHashShort = journal.ShortHash(svcState.ConfigHash)
-			if svcState.ConfigHash != currHash {
-				delta = statusview.ConfigDeltaChanged
-			}
-		}
-
-		row := statusview.DeployStatusRow{
-			Service:       serviceName,
-			Status:        journal.StatusNotDeployed,
-			ConfigDelta:   delta,
-			CurrHashShort: currHashShort,
-			PrevHashShort: prevHashShort,
-		}
-
-		if svcState != nil {
-			row.Status = svcState.Status
-			if svcState.LastRun != nil && svcState.LastRun.Status != journal.StatusOk {
-				// Find the most recently failed step by FinishedAt timestamp.
-				var latestFailedAt time.Time
-				for phaseName, phase := range svcState.Phases {
-					for stepName, step := range phase.Steps {
-						if step.Status == journal.StatusFailed && step.FinishedAt.After(latestFailedAt) {
-							latestFailedAt = step.FinishedAt
-							row.LastFailedPhase = phaseName
-							row.LastFailedStep = stepName
-						}
-					}
-				}
-			}
-		}
-
-		view.Rows = append(view.Rows, row)
-	}
-
-	return view, nil
-}
-
-// renderServiceDeployDetail renders per-phase/step breakdown for a service.
-func renderServiceDeployDetail(w io.Writer, state *journal.ProjectState, _ *config.DevboxConfig, _ map[string]*config.DeployConfig, tracked []string, serviceName string) error {
-	// Verify service is tracked
-	if !slices.Contains(tracked, serviceName) {
-		return fmt.Errorf("service %q is not tracked (not deployed)", serviceName)
-	}
-
-	svcState, ok := state.Services[serviceName]
-	if !ok {
-		rw := render.NewWriter(w)
-		_, _ = fmt.Fprintf(rw.Writer(), "Service %q not deployed yet\n", serviceName)
-		return nil
-	}
-
-	rw := render.NewWriter(w)
-	_, _ = fmt.Fprintf(rw.Writer(), "Deploy status for service %q:\n\n", serviceName)
-	_, _ = fmt.Fprintf(rw.Writer(), "Overall status: %s\n", svcState.Status)
-	_, _ = fmt.Fprintf(rw.Writer(), "Config hash: %s\n", svcState.ConfigHash)
-	if svcState.LastRun != nil {
-		_, _ = fmt.Fprintf(rw.Writer(), "Last run: %s\n", svcState.LastRun.Status)
-	}
-	_, _ = fmt.Fprintf(rw.Writer(), "\n%s\n", ui.RenderSectionTitle("Phases"))
-
-	phaseNames := make([]string, 0, len(svcState.Phases))
-	for phaseName := range svcState.Phases {
-		phaseNames = append(phaseNames, phaseName)
-	}
-	slices.Sort(phaseNames)
-	for _, phaseName := range phaseNames {
-		phase := svcState.Phases[phaseName]
-		_, _ = fmt.Fprintf(rw.Writer(), "  %s: %s\n", phaseName, phase.Status)
-		stepNames := make([]string, 0, len(phase.Steps))
-		for stepName := range phase.Steps {
-			stepNames = append(stepNames, stepName)
-		}
-		slices.Sort(stepNames)
-		for _, stepName := range stepNames {
-			step := phase.Steps[stepName]
-			_, _ = fmt.Fprintf(rw.Writer(), "    %s: %s (hash=%s, duration=%dms)\n",
-				stepName, step.Status, journal.ShortHash(step.ActionHash), step.DurationMs)
-		}
-	}
-
-	return nil
 }

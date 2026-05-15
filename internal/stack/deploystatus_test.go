@@ -1,4 +1,4 @@
-package command
+package stack
 
 import (
 	"bytes"
@@ -8,14 +8,12 @@ import (
 	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// Tests for stack domain logic (aggregateHealth, runStatus, topology helpers,
-// disabledNodes, etc.) have been moved to internal/stack/*_test.go.
 
 func TestBuildDeployStatusView(t *testing.T) {
 	tests := []struct {
@@ -117,8 +115,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			view, err := buildDeployStatusView(tt.state, tt.cfg, tt.svcDeploys, tt.tracked)
-			require.NoError(t, err)
+			view := BuildDeployStatusView(tt.state, tt.cfg, tt.svcDeploys, tt.tracked)
 			assert.Equal(t, tt.expectRows, len(view.Rows))
 
 			if tt.checkRow != nil && len(view.Rows) > 0 {
@@ -128,7 +125,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 	}
 }
 
-func TestRenderDeployStatus(t *testing.T) {
+func TestRenderDeployStatus_TableContents(t *testing.T) {
 	rows := []ui.DeployStatusRow{
 		{
 			Service:         "main",
@@ -190,9 +187,8 @@ func TestRenderServiceDeployDetail(t *testing.T) {
 
 	tracked := []string{"main"}
 
-	// Test service detail render
 	buf := &bytes.Buffer{}
-	err := renderServiceDeployDetail(buf, state, nil, nil, tracked, "main")
+	err := RenderServiceDeployDetail(buf, state, tracked, "main")
 	require.NoError(t, err)
 	output := buf.String()
 	assert.Contains(t, output, "Deploy status for service")
@@ -202,15 +198,13 @@ func TestRenderServiceDeployDetail(t *testing.T) {
 	assert.Contains(t, output, "setup")
 	assert.Contains(t, output, "create-dirs")
 
-	// Test untracked service error
 	buf = &bytes.Buffer{}
-	err = renderServiceDeployDetail(buf, state, nil, nil, tracked, "untracked")
+	err = RenderServiceDeployDetail(buf, state, tracked, "untracked")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not tracked")
 
-	// Test missing service
 	buf = &bytes.Buffer{}
-	err = renderServiceDeployDetail(buf, state, nil, nil, tracked, "missing")
+	err = RenderServiceDeployDetail(buf, state, tracked, "missing")
 	require.Error(t, err)
 }
 
@@ -226,7 +220,11 @@ func TestRenderDeployStatusEmpty(t *testing.T) {
 	}
 
 	buf := &bytes.Buffer{}
-	err := renderDeployStatus(buf, state, cfg, make(map[string]*config.DeployConfig), []string{})
-	require.NoError(t, err)
-	// Should return nil with no output when no tracked services
+	RenderDeployStatus(render.NewWriter(buf), StatusInput{
+		Cfg:        cfg,
+		State:      state,
+		SvcDeploys: make(map[string]*config.DeployConfig),
+		Tracked:    []string{},
+	})
+	assert.Empty(t, buf.String())
 }

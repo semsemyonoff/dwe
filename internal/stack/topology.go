@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
 	"devbox-cli/internal/ui"
 )
 
@@ -233,4 +234,38 @@ func ResolveProjectAndDocker(configPath string, cfg *config.DevboxConfig) (strin
 		projectName = dockerCfg.ProjectName
 	}
 	return projectName, dockerCfg, nil
+}
+
+// ResolveTopology builds the compose topology graph and per-node status map.
+// It queries docker compose where available, falling back to YAML-only parsing
+// when docker is unavailable. Disabled nodes are then added as isolated
+// entries, and any nodes hidden via docker.yml are removed.
+func ResolveTopology(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, projectName string) (map[string][]string, map[string]ui.NodeStatus) {
+	composeFiles := cfg.ComposeFiles()
+	var processEnv []string
+	if dockerCfg != nil {
+		processEnv = docker.MergeEnv(dockerCfg.ProcessEnv)
+	}
+	dockerBin := config.DockerBin(cfg)
+
+	topo := FetchComposeTopology(composeFiles, projectName, processEnv, dockerBin)
+	var topoStatus map[string]ui.NodeStatus
+	if topo == nil {
+		topo = ParseTopologyFromFiles(composeFiles)
+	} else {
+		topoStatus = ComposeNodeStatuses(composeFiles, projectName, processEnv, dockerBin)
+		if topoStatus != nil {
+			for name := range topo {
+				if _, ok := topoStatus[name]; !ok {
+					topoStatus[name] = ui.NodeStopped
+				}
+			}
+		}
+	}
+
+	topo, topoStatus = AugmentWithDisabled(cfg, topo, topoStatus)
+	if dockerCfg != nil && len(dockerCfg.Topology.Hidden) > 0 {
+		topo, topoStatus = RemoveHiddenNodes(topo, topoStatus, dockerCfg.Topology.Hidden)
+	}
+	return topo, topoStatus
 }
