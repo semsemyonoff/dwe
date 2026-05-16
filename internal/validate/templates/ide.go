@@ -135,5 +135,6 @@ func All() []validate.Validator {
 	return []validate.Validator{
 		&IDEValidator{},
 		&AIValidator{},
+		&GitValidator{},
 	}
 }

@@ -174,7 +174,7 @@ Cobra subcommand wiring.
 
 Static validation surfaces broken packs without running `render git`.
 
-- [ ] create `internal/validate/templates/git.go` mirroring the updated `internal/validate/templates/ai.go` (post-Task-3). The validator's contract is "surface broken packs without running `render git`" — so it MUST validate the pack regardless of whether `src/.git` exists. The flow:
+- [x] create `internal/validate/templates/git.go` mirroring the updated `internal/validate/templates/ai.go` (post-Task-3). The validator's contract is "surface broken packs without running `render git`" — so it MUST validate the pack regardless of whether `src/.git` exists. The flow:
   - `PrepareHub` (containment check on `svc.Dir` — diagnostic if escaping)
   - `ResolveTemplatePack` → packDir, packName
   - **DO NOT call `ResolveGitHooksDir` as a gate.** Validators run on CI / fresh fixture projects that have no nested `src/.git` yet. Skipping validation when `.git` is missing would let broken packs slip through.
@@ -182,10 +182,10 @@ Static validation surfaces broken packs without running `render git`.
   - `git.LoadManifest(packDir)` → `git.ValidateManifest(m, projectRoot, packName, destRoot)`. Validator does NOT duplicate basename/symlink checks — those live in `git.ValidateManifest`.
   - **Optional info diagnostic**: call `git.ResolveGitHooksDir(absHub)` AFTER validation, purely as an info-severity probe. `DirMissing` → info "no src/.git, render will be skipped"; `DirWorktree` → info "worktree pointer, render not yet supported". These are advisory — they do NOT gate validation.
   - Diagnostics report manifest-load errors and validate-errors as separate rows.
-- [ ] write tests: pack with invalid `to: foo/bar` → validator emits error diagnostic EVEN when `src/.git` is missing (regression for the skip-on-missing-git bug); pack with valid manifest + missing `src/.git` → no error, optional info diagnostic for the missing dir
-- [ ] register the validator in the templates `All()` set
-- [ ] write tests for diagnostics: missing pack, missing manifest, invalid `to`, missing `from` file, shadow-override resolves the missing-file diagnostic
-- [ ] run `make test` — must pass before next task
+- [x] write tests: pack with invalid `to: foo/bar` → validator emits error diagnostic EVEN when `src/.git` is missing (regression for the skip-on-missing-git bug); pack with valid manifest + missing `src/.git` → no error, optional info diagnostic for the missing dir
+- [x] register the validator in the templates `All()` set
+- [x] write tests for diagnostics: missing pack, missing manifest, invalid `to`, missing `from` file, shadow-override resolves the missing-file diagnostic
+- [x] run `make test` — must pass before next task
 
 ### Task 8: Convert IDE pack to manifest format (hard cut)
 
