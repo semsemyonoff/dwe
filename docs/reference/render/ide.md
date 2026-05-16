@@ -2,6 +2,8 @@
 
 Generate IDE-specific config files for each enabled service from a template pack. Output goes into the service's hub directory (e.g. `services/main/.vscode/settings.json`).
 
+> **Manifest required.** Every IDE pack must contain a `manifest.yml` at its root listing each file to render. The previous directory-walk behavior has been removed; a missing manifest is a hard error with a migration hint. The schema is shared with `render ai` and `render git` — see [Shared manifest schema](index.md#shared-manifest-schema). Per-file [local overrides](index.md#local-overrides) via the sibling `<pack>.local/` shadow tree apply identically to all three renderers.
+
 ## Contents
 
 - [Pipeline](#pipeline)
@@ -11,7 +13,7 @@ Generate IDE-specific config files for each enabled service from a template pack
   - [Collision resolution: deepest-wins](#collision-resolution-deepest-wins)
   - [Explicit `[service]` argument](#explicit-service-argument)
 - [Template pack resolution](#template-pack-resolution)
-- [Pack walk and template filter](#pack-walk-and-template-filter)
+- [Manifest schema](#manifest-schema)
 - [Per-file rendering](#per-file-rendering)
   - [Template variables](#template-variables)
   - [Path-safety guards](#path-safety-guards)
@@ -32,8 +34,9 @@ flowchart TD
   RHA --> LIST
   LIST --> EACH{"For each service"}
   EACH --> RP["Resolve template pack"]
-  RP --> WALK["Walk the pack<br/>collect *.tmpl entries"]
-  WALK --> RNDR["Render each entry<br/>parse, execute, write"]
+  RP --> LM["Load manifest.yml<br/>strict decode"]
+  LM --> VM["Validate manifest"]
+  VM --> RNDR["Render each manifest.render<br/>parse, execute, write"]
   RNDR --> EACH
   EACH -- "end" --> DONE["done"]
 ```
@@ -128,21 +131,30 @@ Template-key validation rejects:
 
 Service names used as the implicit pack key are validated less strictly (leading dots are allowed because service names are YAML map keys, not user-typed paths) but still must not contain path separators or be `..`.
 
-## Pack walk and template filter
+## Manifest schema
 
-The renderer walks every entry under the chosen pack. The walker is strict by design:
+Each IDE pack must contain a `manifest.yml` at its root using the [shared manifest schema](index.md#shared-manifest-schema):
 
-| Rule | Behavior |
-|------|----------|
-| Any symlink in the tree (file or directory) | hard error |
-| Non-`.tmpl` files | silently ignored |
-| Bare `.tmpl` (e.g. `.vscode/.tmpl`) | hard error |
-| Path that resolves to an absolute path or escapes the pack with `..` | hard error |
-| Two source files that would resolve to the same destination after stripping `.tmpl` | hard error |
+```yaml
+render:
+  - from: .vscode/settings.json.tmpl
+    to:   .vscode/settings.json
+  - from: .devcontainer/devcontainer.json.tmpl
+    to:   .devcontainer/devcontainer.json
 
-For each surviving entry, the destination is the path inside the pack with the `.tmpl` suffix stripped (e.g. `.vscode/settings.json.tmpl` → `.vscode/settings.json`). Entries are processed in lexicographic order so output is deterministic and diffs are reproducible.
+# symlinks: optional — same semantics as render ai
+```
 
-If the pack contains zero `.tmpl` files, a warning is printed and the service is skipped without error.
+A missing `manifest.yml` is a hard error: existing packs that used the directory-walk behavior must add a manifest listing each file. Files inside the pack that are not referenced by `render` are ignored (the renderer never walks the pack on its own).
+
+Validation runs in two passes:
+
+| Pass | What it checks |
+|------|----------------|
+| Shape (pure) | At least one `render` or `symlinks` entry; `to` paths are contained under the hub; no duplicate `to`; every symlink `to` references a known render destination. |
+| Sources (resolver-aware) | Every `from` exists either at the canonical `devbox/templates/ide/<pack>/<from>` or at the override `devbox/templates/ide/<pack>.local/<from>`. |
+
+Strict YAML decode (`yaml.Decoder.KnownFields(true)`) rejects misspelled keys like `renders:` at load time.
 
 ## Per-file rendering
 
@@ -258,7 +270,7 @@ services/main/
 | info | Explicit argument resolved to a different sibling — names the chosen winner and the shared hub directory. |
 | warning | A selected service was skipped because it has no hub directory (or its hub is the project root). |
 | warning | A selected service was skipped because another service won the directory collision — the winner is named. |
-| warning | The chosen pack contains no `.tmpl` files; nothing was rendered for that service. |
+| info | A `<pack>.local/<rel>` override was used in place of the canonical pack file. |
 | success | One line per rendered file, naming the relative path inside the project. |
 | info | Nothing was selected after applying policy and collision rules. |
 
@@ -270,7 +282,7 @@ Errors are returned as command failures and name the offending service so the so
 - **Typos in `ide.template` are hard errors.** Explicit packs are strict; a missing `devbox/templates/ide/<name>/` does not silently fall through to `default/`. Either fix the name or remove `ide.template`.
 - **Templates referencing missing fields fail.** Strict-mode rendering means `{{.ServiceCfg.NoSuchField}}` aborts rendering. Guard optional fields with `{{if ...}}`.
 - **Symlinks at destinations are refused.** If `.devcontainer/` or `settings.json` is a symlink, the renderer will not overwrite it. Remove the symlink and re-run.
-- **Files outside `*.tmpl` are silently ignored.** If you forget the `.tmpl` suffix on a template file, it stays in the pack but is never rendered.
+- **Files not listed in `manifest.yml` are silently ignored.** The renderer no longer walks the pack — add an entry under `render:` to include a template.
 - **`dir: "."` is rejected.** A service whose hub is the project root would let templates scribble over `devbox.yml` and other root files. Give every IDE-rendered service a real subdirectory.
 
 ## Related references

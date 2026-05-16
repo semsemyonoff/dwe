@@ -43,6 +43,7 @@ Generated reference for the `devbox` command tree.
 - [devbox render](devbox_render.md) — Render derived artifacts from the merged devbox config
   - [devbox render ai](devbox_render_ai.md) — Generate hub-level agents docs from template packs
   - [devbox render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --output <file>)
+  - [devbox render git](devbox_render_git.md) — Generate git hooks from template packs
   - [devbox render ide](devbox_render_ide.md) — Generate IDE configs from template packs
 - [devbox reset](devbox_reset.md) — Reset pipeline commands
   - [devbox reset plan](devbox_reset_plan.md) — Show resolved reset plan

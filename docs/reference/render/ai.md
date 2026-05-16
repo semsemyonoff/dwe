@@ -2,7 +2,9 @@
 
 Generate hub-level agent documentation for each enabled service from a template pack. The pack declares a `manifest.yml` listing files to render and symlinks to create inside the service's hub directory (e.g. `services/main/AGENTS.md` plus `services/main/CLAUDE.md → AGENTS.md`).
 
-`render ai` and [`render ide`](ide.md) share most of the per-service plumbing — selection, template resolution, path-safety guards. They differ in two important places: the **collision policy** is inverted (shallowest wins, not deepest) and the pack contents are driven by an explicit **manifest** rather than a directory walk.
+`render ai` and [`render ide`](ide.md) share most of the per-service plumbing — selection, template resolution, path-safety guards, manifest schema. They differ in one important place: the **collision policy** is inverted (shallowest wins, not deepest).
+
+Per-file [local overrides](index.md#local-overrides) via the sibling `<pack>.local/` shadow tree apply to AI packs identically to IDE and git — drop a file at `devbox/templates/ai/<pack>.local/<rel>` to substitute it for the canonical one without touching the tracked pack.
 
 ## Contents
 

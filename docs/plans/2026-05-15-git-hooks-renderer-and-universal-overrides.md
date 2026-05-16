@@ -238,19 +238,19 @@ Cobra completions must not error or panic. Note: `serviceNameCompletion` (used b
 
 `docs/reference/render/` already exists (`index.md`, `ide.md`, `ai.md`, `env.md`). Extend it, do NOT create a parallel page under `docs/reference/config/`.
 
-- [ ] create `docs/reference/render/git.md` modeled on the existing `ide.md` / `ai.md` shape: overview, manifest schema (link to shared section in `index.md`), per-service config (`git.enabled`, `git.template`, default app-type policy, `extends` inheritance), output location (`<svc.Dir>/src/.git/hooks/`), worktree (`.git` as file) currently unsupported with warning, example pack and manifest distilled from the legacy hooks
-- [ ] include an example git pack manifest plus example `.tmpl` snippets distilled from the legacy hooks (PROJECT_PREFIX moved to a per-service config field referenced via `{{ .ServiceCfg.X }}`, or kept as `.env.git` reading inside the hook — document the trade-off without mandating one)
-- [ ] update `docs/reference/render/index.md`:
+- [x] create `docs/reference/render/git.md` modeled on the existing `ide.md` / `ai.md` shape: overview, manifest schema (link to shared section in `index.md`), per-service config (`git.enabled`, `git.template`, default app-type policy, `extends` inheritance), output location (`<svc.Dir>/src/.git/hooks/`), worktree (`.git` as file) currently unsupported with warning, example pack and manifest distilled from the legacy hooks
+- [x] include an example git pack manifest plus example `.tmpl` snippets distilled from the legacy hooks (PROJECT_PREFIX moved to a per-service config field referenced via `{{ .ServiceCfg.X }}`, or kept as `.env.git` reading inside the hook — document the trade-off without mandating one)
+- [x] update `docs/reference/render/index.md`:
   - add `devbox render git` to the Subcommands table (Output: `<svc.Dir>/src/.git/hooks/<basename>`; Source: `devbox/templates/git/<pack>/` driven by `manifest.yml`)
   - add `git` to the mermaid flow diagram
   - add a new section **"Local overrides"** documenting the sibling `<pack>.local/` mechanism: how `packroot.Resolve` falls back from override to canonical pack, that the override pack only needs to contain the files being overridden (not the full pack), that `manifest.yml` is read only from the canonical pack (override cannot change the manifest), and a `.gitignore` recommendation (`devbox/templates/*/*.local/` or broader `*.local/`)
   - add a new subsection **"Input vs output"** documenting: the override **input** at `devbox/templates/<kind>/<pack>.local/<rel>` is gitignored by the `.local/` pattern and never committed; the *rendered output* still lands at the manifest-declared `to`. For `git`, output is inside `.git/hooks/` and is never tracked. For `ide`/`ai`, the output path is typically tracked — re-rendering from a local override modifies the tracked artifact, and the developer is responsible for not committing those changes (`git stash`, `git checkout -- <path>`, or a personal pre-commit guard).
   - link to the existing `devbox/local.yml` / `devbox/docker.local.yml` precedent in `services.md` so readers see the consistent pattern
-- [ ] update `docs/reference/render/ide.md`: note the now-mandatory `manifest.yml`, link to the shared schema description in `index.md`, mention `<pack>.local/` override
-- [ ] update `docs/reference/render/ai.md`: mention `<pack>.local/` override (manifest already required, no schema change)
-- [ ] regenerate CLI docs (`devbox docs generate --scope cli` or whatever Makefile target wires this) so the auto-generated `devbox render git` page reflects the new command — verify the regenerated output lands in the expected location and is included in the diff
-- [ ] no test step (docs-only task), but verify markdown renders by grep'ing for broken relative links and previewing the mermaid flow
-- [ ] run `make test` — must pass (no Go changes but ensures we didn't regress)
+- [x] update `docs/reference/render/ide.md`: note the now-mandatory `manifest.yml`, link to the shared schema description in `index.md`, mention `<pack>.local/` override
+- [x] update `docs/reference/render/ai.md`: mention `<pack>.local/` override (manifest already required, no schema change)
+- [x] regenerate CLI docs (`devbox docs generate --scope cli` or whatever Makefile target wires this) so the auto-generated `devbox render git` page reflects the new command — verify the regenerated output lands in the expected location and is included in the diff
+- [x] no test step (docs-only task), but verify markdown renders by grep'ing for broken relative links and previewing the mermaid flow
+- [x] run `make test` — must pass (no Go changes but ensures we didn't regress)
 
 ### Task 13: Update services.md and devbox.md docs
 
