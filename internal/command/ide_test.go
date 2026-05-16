@@ -446,16 +446,22 @@ func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
 	}
 }
 
-// TestResolveIDETemplatePack_invalidServiceName rejects service names with separators.
+// TestResolveIDETemplatePack_invalidServiceName silently skips an
+// identifier-unsafe service name as an implicit pack candidate; with no
+// default pack the resolver returns ErrNotExist (not a pack-name validation
+// error).
 func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
 	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "foo/bar")
 	if err == nil {
-		t.Fatal("want error for invalid service name")
+		t.Fatal("want error (no pack found)")
 	}
-	if !strings.Contains(err.Error(), "cannot be used as implicit template pack key") {
-		t.Errorf("got %q", err.Error())
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("want os.ErrNotExist, got %v", err)
+	}
+	if strings.Contains(err.Error(), "cannot be used as implicit template pack key") {
+		t.Errorf("invalid implicit name should be silent, got %q", err.Error())
 	}
 }
 

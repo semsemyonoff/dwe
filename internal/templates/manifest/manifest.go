@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 
@@ -17,6 +18,24 @@ import (
 
 // ErrManifestMissing is the sentinel returned when manifest.yml does not exist.
 var ErrManifestMissing = errors.New("manifest file not found")
+
+// packNameRe matches identifier-safe template pack names: must start with an
+// alphanumeric character and may only contain alphanumerics, underscores, and
+// hyphens. Names go on disk and into error messages so we keep the rule tight.
+var packNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// ValidatePackName checks that name is safe to use as a template pack directory
+// component. Rejects empty strings, leading dots/hyphens, path separators, and
+// any character outside [A-Za-z0-9_-].
+func ValidatePackName(name string) error {
+	if name == "" {
+		return fmt.Errorf("pack name is empty")
+	}
+	if !packNameRe.MatchString(name) {
+		return fmt.Errorf("pack name %q is not identifier-safe (must match %s)", name, packNameRe.String())
+	}
+	return nil
+}
 
 // File is a template-pack manifest.
 type File struct {

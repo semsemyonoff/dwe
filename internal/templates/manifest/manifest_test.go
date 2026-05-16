@@ -204,3 +204,33 @@ func TestValidateSourcesWith_SinkReceivesOverrides(t *testing.T) {
 		t.Fatalf("expected sink to receive a.tmpl override, got %v", got)
 	}
 }
+
+func TestValidatePackName(t *testing.T) {
+	cases := []struct {
+		name    string
+		wantErr bool
+	}{
+		{"default", false},
+		{"my-pack", false},
+		{"pack_2", false},
+		{"P1", false},
+		{"", true},
+		{"../etc", true},
+		{"pack/sub", true},
+		{".hidden", true},
+		{"-leading", true},
+		{"_leading", true},
+		{"..", true},
+		{"has space", true},
+		{"weird?", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			err := manifest.ValidatePackName(tc.name)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("ValidatePackName(%q) err=%v wantErr=%v", tc.name, err, tc.wantErr)
+			}
+		})
+	}
+}

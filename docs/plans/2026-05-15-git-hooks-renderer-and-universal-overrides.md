@@ -216,13 +216,13 @@ Validators should know if a `from` is being satisfied by the shadow tree, but mu
 
 Belt-and-braces: pack names go on disk and into error messages. Applies to BOTH explicit `*.template` values AND implicit service-name candidates — service names are validated elsewhere by a permissive rule that accepts `"."` and leading-dot names, neither of which is safe as a filesystem path component.
 
-- [ ] in `manifest` package (or a new tiny `internal/templates/packname` helper), add `ValidatePackName(name string) error` enforcing `^[A-Za-z0-9][A-Za-z0-9_-]*$` (no leading dot or hyphen, no traversal, must match what `ResolveTemplatePack` writes to disk)
-- [ ] **explicit `*.template`**: each `ResolveTemplatePack` (AI, IDE, git) calls `ValidatePackName` on `svc.{IDE,AI,Git}.Template` when non-empty. Failure → hard error.
-- [ ] **implicit service-name candidate**: each `ResolveTemplatePack` calls `ValidatePackName(serviceName)` before trying `<templates-root>/<kind>/<serviceName>/` as the second candidate in the chain. If the service name is not a valid pack name, **silently skip** the service-name candidate (do NOT error) and fall through to `<templates-root>/<kind>/default/`. Rationale: a service named `.api` should not crash `devbox render git`; it just can't have an implicit pack of its own name.
-- [ ] write tests: `default`, `my-pack`, `pack_2` accepted; `../etc`, `pack/sub`, empty string, leading dot, leading hyphen rejected
-- [ ] write tests for implicit-candidate skip: service named `.api` with no explicit template and no `<templates-root>/<kind>/default/` errors with "no pack found" (NOT a pack-name validation error); service named `.api` with `<templates-root>/<kind>/default/` present renders against `default`
-- [ ] write tests for explicit-rejection: `svc.AI.Template = ".."` → hard error before any FS lookup
-- [ ] run `make test` — must pass before next task
+- [x] in `manifest` package (or a new tiny `internal/templates/packname` helper), add `ValidatePackName(name string) error` enforcing `^[A-Za-z0-9][A-Za-z0-9_-]*$` (no leading dot or hyphen, no traversal, must match what `ResolveTemplatePack` writes to disk)
+- [x] **explicit `*.template`**: each `ResolveTemplatePack` (AI, IDE, git) calls `ValidatePackName` on `svc.{IDE,AI,Git}.Template` when non-empty. Failure → hard error.
+- [x] **implicit service-name candidate**: each `ResolveTemplatePack` calls `ValidatePackName(serviceName)` before trying `<templates-root>/<kind>/<serviceName>/` as the second candidate in the chain. If the service name is not a valid pack name, **silently skip** the service-name candidate (do NOT error) and fall through to `<templates-root>/<kind>/default/`. Rationale: a service named `.api` should not crash `devbox render git`; it just can't have an implicit pack of its own name.
+- [x] write tests: `default`, `my-pack`, `pack_2` accepted; `../etc`, `pack/sub`, empty string, leading dot, leading hyphen rejected
+- [x] write tests for implicit-candidate skip: service named `.api` with no explicit template and no `<templates-root>/<kind>/default/` errors with "no pack found" (NOT a pack-name validation error); service named `.api` with `<templates-root>/<kind>/default/` present renders against `default`
+- [x] write tests for explicit-rejection: `svc.AI.Template = ".."` → hard error before any FS lookup
+- [x] run `make test` — must pass before next task
 
 ### Task 11: Verify completion callbacks survive broken packs
 

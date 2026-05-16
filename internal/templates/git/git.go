@@ -43,35 +43,6 @@ const (
 	DirWorktree
 )
 
-// validateTemplateKey rejects path separators, absolute paths, and leading dots.
-func validateTemplateKey(s string) error {
-	if s == "" {
-		return nil
-	}
-	if strings.ContainsAny(s, "/\\") {
-		return fmt.Errorf("template key %q contains path separator", s)
-	}
-	if strings.HasPrefix(s, ".") {
-		return fmt.Errorf("template key %q starts with dot", s)
-	}
-	return nil
-}
-
-// validateServiceNameAsPackKey allows leading dots but rejects path separators
-// and explicit traversals — matches AI/IDE.
-func validateServiceNameAsPackKey(s string) error {
-	if s == "" {
-		return fmt.Errorf("service name is empty")
-	}
-	if strings.ContainsAny(s, "/\\") {
-		return fmt.Errorf("service name %q contains path separator", s)
-	}
-	if s == ".." || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "..\\") {
-		return fmt.Errorf("service name %q is a path traversal", s)
-	}
-	return nil
-}
-
 // ExtendsDepth computes the depth of a service's extends chain.
 func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, bool) {
 	const maxDepth = 32
@@ -99,14 +70,10 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("resolve project root: %w", err)
 	}
 
-	if err := validateTemplateKey(svc.Git.Template); err != nil {
-		return "", "", fmt.Errorf("invalid git.template %q: %w", svc.Git.Template, err)
-	}
-	if err := validateServiceNameAsPackKey(serviceName); err != nil {
-		return "", "", fmt.Errorf("service name cannot be used as implicit template pack key: %w", err)
-	}
-
 	if svc.Git.Template != "" {
+		if err := manifest.ValidatePackName(svc.Git.Template); err != nil {
+			return "", "", fmt.Errorf("invalid git.template %q: %w", svc.Git.Template, err)
+		}
 		candidate := filepath.Join(absRoot, "devbox", "templates", "git", svc.Git.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
@@ -127,7 +94,13 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("git template pack %q not found (required by explicit git.template setting)", svc.Git.Template)
 	}
 
-	candidates := []string{serviceName, "default"}
+	// Implicit chain: service-name → default. Skip the service-name candidate
+	// silently if the name is not a valid pack name; default is always tried.
+	var candidates []string
+	if manifest.ValidatePackName(serviceName) == nil {
+		candidates = append(candidates, serviceName)
+	}
+	candidates = append(candidates, "default")
 	for _, name := range candidates {
 		candidate := filepath.Join(absRoot, "devbox", "templates", "git", name)
 		fi, err := os.Lstat(candidate)

@@ -175,14 +175,10 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("resolve project root: %w", err)
 	}
 
-	if err := ValidateTemplateKey(svc.IDE.Template); err != nil {
-		return "", "", fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
-	}
-	if err := ValidateServiceNameAsPackKey(serviceName); err != nil {
-		return "", "", fmt.Errorf("service name cannot be used as implicit template pack key: %w", err)
-	}
-
 	if svc.IDE.Template != "" {
+		if err := manifest.ValidatePackName(svc.IDE.Template); err != nil {
+			return "", "", fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
+		}
 		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", svc.IDE.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
@@ -203,7 +199,13 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("ide template pack %q not found (required by explicit ide.template setting)", svc.IDE.Template)
 	}
 
-	candidates := []string{serviceName, "default"}
+	// Implicit chain: service-name → default. Skip the service-name candidate
+	// silently if the name is not a valid pack name; default is always tried.
+	var candidates []string
+	if manifest.ValidatePackName(serviceName) == nil {
+		candidates = append(candidates, serviceName)
+	}
+	candidates = append(candidates, "default")
 	for _, name := range candidates {
 		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", name)
 		fi, err := os.Lstat(candidate)

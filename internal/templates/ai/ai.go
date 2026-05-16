@@ -99,16 +99,11 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("resolve project root: %w", err)
 	}
 
-	// Validate template key and service name
-	if err := ValidateTemplateKey(svc.AI.Template); err != nil {
-		return "", "", fmt.Errorf("invalid ai.template %q: %w", svc.AI.Template, err)
-	}
-	if err := ValidateServiceNameAsPackKey(serviceName); err != nil {
-		return "", "", fmt.Errorf("service name cannot be used as implicit template pack key: %w", err)
-	}
-
 	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)
 	if svc.AI.Template != "" {
+		if err := manifest.ValidatePackName(svc.AI.Template); err != nil {
+			return "", "", fmt.Errorf("invalid ai.template %q: %w", svc.AI.Template, err)
+		}
 		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", svc.AI.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
@@ -129,8 +124,14 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("agents template pack %q not found (required by explicit ai.template setting)", svc.AI.Template)
 	}
 
-	// Implicit chain: service-name → default
-	candidates := []string{serviceName, "default"}
+	// Implicit chain: service-name → default. Skip the service-name candidate
+	// silently if the name is not a valid pack name (e.g. ".api"); default is
+	// always tried.
+	var candidates []string
+	if manifest.ValidatePackName(serviceName) == nil {
+		candidates = append(candidates, serviceName)
+	}
+	candidates = append(candidates, "default")
 	for _, name := range candidates {
 		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", name)
 		fi, err := os.Lstat(candidate)
