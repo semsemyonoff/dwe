@@ -136,7 +136,8 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 		}}
 	}
 
-	if err := git.ValidateManifest(m, absRoot, packName, destRoot); err != nil {
+	sink, getHits := overrideSink()
+	if err := git.ValidateManifest(m, absRoot, packName, destRoot, sink); err != nil {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
@@ -145,6 +146,8 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Message:  fmt.Sprintf("invalid manifest: %v", err),
 			Hint:     "check render entries (to must be a basename; symlinks not supported)",
 		})
+	} else if d := overrideDiagnostic("templates", "git", packName, fmt.Sprintf("templates.git:%s", name), getHits()); d != nil {
+		diags = append(diags, *d)
 	}
 
 	// Optional info diagnostic — advisory only, does not gate validation.

@@ -75,10 +75,7 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// Validate each selected service's template pack
 	for _, name := range selected {
 		svc := ctx.Cfg.Services[name]
-		diag := v.validateService(name, svc, ctx.ProjectRoot)
-		if diag != nil {
-			diags = append(diags, *diag)
-		}
+		diags = append(diags, v.validateService(name, svc, ctx.ProjectRoot)...)
 	}
 
 	// If no errors/infos, emit a single OK diagnostic
@@ -98,53 +95,58 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 }
 
 // validateService validates one service's IDE template pack.
-func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) *validate.Diagnostic {
+func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) []validate.Diagnostic {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
-		return &validate.Diagnostic{
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("resolve project root: %v", err),
-		}
+		}}
 	}
 
 	packDir, packName, err := ide.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
-		return &validate.Diagnostic{
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
 			Hint:     "check ide.template setting and devbox/templates/ide directory",
-		}
+		}}
 	}
 
 	m, err := ide.LoadManifest(packDir)
 	if err != nil {
-		return &validate.Diagnostic{
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			File:     filepath.Join("devbox", "templates", "ide", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("failed to load manifest: %v", err),
 			Hint:     "IDE packs now require a manifest.yml; see docs/reference/render/ide.md for the migration",
-		}
+		}}
 	}
 
 	absHubDir := filepath.Join(absRoot, svc.Dir)
-	if err := ide.ValidateManifest(m, absRoot, packName, absHubDir); err != nil {
-		return &validate.Diagnostic{
+	sink, getHits := overrideSink()
+	if err := ide.ValidateManifest(m, absRoot, packName, absHubDir, sink); err != nil {
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			File:     filepath.Join("devbox", "templates", "ide", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("invalid manifest: %v", err),
 			Hint:     "check render and symlink entries in manifest.yml",
-		}
+		}}
 	}
 
-	return nil
+	var diags []validate.Diagnostic
+	if d := overrideDiagnostic("templates", "ide", packName, fmt.Sprintf("templates.ide:%s", name), getHits()); d != nil {
+		diags = append(diags, *d)
+	}
+	return diags
 }
 
 // All returns all template validators.

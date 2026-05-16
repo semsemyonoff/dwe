@@ -71,10 +71,7 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// Validate each selected service's template pack
 	for _, name := range selected {
 		svc := ctx.Cfg.Services[name]
-		diag := v.validateService(name, svc, ctx.ProjectRoot)
-		if diag != nil {
-			diags = append(diags, *diag)
-		}
+		diags = append(diags, v.validateService(name, svc, ctx.ProjectRoot)...)
 	}
 
 	// If no errors/infos, emit a single OK diagnostic
@@ -94,57 +91,58 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 }
 
 // validateService validates one service's AI template pack.
-func (v *AIValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) *validate.Diagnostic {
+func (v *AIValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) []validate.Diagnostic {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
-		return &validate.Diagnostic{
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			Message:  fmt.Sprintf("resolve project root: %v", err),
-		}
+		}}
 	}
 
 	// Resolve template pack
 	packDir, packName, err := ai.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
-		return &validate.Diagnostic{
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
-			File:     "",
-			Line:     0,
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
 			Hint:     "check ai.template setting and devbox/templates/ai directory",
-		}
+		}}
 	}
 
 	// Load and validate manifest
 	m, err := ai.LoadManifest(packDir)
 	if err != nil {
-		return &validate.Diagnostic{
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			File:     filepath.Join("devbox", "templates", "ai", packName, "manifest.yml"),
-			Line:     0,
 			Message:  fmt.Sprintf("failed to load manifest: %v", err),
 			Hint:     "check manifest.yml syntax and structure",
-		}
+		}}
 	}
 
 	absHubDir := filepath.Join(absRoot, svc.Dir)
-	if err := ai.ValidateManifest(m, absRoot, packName, absHubDir); err != nil {
-		return &validate.Diagnostic{
+	sink, getHits := overrideSink()
+	if err := ai.ValidateManifest(m, absRoot, packName, absHubDir, sink); err != nil {
+		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			File:     filepath.Join("devbox", "templates", "ai", packName, "manifest.yml"),
-			Line:     0,
 			Message:  fmt.Sprintf("invalid manifest: %v", err),
 			Hint:     "check render and symlink entries in manifest.yml",
-		}
+		}}
 	}
 
-	return nil
+	var diags []validate.Diagnostic
+	if d := overrideDiagnostic("templates", "ai", packName, fmt.Sprintf("templates.ai:%s", name), getHits()); d != nil {
+		diags = append(diags, *d)
+	}
+	return diags
 }

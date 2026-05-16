@@ -1,8 +1,10 @@
 package templates
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -366,4 +368,93 @@ func TestGitValidator_ShadowOverrideResolvesMissingFrom(t *testing.T) {
 
 	require.Equal(t, 0, severityCount(diags, validate.SeverityError),
 		"shadow override should satisfy from-file existence; got: %+v", diags)
+}
+
+func TestGitValidator_NoOverrides_NoOverrideInfoDiag(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+	writeGitPack(t, root, "default", map[string]string{
+		"manifest.yml":    "render:\n  - {from: pre-commit.tmpl, to: pre-commit}\n",
+		"pre-commit.tmpl": "#!/bin/sh\n",
+	})
+
+	v := &GitValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
+		},
+	})
+
+	for _, d := range diags {
+		require.NotContains(t, d.Message, "local override", "no override info expected when no overrides applied")
+	}
+}
+
+func TestGitValidator_OneOverride_EmitsInfoDiag(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+	writeGitPack(t, root, "default", map[string]string{
+		"manifest.yml":    "render:\n  - {from: pre-commit.tmpl, to: pre-commit}\n",
+		"pre-commit.tmpl": "#!/bin/sh\n",
+	})
+	writeFileAt(t,
+		filepath.Join(root, "devbox", "templates", "git", "default.local", "pre-commit.tmpl"),
+		"#!/bin/sh\necho override\n")
+
+	v := &GitValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
+		},
+	})
+
+	infoDiag := findOverrideDiag(diags, "templates.git:main")
+	require.NotNil(t, infoDiag, "expected one override info diag; got: %+v", diags)
+	require.Contains(t, infoDiag.Message, "1 local override")
+	require.Contains(t, infoDiag.Message, "pre-commit.tmpl")
+}
+
+func TestGitValidator_ManyOverrides_TruncatedListing(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+	// Manifest with 7 entries; all 7 overridden.
+	var b strings.Builder
+	b.WriteString("render:\n")
+	files := map[string]string{}
+	for i := 1; i <= 7; i++ {
+		name := fmt.Sprintf("h%d.tmpl", i)
+		fmt.Fprintf(&b, "  - {from: %s, to: hook%d}\n", name, i)
+		files[name] = "#!/bin/sh\n"
+		writeFileAt(t,
+			filepath.Join(root, "devbox", "templates", "git", "default.local", name),
+			"#!/bin/sh\necho override\n")
+	}
+	files["manifest.yml"] = b.String()
+	writeGitPack(t, root, "default", files)
+
+	v := &GitValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
+		},
+	})
+
+	infoDiag := findOverrideDiag(diags, "templates.git:main")
+	require.NotNil(t, infoDiag)
+	require.Contains(t, infoDiag.Message, "7 local override")
+	require.Contains(t, infoDiag.Message, "...")
+}
+
+// findOverrideDiag returns an info diagnostic whose message starts with "using N local override".
+func findOverrideDiag(diags []validate.Diagnostic, target string) *validate.Diagnostic {
+	for i := range diags {
+		if diags[i].Severity == validate.SeverityInfo && diags[i].Target == target &&
+			strings.Contains(diags[i].Message, "local override") {
+			return &diags[i]
+		}
+	}
+	return nil
 }

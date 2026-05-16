@@ -164,8 +164,9 @@ func LoadManifest(packDir string) (*Manifest, error) {
 // verifies each render source is resolvable via packroot.Resolve, so a `from`
 // satisfied only by the sibling `<pack>.local/` override is treated as valid.
 // destRoot is the directory that `to` paths must be contained under; AI passes
-// the service hub directory.
-func ValidateManifest(m *Manifest, projectRoot, packName, destRoot string) error {
+// the service hub directory. An optional sink receives (rel, fromOverride) for
+// each resolved source so callers can aggregate override-hit info.
+func ValidateManifest(m *Manifest, projectRoot, packName, destRoot string, sink ...func(rel string, fromOverride bool)) error {
 	label := "ai pack " + packName
 	if err := manifest.ValidateShape(m, destRoot, label); err != nil {
 		return err
@@ -179,7 +180,11 @@ func ValidateManifest(m *Manifest, projectRoot, packName, destRoot string) error
 	resolve := func(rel string) (string, bool, error) {
 		return packroot.Resolve(projectRoot, "ai", packName, rel)
 	}
-	return manifest.ValidateSources(m, resolve, label)
+	var s func(string, bool)
+	if len(sink) > 0 {
+		s = sink[0]
+	}
+	return manifest.ValidateSourcesWith(m, resolve, s, label)
 }
 
 // TemplateData holds the context for rendering agents templates.

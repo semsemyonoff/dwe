@@ -292,7 +292,7 @@ func LoadManifest(packDir string) (*manifest.File, error) {
 // ValidateManifest validates a git pack manifest. destRoot is the hooks dir
 // (the actual write destination), not the hub dir, so `to` containment math
 // matches the renderer.
-func ValidateManifest(m *manifest.File, projectRoot, packName, destRoot string) error {
+func ValidateManifest(m *manifest.File, projectRoot, packName, destRoot string, sink ...func(rel string, fromOverride bool)) error {
 	label := "git pack " + packName
 	if err := manifest.ValidateShape(m, destRoot, label); err != nil {
 		return err
@@ -313,7 +313,11 @@ func ValidateManifest(m *manifest.File, projectRoot, packName, destRoot string) 
 	resolve := func(rel string) (string, bool, error) {
 		return packroot.Resolve(projectRoot, "git", packName, rel)
 	}
-	return manifest.ValidateSources(m, resolve, label)
+	var s func(string, bool)
+	if len(sink) > 0 {
+		s = sink[0]
+	}
+	return manifest.ValidateSourcesWith(m, resolve, s, label)
 }
 
 // TemplateData is passed to git-hook templates.
