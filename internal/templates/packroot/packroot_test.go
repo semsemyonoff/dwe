@@ -239,8 +239,8 @@ func TestResolve_SymlinkComponentInsidePack(t *testing.T) {
 
 func TestResolve_RequiredArgs(t *testing.T) {
 	cases := []struct {
-		name                    string
-		root, kind, pack, rel   string
+		name                  string
+		root, kind, pack, rel string
 	}{
 		{"no root", "", "ai", "default", "x"},
 		{"no kind", "/tmp", "", "default", "x"},

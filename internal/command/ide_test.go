@@ -47,10 +47,6 @@ func setupIDEPackTemplates(t *testing.T, dir, packName string, files map[string]
 			manifestBody.WriteString(to)
 			manifestBody.WriteString("}\n")
 		}
-	} else {
-		// Empty pack: write an empty manifest with at least one symlink-less render
-		// stub is not possible (shape validation requires ≥1 entry). Tests that
-		// expect an empty pack should not write a manifest at all.
 	}
 	for _, rel := range keys {
 		path := filepath.Join(packDir, rel)
@@ -67,18 +63,6 @@ func setupIDEPackTemplates(t *testing.T, dir, packName string, files map[string]
 			t.Fatalf("write manifest.yml: %v", err)
 		}
 	}
-}
-
-// setupIDEPack writes a pack rooted at <projectRoot>/devbox/templates/ide/test/.
-// Returns (projectRoot, packDir). The caller populates files directly.
-func setupIDEPack(t *testing.T) (projectRoot, packDir string) {
-	t.Helper()
-	projectRoot = t.TempDir()
-	packDir = filepath.Join(projectRoot, "devbox", "templates", "ide", "test")
-	if err := os.MkdirAll(packDir, 0o755); err != nil {
-		t.Fatalf("create pack dir: %v", err)
-	}
-	return projectRoot, packDir
 }
 
 // makeIDECfg returns a DevboxConfig configured for IDE rendering tests.

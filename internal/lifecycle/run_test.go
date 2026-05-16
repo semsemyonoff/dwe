@@ -389,4 +389,3 @@ func TestRunRun_DeploymentGate_NoTrackedServices_Passes(t *testing.T) {
 		t.Errorf("expected no error when no tracked services; got: %v", err)
 	}
 }
-

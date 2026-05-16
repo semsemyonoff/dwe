@@ -295,21 +295,21 @@ type ServiceGitHooksConfig struct {
 // Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
 // from the 3-layer config merge (mandatory services are always enabled).
 type ServiceConfig struct {
-	Type            string               `yaml:"type"`
-	Container       string               `yaml:"container"`
-	Mandatory       bool                 `yaml:"mandatory"`
-	Enabled         bool                 `yaml:"-"` // computed: mandatory || services.<name>.enabled
-	Dir             string               `yaml:"dir"`
-	DirInternal     string               `yaml:"dir_internal"`
-	WorkDirInternal string               `yaml:"work_dir_internal"`
-	Configs         []ServiceConfigEntry `yaml:"configs"`
-	Dirs            []string             `yaml:"dirs"`
-	Extends         string               `yaml:"extends"`
-	DependsOn       []string             `yaml:"depends_on"`
-	Compose         []string             `yaml:"compose"`
-	CLI             ServiceCLIConfig     `yaml:"cli"`
-	IDE             ServiceIDEConfig     `yaml:"ide"`
-	AI              ServiceAIConfig      `yaml:"ai"`
+	Type            string                `yaml:"type"`
+	Container       string                `yaml:"container"`
+	Mandatory       bool                  `yaml:"mandatory"`
+	Enabled         bool                  `yaml:"-"` // computed: mandatory || services.<name>.enabled
+	Dir             string                `yaml:"dir"`
+	DirInternal     string                `yaml:"dir_internal"`
+	WorkDirInternal string                `yaml:"work_dir_internal"`
+	Configs         []ServiceConfigEntry  `yaml:"configs"`
+	Dirs            []string              `yaml:"dirs"`
+	Extends         string                `yaml:"extends"`
+	DependsOn       []string              `yaml:"depends_on"`
+	Compose         []string              `yaml:"compose"`
+	CLI             ServiceCLIConfig      `yaml:"cli"`
+	IDE             ServiceIDEConfig      `yaml:"ide"`
+	AI              ServiceAIConfig       `yaml:"ai"`
 	Git             ServiceGitHooksConfig `yaml:"git"`
 }
 

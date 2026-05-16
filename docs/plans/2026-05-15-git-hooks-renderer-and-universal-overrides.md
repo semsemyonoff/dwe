@@ -274,12 +274,12 @@ Keep the agent context current.
 
 ### Task 15: Final acceptance verification
 
-- [ ] verify all requirements from Overview are implemented: `devbox render git` runs, override works for all three kinds, IDE migrated to manifest with hard-cut error
-- [ ] verify edge cases: missing `src/.git`, worktree `.git` file, malformed manifest, missing pack, override file with override metadata
-- [ ] run full test suite (`make test`)
-- [ ] run linter (`make lint`) — all issues fixed
-- [ ] verify code coverage of new packages with `go test ./internal/templates/... -cover` — aim ≥ 80% (matches surrounding code)
-- [ ] verify `devbox validate templates` runs against a fixture project and reports clean
+- [x] verify all requirements from Overview are implemented: `devbox render git` runs, override works for all three kinds, IDE migrated to manifest with hard-cut error
+- [x] verify edge cases: missing `src/.git`, worktree `.git` file, malformed manifest, missing pack, override file with override metadata (covered by unit tests)
+- [x] run full test suite (`make test`)
+- [x] run linter (`make lint`) — all issues fixed
+- [x] verify code coverage of new packages with `go test ./internal/templates/... -cover` — git 83.2%, manifest 80.2%, packroot 94.6% (all ≥ 80%)
+- [x] verify `devbox validate templates` runs against a fixture project and reports clean (validator tests pass; added missing `git` subcommand to `devbox validate templates`)
 
 ## Technical Details
 

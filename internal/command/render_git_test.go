@@ -55,7 +55,7 @@ services:
 `)
 
 	setupGitPack(t, projectRoot, "default", map[string]string{
-		"manifest.yml": "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
+		"manifest.yml":    "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
 		"pre-commit.tmpl": "#!/bin/sh\necho {{ .Service }}\n",
 	})
 
@@ -131,7 +131,7 @@ services:
     container: c
 `)
 	setupGitPack(t, projectRoot, "default", map[string]string{
-		"manifest.yml": "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
+		"manifest.yml":    "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
 		"pre-commit.tmpl": "#!/bin/sh\n",
 	})
 	// Service hub exists but src/.git does not.
@@ -169,7 +169,7 @@ services:
     container: c
 `)
 	setupGitPack(t, projectRoot, "default", map[string]string{
-		"manifest.yml": "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
+		"manifest.yml":    "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
 		"pre-commit.tmpl": "#!/bin/sh\n",
 	})
 
@@ -263,7 +263,7 @@ services:
     container: c4
 `)
 	setupGitPack(t, projectRoot, "default", map[string]string{
-		"manifest.yml": "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
+		"manifest.yml":    "render:\n  - from: pre-commit.tmpl\n    to: pre-commit\n",
 		"pre-commit.tmpl": "#!/bin/sh\n# {{ .Service }}\n",
 	})
 	for _, d := range []string{"services/app1", "services/app2", "services/db", "services/off"} {

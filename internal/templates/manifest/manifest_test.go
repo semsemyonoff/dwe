@@ -225,7 +225,6 @@ func TestValidatePackName(t *testing.T) {
 		{"weird?", true},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			err := manifest.ValidatePackName(tc.name)
 			if (err != nil) != tc.wantErr {

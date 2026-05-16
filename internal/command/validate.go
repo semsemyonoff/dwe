@@ -58,8 +58,8 @@ Scope targets:
   devbox validate                              - all (config + templates + commands)
   devbox validate config                       - all config validators
   devbox validate config <devbox|services|...> - specific config validator
-  devbox validate templates                    - all template validators (ide, ai)
-  devbox validate templates <ide|ai>           - specific template validator
+  devbox validate templates                    - all template validators (ide, ai, git)
+  devbox validate templates <ide|ai|git>       - specific template validator
   devbox validate commands                     - commands validator
 `,
 		Args:         cobra.NoArgs,
@@ -100,7 +100,7 @@ Scope targets:
 	templatesCmd := &cobra.Command{
 		Use:          "templates",
 		Short:        "Validate template packs",
-		Long:         `Check IDE and AI template packs for validity and integrity.`,
+		Long:         `Check IDE, AI, and git template packs for validity and integrity.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -110,6 +110,7 @@ Scope targets:
 	templatesCmd.AddCommand(
 		newValidateTemplateSubCmd(flags, &strict, &quiet, "ide", "Validate IDE template pack"),
 		newValidateTemplateSubCmd(flags, &strict, &quiet, "ai", "Validate AI template pack"),
+		newValidateTemplateSubCmd(flags, &strict, &quiet, "git", "Validate git hooks template pack"),
 	)
 	cmd.AddCommand(templatesCmd)
 
