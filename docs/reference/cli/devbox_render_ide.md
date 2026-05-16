@@ -6,11 +6,14 @@ Generate IDE configs from template packs
 
 Generate IDE-specific config files for each enabled service from a template pack.
 
-The command walks the chosen template pack (devbox/templates/ide/<pack-name>/)
-and renders each *.tmpl file into the corresponding location within the service
-directory. For example:
-  devbox/templates/ide/default/.vscode/settings.json.tmpl
+The command reads manifest.yml from the chosen template pack
+(devbox/templates/ide/<pack-name>/) and renders each declared entry into the
+corresponding location within the service directory. For example:
+  manifest.yml: render: [{from: settings.json.tmpl, to: .vscode/settings.json}]
   → services/main/.vscode/settings.json
+
+A manifest.yml is required; packs without one produce an error with a migration
+hint. See docs/reference/render/ide.md for the manifest schema and migration.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If ide.template is set in the service config, use that pack (explicit, strict)

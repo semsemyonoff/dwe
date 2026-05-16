@@ -76,6 +76,12 @@ func Resolve(projectRoot, kind, packName, rel string) (string, bool, error) {
 // hit=false with no error when the file does not exist. Any other state
 // (directory, symlink, device, ...) is a hard error.
 func tryCandidate(root, rel, label string) (string, bool, error) {
+	// Reject a symlinked pack root: if root itself is a symlink, following it
+	// would allow template sources to be read from outside the project tree,
+	// bypassing the per-file pathsafe checks that only walk components of rel.
+	if fi, err := os.Lstat(root); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return "", false, fmt.Errorf("%s: pack root %s is a symlink; symlinked pack roots are not supported", label, root)
+	}
 	abs := filepath.Join(root, rel)
 	if _, err := pathsafe.ContainedRel(root, abs); err != nil {
 		return "", false, fmt.Errorf("%s: %w", label, err)

@@ -174,7 +174,7 @@ func TestResolve_CanonicalIsSymlinkHardError(t *testing.T) {
 	}
 }
 
-func TestResolve_SymlinkComponentInOverridePath(t *testing.T) {
+func TestResolve_SymlinkPackRootIsHardError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on windows")
 	}
@@ -189,26 +189,16 @@ func TestResolve_SymlinkComponentInOverridePath(t *testing.T) {
 	if err := os.Symlink(realPack, overrideDir); err != nil {
 		t.Fatal(err)
 	}
-	// Also write a canonical file so we'd otherwise fall through.
+	// Also write a canonical file so we'd fall through if the symlink were allowed.
 	mustWrite(t, canonicalPath(t, root, "ai", "default", "foo.tmpl"), "canonical")
 
-	// CheckNoSymlinks walks components under the root: the override root itself
-	// is not checked, but Lstat on the final candidate sees a regular file
-	// reached through a symlinked directory. The pathsafe walk catches the
-	// symlinked intermediate component — `default.local` is under
-	// `<root>/devbox/templates/ai` which IS the root we pass to CheckNoSymlinks
-	// indirectly? No: tryCandidate passes the override root itself as
-	// CheckNoSymlinks' root, so the symlink AT the root is not detected.
-	// This documents the boundary: a symlinked pack DIR is not caught by
-	// tryCandidate's per-file check. We treat that as out-of-scope here —
-	// the renderer's downstream EnsureRealUnder is the safety net for the
-	// pack directory itself. The Resolve API contract is per-file safety.
-	got, fromOverride, err := Resolve(root, "ai", "default", "foo.tmpl")
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-	if !fromOverride {
-		t.Errorf("expected override hit, got canonical %s", got)
+	// A symlinked pack root must be a hard error: following it would allow
+	// template sources to be read from outside the project tree, bypassing
+	// per-file pathsafe checks. EnsureRealUnder only protects write destinations,
+	// not template source reads, so it cannot serve as a safety net here.
+	_, _, err := Resolve(root, "ai", "default", "foo.tmpl")
+	if err == nil {
+		t.Fatal("expected hard error when override pack root is a symlink, got nil")
 	}
 }
 

@@ -25,11 +25,9 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 		return err
 	}
 
-	packDir, packName, err := gitpkg.ResolveTemplatePack(svc, absRoot, name)
-	if err != nil {
-		return err
-	}
-
+	// Check for src/.git before resolving the pack so that a service with no
+	// src/.git directory produces the documented "warn + skip" behavior even
+	// when no template pack is configured.
 	absHooks, status, err := gitpkg.ResolveGitHooksDir(absHub)
 	if err != nil {
 		return err
@@ -41,6 +39,11 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 	case gitpkg.DirWorktree:
 		w.Warning(fmt.Sprintf("git [%s] — skipped (src/.git is a worktree pointer; not yet supported)", name))
 		return nil
+	}
+
+	packDir, packName, err := gitpkg.ResolveTemplatePack(svc, absRoot, name)
+	if err != nil {
+		return err
 	}
 
 	m, err := gitpkg.LoadManifest(packDir)
