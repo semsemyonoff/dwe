@@ -275,9 +275,6 @@ func ValidateManifest(m *manifest.File, projectRoot, packName, destRoot string, 
 		if strings.ContainsAny(e.To, "/\\") {
 			return fmt.Errorf("%s: render[%d]: to must be a basename (got %q)", label, i, e.To)
 		}
-		if e.To == "." || e.To == ".." {
-			return fmt.Errorf("%s: render[%d]: to %q is invalid", label, i, e.To)
-		}
 	}
 	// Git-specific: symlinks block must be empty.
 	if len(m.Symlinks) > 0 {
@@ -320,6 +317,9 @@ type Context struct {
 func RenderHooks(ctx Context) error {
 	if ctx.Manifest == nil {
 		return errors.New("git: nil manifest")
+	}
+	if ctx.Cfg == nil {
+		return errors.New("git: nil cfg")
 	}
 	absRoot, err := filepath.Abs(ctx.ProjectRoot)
 	if err != nil {
