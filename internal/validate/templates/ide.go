@@ -99,31 +99,48 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 // validateService validates one service's IDE template pack.
 func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) *validate.Diagnostic {
-	// Resolve template pack
-	packDir, err := ide.ResolveTemplatePack(svc, projectRoot, name)
+	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return &validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
-			File:     "",
-			Line:     0,
+			Message:  fmt.Sprintf("resolve project root: %v", err),
+		}
+	}
+
+	packDir, packName, err := ide.ResolveTemplatePack(svc, absRoot, name)
+	if err != nil {
+		return &validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
 			Hint:     "check ide.template setting and devbox/templates/ide directory",
 		}
 	}
 
-	// Walk the pack
-	_, err = ide.WalkPack(packDir)
+	m, err := ide.LoadManifest(packDir)
 	if err != nil {
 		return &validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
-			File:     filepath.Join("devbox", "templates", "ide", filepath.Base(packDir)),
-			Line:     0,
-			Message:  fmt.Sprintf("invalid template pack: %v", err),
-			Hint:     "check template pack for symlinks, escaping paths, and bare .tmpl files",
+			File:     filepath.Join("devbox", "templates", "ide", packName, "manifest.yml"),
+			Message:  fmt.Sprintf("failed to load manifest: %v", err),
+			Hint:     "IDE packs now require a manifest.yml; see docs/reference/render/ide.md for the migration",
+		}
+	}
+
+	absHubDir := filepath.Join(absRoot, svc.Dir)
+	if err := ide.ValidateManifest(m, absRoot, packName, absHubDir); err != nil {
+		return &validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.ide:%s", name),
+			File:     filepath.Join("devbox", "templates", "ide", packName, "manifest.yml"),
+			Message:  fmt.Sprintf("invalid manifest: %v", err),
+			Hint:     "check render and symlink entries in manifest.yml",
 		}
 	}
 

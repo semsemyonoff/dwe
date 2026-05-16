@@ -191,16 +191,16 @@ Static validation surfaces broken packs without running `render git`.
 
 This is the breaking change. Sequence carefully.
 
-- [ ] update `internal/templates/ide/ide.go`: drop `WalkPack`/`PackEntry` (or keep types but remove the walker); add `LoadManifest(packDir)` using the shared schema; require `manifest.yml` to exist — missing manifest returns a wrapped error `ErrManifestMissing` with hint: "IDE packs now require a manifest.yml; see docs/reference/render/ide.md for the migration"
-- [ ] **API change — `ide.ResolveTemplatePack`**: change signature to return `(packDir, packName string, err error)` — same shape as the AI change in Task 3. Update ALL in-tree callers in this same task: `internal/command/ide.go:207` AND `internal/validate/templates/ide.go:103`.
-- [ ] add `ide.ValidateManifest(m *Manifest, projectRoot, packName, destRoot string) error` (same signature shape as the new `ai.ValidateManifest` from Task 3 — `destRoot` is the hub directory for IDE, matching AI's usage; the param is named generically so the same shape works for git). Wrapper calls `manifest.ValidateShape` then `manifest.ValidateSources` with a packroot-backed resolver (`packroot.Resolve(projectRoot, "ide", packName, rel)`). No symlink restriction — IDE may want symlinks, align with AI. Resolver-aware existence ensures `<pack>.local` overrides satisfy `from` checks identically to AI. Update ALL IDE callers in this task — at minimum `internal/command/ide.go` AND `internal/validate/templates/ide.go`. Repo must compile at the end of Task 8.
-- [ ] update IDE renderer to read every `from` via `packroot.Resolve(projectRoot, "ide", packName, from)`; emit one-line info on override hit (same as AI)
-- [ ] keep deepest-extends-wins collision policy unchanged
-- [ ] update `internal/command/ide.go` to use the manifest flow; ensure error message on missing manifest is friendly
-- [ ] update `internal/validate/templates/ide.go` to require manifest and validate via shared rules
-- [ ] update IDE renderer tests: convert existing walk-based fixtures by adding `manifest.yml` to each `testdata/` pack
-- [ ] write a new test asserting "missing manifest" produces `ErrManifestMissing` with the migration hint
-- [ ] run `make test` — must pass before next task
+- [x] update `internal/templates/ide/ide.go`: drop `WalkPack`/`PackEntry` (or keep types but remove the walker); add `LoadManifest(packDir)` using the shared schema; require `manifest.yml` to exist — missing manifest returns a wrapped error `ErrManifestMissing` with hint: "IDE packs now require a manifest.yml; see docs/reference/render/ide.md for the migration"
+- [x] **API change — `ide.ResolveTemplatePack`**: change signature to return `(packDir, packName string, err error)` — same shape as the AI change in Task 3. Update ALL in-tree callers in this same task: `internal/command/ide.go:207` AND `internal/validate/templates/ide.go:103`.
+- [x] add `ide.ValidateManifest(m *Manifest, projectRoot, packName, destRoot string) error` (same signature shape as the new `ai.ValidateManifest` from Task 3 — `destRoot` is the hub directory for IDE, matching AI's usage; the param is named generically so the same shape works for git). Wrapper calls `manifest.ValidateShape` then `manifest.ValidateSources` with a packroot-backed resolver (`packroot.Resolve(projectRoot, "ide", packName, rel)`). No symlink restriction — IDE may want symlinks, align with AI. Resolver-aware existence ensures `<pack>.local` overrides satisfy `from` checks identically to AI. Update ALL IDE callers in this task — at minimum `internal/command/ide.go` AND `internal/validate/templates/ide.go`. Repo must compile at the end of Task 8.
+- [x] update IDE renderer to read every `from` via `packroot.Resolve(projectRoot, "ide", packName, from)`; emit one-line info on override hit (same as AI)
+- [x] keep deepest-extends-wins collision policy unchanged
+- [x] update `internal/command/ide.go` to use the manifest flow; ensure error message on missing manifest is friendly
+- [x] update `internal/validate/templates/ide.go` to require manifest and validate via shared rules
+- [x] update IDE renderer tests: convert existing walk-based fixtures by adding `manifest.yml` to each `testdata/` pack
+- [x] write a new test asserting "missing manifest" produces `ErrManifestMissing` with the migration hint
+- [x] run `make test` — must pass before next task
 
 ### Task 9: Surface override-source in validators
 

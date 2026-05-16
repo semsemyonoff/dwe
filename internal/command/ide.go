@@ -169,8 +169,8 @@ func validateExplicitIDEArg(name string, services map[string]config.ServiceConfi
 	return nil
 }
 
-// renderIDEConfigs generates IDE config files for a single service by walking
-// the resolved template pack and rendering all .tmpl entries.
+// renderIDEConfigs generates IDE config files for a single service using the
+// manifest-driven pack flow (parity with `render ai`).
 func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
 	if strings.TrimSpace(svc.Dir) == "" {
 		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
@@ -203,29 +203,35 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 
-	// Resolve the template pack
-	pack, err := ide.ResolveTemplatePack(svc, projectRoot, name)
+	packDir, packName, err := ide.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return err
 	}
 
-	// Walk the pack and render each entry
-	entries, err := ide.WalkPack(pack)
+	m, err := ide.LoadManifest(packDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("ide pack %q: %w; IDE packs now require a manifest.yml — see docs/reference/render/ide.md for the migration", packName, err)
 	}
-	if len(entries) == 0 {
-		packRel, _ := filepath.Rel(absRoot, pack)
-		w.Warning(fmt.Sprintf("ide [%s] — pack %q has no .tmpl files; nothing rendered", name, packRel))
-		return nil
+	if err := ide.ValidateManifest(m, absRoot, packName, absDir); err != nil {
+		return fmt.Errorf("invalid ide manifest: %w", err)
 	}
 
-	for _, entry := range entries {
-		dest := filepath.Join(absDir, entry.RelPath)
-		if err := ide.RenderTemplateFile(entry.SourcePath, data, dest, absDir, absRoot); err != nil {
+	for _, entry := range m.Render {
+		fromOverride, err := ide.RenderTemplateFile(absRoot, packName, entry.From, data, entry.To, absDir, absRoot)
+		if err != nil {
 			return err
 		}
-		w.Success(fmt.Sprintf("ide → %s", filepath.Join(svc.Dir, entry.RelPath)))
+		if fromOverride {
+			w.Info(fmt.Sprintf("using local override: devbox/templates/ide/%s.local/%s", packName, entry.From))
+		}
+		w.Success(fmt.Sprintf("ide → %s", filepath.Join(svc.Dir, entry.To)))
+	}
+
+	for _, entry := range m.Symlinks {
+		if err := ide.EnsureRelativeSymlink(entry.Link, entry.To, absDir, absRoot); err != nil {
+			return err
+		}
+		w.Success(fmt.Sprintf("ide → %s ⇒ %s", filepath.Join(svc.Dir, entry.Link), entry.To))
 	}
 
 	return nil
