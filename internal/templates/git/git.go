@@ -26,7 +26,7 @@ import (
 // SkippedService carries information about a service that was skipped during git rendering.
 type SkippedService struct {
 	Name   string // service name
-	Reason string // "service-disabled" | "git-disabled" | "empty-dir" | "lost-collision"
+	Reason string // "service-disabled" | "git-disabled" | "git-policy" | "empty-dir" | "lost-collision"
 	Dir    string // set for "lost-collision" only
 	Winner string // set for "lost-collision" only (name of the winning service)
 }
@@ -135,8 +135,12 @@ func SelectServices(services map[string]config.ServiceConfig) (selected []string
 			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: "service-disabled"})
 			continue
 		}
-		if !svc.GitRenderEnabled() {
-			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: "git-disabled"})
+		if gitEnabled, explicit := svc.GitRenderEnabledExplicit(); !gitEnabled {
+			reason := "git-policy"
+			if explicit {
+				reason = "git-disabled"
+			}
+			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: reason})
 			continue
 		}
 		enabled[name] = svc

@@ -125,6 +125,17 @@ func TestValidateShape_EscapingSymlink(t *testing.T) {
 	}
 }
 
+func TestValidateShape_SymlinkLinkCollidesWithRenderDest(t *testing.T) {
+	m := &manifest.File{
+		Render:   []manifest.RenderEntry{{From: "a.tmpl", To: "a"}, {From: "b.tmpl", To: "b"}},
+		Symlinks: []manifest.SymlinkEntry{{Link: "a", To: "b"}},
+	}
+	err := manifest.ValidateShape(m, t.TempDir(), "test")
+	if err == nil || !strings.Contains(err.Error(), "collides") {
+		t.Fatalf("expected link-render collision error, got %v", err)
+	}
+}
+
 func TestValidateShape_NoFSAccess_PassesWithoutFromFiles(t *testing.T) {
 	// ValidateShape must not touch disk for `from` files.
 	m := &manifest.File{Render: []manifest.RenderEntry{

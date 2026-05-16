@@ -163,6 +163,9 @@ func validateSymlinkShape(e SymlinkEntry, absDest string, renderDests, links map
 		return fmt.Errorf("%slink %q is duplicated", prefix, e.Link)
 	}
 	links[relLink] = struct{}{}
+	if _, collision := renderDests[relLink]; collision {
+		return fmt.Errorf("%slink %q collides with a render destination; a path cannot be both a rendered file and a symlink", prefix, e.Link)
+	}
 
 	// `to` is interpreted as destRoot-relative (matching the render side):
 	// EnsureRelativeSymlink turns it into a link-relative target at write time.

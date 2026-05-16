@@ -45,6 +45,9 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		case "git-disabled":
 			message = "service has git.enabled: false"
 			hint = "set git.enabled: true to include this service in git hook rendering"
+		case "git-policy":
+			message = "service does not render git hooks by default (only 'app' type services render by default)"
+			hint = "set git.enabled: true to opt in"
 		case "empty-dir":
 			message = "service has no dir or dir is project root"
 			hint = "set service.dir to a subdirectory path"
