@@ -150,26 +150,32 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 		diags = append(diags, *d)
 	}
 
-	// Optional info diagnostic — advisory only, does not gate validation.
+	// Optional advisory diagnostic — does not gate validation.
 	_, status, hookErr := git.ResolveGitHooksDir(absHub)
-	if hookErr == nil {
-		switch status {
-		case git.DirMissing:
-			diags = append(diags, validate.Diagnostic{
-				Severity: validate.SeverityInfo,
-				Domain:   "templates",
-				Target:   fmt.Sprintf("templates.git:%s", name),
-				Message:  "no src/.git in service dir; render will be skipped",
-				Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove git.enabled",
-			})
-		case git.DirWorktree:
-			diags = append(diags, validate.Diagnostic{
-				Severity: validate.SeverityInfo,
-				Domain:   "templates",
-				Target:   fmt.Sprintf("templates.git:%s", name),
-				Message:  "src/.git is a worktree pointer (not yet supported); render will be skipped",
-			})
-		}
+	switch {
+	case hookErr != nil:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityWarning,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.git:%s", name),
+			Message:  fmt.Sprintf("cannot inspect src/.git: %v", hookErr),
+			Hint:     "render git will fail; check for unsupported symlinks in the service directory",
+		})
+	case status == git.DirMissing:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.git:%s", name),
+			Message:  "no src/.git in service dir; render will be skipped",
+			Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove git.enabled",
+		})
+	case status == git.DirWorktree:
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityInfo,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.git:%s", name),
+			Message:  "src/.git is a worktree pointer (not yet supported); render will be skipped",
+		})
 	}
 
 	return diags

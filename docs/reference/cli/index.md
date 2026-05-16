@@ -78,5 +78,6 @@ Generated reference for the `devbox` command tree.
     - [devbox validate config styles](devbox_validate_config_styles.md) — Validate devbox/styles.yml
   - [devbox validate templates](devbox_validate_templates.md) — Validate template packs
     - [devbox validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
+    - [devbox validate templates git](devbox_validate_templates_git.md) — Validate git hooks template pack
     - [devbox validate templates ide](devbox_validate_templates_ide.md) — Validate IDE template pack
 - [devbox version](devbox_version.md) — Print version information

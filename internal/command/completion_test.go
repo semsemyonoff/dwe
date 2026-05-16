@@ -532,6 +532,7 @@ project:
 	if len(completions) != 2 {
 		t.Fatalf("expected 2 completions (main, worker), got %d: %v", len(completions), completions)
 	}
+	sort.Strings(completions)
 	if completions[0] != "main" || completions[1] != "worker" {
 		t.Errorf("expected [main worker], got %v", completions)
 	}

@@ -43,13 +43,13 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	}
 
 	// Resolve template pack
-	_, packName, err := aipkg.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, err := aipkg.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return err
 	}
 
 	// Load and validate manifest
-	m, err := aipkg.LoadManifest(filepath.Join(absRoot, "devbox", "templates", "ai", packName))
+	m, err := aipkg.LoadManifest(packDir)
 	if err != nil {
 		return err
 	}

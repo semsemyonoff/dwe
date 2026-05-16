@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -143,6 +144,26 @@ func TestSelectServices(t *testing.T) {
 			t.Errorf("selected=%v", selected)
 		}
 		if len(skipped) != 2 {
+			t.Fatalf("skipped=%v", skipped)
+		}
+		// Sort by name for deterministic assertions.
+		sort.Slice(skipped, func(i, j int) bool { return skipped[i].Name < skipped[j].Name })
+		if skipped[0].Name != "a" || skipped[0].Reason != "service-disabled" {
+			t.Errorf("skipped[0]=%+v want {a service-disabled}", skipped[0])
+		}
+		if skipped[1].Name != "b" || skipped[1].Reason != "git-disabled" {
+			t.Errorf("skipped[1]=%+v want {b git-disabled}", skipped[1])
+		}
+	})
+	t.Run("non-app type dropped as git-disabled", func(t *testing.T) {
+		svcs := map[string]config.ServiceConfig{
+			"db": {Enabled: true, Type: "db", Dir: "services/db"},
+		}
+		selected, skipped := SelectServices(svcs)
+		if len(selected) != 0 {
+			t.Errorf("selected=%v", selected)
+		}
+		if len(skipped) != 1 || skipped[0].Reason != "git-disabled" {
 			t.Errorf("skipped=%v", skipped)
 		}
 	})

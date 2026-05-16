@@ -24,8 +24,8 @@ Scope targets:
   devbox validate                              - all (config + templates + commands)
   devbox validate config                       - all config validators
   devbox validate config <devbox|services|...> - specific config validator
-  devbox validate templates                    - all template validators (ide, ai)
-  devbox validate templates <ide|ai>           - specific template validator
+  devbox validate templates                    - all template validators (ide, ai, git)
+  devbox validate templates <ide|ai|git>       - specific template validator
   devbox validate commands                     - commands validator
 
 
