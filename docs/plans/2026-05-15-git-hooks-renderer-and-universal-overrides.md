@@ -228,11 +228,11 @@ Belt-and-braces: pack names go on disk and into error messages. Applies to BOTH 
 
 Cobra completions must not error or panic. Note: `serviceNameCompletion` (used by all three render subcommands) only loads `config.LoadConfig` — it does NOT load manifests or resolve packs. A malformed manifest therefore does NOT affect completion output; it only affects the actual render command. So the relevant test surface is config-level malformation, not manifest-level.
 
-- [ ] for `devbox render git`, follow the existing pattern (`completionConfigPath` → empty completions on `ErrNotFound`, schema errors, bad `-c` path)
-- [ ] ensure the IDE completion path still works after the manifest cut — the test must NOT rely on manifest state, only on config loading
-- [ ] add a test where `__complete` is invoked on a project with a **broken `devbox.yml`** (e.g. bad schema_version) — `serviceNameCompletion` returns empty, no panic, no error
-- [ ] add a test where `__complete` is invoked on a project with a **malformed `manifest.yml`** but a healthy config — `serviceNameCompletion` returns all service names normally (this documents the boundary: completion is config-scoped, not manifest-scoped)
-- [ ] run `make test` — must pass before next task
+- [x] for `devbox render git`, follow the existing pattern (`completionConfigPath` → empty completions on `ErrNotFound`, schema errors, bad `-c` path)
+- [x] ensure the IDE completion path still works after the manifest cut — the test must NOT rely on manifest state, only on config loading
+- [x] add a test where `__complete` is invoked on a project with a **broken `devbox.yml`** (e.g. bad schema_version) — `serviceNameCompletion` returns empty, no panic, no error
+- [x] add a test where `__complete` is invoked on a project with a **malformed `manifest.yml`** but a healthy config — `serviceNameCompletion` returns all service names normally (this documents the boundary: completion is config-scoped, not manifest-scoped)
+- [x] run `make test` — must pass before next task
 
 ### Task 12: Update render reference docs
 

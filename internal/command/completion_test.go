@@ -2,6 +2,7 @@ package command
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -452,6 +453,99 @@ func TestCompletionConfigPath_explicitBadPath(t *testing.T) {
 	_, _, err := completionConfigPath(flags, root)
 	if err == nil {
 		t.Fatal("expected error for explicit bad path, got nil")
+	}
+}
+
+// TestServiceNameCompletion_brokenSchemaReturnsEmpty verifies that
+// serviceNameCompletion (used by `devbox render git/ide/ai` and many other
+// commands) returns no completions and ShellCompDirectiveNoFileComp when the
+// project's devbox.yml has a bad schema_version. The __complete path must
+// never panic or surface errors to the terminal.
+func TestServiceNameCompletion_brokenSchemaReturnsEmpty(t *testing.T) {
+	projectDir := t.TempDir()
+	makeV1Project(t, projectDir)
+
+	t.Chdir(projectDir)
+
+	flags := &rootFlags{}
+	root := buildRootCmdForCompletion(flags, "")
+
+	completions, directive := serviceNameCompletion(flags)(root, []string{}, "")
+	if len(completions) != 0 {
+		t.Errorf("expected 0 completions for project with broken schema, got %d: %v", len(completions), completions)
+	}
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
+	}
+}
+
+// TestServiceNameCompletion_malformedManifestReturnsServiceNames documents the
+// boundary between completion and rendering: completion is config-scoped, not
+// manifest-scoped. A malformed manifest.yml does NOT affect serviceNameCompletion
+// because the completion path only loads config.LoadConfig.
+func TestServiceNameCompletion_malformedManifestReturnsServiceNames(t *testing.T) {
+	projectDir := t.TempDir()
+
+	// Write a v2 devbox.yml with services so completion has something to return.
+	devboxDir := filepath.Join(projectDir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("mkdir devbox: %v", err)
+	}
+	devboxYML := `schema_version: "2"
+project:
+  name: testproject
+  prefix: devbox
+`
+	if err := os.WriteFile(filepath.Join(projectDir, "devbox.yml"), []byte(devboxYML), 0644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+	servicesYML := `services:
+  main:
+    type: app
+    dir: services/main
+  worker:
+    type: worker
+    dir: services/worker
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
+	}
+
+	// Write a malformed manifest.yml under an IDE pack — broken YAML.
+	packDir := filepath.Join(devboxDir, "templates", "ide", "default")
+	if err := os.MkdirAll(packDir, 0755); err != nil {
+		t.Fatalf("mkdir pack: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packDir, "manifest.yml"), []byte("render: [this is: not valid yaml\n"), 0644); err != nil {
+		t.Fatalf("write manifest.yml: %v", err)
+	}
+
+	t.Chdir(projectDir)
+
+	flags := &rootFlags{}
+	root := buildRootCmdForCompletion(flags, "")
+
+	completions, directive := serviceNameCompletion(flags)(root, []string{}, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
+	}
+	if len(completions) != 2 {
+		t.Fatalf("expected 2 completions (main, worker), got %d: %v", len(completions), completions)
+	}
+	if completions[0] != "main" || completions[1] != "worker" {
+		t.Errorf("expected [main worker], got %v", completions)
+	}
+}
+
+// TestRenderGitCmd_HasServiceNameCompletion verifies the new `render git`
+// command wires the shared serviceNameCompletion callback (same as render
+// ide/ai). This documents that the broken-schema and malformed-manifest tests
+// above apply to render git as well.
+func TestRenderGitCmd_HasServiceNameCompletion(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newRenderGitCmd(flags)
+	if cmd.ValidArgsFunction == nil {
+		t.Error("render git should have a ValidArgsFunction for dynamic completion")
 	}
 }
 
