@@ -266,11 +266,11 @@ Point users to the new `git.*` block.
 
 Keep the agent context current.
 
-- [ ] in `AGENTS.md` (which `CLAUDE.md` symlinks to), update the `internal/templates/` bullet to list `git/` package and the shared `manifest/` and `packroot/` packages; note IDE has migrated to manifest; document the sibling `devbox/templates/<kind>/<pack>.local/` override convention (parallel to the existing `devbox/local.yml` / `devbox/docker.local.yml` pattern)
-- [ ] add `internal/templates/git/` and the new validator to the relevant entries
-- [ ] update the `internal/config/` bullet to document `ServiceGitHooksConfig` and the `GitRenderEnabled*` accessors
-- [ ] no test step
-- [ ] run `make test` — must pass
+- [x] in `AGENTS.md` (which `CLAUDE.md` symlinks to), update the `internal/templates/` bullet to list `git/` package and the shared `manifest/` and `packroot/` packages; note IDE has migrated to manifest; document the sibling `devbox/templates/<kind>/<pack>.local/` override convention (parallel to the existing `devbox/local.yml` / `devbox/docker.local.yml` pattern)
+- [x] add `internal/templates/git/` and the new validator to the relevant entries
+- [x] update the `internal/config/` bullet to document `ServiceGitHooksConfig` and the `GitRenderEnabled*` accessors
+- [x] no test step
+- [x] run `make test` — must pass
 
 ### Task 15: Final acceptance verification
 
