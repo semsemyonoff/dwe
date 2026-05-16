@@ -14,6 +14,7 @@ Service declarations for the devbox project.
   - [`cli` block](#cli-block)
   - [`ide` block](#ide-block)
   - [`ai` block](#ai-block)
+  - [`git` block](#git-block)
 - [Inheritance via `extends`](#inheritance-via-extends)
 - [Example: full service definition](#example-full-service-definition)
 - [Common pitfalls](#common-pitfalls)
@@ -71,6 +72,9 @@ services:
     ai:
       enabled: true|false          # enable agentic docs rendering for this service
       template: <template-dir-name> # service-specific template directory
+    git:
+      enabled: true|false          # enable git hooks rendering for this service
+      template: <template-dir-name> # service-specific template directory
 ```
 
 ## Field reference
@@ -90,6 +94,7 @@ services:
 | `compose` | list | no | Additional compose overlay files active when service is enabled |
 | `ide` | block | no | IDE rendering configuration (see [`ide` block](#ide-block)) |
 | `ai` | block | no | Agent docs rendering configuration (see [`ai` block](#ai-block)) |
+| `git` | block | no | Git hooks rendering configuration (see [`git` block](#git-block)) |
 
 ### `configs` field
 
@@ -402,6 +407,25 @@ services/main/
     CLAUDE.md        ← rendered from .claude/CLAUDE.md.tmpl
 ```
 
+### `git` block
+
+Controls whether and how shell git hooks are rendered into the service's `src/.git/hooks/` directory from template packs.
+
+```yaml
+git:
+  enabled: true          # opt in to git hooks rendering for this service
+  template: custom-hooks # use custom template pack
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in `devbox render git` output. Mirrors the `ide` default policy. |
+| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/git/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then `default` packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
+
+`extends` inheritance for `git.enabled` and `git.template` follows the same rules as `ide` and `ai`: child explicit values override the parent's; omitted values inherit. Collision resolution on shared `dir` uses **deepest-extends-wins** (same as `ide`).
+
+Hooks are written to `<svc.Dir>/src/.git/hooks/<basename>` with mode `0755`. Services whose `src/.git` is missing (no git checkout) or is a file (worktree/submodule pointer) are skipped with a warning. See [render git](../render/git.md) for the full reference, manifest schema, and examples.
+
 ## Inheritance via `extends`
 
 A child service inherits all fields from the named parent. The child then overrides only the fields it declares. Multi-level chains are supported and resolved in topological order — a grandchild gets the parent's defaults indirectly via its direct parent.
@@ -419,7 +443,7 @@ Resolution rules:
 - `dirs` — parent's list comes first; child entries are appended; duplicates are removed (parent order preserved).
 - `configs` — child wholly replaces parent when set (child has its own list); parent's list is used only when child omits the key.
 - `cli.env` — recursive map merge: parent provides defaults, child overrides per key.
-- `ide.enabled`, `ide.template`, `ai.enabled`, and `ai.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
+- `ide.enabled`, `ide.template`, `ai.enabled`, `ai.template`, `git.enabled`, and `git.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
 - `container`, `mandatory`, `compose`, `depends_on` — never inherited. A child that omits `container` keeps an empty value, which is rejected at runtime; declare it explicitly. The same applies to `compose` and `depends_on`: each child specifies its own.
 
 ```yaml

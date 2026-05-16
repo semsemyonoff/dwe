@@ -200,7 +200,7 @@ These exist so the `${...}` shorthand can be expanded to portable Go-template fo
 
 ## Strict rendering (render packs)
 
-`render ide` and `render ai` parse templates with `{{.Option "missingkey=error"}}` semantics: a typo like `{{.Servic.Name}}` aborts the entire pack render rather than writing `<no value>` to disk. Guard genuinely optional fields with `{{if ...}}`:
+`render ide`, `render ai`, and `render git` parse templates with `{{.Option "missingkey=error"}}` semantics: a typo like `{{.Servic.Name}}` aborts the entire pack render rather than writing `<no value>` to disk. Guard genuinely optional fields with `{{if ...}}`:
 
 ```gotemplate
 {{if .ServiceCfg.CLI.Workdir}}WORKDIR={{.ServiceCfg.CLI.Workdir}}{{end}}

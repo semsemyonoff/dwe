@@ -378,6 +378,7 @@ If `local.yml` does not exist, layer 3 is silently skipped.
 ## Related commands
 
 - `devbox render env -o .env` — regenerate `.env` from the merged config
+- `devbox render ide` / `devbox render ai` / `devbox render git` — pack-based renderers; see [render reference](../render/index.md)
 - `devbox info` — show dashboard (uses merged config + `info.yml`)
 - `devbox services list` — show services with enabled/disabled status
 - `devbox tools list` — show tools with enabled/disabled status

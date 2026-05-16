@@ -256,11 +256,11 @@ Cobra completions must not error or panic. Note: `serviceNameCompletion` (used b
 
 Point users to the new `git.*` block.
 
-- [ ] in `docs/reference/config/services.md`, add the `git: { enabled, template }` block to the service schema reference (alongside `ide:` and `ai:`); cross-link to `docs/reference/render/git.md`; note `extends` inheritance behavior matches `ide`/`ai`
-- [ ] in `docs/reference/config/devbox.md`, mention `git` in the list of render targets if such a list exists; otherwise add a one-line note pointing to `docs/reference/render/git.md`
-- [ ] verify any other doc that lists render kinds (search for "render ide" / "render ai" in docs/) is updated
-- [ ] no test step
-- [ ] run `make test` — must pass
+- [x] in `docs/reference/config/services.md`, add the `git: { enabled, template }` block to the service schema reference (alongside `ide:` and `ai:`); cross-link to `docs/reference/render/git.md`; note `extends` inheritance behavior matches `ide`/`ai`
+- [x] in `docs/reference/config/devbox.md`, mention `git` in the list of render targets if such a list exists; otherwise add a one-line note pointing to `docs/reference/render/git.md`
+- [x] verify any other doc that lists render kinds (search for "render ide" / "render ai" in docs/) is updated
+- [x] no test step
+- [x] run `make test` — must pass
 
 ### Task 14: Update CLAUDE.md / AGENTS.md
 
