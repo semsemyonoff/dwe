@@ -99,6 +99,14 @@ phases:
             key: value
         continue_on_error: true    # optional: failure does not abort the pipeline
         skip_confirm: true         # optional: bypass confirmation prompts for this step
+        files_gate: readable       # short form: state must be readable|missing
+        # or long form:
+        files_gate:
+          state: readable|missing  # required
+          command: <cmd-id>        # default: step.cmd (only valid for type: command)
+          require: required|all|[id1, id2]  # default: required
+          with:                    # default: step.with
+            key: value
         with:                      # parameters (for command and builtin types)
           key: value
 
@@ -666,6 +674,7 @@ Key behaviors:
 - **Service config change** → all service steps re-run
 - **Project config change** → all project-level steps re-run
 - **Has `check:` action** → step always runs (even if hash matches), so the check re-validates idempotency
+- **Has `files_gate:`** → gate is re-evaluated on every deploy; the journal skip is bypassed so the gate decision is always current (the journal still records the step for audit/status display using `step_hash` which includes the gate config)
 - **Previous step failed** → step re-runs on next deploy (allows `--resume` to continue from the failure)
 
 Use `devbox deploy state show` to inspect the journal, `devbox deploy state clear` to reset it, and `devbox deploy state repair` to fix corrupted aggregates.

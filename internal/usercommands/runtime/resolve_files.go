@@ -77,10 +77,8 @@ func ComputeFilePathsProbe(ctx RunContext, only []string) (map[string]FileProbeR
 // write-only files are not probed by the gate API; this function rejects them.
 func probeFileSpec(ctx RunContext, fid string, fspec model.FileSpec) FileProbeResult {
 	switch fspec.Access {
-	case model.FileAccessRead:
-		return probeReadFile(ctx, fid, fspec)
-	case model.FileAccessReadWrite:
-		return probeReadWriteFile(ctx, fid, fspec)
+	case model.FileAccessRead, model.FileAccessReadWrite:
+		return probeAccessibleFile(ctx, fid, fspec)
 	case model.FileAccessWrite:
 		return FileProbeResult{
 			Err: fmt.Errorf("files.%s: cannot probe write-only file (access: write)", fid),
@@ -92,33 +90,9 @@ func probeFileSpec(ctx RunContext, fid string, fspec model.FileSpec) FileProbeRe
 	}
 }
 
-// probeReadFile probes a read-access file for existence.
+// probeAccessibleFile probes a read or read_write file for existence.
 // Missing files return Resolved: false with no error.
-func probeReadFile(ctx RunContext, fid string, fspec model.FileSpec) FileProbeResult {
-	if fspec.Path != "" {
-		path, _, err := probePathCandidate(ctx, fid, fspec.Path)
-		if err != nil {
-			return FileProbeResult{Err: err}
-		}
-		return FileProbeResult{Resolved: path != "", Path: path}
-	}
-
-	for i, cand := range fspec.Candidates {
-		path, err := probeCandidate(ctx, fid, i, cand)
-		if err != nil {
-			return FileProbeResult{Err: err}
-		}
-		if path != "" {
-			return FileProbeResult{Resolved: true, Path: path}
-		}
-	}
-
-	return FileProbeResult{Resolved: false}
-}
-
-// probeReadWriteFile probes a read_write-access file for existence.
-// Missing files return Resolved: false with no error (same as read for probe semantics).
-func probeReadWriteFile(ctx RunContext, fid string, fspec model.FileSpec) FileProbeResult {
+func probeAccessibleFile(ctx RunContext, fid string, fspec model.FileSpec) FileProbeResult {
 	if fspec.Path != "" {
 		path, _, err := probePathCandidate(ctx, fid, fspec.Path)
 		if err != nil {

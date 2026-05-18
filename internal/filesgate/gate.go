@@ -131,10 +131,15 @@ func (fg *FilesGate) UnmarshalYAML(node *yaml.Node) error {
 	var scalarVal string
 	if node.Kind == yaml.ScalarNode {
 		if err := node.Decode(&scalarVal); err == nil {
-			// Short form: just the state value.
-			fg.State = State(scalarVal)
-			fg.Require = RequireRequired{}
-			return nil
+			// Short form: just the state value — validate it.
+			switch scalarVal {
+			case "readable", "missing":
+				fg.State = State(scalarVal)
+				fg.Require = RequireRequired{}
+				return nil
+			default:
+				return fmt.Errorf("invalid files_gate state %q, must be readable or missing", scalarVal)
+			}
 		}
 	}
 

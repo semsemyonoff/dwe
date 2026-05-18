@@ -185,6 +185,11 @@ func TestFilesGateUnmarshalYAML(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "short form: invalid state",
+			yaml:    "bogus",
+			wantErr: true,
+		},
+		{
 			name:    "empty list in require",
 			yaml:    "{ state: readable, require: [] }",
 			wantErr: true,

@@ -874,6 +874,78 @@ func TestRunPipeline_FilesGate_MissingStateFileAbsent(t *testing.T) {
 	}
 }
 
+func TestRunPipeline_FilesGate_MissingStateFilePresent_SkipsStep(t *testing.T) {
+	// Gate state: missing, file present → step should be skipped.
+	workDir := t.TempDir()
+	probeFile := filepath.Join(workDir, "dump.sql.gz")
+	if err := os.WriteFile(probeFile, []byte("exists"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-download",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "dump.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "download-dump",
+				Type: "shell",
+				Cmd:  "echo downloading",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateMissing,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Step should be skipped (file present, state: missing → gate condition not met).
+	kinds := rep.kindSeq()
+	if slices.Contains(kinds, "FinishStep") {
+		t.Errorf("FinishStep should not be called (step should be skipped), got kinds: %v", kinds)
+	}
+	if !slices.Contains(kinds, "SkipStep") {
+		t.Errorf("expected SkipStep to be called, got kinds: %v", kinds)
+	}
+}
+
 func TestRunPipeline_FilesGate_WhenFalseBypassesGate(t *testing.T) {
 	// when: false should skip step without evaluating the gate.
 	workDir := t.TempDir()

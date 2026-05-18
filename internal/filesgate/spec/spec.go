@@ -57,12 +57,36 @@ func Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.St
 	// Expand require spec.
 	_, err = ResolveRequireIDs(fg.Require, def.Files)
 	if err != nil {
-		issues = append(issues, Issue{Message: fmt.Sprintf("files_gate.require: %v", err)})
+		issues = append(issues, Issue{Message: err.Error()})
 		return issues // Fail-fast.
 	}
 
-	// TODO: Validate that with (plus defaults) covers all required params.
-	// This requires param resolution validation using the same logic as runtime.
+	// Validate that with (plus defaults) covers all required params.
+	// fg.With takes precedence; fall back to ref.With (inherited from the step) when gate.with is unset.
+	effectiveWith := ref.With
+	if fg.With != nil {
+		effectiveWith = fg.With
+	}
+	for paramName, paramDef := range def.Params {
+		if !paramDef.Required {
+			continue
+		}
+		// Check if param is provided in with.
+		withValue, withProvided := effectiveWith[paramName]
+		if withProvided {
+			// Coerce to string for empty check (handles map[string]any).
+			withStr := fmt.Sprintf("%v", withValue)
+			if withStr != "" && withStr != "<nil>" {
+				continue // Param is provided and non-empty.
+			}
+		}
+		// Check if param has a default or default_from.
+		if paramDef.Default != "" || paramDef.DefaultFrom != "" {
+			continue // Param has a fallback.
+		}
+		// Required param is not satisfied.
+		issues = append(issues, Issue{Message: fmt.Sprintf("required parameter %q must be provided in files_gate.with or have a default in the command definition", paramName)})
+	}
 
 	return issues
 }
