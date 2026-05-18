@@ -330,7 +330,7 @@ func EnsureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string)
 			}
 			return nil
 		}
-		return fmt.Errorf("refuse to overwrite non-symlink file at %s; remove it or disable via ai.enabled: false", linkPath)
+		return fmt.Errorf("refuse to overwrite non-symlink file at %s; remove it or disable via render.ai.enabled: false", linkPath)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("stat %s: %w", linkPath, err)
 	}
@@ -346,7 +346,7 @@ func EnsureRelativeSymlink(linkPath, targetWithinHub, absHubDir, absRoot string)
 // a list of services that were skipped with reason-specific context.
 //
 // Selection logic mirrors IDE rendering except for the collision-resolution direction:
-//  1. Gate on both flags: services where svc.Enabled==false or ai.enabled is explicitly false are dropped.
+//  1. Gate on both flags: services where svc.Enabled==false or render.ai.enabled is explicitly false are dropped.
 //  2. Normalize Dir: services with empty (after TrimSpace) Dir are dropped.
 //  3. Group by filepath.Clean(Dir) and resolve collisions: when multiple services
 //     share the same Dir, the **shallowest** extends chain wins (the canonical

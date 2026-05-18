@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/render"
 )
 
 // setupGitPack writes a git template pack at devbox/templates/git/<packName>/.
@@ -30,6 +33,44 @@ func mkGitDir(t *testing.T, hubDir string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(hubDir, "src", ".git", "hooks"), 0o755); err != nil {
 		t.Fatalf("mkdir .git: %v", err)
+	}
+}
+
+// makeGitCfg returns a DevboxConfig configured for git rendering tests.
+func makeGitCfg(name string) *config.DevboxConfig {
+	return &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "test", Prefix: "devbox"},
+		Services: map[string]config.ServiceConfig{
+			name: {
+				Type:      "app",
+				Enabled:   true,
+				Dir:       filepath.Join("services", name),
+				Container: "c",
+			},
+		},
+		Raw: map[string]any{},
+	}
+}
+
+// TestRenderGitHooksForService_implicitPackMissing verifies that a missing implicit
+// pack emits a warning and returns no error.
+func TestRenderGitHooksForService_implicitPackMissing(t *testing.T) {
+	projectRoot := t.TempDir()
+	cfg := makeGitCfg("api")
+	svc := cfg.Services["api"]
+
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	mkGitDir(t, hubDir)
+
+	var buf strings.Builder
+	w := render.NewWriter(&buf)
+	err := renderGitHooksForService(projectRoot, "api", svc, cfg, w)
+	if err != nil {
+		t.Fatalf("expected implicit missing pack to warn and skip, got error: %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "skipped") || !strings.Contains(output, "no template pack found") {
+		t.Errorf("expected warning about missing template pack in output, got: %q", output)
 	}
 }
 
