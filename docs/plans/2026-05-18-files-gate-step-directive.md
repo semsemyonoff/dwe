@@ -206,10 +206,10 @@ In other words: `StepHash` is a **display/audit** hash for the journal, not a sk
 
 ### Task 8: Plan printer + reporter strings
 
-- [ ] in `internal/pipeline/print.go` around line 65, after the `RuntimeWhen` line, add `[files_gate: <state> (<require>)]` when `rs.FilesGate != nil`. Use a helper `FormatFilesGate(fg *filesgate.FilesGate) string`.
-- [ ] add `FormatFilesGate` next to `FormatCondition` / `FormatAction`.
-- [ ] write tests for `FormatFilesGate`: short-form, long-form with custom command, long-form with `require: [a, b]`.
-- [ ] run `make test ./internal/pipeline/...` — must pass before next task.
+- [x] in `internal/pipeline/print.go` around line 65, after the `RuntimeWhen` line, add `[files_gate: <state> (<require>)]` when `rs.FilesGate != nil`. Use a helper `FormatFilesGate(fg *filesgate.FilesGate) string`.
+- [x] add `FormatFilesGate` next to `FormatCondition` / `FormatAction`.
+- [x] write tests for `FormatFilesGate`: short-form, long-form with custom command, long-form with `require: [a, b]`.
+- [x] run `make test ./internal/pipeline/...` — must pass before next task.
 
 ### Task 9: Documentation
 

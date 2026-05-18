@@ -1850,3 +1850,148 @@ func TestRunWithOptions_RecorderGetsDurationMs(t *testing.T) {
 		t.Error("OnStepFinish event not found in recorder")
 	}
 }
+
+func TestFormatRequireSpec(t *testing.T) {
+	tests := []struct {
+		name string
+		spec filesgate.RequireSpec
+		want string
+	}{
+		{
+			name: "RequireRequired",
+			spec: filesgate.RequireRequired{},
+			want: "required",
+		},
+		{
+			name: "RequireAll",
+			spec: filesgate.RequireAll{},
+			want: "all",
+		},
+		{
+			name: "RequireList single ID",
+			spec: filesgate.RequireList{IDs: []string{"dump"}},
+			want: "dump",
+		},
+		{
+			name: "RequireList multiple IDs",
+			spec: filesgate.RequireList{IDs: []string{"dump", "backup"}},
+			want: "dump,backup",
+		},
+		{
+			name: "nil spec defaults to required",
+			spec: nil,
+			want: "required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatRequireSpec(tt.spec)
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatFilesGate(t *testing.T) {
+	tests := []struct {
+		name string
+		gate *filesgate.FilesGate
+		ids  []string
+		want string
+	}{
+		{
+			name: "nil gate",
+			gate: nil,
+			ids:  nil,
+			want: "",
+		},
+		{
+			name: "readable gate with required spec (no ids)",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+			ids:  nil,
+			want: "files_gate: readable (required)",
+		},
+		{
+			name: "missing gate with all spec (no ids)",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateMissing,
+				Require: filesgate.RequireAll{},
+			},
+			ids:  nil,
+			want: "files_gate: missing (all)",
+		},
+		{
+			name: "readable gate with single file ID",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireList{IDs: []string{"dump"}},
+			},
+			ids:  nil,
+			want: "files_gate: readable (dump)",
+		},
+		{
+			name: "readable gate with multiple file IDs (no ids for display)",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireList{IDs: []string{"dump", "backup"}},
+			},
+			ids:  nil,
+			want: "files_gate: readable (dump,backup)",
+		},
+		{
+			name: "readable gate with resolved IDs at runtime",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+			ids:  []string{"dump", "backup"},
+			want: "files_gate: readable [dump,backup]",
+		},
+		{
+			name: "missing gate with resolved IDs at runtime",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateMissing,
+				Require: filesgate.RequireRequired{},
+			},
+			ids:  []string{"artifact"},
+			want: "files_gate: missing [artifact]",
+		},
+		{
+			name: "gate with many resolved IDs (truncated at 3)",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+			ids:  []string{"id1", "id2", "id3", "id4", "id5"},
+			want: "files_gate: readable [id1,id2,id3,...]",
+		},
+		{
+			name: "gate with exactly 3 resolved IDs (no truncation)",
+			gate: &filesgate.FilesGate{
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+			ids:  []string{"a", "b", "c"},
+			want: "files_gate: readable [a,b,c]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got string
+			if tt.ids == nil {
+				got = FormatFilesGate(tt.gate)
+			} else {
+				got = FormatFilesGate(tt.gate, tt.ids...)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

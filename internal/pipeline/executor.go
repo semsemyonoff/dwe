@@ -522,7 +522,7 @@ func RunWithOptions(opts RunOptions) error {
 			if gateSkip {
 				// Gate not satisfied — skip step.
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				reason := FormatFilesGate(rs.FilesGate, ids)
+				reason := FormatFilesGate(rs.FilesGate, ids...)
 				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
 				opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
 				continue
@@ -633,15 +633,43 @@ func FormatAction(a *config.Action) string {
 	return a.Type + " " + a.Cmd
 }
 
+// FormatRequireSpec returns a human-readable form of a RequireSpec.
+func FormatRequireSpec(req filesgate.RequireSpec) string {
+	if req == nil {
+		return "required"
+	}
+	switch spec := req.(type) {
+	case filesgate.RequireRequired:
+		return "required"
+	case filesgate.RequireAll:
+		return "all"
+	case filesgate.RequireList:
+		if len(spec.IDs) == 1 {
+			return spec.IDs[0]
+		}
+		return strings.Join(spec.IDs, ",")
+	default:
+		return "unknown"
+	}
+}
+
 // FormatFilesGate returns a short human-readable form of a files_gate for display.
-// ids are the expanded file IDs that drove the gate decision.
-func FormatFilesGate(fg *filesgate.FilesGate, ids []string) string {
+// If ids are provided, they are the expanded file IDs that drove the gate decision.
+func FormatFilesGate(fg *filesgate.FilesGate, ids ...string) string {
 	if fg == nil {
 		return ""
 	}
+
+	// Base format: "files_gate: <state>"
+	result := "files_gate: " + fg.State.String()
+
+	// If called with no ids (plan-time display), add the require spec.
 	if len(ids) == 0 {
-		return "files_gate: " + fg.State.String()
+		requireStr := FormatRequireSpec(fg.Require)
+		return result + " (" + requireStr + ")"
 	}
+
+	// If called with ids (runtime skip reporting), add the resolved file IDs.
 	// For display, show up to 3 IDs joined by comma, then "..." if more.
 	var shown []string
 	for i, id := range ids {
@@ -651,7 +679,7 @@ func FormatFilesGate(fg *filesgate.FilesGate, ids []string) string {
 		}
 		shown = append(shown, id)
 	}
-	return "files_gate: " + fg.State.String() + " [" + strings.Join(shown, ",") + "]"
+	return result + " [" + strings.Join(shown, ",") + "]"
 }
 
 // shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.
