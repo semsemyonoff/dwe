@@ -43,12 +43,9 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	for _, skip := range skipped {
 		var message, hint string
 		switch skip.Reason {
-		case "service-disabled":
-			// These are expected; don't emit diagnostics
+		case "service-disabled", "ide-disabled":
+			// Service or IDE render explicitly disabled; nothing to report.
 			continue
-		case "ide-disabled":
-			message = "service has render.ide.enabled: false"
-			hint = "set render.ide.enabled: true to include this service in IDE rendering"
 		case "ide-policy":
 			message = "service does not participate in IDE rendering by default (only 'app' type services render by default)"
 			hint = "set render.ide.enabled: true to opt in"
@@ -122,7 +119,11 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
-			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/ide/%s or devbox/templates/ide/default", name),
+			Hint: fmt.Sprintf(
+				"create devbox/templates/ide/%s or devbox/templates/ide/default\n"+
+					"or set services.%s.render.ide.enabled: false in services.yml",
+				name, name,
+			),
 		}}
 	}
 

@@ -40,11 +40,9 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	for _, skip := range skipped {
 		var message, hint string
 		switch skip.Reason {
-		case "service-disabled":
+		case "service-disabled", "git-disabled":
+			// Service or git render explicitly disabled; nothing to report.
 			continue
-		case "git-disabled":
-			message = "service has render.git.enabled: false"
-			hint = "set render.git.enabled: true to include this service in git hook rendering"
 		case "git-policy":
 			message = "service does not render git hooks by default (only 'app' type services render by default)"
 			hint = "set render.git.enabled: true to opt in"
@@ -127,7 +125,11 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
-			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/git/%s or devbox/templates/git/default", name),
+			Hint: fmt.Sprintf(
+				"create devbox/templates/git/%s or devbox/templates/git/default\n"+
+					"or set services.%s.render.git.enabled: false in services.yml",
+				name, name,
+			),
 		}}
 	}
 

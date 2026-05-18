@@ -42,12 +42,9 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	for _, skip := range skipped {
 		var message, hint string
 		switch skip.Reason {
-		case "service-disabled":
-			// These are expected; don't emit diagnostics
+		case "service-disabled", "ai-disabled":
+			// Service or AI render explicitly disabled; nothing to report.
 			continue
-		case "ai-disabled":
-			message = "service has render.ai.enabled: false"
-			hint = "set render.ai.enabled: true to include this service in AI rendering"
 		case "empty-dir":
 			message = "service has no dir or dir is project root"
 			hint = "set service.dir to a subdirectory path"
@@ -119,7 +116,11 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
-			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/ai/%s or devbox/templates/ai/default", name),
+			Hint: fmt.Sprintf(
+				"create devbox/templates/ai/%s or devbox/templates/ai/default\n"+
+					"or set services.%s.render.ai.enabled: false in services.yml",
+				name, name,
+			),
 		}}
 	}
 
