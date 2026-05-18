@@ -10,7 +10,6 @@ import (
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/reset"
-	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"
 )
 
@@ -417,12 +416,10 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	_ = deployCfg
 
 	// Cross-reference: resolve the plan to catch step-level errors.
+	// Pass nil registry so files_gate validation is skipped here — the dedicated
+	// deployFilesGateValidator handles that and emits structured diagnostics.
 	if ctx.Cfg != nil {
-		var reg *registry.Registry
-		if ctx.CommandRegistry != nil {
-			reg = ctx.CommandRegistry.(*registry.Registry)
-		}
-		if _, err := deploy.ResolvePlan(ctx.Cfg, reg); err != nil {
+		if _, err := deploy.ResolvePlan(ctx.Cfg, nil); err != nil {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "config",
@@ -491,12 +488,10 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	_ = resetCfg
 
 	// Cross-reference: resolve the plan to catch step-level errors.
+	// Pass nil registry so files_gate validation is skipped here — the dedicated
+	// resetFilesGateValidator handles that and emits structured diagnostics.
 	if ctx.Cfg != nil {
-		var reg *registry.Registry
-		if ctx.CommandRegistry != nil {
-			reg = ctx.CommandRegistry.(*registry.Registry)
-		}
-		if _, err := reset.ResolvePlan(ctx.Cfg, reg); err != nil {
+		if _, err := reset.ResolvePlan(ctx.Cfg, nil); err != nil {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "config",

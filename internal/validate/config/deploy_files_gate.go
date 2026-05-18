@@ -14,7 +14,7 @@ import (
 type deployFilesGateValidator struct{}
 
 func (v *deployFilesGateValidator) ID() string {
-	return "deploy-files-gate"
+	return "deploy"
 }
 
 func (v *deployFilesGateValidator) Domain() string {
@@ -109,7 +109,7 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 type lifecycleFilesGateValidator struct{}
 
 func (v *lifecycleFilesGateValidator) ID() string {
-	return "lifecycle-files-gate"
+	return "lifecycle"
 }
 
 func (v *lifecycleFilesGateValidator) Domain() string {
@@ -183,7 +183,7 @@ func (v *lifecycleFilesGateValidator) Run(ctx validate.Context) []validate.Diagn
 type resetFilesGateValidator struct{}
 
 func (v *resetFilesGateValidator) ID() string {
-	return "reset-files-gate"
+	return "reset"
 }
 
 func (v *resetFilesGateValidator) Domain() string {

@@ -92,8 +92,9 @@ func canonicalRequireSpec(r filesgate.RequireSpec) any {
 		copy(sorted, req.IDs)
 		sort.Strings(sorted)
 		return sorted
+	case nil:
+		return "required" // nil normalizes to RequireRequired via UnmarshalYAML
 	default:
-		// Fallback for unknown types
 		return "unknown"
 	}
 }

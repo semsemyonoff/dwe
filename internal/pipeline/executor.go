@@ -329,13 +329,15 @@ func Run(
 // and action hashes. If nil, all steps are forced to Run.
 //
 // Per-step ordering for state tracking (does not affect steps without state):
-//  1. compute stepHash := journal.ActionHash(rs.Step.Action())
-//  2. evaluate when: first (unchanged) — if false, skip and continue
-//  3. consult SkipDecider(addr, rs, stepHash) — on Skip, record skip and continue
-//  4. on Run, call recorder.OnStepStart, then ExecAction, then post-step hooks,
-//     then check conditions (unchanged)
-//  5. on success: recorder.OnStepFinish
-//  6. on failure: recorder.OnStepFail
+//  1. compute stepHash := journal.StepHash(rs.Step)
+//  2. evaluate phase-level when — if false, skip and continue
+//  3. evaluate step-level when: — if false, skip and continue
+//  4. if files_gate present: probe gate — if not satisfied, skip (bypasses SkipDecider)
+//     else: consult SkipDecider(addr, rs, stepHash) — on Skip, record skip and continue
+//  5. on Run, call recorder.OnStepStart, then ExecAction, then post-step hooks,
+//     then check conditions
+//  6. on success: recorder.OnStepFinish
+//  7. on failure: recorder.OnStepFail
 //
 // Returns ErrSilent when any step fails (rep.FailStep has already been called).
 // Returns other errors for config/condition evaluation failures.
