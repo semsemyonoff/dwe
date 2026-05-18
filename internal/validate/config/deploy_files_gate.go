@@ -71,6 +71,38 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 		}
 	}
 
+	// Also validate per-service deploy files.
+	if ctx.Cfg != nil && len(ctx.Cfg.Services) > 0 {
+		svcDeploys, err := config.LoadServiceDeployConfigs(ctx.ProjectRoot, ctx.Cfg.Services)
+		if err == nil {
+			for svcName, svcDeploy := range svcDeploys {
+				svcDeployPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy", svcName+".yml")
+				for phaseIdx, phase := range svcDeploy.Phases {
+					for stepIdx, step := range phase.Steps {
+						if step.FilesGate == nil {
+							continue
+						}
+						stepRef := filesgate.StepRef{
+							Type: step.Type,
+							Cmd:  step.Cmd,
+							With: step.With,
+						}
+						issues := spec.Validate(reg, stepRef, step.FilesGate)
+						for _, issue := range issues {
+							diags = append(diags, validate.Diagnostic{
+								Severity: validate.SeverityError,
+								Domain:   "config",
+								Target:   fmt.Sprintf("config.service-deploy[%s].phases[%d].steps[%d].files-gate", svcName, phaseIdx, stepIdx),
+								File:     relPath(ctx.ProjectRoot, svcDeployPath),
+								Message:  issue.Message,
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return diags
 }
 

@@ -40,6 +40,11 @@ func Validate(reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.Files
 		}
 	}
 
+	if reg == nil {
+		issues = append(issues, Issue{Message: "command registry not available; skipping files_gate validation"})
+		return issues
+	}
+
 	// Command must exist in registry.
 	def, err := reg.Get(cmd)
 	if err != nil {
