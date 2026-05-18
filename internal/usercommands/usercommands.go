@@ -218,3 +218,15 @@ func RunCommand(ctx RunContext) error {
 func ConfirmCommand(ctx RunContext) error {
 	return runtime.ConfirmCommand(ctx)
 }
+
+// BuildRunContext constructs a RunContext for command execution by resolving
+// params, context, and docker config.
+func BuildRunContext(
+	cfg *config.DevboxConfig,
+	reg *Registry,
+	def *CommandDef,
+	with map[string]any,
+	workDir string,
+) (RunContext, error) {
+	return runtime.BuildRunContext(cfg, reg, def, with, workDir)
+}

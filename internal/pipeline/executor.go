@@ -19,7 +19,6 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/render"
-	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands"
 )
 
@@ -241,49 +240,18 @@ func execCommandAction(a config.Action, actx ActionContext) error {
 	if err != nil {
 		return fmt.Errorf("command %q: %w", a.Cmd, err)
 	}
-	// Convert With map[string]any → map[string]string for command param resolution.
-	strWith := make(map[string]string, len(a.With))
-	for k, v := range a.With {
-		strWith[k] = fmt.Sprintf("%v", v)
-	}
-	params, err := usercommands.ResolveParams(def.Params, strWith, actx.Cfg)
+	rctx, err := usercommands.BuildRunContext(actx.Cfg, actx.Reg, def, a.With, actx.WorkDir)
 	if err != nil {
-		return fmt.Errorf("resolving params: %w", err)
-	}
-	ctx, err := usercommands.ResolveContext(def.Context, actx.Cfg)
-	if err != nil {
-		return fmt.Errorf("resolving context: %w", err)
-	}
-	rctx := &tpl.RenderContext{
-		Raw:     actx.Cfg.Raw,
-		Params:  params,
-		Context: ctx,
-		Host:    tpl.CurrentHostInfo(),
-	}
-	dockerCfg, err := config.LoadDockerConfig(actx.WorkDir, actx.Cfg)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("loading docker config: %w", err)
-		}
-		dockerCfg = &config.DockerConfig{}
+		return err
 	}
 	stdout, stderr, cleanup := childIO(actx.LogWriter)
 	defer cleanup()
-	return usercommands.RunCommand(usercommands.RunContext{
-		Cmd:            def,
-		Params:         params,
-		Context:        ctx,
-		Render:         rctx,
-		Config:         actx.Cfg,
-		DockerConfig:   dockerCfg,
-		Registry:       actx.Reg,
-		ProjectRoot:    actx.WorkDir,
-		Stdout:         stdout,
-		Stderr:         stderr,
-		Stdin:          os.Stdin,
-		SkipConfirm:    actx.SkipConfirm,
-		NonInteractive: actx.SkipConfirm,
-	})
+	rctx.Stdout = stdout
+	rctx.Stderr = stderr
+	rctx.Stdin = os.Stdin
+	rctx.SkipConfirm = actx.SkipConfirm
+	rctx.NonInteractive = actx.SkipConfirm
+	return usercommands.RunCommand(rctx)
 }
 
 // ExecStep is a deprecated wrapper for backward compatibility.

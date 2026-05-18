@@ -10,7 +10,6 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
-	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 
@@ -180,27 +179,15 @@ it runs directly without showing a selector.`,
 			if err != nil {
 				return err
 			}
-			params, err := usercommands.ResolveParams(def.Params, provided, cfg)
-			if err != nil {
-				return fmt.Errorf("resolving params: %w", err)
-			}
-			ctx, err := usercommands.ResolveContext(def.Context, cfg)
-			if err != nil {
-				return fmt.Errorf("resolving context: %w", err)
-			}
-			rctx := &tpl.RenderContext{
-				Raw:     cfg.Raw,
-				Params:  params,
-				Context: ctx,
-				Host:    tpl.CurrentHostInfo(),
-			}
 			projectRoot := flags.ProjectRoot()
-			dockerCfg, err := config.LoadDockerConfig(projectRoot, cfg)
+			// Convert map[string]string to map[string]any for BuildRunContext.
+			with := make(map[string]any, len(provided))
+			for k, v := range provided {
+				with[k] = v
+			}
+			rctx, err := usercommands.BuildRunContext(cfg, reg, def, with, projectRoot)
 			if err != nil {
-				if !errors.Is(err, os.ErrNotExist) {
-					return fmt.Errorf("loading docker config: %w", err)
-				}
-				dockerCfg = &config.DockerConfig{}
+				return fmt.Errorf("building run context: %w", err)
 			}
 
 			// Determine if we should skip confirmation:
@@ -211,21 +198,13 @@ it runs directly without showing a selector.`,
 				shouldSkip = true
 			}
 
-			if err := usercommands.RunCommand(usercommands.RunContext{
-				Cmd:            def,
-				Params:         params,
-				Context:        ctx,
-				Render:         rctx,
-				Config:         cfg,
-				DockerConfig:   dockerCfg,
-				Registry:       reg,
-				ProjectRoot:    projectRoot,
-				Stdout:         os.Stdout,
-				Stderr:         os.Stderr,
-				Stdin:          os.Stdin,
-				SkipConfirm:    shouldSkip,
-				NonInteractive: shouldSkip,
-			}); err != nil {
+			rctx.Stdout = os.Stdout
+			rctx.Stderr = os.Stderr
+			rctx.Stdin = os.Stdin
+			rctx.SkipConfirm = shouldSkip
+			rctx.NonInteractive = shouldSkip
+
+			if err := usercommands.RunCommand(rctx); err != nil {
 				return fmt.Errorf("running command %q: %w", id, err)
 			}
 			return nil
