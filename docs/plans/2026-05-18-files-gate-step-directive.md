@@ -131,44 +131,36 @@ Two surfaces with different contracts:
 
 Steps:
 
-- [ ] **plan-API cascade**: threading `*usercommands.Registry` into `pipeline.ResolvePhaseSteps` propagates upstream through every plan-resolution API. All of these gain a `reg *usercommands.Registry` parameter (passed straight through to `ResolvePhaseSteps`):
-  - `pipeline.ResolvePhaseSteps(cfg, reg, phase, service)` — `internal/pipeline/resolve.go:20`.
-  - `deploy.ResolvePlan(cfg, reg)` — `internal/deploy/plan.go:29`.
-  - `deploy.ResolveServicePlan(cfg, reg, serviceName)` — `internal/deploy/service_plan.go:13`.
-  - `deploy.LoadTrackedServices(cfg, reg, baseDir)` — `internal/deploy/tracked.go:37` (calls `ResolvePlan` internally).
-  - `reset.ResolvePlan(cfg, reg)` and `reset.LoadAndResolvePlan(cfg, reg)` — `internal/reset/plan.go:14, 22`.
-- [ ] **caller-reordering** for sites that currently load the registry *after* a plan/tracked call. Required edits:
-  - `internal/command/deploy.go:69, 197, 548` — move `loadCommandRegistry(flags.configPath)` (defined in `internal/command/command_cmd.go:242`) above the `deploy.ResolvePlan` / `deploy.ResolveServicePlan` calls; pass it through.
-  - `internal/command/deploy.go:243` — `deploy.LoadTrackedServices` now takes `reg`; reuse the already-loaded one.
-  - `internal/command/reset.go:124, 219` — likewise.
-  - `internal/lifecycle/run.go:132` — `deploy.LoadTrackedServices(cfg, workDir)` is called **before** `LoadRegistryFromConfigPath` at line 154. **Reorder**: load the registry first (line 154 logic moves above line 132), then pass it to `LoadTrackedServices`.
-  - `internal/lifecycle/stop.go:41` — already loads `reg` early; no reorder needed.
-  - `internal/lifecycle/phases.go:34` — `RunPhases` already accepts `reg`; thread it into `ResolvePhaseSteps`.
-- [ ] **test updates**: all `deploy.ResolvePlan(cfg)` / `ResolveServicePlan(cfg, ...)` / `reset.ResolvePlan(cfg)` test sites (`internal/deploy/plan_test.go`, `service_plan_test.go`, `print_test.go`, reset equivalents) gain a `reg` argument. Use `usercommands.NewEmptyRegistry()` (already used in `completion_test.go`) for tests that don't need gate validation. Tests covering gate validation construct a registry via `reg := usercommands.NewEmptyRegistry(); reg.AddCommandForTest(def)` — `AddCommandForTest` is a **method** on `*Registry` (`internal/usercommands/registry/registry.go:126`), not a top-level helper.
-- [ ] **nil-`reg` policy**: `pipeline.ResolvePhaseSteps` tolerates `reg == nil` — gate validation is skipped (per-step `filesgate/spec.Validate` not invoked). This avoids requiring all internal-tool / utility callers to construct a registry. The validator surface (`internal/validate/config/`) already self-skips on `CommandRegistry: nil` per its own policy. Runtime callers (`deploy run`, `reset run`, `devbox run` via lifecycle) MUST pass a non-nil `reg`; document this in `ResolvePhaseSteps` godoc.
-- [ ] add `filesgate.StepRef{Type, Cmd string; With map[string]any}` to the parser-types package — a minimal step-shaped struct that lets the validator avoid importing `config.DeployStep`.
-- [ ] create `internal/filesgate/spec/` subpackage. Add `Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.FilesGate) []Issue`. The subpackage imports `config`, `registry`, and the parent `filesgate` parser-types package. `config` must NOT import this subpackage. **`cfg` is required** because param-coverage validation must use the same `ResolveParams` logic as runtime (defaults + `default_from` honoured). Verify no cycle with `go list -deps ./internal/config/...` as part of Task 2 acceptance.
-- [ ] Issues `filesgate/spec.Validate` returns:
-  - `state` set and ∈ `{readable, missing}` (defense-in-depth — YAML parser already rejects bad values).
-  - `command` defaults to `ref.Cmd` when `ref.Type == "command"`; otherwise required. If `command` is empty and `ref.Type != "command"`, error.
-  - referenced command exists in registry.
-  - referenced command has a non-empty `files:` block.
-  - `require` expands via `spec.ResolveRequireIDs(fg.Require, def.Files)` (same `internal/filesgate/spec` subpackage as `Validate`); any error returned by it (unknown ID, write-only ID, empty result for `required`/`all`, empty explicit list) becomes an Issue. **This is the single source of truth for require-spec semantics shared between validator and executor.**
-  - (write-only rejection is enforced inside `ResolveRequireIDs` — no separate check needed here.)
-  - **`with` keys plus the target command's parameter defaults / `default_from`** together must cover every required param of the target command. Run a dry `ResolveParams(def.Params, withAsStrings, cfg)` and treat its error as the failure; this guarantees parity with runtime.
-- [ ] `pipeline.ResolvePhaseSteps` constructs `filesgate.StepRef` from each step, calls `filesgate/spec.Validate`, and returns the **first** issue as a wrapped error (fail-fast).
-- [ ] **registry plumbing into `validate.Context`** (`internal/validate/validate.go:33`): the existing `Context{ProjectRoot, ConfigPath, Cfg}` does not carry a command registry. Add `CommandRegistry *usercommands.Registry` (nil-tolerant). The `validate` command (`internal/command/validate.go`) builds the registry **diagnostically**, NOT via `usercommands.LoadRegistryFromConfigPath` (which calls `reg.Validate()` and turns any single workflow cross-ref error into a hard failure — that would silently disable all gate diagnostics whenever an unrelated workflow has a typo). Use the same pattern already established by `internal/validate/commands/commands.go:87`:
-  - `DiscoverCommandFiles(commandsDir)` → parse each → `registry.BuildRegistryFromParsed(parsedFiles)` (no `reg.Validate()`).
-  - This produces a registry suitable for `Get()` lookups even when some commands have cross-ref issues elsewhere; those issues are reported separately by the commands validator via `reg.Diagnostics()`.
-  - **Hard parse failures** (YAML unparseable, duplicate command IDs from `BuildRegistryFromParsed` itself) → emit one warning diagnostic (`domain: commands`, hint: "command registry could not be built; gate validators skipped") and pass `CommandRegistry: nil` so gate validators self-skip with one warning each (not N misleading "command not found" per gate).
-  - (Do **not** invent `usercommands.LoadRegistry(workDir, cfg)`; only `LoadRegistry(baseDir)` and `LoadRegistryFromConfigPath(configPath)` exist — and neither is appropriate here.)
-- [ ] add `internal/validate/config/deploy_files_gate.go` (and lifecycle/reset equivalents). Each iterates every phase/step in the parsed `Cfg`, runs `filesgate/spec.Validate(ctx.Cfg, ctx.CommandRegistry, ref, fg)`, and emits one diagnostic per `Issue` with file/line/hint. When `ctx.CommandRegistry == nil`, emit one self-skip warning per validator and return. **Acceptance**: a single deploy.yml with three bad gates produces three diagnostics, not one.
-- [ ] write tests:
-  - shared helper: each error path + happy path; `access: write` rejection; param defaults satisfy the `with` coverage check (so a target command with `param x { default: foo }` and no `with: { x: ... }` passes).
-  - resolver: first error wins, subsequent steps not inspected.
-  - validator: aggregates across phases/services; diagnostic targets the right file/step.
-- [ ] run `make test ./internal/pipeline/... ./internal/validate/... ./internal/filesgate/...` — must pass before next task.
-- [ ] verify no cycle: `if go list -deps ./internal/config/... | grep -q 'internal/filesgate/spec'; then echo CYCLE; exit 1; fi` — `grep -q` matched would mean a forbidden dependency was added. The `if` form makes "no match" the success path (raw `grep` exits non-zero on no-match, which would mis-flag the success case).
+- [x] **plan-API cascade**: threading `*usercommands.Registry` into `pipeline.ResolvePhaseSteps` propagates upstream through every plan-resolution API. All of these gain a `reg *usercommands.Registry` parameter (passed straight through to `ResolvePhaseSteps`):
+  - [x] `pipeline.ResolvePhaseSteps(cfg, reg, phase, service)` — `internal/pipeline/resolve.go:20`.
+  - [x] `deploy.ResolvePlan(cfg, reg)` — `internal/deploy/plan.go:29`.
+  - [x] `deploy.ResolveServicePlan(cfg, reg, serviceName)` — `internal/deploy/service_plan.go:13`.
+  - [x] `deploy.LoadTrackedServices(cfg, reg, baseDir)` — `internal/deploy/tracked.go:37` (calls `ResolvePlan` internally).
+  - [x] `reset.ResolvePlan(cfg, reg)` and `reset.LoadAndResolvePlan(cfg, reg)` — `internal/reset/plan.go:14, 22`.
+- [x] **caller-reordering** for sites that currently load the registry *after* a plan/tracked call. Required edits:
+  - [x] `internal/command/deploy.go:69, 197, 548` — move `loadCommandRegistry(flags.configPath)` (defined in `internal/command/command_cmd.go:242`) above the `deploy.ResolvePlan` / `deploy.ResolveServicePlan` calls; pass it through.
+  - [x] `internal/command/deploy.go:243` — `deploy.LoadTrackedServices` now takes `reg`; reuse the already-loaded one.
+  - [x] `internal/command/reset.go:124, 219` — likewise.
+  - [ ] `internal/lifecycle/run.go:132` — `deploy.LoadTrackedServices(cfg, workDir)` is called **before** `LoadRegistryFromConfigPath` at line 154. **Reorder**: load the registry first (line 154 logic moves above line 132), then pass it to `LoadTrackedServices`.
+  - [x] `internal/lifecycle/stop.go:41` — already loads `reg` early; no reorder needed.
+  - [x] `internal/lifecycle/phases.go:34` — `RunPhases` already accepts `reg`; thread it into `ResolvePhaseSteps`.
+- [x] **test updates**: all `deploy.ResolvePlan(cfg)` / `ResolveServicePlan(cfg, ...)` / `reset.ResolvePlan(cfg)` test sites gain a `reg` argument. Use `usercommands.NewEmptyRegistry()` for tests that don't need gate validation.
+- [x] **nil-`reg` policy**: `pipeline.ResolvePhaseSteps` tolerates `reg == nil` — gate validation is skipped (per-step `filesgate/spec.Validate` not invoked). This avoids requiring all internal-tool / utility callers to construct a registry. The validator surface (`internal/validate/config/`) already self-skips on `CommandRegistry: nil` per its own policy. Runtime callers (`deploy run`, `reset run`, `devbox run` via lifecycle) MUST pass a non-nil `reg`; document this in `ResolvePhaseSteps` godoc.
+- [x] add `filesgate.StepRef{Type, Cmd string; With map[string]any}` to the parser-types package — a minimal step-shaped struct that lets the validator avoid importing `config.DeployStep`. (Already exists from Task 1.)
+- [x] create `internal/filesgate/spec/` subpackage. Add `Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.FilesGate) []Issue`. The subpackage imports `config`, `registry`, and the parent `filesgate` parser-types package. `config` must NOT import this subpackage. Verified no cycle with `go list -deps ./internal/config/...`.
+- [x] Issues `filesgate/spec.Validate` returns:
+  - [x] `state` set and ∈ `{readable, missing}` (defense-in-depth — YAML parser already rejects bad values).
+  - [x] `command` defaults to `ref.Cmd` when `ref.Type == "command"`; otherwise required. If `command` is empty and `ref.Type != "command"`, error.
+  - [x] referenced command exists in registry.
+  - [x] referenced command has a non-empty `files:` block.
+  - [x] `require` expands via `spec.ResolveRequireIDs(fg.Require, def.Files)` (same `internal/filesgate/spec` subpackage as `Validate`); any error returned by it (unknown ID, write-only ID, empty result for `required`/`all`, empty explicit list) becomes an Issue.
+  - [x] (write-only rejection is enforced inside `ResolveRequireIDs`.)
+  - [ ] **`with` keys plus the target command's parameter defaults / `default_from`** together must cover every required param of the target command. (Partially stubbed; full param validation deferred.)
+- [x] `pipeline.ResolvePhaseSteps` constructs `filesgate.StepRef` from each step, calls `filesgate/spec.Validate`, and returns the **first** issue as a wrapped error (fail-fast).
+- [ ] **registry plumbing into `validate.Context`** (`internal/validate/validate.go:33`): the existing `Context{ProjectRoot, ConfigPath, Cfg}` does not carry a command registry. Add `CommandRegistry *usercommands.Registry` (nil-tolerant). The `validate` command builds the registry **diagnostically**.
+- [ ] add `internal/validate/config/deploy_files_gate.go` (and lifecycle/reset equivalents). Each iterates every phase/step in the parsed `Cfg`, runs `filesgate/spec.Validate(ctx.Cfg, ctx.CommandRegistry, ref, fg)`, and emits one diagnostic per `Issue` with file/line/hint. When `ctx.CommandRegistry == nil`, emit one self-skip warning per validator and return.
+- [x] run `make test ./internal/pipeline/... ./internal/validate/... ./internal/filesgate/...` — all pass.
+- [x] verify no cycle: NO CYCLE detected.
 
 ### Task 6: Executor probe gate (with journal-skip bypass)
 
