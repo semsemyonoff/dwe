@@ -18,6 +18,8 @@ import (
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/filesgate/spec"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
 )
@@ -430,13 +432,112 @@ func RunWithOptions(opts RunOptions) error {
 			}
 		}
 
-		// Step 3: Consult skip decision from state/config hash invalidation.
-		decision := opts.SkipDecider(addr, rs, actionHash)
-		if decision == journal.Skip {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
-			opts.Recorder.OnStepSkip(addr, rs, actionHash, "state")
-			continue
+		// Step 3: Evaluate files_gate (if present).
+		// When a gate is present, it replaces the journal-skip-decider logic (journal bypass).
+		if rs.FilesGate != nil {
+			// Guard: runtime must have a registry to evaluate gates.
+			if opts.Registry == nil {
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				err := fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr)
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				return ErrSilent
+			}
+
+			// Determine the target command (gate.Command or step.Cmd).
+			targetCmd := rs.FilesGate.Command
+			if targetCmd == "" {
+				targetCmd = rs.Step.Cmd
+			}
+
+			// Resolve the target command from registry.
+			def, err := opts.Registry.Get(targetCmd)
+			if err != nil {
+				// Config error: command not found.
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				err := fmt.Errorf("files_gate on step %q references unknown command %q", addr, targetCmd)
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				return ErrSilent
+			}
+
+			// Build RunContext for the target command (using gate's with or step's with).
+			gateWith := rs.FilesGate.With
+			if gateWith == nil {
+				gateWith = rs.Step.With
+			}
+			runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
+			if err != nil {
+				// Config error: param resolution or docker config failed.
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				err := fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err)
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				return ErrSilent
+			}
+
+			// Expand require spec to get file IDs.
+			ids, err := spec.ResolveRequireIDs(rs.FilesGate.Require, def.Files)
+			if err != nil {
+				// Config error: invalid require spec.
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				err := fmt.Errorf("files_gate on step %q: %w", addr, err)
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				return ErrSilent
+			}
+
+			// Probe the selected files.
+			probeResults, err := usercommands.ComputeFilePathsProbe(runCtx, ids)
+			if err != nil {
+				// Config error: glob/template/regex error.
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				err := fmt.Errorf("files_gate on step %q: probing files: %w", addr, err)
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				return ErrSilent
+			}
+
+			// Evaluate gate against probed state.
+			gateSkip := false
+			switch rs.FilesGate.State {
+			case "readable":
+				// All selected files must exist.
+				for _, id := range ids {
+					if !probeResults[id].Resolved {
+						gateSkip = true
+						break
+					}
+				}
+			case "missing":
+				// None of the selected files may exist.
+				for _, id := range ids {
+					if probeResults[id].Resolved {
+						gateSkip = true
+						break
+					}
+				}
+			}
+
+			if gateSkip {
+				// Gate not satisfied — skip step.
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				reason := FormatFilesGate(rs.FilesGate, ids)
+				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
+				opts.Recorder.OnStepSkip(addr, rs, actionHash, reason)
+				continue
+			}
+
+			// Gate satisfied — proceed to execution (bypass journal-skip-decider).
+		} else {
+			// Step 3b: No gate present — consult skip decision from state/config hash invalidation.
+			decision := opts.SkipDecider(addr, rs, actionHash)
+			if decision == journal.Skip {
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
+				opts.Recorder.OnStepSkip(addr, rs, actionHash, "state")
+				continue
+			}
 		}
 
 		// Step 4: Execute the step.
@@ -530,6 +631,27 @@ func FormatAction(a *config.Action) string {
 		return ""
 	}
 	return a.Type + " " + a.Cmd
+}
+
+// FormatFilesGate returns a short human-readable form of a files_gate for display.
+// ids are the expanded file IDs that drove the gate decision.
+func FormatFilesGate(fg *filesgate.FilesGate, ids []string) string {
+	if fg == nil {
+		return ""
+	}
+	if len(ids) == 0 {
+		return "files_gate: " + fg.State.String()
+	}
+	// For display, show up to 3 IDs joined by comma, then "..." if more.
+	var shown []string
+	for i, id := range ids {
+		if i >= 3 {
+			shown = append(shown, "...")
+			break
+		}
+		shown = append(shown, id)
+	}
+	return "files_gate: " + fg.State.String() + " [" + strings.Join(shown, ",") + "]"
 }
 
 // shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.

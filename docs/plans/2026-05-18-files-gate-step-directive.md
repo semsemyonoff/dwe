@@ -168,17 +168,17 @@ Steps:
 
 **Resolution**: when `rs.FilesGate != nil`, the gate is the authoritative skip decision and the **journal-skip step is bypassed**. The step is always evaluated by the gate on every deploy; on satisfaction it runs (and the recorder still records success/failure as before). When `rs.FilesGate == nil`, executor behaviour is unchanged. This keeps the gate's "decides run/skip" semantics intact without requiring the journal hash to encode probe outcomes (which would make the hash runtime-dependent and violate `ActionHash`'s contract).
 
-- [ ] in `internal/pipeline/executor.go`, after the existing `RuntimeWhen` check around line 452, add `FilesGate` evaluation. Order: `phase-when → step-when → files_gate → (journal-skip iff FilesGate == nil) → execute`.
-- [ ] short-circuit: `when:` evaluates first; if it skips, the gate is not probed.
-- [ ] **nil-registry guard at runtime**: `ResolvePhaseSteps` tolerates `reg == nil` (Task 5), so a gated step *could* in principle reach the executor with `opts.Registry == nil`. Before calling `reg.Get(...)`, the executor must check `opts.Registry == nil` and, if a gated step is present, return a clear error like `"files_gate on step %q requires command registry but none was provided to the executor"`. This becomes a step failure (`FailStep`), not a panic. Document in `ResolvePhaseSteps` godoc that runtime callers MUST pass a non-nil `reg` (matches the policy stated in Task 5).
-- [ ] resolve target command via `reg.Get(fg.Command || step.Cmd)` (registry exposes `Get`, see `internal/usercommands/registry/registry.go:132`), build `RunContext` via `BuildRunContext(cfg, reg, def, fg.With ?? step.With, workDir)`, expand the require spec via `ids, err := spec.ResolveRequireIDs(fg.Require, def.Files)` (importing `internal/filesgate/spec`), then call `usercommands.ComputeFilePathsProbe(ctx, ids)`. The resolved `ids` slice also drives the reporter skip-reason text.
-- [ ] evaluate against `fg.State`:
+- [x] in `internal/pipeline/executor.go`, after the existing `RuntimeWhen` check around line 452, add `FilesGate` evaluation. Order: `phase-when → step-when → files_gate → (journal-skip iff FilesGate == nil) → execute`.
+- [x] short-circuit: `when:` evaluates first; if it skips, the gate is not probed.
+- [x] **nil-registry guard at runtime**: `ResolvePhaseSteps` tolerates `reg == nil` (Task 5), so a gated step *could* in principle reach the executor with `opts.Registry == nil`. Before calling `reg.Get(...)`, the executor must check `opts.Registry == nil` and, if a gated step is present, return a clear error like `"files_gate on step %q requires command registry but none was provided to the executor"`. This becomes a step failure (`FailStep`), not a panic. Document in `ResolvePhaseSteps` godoc that runtime callers MUST pass a non-nil `reg` (matches the policy stated in Task 5).
+- [x] resolve target command via `reg.Get(fg.Command || step.Cmd)` (registry exposes `Get`, see `internal/usercommands/registry/registry.go:132`), build `RunContext` via `BuildRunContext(cfg, reg, def, fg.With ?? step.With, workDir)`, expand the require spec via `ids, err := spec.ResolveRequireIDs(fg.Require, def.Files)` (importing `internal/filesgate/spec`), then call `usercommands.ComputeFilePathsProbe(ctx, ids)`. The resolved `ids` slice also drives the reporter skip-reason text.
+- [x] evaluate against `fg.State`:
   - `readable` → all selected files must have `Resolved: true`; otherwise `SkipStep`.
   - `missing` → none of the selected files may have `Resolved: true`; otherwise `SkipStep`.
   - configuration errors (returned from probe) → return error from executor → step fails (matches existing behaviour for malformed `when:` builtins).
-- [ ] reporter skip reason text: `files_gate: readable` or `files_gate: missing [dump,backup]` — show the file IDs that drove the decision.
-- [ ] `Recorder.OnStepSkip(addr, rs, actionHash, "files_gate: ...")` on gate-skip; recorder unchanged on gate-pass (step runs, normal start/finish path applies).
-- [ ] write tests:
+- [x] reporter skip reason text: `files_gate: readable` or `files_gate: missing [dump,backup]` — show the file IDs that drove the decision.
+- [x] `Recorder.OnStepSkip(addr, rs, actionHash, "files_gate: ...")` on gate-skip; recorder unchanged on gate-pass (step runs, normal start/finish path applies).
+- [x] write tests:
   - gate `readable` + file present → runs; gate `readable` + file missing → skipped with reason.
   - gate `missing` + file present → skipped; gate `missing` + file absent → runs.
   - gate + `when: false` → skipped at `when:`, gate never evaluated (assert via probe-counter spy).
@@ -186,7 +186,7 @@ Steps:
   - **journal-bypass test**: step with `files_gate: missing` previously succeeded in journal, artifact then deleted → step re-evaluates gate → runs again (without gate present, the same scenario would skip via journal).
   - **journal-bypass test (inverse)**: step with `files_gate: readable` previously succeeded, artifact still present → re-evaluates gate → runs again (gate satisfied; journal skip bypassed). This is the deliberate trade-off — gate semantics over idempotency caching. Documented in Task 9 docs.
   - **nil-registry guard test**: a gated step reaches `executor.Run` with `opts.Registry == nil` → step fails with a clear error message (does NOT panic at `reg.Get`).
-- [ ] run `make test ./internal/pipeline/...` — must pass before next task.
+- [x] run `make test ./internal/pipeline/...` — must pass before next task.
 
 ### Task 7: Journal recording — include `FilesGate` in recorded step hash
 

@@ -13,6 +13,8 @@ import (
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/usercommands"
 )
 
 // --- mockReporter records all reporter events for assertion ---
@@ -645,6 +647,374 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 
 	if !slices.Contains(rep.kindSeq(), "SuspendForExec") {
 		t.Errorf("SuspendForExec must be called for confirm step, kinds: %v", rep.kindSeq())
+	}
+}
+
+// --- files_gate tests ---
+
+func TestRunPipeline_FilesGate_ReadableFilePresent(t *testing.T) {
+	// Create a file that the gate will probe.
+	workDir := t.TempDir()
+	probeFile := filepath.Join(workDir, "dump.sql.gz")
+	if err := os.WriteFile(probeFile, []byte("fake dump"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a registry with a command that has a files: block.
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-download",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "dump.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "check-dump",
+				Type: "shell",
+				Cmd:  "echo dump-exists",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Step should run (file is present, gate satisfied).
+	kinds := rep.kindSeq()
+	finishIdx := -1
+	for i, k := range kinds {
+		if k == "FinishStep" {
+			finishIdx = i
+			break
+		}
+	}
+	if finishIdx == -1 {
+		t.Errorf("FinishStep should be called, got kinds: %v", kinds)
+	}
+}
+
+func TestRunPipeline_FilesGate_ReadableFileMissing_SkipsStep(t *testing.T) {
+	// Gate requires file to exist, but it doesn't.
+	workDir := t.TempDir()
+
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-download",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "dump.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "check-dump",
+				Type: "shell",
+				Cmd:  "echo dump-exists",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Step should be skipped due to gate.
+	var skipEvents []reporterEvent
+	for _, e := range rep.events {
+		if e.kind == "SkipStep" {
+			skipEvents = append(skipEvents, e)
+		}
+	}
+	if len(skipEvents) != 1 {
+		t.Errorf("want 1 SkipStep event, got %d (kinds: %v)", len(skipEvents), rep.kindSeq())
+	}
+	if len(skipEvents) > 0 && !strings.Contains(skipEvents[0].reason, "files_gate") {
+		t.Errorf("SkipStep reason %q should mention files_gate", skipEvents[0].reason)
+	}
+}
+
+func TestRunPipeline_FilesGate_MissingStateFileAbsent(t *testing.T) {
+	// Gate state: missing, file absent → step should run.
+	workDir := t.TempDir()
+
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-download",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "dump.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "download-dump",
+				Type: "shell",
+				Cmd:  "echo downloading",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateMissing,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Step should run (file missing satisfies state: missing).
+	kinds := rep.kindSeq()
+	finishIdx := -1
+	for i, k := range kinds {
+		if k == "FinishStep" {
+			finishIdx = i
+			break
+		}
+	}
+	if finishIdx == -1 {
+		t.Errorf("FinishStep should be called, got kinds: %v", kinds)
+	}
+}
+
+func TestRunPipeline_FilesGate_WhenFalseBypassesGate(t *testing.T) {
+	// when: false should skip step without evaluating the gate.
+	workDir := t.TempDir()
+	probeFile := filepath.Join(workDir, "dump.sql.gz")
+	if err := os.WriteFile(probeFile, []byte("fake dump"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a non-empty directory so "dir-empty" evaluates to false.
+	nonEmptyDir := filepath.Join(workDir, "non-empty")
+	if err := os.Mkdir(nonEmptyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nonEmptyDir, "file"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-download",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "dump.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "check-dump",
+				Type: "shell",
+				Cmd:  "echo dump-exists",
+			},
+			RuntimeWhen: &condition.Condition{
+				Type: condition.TypeBuiltin,
+				Cmd:  "dir-empty " + nonEmptyDir, // Will be false since dir is not empty
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateMissing, // gate would fail (file exists)
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Step should be skipped due to when: false, not gate.
+	var skipEvents []reporterEvent
+	for _, e := range rep.events {
+		if e.kind == "SkipStep" {
+			skipEvents = append(skipEvents, e)
+		}
+	}
+	if len(skipEvents) != 1 {
+		t.Errorf("want 1 SkipStep event, got %d", len(skipEvents))
+	} else if !strings.Contains(skipEvents[0].reason, "when:") {
+		t.Errorf("SkipStep reason %q should mention 'when:', not gate", skipEvents[0].reason)
+	}
+}
+
+func TestRunPipeline_FilesGate_NilRegistry_FailsStep(t *testing.T) {
+	// Gate evaluation requires a registry; if none is provided, step should fail.
+	workDir := t.TempDir()
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "check-dump",
+				Type: "shell",
+				Cmd:  "echo dump-exists",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    nil, // Nil registry should cause step to fail.
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent due to nil registry, got %v", err)
+	}
+
+	// FailStep should be called with a clear error message.
+	var failEvents []reporterEvent
+	for _, e := range rep.events {
+		if e.kind == "FailStep" {
+			failEvents = append(failEvents, e)
+		}
+	}
+	if len(failEvents) != 1 {
+		t.Errorf("want 1 FailStep event, got %d", len(failEvents))
+	} else if !strings.Contains(failEvents[0].err.Error(), "registry") {
+		t.Errorf("FailStep error %q should mention registry", failEvents[0].err.Error())
 	}
 }
 
