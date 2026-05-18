@@ -118,7 +118,7 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
-			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
+			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/ai/%s or devbox/templates/ai/default", name),
 		}}
 	}

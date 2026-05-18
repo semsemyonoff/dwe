@@ -48,7 +48,7 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 		return err
 	}
 	if !found {
-		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found; tried %s, default)", name, name))
+		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found)", name))
 		return nil
 	}
 

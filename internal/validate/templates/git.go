@@ -126,7 +126,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
-			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
+			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/git/%s or devbox/templates/git/default", name),
 		}}
 	}

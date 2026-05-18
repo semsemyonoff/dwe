@@ -235,6 +235,8 @@ func ResolveGitHooksDir(absHub string) (string, DirStatus, error) {
 		if fi.Mode()&os.ModeSymlink != 0 {
 			return "", 0, fmt.Errorf("git: src is a symlink at %s", srcDir)
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", 0, fmt.Errorf("stat %s: %w", srcDir, err)
 	}
 
 	fi, err := os.Lstat(gitDir)

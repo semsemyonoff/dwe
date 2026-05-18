@@ -226,6 +226,18 @@ func serviceConfigToMap(svc config.ServiceConfig) map[string]any {
 		m["ai"] = ai
 	}
 
+	// Include Git config if present
+	if svc.Render.Git.Enabled != nil || svc.Render.Git.Template != "" {
+		git := map[string]any{}
+		if svc.Render.Git.Enabled != nil {
+			git["enabled"] = *svc.Render.Git.Enabled
+		}
+		if svc.Render.Git.Template != "" {
+			git["template"] = svc.Render.Git.Template
+		}
+		m["git"] = git
+	}
+
 	return m
 }
 

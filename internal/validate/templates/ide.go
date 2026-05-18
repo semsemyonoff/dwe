@@ -121,7 +121,7 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
-			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
+			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/ide/%s or devbox/templates/ide/default", name),
 		}}
 	}

@@ -1,6 +1,7 @@
 # Binaries
 bin/
 /devbox
+*.test
 
 # IDE & OS
 .idea/
