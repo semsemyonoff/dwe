@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/usercommands"
 )
@@ -140,7 +139,7 @@ func TestResolveServicePlan_singleService(t *testing.T) {
 		t.Fatalf("LoadConfig: %v", err)
 	}
 
-	steps, err := deploy.ResolveServicePlan(cfg, "main")
+	steps, err := deploy.ResolveServicePlan(cfg, usercommands.NewEmptyRegistry(), "main")
 	if err != nil {
 		t.Fatalf("ResolveServicePlan: %v", err)
 	}
