@@ -155,7 +155,7 @@ Steps:
   - [x] referenced command has a non-empty `files:` block.
   - [x] `require` expands via `spec.ResolveRequireIDs(fg.Require, def.Files)` (same `internal/filesgate/spec` subpackage as `Validate`); any error returned by it (unknown ID, write-only ID, empty result for `required`/`all`, empty explicit list) becomes an Issue.
   - [x] (write-only rejection is enforced inside `ResolveRequireIDs`.)
-  - [ ] **`with` keys plus the target command's parameter defaults / `default_from`** together must cover every required param of the target command. (Partially stubbed; full param validation deferred.)
+  - [x] **`with` keys plus the target command's parameter defaults / `default_from`** together must cover every required param of the target command. Validated in `spec.Validate()` with comprehensive tests for required/optional/default/default_from scenarios.
 - [x] `pipeline.ResolvePhaseSteps` constructs `filesgate.StepRef` from each step, calls `filesgate/spec.Validate`, and returns the **first** issue as a wrapped error (fail-fast).
 - [x] **registry plumbing into `validate.Context`** (`internal/validate/validate.go:33`): added `CommandRegistry any` field (nil-tolerant) to Context struct.
 - [x] add `internal/validate/config/deploy_files_gate.go` (and lifecycle/reset equivalents). Created three validators (deployFilesGateValidator, lifecycleFilesGateValidator, resetFilesGateValidator) that iterate phases/steps and emit diagnostics for files_gate validation issues. Registered in All() function.
