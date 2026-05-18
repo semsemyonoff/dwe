@@ -36,7 +36,7 @@ func TestResolveTemplatePack(t *testing.T) {
 	t.Run("explicit hit", func(t *testing.T) {
 		root := t.TempDir()
 		mkPack(t, root, "myhooks", map[string]string{"manifest.yml": "render: []\n"})
-		svc := config.ServiceConfig{Git: config.ServiceGitHooksConfig{Template: "myhooks"}}
+		svc := config.ServiceConfig{Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Template: "myhooks"}}}
 		packDir, packName, err := ResolveTemplatePack(svc, root, "main")
 		if err != nil {
 			t.Fatal(err)
@@ -50,7 +50,7 @@ func TestResolveTemplatePack(t *testing.T) {
 	})
 	t.Run("explicit missing hard error", func(t *testing.T) {
 		root := t.TempDir()
-		svc := config.ServiceConfig{Git: config.ServiceGitHooksConfig{Template: "nope"}}
+		svc := config.ServiceConfig{Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Template: "nope"}}}
 		_, _, err := ResolveTemplatePack(svc, root, "main")
 		if err == nil {
 			t.Fatal("expected error")
@@ -96,12 +96,12 @@ func TestResolveTemplatePack(t *testing.T) {
 		// Even with default present on disk, an explicit "../etc" must hard-error
 		// without falling back.
 		mkPack(t, root, "default", map[string]string{"manifest.yml": ""})
-		svc := config.ServiceConfig{Git: config.ServiceGitHooksConfig{Template: "../etc"}}
+		svc := config.ServiceConfig{Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Template: "../etc"}}}
 		_, _, err := ResolveTemplatePack(svc, root, "main")
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !strings.Contains(err.Error(), "invalid git.template") {
+		if !strings.Contains(err.Error(), "invalid render.git.template") {
 			t.Errorf("expected pack-name validation error, got %v", err)
 		}
 	})
@@ -136,7 +136,7 @@ func TestSelectServices(t *testing.T) {
 	t.Run("disabled and git-disabled dropped", func(t *testing.T) {
 		svcs := map[string]config.ServiceConfig{
 			"a": {Enabled: false, Type: "app", Dir: "services/a"},
-			"b": {Enabled: true, Type: "app", Dir: "services/b", Git: config.ServiceGitHooksConfig{Enabled: ptrBool(false)}},
+			"b": {Enabled: true, Type: "app", Dir: "services/b", Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Enabled: ptrBool(false)}}},
 			"c": {Enabled: true, Type: "app", Dir: "services/c"},
 		}
 		selected, skipped := SelectServices(svcs)

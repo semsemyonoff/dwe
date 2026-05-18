@@ -167,7 +167,7 @@ func ValidateServiceNameAsPackKey(s string) error {
 }
 
 // ResolveTemplatePack resolves a template pack directory for a service.
-// Returns (packDir, packName, err). Explicit svc.IDE.Template is strict.
+// Returns (packDir, packName, err). Explicit svc.Render.IDE.Template is strict.
 // Implicit chain: serviceName → default; ErrNotExist falls through.
 func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, error) {
 	absRoot, err := filepath.Abs(projectRoot)
@@ -175,28 +175,28 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("resolve project root: %w", err)
 	}
 
-	if svc.IDE.Template != "" {
-		if err := manifest.ValidatePackName(svc.IDE.Template); err != nil {
-			return "", "", fmt.Errorf("invalid ide.template %q: %w", svc.IDE.Template, err)
+	if svc.Render.IDE.Template != "" {
+		if err := manifest.ValidatePackName(svc.Render.IDE.Template); err != nil {
+			return "", "", fmt.Errorf("invalid render.ide.template %q: %w", svc.Render.IDE.Template, err)
 		}
-		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", svc.IDE.Template)
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", svc.Render.IDE.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", svc.IDE.Template)
+				return "", "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", svc.Render.IDE.Template)
 			}
 			if !fi.IsDir() {
-				return "", "", fmt.Errorf("ide template pack %q is not a directory", svc.IDE.Template)
+				return "", "", fmt.Errorf("ide template pack %q is not a directory", svc.Render.IDE.Template)
 			}
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "ide template pack"); err != nil {
 				return "", "", err
 			}
-			return candidate, svc.IDE.Template, nil
+			return candidate, svc.Render.IDE.Template, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf("stat ide template pack %q: %w", svc.IDE.Template, err)
+			return "", "", fmt.Errorf("stat ide template pack %q: %w", svc.Render.IDE.Template, err)
 		}
-		return "", "", fmt.Errorf("ide template pack %q not found (required by explicit ide.template setting)", svc.IDE.Template)
+		return "", "", fmt.Errorf("ide template pack %q not found (required by explicit render.ide.template setting)", svc.Render.IDE.Template)
 	}
 
 	// Implicit chain: service-name → default. Skip the service-name candidate

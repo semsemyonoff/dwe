@@ -89,9 +89,9 @@ func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, b
 
 // ResolveTemplatePack resolves a template pack directory for a service.
 // Returns the absolute path to a directory under devbox/templates/ai/ along with
-// the resolved pack name (the chain choice: explicit svc.AI.Template, the
+// the resolved pack name (the chain choice: explicit svc.Render.AI.Template, the
 // service name when that pack exists, or "default"). Explicit is strict: if
-// svc.AI.Template is set and does not exist, returns an error.
+// svc.Render.AI.Template is set and does not exist, returns an error.
 // Implicit chain: service-name → default, with fallthrough only on ErrNotExist.
 func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, error) {
 	absRoot, err := filepath.Abs(projectRoot)
@@ -100,28 +100,28 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 	}
 
 	// Explicit candidate (strict — hard error on any condition, including not-found; never falls through)
-	if svc.AI.Template != "" {
-		if err := manifest.ValidatePackName(svc.AI.Template); err != nil {
-			return "", "", fmt.Errorf("invalid ai.template %q: %w", svc.AI.Template, err)
+	if svc.Render.AI.Template != "" {
+		if err := manifest.ValidatePackName(svc.Render.AI.Template); err != nil {
+			return "", "", fmt.Errorf("invalid render.ai.template %q: %w", svc.Render.AI.Template, err)
 		}
-		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", svc.AI.Template)
+		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", svc.Render.AI.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", "", fmt.Errorf("agents template pack %q is a symlink; symlinked packs are not supported", svc.AI.Template)
+				return "", "", fmt.Errorf("agents template pack %q is a symlink; symlinked packs are not supported", svc.Render.AI.Template)
 			}
 			if !fi.IsDir() {
-				return "", "", fmt.Errorf("agents template pack %q is not a directory", svc.AI.Template)
+				return "", "", fmt.Errorf("agents template pack %q is not a directory", svc.Render.AI.Template)
 			}
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "agents template pack"); err != nil {
 				return "", "", err
 			}
-			return candidate, svc.AI.Template, nil
+			return candidate, svc.Render.AI.Template, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf("stat agents template pack %q: %w", svc.AI.Template, err)
+			return "", "", fmt.Errorf("stat agents template pack %q: %w", svc.Render.AI.Template, err)
 		}
-		return "", "", fmt.Errorf("agents template pack %q not found (required by explicit ai.template setting)", svc.AI.Template)
+		return "", "", fmt.Errorf("agents template pack %q not found (required by explicit render.ai.template setting)", svc.Render.AI.Template)
 	}
 
 	// Implicit chain: service-name → default. Skip the service-name candidate

@@ -3000,13 +3000,13 @@ func TestServiceConfig_IDERenderEnabledExplicit(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{IDE: ServiceIDEConfig{Enabled: ptr(true)}}}, //nolint:modernize
 			wantBool: true,
 			wantExp:  true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{IDE: ServiceIDEConfig{Enabled: ptr(false)}}}, //nolint:modernize
 			wantBool: false,
 			wantExp:  true,
 		},
@@ -3051,12 +3051,12 @@ func TestServiceConfig_IDERenderEnabled(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{IDE: ServiceIDEConfig{Enabled: ptr(true)}}}, //nolint:modernize
 			wantBool: true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{IDE: ServiceIDEConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{IDE: ServiceIDEConfig{Enabled: ptr(false)}}}, //nolint:modernize
 			wantBool: false,
 		},
 		{
@@ -3088,9 +3088,10 @@ services:
     container: parent
     mandatory: true
     dir: ./services/parent
-    ide:
-      enabled: false
-      template: parent-tmpl
+    render:
+      ide:
+        enabled: false
+        template: parent-tmpl
   child-inherit:
     type: app
     container: child-inherit
@@ -3101,23 +3102,26 @@ services:
     container: child-override-enabled
     mandatory: false
     extends: parent
-    ide:
-      enabled: true
+    render:
+      ide:
+        enabled: true
   child-override-template:
     type: app
     container: child-override-template
     mandatory: false
     extends: parent
-    ide:
-      template: child-tmpl
+    render:
+      ide:
+        template: child-tmpl
   child-override-both:
     type: app
     container: child-override-both
     mandatory: false
     extends: parent
-    ide:
-      enabled: true
-      template: both-tmpl
+    render:
+      ide:
+        enabled: true
+        template: both-tmpl
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "services.yml")
@@ -3131,47 +3135,47 @@ services:
 
 	// Parent has explicit false and template
 	parent := services["parent"]
-	if parent.IDE.Enabled == nil || *parent.IDE.Enabled != false {
-		t.Errorf("parent IDE.Enabled should be false, got %v", parent.IDE.Enabled)
+	if parent.Render.IDE.Enabled == nil || *parent.Render.IDE.Enabled != false {
+		t.Errorf("parent Render.IDE.Enabled should be false, got %v", parent.Render.IDE.Enabled)
 	}
-	if parent.IDE.Template != "parent-tmpl" {
-		t.Errorf("parent IDE.Template = %q, want parent-tmpl", parent.IDE.Template)
+	if parent.Render.IDE.Template != "parent-tmpl" {
+		t.Errorf("parent Render.IDE.Template = %q, want parent-tmpl", parent.Render.IDE.Template)
 	}
 
 	// Child inherits both parent's enabled and template
 	childInh := services["child-inherit"]
-	if childInh.IDE.Enabled == nil || *childInh.IDE.Enabled != false {
-		t.Errorf("child-inherit IDE.Enabled should inherit false from parent, got %v", childInh.IDE.Enabled)
+	if childInh.Render.IDE.Enabled == nil || *childInh.Render.IDE.Enabled != false {
+		t.Errorf("child-inherit Render.IDE.Enabled should inherit false from parent, got %v", childInh.Render.IDE.Enabled)
 	}
-	if childInh.IDE.Template != "parent-tmpl" {
-		t.Errorf("child-inherit IDE.Template should inherit parent-tmpl, got %q", childInh.IDE.Template)
+	if childInh.Render.IDE.Template != "parent-tmpl" {
+		t.Errorf("child-inherit Render.IDE.Template should inherit parent-tmpl, got %q", childInh.Render.IDE.Template)
 	}
 
 	// Child overrides enabled but inherits template
 	childOvrE := services["child-override-enabled"]
-	if childOvrE.IDE.Enabled == nil || *childOvrE.IDE.Enabled != true {
-		t.Errorf("child-override-enabled IDE.Enabled should be true, got %v", childOvrE.IDE.Enabled)
+	if childOvrE.Render.IDE.Enabled == nil || *childOvrE.Render.IDE.Enabled != true {
+		t.Errorf("child-override-enabled Render.IDE.Enabled should be true, got %v", childOvrE.Render.IDE.Enabled)
 	}
-	if childOvrE.IDE.Template != "parent-tmpl" {
-		t.Errorf("child-override-enabled IDE.Template should inherit parent-tmpl, got %q", childOvrE.IDE.Template)
+	if childOvrE.Render.IDE.Template != "parent-tmpl" {
+		t.Errorf("child-override-enabled Render.IDE.Template should inherit parent-tmpl, got %q", childOvrE.Render.IDE.Template)
 	}
 
 	// Child overrides template but inherits enabled
 	childOvrT := services["child-override-template"]
-	if childOvrT.IDE.Enabled == nil || *childOvrT.IDE.Enabled != false {
-		t.Errorf("child-override-template IDE.Enabled should inherit false from parent, got %v", childOvrT.IDE.Enabled)
+	if childOvrT.Render.IDE.Enabled == nil || *childOvrT.Render.IDE.Enabled != false {
+		t.Errorf("child-override-template Render.IDE.Enabled should inherit false from parent, got %v", childOvrT.Render.IDE.Enabled)
 	}
-	if childOvrT.IDE.Template != "child-tmpl" {
-		t.Errorf("child-override-template IDE.Template = %q, want child-tmpl", childOvrT.IDE.Template)
+	if childOvrT.Render.IDE.Template != "child-tmpl" {
+		t.Errorf("child-override-template Render.IDE.Template = %q, want child-tmpl", childOvrT.Render.IDE.Template)
 	}
 
 	// Child overrides both
 	childOvrB := services["child-override-both"]
-	if childOvrB.IDE.Enabled == nil || *childOvrB.IDE.Enabled != true {
-		t.Errorf("child-override-both IDE.Enabled should be true, got %v", childOvrB.IDE.Enabled)
+	if childOvrB.Render.IDE.Enabled == nil || *childOvrB.Render.IDE.Enabled != true {
+		t.Errorf("child-override-both Render.IDE.Enabled should be true, got %v", childOvrB.Render.IDE.Enabled)
 	}
-	if childOvrB.IDE.Template != "both-tmpl" {
-		t.Errorf("child-override-both IDE.Template = %q, want both-tmpl", childOvrB.IDE.Template)
+	if childOvrB.Render.IDE.Template != "both-tmpl" {
+		t.Errorf("child-override-both Render.IDE.Template = %q, want both-tmpl", childOvrB.Render.IDE.Template)
 	}
 }
 
@@ -3185,13 +3189,13 @@ func TestServiceConfig_AIRenderEnabledExplicit(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{AI: ServiceAIConfig{Enabled: ptr(true)}}}, //nolint:modernize
 			wantBool: true,
 			wantExp:  true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{AI: ServiceAIConfig{Enabled: ptr(false)}}}, //nolint:modernize
 			wantBool: false,
 			wantExp:  true,
 		},
@@ -3236,12 +3240,12 @@ func TestServiceConfig_AIRenderEnabled(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{AI: ServiceAIConfig{Enabled: ptr(true)}}}, //nolint:modernize
 			wantBool: true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{AI: ServiceAIConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{AI: ServiceAIConfig{Enabled: ptr(false)}}}, //nolint:modernize
 			wantBool: false,
 		},
 		{
@@ -3273,9 +3277,10 @@ services:
     container: parent
     mandatory: true
     dir: ./services/parent
-    ai:
-      enabled: false
-      template: parent-tmpl
+    render:
+      ai:
+        enabled: false
+        template: parent-tmpl
   child-inherit:
     type: app
     container: child-inherit
@@ -3286,23 +3291,26 @@ services:
     container: child-override-enabled
     mandatory: false
     extends: parent
-    ai:
-      enabled: true
+    render:
+      ai:
+        enabled: true
   child-override-template:
     type: app
     container: child-override-template
     mandatory: false
     extends: parent
-    ai:
-      template: child-tmpl
+    render:
+      ai:
+        template: child-tmpl
   child-override-both:
     type: app
     container: child-override-both
     mandatory: false
     extends: parent
-    ai:
-      enabled: true
-      template: both-tmpl
+    render:
+      ai:
+        enabled: true
+        template: both-tmpl
   grandchild-multi-hop:
     type: app
     container: grandchild
@@ -3321,56 +3329,56 @@ services:
 
 	// Parent has explicit false and template
 	parent := services["parent"]
-	if parent.AI.Enabled == nil || *parent.AI.Enabled != false {
-		t.Errorf("parent AI.Enabled should be false, got %v", parent.AI.Enabled)
+	if parent.Render.AI.Enabled == nil || *parent.Render.AI.Enabled != false {
+		t.Errorf("parent Render.AI.Enabled should be false, got %v", parent.Render.AI.Enabled)
 	}
-	if parent.AI.Template != "parent-tmpl" {
-		t.Errorf("parent AI.Template = %q, want parent-tmpl", parent.AI.Template)
+	if parent.Render.AI.Template != "parent-tmpl" {
+		t.Errorf("parent Render.AI.Template = %q, want parent-tmpl", parent.Render.AI.Template)
 	}
 
 	// Child inherits both parent's enabled and template
 	childInh := services["child-inherit"]
-	if childInh.AI.Enabled == nil || *childInh.AI.Enabled != false {
-		t.Errorf("child-inherit AI.Enabled should inherit false from parent, got %v", childInh.AI.Enabled)
+	if childInh.Render.AI.Enabled == nil || *childInh.Render.AI.Enabled != false {
+		t.Errorf("child-inherit Render.AI.Enabled should inherit false from parent, got %v", childInh.Render.AI.Enabled)
 	}
-	if childInh.AI.Template != "parent-tmpl" {
-		t.Errorf("child-inherit AI.Template should inherit parent-tmpl, got %q", childInh.AI.Template)
+	if childInh.Render.AI.Template != "parent-tmpl" {
+		t.Errorf("child-inherit Render.AI.Template should inherit parent-tmpl, got %q", childInh.Render.AI.Template)
 	}
 
 	// Child overrides enabled but inherits template
 	childOvrE := services["child-override-enabled"]
-	if childOvrE.AI.Enabled == nil || *childOvrE.AI.Enabled != true {
-		t.Errorf("child-override-enabled AI.Enabled should be true, got %v", childOvrE.AI.Enabled)
+	if childOvrE.Render.AI.Enabled == nil || *childOvrE.Render.AI.Enabled != true {
+		t.Errorf("child-override-enabled Render.AI.Enabled should be true, got %v", childOvrE.Render.AI.Enabled)
 	}
-	if childOvrE.AI.Template != "parent-tmpl" {
-		t.Errorf("child-override-enabled AI.Template should inherit parent-tmpl, got %q", childOvrE.AI.Template)
+	if childOvrE.Render.AI.Template != "parent-tmpl" {
+		t.Errorf("child-override-enabled Render.AI.Template should inherit parent-tmpl, got %q", childOvrE.Render.AI.Template)
 	}
 
 	// Child overrides template but inherits enabled
 	childOvrT := services["child-override-template"]
-	if childOvrT.AI.Enabled == nil || *childOvrT.AI.Enabled != false {
-		t.Errorf("child-override-template AI.Enabled should inherit false from parent, got %v", childOvrT.AI.Enabled)
+	if childOvrT.Render.AI.Enabled == nil || *childOvrT.Render.AI.Enabled != false {
+		t.Errorf("child-override-template Render.AI.Enabled should inherit false from parent, got %v", childOvrT.Render.AI.Enabled)
 	}
-	if childOvrT.AI.Template != "child-tmpl" {
-		t.Errorf("child-override-template AI.Template = %q, want child-tmpl", childOvrT.AI.Template)
+	if childOvrT.Render.AI.Template != "child-tmpl" {
+		t.Errorf("child-override-template Render.AI.Template = %q, want child-tmpl", childOvrT.Render.AI.Template)
 	}
 
 	// Child overrides both
 	childOvrB := services["child-override-both"]
-	if childOvrB.AI.Enabled == nil || *childOvrB.AI.Enabled != true {
-		t.Errorf("child-override-both AI.Enabled should be true, got %v", childOvrB.AI.Enabled)
+	if childOvrB.Render.AI.Enabled == nil || *childOvrB.Render.AI.Enabled != true {
+		t.Errorf("child-override-both Render.AI.Enabled should be true, got %v", childOvrB.Render.AI.Enabled)
 	}
-	if childOvrB.AI.Template != "both-tmpl" {
-		t.Errorf("child-override-both AI.Template = %q, want both-tmpl", childOvrB.AI.Template)
+	if childOvrB.Render.AI.Template != "both-tmpl" {
+		t.Errorf("child-override-both Render.AI.Template = %q, want both-tmpl", childOvrB.Render.AI.Template)
 	}
 
 	// Grandchild (multi-hop): inherits from child-inherit
 	grandchild := services["grandchild-multi-hop"]
-	if grandchild.AI.Enabled == nil || *grandchild.AI.Enabled != false {
-		t.Errorf("grandchild-multi-hop AI.Enabled should inherit false from parent chain, got %v", grandchild.AI.Enabled)
+	if grandchild.Render.AI.Enabled == nil || *grandchild.Render.AI.Enabled != false {
+		t.Errorf("grandchild-multi-hop Render.AI.Enabled should inherit false from parent chain, got %v", grandchild.Render.AI.Enabled)
 	}
-	if grandchild.AI.Template != "parent-tmpl" {
-		t.Errorf("grandchild-multi-hop AI.Template should inherit parent-tmpl, got %q", grandchild.AI.Template)
+	if grandchild.Render.AI.Template != "parent-tmpl" {
+		t.Errorf("grandchild-multi-hop Render.AI.Template should inherit parent-tmpl, got %q", grandchild.Render.AI.Template)
 	}
 }
 
@@ -3384,13 +3392,13 @@ func TestServiceConfig_GitRenderEnabledExplicit(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{Git: ServiceGitHooksConfig{Enabled: ptr(true)}}}, //nolint:modernize
 			wantBool: true,
 			wantExp:  true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{Git: ServiceGitHooksConfig{Enabled: ptr(false)}}}, //nolint:modernize
 			wantBool: false,
 			wantExp:  true,
 		},
@@ -3435,12 +3443,12 @@ func TestServiceConfig_GitRenderEnabled(t *testing.T) {
 	}{
 		{
 			name:     "explicit true",
-			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(true)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{Git: ServiceGitHooksConfig{Enabled: ptr(true)}}}, //nolint:modernize
 			wantBool: true,
 		},
 		{
 			name:     "explicit false",
-			svc:      ServiceConfig{Git: ServiceGitHooksConfig{Enabled: ptr(false)}}, //nolint:modernize
+			svc:      ServiceConfig{Render: ServiceRenderConfig{Git: ServiceGitHooksConfig{Enabled: ptr(false)}}}, //nolint:modernize
 			wantBool: false,
 		},
 		{
@@ -3472,9 +3480,10 @@ services:
     container: parent
     mandatory: true
     dir: ./services/parent
-    git:
-      enabled: false
-      template: parent-tmpl
+    render:
+      git:
+        enabled: false
+        template: parent-tmpl
   child-inherit:
     type: app
     container: child-inherit
@@ -3485,23 +3494,26 @@ services:
     container: child-override-enabled
     mandatory: false
     extends: parent
-    git:
-      enabled: true
+    render:
+      git:
+        enabled: true
   child-override-template:
     type: app
     container: child-override-template
     mandatory: false
     extends: parent
-    git:
-      template: child-tmpl
+    render:
+      git:
+        template: child-tmpl
   child-override-both:
     type: app
     container: child-override-both
     mandatory: false
     extends: parent
-    git:
-      enabled: true
-      template: both-tmpl
+    render:
+      git:
+        enabled: true
+        template: both-tmpl
   grandchild-multi-hop:
     type: app
     container: grandchild
@@ -3519,51 +3531,51 @@ services:
 	}
 
 	parent := services["parent"]
-	if parent.Git.Enabled == nil || *parent.Git.Enabled != false {
-		t.Errorf("parent Git.Enabled should be false, got %v", parent.Git.Enabled)
+	if parent.Render.Git.Enabled == nil || *parent.Render.Git.Enabled != false {
+		t.Errorf("parent Render.Git.Enabled should be false, got %v", parent.Render.Git.Enabled)
 	}
-	if parent.Git.Template != "parent-tmpl" {
-		t.Errorf("parent Git.Template = %q, want parent-tmpl", parent.Git.Template)
+	if parent.Render.Git.Template != "parent-tmpl" {
+		t.Errorf("parent Render.Git.Template = %q, want parent-tmpl", parent.Render.Git.Template)
 	}
 
 	childInh := services["child-inherit"]
-	if childInh.Git.Enabled == nil || *childInh.Git.Enabled != false {
-		t.Errorf("child-inherit Git.Enabled should inherit false from parent, got %v", childInh.Git.Enabled)
+	if childInh.Render.Git.Enabled == nil || *childInh.Render.Git.Enabled != false {
+		t.Errorf("child-inherit Render.Git.Enabled should inherit false from parent, got %v", childInh.Render.Git.Enabled)
 	}
-	if childInh.Git.Template != "parent-tmpl" {
-		t.Errorf("child-inherit Git.Template should inherit parent-tmpl, got %q", childInh.Git.Template)
+	if childInh.Render.Git.Template != "parent-tmpl" {
+		t.Errorf("child-inherit Render.Git.Template should inherit parent-tmpl, got %q", childInh.Render.Git.Template)
 	}
 
 	childOvrE := services["child-override-enabled"]
-	if childOvrE.Git.Enabled == nil || *childOvrE.Git.Enabled != true {
-		t.Errorf("child-override-enabled Git.Enabled should be true, got %v", childOvrE.Git.Enabled)
+	if childOvrE.Render.Git.Enabled == nil || *childOvrE.Render.Git.Enabled != true {
+		t.Errorf("child-override-enabled Render.Git.Enabled should be true, got %v", childOvrE.Render.Git.Enabled)
 	}
-	if childOvrE.Git.Template != "parent-tmpl" {
-		t.Errorf("child-override-enabled Git.Template should inherit parent-tmpl, got %q", childOvrE.Git.Template)
+	if childOvrE.Render.Git.Template != "parent-tmpl" {
+		t.Errorf("child-override-enabled Render.Git.Template should inherit parent-tmpl, got %q", childOvrE.Render.Git.Template)
 	}
 
 	childOvrT := services["child-override-template"]
-	if childOvrT.Git.Enabled == nil || *childOvrT.Git.Enabled != false {
-		t.Errorf("child-override-template Git.Enabled should inherit false from parent, got %v", childOvrT.Git.Enabled)
+	if childOvrT.Render.Git.Enabled == nil || *childOvrT.Render.Git.Enabled != false {
+		t.Errorf("child-override-template Render.Git.Enabled should inherit false from parent, got %v", childOvrT.Render.Git.Enabled)
 	}
-	if childOvrT.Git.Template != "child-tmpl" {
-		t.Errorf("child-override-template Git.Template = %q, want child-tmpl", childOvrT.Git.Template)
+	if childOvrT.Render.Git.Template != "child-tmpl" {
+		t.Errorf("child-override-template Render.Git.Template = %q, want child-tmpl", childOvrT.Render.Git.Template)
 	}
 
 	childOvrB := services["child-override-both"]
-	if childOvrB.Git.Enabled == nil || *childOvrB.Git.Enabled != true {
-		t.Errorf("child-override-both Git.Enabled should be true, got %v", childOvrB.Git.Enabled)
+	if childOvrB.Render.Git.Enabled == nil || *childOvrB.Render.Git.Enabled != true {
+		t.Errorf("child-override-both Render.Git.Enabled should be true, got %v", childOvrB.Render.Git.Enabled)
 	}
-	if childOvrB.Git.Template != "both-tmpl" {
-		t.Errorf("child-override-both Git.Template = %q, want both-tmpl", childOvrB.Git.Template)
+	if childOvrB.Render.Git.Template != "both-tmpl" {
+		t.Errorf("child-override-both Render.Git.Template = %q, want both-tmpl", childOvrB.Render.Git.Template)
 	}
 
 	grandchild := services["grandchild-multi-hop"]
-	if grandchild.Git.Enabled == nil || *grandchild.Git.Enabled != false {
-		t.Errorf("grandchild-multi-hop Git.Enabled should inherit false from parent chain, got %v", grandchild.Git.Enabled)
+	if grandchild.Render.Git.Enabled == nil || *grandchild.Render.Git.Enabled != false {
+		t.Errorf("grandchild-multi-hop Render.Git.Enabled should inherit false from parent chain, got %v", grandchild.Render.Git.Enabled)
 	}
-	if grandchild.Git.Template != "parent-tmpl" {
-		t.Errorf("grandchild-multi-hop Git.Template should inherit parent-tmpl, got %q", grandchild.Git.Template)
+	if grandchild.Render.Git.Template != "parent-tmpl" {
+		t.Errorf("grandchild-multi-hop Render.Git.Template should inherit parent-tmpl, got %q", grandchild.Render.Git.Template)
 	}
 }
 
@@ -3576,17 +3588,18 @@ func TestLoadConfig_GitNotInjectedIntoRaw(t *testing.T) {
     container: main
     mandatory: true
     dir: ./services/main
-    git:
-      enabled: true
-      template: custom
+    render:
+      git:
+        enabled: true
+        template: custom
 `
 	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", svcYml)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if cfg.Services["main"].Git.Template != "custom" {
-		t.Fatalf("expected Git.Template to be loaded, got %q", cfg.Services["main"].Git.Template)
+	if cfg.Services["main"].Render.Git.Template != "custom" {
+		t.Fatalf("expected Render.Git.Template to be loaded, got %q", cfg.Services["main"].Render.Git.Template)
 	}
 	svcMap, ok := cfg.Raw["services"].(map[string]any)
 	if !ok {

@@ -236,7 +236,7 @@ func gitSvc(dir string) config.ServiceConfig {
 		Enabled: true,
 		Type:    "app",
 		Dir:     dir,
-		Git:     config.ServiceGitHooksConfig{Enabled: &tr},
+		Render:  config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Enabled: &tr}},
 	}
 }
 

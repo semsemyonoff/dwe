@@ -62,7 +62,7 @@ func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, b
 }
 
 // ResolveTemplatePack resolves a git template pack directory for a service.
-// Returns (packDir, packName, err). Explicit svc.Git.Template is strict.
+// Returns (packDir, packName, err). Explicit svc.Render.Git.Template is strict.
 // Implicit chain: serviceName → default; ErrNotExist falls through.
 func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, error) {
 	absRoot, err := filepath.Abs(projectRoot)
@@ -70,28 +70,28 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", fmt.Errorf("resolve project root: %w", err)
 	}
 
-	if svc.Git.Template != "" {
-		if err := manifest.ValidatePackName(svc.Git.Template); err != nil {
-			return "", "", fmt.Errorf("invalid git.template %q: %w", svc.Git.Template, err)
+	if svc.Render.Git.Template != "" {
+		if err := manifest.ValidatePackName(svc.Render.Git.Template); err != nil {
+			return "", "", fmt.Errorf("invalid render.git.template %q: %w", svc.Render.Git.Template, err)
 		}
-		candidate := filepath.Join(absRoot, "devbox", "templates", "git", svc.Git.Template)
+		candidate := filepath.Join(absRoot, "devbox", "templates", "git", svc.Render.Git.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", "", fmt.Errorf("git template pack %q is a symlink; symlinked packs are not supported", svc.Git.Template)
+				return "", "", fmt.Errorf("git template pack %q is a symlink; symlinked packs are not supported", svc.Render.Git.Template)
 			}
 			if !fi.IsDir() {
-				return "", "", fmt.Errorf("git template pack %q is not a directory", svc.Git.Template)
+				return "", "", fmt.Errorf("git template pack %q is not a directory", svc.Render.Git.Template)
 			}
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "git template pack"); err != nil {
 				return "", "", err
 			}
-			return candidate, svc.Git.Template, nil
+			return candidate, svc.Render.Git.Template, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf("stat git template pack %q: %w", svc.Git.Template, err)
+			return "", "", fmt.Errorf("stat git template pack %q: %w", svc.Render.Git.Template, err)
 		}
-		return "", "", fmt.Errorf("git template pack %q not found (required by explicit git.template setting)", svc.Git.Template)
+		return "", "", fmt.Errorf("git template pack %q not found (required by explicit render.git.template setting)", svc.Render.Git.Template)
 	}
 
 	// Implicit chain: service-name → default. Skip the service-name candidate

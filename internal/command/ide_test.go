@@ -297,7 +297,7 @@ func TestResolveIDETemplatePack_explicit(t *testing.T) {
 				Type:    "app",
 				Enabled: true,
 				Dir:     "services/main",
-				IDE:     config.ServiceIDEConfig{Template: tt.template},
+				Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: tt.template}},
 			}
 			pack, packName, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 			if (err != nil) != tt.wantError {
@@ -372,7 +372,7 @@ func TestResolveIDETemplatePack_explicitStrictSemantics(t *testing.T) {
 		Type:    "app",
 		Enabled: true,
 		Dir:     "services/main",
-		IDE:     config.ServiceIDEConfig{Template: "main-deubg"},
+		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "main-deubg"}},
 	}
 	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
@@ -401,7 +401,7 @@ func TestResolveIDETemplatePack_packIsSymlink(t *testing.T) {
 		Type:    "app",
 		Enabled: true,
 		Dir:     "services/main",
-		IDE:     config.ServiceIDEConfig{Template: "custom"},
+		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "custom"}},
 	}
 	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
@@ -419,13 +419,13 @@ func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
 		Type:    "app",
 		Enabled: true,
 		Dir:     "services/main",
-		IDE:     config.ServiceIDEConfig{Template: "foo/bar"},
+		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "foo/bar"}},
 	}
 	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
-		t.Fatal("want error for invalid ide.template")
+		t.Fatal("want error for invalid render.ide.template")
 	}
-	if !strings.Contains(err.Error(), "invalid ide.template") {
+	if !strings.Contains(err.Error(), "invalid render.ide.template") {
 		t.Errorf("got %q", err.Error())
 	}
 }
@@ -597,7 +597,7 @@ func TestRenderIDEConfigs_perServiceOverride(t *testing.T) {
 	})
 	cfg := makeIDECfg("main")
 	svc := cfg.Services["main"]
-	svc.IDE.Template = "main-debug"
+	svc.Render.IDE.Template = "main-debug"
 
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
@@ -868,19 +868,19 @@ func TestSelectIDEServices(t *testing.T) {
 					Type:    "db",
 					Enabled: true,
 					Dir:     "./services/db",
-					IDE:     config.ServiceIDEConfig{Enabled: &trueVal},
+					Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &trueVal}},
 				},
 			},
 			wantSelected: []string{"db"},
 		},
 		{
-			name: "explicit IDE.Enabled=false overrides type",
+			name: "explicit Render.IDE.Enabled=false overrides type",
 			services: map[string]config.ServiceConfig{
 				"main": {
 					Type:    "app",
 					Enabled: true,
 					Dir:     "./services/main",
-					IDE:     config.ServiceIDEConfig{Enabled: &falseVal},
+					Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &falseVal}},
 				},
 			},
 			wantSkippedMap: map[string]ide.SkippedService{
@@ -1006,7 +1006,7 @@ func TestValidateExplicitIDEArg(t *testing.T) {
 			name:        "ide.enabled: false",
 			serviceName: "main",
 			services: map[string]config.ServiceConfig{
-				"main": {Type: "app", Enabled: true, Dir: "./services/main", IDE: config.ServiceIDEConfig{Enabled: &falseVal}},
+				"main": {Type: "app", Enabled: true, Dir: "./services/main", Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &falseVal}}},
 			},
 			wantErrMsg: `service "main" has ide.enabled: false`,
 		},
@@ -1022,7 +1022,7 @@ func TestValidateExplicitIDEArg(t *testing.T) {
 			name:        "no dir",
 			serviceName: "main",
 			services: map[string]config.ServiceConfig{
-				"main": {Type: "app", Enabled: true, IDE: config.ServiceIDEConfig{Enabled: &trueVal}},
+				"main": {Type: "app", Enabled: true, Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &trueVal}}},
 			},
 			wantErrMsg: `service "main" has no dir`,
 		},
@@ -1086,7 +1086,7 @@ func TestResolveIDEHubAnchor(t *testing.T) {
 			input: "main",
 			services: map[string]config.ServiceConfig{
 				"main":       {Type: "app", Enabled: true, Dir: "./services/main"},
-				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main", IDE: config.ServiceIDEConfig{Enabled: &falseVal}},
+				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main", Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &falseVal}}},
 			},
 			want: "main",
 		},

@@ -64,9 +64,9 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "custom",
-		},
+		}},
 	}
 
 	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
@@ -85,9 +85,9 @@ func TestResolveAgentsTemplatePack_explicitPackMissing(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "missing",
-		},
+		}},
 	}
 
 	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
@@ -107,9 +107,9 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "",
-		},
+		}},
 	}
 
 	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "api")
@@ -131,9 +131,9 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "",
-		},
+		}},
 	}
 
 	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "notfound")
@@ -152,9 +152,9 @@ func TestResolveAgentsTemplatePack_implicitBothMissing(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "",
-		},
+		}},
 	}
 
 	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
@@ -185,9 +185,9 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 	}
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "linked",
-		},
+		}},
 	}
 
 	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
@@ -213,9 +213,9 @@ func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 	}
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "file",
-		},
+		}},
 	}
 
 	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
@@ -243,9 +243,9 @@ func TestResolveAgentsTemplatePack_invalidTemplateKey(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.label, func(t *testing.T) {
 			svc := config.ServiceConfig{
-				AI: config.ServiceAIConfig{
+				Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 					Template: test.template,
-				},
+				}},
 			}
 
 			_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
@@ -272,9 +272,9 @@ func TestResolveAgentsTemplatePack_invalidServiceName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.label, func(t *testing.T) {
 			svc := config.ServiceConfig{
-				AI: config.ServiceAIConfig{
+				Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 					Template: "",
-				},
+				}},
 			}
 
 			_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, test.serviceName)
@@ -297,9 +297,9 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{
-		AI: config.ServiceAIConfig{
+		Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{
 			Template: "",
-		},
+		}},
 	}
 
 	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myapi")
@@ -1130,8 +1130,9 @@ services:
     type: app
     dir: services/api
     container: test-api
-    ai:
-      enabled: false
+    render:
+      ai:
+        enabled: false
 `)
 
 	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
@@ -1181,8 +1182,9 @@ services:
     type: app
     dir: services/ai-disabled
     container: test-ai-disabled
-    ai:
-      enabled: false
+    render:
+      ai:
+        enabled: false
   no-dir-svc:
     type: app
     container: test-no-dir
@@ -1412,7 +1414,7 @@ func TestSelectAgentsServices(t *testing.T) {
 			name: "explicit ai.enabled=false drops service as ai-disabled",
 			services: map[string]config.ServiceConfig{
 				"main": {Type: "app", Enabled: true, Dir: "./services/main"},
-				"aux":  {Type: "app", Enabled: true, Dir: "./services/aux", AI: config.ServiceAIConfig{Enabled: &falseVal}},
+				"aux":  {Type: "app", Enabled: true, Dir: "./services/aux", Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: &falseVal}}},
 			},
 			wantSelected: []string{"main"},
 			wantSkippedMap: map[string]aipkg.SkippedService{
@@ -1422,7 +1424,7 @@ func TestSelectAgentsServices(t *testing.T) {
 		{
 			name: "ai.enabled=true (explicit) keeps service",
 			services: map[string]config.ServiceConfig{
-				"main": {Type: "app", Enabled: true, Dir: "./services/main", AI: config.ServiceAIConfig{Enabled: &trueVal}},
+				"main": {Type: "app", Enabled: true, Dir: "./services/main", Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: &trueVal}}},
 			},
 			wantSelected: []string{"main"},
 		},
@@ -1608,7 +1610,7 @@ func TestResolveAIHubAnchor(t *testing.T) {
 			name:  "parent has ai.enabled=false: variant wins",
 			input: "main-debug",
 			services: map[string]config.ServiceConfig{
-				"main":       {Type: "app", Enabled: true, Dir: "./services/main", AI: config.ServiceAIConfig{Enabled: &falseVal}},
+				"main":       {Type: "app", Enabled: true, Dir: "./services/main", Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: &falseVal}}},
 				"main-debug": {Type: "app", Enabled: true, Dir: "./services/main", Extends: "main"},
 			},
 			want: "main-debug",

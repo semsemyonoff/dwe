@@ -203,25 +203,25 @@ func serviceConfigToMap(svc config.ServiceConfig) map[string]any {
 	}
 
 	// Include IDE config if present
-	if svc.IDE.Enabled != nil || svc.IDE.Template != "" {
+	if svc.Render.IDE.Enabled != nil || svc.Render.IDE.Template != "" {
 		ide := map[string]any{}
-		if svc.IDE.Enabled != nil {
-			ide["enabled"] = *svc.IDE.Enabled
+		if svc.Render.IDE.Enabled != nil {
+			ide["enabled"] = *svc.Render.IDE.Enabled
 		}
-		if svc.IDE.Template != "" {
-			ide["template"] = svc.IDE.Template
+		if svc.Render.IDE.Template != "" {
+			ide["template"] = svc.Render.IDE.Template
 		}
 		m["ide"] = ide
 	}
 
 	// Include AI config if present
-	if svc.AI.Enabled != nil || svc.AI.Template != "" {
+	if svc.Render.AI.Enabled != nil || svc.Render.AI.Template != "" {
 		ai := map[string]any{}
-		if svc.AI.Enabled != nil {
-			ai["enabled"] = *svc.AI.Enabled
+		if svc.Render.AI.Enabled != nil {
+			ai["enabled"] = *svc.Render.AI.Enabled
 		}
-		if svc.AI.Template != "" {
-			ai["template"] = svc.AI.Template
+		if svc.Render.AI.Template != "" {
+			ai["template"] = svc.Render.AI.Template
 		}
 		m["ai"] = ai
 	}

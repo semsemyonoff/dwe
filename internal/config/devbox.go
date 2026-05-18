@@ -291,6 +291,13 @@ type ServiceGitHooksConfig struct {
 	Template string `yaml:"template"`
 }
 
+// ServiceRenderConfig holds all rendering-related configuration for a service.
+type ServiceRenderConfig struct {
+	IDE ServiceIDEConfig      `yaml:"ide"`
+	AI  ServiceAIConfig       `yaml:"ai"`
+	Git ServiceGitHooksConfig `yaml:"git"`
+}
+
 // ServiceConfig describes a single application service.
 // Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
 // from the 3-layer config merge (mandatory services are always enabled).
@@ -308,17 +315,15 @@ type ServiceConfig struct {
 	DependsOn       []string              `yaml:"depends_on"`
 	Compose         []string              `yaml:"compose"`
 	CLI             ServiceCLIConfig      `yaml:"cli"`
-	IDE             ServiceIDEConfig      `yaml:"ide"`
-	AI              ServiceAIConfig       `yaml:"ai"`
-	Git             ServiceGitHooksConfig `yaml:"git"`
+	Render          ServiceRenderConfig   `yaml:"render"`
 }
 
 // IDERenderEnabledExplicit returns the IDE render enabled state and whether it was explicitly set.
 // If Enabled is non-nil, returns its value and true.
 // If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
 func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) {
-	if s.IDE.Enabled != nil {
-		return *s.IDE.Enabled, true
+	if s.Render.IDE.Enabled != nil {
+		return *s.Render.IDE.Enabled, true
 	}
 	return s.Type == "app", false
 }
@@ -334,8 +339,8 @@ func (s ServiceConfig) IDERenderEnabled() bool {
 // If Enabled is non-nil, returns its value and true.
 // If Enabled is nil, returns true (default enabled for all service types) and false (not explicit).
 func (s ServiceConfig) AIRenderEnabledExplicit() (enabled bool, explicit bool) {
-	if s.AI.Enabled != nil {
-		return *s.AI.Enabled, true
+	if s.Render.AI.Enabled != nil {
+		return *s.Render.AI.Enabled, true
 	}
 	return true, false
 }
@@ -351,8 +356,8 @@ func (s ServiceConfig) AIRenderEnabled() bool {
 // If Enabled is non-nil, returns its value and true.
 // If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
 func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) {
-	if s.Git.Enabled != nil {
-		return *s.Git.Enabled, true
+	if s.Render.Git.Enabled != nil {
+		return *s.Render.Git.Enabled, true
 	}
 	return s.Type == "app", false
 }
@@ -798,28 +803,28 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		// Merge dirs: parent dirs come first, child dirs appended (deduplicated).
 		svc.Dirs = mergeDeduplicatedStrings(parent.Dirs, svc.Dirs)
 		// IDE block inheritance: child inherits from parent if not explicitly set.
-		if svc.IDE.Enabled == nil && parent.IDE.Enabled != nil {
-			v := *parent.IDE.Enabled
-			svc.IDE.Enabled = &v
+		if svc.Render.IDE.Enabled == nil && parent.Render.IDE.Enabled != nil {
+			v := *parent.Render.IDE.Enabled
+			svc.Render.IDE.Enabled = &v
 		}
-		if svc.IDE.Template == "" {
-			svc.IDE.Template = parent.IDE.Template
+		if svc.Render.IDE.Template == "" {
+			svc.Render.IDE.Template = parent.Render.IDE.Template
 		}
 		// AI block inheritance: child inherits from parent if not explicitly set.
-		if svc.AI.Enabled == nil && parent.AI.Enabled != nil {
-			v := *parent.AI.Enabled
-			svc.AI.Enabled = &v
+		if svc.Render.AI.Enabled == nil && parent.Render.AI.Enabled != nil {
+			v := *parent.Render.AI.Enabled
+			svc.Render.AI.Enabled = &v
 		}
-		if svc.AI.Template == "" {
-			svc.AI.Template = parent.AI.Template
+		if svc.Render.AI.Template == "" {
+			svc.Render.AI.Template = parent.Render.AI.Template
 		}
 		// Git block inheritance: child inherits from parent if not explicitly set.
-		if svc.Git.Enabled == nil && parent.Git.Enabled != nil {
-			v := *parent.Git.Enabled
-			svc.Git.Enabled = &v
+		if svc.Render.Git.Enabled == nil && parent.Render.Git.Enabled != nil {
+			v := *parent.Render.Git.Enabled
+			svc.Render.Git.Enabled = &v
 		}
-		if svc.Git.Template == "" {
-			svc.Git.Template = parent.Git.Template
+		if svc.Render.Git.Template == "" {
+			svc.Render.Git.Template = parent.Render.Git.Template
 		}
 		f.Services[name] = svc
 	}
