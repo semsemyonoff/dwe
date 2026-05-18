@@ -214,6 +214,10 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 				}
 			}
 
+			if step.FilesGate != nil {
+				render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
+			}
+
 			resolved := pipeline.StepCommand(step, config.DevboxBin(cfg))
 			if dryRun {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)

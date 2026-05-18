@@ -4,6 +4,7 @@ package spec
 import (
 	"fmt"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/usercommands/registry"
 )
@@ -14,9 +15,10 @@ type Issue struct {
 }
 
 // Validate checks a files_gate directive at plan time.
+// cfg is the loaded project config used to resolve default_from paths; reg is the command registry;
 // ref is the step reference (type, cmd, with); fg is the files_gate directive.
 // Returns a list of validation issues; empty list means valid.
-func Validate(reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.FilesGate) []Issue {
+func Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.FilesGate) []Issue {
 	var issues []Issue
 
 	if fg == nil {
@@ -84,9 +86,17 @@ func Validate(reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.Files
 				continue // Param is provided and non-empty.
 			}
 		}
-		// Check if param has a default or default_from.
-		if paramDef.Default != "" || paramDef.DefaultFrom != "" {
-			continue // Param has a fallback.
+		// Check if default_from resolves to a non-empty value (mirrors resolve.Params logic).
+		if paramDef.DefaultFrom != "" && cfg != nil {
+			if v, found := config.ResolvePath(cfg.Raw, paramDef.DefaultFrom); found {
+				if s := fmt.Sprintf("%v", v); s != "" {
+					continue // default_from resolves to a non-empty value.
+				}
+			}
+		}
+		// Check literal default.
+		if paramDef.Default != "" {
+			continue // Literal default covers the param.
 		}
 		// Required param is not satisfied.
 		issues = append(issues, Issue{Message: fmt.Sprintf("required parameter %q must be provided in files_gate.with or have a default in the command definition", paramName)})

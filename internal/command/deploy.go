@@ -311,11 +311,19 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 
 	if !force && scopeStatus == journal.StatusDeployed {
-		// Check if all hashes match and there are no check: steps
+		// Check if all hashes match and there are no check: or files_gate: steps.
+		// Steps with files_gate must always re-evaluate the gate (journal-skip bypass),
+		// so an early return here would violate that policy.
 		hasCheckSteps := false
+		hasFilesGateSteps := false
 		for _, rs := range steps {
 			if rs.Step.Check != nil {
 				hasCheckSteps = true
+			}
+			if rs.FilesGate != nil {
+				hasFilesGateSteps = true
+			}
+			if hasCheckSteps && hasFilesGateSteps {
 				break
 			}
 		}
@@ -338,7 +346,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		}
 
 		lastRunFailed := scopeLastRunStatus == journal.StatusFailed
-		if allTrackedDeployed && !hasCheckSteps && scopeConfigHash == scopeExpectedHash && !lastRunFailed {
+		if allTrackedDeployed && !hasCheckSteps && !hasFilesGateSteps && scopeConfigHash == scopeExpectedHash && !lastRunFailed {
 			// In-scope state matches and is clean — skip the pipeline
 			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
 			return nil

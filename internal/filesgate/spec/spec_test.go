@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
@@ -49,7 +50,7 @@ func TestValidate_CommandRequired(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			issues := Validate(reg, tt.ref, tt.fg)
+			issues := Validate(nil, reg, tt.ref, tt.fg)
 			if tt.wantIssue {
 				require.NotEmpty(t, issues, "expected at least one issue")
 				require.Contains(t, issues[0].Message, tt.wantMsg)
@@ -105,7 +106,7 @@ func TestValidate_WithInheritedFromRef(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			issues := Validate(reg, tt.ref, tt.fg)
+			issues := Validate(nil, reg, tt.ref, tt.fg)
 			if tt.wantIssue {
 				require.NotEmpty(t, issues)
 			} else {
@@ -203,6 +204,7 @@ func TestValidate_Parameters(t *testing.T) {
 		name      string
 		fg        *filesgate.FilesGate
 		ref       filesgate.StepRef
+		cfg       *config.DevboxConfig
 		wantIssue bool
 		wantMsg   string
 	}{
@@ -250,13 +252,71 @@ func TestValidate_Parameters(t *testing.T) {
 			wantIssue: false,
 		},
 		{
-			name: "required param not provided but has default_from",
+			// default_from with no cfg: cannot resolve the path, no literal default → issue.
+			name: "required param with default_from only, cfg nil",
 			fg: &filesgate.FilesGate{
 				State:   "readable",
 				Command: "cmd_req_with_default_from",
 			},
 			ref:       filesgate.StepRef{Type: "command", Cmd: "cmd_req_with_default_from"},
+			cfg:       nil,
+			wantIssue: true,
+			wantMsg:   "required parameter \"db\" must be provided",
+		},
+		{
+			// default_from with cfg that has the path → resolves → no issue.
+			name: "required param with default_from, cfg resolves path",
+			fg: &filesgate.FilesGate{
+				State:   "readable",
+				Command: "cmd_req_with_default_from",
+			},
+			ref: filesgate.StepRef{Type: "command", Cmd: "cmd_req_with_default_from"},
+			cfg: &config.DevboxConfig{
+				Raw: map[string]any{
+					"databases": map[string]any{
+						"main": map[string]any{
+							"name": "mydb",
+						},
+					},
+				},
+			},
 			wantIssue: false,
+		},
+		{
+			// default_from with cfg that does NOT have the path → cannot resolve → issue.
+			name: "required param with default_from, cfg missing path",
+			fg: &filesgate.FilesGate{
+				State:   "readable",
+				Command: "cmd_req_with_default_from",
+			},
+			ref: filesgate.StepRef{Type: "command", Cmd: "cmd_req_with_default_from"},
+			cfg: &config.DevboxConfig{
+				Raw: map[string]any{
+					"databases": map[string]any{},
+				},
+			},
+			wantIssue: true,
+			wantMsg:   "required parameter \"db\" must be provided",
+		},
+		{
+			// default_from with cfg that resolves to empty string → falls through → issue.
+			name: "required param with default_from, cfg resolves to empty string",
+			fg: &filesgate.FilesGate{
+				State:   "readable",
+				Command: "cmd_req_with_default_from",
+			},
+			ref: filesgate.StepRef{Type: "command", Cmd: "cmd_req_with_default_from"},
+			cfg: &config.DevboxConfig{
+				Raw: map[string]any{
+					"databases": map[string]any{
+						"main": map[string]any{
+							"name": "",
+						},
+					},
+				},
+			},
+			wantIssue: true,
+			wantMsg:   "required parameter \"db\" must be provided",
 		},
 		{
 			name: "multiple params - some required missing",
@@ -287,7 +347,7 @@ func TestValidate_Parameters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			issues := Validate(reg, tt.ref, tt.fg)
+			issues := Validate(tt.cfg, reg, tt.ref, tt.fg)
 			if tt.wantIssue {
 				require.Len(t, issues, 1, "expected one issue")
 				require.Contains(t, issues[0].Message, tt.wantMsg)
