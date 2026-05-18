@@ -69,8 +69,9 @@ func Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.St
 
 	// Validate that with (plus defaults) covers all required params.
 	// fg.With takes precedence; fall back to ref.With (inherited from the step) when gate.with is unset.
+	// An empty map (with: {}) is treated the same as absent: inherit the step's with.
 	effectiveWith := ref.With
-	if fg.With != nil {
+	if len(fg.With) > 0 {
 		effectiveWith = fg.With
 	}
 	for paramName, paramDef := range def.Params {

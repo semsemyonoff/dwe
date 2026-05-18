@@ -203,9 +203,8 @@ func sortedMap(v any) any {
 		}
 		sort.Strings(keys)
 
-		// Build an ordered representation (using a custom type or structured format)
-		// For JSON, we rely on json.Marshal's behavior, but we need to ensure
-		// the keys are processed in order. We'll use a helper that re-encodes.
+		// encoding/json.Marshal guarantees sorted keys for map[string]any,
+		// so building a new map with recursively processed values is sufficient.
 		result := make(map[string]any)
 		for _, k := range keys {
 			result[k] = sortedMap(val[k])

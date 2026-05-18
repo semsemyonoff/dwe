@@ -464,8 +464,9 @@ func RunWithOptions(opts RunOptions) error {
 			}
 
 			// Build RunContext for the target command (using gate's with or step's with).
+			// Treat an empty map the same as nil: inherit the step's with.
 			gateWith := rs.FilesGate.With
-			if gateWith == nil {
+			if len(gateWith) == 0 {
 				gateWith = rs.Step.With
 			}
 			runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
