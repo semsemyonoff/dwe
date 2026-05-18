@@ -52,7 +52,7 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 						return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
 					}
 				}
-				result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen})
+				result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen, FilesGate: step.FilesGate})
 				continue
 			} else if step.When.Type == condition.TypeTemplate {
 				ok, err := tpl.EvalCondition(step.When.Expr, cfg)
@@ -77,7 +77,7 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 				return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
 			}
 		}
-		result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen})
+		result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen, FilesGate: step.FilesGate})
 	}
 	return result, nil
 }

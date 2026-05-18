@@ -2349,6 +2349,83 @@ stop:
 	}
 }
 
+// --- FilesGate ---
+
+func TestLoadDeployConfig_stepWithFilesGateShortForm(t *testing.T) {
+	yml := `
+phases:
+  - name: setup
+    steps:
+      - name: dump-deploy
+        type: command
+        cmd: db-dump-deploy
+        files_gate: readable
+`
+	path := writePipelineFixture(t, "deploy", yml)
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	step := cfg.Phases[0].Steps[0]
+	if step.FilesGate == nil {
+		t.Fatal("FilesGate should be set")
+	}
+	if step.FilesGate.State != "readable" {
+		t.Errorf("FilesGate.State = %q, want readable", step.FilesGate.State)
+	}
+	if step.FilesGate.Command != "" {
+		t.Errorf("FilesGate.Command should be empty (default to step.cmd), got %q", step.FilesGate.Command)
+	}
+}
+
+func TestLoadDeployConfig_stepWithFilesGateLongForm(t *testing.T) {
+	yml := `
+phases:
+  - name: setup
+    steps:
+      - name: dump-deploy
+        type: command
+        cmd: db-dump-deploy
+        files_gate:
+          state: missing
+          require: [dump]
+`
+	path := writePipelineFixture(t, "deploy", yml)
+	cfg, err := LoadDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadDeployConfig: %v", err)
+	}
+	step := cfg.Phases[0].Steps[0]
+	if step.FilesGate == nil {
+		t.Fatal("FilesGate should be set")
+	}
+	if step.FilesGate.State != "missing" {
+		t.Errorf("FilesGate.State = %q, want missing", step.FilesGate.State)
+	}
+}
+
+func TestLoadDeployConfig_stepWithFilesGateUnknownField(t *testing.T) {
+	yml := `
+phases:
+  - name: setup
+    steps:
+      - name: dump-deploy
+        type: command
+        cmd: db-dump-deploy
+        files_gate:
+          state: readable
+          unknown_field: value
+`
+	path := writePipelineFixture(t, "deploy", yml)
+	_, err := LoadDeployConfig(path)
+	if err == nil {
+		t.Fatal("LoadDeployConfig: expected error for unknown field in files_gate")
+	}
+	if !strings.Contains(err.Error(), "unknown field") {
+		t.Errorf("LoadDeployConfig error should mention unknown field, got: %v", err)
+	}
+}
+
 // --- BinariesConfig ---
 
 func TestLoadConfig_binariesAllDefaulted(t *testing.T) {

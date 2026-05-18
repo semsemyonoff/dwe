@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/condition"
+	"devbox-cli/internal/filesgate"
 
 	"gopkg.in/yaml.v3"
 )
@@ -147,6 +148,7 @@ type DeployPhase struct {
 //   - With            — optional parameters for command or builtin actions
 //   - When            — optional skip condition (type: template|builtin|shell)
 //   - Check           — optional post-execution action (same type/cmd/with shape)
+//   - FilesGate       — optional pre-step file-existence gate (decides run/skip based on files:)
 //   - ContinueOnError — when true, a failed step or check is reported but pipeline continues
 //   - SkipConfirm     — when true, bypasses confirmation prompts for this step only
 //     (equivalent to a per-step -y / --yes); ORed with the pipeline-wide skip-confirm flag
@@ -158,6 +160,7 @@ type DeployStep struct {
 	Description     string               `yaml:"description,omitempty"`
 	When            *condition.Condition `yaml:"when,omitempty"`
 	Check           *Action              `yaml:"check,omitempty"`
+	FilesGate       *filesgate.FilesGate `yaml:"files_gate,omitempty"`
 	ContinueOnError bool                 `yaml:"continue_on_error,omitempty"`
 	SkipConfirm     bool                 `yaml:"skip_confirm,omitempty"`
 }

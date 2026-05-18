@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/filesgate"
 )
 
 func TestStepBadge_shellStep(t *testing.T) {
@@ -32,5 +33,43 @@ func TestStepBadge_allTypes(t *testing.T) {
 	}
 	if got := stepBadge(config.DeployStep{Type: "builtin", Cmd: "service_configs_copy"}); got != "[builtin]" {
 		t.Errorf("got %q want [builtin]", got)
+	}
+}
+
+func TestResolvePhaseSteps_filesGateThreadedThrough(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		SchemaVersion: "2",
+	}
+
+	fg := &filesgate.FilesGate{
+		State: filesgate.StateReadable,
+	}
+
+	phase := config.DeployPhase{
+		Name: "setup",
+		Steps: []config.DeployStep{
+			{
+				Name:      "test-step",
+				Type:      "shell",
+				Cmd:       "echo test",
+				FilesGate: fg,
+			},
+		},
+	}
+
+	resolved, err := ResolvePhaseSteps(cfg, phase, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: %v", err)
+	}
+
+	if len(resolved) != 1 {
+		t.Fatalf("expected 1 resolved step, got %d", len(resolved))
+	}
+
+	if resolved[0].FilesGate != fg {
+		t.Errorf("FilesGate not threaded through: expected %v, got %v", fg, resolved[0].FilesGate)
+	}
+	if resolved[0].FilesGate.State != filesgate.StateReadable {
+		t.Errorf("FilesGate.State = %q, want readable", resolved[0].FilesGate.State)
 	}
 }

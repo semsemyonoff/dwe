@@ -91,13 +91,13 @@ This is the **parser-only** package. It must import nothing from `internal/confi
 
 ### Task 2: Wire `FilesGate` into `DeployStep` and plumbing
 
-- [ ] add `FilesGate *filesgate.FilesGate \`yaml:"files_gate,omitempty"\`` to `DeployStep` in `internal/config/devbox.go:153`.
-- [ ] update the doc comment block on `DeployStep` to mention `FilesGate`.
-- [ ] confirm `LoadDeployConfig` / `LoadResetConfig` / `LoadLifecycleConfig` strict-decode still rejects unknown step fields and **accepts** `files_gate`.
-- [ ] add `FilesGate *filesgate.FilesGate` to `ResolvedStep` in `internal/pipeline/step.go`.
-- [ ] thread it through both `result = append(...)` sites in `ResolvePhaseSteps` (around `internal/pipeline/resolve.go:55` and `:80`).
-- [ ] write tests: a YAML fixture with `files_gate: readable` round-trips through `LoadDeployConfig` and shows up on the resolved step; a fixture with `files_gate: { state: missing, require: [dump] }` parses; an unknown nested field under `files_gate:` errors.
-- [ ] run `make test ./internal/config/... ./internal/pipeline/...` — must pass before next task.
+- [x] add `FilesGate *filesgate.FilesGate \`yaml:"files_gate,omitempty"\`` to `DeployStep` in `internal/config/devbox.go:153`.
+- [x] update the doc comment block on `DeployStep` to mention `FilesGate`.
+- [x] confirm `LoadDeployConfig` / `LoadResetConfig` / `LoadLifecycleConfig` strict-decode still rejects unknown step fields and **accepts** `files_gate`.
+- [x] add `FilesGate *filesgate.FilesGate` to `ResolvedStep` in `internal/pipeline/step.go`.
+- [x] thread it through both `result = append(...)` sites in `ResolvePhaseSteps` (around `internal/pipeline/resolve.go:55` and `:80`).
+- [x] write tests: a YAML fixture with `files_gate: readable` round-trips through `LoadDeployConfig` and shows up on the resolved step; a fixture with `files_gate: { state: missing, require: [dump] }` parses; an unknown nested field under `files_gate:` errors.
+- [x] run `make test ./internal/config/... ./internal/pipeline/...` — must pass before next task.
 
 ### Task 3: Extract `BuildRunContext` from caller-side setup
 

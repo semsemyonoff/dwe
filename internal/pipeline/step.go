@@ -8,6 +8,7 @@ import (
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/filesgate"
 )
 
 // ResolvedStep holds a pipeline step together with the phase it belongs to,
@@ -18,12 +19,15 @@ import (
 // (builtin predicate or shell cmd). Such conditions are NOT evaluated at plan-resolution
 // time — they are checked immediately before the step executes.
 // PhaseWhen carries the phase-level runtime when condition; evaluated once per phase.
+// FilesGate is non-nil when the step carries a files_gate directive; evaluated before
+// the step executes and independently of RuntimeWhen.
 type ResolvedStep struct {
 	Phase       config.DeployPhase
 	Step        config.DeployStep
 	Service     string               // non-empty for per-service steps (e.g. "main")
 	RuntimeWhen *condition.Condition // step-level runtime when condition; nil otherwise
 	PhaseWhen   *condition.Condition // phase-level runtime when condition; nil otherwise
+	FilesGate   *filesgate.FilesGate // step-level files gate; nil otherwise
 }
 
 // StepAddress returns the full address of a step for display and lookup:
