@@ -222,18 +222,18 @@ In other words: `StepHash` is a **display/audit** hash for the journal, not a sk
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] verify all spec requirements implemented: short + long form, `state` enum, `require` shapes, `command` defaulting, `with` defaulting, `when:` AND `files_gate:` independence, journal-skip bypass for gated steps, `StepHash` recording for audit/display.
-- [ ] verify `devbox validate config deploy` reports all gate misconfigs as **aggregated** diagnostics (a deploy.yml with several bad gates produces several diagnostics, not just the first).
-- [ ] verify backward compatibility: a deploy YAML without any `files_gate:` produces byte-identical resolved-step output (golden file comparison if practical, else snapshot-compare via test).
-- [ ] run full `make test`.
-- [ ] run `make lint` — all issues resolved.
-- [ ] verify test coverage hasn't regressed in changed packages.
+- [x] verify all spec requirements implemented: short + long form, `state` enum, `require` shapes, `command` defaulting, `with` defaulting, `when:` AND `files_gate:` independence, journal-skip bypass for gated steps, `StepHash` recording for audit/display.
+- [x] verify `devbox validate config deploy` reports all gate misconfigs as **aggregated** diagnostics (a deploy.yml with several bad gates produces several diagnostics, not just the first).
+- [x] verify backward compatibility: a deploy YAML without any `files_gate:` produces byte-identical resolved-step output (golden file comparison if practical, else snapshot-compare via test).
+- [x] run full `make test`.
+- [x] run `make lint` — all issues resolved.
+- [x] verify test coverage hasn't regressed in changed packages.
 
 ### Task 11: [Final] Plan-completion housekeeping
 
-- [ ] confirm all checkboxes above are marked `[x]`.
-- [ ] confirm no `⚠️` blockers remain.
-- [ ] confirm `MEMORY.md` doesn't need a new feedback entry (only if a non-obvious decision came up — most likely candidate: the "ActionHash vs StepHash" split rationale).
+- [x] confirm all checkboxes above are marked `[x]`.
+- [x] confirm no `⚠️` blockers remain.
+- [x] confirm `MEMORY.md` doesn't need a new feedback entry (only if a non-obvious decision came up — most likely candidate: the "ActionHash vs StepHash" split rationale).
 
 ## Technical Details
 
