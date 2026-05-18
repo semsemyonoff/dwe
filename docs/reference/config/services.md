@@ -198,11 +198,11 @@ render:
 IDE rendering requires **both** activation and policy conditions:
 
 1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; mandatory services are always enabled).
-2. **IDE policy**: The `ide.enabled` setting must be `true`.
+2. **IDE policy**: The `render.ide.enabled` setting must be `true`.
 
 A service is rendered only if both are satisfied. Disabling either suppresses rendering.
 
-**Default policy**: `type: app` services default to `ide.enabled: true` (opt-out); all other types default to `false` (opt-in).
+**Default policy**: `type: app` services default to `render.ide.enabled: true` (opt-out); all other types default to `false` (opt-in).
 
 #### Template pack resolution
 
@@ -214,17 +214,14 @@ A service is rendered only if both are satisfied. Disabling either suppresses re
 
 When an explicit `template:` is specified and the pack is not found, rendering fails with an error (catches typos). When no explicit template is set and the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
 
-Once a pack is selected, the command walks every `*.tmpl` file in the pack and renders it to the matching relative path in the service directory. For example:
+Once a pack is selected, the command reads the pack's `manifest.yml` to determine what files to render and what symlinks to create. The manifest declares:
 
-```
-devbox/templates/ide/default/.devcontainer/devcontainer.json.tmpl
-→ services/main/.devcontainer/devcontainer.json
+- `render`: source template files (must end in `.tmpl`) and their destination paths
+- `symlinks`: relative symlinks to create inside the service directory (optional)
 
-devbox/templates/ide/default/.vscode/settings.json.tmpl
-→ services/main/.vscode/settings.json
-```
+All destinations are relative to the service directory (e.g. `services/main/`). Nested paths are allowed (e.g. `.devcontainer/devcontainer.json`).
 
-This pack-based model lets you add support for any IDE or tool (`.cursor/`, `.zed/`, `.envrc`, etc.) without modifying the code — just add the corresponding `*.tmpl` file to your template pack.
+This manifest-based model lets you add support for any IDE or tool (`.cursor/`, `.zed/`, `.envrc`, etc.) without modifying the code — add the template files and declare them in `manifest.yml`.
 
 #### Collision resolution
 
@@ -237,14 +234,15 @@ services:
   main:
     type: app
     dir: ./services/main
-    # ide.enabled defaults to true
+    # render.ide.enabled defaults to true
 
   main-debug:
     type: app
     extends: main      # same dir as parent
     dir: ./services/main
-    ide:
-      template: main-debug  # use a different template pack
+    render:
+      ide:
+        template: main-debug  # use a different template pack
     # IDE files go to ./services/main/ with content from main-debug pack
     # (main-debug wins because it extends main)
 ```
@@ -261,9 +259,11 @@ This example shows how template packs are organized and the resulting files gene
 devbox/services.yml
 devbox/templates/ide/
   default/
+    manifest.yml
     .devcontainer/devcontainer.json.tmpl
     .vscode/settings.json.tmpl
   main-debug/
+    manifest.yml
     .devcontainer/devcontainer.json.tmpl
     .vscode/settings.json.tmpl
     .vscode/launch.json.tmpl
@@ -276,14 +276,15 @@ services:
   main:
     type: app
     dir: ./services/main
-    # ide.enabled defaults to true; renders using default pack
+    # render.ide.enabled defaults to true; renders using default pack
 
   main-debug:
     extends: main
     container: app-main-debug
     dir: ./services/main
-    ide:
-      template: main-debug  # override to use main-debug pack
+    render:
+      ide:
+        template: main-debug  # override to use main-debug pack
 ```
 
 **After `devbox render ide`:**
@@ -320,11 +321,11 @@ render:
 Agent docs rendering requires **both** activation and policy conditions:
 
 1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; mandatory services are always enabled).
-2. **Agent docs policy**: The `ai.enabled` setting must be `true`.
+2. **Agent docs policy**: The `render.ai.enabled` setting must be `true`.
 
 A service is rendered only if both are satisfied. Disabling either suppresses rendering.
 
-**Default policy**: All services default to `ai.enabled: true` (opt-out). Set `enabled: false` to suppress agent docs generation for a service.
+**Default policy**: All services default to `render.ai.enabled: true` (opt-out). Set `render.ai.enabled: false` to suppress agent docs generation for a service.
 
 #### Template pack resolution
 
@@ -399,7 +400,7 @@ services:
   main:
     type: app
     dir: ./services/main
-    # ai.enabled defaults to true; renders using default pack
+    # render.ai.enabled defaults to true; renders using default pack
 ```
 
 **After `devbox render ai`:**
