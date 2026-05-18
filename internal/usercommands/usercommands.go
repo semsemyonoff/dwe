@@ -51,6 +51,7 @@ type Registry = registry.Registry
 type Runner = runtime.Runner
 type RunContext = runtime.RunContext
 type ErrUnsupportedType = runtime.ErrUnsupportedType
+type FileProbeResult = runtime.FileProbeResult
 
 // ---- CommandType constants ----
 
@@ -229,4 +230,11 @@ func BuildRunContext(
 	workDir string,
 ) (RunContext, error) {
 	return runtime.BuildRunContext(cfg, reg, def, with, workDir)
+}
+
+// ComputeFilePathsProbe probes a subset of files to check for existence without
+// side effects. Configuration errors produce an error; missing files produce
+// Resolved: false with no error.
+func ComputeFilePathsProbe(ctx RunContext, only []string) (map[string]FileProbeResult, error) {
+	return runtime.ComputeFilePathsProbe(ctx, only)
 }
