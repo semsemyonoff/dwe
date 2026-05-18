@@ -25,10 +25,14 @@ func Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.St
 		return issues
 	}
 
-	// State must be set.
+	// State must be set and valid.
 	if fg.State == "" {
 		issues = append(issues, Issue{Message: "files_gate.state is required"})
 		return issues // Fail-fast; can't proceed without state.
+	}
+	if fg.State != filesgate.StateReadable && fg.State != filesgate.StateMissing {
+		issues = append(issues, Issue{Message: fmt.Sprintf("files_gate.state %q is invalid (must be \"readable\" or \"missing\")", fg.State)})
+		return issues
 	}
 
 	// Command defaults to step.cmd when step.type == "command".

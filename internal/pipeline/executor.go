@@ -505,14 +505,14 @@ func RunWithOptions(opts RunOptions) error {
 			// offendingIDs collects the file IDs that drove the gate decision.
 			var offendingIDs []string
 			switch rs.FilesGate.State {
-			case "readable":
+			case filesgate.StateReadable:
 				// All selected files must exist; collect the missing ones.
 				for _, id := range ids {
 					if !probeResults[id].Resolved {
 						offendingIDs = append(offendingIDs, id)
 					}
 				}
-			case "missing":
+			case filesgate.StateMissing:
 				// None of the selected files may exist; collect the present ones.
 				for _, id := range ids {
 					if probeResults[id].Resolved {

@@ -113,8 +113,8 @@ type FilesGate struct {
 	// Require specifies which files participate in the probe.
 	// Default: required.
 	Require RequireSpec `yaml:"-"` // Manually handled in UnmarshalYAML/MarshalYAML
-	// RequireRaw holds the raw require value for marshaling.
-	RequireRaw any `yaml:"require,omitempty"`
+	// requireRaw holds the raw require value for marshaling round-trip fidelity.
+	requireRaw any
 	// State is the expected state (readable or missing).
 	State State `yaml:"state"`
 }
@@ -196,14 +196,14 @@ func (fg *FilesGate) UnmarshalYAML(node *yaml.Node) error {
 		}
 		fg.Require = spec
 		// Store raw value for marshaling.
-		if err := requireNode.Decode(&fg.RequireRaw); err == nil && fg.RequireRaw != nil {
+		if err := requireNode.Decode(&fg.requireRaw); err == nil && fg.requireRaw != nil {
 			// Successfully stored.
 		} else {
-			fg.RequireRaw = nil
+			fg.requireRaw = nil
 		}
 	} else {
 		fg.Require = RequireRequired{}
-		fg.RequireRaw = nil
+		fg.requireRaw = nil
 	}
 
 	return nil
@@ -235,9 +235,9 @@ func (fg *FilesGate) MarshalYAML() (any, error) {
 		requireVal = nil
 	}
 
-	// If RequireRaw is set, prefer it (for round-trip fidelity).
-	if fg.RequireRaw != nil {
-		requireVal = fg.RequireRaw
+	// If requireRaw is set, prefer it (for round-trip fidelity).
+	if fg.requireRaw != nil {
+		requireVal = fg.requireRaw
 	}
 
 	return &raw{

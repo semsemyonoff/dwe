@@ -11,6 +11,32 @@ import (
 	"devbox-cli/internal/validate"
 )
 
+// deployHasFilesGateSteps reports whether any step in the deploy config (project or service) uses files_gate.
+func deployHasFilesGateSteps(ctx validate.Context) bool {
+	for _, phase := range ctx.Cfg.Deploy.Phases {
+		for _, step := range phase.Steps {
+			if step.FilesGate != nil {
+				return true
+			}
+		}
+	}
+	if len(ctx.Cfg.Services) > 0 {
+		svcDeploys, err := config.LoadServiceDeployConfigs(ctx.ProjectRoot, ctx.Cfg.Services)
+		if err == nil {
+			for _, svcDeploy := range svcDeploys {
+				for _, phase := range svcDeploy.Phases {
+					for _, step := range phase.Steps {
+						if step.FilesGate != nil {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 type deployFilesGateValidator struct{}
 
 func (v *deployFilesGateValidator) ID() string {
@@ -28,16 +54,18 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 		return diags
 	}
 
-	// If registry is unavailable, emit a self-skip info diagnostic.
 	reg, ok := ctx.CommandRegistry.(*registry.Registry)
 	if !ok || reg == nil {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityInfo,
-			Domain:   "config",
-			Target:   "config.deploy.files-gate",
-			File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox", "deploy.yml")),
-			Message:  "deploy.yml files_gate validation skipped: command registry not available",
-		})
+		// Only emit a self-skip diagnostic when the project actually uses files_gate.
+		if deployHasFilesGateSteps(ctx) {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.deploy.files-gate",
+				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox", "deploy.yml")),
+				Message:  "deploy.yml files_gate validation skipped: command registry not available",
+			})
+		}
 		return diags
 	}
 
@@ -106,6 +134,32 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 	return diags
 }
 
+// phasesHaveFilesGateSteps reports whether any step in the given phases uses files_gate.
+func phasesHaveFilesGateSteps(phases []config.DeployPhase) bool {
+	for _, phase := range phases {
+		for _, step := range phase.Steps {
+			if step.FilesGate != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// lifecycleHasFilesGateSteps reports whether any step in the lifecycle config uses files_gate.
+func lifecycleHasFilesGateSteps(lifecycleCfg *config.LifecycleConfig) bool {
+	if lifecycleCfg == nil {
+		return false
+	}
+	if lifecycleCfg.Run != nil && phasesHaveFilesGateSteps(lifecycleCfg.Run.Phases) {
+		return true
+	}
+	if lifecycleCfg.Stop != nil && phasesHaveFilesGateSteps(lifecycleCfg.Stop.Phases) {
+		return true
+	}
+	return false
+}
+
 type lifecycleFilesGateValidator struct{}
 
 func (v *lifecycleFilesGateValidator) ID() string {
@@ -123,24 +177,26 @@ func (v *lifecycleFilesGateValidator) Run(ctx validate.Context) []validate.Diagn
 		return diags
 	}
 
-	// If registry is unavailable, emit a self-skip info diagnostic.
-	reg, ok := ctx.CommandRegistry.(*registry.Registry)
-	if !ok || reg == nil {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityInfo,
-			Domain:   "config",
-			Target:   "config.lifecycle.files-gate",
-			File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox", "lifecycle.yml")),
-			Message:  "lifecycle.yml files_gate validation skipped: command registry not available",
-		})
-		return diags
-	}
-
 	lifecyclePath := filepath.Join(ctx.ProjectRoot, "devbox", "lifecycle.yml")
 
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil {
 		return diags // Silently return if lifecycle config doesn't load
+	}
+
+	reg, ok := ctx.CommandRegistry.(*registry.Registry)
+	if !ok || reg == nil {
+		// Only emit a self-skip diagnostic when the project actually uses files_gate.
+		if lifecycleHasFilesGateSteps(lifecycleCfg) {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.lifecycle.files-gate",
+				File:     relPath(ctx.ProjectRoot, lifecyclePath),
+				Message:  "lifecycle.yml files_gate validation skipped: command registry not available",
+			})
+		}
+		return diags
 	}
 
 	validateLifecyclePhases := func(pipelineName string, phases []config.DeployPhase) {
@@ -197,24 +253,26 @@ func (v *resetFilesGateValidator) Run(ctx validate.Context) []validate.Diagnosti
 		return diags
 	}
 
-	// If registry is unavailable, emit a self-skip info diagnostic.
-	reg, ok := ctx.CommandRegistry.(*registry.Registry)
-	if !ok || reg == nil {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityInfo,
-			Domain:   "config",
-			Target:   "config.reset.files-gate",
-			File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox", "reset.yml")),
-			Message:  "reset.yml files_gate validation skipped: command registry not available",
-		})
-		return diags
-	}
-
 	resetPath := filepath.Join(ctx.ProjectRoot, "devbox", "reset.yml")
 
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {
 		return diags // Silently return if reset config doesn't load
+	}
+
+	reg, ok := ctx.CommandRegistry.(*registry.Registry)
+	if !ok || reg == nil {
+		// Only emit a self-skip diagnostic when the project actually uses files_gate.
+		if phasesHaveFilesGateSteps(resetCfg.Phases) {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.reset.files-gate",
+				File:     relPath(ctx.ProjectRoot, resetPath),
+				Message:  "reset.yml files_gate validation skipped: command registry not available",
+			})
+		}
+		return diags
 	}
 
 	// Iterate through all phases and steps in the reset config

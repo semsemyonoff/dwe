@@ -13,7 +13,6 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/reset"
 	"devbox-cli/internal/tpl"
-	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -46,7 +45,7 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			reg, err := usercommands.LoadRegistryFromConfigPath(flags.configPath)
+			reg, err := loadCommandRegistry(flags.configPath)
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
@@ -121,7 +120,7 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	reg, err := usercommands.LoadRegistryFromConfigPath(flags.configPath)
+	reg, err := loadCommandRegistry(flags.configPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}

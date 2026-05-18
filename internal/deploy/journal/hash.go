@@ -32,11 +32,12 @@ func ActionHash(a config.Action) string {
 func StepHash(step config.DeployStep) string {
 	h := sha256.New()
 	// Hash the action part first (same as ActionHash)
-	h.Write([]byte(step.Action().Type))
+	a := step.Action()
+	h.Write([]byte(a.Type))
 	h.Write([]byte{0})
-	h.Write([]byte(step.Action().Cmd))
+	h.Write([]byte(a.Cmd))
 	h.Write([]byte{0})
-	h.Write(canonicalMap(step.Action().With))
+	h.Write(canonicalMap(a.With))
 
 	// Hash the FilesGate part (if present)
 	if step.FilesGate != nil {
