@@ -89,5 +89,8 @@ func resolveList(list []string, defFiles map[string]model.FileSpec) ([]string, e
 			return nil, fmt.Errorf("files_gate: require: file-id %q has access=write (write-only files cannot be probed)", id)
 		}
 	}
-	return list, nil
+	// Return a copy so sort.Strings in the caller does not mutate the original RequireList.IDs.
+	result := make([]string, len(list))
+	copy(result, list)
+	return result, nil
 }

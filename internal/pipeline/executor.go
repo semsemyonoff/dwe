@@ -455,7 +455,7 @@ func RunWithOptions(opts RunOptions) error {
 			if err != nil {
 				// Config error: command not found.
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				err := fmt.Errorf("files_gate on step %q references unknown command %q", addr, targetCmd)
+				err = fmt.Errorf("files_gate on step %q references unknown command %q: %w", addr, targetCmd, err)
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
 				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
 				return ErrSilent
@@ -517,6 +517,12 @@ func RunWithOptions(opts RunOptions) error {
 						break
 					}
 				}
+			default:
+				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+				err := fmt.Errorf("files_gate on step %q: invalid state %q (must be \"readable\" or \"missing\")", addr, rs.FilesGate.State)
+				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+				return ErrSilent
 			}
 
 			if gateSkip {

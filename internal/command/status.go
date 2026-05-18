@@ -41,10 +41,10 @@ If a service name is provided, shows per-phase/step deploy breakdown for that se
 				return fmt.Errorf("loading deploy state: %w", err)
 			}
 
-			reg, err := usercommands.LoadRegistryFromConfigPath(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading command registry: %w", err)
-			}
+			// Registry is used only to validate files_gate directives during plan
+			// resolution; tolerate load failures (e.g. command-file syntax errors)
+			// so that status remains usable even when commands are broken.
+			reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath)
 
 			tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, flags.ProjectRoot())
 			if err != nil {
