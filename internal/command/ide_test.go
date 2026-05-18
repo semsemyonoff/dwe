@@ -299,11 +299,14 @@ func TestResolveIDETemplatePack_explicit(t *testing.T) {
 				Dir:     "services/main",
 				Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: tt.template}},
 			}
-			pack, packName, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+			pack, packName, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 			if (err != nil) != tt.wantError {
 				t.Errorf("want error=%v, got %v", tt.wantError, err)
 			}
 			if !tt.wantError {
+				if !found {
+					t.Errorf("want found=true, got found=false")
+				}
 				if !strings.Contains(pack, tt.wantPack) {
 					t.Errorf("want pack containing %q, got %q", tt.wantPack, pack)
 				}
@@ -323,22 +326,28 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	pack, packName, err := ide.ResolveTemplatePack(svc, projectRoot, "unknown")
+	pack, packName, found, err := ide.ResolveTemplatePack(svc, projectRoot, "unknown")
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
+	}
+	if !found {
+		t.Fatalf("want found=true, got found=false")
 	}
 	if !strings.HasSuffix(pack, "default") || packName != "default" {
 		t.Errorf("want default pack, got pack=%q packName=%q", pack, packName)
 	}
 }
 
-// TestResolveIDETemplatePack_allMissing verifies error when no packs exist.
+// TestResolveIDETemplatePack_allMissing verifies found=false when no packs exist.
 func TestResolveIDETemplatePack_allMissing(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "myservice")
-	if err == nil {
-		t.Fatal("expected error when no packs exist")
+	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "myservice")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if found {
+		t.Fatal("expected found=false when no packs exist")
 	}
 }
 
@@ -353,9 +362,12 @@ func TestResolveIDETemplatePack_implicitPriority(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	pack, packName, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	pack, packName, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
+	}
+	if !found {
+		t.Fatalf("want found=true, got found=false")
 	}
 	if !strings.HasSuffix(pack, "main") || packName != "main" {
 		t.Errorf("want main pack, got pack=%q packName=%q", pack, packName)
@@ -374,9 +386,12 @@ func TestResolveIDETemplatePack_explicitStrictSemantics(t *testing.T) {
 		Dir:     "services/main",
 		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "main-deubg"}},
 	}
-	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error for typo")
+	}
+	if found {
+		t.Fatal("expected found=false when error occurs")
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found', got: %v", err)
@@ -403,9 +418,12 @@ func TestResolveIDETemplatePack_packIsSymlink(t *testing.T) {
 		Dir:     "services/main",
 		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "custom"}},
 	}
-	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error for symlinked pack")
+	}
+	if found {
+		t.Fatal("expected found=false when error occurs")
 	}
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("expected symlink error, got: %v", err)
@@ -421,9 +439,12 @@ func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
 		Dir:     "services/main",
 		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "foo/bar"}},
 	}
-	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
 	if err == nil {
 		t.Fatal("want error for invalid render.ide.template")
+	}
+	if found {
+		t.Fatal("expected found=false when error occurs")
 	}
 	if !strings.Contains(err.Error(), "invalid render.ide.template") {
 		t.Errorf("got %q", err.Error())
@@ -432,44 +453,44 @@ func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
 
 // TestResolveIDETemplatePack_invalidServiceName silently skips an
 // identifier-unsafe service name as an implicit pack candidate; with no
-// default pack the resolver returns ErrNotExist (not a pack-name validation
-// error).
+// default pack the resolver returns found=false.
 func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "foo/bar")
-	if err == nil {
-		t.Fatal("want error (no pack found)")
+	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "foo/bar")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("want os.ErrNotExist, got %v", err)
-	}
-	if strings.Contains(err.Error(), "cannot be used as implicit template pack key") {
-		t.Errorf("invalid implicit name should be silent, got %q", err.Error())
+	if found {
+		t.Fatal("want found=false (no pack found)")
 	}
 }
 
-// TestResolveIDETemplatePack_emptyServiceName rejects empty service name.
+// TestResolveIDETemplatePack_emptyServiceName silently skips empty service name;
+// with no default pack it returns found=false.
 func TestResolveIDETemplatePack_emptyServiceName(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, "")
-	if err == nil {
-		t.Fatal("want error for empty service name")
+	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if found {
+		t.Fatal("want found=false (no pack found)")
 	}
 }
 
 // TestResolveIDETemplatePack_leadingDotServiceName allows leading-dot service names
-// but cleanly returns os.ErrNotExist when no pack is present.
+// but returns found=false when no pack is present.
 func TestResolveIDETemplatePack_leadingDotServiceName(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/hidden"}
-	_, _, err := ide.ResolveTemplatePack(svc, projectRoot, ".hidden")
-	if err == nil {
-		t.Fatal("want error (no pack found)")
+	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, ".hidden")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("want os.ErrNotExist, got %v", err)
+	if found {
+		t.Fatal("want found=false (no pack found)")
 	}
 }
 

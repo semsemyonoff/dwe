@@ -111,14 +111,23 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 		}}
 	}
 
-	packDir, packName, err := git.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := git.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
-			Hint:     "check git.template setting and devbox/templates/git directory",
+			Hint:     "check render.git.template setting and devbox/templates/git directory",
+		}}
+	}
+	if !found {
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.git:%s", name),
+			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
+			Hint:     "check devbox/templates/git directory",
 		}}
 	}
 

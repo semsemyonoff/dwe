@@ -108,14 +108,14 @@ Why: today, adding a new service in a project that doesn't yet have IDE/AI/git t
 
 This task is structured as one atomic landing because changing `ResolveTemplatePack`'s signature breaks every caller. Splitting it leaves the repo uncompilable across tasks, so we update helpers **and** all callers before running the test suite.
 
-- [ ] change `internal/templates/ide/ide.go` `ResolveTemplatePack` signature to `(packDir, packName string, found bool, err error)`; when implicit fallback chain exhausts without finding any pack and `explicit == ""`, return `("", "", false, nil)` instead of an error; explicit-not-found path still returns `err != nil`
-- [ ] mirror the change in `internal/templates/ai/ai.go` `ResolveTemplatePack`
-- [ ] mirror the change in `internal/templates/git/git.go` `ResolveTemplatePack`
-- [ ] update **callers' signatures only** (not yet the warn+skip behavior — that lands in Tasks 3/4): `internal/command/ide.go:209`, `internal/command/render_ai.go:46`, `internal/command/render_git.go:44` — change call sites to receive the extra bool; for now, treat `!found` as if it were the prior error (return a synthesized error preserving today's behavior) so existing tests still pass. Tasks 3/4 will replace that synthesized-error branch with warn+skip / SeverityWarning.
-- [ ] same shim in validators: `internal/validate/templates/{ide,ai,git}.go` — receive the bool, treat `!found` as `SeverityError` for now; Task 4 will downgrade to `SeverityWarning`.
-- [ ] update resolver-coverage tests (which live in `internal/command/`, not the resolver packages — `internal/command/ide_test.go` lines 275-450ish, plus `internal/command/render_ai_test.go` and `internal/command/render_git_test.go`): mechanical signature update; add a new case per kind for "implicit-missing returns found=false, err=nil" against the resolver directly. Keep the explicit-missing-returns-error cases.
-- [ ] verify no other **production** callers of `ResolveTemplatePack` exist beyond the three render commands and three validators (`grep -rn ResolveTemplatePack internal/` — test files in `internal/command/` will also match and need the signature update, that's expected)
-- [ ] run `go test ./...` (full repo) — must pass before next task; behavior unchanged from pre-Task-2, only the internal signature has shifted
+- [x] change `internal/templates/ide/ide.go` `ResolveTemplatePack` signature to `(packDir, packName string, found bool, err error)`; when implicit fallback chain exhausts without finding any pack and `explicit == ""`, return `("", "", false, nil)` instead of an error; explicit-not-found path still returns `err != nil`
+- [x] mirror the change in `internal/templates/ai/ai.go` `ResolveTemplatePack`
+- [x] mirror the change in `internal/templates/git/git.go` `ResolveTemplatePack`
+- [x] update **callers' signatures only** (not yet the warn+skip behavior — that lands in Tasks 3/4): `internal/command/ide.go:209`, `internal/command/render_ai.go:46`, `internal/command/render_git.go:44` — change call sites to receive the extra bool; for now, treat `!found` as if it were the prior error (return a synthesized error preserving today's behavior) so existing tests still pass. Tasks 3/4 will replace that synthesized-error branch with warn+skip / SeverityWarning.
+- [x] same shim in validators: `internal/validate/templates/{ide,ai,git}.go` — receive the bool, treat `!found` as `SeverityError` for now; Task 4 will downgrade to `SeverityWarning`.
+- [x] update resolver-coverage tests (which live in `internal/command/`, not the resolver packages — `internal/command/ide_test.go` lines 275-450ish, plus `internal/command/render_ai_test.go` and `internal/command/render_git_test.go`): mechanical signature update; add a new case per kind for "implicit-missing returns found=false, err=nil" against the resolver directly. Keep the explicit-missing-returns-error cases.
+- [x] verify no other **production** callers of `ResolveTemplatePack` exist beyond the three render commands and three validators (`grep -rn ResolveTemplatePack internal/` — test files in `internal/command/` will also match and need the signature update, that's expected)
+- [x] run `go test ./...` (full repo) — must pass before next task; behavior unchanged from pre-Task-2, only the internal signature has shifted
 
 ### Task 3: Render commands warn-and-skip on implicit missing pack
 

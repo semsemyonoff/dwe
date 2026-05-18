@@ -206,9 +206,12 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 
-	packDir, packName, err := ide.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := ide.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return err
+	}
+	if !found {
+		return fmt.Errorf("ide template pack not found (tried %s, default)", name)
 	}
 
 	m, err := ide.LoadManifest(packDir)

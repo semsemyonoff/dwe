@@ -25,9 +25,22 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 		return err
 	}
 
-	// Check for src/.git before resolving the pack so that a service with no
-	// src/.git directory produces the documented "warn + skip" behavior even
-	// when no template pack is configured.
+	// For explicit template, resolve the pack before checking .git so that
+	// typos in render.git.template surface as errors regardless of .git state.
+	var packDir, packName string
+	if svc.Render.Git.Template != "" {
+		var found bool
+		packDir, packName, found, err = gitpkg.ResolveTemplatePack(svc, absRoot, name)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("git template pack not found (tried %s, default)", name)
+		}
+	}
+
+	// Check for src/.git before resolving implicit pack so that a service with no
+	// src/.git directory produces a single skip warning.
 	absHooks, status, err := gitpkg.ResolveGitHooksDir(absHub)
 	if err != nil {
 		return err
@@ -41,9 +54,16 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 		return nil
 	}
 
-	packDir, packName, err := gitpkg.ResolveTemplatePack(svc, absRoot, name)
-	if err != nil {
-		return err
+	// For implicit template, resolve now (after .git check).
+	if svc.Render.Git.Template == "" {
+		var found bool
+		packDir, packName, found, err = gitpkg.ResolveTemplatePack(svc, absRoot, name)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("git template pack not found (tried %s, default)", name)
+		}
 	}
 
 	m, err := gitpkg.LoadManifest(packDir)

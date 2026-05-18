@@ -106,14 +106,23 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 		}}
 	}
 
-	packDir, packName, err := ide.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := ide.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
-			Hint:     "check ide.template setting and devbox/templates/ide directory",
+			Hint:     "check render.ide.template setting and devbox/templates/ide directory",
+		}}
+	}
+	if !found {
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.ide:%s", name),
+			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
+			Hint:     "check devbox/templates/ide directory",
 		}}
 	}
 

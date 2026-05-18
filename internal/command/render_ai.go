@@ -43,9 +43,12 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	}
 
 	// Resolve template pack
-	packDir, packName, err := aipkg.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := aipkg.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return err
+	}
+	if !found {
+		return fmt.Errorf("agents template pack not found (tried %s, default)", name)
 	}
 
 	// Load and validate manifest

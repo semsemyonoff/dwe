@@ -37,9 +37,12 @@ func TestResolveTemplatePack(t *testing.T) {
 		root := t.TempDir()
 		mkPack(t, root, "myhooks", map[string]string{"manifest.yml": "render: []\n"})
 		svc := config.ServiceConfig{Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Template: "myhooks"}}}
-		packDir, packName, err := ResolveTemplatePack(svc, root, "main")
+		packDir, packName, found, err := ResolveTemplatePack(svc, root, "main")
 		if err != nil {
 			t.Fatal(err)
+		}
+		if !found {
+			t.Fatal("expected found=true")
 		}
 		if packName != "myhooks" {
 			t.Errorf("packName=%q want myhooks", packName)
@@ -51,17 +54,23 @@ func TestResolveTemplatePack(t *testing.T) {
 	t.Run("explicit missing hard error", func(t *testing.T) {
 		root := t.TempDir()
 		svc := config.ServiceConfig{Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Template: "nope"}}}
-		_, _, err := ResolveTemplatePack(svc, root, "main")
+		_, _, found, err := ResolveTemplatePack(svc, root, "main")
 		if err == nil {
 			t.Fatal("expected error")
+		}
+		if found {
+			t.Fatal("expected found=false when error occurs")
 		}
 	})
 	t.Run("implicit service-name fallback", func(t *testing.T) {
 		root := t.TempDir()
 		mkPack(t, root, "main", map[string]string{"manifest.yml": ""})
-		packDir, packName, err := ResolveTemplatePack(config.ServiceConfig{}, root, "main")
+		packDir, packName, found, err := ResolveTemplatePack(config.ServiceConfig{}, root, "main")
 		if err != nil {
 			t.Fatal(err)
+		}
+		if !found {
+			t.Fatal("expected found=true")
 		}
 		if packName != "main" {
 			t.Errorf("packName=%q", packName)
@@ -73,9 +82,12 @@ func TestResolveTemplatePack(t *testing.T) {
 	t.Run("implicit default fallback", func(t *testing.T) {
 		root := t.TempDir()
 		mkPack(t, root, "default", map[string]string{"manifest.yml": ""})
-		_, packName, err := ResolveTemplatePack(config.ServiceConfig{}, root, "main")
+		_, packName, found, err := ResolveTemplatePack(config.ServiceConfig{}, root, "main")
 		if err != nil {
 			t.Fatal(err)
+		}
+		if !found {
+			t.Fatal("expected found=true")
 		}
 		if packName != "default" {
 			t.Errorf("packName=%q", packName)
@@ -83,12 +95,12 @@ func TestResolveTemplatePack(t *testing.T) {
 	})
 	t.Run("none found", func(t *testing.T) {
 		root := t.TempDir()
-		_, _, err := ResolveTemplatePack(config.ServiceConfig{}, root, "main")
-		if err == nil {
-			t.Fatal("expected error")
+		_, _, found, err := ResolveTemplatePack(config.ServiceConfig{}, root, "main")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if !errors.Is(err, os.ErrNotExist) {
-			t.Errorf("expected ErrNotExist, got %v", err)
+		if found {
+			t.Fatal("expected found=false")
 		}
 	})
 	t.Run("explicit template rejected by ValidatePackName before FS lookup", func(t *testing.T) {
@@ -97,9 +109,12 @@ func TestResolveTemplatePack(t *testing.T) {
 		// without falling back.
 		mkPack(t, root, "default", map[string]string{"manifest.yml": ""})
 		svc := config.ServiceConfig{Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Template: "../etc"}}}
-		_, _, err := ResolveTemplatePack(svc, root, "main")
+		_, _, found, err := ResolveTemplatePack(svc, root, "main")
 		if err == nil {
 			t.Fatal("expected error")
+		}
+		if found {
+			t.Fatal("expected found=false when error occurs")
 		}
 		if !strings.Contains(err.Error(), "invalid render.git.template") {
 			t.Errorf("expected pack-name validation error, got %v", err)
@@ -108,26 +123,25 @@ func TestResolveTemplatePack(t *testing.T) {
 	t.Run("implicit service-name with invalid name silently skipped, default used", func(t *testing.T) {
 		root := t.TempDir()
 		mkPack(t, root, "default", map[string]string{"manifest.yml": ""})
-		_, packName, err := ResolveTemplatePack(config.ServiceConfig{}, root, ".api")
+		_, packName, found, err := ResolveTemplatePack(config.ServiceConfig{}, root, ".api")
 		if err != nil {
 			t.Fatal(err)
+		}
+		if !found {
+			t.Fatal("expected found=true")
 		}
 		if packName != "default" {
 			t.Errorf("packName=%q want default", packName)
 		}
 	})
-	t.Run("implicit service-name with invalid name and no default errors", func(t *testing.T) {
+	t.Run("implicit service-name with invalid name and no default returns found=false", func(t *testing.T) {
 		root := t.TempDir()
-		_, _, err := ResolveTemplatePack(config.ServiceConfig{}, root, ".api")
-		if err == nil {
-			t.Fatal("expected error")
+		_, _, found, err := ResolveTemplatePack(config.ServiceConfig{}, root, ".api")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if !errors.Is(err, os.ErrNotExist) {
-			t.Errorf("expected ErrNotExist (no pack found), got %v", err)
-		}
-		// Must NOT be a pack-name validation error — invalid implicit names are skipped silently.
-		if strings.Contains(err.Error(), "invalid git.template") {
-			t.Errorf("invalid implicit name should be silent, got %v", err)
+		if found {
+			t.Fatal("expected found=false (no pack found)")
 		}
 	})
 }

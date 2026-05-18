@@ -62,36 +62,37 @@ func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, b
 }
 
 // ResolveTemplatePack resolves a git template pack directory for a service.
-// Returns (packDir, packName, err). Explicit svc.Render.Git.Template is strict.
-// Implicit chain: serviceName → default; ErrNotExist falls through.
-func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, error) {
+// Returns (packDir, packName, found, err). Explicit svc.Render.Git.Template is strict.
+// Implicit chain: serviceName → default; returns found=false when exhausted.
+// Semantics: err != nil means hard failure; err == nil && !found means implicit chain exhausted.
+func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, bool, error) {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
-		return "", "", fmt.Errorf("resolve project root: %w", err)
+		return "", "", false, fmt.Errorf("resolve project root: %w", err)
 	}
 
 	if svc.Render.Git.Template != "" {
 		if err := manifest.ValidatePackName(svc.Render.Git.Template); err != nil {
-			return "", "", fmt.Errorf("invalid render.git.template %q: %w", svc.Render.Git.Template, err)
+			return "", "", false, fmt.Errorf("invalid render.git.template %q: %w", svc.Render.Git.Template, err)
 		}
 		candidate := filepath.Join(absRoot, "devbox", "templates", "git", svc.Render.Git.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", "", fmt.Errorf("git template pack %q is a symlink; symlinked packs are not supported", svc.Render.Git.Template)
+				return "", "", false, fmt.Errorf("git template pack %q is a symlink; symlinked packs are not supported", svc.Render.Git.Template)
 			}
 			if !fi.IsDir() {
-				return "", "", fmt.Errorf("git template pack %q is not a directory", svc.Render.Git.Template)
+				return "", "", false, fmt.Errorf("git template pack %q is not a directory", svc.Render.Git.Template)
 			}
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "git template pack"); err != nil {
-				return "", "", err
+				return "", "", false, err
 			}
-			return candidate, svc.Render.Git.Template, nil
+			return candidate, svc.Render.Git.Template, true, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf("stat git template pack %q: %w", svc.Render.Git.Template, err)
+			return "", "", false, fmt.Errorf("stat git template pack %q: %w", svc.Render.Git.Template, err)
 		}
-		return "", "", fmt.Errorf("git template pack %q not found (required by explicit render.git.template setting)", svc.Render.Git.Template)
+		return "", "", false, fmt.Errorf("git template pack %q not found (required by explicit render.git.template setting)", svc.Render.Git.Template)
 	}
 
 	// Implicit chain: service-name → default. Skip the service-name candidate
@@ -106,22 +107,22 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", "", fmt.Errorf("git template pack %q is a symlink; symlinked packs are not supported", name)
+				return "", "", false, fmt.Errorf("git template pack %q is a symlink; symlinked packs are not supported", name)
 			}
 			if !fi.IsDir() {
-				return "", "", fmt.Errorf("git template pack %q is not a directory", name)
+				return "", "", false, fmt.Errorf("git template pack %q is not a directory", name)
 			}
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "git template pack"); err != nil {
-				return "", "", err
+				return "", "", false, err
 			}
-			return candidate, name, nil
+			return candidate, name, true, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf("stat git template pack %q: %w", name, err)
+			return "", "", false, fmt.Errorf("stat git template pack %q: %w", name, err)
 		}
 	}
 
-	return "", "", fmt.Errorf("git template pack not found (tried %s, default): %w", serviceName, os.ErrNotExist)
+	return "", "", false, nil
 }
 
 // SelectServices filters and resolves git-hooks-enabled services. Mirrors IDE:

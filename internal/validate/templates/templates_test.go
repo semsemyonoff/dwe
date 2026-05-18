@@ -302,7 +302,7 @@ func TestGitValidator_MissingPackEmitsError(t *testing.T) {
 
 	errDiag := findDiag(diags, validate.SeverityError, "templates.git:main")
 	require.NotNil(t, errDiag)
-	require.Contains(t, errDiag.Message, "failed to resolve template pack")
+	require.Contains(t, errDiag.Message, "template pack not found")
 }
 
 func TestGitValidator_MissingManifestEmitsError(t *testing.T) {

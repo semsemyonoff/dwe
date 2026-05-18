@@ -69,9 +69,12 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 		}},
 	}
 
-	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
+	}
+	if !found {
+		t.Fatal("expected found=true")
 	}
 
 	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "custom")
@@ -90,9 +93,12 @@ func TestResolveAgentsTemplatePack_explicitPackMissing(t *testing.T) {
 		}},
 	}
 
-	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for missing explicit pack")
+	}
+	if found {
+		t.Fatal("expected found=false when error occurs")
 	}
 	if !strings.Contains(err.Error(), "not found") || !strings.Contains(err.Error(), "missing") {
 		t.Errorf("error should mention not found and pack name: %v", err)
@@ -112,9 +118,12 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 		}},
 	}
 
-	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "api")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "api")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
+	}
+	if !found {
+		t.Fatal("expected found=true")
 	}
 
 	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "api")
@@ -136,9 +145,12 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 		}},
 	}
 
-	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "notfound")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "notfound")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
+	}
+	if !found {
+		t.Fatal("expected found=true")
 	}
 
 	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "default")
@@ -157,12 +169,12 @@ func TestResolveAgentsTemplatePack_implicitBothMissing(t *testing.T) {
 		}},
 	}
 
-	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
-	if err == nil {
-		t.Fatal("expected error when both candidates missing")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("error should mention not found: %v", err)
+	if found {
+		t.Fatal("expected found=false when both candidates missing")
 	}
 }
 
@@ -190,9 +202,12 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 		}},
 	}
 
-	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for symlinked pack")
+	}
+	if found {
+		t.Fatal("expected found=false when error occurs")
 	}
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("error should mention symlink: %v", err)
@@ -218,9 +233,12 @@ func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 		}},
 	}
 
-	_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for non-dir pack")
+	}
+	if found {
+		t.Fatal("expected found=false when error occurs")
 	}
 	if !strings.Contains(err.Error(), "not a directory") {
 		t.Errorf("error should mention not a directory: %v", err)
@@ -248,9 +266,12 @@ func TestResolveAgentsTemplatePack_invalidTemplateKey(t *testing.T) {
 				}},
 			}
 
-			_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+			_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
 			if err == nil {
 				t.Fatalf("expected error for %s", test.label)
+			}
+			if found {
+				t.Fatal("expected found=false when error occurs")
 			}
 		})
 	}
@@ -277,9 +298,12 @@ func TestResolveAgentsTemplatePack_invalidServiceName(t *testing.T) {
 				}},
 			}
 
-			_, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, test.serviceName)
-			if err == nil {
-				t.Fatalf("expected error for %s", test.label)
+			_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, test.serviceName)
+			if err != nil {
+				t.Fatalf("unexpected error for %s: %v", test.label, err)
+			}
+			if found {
+				t.Fatalf("expected found=false for %s", test.label)
 			}
 		})
 	}
@@ -302,9 +326,12 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 		}},
 	}
 
-	pack, _, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myapi")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myapi")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
+	}
+	if !found {
+		t.Fatal("expected found=true")
 	}
 
 	// Should pick the service-name pack, not the default

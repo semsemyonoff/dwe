@@ -103,14 +103,23 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 	}
 
 	// Resolve template pack
-	packDir, packName, err := ai.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := ai.ResolveTemplatePack(svc, absRoot, name)
 	if err != nil {
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
-			Hint:     "check ai.template setting and devbox/templates/ai directory",
+			Hint:     "check render.ai.template setting and devbox/templates/ai directory",
+		}}
+	}
+	if !found {
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.ai:%s", name),
+			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
+			Hint:     "check devbox/templates/ai directory",
 		}}
 	}
 

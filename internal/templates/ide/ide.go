@@ -167,36 +167,37 @@ func ValidateServiceNameAsPackKey(s string) error {
 }
 
 // ResolveTemplatePack resolves a template pack directory for a service.
-// Returns (packDir, packName, err). Explicit svc.Render.IDE.Template is strict.
-// Implicit chain: serviceName → default; ErrNotExist falls through.
-func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, error) {
+// Returns (packDir, packName, found, err). Explicit svc.Render.IDE.Template is strict.
+// Implicit chain: serviceName → default; returns found=false when exhausted.
+// Semantics: err != nil means hard failure; err == nil && !found means implicit chain exhausted.
+func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, bool, error) {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
-		return "", "", fmt.Errorf("resolve project root: %w", err)
+		return "", "", false, fmt.Errorf("resolve project root: %w", err)
 	}
 
 	if svc.Render.IDE.Template != "" {
 		if err := manifest.ValidatePackName(svc.Render.IDE.Template); err != nil {
-			return "", "", fmt.Errorf("invalid render.ide.template %q: %w", svc.Render.IDE.Template, err)
+			return "", "", false, fmt.Errorf("invalid render.ide.template %q: %w", svc.Render.IDE.Template, err)
 		}
 		candidate := filepath.Join(absRoot, "devbox", "templates", "ide", svc.Render.IDE.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", svc.Render.IDE.Template)
+				return "", "", false, fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", svc.Render.IDE.Template)
 			}
 			if !fi.IsDir() {
-				return "", "", fmt.Errorf("ide template pack %q is not a directory", svc.Render.IDE.Template)
+				return "", "", false, fmt.Errorf("ide template pack %q is not a directory", svc.Render.IDE.Template)
 			}
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "ide template pack"); err != nil {
-				return "", "", err
+				return "", "", false, err
 			}
-			return candidate, svc.Render.IDE.Template, nil
+			return candidate, svc.Render.IDE.Template, true, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf("stat ide template pack %q: %w", svc.Render.IDE.Template, err)
+			return "", "", false, fmt.Errorf("stat ide template pack %q: %w", svc.Render.IDE.Template, err)
 		}
-		return "", "", fmt.Errorf("ide template pack %q not found (required by explicit render.ide.template setting)", svc.Render.IDE.Template)
+		return "", "", false, fmt.Errorf("ide template pack %q not found (required by explicit render.ide.template setting)", svc.Render.IDE.Template)
 	}
 
 	// Implicit chain: service-name → default. Skip the service-name candidate
@@ -211,22 +212,22 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
-				return "", "", fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", name)
+				return "", "", false, fmt.Errorf("ide template pack %q is a symlink; symlinked packs are not supported", name)
 			}
 			if !fi.IsDir() {
-				return "", "", fmt.Errorf("ide template pack %q is not a directory", name)
+				return "", "", false, fmt.Errorf("ide template pack %q is not a directory", name)
 			}
 			if err := pathsafe.CheckNoSymlinks(absRoot, candidate, "ide template pack"); err != nil {
-				return "", "", err
+				return "", "", false, err
 			}
-			return candidate, name, nil
+			return candidate, name, true, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return "", "", fmt.Errorf("stat ide template pack %q: %w", name, err)
+			return "", "", false, fmt.Errorf("stat ide template pack %q: %w", name, err)
 		}
 	}
 
-	return "", "", fmt.Errorf("ide template pack not found (tried %s, default): %w", serviceName, os.ErrNotExist)
+	return "", "", false, nil
 }
 
 // LoadManifest loads and parses manifest.yml from the pack directory.
