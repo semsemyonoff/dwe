@@ -1090,6 +1090,164 @@ func TestRunPipeline_FilesGate_NilRegistry_FailsStep(t *testing.T) {
 	}
 }
 
+// TestRunPipeline_FilesGate_JournalBypass_MissingStateArtifactAbsent verifies that a gated step
+// bypasses the journal skip-decider when the gate is satisfied. State: missing; artifact absent
+// → gate satisfied (no file present) → step runs, even though SkipDecider returns journal.Skip.
+func TestRunPipeline_FilesGate_JournalBypass_MissingStateArtifactAbsent(t *testing.T) {
+	workDir := t.TempDir()
+	// Artifact is absent — state: missing gate is satisfied.
+
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-download",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "dump.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	rec := &mockRecorder{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "upload-dump",
+				Type: "shell",
+				Cmd:  "true",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateMissing,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	// SkipDecider always returns Skip (simulating journal "already deployed").
+	skipDecider := func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		return journal.Skip
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    rec,
+		SkipDecider: skipDecider,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Gate is satisfied (artifact absent → missing state met) → step must execute despite journal.Skip.
+	finishes := 0
+	for _, e := range rec.events {
+		if e.kind == "OnStepFinish" {
+			finishes++
+		}
+	}
+	if finishes != 1 {
+		t.Errorf("expected step to run (journal-skip bypassed by gate), got OnStepFinish count %d; events: %v", finishes, rec.events)
+	}
+}
+
+// TestRunPipeline_FilesGate_JournalBypass_ReadableStateArtifactPresent verifies that a gated step
+// bypasses the journal skip-decider when the gate is satisfied. State: readable; artifact present
+// → gate satisfied → step runs, even though SkipDecider returns journal.Skip.
+func TestRunPipeline_FilesGate_JournalBypass_ReadableStateArtifactPresent(t *testing.T) {
+	workDir := t.TempDir()
+	// Create the artifact so state: readable gate is satisfied.
+	probeFile := filepath.Join(workDir, "dump.sql.gz")
+	if err := os.WriteFile(probeFile, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-download",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "dump.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	rec := &mockRecorder{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "check-dump",
+				Type: "shell",
+				Cmd:  "true",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	// SkipDecider always returns Skip (simulating journal "already deployed").
+	skipDecider := func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		return journal.Skip
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    rec,
+		SkipDecider: skipDecider,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Gate is satisfied (artifact present → readable state met) → step must execute despite journal.Skip.
+	finishes := 0
+	for _, e := range rec.events {
+		if e.kind == "OnStepFinish" {
+			finishes++
+		}
+	}
+	if finishes != 1 {
+		t.Errorf("expected step to run (journal-skip bypassed by gate), got OnStepFinish count %d; events: %v", finishes, rec.events)
+	}
+}
+
 // TestRunPipeline_PerStepSkipConfirm verifies that a step with
 // SkipConfirm:true bypasses the confirmation prompt even when the pipeline-wide
 // SkipConfirm flag is false. The confirm builtin would otherwise read from

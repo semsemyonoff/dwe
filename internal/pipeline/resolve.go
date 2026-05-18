@@ -63,7 +63,7 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, reg *registry.Registry, phase c
 				// Validate files_gate if present and registry is available.
 				if step.FilesGate != nil && reg != nil {
 					ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
-					issues := spec.Validate(cfg, reg, ref, step.FilesGate)
+					issues := spec.Validate(reg, ref, step.FilesGate)
 					if len(issues) > 0 {
 						prefix := phase.Name + "/" + step.Name
 						if service != "" {
@@ -100,7 +100,7 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, reg *registry.Registry, phase c
 		// Validate files_gate if present and registry is available.
 		if step.FilesGate != nil && reg != nil {
 			ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
-			issues := spec.Validate(cfg, reg, ref, step.FilesGate)
+			issues := spec.Validate(reg, ref, step.FilesGate)
 			if len(issues) > 0 {
 				prefix := phase.Name + "/" + step.Name
 				if service != "" {

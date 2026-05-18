@@ -58,7 +58,7 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 			}
 
 			// Validate the files_gate directive
-			issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
+			issues := spec.Validate(reg, stepRef, step.FilesGate)
 			for _, issue := range issues {
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityError,
@@ -128,7 +128,7 @@ func (v *lifecycleFilesGateValidator) Run(ctx validate.Context) []validate.Diagn
 				With: step.With,
 			}
 
-			issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
+			issues := spec.Validate(reg, stepRef, step.FilesGate)
 			for _, issue := range issues {
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityError,
@@ -194,7 +194,7 @@ func (v *resetFilesGateValidator) Run(ctx validate.Context) []validate.Diagnosti
 				With: step.With,
 			}
 
-			issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
+			issues := spec.Validate(reg, stepRef, step.FilesGate)
 			for _, issue := range issues {
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityError,
