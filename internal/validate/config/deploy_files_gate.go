@@ -143,34 +143,38 @@ func (v *lifecycleFilesGateValidator) Run(ctx validate.Context) []validate.Diagn
 		return diags // Silently return if lifecycle config doesn't load
 	}
 
-	if lifecycleCfg.Run == nil {
-		return diags
-	}
+	validateLifecyclePhases := func(pipelineName string, phases []config.DeployPhase) {
+		for phaseIdx, phase := range phases {
+			for stepIdx, step := range phase.Steps {
+				if step.FilesGate == nil {
+					continue
+				}
 
-	// Iterate through all phases and steps in the lifecycle run config
-	for phaseIdx, phase := range lifecycleCfg.Run.Phases {
-		for stepIdx, step := range phase.Steps {
-			if step.FilesGate == nil {
-				continue
-			}
+				stepRef := filesgate.StepRef{
+					Type: step.Type,
+					Cmd:  step.Cmd,
+					With: step.With,
+				}
 
-			stepRef := filesgate.StepRef{
-				Type: step.Type,
-				Cmd:  step.Cmd,
-				With: step.With,
-			}
-
-			issues := spec.Validate(reg, stepRef, step.FilesGate)
-			for _, issue := range issues {
-				diags = append(diags, validate.Diagnostic{
-					Severity: validate.SeverityError,
-					Domain:   "config",
-					Target:   fmt.Sprintf("config.lifecycle.phases[%d].steps[%d].files-gate", phaseIdx, stepIdx),
-					File:     relPath(ctx.ProjectRoot, lifecyclePath),
-					Message:  issue.Message,
-				})
+				issues := spec.Validate(reg, stepRef, step.FilesGate)
+				for _, issue := range issues {
+					diags = append(diags, validate.Diagnostic{
+						Severity: validate.SeverityError,
+						Domain:   "config",
+						Target:   fmt.Sprintf("config.lifecycle.%s.phases[%d].steps[%d].files-gate", pipelineName, phaseIdx, stepIdx),
+						File:     relPath(ctx.ProjectRoot, lifecyclePath),
+						Message:  issue.Message,
+					})
+				}
 			}
 		}
+	}
+
+	if lifecycleCfg.Run != nil {
+		validateLifecyclePhases("run", lifecycleCfg.Run.Phases)
+	}
+	if lifecycleCfg.Stop != nil {
+		validateLifecyclePhases("stop", lifecycleCfg.Stop.Phases)
 	}
 
 	return diags

@@ -499,22 +499,21 @@ func RunWithOptions(opts RunOptions) error {
 			}
 
 			// Evaluate gate against probed state.
-			gateSkip := false
+			// offendingIDs collects the file IDs that drove the gate decision.
+			var offendingIDs []string
 			switch rs.FilesGate.State {
 			case "readable":
-				// All selected files must exist.
+				// All selected files must exist; collect the missing ones.
 				for _, id := range ids {
 					if !probeResults[id].Resolved {
-						gateSkip = true
-						break
+						offendingIDs = append(offendingIDs, id)
 					}
 				}
 			case "missing":
-				// None of the selected files may exist.
+				// None of the selected files may exist; collect the present ones.
 				for _, id := range ids {
 					if probeResults[id].Resolved {
-						gateSkip = true
-						break
+						offendingIDs = append(offendingIDs, id)
 					}
 				}
 			default:
@@ -525,10 +524,10 @@ func RunWithOptions(opts RunOptions) error {
 				return ErrSilent
 			}
 
-			if gateSkip {
-				// Gate not satisfied — skip step.
+			if len(offendingIDs) > 0 {
+				// Gate not satisfied — skip step, showing only the IDs that drove the decision.
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				reason := FormatFilesGate(rs.FilesGate, ids...)
+				reason := FormatFilesGate(rs.FilesGate, offendingIDs...)
 				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
 				opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
 				continue
