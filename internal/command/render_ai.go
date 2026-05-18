@@ -147,7 +147,7 @@ func validateExplicitAIArg(name string, services map[string]config.ServiceConfig
 		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
 	}
 	if !svc.AIRenderEnabled() {
-		return fmt.Errorf("service %q has ai.enabled: false", name)
+		return fmt.Errorf("service %q has render.ai.enabled: false", name)
 	}
 	return nil
 }

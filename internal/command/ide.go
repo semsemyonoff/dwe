@@ -165,9 +165,9 @@ func validateExplicitIDEArg(name string, services map[string]config.ServiceConfi
 	enabled, explicit := svc.IDERenderEnabledExplicit()
 	if !enabled {
 		if explicit {
-			return fmt.Errorf("service %q has ide.enabled: false", name)
+			return fmt.Errorf("service %q has render.ide.enabled: false", name)
 		}
-		return fmt.Errorf("service %q (type: %s) does not participate in IDE rendering by default; set ide.enabled: true to opt in", name, svc.Type)
+		return fmt.Errorf("service %q (type: %s) does not participate in IDE rendering by default; set render.ide.enabled: true to opt in", name, svc.Type)
 	}
 	return nil
 }

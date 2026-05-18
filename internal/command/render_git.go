@@ -29,13 +29,9 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 	// typos in render.git.template surface as errors regardless of .git state.
 	var packDir, packName string
 	if svc.Render.Git.Template != "" {
-		var found bool
-		packDir, packName, found, err = gitpkg.ResolveTemplatePack(svc, absRoot, name)
+		packDir, packName, _, err = gitpkg.ResolveTemplatePack(svc, absRoot, name)
 		if err != nil {
 			return err
-		}
-		if !found {
-			return fmt.Errorf("git template pack not found (tried %s, default)", name)
 		}
 	}
 
@@ -141,9 +137,9 @@ func validateExplicitGitArg(name string, services map[string]config.ServiceConfi
 	enabled, explicit := svc.GitRenderEnabledExplicit()
 	if !enabled {
 		if explicit {
-			return fmt.Errorf("service %q has git.enabled: false", name)
+			return fmt.Errorf("service %q has render.git.enabled: false", name)
 		}
-		return fmt.Errorf("service %q (type: %s) does not participate in git-hook rendering by default; set git.enabled: true to opt in", name, svc.Type)
+		return fmt.Errorf("service %q (type: %s) does not participate in git-hook rendering by default; set render.git.enabled: true to opt in", name, svc.Type)
 	}
 	return nil
 }

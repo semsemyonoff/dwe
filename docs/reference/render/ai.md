@@ -243,7 +243,7 @@ Steps:
 4. Inspect any existing path at the link location:
    - Symlink already pointing at the correct relative target — no-op (idempotent).
    - Symlink pointing somewhere else — remove and recreate.
-   - Regular file or directory — refuse with an error suggesting either deleting the file or setting `ai.enabled: false` for the service.
+   - Regular file or directory — refuse with an error suggesting either deleting the file or setting `render.ai.enabled: false` for the service.
    - Path absent — create the symlink.
 
 The result is **content-idempotent**: re-running `devbox render ai` produces a hub directory in the same final state. Note that rendered files are always rewritten on each run (so file modification times advance), but the bytes are determined entirely by the templates and the merged config. Symlinks, by contrast, are only re-created when the existing one is missing or points at the wrong target.

@@ -117,16 +117,6 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 		}}
 	}
 	if !found {
-		isExplicit := svc.Render.IDE.Template != ""
-		if isExplicit {
-			return []validate.Diagnostic{{
-				Severity: validate.SeverityError,
-				Domain:   "templates",
-				Target:   fmt.Sprintf("templates.ide:%s", name),
-				Message:  fmt.Sprintf("template pack not found: %s", svc.Render.IDE.Template),
-				Hint:     fmt.Sprintf("check devbox/templates/ide/%s", svc.Render.IDE.Template),
-			}}
-		}
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",

@@ -43,11 +43,11 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		case "service-disabled":
 			continue
 		case "git-disabled":
-			message = "service has git.enabled: false"
-			hint = "set git.enabled: true to include this service in git hook rendering"
+			message = "service has render.git.enabled: false"
+			hint = "set render.git.enabled: true to include this service in git hook rendering"
 		case "git-policy":
 			message = "service does not render git hooks by default (only 'app' type services render by default)"
-			hint = "set git.enabled: true to opt in"
+			hint = "set render.git.enabled: true to opt in"
 		case "empty-dir":
 			message = "service has no dir or dir is project root"
 			hint = "set service.dir to a subdirectory path"
@@ -122,16 +122,6 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 		}}
 	}
 	if !found {
-		isExplicit := svc.Render.Git.Template != ""
-		if isExplicit {
-			return []validate.Diagnostic{{
-				Severity: validate.SeverityError,
-				Domain:   "templates",
-				Target:   fmt.Sprintf("templates.git:%s", name),
-				Message:  fmt.Sprintf("template pack not found: %s", svc.Render.Git.Template),
-				Hint:     fmt.Sprintf("check devbox/templates/git/%s", svc.Render.Git.Template),
-			}}
-		}
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
@@ -189,7 +179,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
 			Message:  "no src/.git in service dir; render will be skipped",
-			Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove git.enabled",
+			Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove render.git.enabled",
 		})
 	case status == git.DirWorktree:
 		diags = append(diags, validate.Diagnostic{

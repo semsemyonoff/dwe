@@ -247,7 +247,7 @@ A follow-up plan will add worktree support. Until then, services with worktree c
 
 ## Related references
 
-- [`services.<name>.git` block](../config/services.md) — `enabled`, `template`, inheritance via `extends`
+- [`services.<name>.render.git` block](../config/services.md#rendergit-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ide`](ide.md) — companion command with the same deepest-wins collision policy
 - [`render ai`](ai.md) — companion command (shallowest-wins) sharing the manifest schema
 - [Render overview](index.md) — shared manifest schema and local-override mechanism

@@ -59,7 +59,7 @@ Each subcommand:
 |--------|--------------|--------------|-------------|--------------|
 | Iterates services | no | yes | yes | yes |
 | Reads templates from disk | no | yes (manifest-driven) | yes (manifest-driven) | yes (manifest-driven) |
-| Per-service opt-in field | — | `services.<name>.ide.enabled` | `services.<name>.ai.enabled` | `services.<name>.git.enabled` |
+| Per-service opt-in field | — | `services.<name>.render.ide.enabled` | `services.<name>.render.ai.enabled` | `services.<name>.render.git.enabled` |
 | Default opt-in policy | — | `true` for `type: app`; `false` otherwise | `true` for all types | `true` for `type: app`; `false` otherwise |
 | Collision policy when services share `dir` | — | deepest `extends` wins (per-variant overrides) | shallowest `extends` wins (canonical hub identity) | deepest `extends` wins (per-variant hooks) |
 | Manifest file | — | `manifest.yml` declares `render` (+ `symlinks`) | `manifest.yml` declares `render` + `symlinks` | `manifest.yml` declares `render` only |

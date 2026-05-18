@@ -1048,7 +1048,7 @@ func TestValidateExplicitIDEArg(t *testing.T) {
 			services: map[string]config.ServiceConfig{
 				"main": {Type: "app", Enabled: true, Dir: "./services/main", Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &falseVal}}},
 			},
-			wantErrMsg: `service "main" has ide.enabled: false`,
+			wantErrMsg: `service "main" has render.ide.enabled: false`,
 		},
 		{
 			name:        "non-app type no explicit",

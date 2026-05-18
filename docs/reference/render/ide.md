@@ -223,14 +223,15 @@ services:
     type: app
     container: app-main
     dir: ./services/main
-    # ide.enabled defaults to true (type: app)
+    # render.ide.enabled defaults to true (type: app)
 
   main-debug:
     extends: main
     container: app-main-debug
     dir: ./services/main          # same dir as parent — collision
-    ide:
-      template: main-debug         # use the main-debug pack
+    render:
+      ide:
+        template: main-debug       # use the main-debug pack
 ```
 
 Template `devbox/templates/ide/main-debug/.vscode/settings.json.tmpl`:
@@ -246,7 +247,7 @@ Template `devbox/templates/ide/main-debug/.vscode/settings.json.tmpl`:
 `devbox render ide` (no argument):
 
 1. Selection: both `main` and `main-debug` pass the activation gate. They share `dir: ./services/main`. `main-debug` has a deeper `extends` chain (depth 1 vs 0), so `main-debug` wins. `main` is reported as a collision skip and a warning is printed.
-2. Pack resolution for `main-debug`: `ide.template: main-debug` is explicit; `devbox/templates/ide/main-debug/` exists, so it is used.
+2. Pack resolution for `main-debug`: `render.ide.template: main-debug` is explicit; `devbox/templates/ide/main-debug/` exists, so it is used.
 3. Pack walk yields three entries (sorted): `.devcontainer/devcontainer.json`, `.vscode/launch.json`, `.vscode/settings.json`.
 4. Each is rendered with `.Service = "main-debug"`, `.ServiceCfg.Container = "app-main-debug"`, etc.
 
@@ -278,8 +279,8 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Common pitfalls
 
-- **Non-`app` services do not render by default.** Set `services.<name>.ide.enabled: true` explicitly in `services.yml` to opt in.
-- **Typos in `ide.template` are hard errors.** Explicit packs are strict; a missing `devbox/templates/ide/<name>/` does not silently fall through to `default/`. Either fix the name or remove `ide.template`.
+- **Non-`app` services do not render by default.** Set `services.<name>.render.ide.enabled: true` explicitly in `services.yml` to opt in.
+- **Typos in `render.ide.template` are hard errors.** Explicit packs are strict; a missing `devbox/templates/ide/<name>/` does not silently fall through to `default/`. Either fix the name or remove `render.ide.template`.
 - **Templates referencing missing fields fail.** Strict-mode rendering means `{{.ServiceCfg.NoSuchField}}` aborts rendering. Guard optional fields with `{{if ...}}`.
 - **Symlinks at destinations are refused.** If `.devcontainer/` or `settings.json` is a symlink, the renderer will not overwrite it. Remove the symlink and re-run.
 - **Files not listed in `manifest.yml` are silently ignored.** The renderer no longer walks the pack — add an entry under `render:` to include a template.
@@ -287,6 +288,6 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Related references
 
-- [`services.<name>.ide` block](../config/services.md#ide-block) — `enabled`, `template`, inheritance via `extends`
+- [`services.<name>.render.ide` block](../config/services.md#renderide-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ai`](ai.md) — companion command with the opposite collision policy
 - CLI reference: [`devbox render ide`](../cli/devbox_render_ide.md)
