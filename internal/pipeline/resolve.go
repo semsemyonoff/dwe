@@ -6,7 +6,10 @@ import (
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/filesgate/spec"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/usercommands/registry"
 )
 
 // ResolvePhaseSteps resolves steps for a single phase, evaluating when conditions.
@@ -17,7 +20,12 @@ import (
 //   - Runtime condition: propagated to each step that does not already carry its
 //     own runtime when condition. The phase condition is stored in PhaseWhen and
 //     evaluated before each such step at execution time.
-func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, service string) ([]ResolvedStep, error) {
+//
+// reg (registry) is used to validate files_gate directives if present.
+// When reg is nil, files_gate validation is skipped; this is tolerated for
+// internal-tool and test callers. Runtime callers (deploy run, reset run, etc.)
+// MUST pass a non-nil registry.
+func ResolvePhaseSteps(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string) ([]ResolvedStep, error) {
 	var phaseRuntimeWhen *condition.Condition
 	if phase.When != nil {
 		if phase.When.IsRuntime() {
@@ -52,6 +60,18 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 						return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
 					}
 				}
+				// Validate files_gate if present and registry is available.
+				if step.FilesGate != nil && reg != nil {
+					ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
+					issues := spec.Validate(cfg, reg, ref, step.FilesGate)
+					if len(issues) > 0 {
+						prefix := phase.Name + "/" + step.Name
+						if service != "" {
+							prefix = service + "/" + prefix
+						}
+						return nil, fmt.Errorf("step %s: %s", prefix, issues[0].Message)
+					}
+				}
 				result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen, FilesGate: step.FilesGate})
 				continue
 			} else if step.When.Type == condition.TypeTemplate {
@@ -75,6 +95,18 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, phase config.DeployPhase, servi
 					prefix = service + "/" + prefix
 				}
 				return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
+			}
+		}
+		// Validate files_gate if present and registry is available.
+		if step.FilesGate != nil && reg != nil {
+			ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
+			issues := spec.Validate(cfg, reg, ref, step.FilesGate)
+			if len(issues) > 0 {
+				prefix := phase.Name + "/" + step.Name
+				if service != "" {
+					prefix = service + "/" + prefix
+				}
+				return nil, fmt.Errorf("step %s: %s", prefix, issues[0].Message)
 			}
 		}
 		result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen, FilesGate: step.FilesGate})

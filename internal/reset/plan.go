@@ -7,19 +7,22 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands/registry"
 )
 
 // ResolvePlan builds the ordered step list from the reset pipeline config.
 // Loads devbox/reset.yml and resolves all phases/steps.
-func ResolvePlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
-	_, steps, err := LoadAndResolvePlan(cfg)
+// reg (registry) is used to validate files_gate directives and must be non-nil.
+func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
+	_, steps, err := LoadAndResolvePlan(cfg, reg)
 	return steps, err
 }
 
 // LoadAndResolvePlan loads devbox/reset.yml and resolves its phases.
 // Returns the loaded reset config (for inspecting fields like Log) alongside
 // the resolved step list.
-func LoadAndResolvePlan(cfg *config.DevboxConfig) (*config.DeployConfig, []pipeline.ResolvedStep, error) {
+// reg (registry) is used to validate files_gate directives and must be non-nil.
+func LoadAndResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) (*config.DeployConfig, []pipeline.ResolvedStep, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
 		return nil, nil, fmt.Errorf("internal: __configPath missing from config")
@@ -34,7 +37,7 @@ func LoadAndResolvePlan(cfg *config.DevboxConfig) (*config.DeployConfig, []pipel
 
 	var result []pipeline.ResolvedStep
 	for _, phase := range resetCfg.Phases {
-		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, "")
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, reg, phase, "")
 		if err != nil {
 			return nil, nil, err
 		}

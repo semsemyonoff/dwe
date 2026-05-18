@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/usercommands"
 )
 
 // writeServiceDeployFixture creates the full file layout for service deploy tests.
@@ -89,7 +91,7 @@ func TestResolvePlan_deployServicesInlines(t *testing.T) {
 		t.Fatalf("LoadConfig: %v", err)
 	}
 
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("ResolvePlan: %v", err)
 	}

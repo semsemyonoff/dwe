@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/reset"
+	"devbox-cli/internal/usercommands"
 )
 
 // makeResetCfg returns a DevboxConfig with __configPath pointing to a
@@ -43,7 +45,7 @@ func TestResolvePlan_emptyPhasesReturnsNil(t *testing.T) {
 	dir := t.TempDir()
 	writeResetYML(t, dir, `phases: []`)
 	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
-	steps, err := reset.ResolvePlan(cfg)
+	steps, err := reset.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -63,7 +65,7 @@ phases:
         cmd: rm -rf services/main/src
 `)
 	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
-	steps, err := reset.ResolvePlan(cfg)
+	steps, err := reset.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

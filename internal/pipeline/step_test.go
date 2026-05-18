@@ -57,7 +57,7 @@ func TestResolvePhaseSteps_filesGateThreadedThrough(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolvePhaseSteps(cfg, phase, "")
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
 	if err != nil {
 		t.Fatalf("ResolvePhaseSteps: %v", err)
 	}

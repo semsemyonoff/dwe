@@ -31,7 +31,7 @@ func RunPhases(
 ) error {
 	var steps []pipeline.ResolvedStep
 	for _, phase := range phases {
-		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, "")
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, reg, phase, "")
 		if err != nil {
 			return fmt.Errorf("resolving lifecycle phases: %w", err)
 		}

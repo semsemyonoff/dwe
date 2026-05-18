@@ -6,9 +6,13 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/usercommands"
 )
 
 // --- PrintPlanShell tests ---
@@ -279,7 +283,7 @@ func TestPrintPlanTable_showsImplicitStepFirst(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{
 		phaseWith("setup", cmdStep("step1", "echo 1")),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

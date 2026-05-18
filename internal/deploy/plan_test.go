@@ -7,13 +7,14 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands"
 )
 
 // --- ResolvePlan tests ---
 
 func TestResolvePlan_implicitEnvStepAlwaysFirst(t *testing.T) {
 	cfg := makeDeployCfg(nil)
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -30,7 +31,7 @@ func TestResolvePlan_implicitEnvStepAlwaysFirst(t *testing.T) {
 
 func TestResolvePlan_emptyPhasesOnlyImplicit(t *testing.T) {
 	cfg := makeDeployCfg([]config.DeployPhase{})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -46,7 +47,7 @@ func TestResolvePlan_noWhenAlwaysIncluded(t *testing.T) {
 			commandStep("up", "up"),
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestResolvePlan_truthyWhenIncluded(t *testing.T) {
 	cfg.Runtime = config.RuntimeConfig{
 		UseHTTPS: true,
 	}
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -92,7 +93,7 @@ func TestResolvePlan_falsyWhenExcluded(t *testing.T) {
 	cfg.Runtime = config.RuntimeConfig{
 		UseHTTPS: false,
 	}
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -111,7 +112,7 @@ func TestResolvePlan_multiplePhasesPreserveOrder(t *testing.T) {
 		phaseWith("setup", cmdStep("s1", "cmd1"), cmdStep("s2", "cmd2")),
 		phaseWith("init", commandStep("m1", "services.main.cmd1"), commandStep("m2", "services.main.cmd2")),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,7 +133,7 @@ func TestResolvePlan_invalidWhenTemplate(t *testing.T) {
 			whenStep("bad", "echo hi", "{{ unclosed"),
 		),
 	})
-	_, err := deploy.ResolvePlan(cfg)
+	_, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err == nil {
 		t.Error("expected error for malformed when template, got nil")
 	}
@@ -144,7 +145,7 @@ func TestResolvePlan_runtimeWhenPassesThrough(t *testing.T) {
 			runtimeWhenStep("install", "make app-install", "dir-empty services/main/src"),
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,7 +167,7 @@ func TestResolvePlan_cmdWhenPassesThrough(t *testing.T) {
 			runtimeWhenStep("check", "echo run", "cmd: test -f marker"),
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -185,7 +186,7 @@ func TestResolvePlan_templateWhenFalseFiltered(t *testing.T) {
 			cmdStep("always", "echo always"),
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -203,7 +204,7 @@ func TestResolvePlan_runtimeWhenHasEmptyRuntimeWhenForTemplateStep(t *testing.T)
 			cmdStep("plain", "echo plain"),
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -223,7 +224,7 @@ func TestResolvePhaseSteps_phaseFalsyTemplateWhenExcludesAllSteps(t *testing.T) 
 	})
 	cfg.Runtime = config.RuntimeConfig{UseHTTPS: false}
 
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -240,7 +241,7 @@ func TestResolvePhaseSteps_phaseTruthyTemplateWhenIncludesSteps(t *testing.T) {
 	})
 	cfg.Runtime = config.RuntimeConfig{UseHTTPS: true}
 
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -257,7 +258,7 @@ func TestResolvePhaseSteps_phaseRuntimeWhenPropagatedToSteps(t *testing.T) {
 		),
 	})
 
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -282,7 +283,7 @@ func TestResolvePhaseSteps_stepOwnRuntimeWhenTakesPriority(t *testing.T) {
 		),
 	})
 
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -553,7 +554,7 @@ func TestResolvePlan_postDeployPhaseIncludedLast(t *testing.T) {
 			},
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -586,7 +587,7 @@ func TestResolvePlan_postDeployPhasePreserved(t *testing.T) {
 			},
 		},
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -605,7 +606,7 @@ func TestResolvePlan_postDeployStepsAreInPlan(t *testing.T) {
 			config.DeployStep{Name: "summary", Type: "devbox", Cmd: "info", Description: "Summary"},
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -630,7 +631,7 @@ func TestResolvePlan_commandStepIncluded(t *testing.T) {
 			commandStepWith("seed", "services.main.seed", map[string]any{"env": "test"}),
 		),
 	})
-	steps, err := deploy.ResolvePlan(cfg)
+	steps, err := deploy.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

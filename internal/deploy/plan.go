@@ -10,6 +10,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands/registry"
 )
 
 // ImplicitEnvStep is always the first step of any deploy plan.
@@ -26,7 +27,9 @@ var ImplicitEnvStep = config.DeployStep{
 // Steps whose when condition evaluates to false are excluded.
 // Phases with deploy_services=true are expanded by inlining per-service
 // deploy pipelines in topological dependency order.
-func ResolvePlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
+// reg (registry) is used to validate files_gate directives and must be non-nil
+// for runtime callers (deploy run, etc.).
+func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
 	implicit := pipeline.ResolvedStep{
 		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
 		Step:  ImplicitEnvStep,
@@ -35,14 +38,14 @@ func ResolvePlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
 
 	for _, phase := range cfg.Deploy.Phases {
 		if phase.DeployServices {
-			serviceSteps, err := ResolveServicesPlan(cfg)
+			serviceSteps, err := ResolveServicesPlan(cfg, reg)
 			if err != nil {
 				return nil, fmt.Errorf("resolving services deploy: %w", err)
 			}
 			result = append(result, serviceSteps...)
 			continue
 		}
-		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, "")
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, reg, phase, "")
 		if err != nil {
 			return nil, err
 		}

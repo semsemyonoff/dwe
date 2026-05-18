@@ -7,6 +7,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands/registry"
 )
 
 // TrackedServices returns the canonical tracked-service list derived from a resolved plan.
@@ -34,9 +35,10 @@ func TrackedServices(plan []pipeline.ResolvedStep) []string {
 //  3. Loads service deploy configs for tracked services only
 //
 // Returns: tracked service names, service deploy configs (keyed by service name), error.
-func LoadTrackedServices(cfg *config.DevboxConfig, baseDir string) ([]string, map[string]*config.DeployConfig, error) {
+// reg (registry) is used to validate files_gate directives and must be non-nil.
+func LoadTrackedServices(cfg *config.DevboxConfig, reg *registry.Registry, baseDir string) ([]string, map[string]*config.DeployConfig, error) {
 	// Resolve the full deploy plan to find which services are tracked
-	plan, err := ResolvePlan(cfg)
+	plan, err := ResolvePlan(cfg, reg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolving deploy plan: %w", err)
 	}

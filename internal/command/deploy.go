@@ -66,9 +66,17 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 				if _, ok := cfg.Services[serviceName]; !ok {
 					return fmt.Errorf("service %q not found in config", serviceName)
 				}
-				steps, err = deploy.ResolveServicePlan(cfg, serviceName)
+				reg, err := loadCommandRegistry(flags.configPath)
+				if err != nil {
+					return fmt.Errorf("loading command registry: %w", err)
+				}
+				steps, err = deploy.ResolveServicePlan(cfg, reg, serviceName)
 			} else {
-				steps, err = deploy.ResolvePlan(cfg)
+				reg, err := loadCommandRegistry(flags.configPath)
+				if err != nil {
+					return fmt.Errorf("loading command registry: %w", err)
+				}
+				steps, err = deploy.ResolvePlan(cfg, reg)
 			}
 			if err != nil {
 				return fmt.Errorf("resolving deploy plan: %w", err)
@@ -192,9 +200,17 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		if _, ok := cfg.Services[serviceName]; !ok {
 			return fmt.Errorf("service %q not found in config", serviceName)
 		}
-		steps, err = deploy.ResolveServicePlan(cfg, serviceName)
+		reg, err := loadCommandRegistry(flags.configPath)
+				if err != nil {
+					return fmt.Errorf("loading command registry: %w", err)
+				}
+				steps, err = deploy.ResolveServicePlan(cfg, reg, serviceName)
 	} else {
-		steps, err = deploy.ResolvePlan(cfg)
+		reg, err := loadCommandRegistry(flags.configPath)
+				if err != nil {
+					return fmt.Errorf("loading command registry: %w", err)
+				}
+				steps, err = deploy.ResolvePlan(cfg, reg)
 	}
 	if err != nil {
 		return fmt.Errorf("resolving deploy plan: %w", err)
@@ -240,7 +256,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 
 	// Load tracked services and their deploy configs
-	trackedServices, svcDeploys, err := deploy.LoadTrackedServices(cfg, baseDir)
+	trackedServices, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, baseDir)
 	if err != nil {
 		return fmt.Errorf("loading tracked services: %w", err)
 	}
@@ -545,7 +561,11 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			if err != nil {
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}
-			steps, err := deploy.ResolvePlan(cfg)
+			reg, err := loadCommandRegistry(configPath)
+			if err != nil {
+				return completions, cobra.ShellCompDirectiveNoFileComp
+			}
+			steps, err := deploy.ResolvePlan(cfg, reg)
 			if err != nil {
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}

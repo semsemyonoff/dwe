@@ -6,11 +6,13 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands/registry"
 )
 
 // ResolveServicePlan builds the step list for a single named service.
 // Used by --service flag to deploy only one service.
-func ResolveServicePlan(cfg *config.DevboxConfig, serviceName string) ([]pipeline.ResolvedStep, error) {
+// reg (registry) is used to validate files_gate directives.
+func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, serviceName string) ([]pipeline.ResolvedStep, error) {
 	implicit := pipeline.ResolvedStep{
 		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
 		Step:  ImplicitEnvStep,
@@ -34,7 +36,7 @@ func ResolveServicePlan(cfg *config.DevboxConfig, serviceName string) ([]pipelin
 	}
 
 	for _, phase := range svcDeploy.Phases {
-		resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, serviceName)
+		resolved, err := pipeline.ResolvePhaseSteps(cfg, reg, phase, serviceName)
 		if err != nil {
 			return nil, err
 		}
@@ -45,7 +47,8 @@ func ResolveServicePlan(cfg *config.DevboxConfig, serviceName string) ([]pipelin
 
 // ResolveServicesPlan loads all per-service deploy pipelines, sorts them
 // by dependency order, and returns their steps inlined.
-func ResolveServicesPlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, error) {
+// reg (registry) is used to validate files_gate directives.
+func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
 		return nil, fmt.Errorf("internal: __configPath missing from config")
@@ -80,7 +83,7 @@ func ResolveServicesPlan(cfg *config.DevboxConfig) ([]pipeline.ResolvedStep, err
 	for _, name := range sorted {
 		deploy := svcDeploys[name]
 		for _, phase := range deploy.Phases {
-			resolved, err := pipeline.ResolvePhaseSteps(cfg, phase, name)
+			resolved, err := pipeline.ResolvePhaseSteps(cfg, reg, phase, name)
 			if err != nil {
 				return nil, err
 			}

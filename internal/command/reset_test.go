@@ -75,7 +75,7 @@ phases:
 		t.Fatalf("loading config: %v", err)
 	}
 
-	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg)
+	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("resolving reset plan: %v", err)
 	}

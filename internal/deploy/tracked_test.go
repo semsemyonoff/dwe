@@ -7,6 +7,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -140,7 +141,7 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 	}
 
 	// Call LoadTrackedServices - should return empty list since no deploy_services: true
-	tracked, svcDeploys, err := LoadTrackedServices(cfg, testDir)
+	tracked, svcDeploys, err := LoadTrackedServices(cfg, usercommands.NewEmptyRegistry(), testDir)
 	if err != nil {
 		t.Fatalf("LoadTrackedServices failed: %v", err)
 	}
