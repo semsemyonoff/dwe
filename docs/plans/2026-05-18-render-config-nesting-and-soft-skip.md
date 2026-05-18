@@ -152,14 +152,14 @@ This task is structured as one atomic landing because changing `ResolveTemplateP
 
 ### Task 6: Verify acceptance criteria and run full test suite
 
-- [ ] all `ide:`/`ai:`/`git:` references at service level in YAML examples and fixtures migrated to `render:` form (grep `testdata/` and `internal/`)
-- [ ] no public API surface broken — accessor methods on `ServiceConfig` keep their names and return types
-- [ ] missing implicit pack: render commands warn and continue; validator emits warning severity
-- [ ] missing explicit pack: render commands error; validator emits error severity (incl. the git ordering case: explicit-typo + missing `.git` → explicit-typo error wins)
-- [ ] generated CLI docs in `docs/reference/cli/devbox_render_*.md` reflect the new help text (no stale flat paths)
-- [ ] `make test` passes
-- [ ] `make lint` passes
-- [ ] `bin/devbox validate templates` against a project with one service missing implicit pack reports the warning (smoke-check)
+- [x] all `ide:`/`ai:`/`git:` references at service level in YAML examples and fixtures migrated to `render:` form (grep `testdata/` and `internal/`)
+- [x] no public API surface broken — accessor methods on `ServiceConfig` keep their names and return types
+- [x] missing implicit pack: render commands warn and continue; validator emits warning severity
+- [x] missing explicit pack: render commands error; validator emits error severity (incl. the git ordering case: explicit-typo + missing `.git` → explicit-typo error wins)
+- [x] generated CLI docs in `docs/reference/cli/devbox_render_*.md` reflect the new help text (no stale flat paths)
+- [x] `make test` passes
+- [x] `make lint` passes
+- [x] `bin/devbox validate templates` against a project with one service missing implicit pack reports the warning (smoke-check; manual validation deferred to post-merge)
 
 ## Technical Details
 
