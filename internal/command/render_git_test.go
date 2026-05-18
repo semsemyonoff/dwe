@@ -226,6 +226,108 @@ services:
 	}
 }
 
+func TestNewRenderGitCmd_implicitPackMissing(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+project:
+  name: p
+services:
+  api:
+    enabled: true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: c
+`)
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	mkGitDir(t, hubDir)
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderGitCmd(flags)
+	err := cmd.RunE(cmd, []string{"api"})
+	if err != nil {
+		t.Fatalf("expected implicit missing pack to warn and skip, got error: %v", err)
+	}
+}
+
+func TestNewRenderGitCmd_explicitPackMissing(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+project:
+  name: p
+services:
+  api:
+    enabled: true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: c
+    render:
+      git:
+        template: nonexistent
+`)
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	mkGitDir(t, hubDir)
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderGitCmd(flags)
+	err := cmd.RunE(cmd, []string{"api"})
+	if err == nil {
+		t.Fatal("expected error for explicit missing template pack")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error should mention 'not found': %v", err)
+	}
+}
+
+func TestNewRenderGitCmd_explicitPackMissingWithoutGitDir(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+project:
+  name: p
+services:
+  api:
+    enabled: true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: c
+    render:
+      git:
+        template: nonexistent
+`)
+	hubDir := filepath.Join(projectRoot, "services", "api")
+	// Do NOT create .git directory
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderGitCmd(flags)
+	err := cmd.RunE(cmd, []string{"api"})
+	if err == nil {
+		t.Fatal("expected error for explicit missing template pack")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error should mention 'not found' (explicit error wins over .git-missing): %v", err)
+	}
+}
+
 func TestNewRenderGitCmd_noArgIteratesEnabledAppServices(t *testing.T) {
 	projectRoot := t.TempDir()
 	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"

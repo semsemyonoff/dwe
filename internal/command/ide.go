@@ -211,7 +211,8 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 	if !found {
-		return fmt.Errorf("ide template pack not found (tried %s, default)", name)
+		w.Warning(fmt.Sprintf("ide [%s] — skipped (no template pack found; tried %s, default)", name, name))
+		return nil
 	}
 
 	m, err := ide.LoadManifest(packDir)

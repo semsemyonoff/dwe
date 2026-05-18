@@ -48,7 +48,8 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 		return err
 	}
 	if !found {
-		return fmt.Errorf("agents template pack not found (tried %s, default)", name)
+		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found; tried %s, default)", name, name))
+		return nil
 	}
 
 	// Load and validate manifest

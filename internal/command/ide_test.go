@@ -578,11 +578,30 @@ func TestRenderIDEConfigs_packNotFound(t *testing.T) {
 	var buf strings.Builder
 	w := render.NewWriter(&buf)
 	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
+	if err != nil {
+		t.Fatalf("expected implicit missing pack to warn and skip, got error: %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "skipped") || !strings.Contains(output, "no template pack found") {
+		t.Errorf("expected warning about missing template pack in output, got: %s", output)
+	}
+}
+
+// TestRenderIDEConfigs_explicitPackNotFound verifies that an explicit template reference that doesn't exist produces an error.
+func TestRenderIDEConfigs_explicitPackNotFound(t *testing.T) {
+	projectRoot := t.TempDir()
+	cfg := makeIDECfg("main")
+	svc := cfg.Services["main"]
+	svc.Render.IDE.Template = "nonexistent"
+
+	var buf strings.Builder
+	w := render.NewWriter(&buf)
+	err := renderIDEConfigs(projectRoot, "main", svc, cfg, w)
 	if err == nil {
-		t.Fatal("expected error when no pack found")
+		t.Fatal("expected error for explicit missing template pack")
 	}
 	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected 'not found', got: %v", err)
+		t.Errorf("expected 'not found' in error, got: %v", err)
 	}
 }
 

@@ -1365,8 +1365,48 @@ services:
 	cmd := newRenderAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"api"})
+	if err != nil {
+		t.Fatalf("expected implicit missing pack to warn and skip, got error: %v", err)
+	}
+}
+
+// TestNewRenderAICmd_explicitPackMissing tests that an explicit template reference that doesn't exist produces an error.
+func TestNewRenderAICmd_explicitPackMissing(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	devboxYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  api:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	setupServicesConfig(t, projectRoot, `
+services:
+  api:
+    type: app
+    dir: services/api
+    container: test-api
+    render:
+      ai:
+        template: nonexistent
+`)
+
+	// Create service directory but no template pack
+	if err := os.MkdirAll(filepath.Join(projectRoot, "services", "api"), 0o755); err != nil {
+		t.Fatalf("create service dir: %v", err)
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(projectRoot, "devbox.yml")}
+	cmd := newRenderAICmd(flags)
+
+	err := cmd.RunE(cmd, []string{"api"})
 	if err == nil {
-		t.Fatal("expected error for missing pack")
+		t.Fatal("expected error for explicit missing template pack")
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error should mention 'not found': %v", err)

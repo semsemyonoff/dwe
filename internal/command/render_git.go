@@ -62,7 +62,8 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 			return err
 		}
 		if !found {
-			return fmt.Errorf("git template pack not found (tried %s, default)", name)
+			w.Warning(fmt.Sprintf("git [%s] — skipped (no template pack found; tried %s, default)", name, name))
+			return nil
 		}
 	}
 
