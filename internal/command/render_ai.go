@@ -11,6 +11,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pathsafe"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/templates/manifest"
 
 	"github.com/spf13/cobra"
 )
@@ -48,7 +49,11 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 		return err
 	}
 	if !found {
-		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found)", name))
+		tried := fmt.Sprintf("tried %s, default", name)
+		if manifest.ValidatePackName(name) != nil {
+			tried = "tried default"
+		}
+		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found; %s)", name, tried))
 		return nil
 	}
 

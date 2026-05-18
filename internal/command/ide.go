@@ -10,6 +10,7 @@ import (
 	"devbox-cli/internal/pathsafe"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/templates/ide"
+	"devbox-cli/internal/templates/manifest"
 
 	"github.com/spf13/cobra"
 )
@@ -211,7 +212,11 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 	if !found {
-		w.Warning(fmt.Sprintf("ide [%s] — skipped (no template pack found)", name))
+		tried := fmt.Sprintf("tried %s, default", name)
+		if manifest.ValidatePackName(name) != nil {
+			tried = "tried default"
+		}
+		w.Warning(fmt.Sprintf("ide [%s] — skipped (no template pack found; %s)", name, tried))
 		return nil
 	}
 
