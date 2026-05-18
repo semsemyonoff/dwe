@@ -31,9 +31,10 @@ type Diagnostic struct {
 
 // Context carries data for validator execution.
 type Context struct {
-	ProjectRoot string
-	ConfigPath  string
-	Cfg         *config.DevboxConfig
+	ProjectRoot     string
+	ConfigPath      string
+	Cfg             *config.DevboxConfig
+	CommandRegistry any // *usercommands.Registry; nil-tolerant
 }
 
 // Validator is the interface for domain-specific validators.

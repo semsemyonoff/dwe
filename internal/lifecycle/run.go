@@ -128,8 +128,14 @@ func RunRun(ctx RunContext) error {
 		}
 	}
 
+	// Load registry first (needed by LoadTrackedServices).
+	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("loading command registry: %w", err)
+	}
+
 	// Gate: ensure all tracked services are deployed.
-	tracked, _, err := deploy.LoadTrackedServices(cfg, workDir)
+	tracked, _, err := deploy.LoadTrackedServices(cfg, reg, workDir)
 	if err != nil {
 		return fmt.Errorf("loading tracked services: %w", err)
 	}
@@ -149,11 +155,6 @@ func RunRun(ctx RunContext) error {
 				return dge
 			}
 		}
-	}
-
-	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("loading command registry: %w", err)
 	}
 
 	if err := RunPhases(cfg, reg, workDir, lifecycleCfg.Run.Phases, "run", "run", ctx.Yes, lifecycleCfg.Run.LogEnabled()); err != nil {

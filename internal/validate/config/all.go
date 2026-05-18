@@ -14,7 +14,10 @@ func All() []validate.Validator {
 		&stylesValidator{},
 		&lifecycleValidator{},
 		&deployValidator{},
+		&deployFilesGateValidator{},
+		&lifecycleFilesGateValidator{},
 		&resetValidator{},
+		&resetFilesGateValidator{},
 		&serviceDeployValidator{},
 	}
 }

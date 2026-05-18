@@ -13,6 +13,7 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/reset"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -45,7 +46,11 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			steps, err := reset.ResolvePlan(cfg)
+			reg, err := usercommands.LoadRegistryFromConfigPath(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading command registry: %w", err)
+			}
+			steps, err := reset.ResolvePlan(cfg, reg)
 			if err != nil {
 				return fmt.Errorf("resolving reset plan: %w", err)
 			}
@@ -116,14 +121,14 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg)
-	if err != nil {
-		return fmt.Errorf("resolving reset plan: %w", err)
-	}
-
-	reg, err := loadCommandRegistry(flags.configPath)
+	reg, err := usercommands.LoadRegistryFromConfigPath(flags.configPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
+	}
+
+	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg, reg)
+	if err != nil {
+		return fmt.Errorf("resolving reset plan: %w", err)
 	}
 
 	logEnabled := resetCfg.LogEnabled()

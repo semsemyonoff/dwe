@@ -16,6 +16,7 @@ import (
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -257,20 +258,24 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 		state, err := journal.Load(statePath)
 		if err == nil && state != nil {
 			// Get tracked services to know the total.
-			tracked, _, err := deploy.LoadTrackedServices(cfg, flags.projectRoot)
-			if err == nil && len(tracked) > 0 {
-				// Count how many tracked services are deployed.
-				deployedCount := 0
-				for _, svcName := range tracked {
-					if svc, ok := state.Services[svcName]; ok && svc != nil && svc.Status == journal.StatusDeployed {
-						deployedCount++
+			// Load registry diagnostically for the status display.
+			reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.configPath)
+			if regErr == nil {
+				tracked, _, err := deploy.LoadTrackedServices(cfg, reg, flags.projectRoot)
+				if err == nil && len(tracked) > 0 {
+					// Count how many tracked services are deployed.
+					deployedCount := 0
+					for _, svcName := range tracked {
+						if svc, ok := state.Services[svcName]; ok && svc != nil && svc.Status == journal.StatusDeployed {
+							deployedCount++
+						}
 					}
-				}
-				// Build summary view.
-				deploySummary = &statusview.DeploySummary{
-					Deployed:      deployedCount,
-					Total:         len(tracked),
-					ProjectStatus: state.Project.Status,
+					// Build summary view.
+					deploySummary = &statusview.DeploySummary{
+						Deployed:      deployedCount,
+						Total:         len(tracked),
+						ProjectStatus: state.Project.Status,
+					}
 				}
 			}
 		}

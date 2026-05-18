@@ -3,10 +3,12 @@ package command
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/validate"
 	valcmds "devbox-cli/internal/validate/commands"
 	valconfig "devbox-cli/internal/validate/config"
@@ -169,7 +171,20 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, scope
 		partialLoadErr = err
 	}
 
-	ctx := validate.Context{ProjectRoot: projectRoot, ConfigPath: configPath, Cfg: cfg}
+	// Load the command registry diagnostically (nil is OK if it fails or project isn't found).
+	var cmdReg any // *usercommands.Registry
+	if projectRoot != "" {
+		configPathForReg := configPath
+		if configPathForReg == "" {
+			configPathForReg = filepath.Join(projectRoot, "devbox.yml")
+		}
+		if reg, err := usercommands.LoadRegistryFromConfigPath(configPathForReg); err == nil {
+			cmdReg = reg
+		}
+		// Ignore registry load errors — validators will self-skip on nil.
+	}
+
+	ctx := validate.Context{ProjectRoot: projectRoot, ConfigPath: configPath, Cfg: cfg, CommandRegistry: cmdReg}
 
 	// Build the registry and run validators.
 	registry := buildRegistry()

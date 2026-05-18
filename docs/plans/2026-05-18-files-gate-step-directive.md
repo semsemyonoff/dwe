@@ -141,7 +141,7 @@ Steps:
   - [x] `internal/command/deploy.go:69, 197, 548` — move `loadCommandRegistry(flags.configPath)` (defined in `internal/command/command_cmd.go:242`) above the `deploy.ResolvePlan` / `deploy.ResolveServicePlan` calls; pass it through.
   - [x] `internal/command/deploy.go:243` — `deploy.LoadTrackedServices` now takes `reg`; reuse the already-loaded one.
   - [x] `internal/command/reset.go:124, 219` — likewise.
-  - [ ] `internal/lifecycle/run.go:132` — `deploy.LoadTrackedServices(cfg, workDir)` is called **before** `LoadRegistryFromConfigPath` at line 154. **Reorder**: load the registry first (line 154 logic moves above line 132), then pass it to `LoadTrackedServices`.
+  - [x] `internal/lifecycle/run.go:132` — reordered registry load before LoadTrackedServices call and passed it as parameter.
   - [x] `internal/lifecycle/stop.go:41` — already loads `reg` early; no reorder needed.
   - [x] `internal/lifecycle/phases.go:34` — `RunPhases` already accepts `reg`; thread it into `ResolvePhaseSteps`.
 - [x] **test updates**: all `deploy.ResolvePlan(cfg)` / `ResolveServicePlan(cfg, ...)` / `reset.ResolvePlan(cfg)` test sites gain a `reg` argument. Use `usercommands.NewEmptyRegistry()` for tests that don't need gate validation.
@@ -157,8 +157,8 @@ Steps:
   - [x] (write-only rejection is enforced inside `ResolveRequireIDs`.)
   - [ ] **`with` keys plus the target command's parameter defaults / `default_from`** together must cover every required param of the target command. (Partially stubbed; full param validation deferred.)
 - [x] `pipeline.ResolvePhaseSteps` constructs `filesgate.StepRef` from each step, calls `filesgate/spec.Validate`, and returns the **first** issue as a wrapped error (fail-fast).
-- [ ] **registry plumbing into `validate.Context`** (`internal/validate/validate.go:33`): the existing `Context{ProjectRoot, ConfigPath, Cfg}` does not carry a command registry. Add `CommandRegistry *usercommands.Registry` (nil-tolerant). The `validate` command builds the registry **diagnostically**.
-- [ ] add `internal/validate/config/deploy_files_gate.go` (and lifecycle/reset equivalents). Each iterates every phase/step in the parsed `Cfg`, runs `filesgate/spec.Validate(ctx.Cfg, ctx.CommandRegistry, ref, fg)`, and emits one diagnostic per `Issue` with file/line/hint. When `ctx.CommandRegistry == nil`, emit one self-skip warning per validator and return.
+- [x] **registry plumbing into `validate.Context`** (`internal/validate/validate.go:33`): added `CommandRegistry any` field (nil-tolerant) to Context struct.
+- [x] add `internal/validate/config/deploy_files_gate.go` (and lifecycle/reset equivalents). Created three validators (deployFilesGateValidator, lifecycleFilesGateValidator, resetFilesGateValidator) that iterate phases/steps and emit diagnostics for files_gate validation issues. Registered in All() function.
 - [x] run `make test ./internal/pipeline/... ./internal/validate/... ./internal/filesgate/...` — all pass.
 - [x] verify no cycle: NO CYCLE detected.
 

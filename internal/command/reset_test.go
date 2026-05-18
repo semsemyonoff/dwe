@@ -8,6 +8,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/reset"
+	"devbox-cli/internal/usercommands"
 )
 
 // TestResetRunCmd_projectWideCleanup verifies that a project-wide reset

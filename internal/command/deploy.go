@@ -61,21 +61,18 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 				return fmt.Errorf("loading config: %w", err)
 			}
 
+			reg, err := loadCommandRegistry(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading command registry: %w", err)
+			}
+
 			var steps []pipeline.ResolvedStep
 			if serviceName != "" {
 				if _, ok := cfg.Services[serviceName]; !ok {
 					return fmt.Errorf("service %q not found in config", serviceName)
 				}
-				reg, err := loadCommandRegistry(flags.configPath)
-				if err != nil {
-					return fmt.Errorf("loading command registry: %w", err)
-				}
 				steps, err = deploy.ResolveServicePlan(cfg, reg, serviceName)
 			} else {
-				reg, err := loadCommandRegistry(flags.configPath)
-				if err != nil {
-					return fmt.Errorf("loading command registry: %w", err)
-				}
 				steps, err = deploy.ResolvePlan(cfg, reg)
 			}
 			if err != nil {
@@ -195,30 +192,22 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		}
 	}
 
+	reg, err := loadCommandRegistry(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading command registry: %w", err)
+	}
+
 	var steps []pipeline.ResolvedStep
 	if serviceName != "" {
 		if _, ok := cfg.Services[serviceName]; !ok {
 			return fmt.Errorf("service %q not found in config", serviceName)
 		}
-		reg, err := loadCommandRegistry(flags.configPath)
-				if err != nil {
-					return fmt.Errorf("loading command registry: %w", err)
-				}
-				steps, err = deploy.ResolveServicePlan(cfg, reg, serviceName)
+		steps, err = deploy.ResolveServicePlan(cfg, reg, serviceName)
 	} else {
-		reg, err := loadCommandRegistry(flags.configPath)
-				if err != nil {
-					return fmt.Errorf("loading command registry: %w", err)
-				}
-				steps, err = deploy.ResolvePlan(cfg, reg)
+		steps, err = deploy.ResolvePlan(cfg, reg)
 	}
 	if err != nil {
 		return fmt.Errorf("resolving deploy plan: %w", err)
-	}
-
-	reg, err := loadCommandRegistry(flags.configPath)
-	if err != nil {
-		return fmt.Errorf("loading command registry: %w", err)
 	}
 
 	logEnabled := cfg.Deploy.LogEnabled()

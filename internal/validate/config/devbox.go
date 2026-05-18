@@ -10,6 +10,7 @@ import (
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/reset"
+	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"
 )
 
@@ -417,7 +418,11 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	// Cross-reference: resolve the plan to catch step-level errors.
 	if ctx.Cfg != nil {
-		if _, err := deploy.ResolvePlan(ctx.Cfg); err != nil {
+		var reg *registry.Registry
+		if ctx.CommandRegistry != nil {
+			reg = ctx.CommandRegistry.(*registry.Registry)
+		}
+		if _, err := deploy.ResolvePlan(ctx.Cfg, reg); err != nil {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "config",
@@ -487,7 +492,11 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	// Cross-reference: resolve the plan to catch step-level errors.
 	if ctx.Cfg != nil {
-		if _, err := reset.ResolvePlan(ctx.Cfg); err != nil {
+		var reg *registry.Registry
+		if ctx.CommandRegistry != nil {
+			reg = ctx.CommandRegistry.(*registry.Registry)
+		}
+		if _, err := reset.ResolvePlan(ctx.Cfg, reg); err != nil {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "config",

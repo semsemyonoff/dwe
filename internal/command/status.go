@@ -9,6 +9,7 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/stack"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -40,7 +41,12 @@ If a service name is provided, shows per-phase/step deploy breakdown for that se
 				return fmt.Errorf("loading deploy state: %w", err)
 			}
 
-			tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, flags.ProjectRoot())
+			reg, err := usercommands.LoadRegistryFromConfigPath(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading command registry: %w", err)
+			}
+
+			tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, flags.ProjectRoot())
 			if err != nil {
 				return fmt.Errorf("loading tracked services: %w", err)
 			}
