@@ -114,12 +114,22 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 		}}
 	}
 	if !found {
+		isExplicit := svc.Render.AI.Template != ""
+		if isExplicit {
+			return []validate.Diagnostic{{
+				Severity: validate.SeverityError,
+				Domain:   "templates",
+				Target:   fmt.Sprintf("templates.ai:%s", name),
+				Message:  fmt.Sprintf("template pack not found: %s", svc.Render.AI.Template),
+				Hint:     fmt.Sprintf("check devbox/templates/ai/%s", svc.Render.AI.Template),
+			}}
+		}
 		return []validate.Diagnostic{{
-			Severity: validate.SeverityError,
+			Severity: validate.SeverityWarning,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
-			Hint:     "check devbox/templates/ai directory",
+			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/ai/%s or devbox/templates/ai/default", name),
 		}}
 	}
 

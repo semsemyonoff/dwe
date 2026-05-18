@@ -117,12 +117,22 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 		}}
 	}
 	if !found {
+		isExplicit := svc.Render.IDE.Template != ""
+		if isExplicit {
+			return []validate.Diagnostic{{
+				Severity: validate.SeverityError,
+				Domain:   "templates",
+				Target:   fmt.Sprintf("templates.ide:%s", name),
+				Message:  fmt.Sprintf("template pack not found: %s", svc.Render.IDE.Template),
+				Hint:     fmt.Sprintf("check devbox/templates/ide/%s", svc.Render.IDE.Template),
+			}}
+		}
 		return []validate.Diagnostic{{
-			Severity: validate.SeverityError,
+			Severity: validate.SeverityWarning,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("template pack not found (tried %s, default)", name),
-			Hint:     "check devbox/templates/ide directory",
+			Hint:     fmt.Sprintf("to use implicit rendering, create devbox/templates/ide/%s or devbox/templates/ide/default", name),
 		}}
 	}
 

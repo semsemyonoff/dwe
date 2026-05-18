@@ -129,12 +129,12 @@ This task is structured as one atomic landing because changing `ResolveTemplateP
 
 ### Task 4: Validators emit warning instead of error on implicit missing pack
 
-- [ ] update `internal/validate/templates/ide.go` (around line 109-117): when resolver returns `found == false && err == nil`, emit `SeverityWarning` diagnostic with message describing the missing implicit pack and a hint pointing at `devbox/templates/ide/<service>` and `devbox/templates/ide/default`; keep `SeverityError` path for `err != nil`
-- [ ] same change in `internal/validate/templates/ai.go` (around 106-114)
-- [ ] same change in `internal/validate/templates/git.go` (around 114-122)
-- [ ] update `internal/validate/templates/templates_test.go` — add cases for implicit-missing → warning, keep explicit-missing → error cases
-- [ ] verify exit-code behavior with `--strict`: warnings still trip exit code 1 under `--strict`, otherwise non-fatal
-- [ ] run `go test ./internal/validate/...` — must pass before next task
+- [x] update `internal/validate/templates/ide.go` (around line 109-117): when resolver returns `found == false && err == nil`, emit `SeverityWarning` diagnostic with message describing the missing implicit pack and a hint pointing at `devbox/templates/ide/<service>` and `devbox/templates/ide/default`; keep `SeverityError` path for `err != nil`
+- [x] same change in `internal/validate/templates/ai.go` (around 106-114)
+- [x] same change in `internal/validate/templates/git.go` (around 114-122)
+- [x] update `internal/validate/templates/templates_test.go` — add cases for implicit-missing → warning, keep explicit-missing → error cases
+- [x] verify exit-code behavior with `--strict`: warnings still trip exit code 1 under `--strict`, otherwise non-fatal
+- [x] run `go test ./internal/validate/...` — must pass before next task
 
 ### Task 5: Update docs to reflect both changes
 

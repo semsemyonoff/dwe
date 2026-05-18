@@ -206,6 +206,116 @@ func TestAllFunction(t *testing.T) {
 	require.True(t, ids["git"], "Git validator should be present")
 }
 
+func ideSvc(dir string) config.ServiceConfig {
+	tr := true
+	return config.ServiceConfig{
+		Enabled: true,
+		Type:    "app",
+		Dir:     dir,
+		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &tr}},
+	}
+}
+
+func aiSvc(dir string) config.ServiceConfig {
+	tr := true
+	return config.ServiceConfig{
+		Enabled: true,
+		Type:    "app",
+		Dir:     dir,
+		Render:  config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: &tr}},
+	}
+}
+
+func TestIDEValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+
+	v := &IDEValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": ideSvc("services/main")},
+		},
+	})
+
+	warnDiag := findDiag(diags, validate.SeverityWarning, "templates.ide:main")
+	require.NotNil(t, warnDiag)
+	require.Contains(t, warnDiag.Message, "template pack not found")
+}
+
+func TestIDEValidator_ExplicitMissingPackEmitsError(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+
+	tr := true
+	svc := config.ServiceConfig{
+		Enabled: true,
+		Type:    "app",
+		Dir:     "services/main",
+		Render: config.ServiceRenderConfig{
+			IDE: config.ServiceIDEConfig{Enabled: &tr, Template: "custom"},
+		},
+	}
+
+	v := &IDEValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": svc},
+		},
+	})
+
+	errDiag := findDiag(diags, validate.SeverityError, "templates.ide:main")
+	require.NotNil(t, errDiag)
+	require.Contains(t, errDiag.Message, "failed to resolve template pack")
+	require.Contains(t, errDiag.Message, "custom")
+}
+
+func TestAIValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+
+	v := &AIValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": aiSvc("services/main")},
+		},
+	})
+
+	warnDiag := findDiag(diags, validate.SeverityWarning, "templates.ai:main")
+	require.NotNil(t, warnDiag)
+	require.Contains(t, warnDiag.Message, "template pack not found")
+}
+
+func TestAIValidator_ExplicitMissingPackEmitsError(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+
+	tr := true
+	svc := config.ServiceConfig{
+		Enabled: true,
+		Type:    "app",
+		Dir:     "services/main",
+		Render: config.ServiceRenderConfig{
+			AI: config.ServiceAIConfig{Enabled: &tr, Template: "custom"},
+		},
+	}
+
+	v := &AIValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": svc},
+		},
+	})
+
+	errDiag := findDiag(diags, validate.SeverityError, "templates.ai:main")
+	require.NotNil(t, errDiag)
+	require.Contains(t, errDiag.Message, "failed to resolve template pack")
+	require.Contains(t, errDiag.Message, "custom")
+}
+
 func TestGitValidator_BasicID(t *testing.T) {
 	v := &GitValidator{}
 	require.Equal(t, "git", v.ID())
@@ -287,10 +397,10 @@ func TestGitValidator_ValidPackEmitsInfoForMissingSrcGit(t *testing.T) {
 	require.Contains(t, infoDiag.Message, "no src/.git")
 }
 
-func TestGitValidator_MissingPackEmitsError(t *testing.T) {
+func TestGitValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
-	// No pack on disk at all.
+	// No pack on disk at all (implicit missing).
 
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
@@ -300,9 +410,38 @@ func TestGitValidator_MissingPackEmitsError(t *testing.T) {
 		},
 	})
 
+	warnDiag := findDiag(diags, validate.SeverityWarning, "templates.git:main")
+	require.NotNil(t, warnDiag)
+	require.Contains(t, warnDiag.Message, "template pack not found")
+}
+
+func TestGitValidator_ExplicitMissingPackEmitsError(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+	// Explicit template set but pack does not exist.
+
+	tr := true
+	svc := config.ServiceConfig{
+		Enabled: true,
+		Type:    "app",
+		Dir:     "services/main",
+		Render: config.ServiceRenderConfig{
+			Git: config.ServiceGitHooksConfig{Enabled: &tr, Template: "custom"},
+		},
+	}
+
+	v := &GitValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{"main": svc},
+		},
+	})
+
 	errDiag := findDiag(diags, validate.SeverityError, "templates.git:main")
 	require.NotNil(t, errDiag)
-	require.Contains(t, errDiag.Message, "template pack not found")
+	require.Contains(t, errDiag.Message, "failed to resolve template pack")
+	require.Contains(t, errDiag.Message, "custom")
 }
 
 func TestGitValidator_MissingManifestEmitsError(t *testing.T) {
