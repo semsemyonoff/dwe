@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/filesgate"
 )
 
 // ActionHash computes a stable hash for a config.Action based on type, cmd, and with parameters.
@@ -22,6 +23,79 @@ func ActionHash(a config.Action) string {
 	h.Write([]byte{0})
 	h.Write(canonicalMap(a.With))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// StepHash computes a stable hash for a config.DeployStep including its action and files_gate.
+// When FilesGate is nil, the hash is identical to ActionHash(step.Action()) for backwards compatibility.
+// When FilesGate is present, the hash includes the canonical FilesGate representation.
+// The hash is invariant to map key ordering and YAML formatting.
+func StepHash(step config.DeployStep) string {
+	h := sha256.New()
+	// Hash the action part first (same as ActionHash)
+	h.Write([]byte(step.Action().Type))
+	h.Write([]byte{0})
+	h.Write([]byte(step.Action().Cmd))
+	h.Write([]byte{0})
+	h.Write(canonicalMap(step.Action().With))
+
+	// Hash the FilesGate part (if present)
+	if step.FilesGate != nil {
+		h.Write([]byte{0})
+		h.Write(canonicalFilesGate(step.FilesGate))
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// canonicalFilesGate returns a canonical JSON representation of a FilesGate for hashing.
+// This ensures that files_gate directives with the same semantic meaning hash identically,
+// even when require IDs are specified in different order.
+func canonicalFilesGate(fg *filesgate.FilesGate) []byte {
+	if fg == nil {
+		return []byte{}
+	}
+
+	// Build a map representing the FilesGate canonically
+	m := map[string]any{
+		"state": string(fg.State),
+	}
+
+	if fg.Command != "" {
+		m["command"] = fg.Command
+	}
+
+	if len(fg.With) > 0 {
+		m["with"] = fg.With
+	}
+
+	// Canonicalize the require spec
+	m["require"] = canonicalRequireSpec(fg.Require)
+
+	return canonicalMap(m)
+}
+
+// canonicalRequireSpec returns a canonical representation of a RequireSpec for hashing.
+// This handles the different forms (required, all, list) and ensures consistent hashing.
+func canonicalRequireSpec(r filesgate.RequireSpec) any {
+	switch req := r.(type) {
+	case filesgate.RequireRequired:
+		return "required"
+	case filesgate.RequireAll:
+		return "all"
+	case filesgate.RequireList:
+		if len(req.IDs) == 0 {
+			// Empty list is represented as-is
+			return []string{}
+		}
+		// Sort the list for canonical ordering
+		sorted := make([]string, len(req.IDs))
+		copy(sorted, req.IDs)
+		sort.Strings(sorted)
+		return sorted
+	default:
+		// Fallback for unknown types
+		return "unknown"
+	}
 }
 
 // ShortHash returns a shortened version of the hash suitable for UI display.
@@ -295,6 +369,10 @@ func deployConfigToMap(cfg *config.DeployConfig) map[string]any {
 						}
 					}
 
+					if step.FilesGate != nil {
+						s["files_gate"] = filesGateToMap(step.FilesGate)
+					}
+
 					steps[j] = s
 				}
 				p["steps"] = steps
@@ -304,6 +382,30 @@ func deployConfigToMap(cfg *config.DeployConfig) map[string]any {
 		}
 		m["phases"] = phases
 	}
+
+	return m
+}
+
+// filesGateToMap converts a filesgate.FilesGate to a map for hashing purposes.
+func filesGateToMap(fg *filesgate.FilesGate) map[string]any {
+	if fg == nil {
+		return map[string]any{}
+	}
+
+	m := map[string]any{
+		"state": string(fg.State),
+	}
+
+	if fg.Command != "" {
+		m["command"] = fg.Command
+	}
+
+	if len(fg.With) > 0 {
+		m["with"] = fg.With
+	}
+
+	// Represent the require spec canonically
+	m["require"] = canonicalRequireSpec(fg.Require)
 
 	return m
 }

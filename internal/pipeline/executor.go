@@ -314,7 +314,7 @@ func Run(
 		SkipConfirm:  skipConfirm,
 		PostStepHook: postStepHooks,
 		Recorder:     NopRecorder{},
-		SkipDecider:  func(addr string, rs ResolvedStep, actionHash string) journal.Decision { return journal.Run },
+		SkipDecider:  func(addr string, rs ResolvedStep, stepHash string) journal.Decision { return journal.Run },
 	})
 }
 
@@ -329,9 +329,9 @@ func Run(
 // and action hashes. If nil, all steps are forced to Run.
 //
 // Per-step ordering for state tracking (does not affect steps without state):
-//  1. compute actionHash := journal.ActionHash(rs.Step.Action())
+//  1. compute stepHash := journal.ActionHash(rs.Step.Action())
 //  2. evaluate when: first (unchanged) — if false, skip and continue
-//  3. consult SkipDecider(addr, rs, actionHash) — on Skip, record skip and continue
+//  3. consult SkipDecider(addr, rs, stepHash) — on Skip, record skip and continue
 //  4. on Run, call recorder.OnStepStart, then ExecAction, then post-step hooks,
 //     then check conditions (unchanged)
 //  5. on success: recorder.OnStepFinish
@@ -344,7 +344,7 @@ func RunWithOptions(opts RunOptions) error {
 		opts.Recorder = NopRecorder{}
 	}
 	if opts.SkipDecider == nil {
-		opts.SkipDecider = func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		opts.SkipDecider = func(addr string, rs ResolvedStep, stepHash string) journal.Decision {
 			return journal.Run
 		}
 	}
@@ -407,14 +407,14 @@ func RunWithOptions(opts RunOptions) error {
 			stepIndex, stepTotal = trackedIndex, trackedTotal
 		}
 
-		// Step 1: Compute action hash early (before any skip decision).
-		actionHash := journal.ActionHash(rs.Step.Action())
+		// Step 1: Compute step hash early (includes FilesGate if present; for gateless steps equals ActionHash).
+		stepHash := journal.StepHash(rs.Step)
 
 		// Phase-level when condition was false — skip all steps in this phase.
 		if phaseSkipped {
 			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhenMsg)
-			opts.Recorder.OnStepSkip(addr, rs, actionHash, "phase when: "+phaseWhenMsg)
+			opts.Recorder.OnStepSkip(addr, rs, stepHash, "phase when: "+phaseWhenMsg)
 			continue
 		}
 
@@ -427,7 +427,7 @@ func RunWithOptions(opts RunOptions) error {
 			if !ok {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
-				opts.Recorder.OnStepSkip(addr, rs, actionHash, "when: "+FormatCondition(rs.RuntimeWhen))
+				opts.Recorder.OnStepSkip(addr, rs, stepHash, "when: "+FormatCondition(rs.RuntimeWhen))
 				continue
 			}
 		}
@@ -440,7 +440,7 @@ func RunWithOptions(opts RunOptions) error {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				err := fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr)
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
 				return ErrSilent
 			}
 
@@ -457,7 +457,7 @@ func RunWithOptions(opts RunOptions) error {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				err := fmt.Errorf("files_gate on step %q references unknown command %q", addr, targetCmd)
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
 				return ErrSilent
 			}
 
@@ -472,7 +472,7 @@ func RunWithOptions(opts RunOptions) error {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				err := fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err)
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
 				return ErrSilent
 			}
 
@@ -483,7 +483,7 @@ func RunWithOptions(opts RunOptions) error {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				err := fmt.Errorf("files_gate on step %q: %w", addr, err)
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
 				return ErrSilent
 			}
 
@@ -494,7 +494,7 @@ func RunWithOptions(opts RunOptions) error {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				err := fmt.Errorf("files_gate on step %q: probing files: %w", addr, err)
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, actionHash, 0, err)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
 				return ErrSilent
 			}
 
@@ -524,25 +524,25 @@ func RunWithOptions(opts RunOptions) error {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				reason := FormatFilesGate(rs.FilesGate, ids)
 				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
-				opts.Recorder.OnStepSkip(addr, rs, actionHash, reason)
+				opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
 				continue
 			}
 
 			// Gate satisfied — proceed to execution (bypass journal-skip-decider).
 		} else {
 			// Step 3b: No gate present — consult skip decision from state/config hash invalidation.
-			decision := opts.SkipDecider(addr, rs, actionHash)
+			decision := opts.SkipDecider(addr, rs, stepHash)
 			if decision == journal.Skip {
 				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
-				opts.Recorder.OnStepSkip(addr, rs, actionHash, "state")
+				opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
 				continue
 			}
 		}
 
 		// Step 4: Execute the step.
 		opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-		opts.Recorder.OnStepStart(addr, rs, actionHash)
+		opts.Recorder.OnStepStart(addr, rs, stepHash)
 		opts.Reporter.SuspendForExec()
 
 		// Per-step skip_confirm: ORed with the pipeline-wide flag so a step can
@@ -557,7 +557,7 @@ func RunWithOptions(opts RunOptions) error {
 
 		if stepErr != nil {
 			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, stepErr)
-			opts.Recorder.OnStepFail(addr, rs, actionHash, durationMs, stepErr)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, stepErr)
 			if rs.Step.ContinueOnError {
 				// Step failed but is marked continue_on_error: report the failure
 				// and proceed to the next step. Post-step hook and Check are skipped.
@@ -570,7 +570,7 @@ func RunWithOptions(opts RunOptions) error {
 		if hook, ok := opts.PostStepHook[rs.Step.Name]; ok {
 			if err := hook(); err != nil {
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, actionHash, durationMs, err)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, err)
 				if rs.Step.ContinueOnError {
 					continue
 				}
@@ -590,7 +590,7 @@ func RunWithOptions(opts RunOptions) error {
 			checkErr := ExecAction(*rs.Step.Check, actx)
 			if checkErr != nil {
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
-				opts.Recorder.OnStepFail(addr, rs, actionHash, durationMs, checkErr)
+				opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, checkErr)
 				if rs.Step.ContinueOnError {
 					// Check failed but step is marked continue_on_error: report the failure
 					// and proceed to the next step.
@@ -601,7 +601,7 @@ func RunWithOptions(opts RunOptions) error {
 		}
 
 		opts.Reporter.FinishStep(addr, rs.Step, stepIndex, stepTotal)
-		opts.Recorder.OnStepFinish(addr, rs, actionHash, durationMs)
+		opts.Recorder.OnStepFinish(addr, rs, stepHash, durationMs)
 	}
 
 	success = true

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/filesgate"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -291,4 +292,234 @@ func TestHashesNotEmptyOnEmptyInput(t *testing.T) {
 	projHash := ProjectConfigHash(cfg, nil, map[string]*config.DeployConfig{}, []string{})
 	assert.Len(t, projHash, 64)
 	assert.NotEmpty(t, projHash)
+}
+
+// TestStepHashBasics verifies that StepHash produces stable hashes for deploy steps.
+func TestStepHashBasics(t *testing.T) {
+	step := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+	}
+
+	hash1 := StepHash(step)
+	assert.Len(t, hash1, 64, "StepHash should return full sha256 (64 hex chars)")
+
+	// Verify stability
+	hash2 := StepHash(step)
+	assert.Equal(t, hash1, hash2, "StepHash should be stable")
+}
+
+// TestStepHashNilFilesGateEqualsActionHash verifies backwards compatibility:
+// when FilesGate is nil, StepHash should equal ActionHash(step.Action()).
+func TestStepHashNilFilesGateEqualsActionHash(t *testing.T) {
+	step := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+		With: map[string]any{
+			"param": "value",
+		},
+	}
+
+	stepHash := StepHash(step)
+	actionHash := ActionHash(step.Action())
+
+	assert.Equal(t, stepHash, actionHash, "StepHash with nil FilesGate should equal ActionHash(Action)")
+}
+
+// TestStepHashFilesGateChange verifies that changing FilesGate.State changes the hash.
+func TestStepHashFilesGateChange(t *testing.T) {
+	baseStep := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+	}
+
+	// Create step with files_gate state=readable
+	step1 := baseStep
+	step1.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateReadable,
+		Require: filesgate.RequireRequired{},
+	}
+
+	// Create step with files_gate state=missing
+	step2 := baseStep
+	step2.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateMissing,
+		Require: filesgate.RequireRequired{},
+	}
+
+	hash1 := StepHash(step1)
+	hash2 := StepHash(step2)
+
+	assert.NotEqual(t, hash1, hash2, "Different FilesGate states should produce different hashes")
+}
+
+// TestStepHashRequireListOrder verifies that files_gate require lists are order-independent.
+func TestStepHashRequireListOrder(t *testing.T) {
+	baseStep := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+	}
+
+	// Step with require: [a, b, c]
+	step1 := baseStep
+	step1.FilesGate = &filesgate.FilesGate{
+		State: filesgate.StateReadable,
+		Require: filesgate.RequireList{
+			IDs: []string{"a", "b", "c"},
+		},
+	}
+
+	// Step with require: [c, a, b] (different order)
+	step2 := baseStep
+	step2.FilesGate = &filesgate.FilesGate{
+		State: filesgate.StateReadable,
+		Require: filesgate.RequireList{
+			IDs: []string{"c", "a", "b"},
+		},
+	}
+
+	hash1 := StepHash(step1)
+	hash2 := StepHash(step2)
+
+	assert.Equal(t, hash1, hash2, "Require list order should not affect hash (sets are order-independent)")
+}
+
+// TestStepHashRequireSpecForms verifies that different require spec forms hash correctly.
+func TestStepHashRequireSpecForms(t *testing.T) {
+	baseStep := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+	}
+
+	// Step with require: required
+	stepRequired := baseStep
+	stepRequired.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateReadable,
+		Require: filesgate.RequireRequired{},
+	}
+
+	// Step with require: all
+	stepAll := baseStep
+	stepAll.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateReadable,
+		Require: filesgate.RequireAll{},
+	}
+
+	// Step with require: [file1]
+	stepList := baseStep
+	stepList.FilesGate = &filesgate.FilesGate{
+		State: filesgate.StateReadable,
+		Require: filesgate.RequireList{
+			IDs: []string{"file1"},
+		},
+	}
+
+	hashRequired := StepHash(stepRequired)
+	hashAll := StepHash(stepAll)
+	hashList := StepHash(stepList)
+
+	assert.NotEqual(t, hashRequired, hashAll, "Different require forms should produce different hashes")
+	assert.NotEqual(t, hashRequired, hashList, "required and [file1] should hash differently")
+	assert.NotEqual(t, hashAll, hashList, "all and [file1] should hash differently")
+}
+
+// TestStepHashFilesGateWithCommand verifies that files_gate command field affects the hash.
+func TestStepHashFilesGateWithCommand(t *testing.T) {
+	baseStep := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+	}
+
+	// Step with files_gate command=cmd1
+	step1 := baseStep
+	step1.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateReadable,
+		Command: "cmd1",
+		Require: filesgate.RequireRequired{},
+	}
+
+	// Step with files_gate command=cmd2
+	step2 := baseStep
+	step2.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateReadable,
+		Command: "cmd2",
+		Require: filesgate.RequireRequired{},
+	}
+
+	hash1 := StepHash(step1)
+	hash2 := StepHash(step2)
+
+	assert.NotEqual(t, hash1, hash2, "Different FilesGate commands should produce different hashes")
+}
+
+// TestStepHashFilesGateWithParams verifies that files_gate with field affects the hash.
+func TestStepHashFilesGateWithParams(t *testing.T) {
+	baseStep := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+	}
+
+	// Step with files_gate with={param: val1}
+	step1 := baseStep
+	step1.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateReadable,
+		Command: "cmd",
+		With: map[string]any{
+			"param": "val1",
+		},
+		Require: filesgate.RequireRequired{},
+	}
+
+	// Step with files_gate with={param: val2}
+	step2 := baseStep
+	step2.FilesGate = &filesgate.FilesGate{
+		State:   filesgate.StateReadable,
+		Command: "cmd",
+		With: map[string]any{
+			"param": "val2",
+		},
+		Require: filesgate.RequireRequired{},
+	}
+
+	hash1 := StepHash(step1)
+	hash2 := StepHash(step2)
+
+	assert.NotEqual(t, hash1, hash2, "Different FilesGate with values should produce different hashes")
+}
+
+// TestStepHashWithMapOrder verifies that with map order doesn't affect the hash.
+func TestStepHashWithMapOrder(t *testing.T) {
+	baseStep := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+		With: map[string]any{
+			"z_param": "value",
+			"a_param": "value",
+			"m_param": "value",
+		},
+	}
+
+	step2 := config.DeployStep{
+		Name: "my-step",
+		Type: "command",
+		Cmd:  "my-cmd",
+		With: map[string]any{
+			"a_param": "value",
+			"m_param": "value",
+			"z_param": "value",
+		},
+	}
+
+	hash1 := StepHash(baseStep)
+	hash2 := StepHash(step2)
+
+	assert.Equal(t, hash1, hash2, "With map order should not affect hash")
 }

@@ -197,12 +197,12 @@ Steps:
 
 In other words: `StepHash` is a **display/audit** hash for the journal, not a skip-decider input for gated steps.
 
-- [ ] in `internal/deploy/journal/hash.go`, add `func StepHash(step config.DeployStep) string` that hashes `ActionHash(step.Action())` || canonical FilesGate (zero-length write when nil).
-- [ ] FilesGate canonicalisation: serialise as `{command, with, require_kind, require_ids_sorted, state}` so `require: [a, b]` and `require: [b, a]` hash identically (sets are order-independent).
-- [ ] update `FileRecorder` (and any other `Recorder` implementations) to write `StepHash(rs.Step)` as the step's recorded hash, replacing direct `ActionHash` usage in the recorder path. The skip-decider call site keeps using `ActionHash` for gateless steps (since recorded `StepHash == ActionHash` when `FilesGate == nil`, this remains consistent for gateless steps). For gated steps, the journal-skip-decider is bypassed in Task 6, so no hash comparison happens regardless.
-- [ ] write tests: identical step → identical hash; same Action but different `FilesGate.State` → different hash; nil `FilesGate` → hash equal to `ActionHash(step.Action())` (backwards-compat invariant); `with` map order doesn't change hash; `require: [a, b]` and `require: [b, a]` produce the **same** hash.
-- [ ] add a recorder test: a gated step records `StepHash` (not `ActionHash`); a gateless step still records `ActionHash` (= `StepHash` for nil-gate).
-- [ ] run `make test ./internal/deploy/journal/... ./internal/pipeline/...` — must pass before next task.
+- [x] in `internal/deploy/journal/hash.go`, add `func StepHash(step config.DeployStep) string` that hashes `ActionHash(step.Action())` || canonical FilesGate (zero-length write when nil).
+- [x] FilesGate canonicalisation: serialise as `{command, with, require_kind, require_ids_sorted, state}` so `require: [a, b]` and `require: [b, a]` hash identically (sets are order-independent).
+- [x] update `FileRecorder` (and any other `Recorder` implementations) to write `StepHash(rs.Step)` as the step's recorded hash, replacing direct `ActionHash` usage in the recorder path. The skip-decider call site keeps using `ActionHash` for gateless steps (since recorded `StepHash == ActionHash` when `FilesGate == nil`, this remains consistent for gateless steps). For gated steps, the journal-skip-decider is bypassed in Task 6, so no hash comparison happens regardless.
+- [x] write tests: identical step → identical hash; same Action but different `FilesGate.State` → different hash; nil `FilesGate` → hash equal to `ActionHash(step.Action())` (backwards-compat invariant); `with` map order doesn't change hash; `require: [a, b]` and `require: [b, a]` produce the **same** hash.
+- [x] add a recorder test: a gated step records `StepHash` (not `ActionHash`); a gateless step still records `ActionHash` (= `StepHash` for nil-gate).
+- [x] run `make test ./internal/deploy/journal/... ./internal/pipeline/...` — must pass before next task.
 
 ### Task 8: Plan printer + reporter strings
 

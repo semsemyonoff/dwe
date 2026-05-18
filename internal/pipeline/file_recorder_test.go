@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/filesgate"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -793,4 +794,103 @@ func TestFileRecorder_ServiceInProgressOnStepStart(t *testing.T) {
 	journal.Recompute(crashed)
 	assert.Equal(t, journal.StatusFailed, crashed.Services["main"].LastRun.Status,
 		"Recompute must convert in_progress → failed for crashed services")
+}
+
+// TestFileRecorder_StepHashIncludesFilesGate verifies that a gated step's recorded hash includes
+// the FilesGate directive, so that changes to the files_gate directive are reflected in the state.
+func TestFileRecorder_StepHashIncludesFilesGate(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services:      make(map[string]*journal.ServiceState),
+	}
+
+	rec := NewFileRecorder(statePath, state, map[string]string{}, "proj-hash", true)
+	rec.OnPipelineStart("deploy", 1)
+
+	// Step with files_gate: readable
+	stepWithGate := config.DeployStep{
+		Name: "step1",
+		Type: "command",
+		Cmd:  "my-cmd",
+		FilesGate: &filesgate.FilesGate{
+			State:   filesgate.StateReadable,
+			Require: filesgate.RequireRequired{},
+		},
+	}
+
+	resolved := ResolvedStep{
+		Phase: config.DeployPhase{Name: "setup"},
+		Step:  stepWithGate,
+	}
+
+	// Compute the hash as the executor does
+	stepHash := journal.StepHash(stepWithGate)
+
+	rec.OnStepStart(resolved.StepAddress(), resolved, stepHash)
+	rec.OnStepFinish(resolved.StepAddress(), resolved, stepHash, 100)
+	rec.OnPipelineFinish(true)
+
+	// Verify the recorded hash includes FilesGate
+	loaded, err := journal.Load(statePath)
+	require.NoError(t, err)
+	require.NotNil(t, loaded.Project.Phases["setup"])
+	require.NotNil(t, loaded.Project.Phases["setup"].Steps["step1"])
+
+	recordedHash := loaded.Project.Phases["setup"].Steps["step1"].ActionHash
+	assert.Equal(t, stepHash, recordedHash, "recorded hash should equal StepHash (including FilesGate)")
+
+	// Verify that the hash differs from ActionHash(step.Action()) since FilesGate is present
+	actionHash := journal.ActionHash(stepWithGate.Action())
+	assert.NotEqual(t, actionHash, recordedHash, "with FilesGate present, StepHash should differ from ActionHash")
+}
+
+// TestFileRecorder_GatelessStepHashEqualsActionHash verifies backwards compatibility:
+// when FilesGate is nil, the recorded hash (StepHash) equals ActionHash for gateless steps.
+func TestFileRecorder_GatelessStepHashEqualsActionHash(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services:      make(map[string]*journal.ServiceState),
+	}
+
+	rec := NewFileRecorder(statePath, state, map[string]string{}, "proj-hash", true)
+	rec.OnPipelineStart("deploy", 1)
+
+	// Step WITHOUT files_gate
+	gatelessStep := config.DeployStep{
+		Name: "step1",
+		Type: "command",
+		Cmd:  "my-cmd",
+		With: map[string]any{"param": "value"},
+	}
+
+	resolved := ResolvedStep{
+		Phase: config.DeployPhase{Name: "setup"},
+		Step:  gatelessStep,
+	}
+
+	// Both ActionHash and StepHash should be the same for gateless steps
+	actionHash := journal.ActionHash(gatelessStep.Action())
+	stepHash := journal.StepHash(gatelessStep)
+	assert.Equal(t, actionHash, stepHash, "StepHash should equal ActionHash when FilesGate is nil")
+
+	rec.OnStepStart(resolved.StepAddress(), resolved, stepHash)
+	rec.OnStepFinish(resolved.StepAddress(), resolved, stepHash, 50)
+	rec.OnPipelineFinish(true)
+
+	// Verify the recorded hash matches ActionHash
+	loaded, err := journal.Load(statePath)
+	require.NoError(t, err)
+	require.NotNil(t, loaded.Project.Phases["setup"])
+	require.NotNil(t, loaded.Project.Phases["setup"].Steps["step1"])
+
+	recordedHash := loaded.Project.Phases["setup"].Steps["step1"].ActionHash
+	assert.Equal(t, actionHash, recordedHash, "recorded hash for gateless step should equal ActionHash")
 }
