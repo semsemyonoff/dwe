@@ -47,11 +47,11 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			// These are expected; don't emit diagnostics
 			continue
 		case "ide-disabled":
-			message = "service has ide.enabled: false"
-			hint = "set ide.enabled: true to include this service in IDE rendering"
+			message = "service has render.ide.enabled: false"
+			hint = "set render.ide.enabled: true to include this service in IDE rendering"
 		case "ide-policy":
 			message = "service does not participate in IDE rendering by default (only 'app' type services render by default)"
-			hint = "set ide.enabled: true to opt in"
+			hint = "set render.ide.enabled: true to opt in"
 		case "empty-dir":
 			message = "service has no dir or dir is project root"
 			hint = "set service.dir to a subdirectory path"

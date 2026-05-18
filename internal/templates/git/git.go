@@ -259,6 +259,8 @@ func ResolveGitHooksDir(absHub string) (string, DirStatus, error) {
 		if hfi.Mode()&os.ModeSymlink != 0 {
 			return "", 0, fmt.Errorf("git: %s is a symlink; symlinked hooks dir is not supported", hooksDir)
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", 0, fmt.Errorf("stat %s: %w", hooksDir, err)
 	}
 	return hooksDir, DirOK, nil
 }
@@ -414,6 +416,8 @@ func renderOneHook(ctx Context, entry manifest.RenderEntry, data TemplateData) (
 		if fi.Mode()&os.ModeSymlink != 0 {
 			return false, fmt.Errorf("hook destination is a symlink: %s", absDest)
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("stat hook destination %s: %w", absDest, err)
 	}
 
 	if err := os.WriteFile(absDest, buf.Bytes(), 0o755); err != nil {

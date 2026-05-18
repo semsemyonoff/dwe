@@ -46,8 +46,8 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			// These are expected; don't emit diagnostics
 			continue
 		case "ai-disabled":
-			message = "service has ai.enabled: false"
-			hint = "set ai.enabled: true to include this service in AI rendering"
+			message = "service has render.ai.enabled: false"
+			hint = "set render.ai.enabled: true to include this service in AI rendering"
 		case "empty-dir":
 			message = "service has no dir or dir is project root"
 			hint = "set service.dir to a subdirectory path"
