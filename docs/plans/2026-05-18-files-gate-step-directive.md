@@ -213,12 +213,12 @@ In other words: `StepHash` is a **display/audit** hash for the journal, not a sk
 
 ### Task 9: Documentation
 
-- [ ] update `docs/reference/config/deploy.md`: new section "Step gates: when vs check vs files_gate" with the full table from the spec (fields, defaults, semantics) and at least one before/after example (dump-deploy + dump-download). **Call out the journal-skip-bypass policy** (Task 6): steps with `files_gate:` re-evaluate the gate every deploy and bypass the journal's "already deployed" skip — this is the deliberate trade-off in exchange for "decides whether a step runs" semantics. Gateless steps remain idempotency-cached as today.
-- [ ] update `docs/reference/config/commands.md`: in the `Files` section, add a cross-reference to `files_gate:` explaining "this same block is the source of truth for `files_gate:` in pipelines."
-- [ ] update `docs/reference/config/lifecycle.md` and `docs/reference/config/reset.md` with one-line pointers to the deploy.md section (no duplication).
-- [ ] update `AGENTS.md` (which `CLAUDE.md` symlinks to) project-structure block: mention `internal/filesgate/` and the new `BuildRunContext` / `ComputeFilePathsProbe` / `StepHash` helpers.
-- [ ] write tests: none for docs themselves, but run `devbox docs generate --scope all` against a fixture project to ensure the new YAML keys appear in generated reference output (if `docs generate` pulls from struct tags).
-- [ ] run `make test` (full suite) — must pass before next task.
+- [x] update `docs/reference/config/deploy.md`: new section "Step gates: when vs check vs files_gate" with the full table from the spec (fields, defaults, semantics) and at least one before/after example (dump-deploy + dump-download). **Call out the journal-skip-bypass policy** (Task 6): steps with `files_gate:` re-evaluate the gate every deploy and bypass the journal's "already deployed" skip — this is the deliberate trade-off in exchange for "decides whether a step runs" semantics. Gateless steps remain idempotency-cached as today.
+- [x] update `docs/reference/config/commands.md`: in the `Files` section, add a cross-reference to `files_gate:` explaining "this same block is the source of truth for `files_gate:` in pipelines."
+- [x] update `docs/reference/config/lifecycle.md` and `docs/reference/config/reset.md` with one-line pointers to the deploy.md section (no duplication).
+- [x] update `AGENTS.md` (which `CLAUDE.md` symlinks to) project-structure block: mention `internal/filesgate/` and the new `BuildRunContext` / `ComputeFilePathsProbe` / `StepHash` helpers.
+- [x] write tests: none for docs themselves, but run `devbox docs generate --scope all` against a fixture project to ensure the new YAML keys appear in generated reference output (if `docs generate` pulls from struct tags).
+- [x] run `make test` (full suite) — must pass before next task.
 
 ### Task 10: Verify acceptance criteria
 

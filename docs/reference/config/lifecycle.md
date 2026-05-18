@@ -92,7 +92,7 @@ stop:
             key: value
 ```
 
-Phases and steps use the same shape as [deploy.yml](deploy.md): `name`, `description`, `when`, `untracked`, `steps[]`, plus per-step `type` / `cmd` / `with`, `when`, `check`, `continue_on_error`. See the deploy reference for the complete step grammar.
+Phases and steps use the same shape as [deploy.yml](deploy.md): `name`, `description`, `when`, `untracked`, `steps[]`, plus per-step `type` / `cmd` / `with`, `when`, `check`, `files_gate`, `continue_on_error`. See the deploy reference for the complete step grammar, including [`files_gate:` (pre-condition for files)](deploy.md#files_gate-pre-condition-for-files).
 
 `deploy_services: true` is **not** allowed in lifecycle pipelines.
 

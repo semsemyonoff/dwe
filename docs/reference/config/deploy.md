@@ -26,6 +26,7 @@ Deploy and reset pipeline declarations.
 - [Conditions and checks](#conditions-and-checks)
   - [`when:` (pre-condition)](#when-pre-condition)
   - [`check:` (post-condition)](#check-post-condition)
+  - [`files_gate:` (pre-condition for files)](#files_gate-pre-condition-for-files)
 - [Post-deploy semantics](#post-deploy-semantics)
 - [`deploy_services` marker](#deploy_services-marker)
 - [Example: orchestrator pipeline](#example-orchestrator-pipeline)
@@ -135,6 +136,7 @@ phases:
 | `with` | mapping | Parameters passed to command or builtin (optional; required for most builtins) |
 | `when` | typed condition | Pre-condition evaluated before the step runs; step skipped if falsy |
 | `check` | typed action | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. |
+| `files_gate` | typed gate | Pre-condition based on file existence/absence from a command's `files:` block. Step skipped if unsatisfied. See [`files_gate:` (pre-condition for files)](#files_gate-pre-condition-for-files). |
 | `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](lifecycle.md). **Behavior change:** when the step body succeeds but `check:` fails, and `continue_on_error: true`, the step is reported as failed and the pipeline continues to the next step (symmetric with body-failure semantics). |
 | `skip_confirm` | bool | When `true`, bypasses confirmation prompts for this step only — equivalent to a per-step `-y` / `--yes`. Propagates to the step body and its `check:` action. ORed with the pipeline-wide skip-confirm flag, so the step is non-interactive whenever either is set. Useful when most of the pipeline is interactive but one step (e.g. a `confirm` builtin guarding an idempotent action, or a command that re-prompts internally) should always proceed. |
 
@@ -439,6 +441,91 @@ Use `check:` to assert that a step had its intended effect — e.g. that a migra
 - When a step body fails and `continue_on_error: true` is set, `check:` is **not** evaluated. The step is reported as failed and the pipeline continues.
 - When a step body succeeds but `check:` fails, the step is reported as failed. If `continue_on_error: true`, the pipeline continues; otherwise it aborts. **This is a behavior change from prior versions**, where check failure always aborted regardless of `continue_on_error`.
 
+### `files_gate:` (pre-condition for files)
+
+`files_gate:` probes for the **existence or absence** of files before running a step. Unlike `when:` (which is a generic predicate) or `check:` (which validates after success), `files_gate:` decides whether to run based on **the same `files:` block declared in a command definition** — making the command's file spec the single source of truth.
+
+**Use case:** skip a deployment step if the artifact already exists, or run it only when a pre-fetched cache is present. Example: "dump the database only if a dump file doesn't already exist" (producer step with `state: missing`), or "load the cache only if it was pre-fetched" (consumer step with `state: readable`).
+
+**Short form:**
+
+```yaml
+- name: db-dump
+  type: command
+  cmd: services.main.db.dump
+  files_gate: readable              # runs iff dump file exists
+```
+
+**Long form:**
+
+```yaml
+- name: db-load
+  type: command
+  cmd: services.main.db.load
+  files_gate:
+    state: missing                  # required: runs iff dump file does NOT exist
+    command: services.main.db.dump  # optional: target command (default: step.cmd)
+    require: all                    # optional: which files to probe (default: required)
+    with:                           # optional: params for file resolution (default: step.with)
+      database: test_db
+```
+
+**Field reference:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `state` | `readable` \| `missing` | (required) | `readable`: runs iff **all** selected files resolve (file exists). `missing`: runs iff **none** do. |
+| `command` | string | `step.cmd` | Target command ID whose `files:` block is probed. When not specified, the step's own `cmd` is used (self-probe). |
+| `require` | string \| list | `required` | Which files participate in the probe: `required` (files marked `required: true` or `read_write`), `all` (all readable files), or explicit list `[id1, id2]`. |
+| `with` | mapping | `step.with` | Parameter overrides for file resolution templates. Merged with `step.with` for the targeted command. |
+
+**Semantics:**
+
+- **No file errors → skip**, not fail. If `state: readable` and no files match, the step is skipped (not failed). Configuration errors (bad template, bad glob, missing params) do produce an error and fail the step.
+- **AND'ed with `when:`** — both must be satisfied for the step to run. If `when:` is false, the gate is never evaluated (short-circuits). If `when:` is true but the gate is unsatisfied, the step is skipped.
+- **Journal-skip bypass** — steps with `files_gate:` **always re-evaluate the gate on every deploy**, bypassing the journal's "already deployed" skip optimization. This ensures a producer step with `state: missing` re-runs after its artifact is deleted between deploys. This is the deliberate trade-off: gate re-evaluation vs. idempotency caching. (Gateless steps remain idempotency-cached as before.)
+- **Probe scope** — only files with `access: read` or `access: read_write` participate. Files with `access: write` only are rejected at plan-time validation if listed in the gate's `require:` spec.
+
+**Before and after example:**
+
+*Without `files_gate:` — duplicated glob+regex logic:*
+
+```yaml
+# Deploy step: hard-coded shell condition duplicating the command's file logic
+- name: dump-download
+  type: command
+  cmd: services.main.db.dump-download
+  when:
+    type: shell
+    cmd: "test -f services/main/.backups/dump_*.sql.gz"  # duplicated glob logic
+```
+
+*With `files_gate:` — single source of truth:*
+
+```yaml
+# Deploy step: references the command's canonical file spec
+- name: dump-download
+  type: command
+  cmd: services.main.db.dump-download
+  files_gate: readable                # probes the dump_*.sql.gz from command definition
+```
+
+The command definition once:
+
+```yaml
+# devbox/commands/services/main/db.yml
+commands:
+  dump-download:
+    type: shell
+    files:
+      dump:
+        access: read
+        candidates:
+          - glob: "services/main/.backups/dump_*.sql.gz"
+            sort: modtime_desc
+        required: true
+```
+
 ## Post-deploy semantics
 
 The `post-deploy` phase (by convention, the last phase in `deploy.yml`) runs only if all prior phases succeed. This is not magic — it follows the existing behavior where deploy aborts on first failure. Name the final summary phase `post-deploy` and it naturally benefits from this.
@@ -565,6 +652,7 @@ phases:
 - **Forgetting `log: false` for noisy reset runs** — reset defaults to `log: false`, deploy defaults to `log: true`. Set the field explicitly when you want behaviour different from the default.
 - **Using `continue_on_error` to mask real failures in core phases** — it is meant for hook phases (pre/post). A failed `docker up` should always abort.
 - **Confusing `when:` and `check:`** — `when:` is evaluated before the step runs (pre-condition); `check:` is evaluated after success (post-action). `when:` uses the typed `type: builtin|shell|template` / `cmd:` shape; `check:` uses the typed `type: shell|devbox|command|builtin` shape.
+- **Duplicating file-probe logic in `when:` instead of using `files_gate:`** — If a step should run conditionally based on whether a file exists, use `files_gate:` instead of hard-coding globs in a shell `when:` condition. That way, edits to the command's `files:` definition automatically apply to the step's probe logic — they stay in sync. The `files_gate:` references the command's canonical file spec.
 
 ## Idempotent deploy and state
 
