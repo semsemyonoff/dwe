@@ -138,17 +138,17 @@ This task is structured as one atomic landing because changing `ResolveTemplateP
 
 ### Task 5: Update docs to reflect both changes
 
-- [ ] rewrite `docs/reference/config/services.md` examples (lines 69-77 and 177-296) to use nested `render: { ide:, ai:, git: }` form throughout
-- [ ] add a subsection under "Template pack resolution" stating: implicit fallback exhaustion → warning + skip; explicit `template:` typo → hard error. Mention both `devbox render` runtime and `devbox validate templates`.
-- [ ] rewrite `docs/reference/render/ide.md` — examples and prose currently use flat-key paths and the old hard-error semantics (e.g., lines 53 and 116); update to nested `render.ide.*` paths and document the new implicit-missing-warn behavior
-- [ ] same for `docs/reference/render/ai.md`
-- [ ] same for `docs/reference/render/git.md`
-- [ ] update command help long descriptions in `internal/command/{ide,render_ai,render_git}.go` (cobra `Long` strings) — they encode flat paths and old hard-error semantics that propagate into generated CLI docs
-- [ ] regenerate generated CLI docs: `bin/devbox docs generate --scope cli` (the `commands` scope is for the declarative command registry and needs a project) — verify `docs/reference/cli/devbox_render_ide.md`, `devbox_render_ai.md`, `devbox_render_git.md` reflect the new help text
-- [ ] grep `docs/` for other mentions of `ide:`/`ai:`/`git:` at service level and update each (likely under deploy.md, agents docs, info.md examples — verify and migrate)
-- [ ] edit `AGENTS.md` (canonical; `CLAUDE.md` is a symlink to it — repo guidelines say edit `AGENTS.md` only): update the long descriptive paragraph about `ServiceConfig` to reference `Render.IDE/AI/Git` and the new soft-skip semantics; update the `internal/templates/{ide,ai,git}` summary lines noting the new `(packDir, packName, found bool, err error)` signature; note the git "resolve explicit pack before .git check" ordering quirk
-- [ ] verify `CLAUDE.md` is still a symlink to `AGENTS.md` after the edit (`ls -l CLAUDE.md`) — do not overwrite it
-- [ ] no test step (docs only) — proceed to next task
+- [x] rewrite `docs/reference/config/services.md` examples (lines 69-77 and 177-296) to use nested `render: { ide:, ai:, git: }` form throughout
+- [x] add a subsection under "Template pack resolution" stating: implicit fallback exhaustion → warning + skip; explicit `template:` typo → hard error. Mention both `devbox render` runtime and `devbox validate templates`.
+- [x] rewrite `docs/reference/render/ide.md` — examples and prose currently use flat-key paths and the old hard-error semantics (e.g., lines 53 and 116); update to nested `render.ide.*` paths and document the new implicit-missing-warn behavior
+- [x] same for `docs/reference/render/ai.md`
+- [x] same for `docs/reference/render/git.md`
+- [x] update command help long descriptions in `internal/command/{ide,render_ai,render_git}.go` (cobra `Long` strings) — they encode flat paths and old hard-error semantics that propagate into generated CLI docs
+- [x] regenerate generated CLI docs: `bin/devbox docs generate --scope cli` (the `commands` scope is for the declarative command registry and needs a project) — verify `docs/reference/cli/devbox_render_ide.md`, `devbox_render_ai.md`, `devbox_render_git.md` reflect the new help text
+- [x] grep `docs/` for other mentions of `ide:`/`ai:`/`git:` at service level and update each (likely under deploy.md, agents docs, info.md examples — verify and migrate) — no additional instances found
+- [x] edit `AGENTS.md` (canonical; `CLAUDE.md` is a symlink to it — repo guidelines say edit `AGENTS.md` only): update the long descriptive paragraph about `ServiceConfig` to reference `Render.IDE/AI/Git` and the new soft-skip semantics; update the `internal/templates/{ide,ai,git}` summary lines noting the new `(packDir, packName, found bool, err error)` signature; note the git "resolve explicit pack before .git check" ordering quirk
+- [x] verify `CLAUDE.md` is still a symlink to `AGENTS.md` after the edit (`ls -l CLAUDE.md`) — do not overwrite it
+- [x] all tests pass (make test)
 
 ### Task 6: Verify acceptance criteria and run full test suite
 

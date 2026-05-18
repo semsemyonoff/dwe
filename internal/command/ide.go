@@ -34,14 +34,14 @@ A manifest.yml is required; packs without one produce an error with a migration
 hint. See docs/reference/render/ide.md for the manifest schema and migration.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
-  1. If ide.template is set in the service config, use that pack (explicit, strict)
+  1. If render.ide.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try devbox/templates/ide/<service-name>/
   3. If not found, use devbox/templates/ide/default/
-  4. If none exist, return an error
+  4. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in IDE rendering:
-  - Type 'app' (default) has ide.enabled: true by default
-  - Other types require explicit ide.enabled: true in the config
+  - Type 'app' (default) has render.ide.enabled: true by default
+  - Other types require explicit render.ide.enabled: true in the config
 
 When a service name is given, it is treated as a hub anchor: if multiple
 services share its dir (e.g. main and main-debug both point to services/main),

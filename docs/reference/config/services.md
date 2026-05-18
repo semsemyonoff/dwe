@@ -66,15 +66,16 @@ services:
       workdir: /workspace/src
       env:
         - KEY=value
-    ide:
-      enabled: true|false          # enable IDE rendering for this service
-      template: <template-dir-name> # service-specific template directory
-    ai:
-      enabled: true|false          # enable agentic docs rendering for this service
-      template: <template-dir-name> # service-specific template directory
-    git:
-      enabled: true|false          # enable git hooks rendering for this service
-      template: <template-dir-name> # service-specific template directory
+    render:
+      ide:
+        enabled: true|false             # enable IDE rendering for this service
+        template: <template-dir-name>   # service-specific template directory
+      ai:
+        enabled: true|false             # enable agentic docs rendering for this service
+        template: <template-dir-name>   # service-specific template directory
+      git:
+        enabled: true|false             # enable git hooks rendering for this service
+        template: <template-dir-name>   # service-specific template directory
 ```
 
 ## Field reference
@@ -92,9 +93,7 @@ services:
 | `extends` | string | no | Inherit fields from another service key |
 | `depends_on` | list | no | Ordered dependency on other services (affects deploy order) |
 | `compose` | list | no | Additional compose overlay files active when service is enabled |
-| `ide` | block | no | IDE rendering configuration (see [`ide` block](#ide-block)) |
-| `ai` | block | no | Agent docs rendering configuration (see [`ai` block](#ai-block)) |
-| `git` | block | no | Git hooks rendering configuration (see [`git` block](#git-block)) |
+| `render` | block | no | Nested rendering configuration (see [`render` block](#render-block)) |
 
 ### `configs` field
 
@@ -174,14 +173,19 @@ cli:
 
 The list form is convenient when copy-pasting from a `.env` file; the map form is friendlier for inheriting and overriding individual keys via `extends:`.
 
-### `ide` block
+### `render` block
+
+Nested block controlling whether and how rendering generates files for this service from template packs. Contains three sub-blocks: `ide`, `ai`, and `git`, each with the same structure.
+
+#### `render.ide` block
 
 Controls whether and how IDE rendering generates config files for this service from template packs.
 
 ```yaml
-ide:
-  enabled: true          # opt in to IDE rendering for this service
-  template: main-debug   # use custom template pack
+render:
+  ide:
+    enabled: true          # opt in to IDE rendering for this service
+    template: main-debug   # use custom template pack
 ```
 
 | Field | Default | Description |
@@ -204,11 +208,11 @@ A service is rendered only if both are satisfied. Disabling either suppresses re
 
 `devbox render ide` searches for template packs in this order; the first match is used:
 
-1. `devbox/templates/ide/<template>/` (if `template` is set) — **strict**: pack must exist
+1. `devbox/templates/ide/<template>/` (if `template` is set) — **strict**: pack must exist or rendering fails
 2. `devbox/templates/ide/<service-name>/` (if `template` is not set)
 3. `devbox/templates/ide/default/` (final fallback)
 
-If none exist, rendering is skipped with an error.
+When an explicit `template:` is specified and the pack is not found, rendering fails with an error (catches typos). When no explicit template is set and the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
 
 Once a pack is selected, the command walks every `*.tmpl` file in the pack and renders it to the matching relative path in the service directory. For example:
 
@@ -295,14 +299,15 @@ services/main/
 
 Note that `main` is skipped due to collision (same `dir` as `main-debug`), so only `main-debug`'s template pack is rendered.
 
-### `ai` block
+#### `render.ai` block
 
 Controls whether and how agentic documentation rendering generates hub-level docs for this service from template packs.
 
 ```yaml
-ai:
-  enabled: true          # opt in to agent docs rendering for this service
-  template: custom-docs  # use custom template pack
+render:
+  ai:
+    enabled: true          # opt in to agent docs rendering for this service
+    template: custom-docs  # use custom template pack
 ```
 
 | Field | Default | Description |
@@ -325,11 +330,11 @@ A service is rendered only if both are satisfied. Disabling either suppresses re
 
 `devbox render ai` searches for template packs in this order; the first match is used:
 
-1. `devbox/templates/ai/<template>/` (if `template` is set) — **strict**: pack must exist
+1. `devbox/templates/ai/<template>/` (if `template` is set) — **strict**: pack must exist or rendering fails
 2. `devbox/templates/ai/<service-name>/` (if `template` is not set)
 3. `devbox/templates/ai/default/` (final fallback)
 
-If none exist, rendering is skipped with an error.
+When an explicit `template:` is specified and the pack is not found, rendering fails with an error (catches typos). When no explicit template is set and the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
 
 Once a pack is selected, the command reads the pack's `manifest.yml` to determine what files to render and what symlinks to create. The manifest declares:
 
@@ -407,22 +412,23 @@ services/main/
     CLAUDE.md        ← rendered from .claude/CLAUDE.md.tmpl
 ```
 
-### `git` block
+#### `render.git` block
 
 Controls whether and how shell git hooks are rendered into the service's `src/.git/hooks/` directory from template packs.
 
 ```yaml
-git:
-  enabled: true          # opt in to git hooks rendering for this service
-  template: custom-hooks # use custom template pack
+render:
+  git:
+    enabled: true          # opt in to git hooks rendering for this service
+    template: custom-hooks # use custom template pack
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in `devbox render git` output. Mirrors the `ide` default policy. |
+| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in `devbox render git` output. Mirrors the `render.ide` default policy. |
 | `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/git/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then `default` packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
-`extends` inheritance for `git.enabled` and `git.template` follows the same rules as `ide` and `ai`: child explicit values override the parent's; omitted values inherit. Collision resolution on shared `dir` uses **deepest-extends-wins** (same as `ide`).
+`extends` inheritance for `render.git.enabled` and `render.git.template` follows the same rules as `render.ide` and `render.ai`: child explicit values override the parent's; omitted values inherit. Collision resolution on shared `dir` uses **deepest-extends-wins** (same as `render.ide`).
 
 Hooks are written to `<svc.Dir>/src/.git/hooks/<basename>` with mode `0755`. Services whose `src/.git` is missing (no git checkout) or is a file (worktree/submodule pointer) are skipped with a warning. See [render git](../render/git.md) for the full reference, manifest schema, and examples.
 
@@ -443,7 +449,7 @@ Resolution rules:
 - `dirs` — parent's list comes first; child entries are appended; duplicates are removed (parent order preserved).
 - `configs` — child wholly replaces parent when set (child has its own list); parent's list is used only when child omits the key.
 - `cli.env` — recursive map merge: parent provides defaults, child overrides per key.
-- `ide.enabled`, `ide.template`, `ai.enabled`, `ai.template`, `git.enabled`, and `git.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
+- `render.ide.enabled`, `render.ide.template`, `render.ai.enabled`, `render.ai.template`, `render.git.enabled`, and `render.git.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
 - `container`, `mandatory`, `compose`, `depends_on` — never inherited. A child that omits `container` keeps an empty value, which is rejected at runtime; declare it explicitly. The same applies to `compose` and `depends_on`: each child specifies its own.
 
 ```yaml
@@ -456,11 +462,12 @@ services:
     cli:
       shell: bash
       user: www-data
-    ide:
-      enabled: true
+    render:
+      ide:
+        enabled: true
 
   main-debug:
-    extends: main            # inherits dir, dirs, cli, ide, etc.
+    extends: main            # inherits dir, dirs, cli, render, etc.
     container: app-main-debug
     mandatory: false
     compose:
@@ -468,11 +475,12 @@ services:
     cli:
       env:
         - XDEBUG_CONFIG="cli_color=1"
-    ide:
-      template: main-debug  # override template, keep enabled: true from parent
+    render:
+      ide:
+        template: main-debug  # override template, keep enabled: true from parent
 ```
 
-`main-debug` gets `dir`, `dirs`, base `cli`, and `ide.enabled: true` from `main`. It overrides `ide.template` to use a custom template subdirectory (`devbox/templates/ide/main-debug/`), and adds its own `compose` overlay and extra env. When `devbox render ide` runs, both services share `dir: ./services/main`, so the most-derived (`main-debug`) wins and renders its custom template; `main` is skipped with a collision warning.
+`main-debug` gets `dir`, `dirs`, base `cli`, and `render.ide.enabled: true` from `main`. It overrides `render.ide.template` to use a custom template subdirectory (`devbox/templates/ide/main-debug/`), and adds its own `compose` overlay and extra env. When `devbox render ide` runs, both services share `dir: ./services/main`, so the most-derived (`main-debug`) wins and renders its custom template; `main` is skipped with a collision warning.
 
 ## Example: full service definition
 
@@ -496,10 +504,11 @@ services:
       shell: bash
       user: www-data
       workdir: /workspace/src
-    ide:
-      enabled: true
-    ai:
-      enabled: true
+    render:
+      ide:
+        enabled: true
+      ai:
+        enabled: true
 ```
 
 ## Common pitfalls
@@ -508,8 +517,8 @@ services:
 - **Absolute paths in `dirs`** — dirs entries must be relative paths. Absolute paths or paths containing `..` are rejected by `service_dirs_ensure` as a security check.
 - **Missing `container` in child** — `container` is **not** inherited via `extends:`. A child without an explicit `container` carries an empty value, which fails at runtime. Always declare `container` per service.
 - **Forgetting `compose:` and `depends_on:` on a child** — also not inherited. Optional services that need their own overlay or dependency must declare it explicitly.
-- **Forgetting `ide.enabled: true` on non-`app` services** — only `type: app` services default to `ide.enabled: true`; `db`, `cache`, `queue`, and `tool` default to `false`. Set `ide.enabled: true` explicitly when IDE files are needed.
-- **Pre-existing non-symlink at a managed symlink path** — if `CLAUDE.md` (or another `symlinks[].link` path) already exists as a regular file, `devbox render ai` refuses to overwrite it and exits with an error: `refuse to overwrite non-symlink file at <path>; remove it or disable via ai.enabled: false`. Delete the file first, or set `ai.enabled: false` for that service.
+- **Forgetting `render.ide.enabled: true` on non-`app` services** — only `type: app` services default to `render.ide.enabled: true`; `db`, `cache`, `queue`, and `tool` default to `false`. Set `render.ide.enabled: true` explicitly when IDE files are needed.
+- **Pre-existing non-symlink at a managed symlink path** — if `CLAUDE.md` (or another `symlinks[].link` path) already exists as a regular file, `devbox render ai` refuses to overwrite it and exits with an error: `refuse to overwrite non-symlink file at <path>; remove it or disable via render.ai.enabled: false`. Delete the file first, or set `render.ai.enabled: false` for that service.
 
 ## Related commands
 

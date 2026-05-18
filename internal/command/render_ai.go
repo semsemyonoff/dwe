@@ -169,14 +169,14 @@ created. Files inside the pack that are not referenced by the manifest are
 ignored.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
-  1. If ai.template is set in the service config, use that pack (explicit, strict)
+  1. If render.ai.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try devbox/templates/ai/<service-name>/
   3. If not found, use devbox/templates/ai/default/
-  4. If none exist, return an error
+  4. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in agents docs rendering:
-  - All service types have ai.enabled: true by default
-  - Set ai.enabled: false to opt out
+  - All service types have render.ai.enabled: true by default
+  - Set render.ai.enabled: false to opt out
 
 When a service name is given, it is treated as a hub anchor: if multiple
 services share its dir (e.g. main and main-debug both point to services/main),

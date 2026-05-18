@@ -56,11 +56,11 @@ A service participates in git-hook rendering only when **both** flags are true:
 | Gate | Source | Default |
 |------|--------|---------|
 | Project-level | `services.<name>.enabled` (3-layer merged + mandatory override) | depends on service |
-| Git policy | `services.<name>.git.enabled` | `true` for `type: app`; `false` otherwise |
+| Git policy | `services.<name>.render.git.enabled` | `true` for `type: app`; `false` otherwise |
 
-The default policy mirrors [`render ide`](ide.md) (not `render ai`): only `type: app` services render hooks by default, because that is where developers typically commit code. Other service types must opt in explicitly with `git.enabled: true`.
+The default policy mirrors [`render ide`](ide.md) (not `render ai`): only `type: app` services render hooks by default, because that is where developers typically commit code. Other service types must opt in explicitly with `render.git.enabled: true`.
 
-Inheritance through `extends` follows the same rules as `ide` and `ai`: a child without an explicit value inherits the parent's `git.enabled` and `git.template`.
+Inheritance through `extends` follows the same rules as `render.ide` and `render.ai`: a child without an explicit value inherits the parent's `render.git.enabled` and `render.git.template`.
 
 ### Hub preflight and git directory probe
 
@@ -88,9 +88,9 @@ Rationale matches IDE: git hooks reflect the variant being worked on right now (
 
 For each selected service the renderer picks one pack directory under `devbox/templates/git/`. The chain matches [`render ai`](ai.md#template-pack-resolution) and [`render ide`](ide.md#template-pack-resolution) exactly, only the base directory differs:
 
-1. If `git.template` is set, only `devbox/templates/git/<git.template>/` is tried. Missing pack is a hard error.
+1. If `render.git.template` is set, only `devbox/templates/git/<render.git.template>/` is tried. Missing pack is a hard error.
 2. Otherwise, try `devbox/templates/git/<service-name>/`. If missing, fall through.
-3. Otherwise, use `devbox/templates/git/default/`. If missing, hard error.
+3. Otherwise, use `devbox/templates/git/default/`. If missing, skip with a warning (implicit missing pack).
 
 Pack-name characters are restricted (`^[A-Za-z0-9][A-Za-z0-9_-]*$`); an unsafe service name (leading dot, leading hyphen, path separators) silently skips the service-name candidate and falls through to `default/`.
 
@@ -195,7 +195,7 @@ services:
     type: app
     container: app-main
     dir: ./services/main
-    # git.enabled defaults to true (type: app)
+    # render.git.enabled defaults to true (type: app)
 ```
 
 `devbox render git`:
@@ -238,7 +238,7 @@ A follow-up plan will add worktree support. Until then, services with worktree c
 
 ## Common pitfalls
 
-- **Non-`app` services do not render by default.** Set `services.<name>.git.enabled: true` explicitly to opt in.
+- **Non-`app` services do not render by default.** Set `services.<name>.render.git.enabled: true` explicitly to opt in.
 - **Manifest `to` must be a basename.** Hooks live directly inside `hooks/`; git does not recurse. A `to: subdir/pre-commit` is rejected.
 - **`symlinks` is not used for git.** Many git installations ignore symlinked hooks. Move the content into a separate render entry instead.
 - **The render output is inside `.git/`.** It is never tracked. Re-rendering is the source of truth — do not hand-edit `src/.git/hooks/<name>` and expect changes to survive.

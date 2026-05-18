@@ -50,13 +50,13 @@ A service participates in IDE rendering only when **both** flags are true:
 | Gate | Source | Default |
 |------|--------|---------|
 | Project-level | `services.<name>.enabled` (3-layer merged + mandatory override) | depends on service |
-| IDE policy | `services.<name>.ide.enabled` | `true` for `type: app`; `false` otherwise |
+| IDE policy | `services.<name>.render.ide.enabled` | `true` for `type: app`; `false` otherwise |
 
 If either gate is false, the service is skipped. Skips fall into two groups:
 
 | Group | When | Reported as warning? |
 |-------|------|----------------------|
-| Policy skips | The service is disabled at the project level, or `ide.enabled` is `false` (explicitly or by type default). | no — these are the documented opt-in/opt-out behavior |
+| Policy skips | The service is disabled at the project level, or `render.ide.enabled` is `false` (explicitly or by type default). | no — these are the documented opt-in/opt-out behavior |
 | Actionable skips | The service has no hub directory, or another service won a directory collision. | yes — these usually indicate a misconfiguration |
 
 ### Directory normalization
@@ -93,7 +93,7 @@ Validation order (first failure wins):
 1. Service not in config.
 2. Service is disabled at the project level.
 3. Service has no hub directory, or its hub is the project root.
-4. `ide.enabled` evaluates to `false` — either explicitly or by the type's default (non-`app` types are off by default; the error message tells you which case applies and how to opt in).
+4. `render.ide.enabled` evaluates to `false` — either explicitly or by the type's default (non-`app` types are off by default; the error message tells you which case applies and how to opt in).
 
 Once validated, the same deepest-wins resolution is applied scoped to siblings sharing the same `dir`. If the winner differs from the argument, an info line announces the substitution.
 
@@ -105,7 +105,7 @@ For each selected service the renderer picks one pack directory under `devbox/te
 
 ```mermaid
 flowchart TD
-  S{"ide.template set?"}
+  S{"render.ide.template set?"}
   S -- yes --> EX["devbox/templates/ide/{template}/"]
   EX -- exists --> USE["use this pack"]
   EX -- missing --> ERR["error<br/>explicit is strict"]
@@ -113,13 +113,13 @@ flowchart TD
   SN -- exists --> USE
   SN -- missing --> DEF["devbox/templates/ide/default/"]
   DEF -- exists --> USE
-  DEF -- missing --> ERR2["error: pack not found"]
+  DEF -- missing --> WARN["warning + skip<br/>implicit not found"]
 ```
 
 Rules:
 
-- **Explicit is strict.** If `ide.template` is set, only that pack is tried. A missing pack is a hard error — no silent fallback. This protects against typos like `templete:` accidentally resolving to `default/` and rendering surprising content.
-- **Implicit chain** (when `ide.template` is unset): `<service-name>` → `default`. Fall-through happens only when the candidate directory is missing; any other filesystem error is a hard error.
+- **Explicit is strict.** If `render.ide.template` is set, only that pack is tried. A missing pack is a hard error — no silent fallback. This protects against typos like `templete:` accidentally resolving to `default/` and rendering surprising content.
+- **Implicit chain** (when `render.ide.template` is unset): `<service-name>` → `default`. Fall-through happens only when the candidate directory is missing; any other filesystem error is a hard error. If the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
 - A pack must be a **real directory**. Symlinked packs are rejected.
 - The chosen pack must be inside the project root with no symlinked parent components.
 

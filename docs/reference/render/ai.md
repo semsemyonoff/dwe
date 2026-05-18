@@ -57,7 +57,7 @@ A service participates in agent-docs rendering only when **both** flags are true
 | Gate | Source | Default |
 |------|--------|---------|
 | Project-level | `services.<name>.enabled` (3-layer merged + mandatory override) | depends on service |
-| Agent docs policy | `services.<name>.ai.enabled` | `true` for **all** service types |
+| Agent docs policy | `services.<name>.render.ai.enabled` | `true` for **all** service types |
 
 Note the contrast with IDE rendering: agent docs default to `true` for every type. The rationale is that hub identity (what this directory *is* and how an AI agent should approach it) is useful for every service, not only `app` services.
 
@@ -65,7 +65,7 @@ If either gate is false, the service is skipped. Skips fall into two groups:
 
 | Group | When | Reported as warning? |
 |-------|------|----------------------|
-| Policy skips | The service is disabled at the project level, or `ai.enabled` is `false`. | no — these are the documented opt-out behavior |
+| Policy skips | The service is disabled at the project level, or `render.ai.enabled` is `false`. | no — these are the documented opt-out behavior |
 | Actionable skips | The service has no hub directory, or another service won a directory collision. | yes — these usually indicate a misconfiguration |
 
 ### Directory normalization
@@ -109,7 +109,7 @@ Validation order (first failure wins):
 1. Service not in config.
 2. Service is disabled at the project level.
 3. Service has no hub directory, or its hub is the project root.
-4. `ai.enabled` is `false`.
+4. `render.ai.enabled` is `false`.
 
 After validation, the same shallowest-wins resolution is applied scoped to siblings sharing the hub. If the winner differs, an info line announces the substitution.
 
@@ -121,7 +121,7 @@ For each selected service, the renderer picks one pack directory under `devbox/t
 
 ```mermaid
 flowchart TD
-  S{"ai.template set?"}
+  S{"render.ai.template set?"}
   S -- yes --> EX["devbox/templates/ai/{template}/"]
   EX -- exists --> USE["use this pack"]
   EX -- missing --> ERR["error<br/>explicit is strict"]
@@ -129,13 +129,13 @@ flowchart TD
   SN -- exists --> USE
   SN -- missing --> DEF["devbox/templates/ai/default/"]
   DEF -- exists --> USE
-  DEF -- missing --> ERR2["error: pack not found"]
+  DEF -- missing --> WARN["warning + skip<br/>implicit not found"]
 ```
 
 Rules:
 
-- **Explicit is strict.** A set `ai.template` that doesn't exist is a hard error — no silent fallback.
-- **Implicit chain** (when `ai.template` is unset): `<service-name>` → `default`.
+- **Explicit is strict.** A set `render.ai.template` that doesn't exist is a hard error — no silent fallback.
+- **Implicit chain** (when `render.ai.template` is unset): `<service-name>` → `default`. If the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
 - A pack must be a real directory; symlinks at the pack root or in any parent component are rejected.
 - Template-key validation rejects path separators, leading dots, and `..`.
 
@@ -304,8 +304,8 @@ services:
 
 `devbox render ai`:
 
-1. Selection: both services pass the activation gate (default `ai.enabled: true`). They share `dir: ./services/main`. `main` has the shallower extends chain (depth 0 vs `main-debug`'s 1), so **`main` wins**. `main-debug` is reported as a collision skip.
-2. Pack resolution for `main`: `ai.template` is unset; the implicit chain tries `devbox/templates/ai/main/` (not found), then `devbox/templates/ai/default/` (used).
+1. Selection: both services pass the activation gate (default `render.ai.enabled: true`). They share `dir: ./services/main`. `main` has the shallower extends chain (depth 0 vs `main-debug`'s 1), so **`main` wins**. `main-debug` is reported as a collision skip.
+2. Pack resolution for `main`: `render.ai.template` is unset; the implicit chain tries `devbox/templates/ai/main/` (not found), then `devbox/templates/ai/default/` (used).
 3. Manifest is loaded and validated: two render entries, one symlink. The symlink targets `AGENTS.md`, which is one of the render destinations.
 4. Each render entry is processed: `AGENTS.md` and `.claude/CLAUDE.md` are written into `services/main/`.
 5. The symlink `services/main/CLAUDE.md → AGENTS.md` is created.
@@ -337,7 +337,7 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Common pitfalls
 
-- **Pre-existing non-symlink at a managed symlink path.** If `CLAUDE.md` already exists as a regular file (perhaps from a previous manual edit), `render ai` refuses to overwrite it. Delete the file or set `ai.enabled: false` for the service.
+- **Pre-existing non-symlink at a managed symlink path.** If `CLAUDE.md` already exists as a regular file (perhaps from a previous manual edit), `render ai` refuses to overwrite it. Delete the file or set `render.ai.enabled: false` for the service.
 - **Symlink `to` must reference a render destination.** The manifest validator enforces this; you cannot symlink to an arbitrary file outside the manifest.
 - **Manifest typos are hard errors.** Strict YAML decode means a misspelled key like `renders:` or `symlink:` aborts loading. Fix the spelling.
 - **Empty manifest is rejected.** A manifest with both `render: []` and `symlinks: []` is almost always a mistake.
@@ -347,6 +347,6 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Related references
 
-- [`services.<name>.ai` block](../config/services.md#ai-block) — `enabled`, `template`, inheritance via `extends`
+- [`services.<name>.render.ai` block](../config/services.md#renderai-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ide`](ide.md) — companion command with the opposite (deepest-wins) collision policy
 - CLI reference: [`devbox render ai`](../cli/devbox_render_ai.md)
