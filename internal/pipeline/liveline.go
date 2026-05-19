@@ -3,12 +3,14 @@ package pipeline
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/term"
 )
 
 // liveLineTickPeriod is the redraw period for the LiveLine ticker (10 Hz).
@@ -34,7 +36,6 @@ type LiveLine struct {
 	mu       sync.Mutex
 	spinner  spinner.Model
 	text     string
-	width    int
 	paused   bool
 	started  bool
 	stopped  bool
@@ -78,7 +79,6 @@ func NewLiveLine(termOut, screen io.Writer, enabled bool) *LiveLine {
 		screen:  screen,
 		enabled: enabled,
 		spinner: sp,
-		width:   liveLineDefaultWidth,
 		stopCh:  make(chan struct{}),
 		doneCh:  make(chan struct{}),
 	}
@@ -314,16 +314,24 @@ func (l *LiveLine) EndBlock() {
 	l.blockContent = nil
 }
 
+// termWidth returns the current terminal column count. Test hooks take
+// priority; otherwise os.Stdout is queried. Falls back to liveLineDefaultWidth
+// on error (non-TTY, io.Pipe, etc.). Caller need not hold l.mu.
+func (l *LiveLine) termWidth() int {
+	if l.testHooks != nil && l.testHooks.widthFn != nil {
+		return l.testHooks.widthFn()
+	}
+	cols, _, err := term.GetSize(os.Stdout.Fd())
+	if err == nil && cols > 0 {
+		return cols
+	}
+	return liveLineDefaultWidth
+}
+
 // renderBlockRowLocked formats block row idx, truncating to terminal width.
 // Caller holds l.mu.
 func (l *LiveLine) renderBlockRowLocked(idx int) string {
-	w := l.width
-	if l.testHooks != nil && l.testHooks.widthFn != nil {
-		w = l.testHooks.widthFn()
-	}
-	if w <= 0 {
-		w = liveLineDefaultWidth
-	}
+	w := l.termWidth()
 	content := l.blockContent[idx]
 	if lipgloss.Width(content) > w {
 		content = truncateToWidth(content, w)
@@ -391,13 +399,7 @@ func (l *LiveLine) Println(rawLine string) {
 // renderFooterLocked returns the formatted footer string (no trailing newline).
 // Caller must hold l.mu.
 func (l *LiveLine) renderFooterLocked() string {
-	w := l.width
-	if l.testHooks != nil && l.testHooks.widthFn != nil {
-		w = l.testHooks.widthFn()
-	}
-	if w <= 0 {
-		w = liveLineDefaultWidth
-	}
+	w := l.termWidth()
 	frame := l.spinner.View()
 	frameW := lipgloss.Width(frame)
 	text := l.text

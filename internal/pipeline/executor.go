@@ -100,9 +100,10 @@ type ActionContext struct {
 	LogWriter   io.Writer
 	SkipConfirm bool
 	// Parallel indicates the action is running as a sub-step of a parallel
-	// group. In that mode childIO must never write to os.Stdout / os.Stderr
-	// and must not allocate a PTY — the reporter owns the host terminal.
-	// LogWriter is required (non-nil) in parallel mode.
+	// group. In that mode all child output is routed through StepWriter (never
+	// directly to os.Stdout / os.Stderr). A PTY is still allocated when stdout
+	// is a TTY — the parallel flag only prevents stdin attachment. LogWriter
+	// carries the per-sub-step log-file sink (non-nil in parallel mode).
 	Parallel bool
 }
 

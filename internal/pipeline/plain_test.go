@@ -1290,10 +1290,19 @@ func TestPlainReporter_SetSubStepLogPath_EmptyPathIsNoOp(t *testing.T) {
 }
 
 // TestPlainReporter_TTY_FullParallelGroup_Integration drives a 3-sub-step
-// parallel group end-to-end with the LiveLine block and verifies block rows
-// reflect each sub-step's terminal state.
+// parallel group end-to-end with the LiveLine block and verifies that all
+// status lines appear in the screen output and the block is torn down.
 func TestPlainReporter_TTY_FullParallelGroup_Integration(t *testing.T) {
-	r, _ := newTTYReporter()
+	// Use a separate bytes.Buffer for screen so data lines are inspectable
+	// without interleaving ANSI cursor sequences from termOut.
+	scr := &bytes.Buffer{}
+	w := render.NewWriter(scr)
+	grid := newTermGrid(24, 120)
+	r := NewPlainReporter(w, nil, grid)
+	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.now = func() time.Time { return fixedTime }
+	defer r.live.Stop()
+
 	r.StartPipeline("deploy", 3)
 	group := parallelGroup("dumps", "alpha", "beta", "charlie")
 	r.StartGroup("init/dumps", group, []int{1, 2, 3}, 3)
@@ -1306,14 +1315,22 @@ func TestPlainReporter_TTY_FullParallelGroup_Integration(t *testing.T) {
 	r.SkipStep("init/charlie", config.DeployStep{Name: "charlie"}, 3, 3, "when: false")
 
 	r.FinishGroup("init/dumps", group, false)
-	defer r.live.Stop()
 
-	// The block has been ended; blockContent has been reset.
-	// But the rows live in scrollback — we verify via final block state captured
-	// just before EndBlock by re-inspecting block content immediately after
-	// each terminal event would be complex. Instead, assert the screen buffer
-	// at least carried each terminal status line emitted via r.emit.
-	// (Block-row visual assertions are covered by the per-icon tests above.)
+	got := clean(scr.String())
+	for _, want := range []string{
+		"✓ [1/3] Done: init/alpha",
+		"✗ [2/3] Failed: init/beta",
+		"◎ [3/3] Skipped: init/charlie (when: false)",
+		"✗ Parallel group failed: init/dumps",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing line %q; output:\n%s", want, got)
+		}
+	}
+	// Block must be torn down after FinishGroup.
+	if r.live.blockRows != 0 {
+		t.Errorf("blockRows should be 0 after FinishGroup, got %d", r.live.blockRows)
+	}
 }
 
 // --- Task 10: huh hook registration ---

@@ -103,11 +103,13 @@ type PlainReporter struct {
 	groups map[string]*groupEntry
 
 	// currentStepAddr tracks the most recently started sequential step (or
-	// the group address while a parallel group is active). inBlockMode is
-	// true between StartGroup and FinishGroup; blockGroupAddr holds the
-	// active group's address. Used by later live-progress tasks; populated
-	// here in Task 6 so future tasks can read the state without re-plumbing.
+	// the group address while a parallel group is active). footerPrefix is the
+	// footer text set by StartStep ("[N/M] label"), reused by StepOutput to
+	// show non-final sequential frames in the footer. inBlockMode is true
+	// between StartGroup and FinishGroup; blockGroupAddr holds the active
+	// group's address.
 	currentStepAddr string
+	footerPrefix    string
 	inBlockMode     bool
 	blockGroupAddr  string
 
@@ -221,23 +223,23 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 	if index == 0 && total == 0 {
 		return
 	}
-	r.mu.Lock()
-	r.currentStepAddr = stepAddr
 	label := stepAddr
 	if step.Description != "" {
 		label += ": " + step.Description
 	}
+	footer := label
+	if index > 0 {
+		footer = fmt.Sprintf("[%d/%d] %s", index, total, label)
+	}
+	r.mu.Lock()
+	r.currentStepAddr = stepAddr
+	r.footerPrefix = footer
 	if index > 0 {
 		r.emit(render.Blue, fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
 	} else {
 		r.emit(render.Blue, fmt.Sprintf("  %s %s", iconRunning, label))
 	}
 	r.mu.Unlock()
-
-	footer := label
-	if index > 0 {
-		footer = fmt.Sprintf("[%d/%d] %s", index, total, label)
-	}
 	r.live.SetText(footer)
 }
 
@@ -597,9 +599,9 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	if entry.flushed {
 		// Sub-step already completed and its buffer was dumped by
 		// FinishStep/FailStep. This call originates from lineTee.Flush()
-		// delivering a trailing non-newline-terminated frame. Write
-		// directly so it is not silently dropped.
-		_, _ = fmt.Fprintln(r.w.Writer(), frame)
+		// delivering a trailing non-newline-terminated frame. Route through
+		// LiveLine so the cursor invariant is maintained.
+		r.live.Println(frame)
 		if final {
 			r.writeLog(frame)
 		}
@@ -607,17 +609,22 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	}
 	if !final {
 		entry.inProgress = frame
-		// Ephemeral row update: refresh the block row with the latest frame so
-		// the user sees progress even before the next \n. No log write, no
-		// buffer commit — commitTrailingTail is the single tail commit point.
+		// Ephemeral row update: for parallel sub-steps refresh the block row;
+		// for sequential steps update the footer text so live progress shows.
 		if entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
 			r.live.SetBlockRow(entry.blockRowIdx, formatRunningRow(entry.subIdx, entry.subTotal, entry.subName, frame))
+		} else if entry.groupAddr == "" && r.ttyMode {
+			text := r.footerPrefix
+			if frame != "" {
+				text += ": " + frame
+			}
+			r.live.SetText(text)
 		}
 		return
 	}
 	if entry.groupAddr == "" {
-		// Sequential step: write directly to screen + log.
-		_, _ = fmt.Fprintln(r.w.Writer(), frame)
+		// Sequential step: route through LiveLine to preserve cursor invariant.
+		r.live.Println(frame)
 		r.writeLog(frame)
 		entry.inProgress = ""
 		return
@@ -656,7 +663,7 @@ func (r *PlainReporter) commitTrailingTail(addr string) {
 	tail := entry.inProgress
 	entry.inProgress = ""
 	if entry.groupAddr == "" {
-		_, _ = fmt.Fprintln(r.w.Writer(), tail)
+		r.live.Println(tail)
 		r.writeLog(tail)
 		return
 	}
