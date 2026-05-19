@@ -180,15 +180,15 @@ This task addresses the central `docs/reference/templates.md` page in full. Per-
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify all three `TemplateData` structs carry `Cfg *config.DevboxConfig`
-- [ ] verify all three callers populate `Cfg: cfg`
-- [ ] verify the three positive `.Cfg.Raw.*` (dot) subtests added in Tasks 1–3 pass
-- [ ] verify the three non-identifier-key (`index`) subtests added in Tasks 1–3 pass — these lock the documented access-syntax contract
-- [ ] verify the three `missingkey=error` subtests added in Tasks 1–3 pass
-- [ ] verify the three backward-compat byte-identical subtests added in Tasks 1–3 pass — this is the canonical guard against the IDE/AI tracked-artifact risk
-- [ ] verify the central `docs/reference/templates.md` lists git, ide, and ai as separate rows with the new context shape and the renamed "Render packs (git / ide / ai, strict)" section
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
+- [x] verify all three `TemplateData` structs carry `Cfg *config.DevboxConfig`
+- [x] verify all three callers populate `Cfg: cfg`
+- [x] verify the three positive `.Cfg.Raw.*` (dot) subtests added in Tasks 1–3 pass
+- [x] verify the three non-identifier-key (`index`) subtests added in Tasks 1–3 pass — these lock the documented access-syntax contract
+- [x] verify the three `missingkey=error` subtests added in Tasks 1–3 pass
+- [x] verify the three backward-compat byte-identical subtests added in Tasks 1–3 pass — this is the canonical guard against the IDE/AI tracked-artifact risk
+- [x] verify the central `docs/reference/templates.md` lists git, ide, and ai as separate rows with the new context shape and the renamed "Render packs (git / ide / ai, strict)" section
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint`
 
 ## Technical Details
 
