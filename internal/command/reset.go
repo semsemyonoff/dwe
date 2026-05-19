@@ -138,6 +138,7 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 	defer cleanup()
 
 	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
+	defer rep.Close()
 
 	opts := pipeline.RunOptions{
 		Steps:       steps,

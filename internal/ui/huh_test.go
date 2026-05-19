@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"errors"
 	"image/color"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	huh "charm.land/huh/v2"
@@ -104,6 +107,168 @@ func TestBuildPaletteApplierEmptyColorsNoOp(t *testing.T) {
 	// on fields whose color comes from ThemeBase (they should stay as zero/default).
 	apply(s)
 	// The test verifies the applier runs without panicking.
+}
+
+// --- huh hook tests ---
+
+// resetHooks clears the package-level hooks. Used as t.Cleanup so each test
+// starts and ends with no hooks installed.
+func resetHooks(t *testing.T) {
+	t.Helper()
+	ClearHuhHooks()
+	t.Cleanup(ClearHuhHooks)
+}
+
+func TestSetHuhHooks_FiresAroundConfirm(t *testing.T) {
+	resetHooks(t)
+
+	origConfirm := runConfirmFormFn
+	t.Cleanup(func() { runConfirmFormFn = origConfirm })
+	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
+		return true, nil
+	}
+
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
+
+	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
+		order = append(order, "form")
+		return true, nil
+	}
+	if _, err := RunConfirm("?", "Y", "N"); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 3 || order[0] != "before" || order[1] != "form" || order[2] != "after" {
+		t.Errorf("expected before/form/after, got %v", order)
+	}
+}
+
+func TestSetHuhHooks_AfterFiresOnError(t *testing.T) {
+	resetHooks(t)
+
+	orig := runConfirmFormFn
+	t.Cleanup(func() { runConfirmFormFn = orig })
+
+	var afterCalled bool
+	SetHuhHooks(nil, func() { afterCalled = true })
+
+	sentinel := errors.New("form failed")
+	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
+		return false, sentinel
+	}
+	_, err := RunConfirm("?", "Y", "N")
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected sentinel error, got %v", err)
+	}
+	if !afterCalled {
+		t.Error("after hook must fire even when the form returns an error")
+	}
+}
+
+func TestSetHuhHooks_AfterFiresOnCancel(t *testing.T) {
+	resetHooks(t)
+
+	orig := runConfirmFormFn
+	t.Cleanup(func() { runConfirmFormFn = orig })
+
+	var afterCalled bool
+	SetHuhHooks(nil, func() { afterCalled = true })
+
+	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
+		return false, huh.ErrUserAborted
+	}
+	_, err := RunConfirm("?", "Y", "N")
+	if !errors.Is(err, ErrCancelled) {
+		t.Fatalf("expected ErrCancelled, got %v", err)
+	}
+	if !afterCalled {
+		t.Error("after hook must fire on user-cancel path")
+	}
+}
+
+func TestSnapshotHuhHooks_NilSafe(t *testing.T) {
+	resetHooks(t)
+
+	orig := runConfirmFormFn
+	t.Cleanup(func() { runConfirmFormFn = orig })
+	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
+		return true, nil
+	}
+
+	// No hooks installed — must not panic.
+	if _, err := RunConfirm("?", "Y", "N"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSnapshotHuhHooks_SurvivesMidPromptClear(t *testing.T) {
+	resetHooks(t)
+
+	orig := runConfirmFormFn
+	t.Cleanup(func() { runConfirmFormFn = orig })
+
+	var afterCalled bool
+	SetHuhHooks(
+		func() {},
+		func() { afterCalled = true },
+	)
+
+	// Simulate a mid-prompt ClearHuhHooks. The snapshot taken at RunConfirm
+	// entry guarantees the after hook still fires.
+	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
+		ClearHuhHooks()
+		return true, nil
+	}
+	if _, err := RunConfirm("?", "Y", "N"); err != nil {
+		t.Fatal(err)
+	}
+	if !afterCalled {
+		t.Error("after hook must fire even when hooks were cleared mid-prompt")
+	}
+}
+
+func TestHuhHooks_ConcurrentSetAndSnapshot(t *testing.T) {
+	resetHooks(t)
+
+	const writers, readers, iters = 100, 100, 200
+
+	var wg sync.WaitGroup
+	var invokes atomic.Int64
+
+	for range writers {
+		wg.Go(func() {
+			for j := range iters {
+				if j%2 == 0 {
+					SetHuhHooks(func() {}, func() {})
+				} else {
+					ClearHuhHooks()
+				}
+			}
+		})
+	}
+
+	for range readers {
+		wg.Go(func() {
+			for range iters {
+				before, after := snapshotHuhHooks()
+				if before != nil {
+					before()
+				}
+				if after != nil {
+					after()
+				}
+				invokes.Add(1)
+			}
+		})
+	}
+
+	wg.Wait()
+	if invokes.Load() == 0 {
+		t.Fatal("expected at least one snapshot invocation")
+	}
 }
 
 func TestBuildPaletteApplierAllFields(t *testing.T) {

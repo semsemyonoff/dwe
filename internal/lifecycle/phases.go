@@ -45,6 +45,7 @@ func RunPhases(
 	defer cleanup()
 
 	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
+	defer rep.Close()
 
 	if err := pipeline.Run(steps, rep, name, cfg, reg, workDir, logWriter, skipConfirm, nil); err != nil {
 		if errors.Is(err, pipeline.ErrSilent) && logEnabled {

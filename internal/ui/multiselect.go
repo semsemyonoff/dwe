@@ -112,6 +112,13 @@ func RunMultiSelect(title string, items []MultiSelectItem) (MultiSelectResult, e
 		return MultiSelectResult{Kept: nil, Locked: lk}, nil
 	}
 
+	before, after := snapshotHuhHooks()
+	if before != nil {
+		before()
+	}
+	if after != nil {
+		defer after()
+	}
 	opts := buildMultiSelectOptions(toggleable)
 	kept, err := runMultiSelectFormFn(title, opts)
 	if err != nil {

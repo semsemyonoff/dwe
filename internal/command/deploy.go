@@ -218,6 +218,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	defer cleanup()
 
 	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
+	defer rep.Close()
 
 	// After .env is regenerated, load it into the current process
 	// environment so subsequent cmd: steps can reference its variables.

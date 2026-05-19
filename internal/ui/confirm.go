@@ -23,6 +23,13 @@ func defaultRunConfirmForm(title, affirmative, negative string) (bool, error) {
 // RunConfirm displays an interactive yes/no confirmation form and returns the
 // user's choice. ErrCancelled is returned when the user presses Esc or Ctrl-C.
 func RunConfirm(title, affirmative, negative string) (bool, error) {
+	before, after := snapshotHuhHooks()
+	if before != nil {
+		before()
+	}
+	if after != nil {
+		defer after()
+	}
 	result, err := runConfirmFormFn(title, affirmative, negative)
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {

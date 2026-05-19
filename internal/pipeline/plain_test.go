@@ -13,6 +13,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 )
 
 // fixedTime is the clock injected into the test reporter so timestamp
@@ -298,17 +299,6 @@ func TestPlainReporter_FinishPipeline_NoStartPipeline(t *testing.T) {
 	}
 }
 
-// --- SuspendForExec / ResumeAfterExec ---
-
-func TestPlainReporter_SuspendResumeNoOps(t *testing.T) {
-	r, buf := newBufReporter()
-	r.SuspendForExec()
-	r.ResumeAfterExec()
-	if buf.Len() != 0 {
-		t.Errorf("SuspendForExec/ResumeAfterExec should produce no output, got: %q", buf.String())
-	}
-}
-
 // --- Full event sequence ---
 
 func TestPlainReporter_FullEventSequence(t *testing.T) {
@@ -327,8 +317,6 @@ func TestPlainReporter_FullEventSequence(t *testing.T) {
 
 	r.EnterPhase("env", phase1)
 	r.StartStep("env/render-env", step1, 1, 4)
-	r.SuspendForExec()
-	r.ResumeAfterExec()
 	r.FinishStep("env/render-env", step1, 1, 4)
 
 	r.EnterPhase("main/setup", phase2)
@@ -1326,4 +1314,74 @@ func TestPlainReporter_TTY_FullParallelGroup_Integration(t *testing.T) {
 	// each terminal event would be complex. Instead, assert the screen buffer
 	// at least carried each terminal status line emitted via r.emit.
 	// (Block-row visual assertions are covered by the per-icon tests above.)
+}
+
+// --- Task 10: huh hook registration ---
+
+func TestNewPlainReporter_RegistersHuhHooks(t *testing.T) {
+	ui.ClearHuhHooks()
+	t.Cleanup(ui.ClearHuhHooks)
+
+	r, _ := newBufReporter()
+	t.Cleanup(r.Close)
+
+	before, after := ui.SnapshotHuhHooks()
+	if before == nil || after == nil {
+		t.Fatal("NewPlainReporter must install before+after huh hooks")
+	}
+}
+
+func TestPlainReporter_Close_ClearsHooks(t *testing.T) {
+	ui.ClearHuhHooks()
+	t.Cleanup(ui.ClearHuhHooks)
+
+	r, _ := newBufReporter()
+	r.Close()
+
+	before, after := ui.SnapshotHuhHooks()
+	if before != nil || after != nil {
+		t.Errorf("Close must clear huh hooks, got before=%v after=%v", before != nil, after != nil)
+	}
+}
+
+func TestPlainReporter_Close_Idempotent(t *testing.T) {
+	r, _ := newBufReporter()
+	r.Close()
+	r.Close() // must not panic
+}
+
+func TestPlainReporter_HuhHooksDriveLiveLinePauseResume(t *testing.T) {
+	ui.ClearHuhHooks()
+	t.Cleanup(ui.ClearHuhHooks)
+
+	r, grid := newTTYReporter()
+	t.Cleanup(r.Close)
+
+	r.StartPipeline("deploy", 1)
+
+	before, after := ui.SnapshotHuhHooks()
+	if before == nil || after == nil {
+		t.Fatal("hooks not installed")
+	}
+
+	// Invoke before (Pause): footer row should be cleared.
+	before()
+	// After Pause, the LiveLine should be marked paused.
+	r.live.mu.Lock()
+	paused := r.live.paused
+	r.live.mu.Unlock()
+	if !paused {
+		t.Error("before hook should pause LiveLine")
+	}
+
+	// Invoke after (Resume): footer repaints.
+	after()
+	r.live.mu.Lock()
+	paused = r.live.paused
+	r.live.mu.Unlock()
+	if paused {
+		t.Error("after hook should resume LiveLine")
+	}
+
+	_ = grid // grid byte-level assertions are covered by liveline_test.go
 }

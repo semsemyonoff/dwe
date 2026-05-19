@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/ui"
 )
 
 // Icons used in step output lines.
@@ -36,8 +37,6 @@ const timestampLayout = "06-01-02 15:04:05"
 //	[ts]   <error message>
 //	[ts] ✓ Done (1m 23s)
 //
-// SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
-// need to yield or reclaim the terminal.
 // subStepEntry holds buffered output for a single parallel sub-step.
 // The group association lets FinishStep/FailStep update the parent group's
 // aggregate counters.
@@ -144,7 +143,22 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 		now:     time.Now,
 	}
 	r.live = NewLiveLine(termOut, screen.Writer(), tty)
+	// Register package-level prompt hooks so huh-based prompts (RunConfirm,
+	// RunSelector, RunMultiSelect) pause/resume the LiveLine automatically.
+	// Only one PlainReporter is expected per process; nested deploys are not
+	// supported by this design. Close() clears the hooks on shutdown.
+	ui.SetHuhHooks(r.live.Pause, r.live.Resume)
 	return r
+}
+
+// Close releases reporter resources. Idempotent: calls LiveLine.Stop (a no-op
+// when FinishPipeline already stopped the ticker via stopOnce) and clears the
+// package-level huh hooks installed by NewPlainReporter. Callers should defer
+// Close after the deploy/reset/lifecycle log cleanup so the hooks come down
+// even on panic or early return.
+func (r *PlainReporter) Close() {
+	r.live.Stop()
+	ui.ClearHuhHooks()
 }
 
 // StartPipeline stores the pipeline name and records the start time for
@@ -385,12 +399,6 @@ func formatElapsed(d time.Duration) string {
 		return fmt.Sprintf("%ds", s)
 	}
 }
-
-// SuspendForExec is a no-op for PlainReporter.
-func (r *PlainReporter) SuspendForExec() {}
-
-// ResumeAfterExec is a no-op for PlainReporter.
-func (r *PlainReporter) ResumeAfterExec() {}
 
 // SetSubStepLogPath records the per-sub-step log file path for subAddr. Called
 // by the executor after OpenSubStepLog succeeds in runParallelSubStep. The

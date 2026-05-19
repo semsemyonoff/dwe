@@ -197,7 +197,7 @@ func TestParallelGroup_TrackedTotalIncludesSubSteps(t *testing.T) {
 		t.Errorf("StartPipeline total = %d, want 5", rep.events[0].total0)
 	}
 
-	// Every reporter call (other than StartPipeline/FinishPipeline/SuspendForExec/ResumeAfterExec/EnterPhase/SkipPhase) should have total=5.
+	// Every reporter call (other than StartPipeline/FinishPipeline/EnterPhase/SkipPhase) should have total=5.
 	for _, e := range rep.events {
 		switch e.kind {
 		case "StartStep", "FinishStep", "FailStep", "SkipStep", "StartGroup":

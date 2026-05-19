@@ -81,6 +81,13 @@ func RunSelector(title string, items []SelectorItem) (int, error) {
 	if len(items) == 0 {
 		return -1, fmt.Errorf("selector: no items to display")
 	}
+	before, after := snapshotHuhHooks()
+	if before != nil {
+		before()
+	}
+	if after != nil {
+		defer after()
+	}
 	opts := buildSelectorOptions(items)
 	idx, err := runSelectFormFn(title, opts)
 	if err != nil {

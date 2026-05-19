@@ -73,12 +73,6 @@ func (m *mockReporter) FailStep(stepAddr string, step config.DeployStep, index i
 func (m *mockReporter) FinishPipeline(success bool) {
 	m.append(reporterEvent{kind: "FinishPipeline", success: success})
 }
-func (m *mockReporter) SuspendForExec() {
-	m.append(reporterEvent{kind: "SuspendForExec"})
-}
-func (m *mockReporter) ResumeAfterExec() {
-	m.append(reporterEvent{kind: "ResumeAfterExec"})
-}
 func (m *mockReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int) {
 	cp := make([]int, len(subIndices))
 	copy(cp, subIndices)

@@ -12,7 +12,7 @@ import "devbox-cli/internal/config"
 //
 //	StartPipeline
 //	  → (EnterPhase | SkipPhase)*
-//	      → (StartStep → SuspendForExec → ResumeAfterExec → FinishStep|FailStep|SkipStep)*
+//	      → (StartStep → FinishStep|FailStep|SkipStep)*
 //	FinishPipeline
 //
 // phaseKey is the display key for the phase: "<phase>" for orchestrator phases
@@ -47,14 +47,6 @@ type Reporter interface {
 	// FinishPipeline is called once after all phases complete.
 	// success is false if any step failed.
 	FinishPipeline(success bool)
-
-	// SuspendForExec is called before an external child process takes the
-	// terminal. PlainReporter is a no-op.
-	SuspendForExec()
-
-	// ResumeAfterExec is called after the external child process exits.
-	// PlainReporter is a no-op.
-	ResumeAfterExec()
 
 	// StartGroup is called immediately before a parallel group launches its
 	// sub-steps. subIndices is the contiguous block of per-sub-step tracked
