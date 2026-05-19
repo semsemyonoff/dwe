@@ -38,7 +38,7 @@ const timestampLayout = "06-01-02 15:04:05"
 // SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
 // need to yield or reclaim the terminal.
 type PlainReporter struct {
-	mu        sync.Mutex       // guards every write to w and any future shared state
+	mu        sync.Mutex // guards every write to w and any future shared state
 	w         *render.Writer
 	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline

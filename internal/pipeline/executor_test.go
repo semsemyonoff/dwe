@@ -1464,7 +1464,7 @@ func TestChildIO_TTY_AllocatesPTY(t *testing.T) {
 	defer func() { stdoutIsTTY = prev }()
 
 	logBuf := &bytes.Buffer{}
-	stdout, stderr, cleanup := childIO(logBuf)
+	stdout, stderr, cleanup := childIO(logBuf, false)
 	if _, ok := stdout.(*os.File); !ok {
 		t.Fatalf("expected *os.File (pty slave) for stdout, got %T", stdout)
 	}
@@ -1487,7 +1487,7 @@ func TestChildIO_NonTTY_TeesToLog(t *testing.T) {
 	defer func() { stdoutIsTTY = prev }()
 
 	logBuf := &bytes.Buffer{}
-	stdout, _, cleanup := childIO(logBuf)
+	stdout, _, cleanup := childIO(logBuf, false)
 	defer cleanup()
 	if stdout == os.Stdout {
 		t.Error("expected MultiWriter when non-TTY, got os.Stdout directly")
@@ -1507,7 +1507,7 @@ func TestChildIO_NilLogWriter_PassesThrough(t *testing.T) {
 	for _, tty := range []bool{true, false} {
 		prev := stdoutIsTTY
 		stdoutIsTTY = func() bool { return tty }
-		stdout, stderr, cleanup := childIO(nil)
+		stdout, stderr, cleanup := childIO(nil, false)
 		stdoutIsTTY = prev
 		cleanup()
 		if stdout != os.Stdout || stderr != os.Stderr {

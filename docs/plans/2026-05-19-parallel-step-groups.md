@@ -274,21 +274,21 @@ Wire concurrency into the executor. This is the core of the feature.
 
 Each sub-step gets its own log file; the global pipeline log keeps interleaved output.
 
-- [ ] add `OpenSubStepLog(workDir, pipelineName, groupName, subStepName string, enabled bool) (io.WriteCloser, string, error)` in `internal/pipeline/logging.go` — derives `.devbox/logs/parallel/<pipeline>/<group>/<sub>.log` (sanitise names via existing helpers or a new `sanitizeForFS`)
-- [ ] in `executeParallelGroup`, before each sub-step's `ExecAction`, open its sub-log; pass a **nil-filtered multi-writer** as the `LogWriter` in the sub-step's `ActionContext`. Introduce a small helper `joinWriters(ws ...io.Writer) io.Writer` in `internal/pipeline/logging.go` that drops nil entries and returns:
+- [x] add `OpenSubStepLog(workDir, pipelineName, groupName, subStepName string, enabled bool) (io.WriteCloser, string, error)` in `internal/pipeline/logging.go` — derives `.devbox/logs/parallel/<pipeline>/<group>/<sub>.log` (sanitise names via existing helpers or a new `sanitizeForFS`)
+- [x] in `executeParallelGroup`, before each sub-step's `ExecAction`, open its sub-log; pass a **nil-filtered multi-writer** as the `LogWriter` in the sub-step's `ActionContext`. Introduce a small helper `joinWriters(ws ...io.Writer) io.Writer` in `internal/pipeline/logging.go` that drops nil entries and returns:
   - `io.Discard` if all entries are nil (defensive — should not happen in parallel mode since `lineTee` is always non-nil)
   - the single non-nil writer if exactly one remains
   - `io.MultiWriter(...)` over the non-nil set otherwise
   Required because (a) `globalLogWriter` from `OpenPipelineLog` is `nil` when pipeline logging is disabled (`logging.go:37`), and (b) `subLogWriter` is `nil` when sub-step logging is disabled (same `enabled` flag flow). `io.MultiWriter` does not tolerate nil writers — it panics at first `Write`. `lineTee` is always non-nil (it's what feeds the reporter buffer). The helper guarantees `lineTee` is always included.
-- [ ] guarantee the sub-log file is closed on every exit path (success, fail, skip, cancel) — use a per-substep helper to avoid `defer` in loop
-- [ ] add `SubStepOutput` plumbing: in parallel mode, also tee stdout/stderr **line-by-line** to the reporter via `SubStepOutput(subAddr, line)`. Reuse the existing ANSI stripper; introduce a small `lineReader(io.Reader, func(string))` helper that splits on `\n`
-- [ ] **route builtin output through the same plumbing**: builtins write through `ExecContext.Output *render.Writer` (`internal/builtin/builtin.go:38-44`), not `childIO`. Add an `Output io.Writer` field on `ActionContext` (or wire through the existing `LogWriter`) and have `internal/pipeline/logging.go`'s builtin dispatch construct an `ExecContext.Output` that wraps the sub-step's tee writer. Without this, sub-step builtins (`docker_wait_healthy`, `message`, etc.) would print to the host terminal directly and bypass the reporter buffer entirely.
-- [ ] **`childIO` must take a parallel-mode branch that never writes to `os.Stdout` / `os.Stderr`**. Today's `childIO` returns `(os.Stdout, os.Stderr, noop)` when `logWriter == nil` and a `MultiWriter(os.Stdout, …)` even when `logWriter != nil`. In parallel mode that direct `os.Stdout` write would (a) interleave with the non-TTY reporter's buffered dump, breaking output ordering, and (b) overwrite the TTY bubbletea live view. Required behaviour in parallel mode:
+- [x] guarantee the sub-log file is closed on every exit path (success, fail, skip, cancel) — use a per-substep helper to avoid `defer` in loop
+- [x] add `SubStepOutput` plumbing: in parallel mode, also tee stdout/stderr **line-by-line** to the reporter via `SubStepOutput(subAddr, line)`. Reuse the existing ANSI stripper; introduce a small `lineReader(io.Reader, func(string))` helper that splits on `\n`
+- [x] **route builtin output through the same plumbing**: builtins write through `ExecContext.Output *render.Writer` (`internal/builtin/builtin.go:38-44`), not `childIO`. Add an `Output io.Writer` field on `ActionContext` (or wire through the existing `LogWriter`) and have `internal/pipeline/logging.go`'s builtin dispatch construct an `ExecContext.Output` that wraps the sub-step's tee writer. Without this, sub-step builtins (`docker_wait_healthy`, `message`, etc.) would print to the host terminal directly and bypass the reporter buffer entirely.
+- [x] **`childIO` must take a parallel-mode branch that never writes to `os.Stdout` / `os.Stderr`**. Today's `childIO` returns `(os.Stdout, os.Stderr, noop)` when `logWriter == nil` and a `MultiWriter(os.Stdout, …)` even when `logWriter != nil`. In parallel mode that direct `os.Stdout` write would (a) interleave with the non-TTY reporter's buffered dump, breaking output ordering, and (b) overwrite the TTY bubbletea live view. Required behaviour in parallel mode:
   - stdout/stderr go **only** to the writers the executor supplies (per-substep log file + line tee that feeds `Reporter.SubStepOutput`)
   - no path that writes to `os.Stdout` / `os.Stderr` directly
   - PTY is never allocated (terminal display is the reporter's job)
   Add an explicit `Parallel bool` field on `ActionContext`; in `childIO`, when `actx.Parallel` is true, ignore `os.Stdout`/`os.Stderr` and route only to the supplied tee. Document that in parallel mode `LogWriter` is **required** (executor passes one unconditionally; assert at the top of `childIO`).
-- [ ] write tests in `internal/pipeline/logging_test.go`:
+- [x] write tests in `internal/pipeline/logging_test.go`:
   - `OpenSubStepLog` creates the right path and sanitises unsafe characters
   - per-substep log contains the substep's output and nothing from siblings (covers both shell and builtin sub-steps)
   - `message` builtin output for a parallel sub-step ends up in the per-substep buffer and the per-substep log file, not on the host terminal
@@ -296,7 +296,7 @@ Each sub-step gets its own log file; the global pipeline log keeps interleaved o
   - PTY is not allocated when `Parallel=true`, even on TTY stdout
   - **regression**: under `Parallel=true`, `childIO` never returns `os.Stdout` / `os.Stderr` (use a small wrapper that captures `os.Stdout`/`os.Stderr` and asserts no writes during the sub-step's execution); `LogWriter == nil` while `Parallel=true` is a programmer error and panics or returns an obvious error
   - **`joinWriters` helper**: all-nil → `io.Discard`; one non-nil → that writer; multiple → MultiWriter; **regression case**: `joinWriters(nil, nil, lineTee)` writes to `lineTee` without panicking (this is the disabled-logging scenario that motivated the helper)
-- [ ] run `go test ./internal/pipeline/...` — must pass before next task
+- [x] run `go test ./internal/pipeline/...` — must pass before next task
 
 ### Task 8: Non-TTY PlainReporter mode (buffered + dump-on-finish)
 

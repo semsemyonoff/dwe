@@ -2,10 +2,16 @@ package pipeline
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+
+	"devbox-cli/internal/condition"
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy/journal"
 )
 
 func TestAnsiStripper_Write_StripsEscapes(t *testing.T) {
@@ -71,6 +77,352 @@ func TestOpenPipelineLog_CreatesDevboxLogsDirectory(t *testing.T) {
 	if _, err := os.Stat(legacyLogsDir); !os.IsNotExist(err) {
 		t.Errorf("expected legacy logs/ directory to not exist, but it does")
 	}
+}
+
+func TestOpenSubStepLog_Disabled(t *testing.T) {
+	w, path, err := OpenSubStepLog(t.TempDir(), "deploy", "g", "a", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if w != nil || path != "" {
+		t.Errorf("disabled: want (nil, \"\"), got (%v, %q)", w, path)
+	}
+}
+
+func TestOpenSubStepLog_CreatesPathAndSanitises(t *testing.T) {
+	tmp := t.TempDir()
+	// Pipeline / group / sub names contain unsafe characters that must be
+	// replaced by sanitizeForFS — slashes, spaces, colons.
+	w, path, err := OpenSubStepLog(tmp, "dep/loy", "my group:1", "../sub a", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if w == nil {
+		t.Fatal("expected non-nil writer")
+	}
+	defer func() { _ = w.Close() }()
+
+	wantDir := filepath.Join(tmp, ".devbox", "logs", "parallel", "dep_loy", "my_group_1")
+	wantPath := filepath.Join(wantDir, "_sub_a.log")
+	if path != wantPath {
+		t.Errorf("path = %q, want %q", path, wantPath)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("expected file to exist: %v", err)
+	}
+	// Ensure the sanitised name did not escape the parallel root.
+	rel, err := filepath.Rel(filepath.Join(tmp, ".devbox", "logs", "parallel"), path)
+	if err != nil {
+		t.Fatalf("filepath.Rel: %v", err)
+	}
+	if strings.HasPrefix(rel, "..") {
+		t.Errorf("sanitised path escaped parallel root: %q", rel)
+	}
+}
+
+func TestSanitizeForFS(t *testing.T) {
+	cases := map[string]string{
+		"":            "_",
+		"plain":       "plain",
+		"with space":  "with_space",
+		"a/b":         "a_b",
+		"...":         "_",
+		"../etc":      "_etc",
+		"keep.dots":   "keep.dots",
+		"dash-and_us": "dash-and_us",
+	}
+	for in, want := range cases {
+		if got := sanitizeForFS(in); got != want {
+			t.Errorf("sanitizeForFS(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestJoinWriters_AllNil_ReturnsDiscard(t *testing.T) {
+	w := joinWriters(nil, nil)
+	if w != io.Discard {
+		t.Errorf("joinWriters(nil, nil) = %v, want io.Discard", w)
+	}
+}
+
+func TestJoinWriters_SingleNonNil_ReturnsIt(t *testing.T) {
+	var buf bytes.Buffer
+	w := joinWriters(nil, &buf, nil)
+	if w != io.Writer(&buf) {
+		t.Errorf("joinWriters with single non-nil: got %v, want &buf", w)
+	}
+}
+
+func TestJoinWriters_NilFiltering_DoesNotPanicOnMultiWriter(t *testing.T) {
+	// io.MultiWriter cannot tolerate nil entries — it panics on first Write
+	// when one is present. joinWriters must filter nils before constructing
+	// the MultiWriter. Regression: joinWriters(nil, nil, &buf) returned the
+	// buffer directly; this case has two non-nil entries plus a nil and
+	// must still survive.
+	var a, b bytes.Buffer
+	w := joinWriters(nil, &a, nil, &b)
+	if _, err := w.Write([]byte("xyz")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if a.String() != "xyz" || b.String() != "xyz" {
+		t.Errorf("expected both buffers to receive 'xyz', got a=%q b=%q", a.String(), b.String())
+	}
+}
+
+func TestJoinWriters_NilsWithLineTee_NoPanic(t *testing.T) {
+	// Scenario that motivated the helper: pipeline logging disabled
+	// (globalLogWriter and subLogWriter are both nil), but lineTee is always
+	// non-nil. The helper must return lineTee alone — and writes must succeed.
+	var got string
+	tee := newLineTee(func(line string) { got = line })
+	w := joinWriters(nil, nil, tee)
+	if _, err := w.Write([]byte("hello\n")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("lineTee got %q, want %q", got, "hello")
+	}
+}
+
+func TestLineTee_SplitsOnNewline_StripsANSI(t *testing.T) {
+	var mu sync.Mutex
+	var lines []string
+	tee := newLineTee(func(line string) {
+		mu.Lock()
+		lines = append(lines, line)
+		mu.Unlock()
+	})
+	// Write across multiple chunks; one chunk has no terminator.
+	_, _ = tee.Write([]byte("\x1b[32mfirst\x1b[0m\nsec"))
+	_, _ = tee.Write([]byte("ond\nthird"))
+	tee.Flush()
+
+	want := []string{"first", "second", "third"}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(lines) != len(want) {
+		t.Fatalf("lines = %v, want %v", lines, want)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Errorf("line[%d] = %q, want %q", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestChildIO_Parallel_NoStdoutNoStderr(t *testing.T) {
+	var buf bytes.Buffer
+	stdout, stderr, cleanup := childIO(&buf, true)
+	defer cleanup()
+	if stdout == os.Stdout || stderr == os.Stderr {
+		t.Error("parallel mode must not return os.Stdout / os.Stderr")
+	}
+	if _, err := stdout.Write([]byte("\x1b[31mred\x1b[0m\n")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := buf.String(); strings.Contains(got, "\x1b") {
+		t.Errorf("expected ANSI stripped, got %q", got)
+	}
+	if !strings.Contains(buf.String(), "red") {
+		t.Errorf("expected text preserved, got %q", buf.String())
+	}
+}
+
+func TestChildIO_Parallel_NilLogWriter_Panics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic when parallel=true and logWriter is nil")
+		}
+	}()
+	_, _, _ = childIO(nil, true)
+}
+
+// TestParallelGroup_PerSubStepLogRoutesOutput exercises the executor's
+// parallel branch end-to-end: each sub-step's stdout must reach its dedicated
+// log file, the global pipeline log, and Reporter.SubStepOutput; nothing must
+// reach a sibling sub-step's log file or os.Stdout.
+func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Capture the writer that OpenPipelineLog would normally hand back. A
+	// real *os.File would be safe for concurrent writes; a bytes.Buffer is
+	// not, so guard it with a mutex.
+	globalLog := &syncBuf{}
+
+	rep := &mockReporter{}
+	phase := config.DeployPhase{Name: "p"}
+	group := buildParallelGroupStep(phase, "g", true, 0, []config.DeployStep{
+		{Name: "alpha", Type: "shell", Cmd: "echo alpha-out"},
+		{Name: "beta", Type: "shell", Cmd: "echo beta-out"},
+	})
+
+	opts := RunOptions{
+		Steps:       []ResolvedStep{group},
+		Reporter:    rep,
+		Name:        "deploy",
+		Config:      &config.DevboxConfig{Raw: map[string]any{}},
+		WorkDir:     tmp,
+		LogWriter:   globalLog,
+		Recorder:    &mockRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, h string) journal.Decision { return journal.Run },
+	}
+	if err := RunWithOptions(opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	alphaPath := filepath.Join(tmp, ".devbox", "logs", "parallel", "deploy", "g", "alpha.log")
+	betaPath := filepath.Join(tmp, ".devbox", "logs", "parallel", "deploy", "g", "beta.log")
+
+	alpha, err := os.ReadFile(alphaPath)
+	if err != nil {
+		t.Fatalf("read alpha log: %v", err)
+	}
+	beta, err := os.ReadFile(betaPath)
+	if err != nil {
+		t.Fatalf("read beta log: %v", err)
+	}
+
+	if !strings.Contains(string(alpha), "alpha-out") {
+		t.Errorf("alpha.log missing 'alpha-out': %q", alpha)
+	}
+	if strings.Contains(string(alpha), "beta-out") {
+		t.Errorf("alpha.log leaked sibling output: %q", alpha)
+	}
+	if !strings.Contains(string(beta), "beta-out") {
+		t.Errorf("beta.log missing 'beta-out': %q", beta)
+	}
+	if strings.Contains(string(beta), "alpha-out") {
+		t.Errorf("beta.log leaked sibling output: %q", beta)
+	}
+
+	// Global log receives both (interleaving acceptable).
+	gl := globalLog.String()
+	if !strings.Contains(gl, "alpha-out") || !strings.Contains(gl, "beta-out") {
+		t.Errorf("global log missing one of the outputs: %q", gl)
+	}
+
+	// Reporter.SubStepOutput was called with each sub-step's line.
+	sawAlpha, sawBeta := false, false
+	for _, e := range rep.events {
+		if e.kind != "SubStepOutput" {
+			continue
+		}
+		if e.stepAddr == "p/alpha" && strings.Contains(e.reason, "alpha-out") {
+			sawAlpha = true
+		}
+		if e.stepAddr == "p/beta" && strings.Contains(e.reason, "beta-out") {
+			sawBeta = true
+		}
+	}
+	if !sawAlpha || !sawBeta {
+		t.Errorf("missing SubStepOutput events: sawAlpha=%v sawBeta=%v events=%v", sawAlpha, sawBeta, rep.events)
+	}
+}
+
+// TestParallelGroup_NoOutputWithLoggingDisabled verifies that when the
+// pipeline log is disabled (opts.LogWriter == nil), no per-sub-step log file
+// is created, but SubStepOutput events still fire so the reporter can render.
+func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) {
+	tmp := t.TempDir()
+
+	rep := &mockReporter{}
+	phase := config.DeployPhase{Name: "p"}
+	group := buildParallelGroupStep(phase, "g", true, 0, []config.DeployStep{
+		{Name: "alpha", Type: "shell", Cmd: "echo a"},
+	})
+
+	opts := RunOptions{
+		Steps:       []ResolvedStep{group},
+		Reporter:    rep,
+		Name:        "deploy",
+		Config:      &config.DevboxConfig{Raw: map[string]any{}},
+		WorkDir:     tmp,
+		LogWriter:   nil,
+		Recorder:    &mockRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, h string) journal.Decision { return journal.Run },
+	}
+	if err := RunWithOptions(opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// No parallel log directory should have been created.
+	if _, err := os.Stat(filepath.Join(tmp, ".devbox", "logs", "parallel")); !os.IsNotExist(err) {
+		t.Errorf("expected no parallel/ log dir when logging disabled, got err=%v", err)
+	}
+
+	// SubStepOutput still fires.
+	saw := false
+	for _, e := range rep.events {
+		if e.kind == "SubStepOutput" && strings.Contains(e.reason, "a") {
+			saw = true
+			break
+		}
+	}
+	if !saw {
+		t.Errorf("expected SubStepOutput event when log disabled, events=%v", rep.events)
+	}
+}
+
+// TestExecBuiltinAction_Parallel_NoStdoutWrite verifies that a builtin running
+// in parallel mode (actx.Parallel=true) writes only to actx.LogWriter and
+// never directly to os.Stdout — required for non-TTY buffered reporter modes.
+func TestExecBuiltinAction_Parallel_NoStdoutWrite(t *testing.T) {
+	var buf bytes.Buffer
+	tee := newLineTee(func(string) {})
+	w := joinWriters(&buf, tee)
+
+	// Capture and discard os.Stdout writes to assert nothing leaks.
+	origStdout := os.Stdout
+	rPipe, wPipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = wPipe
+	defer func() { os.Stdout = origStdout; _ = rPipe.Close(); _ = wPipe.Close() }()
+
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	actx := ActionContext{
+		WorkDir:   t.TempDir(),
+		Cfg:       cfg,
+		LogWriter: w,
+		Parallel:  true,
+	}
+	action := config.Action{Type: "builtin", Cmd: "message", With: map[string]any{"level": "info", "text": "hi"}}
+	if err := ExecAction(t.Context(), action, actx); err != nil {
+		t.Fatalf("ExecAction: %v", err)
+	}
+	if !strings.Contains(buf.String(), "hi") {
+		t.Errorf("builtin output did not reach LogWriter: %q", buf.String())
+	}
+	// Drain the captured os.Stdout pipe non-blockingly.
+	_ = wPipe.Close()
+	captured, _ := io.ReadAll(rPipe)
+	if len(captured) > 0 {
+		t.Errorf("parallel builtin leaked %d bytes to os.Stdout: %q", len(captured), captured)
+	}
+	os.Stdout = origStdout
+}
+
+// suppress unused-import warning for condition when no tests reference it.
+var _ = condition.TypeShell
+
+// syncBuf is a concurrency-safe bytes.Buffer wrapper for tests that share a
+// global log writer across parallel sub-steps.
+type syncBuf struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuf) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuf) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func TestOpenPipelineLog_DisabledReturnsNil(t *testing.T) {

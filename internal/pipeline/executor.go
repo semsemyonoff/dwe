@@ -51,7 +51,20 @@ var stdoutIsTTY = func() bool {
 //     waits for the copy goroutine to drain before closing the master. If
 //     pty allocation fails, falls back transparently to the MultiWriter path
 //     so log capture still happens (just without the TUI).
-func childIO(logWriter io.Writer) (stdout, stderr io.Writer, cleanup func()) {
+//
+// Parallel mode (parallel=true) is a fourth path: stdout/stderr go only to
+// the supplied logWriter (wrapped with ansiStripper). os.Stdout / os.Stderr
+// are never touched and no PTY is allocated — the reporter owns the host
+// terminal in parallel mode. logWriter must be non-nil; a nil writer in
+// parallel mode is a programmer error and panics.
+func childIO(logWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cleanup func()) {
+	if parallel {
+		if logWriter == nil {
+			panic("pipeline: childIO called with parallel=true but logWriter is nil")
+		}
+		logStripped := &ansiStripper{logWriter}
+		return logStripped, logStripped, func() {}
+	}
 	if logWriter == nil {
 		return os.Stdout, os.Stderr, func() {}
 	}
@@ -99,6 +112,11 @@ type ActionContext struct {
 	Reg         *usercommands.Registry
 	LogWriter   io.Writer
 	SkipConfirm bool
+	// Parallel indicates the action is running as a sub-step of a parallel
+	// group. In that mode childIO must never write to os.Stdout / os.Stderr
+	// and must not allocate a PTY — the reporter owns the host terminal.
+	// LogWriter is required (non-nil) in parallel mode.
+	Parallel bool
 }
 
 // buildDevboxCmd constructs an exec.Cmd for a devbox: pipeline step.
@@ -151,7 +169,7 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 	bindCancelTerm(cmd)
 	cmd.Dir = actx.WorkDir
 	cmd.Stdin = os.Stdin
-	stdout, stderr, cleanup := childIO(actx.LogWriter)
+	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
@@ -169,7 +187,7 @@ func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) 
 	shell := config.ShellBin(actx.Cfg)
 	cmd := buildDevboxCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DevboxBin(actx.Cfg), actx.SkipConfirm)
 	cmd.Stdin = os.Stdin
-	stdout, stderr, cleanup := childIO(actx.LogWriter)
+	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
@@ -187,9 +205,17 @@ func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext)
 	if err := builtin.Validate(a.Cmd, a.With); err != nil {
 		return fmt.Errorf("invalid builtin %q: %w", a.Cmd, err)
 	}
-	var out io.Writer = os.Stdout
-	if actx.LogWriter != nil {
+	var out io.Writer
+	switch {
+	case actx.Parallel:
+		if actx.LogWriter == nil {
+			return fmt.Errorf("internal error: parallel builtin %q requires non-nil LogWriter", a.Cmd)
+		}
+		out = &ansiStripper{actx.LogWriter}
+	case actx.LogWriter != nil:
 		out = io.MultiWriter(os.Stdout, &ansiStripper{actx.LogWriter})
+	default:
+		out = os.Stdout
 	}
 	ectx := builtin.ExecContext{
 		Config:      actx.Cfg,
@@ -215,7 +241,7 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	if err != nil {
 		return err
 	}
-	stdout, stderr, cleanup := childIO(actx.LogWriter)
+	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
 	defer cleanup()
 	rctx.Stdout = stdout
 	rctx.Stderr = stderr
@@ -274,6 +300,14 @@ type RunOptions struct {
 	// that cancels on SIGINT / SIGTERM. Callers that already manage signals
 	// should set this to avoid double-wrapping.
 	Context context.Context
+
+	// Parallel marks this RunOptions as describing a parallel sub-step. It is
+	// set by executeParallelGroup on a per-sub-step copy before delegating to
+	// executeStepBody, and is threaded into ActionContext.Parallel so that
+	// child I/O (childIO, execBuiltinAction) routes only to LogWriter — never
+	// to os.Stdout / os.Stderr — and skips PTY allocation. Callers MUST NOT
+	// set this field directly; sequential pipelines leave it false.
+	Parallel bool
 }
 
 // Run executes a resolved step list, calling rep for all lifecycle events.
@@ -595,8 +629,16 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 
 	skipConfirm := opts.SkipConfirm || rs.Step.SkipConfirm
 
+	bodyActx := ActionContext{
+		WorkDir:     opts.WorkDir,
+		Cfg:         opts.Config,
+		Reg:         opts.Registry,
+		LogWriter:   opts.LogWriter,
+		SkipConfirm: skipConfirm,
+		Parallel:    opts.Parallel,
+	}
 	startTime := time.Now()
-	stepErr := ExecStep(ctx, rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, skipConfirm)
+	stepErr := ExecAction(ctx, rs.Step.Action(), bodyActx)
 	durationMs := time.Since(startTime).Milliseconds()
 
 	opts.Reporter.ResumeAfterExec()
@@ -628,6 +670,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			Reg:         opts.Registry,
 			LogWriter:   opts.LogWriter,
 			SkipConfirm: skipConfirm,
+			Parallel:    opts.Parallel,
 		}
 		checkErr := ExecAction(ctx, *rs.Step.Check, actx)
 		if checkErr != nil {
@@ -700,7 +743,7 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 				return gctx.Err()
 			}
 			subAddr := sub.StepAddress()
-			err := executeStepBody(gctx, opts, sub, subAddr, subIndices[i], total)
+			err := runParallelSubStep(gctx, opts, rs, sub, subAddr, subIndices[i], total)
 			if err == nil {
 				return nil
 			}
@@ -727,6 +770,35 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 
 	opts.Reporter.FinishGroup(addr, rs.Step, groupErr == nil)
 	return groupErr
+}
+
+// runParallelSubStep opens a per-sub-step log file, builds a tee writer
+// (sub-step log + global pipeline log + line tee to Reporter.SubStepOutput),
+// and delegates to executeStepBody with Parallel=true so child I/O is routed
+// only through the tee — never to os.Stdout / os.Stderr, never via PTY.
+//
+// The sub-step log file is closed on every return path. The line tee is
+// flushed so any trailing un-terminated bytes still surface as a final
+// SubStepOutput line.
+func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep, sub ResolvedStep, subAddr string, idx, total int) error {
+	subFile, _, openErr := OpenSubStepLog(opts.WorkDir, opts.Name, group.Step.Name, sub.Step.Name, opts.LogWriter != nil)
+	if openErr != nil {
+		return fmt.Errorf("opening sub-step log for %q: %w", subAddr, openErr)
+	}
+	if subFile != nil {
+		defer func() { _ = subFile.Close() }()
+	}
+
+	tee := newLineTee(func(line string) { opts.Reporter.SubStepOutput(subAddr, line) })
+	defer tee.Flush()
+
+	subWriter := joinWriters(subFile, opts.LogWriter, tee)
+
+	subOpts := opts
+	subOpts.LogWriter = subWriter
+	subOpts.Parallel = true
+
+	return executeStepBody(ctx, subOpts, sub, subAddr, idx, total)
 }
 
 // FormatCondition returns a short human-readable form of a typed condition for display.

@@ -257,12 +257,12 @@ type countingRecorder struct {
 	onFinish func()
 }
 
-func (r *countingRecorder) OnPipelineStart(string, int)                                  {}
-func (r *countingRecorder) OnStepStart(string, ResolvedStep, string)                     { r.onStart() }
-func (r *countingRecorder) OnStepFinish(string, ResolvedStep, string, int64)             { r.onFinish() }
-func (r *countingRecorder) OnStepFail(string, ResolvedStep, string, int64, error)        { r.onFinish() }
-func (r *countingRecorder) OnStepSkip(string, ResolvedStep, string, string)              {}
-func (r *countingRecorder) OnPipelineFinish(bool)                                        {}
+func (r *countingRecorder) OnPipelineStart(string, int)                           {}
+func (r *countingRecorder) OnStepStart(string, ResolvedStep, string)              { r.onStart() }
+func (r *countingRecorder) OnStepFinish(string, ResolvedStep, string, int64)      { r.onFinish() }
+func (r *countingRecorder) OnStepFail(string, ResolvedStep, string, int64, error) { r.onFinish() }
+func (r *countingRecorder) OnStepSkip(string, ResolvedStep, string, string)       {}
+func (r *countingRecorder) OnPipelineFinish(bool)                                 {}
 
 func TestParallelGroup_FailFast_CancelsRemaining(t *testing.T) {
 	rep := &mockReporter{}
