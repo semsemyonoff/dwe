@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
 )
@@ -71,8 +73,7 @@ type PlainReporter struct {
 	now       func() time.Time // injectable clock; defaults to time.Now
 
 	// tty selects the parallel-group rendering branch. false = Task 8 buffered
-	// non-TTY path; true = Task 9 live bubbletea view (not yet implemented —
-	// falls through to the basic Task 5 header/footer stub for now).
+	// non-TTY path; true = Task 9 live bubbletea view.
 	tty bool
 
 	// subs holds buffered output for parallel sub-steps that have not yet
@@ -81,6 +82,29 @@ type PlainReporter struct {
 
 	// groups holds per-parallel-group aggregate state for FinishGroup.
 	groups map[string]*groupEntry
+
+	// ttyProg is the bubbletea program rendering the currently active
+	// parallel group's live view (TTY mode only); nil between groups.
+	ttyProg *tea.Program
+	// ttyDone is closed when ttyProg.Run() returns.
+	ttyDone chan struct{}
+	// ttyGroupAddr is the address of the currently active group; "" between
+	// groups. ttySubs maps sub-step address → row state used to print the
+	// post-group summary after the live view exits.
+	ttyGroupAddr string
+	ttySubs      map[string]*ttySubStepEntry
+}
+
+// ttySubStepEntry tracks per-sub-step state needed to print the summary
+// lines after the bubbletea live view ends.
+type ttySubStepEntry struct {
+	idx    int
+	total  int
+	name   string
+	status subStepStatus // statusOk / statusFailed / statusSkipped
+	reason string
+	err    error
+	finish time.Time
 }
 
 // NewPlainReporter creates a PlainReporter that writes to w.
@@ -134,17 +158,24 @@ func (r *PlainReporter) SkipPhase(phaseKey string, phase config.DeployPhase, rea
 //
 //	[ts]   · [N/M] <stepAddr>[: <description>]
 //
-// Untracked steps (index == 0, total == 0) produce no output.
+// Untracked steps (index == 0, total == 0) produce no output. In TTY mode a
+// parallel sub-step's StartStep is suppressed (the live view already shows the
+// row in running state).
 func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index int, total int) {
 	if index == 0 && total == 0 {
 		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.tty && r.ttyProg != nil {
+		if _, ok := r.ttySubs[stepAddr]; ok {
+			return
+		}
 	}
 	label := stepAddr
 	if step.Description != "" {
 		label += ": " + step.Description
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	if index > 0 {
 		r.emit(render.Blue, fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
 	} else {
@@ -164,6 +195,15 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.tty && r.ttyProg != nil {
+		if entry, ok := r.ttySubs[stepAddr]; ok {
+			entry.status = statusSkipped
+			entry.reason = reason
+			entry.finish = r.now()
+			r.ttyProg.Send(subStepSkipMsg{addr: stepAddr, reason: reason})
+			return
+		}
+	}
 	if index > 0 {
 		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
 	} else {
@@ -186,6 +226,14 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.tty && r.ttyProg != nil {
+		if entry, ok := r.ttySubs[stepAddr]; ok {
+			entry.status = statusOk
+			entry.finish = r.now()
+			r.ttyProg.Send(subStepDoneMsg{addr: stepAddr, ok: true})
+			return
+		}
+	}
 	if index > 0 {
 		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
 	} else {
@@ -205,6 +253,22 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int, total int, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// Parallel sub-step failure in TTY mode: defer the formatted error block
+	// to the post-group summary so it does not collide with the live view.
+	if r.tty && r.ttyProg != nil {
+		if entry, ok := r.ttySubs[stepAddr]; ok {
+			entry.status = statusFailed
+			entry.err = err
+			entry.finish = r.now()
+			msg := subStepDoneMsg{addr: stepAddr, ok: false}
+			if err != nil {
+				msg.err = err.Error()
+			}
+			r.ttyProg.Send(msg)
+			return
+		}
+	}
 
 	// Parallel sub-step failure in non-TTY mode: print compact status line,
 	// dump captured output between separator bars, then the error.
@@ -305,12 +369,6 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 	}
 	r.emit(render.Blue, fmt.Sprintf("  %s Parallel group: %s (%d steps)", iconRunning, label, len(subIndices)))
 
-	if r.tty {
-		return
-	}
-	if r.subs == nil {
-		r.subs = make(map[string]*subStepEntry)
-	}
 	if r.groups == nil {
 		r.groups = make(map[string]*groupEntry)
 	}
@@ -318,11 +376,19 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 		startTime: r.now(),
 		total:     len(subIndices),
 	}
-	// Pre-register each sub-step buffer. Sub-step addresses share the group's
-	// phase prefix (everything up to the last '/' segment of groupAddr).
+
 	phasePrefix := groupAddr
 	if i := strings.LastIndex(groupAddr, "/"); i >= 0 {
 		phasePrefix = groupAddr[:i]
+	}
+
+	if r.tty {
+		r.startTTYView(groupAddr, group, subIndices, phasePrefix)
+		return
+	}
+
+	if r.subs == nil {
+		r.subs = make(map[string]*subStepEntry)
 	}
 	if group.Parallel != nil {
 		for _, sub := range group.Parallel.Steps {
@@ -332,12 +398,131 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 	}
 }
 
+// startTTYView builds the parallelGroupModel, registers sub-step entries, and
+// launches a bubbletea program in a goroutine. Caller must hold r.mu.
+func (r *PlainReporter) startTTYView(groupAddr string, group config.DeployStep, subIndices []int, phasePrefix string) {
+	r.ttySubs = make(map[string]*ttySubStepEntry)
+	views := make([]subStepView, 0, len(subIndices))
+	if group.Parallel != nil {
+		total := 0
+		// The "total" displayed on each row matches the deploy-wide stepTotal
+		// the executor passes through StartStep; we don't have it here, so we
+		// fall back to the group's own count which is what the model uses for
+		// its [N/total] formatting (purely visual).
+		total = len(group.Parallel.Steps)
+		for i, sub := range group.Parallel.Steps {
+			subAddr := phasePrefix + "/" + sub.Name
+			idx := 0
+			if i < len(subIndices) {
+				idx = subIndices[i]
+			}
+			r.ttySubs[subAddr] = &ttySubStepEntry{
+				idx:   idx,
+				total: total,
+				name:  sub.Name,
+			}
+			views = append(views, subStepView{
+				addr:   subAddr,
+				idx:    idx,
+				total:  total,
+				name:   sub.Name,
+				status: subStatusRunning,
+			})
+		}
+	}
+	model := newParallelGroupModel(groupAddr, views)
+	prog := tea.NewProgram(model,
+		tea.WithOutput(r.w.Writer()),
+		tea.WithoutSignalHandler(),
+		tea.WithoutCatchPanics(),
+		tea.WithInput(bytes.NewReader(nil)),
+	)
+	r.ttyProg = prog
+	r.ttyGroupAddr = groupAddr
+	r.ttyDone = make(chan struct{})
+	go func() {
+		defer close(r.ttyDone)
+		_, _ = prog.Run()
+	}()
+}
+
 // FinishGroup prints a one-line footer for a parallel group. success is true
 // when every sub-step succeeded (after accounting for continue_on_error). In
 // non-TTY mode the footer also carries aggregate ok/failed/skipped counts and
 // the elapsed time since StartGroup.
 func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, success bool) {
 	r.mu.Lock()
+	if r.tty && r.ttyProg != nil && r.ttyGroupAddr == groupAddr {
+		prog := r.ttyProg
+		done := r.ttyDone
+		r.mu.Unlock()
+		// Tell the live view to exit and wait without holding r.mu so the
+		// tea program can finish rendering through r.w.Writer.
+		prog.Send(groupDoneMsg{})
+		<-done
+		r.mu.Lock()
+		r.ttyProg = nil
+		r.ttyDone = nil
+		r.ttyGroupAddr = ""
+		// Tally counts from ttySubs and emit summary lines.
+		var ok, failed, skipped int
+		for _, e := range r.ttySubs {
+			switch e.status {
+			case statusOk:
+				ok++
+			case statusFailed:
+				failed++
+			case statusSkipped:
+				skipped++
+			}
+		}
+		// Print per-sub-step result lines in declaration order.
+		for _, e := range orderedTTYSubs(r.ttySubs) {
+			switch e.status {
+			case statusOk:
+				if e.idx > 0 {
+					r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, e.idx, e.total, e.name))
+				} else {
+					r.emit(render.Green, fmt.Sprintf("  %s Done: %s", iconDone, e.name))
+				}
+			case statusFailed:
+				if e.idx > 0 {
+					r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, e.idx, e.total, e.name))
+				} else {
+					r.emit(render.Red, fmt.Sprintf("  %s Failed: %s", iconFailed, e.name))
+				}
+				if e.err != nil {
+					r.emit(render.Red, "  "+e.err.Error())
+				}
+			case statusSkipped:
+				if e.idx > 0 {
+					r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, e.idx, e.total, e.name, e.reason))
+				} else {
+					r.emit(render.Yellow, fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, e.name, e.reason))
+				}
+			}
+		}
+		// Footer: success/failure with aggregate counts + elapsed.
+		icon := iconDone
+		color := render.Green
+		verb := "done"
+		if !success {
+			icon = iconFailed
+			color = render.Red
+			verb = "failed"
+		}
+		msg := fmt.Sprintf("  %s Parallel group %s: %s", icon, verb, groupAddr)
+		if g, gok := r.groups[groupAddr]; gok {
+			elapsed := formatElapsed(r.now().Sub(g.startTime))
+			msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped of %d, %s)",
+				ok, failed, skipped, g.total, elapsed)
+			delete(r.groups, groupAddr)
+		}
+		r.emit(color, msg)
+		r.ttySubs = nil
+		r.mu.Unlock()
+		return
+	}
 	defer r.mu.Unlock()
 
 	icon := iconDone
@@ -361,6 +546,22 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 	r.emit(color, msg)
 }
 
+// orderedTTYSubs returns the ttySubs entries sorted by declaration index so
+// the post-group summary prints in a stable order matching the YAML.
+func orderedTTYSubs(m map[string]*ttySubStepEntry) []*ttySubStepEntry {
+	out := make([]*ttySubStepEntry, 0, len(m))
+	for _, e := range m {
+		out = append(out, e)
+	}
+	// Insertion sort on idx — N is tiny.
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j-1].idx > out[j].idx; j-- {
+			out[j-1], out[j] = out[j], out[j-1]
+		}
+	}
+	return out
+}
+
 // SubStepOutput appends a single line of captured sub-step output to the
 // non-TTY mode's per-sub-step buffer. Never writes to the terminal directly;
 // the buffer is dumped between separator bars by FinishStep / FailStep. In
@@ -374,6 +575,9 @@ func (r *PlainReporter) SubStepOutput(subAddr string, line string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.tty {
+		if r.ttyProg != nil {
+			r.ttyProg.Send(subStepOutputMsg{addr: subAddr, line: line})
+		}
 		return
 	}
 	if r.subs == nil {

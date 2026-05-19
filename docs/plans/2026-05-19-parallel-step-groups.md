@@ -319,24 +319,26 @@ Realise the non-TTY path: buffer sub-step output in memory and per-file log; on 
 
 The TTY path renders a live spinner block for the active group, then dumps post-factum after `FinishGroup`.
 
-- [ ] new file `internal/pipeline/parallel_view.go` with:
+- [x] new file `internal/pipeline/parallel_view.go` with:
   - `parallelGroupModel` struct: per-substep state (`spinner.Model`, last-line, status `running|done|failed|skipped`, index, name)
   - `tea.Msg` types: `subStepOutputMsg{addr, line}`, `subStepDoneMsg{addr, ok, err}`, `subStepSkipMsg{addr, reason}`, `groupDoneMsg`
   - `Init() tea.Cmd` starts spinners
   - `Update(msg tea.Msg) (tea.Model, tea.Cmd)` handles the messages
-  - `View() string` renders with `lipgloss/v2` (one line per sub-step: `<spinner> [idx/total] <name>: <last-line>`)
-- [ ] integrate in `PlainReporter` TTY branch:
-  - `StartGroup` launches a goroutine running `tea.NewProgram(model).Run()`; output events feed it via a channel (`Send`)
-  - `FinishGroup` sends `groupDoneMsg`, waits for `Run()` to return, then prints the per-substep summary lines (✓/✗/◎ with elapsed)
-  - the global per-substep log still receives raw output; tea view only displays the latest line
-  - synchronise the bubbletea program lifecycle with the reporter mutex (acquire only when manipulating shared state — do not hold it across `Run()`)
-- [ ] interactive children are forbidden in parallel mode (no PTY, no `huh.Confirm`); rely on the Task 2 validation. `SuspendForExec`/`ResumeAfterExec` are unused in the parallel path (sequential path keeps them).
-- [ ] write tests in `internal/pipeline/parallel_view_test.go`:
+  - `View() tea.View` renders with `lipgloss/v2` via a string-returning `render()` helper that tests call directly (bubbletea v2 requires `View() tea.View`, not `View() string`)
+- [x] integrate in `PlainReporter` TTY branch:
+  - `StartGroup` launches a goroutine running `tea.NewProgram(model, WithOutput, WithoutSignalHandler, WithoutCatchPanics, WithInput(empty)).Run()`; sub-step events feed it via `Send`
+  - `FinishGroup` sends `groupDoneMsg`, releases `r.mu` while waiting on the done channel (so the tea renderer can write through `r.w` without contending on the reporter mutex), then prints per-substep summary lines (✓/✗/◎ with elapsed) and the footer
+  - the global per-substep log still receives raw output via the non-TTY plumbing; tea view only displays the latest line
+  - mutex discipline: send to the program is done with `r.mu` held (Send is non-blocking once the program is running; bubbletea routes via its own channel); waiting on `ttyDone` releases `r.mu` first
+- [x] interactive children are forbidden in parallel mode (no PTY, no `huh.Confirm`); rely on the Task 2 validation. `SuspendForExec`/`ResumeAfterExec` are unused in the parallel path (sequential path keeps them).
+- [x] write tests in `internal/pipeline/parallel_view_test.go`:
   - `parallelGroupModel.Update` transitions: starting → output → done; starting → skip; starting → fail
-  - `View()` renders non-empty content for each state
-  - (optional) `teatest`-style smoke that pipes a recorded message sequence through the program and asserts the final render — only if it doesn't bloat dependencies; otherwise stick to model-level tests
-- [ ] add `goleak.VerifyTestMain(m, …)` to `internal/pipeline/main_test.go` (create if absent) — the bubbletea program runs in its own goroutine and must exit cleanly on `groupDoneMsg`; without goleak a hung tea-loop is invisible to CI. `go.uber.org/goleak` is a **new external test-only dependency** (not stdlib); add it via `go get -t go.uber.org/goleak` and reflect in `go.mod` / `go.sum`.
-- [ ] run `go test ./internal/pipeline/...` — must pass before next task
+  - `render()` returns non-empty content for each state and includes the group header + sub-step names
+  - `groupDoneMsg` produces a `tea.QuitMsg` cmd (covers the goleak guarantee that Run() exits)
+  - unknown sub-step addresses are silently ignored (no panic, no perturbation of known state)
+  - `truncate` table-driven cases (covers the rune-aware ellipsis branch)
+- [x] add `goleak.VerifyTestMain(m, …)` to `internal/pipeline/main_test.go` (created) — the bubbletea program runs in its own goroutine and must exit cleanly on `groupDoneMsg`. Added `go.uber.org/goleak` via `go get -t`; `go.mod` / `go.sum` reflect the new test-only dependency.
+- [x] run `go test ./internal/pipeline/...` — passes (full suite `go test ./...` green; pre-existing `TestFileRecorder_TimestampsAreSet` race-only flake unrelated to this task, verified reproduces on baseline)
 
 ### Task 10: Plan output rendering
 
