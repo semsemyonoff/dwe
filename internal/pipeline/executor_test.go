@@ -1090,6 +1090,98 @@ func TestRunPipeline_FilesGate_NilRegistry_FailsStep(t *testing.T) {
 	}
 }
 
+// TestRunPipeline_FilesGate_WithRendersTemplate verifies that ${...} expressions in
+// the gate's `with` block are rendered against project config before being passed
+// to the target command's param validation. Regression test: previously these
+// values were forwarded as literal strings and tripped pattern validation.
+func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
+	workDir := t.TempDir()
+	// Create the file whose path includes the rendered database name.
+	probeFile := filepath.Join(workDir, "tbm_stock.sql.gz")
+	if err := os.WriteFile(probeFile, []byte("fake dump"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := usercommands.NewEmptyRegistry()
+	cmd := &usercommands.CommandDef{
+		ID:   "db-dump-deploy",
+		Type: usercommands.CommandTypeShell,
+		Cmd:  "true",
+		Params: map[string]usercommands.ParamDef{
+			"database": {
+				Type:    usercommands.ParamTypeString,
+				Pattern: `^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`,
+			},
+		},
+		Files: map[string]usercommands.FileSpec{
+			"dump": {
+				Candidates: []usercommands.FileCandidate{
+					{Path: "${param.database}.sql.gz"},
+				},
+				Access:   usercommands.FileAccessRead,
+				Required: true,
+			},
+		},
+	}
+	reg.AddCommandForTest(cmd)
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{
+		"db": map[string]any{
+			"stock_database": "tbm_stock",
+		},
+	}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "check-stock-dump",
+				Type: "shell",
+				Cmd:  "echo dump-exists",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-dump-deploy",
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+				With: map[string]any{
+					"database": "${db.stock_database}",
+				},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Gate satisfied (rendered path resolves and file exists) → step runs to completion.
+	kinds := rep.kindSeq()
+	finishIdx := slices.Index(kinds, "FinishStep")
+	if finishIdx == -1 {
+		t.Errorf("FinishStep should be called (gate should be satisfied after template render), got kinds: %v", kinds)
+	}
+	for _, e := range rep.events {
+		if e.kind == "FailStep" {
+			t.Errorf("unexpected FailStep: %v", e.err)
+		}
+	}
+}
+
 // TestRunPipeline_FilesGate_UnknownCommand_FailsStep verifies that a gated step fails with
 // ErrSilent when the gate references a command not present in the registry.
 func TestRunPipeline_FilesGate_UnknownCommand_FailsStep(t *testing.T) {

@@ -24,9 +24,20 @@ func BuildRunContext(
 	workDir string,
 ) (RunContext, error) {
 	// Convert With map[string]any → map[string]string for command param resolution.
+	// String values are rendered through tpl.RenderCommand so that ${...} expressions
+	// referencing project-level config (Raw) and host info resolve before pattern
+	// validation. ${param.*} / ${context.*} are not available here — those belong to
+	// the target command and are what this call is computing. Symmetric with the
+	// workflow step path in runner_workflow.go.
+	renderCtx := &tpl.RenderContext{Raw: cfg.Raw, Host: tpl.CurrentHostInfo()}
 	strWith := make(map[string]string, len(with))
 	for k, v := range with {
-		strWith[k] = fmt.Sprintf("%v", v)
+		raw := fmt.Sprintf("%v", v)
+		rendered, err := tpl.RenderCommand(raw, renderCtx)
+		if err != nil {
+			return RunContext{}, fmt.Errorf("rendering with[%q]: %w", k, err)
+		}
+		strWith[k] = rendered
 	}
 
 	// Resolve parameters using the converted with map.

@@ -233,6 +233,106 @@ func TestBuildRunContext_ConvertWithMapType(t *testing.T) {
 	}
 }
 
+// TestBuildRunContext_WithTemplateRender verifies ${...} expressions in `with`
+// values are rendered against project-level Raw before param validation.
+func TestBuildRunContext_WithTemplateRender(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	cfg := &config.DevboxConfig{
+		Raw: map[string]any{
+			"db": map[string]any{
+				"stock_database": "tbm_stock",
+			},
+		},
+	}
+
+	def := &model.CommandDef{
+		ID:   "test.cmd",
+		Type: model.CommandTypeShell,
+		Params: map[string]model.ParamDef{
+			"database": {
+				Type:    model.ParamTypeString,
+				Pattern: `^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`,
+			},
+		},
+		Context: map[string]model.ContextDef{},
+		Cmd:     "echo hello",
+	}
+
+	with := map[string]any{"database": "${db.stock_database}"}
+
+	rctx, err := BuildRunContext(cfg, nil, def, with, tmpdir)
+	if err != nil {
+		t.Fatalf("BuildRunContext returned error: %v", err)
+	}
+
+	if rctx.Params["database"] != "tbm_stock" {
+		t.Errorf("param database = %v, want %q", rctx.Params["database"], "tbm_stock")
+	}
+}
+
+// TestBuildRunContext_WithTemplateMissingKey verifies that a ${...} reference to
+// a missing config key resolves to "" (consistent with default_from behavior).
+func TestBuildRunContext_WithTemplateMissingKey(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	cfg := &config.DevboxConfig{
+		Raw: map[string]any{},
+	}
+
+	def := &model.CommandDef{
+		ID:   "test.cmd",
+		Type: model.CommandTypeShell,
+		Params: map[string]model.ParamDef{
+			"name": {Type: model.ParamTypeString},
+		},
+		Context: map[string]model.ContextDef{},
+		Cmd:     "echo hello",
+	}
+
+	with := map[string]any{"name": "${db.nonexistent}"}
+
+	rctx, err := BuildRunContext(cfg, nil, def, with, tmpdir)
+	if err != nil {
+		t.Fatalf("BuildRunContext returned error: %v", err)
+	}
+
+	if rctx.Params["name"] != "" {
+		t.Errorf("param name = %v, want empty string", rctx.Params["name"])
+	}
+}
+
+// TestBuildRunContext_WithLiteralPassthrough verifies plain string values without
+// ${...} survive rendering untouched (idempotent no-op).
+func TestBuildRunContext_WithLiteralPassthrough(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	cfg := &config.DevboxConfig{
+		Raw: map[string]any{},
+	}
+
+	def := &model.CommandDef{
+		ID:   "test.cmd",
+		Type: model.CommandTypeShell,
+		Params: map[string]model.ParamDef{
+			"name": {Type: model.ParamTypeString},
+		},
+		Context: map[string]model.ContextDef{},
+		Cmd:     "echo hello",
+	}
+
+	with := map[string]any{"name": "literal-value"}
+
+	rctx, err := BuildRunContext(cfg, nil, def, with, tmpdir)
+	if err != nil {
+		t.Fatalf("BuildRunContext returned error: %v", err)
+	}
+
+	if rctx.Params["name"] != "literal-value" {
+		t.Errorf("param name = %v, want %q", rctx.Params["name"], "literal-value")
+	}
+}
+
 // TestBuildRunContext_NoFilesystemSideEffects verifies no filesystem writes happen.
 func TestBuildRunContext_NoFilesystemSideEffects(t *testing.T) {
 	tmpdir := t.TempDir()
