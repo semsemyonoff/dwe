@@ -644,7 +644,11 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	// Step 4: Execute the step.
 	opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 	opts.Recorder.OnStepStart(addr, rs, stepHash)
-	opts.Reporter.SuspendForExec()
+	// SuspendForExec/ResumeAfterExec signal terminal hand-off; they must not be
+	// called from concurrent goroutines in parallel mode (contract violation).
+	if !opts.Parallel {
+		opts.Reporter.SuspendForExec()
+	}
 
 	skipConfirm := opts.SkipConfirm || rs.Step.SkipConfirm
 
@@ -660,7 +664,9 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	stepErr := ExecAction(ctx, rs.Step.Action(), bodyActx)
 	durationMs := time.Since(startTime).Milliseconds()
 
-	opts.Reporter.ResumeAfterExec()
+	if !opts.Parallel {
+		opts.Reporter.ResumeAfterExec()
+	}
 
 	if stepErr != nil {
 		opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, stepErr)

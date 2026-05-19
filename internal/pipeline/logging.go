@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -78,8 +79,21 @@ func OpenSubStepLog(workDir, pipelineName, groupName, subStepName string, enable
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, "", fmt.Errorf("creating sub-step log directory %s: %w", dir, err)
 	}
-	path := filepath.Join(dir, sanitizeForFS(subStepName)+".log")
-	f, err := os.Create(path)
+	// Use O_EXCL so that two sub-steps whose names sanitize identically (e.g.
+	// "step 1" and "step:1" both → "step_1") get distinct log files instead of
+	// the second truncating the first.
+	base := sanitizeForFS(subStepName)
+	path := filepath.Join(dir, base+".log")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if errors.Is(err, os.ErrExist) {
+		for n := 2; ; n++ {
+			path = filepath.Join(dir, fmt.Sprintf("%s_%d.log", base, n))
+			f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+			if err == nil || !errors.Is(err, os.ErrExist) {
+				break
+			}
+		}
+	}
 	if err != nil {
 		return nil, "", fmt.Errorf("creating sub-step log %s: %w", path, err)
 	}
