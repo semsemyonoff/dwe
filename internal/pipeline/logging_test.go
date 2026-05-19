@@ -14,9 +14,9 @@ import (
 	"devbox-cli/internal/deploy/journal"
 )
 
-func TestAnsiStripper_Write_StripsEscapes(t *testing.T) {
+func TestAnsiOnlyStripper_Write_StripsEscapes(t *testing.T) {
 	var buf bytes.Buffer
-	s := &ansiStripper{w: &buf}
+	s := &ansiOnlyStripper{w: &buf}
 	input := "\x1b[32mhello\x1b[0m world"
 	n, err := s.Write([]byte(input))
 	if err != nil {
@@ -34,9 +34,9 @@ func TestAnsiStripper_Write_StripsEscapes(t *testing.T) {
 	}
 }
 
-func TestAnsiStripper_Write_PlainText(t *testing.T) {
+func TestAnsiOnlyStripper_Write_PlainText(t *testing.T) {
 	var buf bytes.Buffer
-	s := &ansiStripper{w: &buf}
+	s := &ansiOnlyStripper{w: &buf}
 	input := "plain text"
 	n, err := s.Write([]byte(input))
 	if err != nil {
@@ -47,6 +47,125 @@ func TestAnsiStripper_Write_PlainText(t *testing.T) {
 	}
 	if buf.String() != input {
 		t.Errorf("expected output unchanged, got: %q", buf.String())
+	}
+}
+
+// TestAnsiOnlyRe_PreservesCR ensures the regex used by the tee path leaves
+// `\r` bytes intact (precondition for Task 2 frame parsing).
+func TestAnsiOnlyRe_PreservesCR(t *testing.T) {
+	in := []byte("\x1b[32m50%\r100%\x1b[0m\n")
+	got := ansiOnlyRe.ReplaceAll(in, nil)
+	want := "50%\r100%\n"
+	if string(got) != want {
+		t.Errorf("ansiOnlyRe.ReplaceAll = %q, want %q (must preserve \\r)", got, want)
+	}
+}
+
+// TestLogSanitizer_ProgressFrames_BecomeSeparateLines is the regression test
+// for the live-progress bug: progress frames that overwrite each other on a
+// real terminal must land on separate lines in the log file.
+func TestLogSanitizer_ProgressFrames_BecomeSeparateLines(t *testing.T) {
+	var buf bytes.Buffer
+	s := &logSanitizer{w: &buf}
+	in := "50%\r100%\n"
+	if _, err := s.Write([]byte(in)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got := buf.String()
+	want := "50%\n100%\n"
+	if got != want {
+		t.Errorf("progress-frame log: got %q, want %q", got, want)
+	}
+	if strings.Contains(got, "\r") {
+		t.Errorf("logSanitizer left bare \\r in output: %q", got)
+	}
+	if strings.Contains(got, "50%100%") {
+		t.Errorf("frames concatenated instead of separating: %q", got)
+	}
+}
+
+func TestLogSanitizer_LoneCR_BecomesNewline(t *testing.T) {
+	var buf bytes.Buffer
+	s := &logSanitizer{w: &buf}
+	if _, err := s.Write([]byte("partial\r")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if buf.String() != "partial\n" {
+		t.Errorf("lone \\r: got %q, want %q", buf.String(), "partial\n")
+	}
+}
+
+// TestLogSanitizer_CRLFInOneWrite_BecomesDoubleNewline documents the stateless
+// trade-off: `\r\n` within a single Write produces `\n\n` (one extra blank
+// line). Acceptable because PTY-captured child output rarely emits CRLF.
+func TestLogSanitizer_CRLFInOneWrite_BecomesDoubleNewline(t *testing.T) {
+	var buf bytes.Buffer
+	s := &logSanitizer{w: &buf}
+	if _, err := s.Write([]byte("a\r\nb")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if buf.String() != "a\n\nb" {
+		t.Errorf("CRLF: got %q, want %q", buf.String(), "a\n\nb")
+	}
+}
+
+// TestLogSanitizer_SplitWrite_CRThenLF documents that a `\r` and `\n` arriving
+// in separate Writes also produce two newlines (each Write is independent).
+func TestLogSanitizer_SplitWrite_CRThenLF(t *testing.T) {
+	var buf bytes.Buffer
+	s := &logSanitizer{w: &buf}
+	if _, err := s.Write([]byte("a\r")); err != nil {
+		t.Fatalf("write1: %v", err)
+	}
+	if _, err := s.Write([]byte("\nb")); err != nil {
+		t.Fatalf("write2: %v", err)
+	}
+	if buf.String() != "a\n\nb" {
+		t.Errorf("split CR/LF: got %q, want %q", buf.String(), "a\n\nb")
+	}
+}
+
+// TestLogSanitizer_ConcurrentWrites_NoPanic asserts the stateless writer
+// tolerates concurrent calls from multiple goroutines without panicking. Run
+// with `-race` to also catch any shared-state issues.
+func TestLogSanitizer_ConcurrentWrites_NoPanic(t *testing.T) {
+	var buf syncBuf
+	s := &logSanitizer{w: &buf}
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Go(func() {
+			for range 100 {
+				_, _ = s.Write([]byte("frame\r"))
+			}
+		})
+	}
+	wg.Wait()
+	if strings.Contains(buf.String(), "\r") {
+		t.Errorf("expected no \\r in output, got %q", buf.String())
+	}
+}
+
+// TestLineTee_PreservesCR_InBuffer verifies that `\r` survives ANSI stripping
+// inside the tee buffer (precondition for Task 2 frame-aware parsing).
+func TestLineTee_PreservesCR_InBuffer(t *testing.T) {
+	var got []string
+	tee := newLineTee(func(line string) { got = append(got, line) })
+	// `\r` is data, no `\n` terminator → must remain buffered (no callback).
+	if _, err := tee.Write([]byte("\x1b[32m50%\r100%")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected no callbacks yet, got %v", got)
+	}
+	tee.Flush()
+	if len(got) != 1 {
+		t.Fatalf("expected one flushed line, got %v", got)
+	}
+	if !strings.Contains(got[0], "\r") {
+		t.Errorf("expected \\r to survive into the buffer, got %q", got[0])
+	}
+	if strings.Contains(got[0], "\x1b") {
+		t.Errorf("expected ANSI stripped, got %q", got[0])
 	}
 }
 
@@ -217,11 +336,10 @@ func TestChildIO_Parallel_NoStdoutNoStderr(t *testing.T) {
 	if stdout == os.Stdout || stderr == os.Stderr {
 		t.Error("parallel mode must not return os.Stdout / os.Stderr")
 	}
+	// Parallel branch returns the writer unchanged — the caller (runParallelSubStep)
+	// is responsible for routing through logSanitizer / ansiOnlyStripper.
 	if _, err := stdout.Write([]byte("\x1b[31mred\x1b[0m\n")); err != nil {
 		t.Fatalf("write: %v", err)
-	}
-	if got := buf.String(); strings.Contains(got, "\x1b") {
-		t.Errorf("expected ANSI stripped, got %q", got)
 	}
 	if !strings.Contains(buf.String(), "red") {
 		t.Errorf("expected text preserved, got %q", buf.String())
@@ -295,11 +413,11 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 		t.Errorf("beta.log leaked sibling output: %q", beta)
 	}
 
-	// Global log receives both (interleaving acceptable).
-	gl := globalLog.String()
-	if !strings.Contains(gl, "alpha-out") || !strings.Contains(gl, "beta-out") {
-		t.Errorf("global log missing one of the outputs: %q", gl)
-	}
+	// NOTE: As of Task 1, the global pipeline log is intentionally NOT in the
+	// per-sub-step join — the global log receives parallel sub-step output via
+	// Reporter.StepOutput's dedicated side-write, added in Task 6. Until then,
+	// we do not assert global-log contents here.
+	_ = globalLog
 
 	// Reporter.SubStepOutput was called with each sub-step's line.
 	sawAlpha, sawBeta := false, false

@@ -14,17 +14,45 @@ import (
 	"devbox-cli/internal/render"
 )
 
-// ansiRe matches ANSI/VT100 escape sequences and bare carriage returns.
-var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b[a-zA-Z]|\r`)
+// ansiOnlyRe matches ANSI/VT100 escape sequences only. It deliberately does
+// NOT match `\r` — bare carriage returns are data for the frame parser
+// (lineTee) and the log sanitiser (logSanitizer), each of which handles them.
+var ansiOnlyRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b[a-zA-Z]`)
 
 // unsafeFSRe matches characters not allowed in sanitised filesystem names.
 var unsafeFSRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
-// ansiStripper wraps an io.Writer, stripping ANSI escape sequences before writing.
-type ansiStripper struct{ w io.Writer }
+// ansiOnlyStripper wraps an io.Writer, stripping ANSI escape sequences but
+// preserving `\r` and `\n` byte values. Used by the tee path so the frame
+// parser sees `\r` as data.
+type ansiOnlyStripper struct{ w io.Writer }
 
-func (s *ansiStripper) Write(p []byte) (int, error) {
-	stripped := ansiRe.ReplaceAll(p, nil)
+func (s *ansiOnlyStripper) Write(p []byte) (int, error) {
+	stripped := ansiOnlyRe.ReplaceAll(p, nil)
+	if _, err := s.w.Write(stripped); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// logSanitizer wraps an io.Writer for log-file destinations. It strips ANSI
+// escape sequences and converts EVERY `\r` byte to `\n`, in a single stateless
+// pass. This means `50%\r100%\n` becomes `50%\n100%\n` (one frame per line on
+// disk) and `\r\n` within one Write becomes `\n\n` (one extra blank line — an
+// accepted trade-off, see plan).
+//
+// Stateless on purpose: no buffered trailing CR, no lifecycle (no Flush/Close
+// contract), no mutex. Safe for concurrent writes from multiple goroutines.
+type logSanitizer struct{ w io.Writer }
+
+func (s *logSanitizer) Write(p []byte) (int, error) {
+	stripped := ansiOnlyRe.ReplaceAll(p, nil)
+	// Single-pass byte walk: replace every `\r` with `\n`.
+	for i, b := range stripped {
+		if b == '\r' {
+			stripped[i] = '\n'
+		}
+	}
 	if _, err := s.w.Write(stripped); err != nil {
 		return 0, err
 	}
@@ -54,7 +82,7 @@ func OpenPipelineLog(workDir, name string, enabled bool) (*render.Writer, io.Wri
 	if err != nil {
 		return nil, nil, "", func() {}, fmt.Errorf("creating %s log %s: %w", name, logPath, err)
 	}
-	tee := io.MultiWriter(os.Stdout, &ansiStripper{logFile})
+	tee := io.MultiWriter(os.Stdout, &logSanitizer{logFile})
 	return render.NewWriter(tee), logFile, logPath, func() { _ = logFile.Close() }, nil
 }
 
@@ -154,7 +182,8 @@ func newLineTee(cb func(string)) *lineTee {
 }
 
 func (t *lineTee) Write(p []byte) (int, error) {
-	stripped := ansiRe.ReplaceAll(p, nil)
+	// Strip ANSI but preserve `\r` so frame parsing (Task 2) sees it as data.
+	stripped := ansiOnlyRe.ReplaceAll(p, nil)
 	t.mu.Lock()
 	t.buf.Write(stripped)
 	for {

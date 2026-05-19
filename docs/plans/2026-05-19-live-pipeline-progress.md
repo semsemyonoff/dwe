@@ -122,18 +122,18 @@ Three pieces:
 - Stateless = zero lifecycle, zero locking, zero edge cases at stream end.
 
 Checklist:
-- [ ] in `internal/pipeline/logging.go` add `ansiOnlyRe` (no `|\r`)
-- [ ] introduce `ansiOnlyStripper{w io.Writer}` (strips CSI/ESC, preserves `\r` and `\n`)
-- [ ] introduce `logSanitizer{w io.Writer}` — stateless, single-pass `\r`→`\n` substitution after ANSI strip
-- [ ] DELETE the old `ansiStripper` type and `ansiRe`/`ansiAndCRRe` regex; rewrite all current `&ansiStripper{...}` call sites to use `&logSanitizer{...}` (these are all log-file destinations)
-- [ ] inside `lineTee.Write`: replace the regex used for stripping with `ansiOnlyRe.ReplaceAll` so `\r` survives into the buffer (precondition for Task 2)
-- [ ] in `runParallelSubStep` (executor.go:822): the new join is `joinWriters(logSanitizer{subFile}, tee)` — `opts.LogWriter` (global pipeline log) is intentionally NOT in this join; global log receives parallel output via `Reporter.StepOutput`'s side-write (Task 6). Per-sub-step file gets full output via the direct `logSanitizer{subFile}` branch.
-- [ ] in `childIO` parallel branch: return the writer unchanged (no extra stripper wrapping inside `childIO` — the caller has already routed log destinations through `logSanitizer` and the tee handles its own ANSI stripping via `ansiOnlyStripper` internally).
-- [ ] write unit tests in `logging_test.go` for `ansiOnlyRe`: preserves `\r`, strips CSI/ESC
-- [ ] write unit tests for `logSanitizer.Write`: `50%\r100%\n` → `50%\n100%\n`; lone `\r` → `\n`; `\r\n` within one Write → `\n\n` (documents the stateless trade-off); split-write `\r` then `\n` across two Writes → `\n` then `\n` (also `\n\n`, same result); concurrent Writes from two goroutines do not panic (stateless means no shared mutable state — but a `-race` test still belongs here)
-- [ ] write unit tests for `lineTee` showing `\r` survives into the buffer (precondition for Task 2)
-- [ ] write a regression test capturing the exact bug from the review: feed `50%\r100%\n` to `logSanitizer{buf}`, assert `buf` contains `"50%\n100%\n"` and NOT `"50%100%\n"` or `"50%\r100%\n"`
-- [ ] run `go test -race ./internal/pipeline/...` — must pass before Task 2 (the `-race` flag catches the concurrent-Write-from-stdout-and-stderr case)
+- [x] in `internal/pipeline/logging.go` add `ansiOnlyRe` (no `|\r`)
+- [x] introduce `ansiOnlyStripper{w io.Writer}` (strips CSI/ESC, preserves `\r` and `\n`)
+- [x] introduce `logSanitizer{w io.Writer}` — stateless, single-pass `\r`→`\n` substitution after ANSI strip
+- [x] DELETE the old `ansiStripper` type and `ansiRe`/`ansiAndCRRe` regex; rewrite all current `&ansiStripper{...}` call sites to use `&logSanitizer{...}` (these are all log-file destinations)
+- [x] inside `lineTee.Write`: replace the regex used for stripping with `ansiOnlyRe.ReplaceAll` so `\r` survives into the buffer (precondition for Task 2)
+- [x] in `runParallelSubStep` (executor.go:822): the new join is `joinWriters(logSanitizer{subFile}, tee)` — `opts.LogWriter` (global pipeline log) is intentionally NOT in this join; global log receives parallel output via `Reporter.StepOutput`'s side-write (Task 6). Per-sub-step file gets full output via the direct `logSanitizer{subFile}` branch.
+- [x] in `childIO` parallel branch: return the writer unchanged (no extra stripper wrapping inside `childIO` — the caller has already routed log destinations through `logSanitizer` and the tee handles its own ANSI stripping via `ansiOnlyStripper` internally).
+- [x] write unit tests in `logging_test.go` for `ansiOnlyRe`: preserves `\r`, strips CSI/ESC
+- [x] write unit tests for `logSanitizer.Write`: `50%\r100%\n` → `50%\n100%\n`; lone `\r` → `\n`; `\r\n` within one Write → `\n\n` (documents the stateless trade-off); split-write `\r` then `\n` across two Writes → `\n` then `\n` (also `\n\n`, same result); concurrent Writes from two goroutines do not panic (stateless means no shared mutable state — but a `-race` test still belongs here)
+- [x] write unit tests for `lineTee` showing `\r` survives into the buffer (precondition for Task 2)
+- [x] write a regression test capturing the exact bug from the review: feed `50%\r100%\n` to `logSanitizer{buf}`, assert `buf` contains `"50%\n100%\n"` and NOT `"50%100%\n"` or `"50%\r100%\n"`
+- [x] run `go test -race ./internal/pipeline/...` — must pass before Task 2 (the `-race` flag catches the concurrent-Write-from-stdout-and-stderr case)
 
 ### Task 2: Frame-aware `lineTee`
 

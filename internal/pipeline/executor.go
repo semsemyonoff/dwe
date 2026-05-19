@@ -52,32 +52,33 @@ var stdoutIsTTY = func() bool {
 //     pty allocation fails, falls back transparently to the MultiWriter path
 //     so log capture still happens (just without the TUI).
 //
-// Parallel mode (parallel=true) is a fourth path: stdout/stderr go only to
-// the supplied logWriter (wrapped with ansiStripper). os.Stdout / os.Stderr
-// are never touched and no PTY is allocated — the reporter owns the host
-// terminal in parallel mode. logWriter must be non-nil; a nil writer in
-// parallel mode is a programmer error and panics.
+// Parallel mode (parallel=true) is a fourth path: stdout/stderr go to the
+// supplied logWriter UNCHANGED. The caller is responsible for routing log-file
+// destinations through logSanitizer and the line-tee path through
+// ansiOnlyStripper. os.Stdout / os.Stderr are never touched and no PTY is
+// allocated here — the reporter owns the host terminal in parallel mode.
+// logWriter must be non-nil; a nil writer in parallel mode is a programmer
+// error and panics.
 func childIO(logWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cleanup func()) {
 	if parallel {
 		if logWriter == nil {
 			panic("pipeline: childIO called with parallel=true but logWriter is nil")
 		}
-		logStripped := &ansiStripper{logWriter}
-		return logStripped, logStripped, func() {}
+		return logWriter, logWriter, func() {}
 	}
 	if logWriter == nil {
 		return os.Stdout, os.Stderr, func() {}
 	}
 
 	if !stdoutIsTTY() {
-		logStripped := &ansiStripper{logWriter}
+		logStripped := &logSanitizer{logWriter}
 		return io.MultiWriter(os.Stdout, logStripped), io.MultiWriter(os.Stderr, logStripped), func() {}
 	}
 
 	ptmx, tty, err := pty.Open()
 	if err != nil {
 		// Fall back to MultiWriter — interactive UI is lost but log capture works.
-		logStripped := &ansiStripper{logWriter}
+		logStripped := &logSanitizer{logWriter}
 		return io.MultiWriter(os.Stdout, logStripped), io.MultiWriter(os.Stderr, logStripped), func() {}
 	}
 
@@ -86,7 +87,7 @@ func childIO(logWriter io.Writer, parallel bool) (stdout, stderr io.Writer, clea
 	_ = pty.InheritSize(os.Stdout, ptmx)
 
 	done := make(chan struct{})
-	sink := io.MultiWriter(os.Stdout, &ansiStripper{logWriter})
+	sink := io.MultiWriter(os.Stdout, &logSanitizer{logWriter})
 	go func() {
 		defer close(done)
 		_, _ = io.Copy(sink, ptmx)
@@ -123,7 +124,7 @@ type ActionContext struct {
 //
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
-// as a pipe rather than a TTY). The log tee via ansiStripper is unaffected.
+// as a pipe rather than a TTY). The log tee via logSanitizer is unaffected.
 // When skipConfirm is true, DEVBOX_NONINTERACTIVE=1 is added so that nested
 // devbox subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
@@ -215,9 +216,9 @@ func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext)
 		if actx.LogWriter == nil {
 			return fmt.Errorf("internal error: parallel builtin %q requires non-nil LogWriter", a.Cmd)
 		}
-		out = &ansiStripper{actx.LogWriter}
+		out = &logSanitizer{actx.LogWriter}
 	case actx.LogWriter != nil:
-		out = io.MultiWriter(os.Stdout, &ansiStripper{actx.LogWriter})
+		out = io.MultiWriter(os.Stdout, &logSanitizer{actx.LogWriter})
 	default:
 		out = os.Stdout
 	}
@@ -831,7 +832,17 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 	tee := newLineTee(func(line string) { opts.Reporter.SubStepOutput(subAddr, line) })
 	defer tee.Flush()
 
-	subWriter := joinWriters(subFile, opts.LogWriter, tee)
+	// Per-sub-step log file receives full output via logSanitizer (ANSI strip
+	// + `\r` → `\n` so progress frames land on separate lines). The line-tee
+	// strips ANSI itself but preserves `\r` for frame-aware parsing (Task 2).
+	// opts.LogWriter (global pipeline log) is intentionally NOT in this join;
+	// the global log receives parallel output via Reporter.StepOutput's
+	// dedicated side-write (added in Task 6).
+	var subFileSink io.Writer
+	if subFile != nil {
+		subFileSink = &logSanitizer{subFile}
+	}
+	subWriter := joinWriters(subFileSink, tee)
 
 	subOpts := opts
 	subOpts.LogWriter = subWriter
