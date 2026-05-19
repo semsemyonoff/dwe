@@ -156,14 +156,14 @@ Related patterns:
 
 This task addresses the central `docs/reference/templates.md` page in full. Per-renderer docs are Task 6.
 
-- [ ] in the "Where templates are evaluated" table (`docs/reference/templates.md:22-31`):
+- [x] in the "Where templates are evaluated" table (`docs/reference/templates.md:22-31`):
   - **add a new row** for `devbox/templates/git/<pack>/**/*.tmpl` with the same context shape and a link to `render/git.md`
   - **rewrite** the existing ide/ai rows so each lists its full context shape explicitly (do not collapse `ai` into "same shape as IDE" — the page must list each site canonically). New shape for all three rows: `{.Project, .Service, .ServiceCfg, .Runtime, .Cfg}`
-- [ ] in the "Render context per site" section (`docs/reference/templates.md:80+`):
+- [x] in the "Render context per site" section (`docs/reference/templates.md:80+`):
   - **rename** the "IDE / AI render packs (strict)" heading at line 96 to "Render packs (git / ide / ai, strict)"
   - extend the variable table (lines 98-103) with a `.Cfg` row, described as: `merged DevboxConfig (advanced). .Cfg.Raw is the post-merge config map after devbox normalization (binaries normalized; services.* injected from services.yml). Dot syntax (.Cfg.Raw.git.project_prefix) works only for identifier-safe keys; use {{ index .Cfg.Raw "my-key" }} for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases.`
   - immediately after the table, add a short advisory paragraph: "IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint."
-- [ ] verify the page renders cleanly (no broken anchors / link checker if one runs in CI)
+- [x] verify the page renders cleanly (no broken anchors / link checker if one runs in CI)
 
 ### Task 6: Update per-renderer documentation
 

@@ -26,8 +26,9 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 | `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Merged `DevboxConfig` | Evaluated at plan time. See [deploy.md](config/deploy.md) |
 | `message` builtin — `text:` | `{{ ... }}` | Merged `DevboxConfig` | See [deploy.md](config/deploy.md#message) |
 | `docker.yml` — `project_name` | `${...}` only | Merged `DevboxConfig.Raw` | Dot-path lookups (no `{{ }}` logic). See [docker.md](config/docker.md) |
-| `devbox/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .ServiceCfg, .Runtime}` | Strict mode. See [render/ide.md](render/ide.md) |
-| `devbox/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | same shape as IDE | Strict mode. See [render/ai.md](render/ai.md) |
+| `devbox/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .ServiceCfg, .Runtime, .Cfg}` | Strict mode. See [render/git.md](render/git.md) |
+| `devbox/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .ServiceCfg, .Runtime, .Cfg}` | Strict mode. See [render/ide.md](render/ide.md) |
+| `devbox/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .ServiceCfg, .Runtime, .Cfg}` | Strict mode. See [render/ai.md](render/ai.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Plain dot-paths only (no template expressions). |
 
 ## Two syntaxes: shorthand and full templates
@@ -93,7 +94,7 @@ The data exposed to a template depends on the site. All sites converge on a stru
 
 **Info, pipelines, `message` builtin:** The merged typed `DevboxConfig` (e.g. `.Project.Name`, `.Runtime.Ports.app`, `.Services.<name>.Enabled`).
 
-**IDE / AI render packs (strict):**
+**Render packs (git / ide / ai, strict):**
 
 | Variable | Source |
 |----------|--------|
@@ -101,6 +102,9 @@ The data exposed to a template depends on the site. All sites converge on a stru
 | `.Service` | service name (the map key in `services:`) |
 | `.ServiceCfg` | effective service config after `extends` resolution |
 | `.Runtime` | merged `runtime` block |
+| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
+
+IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.
 
 ## Built-in `text/template` functions
 
