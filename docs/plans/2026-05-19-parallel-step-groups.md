@@ -302,18 +302,18 @@ Each sub-step gets its own log file; the global pipeline log keeps interleaved o
 
 Realise the non-TTY path: buffer sub-step output in memory and per-file log; on `FinishStep`/`FailStep` of a sub-step, dump the buffer between separator lines. Order of completion is allowed to vary.
 
-- [ ] add a per-substep buffer map to `PlainReporter` (`map[subAddr]*bytes.Buffer`) protected by the mutex from Task 5; initialise the map lazily in `StartGroup` (writing to a nil map panics — guard explicitly)
-- [ ] `SubStepOutput(subAddr, line)` appends to the buffer (do **not** write to terminal directly); if the entry is missing (e.g. `StartGroup` was skipped due to an upstream bug), create it on the fly rather than panic
-- [ ] `StartStep` for a parallel sub-step prints the standard `· [N/M] ...` line immediately (so users see what was launched)
-- [ ] `FinishStep` / `FailStep` / `SkipStep` for a parallel sub-step prints the status line **followed by** the buffered output between `───── output ─────` / `──────────────────` separators, then frees the buffer
-- [ ] `FinishGroup` prints a one-line summary with elapsed time and success/fail counts
-- [ ] introduce a `mode` flag on `PlainReporter` (TTY vs non-TTY) decided once at construction via `stdoutIsTTY()`; this task implements only the non-TTY branch
-- [ ] write tests in `internal/pipeline/plain_test.go`:
+- [x] add a per-substep buffer map to `PlainReporter` (`map[subAddr]*bytes.Buffer`) protected by the mutex from Task 5; initialise the map lazily in `StartGroup` (writing to a nil map panics — guard explicitly)
+- [x] `SubStepOutput(subAddr, line)` appends to the buffer (do **not** write to terminal directly); if the entry is missing (e.g. `StartGroup` was skipped due to an upstream bug), create it on the fly rather than panic
+- [x] `StartStep` for a parallel sub-step prints the standard `· [N/M] ...` line immediately (so users see what was launched)
+- [x] `FinishStep` / `FailStep` / `SkipStep` for a parallel sub-step prints the status line **followed by** the buffered output between `───── output ─────` / `──────────────────` separators, then frees the buffer
+- [x] `FinishGroup` prints a one-line summary with elapsed time and success/fail counts
+- [x] introduce a `mode` flag on `PlainReporter` (TTY vs non-TTY) decided once at construction via `stdoutIsTTY()`; this task implements only the non-TTY branch
+- [x] write tests in `internal/pipeline/plain_test.go`:
   - given `SubStepOutput` lines followed by `FinishStep`, the writer receives the expected formatted block with separators
   - sub-steps completing in interleaved order each get their own correct block
   - `FailStep` block includes the captured error after the buffer dump
   - `SkipStep` block prints reason and does not dump buffered output (none expected)
-- [ ] run `go test ./internal/pipeline/...` — must pass before next task
+- [x] run `go test ./internal/pipeline/...` — must pass before next task
 
 ### Task 9: TTY PlainReporter mode (bubbletea live view)
 

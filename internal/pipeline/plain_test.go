@@ -25,6 +25,7 @@ func newBufReporter() (*PlainReporter, *bytes.Buffer) {
 	w := render.NewWriter(buf)
 	r := NewPlainReporter(w)
 	r.now = func() time.Time { return fixedTime }
+	r.tty = false // force deterministic non-TTY rendering for Task 8 paths
 	return r, buf
 }
 
@@ -572,11 +573,183 @@ func TestPlainReporter_FinishGroup_Failure(t *testing.T) {
 	}
 }
 
-func TestPlainReporter_SubStepOutput_Noop(t *testing.T) {
+// SubStepOutput must NEVER write to the writer directly — in non-TTY mode it
+// buffers for a later dump on FinishStep / FailStep; in TTY mode the live
+// view consumes events out-of-band.
+func TestPlainReporter_SubStepOutput_NoDirectWrite(t *testing.T) {
 	r, buf := newBufReporter()
 	r.SubStepOutput("init/dumps/main", "some line")
 	if buf.Len() != 0 {
-		t.Errorf("SubStepOutput stub should not write; got %q", buf.String())
+		t.Errorf("SubStepOutput must not write to terminal directly; got %q", buf.String())
+	}
+}
+
+// --- Task 8: non-TTY parallel sub-step buffering and dump ---
+
+// helper: build a parallel-group DeployStep with the named sub-steps so
+// StartGroup pre-registers the matching sub-addr buffers.
+func parallelGroup(name string, subNames ...string) config.DeployStep {
+	subs := make([]config.DeployStep, len(subNames))
+	for i, n := range subNames {
+		subs[i] = config.DeployStep{Name: n}
+	}
+	return config.DeployStep{
+		Name:     name,
+		Parallel: &config.ParallelGroup{Steps: subs},
+	}
+}
+
+func TestPlainReporter_NonTTY_FinishStep_DumpsBufferedOutput(t *testing.T) {
+	r, buf := newBufReporter()
+
+	group := parallelGroup("dumps", "main", "stock")
+	r.StartGroup("init/dumps", group, []int{1, 2}, 2)
+	r.StartStep("init/main", config.DeployStep{Name: "main"}, 1, 2)
+	r.SubStepOutput("init/main", "downloading…")
+	r.SubStepOutput("init/main", "done")
+	r.FinishStep("init/main", config.DeployStep{Name: "main"}, 1, 2)
+
+	got := clean(buf.String())
+	wantLines := []string{
+		"  · Parallel group: init/dumps (2 steps)",
+		"  · [1/2] init/main",
+		"  ✓ [1/2] Done: init/main",
+		"  ───── output ─────",
+		"downloading…",
+		"done",
+		"  ──────────────────",
+	}
+	gotLines := lines(got)
+	if len(gotLines) != len(wantLines) {
+		t.Fatalf("FinishStep dump: got %d lines, want %d\ngot:\n%s",
+			len(gotLines), len(wantLines), strings.Join(gotLines, "\n"))
+	}
+	for i, want := range wantLines {
+		if gotLines[i] != want {
+			t.Errorf("line %d:\n got:  %q\n want: %q", i, gotLines[i], want)
+		}
+	}
+}
+
+func TestPlainReporter_NonTTY_InterleavedCompletion_KeepsBuffersDistinct(t *testing.T) {
+	r, buf := newBufReporter()
+
+	group := parallelGroup("dumps", "alpha", "beta")
+	r.StartGroup("init/dumps", group, []int{1, 2}, 2)
+	r.StartStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 2)
+	r.StartStep("init/beta", config.DeployStep{Name: "beta"}, 2, 2)
+	r.SubStepOutput("init/alpha", "alpha-1")
+	r.SubStepOutput("init/beta", "beta-1")
+	r.SubStepOutput("init/alpha", "alpha-2")
+	// beta finishes first
+	r.FinishStep("init/beta", config.DeployStep{Name: "beta"}, 2, 2)
+	r.FinishStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 2)
+
+	got := clean(buf.String())
+	// beta's block must precede alpha's block and contain only beta-1.
+	betaIdx := strings.Index(got, "✓ [2/2] Done: init/beta")
+	alphaIdx := strings.Index(got, "✓ [1/2] Done: init/alpha")
+	if betaIdx == -1 || alphaIdx == -1 || betaIdx >= alphaIdx {
+		t.Fatalf("expected beta block before alpha block; got:\n%s", got)
+	}
+	betaBlock := got[betaIdx:alphaIdx]
+	alphaBlock := got[alphaIdx:]
+	if !strings.Contains(betaBlock, "beta-1") {
+		t.Errorf("beta block missing beta-1:\n%s", betaBlock)
+	}
+	if strings.Contains(betaBlock, "alpha-1") || strings.Contains(betaBlock, "alpha-2") {
+		t.Errorf("beta block leaked alpha output:\n%s", betaBlock)
+	}
+	if !strings.Contains(alphaBlock, "alpha-1") || !strings.Contains(alphaBlock, "alpha-2") {
+		t.Errorf("alpha block missing alpha lines:\n%s", alphaBlock)
+	}
+	if strings.Contains(alphaBlock, "beta-1") {
+		t.Errorf("alpha block leaked beta output:\n%s", alphaBlock)
+	}
+}
+
+func TestPlainReporter_NonTTY_FailStep_DumpsBufferThenError(t *testing.T) {
+	r, buf := newBufReporter()
+	r.StartPipeline("deploy", 2)
+
+	group := parallelGroup("dumps", "main")
+	r.StartGroup("init/dumps", group, []int{1}, 1)
+	r.StartStep("init/main", config.DeployStep{Name: "main"}, 1, 1)
+	r.SubStepOutput("init/main", "partial output")
+	r.FailStep("init/main", config.DeployStep{Name: "main"}, 1, 1, errors.New("exit status 7"))
+
+	got := clean(buf.String())
+	gotLines := lines(got)
+	wantOrder := []string{
+		"  ✗ [1/1] Failed: init/main",
+		"  ───── output ─────",
+		"partial output",
+		"  ──────────────────",
+		"  exit status 7",
+	}
+	// Find the failed-line index and check the following block.
+	startIdx := -1
+	for i, l := range gotLines {
+		if l == wantOrder[0] {
+			startIdx = i
+			break
+		}
+	}
+	if startIdx < 0 {
+		t.Fatalf("missing failed line; output:\n%s", got)
+	}
+	if startIdx+len(wantOrder) > len(gotLines) {
+		t.Fatalf("not enough trailing lines; output:\n%s", got)
+	}
+	for i, want := range wantOrder {
+		if gotLines[startIdx+i] != want {
+			t.Errorf("line %d:\n got:  %q\n want: %q", i, gotLines[startIdx+i], want)
+		}
+	}
+}
+
+func TestPlainReporter_NonTTY_SkipStep_NoBufferDump(t *testing.T) {
+	r, buf := newBufReporter()
+
+	group := parallelGroup("dumps", "main")
+	r.StartGroup("init/dumps", group, []int{1}, 1)
+	r.SkipStep("init/main", config.DeployStep{Name: "main"}, 1, 1, "when: false")
+
+	got := clean(buf.String())
+	if !strings.Contains(got, "◎ [1/1] Skipped: init/main (when: false)") {
+		t.Errorf("missing skip line; got:\n%s", got)
+	}
+	if strings.Contains(got, "───── output ─────") {
+		t.Errorf("skip must not dump output block; got:\n%s", got)
+	}
+}
+
+func TestPlainReporter_NonTTY_FinishGroup_PrintsCountsAndElapsed(t *testing.T) {
+	r, buf := newBufReporter()
+
+	group := parallelGroup("dumps", "a", "b", "c")
+	r.StartGroup("init/dumps", group, []int{1, 2, 3}, 3)
+	r.FinishStep("init/a", config.DeployStep{Name: "a"}, 1, 3)
+	r.FailStep("init/b", config.DeployStep{Name: "b"}, 2, 3, errors.New("nope"))
+	r.SkipStep("init/c", config.DeployStep{Name: "c"}, 3, 3, "when: false")
+	r.FinishGroup("init/dumps", config.DeployStep{Name: "dumps"}, false)
+
+	got := clean(buf.String())
+	want := "  ✗ Parallel group failed: init/dumps (1 ok, 1 failed, 1 skipped of 3, 0s)"
+	if !strings.Contains(got, want) {
+		t.Errorf("missing aggregate line %q; got:\n%s", want, got)
+	}
+}
+
+func TestPlainReporter_NonTTY_SubStepOutput_LazyEntryWhenStartGroupSkipped(t *testing.T) {
+	r, buf := newBufReporter()
+	// No StartGroup; defensive lazy creation must not panic.
+	r.SubStepOutput("orphan/sub", "stray line")
+	r.FinishStep("orphan/sub", config.DeployStep{Name: "sub"}, 1, 1)
+
+	got := clean(buf.String())
+	if !strings.Contains(got, "stray line") {
+		t.Errorf("expected lazy buffer to flush on FinishStep; got:\n%s", got)
 	}
 }
 

@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"sync"
@@ -37,17 +38,54 @@ const timestampLayout = "06-01-02 15:04:05"
 //
 // SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
 // need to yield or reclaim the terminal.
+// subStepEntry holds buffered output for a single parallel sub-step in the
+// non-TTY PlainReporter path. The group association lets FinishStep/FailStep
+// update the parent group's aggregate counters.
+type subStepEntry struct {
+	groupAddr string
+	buf       bytes.Buffer
+}
+
+// groupEntry tracks per-parallel-group aggregate state for the FinishGroup
+// summary line (success counts + elapsed).
+type groupEntry struct {
+	startTime time.Time
+	total     int
+	ok        int
+	failed    int
+	skipped   int
+}
+
+// parallelOutputTopBar is the separator emitted before a buffered sub-step's
+// captured output, and parallelOutputBotBar follows it.
+const (
+	parallelOutputTopBar = "  ───── output ─────"
+	parallelOutputBotBar = "  ──────────────────"
+)
+
 type PlainReporter struct {
 	mu        sync.Mutex // guards every write to w and any future shared state
 	w         *render.Writer
 	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline
 	now       func() time.Time // injectable clock; defaults to time.Now
+
+	// tty selects the parallel-group rendering branch. false = Task 8 buffered
+	// non-TTY path; true = Task 9 live bubbletea view (not yet implemented —
+	// falls through to the basic Task 5 header/footer stub for now).
+	tty bool
+
+	// subs holds buffered output for parallel sub-steps that have not yet
+	// completed. Keyed by full sub-step address.
+	subs map[string]*subStepEntry
+
+	// groups holds per-parallel-group aggregate state for FinishGroup.
+	groups map[string]*groupEntry
 }
 
 // NewPlainReporter creates a PlainReporter that writes to w.
 func NewPlainReporter(w *render.Writer) *PlainReporter {
-	return &PlainReporter{w: w, now: time.Now}
+	return &PlainReporter{w: w, now: time.Now, tty: stdoutIsTTY()}
 }
 
 // StartPipeline stores the pipeline name and records the start time for
@@ -118,7 +156,8 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 //
 //	[ts]   ◎ [N/M] Skipped: <stepAddr> (<reason>)
 //
-// Untracked steps (index == 0, total == 0) produce no output.
+// Untracked steps (index == 0, total == 0) produce no output. A parallel
+// sub-step skip discards any (likely empty) buffered output without dumping.
 func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int, total int, reason string) {
 	if index == 0 && total == 0 {
 		return
@@ -130,13 +169,17 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	} else {
 		r.emit(render.Yellow, fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, stepAddr, reason))
 	}
+	r.dropSubStepLocked(stepAddr, statusSkipped)
 }
 
 // FinishStep prints a success line when a step completes:
 //
 //	[ts]   ✓ [N/M] Done: <stepAddr>
 //
-// Untracked steps (index == 0, total == 0) produce no output.
+// Untracked steps (index == 0, total == 0) produce no output. When the step
+// is a parallel sub-step (registered by StartGroup) in non-TTY mode, any
+// buffered output captured via SubStepOutput is dumped between separator bars
+// after the status line.
 func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index int, total int) {
 	if index == 0 && total == 0 {
 		return
@@ -148,6 +191,7 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	} else {
 		r.emit(render.Green, fmt.Sprintf("  %s Done: %s", iconDone, stepAddr))
 	}
+	r.flushSubStepLocked(stepAddr, statusOk)
 }
 
 // FailStep prints error lines when a step fails:
@@ -158,9 +202,27 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 // The label is derived from the pipeline name set by StartPipeline (e.g.
 // "deploy" → "Deploy failed…", "reset" → "Reset failed…"). Falls back to
 // "Pipeline" if StartPipeline was not called.
-func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, _ int, _ int, err error) {
+func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int, total int, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// Parallel sub-step failure in non-TTY mode: print compact status line,
+	// dump captured output between separator bars, then the error.
+	if !r.tty {
+		if _, isSub := r.subs[stepAddr]; isSub {
+			if index > 0 {
+				r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, index, total, stepAddr))
+			} else {
+				r.emit(render.Red, fmt.Sprintf("  %s Failed: %s", iconFailed, stepAddr))
+			}
+			r.flushSubStepLocked(stepAddr, statusFailed)
+			if err != nil {
+				r.emit(render.Red, "  "+err.Error())
+			}
+			return
+		}
+	}
+
 	label := r.name
 	if label == "" {
 		label = "pipeline"
@@ -231,8 +293,9 @@ func (r *PlainReporter) ResumeAfterExec() {}
 //	[ts]   · Parallel group: <groupAddr> (<n> steps)
 //
 // Per-sub-step lifecycle events still flow through StartStep / FinishStep /
-// FailStep / SkipStep; this method only signals the group boundary. Task 8/9
-// will replace this stub with buffered / live rendering.
+// FailStep / SkipStep; in non-TTY mode this also pre-registers a per-sub-step
+// output buffer and records the group's start time / total for the
+// FinishGroup summary line.
 func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, _ int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -241,20 +304,149 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 		label += ": " + group.Description
 	}
 	r.emit(render.Blue, fmt.Sprintf("  %s Parallel group: %s (%d steps)", iconRunning, label, len(subIndices)))
-}
 
-// FinishGroup prints a one-line footer for a parallel group. success is true
-// when every sub-step succeeded (after accounting for continue_on_error).
-func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, success bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if success {
-		r.emit(render.Green, fmt.Sprintf("  %s Parallel group done: %s", iconDone, groupAddr))
-	} else {
-		r.emit(render.Red, fmt.Sprintf("  %s Parallel group failed: %s", iconFailed, groupAddr))
+	if r.tty {
+		return
+	}
+	if r.subs == nil {
+		r.subs = make(map[string]*subStepEntry)
+	}
+	if r.groups == nil {
+		r.groups = make(map[string]*groupEntry)
+	}
+	r.groups[groupAddr] = &groupEntry{
+		startTime: r.now(),
+		total:     len(subIndices),
+	}
+	// Pre-register each sub-step buffer. Sub-step addresses share the group's
+	// phase prefix (everything up to the last '/' segment of groupAddr).
+	phasePrefix := groupAddr
+	if i := strings.LastIndex(groupAddr, "/"); i >= 0 {
+		phasePrefix = groupAddr[:i]
+	}
+	if group.Parallel != nil {
+		for _, sub := range group.Parallel.Steps {
+			subAddr := phasePrefix + "/" + sub.Name
+			r.subs[subAddr] = &subStepEntry{groupAddr: groupAddr}
+		}
 	}
 }
 
-// SubStepOutput is a no-op in the Task 5 stub. Task 8/9 will route per-sub-step
-// output through this method into buffered/live displays.
-func (r *PlainReporter) SubStepOutput(_ string, _ string) {}
+// FinishGroup prints a one-line footer for a parallel group. success is true
+// when every sub-step succeeded (after accounting for continue_on_error). In
+// non-TTY mode the footer also carries aggregate ok/failed/skipped counts and
+// the elapsed time since StartGroup.
+func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, success bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	icon := iconDone
+	color := render.Green
+	verb := "done"
+	if !success {
+		icon = iconFailed
+		color = render.Red
+		verb = "failed"
+	}
+
+	msg := fmt.Sprintf("  %s Parallel group %s: %s", icon, verb, groupAddr)
+	if !r.tty {
+		if g, ok := r.groups[groupAddr]; ok {
+			elapsed := formatElapsed(r.now().Sub(g.startTime))
+			msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped of %d, %s)",
+				g.ok, g.failed, g.skipped, g.total, elapsed)
+			delete(r.groups, groupAddr)
+		}
+	}
+	r.emit(color, msg)
+}
+
+// SubStepOutput appends a single line of captured sub-step output to the
+// non-TTY mode's per-sub-step buffer. Never writes to the terminal directly;
+// the buffer is dumped between separator bars by FinishStep / FailStep. In
+// TTY mode (Task 9) this is a no-op; the live view consumes events
+// independently.
+//
+// If subAddr is unknown (e.g. StartGroup was skipped due to an upstream bug
+// or a sequential test calls SubStepOutput) the entry is created on the fly
+// so we never panic.
+func (r *PlainReporter) SubStepOutput(subAddr string, line string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.tty {
+		return
+	}
+	if r.subs == nil {
+		r.subs = make(map[string]*subStepEntry)
+	}
+	entry, ok := r.subs[subAddr]
+	if !ok {
+		entry = &subStepEntry{}
+		r.subs[subAddr] = entry
+	}
+	entry.buf.WriteString(line)
+	entry.buf.WriteByte('\n')
+}
+
+// subStepStatus categorises a sub-step's outcome for group counter updates.
+type subStepStatus int
+
+const (
+	statusOk subStepStatus = iota
+	statusFailed
+	statusSkipped
+)
+
+// flushSubStepLocked dumps the captured output for a parallel sub-step (if
+// any) between separator bars, updates the group counters, and frees the
+// buffer. Caller must hold r.mu. No-op in TTY mode or for non-parallel
+// addresses.
+func (r *PlainReporter) flushSubStepLocked(addr string, status subStepStatus) {
+	if r.tty {
+		return
+	}
+	entry, ok := r.subs[addr]
+	if !ok {
+		return
+	}
+	if entry.buf.Len() > 0 {
+		r.emit(render.Gray, parallelOutputTopBar)
+		_, _ = fmt.Fprint(r.w.Writer(), entry.buf.String())
+		r.emit(render.Gray, parallelOutputBotBar)
+	}
+	r.updateGroupCounterLocked(entry.groupAddr, status)
+	delete(r.subs, addr)
+}
+
+// dropSubStepLocked discards a parallel sub-step's buffered output without
+// dumping it (used for skipped sub-steps where no output is expected) and
+// updates the group counters. Caller must hold r.mu.
+func (r *PlainReporter) dropSubStepLocked(addr string, status subStepStatus) {
+	if r.tty {
+		return
+	}
+	entry, ok := r.subs[addr]
+	if !ok {
+		return
+	}
+	r.updateGroupCounterLocked(entry.groupAddr, status)
+	delete(r.subs, addr)
+}
+
+func (r *PlainReporter) updateGroupCounterLocked(groupAddr string, status subStepStatus) {
+	if groupAddr == "" {
+		return
+	}
+	g, ok := r.groups[groupAddr]
+	if !ok {
+		return
+	}
+	switch status {
+	case statusOk:
+		g.ok++
+	case statusFailed:
+		g.failed++
+	case statusSkipped:
+		g.skipped++
+	}
+}
