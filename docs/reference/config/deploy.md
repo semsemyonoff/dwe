@@ -721,8 +721,7 @@ Validation runs at `devbox validate` and at plan resolution; either path catches
 
 ### Reporter and logging
 
-- **TTY**: a per-group bubbletea live view (`internal/pipeline/parallel_view.go`) renders a spinner block with the latest output line per sub-step. After the group finishes, the live view is replaced with a one-shot summary block (icon, elapsed, sub-step name).
-- **Non-TTY** (CI, piped stdout): sub-step output is buffered per sub-step and dumped between `───── output ─────` separators when each sub-step finishes. `StartStep`, `FinishStep`, `FailStep`, and `SkipStep` for sub-steps are routed through the same `· [N/M] ...` formatter as leaf steps.
+- **Reporter output**: sub-step output is buffered per sub-step and dumped between `───── output ─────` separators when each sub-step finishes. `StartStep`, `FinishStep`, `FailStep`, and `SkipStep` for sub-steps are routed through the same `· [N/M] ...` formatter as leaf steps. (A previous bubbletea live spinner was removed: with `tea.WithInput(bytes.NewReader(nil))` the terminal stayed in cooked mode while bubbletea still enabled kitty-keyboard mode, which echoed capability-query responses back to the screen and prevented Ctrl+C from generating SIGINT.)
 - **Per-sub-step log files**: `.devbox/logs/parallel/<pipeline>/<group>/<sub>.log` captures only that sub-step's output. The global pipeline log (`.devbox/logs/<pipeline>.log`) keeps receiving everything interleaved.
 - **`childIO`** never writes to `os.Stdout` / `os.Stderr` directly in parallel mode (`ActionContext.Parallel = true`); a PTY is never allocated.
 

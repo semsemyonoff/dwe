@@ -25,7 +25,6 @@ func newBufReporter() (*PlainReporter, *bytes.Buffer) {
 	w := render.NewWriter(buf)
 	r := NewPlainReporter(w)
 	r.now = func() time.Time { return fixedTime }
-	r.tty = false // force deterministic non-TTY rendering for Task 8 paths
 	return r, buf
 }
 
