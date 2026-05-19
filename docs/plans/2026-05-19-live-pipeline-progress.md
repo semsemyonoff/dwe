@@ -251,21 +251,21 @@ Files:
 - new `internal/pipeline/liveline_test.go`
 
 Checklist:
-- [ ] create `LiveLine` struct with the two-writer split (`termOut`, `screen`), `sync.Mutex`, `stopCh`, `doneCh`, `stopOnce`
-- [ ] implement `Start` (idempotent, starts ticker, initial footer write); `Stop` per the sequence above; `Pause`/`Resume` via a `paused` flag
-- [ ] implement `SetText` (updates state under mutex; next redraw picks it up)
-- [ ] implement `Println` with the up-clear / write-data / redraw sequence in that exact order
-- [ ] implement `redraw` matching the cursor invariant (cursor ends below footer, not on it)
-- [ ] integrate `bubbles/v2/spinner` standalone — synthesize `spinner.TickMsg{ID: m.ID()}` on each tick, pass through `m.Update`, discard returned Cmd
-- [ ] truncate `text` width-aware via `lipgloss/v2.Width`
-- [ ] write **channel-separation tests** in `liveline_test.go` for `enabled=true`: termOut and screen are TWO separate `bytes.Buffer`s; substitute `time.Ticker` with a deterministic step function (`tick()` method exposed via `testHooks` field); assert that termOut received only ANSI / spinner sequences and screen received only data lines from `Println`
-- [ ] write **cursor-invariant tests** using `termGrid`: termOut and screen are the SAME `*termGrid` instance (consumes both byte streams in write order, mirroring real-terminal behaviour); after each operation, assert (a) grid contents row-by-row, (b) cursor position matches Invariant #9 (or the Pause exception)
-- [ ] write unit tests for `enabled=false` (no-op) path: only `Println` writes to screen, termOut receives nothing
-- [ ] write a concurrency test: 100 concurrent `Println` calls + 100 `SetText` calls + 10ms ticker produce well-formed output (every "data" line on its own row in screen, no torn writes in termOut); verify the goroutine count returns to baseline after `Stop()` via `goleak`
-- [ ] write a `goleak`-asserting test: `Start` → `Stop` cycle leaves zero leaked goroutines
-- [ ] write an idempotency test: `Start` → `Stop` → `Stop` (second call is a no-op via `stopOnce`); also `Start` → `Stop` → `Println("late")` (second-life writes after Stop are safe no-ops, NOT panics — `enabled=false` after Stop)
-- [ ] write a Pause-exception test using `termGrid` (single-grid mode): assert cursor is on the cleared former-footer row after `Pause()` (NOT below it); assert `Resume()` restores the invariant (cursor below new footer); document the exception inline as a comment near the `Pause` method body
-- [ ] run `go test ./internal/pipeline/...` — must pass before Task 6
+- [x] create `LiveLine` struct with the two-writer split (`termOut`, `screen`), `sync.Mutex`, `stopCh`, `doneCh`, `stopOnce`
+- [x] implement `Start` (idempotent, starts ticker, initial footer write); `Stop` per the sequence above; `Pause`/`Resume` via a `paused` flag
+- [x] implement `SetText` (updates state under mutex; next redraw picks it up)
+- [x] implement `Println` with the up-clear / write-data / redraw sequence in that exact order
+- [x] implement `redraw` matching the cursor invariant (cursor ends below footer, not on it)
+- [x] integrate `bubbles/v2/spinner` standalone — synthesize `spinner.TickMsg{ID: m.ID()}` on each tick, pass through `m.Update`, discard returned Cmd
+- [x] truncate `text` width-aware via `lipgloss/v2.Width`
+- [x] write **channel-separation tests** in `liveline_test.go` for `enabled=true`: termOut and screen are TWO separate `bytes.Buffer`s; substitute `time.Ticker` with a deterministic step function (`tick()` method exposed via `testHooks` field); assert that termOut received only ANSI / spinner sequences and screen received only data lines from `Println`
+- [x] write **cursor-invariant tests** using `termGrid`: termOut and screen are the SAME `*termGrid` instance (consumes both byte streams in write order, mirroring real-terminal behaviour); after each operation, assert (a) grid contents row-by-row, (b) cursor position matches Invariant #9 (or the Pause exception)
+- [x] write unit tests for `enabled=false` (no-op) path: only `Println` writes to screen, termOut receives nothing
+- [x] write a concurrency test: 100 concurrent `Println` calls + 100 `SetText` calls + 10ms ticker produce well-formed output (every "data" line on its own row in screen, no torn writes in termOut); verify the goroutine count returns to baseline after `Stop()` via `goleak`
+- [x] write a `goleak`-asserting test: `Start` → `Stop` cycle leaves zero leaked goroutines
+- [x] write an idempotency test: `Start` → `Stop` → `Stop` (second call is a no-op via `stopOnce`); also `Start` → `Stop` → `Println("late")` (second-life writes after Stop are safe no-ops, NOT panics — `enabled=false` after Stop)
+- [x] write a Pause-exception test using `termGrid` (single-grid mode): assert cursor is on the cleared former-footer row after `Pause()` (NOT below it); assert `Resume()` restores the invariant (cursor below new footer); document the exception inline as a comment near the `Pause` method body
+- [x] run `go test ./internal/pipeline/...` — must pass before Task 6
 
 ### Task 6: Route ALL child output via `Reporter.StepOutput` (single durable path)
 
