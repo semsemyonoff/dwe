@@ -201,6 +201,9 @@ type TemplateData struct {
 // the source. It enforces that dest stays inside absHubDir and that absHubDir
 // stays inside absRoot (via symlink checks and boundaries).
 func RenderTemplateFile(projectRoot, packName, rel string, data TemplateData, dest, absHubDir, absRoot string) (bool, error) {
+	if data.Cfg == nil {
+		return false, errors.New("ai: nil cfg")
+	}
 	sourcePath, fromOverride, err := packroot.Resolve(projectRoot, "ai", packName, rel)
 	if err != nil {
 		return false, fmt.Errorf("resolve template %s: %w", rel, err)

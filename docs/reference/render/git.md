@@ -149,7 +149,7 @@ Go's `text/template` resolves dot-segments only when each segment matches `[A-Za
 
 ```gotemplate
 JIRA_PREFIX="{{ .Cfg.Raw.git.project_prefix }}"                  {{- /* dot — identifier-safe keys */ -}}
-TOKEN="{{ index .Cfg.Raw "my-tool" "api-key" }}"                {{- /* index — hyphenated keys */ -}}
+TOKEN='{{ index .Cfg.Raw "my-tool" "api-key" }}'                {{- /* index — hyphenated keys */ -}}
 {{- $hooks := index .Cfg.Raw.git.hooks .Service }}{{ index $hooks "pre_commit" }}
 ```
 

@@ -122,6 +122,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 		Runtime: config.RuntimeConfig{
 			Ports: config.RuntimePorts{"app": 8080},
 		},
+		Cfg: &config.DevboxConfig{Raw: map[string]any{}},
 	}
 
 	if _, err := ide.RenderTemplateFile(projectRoot, "test", "devcontainer.json.tmpl", data, "devcontainer.json", hubDir, projectRoot); err != nil {
@@ -161,6 +162,7 @@ func TestRenderIDETemplateFile_createsParentDirs(t *testing.T) {
 			DirInternal:     "/workspace",
 			WorkDirInternal: "/workspace/src",
 		},
+		Cfg: &config.DevboxConfig{Raw: map[string]any{}},
 	}
 	dest := filepath.Join("nested", "deep", "file.json")
 	if _, err := ide.RenderTemplateFile(projectRoot, "test", "launch.json.tmpl", data, dest, hubDir, projectRoot); err != nil {
@@ -181,7 +183,7 @@ func TestRenderIDETemplateFile_serviceDirContainment(t *testing.T) {
 	writeIDEPackFile(t, projectRoot, "x.tmpl", "{}")
 
 	dest := "../sibling/file.json"
-	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{}, dest, hubDir, projectRoot)
+	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, dest, hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when dest escapes service dir")
 	}
@@ -203,7 +205,7 @@ func TestRenderIDETemplateFile_symlinkDir(t *testing.T) {
 	}
 	writeIDEPackFile(t, projectRoot, "x.tmpl", "{}")
 
-	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{}, ".devcontainer/devcontainer.json", hubDir, projectRoot)
+	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, ".devcontainer/devcontainer.json", hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when destination dir is a symlink outside project root")
 	}
@@ -231,7 +233,7 @@ func TestRenderIDETemplateFile_symlinkFile(t *testing.T) {
 	}
 	writeIDEPackFile(t, projectRoot, "x.tmpl", "{}")
 
-	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{}, ".devcontainer/devcontainer.json", absHubDir, projectRoot)
+	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, ".devcontainer/devcontainer.json", absHubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when destination file is a symlink")
 	}
@@ -256,7 +258,7 @@ func TestRenderIDETemplateFile_overrideHit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fromOverride, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", ide.TemplateData{}, "settings.json", hubDir, projectRoot)
+	fromOverride, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, "settings.json", hubDir, projectRoot)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}

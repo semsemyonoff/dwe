@@ -270,6 +270,9 @@ type TemplateData struct {
 // absHubDir. Returns fromOverride=true when the sibling override pack supplied
 // the source.
 func RenderTemplateFile(projectRoot, packName, rel string, data TemplateData, dest, absHubDir, absRoot string) (bool, error) {
+	if data.Cfg == nil {
+		return false, errors.New("ide: nil cfg")
+	}
 	sourcePath, fromOverride, err := packroot.Resolve(projectRoot, "ide", packName, rel)
 	if err != nil {
 		return false, fmt.Errorf("resolve template %s: %w", rel, err)

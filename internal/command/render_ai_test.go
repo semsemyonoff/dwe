@@ -767,6 +767,7 @@ func TestRenderAgentsTemplateFile_fresh(t *testing.T) {
 	data := aipkg.TemplateData{
 		Project: config.ProjectConfig{Name: "myproject"},
 		Service: "api",
+		Cfg:     &config.DevboxConfig{Raw: map[string]any{}},
 	}
 
 	dest := "AGENTS.md"
@@ -793,7 +794,7 @@ func TestRenderAgentsTemplateFile_idempotent(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "Content: {{ .Service }}")
-	data := aipkg.TemplateData{Service: "api"}
+	data := aipkg.TemplateData{Service: "api", Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
 	dest := "AGENTS.md"
 
 	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
@@ -834,7 +835,7 @@ func TestRenderAgentsTemplateFile_nestedPath(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "Nested")
-	data := aipkg.TemplateData{}
+	data := aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
 	dest := ".claude/AGENTS.md"
 
 	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
@@ -855,7 +856,7 @@ func TestRenderAgentsTemplateFile_escapingDest(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "test")
-	data := aipkg.TemplateData{}
+	data := aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
 	dest := "../escape.md"
 
 	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot)
@@ -883,7 +884,7 @@ func TestRenderAgentsTemplateFile_symlinkInDestDir(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "test")
-	data := aipkg.TemplateData{}
+	data := aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
 	dest := ".claude/AGENTS.md"
 
 	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot)
@@ -912,7 +913,7 @@ func TestRenderAgentsTemplateFile_overrideHit(t *testing.T) {
 		t.Fatalf("write override: %v", err)
 	}
 
-	fromOverride, err := aipkg.RenderTemplateFile(projectRoot, "test", "foo.tmpl", aipkg.TemplateData{}, "AGENTS.md", hubDir, projectRoot)
+	fromOverride, err := aipkg.RenderTemplateFile(projectRoot, "test", "foo.tmpl", aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, "AGENTS.md", hubDir, projectRoot)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
