@@ -143,15 +143,15 @@ Implementation:
 
 Recursively resolve sub-steps and reject configurations that the runtime cannot honour. Validation errors are exported sentinels so the `validate` package (Task 11) can match with `errors.Is` instead of string-matching.
 
-- [ ] add `ResolvedParallel struct { MaxConcurrent int; FailFast bool; Steps []ResolvedStep }` in `internal/pipeline/step.go` and a `Parallel *ResolvedParallel` field on `ResolvedStep`
-- [ ] define exported sentinel errors in `internal/pipeline/resolve.go`: `ErrNestedParallel`, `ErrUnnamedSubStep`, `ErrInteractiveInParallel`, `ErrEmptyParallelSteps`, `ErrDuplicateStepName` — wrap with context using `fmt.Errorf("...: %w", ErrXxx)` at the call site so callers retain detail while staying `errors.Is`-matchable
-- [ ] extend `ResolvePhaseSteps` in `internal/pipeline/resolve.go` so that when a step has a non-nil `Parallel`:
+- [x] add `ResolvedParallel struct { MaxConcurrent int; FailFast bool; Steps []ResolvedStep }` in `internal/pipeline/step.go` and a `Parallel *ResolvedParallel` field on `ResolvedStep`
+- [x] define exported sentinel errors in `internal/pipeline/resolve.go`: `ErrNestedParallel`, `ErrUnnamedSubStep`, `ErrInteractiveInParallel`, `ErrEmptyParallelSteps`, `ErrDuplicateStepName` — wrap with context using `fmt.Errorf("...: %w", ErrXxx)` at the call site so callers retain detail while staying `errors.Is`-matchable
+- [x] extend `ResolvePhaseSteps` in `internal/pipeline/resolve.go` so that when a step has a non-nil `Parallel`:
   - recursively resolve each sub-step (template `when` evaluated, builtin/files_gate validated, runtime `when` classified)
   - default `MaxConcurrent` to `min(runtime.NumCPU(), len(steps))` when `≤ 0`; cap to `len(steps)` when larger
   - default `FailFast` to `true` when `nil`
   - **propagate group `skip_confirm` into each sub-step**: OR the group's `SkipConfirm` into each sub-step's `SkipConfirm` at resolve time (one assignment per sub-step; the executor then sees plain leaf-style sub-steps and needs no group lookup). The sub-step's own `skip_confirm: false` cannot un-set the inherited true — inheritance is monotonic OR, not override. Document this in the YAML reference.
   - return a single `ResolvedStep` with `Parallel` populated and **no** leaf-step fields
-- [ ] enforce the rules — each returns the matching sentinel wrapped with offending step name:
+- [x] enforce the rules — each returns the matching sentinel wrapped with offending step name:
   - sub-step has its own non-nil `Parallel` → `ErrNestedParallel`
   - sub-step has empty `Name` → `ErrUnnamedSubStep`
   - **sub-step names must be unique within the enclosing phase across all groups + leaf steps** → `ErrDuplicateStepName`. *Reason*: `FileRecorder` keys journal entries by `(phase, step.Name)` only (`internal/pipeline/file_recorder.go:167-265`), and the deploy skip-decider looks up steps by `rs.Step.Name` (`internal/command/deploy.go:465,479`). Two parallel groups in one phase both containing a sub-step named `download` would collide. Validate at plan time rather than re-keying the journal.
@@ -165,8 +165,8 @@ Recursively resolve sub-steps and reject configurations that the runtime cannot 
       Skip the recursion entirely when registry is nil — same nil-tolerance pattern as gates.
   - `parallel.steps` < 2 → `ErrEmptyParallelSteps` (also covers the empty case from Task 1)
   - registry-nil tolerance preserved (gate / command / workflow-walk checks skipped, mirroring current behaviour)
-- [ ] write table-driven tests in `internal/pipeline/resolve_test.go`: happy path with 2 sub-steps; defaulting of `MaxConcurrent` / `FailFast`; explicit `max_concurrent` capping; rejection of nested parallel; rejection of unnamed sub-step; rejection of duplicate sub-step names within a phase (cross-group collision, leaf+group collision); rejection of interactive confirmation via `confirmation: true`, via `builtin confirm`, and via workflow `WorkflowStep.Confirm` non-empty plus via recursive `WorkflowStep.Command` reference into a confirming command/workflow; acceptance when `skip_confirm: true` is set on either the sub-step or the parent group; **assert** that group-level `skip_confirm: true` flips each sub-step's resolved `SkipConfirm` to true (covers the OR inheritance). Each rejection test must assert `errors.Is(err, ErrXxx)`.
-- [ ] run `go test ./internal/pipeline/...` (excluding executor tests that haven't been added yet) — must pass before next task
+- [x] write table-driven tests in `internal/pipeline/resolve_test.go`: happy path with 2 sub-steps; defaulting of `MaxConcurrent` / `FailFast`; explicit `max_concurrent` capping; rejection of nested parallel; rejection of unnamed sub-step; rejection of duplicate sub-step names within a phase (cross-group collision, leaf+group collision); rejection of interactive confirmation via `confirmation: true`, via `builtin confirm`, and via workflow `WorkflowStep.Confirm` non-empty plus via recursive `WorkflowStep.Command` reference into a confirming command/workflow; acceptance when `skip_confirm: true` is set on either the sub-step or the parent group; **assert** that group-level `skip_confirm: true` flips each sub-step's resolved `SkipConfirm` to true (covers the OR inheritance). Each rejection test must assert `errors.Is(err, ErrXxx)`.
+- [x] run `go test ./internal/pipeline/...` (excluding executor tests that haven't been added yet) — must pass before next task
 
 ### Task 3: Context propagation through runners, builtins, and executor entry
 

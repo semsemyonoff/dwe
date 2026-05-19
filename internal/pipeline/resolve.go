@@ -1,7 +1,9 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
+	"runtime"
 
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
@@ -9,7 +11,33 @@ import (
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/filesgate/spec"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
+)
+
+// Exported sentinel errors for parallel-group plan-time validation. Callers
+// (validate package, command layer) match these with errors.Is.
+var (
+	// ErrNestedParallel is returned when a parallel group contains a sub-step
+	// that itself declares a parallel block. Nested parallel groups are not
+	// supported in v1.
+	ErrNestedParallel = errors.New("nested parallel groups are not supported")
+	// ErrUnnamedSubStep is returned when a parallel sub-step is missing the
+	// required `name` field. Names are required because the journal and
+	// skip-decider key by (phase, step.Name).
+	ErrUnnamedSubStep = errors.New("parallel sub-step must have a name")
+	// ErrInteractiveInParallel is returned when a parallel sub-step would
+	// require an interactive prompt at runtime without skip_confirm set.
+	ErrInteractiveInParallel = errors.New("interactive prompt in parallel sub-step requires skip_confirm: true")
+	// ErrEmptyParallelSteps is returned when a parallel group declares fewer
+	// than two sub-steps. Single-element groups should be expressed as leaf
+	// steps.
+	ErrEmptyParallelSteps = errors.New("parallel group must declare at least two sub-steps")
+	// ErrDuplicateStepName is returned when two steps in the same phase share
+	// the same name (including sub-steps across multiple parallel groups).
+	// The journal keys entries by (phase, step.Name); collisions cause
+	// incorrect resume behaviour.
+	ErrDuplicateStepName = errors.New("duplicate step name in phase")
 )
 
 // ResolvePhaseSteps resolves steps for a single phase, evaluating when conditions.
@@ -21,10 +49,11 @@ import (
 //     own runtime when condition. The phase condition is stored in PhaseWhen and
 //     evaluated before each such step at execution time.
 //
-// reg (registry) is used to validate files_gate directives if present.
-// When reg is nil, files_gate validation is skipped; this is tolerated for
-// internal-tool and test callers. Runtime callers (deploy run, reset run, etc.)
-// MUST pass a non-nil registry.
+// reg (registry) is used to validate files_gate directives if present, and to
+// walk workflow command references for interactive-prompt detection inside
+// parallel groups. When reg is nil, both checks are skipped; this is tolerated
+// for internal-tool and test callers. Runtime callers (deploy run, reset run,
+// etc.) MUST pass a non-nil registry.
 func ResolvePhaseSteps(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string) ([]ResolvedStep, error) {
 	var phaseRuntimeWhen *condition.Condition
 	if phase.When != nil {
@@ -47,69 +76,238 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, reg *registry.Registry, phase c
 
 	var result []ResolvedStep
 	for _, step := range phase.Steps {
-		var stepRuntimeWhen *condition.Condition
-		if step.When != nil {
-			if step.When.IsRuntime() {
-				stepRuntimeWhen = step.When
-				if step.Type == "builtin" {
-					if err := builtin.Validate(step.Cmd, step.With); err != nil {
-						prefix := phase.Name + "/" + step.Name
-						if service != "" {
-							prefix = service + "/" + prefix
-						}
-						return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
-					}
-				}
-				// Validate files_gate if present and registry is available.
-				if step.FilesGate != nil && reg != nil {
-					ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
-					issues := spec.Validate(cfg, reg, ref, step.FilesGate)
-					if len(issues) > 0 {
-						prefix := phase.Name + "/" + step.Name
-						if service != "" {
-							prefix = service + "/" + prefix
-						}
-						return nil, fmt.Errorf("step %s: %s", prefix, issues[0].Message)
-					}
-				}
-				result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen, FilesGate: step.FilesGate})
+		if step.Parallel != nil {
+			resolvedGroup, err := resolveParallelStep(cfg, reg, phase, service, step, phaseRuntimeWhen)
+			if err != nil {
+				return nil, err
+			}
+			if resolvedGroup == nil {
 				continue
-			} else if step.When.Type == condition.TypeTemplate {
-				ok, err := tpl.EvalCondition(step.When.Expr, cfg)
-				if err != nil {
-					prefix := phase.Name + "/" + step.Name
-					if service != "" {
-						prefix = service + "/" + prefix
-					}
-					return nil, fmt.Errorf("evaluating when condition for step %s: %w", prefix, err)
-				}
-				if !ok {
-					continue
-				}
 			}
+			result = append(result, *resolvedGroup)
+			continue
 		}
-		if step.Type == "builtin" {
-			if err := builtin.Validate(step.Cmd, step.With); err != nil {
-				prefix := phase.Name + "/" + step.Name
-				if service != "" {
-					prefix = service + "/" + prefix
-				}
-				return nil, fmt.Errorf("step %s: invalid builtin: %w", prefix, err)
-			}
+
+		rs, ok, err := resolveLeafStep(cfg, reg, phase, service, step, phaseRuntimeWhen)
+		if err != nil {
+			return nil, err
 		}
-		// Validate files_gate if present and registry is available.
-		if step.FilesGate != nil && reg != nil {
-			ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
-			issues := spec.Validate(cfg, reg, ref, step.FilesGate)
-			if len(issues) > 0 {
-				prefix := phase.Name + "/" + step.Name
-				if service != "" {
-					prefix = service + "/" + prefix
-				}
-				return nil, fmt.Errorf("step %s: %s", prefix, issues[0].Message)
-			}
+		if !ok {
+			continue
 		}
-		result = append(result, ResolvedStep{Phase: phase, Step: step, Service: service, RuntimeWhen: stepRuntimeWhen, PhaseWhen: phaseRuntimeWhen, FilesGate: step.FilesGate})
+		result = append(result, rs)
+	}
+
+	// Enforce name uniqueness within the phase across all leaf steps and
+	// parallel sub-steps. Required by the journal key model.
+	if err := checkUniqueStepNames(result, phase, service); err != nil {
+		return nil, err
 	}
 	return result, nil
+}
+
+// resolveLeafStep resolves a single leaf-style DeployStep. Returns ok=false when
+// the step's template `when:` evaluates to false (step is filtered out).
+func resolveLeafStep(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (ResolvedStep, bool, error) {
+	var stepRuntimeWhen *condition.Condition
+	if step.When != nil {
+		if step.When.IsRuntime() {
+			stepRuntimeWhen = step.When
+		} else if step.When.Type == condition.TypeTemplate {
+			ok, err := tpl.EvalCondition(step.When.Expr, cfg)
+			if err != nil {
+				return ResolvedStep{}, false, fmt.Errorf("evaluating when condition for step %s: %w", stepPrefix(phase, service, step.Name), err)
+			}
+			if !ok {
+				return ResolvedStep{}, false, nil
+			}
+		}
+	}
+	if step.Type == "builtin" {
+		if err := builtin.Validate(step.Cmd, step.With); err != nil {
+			return ResolvedStep{}, false, fmt.Errorf("step %s: invalid builtin: %w", stepPrefix(phase, service, step.Name), err)
+		}
+	}
+	if step.FilesGate != nil && reg != nil {
+		ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
+		issues := spec.Validate(cfg, reg, ref, step.FilesGate)
+		if len(issues) > 0 {
+			return ResolvedStep{}, false, fmt.Errorf("step %s: %s", stepPrefix(phase, service, step.Name), issues[0].Message)
+		}
+	}
+	return ResolvedStep{
+		Phase:       phase,
+		Step:        step,
+		Service:     service,
+		RuntimeWhen: stepRuntimeWhen,
+		PhaseWhen:   phaseRuntimeWhen,
+		FilesGate:   step.FilesGate,
+	}, true, nil
+}
+
+// resolveParallelStep recursively resolves a parallel-group DeployStep. Returns
+// (nil, nil) when the group's template `when:` evaluates to false.
+func resolveParallelStep(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (*ResolvedStep, error) {
+	prefix := stepPrefix(phase, service, step.Name)
+	if len(step.Parallel.Steps) < 2 {
+		return nil, fmt.Errorf("step %s: %w", prefix, ErrEmptyParallelSteps)
+	}
+
+	var stepRuntimeWhen *condition.Condition
+	if step.When != nil {
+		if step.When.IsRuntime() {
+			stepRuntimeWhen = step.When
+		} else if step.When.Type == condition.TypeTemplate {
+			ok, err := tpl.EvalCondition(step.When.Expr, cfg)
+			if err != nil {
+				return nil, fmt.Errorf("evaluating when condition for step %s: %w", prefix, err)
+			}
+			if !ok {
+				return nil, nil
+			}
+		}
+	}
+
+	subs := make([]ResolvedStep, 0, len(step.Parallel.Steps))
+	for _, sub := range step.Parallel.Steps {
+		if sub.Parallel != nil {
+			return nil, fmt.Errorf("step %s/%s: %w", prefix, sub.Name, ErrNestedParallel)
+		}
+		if sub.Name == "" {
+			return nil, fmt.Errorf("step %s: %w", prefix, ErrUnnamedSubStep)
+		}
+		// Inherit skip_confirm from the group (monotonic OR; a sub-step's
+		// `skip_confirm: false` cannot un-set an inherited true).
+		if step.SkipConfirm {
+			sub.SkipConfirm = true
+		}
+		// Reject interactive prompts in sub-steps unless skip_confirm is set.
+		if !sub.SkipConfirm {
+			if err := checkInteractive(reg, sub, map[string]bool{}); err != nil {
+				return nil, fmt.Errorf("step %s/%s: %w", prefix, sub.Name, err)
+			}
+		}
+		rs, ok, err := resolveLeafStep(cfg, reg, phase, service, sub, phaseRuntimeWhen)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			// A template `when: false` on a sub-step filters it out. After
+			// filtering, the group must still have at least two sub-steps.
+			continue
+		}
+		subs = append(subs, rs)
+	}
+	if len(subs) < 2 {
+		return nil, fmt.Errorf("step %s: %w", prefix, ErrEmptyParallelSteps)
+	}
+
+	max := step.Parallel.MaxConcurrent
+	if max <= 0 {
+		max = runtime.NumCPU()
+	}
+	if max > len(subs) {
+		max = len(subs)
+	}
+	failFast := true
+	if step.Parallel.FailFast != nil {
+		failFast = *step.Parallel.FailFast
+	}
+
+	return &ResolvedStep{
+		Phase:       phase,
+		Step:        step,
+		Service:     service,
+		RuntimeWhen: stepRuntimeWhen,
+		PhaseWhen:   phaseRuntimeWhen,
+		Parallel: &ResolvedParallel{
+			MaxConcurrent: max,
+			FailFast:      failFast,
+			Steps:         subs,
+		},
+	}, nil
+}
+
+// checkInteractive rejects a sub-step that would require an interactive prompt
+// at runtime. Sources:
+//   - type=command targeting a CommandDef with Confirmation: true
+//   - type=builtin cmd=confirm
+//   - type=command targeting a workflow whose steps transitively contain a
+//     non-empty WorkflowStep.Confirm or a Command reference to a confirming
+//     command/workflow.
+//
+// When reg is nil, all registry-dependent checks are skipped (same nil-tolerant
+// pattern as files_gate validation).
+func checkInteractive(reg *registry.Registry, step config.DeployStep, visited map[string]bool) error {
+	if step.Type == "builtin" && step.Cmd == "confirm" {
+		return ErrInteractiveInParallel
+	}
+	if step.Type != "command" || reg == nil {
+		return nil
+	}
+	return checkCommandInteractive(reg, step.Cmd, visited)
+}
+
+func checkCommandInteractive(reg *registry.Registry, cmdID string, visited map[string]bool) error {
+	if visited[cmdID] {
+		return nil
+	}
+	visited[cmdID] = true
+	def, err := reg.Get(cmdID)
+	if err != nil || def == nil {
+		// Unknown command: not our concern to flag here; other validators
+		// surface unresolved references.
+		return nil
+	}
+	if def.Confirmation {
+		return ErrInteractiveInParallel
+	}
+	if def.Type != model.CommandTypeWorkflow {
+		return nil
+	}
+	for _, ws := range def.Steps {
+		if ws.Confirm != "" {
+			return ErrInteractiveInParallel
+		}
+		if ws.Command != "" {
+			if err := checkCommandInteractive(reg, ws.Command, visited); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func checkUniqueStepNames(steps []ResolvedStep, phase config.DeployPhase, service string) error {
+	seen := make(map[string]bool)
+	for _, rs := range steps {
+		if rs.Parallel != nil {
+			for _, sub := range rs.Parallel.Steps {
+				if seen[sub.Step.Name] {
+					return fmt.Errorf("phase %s: %w: %q", stepPrefix(phase, service, ""), ErrDuplicateStepName, sub.Step.Name)
+				}
+				seen[sub.Step.Name] = true
+			}
+			continue
+		}
+		if rs.Step.Name == "" {
+			continue
+		}
+		if seen[rs.Step.Name] {
+			return fmt.Errorf("phase %s: %w: %q", stepPrefix(phase, service, ""), ErrDuplicateStepName, rs.Step.Name)
+		}
+		seen[rs.Step.Name] = true
+	}
+	return nil
+}
+
+func stepPrefix(phase config.DeployPhase, service, stepName string) string {
+	prefix := phase.Name
+	if service != "" {
+		prefix = service + "/" + prefix
+	}
+	if stepName != "" {
+		prefix = prefix + "/" + stepName
+	}
+	return prefix
 }

@@ -28,6 +28,16 @@ type ResolvedStep struct {
 	RuntimeWhen *condition.Condition // step-level runtime when condition; nil otherwise
 	PhaseWhen   *condition.Condition // phase-level runtime when condition; nil otherwise
 	FilesGate   *filesgate.FilesGate // step-level files gate; nil otherwise
+	Parallel    *ResolvedParallel    // non-nil when the step is a parallel group
+}
+
+// ResolvedParallel is the resolved form of a config.ParallelGroup.
+// MaxConcurrent and FailFast carry concrete (defaulted) values; Steps holds the
+// resolved sub-steps in declaration order.
+type ResolvedParallel struct {
+	MaxConcurrent int
+	FailFast      bool
+	Steps         []ResolvedStep
 }
 
 // StepAddress returns the full address of a step for display and lookup:
