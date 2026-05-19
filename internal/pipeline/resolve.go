@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
@@ -132,7 +133,11 @@ func resolveLeafStep(cfg *config.DevboxConfig, reg *registry.Registry, phase con
 		ref := filesgate.StepRef{Type: step.Type, Cmd: step.Cmd, With: step.With}
 		issues := spec.Validate(cfg, reg, ref, step.FilesGate)
 		if len(issues) > 0 {
-			return ResolvedStep{}, false, fmt.Errorf("step %s: %s", stepPrefix(phase, service, step.Name), issues[0].Message)
+			msgs := make([]string, len(issues))
+			for i, iss := range issues {
+				msgs[i] = iss.Message
+			}
+			return ResolvedStep{}, false, fmt.Errorf("step %s: %s", stepPrefix(phase, service, step.Name), strings.Join(msgs, "; "))
 		}
 	}
 	return ResolvedStep{
@@ -199,7 +204,10 @@ func resolveParallelStep(cfg *config.DevboxConfig, reg *registry.Registry, phase
 		subs = append(subs, rs)
 	}
 	if len(subs) < 2 {
-		return nil, fmt.Errorf("step %s: %w", prefix, ErrEmptyParallelSteps)
+		// Line 152 already rejects groups with fewer than 2 declared sub-steps, so
+		// reaching here means template when: evaluation filtered out sub-steps.
+		return nil, fmt.Errorf("step %s: %w (%d of %d sub-step(s) remain after when: filtering)",
+			prefix, ErrEmptyParallelSteps, len(subs), len(step.Parallel.Steps))
 	}
 
 	max := step.Parallel.MaxConcurrent

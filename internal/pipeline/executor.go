@@ -475,6 +475,10 @@ func RunWithOptions(opts RunOptions) error {
 				trackedIndex++
 				stepIndex, stepTotal = trackedIndex, trackedTotal
 			}
+		} else if rs.Parallel != nil {
+			// Untracked parallel groups still need a valid slice so goroutines
+			// can index into it; zero indices tell reporters to suppress [n/N].
+			subIndices = make([]int, len(rs.Parallel.Steps))
 		}
 
 		// Step 1: Compute step hash early (includes FilesGate if present; for gateless steps equals ActionHash).

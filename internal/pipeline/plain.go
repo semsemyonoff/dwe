@@ -458,6 +458,78 @@ func (r *PlainReporter) startTTYView(groupAddr string, group config.DeployStep, 
 	}()
 }
 
+// finishGroupTTY handles the TTY path of FinishGroup after the bubbletea
+// program has exited. It is called without r.mu held.
+func (r *PlainReporter) finishGroupTTY(groupAddr string, success bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ttyProg = nil
+	r.ttyDone = nil
+	r.ttyGroupAddr = ""
+	// Tally counts from ttySubs and emit summary lines.
+	var ok, failed, skipped int
+	for _, e := range r.ttySubs {
+		switch e.status {
+		case statusOk:
+			ok++
+		case statusFailed:
+			failed++
+		case statusSkipped:
+			skipped++
+		}
+	}
+	// Print per-sub-step result lines in declaration order.
+	for _, e := range orderedTTYSubs(r.ttySubs) {
+		switch e.status {
+		case statusOk:
+			if e.idx > 0 {
+				r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, e.idx, e.total, e.name))
+			} else {
+				r.emit(render.Green, fmt.Sprintf("  %s Done: %s", iconDone, e.name))
+			}
+		case statusFailed:
+			if e.idx > 0 {
+				r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, e.idx, e.total, e.name))
+			} else {
+				r.emit(render.Red, fmt.Sprintf("  %s Failed: %s", iconFailed, e.name))
+			}
+			if e.err != nil {
+				r.emit(render.Red, "  "+e.err.Error())
+			}
+		case statusSkipped:
+			if e.idx > 0 {
+				r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, e.idx, e.total, e.name, e.reason))
+			} else {
+				r.emit(render.Yellow, fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, e.name, e.reason))
+			}
+		case statusPending:
+			if e.idx > 0 {
+				r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Cancelled: %s", iconSkipped, e.idx, e.total, e.name))
+			} else {
+				r.emit(render.Yellow, fmt.Sprintf("  %s Cancelled: %s", iconSkipped, e.name))
+			}
+		}
+	}
+	// Footer: success/failure with aggregate counts + elapsed.
+	icon := iconDone
+	color := render.Green
+	verb := "done"
+	if !success {
+		icon = iconFailed
+		color = render.Red
+		verb = "failed"
+	}
+	msg := fmt.Sprintf("  %s Parallel group %s: %s", icon, verb, groupAddr)
+	if g, gok := r.groups[groupAddr]; gok {
+		elapsed := formatElapsed(r.now().Sub(g.startTime))
+		msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped of %d, %s)",
+			ok, failed, skipped, g.total, elapsed)
+		delete(r.groups, groupAddr)
+	}
+	r.emit(color, msg)
+	r.ttySubs = nil
+}
+
 // FinishGroup prints a one-line footer for a parallel group. success is true
 // when every sub-step succeeded (after accounting for continue_on_error). In
 // non-TTY mode the footer also carries aggregate ok/failed/skipped counts and
@@ -472,73 +544,7 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 		// tea program can finish rendering through r.w.Writer.
 		prog.Send(groupDoneMsg{})
 		<-done
-		r.mu.Lock()
-		r.ttyProg = nil
-		r.ttyDone = nil
-		r.ttyGroupAddr = ""
-		// Tally counts from ttySubs and emit summary lines.
-		var ok, failed, skipped int
-		for _, e := range r.ttySubs {
-			switch e.status {
-			case statusOk:
-				ok++
-			case statusFailed:
-				failed++
-			case statusSkipped:
-				skipped++
-			}
-		}
-		// Print per-sub-step result lines in declaration order.
-		for _, e := range orderedTTYSubs(r.ttySubs) {
-			switch e.status {
-			case statusOk:
-				if e.idx > 0 {
-					r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, e.idx, e.total, e.name))
-				} else {
-					r.emit(render.Green, fmt.Sprintf("  %s Done: %s", iconDone, e.name))
-				}
-			case statusFailed:
-				if e.idx > 0 {
-					r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, e.idx, e.total, e.name))
-				} else {
-					r.emit(render.Red, fmt.Sprintf("  %s Failed: %s", iconFailed, e.name))
-				}
-				if e.err != nil {
-					r.emit(render.Red, "  "+e.err.Error())
-				}
-			case statusSkipped:
-				if e.idx > 0 {
-					r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, e.idx, e.total, e.name, e.reason))
-				} else {
-					r.emit(render.Yellow, fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, e.name, e.reason))
-				}
-			case statusPending:
-				if e.idx > 0 {
-					r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Cancelled: %s", iconSkipped, e.idx, e.total, e.name))
-				} else {
-					r.emit(render.Yellow, fmt.Sprintf("  %s Cancelled: %s", iconSkipped, e.name))
-				}
-			}
-		}
-		// Footer: success/failure with aggregate counts + elapsed.
-		icon := iconDone
-		color := render.Green
-		verb := "done"
-		if !success {
-			icon = iconFailed
-			color = render.Red
-			verb = "failed"
-		}
-		msg := fmt.Sprintf("  %s Parallel group %s: %s", icon, verb, groupAddr)
-		if g, gok := r.groups[groupAddr]; gok {
-			elapsed := formatElapsed(r.now().Sub(g.startTime))
-			msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped of %d, %s)",
-				ok, failed, skipped, g.total, elapsed)
-			delete(r.groups, groupAddr)
-		}
-		r.emit(color, msg)
-		r.ttySubs = nil
-		r.mu.Unlock()
+		r.finishGroupTTY(groupAddr, success)
 		return
 	}
 	defer r.mu.Unlock()
