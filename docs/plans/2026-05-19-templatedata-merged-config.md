@@ -146,11 +146,11 @@ Related patterns:
 
 ### Task 4: Cross-renderer consistency and lint
 
-- [ ] grep the three renderer packages to confirm `TemplateData` shapes stay symmetric (`Project`, `Service`, `ServiceCfg`, `Runtime`, `Cfg`) — adjust if any drift
-- [ ] for ide and ai callers, ensure `Cfg: cfg` is set on every code path that constructs `TemplateData` (`grep -rn "ide.TemplateData{\|aipkg.TemplateData{\|ai.TemplateData{" internal/`)
-- [ ] decide nil-handling for ide/ai: either add a `if cfg == nil` guard at the caller boundary (mirroring `git.go:330-332`) or document at the type that `Cfg` is non-nil when callers come from `internal/command`. Implement the chosen option; do not leave silent nil dereferences possible
-- [ ] run `go test ./...` — full suite must pass
-- [ ] run `make lint` — no new issues
+- [x] grep the three renderer packages to confirm `TemplateData` shapes stay symmetric (`Project`, `Service`, `ServiceCfg`, `Runtime`, `Cfg`) — adjust if any drift
+- [x] for ide and ai callers, ensure `Cfg: cfg` is set on every code path that constructs `TemplateData` (`grep -rn "ide.TemplateData{\|aipkg.TemplateData{\|ai.TemplateData{" internal/`)
+- [x] decide nil-handling for ide/ai: either add a `if cfg == nil` guard at the caller boundary (mirroring `git.go:330-332`) or document at the type that `Cfg` is non-nil when callers come from `internal/command`. Implement the chosen option; do not leave silent nil dereferences possible
+- [x] run `go test ./...` — full suite must pass
+- [x] run `make lint` — no new issues
 
 ### Task 5: Update central template variables documentation
 

@@ -20,6 +20,9 @@ import (
 // It resolves the template pack, loads and validates the manifest, and renders
 // each entry in the manifest (files + symlinks).
 func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
+	if cfg == nil {
+		return fmt.Errorf("ai: nil cfg")
+	}
 	// Validate that service has a directory
 	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
