@@ -211,8 +211,9 @@ Templates receive the same object shape as IDE templates:
 | Variable | Source |
 |----------|--------|
 | `.Project` | `project:` block from `devbox.yml` |
-| `.Service` | service name (the map key in `services:`) |
-| `.ServiceCfg` | effective service config after `extends` resolution |
+| `.Service` | **canonical config identity** — root of the rendering service's `extends:` chain. Use this for raw-config lookups keyed by service name. Equals `.Resolved` when no extends chain. |
+| `.Resolved` | **rendering identity** — service whose hub is actually being rendered (collision-policy winner). For AI the winner is the shallowest extender, so `.Resolved` typically equals `.Service`. |
+| `.ServiceCfg` | effective service config of `.Resolved`, after `extends` resolution. |
 | `.Runtime` | merged `runtime` block |
 | `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 

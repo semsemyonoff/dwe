@@ -87,6 +87,22 @@ func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, b
 	}
 }
 
+// ExtendsRoot walks the extends chain from name and returns the chain root
+// (first ancestor with empty Extends). Returns name itself when the service
+// has no extends or is unknown. The 32-hop cycle guard mirrors ExtendsDepth.
+func ExtendsRoot(services map[string]config.ServiceConfig, name string) string {
+	const maxDepth = 32
+	current := name
+	for range maxDepth {
+		svc, ok := services[current]
+		if !ok || svc.Extends == "" {
+			return current
+		}
+		current = svc.Extends
+	}
+	return current
+}
+
 // ResolveTemplatePack resolves a template pack directory for a service.
 // Returns (packDir, packName, found, err). Explicit svc.Render.AI.Template is strict.
 // Implicit chain: service-name → default; returns found=false when exhausted.
@@ -187,9 +203,16 @@ func ValidateManifest(m *Manifest, projectRoot, packName, destRoot string, sink 
 }
 
 // TemplateData holds the context for rendering agents templates.
+//
+// Service is the canonical config identity (root of the extends chain) — use
+// it for raw-config lookups keyed by service name. Resolved is the actual
+// rendering service (the collision-policy winner) and equals Service when
+// the rendering service has no extends chain. ServiceCfg is the merged
+// service block of the rendering service (Resolved).
 type TemplateData struct {
 	Project    config.ProjectConfig
 	Service    string
+	Resolved   string
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
 	Cfg        *config.DevboxConfig

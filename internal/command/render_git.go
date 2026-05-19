@@ -79,7 +79,8 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 	return gitpkg.RenderHooks(gitpkg.Context{
 		ProjectRoot: absRoot,
 		Cfg:         cfg,
-		Service:     name,
+		Service:     gitpkg.ExtendsRoot(cfg.Services, name),
+		Resolved:    name,
 		ServiceCfg:  svc,
 		PackName:    packName,
 		Manifest:    m,

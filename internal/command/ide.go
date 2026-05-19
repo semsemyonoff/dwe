@@ -185,7 +185,8 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 
 	data := ide.TemplateData{
 		Project:    cfg.Project,
-		Service:    name,
+		Service:    ide.ExtendsRoot(cfg.Services, name),
+		Resolved:   name,
 		ServiceCfg: svc,
 		Runtime:    cfg.Runtime,
 		Cfg:        cfg,

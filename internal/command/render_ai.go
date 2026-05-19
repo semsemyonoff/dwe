@@ -72,7 +72,8 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	// Prepare template data
 	data := aipkg.TemplateData{
 		Project:    cfg.Project,
-		Service:    name,
+		Service:    aipkg.ExtendsRoot(cfg.Services, name),
+		Resolved:   name,
 		ServiceCfg: svc,
 		Runtime:    cfg.Runtime,
 		Cfg:        cfg,

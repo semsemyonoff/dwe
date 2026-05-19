@@ -136,10 +136,13 @@ Same shape as `render ide` and `render ai`:
 | Variable | Source |
 |----------|--------|
 | `.Project` | `project:` block from `devbox.yml` |
-| `.Service` | service name (the map key in `services:`) |
-| `.ServiceCfg` | effective service config after `extends` resolution |
+| `.Service` | **canonical config identity** — the root of the rendering service's `extends:` chain. Use this for raw-config lookups keyed by service name (e.g. `(index .Cfg.Raw.git.hooks .Service)`). Equals `.Resolved` when the rendering service has no `extends:`. |
+| `.Resolved` | **rendering identity** — the name of the service whose hub is actually being rendered (the deepest-extends collision winner). Equals `.Service` in the no-collision case. |
+| `.ServiceCfg` | effective service config of `.Resolved` (the rendering service), after `extends` resolution. Fields like `.ServiceCfg.Container` reflect the extender's overlay. |
 | `.Runtime` | merged `runtime` block |
 | `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+
+> **Why `.Service` and `.Resolved` differ.** When two services share the same `dir:` (typically a base + an `extends:` child like `main` and `main-debug`), the collision policy picks the deepest extender as the hub owner — that's `.Resolved`. But user-facing config sections keyed by service name (`git.hooks.<svc>`, `cs.<svc>`, …) are populated only on the base by convention, so raw-config lookups must use `.Service` (the chain root) to resolve. The two fields keep the *behavioral identity* (which container to attach to, which overlay applies) and the *config identity* (where to look up user values) distinguishable.
 
 Strict-mode rendering means a typo like `{{.Servic.Name}}` aborts rendering instead of producing `<no value>`. Use `{{if ...}}` for fields that may legitimately be empty.
 
@@ -196,8 +199,8 @@ Template `devbox/templates/git/default/pre-commit.tmpl`:
 
 ```sh
 #!/usr/bin/env sh
-# pre-commit hook for {{.Service}} ({{.ServiceCfg.Container}})
-exec devbox run --service {{.Service}} lint
+# pre-commit hook for {{.Resolved}} ({{.ServiceCfg.Container}})
+exec devbox run --service {{.Resolved}} lint
 ```
 
 `devbox/services.yml`:

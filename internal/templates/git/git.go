@@ -61,6 +61,22 @@ func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, b
 	}
 }
 
+// ExtendsRoot walks the extends chain from name and returns the chain root
+// (first ancestor with empty Extends). Returns name itself when the service
+// has no extends or is unknown. The 32-hop cycle guard mirrors ExtendsDepth.
+func ExtendsRoot(services map[string]config.ServiceConfig, name string) string {
+	const maxDepth = 32
+	current := name
+	for range maxDepth {
+		svc, ok := services[current]
+		if !ok || svc.Extends == "" {
+			return current
+		}
+		current = svc.Extends
+	}
+	return current
+}
+
 // ResolveTemplatePack resolves a git template pack directory for a service.
 // Returns (packDir, packName, found, err). Explicit svc.Render.Git.Template is strict.
 // Implicit chain: serviceName → default; returns found=false when exhausted.
@@ -300,19 +316,31 @@ func ValidateManifest(m *manifest.File, projectRoot, packName, destRoot string, 
 }
 
 // TemplateData is passed to git-hook templates.
+//
+// Service is the canonical config identity (root of the extends chain) — use
+// it for raw-config lookups keyed by service name (e.g. `(index .Cfg.Raw.git.hooks .Service)`).
+// Resolved is the actual rendering service (the deepest-extends collision
+// winner) and equals Service when the rendering service has no extends chain.
+// ServiceCfg is the merged service block of the rendering service (Resolved),
+// so fields like .ServiceCfg.Container reflect the extender's overlay.
 type TemplateData struct {
 	Project    config.ProjectConfig
 	Service    string
+	Resolved   string
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
 	Cfg        *config.DevboxConfig
 }
 
 // Context carries the inputs for rendering all hooks for one service.
+// Service is the canonical config identity (root of the extends chain);
+// Resolved is the rendering service (the collision-policy winner). They
+// match when the rendering service has no extends chain.
 type Context struct {
 	ProjectRoot string
 	Cfg         *config.DevboxConfig
 	Service     string
+	Resolved    string
 	ServiceCfg  config.ServiceConfig
 	PackName    string
 	Manifest    *manifest.File
@@ -362,9 +390,14 @@ func RenderHooks(ctx Context) error {
 		return fmt.Errorf("hooks dir resolves outside required boundaries via symlink: %w", err)
 	}
 
+	resolved := ctx.Resolved
+	if resolved == "" {
+		resolved = ctx.Service
+	}
 	data := TemplateData{
 		Project:    ctx.Cfg.Project,
 		Service:    ctx.Service,
+		Resolved:   resolved,
 		ServiceCfg: ctx.ServiceCfg,
 		Runtime:    ctx.Cfg.Runtime,
 		Cfg:        ctx.Cfg,

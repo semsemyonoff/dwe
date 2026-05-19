@@ -177,8 +177,9 @@ Templates receive a single object with these top-level fields:
 | Variable | Source | Notes |
 |----------|--------|-------|
 | `.Project` | `project:` block from `devbox.yml` | e.g. `.Project.Name`, `.Project.Prefix` |
-| `.Service` | service name (the map key in `services:`) | |
-| `.ServiceCfg` | the effective service config after `extends` resolution | e.g. `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` |
+| `.Service` | **canonical config identity** — the root of the rendering service's `extends:` chain. | Use this for raw-config lookups keyed by service name (e.g. `(index .Cfg.Raw.cs .Service).standard`). Equals `.Resolved` when no extends chain. |
+| `.Resolved` | **rendering identity** — the service whose hub is actually being rendered (the deepest-extends collision winner). | Equals `.Service` in the no-collision case. |
+| `.ServiceCfg` | the effective service config of `.Resolved`, after `extends` resolution. | e.g. `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` reflect the rendering service's overlay. |
 | `.Runtime` | merged `runtime` block | e.g. `.Runtime.Ports.app`, `.Runtime.Hosts.main` (non-tool roles; lowercase keys). Tool host/port use `.Tools.<name>.Host` / `.Tools.<name>.Port` instead. |
 | `.Cfg` | merged `DevboxConfig` (advanced) | `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
@@ -252,7 +253,7 @@ Template `devbox/templates/ide/main-debug/.vscode/settings.json.tmpl`:
 {
   "container.name": "{{.ServiceCfg.Container}}",
   "workspace.root": "{{.ServiceCfg.DirInternal}}",
-  "service": "{{.Service}}"
+  "service": "{{.Resolved}}"
 }
 ```
 
@@ -261,7 +262,7 @@ Template `devbox/templates/ide/main-debug/.vscode/settings.json.tmpl`:
 1. Selection: both `main` and `main-debug` pass the activation gate. They share `dir: ./services/main`. `main-debug` has a deeper `extends` chain (depth 1 vs 0), so `main-debug` wins. `main` is reported as a collision skip and a warning is printed.
 2. Pack resolution for `main-debug`: `render.ide.template: main-debug` is explicit; `devbox/templates/ide/main-debug/` exists, so it is used.
 3. Pack walk yields three entries (sorted): `.devcontainer/devcontainer.json`, `.vscode/launch.json`, `.vscode/settings.json`.
-4. Each is rendered with `.Service = "main-debug"`, `.ServiceCfg.Container = "app-main-debug"`, etc.
+4. Each is rendered with `.Service = "main"` (the chain root — what user-config maps are keyed on), `.Resolved = "main-debug"` (the rendering service), `.ServiceCfg.Container = "app-main-debug"`, etc.
 
 Result:
 

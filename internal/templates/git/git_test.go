@@ -731,4 +731,103 @@ func TestRenderHooks(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("service rebound to extends root for raw lookups", func(t *testing.T) {
+		// Collision policy: rendering service is the deepest extender
+		// ("main-debug"), but user-config keys live on the base ("main").
+		// .Service must be the chain root for `(index ... .Service)` lookups
+		// to resolve, while .Resolved exposes the rendering service.
+		root := t.TempDir()
+		mkPack(t, root, "default", map[string]string{
+			"manifest.yml":    "render:\n  - {from: pre-commit.tmpl, to: pre-commit}\n",
+			"pre-commit.tmpl": "#!/bin/sh\necho svc={{.Service}} resolved={{.Resolved}} cmd={{ (index .Cfg.Raw.git.hooks .Service).pre_commit }}\n",
+		})
+		hub := filepath.Join(root, "services", "main")
+		if err := os.MkdirAll(filepath.Join(hub, "src", ".git", "hooks"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		hooks := filepath.Join(hub, "src", ".git", "hooks")
+		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.DevboxConfig{Raw: map[string]any{
+			"git": map[string]any{
+				"hooks": map[string]any{
+					"main": map[string]any{"pre_commit": "make lint"},
+				},
+			},
+		}}
+		ctx := Context{
+			ProjectRoot: root, Cfg: cfg,
+			Service:    "main",       // chain root (where user config lives)
+			Resolved:   "main-debug", // collision-policy winner
+			ServiceCfg: config.ServiceConfig{Dir: "services/main", Container: "app-main-debug"},
+			PackName:   "default", Manifest: m,
+			HooksDir: hooks, HubDir: hub,
+		}
+		if err := RenderHooks(ctx); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(filepath.Join(hooks, "pre-commit"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(got), "svc=main resolved=main-debug cmd=make lint") {
+			t.Errorf("content=%q", got)
+		}
+	})
+
+	t.Run("resolved falls back to service when empty", func(t *testing.T) {
+		root, hub, hooks, _, _ := setup(t)
+		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+			"#!/bin/sh\necho svc={{.Service}} resolved={{.Resolved}}\n")
+		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := Context{
+			ProjectRoot: root, Cfg: &config.DevboxConfig{},
+			Service:    "main", // Resolved deliberately left empty
+			ServiceCfg: config.ServiceConfig{Dir: "services/main"},
+			PackName:   "default", Manifest: m,
+			HooksDir: hooks, HubDir: hub,
+		}
+		if err := RenderHooks(ctx); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(filepath.Join(hooks, "pre-commit"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(got), "svc=main resolved=main") {
+			t.Errorf("content=%q", got)
+		}
+	})
+}
+
+func TestExtendsRoot(t *testing.T) {
+	services := map[string]config.ServiceConfig{
+		"base":    {},
+		"mid":     {Extends: "base"},
+		"leaf":    {Extends: "mid"},
+		"orphan":  {Extends: "missing"},
+		"selfref": {Extends: "selfref"}, // cycle: guard must stop
+	}
+	cases := []struct {
+		name string
+		want string
+	}{
+		{"base", "base"},
+		{"mid", "base"},
+		{"leaf", "base"},
+		{"orphan", "missing"},  // walks until the chain dead-ends
+		{"selfref", "selfref"}, // 32-hop guard returns current
+		{"unknown", "unknown"}, // unknown service returns itself
+	}
+	for _, tc := range cases {
+		if got := ExtendsRoot(services, tc.name); got != tc.want {
+			t.Errorf("ExtendsRoot(%q)=%q want %q", tc.name, got, tc.want)
+		}
+	}
 }
