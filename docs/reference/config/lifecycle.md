@@ -14,6 +14,7 @@ Run / stop pipeline declarations driving `devbox run`, `devbox stop`, and `devbo
 - [Hook phases](#hook-phases)
 - [Minimal example](#minimal-example)
 - [Validation](#validation)
+- [Parallel step groups](#parallel-step-groups)
 - [Common pitfalls](#common-pitfalls)
 - [Related commands](#related-commands)
 

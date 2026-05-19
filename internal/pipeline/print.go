@@ -84,7 +84,9 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 			subIndent := indent + "  "
 			subDetailIndent := detailIndent + "  "
 			for _, sub := range rs.Parallel.Steps {
-				trackedIndex++
+				if !rs.Phase.Untracked {
+					trackedIndex++
+				}
 				idxPrefix := ""
 				if !rs.Phase.Untracked && trackedTotal > 0 {
 					idxPrefix = fmt.Sprintf("[%d/%d] ", trackedIndex, trackedTotal)

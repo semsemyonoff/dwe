@@ -168,7 +168,9 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = actx.WorkDir
-	cmd.Stdin = os.Stdin
+	if !actx.Parallel {
+		cmd.Stdin = os.Stdin
+	}
 	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -186,7 +188,9 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
 	cmd := buildDevboxCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DevboxBin(actx.Cfg), actx.SkipConfirm)
-	cmd.Stdin = os.Stdin
+	if !actx.Parallel {
+		cmd.Stdin = os.Stdin
+	}
 	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -217,12 +221,16 @@ func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext)
 	default:
 		out = os.Stdout
 	}
+	var stdinForBuiltin *os.File
+	if !actx.Parallel {
+		stdinForBuiltin = os.Stdin
+	}
 	ectx := builtin.ExecContext{
 		Config:      actx.Cfg,
 		ProjectRoot: actx.WorkDir,
 		Output:      render.NewWriter(out),
 		LogWriter:   actx.LogWriter,
-		Stdin:       os.Stdin,
+		Stdin:       stdinForBuiltin,
 		SkipConfirm: actx.SkipConfirm,
 	}
 	return builtin.Run(ctx, a.Cmd, a.With, ectx)
@@ -245,7 +253,9 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	defer cleanup()
 	rctx.Stdout = stdout
 	rctx.Stderr = stderr
-	rctx.Stdin = os.Stdin
+	if !actx.Parallel {
+		rctx.Stdin = os.Stdin
+	}
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
 	return usercommands.RunCommand(ctx, rctx)
@@ -740,7 +750,10 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 	for i, sub := range rs.Parallel.Steps {
 		eg.Go(func() error {
 			if gctx.Err() != nil {
-				return gctx.Err()
+				// Return ErrSilent (not gctx.Err()) so callers that inspect
+				// errors.Is(err, ErrSilent) behave consistently regardless of
+				// which goroutine's error errgroup.Wait returns.
+				return fmt.Errorf("cancelled: %w", ErrSilent)
 			}
 			subAddr := sub.StepAddress()
 			err := runParallelSubStep(gctx, opts, rs, sub, subAddr, subIndices[i], total)

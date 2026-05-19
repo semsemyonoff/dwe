@@ -31,6 +31,7 @@ Deploy and reset pipeline declarations.
 - [`deploy_services` marker](#deploy_services-marker)
 - [Example: orchestrator pipeline](#example-orchestrator-pipeline)
 - [Example: per-service pipeline](#example-per-service-pipeline)
+- [Parallel step groups](#parallel-step-groups)
 - [Common pitfalls](#common-pitfalls)
 - [Related commands](#related-commands)
 

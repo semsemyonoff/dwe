@@ -282,6 +282,12 @@ func checkUniqueStepNames(steps []ResolvedStep, phase config.DeployPhase, servic
 	seen := make(map[string]bool)
 	for _, rs := range steps {
 		if rs.Parallel != nil {
+			if rs.Step.Name != "" {
+				if seen[rs.Step.Name] {
+					return fmt.Errorf("phase %s: %w: %q", stepPrefix(phase, service, ""), ErrDuplicateStepName, rs.Step.Name)
+				}
+				seen[rs.Step.Name] = true
+			}
 			for _, sub := range rs.Parallel.Steps {
 				if seen[sub.Step.Name] {
 					return fmt.Errorf("phase %s: %w: %q", stepPrefix(phase, service, ""), ErrDuplicateStepName, sub.Step.Name)

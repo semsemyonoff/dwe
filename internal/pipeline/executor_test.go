@@ -22,18 +22,19 @@ import (
 // --- mockReporter records all reporter events for assertion ---
 
 type reporterEvent struct {
-	kind     string
-	phaseKey string
-	phase    config.DeployPhase
-	stepAddr string
-	step     config.DeployStep
-	index    int
-	total    int
-	reason   string
-	err      error
-	name     string
-	total0   int
-	success  bool
+	kind       string
+	phaseKey   string
+	phase      config.DeployPhase
+	stepAddr   string
+	step       config.DeployStep
+	index      int
+	total      int
+	reason     string
+	err        error
+	name       string
+	total0     int
+	success    bool
+	subIndices []int
 }
 
 type mockReporter struct {
@@ -78,8 +79,9 @@ func (m *mockReporter) ResumeAfterExec() {
 	m.append(reporterEvent{kind: "ResumeAfterExec"})
 }
 func (m *mockReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int) {
-	m.append(reporterEvent{kind: "StartGroup", stepAddr: groupAddr, step: group, total: total})
-	_ = subIndices
+	cp := make([]int, len(subIndices))
+	copy(cp, subIndices)
+	m.append(reporterEvent{kind: "StartGroup", stepAddr: groupAddr, step: group, total: total, subIndices: cp})
 }
 func (m *mockReporter) FinishGroup(groupAddr string, group config.DeployStep, success bool) {
 	m.append(reporterEvent{kind: "FinishGroup", stepAddr: groupAddr, step: group, success: success})

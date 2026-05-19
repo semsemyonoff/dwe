@@ -365,7 +365,7 @@ func (r *PlainReporter) ResumeAfterExec() {}
 // FailStep / SkipStep; in non-TTY mode this also pre-registers a per-sub-step
 // output buffer and records the group's start time / total for the
 // FinishGroup summary line.
-func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, _ int) {
+func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	label := groupAddr
@@ -388,7 +388,7 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 	}
 
 	if r.tty {
-		r.startTTYView(groupAddr, group, subIndices, phasePrefix)
+		r.startTTYView(groupAddr, group, subIndices, phasePrefix, total)
 		return
 	}
 
@@ -405,16 +405,10 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 
 // startTTYView builds the parallelGroupModel, registers sub-step entries, and
 // launches a bubbletea program in a goroutine. Caller must hold r.mu.
-func (r *PlainReporter) startTTYView(groupAddr string, group config.DeployStep, subIndices []int, phasePrefix string) {
+func (r *PlainReporter) startTTYView(groupAddr string, group config.DeployStep, subIndices []int, phasePrefix string, total int) {
 	r.ttySubs = make(map[string]*ttySubStepEntry)
 	views := make([]subStepView, 0, len(subIndices))
 	if group.Parallel != nil {
-		total := 0
-		// The "total" displayed on each row matches the deploy-wide stepTotal
-		// the executor passes through StartStep; we don't have it here, so we
-		// fall back to the group's own count which is what the model uses for
-		// its [N/total] formatting (purely visual).
-		total = len(group.Parallel.Steps)
 		for i, sub := range group.Parallel.Steps {
 			subAddr := phasePrefix + "/" + sub.Name
 			idx := 0
@@ -505,6 +499,12 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 				} else {
 					r.emit(render.Yellow, fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, e.name, e.reason))
 				}
+			case statusPending:
+				if e.idx > 0 {
+					r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Cancelled: %s", iconSkipped, e.idx, e.total, e.name))
+				} else {
+					r.emit(render.Yellow, fmt.Sprintf("  %s Cancelled: %s", iconSkipped, e.name))
+				}
 			}
 		}
 		// Footer: success/failure with aggregate counts + elapsed.
@@ -546,6 +546,13 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 			msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped of %d, %s)",
 				g.ok, g.failed, g.skipped, g.total, elapsed)
 			delete(r.groups, groupAddr)
+		}
+		// Clean up any sub-step entries that never received a terminal event
+		// (e.g. cancelled by FailFast before executeStepBody was entered).
+		for addr, e := range r.subs {
+			if e.groupAddr == groupAddr {
+				delete(r.subs, addr)
+			}
 		}
 	}
 	r.emit(color, msg)
@@ -601,7 +608,12 @@ func (r *PlainReporter) SubStepOutput(subAddr string, line string) {
 type subStepStatus int
 
 const (
-	statusOk subStepStatus = iota
+	// statusPending is the zero value: sub-step has not yet received a terminal
+	// event. This can happen when a FailFast cancellation races ahead of the
+	// sub-step completing, or when a template when: filters the sub-step at
+	// plan time but it is still registered in the reporter map.
+	statusPending subStepStatus = iota
+	statusOk
 	statusFailed
 	statusSkipped
 )

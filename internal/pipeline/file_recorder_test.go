@@ -600,8 +600,8 @@ func TestFileRecorder_TimestampsAreSet(t *testing.T) {
 	rec.OnStepFinish(step.StepAddress(), step, "hash1", 5)
 	stepAfter := time.Now()
 
-	after := time.Now()
 	rec.OnPipelineFinish(true)
+	after := time.Now()
 
 	loaded, err := journal.Load(statePath)
 	require.NoError(t, err)

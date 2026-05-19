@@ -205,6 +205,28 @@ func validateParallelPhases(reg *registry.Registry, phases []config.DeployPhase,
 				}
 			}
 		}
+
+		// Second pass: emit diagnostics for leaf steps whose names collide with
+		// another leaf step or with a parallel sub-step in the same phase. These
+		// collisions are already present in nameCounts but skipped by the first
+		// loop (which continues past non-parallel steps).
+		for stepIdx, step := range phase.Steps {
+			if step.Parallel != nil {
+				continue
+			}
+			if step.Name == "" || nameCounts[step.Name] <= 1 || reportedDup[step.Name] {
+				continue
+			}
+			reportedDup[step.Name] = true
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   fmt.Sprintf("%s.phases[%d].steps[%d]", baseTarget, phaseIdx, stepIdx),
+				File:     file,
+				Message:  fmt.Sprintf("duplicate step name in phase: %q", step.Name),
+				Hint:     "rename to a unique value within the phase",
+			})
+		}
 	}
 	return diags
 }

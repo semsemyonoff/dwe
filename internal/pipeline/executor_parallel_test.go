@@ -3,6 +3,7 @@ package pipeline
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -400,11 +401,16 @@ func TestParallelGroup_SubStepIndicesAreContiguous(t *testing.T) {
 		}
 	}
 
-	// StartGroup should carry the leading reserved index in subIndices[0].
+	// StartGroup must carry contiguous sub-step indices [2, 3, 4] for group g.
 	for _, e := range rep.events {
 		if e.kind == "StartGroup" && e.stepAddr == "p/g" {
-			// total verified elsewhere
-			_ = e
+			wantSubs := []int{2, 3, 4}
+			if !slices.Equal(e.subIndices, wantSubs) {
+				t.Errorf("StartGroup subIndices=%v, want %v", e.subIndices, wantSubs)
+			}
+			if e.total != 5 {
+				t.Errorf("StartGroup total=%d, want 5", e.total)
+			}
 		}
 	}
 }
