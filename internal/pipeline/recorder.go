@@ -7,6 +7,10 @@ import "devbox-cli/internal/deploy/journal"
 //
 // Implementations record step execution status, hashes, and timings to enable
 // idempotent re-runs where previously-completed steps can be skipped.
+//
+// Implementations MUST be safe to call from multiple goroutines: the
+// parallel-group executor invokes OnStepStart / OnStepFinish / OnStepFail /
+// OnStepSkip concurrently, one call per in-flight sub-step.
 type Recorder interface {
 	// OnPipelineStart is called once before any steps execute.
 	// name is the pipeline name (e.g. "deploy", "reset").
@@ -39,7 +43,7 @@ type Recorder interface {
 }
 
 // NopRecorder is a no-op Recorder implementation for tests and pipelines that
-// do not track state.
+// do not track state. All methods are trivially safe for concurrent use.
 type NopRecorder struct{}
 
 // OnPipelineStart is a no-op.

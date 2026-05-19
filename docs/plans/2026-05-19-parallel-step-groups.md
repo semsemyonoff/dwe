@@ -207,10 +207,10 @@ Cancellation must reach **three** layers, not just one: shell-out runners (host/
 
 The executor's parallel branch will call `Recorder.OnStepStart` / `OnStepFinish` / `OnStepFail` from N goroutines. `FileRecorder` writes `journal.Save` on each event → needs serialisation.
 
-- [ ] add `sync.Mutex` to `FileRecorder` (`internal/pipeline/file_recorder.go`) and lock around every state-mutating method (`OnStepStart`, `OnStepFinish`, `OnStepFail`, `OnStepSkip`, `OnPipelineFinish`)
-- [ ] document on the `Recorder` interface (`internal/pipeline/recorder.go`) that **implementations must be safe to call from multiple goroutines** once parallel groups land; update the `NopRecorder` accordingly (no-op, trivially safe — add a comment)
-- [ ] add a stress test in `internal/pipeline/file_recorder_test.go`: launch 32 goroutines each calling `OnStepStart` + `OnStepFinish` with distinct step addresses; `journal.Load(path)` after must show all 32 entries (no lost writes, no truncated YAML)
-- [ ] run `go test -race ./internal/pipeline/...` — must pass before next task
+- [x] add `sync.Mutex` to `FileRecorder` (`internal/pipeline/file_recorder.go`) and lock around every state-mutating method (`OnStepStart`, `OnStepFinish`, `OnStepFail`, `OnStepSkip`, `OnPipelineFinish`)
+- [x] document on the `Recorder` interface (`internal/pipeline/recorder.go`) that **implementations must be safe to call from multiple goroutines** once parallel groups land; update the `NopRecorder` accordingly (no-op, trivially safe — add a comment)
+- [x] add a stress test in `internal/pipeline/file_recorder_test.go`: launch 32 goroutines each calling `OnStepStart` + `OnStepFinish` with distinct step addresses; `journal.Load(path)` after must show all 32 entries (no lost writes, no truncated YAML)
+- [x] run `go test -race ./internal/pipeline/...` — must pass before next task
 
 ### Task 5: Reporter interface extension
 

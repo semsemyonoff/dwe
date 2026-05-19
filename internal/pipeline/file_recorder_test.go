@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -893,4 +894,55 @@ func TestFileRecorder_GatelessStepHashEqualsActionHash(t *testing.T) {
 
 	recordedHash := loaded.Project.Phases["setup"].Steps["step1"].ActionHash
 	assert.Equal(t, actionHash, recordedHash, "recorded hash for gateless step should equal ActionHash")
+}
+
+// TestFileRecorder_ConcurrentStepEvents exercises the recorder under the
+// access pattern the parallel-group executor will use: many goroutines each
+// recording one OnStepStart + OnStepFinish for a distinct step. Without the
+// mutex this would race on map writes and lose entries when journal.Save
+// re-marshals a half-mutated state. Run with `go test -race`.
+func TestFileRecorder_ConcurrentStepEvents(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.yml")
+
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project:       &journal.ProjectLevelState{},
+		Services:      make(map[string]*journal.ServiceState),
+	}
+	rec := NewFileRecorder(statePath, state, map[string]string{}, "project-hash", true)
+	rec.OnPipelineStart("deploy", 32)
+
+	const n = 32
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		go func() {
+			defer wg.Done()
+			step := ResolvedStep{
+				Phase: config.DeployPhase{Name: "setup"},
+				Step:  config.DeployStep{Name: fmt.Sprintf("step-%02d", i), Type: "shell", Cmd: "true"},
+			}
+			hash := fmt.Sprintf("hash-%02d", i)
+			rec.OnStepStart(step.StepAddress(), step, hash)
+			rec.OnStepFinish(step.StepAddress(), step, hash, int64(i))
+		}()
+	}
+	wg.Wait()
+
+	rec.OnPipelineFinish(true)
+	require.NoError(t, rec.Err())
+
+	loaded, err := journal.Load(statePath)
+	require.NoError(t, err)
+	require.NotNil(t, loaded.Project)
+	require.NotNil(t, loaded.Project.Phases["setup"])
+	steps := loaded.Project.Phases["setup"].Steps
+	require.Len(t, steps, n, "all %d concurrent step writes must survive to disk", n)
+	for i := range n {
+		name := fmt.Sprintf("step-%02d", i)
+		require.NotNil(t, steps[name], "missing recorded step %q", name)
+		assert.Equal(t, journal.StatusOk, steps[name].Status)
+		assert.Equal(t, fmt.Sprintf("hash-%02d", i), steps[name].ActionHash)
+	}
 }

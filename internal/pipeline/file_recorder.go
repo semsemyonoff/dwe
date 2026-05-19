@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"devbox-cli/internal/deploy/journal"
@@ -14,7 +15,12 @@ import (
 // to the correct subtree in the state using ResolvedStep.Service and ResolvedStep.Phase.Name.
 // Project-level steps (Service == "") update project.phases.<name>.steps.<step>,
 // while service steps update services.<service>.phases.<name>.steps.<step>.
+// FileRecorder methods that mutate state (OnPipelineStart, OnStepStart,
+// OnStepFinish, OnStepFail, OnStepSkip, OnPipelineFinish) are safe for
+// concurrent use; the parallel-group executor calls them from multiple
+// goroutines per sub-step.
 type FileRecorder struct {
+	mu                    sync.Mutex
 	statePath             string
 	state                 *journal.ProjectState
 	serviceConfigHashes   map[string]string
@@ -29,6 +35,8 @@ type FileRecorder struct {
 // Callers should check this after RunWithOptions succeeds to detect cases where
 // steps ran successfully but state was not persisted to disk.
 func (r *FileRecorder) Err() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.flushErr
 }
 
@@ -62,6 +70,8 @@ func NewFileRecorder(
 
 // OnPipelineStart is called once before any steps execute.
 func (r *FileRecorder) OnPipelineStart(name string, totalSteps int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.pipelineStartTime = time.Now()
 
 	if r.state.Project == nil {
@@ -90,6 +100,8 @@ func (r *FileRecorder) OnPipelineStart(name string, totalSteps int) {
 
 // OnStepStart is called immediately before a step executes.
 func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	// Initialize phase if not present
 	if rs.Service == "" {
 		// Project-scope step
@@ -154,6 +166,8 @@ func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash stri
 
 // OnStepFinish is called after a step completes successfully.
 func (r *FileRecorder) OnStepFinish(addr string, rs ResolvedStep, actionHash string, durationMs int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	now := time.Now()
 	stepState := &journal.StepState{
 		Status:     journal.StatusOk,
@@ -182,6 +196,8 @@ func (r *FileRecorder) OnStepFinish(addr string, rs ResolvedStep, actionHash str
 
 // OnStepFail is called when a step returns an error.
 func (r *FileRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash string, durationMs int64, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	now := time.Now()
 	stepState := &journal.StepState{
 		Status:     journal.StatusFailed,
@@ -208,6 +224,8 @@ func (r *FileRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash strin
 
 // OnStepSkip is called when a step is skipped.
 func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash string, reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	// For state-based skips, do not overwrite the existing StatusOk journal entry.
 	// Overwriting with StatusSkipped would cause Decide() to return Run on the next
 	// deploy (prev.Status != StatusOk), creating an alternating run/skip cycle.
@@ -279,6 +297,8 @@ func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash strin
 // OnPipelineFinish is called once after all steps complete or the first step fails.
 // It stamps the config hashes and derives status aggregates.
 func (r *FileRecorder) OnPipelineFinish(success bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	now := time.Now()
 
 	// Stamp project config hash and last run status
