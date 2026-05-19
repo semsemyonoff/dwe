@@ -1090,6 +1090,64 @@ func TestRunPipeline_FilesGate_NilRegistry_FailsStep(t *testing.T) {
 	}
 }
 
+// TestRunPipeline_FilesGate_UnknownCommand_FailsStep verifies that a gated step fails with
+// ErrSilent when the gate references a command not present in the registry.
+func TestRunPipeline_FilesGate_UnknownCommand_FailsStep(t *testing.T) {
+	workDir := t.TempDir()
+
+	reg := usercommands.NewEmptyRegistry()
+	// "db-download" intentionally absent from registry.
+
+	rep := &mockReporter{}
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "setup"}
+	steps := []ResolvedStep{
+		{
+			Phase: phase,
+			Step: config.DeployStep{
+				Name: "check-dump",
+				Type: "shell",
+				Cmd:  "echo dump-exists",
+			},
+			FilesGate: &filesgate.FilesGate{
+				Command: "db-download",
+				State:   filesgate.StateReadable,
+				Require: filesgate.RequireRequired{},
+			},
+		},
+	}
+
+	err := RunWithOptions(RunOptions{
+		Steps:       steps,
+		Reporter:    rep,
+		Name:        "test",
+		Config:      cfg,
+		Registry:    reg,
+		WorkDir:     workDir,
+		LogWriter:   nil,
+		SkipConfirm: true,
+		Recorder:    &NopRecorder{},
+		SkipDecider: func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+			return journal.Run
+		},
+	})
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent for unknown command, got %v", err)
+	}
+
+	var failEvents []reporterEvent
+	for _, e := range rep.events {
+		if e.kind == "FailStep" {
+			failEvents = append(failEvents, e)
+		}
+	}
+	if len(failEvents) != 1 {
+		t.Errorf("want 1 FailStep event, got %d", len(failEvents))
+	} else if !strings.Contains(failEvents[0].err.Error(), "unknown command") {
+		t.Errorf("FailStep error %q should mention 'unknown command'", failEvents[0].err.Error())
+	}
+}
+
 // TestRunPipeline_FilesGate_JournalBypass_MissingStateArtifactAbsent verifies that a gated step
 // bypasses the journal skip-decider when the gate is satisfied. State: missing; artifact absent
 // → gate satisfied (no file present) → step runs, even though SkipDecider returns journal.Skip.
