@@ -95,10 +95,16 @@ func (v *resetParallelGroupsValidator) Run(ctx validate.Context) []validate.Diag
 func validateParallelPhases(reg *registry.Registry, phases []config.DeployPhase, baseTarget, file string) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	for phaseIdx, phase := range phases {
-		// Collect name counts across leaf steps + every parallel sub-step in this phase.
+		// Collect name counts across leaf steps + group steps + every parallel
+		// sub-step in this phase. The group step's own name must be counted so
+		// that a leaf "foo" + group named "foo", or a group named "foo" with a
+		// sub-step also named "foo", are detected as duplicates.
 		nameCounts := map[string]int{}
 		for _, step := range phase.Steps {
 			if step.Parallel != nil {
+				if step.Name != "" {
+					nameCounts[step.Name]++
+				}
 				for _, sub := range step.Parallel.Steps {
 					if sub.Name != "" {
 						nameCounts[sub.Name]++

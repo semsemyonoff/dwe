@@ -207,11 +207,46 @@ func (r *FileRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash strin
 	}
 
 	if rs.Service == "" {
-		// Project-scope step
+		// Project-scope step — initialize maps if not yet set up by OnStepStart
+		// (files_gate failures call OnStepFail without a preceding OnStepStart).
+		if r.state.Project == nil {
+			r.state.Project = &journal.ProjectLevelState{}
+		}
+		if r.state.Project.Phases == nil {
+			r.state.Project.Phases = make(map[string]*journal.PhaseState)
+		}
+		if r.state.Project.Phases[rs.Phase.Name] == nil {
+			r.state.Project.Phases[rs.Phase.Name] = &journal.PhaseState{
+				Steps: make(map[string]*journal.StepState),
+			}
+		}
+		if r.state.Project.Phases[rs.Phase.Name].Steps == nil {
+			r.state.Project.Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
+		}
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		r.state.Project.Phases[rs.Phase.Name].Status = journal.StatusFailed
 	} else {
-		// Service-scope step
+		// Service-scope step — initialize maps if not yet set up by OnStepStart.
+		if r.state.Services == nil {
+			r.state.Services = make(map[string]*journal.ServiceState)
+		}
+		if r.state.Services[rs.Service] == nil {
+			r.state.Services[rs.Service] = &journal.ServiceState{
+				Phases:  make(map[string]*journal.PhaseState),
+				LastRun: &journal.LastRun{},
+			}
+		}
+		if r.state.Services[rs.Service].Phases == nil {
+			r.state.Services[rs.Service].Phases = make(map[string]*journal.PhaseState)
+		}
+		if r.state.Services[rs.Service].Phases[rs.Phase.Name] == nil {
+			r.state.Services[rs.Service].Phases[rs.Phase.Name] = &journal.PhaseState{
+				Steps: make(map[string]*journal.StepState),
+			}
+		}
+		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps == nil {
+			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
+		}
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = journal.StatusFailed
 	}

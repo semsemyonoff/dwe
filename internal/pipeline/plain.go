@@ -199,16 +199,18 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 		return
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.tty && r.ttyProg != nil {
 		if entry, ok := r.ttySubs[stepAddr]; ok {
 			entry.status = statusSkipped
 			entry.reason = reason
 			entry.finish = r.now()
-			r.ttyProg.Send(subStepSkipMsg{addr: stepAddr, reason: reason})
+			prog := r.ttyProg
+			r.mu.Unlock()
+			prog.Send(subStepSkipMsg{addr: stepAddr, reason: reason})
 			return
 		}
 	}
+	defer r.mu.Unlock()
 	if index > 0 {
 		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
 	} else {
@@ -230,15 +232,17 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 		return
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.tty && r.ttyProg != nil {
 		if entry, ok := r.ttySubs[stepAddr]; ok {
 			entry.status = statusOk
 			entry.finish = r.now()
-			r.ttyProg.Send(subStepDoneMsg{addr: stepAddr, ok: true})
+			prog := r.ttyProg
+			r.mu.Unlock()
+			prog.Send(subStepDoneMsg{addr: stepAddr, ok: true})
 			return
 		}
 	}
+	defer r.mu.Unlock()
 	if index > 0 {
 		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
 	} else {
@@ -257,7 +261,6 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 // "Pipeline" if StartPipeline was not called.
 func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int, total int, err error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	// Parallel sub-step failure in TTY mode: defer the formatted error block
 	// to the post-group summary so it does not collide with the live view.
@@ -270,10 +273,13 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int
 			if err != nil {
 				msg.err = err.Error()
 			}
-			r.ttyProg.Send(msg)
+			prog := r.ttyProg
+			r.mu.Unlock()
+			prog.Send(msg)
 			return
 		}
 	}
+	defer r.mu.Unlock()
 
 	// Parallel sub-step failure in non-TTY mode: print compact status line,
 	// dump captured output between separator bars, then the error.
@@ -585,13 +591,15 @@ func orderedTTYSubs(m map[string]*ttySubStepEntry) []*ttySubStepEntry {
 // so we never panic.
 func (r *PlainReporter) SubStepOutput(subAddr string, line string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.tty {
-		if r.ttyProg != nil {
-			r.ttyProg.Send(subStepOutputMsg{addr: subAddr, line: line})
+		prog := r.ttyProg
+		r.mu.Unlock()
+		if prog != nil {
+			prog.Send(subStepOutputMsg{addr: subAddr, line: line})
 		}
 		return
 	}
+	defer r.mu.Unlock()
 	if r.subs == nil {
 		r.subs = make(map[string]*subStepEntry)
 	}
