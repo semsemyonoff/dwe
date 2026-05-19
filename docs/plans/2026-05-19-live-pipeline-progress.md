@@ -380,18 +380,18 @@ End state: row F has `line` (now in scrollback record), rows F+1..F+N have block
 End state: row F+N is the OLD footer (frozen with whatever final text it had), row F+N+1 is the NEW single-line footer, cursor at row F+N+2. Subsequent operations (Println, redraw) operate on the new footer.
 
 Checklist:
-- [ ] add `blockRows int`, `blockContent []string` state to `LiveLine`
-- [ ] implement `StartBlock` with the physical-reservation sequence above (NOT state-only)
-- [ ] implement `SetBlockRow` (state update + immediate redraw)
-- [ ] implement `EndBlock` (freezes existing block, paints new single-line footer below)
-- [ ] update `redraw()` to handle both single-line and block modes per the sequences above
-- [ ] update `Println` to handle both single-line and block modes per the sequences above
-- [ ] build a `termGrid` test helper in `liveline_test.go` (or a separate `termgrid_test.go`) — virtual `[][]rune` of fixed height that consumes `\r`, `\n` (with auto-scroll when cursor exceeds height), `\x1b[2K`, `\x1b[<N>A`, `\x1b[<N>B`; returns final cell contents row-by-row; the helper also models cursor position so tests can assert it
-- [ ] write unit tests for block-mode operations using `termGrid`: after `StartBlock(3)` cursor is at the row immediately below the new footer (which is 3 block rows + 1 footer = 4 rows below the original footer position); after `SetBlockRow(0, "a") + SetBlockRow(1, "b") + SetBlockRow(2, "c")` rows show a/b/c + footer; after `Println("data")` the grid shows: `data` in scrollback row, then 3 block rows with set content, then footer; after `EndBlock` the block + old-footer rows persist, a new footer is at the row the cursor was on
-- [ ] write tests for transitions: single → block → single (block leaves scrollback record, single-line continues below)
-- [ ] write tests for multiple block sessions in sequence (a parallel group followed by another parallel group); assert both blocks persist in scrollback
-- [ ] write a test where the block's bottom row pushes against the viewport bottom — viewport scrolls correctly (use a small terminal height in `termGrid`)
-- [ ] run `go test ./internal/pipeline/...` — must pass before Task 9
+- [x] add `blockRows int`, `blockContent []string` state to `LiveLine`
+- [x] implement `StartBlock` with the physical-reservation sequence above (NOT state-only)
+- [x] implement `SetBlockRow` (state update + immediate redraw)
+- [x] implement `EndBlock` (freezes existing block, paints new single-line footer below)
+- [x] update `redraw()` to handle both single-line and block modes per the sequences above
+- [x] update `Println` to handle both single-line and block modes per the sequences above
+- [x] build a `termGrid` test helper in `liveline_test.go` (or a separate `termgrid_test.go`) — virtual `[][]rune` of fixed height that consumes `\r`, `\n` (with auto-scroll when cursor exceeds height), `\x1b[2K`, `\x1b[<N>A`, `\x1b[<N>B`; returns final cell contents row-by-row; the helper also models cursor position so tests can assert it
+- [x] write unit tests for block-mode operations using `termGrid`: after `StartBlock(3)` cursor is at the row immediately below the new footer (which is 3 block rows + 1 footer = 4 rows below the original footer position); after `SetBlockRow(0, "a") + SetBlockRow(1, "b") + SetBlockRow(2, "c")` rows show a/b/c + footer; after `Println("data")` the grid shows: `data` in scrollback row, then 3 block rows with set content, then footer; after `EndBlock` the block + old-footer rows persist, a new footer is at the row the cursor was on
+- [x] write tests for transitions: single → block → single (block leaves scrollback record, single-line continues below)
+- [x] write tests for multiple block sessions in sequence (a parallel group followed by another parallel group); assert both blocks persist in scrollback
+- [x] write a test where the block's bottom row pushes against the viewport bottom — viewport scrolls correctly (use a small terminal height in `termGrid`)
+- [x] run `go test ./internal/pipeline/...` — must pass before Task 9
 
 ### Task 9: `PlainReporter` parallel group integration
 

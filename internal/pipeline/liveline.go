@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +41,11 @@ type LiveLine struct {
 	stopOnce sync.Once
 	stopCh   chan struct{}
 	doneCh   chan struct{}
+
+	// Block-mode state: when blockRows > 0 the LiveLine owns N reserved rows
+	// above the footer used by parallel-group sub-step displays.
+	blockRows    int
+	blockContent []string
 
 	// testHooks lets tests drive the ticker deterministically and to override
 	// width detection without poking at the terminal.
@@ -127,16 +133,31 @@ func (l *LiveLine) tick() {
 
 func (l *LiveLine) advance() {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	if !l.enabled || !l.started || l.stopped || l.paused {
-		l.mu.Unlock()
 		return
 	}
 	// Synthesise a TickMsg the spinner accepts; discard the returned Cmd.
 	newSp, _ := l.spinner.Update(spinner.TickMsg{Time: time.Now(), ID: l.spinner.ID()})
 	l.spinner = newSp
-	// Redraw single-line footer: up one row, clear, paint, newline.
+	l.redrawLocked()
+}
+
+// redrawLocked repaints the LiveLine-owned rows. Caller holds l.mu.
+//
+// Single-line mode: up one row, clear, paint footer, newline (cursor below).
+// Block mode: up blockRows+1 rows to top of block, paint each block row, then
+// footer, each terminated by \n (cursor ends below footer).
+func (l *LiveLine) redrawLocked() {
+	if l.blockRows > 0 {
+		l.writeTerm(fmt.Sprintf("\x1b[%dA", l.blockRows+1))
+		for i := range l.blockRows {
+			l.writeTerm("\r\x1b[2K" + l.renderBlockRowLocked(i) + "\n")
+		}
+		l.writeTerm("\r\x1b[2K" + l.renderFooterLocked() + "\n")
+		return
+	}
 	l.writeTerm("\x1b[1A\r\x1b[2K" + l.renderFooterLocked() + "\n")
-	l.mu.Unlock()
 }
 
 // Stop hides the footer and joins the ticker. Idempotent — safe to call
@@ -164,8 +185,20 @@ func (l *LiveLine) Stop() {
 
 		l.mu.Lock()
 		if l.started && !l.paused {
-			// Erase footer + show cursor. Cursor remains on the cleared row.
-			l.writeTerm("\x1b[1A\r\x1b[2K\x1b[?25h")
+			if l.blockRows > 0 {
+				// Erase block + footer rows (defensive: callers should
+				// EndBlock first, but Stop must not leave artifacts).
+				n := l.blockRows + 1
+				l.writeTerm(fmt.Sprintf("\x1b[%dA", n))
+				for range n {
+					l.writeTerm("\r\x1b[2K\n")
+				}
+				l.writeTerm(fmt.Sprintf("\x1b[%dA", n))
+				l.writeTerm("\x1b[?25h")
+			} else {
+				// Erase footer + show cursor. Cursor remains on the cleared row.
+				l.writeTerm("\x1b[1A\r\x1b[2K\x1b[?25h")
+			}
 		} else if l.started && l.paused {
 			// Paused already erased the footer; just show the cursor.
 			l.writeTerm("\x1b[?25h")
@@ -219,6 +252,85 @@ func (l *LiveLine) SetText(s string) {
 	l.mu.Unlock()
 }
 
+// StartBlock physically reserves `rows` rows above the footer for sub-step
+// content. The footer moves down by `rows` rows. Block content starts empty
+// and is populated via [LiveLine.SetBlockRow]. Calling StartBlock when a block
+// is already active or when LiveLine is disabled/stopped is a no-op.
+func (l *LiveLine) StartBlock(rows int) {
+	if !l.enabled || rows <= 0 {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.started || l.stopped || l.blockRows > 0 {
+		return
+	}
+	// Erase current footer (cursor at footer row col 0).
+	l.writeTerm("\x1b[1A\r\x1b[2K")
+	// Reserve `rows` rows by writing newlines; terminal scrolls if needed.
+	l.writeTerm(strings.Repeat("\n", rows))
+	l.blockRows = rows
+	l.blockContent = make([]string, rows)
+	// Paint footer at the new bottom position; \n places cursor below footer.
+	l.writeTerm(l.renderFooterLocked() + "\n")
+}
+
+// SetBlockRow updates the content for block row idx and triggers an immediate
+// redraw. Out-of-range idx is silently ignored.
+func (l *LiveLine) SetBlockRow(idx int, content string) {
+	if !l.enabled {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.started || l.stopped || l.paused || l.blockRows == 0 {
+		if l.blockRows > 0 && idx >= 0 && idx < l.blockRows {
+			l.blockContent[idx] = content
+		}
+		return
+	}
+	if idx < 0 || idx >= l.blockRows {
+		return
+	}
+	l.blockContent[idx] = content
+	l.redrawLocked()
+}
+
+// EndBlock freezes the current block (rows persist in scrollback) and paints a
+// fresh single-line footer below. Subsequent operations behave as single-line.
+func (l *LiveLine) EndBlock() {
+	if !l.enabled {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.started || l.stopped || l.blockRows == 0 {
+		return
+	}
+	// Cursor is at the row below the current (about-to-be-frozen) footer.
+	// Paint a fresh single-line footer here; \n lands cursor below it.
+	l.writeTerm(l.renderFooterLocked() + "\n")
+	l.blockRows = 0
+	l.blockContent = nil
+}
+
+// renderBlockRowLocked formats block row idx, truncating to terminal width.
+// Caller holds l.mu.
+func (l *LiveLine) renderBlockRowLocked(idx int) string {
+	w := l.width
+	if l.testHooks != nil && l.testHooks.widthFn != nil {
+		w = l.testHooks.widthFn()
+	}
+	if w <= 0 {
+		w = liveLineDefaultWidth
+	}
+	content := l.blockContent[idx]
+	if lipgloss.Width(content) > w {
+		content = truncateToWidth(content, w)
+	}
+	return content
+}
+
 // Println writes a persistent data line ABOVE the footer. In disabled mode it
 // writes "line\n" straight to screen. In enabled mode the sequence is:
 //
@@ -246,6 +358,26 @@ func (l *LiveLine) Println(rawLine string) {
 	if l.paused {
 		// Footer is already erased; just write the line.
 		_, _ = io.WriteString(l.screen, rawLine+"\n")
+		l.mu.Unlock()
+		return
+	}
+	if l.blockRows > 0 {
+		n := l.blockRows + 1
+		// Up to the top of owned area.
+		l.writeTerm(fmt.Sprintf("\x1b[%dA", n))
+		// Clear each owned row by walking down with \r\x1b[2K\n.
+		for range n {
+			l.writeTerm("\r\x1b[2K\n")
+		}
+		// Back to top of cleared area.
+		l.writeTerm(fmt.Sprintf("\x1b[%dA", n))
+		// Data line lands on the topmost cleared row.
+		_, _ = io.WriteString(l.screen, rawLine+"\n")
+		// Repaint block rows then footer; \n advances cursor below the footer.
+		for i := range l.blockRows {
+			l.writeTerm(l.renderBlockRowLocked(i) + "\n")
+		}
+		l.writeTerm(l.renderFooterLocked() + "\n")
 		l.mu.Unlock()
 		return
 	}
