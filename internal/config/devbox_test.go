@@ -3924,14 +3924,14 @@ parallel:
   fail_fast: true
   steps:
     - {name: a, type: shell, cmd: echo a}
-`, want: ptr(true)},
+`, want: new(true)},
 		{name: "false", yaml: `
 name: g
 parallel:
   fail_fast: false
   steps:
     - {name: a, type: shell, cmd: echo a}
-`, want: ptr(false)},
+`, want: new(false)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

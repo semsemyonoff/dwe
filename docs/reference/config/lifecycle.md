@@ -229,6 +229,10 @@ A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
 - `deploy_services: true` is rejected (only valid in `deploy.yml`).
 - `final_message` and `log` are normalized to defaults when absent.
 
+## Parallel step groups
+
+Lifecycle phases use the same `parallel:` step-group container as `deploy.yml`. A step may declare `parallel: { max_concurrent, fail_fast, steps }` instead of a leaf body, and the inner sub-steps run concurrently with the same cancellation, journal, and reporter semantics. See [deploy.md → Parallel step groups](deploy.md#parallel-step-groups) for the schema, defaults, validation rules, and execution model.
+
 ## Common pitfalls
 
 - **Forgetting `continue_on_error: true` on hook steps** — without it, a failing pre-stop hook aborts the entire stop sequence and containers are never stopped.

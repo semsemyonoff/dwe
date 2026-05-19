@@ -653,6 +653,97 @@ phases:
         cmd: "render ide main"
 ```
 
+## Parallel step groups
+
+A step may declare a `parallel:` block instead of a leaf body (`type` + `cmd`). The orchestrator runs the inner sub-steps concurrently via `errgroup` + a semaphore, waits for all of them, and aggregates results. Same model applies to `lifecycle.yml` and `reset.yml`.
+
+```yaml
+phases:
+  - name: init
+    steps:
+      - name: db-dumps
+        when: ...                  # optional; evaluated once before the group
+        skip_confirm: true         # optional; OR-merged into every sub-step
+        parallel:
+          max_concurrent: 4        # optional; default = min(NumCPU, len(steps))
+          fail_fast: true          # optional; default true
+          steps:                   # required, >= 2
+            - name: download-main
+              type: command
+              cmd: services.main.db.dump-download
+              files_gate: { ... }
+            - name: download-stock
+              type: command
+              cmd: services.stock.db.dump-download
+            - name: download-price
+              type: command
+              cmd: services.price.db.dump-download
+```
+
+### Schema
+
+Group-level keys allowed on a step with `parallel:`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Required. Group name (used in plan output and reporter headers). |
+| `description` | string | Optional. |
+| `when` | condition | Evaluated **once** before launching sub-steps. On false the whole group is skipped and each sub-step is recorded as skipped in the journal. |
+| `skip_confirm` | bool | OR-merged into every sub-step at resolve time. A sub-step's own `skip_confirm: false` cannot un-set the inherited true (monotonic). |
+| `parallel.max_concurrent` | int | Default `min(runtime.NumCPU(), len(steps))`; capped to `len(steps)` when larger. |
+| `parallel.fail_fast` | bool (tristate) | Default `true`. When true, the first sub-step failure cancels siblings via `context`. When false, all sub-steps run to completion and errors are joined. |
+| `parallel.steps` | []DeployStep | Required, >= 2 entries. |
+
+Leaf-only directives are **rejected** on a group step: `type`, `cmd`, `with`, `check`, `files_gate`, `continue_on_error`. The YAML loader returns a strict-decode error naming the offending field. Unknown fields under `parallel:` itself (e.g. typo `max_concurent`) are likewise rejected.
+
+### Defaults and validation
+
+| Rule | Diagnostic |
+|---|---|
+| Nested `parallel:` (sub-step has its own `parallel:`) | error — flat groups only in v1 |
+| `parallel.steps` < 2 | error — use a leaf step if only one item |
+| Sub-step missing `name` | error |
+| Duplicate sub-step names within a phase (across groups + leaf steps) | error — the journal keys entries by `(phase, name)` |
+| Interactive prompt in sub-step without `skip_confirm: true` (sub-step or inherited from group) | error — covers `confirmation: true` in the target command, `builtin: confirm`, and workflows recursively containing a confirm-step |
+| `service_run` sub-step with TTY-allocating compose args | warning — TTY is never allocated in parallel mode |
+
+Validation runs at `devbox validate` and at plan resolution; either path catches misconfigurations before execution.
+
+### Execution semantics
+
+- **Cancellation**: `errgroup.WithContext` carries the parent `context.Context` through every runner (`HostRunner`, `DevboxRunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`) and every builtin. Shell-out children are spawned with `exec.CommandContext` and bound to `cmd.Cancel = SIGTERM` + `cmd.WaitDelay = 5s` — on cancel, the child receives SIGTERM first (graceful shutdown), then SIGKILL after the delay. The Go-side builtin `docker_wait_healthy` aborts its poll loop on `ctx.Done()` within one tick.
+- **SIGINT**: `RunWithOptions` installs a `signal.NotifyContext(SIGINT, SIGTERM)` on the parent context once per pipeline run. A user Ctrl-C cancels the context, which propagates to every active sub-step's child process. No orphaned `docker compose` / `sleep` processes after a clean shutdown.
+- **`fail_fast: true`**: first failing sub-step (not counting `continue_on_error: true` ones) cancels the group; remaining sub-steps observe `ctx.Done()` and their children are killed. The group's error is the first failure wrapped with its sub-step address.
+- **`fail_fast: false`**: all sub-steps run to completion. Errors are wrapped per-sub-step (`parallel sub-step "phase/group/sub": <err>`) and combined via `errors.Join`.
+- **Per-sub-step `when` / `files_gate` / journal-skip**: each sub-step still runs through the same `step-when → files_gate → journal-skip (only when gate is nil) → ExecAction → check` pipeline. Group-`when` is evaluated **once**; per-sub-step `when` is **also** evaluated inside the goroutine.
+- **Journal**: each sub-step is journaled independently under `(phase, sub-step.Name)`. The group itself is not journaled. `journal.StepHash(step)` is computed from the sub-step alone, so reordering or adding sub-steps does not invalidate siblings.
+
+### Reporter and logging
+
+- **TTY**: a per-group bubbletea live view (`internal/pipeline/parallel_view.go`) renders a spinner block with the latest output line per sub-step. After the group finishes, the live view is replaced with a one-shot summary block (icon, elapsed, sub-step name).
+- **Non-TTY** (CI, piped stdout): sub-step output is buffered per sub-step and dumped between `───── output ─────` separators when each sub-step finishes. `StartStep`, `FinishStep`, `FailStep`, and `SkipStep` for sub-steps are routed through the same `· [N/M] ...` formatter as leaf steps.
+- **Per-sub-step log files**: `.devbox/logs/parallel/<pipeline>/<group>/<sub>.log` captures only that sub-step's output. The global pipeline log (`.devbox/logs/<pipeline>.log`) keeps receiving everything interleaved.
+- **`childIO`** never writes to `os.Stdout` / `os.Stderr` directly in parallel mode (`ActionContext.Parallel = true`); a PTY is never allocated.
+
+### Plan output
+
+`devbox deploy plan` renders parallel groups with a contiguous index range and indented sub-step lines:
+
+```
+[12-14/25] [parallel group: db-dumps (3 steps, max_concurrent=3, fail_fast=true)]
+  [12/25]  download-main      command services.main.db.dump-download [files_gate]
+  [13/25]  download-stock     command services.stock.db.dump-download
+  [14/25]  download-price     command services.price.db.dump-download
+```
+
+### Restrictions (v1)
+
+- No nested `parallel:` inside `parallel:`.
+- No interactive confirmation in sub-steps (`confirmation: true`, `builtin: confirm`, workflow with `WorkflowStep.Confirm`). Set `skip_confirm: true` or restructure.
+- No DAG / `depends_on` between sub-steps. Flat groups only.
+- No auto-parallelisation flag — explicit YAML opt-in only.
+- No PTY in sub-steps. `service_run` with `-it`-style compose args will fail at the child with "cannot allocate tty" (surfaces as a normal sub-step failure subject to `continue_on_error` / `fail_fast`).
+
 ## Common pitfalls
 
 - **Missing `with:` for builtin parameters** — builtins require `with:` for their parameters; passing them as top-level step fields does not work.

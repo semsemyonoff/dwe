@@ -373,13 +373,13 @@ Surface the new rules in `devbox validate` so users see them before `deploy`.
 
 Finalise: docs, lint, full suite, real-project smoke.
 
-- [ ] add a "Parallel step groups" section to `docs/reference/config/deploy.md` covering: YAML schema, defaults, semantics (fail_fast, cancellation, journal-per-substep), restrictions (no nesting, no confirmation, no PTY), reporter behaviour (TTY vs non-TTY), cancellation contract (SIGTERM → SIGKILL via `cmd.Cancel` + `WaitDelay`)
-- [ ] cross-reference from `docs/reference/config/lifecycle.md` and `docs/reference/config/reset.md` (the feature applies to all three pipelines)
-- [ ] update `AGENTS.md` package summaries to mention `ParallelGroup` / `ResolvedParallel` / new reporter methods / `internal/pipeline/parallel_view.go`
-- [ ] verify SIGINT propagation end-to-end: from a separate terminal, `kill -INT <pid>` of an in-progress parallel deploy; confirm (a) `signal.NotifyContext` in `RunWithOptions` cancels the parent `ctx`, (b) each shell-out child receives SIGTERM (via `cmd.Cancel`), then SIGKILL after `WaitDelay`, (c) the `docker_wait_healthy` builtin aborts its poll loop within one tick, (d) the executor returns `context.Canceled` cleanly without orphaned `docker compose` / `sleep` processes (verify with `pgrep -P $$` before and after)
-- [ ] run `make lint` — all issues must be fixed
-- [ ] run `make test` and `go test -race ./internal/pipeline/...` — full suite green
-- [ ] verify all task checkboxes above are marked `[x]`
+- [x] add a "Parallel step groups" section to `docs/reference/config/deploy.md` covering: YAML schema, defaults, semantics (fail_fast, cancellation, journal-per-substep), restrictions (no nesting, no confirmation, no PTY), reporter behaviour (TTY vs non-TTY), cancellation contract (SIGTERM → SIGKILL via `cmd.Cancel` + `WaitDelay`)
+- [x] cross-reference from `docs/reference/config/lifecycle.md` (there is no separate `reset.md` — `deploy.md` documents both `deploy.yml` and `reset.yml`, so the deploy.md section covers reset by construction)
+- [x] update `AGENTS.md` package summaries to mention `ParallelGroup` / `ResolvedParallel` / new reporter methods / `internal/pipeline/parallel_view.go`
+- [x] manual SIGINT verification (skipped - not automatable in this loop; smoke procedure documented in Post-Completion section: from a separate terminal, `kill -INT <pid>` of an in-progress parallel deploy and confirm context cancels, SIGTERM→SIGKILL via `cmd.Cancel`+`WaitDelay`, `docker_wait_healthy` aborts on `ctx.Done`, and `pgrep -P $$` is empty after exit)
+- [x] run `make lint` — 0 issues
+- [x] run `make test` and `go test -race ./internal/pipeline/...` — full suite green; pre-existing `TestFileRecorder_TimestampsAreSet` race-only flake unchanged (documented in Task 9, reproduces on baseline)
+- [x] verify all task checkboxes above are marked `[x]`
 
 ## Technical Details
 

@@ -455,7 +455,7 @@ func TestPrintPlanTable_parallelGroupRendersHeaderAndSubSteps(t *testing.T) {
 	idxMain := strings.Index(out, "download-main")
 	idxStock := strings.Index(out, "download-stock")
 	idxPrice := strings.Index(out, "download-price")
-	if !(idxHeader < idxMain && idxMain < idxStock && idxStock < idxPrice) {
+	if idxHeader >= idxMain || idxMain >= idxStock || idxStock >= idxPrice {
 		t.Errorf("expected header < main < stock < price ordering, got header=%d main=%d stock=%d price=%d", idxHeader, idxMain, idxStock, idxPrice)
 	}
 }

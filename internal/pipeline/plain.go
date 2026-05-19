@@ -65,6 +65,11 @@ const (
 	parallelOutputBotBar = "  ──────────────────"
 )
 
+// PlainReporter is the default pipeline Reporter implementation.
+// It writes status icons (✓ ✗ ◎ ·) and elapsed-time footers via a render.Writer.
+// In TTY mode it drives a per-group bubbletea live view for parallel sub-steps;
+// in non-TTY mode it buffers sub-step output and dumps it between separator lines
+// on FinishStep/FailStep/SkipStep. All methods are safe for concurrent use.
 type PlainReporter struct {
 	mu        sync.Mutex // guards every write to w and any future shared state
 	w         *render.Writer

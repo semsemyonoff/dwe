@@ -10,8 +10,6 @@ import (
 	"devbox-cli/internal/usercommands/registry"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 func newParallelStep(name string, max int, failFast *bool, subs ...config.DeployStep) config.DeployStep {
 	return config.DeployStep{
 		Name: name,
@@ -46,10 +44,7 @@ func TestResolvePhaseSteps_parallelHappyPath(t *testing.T) {
 		t.Fatalf("expected 2 sub-steps, got %d", len(rp.Steps))
 	}
 	// Default MaxConcurrent: min(NumCPU, len)
-	want := runtime.NumCPU()
-	if want > 2 {
-		want = 2
-	}
+	want := min(runtime.NumCPU(), 2)
 	if rp.MaxConcurrent != want {
 		t.Errorf("MaxConcurrent default = %d, want %d", rp.MaxConcurrent, want)
 	}
@@ -63,7 +58,7 @@ func TestResolvePhaseSteps_parallelExplicitDefaults(t *testing.T) {
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
-			newParallelStep("group", 99, boolPtr(false),
+			newParallelStep("group", 99, new(false),
 				config.DeployStep{Name: "a", Type: "shell", Cmd: "echo a"},
 				config.DeployStep{Name: "b", Type: "shell", Cmd: "echo b"},
 			),
