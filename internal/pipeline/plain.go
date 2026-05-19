@@ -105,6 +105,12 @@ type PlainReporter struct {
 	currentStepAddr string
 	inBlockMode     bool
 	blockGroupAddr  string
+
+	// live owns the sticky single-line footer. It is always non-nil; when
+	// termOut is io.Discard (non-TTY) the LiveLine is constructed disabled
+	// and every public call is a no-op except Println, which writes the
+	// data line straight to the screen writer (matching the legacy path).
+	live *LiveLine
 }
 
 // NewPlainReporter creates a PlainReporter.
@@ -123,12 +129,14 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 	if logFile != nil {
 		wrapped = &logSanitizer{w: logFile}
 	}
-	return &PlainReporter{
+	r := &PlainReporter{
 		w:       screen,
 		logFile: wrapped,
 		termOut: termOut,
 		now:     time.Now,
 	}
+	r.live = NewLiveLine(termOut, screen.Writer(), termOut != io.Discard)
+	return r
 }
 
 // StartPipeline stores the pipeline name and records the start time for
@@ -136,9 +144,13 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 // output has no pipeline banner.
 func (r *PlainReporter) StartPipeline(name string, _ int) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.name = name
 	r.startTime = r.now()
+	r.mu.Unlock()
+	// SetText before Start so the initial footer paint already shows the
+	// pipeline label rather than the spinner alone.
+	r.live.SetText("Starting " + name + "...")
+	r.live.Start()
 }
 
 // EnterPhase prints the phase label line:
@@ -155,8 +167,13 @@ func (r *PlainReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
 		label += ": " + phase.Description
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.emit(render.Blue, label)
+	r.mu.Unlock()
+	footer := phaseKey
+	if phase.Description != "" {
+		footer += ": " + phase.Description
+	}
+	r.live.SetText(footer)
 }
 
 // SkipPhase prints a warning when an entire phase is skipped:
@@ -183,7 +200,6 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 		return
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.currentStepAddr = stepAddr
 	label := stepAddr
 	if step.Description != "" {
@@ -194,6 +210,13 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 	} else {
 		r.emit(render.Blue, fmt.Sprintf("  %s %s", iconRunning, label))
 	}
+	r.mu.Unlock()
+
+	footer := label
+	if index > 0 {
+		footer = fmt.Sprintf("[%d/%d] %s", index, total, label)
+	}
+	r.live.SetText(footer)
 }
 
 // SkipStep prints a warning when a step is skipped due to a when condition:
@@ -288,17 +311,23 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int
 //
 // On failure it is silent; the failure is already reported by FailStep.
 func (r *PlainReporter) FinishPipeline(success bool) {
+	// Stop the LiveLine on BOTH success and failure paths. The defer is
+	// registered before the early-return guard so the previous bug — where
+	// a failed pipeline left the spinner ticker running until process exit
+	// — cannot reoccur. stopOnce makes a redundant Close-time Stop a no-op.
+	defer r.live.Stop()
 	if !success {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	elapsed := formatElapsed(r.now().Sub(r.startTime))
-	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s %s Done%s %s(%s)%s\n",
+	line := fmt.Sprintf("%s%s %s Done%s %s(%s)%s",
 		r.timestampPrefix(),
 		render.Green, iconDone, render.Reset,
 		render.Gray, elapsed, render.Reset,
 	)
+	r.live.Println(line)
 	if r.logFile != nil {
 		_, _ = fmt.Fprintf(r.logFile, "[%s] %s Done (%s)\n", r.now().Format(timestampLayout), iconDone, elapsed)
 	}
@@ -310,7 +339,8 @@ func (r *PlainReporter) FinishPipeline(success bool) {
 // The full line goes to the screen writer; a clean ts+msg copy is side-written
 // to the log file (when configured) via logSanitizer.
 func (r *PlainReporter) emit(color, msg string) {
-	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s%s%s\n", r.timestampPrefix(), color, msg, render.Reset)
+	line := fmt.Sprintf("%s%s%s%s", r.timestampPrefix(), color, msg, render.Reset)
+	r.live.Println(line)
 	if r.logFile != nil {
 		_, _ = fmt.Fprintf(r.logFile, "[%s] %s\n", r.now().Format(timestampLayout), msg)
 	}

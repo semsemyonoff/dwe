@@ -314,19 +314,19 @@ Checklist:
 
 Goal: wire `LiveLine` into `PlainReporter` for the sequential (non-parallel) lifecycle. Every reporter event routes through `LiveLine.Println` (for status lines) or `LiveLine.SetText` (for the "what's running now" footer). Fix the `FinishPipeline(false)` early-return bug so Stop is always called.
 
-- [ ] add `live *LiveLine` and `logFile io.Writer` fields to `PlainReporter`; in `NewPlainReporter(screen, logFile, termOut)` construct LiveLine with `enabled = (termOut != io.Discard)`, `termOut`, `screen.Writer()`; wrap `logFile` with `logSanitizer{}` (Task 1) and store on `r.logFile` (nil when log disabled)
-- [ ] add `r.writeLog(line string)` helper that no-ops when `r.logFile == nil`, else writes `line + "\n"` to it
-- [ ] in `StartPipeline`: call `r.live.Start()` and `r.live.SetText("Starting <name>...")`
-- [ ] replace direct `fmt.Fprintf(r.w.Writer(), ...)` calls in `emit` with `r.live.Println(line)` (screen-only) + `r.writeLog(line)` (log-only) — single copy each
-- [ ] in `EnterPhase`: `r.live.SetText("<phase>: <description>")` — pure state update, no Println (the phase header status line is still emitted via the existing emit path)
-- [ ] in `StartStep`: emit the existing `· [N/M] <addr>` line via `emit` (so it goes to screen + log), AND `r.live.SetText("[N/M] <addr>: <description>")`
-- [ ] **fix FinishPipeline failure path** (plain.go:248 currently `if !success { return }`): restructure so `defer r.live.Stop()` is registered BEFORE the early-return guard; both success and failure paths Stop the live line
-- [ ] in `FinishPipeline(true)`: defer Stop, then emit the final "Done (1m 23s)" line via `emit`
-- [ ] in `FinishPipeline(false)`: defer Stop, then return silently (failure already reported by `FailStep`)
-- [ ] update `plain_test.go`'s `newBufReporter` to construct `NewPlainReporter(screen, nil, io.Discard)` — termOut=io.Discard means LiveLine is disabled and existing byte-for-byte assertions keep working; logFile=nil means side-writes no-op
-- [ ] add new tests covering the TTY path: feed lifecycle events to a PlainReporter where termOut is a `termGrid` (see Task 8), assert footer appears after StartPipeline, updates per phase/step, and disappears after FinishPipeline (both success and failure paths)
-- [ ] add tests confirming log file gets each status line exactly once even when LiveLine is enabled
-- [ ] run `go test ./internal/pipeline/...` — must pass before Task 8
+- [x] add `live *LiveLine` and `logFile io.Writer` fields to `PlainReporter`; in `NewPlainReporter(screen, logFile, termOut)` construct LiveLine with `enabled = (termOut != io.Discard)`, `termOut`, `screen.Writer()`; wrap `logFile` with `logSanitizer{}` (Task 1) and store on `r.logFile` (nil when log disabled)
+- [x] add `r.writeLog(line string)` helper that no-ops when `r.logFile == nil`, else writes `line + "\n"` to it
+- [x] in `StartPipeline`: call `r.live.Start()` and `r.live.SetText("Starting <name>...")`
+- [x] replace direct `fmt.Fprintf(r.w.Writer(), ...)` calls in `emit` with `r.live.Println(line)` (screen-only) + `r.writeLog(line)` (log-only) — single copy each
+- [x] in `EnterPhase`: `r.live.SetText("<phase>: <description>")` — pure state update, no Println (the phase header status line is still emitted via the existing emit path)
+- [x] in `StartStep`: emit the existing `· [N/M] <addr>` line via `emit` (so it goes to screen + log), AND `r.live.SetText("[N/M] <addr>: <description>")`
+- [x] **fix FinishPipeline failure path** (plain.go:248 currently `if !success { return }`): restructure so `defer r.live.Stop()` is registered BEFORE the early-return guard; both success and failure paths Stop the live line
+- [x] in `FinishPipeline(true)`: defer Stop, then emit the final "Done (1m 23s)" line via `emit`
+- [x] in `FinishPipeline(false)`: defer Stop, then return silently (failure already reported by `FailStep`)
+- [x] update `plain_test.go`'s `newBufReporter` to construct `NewPlainReporter(screen, nil, io.Discard)` — termOut=io.Discard means LiveLine is disabled and existing byte-for-byte assertions keep working; logFile=nil means side-writes no-op
+- [x] add new tests covering the TTY path: feed lifecycle events to a PlainReporter where termOut is a `termGrid` (see Task 8), assert footer appears after StartPipeline, updates per phase/step, and disappears after FinishPipeline (both success and failure paths)
+- [x] add tests confirming log file gets each status line exactly once even when LiveLine is enabled
+- [x] run `go test ./internal/pipeline/...` — must pass before Task 8
 
 ### Task 8: `LiveBlock` — multi-row block for parallel groups (with physical row reservation)
 

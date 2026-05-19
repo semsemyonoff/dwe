@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"sync"
@@ -23,7 +24,9 @@ var fixedTime = time.Date(2026, 5, 14, 22, 36, 36, 0, time.UTC)
 func newBufReporter() (*PlainReporter, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	w := render.NewWriter(buf)
-	r := NewPlainReporter(w, nil, nil)
+	// termOut=io.Discard means LiveLine is disabled so byte-for-byte
+	// assertions on `buf` still hold. logFile=nil means side-writes no-op.
+	r := NewPlainReporter(w, nil, io.Discard)
 	r.now = func() time.Time { return fixedTime }
 	return r, buf
 }
@@ -912,3 +915,141 @@ var errSentinel = errors.New("concurrent test")
 
 // Verify PlainReporter satisfies the Reporter interface at compile time.
 var _ Reporter = (*PlainReporter)(nil)
+
+// --- Task 7: LiveLine integration (sequential lifecycle) ---
+
+// newTTYReporter returns a PlainReporter wired to a termGrid as termOut so the
+// LiveLine is enabled. The internal ticker is suppressed via testHooks so the
+// tests don't race against a background goroutine; redraws happen synchronously
+// on Println / SetText calls.
+func newTTYReporter() (*PlainReporter, *termGrid) {
+	grid := newTermGrid(24, 120)
+	// Both the screen writer and termOut target the same grid, mirroring how
+	// a real terminal consumes a single unified byte stream.
+	w := render.NewWriter(grid)
+	r := NewPlainReporter(w, nil, grid)
+	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.now = func() time.Time { return fixedTime }
+	return r, grid
+}
+
+func TestPlainReporter_StartPipeline_PaintsFooter(t *testing.T) {
+	r, grid := newTTYReporter()
+	r.StartPipeline("deploy", 3)
+	defer r.live.Stop() // safety net even though FinishPipeline is not called
+
+	// After Start, the footer is painted on row 0 and cursor lives on row 1.
+	if !strings.Contains(grid.line(0), "Starting deploy...") {
+		t.Errorf("footer should contain 'Starting deploy...'; got %q", grid.line(0))
+	}
+	if row, col := grid.cursor(); row != 1 || col != 0 {
+		t.Errorf("cursor should be below footer at (1,0); got (%d,%d)", row, col)
+	}
+}
+
+func TestPlainReporter_EnterPhase_UpdatesFooter(t *testing.T) {
+	r, grid := newTTYReporter()
+	r.StartPipeline("deploy", 1)
+	r.EnterPhase("env", config.DeployPhase{Name: "env", Description: "Environment"})
+	// Drive a tick so the new footer text actually paints.
+	r.live.tick()
+	defer r.live.Stop()
+
+	// emit pushed the "Phase: env: Environment" line into scrollback (row 0),
+	// and the redraw paints the new footer at the current footer row with
+	// the SetText value.
+	if !strings.Contains(grid.line(0), "Phase: env: Environment") {
+		t.Errorf("scrollback row 0 should carry the phase line; got %q", grid.line(0))
+	}
+	// The footer row should mention the phase key + description (from SetText).
+	footerRow := grid.line(1)
+	if !strings.Contains(footerRow, "env: Environment") {
+		t.Errorf("footer should reflect phase via SetText; got %q", footerRow)
+	}
+}
+
+func TestPlainReporter_StartStep_UpdatesFooter(t *testing.T) {
+	r, grid := newTTYReporter()
+	r.StartPipeline("deploy", 1)
+	step := config.DeployStep{Name: "render", Description: "Render env"}
+	r.StartStep("env/render", step, 1, 2)
+	r.live.tick()
+	defer r.live.Stop()
+
+	if !strings.Contains(grid.line(0), "env/render") {
+		t.Errorf("scrollback row 0 should carry the step start line; got %q", grid.line(0))
+	}
+	if !strings.Contains(grid.line(1), "[1/2] env/render") {
+		t.Errorf("footer should carry the [N/M] step prefix; got %q", grid.line(1))
+	}
+}
+
+func TestPlainReporter_FinishPipeline_Success_StopsLiveLine(t *testing.T) {
+	r, grid := newTTYReporter()
+	r.StartPipeline("deploy", 1)
+	r.FinishPipeline(true)
+
+	// After Stop, the footer is erased. The "Done" line lands in scrollback;
+	// the row where the footer used to sit is now blank.
+	scrollback := grid.line(0) + " | " + grid.line(1) + " | " + grid.line(2)
+	if !strings.Contains(scrollback, "✓ Done") {
+		t.Errorf("expected '✓ Done' somewhere in grid; got %s", scrollback)
+	}
+	if r.live.stopped != true {
+		t.Errorf("LiveLine should be stopped after FinishPipeline(true)")
+	}
+}
+
+// Regression test: FinishPipeline(false) must still call live.Stop() — the
+// previous early-return bug left the ticker running.
+func TestPlainReporter_FinishPipeline_Failure_StopsLiveLine(t *testing.T) {
+	r, _ := newTTYReporter()
+	r.StartPipeline("deploy", 1)
+	r.FinishPipeline(false)
+
+	if !r.live.stopped {
+		t.Fatalf("LiveLine must be stopped after FinishPipeline(false) — regression of the early-return bug")
+	}
+}
+
+// TestPlainReporter_FinishPipeline_StopIdempotent guards against any future
+// caller pattern that calls FinishPipeline followed by Close() (Task 10) by
+// asserting Stop is safe to invoke twice via stopOnce.
+func TestPlainReporter_FinishPipeline_StopIdempotent(t *testing.T) {
+	r, _ := newTTYReporter()
+	r.StartPipeline("deploy", 1)
+	r.FinishPipeline(true)
+	r.live.Stop() // double-stop must be a no-op via stopOnce
+}
+
+// TestPlainReporter_LogFile_StatusLines_ExactlyOnce verifies that every status
+// line lands in the log file exactly once even when the LiveLine is enabled
+// (i.e. the screen and log channels are independent — no double-emit).
+func TestPlainReporter_LogFile_StatusLines_ExactlyOnce(t *testing.T) {
+	var logBuf bytes.Buffer
+	scr := &bytes.Buffer{}
+	w := render.NewWriter(scr)
+	grid := newTermGrid(24, 120)
+	r := NewPlainReporter(w, &logBuf, grid)
+	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.now = func() time.Time { return fixedTime }
+
+	r.StartPipeline("deploy", 2)
+	r.EnterPhase("env", config.DeployPhase{Name: "env"})
+	r.StartStep("env/render", config.DeployStep{Name: "render"}, 1, 2)
+	r.FinishStep("env/render", config.DeployStep{Name: "render"}, 1, 2)
+	r.FinishPipeline(true)
+
+	log := logBuf.String()
+	checks := []string{
+		"Phase: env",
+		"[1/2] env/render",
+		"Done: env/render",
+		"✓ Done (",
+	}
+	for _, c := range checks {
+		if n := strings.Count(log, c); n != 1 {
+			t.Errorf("status line %q must appear exactly once in log; got %d in:\n%s", c, n, log)
+		}
+	}
+}
