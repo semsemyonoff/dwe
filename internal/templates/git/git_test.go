@@ -576,6 +576,120 @@ func TestRenderHooks(t *testing.T) {
 		}
 	})
 
+	t.Run("cfg raw dot access", func(t *testing.T) {
+		root, hub, hooks, _, _ := setup(t)
+		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+			"#!/bin/sh\necho {{ .Cfg.Raw.git.project_prefix }} {{ index (index .Cfg.Raw.git.hooks .Service) \"pre_commit\" }}\n")
+		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.DevboxConfig{Raw: map[string]any{
+			"git": map[string]any{
+				"project_prefix": "PRJ",
+				"hooks": map[string]any{
+					"main": map[string]any{"pre_commit": "echo hi"},
+				},
+			},
+		}}
+		ctx := Context{
+			ProjectRoot: root, Cfg: cfg, Service: "main",
+			ServiceCfg: config.ServiceConfig{Dir: "services/main"},
+			PackName:   "default", Manifest: m,
+			HooksDir: hooks, HubDir: hub,
+		}
+		if err := RenderHooks(ctx); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(filepath.Join(hooks, "pre-commit"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(got), "PRJ") || !strings.Contains(string(got), "echo hi") {
+			t.Errorf("content=%q", got)
+		}
+	})
+
+	t.Run("cfg raw non-identifier key via index", func(t *testing.T) {
+		root, hub, hooks, _, _ := setup(t)
+		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+			"#!/bin/sh\necho {{ index .Cfg.Raw \"my-tool\" \"api-key\" }}\n")
+		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.DevboxConfig{Raw: map[string]any{
+			"my-tool": map[string]any{"api-key": "VALUE"},
+		}}
+		ctx := Context{
+			ProjectRoot: root, Cfg: cfg, Service: "main",
+			ServiceCfg: config.ServiceConfig{Dir: "services/main"},
+			PackName:   "default", Manifest: m,
+			HooksDir: hooks, HubDir: hub,
+		}
+		if err := RenderHooks(ctx); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(filepath.Join(hooks, "pre-commit"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(got), "VALUE") {
+			t.Errorf("content=%q", got)
+		}
+	})
+
+	t.Run("cfg raw missingkey error", func(t *testing.T) {
+		root, hub, hooks, _, _ := setup(t)
+		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+			"#!/bin/sh\necho {{ .Cfg.Raw.git.project_prefix }}\n")
+		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.DevboxConfig{Raw: map[string]any{}}
+		ctx := Context{
+			ProjectRoot: root, Cfg: cfg, Service: "main",
+			ServiceCfg: config.ServiceConfig{Dir: "services/main"},
+			PackName:   "default", Manifest: m,
+			HooksDir: hooks, HubDir: hub,
+		}
+		err = RenderHooks(ctx)
+		if err == nil {
+			t.Fatal("expected missingkey error")
+		}
+		if !strings.Contains(err.Error(), "git") {
+			t.Errorf("expected error to mention 'git', got: %v", err)
+		}
+	})
+
+	t.Run("backward compat without cfg reference", func(t *testing.T) {
+		// Render with a template that does not reference .Cfg, then again with
+		// Cfg populated by arbitrary Raw data — output must be byte-identical.
+		render := func(cfg *config.DevboxConfig) []byte {
+			root, hub, hooks, _, m := setup(t)
+			ctx := Context{
+				ProjectRoot: root, Cfg: cfg, Service: "main",
+				ServiceCfg: config.ServiceConfig{Dir: "services/main"},
+				PackName:   "default", Manifest: m,
+				HooksDir: hooks, HubDir: hub,
+			}
+			if err := RenderHooks(ctx); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(hooks, "pre-commit"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return got
+		}
+		empty := render(&config.DevboxConfig{})
+		populated := render(&config.DevboxConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
+		if string(empty) != string(populated) {
+			t.Errorf("output diverged when template does not reference .Cfg:\nempty=%q\npopulated=%q", empty, populated)
+		}
+	})
+
 	t.Run("multiple entries closed cleanly", func(t *testing.T) {
 		// File-handle accounting: render many entries and ensure subsequent
 		// writes still succeed (no descriptor exhaustion via leaked defers).

@@ -305,6 +305,7 @@ type TemplateData struct {
 	Service    string
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
+	Cfg        *config.DevboxConfig
 }
 
 // Context carries the inputs for rendering all hooks for one service.
@@ -366,6 +367,7 @@ func RenderHooks(ctx Context) error {
 		Service:    ctx.Service,
 		ServiceCfg: ctx.ServiceCfg,
 		Runtime:    ctx.Cfg.Runtime,
+		Cfg:        ctx.Cfg,
 	}
 
 	for _, entry := range ctx.Manifest.Render {
