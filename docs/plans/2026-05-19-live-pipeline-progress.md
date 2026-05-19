@@ -467,10 +467,10 @@ Goal: pause LiveLine around every huh-based prompt regardless of where it is inv
 
 ### Task 12: Update documentation
 
-- [ ] update `AGENTS.md` — replace the "previous bubbletea live view was removed" wording with a description of `LiveLine`/`LiveBlock`, the nine Key Invariants from this plan (no `tea.NewProgram` for live view, no `term.MakeRaw`, no capability queries, split-channel writers, single mutex / non-reentrant Stop, `\r` is data, `ui.SetHuhHooks` for prompt handoff, non-TTY parity, cursor-below-footer)
-- [ ] update `docs/reference/config/deploy.md` "Reporter and logging" section with the new architecture (PTY + LiveBlock + frame-aware parser)
-- [ ] add a short section to `AGENTS.md` describing how to add a new bubbles component standalone (the `Model.View()` + private ticker recipe) so future contributors don't reach for `tea.NewProgram`
-- [ ] ensure no docs reference the removed `parallel_view.go` (already cleaned up in previous commit, but double-check)
+- [x] update `AGENTS.md` — replace the "previous bubbletea live view was removed" wording with a description of `LiveLine`/`LiveBlock`, the nine Key Invariants from this plan (no `tea.NewProgram` for live view, no `term.MakeRaw`, no capability queries, split-channel writers, single mutex / non-reentrant Stop, `\r` is data, `ui.SetHuhHooks` for prompt handoff, non-TTY parity, cursor-below-footer)
+- [x] update `docs/reference/config/deploy.md` "Reporter and logging" section with the new architecture (PTY + LiveBlock + frame-aware parser)
+- [x] add a short section to `AGENTS.md` describing how to add a new bubbles component standalone (the `Model.View()` + private ticker recipe) so future contributors don't reach for `tea.NewProgram`
+- [x] ensure no docs reference the removed `parallel_view.go` (already cleaned up in previous commit, but double-check) — only historical plan files reference the name; live AGENTS.md and docs/reference are clean
 
 ## Technical Details
 
