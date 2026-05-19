@@ -323,6 +323,16 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 			if rs.FilesGate != nil {
 				hasFilesGateSteps = true
 			}
+			if rs.Parallel != nil {
+				for _, sub := range rs.Parallel.Steps {
+					if sub.Step.Check != nil {
+						hasCheckSteps = true
+					}
+					if sub.FilesGate != nil {
+						hasFilesGateSteps = true
+					}
+				}
+			}
 			if hasCheckSteps && hasFilesGateSteps {
 				break
 			}

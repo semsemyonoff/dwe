@@ -255,6 +255,11 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	rctx.Stderr = stderr
 	if !actx.Parallel {
 		rctx.Stdin = os.Stdin
+	} else {
+		// Never let a parallel sub-step read from shared stdin.
+		// Interactive commands are rejected at plan time, but shell
+		// scripts could still block on an unexpected read without this.
+		rctx.Stdin = strings.NewReader("")
 	}
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm

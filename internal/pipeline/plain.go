@@ -43,9 +43,15 @@ const timestampLayout = "06-01-02 15:04:05"
 // subStepEntry holds buffered output for a single parallel sub-step in the
 // non-TTY PlainReporter path. The group association lets FinishStep/FailStep
 // update the parent group's aggregate counters.
+//
+// flushed is set to true after FinishStep/FailStep/SkipStep has dumped and
+// cleared the buffer. If SubStepOutput is called after that point (e.g. from
+// lineTee.Flush() on a trailing non-newline-terminated line), the output is
+// written directly to the terminal rather than being silently dropped.
 type subStepEntry struct {
 	groupAddr string
 	buf       bytes.Buffer
+	flushed   bool
 }
 
 // groupEntry tracks per-parallel-group aggregate state for the FinishGroup
@@ -551,9 +557,14 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 		if g, ok := r.groups[groupAddr]; ok {
 			// Count sub-steps that never received a terminal event
 			// (cancelled by FailFast before executeStepBody ran).
+			// Flushed entries have already been counted via
+			// flushSubStepLocked/dropSubStepLocked; only non-flushed
+			// entries are genuinely cancelled.
 			for addr, e := range r.subs {
 				if e.groupAddr == groupAddr {
-					g.cancelled++
+					if !e.flushed {
+						g.cancelled++
+					}
 					delete(r.subs, addr)
 				}
 			}
@@ -622,6 +633,14 @@ func (r *PlainReporter) SubStepOutput(subAddr string, line string) {
 		entry = &subStepEntry{}
 		r.subs[subAddr] = entry
 	}
+	if entry.flushed {
+		// The sub-step already completed and its buffer was dumped by
+		// FinishStep/FailStep. This call originates from lineTee.Flush()
+		// delivering a trailing non-newline-terminated line. Write
+		// directly so it is not silently dropped.
+		_, _ = fmt.Fprintln(r.w.Writer(), line)
+		return
+	}
 	entry.buf.WriteString(line)
 	entry.buf.WriteByte('\n')
 }
@@ -641,9 +660,12 @@ const (
 )
 
 // flushSubStepLocked dumps the captured output for a parallel sub-step (if
-// any) between separator bars, updates the group counters, and frees the
-// buffer. Caller must hold r.mu. No-op in TTY mode or for non-parallel
-// addresses.
+// any) between separator bars, updates the group counters, and marks the entry
+// as flushed. The entry is kept in r.subs (not deleted) so that a subsequent
+// SubStepOutput call from lineTee.Flush() delivering a trailing non-newline-
+// terminated line can detect the flushed state and write directly rather than
+// silently dropping the content. FinishGroup cleans up flushed entries.
+// Caller must hold r.mu. No-op in TTY mode or for non-parallel addresses.
 func (r *PlainReporter) flushSubStepLocked(addr string, status subStepStatus) {
 	if r.tty {
 		return
@@ -658,12 +680,14 @@ func (r *PlainReporter) flushSubStepLocked(addr string, status subStepStatus) {
 		r.emit(render.Gray, parallelOutputBotBar)
 	}
 	r.updateGroupCounterLocked(entry.groupAddr, status)
-	delete(r.subs, addr)
+	entry.buf.Reset()
+	entry.flushed = true
 }
 
 // dropSubStepLocked discards a parallel sub-step's buffered output without
-// dumping it (used for skipped sub-steps where no output is expected) and
-// updates the group counters. Caller must hold r.mu.
+// dumping it (used for skipped sub-steps where no output is expected),
+// updates the group counters, and marks the entry as flushed. The entry is
+// kept in r.subs; FinishGroup cleans up flushed entries. Caller must hold r.mu.
 func (r *PlainReporter) dropSubStepLocked(addr string, status subStepStatus) {
 	if r.tty {
 		return
@@ -673,7 +697,8 @@ func (r *PlainReporter) dropSubStepLocked(addr string, status subStepStatus) {
 		return
 	}
 	r.updateGroupCounterLocked(entry.groupAddr, status)
-	delete(r.subs, addr)
+	entry.buf.Reset()
+	entry.flushed = true
 }
 
 func (r *PlainReporter) updateGroupCounterLocked(groupAddr string, status subStepStatus) {

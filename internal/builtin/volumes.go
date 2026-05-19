@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -59,8 +58,9 @@ func (dockerRemoveProjectVolumesBuiltin) Run(ctx context.Context, with map[strin
 	ectx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
 	args := append([]string{"volume", "rm"}, toRemove...)
 	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmdOut := ectx.Output.Writer()
+	cmd.Stdout = cmdOut
+	cmd.Stderr = cmdOut
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker volume rm: %w", err)
 	}

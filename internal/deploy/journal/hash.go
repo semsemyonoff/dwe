@@ -345,36 +345,7 @@ func deployConfigToMap(cfg *config.DeployConfig) map[string]any {
 			if len(phase.Steps) > 0 {
 				steps := make([]any, len(phase.Steps))
 				for j, step := range phase.Steps {
-					s := map[string]any{
-						"name":              step.Name,
-						"type":              step.Type,
-						"cmd":               step.Cmd,
-						"description":       step.Description,
-						"continue_on_error": step.ContinueOnError,
-						"skip_confirm":      step.SkipConfirm,
-					}
-
-					if len(step.With) > 0 {
-						s["with"] = step.With
-					}
-
-					if step.When != nil {
-						s["when"] = conditionToMap(step.When)
-					}
-
-					if step.Check != nil {
-						s["check"] = map[string]any{
-							"type": step.Check.Type,
-							"cmd":  step.Check.Cmd,
-							"with": step.Check.With,
-						}
-					}
-
-					if step.FilesGate != nil {
-						s["files_gate"] = filesGateToMap(step.FilesGate)
-					}
-
-					steps[j] = s
+					steps[j] = deployStepToMap(step)
 				}
 				p["steps"] = steps
 			}
@@ -384,6 +355,66 @@ func deployConfigToMap(cfg *config.DeployConfig) map[string]any {
 		m["phases"] = phases
 	}
 
+	return m
+}
+
+// deployStepToMap converts a config.DeployStep to a map for hashing purposes.
+// Works for both top-level steps and parallel sub-steps.
+func deployStepToMap(step config.DeployStep) map[string]any {
+	s := map[string]any{
+		"name":              step.Name,
+		"type":              step.Type,
+		"cmd":               step.Cmd,
+		"description":       step.Description,
+		"continue_on_error": step.ContinueOnError,
+		"skip_confirm":      step.SkipConfirm,
+	}
+
+	if len(step.With) > 0 {
+		s["with"] = step.With
+	}
+
+	if step.When != nil {
+		s["when"] = conditionToMap(step.When)
+	}
+
+	if step.Check != nil {
+		s["check"] = map[string]any{
+			"type": step.Check.Type,
+			"cmd":  step.Check.Cmd,
+			"with": step.Check.With,
+		}
+	}
+
+	if step.FilesGate != nil {
+		s["files_gate"] = filesGateToMap(step.FilesGate)
+	}
+
+	if step.Parallel != nil {
+		s["parallel"] = parallelGroupToMap(step.Parallel)
+	}
+
+	return s
+}
+
+// parallelGroupToMap converts a config.ParallelGroup to a map for hashing purposes.
+func parallelGroupToMap(pg *config.ParallelGroup) map[string]any {
+	if pg == nil {
+		return map[string]any{}
+	}
+	m := map[string]any{
+		"max_concurrent": pg.MaxConcurrent,
+	}
+	if pg.FailFast != nil {
+		m["fail_fast"] = *pg.FailFast
+	}
+	if len(pg.Steps) > 0 {
+		steps := make([]any, len(pg.Steps))
+		for i, sub := range pg.Steps {
+			steps[i] = deployStepToMap(sub)
+		}
+		m["steps"] = steps
+	}
 	return m
 }
 
