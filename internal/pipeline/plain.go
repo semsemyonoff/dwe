@@ -42,13 +42,20 @@ const timestampLayout = "06-01-02 15:04:05"
 // aggregate counters.
 //
 // flushed is set to true after FinishStep/FailStep/SkipStep has dumped and
-// cleared the buffer. If SubStepOutput is called after that point (e.g. from
-// lineTee.Flush() on a trailing non-newline-terminated line), the output is
+// cleared the buffer. If StepOutput is called after that point (e.g. from
+// lineTee.Flush() on a trailing non-newline-terminated frame), the output is
 // written directly to the terminal rather than being silently dropped.
+//
+// inProgress holds the most recent non-final (`\r`) frame for the sub-step,
+// or the trailing tail emitted by lineTee.Flush at end-of-stream. It is
+// display state only — never committed by StepOutput itself; the central
+// commitTrailingTail helper (Task 9) is responsible for flushing it on
+// step-finish events.
 type subStepEntry struct {
-	groupAddr string
-	buf       strings.Builder
-	flushed   bool
+	groupAddr  string
+	buf        strings.Builder
+	inProgress string
+	flushed    bool
 }
 
 // groupEntry tracks per-parallel-group aggregate state for the FinishGroup
@@ -385,35 +392,59 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 	r.emit(color, msg)
 }
 
-// SubStepOutput appends a single line of captured sub-step output to the
-// per-sub-step buffer. Never writes to the terminal directly; the buffer is
-// dumped between separator bars by FinishStep / FailStep.
+// StepOutput streams a single frame of captured step output to the per-step
+// buffer. Never writes to the terminal directly; the buffer is dumped between
+// separator bars by FinishStep / FailStep.
 //
-// If subAddr is unknown (e.g. StartGroup was skipped due to an upstream bug
-// or a sequential test calls SubStepOutput) the entry is created on the fly
-// so we never panic.
-func (r *PlainReporter) SubStepOutput(subAddr string, line string) {
+// final=true marks a `\n`-terminated committed line: append `frame + "\n"`
+// to the buffer, side-write to the log (via writeLog), reset inProgress.
+//
+// final=false marks an in-progress `\r` redraw frame, or the trailing
+// non-newline-terminated tail from lineTee.Flush at end-of-stream. The frame
+// is stored in inProgress as display state only — NOT committed here. The
+// central commitTrailingTail helper (Task 9) is responsible for flushing
+// inProgress on step-finish events.
+//
+// If addr is unknown (e.g. StartGroup was skipped due to an upstream bug or
+// a sequential test calls StepOutput) the entry is created on the fly so we
+// never panic.
+func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.subs == nil {
 		r.subs = make(map[string]*subStepEntry)
 	}
-	entry, ok := r.subs[subAddr]
+	entry, ok := r.subs[addr]
 	if !ok {
 		entry = &subStepEntry{}
-		r.subs[subAddr] = entry
+		r.subs[addr] = entry
 	}
 	if entry.flushed {
-		// The sub-step already completed and its buffer was dumped by
+		// The step already completed and its buffer was dumped by
 		// FinishStep/FailStep. This call originates from lineTee.Flush()
-		// delivering a trailing non-newline-terminated line. Write
+		// delivering a trailing non-newline-terminated frame. Write
 		// directly so it is not silently dropped.
-		_, _ = fmt.Fprintln(r.w.Writer(), line)
+		if final {
+			_, _ = fmt.Fprintln(r.w.Writer(), frame)
+		} else {
+			_, _ = fmt.Fprintln(r.w.Writer(), frame)
+		}
 		return
 	}
-	entry.buf.WriteString(line)
+	if !final {
+		// In-progress frame: display state only. NOT committed here.
+		entry.inProgress = frame
+		return
+	}
+	entry.buf.WriteString(frame)
 	entry.buf.WriteByte('\n')
+	entry.inProgress = ""
+	r.writeLog(frame)
 }
+
+// writeLog is the side-channel write to the global pipeline log file.
+// Stubbed as a no-op until Task 3 wires up the logFile field.
+func (r *PlainReporter) writeLog(_ string) {}
 
 // subStepStatus categorises a sub-step's outcome for group counter updates.
 type subStepStatus int

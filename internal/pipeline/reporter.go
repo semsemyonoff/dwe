@@ -62,7 +62,7 @@ type Reporter interface {
 	// total is the pipeline-wide tracked-step total.
 	//
 	// Implementations MUST be safe for concurrent invocation: once a group is
-	// started, StartStep / FinishStep / FailStep / SkipStep / SubStepOutput
+	// started, StartStep / FinishStep / FailStep / SkipStep / StepOutput
 	// events for sub-steps arrive from N goroutines.
 	StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int)
 
@@ -71,7 +71,10 @@ type Reporter interface {
 	// (after accounting for continue_on_error).
 	FinishGroup(groupAddr string, group config.DeployStep, success bool)
 
-	// SubStepOutput streams a single output line from a parallel sub-step to
-	// the reporter. Sequential pipelines never call this method.
-	SubStepOutput(subAddr string, line string)
+	// StepOutput streams a single frame of child output to the reporter.
+	// final=true marks a `\n`-terminated committed line; final=false marks an
+	// in-progress `\r` redraw frame (or the trailing non-terminated tail
+	// emitted by lineTee.Flush at end-of-stream). Used for both sequential
+	// steps (Task 6) and parallel sub-steps.
+	StepOutput(stepAddr string, frame string, final bool)
 }

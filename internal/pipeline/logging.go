@@ -164,54 +164,80 @@ func joinWriters(ws ...io.Writer) io.Writer {
 	}
 }
 
-// lineTee buffers writes and invokes cb once per complete \n-terminated line.
-// ANSI escape sequences are stripped before line-splitting so callbacks see
-// plain text. Trailing un-terminated bytes are flushed via Flush().
+// lineTee buffers writes and invokes cb once per frame — a segment ending in
+// `\r` (in-progress redraw, `final=false`) or `\n` (committed line,
+// `final=true`). CRLF (`\r\n`) within one buffer scan collapses to a single
+// `final=true` frame. ANSI escape sequences are stripped before scanning so
+// callbacks see plain text. Trailing un-terminated bytes are flushed via
+// Flush() as `(tail, false)`.
 //
 // lineTee is safe for concurrent Write calls from a single source (one
 // sub-step) but is NOT designed for concurrent writes from multiple goroutines
 // — each parallel sub-step gets its own lineTee instance.
 type lineTee struct {
-	cb  func(string)
+	cb  func(frame string, final bool)
 	mu  sync.Mutex
 	buf bytes.Buffer
 }
 
-func newLineTee(cb func(string)) *lineTee {
+func newLineTee(cb func(frame string, final bool)) *lineTee {
 	return &lineTee{cb: cb}
 }
 
 func (t *lineTee) Write(p []byte) (int, error) {
-	// Strip ANSI but preserve `\r` so frame parsing (Task 2) sees it as data.
+	// Strip ANSI but preserve `\r` so frame parsing sees it as data.
 	stripped := ansiOnlyRe.ReplaceAll(p, nil)
 	t.mu.Lock()
 	t.buf.Write(stripped)
 	for {
 		data := t.buf.Bytes()
-		i := bytes.IndexByte(data, '\n')
-		if i < 0 {
+		// Find the earliest of `\r` or `\n` as the frame terminator.
+		idxN := bytes.IndexByte(data, '\n')
+		idxR := bytes.IndexByte(data, '\r')
+		if idxN < 0 && idxR < 0 {
 			break
 		}
-		line := string(data[:i])
-		// Consume the line plus its terminator from the buffer.
-		_ = t.buf.Next(i + 1)
+		var idx int
+		isR := false
+		switch {
+		case idxN < 0:
+			idx, isR = idxR, true
+		case idxR < 0:
+			idx = idxN
+		case idxR < idxN:
+			idx, isR = idxR, true
+		default:
+			idx = idxN
+		}
+
+		frame := string(data[:idx])
+		consume := idx + 1
+		final := !isR
+		// CRLF collapses to a single final frame.
+		if isR && idx+1 < len(data) && data[idx+1] == '\n' {
+			consume = idx + 2
+			final = true
+		}
+		_ = t.buf.Next(consume)
 		t.mu.Unlock()
-		t.cb(line)
+		t.cb(frame, final)
 		t.mu.Lock()
 	}
 	t.mu.Unlock()
 	return len(p), nil
 }
 
-// Flush emits any buffered un-terminated trailing bytes as a final line.
+// Flush emits any buffered un-terminated trailing bytes as a non-final frame.
+// The reporter's commitTrailingTail (Task 9) is responsible for committing the
+// tail to scrollback/log at step-finish time.
 func (t *lineTee) Flush() {
 	t.mu.Lock()
 	if t.buf.Len() == 0 {
 		t.mu.Unlock()
 		return
 	}
-	line := t.buf.String()
+	tail := t.buf.String()
 	t.buf.Reset()
 	t.mu.Unlock()
-	t.cb(line)
+	t.cb(tail, false)
 }

@@ -829,7 +829,7 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 		defer func() { _ = subFile.Close() }()
 	}
 
-	tee := newLineTee(func(line string) { opts.Reporter.SubStepOutput(subAddr, line) })
+	tee := newLineTee(func(frame string, final bool) { opts.Reporter.StepOutput(subAddr, frame, final) })
 	defer tee.Flush()
 
 	// Per-sub-step log file receives full output via logSanitizer (ANSI strip

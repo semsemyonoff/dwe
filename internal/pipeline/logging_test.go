@@ -145,28 +145,143 @@ func TestLogSanitizer_ConcurrentWrites_NoPanic(t *testing.T) {
 	}
 }
 
-// TestLineTee_PreservesCR_InBuffer verifies that `\r` survives ANSI stripping
-// inside the tee buffer (precondition for Task 2 frame-aware parsing).
-func TestLineTee_PreservesCR_InBuffer(t *testing.T) {
-	var got []string
-	tee := newLineTee(func(line string) { got = append(got, line) })
-	// `\r` is data, no `\n` terminator → must remain buffered (no callback).
-	if _, err := tee.Write([]byte("\x1b[32m50%\r100%")); err != nil {
-		t.Fatalf("write: %v", err)
+// teeFrame is a captured (frame, final) pair from the new lineTee callback.
+type teeFrame struct {
+	frame string
+	final bool
+}
+
+func collectFrames() (*[]teeFrame, func(string, bool)) {
+	var got []teeFrame
+	return &got, func(frame string, final bool) { got = append(got, teeFrame{frame, final}) }
+}
+
+// TestLineTee_FrameParsing_NewlineOnly verifies plain `\n`-terminated lines
+// each emit one final=true frame and the trailing tail flushes as final=false.
+func TestLineTee_FrameParsing_NewlineOnly(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("a\nb\nc"))
+	tee.Flush()
+	want := []teeFrame{{"a", true}, {"b", true}, {"c", false}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
 	}
-	if len(got) != 0 {
-		t.Errorf("expected no callbacks yet, got %v", got)
+}
+
+// TestLineTee_FrameParsing_CROnly verifies `\r` frames are emitted as
+// final=false.
+func TestLineTee_FrameParsing_CROnly(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("50%\r75%\r100%\n"))
+	want := []teeFrame{{"50%", false}, {"75%", false}, {"100%", true}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
+	}
+}
+
+// TestLineTee_FrameParsing_CRLF verifies CRLF collapses to a single final
+// frame.
+func TestLineTee_FrameParsing_CRLF(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("hello\r\nworld\r\n"))
+	want := []teeFrame{{"hello", true}, {"world", true}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
+	}
+}
+
+// TestLineTee_FrameParsing_Mixed combines `\r`, `\n`, and CRLF in one stream.
+func TestLineTee_FrameParsing_Mixed(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("a\nb\rc\r\nd"))
+	tee.Flush()
+	want := []teeFrame{{"a", true}, {"b", false}, {"c", true}, {"d", false}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
+	}
+}
+
+// TestLineTee_FrameParsing_LoneCRMidLine asserts a `\r` in the middle of a
+// line splits cleanly into two frames.
+func TestLineTee_FrameParsing_LoneCRMidLine(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("ab\rcd\n"))
+	want := []teeFrame{{"ab", false}, {"cd", true}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
+	}
+}
+
+// TestLineTee_FrameParsing_TrailingTail asserts Flush emits the trailing
+// non-terminated tail as final=false.
+func TestLineTee_FrameParsing_TrailingTail(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("partial"))
+	if len(*got) != 0 {
+		t.Fatalf("expected no callbacks before Flush, got %v", *got)
 	}
 	tee.Flush()
-	if len(got) != 1 {
-		t.Fatalf("expected one flushed line, got %v", got)
+	want := []teeFrame{{"partial", false}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
 	}
-	if !strings.Contains(got[0], "\r") {
-		t.Errorf("expected \\r to survive into the buffer, got %q", got[0])
+}
+
+// TestLineTee_FrameParsing_Empty verifies an empty stream emits nothing.
+func TestLineTee_FrameParsing_Empty(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	tee.Flush()
+	if len(*got) != 0 {
+		t.Errorf("expected no callbacks for empty stream, got %v", *got)
 	}
-	if strings.Contains(got[0], "\x1b") {
-		t.Errorf("expected ANSI stripped, got %q", got[0])
+}
+
+// TestLineTee_FrameParsing_MultipleConsecutiveCRs verifies a run of `\r`
+// produces empty in-progress frames.
+func TestLineTee_FrameParsing_MultipleConsecutiveCRs(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("a\r\r\rb\n"))
+	want := []teeFrame{{"a", false}, {"", false}, {"", false}, {"b", true}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
 	}
+}
+
+// TestLineTee_PreservesCR_StripsANSI asserts ANSI is stripped while `\r`
+// survives so the frame parser can see it as a delimiter.
+func TestLineTee_PreservesCR_StripsANSI(t *testing.T) {
+	got, cb := collectFrames()
+	tee := newLineTee(cb)
+	_, _ = tee.Write([]byte("\x1b[32m50%\r100%\x1b[0m\n"))
+	want := []teeFrame{{"50%", false}, {"100%", true}}
+	if !equalFrames(*got, want) {
+		t.Errorf("got %v, want %v", *got, want)
+	}
+	for _, f := range *got {
+		if strings.Contains(f.frame, "\x1b") {
+			t.Errorf("ANSI leaked into frame: %q", f.frame)
+		}
+	}
+}
+
+func equalFrames(a, b []teeFrame) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestOpenPipelineLog_CreatesDevboxLogsDirectory(t *testing.T) {
@@ -293,7 +408,7 @@ func TestJoinWriters_NilsWithLineTee_NoPanic(t *testing.T) {
 	// (globalLogWriter and subLogWriter are both nil), but lineTee is always
 	// non-nil. The helper must return lineTee alone — and writes must succeed.
 	var got string
-	tee := newLineTee(func(line string) { got = line })
+	tee := newLineTee(func(line string, _ bool) { got = line })
 	w := joinWriters(nil, nil, tee)
 	if _, err := w.Write([]byte("hello\n")); err != nil {
 		t.Fatalf("write: %v", err)
@@ -306,7 +421,7 @@ func TestJoinWriters_NilsWithLineTee_NoPanic(t *testing.T) {
 func TestLineTee_SplitsOnNewline_StripsANSI(t *testing.T) {
 	var mu sync.Mutex
 	var lines []string
-	tee := newLineTee(func(line string) {
+	tee := newLineTee(func(line string, _ bool) {
 		mu.Lock()
 		lines = append(lines, line)
 		mu.Unlock()
@@ -422,7 +537,7 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 	// Reporter.SubStepOutput was called with each sub-step's line.
 	sawAlpha, sawBeta := false, false
 	for _, e := range rep.events {
-		if e.kind != "SubStepOutput" {
+		if e.kind != "StepOutput" {
 			continue
 		}
 		if e.stepAddr == "p/alpha" && strings.Contains(e.reason, "alpha-out") {
@@ -471,7 +586,7 @@ func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) 
 	// SubStepOutput still fires.
 	saw := false
 	for _, e := range rep.events {
-		if e.kind == "SubStepOutput" && strings.Contains(e.reason, "a") {
+		if e.kind == "StepOutput" && strings.Contains(e.reason, "a") {
 			saw = true
 			break
 		}
@@ -486,7 +601,7 @@ func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) 
 // never directly to os.Stdout — required for non-TTY buffered reporter modes.
 func TestExecBuiltinAction_Parallel_NoStdoutWrite(t *testing.T) {
 	var buf bytes.Buffer
-	tee := newLineTee(func(string) {})
+	tee := newLineTee(func(string, bool) {})
 	w := joinWriters(&buf, tee)
 
 	// Capture and discard os.Stdout writes to assert nothing leaks.

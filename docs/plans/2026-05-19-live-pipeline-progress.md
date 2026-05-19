@@ -139,19 +139,19 @@ Checklist:
 
 Goal: with `\r` now preserved (Task 1), make `lineTee` emit one callback per *frame* — a segment ending in `\r` OR `\n` — with a `final bool` flag distinguishing committed-rows (`\n`) from in-progress redraws (`\r`).
 
-- [ ] change `lineTee` callback signature from `func(line string)` to `func(frame string, final bool)`
-- [ ] update `lineTee.Write` to scan for `\r` AND `\n` and dispatch a frame per segment; CRLF (`\r\n`) collapses to one `final=true` frame
-- [ ] update `lineTee.Flush` to emit any trailing non-terminated tail as `(frame, false)`
-- [ ] update `Reporter` interface (`internal/pipeline/reporter.go`): rename `SubStepOutput(addr, line string)` to `StepOutput(addr, frame string, final bool)` — also covers sequential steps (Task 6)
-- [ ] update `runParallelSubStep` to use the new signature
-- [ ] update `PlainReporter.SubStepOutput` (now `StepOutput`) to coalesce non-final frames. State per sub-step: `inProgress string` (current in-progress display state ONLY — never committed by StepOutput itself; committed centrally by `commitTrailingTail` at finish time — see Task 9). Logic:
+- [x] change `lineTee` callback signature from `func(line string)` to `func(frame string, final bool)`
+- [x] update `lineTee.Write` to scan for `\r` AND `\n` and dispatch a frame per segment; CRLF (`\r\n`) collapses to one `final=true` frame
+- [x] update `lineTee.Flush` to emit any trailing non-terminated tail as `(frame, false)`
+- [x] update `Reporter` interface (`internal/pipeline/reporter.go`): rename `SubStepOutput(addr, line string)` to `StepOutput(addr, frame string, final bool)` — also covers sequential steps (Task 6)
+- [x] update `runParallelSubStep` to use the new signature
+- [x] update `PlainReporter.SubStepOutput` (now `StepOutput`) to coalesce non-final frames. State per sub-step: `inProgress string` (current in-progress display state ONLY — never committed by StepOutput itself; committed centrally by `commitTrailingTail` at finish time — see Task 9). Logic:
   - on `final=false`: set `inProgress = frame` (display state for live-block / non-TTY no-op); NO buffer commit, NO `writeLog`
   - on `final=true`: append `frame + "\n"` (the FINAL frame, not `inProgress`) to the per-sub-step buffer; `writeLog(frame)`; reset `inProgress = ""`
   - on tee `Flush()` end-of-stream (which emits trailing tail as `(tail, false)`): `inProgress = tail` is set; **tail is NOT committed here** — the single commit point is `r.commitTrailingTail(addr)` invoked by FinishStep/FailStep/SkipStep in Task 9. This avoids two competing commit paths.
-- [ ] write unit tests in `logging_test.go` covering: `\n`-only, `\r`-only, `\r\n`, mixed, lone `\r` in middle of line, trailing tail flush, empty input, multiple `\r` in a row
-- [ ] write unit tests in `plain_test.go` verifying that progressive `\r` frames produce a single committed line in the buffer dump (key visible improvement even in CI)
-- [ ] write a regression test for the commit-the-right-frame bug: feed `50%\r100%\n` to `PlainReporter.StepOutput`; assert the per-sub-step buffer dump contains exactly `100%\n` — NOT `50%\n`
-- [ ] run `go test ./internal/pipeline/...` — must pass before Task 3
+- [x] write unit tests in `logging_test.go` covering: `\n`-only, `\r`-only, `\r\n`, mixed, lone `\r` in middle of line, trailing tail flush, empty input, multiple `\r` in a row
+- [x] write unit tests in `plain_test.go` verifying that progressive `\r` frames produce a single committed line in the buffer dump (key visible improvement even in CI)
+- [x] write a regression test for the commit-the-right-frame bug: feed `50%\r100%\n` to `PlainReporter.StepOutput`; assert the per-sub-step buffer dump contains exactly `100%\n` — NOT `50%\n`
+- [x] run `go test ./internal/pipeline/...` — must pass before Task 3
 
 ### Task 3: Refactor `OpenPipelineLog` to return separate screen / logFile / termOut
 

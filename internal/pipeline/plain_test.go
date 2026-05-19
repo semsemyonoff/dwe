@@ -577,9 +577,74 @@ func TestPlainReporter_FinishGroup_Failure(t *testing.T) {
 // view consumes events out-of-band.
 func TestPlainReporter_SubStepOutput_NoDirectWrite(t *testing.T) {
 	r, buf := newBufReporter()
-	r.SubStepOutput("init/dumps/main", "some line")
+	r.StepOutput("init/dumps/main", "some line", true)
 	if buf.Len() != 0 {
 		t.Errorf("SubStepOutput must not write to terminal directly; got %q", buf.String())
+	}
+}
+
+// TestPlainReporter_StepOutput_NonFinalFrames_NotCommitted verifies that
+// in-progress `\r` frames update inProgress state but are NOT appended to the
+// per-sub-step buffer. Only the final `\n`-terminated frame lands in the dump.
+func TestPlainReporter_StepOutput_NonFinalFrames_NotCommitted(t *testing.T) {
+	r, buf := newBufReporter()
+	group := parallelGroup("dumps", "main")
+	r.StartGroup("init/dumps", group, []int{1}, 1)
+
+	// Progressive `\r` frames coalesce — only the final frame is committed.
+	r.StepOutput("init/main", "0%", false)
+	r.StepOutput("init/main", "50%", false)
+	r.StepOutput("init/main", "100%", true)
+	r.FinishStep("init/main", config.DeployStep{Name: "main"}, 1, 1)
+
+	got := clean(buf.String())
+	bodyLines := lines(got)
+	// Locate "100%" as an exact body line; ensure "0%" and "50%" are absent.
+	saw100, sawIntermediate := false, false
+	for _, l := range bodyLines {
+		switch l {
+		case "100%":
+			saw100 = true
+		case "0%", "50%":
+			sawIntermediate = true
+		}
+	}
+	if !saw100 {
+		t.Errorf("expected final frame '100%%' in dump:\n%s", got)
+	}
+	if sawIntermediate {
+		t.Errorf("non-final frames should not be committed; got:\n%s", got)
+	}
+}
+
+// TestPlainReporter_StepOutput_CommitTheRightFrame is the regression test for
+// the commit-the-right-frame bug: feed `50%\r100%\n` semantics as two
+// StepOutput calls — non-final 50%, then final 100% — and assert the buffer
+// dump contains exactly `100%`, NOT `50%`.
+func TestPlainReporter_StepOutput_CommitTheRightFrame(t *testing.T) {
+	r, buf := newBufReporter()
+	group := parallelGroup("dumps", "main")
+	r.StartGroup("init/dumps", group, []int{1}, 1)
+	r.StepOutput("init/main", "50%", false)
+	r.StepOutput("init/main", "100%", true)
+	r.FinishStep("init/main", config.DeployStep{Name: "main"}, 1, 1)
+
+	got := clean(buf.String())
+	bodyLines := lines(got)
+	saw100, saw50 := false, false
+	for _, l := range bodyLines {
+		switch l {
+		case "100%":
+			saw100 = true
+		case "50%":
+			saw50 = true
+		}
+	}
+	if !saw100 {
+		t.Errorf("expected '100%%' in dump:\n%s", got)
+	}
+	if saw50 {
+		t.Errorf("regression: committed the wrong frame; got:\n%s", got)
 	}
 }
 
@@ -604,8 +669,8 @@ func TestPlainReporter_NonTTY_FinishStep_DumpsBufferedOutput(t *testing.T) {
 	group := parallelGroup("dumps", "main", "stock")
 	r.StartGroup("init/dumps", group, []int{1, 2}, 2)
 	r.StartStep("init/main", config.DeployStep{Name: "main"}, 1, 2)
-	r.SubStepOutput("init/main", "downloading…")
-	r.SubStepOutput("init/main", "done")
+	r.StepOutput("init/main", "downloading…", true)
+	r.StepOutput("init/main", "done", true)
 	r.FinishStep("init/main", config.DeployStep{Name: "main"}, 1, 2)
 
 	got := clean(buf.String())
@@ -637,9 +702,9 @@ func TestPlainReporter_NonTTY_InterleavedCompletion_KeepsBuffersDistinct(t *test
 	r.StartGroup("init/dumps", group, []int{1, 2}, 2)
 	r.StartStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 2)
 	r.StartStep("init/beta", config.DeployStep{Name: "beta"}, 2, 2)
-	r.SubStepOutput("init/alpha", "alpha-1")
-	r.SubStepOutput("init/beta", "beta-1")
-	r.SubStepOutput("init/alpha", "alpha-2")
+	r.StepOutput("init/alpha", "alpha-1", true)
+	r.StepOutput("init/beta", "beta-1", true)
+	r.StepOutput("init/alpha", "alpha-2", true)
 	// beta finishes first
 	r.FinishStep("init/beta", config.DeployStep{Name: "beta"}, 2, 2)
 	r.FinishStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 2)
@@ -674,7 +739,7 @@ func TestPlainReporter_NonTTY_FailStep_DumpsBufferThenError(t *testing.T) {
 	group := parallelGroup("dumps", "main")
 	r.StartGroup("init/dumps", group, []int{1}, 1)
 	r.StartStep("init/main", config.DeployStep{Name: "main"}, 1, 1)
-	r.SubStepOutput("init/main", "partial output")
+	r.StepOutput("init/main", "partial output", true)
 	r.FailStep("init/main", config.DeployStep{Name: "main"}, 1, 1, errors.New("exit status 7"))
 
 	got := clean(buf.String())
@@ -762,7 +827,7 @@ func TestPlainReporter_NonTTY_FinishGroup_CancelledSubStepsIncludedInSummary(t *
 func TestPlainReporter_NonTTY_SubStepOutput_LazyEntryWhenStartGroupSkipped(t *testing.T) {
 	r, buf := newBufReporter()
 	// No StartGroup; defensive lazy creation must not panic.
-	r.SubStepOutput("orphan/sub", "stray line")
+	r.StepOutput("orphan/sub", "stray line", true)
 	r.FinishStep("orphan/sub", config.DeployStep{Name: "sub"}, 1, 1)
 
 	got := clean(buf.String())
@@ -795,10 +860,10 @@ func TestPlainReporter_ConcurrentEvents_NoRace(t *testing.T) {
 				addr := fmt.Sprintf("p%d/s%d", w, i)
 				r.EnterPhase(phase.Name, phase)
 				r.StartStep(addr, step, 1, 100)
-				r.SubStepOutput(addr, "line")
+				r.StepOutput(addr, "line", true)
 				r.FinishStep(addr, step, 1, 100)
 				r.StartGroup(addr+"/g", group, []int{1, 2}, 100)
-				r.SubStepOutput(addr+"/g/a", "out")
+				r.StepOutput(addr+"/g/a", "out", true)
 				r.FinishGroup(addr+"/g", group, true)
 				r.SkipStep(addr, step, 1, 100, "reason")
 				r.SkipPhase(phase.Name, phase, "reason")

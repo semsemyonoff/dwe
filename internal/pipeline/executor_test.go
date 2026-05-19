@@ -35,6 +35,7 @@ type reporterEvent struct {
 	total0     int
 	success    bool
 	subIndices []int
+	final      bool
 }
 
 type mockReporter struct {
@@ -86,8 +87,8 @@ func (m *mockReporter) StartGroup(groupAddr string, group config.DeployStep, sub
 func (m *mockReporter) FinishGroup(groupAddr string, group config.DeployStep, success bool) {
 	m.append(reporterEvent{kind: "FinishGroup", stepAddr: groupAddr, step: group, success: success})
 }
-func (m *mockReporter) SubStepOutput(subAddr string, line string) {
-	m.append(reporterEvent{kind: "SubStepOutput", stepAddr: subAddr, reason: line})
+func (m *mockReporter) StepOutput(addr string, frame string, final bool) {
+	m.append(reporterEvent{kind: "StepOutput", stepAddr: addr, reason: frame, final: final})
 }
 
 // kindSeq returns the sequence of event kinds.
