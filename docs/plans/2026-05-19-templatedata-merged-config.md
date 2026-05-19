@@ -175,8 +175,8 @@ This task addresses the central `docs/reference/templates.md` page in full. Per-
 
 ### Task 7: Update AGENTS.md project structure notes
 
-- [ ] in the `internal/templates/git/`, `ide/`, `ai/` bullets in `AGENTS.md`, add one terse line to each noting that `TemplateData` now carries `Cfg *config.DevboxConfig`
-- [ ] do **not** edit `CLAUDE.md` directly — it is a symlink to `AGENTS.md`
+- [x] in the `internal/templates/git/`, `ide/`, `ai/` bullets in `AGENTS.md`, add one terse line to each noting that `TemplateData` now carries `Cfg *config.DevboxConfig`
+- [x] do **not** edit `CLAUDE.md` directly — it is a symlink to `AGENTS.md`
 
 ### Task 8: Verify acceptance criteria
 
