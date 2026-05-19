@@ -131,13 +131,13 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 	}
 
 	logEnabled := resetCfg.LogEnabled()
-	w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "reset", logEnabled)
+	w, logWriter, termOut, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "reset", logEnabled)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	rep := pipeline.NewPlainReporter(w)
+	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
 
 	opts := pipeline.RunOptions{
 		Steps:       steps,

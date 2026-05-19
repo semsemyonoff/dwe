@@ -23,7 +23,7 @@ var fixedTime = time.Date(2026, 5, 14, 22, 36, 36, 0, time.UTC)
 func newBufReporter() (*PlainReporter, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	w := render.NewWriter(buf)
-	r := NewPlainReporter(w)
+	r := NewPlainReporter(w, nil, nil)
 	r.now = func() time.Time { return fixedTime }
 	return r, buf
 }

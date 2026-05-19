@@ -38,13 +38,13 @@ func RunPhases(
 		steps = append(steps, resolved...)
 	}
 
-	w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, logFileName, logEnabled)
+	w, logWriter, termOut, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, logFileName, logEnabled)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	rep := pipeline.NewPlainReporter(w)
+	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
 
 	if err := pipeline.Run(steps, rep, name, cfg, reg, workDir, logWriter, skipConfirm, nil); err != nil {
 		if errors.Is(err, pipeline.ErrSilent) && logEnabled {

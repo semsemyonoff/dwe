@@ -8,10 +8,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/render"
 )
 
 func TestAnsiOnlyStripper_Write_StripsEscapes(t *testing.T) {
@@ -287,7 +289,7 @@ func equalFrames(a, b []teeFrame) bool {
 func TestOpenPipelineLog_CreatesDevboxLogsDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	_, logWriter, logPath, cleanup, err := OpenPipelineLog(tmpDir, "deploy", true)
+	_, logWriter, _, logPath, cleanup, err := OpenPipelineLog(tmpDir, "deploy", true)
 	defer cleanup()
 
 	if err != nil {
@@ -658,10 +660,59 @@ func (b *syncBuf) String() string {
 	return b.buf.String()
 }
 
+// TestOpenPipelineLog_ScreenDoesNotTeeToLog asserts the new split-channel
+// contract: ANSI written to the screen writer never reaches the log file
+// (because the old MultiWriter tee was removed).
+func TestOpenPipelineLog_ScreenDoesNotTeeToLog(t *testing.T) {
+	tmpDir := t.TempDir()
+	screen, logFile, _, logPath, cleanup, err := OpenPipelineLog(tmpDir, "deploy", true)
+	if err != nil {
+		t.Fatalf("OpenPipelineLog: %v", err)
+	}
+	defer cleanup()
+
+	// Write ANSI through the screen writer. The log file (a separate writer)
+	// must remain empty because screen no longer tees.
+	if _, werr := screen.Writer().Write([]byte("\x1b[31mhello\x1b[0m\n")); werr != nil {
+		t.Fatalf("screen write: %v", werr)
+	}
+	// Ensure file content is observable by reading from disk.
+	if f, ok := logFile.(*os.File); ok {
+		_ = f.Sync()
+	}
+	data, rerr := os.ReadFile(logPath)
+	if rerr != nil {
+		t.Fatalf("read log: %v", rerr)
+	}
+	if len(data) != 0 {
+		t.Errorf("expected log file to be empty after screen write, got %q", data)
+	}
+}
+
+// TestPlainReporter_StatusLineReachesLogFile verifies that PlainReporter
+// side-writes every emit() to the dedicated log file (no fan-out duplication;
+// each line lands exactly once).
+func TestPlainReporter_StatusLineReachesLogFile(t *testing.T) {
+	var screen, logBuf bytes.Buffer
+	rep := NewPlainReporter(render.NewWriter(&screen), &logBuf, nil)
+	rep.now = func() time.Time { return fixedTime }
+	rep.StartPipeline("deploy", 1)
+	rep.EnterPhase("deploy", config.DeployPhase{Name: "deploy", Description: "Deploy"})
+
+	got := logBuf.String()
+	if !strings.Contains(got, "Phase: deploy") {
+		t.Errorf("expected log file to contain phase line, got %q", got)
+	}
+	// Count occurrences: exactly one line per emit.
+	if n := strings.Count(got, "Phase: deploy"); n != 1 {
+		t.Errorf("expected 1 occurrence of phase line in log, got %d (content=%q)", n, got)
+	}
+}
+
 func TestOpenPipelineLog_DisabledReturnsNil(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	w, logWriter, logPath, cleanup, err := OpenPipelineLog(tmpDir, "deploy", false)
+	w, logWriter, termOut, logPath, cleanup, err := OpenPipelineLog(tmpDir, "deploy", false)
 	defer cleanup()
 
 	if err != nil {
@@ -678,6 +729,10 @@ func TestOpenPipelineLog_DisabledReturnsNil(t *testing.T) {
 
 	if logPath != "" {
 		t.Errorf("expected logPath to be empty when disabled, got %q", logPath)
+	}
+
+	if termOut == nil {
+		t.Errorf("expected termOut to be non-nil even when disabled (io.Discard or os.Stdout)")
 	}
 
 	devboxLogsDir := filepath.Join(tmpDir, ".devbox", "logs")

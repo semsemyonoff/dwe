@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -83,6 +84,8 @@ const (
 type PlainReporter struct {
 	mu        sync.Mutex // guards every write to w and any future shared state
 	w         *render.Writer
+	logFile   io.Writer        // optional ANSI-stripped side-channel to the global pipeline log file
+	termOut   io.Writer        // raw terminal stream for cursor ANSI (LiveLine in later tasks); io.Discard when non-TTY
 	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline
 	now       func() time.Time // injectable clock; defaults to time.Now
@@ -95,9 +98,28 @@ type PlainReporter struct {
 	groups map[string]*groupEntry
 }
 
-// NewPlainReporter creates a PlainReporter that writes to w.
-func NewPlainReporter(w *render.Writer) *PlainReporter {
-	return &PlainReporter{w: w, now: time.Now}
+// NewPlainReporter creates a PlainReporter.
+//
+// screen is the status-line writer (typically wrapping os.Stdout). logFile is
+// the raw global pipeline log file (or nil when logging is disabled); the
+// reporter wraps it with logSanitizer internally so the file on disk receives
+// ANSI-stripped, `\r`-normalised content. termOut is the raw terminal stream
+// reserved for cursor/spinner ANSI sequences in later live-progress tasks; it
+// is io.Discard when stdout is not a TTY.
+func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Writer) *PlainReporter {
+	if termOut == nil {
+		termOut = io.Discard
+	}
+	var wrapped io.Writer
+	if logFile != nil {
+		wrapped = &logSanitizer{w: logFile}
+	}
+	return &PlainReporter{
+		w:       screen,
+		logFile: wrapped,
+		termOut: termOut,
+		now:     time.Now,
+	}
 }
 
 // StartPipeline stores the pipeline name and records the start time for
@@ -264,12 +286,21 @@ func (r *PlainReporter) FinishPipeline(success bool) {
 		render.Green, iconDone, render.Reset,
 		render.Gray, elapsed, render.Reset,
 	)
+	if r.logFile != nil {
+		_, _ = fmt.Fprintf(r.logFile, "[%s] %s Done (%s)\n", r.now().Format(timestampLayout), iconDone, elapsed)
+	}
 }
 
 // emit writes a single line with the timestamp prefix and a colored body.
 // Format: "<gray>[ts]<reset> <color>msg<reset>\n".
+//
+// The full line goes to the screen writer; a clean ts+msg copy is side-written
+// to the log file (when configured) via logSanitizer.
 func (r *PlainReporter) emit(color, msg string) {
 	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s%s%s\n", r.timestampPrefix(), color, msg, render.Reset)
+	if r.logFile != nil {
+		_, _ = fmt.Fprintf(r.logFile, "[%s] %s\n", r.now().Format(timestampLayout), msg)
+	}
 }
 
 // timestampPrefix returns the gray "[YY-MM-DD HH:MM:SS] " prefix for the
@@ -424,11 +455,7 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 		// FinishStep/FailStep. This call originates from lineTee.Flush()
 		// delivering a trailing non-newline-terminated frame. Write
 		// directly so it is not silently dropped.
-		if final {
-			_, _ = fmt.Fprintln(r.w.Writer(), frame)
-		} else {
-			_, _ = fmt.Fprintln(r.w.Writer(), frame)
-		}
+		_, _ = fmt.Fprintln(r.w.Writer(), frame)
 		return
 	}
 	if !final {
@@ -442,9 +469,14 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	r.writeLog(frame)
 }
 
-// writeLog is the side-channel write to the global pipeline log file.
-// Stubbed as a no-op until Task 3 wires up the logFile field.
-func (r *PlainReporter) writeLog(_ string) {}
+// writeLog side-writes a single committed step-output frame to the global
+// pipeline log file. No-op when logging is disabled.
+func (r *PlainReporter) writeLog(frame string) {
+	if r.logFile == nil {
+		return
+	}
+	_, _ = fmt.Fprintln(r.logFile, frame)
+}
 
 // subStepStatus categorises a sub-step's outcome for group counter updates.
 type subStepStatus int

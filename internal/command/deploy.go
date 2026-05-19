@@ -211,13 +211,13 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 
 	logEnabled := cfg.Deploy.LogEnabled()
-	w, logWriter, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "deploy", logEnabled)
+	w, logWriter, termOut, logPath, cleanup, err := pipeline.OpenPipelineLog(workDir, "deploy", logEnabled)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	rep := pipeline.NewPlainReporter(w)
+	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
 
 	// After .env is regenerated, load it into the current process
 	// environment so subsequent cmd: steps can reference its variables.

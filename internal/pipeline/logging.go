@@ -61,29 +61,44 @@ func (s *logSanitizer) Write(p []byte) (int, error) {
 
 // OpenPipelineLog opens (or skips) a pipeline log file at .devbox/logs/<name>.log.
 //
-// When enabled is true, it ensures the .devbox/logs directory exists, creates the log
-// file, and returns a Writer that tees devbox status messages to both stdout
-// and the log file (with ANSI codes stripped from the file copy). The returned
-// io.Writer is the raw log file (for child-process tee) and logPath is the
-// destination path used in trailing "Log saved to:" messages.
+// Returns three separate writers so PlainReporter can drive its live-line UI
+// without fan-out at the writer level:
 //
-// When enabled is false, it returns the plain stdout writer with nil log file
-// and an empty path. cleanup is always non-nil and safe to call.
-func OpenPipelineLog(workDir, name string, enabled bool) (*render.Writer, io.Writer, string, func(), error) {
+//   - screen: status writer around os.Stdout (no log fan-out). PlainReporter
+//     writes log lines explicitly next to each emit via a dedicated side-write.
+//   - logFile: the raw *os.File (when enabled) or nil. PlainReporter wraps it
+//     with logSanitizer internally — the file on disk receives clean
+//     line-terminated text.
+//   - termOut: raw os.Stdout for cursor ANSI when the terminal is a TTY, or
+//     io.Discard otherwise. LiveLine writes its cursor/spinner sequences here.
+//
+// logPath is the destination path used in trailing "Log saved to:" messages.
+// cleanup is always non-nil and safe to call.
+func OpenPipelineLog(workDir, name string, enabled bool) (
+	screen *render.Writer,
+	logFile io.Writer,
+	termOut io.Writer,
+	logPath string,
+	cleanup func(),
+	err error,
+) {
+	termOut = io.Discard
+	if stdoutIsTTY() {
+		termOut = os.Stdout
+	}
 	if !enabled {
-		return render.Stdout(), nil, "", func() {}, nil
+		return render.Stdout(), nil, termOut, "", func() {}, nil
 	}
 	logsDir := filepath.Join(workDir, ".devbox", "logs")
-	if err := os.MkdirAll(logsDir, 0o755); err != nil {
-		return nil, nil, "", func() {}, fmt.Errorf("creating logs directory %s: %w", logsDir, err)
+	if mkErr := os.MkdirAll(logsDir, 0o755); mkErr != nil {
+		return nil, nil, nil, "", func() {}, fmt.Errorf("creating logs directory %s: %w", logsDir, mkErr)
 	}
-	logPath := filepath.Join(logsDir, name+".log")
-	logFile, err := os.Create(logPath)
-	if err != nil {
-		return nil, nil, "", func() {}, fmt.Errorf("creating %s log %s: %w", name, logPath, err)
+	logPath = filepath.Join(logsDir, name+".log")
+	f, createErr := os.Create(logPath)
+	if createErr != nil {
+		return nil, nil, nil, "", func() {}, fmt.Errorf("creating %s log %s: %w", name, logPath, createErr)
 	}
-	tee := io.MultiWriter(os.Stdout, &logSanitizer{logFile})
-	return render.NewWriter(tee), logFile, logPath, func() { _ = logFile.Close() }, nil
+	return render.NewWriter(os.Stdout), f, termOut, logPath, func() { _ = f.Close() }, nil
 }
 
 // OpenSubStepLog opens (or skips) a per-sub-step log file at

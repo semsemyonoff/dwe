@@ -182,13 +182,13 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 ```
 
 Checklist:
-- [ ] change `OpenPipelineLog` to the new signature
-- [ ] update call sites: `internal/command/deploy.go:214`, `internal/command/reset.go:134`, `internal/lifecycle/phases.go:41` — capture three writers + logPath + cleanup
-- [ ] update `pipeline.NewPlainReporter` to accept three writers; store `screen.Writer()`, the ANSI-stripped `logFile`, and `termOut` internally for LiveLine construction in Task 5
-- [ ] update `logging_test.go` cases (`TestOpenPipelineLog_CreatesDevboxLogsDirectory`, `TestOpenPipelineLog_DisabledReturnsNil`, and the file-content-assertion test near line 247) to match the new signature
-- [ ] update `plain_test.go` `newBufReporter` helper: pass a `bytes.Buffer` as screen, `nil` as logFile (or a separate buffer when log-content assertion is desired), `io.Discard` as termOut (existing tests stay byte-for-byte deterministic in non-TTY mode)
-- [ ] write a new test verifying that writing ANSI through `screen` does NOT touch `logFile` (because screen no longer tees), and that PlainReporter status lines reach the log file exactly once via its dedicated side-write
-- [ ] run `go test ./internal/pipeline/... ./internal/command/... ./internal/lifecycle/...` — must pass before Task 4
+- [x] change `OpenPipelineLog` to the new signature
+- [x] update call sites: `internal/command/deploy.go:214`, `internal/command/reset.go:134`, `internal/lifecycle/phases.go:41` — capture three writers + logPath + cleanup
+- [x] update `pipeline.NewPlainReporter` to accept three writers; store `screen.Writer()`, the ANSI-stripped `logFile`, and `termOut` internally for LiveLine construction in Task 5
+- [x] update `logging_test.go` cases (`TestOpenPipelineLog_CreatesDevboxLogsDirectory`, `TestOpenPipelineLog_DisabledReturnsNil`, and the file-content-assertion test near line 247) to match the new signature
+- [x] update `plain_test.go` `newBufReporter` helper: pass a `bytes.Buffer` as screen, `nil` as logFile (or a separate buffer when log-content assertion is desired), `io.Discard` as termOut (existing tests stay byte-for-byte deterministic in non-TTY mode)
+- [x] write a new test verifying that writing ANSI through `screen` does NOT touch `logFile` (because screen no longer tees), and that PlainReporter status lines reach the log file exactly once via its dedicated side-write
+- [x] run `go test ./internal/pipeline/... ./internal/command/... ./internal/lifecycle/...` — must pass before Task 4
 
 ### Task 4: PTY allocation in parallel `childIO`
 
