@@ -1702,3 +1702,113 @@ func TestResolveAIHubAnchor(t *testing.T) {
 		})
 	}
 }
+
+// TestRenderAgentsTemplateFile_cfgRawDotAccess verifies .Cfg.Raw dot syntax.
+func TestRenderAgentsTemplateFile_cfgRawDotAccess(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "main")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeAIPackTmpl(t, projectRoot, "template.tmpl",
+		`prefix={{ .Cfg.Raw.git.project_prefix }};hook={{ index (index .Cfg.Raw.git.hooks .Service) "pre_commit" }}`)
+
+	cfg := &config.DevboxConfig{Raw: map[string]any{
+		"git": map[string]any{
+			"project_prefix": "PRJ",
+			"hooks": map[string]any{
+				"main": map[string]any{"pre_commit": "echo hi"},
+			},
+		},
+	}}
+	data := aipkg.TemplateData{Service: "main", Cfg: cfg}
+	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, "AGENTS.md", hubDir, projectRoot); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(hubDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "PRJ") || !strings.Contains(string(got), "echo hi") {
+		t.Errorf("content=%q", got)
+	}
+}
+
+// TestRenderAgentsTemplateFile_cfgRawNonIdentifierKey verifies index escape hatch.
+func TestRenderAgentsTemplateFile_cfgRawNonIdentifierKey(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "main")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeAIPackTmpl(t, projectRoot, "template.tmpl",
+		`token={{ index .Cfg.Raw "my-tool" "api-key" }}`)
+
+	cfg := &config.DevboxConfig{Raw: map[string]any{
+		"my-tool": map[string]any{"api-key": "VALUE"},
+	}}
+	data := aipkg.TemplateData{Service: "main", Cfg: cfg}
+	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, "AGENTS.md", hubDir, projectRoot); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(hubDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "VALUE") {
+		t.Errorf("content=%q", got)
+	}
+}
+
+// TestRenderAgentsTemplateFile_cfgRawMissingKey verifies missingkey=error surfaces typos.
+func TestRenderAgentsTemplateFile_cfgRawMissingKey(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "main")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeAIPackTmpl(t, projectRoot, "template.tmpl",
+		`prefix={{ .Cfg.Raw.git.project_prefix }}`)
+
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	data := aipkg.TemplateData{Service: "main", Cfg: cfg}
+	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, "AGENTS.md", hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected missingkey error")
+	}
+	if !strings.Contains(err.Error(), "git") {
+		t.Errorf("expected error to mention 'git', got: %v", err)
+	}
+}
+
+// TestRenderAgentsTemplateFile_backwardCompat verifies output byte-identical when
+// templates do not reference .Cfg.
+func TestRenderAgentsTemplateFile_backwardCompat(t *testing.T) {
+	render := func(cfg *config.DevboxConfig) []byte {
+		projectRoot := t.TempDir()
+		hubDir := filepath.Join(projectRoot, "services", "main")
+		if err := os.MkdirAll(hubDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeAIPackTmpl(t, projectRoot, "template.tmpl",
+			`name={{ .Project.Name }};svc={{ .Service }}`)
+		data := aipkg.TemplateData{
+			Project: config.ProjectConfig{Name: "myapp"},
+			Service: "main",
+			Cfg:     cfg,
+		}
+		if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, "AGENTS.md", hubDir, projectRoot); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		got, err := os.ReadFile(filepath.Join(hubDir, "AGENTS.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	empty := render(&config.DevboxConfig{})
+	populated := render(&config.DevboxConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
+	if string(empty) != string(populated) {
+		t.Errorf("output diverged when template does not reference .Cfg:\nempty=%q\npopulated=%q", empty, populated)
+	}
+}

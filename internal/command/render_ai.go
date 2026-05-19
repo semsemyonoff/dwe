@@ -72,6 +72,7 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 		Service:    name,
 		ServiceCfg: svc,
 		Runtime:    cfg.Runtime,
+		Cfg:        cfg,
 	}
 
 	// Render each file in the manifest

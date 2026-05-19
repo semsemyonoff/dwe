@@ -139,10 +139,10 @@ Related patterns:
 
 ### Task 3: Extend AI renderer TemplateData with Cfg field
 
-- [ ] add `Cfg *config.DevboxConfig` to `TemplateData` struct in `internal/templates/ai/ai.go:189-195`
-- [ ] populate `Cfg: cfg` in the caller at `internal/command/render_ai.go:70-75`
-- [ ] extend `internal/command/render_ai_test.go` with four subtests mirroring Task 1's shape (positive dot, non-identifier `index`, missingkey, backward-compat)
-- [ ] run `go test ./internal/templates/ai/... ./internal/command/...` — must pass before next task
+- [x] add `Cfg *config.DevboxConfig` to `TemplateData` struct in `internal/templates/ai/ai.go:189-195`
+- [x] populate `Cfg: cfg` in the caller at `internal/command/render_ai.go:70-75`
+- [x] extend `internal/command/render_ai_test.go` with four subtests mirroring Task 1's shape (positive dot, non-identifier `index`, missingkey, backward-compat)
+- [x] run `go test ./internal/templates/ai/... ./internal/command/...` — must pass before next task
 
 ### Task 4: Cross-renderer consistency and lint
 

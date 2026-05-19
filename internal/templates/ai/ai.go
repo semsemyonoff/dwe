@@ -192,6 +192,7 @@ type TemplateData struct {
 	Service    string
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
+	Cfg        *config.DevboxConfig
 }
 
 // RenderTemplateFile resolves rel via packroot (override first, canonical
