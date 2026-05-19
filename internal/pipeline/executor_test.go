@@ -196,7 +196,7 @@ func TestRunPipeline_SingleStep_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	wantKinds := []string{"StartPipeline", "EnterPhase", "StartStep", "SuspendForExec", "ResumeAfterExec", "FinishStep", "FinishPipeline"}
+	wantKinds := []string{"StartPipeline", "EnterPhase", "StartStep", "FinishStep", "FinishPipeline"}
 	if fmt.Sprint(rep.kindSeq()) != fmt.Sprint(wantKinds) {
 		t.Errorf("event kinds: got %v, want %v", rep.kindSeq(), wantKinds)
 	}
@@ -214,7 +214,7 @@ func TestRunPipeline_SingleStep_Success(t *testing.T) {
 		t.Errorf("StartStep index/total = %d/%d, want 1/1", startStep.index, startStep.total)
 	}
 
-	finishStep := rep.eventAt(5)
+	finishStep := rep.eventAt(3)
 	if finishStep.stepAddr != "init/setup" {
 		t.Errorf("FinishStep stepAddr = %q, want %q", finishStep.stepAddr, "init/setup")
 	}
@@ -266,7 +266,7 @@ func TestRunPipeline_StepFailure_ReporterCalled(t *testing.T) {
 		t.Fatalf("want ErrSilent, got %v", err)
 	}
 
-	// FailStep must appear after SuspendForExec+ResumeAfterExec.
+	// FailStep must appear after StartStep.
 	kinds := rep.kindSeq()
 	findKind := func(k string) int {
 		for i, ev := range kinds {
@@ -276,14 +276,13 @@ func TestRunPipeline_StepFailure_ReporterCalled(t *testing.T) {
 		}
 		return -1
 	}
-	suspendIdx := findKind("SuspendForExec")
-	resumeIdx := findKind("ResumeAfterExec")
+	startIdx := findKind("StartStep")
 	failIdx := findKind("FailStep")
-	if suspendIdx == -1 || resumeIdx == -1 || failIdx == -1 {
+	if startIdx == -1 || failIdx == -1 {
 		t.Fatalf("missing events: kinds=%v", kinds)
 	}
-	if suspendIdx >= resumeIdx || resumeIdx >= failIdx {
-		t.Errorf("event order wrong: Suspend=%d Resume=%d Fail=%d", suspendIdx, resumeIdx, failIdx)
+	if startIdx >= failIdx {
+		t.Errorf("event order wrong: Start=%d Fail=%d", startIdx, failIdx)
 	}
 	if rep.eventAt(failIdx).err == nil {
 		t.Error("FailStep should carry non-nil error")
@@ -477,7 +476,11 @@ func TestRunPipeline_ServiceStep_PhaseKeyIncludesService(t *testing.T) {
 	}
 }
 
-func TestRunPipeline_SuspendResumeWrapsExec(t *testing.T) {
+func TestRunPipeline_NoSuspendResumeAroundExec(t *testing.T) {
+	// Task 6 removed the SuspendForExec/ResumeAfterExec calls in
+	// executeStepBody — child output now routes through Reporter.StepOutput
+	// so the live footer stays visible the entire time. Guard that the
+	// executor does not regress and re-introduce the coarse hand-off.
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "p"}
@@ -487,25 +490,10 @@ func TestRunPipeline_SuspendResumeWrapsExec(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kinds := rep.kindSeq()
-	suspendIdx, resumeIdx, startIdx, finishIdx := -1, -1, -1, -1
-	for i, k := range kinds {
-		switch k {
-		case "StartStep":
-			startIdx = i
-		case "SuspendForExec":
-			suspendIdx = i
-		case "ResumeAfterExec":
-			resumeIdx = i
-		case "FinishStep":
-			finishIdx = i
+	for _, k := range rep.kindSeq() {
+		if k == "SuspendForExec" || k == "ResumeAfterExec" {
+			t.Errorf("executor must not call %s after Task 6 (kinds=%v)", k, rep.kindSeq())
 		}
-	}
-	if startIdx == -1 || suspendIdx == -1 || resumeIdx == -1 || finishIdx == -1 {
-		t.Fatalf("missing events: %v", kinds)
-	}
-	if startIdx >= suspendIdx || suspendIdx >= resumeIdx || resumeIdx >= finishIdx {
-		t.Errorf("event order wrong: Start=%d Suspend=%d Resume=%d Finish=%d", startIdx, suspendIdx, resumeIdx, finishIdx)
 	}
 }
 
@@ -657,10 +645,10 @@ func TestRunPipeline_TrackedIndexContinuous(t *testing.T) {
 	}
 }
 
-func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
-	// A confirm builtin step must always call SuspendForExec/ResumeAfterExec so
-	// the reporter can yield the terminal to stdin. skipConfirm=true lets the
-	// builtin return immediately without blocking stdin.
+func TestRunPipeline_ConfirmStep_RunsWithoutSuspendResume(t *testing.T) {
+	// Task 6 removed Suspend/Resume from the executor; confirm builtins now
+	// rely on the package-level huh hooks installed by PlainReporter (Task 10).
+	// This test just confirms the confirm step still runs cleanly.
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
@@ -673,9 +661,10 @@ func TestRunPipeline_ConfirmStep_SuspendNotSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	if !slices.Contains(rep.kindSeq(), "SuspendForExec") {
-		t.Errorf("SuspendForExec must be called for confirm step, kinds: %v", rep.kindSeq())
+	for _, k := range rep.kindSeq() {
+		if k == "SuspendForExec" || k == "ResumeAfterExec" {
+			t.Errorf("executor must not call %s after Task 6", k)
+		}
 	}
 }
 

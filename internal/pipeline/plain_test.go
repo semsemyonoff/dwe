@@ -572,14 +572,44 @@ func TestPlainReporter_FinishGroup_Failure(t *testing.T) {
 	}
 }
 
-// SubStepOutput must NEVER write to the writer directly — in non-TTY mode it
-// buffers for a later dump on FinishStep / FailStep; in TTY mode the live
-// view consumes events out-of-band.
-func TestPlainReporter_SubStepOutput_NoDirectWrite(t *testing.T) {
+// Parallel sub-step StepOutput must buffer (not write directly) — the buffer
+// is dumped between separator bars on FinishStep / FailStep.
+func TestPlainReporter_StepOutput_ParallelSubStep_Buffers(t *testing.T) {
 	r, buf := newBufReporter()
-	r.StepOutput("init/dumps/main", "some line", true)
+	group := parallelGroup("dumps", "main")
+	r.StartGroup("init/dumps", group, []int{1}, 1)
+	// After StartGroup, "init/dumps/main" is registered with a groupAddr; the
+	// frame is buffered, not written directly.
+	pre := buf.Len()
+	r.StepOutput("init/main", "some line", true)
+	if buf.Len() != pre {
+		t.Errorf("parallel sub-step StepOutput must buffer, not write; new bytes: %q", buf.String()[pre:])
+	}
+}
+
+// Sequential StepOutput writes the final frame directly to the screen so the
+// user sees real-time output (in Task 7 this routes through LiveLine.Println).
+func TestPlainReporter_StepOutput_Sequential_WritesDirectly(t *testing.T) {
+	r, buf := newBufReporter()
+	r.StepOutput("p/s", "line one", true)
+	out := buf.String()
+	if !strings.Contains(out, "line one") {
+		t.Errorf("sequential final StepOutput should write to screen; got %q", out)
+	}
+}
+
+// Sequential non-final frame is held in inProgress (display state only) and
+// not committed to the screen until commitTrailingTail (via FinishStep) runs.
+func TestPlainReporter_StepOutput_Sequential_NonFinalDeferred(t *testing.T) {
+	r, buf := newBufReporter()
+	r.StepOutput("p/s", "spin1", false)
 	if buf.Len() != 0 {
-		t.Errorf("SubStepOutput must not write to terminal directly; got %q", buf.String())
+		t.Errorf("non-final sequential StepOutput must not write directly; got %q", buf.String())
+	}
+	// FinishStep should flush the tail via commitTrailingTail.
+	r.FinishStep("p/s", config.DeployStep{Name: "s"}, 1, 1)
+	if !strings.Contains(buf.String(), "spin1") {
+		t.Errorf("commitTrailingTail should flush leftover tail on FinishStep; got %q", buf.String())
 	}
 }
 

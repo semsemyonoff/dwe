@@ -36,102 +36,67 @@ var stdoutIsTTY = func() bool {
 // childIO returns the (stdout, stderr) writers a step should hand to a child
 // process, plus a cleanup func that must be called after the child exits.
 //
-// Three paths, picked by (logWriter, stdout-is-tty):
+// stepWriter is the per-step tee target prepared by executeStepBody — a
+// lineTee wrapped in ansiOnlyStripper that fans frames into
+// Reporter.StepOutput (and, in parallel mode, into the per-sub-step log file
+// via opts.LogWriter). It is the SOLE destination for child output; childIO
+// never writes to os.Stdout/os.Stderr or to a separate log file.
 //
-//   - logWriter == nil → pass-through: os.Stdout / os.Stderr verbatim so the
-//     child inherits the real terminal fd.
+//   - stepWriter == nil → ad-hoc / external callers (e.g. `devbox deploy run`
+//     outside of RunWithOptions): return os.Stdout / os.Stderr passthrough so
+//     the child inherits the real terminal fd.
 //
-//   - logWriter != nil, stdout NOT a TTY → MultiWriter tee. Stdout was not a
-//     TTY anyway, so docker compose would have used plain mode regardless.
+//   - stepWriter != nil, stdout NOT a TTY → return stepWriter for both
+//     stdout and stderr (sequential and parallel paths share this branch).
 //
-//   - logWriter != nil, stdout IS a TTY → PTY. The child sees the tty slave as
-//     its stdout/stderr (real terminal — docker compose's interactive UI
-//     works), and a goroutine copies pty master output to (real os.Stdout +
-//     log file with ANSI stripped). Cleanup closes the parent's tty fd and
-//     waits for the copy goroutine to drain before closing the master. If
-//     pty allocation fails, falls back transparently to the MultiWriter path
-//     so log capture still happens (just without the TUI).
-//
-// Parallel mode (parallel=true) is a fourth path: when stdoutIsTTY() is true,
-// a PTY is allocated so the child emits proper progress redraws (curl / docker
-// compose) which the caller's lineTee parses frame-by-frame. The PTY master is
-// copied into logWriter UNCHANGED — the caller is responsible for routing
-// log-file destinations through logSanitizer and the line-tee path through
-// ansiOnlyStripper. os.Stdout / os.Stderr are never touched in parallel mode.
-// When stdout is not a TTY, or pty.Open fails, parallel mode falls back to
-// returning logWriter directly (no PTY, no allocation).
-// logWriter must be non-nil; a nil writer in parallel mode is a programmer
-// error and panics.
-func childIO(logWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cleanup func()) {
-	if parallel {
-		if logWriter == nil {
-			panic("pipeline: childIO called with parallel=true but logWriter is nil")
-		}
-		if !stdoutIsTTY() {
-			return logWriter, logWriter, func() {}
-		}
-		ptmx, tty, err := pty.Open()
-		if err != nil {
-			return logWriter, logWriter, func() {}
-		}
-		_ = pty.InheritSize(os.Stdout, ptmx)
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			_, _ = io.Copy(logWriter, ptmx)
-		}()
-		cleanup = func() {
-			_ = tty.Close()
-			<-done
-			_ = ptmx.Close()
-		}
-		return tty, tty, cleanup
-	}
-	if logWriter == nil {
+//   - stepWriter != nil, stdout IS a TTY → allocate a PTY. The child sees the
+//     tty slave so docker compose / curl emit proper progress redraws; a
+//     goroutine copies pty master → stepWriter so frames flow through the
+//     reporter (and per-sub-step log when set). Cleanup closes the parent's
+//     tty fd, waits for the copy goroutine to drain, then closes the master.
+//     If pty.Open fails, falls back transparently to the no-PTY branch.
+func childIO(stepWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cleanup func()) {
+	if stepWriter == nil {
 		return os.Stdout, os.Stderr, func() {}
 	}
-
 	if !stdoutIsTTY() {
-		logStripped := &logSanitizer{logWriter}
-		return io.MultiWriter(os.Stdout, logStripped), io.MultiWriter(os.Stderr, logStripped), func() {}
+		return stepWriter, stepWriter, func() {}
 	}
-
 	ptmx, tty, err := pty.Open()
 	if err != nil {
-		// Fall back to MultiWriter — interactive UI is lost but log capture works.
-		logStripped := &logSanitizer{logWriter}
-		return io.MultiWriter(os.Stdout, logStripped), io.MultiWriter(os.Stderr, logStripped), func() {}
+		return stepWriter, stepWriter, func() {}
 	}
-
-	// Match the parent's terminal size so the child's TUI lays out correctly.
-	// Use os.Stdout (not os.Stdin) because Stdout is the terminal when stdin is piped.
 	_ = pty.InheritSize(os.Stdout, ptmx)
-
 	done := make(chan struct{})
-	sink := io.MultiWriter(os.Stdout, &logSanitizer{logWriter})
 	go func() {
 		defer close(done)
-		_, _ = io.Copy(sink, ptmx)
+		_, _ = io.Copy(stepWriter, ptmx)
 	}()
-
 	cleanup = func() {
-		// Close parent's slave fd; when the child has also exited (its slave
-		// fd closed by the kernel), the master gets EOF and the copy
-		// goroutine returns. We wait for it before closing the master.
 		_ = tty.Close()
 		<-done
 		_ = ptmx.Close()
 	}
-
+	_ = parallel // parameter retained for documentation; behaviour is uniform.
 	return tty, tty, cleanup
 }
 
 // ActionContext carries the inputs needed by ExecAction.
 // It is constructed once per step by Run and reused for both body and check.
 type ActionContext struct {
-	WorkDir     string
-	Cfg         *config.DevboxConfig
-	Reg         *usercommands.Registry
+	WorkDir string
+	Cfg     *config.DevboxConfig
+	Reg     *usercommands.Registry
+	// StepWriter is the per-step tee target (lineTee wrapped in ansiOnlyStripper)
+	// produced by executeStepBody. childIO routes child stdout/stderr through it,
+	// and execBuiltinAction wraps it as the builtin's render.Writer. When nil
+	// (ad-hoc external callers outside RunWithOptions), childIO falls back to
+	// os.Stdout/os.Stderr passthrough.
+	StepWriter io.Writer
+	// LogWriter carries the per-sub-step log-file sink in parallel mode (a
+	// logSanitizer wrapping the per-sub-step file). It is folded into
+	// StepWriter's downstream destinations by executeStepBody. In sequential
+	// mode it is nil — the global pipeline log receives lines via PlainReporter.
 	LogWriter   io.Writer
 	SkipConfirm bool
 	// Parallel indicates the action is running as a sub-step of a parallel
@@ -193,7 +158,7 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 	if !actx.Parallel {
 		cmd.Stdin = os.Stdin
 	}
-	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
+	stdout, stderr, cleanup := childIO(actx.StepWriter, actx.Parallel)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
@@ -213,7 +178,7 @@ func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) 
 	if !actx.Parallel {
 		cmd.Stdin = os.Stdin
 	}
-	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
+	stdout, stderr, cleanup := childIO(actx.StepWriter, actx.Parallel)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
@@ -226,21 +191,16 @@ func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) 
 	return nil
 }
 
-// execBuiltinAction executes a builtin action.
+// execBuiltinAction executes a builtin action. All builtin output is routed
+// through actx.StepWriter so it flows via the per-step lineTee →
+// Reporter.StepOutput like every other child line; when StepWriter is nil
+// (ad-hoc external callers), output falls back to os.Stdout.
 func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	if err := builtin.Validate(a.Cmd, a.With); err != nil {
 		return fmt.Errorf("invalid builtin %q: %w", a.Cmd, err)
 	}
-	var out io.Writer
-	switch {
-	case actx.Parallel:
-		if actx.LogWriter == nil {
-			return fmt.Errorf("internal error: parallel builtin %q requires non-nil LogWriter", a.Cmd)
-		}
-		out = &logSanitizer{actx.LogWriter}
-	case actx.LogWriter != nil:
-		out = io.MultiWriter(os.Stdout, &logSanitizer{actx.LogWriter})
-	default:
+	out := actx.StepWriter
+	if out == nil {
 		out = os.Stdout
 	}
 	var stdinForBuiltin *os.File
@@ -251,7 +211,6 @@ func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext)
 		Config:      actx.Cfg,
 		ProjectRoot: actx.WorkDir,
 		Output:      render.NewWriter(out),
-		LogWriter:   actx.LogWriter,
 		Stdin:       stdinForBuiltin,
 		SkipConfirm: actx.SkipConfirm,
 	}
@@ -271,7 +230,7 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	if err != nil {
 		return err
 	}
-	stdout, stderr, cleanup := childIO(actx.LogWriter, actx.Parallel)
+	stdout, stderr, cleanup := childIO(actx.StepWriter, actx.Parallel)
 	defer cleanup()
 	rctx.Stdout = stdout
 	rctx.Stderr = stderr
@@ -290,12 +249,17 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 
 // ExecStep is a deprecated wrapper for backward compatibility.
 // New code should use ExecAction directly.
+//
+// The legacy logWriter argument is mapped to ActionContext.StepWriter so
+// any external caller that supplies a writer still receives child output via
+// the same single durable path. Passing nil yields os.Stdout/os.Stderr
+// passthrough (legacy `devbox deploy run` semantics).
 func ExecStep(ctx context.Context, step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
 	actx := ActionContext{
 		WorkDir:     workDir,
 		Cfg:         cfg,
 		Reg:         reg,
-		LogWriter:   logWriter,
+		StepWriter:  logWriter,
 		SkipConfirm: skipConfirm,
 	}
 	return ExecAction(ctx, step.Action(), actx)
@@ -666,18 +630,36 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	// Step 4: Execute the step.
 	opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 	opts.Recorder.OnStepStart(addr, rs, stepHash)
-	// SuspendForExec/ResumeAfterExec signal terminal hand-off; they must not be
-	// called from concurrent goroutines in parallel mode (contract violation).
-	if !opts.Parallel {
-		opts.Reporter.SuspendForExec()
-	}
 
 	skipConfirm := opts.SkipConfirm || rs.Step.SkipConfirm
+
+	// Build the per-step tee: every frame the child emits flows through
+	// Reporter.StepOutput exactly once. In parallel mode the per-sub-step
+	// log-file sink (opts.LogWriter) is folded into the same writer so the
+	// sub-step's .log captures full output without a second tee.
+	stepAddr := addr
+	tee := newLineTee(func(frame string, final bool) {
+		opts.Reporter.StepOutput(stepAddr, frame, final)
+	})
+	// tee.Flush must run BEFORE any reporter end-of-step event so the
+	// trailing non-newline-terminated tail (delivered as final=false via
+	// lineTee.Flush) is recorded in PlainReporter.inProgress in time for
+	// commitTrailingTail to flush it inside FinishStep/FailStep/SkipStep.
+	// lineTee.Flush is idempotent (no-op on empty buffer), so calling it
+	// both eagerly (before each finish event) and via the defer for any
+	// short-circuit return paths is safe.
+	defer tee.Flush()
+	var stepDst io.Writer = tee
+	if opts.Parallel && opts.LogWriter != nil {
+		stepDst = joinWriters(tee, opts.LogWriter)
+	}
+	stepWriter := &ansiOnlyStripper{w: stepDst}
 
 	bodyActx := ActionContext{
 		WorkDir:     opts.WorkDir,
 		Cfg:         opts.Config,
 		Reg:         opts.Registry,
+		StepWriter:  stepWriter,
 		LogWriter:   opts.LogWriter,
 		SkipConfirm: skipConfirm,
 		Parallel:    opts.Parallel,
@@ -685,10 +667,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	startTime := time.Now()
 	stepErr := ExecAction(ctx, rs.Step.Action(), bodyActx)
 	durationMs := time.Since(startTime).Milliseconds()
-
-	if !opts.Parallel {
-		opts.Reporter.ResumeAfterExec()
-	}
+	tee.Flush()
 
 	if stepErr != nil {
 		opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, stepErr)
@@ -715,11 +694,13 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			WorkDir:     opts.WorkDir,
 			Cfg:         opts.Config,
 			Reg:         opts.Registry,
+			StepWriter:  stepWriter,
 			LogWriter:   opts.LogWriter,
 			SkipConfirm: skipConfirm,
 			Parallel:    opts.Parallel,
 		}
 		checkErr := ExecAction(ctx, *rs.Step.Check, actx)
+		tee.Flush()
 		if checkErr != nil {
 			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
 			opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, checkErr)
@@ -850,23 +831,17 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 		defer func() { _ = subFile.Close() }()
 	}
 
-	tee := newLineTee(func(frame string, final bool) { opts.Reporter.StepOutput(subAddr, frame, final) })
-	defer tee.Flush()
-
 	// Per-sub-step log file receives full output via logSanitizer (ANSI strip
-	// + `\r` → `\n` so progress frames land on separate lines). The line-tee
-	// strips ANSI itself but preserves `\r` for frame-aware parsing (Task 2).
-	// opts.LogWriter (global pipeline log) is intentionally NOT in this join;
-	// the global log receives parallel output via Reporter.StepOutput's
-	// dedicated side-write (added in Task 6).
-	var subFileSink io.Writer
-	if subFile != nil {
-		subFileSink = &logSanitizer{subFile}
-	}
-	subWriter := joinWriters(subFileSink, tee)
-
+	// + `\r` → `\n` so progress frames land on separate lines). The per-step
+	// lineTee created in executeStepBody is the SINGLE source-of-truth tee for
+	// child frames; runParallelSubStep no longer wires its own. The global
+	// pipeline log is fed via PlainReporter.StepOutput's writeLog path.
 	subOpts := opts
-	subOpts.LogWriter = subWriter
+	if subFile != nil {
+		subOpts.LogWriter = &logSanitizer{w: subFile}
+	} else {
+		subOpts.LogWriter = nil
+	}
 	subOpts.Parallel = true
 
 	return executeStepBody(ctx, subOpts, sub, subAddr, idx, total)

@@ -41,10 +41,11 @@ type ExecContext struct {
 	Config *config.DevboxConfig
 	// ProjectRoot is the absolute path to the project root (directory of devbox.yml).
 	ProjectRoot string
-	// Output is the render writer for styled terminal output.
+	// Output is the render writer for styled terminal output. All builtin
+	// output flows through this single channel — the executor wires it to
+	// the per-step lineTee so frames reach Reporter.StepOutput like every
+	// other child line.
 	Output *render.Writer
-	// LogWriter receives a plain-text copy of output (ANSI stripped). May be nil.
-	LogWriter io.Writer
 	// Stdin is the reader used for interactive prompts. Defaults to os.Stdin when nil.
 	Stdin io.Reader
 	// SkipConfirm suppresses all confirm builtins (e.g. when --yes is passed).

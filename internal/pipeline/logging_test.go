@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -506,13 +507,16 @@ func TestChildIO_Parallel_TTY_NoLeakAfterCleanup(t *testing.T) {
 	cleanup()
 }
 
-func TestChildIO_Parallel_NilLogWriter_Panics(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic when parallel=true and logWriter is nil")
-		}
-	}()
-	_, _, _ = childIO(nil, true)
+func TestChildIO_NilStepWriter_FallsBackToOsStdio(t *testing.T) {
+	// Task 6: childIO with stepWriter == nil falls back to os.Stdout / os.Stderr
+	// passthrough so ad-hoc external callers (`devbox deploy run STEP`) still
+	// inherit the real terminal fd. Replaces the old parallel-nil panic which
+	// is no longer reachable: parallel-mode callers always supply a tee.
+	stdout, stderr, cleanup := childIO(nil, false)
+	defer cleanup()
+	if stdout != os.Stdout || stderr != os.Stderr {
+		t.Errorf("nil stepWriter must yield os.Stdout/os.Stderr passthrough")
+	}
 }
 
 // TestParallelGroup_PerSubStepLogRoutesOutput exercises the executor's
@@ -642,12 +646,12 @@ func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) 
 }
 
 // TestExecBuiltinAction_Parallel_NoStdoutWrite verifies that a builtin running
-// in parallel mode (actx.Parallel=true) writes only to actx.LogWriter and
+// in parallel mode (actx.Parallel=true) writes only to actx.StepWriter and
 // never directly to os.Stdout — required for non-TTY buffered reporter modes.
 func TestExecBuiltinAction_Parallel_NoStdoutWrite(t *testing.T) {
 	var buf bytes.Buffer
 	tee := newLineTee(func(string, bool) {})
-	w := joinWriters(&buf, tee)
+	stepWriter := &ansiOnlyStripper{w: joinWriters(&buf, tee)}
 
 	// Capture and discard os.Stdout writes to assert nothing leaks.
 	origStdout := os.Stdout
@@ -660,17 +664,17 @@ func TestExecBuiltinAction_Parallel_NoStdoutWrite(t *testing.T) {
 
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	actx := ActionContext{
-		WorkDir:   t.TempDir(),
-		Cfg:       cfg,
-		LogWriter: w,
-		Parallel:  true,
+		WorkDir:    t.TempDir(),
+		Cfg:        cfg,
+		StepWriter: stepWriter,
+		Parallel:   true,
 	}
 	action := config.Action{Type: "builtin", Cmd: "message", With: map[string]any{"level": "info", "text": "hi"}}
 	if err := ExecAction(t.Context(), action, actx); err != nil {
 		t.Fatalf("ExecAction: %v", err)
 	}
 	if !strings.Contains(buf.String(), "hi") {
-		t.Errorf("builtin output did not reach LogWriter: %q", buf.String())
+		t.Errorf("builtin output did not reach StepWriter: %q", buf.String())
 	}
 	// Drain the captured os.Stdout pipe non-blockingly.
 	_ = wPipe.Close()
@@ -679,6 +683,102 @@ func TestExecBuiltinAction_Parallel_NoStdoutWrite(t *testing.T) {
 		t.Errorf("parallel builtin leaked %d bytes to os.Stdout: %q", len(captured), captured)
 	}
 	os.Stdout = origStdout
+}
+
+// TestExecBuiltinAction_RoutesViaStepOutput proves that builtin output flows
+// through Reporter.StepOutput like every other child line (so it never
+// bypasses LiveLine in later tasks).
+func TestExecBuiltinAction_RoutesViaStepOutput(t *testing.T) {
+	rep := &mockReporter{}
+	phase := config.DeployPhase{Name: "p"}
+	steps := []ResolvedStep{
+		{Phase: phase, Step: config.DeployStep{
+			Name: "say-hi", Type: "builtin", Cmd: "message",
+			With: map[string]any{"level": "info", "text": "hello world"},
+		}},
+	}
+	if err := Run(steps, rep, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	saw := false
+	for _, e := range rep.events {
+		if e.kind == "StepOutput" && e.stepAddr == "p/say-hi" && strings.Contains(e.reason, "hello world") && e.final {
+			saw = true
+			break
+		}
+	}
+	if !saw {
+		t.Errorf("expected builtin output via StepOutput(addr=p/say-hi, frame contains 'hello world', final=true); got events: %v", rep.events)
+	}
+}
+
+// TestSequentialStep_OutputReachesReporterAndLog wires a fake sequential step
+// that emits multi-line output and asserts StepOutput receives each line and
+// the global log captures each line exactly once via PlainReporter.writeLog.
+func TestSequentialStep_OutputReachesReporterAndLog(t *testing.T) {
+	rep := &mockReporter{}
+	phase := config.DeployPhase{Name: "p"}
+	steps := []ResolvedStep{
+		{Phase: phase, Step: config.DeployStep{
+			Name: "echo", Type: "shell", Cmd: "printf 'alpha\\nbeta\\n'",
+		}},
+	}
+	if err := Run(steps, rep, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var frames []string
+	for _, e := range rep.events {
+		if e.kind == "StepOutput" && e.final {
+			frames = append(frames, e.reason)
+		}
+	}
+	if !slices.Contains(frames, "alpha") || !slices.Contains(frames, "beta") {
+		t.Errorf("StepOutput must carry both sequential frames; got %v", frames)
+	}
+}
+
+// TestSequentialStep_TrailingTail_LoggedExactlyOnce verifies a child whose
+// stdout ends without a trailing newline still gets its tail flushed to the
+// log via commitTrailingTail (and only once).
+func TestSequentialStep_TrailingTail_LoggedExactlyOnce(t *testing.T) {
+	var screen bytes.Buffer
+	var logFile bytes.Buffer
+	r := NewPlainReporter(render.NewWriter(&screen), &logFile, nil)
+	r.now = func() time.Time { return time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC) }
+
+	phase := config.DeployPhase{Name: "p"}
+	step := config.DeployStep{Name: "tail", Type: "shell", Cmd: "printf 'no-newline-here'"}
+	steps := []ResolvedStep{{Phase: phase, Step: step}}
+	if err := Run(steps, r, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	n := strings.Count(logFile.String(), "no-newline-here")
+	if n != 1 {
+		t.Errorf("trailing tail must reach the log exactly once; got %d occurrences in %q", n, logFile.String())
+	}
+	if !strings.Contains(screen.String(), "no-newline-here") {
+		t.Errorf("trailing tail must also reach the screen; got %q", screen.String())
+	}
+}
+
+// TestNoDuplication_SequentialStepLog asserts each sequential child line
+// reaches the global log file exactly once (no double-emit via fan-out).
+func TestNoDuplication_SequentialStepLog(t *testing.T) {
+	var screen bytes.Buffer
+	var logFile bytes.Buffer
+	r := NewPlainReporter(render.NewWriter(&screen), &logFile, nil)
+	r.now = func() time.Time { return time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC) }
+
+	phase := config.DeployPhase{Name: "p"}
+	steps := []ResolvedStep{
+		{Phase: phase, Step: config.DeployStep{Name: "s", Type: "shell", Cmd: "printf 'unique-line\\n'"}},
+	}
+	if err := Run(steps, r, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := strings.Count(logFile.String(), "unique-line"); got != 1 {
+		t.Errorf("sequential line must land in global log exactly once; got %d in:\n%s", got, logFile.String())
+	}
 }
 
 // suppress unused-import warning for condition when no tests reference it.

@@ -96,6 +96,15 @@ type PlainReporter struct {
 
 	// groups holds per-parallel-group aggregate state for FinishGroup.
 	groups map[string]*groupEntry
+
+	// currentStepAddr tracks the most recently started sequential step (or
+	// the group address while a parallel group is active). inBlockMode is
+	// true between StartGroup and FinishGroup; blockGroupAddr holds the
+	// active group's address. Used by later live-progress tasks; populated
+	// here in Task 6 so future tasks can read the state without re-plumbing.
+	currentStepAddr string
+	inBlockMode     bool
+	blockGroupAddr  string
 }
 
 // NewPlainReporter creates a PlainReporter.
@@ -175,6 +184,7 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.currentStepAddr = stepAddr
 	label := stepAddr
 	if step.Description != "" {
 		label += ": " + step.Description
@@ -198,6 +208,7 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.commitTrailingTail(stepAddr)
 	if index > 0 {
 		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
 	} else {
@@ -220,6 +231,7 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.commitTrailingTail(stepAddr)
 	if index > 0 {
 		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
 	} else {
@@ -244,8 +256,9 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int, total int, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.commitTrailingTail(stepAddr)
 
-	if _, isSub := r.subs[stepAddr]; isSub {
+	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" {
 		if index > 0 {
 			r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, index, total, stepAddr))
 		} else {
@@ -342,6 +355,8 @@ func (r *PlainReporter) ResumeAfterExec() {}
 func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, _ int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.inBlockMode = true
+	r.blockGroupAddr = groupAddr
 	label := groupAddr
 	if group.Description != "" {
 		label += ": " + group.Description
@@ -379,6 +394,10 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, success bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.blockGroupAddr == groupAddr {
+		r.inBlockMode = false
+		r.blockGroupAddr = ""
+	}
 
 	icon := iconDone
 	color := render.Green
@@ -423,22 +442,19 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 	r.emit(color, msg)
 }
 
-// StepOutput streams a single frame of captured step output to the per-step
-// buffer. Never writes to the terminal directly; the buffer is dumped between
-// separator bars by FinishStep / FailStep.
+// StepOutput streams a single frame of captured step output to the reporter.
 //
-// final=true marks a `\n`-terminated committed line: append `frame + "\n"`
-// to the buffer, side-write to the log (via writeLog), reset inProgress.
+// For SEQUENTIAL steps (no associated groupAddr): final=true writes the frame
+// directly to the screen and to the global pipeline log (single copy each);
+// final=false stores the frame in inProgress as ephemeral display state, to be
+// flushed by commitTrailingTail at step-finish time.
 //
-// final=false marks an in-progress `\r` redraw frame, or the trailing
-// non-newline-terminated tail from lineTee.Flush at end-of-stream. The frame
-// is stored in inProgress as display state only — NOT committed here. The
-// central commitTrailingTail helper (Task 9) is responsible for flushing
-// inProgress on step-finish events.
+// For PARALLEL sub-steps (registered by StartGroup so groupAddr != ""):
+// final=true appends to the per-sub-step buffer (dumped between separator bars
+// by FinishStep/FailStep) AND writes to the global pipeline log once;
+// final=false stores in inProgress (display state only).
 //
-// If addr is unknown (e.g. StartGroup was skipped due to an upstream bug or
-// a sequential test calls StepOutput) the entry is created on the fly so we
-// never panic.
+// If addr is unknown the entry is created on the fly so we never panic.
 func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -451,22 +467,63 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 		r.subs[addr] = entry
 	}
 	if entry.flushed {
-		// The step already completed and its buffer was dumped by
+		// Sub-step already completed and its buffer was dumped by
 		// FinishStep/FailStep. This call originates from lineTee.Flush()
 		// delivering a trailing non-newline-terminated frame. Write
 		// directly so it is not silently dropped.
 		_, _ = fmt.Fprintln(r.w.Writer(), frame)
+		if final {
+			r.writeLog(frame)
+		}
 		return
 	}
 	if !final {
-		// In-progress frame: display state only. NOT committed here.
 		entry.inProgress = frame
 		return
 	}
+	if entry.groupAddr == "" {
+		// Sequential step: write directly to screen + log.
+		_, _ = fmt.Fprintln(r.w.Writer(), frame)
+		r.writeLog(frame)
+		entry.inProgress = ""
+		return
+	}
+	// Parallel sub-step: buffer for dump, side-write log once.
 	entry.buf.WriteString(frame)
 	entry.buf.WriteByte('\n')
 	entry.inProgress = ""
 	r.writeLog(frame)
+}
+
+// commitTrailingTail flushes any trailing non-terminated tail captured in
+// inProgress for addr. Called as the FIRST step at every step-finish event
+// (FinishStep / FailStep / SkipStep) so that the tail is preserved exactly
+// once in screen + log regardless of whether the buffer is later dumped.
+//
+// For SEQUENTIAL steps the tail is written directly to screen + log.
+// For PARALLEL sub-steps the tail is appended to the per-sub-step buffer
+// AND written to the global log; the dump policy (executed by callers after
+// this returns) replays from the buffer only, never re-logging.
+//
+// Caller must hold r.mu.
+func (r *PlainReporter) commitTrailingTail(addr string) {
+	if r.subs == nil {
+		return
+	}
+	entry, ok := r.subs[addr]
+	if !ok || entry.inProgress == "" {
+		return
+	}
+	tail := entry.inProgress
+	entry.inProgress = ""
+	if entry.groupAddr == "" {
+		_, _ = fmt.Fprintln(r.w.Writer(), tail)
+		r.writeLog(tail)
+		return
+	}
+	entry.buf.WriteString(tail)
+	entry.buf.WriteByte('\n')
+	r.writeLog(tail)
 }
 
 // writeLog side-writes a single committed step-output frame to the global
