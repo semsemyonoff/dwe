@@ -515,7 +515,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		SkipConfirm:  nonInteractive,
 		PostStepHook: postStepHooks,
 		Recorder:     recorder,
-		SkipDecider:  skipDecider,
+		SkipDecider:  recorder.WrapSkipDecider(skipDecider),
 	}
 
 	if pipeErr := pipeline.RunWithOptions(opts); pipeErr != nil {
@@ -577,6 +577,10 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 				return completions, cobra.ShellCompDirectiveNoFileComp
 			}
 			for _, s := range steps {
+				if s.Parallel != nil {
+					// Parallel groups cannot be run individually; skip from completions.
+					continue
+				}
 				addr := s.StepAddress()
 				desc := s.Step.Description
 				if desc == "" {
@@ -596,6 +600,10 @@ Use 'devbox deploy plan' to list available step addresses. Use --dry-run to prev
 			phase, step, err := deploy.FindStep(cfg, address)
 			if err != nil {
 				return err
+			}
+
+			if step.Parallel != nil {
+				return fmt.Errorf("step %q is a parallel group and cannot be run individually; use 'devbox deploy run' to execute the full pipeline", address)
 			}
 
 			// Evaluate when condition.

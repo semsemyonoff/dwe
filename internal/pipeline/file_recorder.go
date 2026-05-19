@@ -430,6 +430,17 @@ func phaseStatusFromSteps(steps map[string]*journal.StepState) journal.Status {
 	return journal.StatusOk
 }
 
+// WrapSkipDecider returns a SkipDecider that acquires r.mu before delegating to fn.
+// This prevents data races when parallel sub-steps call skipDecider concurrently
+// with FileRecorder mutations (OnStepStart, OnStepFinish, etc.) on the shared state.
+func (r *FileRecorder) WrapSkipDecider(fn SkipDecider) SkipDecider {
+	return func(addr string, rs ResolvedStep, actionHash string) journal.Decision {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return fn(addr, rs, actionHash)
+	}
+}
+
 // flush writes the current state to disk.
 func (r *FileRecorder) flush() error {
 	if r.statePath == "" {
