@@ -657,8 +657,7 @@ type subStepStatus int
 const (
 	// statusPending is the zero value: sub-step has not yet received a terminal
 	// event. This can happen when a FailFast cancellation races ahead of the
-	// sub-step completing, or when a template when: filters the sub-step at
-	// plan time but it is still registered in the reporter map.
+	// sub-step completing.
 	statusPending subStepStatus = iota
 	statusOk
 	statusFailed

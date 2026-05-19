@@ -492,7 +492,7 @@ func RunWithOptions(opts RunOptions) error {
 				// Record each sub-step as skipped so the journal does not
 				// treat them as never-attempted on the next run.
 				for _, sub := range rs.Parallel.Steps {
-					opts.Recorder.OnStepSkip(sub.StepAddress(), sub, journal.StepHash(sub.Step), "parent phase when=false")
+					opts.Recorder.OnStepSkip(sub.StepAddress(), sub, journal.StepHash(sub.Step), "parent phase when=false: "+phaseWhenMsg)
 				}
 			} else {
 				opts.Recorder.OnStepSkip(addr, rs, stepHash, "phase when: "+phaseWhenMsg)
@@ -744,7 +744,18 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 		}
 	}
 
-	opts.Reporter.StartGroup(addr, rs.Step, subIndices, total)
+	// Build a filtered step containing only resolved sub-steps so the reporter
+	// does not register phantom entries for sub-steps removed by template when:.
+	filteredStep := rs.Step
+	if rs.Step.Parallel != nil {
+		filteredParallel := *rs.Step.Parallel
+		filteredParallel.Steps = make([]config.DeployStep, len(rs.Parallel.Steps))
+		for i, sub := range rs.Parallel.Steps {
+			filteredParallel.Steps[i] = sub.Step
+		}
+		filteredStep.Parallel = &filteredParallel
+	}
+	opts.Reporter.StartGroup(addr, filteredStep, subIndices, total)
 
 	eg, gctx := errgroup.WithContext(parentCtx)
 	if rs.Parallel.MaxConcurrent > 0 {
