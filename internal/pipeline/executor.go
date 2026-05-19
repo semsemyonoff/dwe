@@ -9,11 +9,13 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/creack/pty"
+	"golang.org/x/sync/errgroup"
 
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
@@ -349,11 +351,18 @@ func RunWithOptions(opts RunOptions) error {
 	// trackedTotal excludes steps belonging to phases with Untracked=true.
 	// These steps receive index=0, total=0 in reporter calls so PlainReporter
 	// can suppress output for them.
+	// A parallel group contributes len(group.Steps) to the total — each
+	// sub-step gets its own reserved index in the [N/M] display.
 	trackedTotal := 0
 	for _, rs := range opts.Steps {
-		if !rs.Phase.Untracked {
-			trackedTotal++
+		if rs.Phase.Untracked {
+			continue
 		}
+		if rs.Parallel != nil {
+			trackedTotal += len(rs.Parallel.Steps)
+			continue
+		}
+		trackedTotal++
 	}
 
 	opts.Reporter.StartPipeline(opts.Name, trackedTotal)
@@ -397,12 +406,26 @@ func RunWithOptions(opts RunOptions) error {
 
 		addr := rs.StepAddress()
 
-		// Determine the index/total to pass to reporter calls for this step.
-		// Untracked phase steps always receive 0/0 so reporters can identify them.
+		// Determine the index/total to pass to reporter calls for this step
+		// or parallel group. Untracked phase steps always receive 0/0 so
+		// reporters can identify them. Parallel groups reserve a contiguous
+		// block of len(group.Steps) indices in declaration order; the group
+		// itself (when emitted as a single StartStep/SkipStep on skip) uses
+		// the leading index of that block.
 		stepIndex, stepTotal := 0, 0
+		var subIndices []int
 		if !rs.Phase.Untracked {
-			trackedIndex++
-			stepIndex, stepTotal = trackedIndex, trackedTotal
+			if rs.Parallel != nil {
+				subIndices = make([]int, len(rs.Parallel.Steps))
+				for i := range subIndices {
+					trackedIndex++
+					subIndices[i] = trackedIndex
+				}
+				stepIndex, stepTotal = subIndices[0], trackedTotal
+			} else {
+				trackedIndex++
+				stepIndex, stepTotal = trackedIndex, trackedTotal
+			}
 		}
 
 		// Step 1: Compute step hash early (includes FilesGate if present; for gateless steps equals ActionHash).
@@ -412,204 +435,298 @@ func RunWithOptions(opts RunOptions) error {
 		if phaseSkipped {
 			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhenMsg)
-			opts.Recorder.OnStepSkip(addr, rs, stepHash, "phase when: "+phaseWhenMsg)
+			if rs.Parallel != nil {
+				// Record each sub-step as skipped so the journal does not
+				// treat them as never-attempted on the next run.
+				for _, sub := range rs.Parallel.Steps {
+					opts.Recorder.OnStepSkip(sub.StepAddress(), sub, journal.StepHash(sub.Step), "parent phase when=false")
+				}
+			} else {
+				opts.Recorder.OnStepSkip(addr, rs, stepHash, "phase when: "+phaseWhenMsg)
+			}
 			continue
 		}
 
-		// Step 2: Evaluate step-level runtime when condition (unchanged from before).
-		if rs.RuntimeWhen != nil {
-			ok, err := condition.EvalRuntimeTyped(rs.RuntimeWhen, opts.WorkDir)
-			if err != nil {
-				return fmt.Errorf("evaluating when condition for %s: %w", addr, err)
+		// Parallel group: branch into the concurrent executor.
+		if rs.Parallel != nil {
+			if err := executeParallelGroup(ctx, opts, rs, addr, subIndices, trackedTotal); err != nil {
+				return err
 			}
-			if !ok {
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
-				opts.Recorder.OnStepSkip(addr, rs, stepHash, "when: "+FormatCondition(rs.RuntimeWhen))
-				continue
-			}
+			continue
 		}
 
-		// Step 3: Evaluate files_gate (if present).
-		// When a gate is present, it replaces the journal-skip-decider logic (journal bypass).
-		if rs.FilesGate != nil {
-			// Guard: runtime must have a registry to evaluate gates.
-			if opts.Registry == nil {
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				err := fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr)
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-				return ErrSilent
-			}
-
-			// Determine the target command (gate.Command or step.Cmd).
-			targetCmd := rs.FilesGate.Command
-			if targetCmd == "" {
-				targetCmd = rs.Step.Cmd
-			}
-
-			// Resolve the target command from registry.
-			def, err := opts.Registry.Get(targetCmd)
-			if err != nil {
-				// Config error: command not found.
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				err = fmt.Errorf("files_gate on step %q references unknown command %q: %w", addr, targetCmd, err)
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-				return ErrSilent
-			}
-
-			// Build RunContext for the target command (using gate's with or step's with).
-			// Treat an empty map the same as nil: inherit the step's with.
-			gateWith := rs.FilesGate.With
-			if len(gateWith) == 0 {
-				gateWith = rs.Step.With
-			}
-			runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
-			if err != nil {
-				// Config error: param resolution or docker config failed.
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				err := fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err)
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-				return ErrSilent
-			}
-
-			// Expand require spec to get file IDs.
-			ids, err := spec.ResolveRequireIDs(rs.FilesGate.Require, def.Files)
-			if err != nil {
-				// Config error: invalid require spec.
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				err := fmt.Errorf("files_gate on step %q: %w", addr, err)
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-				return ErrSilent
-			}
-
-			// Probe the selected files.
-			probeResults, err := usercommands.ComputeFilePathsProbe(runCtx, ids)
-			if err != nil {
-				// Config error: glob/template/regex error.
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				err := fmt.Errorf("files_gate on step %q: probing files: %w", addr, err)
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-				return ErrSilent
-			}
-
-			// Evaluate gate against probed state.
-			// offendingIDs collects the file IDs that drove the gate decision.
-			var offendingIDs []string
-			switch rs.FilesGate.State {
-			case filesgate.StateReadable:
-				// All selected files must exist; collect the missing ones.
-				for _, id := range ids {
-					if !probeResults[id].Resolved {
-						offendingIDs = append(offendingIDs, id)
-					}
-				}
-			case filesgate.StateMissing:
-				// None of the selected files may exist; collect the present ones.
-				for _, id := range ids {
-					if probeResults[id].Resolved {
-						offendingIDs = append(offendingIDs, id)
-					}
-				}
-			default:
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				err := fmt.Errorf("files_gate on step %q: invalid state %q (must be \"readable\" or \"missing\")", addr, rs.FilesGate.State)
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-				return ErrSilent
-			}
-
-			if len(offendingIDs) > 0 {
-				// Gate not satisfied — skip step, showing only the IDs that drove the decision.
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				reason := FormatFilesGate(rs.FilesGate, offendingIDs...)
-				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
-				opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
-				continue
-			}
-
-			// Gate satisfied — proceed to execution (bypass journal-skip-decider).
-		} else {
-			// Step 3b: No gate present — consult skip decision from state/config hash invalidation.
-			decision := opts.SkipDecider(addr, rs, stepHash)
-			if decision == journal.Skip {
-				opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-				opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
-				opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
-				continue
-			}
+		if err := executeStepBody(ctx, opts, rs, addr, stepIndex, stepTotal); err != nil {
+			return err
 		}
-
-		// Step 4: Execute the step.
-		opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-		opts.Recorder.OnStepStart(addr, rs, stepHash)
-		opts.Reporter.SuspendForExec()
-
-		// Per-step skip_confirm: ORed with the pipeline-wide flag so a step can
-		// opt in to bypass even when the pipeline was invoked without -y.
-		skipConfirm := opts.SkipConfirm || rs.Step.SkipConfirm
-
-		startTime := time.Now()
-		stepErr := ExecStep(ctx, rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, skipConfirm)
-		durationMs := time.Since(startTime).Milliseconds()
-
-		opts.Reporter.ResumeAfterExec()
-
-		if stepErr != nil {
-			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, stepErr)
-			opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, stepErr)
-			if rs.Step.ContinueOnError {
-				// Step failed but is marked continue_on_error: report the failure
-				// and proceed to the next step. Post-step hook and Check are skipped.
-				continue
-			}
-			return ErrSilent
-		}
-
-		// Run post-step hook if registered (e.g. source .env after render-env).
-		if hook, ok := opts.PostStepHook[rs.Step.Name]; ok {
-			if err := hook(); err != nil {
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, err)
-				if rs.Step.ContinueOnError {
-					continue
-				}
-				return ErrSilent
-			}
-		}
-
-		// Execute check action after successful execution.
-		if rs.Step.Check != nil {
-			actx := ActionContext{
-				WorkDir:     opts.WorkDir,
-				Cfg:         opts.Config,
-				Reg:         opts.Registry,
-				LogWriter:   opts.LogWriter,
-				SkipConfirm: skipConfirm,
-			}
-			checkErr := ExecAction(ctx, *rs.Step.Check, actx)
-			if checkErr != nil {
-				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
-				opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, checkErr)
-				if rs.Step.ContinueOnError {
-					// Check failed but step is marked continue_on_error: report the failure
-					// and proceed to the next step.
-					continue
-				}
-				return ErrSilent
-			}
-		}
-
-		opts.Reporter.FinishStep(addr, rs.Step, stepIndex, stepTotal)
-		opts.Recorder.OnStepFinish(addr, rs, stepHash, durationMs)
 	}
 
 	success = true
 	return nil
+}
+
+// executeStepBody runs the per-step pipeline for a single resolved step (or a
+// single sub-step inside a parallel group). It handles step-level when,
+// files_gate vs SkipDecider, ExecAction, post-step hook, and check action.
+//
+// Return semantics:
+//   - nil: step succeeded, was skipped, or failed with continue_on_error=true
+//     (the failure was already reported via FailStep/OnStepFail).
+//   - ErrSilent: step failed and continue_on_error=false; caller should abort.
+//   - other error: config / condition evaluation error; caller propagates.
+func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int) error {
+	stepHash := journal.StepHash(rs.Step)
+
+	// Step 2: Evaluate step-level runtime when condition.
+	if rs.RuntimeWhen != nil {
+		ok, err := condition.EvalRuntimeTyped(rs.RuntimeWhen, opts.WorkDir)
+		if err != nil {
+			return fmt.Errorf("evaluating when condition for %s: %w", addr, err)
+		}
+		if !ok {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
+			opts.Recorder.OnStepSkip(addr, rs, stepHash, "when: "+FormatCondition(rs.RuntimeWhen))
+			return nil
+		}
+	}
+
+	// Step 3: Evaluate files_gate (if present).
+	// When a gate is present, it replaces the journal-skip-decider logic (journal bypass).
+	if rs.FilesGate != nil {
+		// Guard: runtime must have a registry to evaluate gates.
+		if opts.Registry == nil {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			err := fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr)
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+			return ErrSilent
+		}
+
+		targetCmd := rs.FilesGate.Command
+		if targetCmd == "" {
+			targetCmd = rs.Step.Cmd
+		}
+
+		def, err := opts.Registry.Get(targetCmd)
+		if err != nil {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			err = fmt.Errorf("files_gate on step %q references unknown command %q: %w", addr, targetCmd, err)
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+			return ErrSilent
+		}
+
+		gateWith := rs.FilesGate.With
+		if len(gateWith) == 0 {
+			gateWith = rs.Step.With
+		}
+		runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
+		if err != nil {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			err := fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err)
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+			return ErrSilent
+		}
+
+		ids, err := spec.ResolveRequireIDs(rs.FilesGate.Require, def.Files)
+		if err != nil {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			err := fmt.Errorf("files_gate on step %q: %w", addr, err)
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+			return ErrSilent
+		}
+
+		probeResults, err := usercommands.ComputeFilePathsProbe(runCtx, ids)
+		if err != nil {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			err := fmt.Errorf("files_gate on step %q: probing files: %w", addr, err)
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+			return ErrSilent
+		}
+
+		var offendingIDs []string
+		switch rs.FilesGate.State {
+		case filesgate.StateReadable:
+			for _, id := range ids {
+				if !probeResults[id].Resolved {
+					offendingIDs = append(offendingIDs, id)
+				}
+			}
+		case filesgate.StateMissing:
+			for _, id := range ids {
+				if probeResults[id].Resolved {
+					offendingIDs = append(offendingIDs, id)
+				}
+			}
+		default:
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			err := fmt.Errorf("files_gate on step %q: invalid state %q (must be \"readable\" or \"missing\")", addr, rs.FilesGate.State)
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+			return ErrSilent
+		}
+
+		if len(offendingIDs) > 0 {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			reason := FormatFilesGate(rs.FilesGate, offendingIDs...)
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
+			opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
+			return nil
+		}
+		// Gate satisfied — proceed to execution (bypass journal-skip-decider).
+	} else {
+		// Step 3b: No gate present — consult skip decision.
+		decision := opts.SkipDecider(addr, rs, stepHash)
+		if decision == journal.Skip {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
+			opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
+			return nil
+		}
+	}
+
+	// Step 4: Execute the step.
+	opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+	opts.Recorder.OnStepStart(addr, rs, stepHash)
+	opts.Reporter.SuspendForExec()
+
+	skipConfirm := opts.SkipConfirm || rs.Step.SkipConfirm
+
+	startTime := time.Now()
+	stepErr := ExecStep(ctx, rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, skipConfirm)
+	durationMs := time.Since(startTime).Milliseconds()
+
+	opts.Reporter.ResumeAfterExec()
+
+	if stepErr != nil {
+		opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, stepErr)
+		opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, stepErr)
+		if rs.Step.ContinueOnError {
+			return nil
+		}
+		return ErrSilent
+	}
+
+	if hook, ok := opts.PostStepHook[rs.Step.Name]; ok {
+		if err := hook(); err != nil {
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, err)
+			if rs.Step.ContinueOnError {
+				return nil
+			}
+			return ErrSilent
+		}
+	}
+
+	if rs.Step.Check != nil {
+		actx := ActionContext{
+			WorkDir:     opts.WorkDir,
+			Cfg:         opts.Config,
+			Reg:         opts.Registry,
+			LogWriter:   opts.LogWriter,
+			SkipConfirm: skipConfirm,
+		}
+		checkErr := ExecAction(ctx, *rs.Step.Check, actx)
+		if checkErr != nil {
+			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
+			opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, checkErr)
+			if rs.Step.ContinueOnError {
+				return nil
+			}
+			return ErrSilent
+		}
+	}
+
+	opts.Reporter.FinishStep(addr, rs.Step, stepIndex, stepTotal)
+	opts.Recorder.OnStepFinish(addr, rs, stepHash, durationMs)
+	return nil
+}
+
+// executeParallelGroup runs the sub-steps of a resolved parallel group
+// concurrently. The group itself is consumed as one element from the top-level
+// step list; sub-step indices have been pre-reserved by the caller.
+//
+// Group-level when (rs.RuntimeWhen) is evaluated once before any sub-step is
+// launched. On false the entire group is skipped: a single StartStep/SkipStep
+// pair is emitted for the group address (consuming the leading reserved index),
+// and one OnStepSkip is recorded per sub-step so the journal does not treat
+// them as never-attempted.
+//
+// On true the executor calls StartGroup, dispatches each sub-step's body
+// through executeStepBody concurrently under an errgroup with the configured
+// concurrency limit, then calls FinishGroup. With FailFast=true an erroring
+// sub-step cancels the group context; with FailFast=false errors are collected
+// and joined into a single returned error.
+func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs ResolvedStep, addr string, subIndices []int, total int) error {
+	// Group-level when: evaluate once.
+	if rs.RuntimeWhen != nil {
+		ok, err := condition.EvalRuntimeTyped(rs.RuntimeWhen, opts.WorkDir)
+		if err != nil {
+			return fmt.Errorf("evaluating when condition for %s: %w", addr, err)
+		}
+		if !ok {
+			leadIdx := 0
+			if len(subIndices) > 0 {
+				leadIdx = subIndices[0]
+			}
+			reason := "when: " + FormatCondition(rs.RuntimeWhen)
+			opts.Reporter.StartStep(addr, rs.Step, leadIdx, total)
+			opts.Reporter.SkipStep(addr, rs.Step, leadIdx, total, reason)
+			for _, sub := range rs.Parallel.Steps {
+				opts.Recorder.OnStepSkip(sub.StepAddress(), sub, journal.StepHash(sub.Step), "parent group when=false")
+			}
+			return nil
+		}
+	}
+
+	opts.Reporter.StartGroup(addr, rs.Step, subIndices, total)
+
+	eg, gctx := errgroup.WithContext(parentCtx)
+	if rs.Parallel.MaxConcurrent > 0 {
+		eg.SetLimit(rs.Parallel.MaxConcurrent)
+	}
+
+	var (
+		groupErrs []error
+		errsMu    sync.Mutex
+	)
+
+	for i, sub := range rs.Parallel.Steps {
+		eg.Go(func() error {
+			if gctx.Err() != nil {
+				return gctx.Err()
+			}
+			subAddr := sub.StepAddress()
+			err := executeStepBody(gctx, opts, sub, subAddr, subIndices[i], total)
+			if err == nil {
+				return nil
+			}
+			wrapped := fmt.Errorf("parallel sub-step %q: %w", subAddr, err)
+			if rs.Parallel.FailFast {
+				return wrapped
+			}
+			errsMu.Lock()
+			groupErrs = append(groupErrs, wrapped)
+			errsMu.Unlock()
+			return nil
+		})
+	}
+
+	var groupErr error
+	if rs.Parallel.FailFast {
+		groupErr = eg.Wait()
+	} else {
+		_ = eg.Wait()
+		if len(groupErrs) > 0 {
+			groupErr = errors.Join(groupErrs...)
+		}
+	}
+
+	opts.Reporter.FinishGroup(addr, rs.Step, groupErr == nil)
+	return groupErr
 }
 
 // FormatCondition returns a short human-readable form of a typed condition for display.

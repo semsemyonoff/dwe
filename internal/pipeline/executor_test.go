@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"devbox-cli/internal/condition"
@@ -36,48 +37,55 @@ type reporterEvent struct {
 }
 
 type mockReporter struct {
+	mu     sync.Mutex
 	events []reporterEvent
 }
 
+func (m *mockReporter) append(e reporterEvent) {
+	m.mu.Lock()
+	m.events = append(m.events, e)
+	m.mu.Unlock()
+}
+
 func (m *mockReporter) StartPipeline(name string, totalSteps int) {
-	m.events = append(m.events, reporterEvent{kind: "StartPipeline", name: name, total0: totalSteps})
+	m.append(reporterEvent{kind: "StartPipeline", name: name, total0: totalSteps})
 }
 func (m *mockReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
-	m.events = append(m.events, reporterEvent{kind: "EnterPhase", phaseKey: phaseKey, phase: phase})
+	m.append(reporterEvent{kind: "EnterPhase", phaseKey: phaseKey, phase: phase})
 }
 func (m *mockReporter) SkipPhase(phaseKey string, phase config.DeployPhase, reason string) {
-	m.events = append(m.events, reporterEvent{kind: "SkipPhase", phaseKey: phaseKey, phase: phase, reason: reason})
+	m.append(reporterEvent{kind: "SkipPhase", phaseKey: phaseKey, phase: phase, reason: reason})
 }
 func (m *mockReporter) StartStep(stepAddr string, step config.DeployStep, index int, total int) {
-	m.events = append(m.events, reporterEvent{kind: "StartStep", stepAddr: stepAddr, step: step, index: index, total: total})
+	m.append(reporterEvent{kind: "StartStep", stepAddr: stepAddr, step: step, index: index, total: total})
 }
 func (m *mockReporter) SkipStep(stepAddr string, step config.DeployStep, index int, total int, reason string) {
-	m.events = append(m.events, reporterEvent{kind: "SkipStep", stepAddr: stepAddr, step: step, index: index, total: total, reason: reason})
+	m.append(reporterEvent{kind: "SkipStep", stepAddr: stepAddr, step: step, index: index, total: total, reason: reason})
 }
 func (m *mockReporter) FinishStep(stepAddr string, step config.DeployStep, index int, total int) {
-	m.events = append(m.events, reporterEvent{kind: "FinishStep", stepAddr: stepAddr, step: step, index: index, total: total})
+	m.append(reporterEvent{kind: "FinishStep", stepAddr: stepAddr, step: step, index: index, total: total})
 }
 func (m *mockReporter) FailStep(stepAddr string, step config.DeployStep, index int, total int, err error) {
-	m.events = append(m.events, reporterEvent{kind: "FailStep", stepAddr: stepAddr, step: step, index: index, total: total, err: err})
+	m.append(reporterEvent{kind: "FailStep", stepAddr: stepAddr, step: step, index: index, total: total, err: err})
 }
 func (m *mockReporter) FinishPipeline(success bool) {
-	m.events = append(m.events, reporterEvent{kind: "FinishPipeline", success: success})
+	m.append(reporterEvent{kind: "FinishPipeline", success: success})
 }
 func (m *mockReporter) SuspendForExec() {
-	m.events = append(m.events, reporterEvent{kind: "SuspendForExec"})
+	m.append(reporterEvent{kind: "SuspendForExec"})
 }
 func (m *mockReporter) ResumeAfterExec() {
-	m.events = append(m.events, reporterEvent{kind: "ResumeAfterExec"})
+	m.append(reporterEvent{kind: "ResumeAfterExec"})
 }
 func (m *mockReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int) {
-	m.events = append(m.events, reporterEvent{kind: "StartGroup", stepAddr: groupAddr, step: group, total: total})
+	m.append(reporterEvent{kind: "StartGroup", stepAddr: groupAddr, step: group, total: total})
 	_ = subIndices
 }
 func (m *mockReporter) FinishGroup(groupAddr string, group config.DeployStep, success bool) {
-	m.events = append(m.events, reporterEvent{kind: "FinishGroup", stepAddr: groupAddr, step: group, success: success})
+	m.append(reporterEvent{kind: "FinishGroup", stepAddr: groupAddr, step: group, success: success})
 }
 func (m *mockReporter) SubStepOutput(subAddr string, line string) {
-	m.events = append(m.events, reporterEvent{kind: "SubStepOutput", stepAddr: subAddr, reason: line})
+	m.append(reporterEvent{kind: "SubStepOutput", stepAddr: subAddr, reason: line})
 }
 
 // kindSeq returns the sequence of event kinds.
@@ -109,26 +117,33 @@ type recorderEvent struct {
 }
 
 type mockRecorder struct {
+	mu     sync.Mutex
 	events []recorderEvent
 }
 
+func (m *mockRecorder) append(e recorderEvent) {
+	m.mu.Lock()
+	m.events = append(m.events, e)
+	m.mu.Unlock()
+}
+
 func (m *mockRecorder) OnPipelineStart(name string, totalSteps int) {
-	m.events = append(m.events, recorderEvent{kind: "OnPipelineStart", name: name, totalSteps: totalSteps})
+	m.append(recorderEvent{kind: "OnPipelineStart", name: name, totalSteps: totalSteps})
 }
 func (m *mockRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash string) {
-	m.events = append(m.events, recorderEvent{kind: "OnStepStart", addr: addr, actionHash: actionHash})
+	m.append(recorderEvent{kind: "OnStepStart", addr: addr, actionHash: actionHash})
 }
 func (m *mockRecorder) OnStepFinish(addr string, rs ResolvedStep, actionHash string, durationMs int64) {
-	m.events = append(m.events, recorderEvent{kind: "OnStepFinish", addr: addr, actionHash: actionHash, durationMs: durationMs})
+	m.append(recorderEvent{kind: "OnStepFinish", addr: addr, actionHash: actionHash, durationMs: durationMs})
 }
 func (m *mockRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash string, durationMs int64, err error) {
-	m.events = append(m.events, recorderEvent{kind: "OnStepFail", addr: addr, actionHash: actionHash, durationMs: durationMs, err: err})
+	m.append(recorderEvent{kind: "OnStepFail", addr: addr, actionHash: actionHash, durationMs: durationMs, err: err})
 }
 func (m *mockRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash string, reason string) {
-	m.events = append(m.events, recorderEvent{kind: "OnStepSkip", addr: addr, actionHash: actionHash, reason: reason})
+	m.append(recorderEvent{kind: "OnStepSkip", addr: addr, actionHash: actionHash, reason: reason})
 }
 func (m *mockRecorder) OnPipelineFinish(success bool) {
-	m.events = append(m.events, recorderEvent{kind: "OnPipelineFinish", success: success})
+	m.append(recorderEvent{kind: "OnPipelineFinish", success: success})
 }
 
 // --- helpers ---
