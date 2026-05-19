@@ -344,13 +344,13 @@ The TTY path renders a live spinner block for the active group, then dumps post-
 
 `devbox deploy plan` should render parallel groups so the structure is visible.
 
-- [ ] extend `PrintPlanTable` in `internal/pipeline/print.go` to handle `rs.Parallel != nil`:
+- [x] extend `PrintPlanTable` in `internal/pipeline/print.go` to handle `rs.Parallel != nil`:
   - header line: `[parallel group: <name> (<n> steps, max_concurrent=<m>, fail_fast=<bool>)]`
   - indent and render each sub-step underneath using the same per-step formatter (command, [when], [files_gate], [check], [continue_on_error])
   - index display: contiguous range like `[12-14/25]` for the group, then individual `[12/25]` / `[13/25]` / `[14/25]` for the sub-step lines
-- [ ] update `internal/deploy/print.go` if it has its own print-path layer; otherwise it inherits `PrintPlanTable`
-- [ ] write a golden-style test in `internal/pipeline/print_test.go` (or table-driven on the string output): given a resolved plan with a mix of sequential + parallel, the rendered string contains the expected lines in order
-- [ ] run `go test ./internal/pipeline/... ./internal/deploy/...` — must pass before next task
+- [x] update `internal/deploy/print.go` if it has its own print-path layer; otherwise it inherits `PrintPlanTable` (it inherits — `PrintPlanShell` is a separate shell-emitter and is out of scope here)
+- [x] write a golden-style test in `internal/pipeline/print_test.go` (or table-driven on the string output): given a resolved plan with a mix of sequential + parallel, the rendered string contains the expected lines in order (added to `internal/deploy/print_test.go` where the other PrintPlanTable tests already live)
+- [x] run `go test ./internal/pipeline/... ./internal/deploy/...` — must pass before next task
 
 ### Task 11: Validator coverage
 

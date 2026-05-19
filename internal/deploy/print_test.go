@@ -400,6 +400,100 @@ func TestPrintPlanTable_binarySubstitution(t *testing.T) {
 	}
 }
 
+func TestPrintPlanTable_parallelGroupRendersHeaderAndSubSteps(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	phase := config.DeployPhase{Name: "init", Description: "Init"}
+	steps := []pipeline.ResolvedStep{
+		{Phase: phase, Step: cmdStep("pre", "echo pre")},
+		{
+			Phase: phase,
+			Step:  config.DeployStep{Name: "db-dumps"},
+			Parallel: &pipeline.ResolvedParallel{
+				MaxConcurrent: 4,
+				FailFast:      true,
+				Steps: []pipeline.ResolvedStep{
+					{Phase: phase, Step: commandStep("download-main", "services.main.db.dump-download")},
+					{Phase: phase, Step: commandStep("download-stock", "services.stock.db.dump-download")},
+					{Phase: phase, Step: commandStep("download-price", "services.price.db.dump-download")},
+				},
+			},
+		},
+		{Phase: phase, Step: cmdStep("post", "echo post")},
+	}
+
+	pipeline.PrintPlanTable(steps, w, "devbox")
+	out := buf.String()
+
+	// Group header: total = 1 (pre) + 3 (sub-steps) + 1 (post) = 5; group occupies [2-4/5]
+	if !strings.Contains(out, "[2-4/5]") {
+		t.Errorf("expected group index range '[2-4/5]' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "parallel group: db-dumps") {
+		t.Errorf("expected 'parallel group: db-dumps' header, got:\n%s", out)
+	}
+	if !strings.Contains(out, "3 steps") || !strings.Contains(out, "max_concurrent=4") || !strings.Contains(out, "fail_fast=true") {
+		t.Errorf("expected group meta '(3 steps, max_concurrent=4, fail_fast=true)' in header, got:\n%s", out)
+	}
+	for _, want := range []string{"[2/5]", "[3/5]", "[4/5]"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected sub-step index %s in output, got:\n%s", want, out)
+		}
+	}
+	for _, want := range []string{"download-main", "download-stock", "download-price"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected sub-step name %q in output, got:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "devbox commands run services.main.db.dump-download") {
+		t.Errorf("expected resolved sub-step command in output, got:\n%s", out)
+	}
+
+	// Group header must appear before sub-steps; sub-steps in declaration order.
+	idxHeader := strings.Index(out, "parallel group: db-dumps")
+	idxMain := strings.Index(out, "download-main")
+	idxStock := strings.Index(out, "download-stock")
+	idxPrice := strings.Index(out, "download-price")
+	if !(idxHeader < idxMain && idxMain < idxStock && idxStock < idxPrice) {
+		t.Errorf("expected header < main < stock < price ordering, got header=%d main=%d stock=%d price=%d", idxHeader, idxMain, idxStock, idxPrice)
+	}
+}
+
+func TestPrintPlanTable_parallelGroupOnly(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	phase := config.DeployPhase{Name: "init"}
+	steps := []pipeline.ResolvedStep{
+		{
+			Phase: phase,
+			Step:  config.DeployStep{Name: "group"},
+			Parallel: &pipeline.ResolvedParallel{
+				MaxConcurrent: 2,
+				FailFast:      false,
+				Steps: []pipeline.ResolvedStep{
+					{Phase: phase, Step: cmdStep("a", "echo a")},
+					{Phase: phase, Step: cmdStep("b", "echo b")},
+				},
+			},
+		},
+	}
+
+	pipeline.PrintPlanTable(steps, w, "devbox")
+	out := buf.String()
+
+	if !strings.Contains(out, "[1-2/2]") {
+		t.Errorf("expected '[1-2/2]' group range, got:\n%s", out)
+	}
+	if !strings.Contains(out, "fail_fast=false") {
+		t.Errorf("expected 'fail_fast=false' in header, got:\n%s", out)
+	}
+	if !strings.Contains(out, "[1/2]") || !strings.Contains(out, "[2/2]") {
+		t.Errorf("expected sub-step indices [1/2] and [2/2], got:\n%s", out)
+	}
+}
+
 func TestPrintPlanShell_binarySubstitution(t *testing.T) {
 	var buf bytes.Buffer
 
