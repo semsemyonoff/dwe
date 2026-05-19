@@ -84,10 +84,9 @@ func Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.St
 		}
 		// Check if param is provided in with.
 		withValue, withProvided := effectiveWith[paramName]
-		if withProvided {
+		if withProvided && withValue != nil {
 			// Coerce to string for empty check (handles map[string]any).
-			withStr := fmt.Sprintf("%v", withValue)
-			if withStr != "" && withStr != "<nil>" {
+			if withStr := fmt.Sprintf("%v", withValue); withStr != "" {
 				continue // Param is provided and non-empty.
 			}
 		}

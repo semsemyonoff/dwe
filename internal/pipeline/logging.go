@@ -86,7 +86,7 @@ func OpenSubStepLog(workDir, pipelineName, groupName, subStepName string, enable
 	path := filepath.Join(dir, base+".log")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if errors.Is(err, os.ErrExist) {
-		for n := 2; ; n++ {
+		for n := 2; n <= 1000; n++ {
 			path = filepath.Join(dir, fmt.Sprintf("%s_%d.log", base, n))
 			f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 			if err == nil || !errors.Is(err, os.ErrExist) {
