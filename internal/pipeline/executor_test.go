@@ -69,6 +69,16 @@ func (m *mockReporter) SuspendForExec() {
 func (m *mockReporter) ResumeAfterExec() {
 	m.events = append(m.events, reporterEvent{kind: "ResumeAfterExec"})
 }
+func (m *mockReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int) {
+	m.events = append(m.events, reporterEvent{kind: "StartGroup", stepAddr: groupAddr, step: group, total: total})
+	_ = subIndices
+}
+func (m *mockReporter) FinishGroup(groupAddr string, group config.DeployStep, success bool) {
+	m.events = append(m.events, reporterEvent{kind: "FinishGroup", stepAddr: groupAddr, step: group, success: success})
+}
+func (m *mockReporter) SubStepOutput(subAddr string, line string) {
+	m.events = append(m.events, reporterEvent{kind: "SubStepOutput", stepAddr: subAddr, reason: line})
+}
 
 // kindSeq returns the sequence of event kinds.
 func (m *mockReporter) kindSeq() []string {

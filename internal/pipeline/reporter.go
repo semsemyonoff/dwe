@@ -55,4 +55,23 @@ type Reporter interface {
 	// ResumeAfterExec is called after the external child process exits.
 	// PlainReporter is a no-op.
 	ResumeAfterExec()
+
+	// StartGroup is called immediately before a parallel group launches its
+	// sub-steps. subIndices is the contiguous block of per-sub-step tracked
+	// indices reserved for the group (one per sub-step, in declaration order);
+	// total is the pipeline-wide tracked-step total.
+	//
+	// Implementations MUST be safe for concurrent invocation: once a group is
+	// started, StartStep / FinishStep / FailStep / SkipStep / SubStepOutput
+	// events for sub-steps arrive from N goroutines.
+	StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int)
+
+	// FinishGroup is called after every sub-step of a parallel group has
+	// completed (or been cancelled). success is false if any sub-step failed
+	// (after accounting for continue_on_error).
+	FinishGroup(groupAddr string, group config.DeployStep, success bool)
+
+	// SubStepOutput streams a single output line from a parallel sub-step to
+	// the reporter. Sequential pipelines never call this method.
+	SubStepOutput(subAddr string, line string)
 }

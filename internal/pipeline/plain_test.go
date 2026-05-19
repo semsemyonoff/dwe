@@ -3,8 +3,10 @@ package pipeline
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -537,6 +539,88 @@ func TestPlainReporter_TimestampPrefix_GrayColor(t *testing.T) {
 		t.Errorf("output should start with gray-wrapped timestamp; got %q", got)
 	}
 }
+
+// --- Group event stubs ---
+
+func TestPlainReporter_StartGroup_PrintsHeader(t *testing.T) {
+	r, buf := newBufReporter()
+	r.StartGroup("init/dumps", config.DeployStep{Name: "dumps", Description: "download dumps"}, []int{1, 2, 3}, 5)
+	got := stripTimestamps(stripANSI(buf.String()))
+	want := "  · Parallel group: init/dumps: download dumps (3 steps)\n"
+	if got != want {
+		t.Errorf("StartGroup output\n got:  %q\n want: %q", got, want)
+	}
+}
+
+func TestPlainReporter_FinishGroup_Success(t *testing.T) {
+	r, buf := newBufReporter()
+	r.FinishGroup("init/dumps", config.DeployStep{Name: "dumps"}, true)
+	got := stripTimestamps(stripANSI(buf.String()))
+	want := "  ✓ Parallel group done: init/dumps\n"
+	if got != want {
+		t.Errorf("FinishGroup(success) output\n got:  %q\n want: %q", got, want)
+	}
+}
+
+func TestPlainReporter_FinishGroup_Failure(t *testing.T) {
+	r, buf := newBufReporter()
+	r.FinishGroup("init/dumps", config.DeployStep{Name: "dumps"}, false)
+	got := stripTimestamps(stripANSI(buf.String()))
+	want := "  ✗ Parallel group failed: init/dumps\n"
+	if got != want {
+		t.Errorf("FinishGroup(fail) output\n got:  %q\n want: %q", got, want)
+	}
+}
+
+func TestPlainReporter_SubStepOutput_Noop(t *testing.T) {
+	r, buf := newBufReporter()
+	r.SubStepOutput("init/dumps/main", "some line")
+	if buf.Len() != 0 {
+		t.Errorf("SubStepOutput stub should not write; got %q", buf.String())
+	}
+}
+
+// --- Concurrency safety ---
+//
+// PlainReporter is invoked from N goroutines by the parallel-group executor.
+// This test pounds every public method from 16 goroutines; running under -race
+// is what actually guarantees the mutex placement is correct.
+func TestPlainReporter_ConcurrentEvents_NoRace(t *testing.T) {
+	r, _ := newBufReporter()
+	r.StartPipeline("deploy", 0)
+
+	const workers = 16
+	const iters = 50
+
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for w := range workers {
+		go func(w int) {
+			defer wg.Done()
+			step := config.DeployStep{Name: fmt.Sprintf("s%d", w)}
+			group := config.DeployStep{Name: fmt.Sprintf("g%d", w)}
+			phase := config.DeployPhase{Name: fmt.Sprintf("p%d", w)}
+			for i := range iters {
+				addr := fmt.Sprintf("p%d/s%d", w, i)
+				r.EnterPhase(phase.Name, phase)
+				r.StartStep(addr, step, 1, 100)
+				r.SubStepOutput(addr, "line")
+				r.FinishStep(addr, step, 1, 100)
+				r.StartGroup(addr+"/g", group, []int{1, 2}, 100)
+				r.SubStepOutput(addr+"/g/a", "out")
+				r.FinishGroup(addr+"/g", group, true)
+				r.SkipStep(addr, step, 1, 100, "reason")
+				r.SkipPhase(phase.Name, phase, "reason")
+				r.FailStep(addr, step, 1, 100, errSentinel)
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	r.FinishPipeline(true)
+}
+
+var errSentinel = errors.New("concurrent test")
 
 // --- Interface compliance ---
 

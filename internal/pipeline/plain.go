@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"devbox-cli/internal/config"
@@ -37,6 +38,7 @@ const timestampLayout = "06-01-02 15:04:05"
 // SuspendForExec and ResumeAfterExec are no-ops: plain text output does not
 // need to yield or reclaim the terminal.
 type PlainReporter struct {
+	mu        sync.Mutex       // guards every write to w and any future shared state
 	w         *render.Writer
 	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline
@@ -52,6 +54,8 @@ func NewPlainReporter(w *render.Writer) *PlainReporter {
 // elapsed time reporting. It does not print a header; the current deploy/reset
 // output has no pipeline banner.
 func (r *PlainReporter) StartPipeline(name string, _ int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.name = name
 	r.startTime = r.now()
 }
@@ -69,6 +73,8 @@ func (r *PlainReporter) EnterPhase(phaseKey string, phase config.DeployPhase) {
 	if phase.Description != "" {
 		label += ": " + phase.Description
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.emit(render.Blue, label)
 }
 
@@ -81,6 +87,8 @@ func (r *PlainReporter) SkipPhase(phaseKey string, phase config.DeployPhase, rea
 	if phase.Untracked {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.emit(render.Yellow, fmt.Sprintf("  Skipping phase %s (%s)", phaseKey, reason))
 }
 
@@ -97,6 +105,8 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 	if step.Description != "" {
 		label += ": " + step.Description
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if index > 0 {
 		r.emit(render.Blue, fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
 	} else {
@@ -113,6 +123,8 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	if index == 0 && total == 0 {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if index > 0 {
 		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
 	} else {
@@ -129,6 +141,8 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	if index == 0 && total == 0 {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if index > 0 {
 		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
 	} else {
@@ -145,6 +159,8 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 // "deploy" → "Deploy failed…", "reset" → "Reset failed…"). Falls back to
 // "Pipeline" if StartPipeline was not called.
 func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, _ int, _ int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	label := r.name
 	if label == "" {
 		label = "pipeline"
@@ -165,6 +181,8 @@ func (r *PlainReporter) FinishPipeline(success bool) {
 	if !success {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	elapsed := formatElapsed(r.now().Sub(r.startTime))
 	_, _ = fmt.Fprintf(r.w.Writer(), "%s%s %s Done%s %s(%s)%s\n",
 		r.timestampPrefix(),
@@ -207,3 +225,36 @@ func (r *PlainReporter) SuspendForExec() {}
 
 // ResumeAfterExec is a no-op for PlainReporter.
 func (r *PlainReporter) ResumeAfterExec() {}
+
+// StartGroup prints a single header line announcing a parallel group:
+//
+//	[ts]   · Parallel group: <groupAddr> (<n> steps)
+//
+// Per-sub-step lifecycle events still flow through StartStep / FinishStep /
+// FailStep / SkipStep; this method only signals the group boundary. Task 8/9
+// will replace this stub with buffered / live rendering.
+func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, _ int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	label := groupAddr
+	if group.Description != "" {
+		label += ": " + group.Description
+	}
+	r.emit(render.Blue, fmt.Sprintf("  %s Parallel group: %s (%d steps)", iconRunning, label, len(subIndices)))
+}
+
+// FinishGroup prints a one-line footer for a parallel group. success is true
+// when every sub-step succeeded (after accounting for continue_on_error).
+func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, success bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if success {
+		r.emit(render.Green, fmt.Sprintf("  %s Parallel group done: %s", iconDone, groupAddr))
+	} else {
+		r.emit(render.Red, fmt.Sprintf("  %s Parallel group failed: %s", iconFailed, groupAddr))
+	}
+}
+
+// SubStepOutput is a no-op in the Task 5 stub. Task 8/9 will route per-sub-step
+// output through this method into buffered/live displays.
+func (r *PlainReporter) SubStepOutput(_ string, _ string) {}

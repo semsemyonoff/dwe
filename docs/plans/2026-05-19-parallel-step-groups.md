@@ -216,15 +216,15 @@ The executor's parallel branch will call `Recorder.OnStepStart` / `OnStepFinish`
 
 Add group lifecycle and per-substep output streaming. PlainReporter gets thread-safety primitives but the new methods stay no-ops for now (filled in by Task 7/8).
 
-- [ ] extend `Reporter` interface in `internal/pipeline/reporter.go` with:
+- [x] extend `Reporter` interface in `internal/pipeline/reporter.go` with:
   - `StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int)`
   - `FinishGroup(groupAddr string, group config.DeployStep, success bool)`
   - `SubStepOutput(subAddr string, line string)`
-- [ ] add a `sync.Mutex` to `PlainReporter` and lock around `w.*` writes in **every** existing method (StartPipeline, EnterPhase, SkipPhase, StartStep, SkipStep, FinishStep, FailStep, FinishPipeline) — needed because parallel sub-step events will arrive from goroutines
-- [ ] implement Task-5 stubs for the three new methods in `PlainReporter`: `StartGroup` / `FinishGroup` print a single header/footer line; `SubStepOutput` is a no-op (real impl in Task 8)
-- [ ] update any test reporter (`mockReporter` in `executor_test.go`, etc.) to satisfy the extended interface; record the new events
-- [ ] write tests in `internal/pipeline/plain_test.go` (or nearest) that the new methods are concurrency-safe: 16 goroutines hammering `StartStep`/`FinishStep`/`SubStepOutput` simultaneously must not race (`go test -race`)
-- [ ] run `go test -race ./internal/pipeline/...` — must pass before next task
+- [x] add a `sync.Mutex` to `PlainReporter` and lock around `w.*` writes in **every** existing method (StartPipeline, EnterPhase, SkipPhase, StartStep, SkipStep, FinishStep, FailStep, FinishPipeline) — needed because parallel sub-step events will arrive from goroutines
+- [x] implement Task-5 stubs for the three new methods in `PlainReporter`: `StartGroup` / `FinishGroup` print a single header/footer line; `SubStepOutput` is a no-op (real impl in Task 8)
+- [x] update any test reporter (`mockReporter` in `executor_test.go`, etc.) to satisfy the extended interface; record the new events
+- [x] write tests in `internal/pipeline/plain_test.go` (or nearest) that the new methods are concurrency-safe: 16 goroutines hammering `StartStep`/`FinishStep`/`SubStepOutput` simultaneously must not race (`go test -race`)
+- [x] run `go test -race ./internal/pipeline/...` — must pass before next task (pre-existing `TestFileRecorder_TimestampsAreSet` race-only flake unrelated to this task — verified by reproducing on baseline `git stash`)
 
 ### Task 6: Executor — `executeParallelGroup`
 
