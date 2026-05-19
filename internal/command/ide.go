@@ -185,6 +185,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		Service:    name,
 		ServiceCfg: svc,
 		Runtime:    cfg.Runtime,
+		Cfg:        cfg,
 	}
 
 	serviceDir := filepath.Join(projectRoot, svc.Dir)

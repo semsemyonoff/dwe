@@ -132,10 +132,10 @@ Related patterns:
 
 ### Task 2: Extend IDE renderer TemplateData with Cfg field
 
-- [ ] add `Cfg *config.DevboxConfig` to `TemplateData` struct in `internal/templates/ide/ide.go:259-265`
-- [ ] populate `Cfg: cfg` in the caller at `internal/command/ide.go` where `ide.TemplateData{...}` is constructed (locate by searching for `ide.TemplateData{`)
-- [ ] extend `internal/command/ide_test.go` with four subtests mirroring Task 1's shape (positive `.Cfg.Raw` dot access, non-identifier `index`-syntax access, missingkey error, backward-compat byte-identical output); use the existing fixture-builder helpers in that file
-- [ ] run `go test ./internal/templates/ide/... ./internal/command/...` — must pass before next task
+- [x] add `Cfg *config.DevboxConfig` to `TemplateData` struct in `internal/templates/ide/ide.go:259-265`
+- [x] populate `Cfg: cfg` in the caller at `internal/command/ide.go` where `ide.TemplateData{...}` is constructed (locate by searching for `ide.TemplateData{`)
+- [x] extend `internal/command/ide_test.go` with four subtests mirroring Task 1's shape (positive `.Cfg.Raw` dot access, non-identifier `index`-syntax access, missingkey error, backward-compat byte-identical output); use the existing fixture-builder helpers in that file
+- [x] run `go test ./internal/templates/ide/... ./internal/command/...` — must pass before next task
 
 ### Task 3: Extend AI renderer TemplateData with Cfg field
 

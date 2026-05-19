@@ -1140,3 +1140,114 @@ func TestResolveIDEHubAnchor(t *testing.T) {
 		})
 	}
 }
+
+// TestRenderIDETemplateFile_cfgRawDotAccess verifies .Cfg.Raw dot syntax.
+func TestRenderIDETemplateFile_cfgRawDotAccess(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "main")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
+		`{"prefix":"{{ .Cfg.Raw.git.project_prefix }}","hook":"{{ index (index .Cfg.Raw.git.hooks .Service) "pre_commit" }}"}`)
+
+	cfg := &config.DevboxConfig{Raw: map[string]any{
+		"git": map[string]any{
+			"project_prefix": "PRJ",
+			"hooks": map[string]any{
+				"main": map[string]any{"pre_commit": "echo hi"},
+			},
+		},
+	}}
+	data := ide.TemplateData{Service: "main", Cfg: cfg}
+	if _, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", data, "settings.json", hubDir, projectRoot); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(hubDir, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "PRJ") || !strings.Contains(string(got), "echo hi") {
+		t.Errorf("content=%q", got)
+	}
+}
+
+// TestRenderIDETemplateFile_cfgRawNonIdentifierKey verifies index escape hatch.
+func TestRenderIDETemplateFile_cfgRawNonIdentifierKey(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "main")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
+		`{"token":"{{ index .Cfg.Raw "my-tool" "api-key" }}"}`)
+
+	cfg := &config.DevboxConfig{Raw: map[string]any{
+		"my-tool": map[string]any{"api-key": "VALUE"},
+	}}
+	data := ide.TemplateData{Service: "main", Cfg: cfg}
+	if _, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", data, "settings.json", hubDir, projectRoot); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(hubDir, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "VALUE") {
+		t.Errorf("content=%q", got)
+	}
+}
+
+// TestRenderIDETemplateFile_cfgRawMissingKey verifies missingkey=error surfaces typos.
+func TestRenderIDETemplateFile_cfgRawMissingKey(t *testing.T) {
+	projectRoot := t.TempDir()
+	hubDir := filepath.Join(projectRoot, "services", "main")
+	if err := os.MkdirAll(hubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
+		`{"prefix":"{{ .Cfg.Raw.git.project_prefix }}"}`)
+
+	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	data := ide.TemplateData{Service: "main", Cfg: cfg}
+	_, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", data, "settings.json", hubDir, projectRoot)
+	if err == nil {
+		t.Fatal("expected missingkey error")
+	}
+	if !strings.Contains(err.Error(), "git") {
+		t.Errorf("expected error to mention 'git', got: %v", err)
+	}
+}
+
+// TestRenderIDETemplateFile_backwardCompat verifies output byte-identical when
+// templates do not reference .Cfg.
+func TestRenderIDETemplateFile_backwardCompat(t *testing.T) {
+	render := func(cfg *config.DevboxConfig) []byte {
+		projectRoot := t.TempDir()
+		hubDir := filepath.Join(projectRoot, "services", "main")
+		if err := os.MkdirAll(hubDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
+			`{"name":"{{ .Project.Name }}","port":{{ .Runtime.Ports.app }}}`)
+		data := ide.TemplateData{
+			Project: config.ProjectConfig{Name: "myapp"},
+			Service: "main",
+			Runtime: config.RuntimeConfig{Ports: config.RuntimePorts{"app": 8080}},
+			Cfg:     cfg,
+		}
+		if _, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", data, "settings.json", hubDir, projectRoot); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		got, err := os.ReadFile(filepath.Join(hubDir, "settings.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	empty := render(&config.DevboxConfig{})
+	populated := render(&config.DevboxConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
+	if string(empty) != string(populated) {
+		t.Errorf("output diverged when template does not reference .Cfg:\nempty=%q\npopulated=%q", empty, populated)
+	}
+}
