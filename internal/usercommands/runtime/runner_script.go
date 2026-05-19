@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,9 +30,9 @@ import (
 //	DEVBOX_FILES_JSON      JSON object mapping file IDs to resolved paths
 type ScriptRunner struct{}
 
-// Run executes the script command described by ctx.
-func (r *ScriptRunner) Run(ctx RunContext) error {
-	s := ctx.Cmd.Script
+// Run executes the script command described by rc.
+func (r *ScriptRunner) Run(ctx context.Context, rc RunContext) error {
+	s := rc.Cmd.Script
 	if s == nil {
 		return fmt.Errorf("script runner: script block is nil")
 	}
@@ -47,26 +48,26 @@ func (r *ScriptRunner) Run(ctx RunContext) error {
 	}
 	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
-	contractEnv, err := r.buildContractEnv(ctx, tmpDir)
+	contractEnv, err := r.buildContractEnv(rc, tmpDir)
 	if err != nil {
 		return err
 	}
 
 	if s.Path != "" {
-		return r.execScript(ctx, shell, s.Path, contractEnv)
+		return r.execScript(ctx, rc, shell, s.Path, contractEnv)
 	}
 
 	if s.Plan != "" {
-		if err := r.execScript(ctx, shell, s.Plan, contractEnv); err != nil {
+		if err := r.execScript(ctx, rc, shell, s.Plan, contractEnv); err != nil {
 			return fmt.Errorf("script plan phase: %w", err)
 		}
 	}
 
-	runErr := r.execScript(ctx, shell, s.Run, contractEnv)
+	runErr := r.execScript(ctx, rc, shell, s.Run, contractEnv)
 
 	if s.Cleanup != "" {
-		if cleanErr := r.execScript(ctx, shell, s.Cleanup, contractEnv); cleanErr != nil {
-			_, _ = fmt.Fprintf(stderr(ctx), "script runner: cleanup phase error: %v\n", cleanErr)
+		if cleanErr := r.execScript(ctx, rc, shell, s.Cleanup, contractEnv); cleanErr != nil {
+			_, _ = fmt.Fprintf(stderr(rc), "script runner: cleanup phase error: %v\n", cleanErr)
 		}
 	}
 
@@ -144,10 +145,10 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 }
 
 // execScript runs a single script file using the given shell interpreter.
-// Note: script.path is always resolved against ctx.ProjectRoot, not against workdir.
-func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, contractEnv []string) error {
-	if !filepath.IsAbs(scriptPath) && ctx.ProjectRoot != "" {
-		scriptPath = filepath.Join(ctx.ProjectRoot, scriptPath)
+// Note: script.path is always resolved against rc.ProjectRoot, not against workdir.
+func (r *ScriptRunner) execScript(ctx context.Context, rc RunContext, shell, scriptPath string, contractEnv []string) error {
+	if !filepath.IsAbs(scriptPath) && rc.ProjectRoot != "" {
+		scriptPath = filepath.Join(rc.ProjectRoot, scriptPath)
 	}
 
 	if _, err := exec.LookPath(shell); err != nil {
@@ -160,16 +161,17 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 		return fmt.Errorf("script runner: stat script %s: %w", scriptPath, err)
 	}
 
-	c := exec.Command(shell, scriptPath) //nolint:gosec
+	c := exec.CommandContext(ctx, shell, scriptPath) //nolint:gosec
+	bindCancel(c)
 
-	workdir := ctx.ProjectRoot
-	if ctx.Cmd != nil && ctx.Cmd.Workdir != "" {
-		rendered, err := tpl.RenderCommand(ctx.Cmd.Workdir, ctx.Render)
+	workdir := rc.ProjectRoot
+	if rc.Cmd != nil && rc.Cmd.Workdir != "" {
+		rendered, err := tpl.RenderCommand(rc.Cmd.Workdir, rc.Render)
 		if err != nil {
 			return fmt.Errorf("script runner: render workdir: %w", err)
 		}
-		if !filepath.IsAbs(rendered) && ctx.ProjectRoot != "" {
-			workdir = filepath.Join(ctx.ProjectRoot, rendered)
+		if !filepath.IsAbs(rendered) && rc.ProjectRoot != "" {
+			workdir = filepath.Join(rc.ProjectRoot, rendered)
 		} else {
 			workdir = rendered
 		}
@@ -179,7 +181,7 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 		c.Dir = workdir
 	}
 
-	envMap, err := buildRenderedEnv(ctx.Cmd, ctx)
+	envMap, err := buildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return err
 	}
@@ -189,9 +191,9 @@ func (r *ScriptRunner) execScript(ctx RunContext, shell, scriptPath string, cont
 	}
 	c.Env = append(c.Env, contractEnv...)
 
-	c.Stdout = stdout(ctx)
-	c.Stderr = stderr(ctx)
-	c.Stdin = stdinOrOS(ctx)
+	c.Stdout = stdout(rc)
+	c.Stderr = stderr(rc)
+	c.Stdin = stdinOrOS(rc)
 
 	if err := c.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

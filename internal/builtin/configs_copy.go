@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -31,11 +32,11 @@ func (serviceConfigsCopyBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("builtin: service_configs_copy(service=%s, mode=%s)", service, mode)
 }
 
-func (serviceConfigsCopyBuiltin) Run(with map[string]any, ctx ExecContext) error {
+func (serviceConfigsCopyBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
 	serviceName := getStringParam(with, "service", "")
 	mode := getStringParam(with, "mode", "replace")
 
-	svc, ok := ctx.Config.Services[serviceName]
+	svc, ok := ectx.Config.Services[serviceName]
 	if !ok {
 		return fmt.Errorf("service %q not found in config", serviceName)
 	}
@@ -44,10 +45,10 @@ func (serviceConfigsCopyBuiltin) Run(with map[string]any, ctx ExecContext) error
 	}
 
 	// Source: configs/services/<service>/
-	srcDir := filepath.Join(ctx.ProjectRoot, "configs", "services", serviceName)
+	srcDir := filepath.Join(ectx.ProjectRoot, "configs", "services", serviceName)
 	// Dest: services/<service>/configs/
-	destDir := filepath.Join(ctx.ProjectRoot, svc.Dir, "configs")
-	svcDir := filepath.Join(ctx.ProjectRoot, svc.Dir)
+	destDir := filepath.Join(ectx.ProjectRoot, svc.Dir, "configs")
+	svcDir := filepath.Join(ectx.ProjectRoot, svc.Dir)
 
 	for _, entry := range svc.Configs {
 		src := filepath.Join(srcDir, entry.File)
@@ -61,7 +62,7 @@ func (serviceConfigsCopyBuiltin) Run(with map[string]any, ctx ExecContext) error
 		if err := copyConfigFile(src, dest, mode); err != nil {
 			return fmt.Errorf("copying %s → %s: %w", src, dest, err)
 		}
-		ctx.Output.Success(fmt.Sprintf("config %s → %s [%s]", src, dest, mode))
+		ectx.Output.Success(fmt.Sprintf("config %s → %s [%s]", src, dest, mode))
 
 		// If a mountpoint is declared, ensure the file exists at that path
 		// (relative to the service dir) so Docker Desktop virtiofs can create
@@ -72,7 +73,7 @@ func (serviceConfigsCopyBuiltin) Run(with map[string]any, ctx ExecContext) error
 			if err := touchFile(mp); err != nil {
 				return fmt.Errorf("creating mountpoint %s: %w", mp, err)
 			}
-			ctx.Output.Success(fmt.Sprintf("mountpoint %s [touched]", mp))
+			ectx.Output.Success(fmt.Sprintf("mountpoint %s [touched]", mp))
 		}
 	}
 	return nil

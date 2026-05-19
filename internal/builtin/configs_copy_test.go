@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -290,7 +291,7 @@ func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
-	err := b.Run(map[string]any{"service": "missing"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "missing"}, ctx)
 	if err == nil {
 		t.Fatal("expected error when service not found")
 	}
@@ -310,7 +311,7 @@ func TestServiceConfigsCopy_Run_EmptyServiceDir(t *testing.T) {
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
-	err := b.Run(map[string]any{"service": "main"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error when service dir is empty")
 	}
@@ -327,7 +328,7 @@ func TestServiceConfigsCopy_Run_NoConfigs_Succeeds(t *testing.T) {
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
-	err := b.Run(map[string]any{"service": "main"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err != nil {
 		t.Fatalf("Run with no configs should succeed: %v", err)
 	}

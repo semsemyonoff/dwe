@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"time"
@@ -77,20 +78,20 @@ func (dockerWaitHealthyBuiltin) Describe(with map[string]any) string {
 		timeout, interval)
 }
 
-func (dockerWaitHealthyBuiltin) Run(with map[string]any, ctx ExecContext) error {
+func (dockerWaitHealthyBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
 	// Parse parameters.
 	timeout, _ := getDurationParam(with, "timeout", 60*time.Second)
 	interval, _ := getDurationParam(with, "interval", 2*time.Second)
 	services, _ := getStringSlice(with, "services")
 
 	// Load docker config.
-	dockerCfg, err := config.LoadDockerConfig(ctx.ProjectRoot, ctx.Config)
+	dockerCfg, err := config.LoadDockerConfig(ectx.ProjectRoot, ectx.Config)
 	if err != nil {
 		return fmt.Errorf("docker_wait_healthy: loading docker config: %w", err)
 	}
 
 	// Build compose.
-	compose := docker.NewCompose(ctx.Config, dockerCfg)
+	compose := docker.NewCompose(ectx.Config, dockerCfg)
 
 	// Obtain container IDs.
 	var ids []string
@@ -105,8 +106,8 @@ func (dockerWaitHealthyBuiltin) Run(with map[string]any, ctx ExecContext) error 
 
 	// If no containers, warn and return nil (idempotent: may run before up).
 	if len(ids) == 0 {
-		if ctx.Output != nil {
-			ctx.Output.Warning("no containers found")
+		if ectx.Output != nil {
+			ectx.Output.Warning("no containers found")
 		}
 		return nil
 	}
@@ -115,5 +116,5 @@ func (dockerWaitHealthyBuiltin) Run(with map[string]any, ctx ExecContext) error 
 	attempts := max(int((timeout+interval-1)/interval), 1)
 
 	// Wait for healthy.
-	return docker.WaitContainersHealthy(ids, compose.HealthStatus, attempts, interval, ctx.Output)
+	return docker.WaitContainersHealthyContext(ctx, ids, compose.HealthStatus, attempts, interval, ectx.Output)
 }

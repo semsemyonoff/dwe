@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +92,7 @@ func TestRemovePaths_Run_RemovesFile(t *testing.T) {
 	}
 	b := removePathsBuiltin{}
 	ctx := newTestExecCtx(root)
-	err := b.Run(map[string]any{"paths": []any{"toremove.txt"}}, ctx)
+	err := b.Run(context.Background(), map[string]any{"paths": []any{"toremove.txt"}}, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestRemovePaths_Run_NonexistentPathIsOK(t *testing.T) {
 	root := t.TempDir()
 	b := removePathsBuiltin{}
 	ctx := newTestExecCtx(root)
-	err := b.Run(map[string]any{"paths": []any{"does_not_exist"}}, ctx)
+	err := b.Run(context.Background(), map[string]any{"paths": []any{"does_not_exist"}}, ctx)
 	if err != nil {
 		t.Fatalf("os.RemoveAll on non-existent path should not error: %v", err)
 	}
@@ -114,7 +115,7 @@ func TestRemovePaths_Run_AbsolutePathRejected(t *testing.T) {
 	root := t.TempDir()
 	b := removePathsBuiltin{}
 	ctx := newTestExecCtx(root)
-	err := b.Run(map[string]any{"paths": []any{"/etc/hosts"}}, ctx)
+	err := b.Run(context.Background(), map[string]any{"paths": []any{"/etc/hosts"}}, ctx)
 	if err == nil {
 		t.Fatal("expected error for absolute path in Run")
 	}
@@ -124,7 +125,7 @@ func TestRemovePaths_Run_InvalidPathsType(t *testing.T) {
 	root := t.TempDir()
 	b := removePathsBuiltin{}
 	ctx := newTestExecCtx(root)
-	err := b.Run(map[string]any{"paths": 99}, ctx)
+	err := b.Run(context.Background(), map[string]any{"paths": 99}, ctx)
 	if err == nil {
 		t.Fatal("expected error for invalid paths type in Run")
 	}

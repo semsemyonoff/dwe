@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -104,13 +105,15 @@ type ActionContext struct {
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
 // as a pipe rather than a TTY). The log tee via ansiStripper is unaffected.
 // When skipConfirm is true, DEVBOX_NONINTERACTIVE=1 is added so that nested
-// devbox subcommands also skip confirmation prompts.
-func buildDevboxCmd(devboxArg, workDir, shell, devboxBin string, skipConfirm bool) *exec.Cmd {
+// devbox subcommands also skip confirmation prompts. The supplied ctx
+// propagates cancellation into the child via exec.CommandContext.
+func buildDevboxCmd(ctx context.Context, devboxArg, workDir, shell, devboxBin string, skipConfirm bool) *exec.Cmd {
 	bin, err := os.Executable()
 	if err != nil {
 		bin = devboxBin
 	}
-	cmd := exec.Command(shell, "-c", shellQuote(bin)+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
+	cmd := exec.CommandContext(ctx, shell, "-c", shellQuote(bin)+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
+	bindCancelTerm(cmd)
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
 	if skipConfirm {
@@ -122,99 +125,63 @@ func buildDevboxCmd(devboxArg, workDir, shell, devboxBin string, skipConfirm boo
 // ExecAction executes a typed action (used in step bodies and checks).
 // It dispatches based on action type: shell, devbox, command, or builtin.
 // Does NOT handle reporter calls, when evaluation, hooks, or check orchestration —
-// those stay in Run.
-func ExecAction(a config.Action, actx ActionContext) error {
+// those stay in Run. The supplied ctx propagates cancellation into child processes
+// via exec.CommandContext.
+func ExecAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	switch a.Type {
 	case "builtin":
-		return execBuiltinAction(a, actx)
+		return execBuiltinAction(ctx, a, actx)
 	case "command":
-		return execCommandAction(a, actx)
+		return execCommandAction(ctx, a, actx)
 	case "devbox":
-		return execDevboxAction(a, actx)
+		return execDevboxAction(ctx, a, actx)
 	case "shell":
-		return execShellAction(a, actx)
+		return execShellAction(ctx, a, actx)
 	default:
 		return fmt.Errorf("unknown action type %q", a.Type)
 	}
 }
 
 // execShellAction runs a shell command via sh -c.
-func execShellAction(a config.Action, actx ActionContext) error {
+func execShellAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
-	cmd := exec.Command(shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
+	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
+	bindCancelTerm(cmd)
 	cmd.Dir = actx.WorkDir
 	cmd.Stdin = os.Stdin
 	stdout, stderr, cleanup := childIO(actx.LogWriter)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start: %w", err)
-	}
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		if sig, ok := <-sigCh; ok {
-			signal.Stop(sigCh)
-			if cmd.Process != nil {
-				_ = cmd.Process.Signal(sig)
-			}
-		}
-	}()
-
-	waitErr := cmd.Wait()
-	signal.Stop(sigCh)
-	close(sigCh)
-
-	if waitErr != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](waitErr); ok {
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return fmt.Errorf("exit status %d", exitErr.ExitCode())
 		}
-		return waitErr
+		return err
 	}
 	return nil
 }
 
 // execDevboxAction runs a devbox subcommand.
-func execDevboxAction(a config.Action, actx ActionContext) error {
+func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
-	cmd := buildDevboxCmd(a.Cmd, actx.WorkDir, shell, config.DevboxBin(actx.Cfg), actx.SkipConfirm)
+	cmd := buildDevboxCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DevboxBin(actx.Cfg), actx.SkipConfirm)
 	cmd.Stdin = os.Stdin
 	stdout, stderr, cleanup := childIO(actx.LogWriter)
 	defer cleanup()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start: %w", err)
-	}
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		if sig, ok := <-sigCh; ok {
-			signal.Stop(sigCh)
-			if cmd.Process != nil {
-				_ = cmd.Process.Signal(sig)
-			}
-		}
-	}()
-
-	waitErr := cmd.Wait()
-	signal.Stop(sigCh)
-	close(sigCh)
-
-	if waitErr != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](waitErr); ok {
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return fmt.Errorf("exit status %d", exitErr.ExitCode())
 		}
-		return waitErr
+		return err
 	}
 	return nil
 }
 
 // execBuiltinAction executes a builtin action.
-func execBuiltinAction(a config.Action, actx ActionContext) error {
+func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	if err := builtin.Validate(a.Cmd, a.With); err != nil {
 		return fmt.Errorf("invalid builtin %q: %w", a.Cmd, err)
 	}
@@ -222,7 +189,7 @@ func execBuiltinAction(a config.Action, actx ActionContext) error {
 	if actx.LogWriter != nil {
 		out = io.MultiWriter(os.Stdout, &ansiStripper{actx.LogWriter})
 	}
-	ctx := builtin.ExecContext{
+	ectx := builtin.ExecContext{
 		Config:      actx.Cfg,
 		ProjectRoot: actx.WorkDir,
 		Output:      render.NewWriter(out),
@@ -230,11 +197,11 @@ func execBuiltinAction(a config.Action, actx ActionContext) error {
 		Stdin:       os.Stdin,
 		SkipConfirm: actx.SkipConfirm,
 	}
-	return builtin.Run(a.Cmd, a.With, ctx)
+	return builtin.Run(ctx, a.Cmd, a.With, ectx)
 }
 
 // execCommandAction executes a registered user command.
-func execCommandAction(a config.Action, actx ActionContext) error {
+func execCommandAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	if actx.Reg == nil {
 		return fmt.Errorf("command registry not available for command %q", a.Cmd)
 	}
@@ -253,12 +220,12 @@ func execCommandAction(a config.Action, actx ActionContext) error {
 	rctx.Stdin = os.Stdin
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
-	return usercommands.RunCommand(rctx)
+	return usercommands.RunCommand(ctx, rctx)
 }
 
 // ExecStep is a deprecated wrapper for backward compatibility.
 // New code should use ExecAction directly.
-func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
+func ExecStep(ctx context.Context, step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
 	actx := ActionContext{
 		WorkDir:     workDir,
 		Cfg:         cfg,
@@ -266,7 +233,19 @@ func ExecStep(step config.DeployStep, workDir string, cfg *config.DevboxConfig, 
 		LogWriter:   logWriter,
 		SkipConfirm: skipConfirm,
 	}
-	return ExecAction(step.Action(), actx)
+	return ExecAction(ctx, step.Action(), actx)
+}
+
+// bindCancelTerm configures cmd to send SIGTERM (instead of SIGKILL) on
+// context cancellation, with a 5-second grace period before force-kill.
+func bindCancelTerm(cmd *exec.Cmd) {
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		return cmd.Process.Signal(syscall.SIGTERM)
+	}
+	cmd.WaitDelay = 5 * time.Second
 }
 
 // RunOptions carries all inputs to Run, replacing individual positional arguments.
@@ -287,6 +266,12 @@ type RunOptions struct {
 	// results and consults the skip decision before running each step.
 	Recorder    Recorder
 	SkipDecider SkipDecider
+
+	// Context, when non-nil, is used as the parent for all child-process
+	// cancellation. When nil, RunWithOptions creates one via signal.NotifyContext
+	// that cancels on SIGINT / SIGTERM. Callers that already manage signals
+	// should set this to avoid double-wrapping.
+	Context context.Context
 }
 
 // Run executes a resolved step list, calling rep for all lifecycle events.
@@ -349,6 +334,17 @@ func RunWithOptions(opts RunOptions) error {
 		opts.SkipDecider = func(addr string, rs ResolvedStep, stepHash string) journal.Decision {
 			return journal.Run
 		}
+	}
+	// Establish a cancellable parent context for all child-process work.
+	// When the caller did not supply one, install signal.NotifyContext so
+	// SIGINT / SIGTERM cancel ctx and propagate to children via cmd.Cancel.
+	var ctx context.Context
+	if opts.Context != nil {
+		ctx = opts.Context
+	} else {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
 	}
 	// trackedTotal excludes steps belonging to phases with Untracked=true.
 	// These steps receive index=0, total=0 in reporter calls so PlainReporter
@@ -558,7 +554,7 @@ func RunWithOptions(opts RunOptions) error {
 		skipConfirm := opts.SkipConfirm || rs.Step.SkipConfirm
 
 		startTime := time.Now()
-		stepErr := ExecStep(rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, skipConfirm)
+		stepErr := ExecStep(ctx, rs.Step, opts.WorkDir, opts.Config, opts.Registry, opts.LogWriter, skipConfirm)
 		durationMs := time.Since(startTime).Milliseconds()
 
 		opts.Reporter.ResumeAfterExec()
@@ -595,7 +591,7 @@ func RunWithOptions(opts RunOptions) error {
 				LogWriter:   opts.LogWriter,
 				SkipConfirm: skipConfirm,
 			}
-			checkErr := ExecAction(*rs.Step.Check, actx)
+			checkErr := ExecAction(ctx, *rs.Step.Check, actx)
 			if checkErr != nil {
 				opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, checkErr)
 				opts.Recorder.OnStepFail(addr, rs, stepHash, durationMs, checkErr)

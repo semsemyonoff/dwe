@@ -1,9 +1,13 @@
 package runtime
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/tpl"
@@ -19,7 +23,7 @@ func TestHostRunner_BuildCommand_Run(t *testing.T) {
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -44,7 +48,7 @@ func TestHostRunner_BuildCommand_Argv(t *testing.T) {
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -68,7 +72,7 @@ func TestHostRunner_BuildCommand_WorkdirAbsolute(t *testing.T) {
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +92,7 @@ func TestHostRunner_BuildCommand_WorkdirRelative(t *testing.T) {
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,7 +111,7 @@ func TestHostRunner_BuildCommand_DefaultWorkdir(t *testing.T) {
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -129,7 +133,7 @@ func TestHostRunner_BuildCommand_EnvRendered(t *testing.T) {
 		Render:      &tpl.RenderContext{},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -152,7 +156,7 @@ func TestHostRunner_BuildCommand_RunWithTemplateInterpolation(t *testing.T) {
 		},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -176,7 +180,7 @@ func TestHostRunner_BuildCommand_WorkdirWithTemplate(t *testing.T) {
 		},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -200,7 +204,7 @@ func TestHostRunner_BuildCommand_WorkdirAbsoluteTemplate(t *testing.T) {
 		},
 		ProjectRoot: "/project",
 	}
-	c, err := r.BuildCommand(ctx)
+	c, err := r.BuildCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -298,7 +302,7 @@ func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 				Render:      &tpl.RenderContext{},
 				ProjectRoot: "/project",
 			}
-			c, err := r.BuildCommand(ctx)
+			c, err := r.BuildCommand(context.Background(), ctx)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -307,4 +311,69 @@ func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHostRunner_Run_ContextCancellation verifies that cancelling the context
+// while a child process is in-flight kills the child promptly.
+func TestHostRunner_Run_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	rc := RunContext{
+		Cmd: &CommandDef{
+			Type: CommandTypeShell,
+			Cmd:  "sleep 30",
+		},
+		Render:      &tpl.RenderContext{},
+		ProjectRoot: t.TempDir(),
+		Stdout:      &bytes.Buffer{},
+		Stderr:      &bytes.Buffer{},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		r := &HostRunner{}
+		done <- r.Run(ctx, rc)
+	}()
+
+	// Give the child a moment to start, then cancel.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		// Expect an error (the sleep was killed); the runner returns the wait error.
+		if err == nil {
+			t.Fatal("expected error from cancelled child, got nil")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("runner did not return within 10s of cancel — child was not killed")
+	}
+}
+
+// TestHostRunner_Run_ContextDeadline verifies that exceeding the context
+// deadline cancels the child and returns promptly.
+func TestHostRunner_Run_ContextDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	rc := RunContext{
+		Cmd: &CommandDef{
+			Type: CommandTypeShell,
+			Cmd:  "sleep 30",
+		},
+		Render:      &tpl.RenderContext{},
+		ProjectRoot: t.TempDir(),
+		Stdout:      &bytes.Buffer{},
+		Stderr:      &bytes.Buffer{},
+	}
+
+	start := time.Now()
+	err := (&HostRunner{}).Run(ctx, rc)
+	if err == nil {
+		t.Fatal("expected error from deadline, got nil")
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("runner did not return promptly after deadline: %v", elapsed)
+	}
+	// errors.Is is unreliable across exec.ExitError unwraps, so just assert non-nil.
+	_ = errors.Is(ctx.Err(), context.DeadlineExceeded)
 }

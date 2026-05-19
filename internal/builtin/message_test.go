@@ -1,13 +1,13 @@
 package builtin
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
-
-	"bytes"
 )
 
 // makeMessageCtx returns an ExecContext with a captured output buffer.
@@ -73,7 +73,7 @@ func TestMessageRun_AllLevels(t *testing.T) {
 	for _, level := range levels {
 		t.Run(level, func(t *testing.T) {
 			ctx, buf := makeMessageCtx(t)
-			err := b.Run(map[string]any{"level": level, "text": "test message"}, ctx)
+			err := b.Run(context.Background(), map[string]any{"level": level, "text": "test message"}, ctx)
 			if err != nil {
 				t.Fatalf("Run() unexpected error: %v", err)
 			}
@@ -93,7 +93,7 @@ func TestMessageRun_TemplateEvaluation(t *testing.T) {
 		Project: config.ProjectConfig{Name: "myproject"},
 	}
 
-	err := b.Run(map[string]any{
+	err := b.Run(context.Background(), map[string]any{
 		"level": "info",
 		"text":  "project is {{.Project.Name}}",
 	}, ctx)
@@ -109,7 +109,7 @@ func TestMessageRun_PlainTextNoTemplate(t *testing.T) {
 	b := messageBuiltin{}
 	ctx, buf := makeMessageCtx(t)
 
-	err := b.Run(map[string]any{"level": "success", "text": "no template here"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"level": "success", "text": "no template here"}, ctx)
 	if err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}

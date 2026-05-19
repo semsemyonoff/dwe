@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -39,7 +40,7 @@ func runWorkflowCtx(t *testing.T, reg *Registry, workflowCmd *CommandDef) (strin
 		Stderr:   &errBuf,
 	}
 	r := &WorkflowRunner{}
-	err := r.Run(ctx)
+	err := r.Run(context.Background(), ctx)
 	return outBuf.String(), errBuf.String(), err
 }
 
@@ -66,7 +67,7 @@ func TestWorkflowRunner_NoRegistry_Error(t *testing.T) {
 		// Registry intentionally nil
 	}
 	r := &WorkflowRunner{}
-	err := r.Run(ctx)
+	err := r.Run(context.Background(), ctx)
 	if err == nil {
 		t.Fatal("expected error when registry is nil")
 	}
@@ -360,7 +361,7 @@ func TestWorkflowRunner_ConfirmStep_TTY_Confirmed(t *testing.T) {
 		Stderr:   &outBuf,
 		Stdin:    bytes.NewBufferString(""),
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error on confirmed TTY prompt: %v", err)
 	}
@@ -401,7 +402,7 @@ func TestWorkflowRunner_ConfirmStep_TTY_Denied(t *testing.T) {
 		Stderr:   &outBuf,
 		Stdin:    bytes.NewBufferString(""),
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err == nil {
 		t.Fatal("expected error when user denies TTY confirm")
 	}
@@ -442,7 +443,7 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_YInput(t *testing.T) {
 		Stderr:   &outBuf,
 		Stdin:    bytes.NewBufferString("y\n"),
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("expected no error for 'y' input; got %v", err)
 	}
@@ -479,7 +480,7 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_CIEnv(t *testing.T) {
 		Stderr:   &outBuf,
 		Stdin:    bytes.NewBufferString(""), // no input — CI must short-circuit
 	}
-	if err := (&WorkflowRunner{}).Run(ctx); err != nil {
+	if err := (&WorkflowRunner{}).Run(context.Background(), ctx); err != nil {
 		t.Fatalf("expected no error under CI=1; got %v", err)
 	}
 }
@@ -512,7 +513,7 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_NInput(t *testing.T) {
 		Stderr:   &outBuf,
 		Stdin:    bytes.NewBufferString("n\n"),
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err == nil {
 		t.Fatal("expected error for 'n' input")
 	}
@@ -557,7 +558,7 @@ func TestWorkflowRunner_ConfirmStep_NonInteractiveContext_SkipsConfirm(t *testin
 		Stdin:          bytes.NewBufferString(""), // Empty stdin; would block if prompt tried to read
 		NonInteractive: true,
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error with NonInteractive=true: %v", err)
 	}
@@ -606,7 +607,7 @@ func TestWorkflowRunner_WhenParam_Truthy_Runs(t *testing.T) {
 		Stdout:   &outBuf,
 		Stderr:   &outBuf,
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -651,7 +652,7 @@ func TestWorkflowRunner_WhenParam_Falsy_Skips(t *testing.T) {
 		Stdout:   &outBuf,
 		Stderr:   &outBuf,
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -696,7 +697,7 @@ func TestWorkflowRunner_WhenCmd_True_Runs(t *testing.T) {
 		Stdout:      &outBuf,
 		Stderr:      &outBuf,
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -747,7 +748,7 @@ func TestWorkflowRunner_WhenBuiltin_FileExistsInTemplate(t *testing.T) {
 		Stdout:      &outBuf,
 		Stderr:      &outBuf,
 	}
-	err := (&WorkflowRunner{}).Run(ctx)
+	err := (&WorkflowRunner{}).Run(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

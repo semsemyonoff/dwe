@@ -204,7 +204,7 @@ it runs directly without showing a selector.`,
 			rctx.SkipConfirm = shouldSkip
 			rctx.NonInteractive = shouldSkip
 
-			if err := usercommands.RunCommand(rctx); err != nil {
+			if err := usercommands.RunCommand(cmd.Context(), rctx); err != nil {
 				return fmt.Errorf("running command %q: %w", id, err)
 			}
 			return nil

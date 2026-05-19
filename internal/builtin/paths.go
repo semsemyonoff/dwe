@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,25 +38,28 @@ func (removePathsBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("builtin: remove_paths(paths=%v)", paths)
 }
 
-func (removePathsBuiltin) Run(with map[string]any, ctx ExecContext) error {
+func (removePathsBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
 	paths, err := getStringSlice(with, "paths")
 	if err != nil {
 		return fmt.Errorf("remove_paths: %w", err)
 	}
 	for _, p := range paths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// Security: path must be relative and must not escape the project root.
 		if filepath.IsAbs(p) {
 			return fmt.Errorf("remove_paths: path %q must be relative", p)
 		}
-		abs := filepath.Join(ctx.ProjectRoot, p)
-		rel, err := filepath.Rel(ctx.ProjectRoot, abs)
+		abs := filepath.Join(ectx.ProjectRoot, p)
+		rel, err := filepath.Rel(ectx.ProjectRoot, abs)
 		if err != nil || rel == "." || rel == "" || strings.HasPrefix(rel, "..") {
 			return fmt.Errorf("remove_paths: path %q is not allowed (must be a non-root relative path inside the project)", p)
 		}
 		if err := os.RemoveAll(abs); err != nil {
 			return fmt.Errorf("remove_paths: removing %q: %w", p, err)
 		}
-		ctx.Output.Success(fmt.Sprintf("removed %s", p))
+		ectx.Output.Success(fmt.Sprintf("removed %s", p))
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,11 +36,11 @@ func (serviceDirsEnsureBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("builtin: service_dirs_ensure(service=%s, mode=%s)", service, mode)
 }
 
-func (serviceDirsEnsureBuiltin) Run(with map[string]any, ctx ExecContext) error {
+func (serviceDirsEnsureBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
 	serviceName := getStringParam(with, "service", "")
 	mode := getStringParam(with, "mode", "skip")
 
-	svc, ok := ctx.Config.Services[serviceName]
+	svc, ok := ectx.Config.Services[serviceName]
 	if !ok {
 		return fmt.Errorf("service_dirs_ensure: service %q not found in config", serviceName)
 	}
@@ -51,7 +52,7 @@ func (serviceDirsEnsureBuiltin) Run(with map[string]any, ctx ExecContext) error 
 	dirs := buildDirList(svc.Dirs)
 
 	// Resolve base directory for the service hub.
-	baseDir := filepath.Join(ctx.ProjectRoot, svc.Dir)
+	baseDir := filepath.Join(ectx.ProjectRoot, svc.Dir)
 
 	for _, rel := range dirs {
 		if err := validateRelDir(rel); err != nil {
@@ -64,7 +65,7 @@ func (serviceDirsEnsureBuiltin) Run(with map[string]any, ctx ExecContext) error 
 		}
 
 		isMandatory := isMandatoryDir(rel)
-		if err := ensureDir(abs, rel, mode, isMandatory, ctx); err != nil {
+		if err := ensureDir(abs, rel, mode, isMandatory, ectx); err != nil {
 			return fmt.Errorf("service_dirs_ensure: service %q: %w", serviceName, err)
 		}
 	}
@@ -128,7 +129,7 @@ func ensureInsideBase(baseDir, abs string) error {
 //	error    — create if missing, error if exists (dir or non-dir)
 //	recreate — remove+create if exists as dir, error if exists as non-dir;
 //	           mandatory dirs use skip semantics in recreate mode for safety
-func ensureDir(abs, rel, mode string, isMandatory bool, ctx ExecContext) error {
+func ensureDir(abs, rel, mode string, isMandatory bool, ectx ExecContext) error {
 	info, err := os.Lstat(abs)
 	exists := err == nil
 	if err != nil && !os.IsNotExist(err) {
@@ -142,43 +143,43 @@ func ensureDir(abs, rel, mode string, isMandatory bool, ctx ExecContext) error {
 	switch mode {
 	case "skip":
 		if exists {
-			ctx.Output.Info(fmt.Sprintf("dir %s [exists, skipped]", rel))
+			ectx.Output.Info(fmt.Sprintf("dir %s [exists, skipped]", rel))
 			return nil
 		}
-		return createDir(abs, rel, ctx)
+		return createDir(abs, rel, ectx)
 
 	case "error":
 		if exists {
 			return fmt.Errorf("path %q already exists (mode=error)", rel)
 		}
-		return createDir(abs, rel, ctx)
+		return createDir(abs, rel, ectx)
 
 	case "recreate":
 		// Safety: mandatory dirs use skip semantics even in recreate mode.
 		if isMandatory {
 			if exists {
-				ctx.Output.Info(fmt.Sprintf("dir %s [exists, skipped (mandatory)]", rel))
+				ectx.Output.Info(fmt.Sprintf("dir %s [exists, skipped (mandatory)]", rel))
 				return nil
 			}
-			return createDir(abs, rel, ctx)
+			return createDir(abs, rel, ectx)
 		}
 		if exists {
 			if err := os.RemoveAll(abs); err != nil {
 				return fmt.Errorf("removing %q: %w", rel, err)
 			}
-			ctx.Output.Info(fmt.Sprintf("dir %s [removed]", rel))
+			ectx.Output.Info(fmt.Sprintf("dir %s [removed]", rel))
 		}
-		return createDir(abs, rel, ctx)
+		return createDir(abs, rel, ectx)
 
 	default:
 		return fmt.Errorf("unknown mode %q", mode)
 	}
 }
 
-func createDir(abs, rel string, ctx ExecContext) error {
+func createDir(abs, rel string, ectx ExecContext) error {
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return fmt.Errorf("creating %q: %w", rel, err)
 	}
-	ctx.Output.Success(fmt.Sprintf("dir %s [created]", rel))
+	ectx.Output.Success(fmt.Sprintf("dir %s [created]", rel))
 	return nil
 }

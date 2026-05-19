@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 
 	"devbox-cli/internal/tpl"
@@ -37,24 +38,24 @@ func (messageBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("builtin: message(level=%s, text=%s)", level, text)
 }
 
-func (messageBuiltin) Run(with map[string]any, ctx ExecContext) error {
+func (messageBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
 	level := getStringParam(with, "level", "")
 	rawText := getStringParam(with, "text", "")
 
-	text, err := tpl.Render(rawText, ctx.Config)
+	text, err := tpl.Render(rawText, ectx.Config)
 	if err != nil {
 		return fmt.Errorf("builtin message: template error: %w", err)
 	}
 
 	switch level {
 	case "info":
-		ctx.Output.Info(text)
+		ectx.Output.Info(text)
 	case "success":
-		ctx.Output.Success(text)
+		ectx.Output.Success(text)
 	case "warning":
-		ctx.Output.Warning(text)
+		ectx.Output.Warning(text)
 	case "error":
-		ctx.Output.Error(text)
+		ectx.Output.Error(text)
 	default:
 		return fmt.Errorf("builtin message: invalid level %q", level)
 	}

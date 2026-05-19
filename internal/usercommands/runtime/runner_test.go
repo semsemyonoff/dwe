@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"devbox-cli/internal/config"
@@ -46,7 +47,7 @@ func TestRunCommand_DefensiveInitNilRender(t *testing.T) {
 		Stderr: &bytes.Buffer{},
 	}
 
-	if err := RunCommand(ctx); err != nil {
+	if err := RunCommand(context.Background(), ctx); err != nil {
 		t.Fatalf("RunCommand with nil Render returned unexpected error: %v", err)
 	}
 }
@@ -71,7 +72,7 @@ func TestRunCommand_DefensiveInitRawCopy(t *testing.T) {
 		Stderr: &bytes.Buffer{},
 	}
 
-	if err := RunCommand(ctx); err != nil {
+	if err := RunCommand(context.Background(), ctx); err != nil {
 		t.Fatalf("RunCommand returned unexpected error: %v", err)
 	}
 }

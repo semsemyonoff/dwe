@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,10 +23,10 @@ func (serviceConfigsCheckBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("builtin: service_configs_check(service=%s)", service)
 }
 
-func (serviceConfigsCheckBuiltin) Run(with map[string]any, ctx ExecContext) error {
+func (serviceConfigsCheckBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
 	serviceName := getStringParam(with, "service", "")
 
-	svc, ok := ctx.Config.Services[serviceName]
+	svc, ok := ectx.Config.Services[serviceName]
 	if !ok {
 		return fmt.Errorf("service %q not found in config", serviceName)
 	}
@@ -33,7 +34,7 @@ func (serviceConfigsCheckBuiltin) Run(with map[string]any, ctx ExecContext) erro
 		return fmt.Errorf("service %q: dir is not set", serviceName)
 	}
 
-	destDir := filepath.Join(ctx.ProjectRoot, svc.Dir, "configs")
+	destDir := filepath.Join(ectx.ProjectRoot, svc.Dir, "configs")
 	cleanDestDir := filepath.Clean(destDir)
 
 	var missing []string
@@ -50,9 +51,9 @@ func (serviceConfigsCheckBuiltin) Run(with map[string]any, ctx ExecContext) erro
 	}
 
 	if len(missing) > 0 {
-		if ctx.Output != nil {
+		if ectx.Output != nil {
 			for _, f := range missing {
-				ctx.Output.Error("missing config: " + f)
+				ectx.Output.Error("missing config: " + f)
 			}
 		}
 		return fmt.Errorf("missing config files: %s", strings.Join(missing, ", "))

@@ -6,6 +6,7 @@
 package usercommands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -210,9 +211,10 @@ func NewRunner(cmd *CommandDef) (Runner, error) {
 	return runtime.NewRunner(cmd)
 }
 
-// RunCommand executes a command definition.
-func RunCommand(ctx RunContext) error {
-	return runtime.RunCommand(ctx)
+// RunCommand executes a command definition. The supplied ctx is threaded
+// through to the runner so child processes are cancelled when ctx is cancelled.
+func RunCommand(ctx context.Context, rc RunContext) error {
+	return runtime.RunCommand(ctx, rc)
 }
 
 // ConfirmCommand prompts before running confirmation-enabled commands.

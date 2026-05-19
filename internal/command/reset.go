@@ -237,12 +237,12 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 				SkipConfirm: false,
 			}
 
-			if err := pipeline.ExecAction(step.Action(), actx); err != nil {
+			if err := pipeline.ExecAction(cmd.Context(), step.Action(), actx); err != nil {
 				return err
 			}
 
 			if step.Check != nil {
-				if err := pipeline.ExecAction(*step.Check, actx); err != nil {
+				if err := pipeline.ExecAction(cmd.Context(), *step.Check, actx); err != nil {
 					return fmt.Errorf("step %s: check failed: %w", address, err)
 				}
 			}

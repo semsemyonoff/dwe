@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -17,11 +18,23 @@ type HealthGetFn func(id string) (string, error)
 // Containers with no healthcheck ("none" status) emit a one-time warning and are
 // skipped (not counted as failures). Unhealthy containers return an error immediately.
 func WaitContainersHealthy(ids []string, getHealth HealthGetFn, attempts int, interval time.Duration, w *render.Writer) error {
+	return WaitContainersHealthyContext(context.Background(), ids, getHealth, attempts, interval, w)
+}
+
+// WaitContainersHealthyContext is the context-aware variant of WaitContainersHealthy.
+// It aborts the polling loop promptly when ctx is cancelled, returning ctx.Err().
+func WaitContainersHealthyContext(ctx context.Context, ids []string, getHealth HealthGetFn, attempts int, interval time.Duration, w *render.Writer) error {
 	warned := make(map[string]bool)
 
 	for attempt := range attempts {
 		if attempt > 0 {
-			time.Sleep(interval)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(interval):
+			}
+		} else if err := ctx.Err(); err != nil {
+			return err
 		}
 
 		allDone := true

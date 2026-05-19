@@ -1,12 +1,15 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/tpl"
@@ -14,28 +17,47 @@ import (
 	"devbox-cli/internal/usercommands/resolve"
 )
 
+// childTermDelay is the grace period exec.CommandContext gives a child after
+// SIGTERM before sending SIGKILL when ctx is cancelled.
+const childTermDelay = 5 * time.Second
+
+// bindCancel configures cmd to send SIGTERM (instead of the default SIGKILL)
+// when its context is cancelled, and to force-kill after childTermDelay.
+// Call this immediately after exec.CommandContext to give children a chance
+// to clean up.
+func bindCancel(cmd *exec.Cmd) {
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		return cmd.Process.Signal(syscall.SIGTERM)
+	}
+	cmd.WaitDelay = childTermDelay
+}
+
 // DevboxRunner executes type=devbox commands by invoking the current devbox
 // executable with the run: string as its arguments.
 type DevboxRunner struct{}
 
-// Run executes the devbox subcommand described by ctx.Cmd.
-func (r *DevboxRunner) Run(ctx RunContext) error {
+// Run executes the devbox subcommand described by rc.Cmd.
+func (r *DevboxRunner) Run(ctx context.Context, rc RunContext) error {
 	bin, err := os.Executable()
 	if err != nil {
-		bin = config.DevboxBin(ctx.Config)
+		bin = config.DevboxBin(rc.Config)
 	}
 
-	rendered, err := tpl.RenderCommand(ctx.Cmd.Cmd, ctx.Render)
+	rendered, err := tpl.RenderCommand(rc.Cmd.Cmd, rc.Render)
 	if err != nil {
 		return fmt.Errorf("render cmd: %w", err)
 	}
 
-	cmd := exec.Command(config.ShellBin(ctx.Config), "-c", shellQuote(bin)+" "+rendered) //nolint:gosec
-	if ctx.ProjectRoot != "" {
-		cmd.Dir = ctx.ProjectRoot
+	cmd := exec.CommandContext(ctx, config.ShellBin(rc.Config), "-c", shellQuote(bin)+" "+rendered) //nolint:gosec
+	bindCancel(cmd)
+	if rc.ProjectRoot != "" {
+		cmd.Dir = rc.ProjectRoot
 	}
 
-	envMap, err := buildRenderedEnv(ctx.Cmd, ctx)
+	envMap, err := buildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return err
 	}
@@ -46,9 +68,9 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 		}
 	}
 
-	cmd.Stdout = stdout(ctx)
-	cmd.Stderr = stderr(ctx)
-	cmd.Stdin = stdinOrOS(ctx)
+	cmd.Stdout = stdout(rc)
+	cmd.Stderr = stderr(rc)
+	cmd.Stdin = stdinOrOS(rc)
 	return cmd.Run()
 }
 
@@ -56,21 +78,23 @@ func (r *DevboxRunner) Run(ctx RunContext) error {
 type HostRunner struct{}
 
 // BuildCommand constructs the exec.Cmd that would be run for the given context.
-// It is exported for testing without actual execution.
-func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
-	cmd := ctx.Cmd
+// It is exported for testing without actual execution. The supplied ctx is
+// attached to the returned *exec.Cmd via exec.CommandContext so callers can
+// cancel the child by cancelling ctx.
+func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd, error) {
+	cmd := rc.Cmd
 
 	var argv []string
 	if cmd.Cmd != "" {
-		rendered, err := tpl.RenderCommand(cmd.Cmd, ctx.Render)
+		rendered, err := tpl.RenderCommand(cmd.Cmd, rc.Render)
 		if err != nil {
 			return nil, fmt.Errorf("render cmd: %w", err)
 		}
-		argv = []string{config.ShellBin(ctx.Config), "-c", rendered}
+		argv = []string{config.ShellBin(rc.Config), "-c", rendered}
 	} else {
 		rendered := make([]string, len(cmd.Argv))
 		for i, arg := range cmd.Argv {
-			r, err := tpl.RenderCommand(arg, ctx.Render)
+			r, err := tpl.RenderCommand(arg, rc.Render)
 			if err != nil {
 				return nil, fmt.Errorf("render argv[%d]: %w", i, err)
 			}
@@ -82,22 +106,23 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("argv is empty")
 	}
-	c := exec.Command(argv[0], argv[1:]...) //nolint:gosec
+	c := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec
+	bindCancel(c)
 
 	if cmd.Workdir != "" {
-		rendered, err := tpl.RenderCommand(cmd.Workdir, ctx.Render)
+		rendered, err := tpl.RenderCommand(cmd.Workdir, rc.Render)
 		if err != nil {
 			return nil, fmt.Errorf("render workdir: %w", err)
 		}
-		if !filepath.IsAbs(rendered) && ctx.ProjectRoot != "" {
-			rendered = filepath.Join(ctx.ProjectRoot, rendered)
+		if !filepath.IsAbs(rendered) && rc.ProjectRoot != "" {
+			rendered = filepath.Join(rc.ProjectRoot, rendered)
 		}
 		c.Dir = rendered
-	} else if ctx.ProjectRoot != "" {
-		c.Dir = ctx.ProjectRoot
+	} else if rc.ProjectRoot != "" {
+		c.Dir = rc.ProjectRoot
 	}
 
-	envMap, err := buildRenderedEnv(cmd, ctx)
+	envMap, err := buildRenderedEnv(cmd, rc)
 	if err != nil {
 		return nil, err
 	}
@@ -112,14 +137,14 @@ func (r *HostRunner) BuildCommand(ctx RunContext) (*exec.Cmd, error) {
 }
 
 // Run executes the command on the host.
-func (r *HostRunner) Run(ctx RunContext) error {
-	c, err := r.BuildCommand(ctx)
+func (r *HostRunner) Run(ctx context.Context, rc RunContext) error {
+	c, err := r.BuildCommand(ctx, rc)
 	if err != nil {
 		return err
 	}
-	c.Stdout = stdout(ctx)
-	c.Stderr = stderr(ctx)
-	c.Stdin = stdinOrOS(ctx)
+	c.Stdout = stdout(rc)
+	c.Stderr = stderr(rc)
+	c.Stdin = stdinOrOS(rc)
 	return c.Run()
 }
 

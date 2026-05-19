@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os/exec"
@@ -20,8 +21,10 @@ type ServiceExecRunner struct{}
 // BuildCommand constructs the exec.Cmd for the given context.
 // When mode is exec-or-run the container state is checked at build time:
 // if the container is not running the command will use `run --rm` instead.
-func (r *ServiceExecRunner) BuildCommand(ctx RunContext, compose *docker.Compose) (*exec.Cmd, error) {
-	svc, user, workdir, mode, err := resolveServiceFields(ctx)
+// The supplied ctx is attached to the returned *exec.Cmd so callers can
+// cancel the child by cancelling ctx.
+func (r *ServiceExecRunner) BuildCommand(ctx context.Context, rc RunContext, compose *docker.Compose) (*exec.Cmd, error) {
+	svc, user, workdir, mode, err := resolveServiceFields(rc)
 	if err != nil {
 		return nil, err
 	}
@@ -29,12 +32,12 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, compose *docker.Compose
 		mode = model.ExecModeExec
 	}
 
-	argv, err := buildServiceArgv(ctx)
+	argv, err := buildServiceArgv(rc)
 	if err != nil {
 		return nil, err
 	}
 
-	envVars, err := buildRenderedEnv(ctx.Cmd, ctx)
+	envVars, err := buildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return nil, err
 	}
@@ -51,24 +54,24 @@ func (r *ServiceExecRunner) BuildCommand(ctx RunContext, compose *docker.Compose
 		useExec = running
 	}
 
-	composeArgs, err := buildRenderedComposeArgs(ctx)
+	composeArgs, err := buildRenderedComposeArgs(rc)
 	if err != nil {
 		return nil, err
 	}
 
-	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, composeArgs, useExec), nil
+	return buildDockerComposeCmd(ctx, rc, compose, svc, user, workdir, argv, envVars, composeArgs, useExec), nil
 }
 
 // Run executes the command inside the container.
-func (r *ServiceExecRunner) Run(ctx RunContext) error {
-	compose := ctx.Compose()
-	c, err := r.BuildCommand(ctx, compose)
+func (r *ServiceExecRunner) Run(ctx context.Context, rc RunContext) error {
+	compose := rc.Compose()
+	c, err := r.BuildCommand(ctx, rc, compose)
 	if err != nil {
 		return err
 	}
-	c.Stdout = stdout(ctx)
-	c.Stderr = stderr(ctx)
-	c.Stdin = stdinOrOS(ctx)
+	c.Stdout = stdout(rc)
+	c.Stderr = stderr(rc)
+	c.Stdin = stdinOrOS(rc)
 	return c.Run()
 }
 
@@ -76,40 +79,41 @@ func (r *ServiceExecRunner) Run(ctx RunContext) error {
 type ServiceRunRunner struct{}
 
 // BuildCommand constructs the exec.Cmd for the given context.
-func (r *ServiceRunRunner) BuildCommand(ctx RunContext, compose *docker.Compose) (*exec.Cmd, error) {
-	svc, user, workdir, _, err := resolveServiceFields(ctx)
+// The supplied ctx is attached to the returned *exec.Cmd.
+func (r *ServiceRunRunner) BuildCommand(ctx context.Context, rc RunContext, compose *docker.Compose) (*exec.Cmd, error) {
+	svc, user, workdir, _, err := resolveServiceFields(rc)
 	if err != nil {
 		return nil, err
 	}
 
-	argv, err := buildServiceArgv(ctx)
+	argv, err := buildServiceArgv(rc)
 	if err != nil {
 		return nil, err
 	}
 
-	envVars, err := buildRenderedEnv(ctx.Cmd, ctx)
+	envVars, err := buildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return nil, err
 	}
 
-	composeArgs, err := buildRenderedComposeArgs(ctx)
+	composeArgs, err := buildRenderedComposeArgs(rc)
 	if err != nil {
 		return nil, err
 	}
 
-	return buildDockerComposeCmd(ctx, compose, svc, user, workdir, argv, envVars, composeArgs, false), nil
+	return buildDockerComposeCmd(ctx, rc, compose, svc, user, workdir, argv, envVars, composeArgs, false), nil
 }
 
 // Run executes the command in a one-off container.
-func (r *ServiceRunRunner) Run(ctx RunContext) error {
-	compose := ctx.Compose()
-	c, err := r.BuildCommand(ctx, compose)
+func (r *ServiceRunRunner) Run(ctx context.Context, rc RunContext) error {
+	compose := rc.Compose()
+	c, err := r.BuildCommand(ctx, rc, compose)
 	if err != nil {
 		return err
 	}
-	c.Stdout = stdout(ctx)
-	c.Stderr = stderr(ctx)
-	c.Stdin = stdinOrOS(ctx)
+	c.Stdout = stdout(rc)
+	c.Stderr = stderr(rc)
+	c.Stdin = stdinOrOS(rc)
 	return c.Run()
 }
 
@@ -240,7 +244,8 @@ func buildServiceArgv(ctx RunContext) ([]string, error) {
 
 // buildDockerComposeCmd assembles the full docker compose exec/run command.
 func buildDockerComposeCmd(
-	ctx RunContext,
+	ctx context.Context,
+	rc RunContext,
 	compose *docker.Compose,
 	svc string,
 	user model.UserMode,
@@ -278,8 +283,8 @@ func buildDockerComposeCmd(
 
 	switch user {
 	case model.UserModeCurrent:
-		if ctx.Render != nil {
-			args = append(args, "--user", ctx.Render.Host.UID+":"+ctx.Render.Host.GID)
+		if rc.Render != nil {
+			args = append(args, "--user", rc.Render.Host.UID+":"+rc.Render.Host.GID)
 		}
 	case model.UserModeRoot:
 		args = append(args, "--user", "root")
@@ -300,7 +305,8 @@ func buildDockerComposeCmd(
 	args = append(args, svc)
 	args = append(args, serviceArgv...)
 
-	cmd := exec.Command(compose.BinName(), append([]string{"compose"}, args...)...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, compose.BinName(), append([]string{"compose"}, args...)...) //nolint:gosec
+	bindCancel(cmd)
 	combined := make(map[string]string, len(compose.ProcessEnv)+len(envVars))
 	maps.Copy(combined, compose.ProcessEnv)
 	maps.Copy(combined, envVars)

@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -22,17 +23,17 @@ func (confirmBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("builtin: confirm(message=%q)", msg)
 }
 
-func (confirmBuiltin) Run(with map[string]any, ctx ExecContext) error {
-	if ctx.SkipConfirm {
+func (confirmBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
+	if ectx.SkipConfirm {
 		return nil
 	}
 	msg := getStringParam(with, "message", "Are you sure?")
 	okMsg := getStringParam(with, "ok_msg", "Continuing")
 	stopMsg := getStringParam(with, "stop_msg", "Aborted")
 
-	// Injected confirmation callback (e.g. in tests); suppress ctx.Output writes.
-	if ctx.ConfirmFunc != nil {
-		confirmed, err := ctx.ConfirmFunc(msg, okMsg, stopMsg)
+	// Injected confirmation callback (e.g. in tests); suppress ectx.Output writes.
+	if ectx.ConfirmFunc != nil {
+		confirmed, err := ectx.ConfirmFunc(msg, okMsg, stopMsg)
 		if err != nil {
 			return err
 		}
@@ -42,7 +43,7 @@ func (confirmBuiltin) Run(with map[string]any, ctx ExecContext) error {
 		return nil
 	}
 
-	stdin := ctx.Stdin
+	stdin := ectx.Stdin
 	if stdin == nil {
 		stdin = os.Stdin
 	}
@@ -52,24 +53,24 @@ func (confirmBuiltin) Run(with map[string]any, ctx ExecContext) error {
 		confirmed, err := runConfirm(msg, okMsg, stopMsg)
 		if err != nil {
 			if errors.Is(err, ui.ErrCancelled) {
-				ctx.Output.Error(stopMsg)
+				ectx.Output.Error(stopMsg)
 				return fmt.Errorf("aborted by user")
 			}
 			return err
 		}
 		if !confirmed {
-			ctx.Output.Error(stopMsg)
+			ectx.Output.Error(stopMsg)
 			return fmt.Errorf("aborted by user")
 		}
-		ctx.Output.Success(okMsg)
+		ectx.Output.Success(okMsg)
 		return nil
 	}
 
 	// Non-TTY fallback: plain stdin Y/n.
-	if ctx.Output.Confirm(msg, stdin) {
-		ctx.Output.Success(okMsg)
+	if ectx.Output.Confirm(msg, stdin) {
+		ectx.Output.Success(okMsg)
 		return nil
 	}
-	ctx.Output.Error(stopMsg)
+	ectx.Output.Error(stopMsg)
 	return fmt.Errorf("aborted by user")
 }

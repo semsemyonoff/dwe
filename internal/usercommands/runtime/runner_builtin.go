@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -16,13 +17,13 @@ import (
 type BuiltinRunner struct{}
 
 // Run dispatches the builtin and surfaces any validation or execution error.
-func (r *BuiltinRunner) Run(ctx RunContext) error {
-	name := ctx.Cmd.Cmd
+func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
+	name := rc.Cmd.Cmd
 	if name == "" {
 		return fmt.Errorf("builtin: cmd (builtin name) is empty")
 	}
 
-	with, err := renderBuiltinWith(ctx.Cmd.With, ctx.Render)
+	with, err := renderBuiltinWith(rc.Cmd.With, rc.Render)
 	if err != nil {
 		return fmt.Errorf("builtin %q: render with: %w", name, err)
 	}
@@ -31,19 +32,19 @@ func (r *BuiltinRunner) Run(ctx RunContext) error {
 		return fmt.Errorf("builtin %q: %w", name, err)
 	}
 
-	stdin := stdinOrOS(ctx)
-	if rc, ok := stdin.(*os.File); ok {
-		stdin = rc
+	stdin := stdinOrOS(rc)
+	if f, ok := stdin.(*os.File); ok {
+		stdin = f
 	}
 
 	execCtx := builtin.ExecContext{
-		Config:      ctx.Config,
-		ProjectRoot: ctx.ProjectRoot,
-		Output:      render.NewWriter(stdout(ctx)),
+		Config:      rc.Config,
+		ProjectRoot: rc.ProjectRoot,
+		Output:      render.NewWriter(stdout(rc)),
 		Stdin:       stdin,
-		SkipConfirm: ctx.SkipConfirm,
+		SkipConfirm: rc.SkipConfirm,
 	}
-	return builtin.Run(name, with, execCtx)
+	return builtin.Run(ctx, name, with, execCtx)
 }
 
 // renderBuiltinWith walks the with map and renders any string values via the

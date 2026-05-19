@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -25,7 +26,7 @@ func TestRunCommand_Confirmation_NonTTY_YInputRunsCommand(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := RunCommand(RunContext{
+	err := RunCommand(context.Background(), RunContext{
 		Cmd:    cmd,
 		Render: &tpl.RenderContext{},
 		Stdout: &out,
@@ -56,7 +57,7 @@ func TestRunCommand_Confirmation_NonTTY_NInputAbortsCommand(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := RunCommand(RunContext{
+	err := RunCommand(context.Background(), RunContext{
 		Cmd:    cmd,
 		Render: &tpl.RenderContext{},
 		Stdout: &out,
@@ -86,7 +87,7 @@ func TestRunCommand_Confirmation_DefaultText(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	_ = RunCommand(RunContext{
+	_ = RunCommand(context.Background(), RunContext{
 		Cmd:    cmd,
 		Render: &tpl.RenderContext{},
 		Stdout: &out,
@@ -122,7 +123,7 @@ func TestRunCommand_Confirmation_TTYUsesCustomText(t *testing.T) {
 		Cmd:              "true",
 	}
 
-	err := RunCommand(RunContext{
+	err := RunCommand(context.Background(), RunContext{
 		Cmd:    cmd,
 		Params: map[string]any{"task": "cleanup"},
 		Render: &tpl.RenderContext{Params: map[string]any{"task": "cleanup"}},
@@ -158,7 +159,7 @@ func TestRunCommand_Confirmation_SkipConfirmSkipsPrompt(t *testing.T) {
 		Cmd:          `printf 'ran\n' >> ` + logFile,
 	}
 
-	err := RunCommand(RunContext{
+	err := RunCommand(context.Background(), RunContext{
 		Cmd:         cmd,
 		Render:      &tpl.RenderContext{},
 		Stdin:       bytes.NewBufferString(""), // Empty stdin; would block if prompt tried to read

@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bytes"
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -75,7 +76,7 @@ func TestRun_UnknownBuiltin(t *testing.T) {
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
-	err := Run("nonexistent_builtin", nil, ctx)
+	err := Run(context.Background(), "nonexistent_builtin", nil, ctx)
 	if err == nil {
 		t.Fatal("expected error for unknown builtin")
 	}

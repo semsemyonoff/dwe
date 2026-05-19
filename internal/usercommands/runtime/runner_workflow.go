@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -24,36 +25,36 @@ import (
 // Private commands may be referenced from workflow steps.
 type WorkflowRunner struct{}
 
-// Run executes the workflow described by ctx.
-func (r *WorkflowRunner) Run(ctx RunContext) error {
-	if ctx.Registry == nil {
+// Run executes the workflow described by rc.
+func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
+	if rc.Registry == nil {
 		return fmt.Errorf("workflow runner: registry is required but not set in RunContext")
 	}
 
-	for i, step := range ctx.Cmd.Steps {
+	for i, step := range rc.Cmd.Steps {
 		if step.When != "" {
-			ok, err := tpl.EvalCommandCondition(step.When, ctx.Render, ctx.ProjectRoot)
+			ok, err := tpl.EvalCommandCondition(step.When, rc.Render, rc.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("workflow %q step[%d]: %w", ctx.Cmd.ID, i, err)
+				return fmt.Errorf("workflow %q step[%d]: %w", rc.Cmd.ID, i, err)
 			}
 			if !ok {
-				_, _ = fmt.Fprintf(stderr(ctx), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
-					ctx.Cmd.ID, i, step.When)
+				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
+					rc.Cmd.ID, i, step.When)
 				continue
 			}
 		}
 
 		if step.Confirm != "" {
-			if err := r.runConfirmStep(ctx, step.Confirm); err != nil {
-				return fmt.Errorf("workflow %q step[%d] confirm: %w", ctx.Cmd.ID, i, err)
+			if err := r.runConfirmStep(rc, step.Confirm); err != nil {
+				return fmt.Errorf("workflow %q step[%d] confirm: %w", rc.Cmd.ID, i, err)
 			}
 			continue
 		}
 
-		if err := r.runCommandStep(ctx, i, step); err != nil {
+		if err := r.runCommandStep(ctx, rc, i, step); err != nil {
 			if step.ContinueOnError {
-				_, _ = fmt.Fprintf(stderr(ctx), "  ⚠ workflow %q step[%d] %q: continue_on_error: %v\n",
-					ctx.Cmd.ID, i, step.Command, err)
+				_, _ = fmt.Fprintf(stderr(rc), "  ⚠ workflow %q step[%d] %q: continue_on_error: %v\n",
+					rc.Cmd.ID, i, step.Command, err)
 				continue
 			}
 			return err
@@ -95,31 +96,31 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 }
 
 // runCommandStep resolves and executes a single command-reference step.
-func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step model.WorkflowStep) error {
-	cmd, err := ctx.Registry.Get(step.Command)
+func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, stepIdx int, step model.WorkflowStep) error {
+	cmd, err := rc.Registry.Get(step.Command)
 	if err != nil {
-		return fmt.Errorf("workflow %q step[%d]: %w", ctx.Cmd.ID, stepIdx, err)
+		return fmt.Errorf("workflow %q step[%d]: %w", rc.Cmd.ID, stepIdx, err)
 	}
 
 	provided := make(map[string]string, len(step.With))
 	for k, v := range step.With {
-		rendered, err := tpl.RenderCommand(v, ctx.Render)
+		rendered, err := tpl.RenderCommand(v, rc.Render)
 		if err != nil {
-			return fmt.Errorf("workflow %q step[%d]: render with[%q]: %w", ctx.Cmd.ID, stepIdx, k, err)
+			return fmt.Errorf("workflow %q step[%d]: render with[%q]: %w", rc.Cmd.ID, stepIdx, k, err)
 		}
 		provided[k] = rendered
 	}
 
-	resolvedParams, err := resolve.Params(cmd.Params, provided, ctx.Config)
+	resolvedParams, err := resolve.Params(cmd.Params, provided, rc.Config)
 	if err != nil {
 		return fmt.Errorf("workflow %q step[%d] %q: resolve params: %w",
-			ctx.Cmd.ID, stepIdx, step.Command, err)
+			rc.Cmd.ID, stepIdx, step.Command, err)
 	}
 
-	resolvedCtx, err := resolve.Context(cmd.Context, ctx.Config)
+	resolvedCtx, err := resolve.Context(cmd.Context, rc.Config)
 	if err != nil {
 		return fmt.Errorf("workflow %q step[%d] %q: resolve context: %w",
-			ctx.Cmd.ID, stepIdx, step.Command, err)
+			rc.Cmd.ID, stepIdx, step.Command, err)
 	}
 
 	renderCtx := &tpl.RenderContext{
@@ -127,8 +128,8 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step model.
 		Context: resolvedCtx,
 		Host:    tpl.CurrentHostInfo(),
 	}
-	if ctx.Config != nil {
-		renderCtx.Raw = ctx.Config.Raw
+	if rc.Config != nil {
+		renderCtx.Raw = rc.Config.Raw
 	}
 
 	subCtx := RunContext{
@@ -136,19 +137,19 @@ func (r *WorkflowRunner) runCommandStep(ctx RunContext, stepIdx int, step model.
 		Params:         resolvedParams,
 		Context:        resolvedCtx,
 		Render:         renderCtx,
-		Config:         ctx.Config,
-		DockerConfig:   ctx.DockerConfig,
-		Registry:       ctx.Registry,
-		ProjectRoot:    ctx.ProjectRoot,
-		Stdout:         ctx.Stdout,
-		Stderr:         ctx.Stderr,
-		Stdin:          ctx.Stdin,
-		SkipConfirm:    ctx.SkipConfirm,
-		NonInteractive: ctx.NonInteractive,
+		Config:         rc.Config,
+		DockerConfig:   rc.DockerConfig,
+		Registry:       rc.Registry,
+		ProjectRoot:    rc.ProjectRoot,
+		Stdout:         rc.Stdout,
+		Stderr:         rc.Stderr,
+		Stdin:          rc.Stdin,
+		SkipConfirm:    rc.SkipConfirm,
+		NonInteractive: rc.NonInteractive,
 	}
 
-	if err := RunCommand(subCtx); err != nil {
-		return fmt.Errorf("workflow %q step[%d] %q: %w", ctx.Cmd.ID, stepIdx, step.Command, err)
+	if err := RunCommand(ctx, subCtx); err != nil {
+		return fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, stepIdx, step.Command, err)
 	}
 
 	return nil

@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -169,7 +170,7 @@ func TestServiceDirsEnsureRun_SkipMode(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = cfg
 
-	if err := b.Run(map[string]any{"service": "main"}, ctx); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx); err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 
@@ -203,7 +204,7 @@ func TestServiceDirsEnsureRun_SkipExisting(t *testing.T) {
 	ctx.Config = cfg
 
 	// Should succeed with no error (dirs exist, skip mode).
-	if err := b.Run(map[string]any{"service": "main"}, ctx); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx); err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 }
@@ -223,7 +224,7 @@ func TestServiceDirsEnsureRun_ErrorMode_ExistingDir(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = cfg
 
-	err := b.Run(map[string]any{"service": "main", "mode": "error"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main", "mode": "error"}, ctx)
 	if err == nil {
 		t.Fatal("Run() expected error for existing dir in error mode, got nil")
 	}
@@ -242,7 +243,7 @@ func TestServiceDirsEnsureRun_ErrorMode_CreatesMissingDirs(t *testing.T) {
 	ctx.Config = cfg
 
 	// Error mode creates missing dirs without error.
-	if err := b.Run(map[string]any{"service": "main", "mode": "error"}, ctx); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"service": "main", "mode": "error"}, ctx); err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 	for _, d := range []string{"src", "configs"} {
@@ -273,7 +274,7 @@ func TestServiceDirsEnsureRun_RecreateMode(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = cfg
 
-	if err := b.Run(map[string]any{"service": "main", "mode": "recreate"}, ctx); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"service": "main", "mode": "recreate"}, ctx); err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 
@@ -305,7 +306,7 @@ func TestServiceDirsEnsureRun_RecreateMode_MandatoryDirsSafe(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = cfg
 
-	if err := b.Run(map[string]any{"service": "main", "mode": "recreate"}, ctx); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"service": "main", "mode": "recreate"}, ctx); err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 
@@ -323,7 +324,7 @@ func TestServiceDirsEnsureRun_UnknownService(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = makeCfgWithService("main", "services/main", nil)
 
-	err := b.Run(map[string]any{"service": "other"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "other"}, ctx)
 	if err == nil {
 		t.Fatal("expected error for unknown service, got nil")
 	}
@@ -345,7 +346,7 @@ func TestServiceDirsEnsureRun_NonDirConflict(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = cfg
 
-	err := b.Run(map[string]any{"service": "main"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error when path exists as file, got nil")
 	}
@@ -359,7 +360,7 @@ func TestServiceDirsEnsureRun_AbsolutePathInDirs(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = cfg
 
-	err := b.Run(map[string]any{"service": "main"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error for absolute path in dirs, got nil")
 	}
@@ -373,7 +374,7 @@ func TestServiceDirsEnsureRun_PathTraversalInDirs(t *testing.T) {
 	ctx := makeExecCtx(t, root)
 	ctx.Config = cfg
 
-	err := b.Run(map[string]any{"service": "main"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error for path traversal in dirs, got nil")
 	}
@@ -457,7 +458,7 @@ func TestServiceDirsEnsure_EmptyServiceDir(t *testing.T) {
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
 	b := serviceDirsEnsureBuiltin{}
-	err := b.Run(map[string]any{"service": "main"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error when service dir is empty")
 	}

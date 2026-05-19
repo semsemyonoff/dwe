@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,8 +20,8 @@ func (dockerRemoveProjectVolumesBuiltin) Describe(with map[string]any) string {
 	return "builtin: docker_remove_project_volumes()"
 }
 
-func (dockerRemoveProjectVolumesBuiltin) Run(with map[string]any, ctx ExecContext) error {
-	dockerCfg, err := config.LoadDockerConfig(ctx.ProjectRoot, ctx.Config)
+func (dockerRemoveProjectVolumesBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
+	dockerCfg, err := config.LoadDockerConfig(ectx.ProjectRoot, ectx.Config)
 	if err != nil {
 		return fmt.Errorf("loading docker config: %w", err)
 	}
@@ -29,10 +30,10 @@ func (dockerRemoveProjectVolumesBuiltin) Run(with map[string]any, ctx ExecContex
 		return fmt.Errorf("could not resolve project name — cannot remove volumes safely")
 	}
 
-	dockerBin := config.DockerBin(ctx.Config)
+	dockerBin := config.DockerBin(ectx.Config)
 
 	// List all volumes.
-	out, err := exec.Command(dockerBin, "volume", "ls", "-q").Output() //nolint:gosec
+	out, err := exec.CommandContext(ctx, dockerBin, "volume", "ls", "-q").Output() //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("listing docker volumes: %w", err)
 	}
@@ -47,13 +48,17 @@ func (dockerRemoveProjectVolumesBuiltin) Run(with map[string]any, ctx ExecContex
 	}
 
 	if len(toRemove) == 0 {
-		ctx.Output.Info(fmt.Sprintf("no volumes found with prefix %q", prefix))
+		ectx.Output.Info(fmt.Sprintf("no volumes found with prefix %q", prefix))
 		return nil
 	}
 
-	ctx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	ectx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
 	args := append([]string{"volume", "rm"}, toRemove...)
-	cmd := exec.Command(dockerBin, args...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

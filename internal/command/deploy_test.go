@@ -1,6 +1,7 @@
 package command
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := pipeline.ExecStep(tc.step, t.TempDir(), &config.DevboxConfig{}, nil, nil, false)
+			err := pipeline.ExecStep(context.Background(), tc.step, t.TempDir(), &config.DevboxConfig{}, nil, nil, false)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}

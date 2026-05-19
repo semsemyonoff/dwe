@@ -24,6 +24,7 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -60,8 +61,9 @@ type Builtin interface {
 	Validate(with map[string]any) error
 	// Describe returns a short human-readable description used in plan output.
 	Describe(with map[string]any) string
-	// Run executes the builtin action.
-	Run(with map[string]any, ctx ExecContext) error
+	// Run executes the builtin action. ctx propagates cancellation; long-running
+	// loops (e.g. health polling) should select on ctx.Done() to abort promptly.
+	Run(ctx context.Context, with map[string]any, ectx ExecContext) error
 }
 
 var registry = map[string]Builtin{
@@ -101,12 +103,13 @@ func Describe(name string, with map[string]any) string {
 }
 
 // Run executes the named builtin with the given parameters and context.
-func Run(name string, with map[string]any, ctx ExecContext) error {
+// ctx propagates cancellation to long-running builtins.
+func Run(ctx context.Context, name string, with map[string]any, ectx ExecContext) error {
 	b, ok := registry[name]
 	if !ok {
 		return fmt.Errorf("unknown builtin %q", name)
 	}
-	return b.Run(with, ctx)
+	return b.Run(ctx, with, ectx)
 }
 
 func knownNames() []string {

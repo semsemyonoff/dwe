@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"testing"
@@ -30,7 +31,7 @@ func TestConfirmBuiltin_SkipConfirm(t *testing.T) {
 	})
 	ctx.SkipConfirm = true
 
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err != nil {
 		t.Errorf("expected nil error with SkipConfirm=true, got %v", err)
 	}
@@ -44,7 +45,7 @@ func TestConfirmBuiltin_ConfirmFunc_Confirmed(t *testing.T) {
 	ctx := newTestConfirmCtx(func(msg, okMsg, stopMsg string) (bool, error) {
 		return true, nil
 	})
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err != nil {
 		t.Errorf("expected nil error when confirmed=true, got %v", err)
 	}
@@ -55,7 +56,7 @@ func TestConfirmBuiltin_ConfirmFunc_Denied(t *testing.T) {
 	ctx := newTestConfirmCtx(func(msg, okMsg, stopMsg string) (bool, error) {
 		return false, nil
 	})
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err == nil {
 		t.Fatal("expected error when confirmed=false")
 	}
@@ -70,7 +71,7 @@ func TestConfirmBuiltin_ConfirmFunc_Error(t *testing.T) {
 	ctx := newTestConfirmCtx(func(msg, okMsg, stopMsg string) (bool, error) {
 		return false, sentinel
 	})
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if !errors.Is(err, sentinel) {
 		t.Errorf("expected sentinel error, got %v", err)
 	}
@@ -91,7 +92,7 @@ func TestConfirmBuiltin_ConfirmFunc_ReceivesParams(t *testing.T) {
 		"ok_msg":   "Resetting",
 		"stop_msg": "Cancelled",
 	}
-	_ = confirmBuiltin{}.Run(with, ctx)
+	_ = confirmBuiltin{}.Run(context.Background(), with, ctx)
 
 	if gotMsg != "This will reset the database." {
 		t.Errorf("expected message %q, got %q", "This will reset the database.", gotMsg)
@@ -111,7 +112,7 @@ func TestConfirmBuiltin_ConfirmFunc_DefaultParams(t *testing.T) {
 		gotMsg = msg
 		return true, nil
 	})
-	_ = confirmBuiltin{}.Run(nil, ctx)
+	_ = confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if gotMsg != "Are you sure?" {
 		t.Errorf("expected default message %q, got %q", "Are you sure?", gotMsg)
 	}
@@ -126,7 +127,7 @@ func TestConfirmBuiltin_NoConfirmFunc_SkipsWhenSkipConfirmSet(t *testing.T) {
 		SkipConfirm: true,
 		ConfirmFunc: nil,
 	}
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err != nil {
 		t.Errorf("expected nil with SkipConfirm=true and no ConfirmFunc, got %v", err)
 	}
@@ -157,7 +158,7 @@ func TestConfirmBuiltin_TTY_UsesRunConfirmWrapper(t *testing.T) {
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString(""), // non-nil, but IsInteractiveFn is faked
 	}
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -187,7 +188,7 @@ func TestConfirmBuiltin_TTY_ErrCancelled(t *testing.T) {
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString(""),
 	}
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err == nil || err.Error() != "aborted by user" {
 		t.Errorf("expected 'aborted by user' for ErrCancelled, got %v", err)
 	}
@@ -214,7 +215,7 @@ func TestConfirmBuiltin_TTY_Denied(t *testing.T) {
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString(""),
 	}
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err == nil || err.Error() != "aborted by user" {
 		t.Errorf("expected 'aborted by user', got %v", err)
 	}
@@ -234,7 +235,7 @@ func TestConfirmBuiltin_NonTTY_StdinY(t *testing.T) {
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString("y\n"),
 	}
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err != nil {
 		t.Errorf("expected nil for y input, got %v", err)
 	}
@@ -254,7 +255,7 @@ func TestConfirmBuiltin_NonTTY_StdinN(t *testing.T) {
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString("n\n"),
 	}
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err == nil || err.Error() != "aborted by user" {
 		t.Errorf("expected 'aborted by user' for n input, got %v", err)
 	}
@@ -272,7 +273,7 @@ func TestConfirmBuiltin_PipedStdin_RoutesToFallback(t *testing.T) {
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString("y\n"),
 	}
-	err := confirmBuiltin{}.Run(nil, ctx)
+	err := confirmBuiltin{}.Run(context.Background(), nil, ctx)
 	if err != nil {
 		t.Errorf("expected nil for piped y input, got %v", err)
 	}

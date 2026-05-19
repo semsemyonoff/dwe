@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ func captureOutput(t *testing.T, ctx RunContext) (string, string, error) {
 	ctx.Stdout = &outBuf
 	ctx.Stderr = &errBuf
 	r := &ScriptRunner{}
-	err := r.Run(ctx)
+	err := r.Run(context.Background(), ctx)
 	return outBuf.String(), errBuf.String(), err
 }
 
@@ -512,7 +513,7 @@ func TestScriptRunner_FilesWrite_EnvInjection(t *testing.T) {
 		Stderr:      &errBuf,
 	}
 
-	err := RunCommand(ctx)
+	err := RunCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -592,7 +593,7 @@ fi
 		Stderr:      &errBuf,
 	}
 
-	err := RunCommand(ctx)
+	err := RunCommand(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -640,7 +641,7 @@ exit 1
 		Stderr:      &errBuf,
 	}
 
-	err := RunCommand(ctx)
+	err := RunCommand(context.Background(), ctx)
 	if err == nil {
 		t.Fatal("expected error from failing script")
 	}
@@ -661,7 +662,7 @@ func TestScriptRunner_ExitErrorIncludesScriptPath(t *testing.T) {
 		Script: &ScriptDef{Path: scriptPath, Shell: "sh"},
 	}
 
-	err := (&ScriptRunner{}).Run(RunContext{
+	err := (&ScriptRunner{}).Run(context.Background(), RunContext{
 		Cmd:         cmd,
 		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
 		ProjectRoot: dir,
@@ -719,7 +720,7 @@ func TestScriptRunner_FilesOnError_PreservesExisting(t *testing.T) {
 		Stderr:      &errBuf,
 	}
 
-	err := RunCommand(ctx)
+	err := RunCommand(context.Background(), ctx)
 	if err == nil {
 		t.Fatal("expected error from failing script")
 	}

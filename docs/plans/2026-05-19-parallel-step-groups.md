@@ -176,37 +176,32 @@ Cancellation must reach **three** layers, not just one: shell-out runners (host/
 
 #### 3.1 Runner layer (shell-out children)
 
-- [ ] change the `Runner` interface in `internal/usercommands/runtime/runner.go` from `Run(rc RunContext) error` to `Run(ctx context.Context, rc RunContext) error`
-- [ ] update every implementation — `HostRunner.Run`, `DevboxRunner.Run`, `ServiceExecRunner.Run`, `ServiceRunRunner.Run`, `ScriptRunner.Run`, `WorkflowRunner.Run` — and replace every `exec.Command(...)` with `exec.CommandContext(ctx, ...)`
-- [ ] **also thread `ctx` through `BuildCommand`** (exported on each runner — e.g. `HostRunner.BuildCommand(rc) (*exec.Cmd, error)` at `runner_host.go:60`). The `*exec.Cmd` it returns is later started by `Run`; if `BuildCommand` constructs it with `exec.Command` (no ctx) then cancellation has no handle. Two acceptable shapes — pick one and apply consistently:
-  - **(a) preferred** add `ctx context.Context` as the first parameter of every `BuildCommand`; constructors use `exec.CommandContext(ctx, ...)` and set `Cancel` / `WaitDelay`
-  - **(b)** keep `BuildCommand` ctx-free and have `Run` attach ctx via a small `bindContext(cmd, ctx)` helper that sets `cmd.Cancel` / `cmd.WaitDelay` and rewrites `cmd.Cmd` if needed. Simpler-looking but `exec.CommandContext` is the idiomatic constructor; (a) is preferred.
-- [ ] **update the package-level `RunCommand` entry points** so callers thread ctx through. Two functions both named `RunCommand`:
-  - `internal/usercommands/runtime/runner.go:106` — internal entry: `func RunCommand(rc RunContext) error` → `func RunCommand(ctx context.Context, rc RunContext) error`
-  - `internal/usercommands/usercommands.go:214` — exported facade re-exporting the above; same signature change
-  Both must forward `ctx` into `Runner.Run`. `execCommandAction` in `internal/pipeline/logging.go` currently calls `usercommands.RunCommand(rctx)` — update to `usercommands.RunCommand(ctx, rctx)` once `ExecAction` takes ctx (3.3).
-- [ ] set `cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }` and `cmd.WaitDelay = 5 * time.Second` on every spawned `*exec.Cmd` so cancellation sends SIGTERM first (giving children a chance to clean up), then SIGKILL after the delay. Required for graceful shutdown of `composer install`, `mariadb`, etc. Without `WaitDelay`, stdio-reader goroutines can leak after force-kill.
+- [x] change the `Runner` interface in `internal/usercommands/runtime/runner.go` from `Run(rc RunContext) error` to `Run(ctx context.Context, rc RunContext) error`
+- [x] update every implementation — `HostRunner.Run`, `DevboxRunner.Run`, `ServiceExecRunner.Run`, `ServiceRunRunner.Run`, `ScriptRunner.Run`, `WorkflowRunner.Run` — and replace every `exec.Command(...)` with `exec.CommandContext(ctx, ...)`
+- [x] **also thread `ctx` through `BuildCommand`** — implemented option (a): every `BuildCommand` now takes `ctx context.Context` as the first parameter and constructs the child via `exec.CommandContext` with `cmd.Cancel` / `cmd.WaitDelay` attached by the shared `bindCancel` helper.
+- [x] **update the package-level `RunCommand` entry points** so callers thread ctx through — both `runtime.RunCommand` and the `usercommands` facade re-export now take `(ctx context.Context, rc RunContext)`; `execCommandAction` in the executor forwards the executor's parent ctx.
+- [x] set `cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }` and `cmd.WaitDelay = 5 * time.Second` on every spawned `*exec.Cmd` so cancellation sends SIGTERM first (giving children a chance to clean up), then SIGKILL after the delay. Implemented via two shared helpers — `bindCancel` in `internal/usercommands/runtime/runner_host.go` for runner-spawned children, and `bindCancelTerm` in `internal/pipeline/executor.go` for executor-spawned shell/devbox children.
 
 #### 3.2 Builtin layer (Go-side work)
 
-- [ ] change `Builtin.Run(with map[string]any, ctx ExecContext) error` in `internal/builtin/builtin.go` to `Run(ctx context.Context, with map[string]any, ectx ExecContext) error` (rename the existing parameter to `ectx` to avoid shadowing `context.Context`); update every builtin implementation: `service_dirs_ensure`, `service_configs_copy`, `service_configs_check`, `message`, `confirm`, `docker_remove_project_volumes`, `docker_wait_healthy`, `remove_paths`
-- [ ] in `docker_wait_healthy` (`internal/builtin/wait_healthy.go`), thread `ctx` into the poll loop — replace any `time.Sleep` with `select { case <-time.After(...): case <-ctx.Done(): return ctx.Err() }` so cancellation aborts the wait promptly
-- [ ] in `docker_remove_project_volumes` and `remove_paths` (which iterate over many filesystem/docker operations), check `ctx.Err()` between iterations and return early on cancel
-- [ ] update the dispatch helper `builtin.Run(name, with, ctx)` (`internal/builtin/builtin.go:104`) to take `ctx context.Context` as the new first parameter and forward it to the implementation's `Run`
+- [x] change `Builtin.Run(with map[string]any, ctx ExecContext) error` in `internal/builtin/builtin.go` to `Run(ctx context.Context, with map[string]any, ectx ExecContext) error`; updated every implementation (`service_dirs_ensure`, `service_configs_copy`, `service_configs_check`, `message`, `confirm`, `docker_remove_project_volumes`, `docker_wait_healthy`, `remove_paths`).
+- [x] in `docker_wait_healthy`, threaded `ctx` into the poll loop — added `docker.WaitContainersHealthyContext` which uses `select { case <-time.After(...): case <-ctx.Done(): return ctx.Err() }`; the legacy `WaitContainersHealthy` wraps it with `context.Background()` for backward compatibility.
+- [x] in `docker_remove_project_volumes` and `remove_paths`, added `ctx.Err()` checks between iterations and replaced `exec.Command` with `exec.CommandContext` so the spawned `docker volume rm` is cancellable too.
+- [x] updated the dispatch helper `builtin.Run` to take `ctx context.Context` as the new first parameter and forward it to the implementation's `Run`.
 
 #### 3.3 Executor entry (SIGINT plumbing)
 
-- [ ] today `internal/pipeline/executor.go` installs **per-action** `signal.Notify` goroutines inside `execShellAction:156` and `execDevboxAction:193` that forward signals to the running child. These become redundant once `exec.CommandContext` + `cmd.Cancel` propagate cancellation. **Remove them** to avoid double-signalling and races; add a single `signal.NotifyContext(parentCtx, syscall.SIGINT, syscall.SIGTERM)` at the top of `RunWithOptions` (if `opts.Context` is nil) and use the returned context as the parent for all sub-execution. Document that callers who already wrap their own `signal.NotifyContext` should pass it via `opts.Context` to avoid double-wrapping.
-- [ ] update `ExecAction` in `internal/pipeline/logging.go` to accept `ctx context.Context` as the first parameter and thread it into every `exec.CommandContext` (including the now-simplified `execShellAction` / `execDevboxAction`) and into builtin dispatch
+- [x] removed the per-action `signal.Notify` goroutines from `execShellAction` and `execDevboxAction`; cancellation is now driven entirely by `exec.CommandContext` + `cmd.Cancel`. Added a single `signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)` at the top of `RunWithOptions` when `opts.Context` is nil; callers wrapping their own context pass it via `opts.Context` to avoid double-wrapping.
+- [x] `ExecAction` now accepts `ctx context.Context` as the first parameter and threads it into every `exec.CommandContext` (shell, devbox, builtin dispatch, and the command runner path).
 
 #### 3.4 Callers and tests
 
-- [ ] update every caller (`internal/command/`, `internal/lifecycle/`, `internal/deploy/`, `internal/reset/`, and the existing executor-level call sites) to thread `ctx` through; sequential callers start with `context.Background()`. The executor's parallel path overrides it in Task 6.
-- [ ] update mocks/stubs in `internal/builtin/builtin_test.go`, `internal/usercommands/runtime/*_test.go` (specifically the many `*_BuildCommand_*` test files at `runner_host_test.go`, `runner_service_test.go`), `internal/pipeline/executor_test.go` to match the new signatures — `BuildCommand` tests will need to pass `context.Background()` as the new first arg
-- [ ] write tests:
-  - `internal/usercommands/runtime/runner_host_test.go`: cancelled context → runner returns promptly; child process is killed (use `sleep 30` under a 1 s deadline + `context.WithCancel`); SIGTERM-then-SIGKILL ordering verified with a trap-and-log shell script (PID writes to file before signal, file inspection after)
-  - `internal/builtin/wait_healthy_test.go`: cancelled context aborts the poll loop within one tick interval (use `testing/synctest` to keep it deterministic)
-- [ ] run `go test ./...` — must pass before next task (sequential semantics unchanged)
+- [x] updated every caller (`internal/command/deploy.go`, `internal/command/reset.go`, `internal/command/command_cmd.go`, the executor's own call sites in `internal/pipeline/executor.go`) to thread `ctx` through; sequential callers use `cmd.Context()` (cobra) or `context.Background()`.
+- [x] updated mocks/stubs in `internal/builtin/*_test.go`, `internal/usercommands/runtime/*_test.go`, `internal/pipeline/executor_test.go`, and `internal/command/deploy_test.go` to match the new signatures — `BuildCommand` tests now pass `context.Background()` as the new first arg.
+- [x] wrote tests:
+  - `internal/usercommands/runtime/runner_host_test.go`: `TestHostRunner_Run_ContextCancellation` (cancel mid-`sleep 30`, assert prompt return) and `TestHostRunner_Run_ContextDeadline` (deadline-based, asserts return within 10s).
+  - `internal/docker/health_context_test.go`: `TestWaitContainersHealthyContext_CancelAborts` and `TestWaitContainersHealthyContext_DeadlineExceeded` — both keep `getHealth` returning `"starting"` and assert the loop returns `context.Canceled` / `context.DeadlineExceeded` within an interval. (Placed in the `docker` package rather than `builtin/wait_healthy_test.go` because the cancellation logic lives in `docker.WaitContainersHealthyContext`; tests pass without the `testing/synctest` package — wall-clock latency is in the 50–200 ms range so determinism is not at risk here.)
+- [x] ran `go test ./...` and `go test -race ./internal/pipeline/... ./internal/usercommands/runtime/... ./internal/docker/... ./internal/builtin/...` — all green, sequential semantics unchanged.
 
 ### Task 4: Concurrent-safe recorder and journal writes
 

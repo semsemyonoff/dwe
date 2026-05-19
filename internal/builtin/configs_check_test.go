@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,7 +182,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 				Output:      nil,
 			}
 
-			err := builtin.Run(map[string]any{"service": tt.service}, ctx)
+			err := builtin.Run(context.Background(), map[string]any{"service": tt.service}, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Run() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -221,7 +222,7 @@ func TestServiceConfigsCheckBuiltin_Run_OutputWriterLogsErrors(t *testing.T) {
 		Output:      w,
 	}
 
-	err := b.Run(map[string]any{"service": "main"}, ctx)
+	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error for missing config files")
 	}

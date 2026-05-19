@@ -2,6 +2,7 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -16,9 +17,11 @@ import (
 )
 
 // Runner is the interface implemented by each command type executor.
-// Run carries out the command described by ctx and reports any error.
+// Run carries out the command described by rc and reports any error. The
+// supplied context.Context controls cancellation of any child processes
+// spawned by the runner (via exec.CommandContext).
 type Runner interface {
-	Run(ctx RunContext) error
+	Run(ctx context.Context, rc RunContext) error
 }
 
 // RunContext holds all data needed to execute a single command invocation.
@@ -102,55 +105,56 @@ func NewRunner(cmd *model.CommandDef) (Runner, error) {
 
 // RunCommand executes a command definition, applying command-level pre-run
 // behavior such as file preparation and confirmation prompts before dispatching
-// to the concrete runner for the command type.
-func RunCommand(ctx RunContext) error {
-	if ctx.Render == nil {
-		ctx.Render = &tpl.RenderContext{}
+// to the concrete runner for the command type. The supplied ctx is threaded
+// through to the runner so child processes can be cancelled.
+func RunCommand(ctx context.Context, rc RunContext) error {
+	if rc.Render == nil {
+		rc.Render = &tpl.RenderContext{}
 	}
 
-	if ctx.Render.Raw == nil && ctx.Config != nil {
-		ctx.Render.Raw = ctx.Config.Raw
+	if rc.Render.Raw == nil && rc.Config != nil {
+		rc.Render.Raw = rc.Config.Raw
 	}
 
-	if ctx.Render.Params == nil {
-		ctx.Render.Params = make(map[string]any)
+	if rc.Render.Params == nil {
+		rc.Render.Params = make(map[string]any)
 	}
-	if ctx.Render.Context == nil {
-		ctx.Render.Context = make(map[string]any)
+	if rc.Render.Context == nil {
+		rc.Render.Context = make(map[string]any)
 	}
 
-	paths, err := ComputeFilePaths(ctx)
+	paths, err := ComputeFilePaths(rc)
 	if err != nil {
 		return err
 	}
 
-	ctx.Render.Files = paths
+	rc.Render.Files = paths
 
-	if err := ConfirmCommand(ctx); err != nil {
+	if err := ConfirmCommand(rc); err != nil {
 		return err
 	}
 
-	cleanups, err := PrepareFileEffects(ctx, paths)
+	cleanups, err := PrepareFileEffects(rc, paths)
 	if err != nil {
 		return err
 	}
 
-	runner, err := NewRunner(ctx.Cmd)
+	runner, err := NewRunner(rc.Cmd)
 	if err != nil {
 		return err
 	}
 
-	if err := runner.Run(ctx); err != nil {
+	if err := runner.Run(ctx, rc); err != nil {
 		for _, cleanup := range slices.Backward(cleanups) {
 			cleanup()
 		}
-		if msgErr := emitCommandMessage(ctx, ctx.Cmd.Messages.Error, false); msgErr != nil {
+		if msgErr := emitCommandMessage(rc, rc.Cmd.Messages.Error, false); msgErr != nil {
 			return fmt.Errorf("%w; render error message: %v", err, msgErr)
 		}
 		return err
 	}
 
-	if err := emitCommandMessage(ctx, ctx.Cmd.Messages.Success, true); err != nil {
+	if err := emitCommandMessage(rc, rc.Cmd.Messages.Success, true); err != nil {
 		return err
 	}
 	return nil

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestRunCommand_Messages_NoMessagesNoExtraOutput(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	err := RunCommand(RunContext{
+	err := RunCommand(context.Background(), RunContext{
 		Cmd:    cmd,
 		Render: &tpl.RenderContext{},
 		Stdout: &out,
@@ -45,7 +46,7 @@ func TestRunCommand_Messages_SuccessPrintedAfterSuccess(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	err := RunCommand(RunContext{
+	err := RunCommand(context.Background(), RunContext{
 		Cmd:    cmd,
 		Params: map[string]any{"name": "demo"},
 		Render: &tpl.RenderContext{Params: map[string]any{"name": "demo"}},
@@ -78,7 +79,7 @@ func TestRunCommand_Messages_ErrorPrintedAfterFailure(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	err := RunCommand(RunContext{
+	err := RunCommand(context.Background(), RunContext{
 		Cmd:    cmd,
 		Params: map[string]any{"name": "demo"},
 		Render: &tpl.RenderContext{Params: map[string]any{"name": "demo"}},
