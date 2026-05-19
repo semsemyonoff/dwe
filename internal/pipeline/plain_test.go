@@ -741,6 +741,25 @@ func TestPlainReporter_NonTTY_FinishGroup_PrintsCountsAndElapsed(t *testing.T) {
 	}
 }
 
+func TestPlainReporter_NonTTY_FinishGroup_CancelledSubStepsIncludedInSummary(t *testing.T) {
+	r, buf := newBufReporter()
+
+	// Three sub-steps: "a" finishes OK, "b" fails, "c" is cancelled (FailFast)
+	// and never receives a terminal event.
+	group := parallelGroup("dumps", "a", "b", "c")
+	r.StartGroup("init/dumps", group, []int{1, 2, 3}, 3)
+	r.FinishStep("init/a", config.DeployStep{Name: "a"}, 1, 3)
+	r.FailStep("init/b", config.DeployStep{Name: "b"}, 2, 3, errors.New("nope"))
+	// "c" receives no terminal event — simulates FailFast cancellation.
+	r.FinishGroup("init/dumps", config.DeployStep{Name: "dumps"}, false)
+
+	got := clean(buf.String())
+	want := "  ✗ Parallel group failed: init/dumps (1 ok, 1 failed, 0 skipped, 1 cancelled of 3, 0s)"
+	if !strings.Contains(got, want) {
+		t.Errorf("missing aggregate line %q; got:\n%s", want, got)
+	}
+}
+
 func TestPlainReporter_NonTTY_SubStepOutput_LazyEntryWhenStartGroupSkipped(t *testing.T) {
 	r, buf := newBufReporter()
 	// No StartGroup; defensive lazy creation must not panic.

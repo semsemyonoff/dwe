@@ -18,6 +18,13 @@ func deployHasFilesGateSteps(ctx validate.Context) bool {
 			if step.FilesGate != nil {
 				return true
 			}
+			if step.Parallel != nil {
+				for _, sub := range step.Parallel.Steps {
+					if sub.FilesGate != nil {
+						return true
+					}
+				}
+			}
 		}
 	}
 	if len(ctx.Cfg.Services) > 0 {
@@ -28,6 +35,13 @@ func deployHasFilesGateSteps(ctx validate.Context) bool {
 					for _, step := range phase.Steps {
 						if step.FilesGate != nil {
 							return true
+						}
+						if step.Parallel != nil {
+							for _, sub := range step.Parallel.Steps {
+								if sub.FilesGate != nil {
+									return true
+								}
+							}
 						}
 					}
 				}
@@ -74,27 +88,44 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 	// Iterate through all phases and steps in the deploy config
 	for phaseIdx, phase := range ctx.Cfg.Deploy.Phases {
 		for stepIdx, step := range phase.Steps {
-			if step.FilesGate == nil {
-				continue
+			if step.FilesGate != nil {
+				stepRef := filesgate.StepRef{
+					Type: step.Type,
+					Cmd:  step.Cmd,
+					With: step.With,
+				}
+				issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
+				for _, issue := range issues {
+					diags = append(diags, validate.Diagnostic{
+						Severity: validate.SeverityError,
+						Domain:   "config",
+						Target:   fmt.Sprintf("config.deploy.phases[%d].steps[%d].files-gate", phaseIdx, stepIdx),
+						File:     relPath(ctx.ProjectRoot, deployPath),
+						Message:  issue.Message,
+					})
+				}
 			}
-
-			// Construct the step reference
-			stepRef := filesgate.StepRef{
-				Type: step.Type,
-				Cmd:  step.Cmd,
-				With: step.With,
-			}
-
-			// Validate the files_gate directive
-			issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
-			for _, issue := range issues {
-				diags = append(diags, validate.Diagnostic{
-					Severity: validate.SeverityError,
-					Domain:   "config",
-					Target:   fmt.Sprintf("config.deploy.phases[%d].steps[%d].files-gate", phaseIdx, stepIdx),
-					File:     relPath(ctx.ProjectRoot, deployPath),
-					Message:  issue.Message,
-				})
+			if step.Parallel != nil {
+				for subIdx, sub := range step.Parallel.Steps {
+					if sub.FilesGate == nil {
+						continue
+					}
+					stepRef := filesgate.StepRef{
+						Type: sub.Type,
+						Cmd:  sub.Cmd,
+						With: sub.With,
+					}
+					issues := spec.Validate(ctx.Cfg, reg, stepRef, sub.FilesGate)
+					for _, issue := range issues {
+						diags = append(diags, validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Domain:   "config",
+							Target:   fmt.Sprintf("config.deploy.phases[%d].steps[%d].parallel.steps[%d].files-gate", phaseIdx, stepIdx, subIdx),
+							File:     relPath(ctx.ProjectRoot, deployPath),
+							Message:  issue.Message,
+						})
+					}
+				}
 			}
 		}
 	}
@@ -107,23 +138,44 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 				svcDeployPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy", svcName+".yml")
 				for phaseIdx, phase := range svcDeploy.Phases {
 					for stepIdx, step := range phase.Steps {
-						if step.FilesGate == nil {
-							continue
+						if step.FilesGate != nil {
+							stepRef := filesgate.StepRef{
+								Type: step.Type,
+								Cmd:  step.Cmd,
+								With: step.With,
+							}
+							issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
+							for _, issue := range issues {
+								diags = append(diags, validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Domain:   "config",
+									Target:   fmt.Sprintf("config.service-deploy[%s].phases[%d].steps[%d].files-gate", svcName, phaseIdx, stepIdx),
+									File:     relPath(ctx.ProjectRoot, svcDeployPath),
+									Message:  issue.Message,
+								})
+							}
 						}
-						stepRef := filesgate.StepRef{
-							Type: step.Type,
-							Cmd:  step.Cmd,
-							With: step.With,
-						}
-						issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
-						for _, issue := range issues {
-							diags = append(diags, validate.Diagnostic{
-								Severity: validate.SeverityError,
-								Domain:   "config",
-								Target:   fmt.Sprintf("config.service-deploy[%s].phases[%d].steps[%d].files-gate", svcName, phaseIdx, stepIdx),
-								File:     relPath(ctx.ProjectRoot, svcDeployPath),
-								Message:  issue.Message,
-							})
+						if step.Parallel != nil {
+							for subIdx, sub := range step.Parallel.Steps {
+								if sub.FilesGate == nil {
+									continue
+								}
+								stepRef := filesgate.StepRef{
+									Type: sub.Type,
+									Cmd:  sub.Cmd,
+									With: sub.With,
+								}
+								issues := spec.Validate(ctx.Cfg, reg, stepRef, sub.FilesGate)
+								for _, issue := range issues {
+									diags = append(diags, validate.Diagnostic{
+										Severity: validate.SeverityError,
+										Domain:   "config",
+										Target:   fmt.Sprintf("config.service-deploy[%s].phases[%d].steps[%d].parallel.steps[%d].files-gate", svcName, phaseIdx, stepIdx, subIdx),
+										File:     relPath(ctx.ProjectRoot, svcDeployPath),
+										Message:  issue.Message,
+									})
+								}
+							}
 						}
 					}
 				}
@@ -140,6 +192,13 @@ func phasesHaveFilesGateSteps(phases []config.DeployPhase) bool {
 		for _, step := range phase.Steps {
 			if step.FilesGate != nil {
 				return true
+			}
+			if step.Parallel != nil {
+				for _, sub := range step.Parallel.Steps {
+					if sub.FilesGate != nil {
+						return true
+					}
+				}
 			}
 		}
 	}
@@ -202,25 +261,44 @@ func (v *lifecycleFilesGateValidator) Run(ctx validate.Context) []validate.Diagn
 	validateLifecyclePhases := func(pipelineName string, phases []config.DeployPhase) {
 		for phaseIdx, phase := range phases {
 			for stepIdx, step := range phase.Steps {
-				if step.FilesGate == nil {
-					continue
+				if step.FilesGate != nil {
+					stepRef := filesgate.StepRef{
+						Type: step.Type,
+						Cmd:  step.Cmd,
+						With: step.With,
+					}
+					issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
+					for _, issue := range issues {
+						diags = append(diags, validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Domain:   "config",
+							Target:   fmt.Sprintf("config.lifecycle.%s.phases[%d].steps[%d].files-gate", pipelineName, phaseIdx, stepIdx),
+							File:     relPath(ctx.ProjectRoot, lifecyclePath),
+							Message:  issue.Message,
+						})
+					}
 				}
-
-				stepRef := filesgate.StepRef{
-					Type: step.Type,
-					Cmd:  step.Cmd,
-					With: step.With,
-				}
-
-				issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
-				for _, issue := range issues {
-					diags = append(diags, validate.Diagnostic{
-						Severity: validate.SeverityError,
-						Domain:   "config",
-						Target:   fmt.Sprintf("config.lifecycle.%s.phases[%d].steps[%d].files-gate", pipelineName, phaseIdx, stepIdx),
-						File:     relPath(ctx.ProjectRoot, lifecyclePath),
-						Message:  issue.Message,
-					})
+				if step.Parallel != nil {
+					for subIdx, sub := range step.Parallel.Steps {
+						if sub.FilesGate == nil {
+							continue
+						}
+						stepRef := filesgate.StepRef{
+							Type: sub.Type,
+							Cmd:  sub.Cmd,
+							With: sub.With,
+						}
+						issues := spec.Validate(ctx.Cfg, reg, stepRef, sub.FilesGate)
+						for _, issue := range issues {
+							diags = append(diags, validate.Diagnostic{
+								Severity: validate.SeverityError,
+								Domain:   "config",
+								Target:   fmt.Sprintf("config.lifecycle.%s.phases[%d].steps[%d].parallel.steps[%d].files-gate", pipelineName, phaseIdx, stepIdx, subIdx),
+								File:     relPath(ctx.ProjectRoot, lifecyclePath),
+								Message:  issue.Message,
+							})
+						}
+					}
 				}
 			}
 		}
@@ -278,25 +356,44 @@ func (v *resetFilesGateValidator) Run(ctx validate.Context) []validate.Diagnosti
 	// Iterate through all phases and steps in the reset config
 	for phaseIdx, phase := range resetCfg.Phases {
 		for stepIdx, step := range phase.Steps {
-			if step.FilesGate == nil {
-				continue
+			if step.FilesGate != nil {
+				stepRef := filesgate.StepRef{
+					Type: step.Type,
+					Cmd:  step.Cmd,
+					With: step.With,
+				}
+				issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
+				for _, issue := range issues {
+					diags = append(diags, validate.Diagnostic{
+						Severity: validate.SeverityError,
+						Domain:   "config",
+						Target:   fmt.Sprintf("config.reset.phases[%d].steps[%d].files-gate", phaseIdx, stepIdx),
+						File:     relPath(ctx.ProjectRoot, resetPath),
+						Message:  issue.Message,
+					})
+				}
 			}
-
-			stepRef := filesgate.StepRef{
-				Type: step.Type,
-				Cmd:  step.Cmd,
-				With: step.With,
-			}
-
-			issues := spec.Validate(ctx.Cfg, reg, stepRef, step.FilesGate)
-			for _, issue := range issues {
-				diags = append(diags, validate.Diagnostic{
-					Severity: validate.SeverityError,
-					Domain:   "config",
-					Target:   fmt.Sprintf("config.reset.phases[%d].steps[%d].files-gate", phaseIdx, stepIdx),
-					File:     relPath(ctx.ProjectRoot, resetPath),
-					Message:  issue.Message,
-				})
+			if step.Parallel != nil {
+				for subIdx, sub := range step.Parallel.Steps {
+					if sub.FilesGate == nil {
+						continue
+					}
+					stepRef := filesgate.StepRef{
+						Type: sub.Type,
+						Cmd:  sub.Cmd,
+						With: sub.With,
+					}
+					issues := spec.Validate(ctx.Cfg, reg, stepRef, sub.FilesGate)
+					for _, issue := range issues {
+						diags = append(diags, validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Domain:   "config",
+							Target:   fmt.Sprintf("config.reset.phases[%d].steps[%d].parallel.steps[%d].files-gate", phaseIdx, stepIdx, subIdx),
+							File:     relPath(ctx.ProjectRoot, resetPath),
+							Message:  issue.Message,
+						})
+					}
+				}
 			}
 		}
 	}

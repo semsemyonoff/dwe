@@ -170,6 +170,53 @@ func TestLifecycleFilesGateValidator_NilRegistry_WithGateSteps(t *testing.T) {
 	require.Contains(t, diags[0].Message, "skipped")
 }
 
+// TestDeployFilesGateValidator_ParallelSubStep verifies that files_gate on a
+// parallel sub-step is validated (not silently skipped).
+func TestDeployFilesGateValidator_ParallelSubStep(t *testing.T) {
+	reg := usercommands.NewEmptyRegistry()
+	// "db-download" intentionally absent from registry — sub-step gate must be caught.
+
+	cfg := &config.DevboxConfig{
+		Raw: map[string]any{},
+		Deploy: config.DeployConfig{
+			Phases: []config.DeployPhase{
+				{
+					Name: "setup",
+					Steps: []config.DeployStep{
+						{
+							Name: "parallel-group",
+							Parallel: &config.ParallelGroup{
+								Steps: []config.DeployStep{
+									{
+										Name: "sub",
+										Type: "shell",
+										Cmd:  "true",
+										FilesGate: &filesgate.FilesGate{
+											Command: "db-download",
+											State:   filesgate.StateReadable,
+											Require: filesgate.RequireRequired{},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	ctx := validate.Context{
+		ProjectRoot:     t.TempDir(),
+		CommandRegistry: reg,
+		Cfg:             cfg,
+	}
+	diags := (&deployFilesGateValidator{}).Run(ctx)
+	require.Len(t, diags, 1)
+	require.Equal(t, validate.SeverityError, diags[0].Severity)
+	require.Contains(t, diags[0].Message, "unknown command")
+	require.Contains(t, diags[0].Target, "parallel.steps[0].files-gate")
+}
+
 // TestResetFilesGateValidator_UnknownCommand verifies an error diagnostic when
 // reset.yml files_gate references a command not in the registry.
 func TestResetFilesGateValidator_UnknownCommand(t *testing.T) {

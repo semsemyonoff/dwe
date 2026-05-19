@@ -56,6 +56,7 @@ type groupEntry struct {
 	ok        int
 	failed    int
 	skipped   int
+	cancelled int
 }
 
 // parallelOutputTopBar is the separator emitted before a buffered sub-step's
@@ -548,16 +549,29 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 	msg := fmt.Sprintf("  %s Parallel group %s: %s", icon, verb, groupAddr)
 	if !r.tty {
 		if g, ok := r.groups[groupAddr]; ok {
+			// Count sub-steps that never received a terminal event
+			// (cancelled by FailFast before executeStepBody ran).
+			for addr, e := range r.subs {
+				if e.groupAddr == groupAddr {
+					g.cancelled++
+					delete(r.subs, addr)
+				}
+			}
 			elapsed := formatElapsed(r.now().Sub(g.startTime))
-			msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped of %d, %s)",
-				g.ok, g.failed, g.skipped, g.total, elapsed)
+			if g.cancelled > 0 {
+				msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped, %d cancelled of %d, %s)",
+					g.ok, g.failed, g.skipped, g.cancelled, g.total, elapsed)
+			} else {
+				msg += fmt.Sprintf(" (%d ok, %d failed, %d skipped of %d, %s)",
+					g.ok, g.failed, g.skipped, g.total, elapsed)
+			}
 			delete(r.groups, groupAddr)
-		}
-		// Clean up any sub-step entries that never received a terminal event
-		// (e.g. cancelled by FailFast before executeStepBody was entered).
-		for addr, e := range r.subs {
-			if e.groupAddr == groupAddr {
-				delete(r.subs, addr)
+		} else {
+			// Defensive: clean up subs even when group entry is absent.
+			for addr, e := range r.subs {
+				if e.groupAddr == groupAddr {
+					delete(r.subs, addr)
+				}
 			}
 		}
 	}
