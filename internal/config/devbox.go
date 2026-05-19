@@ -163,6 +163,118 @@ type DeployStep struct {
 	FilesGate       *filesgate.FilesGate `yaml:"files_gate,omitempty"`
 	ContinueOnError bool                 `yaml:"continue_on_error,omitempty"`
 	SkipConfirm     bool                 `yaml:"skip_confirm,omitempty"`
+	Parallel        *ParallelGroup       `yaml:"parallel,omitempty"`
+}
+
+// ParallelGroup represents a step-group container that runs sub-steps concurrently.
+// A DeployStep with non-nil Parallel is a group step; all leaf-only fields
+// (type, cmd, with, check, files_gate, continue_on_error) must be absent on
+// the parent step. Allowed group-level fields: name, description, when, skip_confirm.
+type ParallelGroup struct {
+	MaxConcurrent int          `yaml:"max_concurrent,omitempty"`
+	FailFast      *bool        `yaml:"fail_fast,omitempty"`
+	Steps         []DeployStep `yaml:"steps"`
+}
+
+// deployStepKnownFields is the explicit allow-list of keys recognised on a
+// DeployStep YAML mapping. A custom UnmarshalYAML bypasses the parent decoder's
+// KnownFields(true), so we hand-validate keys here to preserve strict-decode
+// semantics. Keep in sync with the DeployStep field tags above.
+var deployStepKnownFields = map[string]bool{
+	"name":              true,
+	"description":       true,
+	"type":              true,
+	"cmd":               true,
+	"with":              true,
+	"when":              true,
+	"check":             true,
+	"files_gate":        true,
+	"continue_on_error": true,
+	"skip_confirm":      true,
+	"parallel":          true,
+}
+
+// deployStepLeafOnlyFields are keys that may appear only on a leaf step
+// (Parallel == nil). Their presence alongside parallel: is a hard error.
+var deployStepLeafOnlyFields = []string{
+	"type", "cmd", "with", "check", "files_gate", "continue_on_error",
+}
+
+// UnmarshalYAML enforces:
+//   - mapping shape only
+//   - explicit known-field allow-list (compensates for yaml.v3 bypass of KnownFields(true)
+//     inside custom UnmarshalYAML implementations)
+//   - mutual exclusion between parallel: and leaf-only fields (type/cmd/with/check/
+//     files_gate/continue_on_error)
+//
+// Length of parallel.steps is NOT enforced here; that check lives in
+// internal/pipeline.ResolvePhaseSteps so it can return a typed sentinel
+// (ErrEmptyParallelSteps) without an import cycle.
+func (s *DeployStep) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("deploy step must be a mapping, got kind %d", value.Kind)
+	}
+	seen := make(map[string]bool, len(value.Content)/2)
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		key := value.Content[i].Value
+		if !deployStepKnownFields[key] {
+			return fmt.Errorf("field %s not found in type config.DeployStep", key)
+		}
+		seen[key] = true
+	}
+	if seen["parallel"] {
+		for _, leaf := range deployStepLeafOnlyFields {
+			if seen[leaf] {
+				return fmt.Errorf("parallel step %q must not set leaf-only field %q", nameOfNode(value), leaf)
+			}
+		}
+	}
+	type rawDeployStep DeployStep
+	var raw rawDeployStep
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*s = DeployStep(raw)
+	return nil
+}
+
+// parallelGroupKnownFields is the allow-list for the nested parallel: mapping.
+// Mirrors the rationale on deployStepKnownFields.
+var parallelGroupKnownFields = map[string]bool{
+	"max_concurrent": true,
+	"fail_fast":      true,
+	"steps":          true,
+}
+
+// UnmarshalYAML enforces the known-field allow-list on the parallel: mapping.
+func (p *ParallelGroup) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("parallel must be a mapping, got kind %d", value.Kind)
+	}
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		key := value.Content[i].Value
+		if !parallelGroupKnownFields[key] {
+			return fmt.Errorf("field %s not found in type config.ParallelGroup", key)
+		}
+	}
+	type rawParallelGroup ParallelGroup
+	var raw rawParallelGroup
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*p = ParallelGroup(raw)
+	return nil
+}
+
+// nameOfNode tries to extract the "name" field value from a mapping node for
+// inclusion in error messages. Returns "<unnamed>" if absent.
+func nameOfNode(value *yaml.Node) string {
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		if value.Content[i].Value == "name" && value.Content[i+1].Kind == yaml.ScalarNode {
+			return value.Content[i+1].Value
+		}
+	}
+	return "<unnamed>"
 }
 
 // Action returns the action-shaped representation of this step for ExecAction callers.

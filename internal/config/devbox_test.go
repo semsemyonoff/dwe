@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // sampleDevboxYML reflects the lean devbox.yml (project identity only).
@@ -1330,7 +1332,8 @@ func TestLoadDeployConfig_phaseUIFieldRejected(t *testing.T) {
     ui: plain
     steps:
       - name: create-dirs
-        run: mkdir -p services/main/src
+        type: shell
+        cmd: mkdir -p services/main/src
         description: Create directories
 `
 	dir := t.TempDir()
@@ -3695,4 +3698,263 @@ func TestLoadConfig_GitNotInjectedIntoRaw(t *testing.T) {
 // nolint: unused,modernize // used in test table initialization
 func ptr[T any](v T) *T {
 	return &v
+}
+
+// TestDeployStep_UnmarshalYAML covers the custom unmarshaller's allow-list
+// and the parallel-vs-leaf mutual exclusion rules.
+func TestDeployStep_UnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name      string
+		yaml      string
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "leaf step parses",
+			yaml: `
+name: hello
+type: shell
+cmd: echo hi
+`,
+		},
+		{
+			name: "pure parallel parses",
+			yaml: `
+name: group
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+    - {name: b, type: shell, cmd: echo b}
+`,
+		},
+		{
+			name: "parallel + type rejected",
+			yaml: `
+name: g
+type: shell
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "type",
+		},
+		{
+			name: "parallel + cmd rejected",
+			yaml: `
+name: g
+cmd: x
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "cmd",
+		},
+		{
+			name: "parallel + with rejected",
+			yaml: `
+name: g
+with: {x: 1}
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "with",
+		},
+		{
+			name: "parallel + check rejected",
+			yaml: `
+name: g
+check: {type: shell, cmd: echo ok}
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "check",
+		},
+		{
+			name: "parallel + files_gate rejected",
+			yaml: `
+name: g
+files_gate:
+  files: [foo]
+  required:
+    state: readable
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "files_gate",
+		},
+		{
+			name: "parallel + continue_on_error rejected",
+			yaml: `
+name: g
+continue_on_error: true
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "continue_on_error",
+		},
+		{
+			name: "parallel + when accepted",
+			yaml: `
+name: g
+when: {type: shell, cmd: "true"}
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+		},
+		{
+			name: "parallel + skip_confirm accepted",
+			yaml: `
+name: g
+skip_confirm: true
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+		},
+		{
+			name: "parallel + description + name accepted",
+			yaml: `
+name: g
+description: hello
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+		},
+		{
+			name: "empty parallel.steps parses at loader (length checked later)",
+			yaml: `
+name: g
+parallel:
+  steps: []
+`,
+		},
+		{
+			name: "single-element parallel.steps parses at loader",
+			yaml: `
+name: g
+parallel:
+  steps:
+    - {name: only, type: shell, cmd: echo a}
+`,
+		},
+		{
+			name: "unknown field on DeployStep rejected",
+			yaml: `
+name: g
+typo_field: hello
+type: shell
+cmd: echo a
+`,
+			wantErr:   true,
+			errSubstr: "typo_field",
+		},
+		{
+			name: "unknown field on ParallelGroup rejected",
+			yaml: `
+name: g
+parallel:
+  max_concurent: 2
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "max_concurent",
+		},
+		{
+			name: "nested parallel parses (validated at plan time)",
+			yaml: `
+name: outer
+parallel:
+  steps:
+    - name: inner
+      parallel:
+        steps:
+          - {name: a, type: shell, cmd: echo a}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var step DeployStep
+			err := yamlUnmarshalForTest(tt.yaml, &step)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.errSubstr)
+				}
+				if tt.errSubstr != "" && !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.errSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestParallelGroup_FailFastTristate verifies the *bool round-trips nil/true/false.
+func TestParallelGroup_FailFastTristate(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want *bool
+	}{
+		{name: "absent", yaml: `
+name: g
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`, want: nil},
+		{name: "true", yaml: `
+name: g
+parallel:
+  fail_fast: true
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`, want: ptr(true)},
+		{name: "false", yaml: `
+name: g
+parallel:
+  fail_fast: false
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`, want: ptr(false)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var step DeployStep
+			if err := yamlUnmarshalForTest(tt.yaml, &step); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if step.Parallel == nil {
+				t.Fatalf("expected non-nil Parallel")
+			}
+			got := step.Parallel.FailFast
+			switch {
+			case tt.want == nil && got != nil:
+				t.Fatalf("expected nil, got %v", *got)
+			case tt.want != nil && got == nil:
+				t.Fatalf("expected %v, got nil", *tt.want)
+			case tt.want != nil && got != nil && *tt.want != *got:
+				t.Fatalf("expected %v, got %v", *tt.want, *got)
+			}
+		})
+	}
+}
+
+func yamlUnmarshalForTest(src string, out any) error {
+	return yaml.Unmarshal([]byte(src), out)
 }
