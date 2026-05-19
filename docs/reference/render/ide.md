@@ -180,8 +180,20 @@ Templates receive a single object with these top-level fields:
 | `.Service` | service name (the map key in `services:`) | |
 | `.ServiceCfg` | the effective service config after `extends` resolution | e.g. `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` |
 | `.Runtime` | merged `runtime` block | e.g. `.Runtime.Ports.app`, `.Runtime.Hosts.main` (non-tool roles; lowercase keys). Tool host/port use `.Tools.<name>.Host` / `.Tools.<name>.Port` instead. |
+| `.Cfg` | merged `DevboxConfig` (advanced) | `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+
+> **Advisory.** IDE outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in IDE templates: any value layered in from `devbox/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
 
 Strict-mode means a typo in `{{.Servic.Name}}` aborts rendering instead of writing a `<no value>` placeholder. Use `{{if ...}}` guards for fields that may legitimately be empty.
+
+#### Accessing `.Cfg.Raw`
+
+Go's `text/template` resolves dot-segments only when each segment matches `[A-Za-z_][A-Za-z0-9_]*`. Keys with hyphens, dots, leading digits, or any other non-identifier character cannot be reached with dot syntax — use `index` instead.
+
+```gotemplate
+{{ .Cfg.Raw.ide.workspace_name }}              {{- /* dot — identifier-safe keys */ -}}
+{{ index .Cfg.Raw "my-tool" "api-key" }}       {{- /* index — hyphenated keys */ -}}
+```
 
 Note: Runtime roles are now lowercase scalars (`.Runtime.Ports.app`, `.Runtime.Hosts.main`). Tool references use mixed-case (`.Tools.adminer.Enabled`, `.Tools.adminer.Host`).
 

@@ -214,8 +214,20 @@ Templates receive the same object shape as IDE templates:
 | `.Service` | service name (the map key in `services:`) |
 | `.ServiceCfg` | effective service config after `extends` resolution |
 | `.Runtime` | merged `runtime` block |
+| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+
+> **Advisory.** AI outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`AGENTS.md`, `.claude/CLAUDE.md`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in AI templates: any value layered in from `devbox/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
 
 Strict-mode rendering means a typo like `{{.Servic.Name}}` aborts rendering instead of producing `<no value>`. Use `{{if ...}}` for fields that may legitimately be empty.
+
+#### Accessing `.Cfg.Raw`
+
+Go's `text/template` resolves dot-segments only when each segment matches `[A-Za-z_][A-Za-z0-9_]*`. Keys with hyphens, dots, leading digits, or any other non-identifier character cannot be reached with dot syntax — use `index` instead.
+
+```gotemplate
+{{ .Cfg.Raw.ai.persona }}                      {{- /* dot — identifier-safe keys */ -}}
+{{ index .Cfg.Raw "my-tool" "api-key" }}       {{- /* index — hyphenated keys */ -}}
+```
 
 The full set of helper functions available inside `*.tmpl` files (`appURL`, sprout registries, `text/template` built-ins) is documented in [Templates](../templates.md).
 

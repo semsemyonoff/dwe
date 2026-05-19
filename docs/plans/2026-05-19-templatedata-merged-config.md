@@ -167,11 +167,11 @@ This task addresses the central `docs/reference/templates.md` page in full. Per-
 
 ### Task 6: Update per-renderer documentation
 
-- [ ] `docs/reference/render/git.md`: add `.Cfg` to the variable list; add a worked example showing **both** access forms — `{{ .Cfg.Raw.git.project_prefix }}` for identifier-safe keys and `{{ index .Cfg.Raw "my-tool" "api-key" }}` for non-identifier keys; explain the rule briefly (Go template dot-segments must match `[A-Za-z_][A-Za-z0-9_]*`); note that hooks live under `.git/hooks/` so `local.yml`-derived variation is harmless
-- [ ] `docs/reference/render/ide.md`: add `.Cfg` to the variable list with the same dot-vs-`index` explanation and worked example; **prepend** the advisory copy from Task 5: outputs are tracked, do not consume developer-local keys
-- [ ] `docs/reference/render/ai.md`: same as ide.md
-- [ ] `docs/reference/render/index.md`: if it lists template context fields, sync with the new shape (including the dot-vs-`index` access rule)
-- [ ] sanity-check that the `.Raw` description across all four files matches the contract spelled out in Overview ("merged config map after devbox normalization — binaries normalized, services.* injected") and never claims "the literal 3-layer YAML"; also confirm every `.Cfg.Raw` example using a non-identifier key uses `index`, never dot
+- [x] `docs/reference/render/git.md`: add `.Cfg` to the variable list; add a worked example showing **both** access forms — `{{ .Cfg.Raw.git.project_prefix }}` for identifier-safe keys and `{{ index .Cfg.Raw "my-tool" "api-key" }}` for non-identifier keys; explain the rule briefly (Go template dot-segments must match `[A-Za-z_][A-Za-z0-9_]*`); note that hooks live under `.git/hooks/` so `local.yml`-derived variation is harmless
+- [x] `docs/reference/render/ide.md`: add `.Cfg` to the variable list with the same dot-vs-`index` explanation and worked example; **prepend** the advisory copy from Task 5: outputs are tracked, do not consume developer-local keys
+- [x] `docs/reference/render/ai.md`: same as ide.md
+- [x] `docs/reference/render/index.md`: if it lists template context fields, sync with the new shape (including the dot-vs-`index` access rule) — index.md does not enumerate template context fields per site; the templates.md link in "Related references" already conveys the new shape
+- [x] sanity-check that the `.Raw` description across all four files matches the contract spelled out in Overview ("merged config map after devbox normalization — binaries normalized, services.* injected") and never claims "the literal 3-layer YAML"; also confirm every `.Cfg.Raw` example using a non-identifier key uses `index`, never dot
 
 ### Task 7: Update AGENTS.md project structure notes
 

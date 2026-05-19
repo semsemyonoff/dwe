@@ -139,8 +139,21 @@ Same shape as `render ide` and `render ai`:
 | `.Service` | service name (the map key in `services:`) |
 | `.ServiceCfg` | effective service config after `extends` resolution |
 | `.Runtime` | merged `runtime` block |
+| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
 Strict-mode rendering means a typo like `{{.Servic.Name}}` aborts rendering instead of producing `<no value>`. Use `{{if ...}}` for fields that may legitimately be empty.
+
+#### Accessing `.Cfg.Raw`
+
+Go's `text/template` resolves dot-segments only when each segment matches `[A-Za-z_][A-Za-z0-9_]*`. Keys with hyphens, dots, leading digits, or any other non-identifier character cannot be reached with dot syntax — use `index` instead.
+
+```gotemplate
+JIRA_PREFIX="{{ .Cfg.Raw.git.project_prefix }}"                  {{- /* dot — identifier-safe keys */ -}}
+TOKEN="{{ index .Cfg.Raw "my-tool" "api-key" }}"                {{- /* index — hyphenated keys */ -}}
+{{- $hooks := index .Cfg.Raw.git.hooks .Service }}{{ index $hooks "pre_commit" }}
+```
+
+Git hooks render under `<svc.Dir>/src/.git/hooks/` (gitignored), so `local.yml`-sourced values in `.Cfg.Raw` produce per-developer hook variation that is not committed — that's the intended use case here, unlike `render ide` / `render ai` which write tracked files.
 
 The full set of helper functions available inside `*.tmpl` files (`appURL`, sprout registries, `text/template` built-ins) is documented in [Templates](../templates.md).
 
