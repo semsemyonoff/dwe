@@ -1256,36 +1256,59 @@ func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
 		}
 		for si := range phase.Steps {
 			step := &phase.Steps[si]
-			// Validate step body: exactly one of the four types with non-empty cmd.
-			if step.Type == "" {
-				return fmt.Errorf("step %q (phase %q): type is required", step.Name, phase.Name)
+			if err := validateStepShape(step, phase.Name); err != nil {
+				return err
 			}
-			if step.Cmd == "" {
-				return fmt.Errorf("step %q (phase %q): cmd is required", step.Name, phase.Name)
+		}
+	}
+	return nil
+}
+
+// validateStepShape validates a single DeployStep, dispatching to either the
+// leaf-step rules (type/cmd required) or the parallel-group rules (recurse into
+// sub-steps; leaf-only directives on the group are already rejected by
+// DeployStep.UnmarshalYAML).
+func validateStepShape(step *DeployStep, phaseName string) error {
+	if step.Parallel != nil {
+		// Group-level when is optional and validated like any other when.
+		if step.When != nil {
+			if err := step.When.Validate(); err != nil {
+				return fmt.Errorf("step %q (phase %q) when: %w", step.Name, phaseName, err)
 			}
-			switch step.Type {
-			case "shell", "devbox":
-				// shell and devbox do not accept with
-				if len(step.With) > 0 {
-					return fmt.Errorf("step %q (phase %q): type %q does not accept with", step.Name, phase.Name, step.Type)
-				}
-			case "command", "builtin":
-				// command and builtin may accept with (optional)
-			default:
-				return fmt.Errorf("step %q (phase %q): unknown type %q", step.Name, phase.Name, step.Type)
+		}
+		for si := range step.Parallel.Steps {
+			sub := &step.Parallel.Steps[si]
+			// Nested parallel is rejected at plan time with a typed sentinel;
+			// here we only validate shape, so recurse uniformly.
+			if err := validateStepShape(sub, phaseName); err != nil {
+				return err
 			}
-			// Validate check if present.
-			if step.Check != nil {
-				if err := step.Check.Validate(); err != nil {
-					return fmt.Errorf("step %q (phase %q) check: %w", step.Name, phase.Name, err)
-				}
-			}
-			// Validate when condition if present.
-			if step.When != nil {
-				if err := step.When.Validate(); err != nil {
-					return fmt.Errorf("step %q (phase %q) when: %w", step.Name, phase.Name, err)
-				}
-			}
+		}
+		return nil
+	}
+	if step.Type == "" {
+		return fmt.Errorf("step %q (phase %q): type is required", step.Name, phaseName)
+	}
+	if step.Cmd == "" {
+		return fmt.Errorf("step %q (phase %q): cmd is required", step.Name, phaseName)
+	}
+	switch step.Type {
+	case "shell", "devbox":
+		if len(step.With) > 0 {
+			return fmt.Errorf("step %q (phase %q): type %q does not accept with", step.Name, phaseName, step.Type)
+		}
+	case "command", "builtin":
+	default:
+		return fmt.Errorf("step %q (phase %q): unknown type %q", step.Name, phaseName, step.Type)
+	}
+	if step.Check != nil {
+		if err := step.Check.Validate(); err != nil {
+			return fmt.Errorf("step %q (phase %q) check: %w", step.Name, phaseName, err)
+		}
+	}
+	if step.When != nil {
+		if err := step.When.Validate(); err != nil {
+			return fmt.Errorf("step %q (phase %q) when: %w", step.Name, phaseName, err)
 		}
 	}
 	return nil

@@ -356,7 +356,7 @@ The TTY path renders a live spinner block for the active group, then dumps post-
 
 Surface the new rules in `devbox validate` so users see them before `deploy`.
 
-- [ ] in `internal/validate/config/`, extend the deploy validator (and lifecycle, reset where applicable) to emit diagnostics for:
+- [x] in `internal/validate/config/`, extend the deploy validator (and lifecycle, reset where applicable) to emit diagnostics for:
   - nested `parallel:` (error, hint: "flat parallel groups only in v1") — match `errors.Is(_, ErrNestedParallel)`
   - `parallel.steps` < 2 (error, hint: "use a leaf step if only one item") — `ErrEmptyParallelSteps`
   - sub-step missing `name` (error) — `ErrUnnamedSubStep`
@@ -364,9 +364,10 @@ Surface the new rules in `devbox validate` so users see them before `deploy`.
   - interactive prompts without `skip_confirm: true` (error, hint: "set skip_confirm: true or restructure"), covering all three sources from Task 2: `confirmation: true` in target command, `builtin confirm`, and `workflow` recursively containing a confirm step — all flagged via `ErrInteractiveInParallel`
   - sub-step uses `service_run` with TTY-allocating compose args (warning, hint: "TTY allocation is not available in parallel sub-steps")
   - group co-occurring with leaf-only directives `check` / `files_gate` / `continue_on_error` (error, surfaced through Task 1's `UnmarshalYAML` but also flagged here in case YAML decoded outside the loader)
-- [ ] ensure validators self-skip cleanly when registry is nil (existing pattern)
-- [ ] write table-driven tests in `internal/validate/config/deploy_test.go` (and equivalents) covering each new rule
-- [ ] run `go test ./internal/validate/...` — must pass before next task
+- [x] ensure validators self-skip cleanly when registry is nil (existing pattern)
+- [x] write table-driven tests in `internal/validate/config/deploy_test.go` (and equivalents) covering each new rule
+- [x] run `go test ./internal/validate/...` — must pass before next task
+- ➕ Fixed pre-existing loader bug: `validatePhaseSteps` in `internal/config/devbox.go` did not handle parallel-group steps, requiring `type`/`cmd` even on group-level mappings. Refactored into `validateStepShape` which recurses into `Parallel.Steps`. Without this fix, the deploy/lifecycle/reset loaders rejected every parallel-group config at load time, so neither the validator nor the executor was reachable from a real project YAML.
 
 ### Task 12: Verify acceptance criteria and update docs
 
