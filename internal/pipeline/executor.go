@@ -52,11 +52,14 @@ var stdoutIsTTY = func() bool {
 //     pty allocation fails, falls back transparently to the MultiWriter path
 //     so log capture still happens (just without the TUI).
 //
-// Parallel mode (parallel=true) is a fourth path: stdout/stderr go to the
-// supplied logWriter UNCHANGED. The caller is responsible for routing log-file
-// destinations through logSanitizer and the line-tee path through
-// ansiOnlyStripper. os.Stdout / os.Stderr are never touched and no PTY is
-// allocated here — the reporter owns the host terminal in parallel mode.
+// Parallel mode (parallel=true) is a fourth path: when stdoutIsTTY() is true,
+// a PTY is allocated so the child emits proper progress redraws (curl / docker
+// compose) which the caller's lineTee parses frame-by-frame. The PTY master is
+// copied into logWriter UNCHANGED — the caller is responsible for routing
+// log-file destinations through logSanitizer and the line-tee path through
+// ansiOnlyStripper. os.Stdout / os.Stderr are never touched in parallel mode.
+// When stdout is not a TTY, or pty.Open fails, parallel mode falls back to
+// returning logWriter directly (no PTY, no allocation).
 // logWriter must be non-nil; a nil writer in parallel mode is a programmer
 // error and panics.
 func childIO(logWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cleanup func()) {
@@ -64,7 +67,25 @@ func childIO(logWriter io.Writer, parallel bool) (stdout, stderr io.Writer, clea
 		if logWriter == nil {
 			panic("pipeline: childIO called with parallel=true but logWriter is nil")
 		}
-		return logWriter, logWriter, func() {}
+		if !stdoutIsTTY() {
+			return logWriter, logWriter, func() {}
+		}
+		ptmx, tty, err := pty.Open()
+		if err != nil {
+			return logWriter, logWriter, func() {}
+		}
+		_ = pty.InheritSize(os.Stdout, ptmx)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, _ = io.Copy(logWriter, ptmx)
+		}()
+		cleanup = func() {
+			_ = tty.Close()
+			<-done
+			_ = ptmx.Close()
+		}
+		return tty, tty, cleanup
 	}
 	if logWriter == nil {
 		return os.Stdout, os.Stderr, func() {}

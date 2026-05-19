@@ -447,20 +447,63 @@ func TestLineTee_SplitsOnNewline_StripsANSI(t *testing.T) {
 }
 
 func TestChildIO_Parallel_NoStdoutNoStderr(t *testing.T) {
+	prev := stdoutIsTTY
+	stdoutIsTTY = func() bool { return false }
+	defer func() { stdoutIsTTY = prev }()
+
 	var buf bytes.Buffer
 	stdout, stderr, cleanup := childIO(&buf, true)
 	defer cleanup()
 	if stdout == os.Stdout || stderr == os.Stderr {
 		t.Error("parallel mode must not return os.Stdout / os.Stderr")
 	}
-	// Parallel branch returns the writer unchanged — the caller (runParallelSubStep)
-	// is responsible for routing through logSanitizer / ansiOnlyStripper.
+	// Parallel+non-TTY branch returns the writer unchanged — the caller
+	// (runParallelSubStep) is responsible for routing through logSanitizer /
+	// ansiOnlyStripper.
 	if _, err := stdout.Write([]byte("\x1b[31mred\x1b[0m\n")); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	if !strings.Contains(buf.String(), "red") {
 		t.Errorf("expected text preserved, got %q", buf.String())
 	}
+}
+
+// TestChildIO_Parallel_TTY_AllocatesPTY verifies that in parallel mode with a
+// TTY stdout, childIO allocates a pty and returns the slave as stdout/stderr.
+// os.Stdout is never returned.
+func TestChildIO_Parallel_TTY_AllocatesPTY(t *testing.T) {
+	prev := stdoutIsTTY
+	stdoutIsTTY = func() bool { return true }
+	defer func() { stdoutIsTTY = prev }()
+
+	logBuf := &syncBuf{}
+	stdout, stderr, cleanup := childIO(logBuf, true)
+	defer cleanup()
+	if _, ok := stdout.(*os.File); !ok {
+		t.Fatalf("expected *os.File slave, got %T", stdout)
+	}
+	if stdout != stderr {
+		t.Error("expected stdout == stderr (same tty slave)")
+	}
+	if stdout == os.Stdout {
+		t.Error("parallel mode must not return os.Stdout")
+	}
+}
+
+// TestChildIO_Parallel_TTY_NoLeakAfterCleanup verifies cleanup waits for the
+// copy goroutine to finish. The goleak check in TestMain catches a regression
+// — if the goroutine outlived cleanup the suite would fail with leaked
+// goroutines after the test exits.
+func TestChildIO_Parallel_TTY_NoLeakAfterCleanup(t *testing.T) {
+	prev := stdoutIsTTY
+	stdoutIsTTY = func() bool { return true }
+	defer func() { stdoutIsTTY = prev }()
+
+	logBuf := &syncBuf{}
+	stdout, _, cleanup := childIO(logBuf, true)
+	f := stdout.(*os.File)
+	_, _ = f.Write([]byte("byte stream\n"))
+	cleanup()
 }
 
 func TestChildIO_Parallel_NilLogWriter_Panics(t *testing.T) {

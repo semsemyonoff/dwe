@@ -194,11 +194,11 @@ Checklist:
 
 Goal: when a sub-step runs in parallel mode AND `stdoutIsTTY()` is true, allocate a PTY for the child so it emits proper progressbars; capture master → `logSanitizer`-wrapped log destinations + raw-frames-to-tee path (set up in Task 1). When PTY allocation fails or stdout is not a TTY, fall back to the existing direct path.
 
-- [ ] extend `childIO()` in `internal/pipeline/executor.go`: in the `parallel=true` branch, when `stdoutIsTTY()` is true, `pty.Open()` a PTY; on success, return the slave as stdout/stderr and start a goroutine `io.Copy(logWriter, ptmx)` — `logWriter` here is the already-properly-fan-out joinWriters from Task 1; cleanup closes slave, waits for copy goroutine, closes master
-- [ ] on PTY error, fall back transparently to the existing direct path (return `logWriter` for both stdout and stderr, no-op cleanup)
-- [ ] write unit tests in `executor_test.go` for the new parallel+TTY branch: stub `stdoutIsTTY = func() bool { return true }` and verify a `*os.File` is returned (slave fd); also test the parallel+non-TTY fallback returns the wrapped writer directly
-- [ ] write a goroutine-leak smoke test: open the PTY path, write some bytes, call cleanup, assert the copy goroutine returned (goleak in TestMain catches this automatically if it hangs)
-- [ ] run `go test ./internal/pipeline/...` — must pass before Task 5
+- [x] extend `childIO()` in `internal/pipeline/executor.go`: in the `parallel=true` branch, when `stdoutIsTTY()` is true, `pty.Open()` a PTY; on success, return the slave as stdout/stderr and start a goroutine `io.Copy(logWriter, ptmx)` — `logWriter` here is the already-properly-fan-out joinWriters from Task 1; cleanup closes slave, waits for copy goroutine, closes master
+- [x] on PTY error, fall back transparently to the existing direct path (return `logWriter` for both stdout and stderr, no-op cleanup)
+- [x] write unit tests in `executor_test.go` for the new parallel+TTY branch: stub `stdoutIsTTY = func() bool { return true }` and verify a `*os.File` is returned (slave fd); also test the parallel+non-TTY fallback returns the wrapped writer directly
+- [x] write a goroutine-leak smoke test: open the PTY path, write some bytes, call cleanup, assert the copy goroutine returned (goleak in TestMain catches this automatically if it hangs)
+- [x] run `go test ./internal/pipeline/...` — must pass before Task 5
 
 ### Task 5: `LiveLine` core (single-line sticky footer)
 
