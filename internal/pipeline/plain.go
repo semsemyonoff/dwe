@@ -53,10 +53,15 @@ const timestampLayout = "06-01-02 15:04:05"
 // commitTrailingTail helper (Task 9) is responsible for flushing it on
 // step-finish events.
 type subStepEntry struct {
-	groupAddr  string
-	buf        strings.Builder
-	inProgress string
-	flushed    bool
+	groupAddr   string
+	buf         strings.Builder
+	inProgress  string
+	flushed     bool
+	logPath     string // absolute path of per-sub-step log file; "" when disabled
+	blockRowIdx int    // 0-based row index inside the LiveLine block
+	subIdx      int    // 1-based sub-step index within the parallel group
+	subTotal    int    // total sub-steps in the parallel group
+	subName     string // sub-step display name
 }
 
 // groupEntry tracks per-parallel-group aggregate state for the FinishGroup
@@ -86,6 +91,7 @@ type PlainReporter struct {
 	w         *render.Writer
 	logFile   io.Writer        // optional ANSI-stripped side-channel to the global pipeline log file
 	termOut   io.Writer        // raw terminal stream for cursor ANSI (LiveLine in later tasks); io.Discard when non-TTY
+	ttyMode   bool             // true when termOut is a real TTY (LiveLine block features enabled)
 	name      string           // pipeline name set by StartPipeline (e.g. "deploy", "reset")
 	startTime time.Time        // recorded by StartPipeline for elapsed time in FinishPipeline
 	now       func() time.Time // injectable clock; defaults to time.Now
@@ -129,13 +135,15 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 	if logFile != nil {
 		wrapped = &logSanitizer{w: logFile}
 	}
+	tty := termOut != io.Discard
 	r := &PlainReporter{
 		w:       screen,
 		logFile: wrapped,
 		termOut: termOut,
+		ttyMode: tty,
 		now:     time.Now,
 	}
-	r.live = NewLiveLine(termOut, screen.Writer(), termOut != io.Discard)
+	r.live = NewLiveLine(termOut, screen.Writer(), tty)
 	return r
 }
 
@@ -232,6 +240,9 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.commitTrailingTail(stepAddr)
+	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
+		r.live.SetBlockRow(entry.blockRowIdx, formatSkippedRow(entry.subIdx, entry.subTotal, entry.subName, reason))
+	}
 	if index > 0 {
 		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
 	} else {
@@ -255,6 +266,9 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.commitTrailingTail(stepAddr)
+	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
+		r.live.SetBlockRow(entry.blockRowIdx, formatDoneRow(entry.subIdx, entry.subTotal, entry.subName))
+	}
 	if index > 0 {
 		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
 	} else {
@@ -282,6 +296,9 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int
 	r.commitTrailingTail(stepAddr)
 
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" {
+		if r.inBlockMode && r.ttyMode {
+			r.live.SetBlockRow(entry.blockRowIdx, formatFailedRow(entry.subIdx, entry.subTotal, entry.subName))
+		}
 		if index > 0 {
 			r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, index, total, stepAddr))
 		} else {
@@ -375,6 +392,51 @@ func (r *PlainReporter) SuspendForExec() {}
 // ResumeAfterExec is a no-op for PlainReporter.
 func (r *PlainReporter) ResumeAfterExec() {}
 
+// SetSubStepLogPath records the per-sub-step log file path for subAddr. Called
+// by the executor after OpenSubStepLog succeeds in runParallelSubStep. The
+// path drives the TTY buffer-dump policy in flushSubStepLocked: when a
+// sub-step succeeds (or is skipped) and a path is known, the dump is
+// suppressed and a "Full log: <path>" pointer line is emitted instead.
+func (r *PlainReporter) SetSubStepLogPath(subAddr string, path string) {
+	if path == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.subs == nil {
+		r.subs = make(map[string]*subStepEntry)
+	}
+	entry, ok := r.subs[subAddr]
+	if !ok {
+		entry = &subStepEntry{}
+		r.subs[subAddr] = entry
+	}
+	entry.logPath = path
+}
+
+// formatRunningRow formats a block-mode row for a sub-step that is still
+// executing. The leading glyph is the static "·" running marker — never ✓/✗/◎
+// during execution, regardless of how many final=true frames arrive (the
+// terminal glyphs are reserved for FinishStep/FailStep/SkipStep transitions).
+func formatRunningRow(subIdx, subTotal int, subName, frame string) string {
+	if frame == "" {
+		return fmt.Sprintf("  %s [%d/%d] %s", iconRunning, subIdx, subTotal, subName)
+	}
+	return fmt.Sprintf("  %s [%d/%d] %s: %s", iconRunning, subIdx, subTotal, subName, frame)
+}
+
+func formatDoneRow(subIdx, subTotal int, subName string) string {
+	return fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, subIdx, subTotal, subName)
+}
+
+func formatFailedRow(subIdx, subTotal int, subName string) string {
+	return fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, subIdx, subTotal, subName)
+}
+
+func formatSkippedRow(subIdx, subTotal int, subName, reason string) string {
+	return fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, subIdx, subTotal, subName, reason)
+}
+
 // StartGroup prints a single header line announcing a parallel group:
 //
 //	[ts]   · Parallel group: <groupAddr> (<n> steps)
@@ -409,10 +471,33 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 	if r.subs == nil {
 		r.subs = make(map[string]*subStepEntry)
 	}
+	subTotal := 0
 	if group.Parallel != nil {
-		for _, sub := range group.Parallel.Steps {
+		subTotal = len(group.Parallel.Steps)
+	}
+	if group.Parallel != nil {
+		for i, sub := range group.Parallel.Steps {
 			subAddr := phasePrefix + "/" + sub.Name
-			r.subs[subAddr] = &subStepEntry{groupAddr: groupAddr}
+			r.subs[subAddr] = &subStepEntry{
+				groupAddr:   groupAddr,
+				blockRowIdx: i,
+				subIdx:      i + 1,
+				subTotal:    subTotal,
+				subName:     sub.Name,
+			}
+		}
+	}
+
+	// In TTY mode, reserve N rows for the parallel block and paint each row
+	// with the initial running-state line so the user immediately sees the
+	// group's shape. SetBlockRow is a no-op when LiveLine is disabled, so
+	// non-TTY mode remains unaffected.
+	if r.ttyMode && subTotal > 0 {
+		r.live.StartBlock(subTotal)
+		if group.Parallel != nil {
+			for i, sub := range group.Parallel.Steps {
+				r.live.SetBlockRow(i, formatRunningRow(i+1, subTotal, sub.Name, ""))
+			}
 		}
 	}
 }
@@ -427,6 +512,11 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 	if r.blockGroupAddr == groupAddr {
 		r.inBlockMode = false
 		r.blockGroupAddr = ""
+		// Freeze the block rows in scrollback and return LiveLine to
+		// single-line mode. No-op when LiveLine is disabled.
+		if r.ttyMode {
+			r.live.EndBlock()
+		}
 	}
 
 	icon := iconDone
@@ -509,6 +599,12 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	}
 	if !final {
 		entry.inProgress = frame
+		// Ephemeral row update: refresh the block row with the latest frame so
+		// the user sees progress even before the next \n. No log write, no
+		// buffer commit — commitTrailingTail is the single tail commit point.
+		if entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
+			r.live.SetBlockRow(entry.blockRowIdx, formatRunningRow(entry.subIdx, entry.subTotal, entry.subName, frame))
+		}
 		return
 	}
 	if entry.groupAddr == "" {
@@ -518,11 +614,16 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 		entry.inProgress = ""
 		return
 	}
-	// Parallel sub-step: buffer for dump, side-write log once.
+	// Parallel sub-step: buffer for dump, side-write log once. Update the
+	// block row to the latest committed frame but keep the running-state
+	// glyph (·) — ✓ is reserved for FinishStep.
 	entry.buf.WriteString(frame)
 	entry.buf.WriteByte('\n')
 	entry.inProgress = ""
 	r.writeLog(frame)
+	if r.inBlockMode && r.ttyMode {
+		r.live.SetBlockRow(entry.blockRowIdx, formatRunningRow(entry.subIdx, entry.subTotal, entry.subName, frame))
+	}
 }
 
 // commitTrailingTail flushes any trailing non-terminated tail captured in
@@ -590,9 +691,26 @@ func (r *PlainReporter) flushSubStepLocked(addr string, status subStepStatus) {
 	if !ok {
 		return
 	}
-	if entry.buf.Len() > 0 {
+	// Buffer-dump policy (Task 9):
+	//   - non-TTY: always dump (existing behaviour).
+	//   - TTY + FAILED: always dump (user needs full history to diagnose).
+	//   - TTY + succeeded/skipped + logPath: suppress dump, emit "Full log:".
+	//   - TTY + succeeded/skipped + no logPath: dump (only on-screen record).
+	suppress := r.ttyMode && status != statusFailed && entry.logPath != ""
+	switch {
+	case suppress:
+		r.emit(render.Gray, "  Full log: "+entry.logPath)
+	case entry.buf.Len() > 0:
 		r.emit(render.Gray, parallelOutputTopBar)
-		_, _ = fmt.Fprint(r.w.Writer(), entry.buf.String())
+		// Replay buffered lines via live.Println so the LiveLine block redraws
+		// correctly in TTY mode. The buffer already contains \n-terminated
+		// frames; split and emit each line. dumpSubStepBufferLocked is PURE
+		// SCREEN REPLAY — no log writes (each line was already writeLog'd at
+		// its commit point in StepOutput / commitTrailingTail).
+		body := strings.TrimSuffix(entry.buf.String(), "\n")
+		for line := range strings.SplitSeq(body, "\n") {
+			r.live.Println(line)
+		}
 		r.emit(render.Gray, parallelOutputBotBar)
 	}
 	r.updateGroupCounterLocked(entry.groupAddr, status)

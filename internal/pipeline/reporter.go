@@ -77,4 +77,13 @@ type Reporter interface {
 	// emitted by lineTee.Flush at end-of-stream). Used for both sequential
 	// steps (Task 6) and parallel sub-steps.
 	StepOutput(stepAddr string, frame string, final bool)
+
+	// SetSubStepLogPath records the absolute path of the per-sub-step log file
+	// for subAddr. The runner calls this after OpenSubStepLog succeeds in
+	// runParallelSubStep, strictly later than StartGroup. When the per-sub-step
+	// log is disabled the runner may pass an empty path or skip the call.
+	// PlainReporter uses the path to decide the TTY buffer-dump policy:
+	// successful or skipped sub-steps with a known log path suppress the dump
+	// and emit a "Full log: <path>" line instead.
+	SetSubStepLogPath(subAddr string, path string)
 }

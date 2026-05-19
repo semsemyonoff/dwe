@@ -823,13 +823,18 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 // flushed so any trailing un-terminated bytes still surface as a final
 // SubStepOutput line.
 func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep, sub ResolvedStep, subAddr string, idx, total int) error {
-	subFile, _, openErr := OpenSubStepLog(opts.WorkDir, opts.Name, group.Step.Name, sub.Step.Name, opts.LogWriter != nil)
+	subFile, logPath, openErr := OpenSubStepLog(opts.WorkDir, opts.Name, group.Step.Name, sub.Step.Name, opts.LogWriter != nil)
 	if openErr != nil {
 		return fmt.Errorf("opening sub-step log for %q: %w", subAddr, openErr)
 	}
 	if subFile != nil {
 		defer func() { _ = subFile.Close() }()
 	}
+	// Push the per-sub-step log path to the reporter so the TTY buffer-dump
+	// policy can suppress the on-screen dump in favour of a "Full log:" hint
+	// on success/skip. An empty path (log disabled) is treated as a no-op by
+	// SetSubStepLogPath. Strictly later than StartGroup, before any output.
+	opts.Reporter.SetSubStepLogPath(subAddr, logPath)
 
 	// Per-sub-step log file receives full output via logSanitizer (ANSI strip
 	// + `\r` → `\n` so progress frames land on separate lines). The per-step

@@ -397,41 +397,41 @@ Checklist:
 
 Goal: in `StartGroup` switch the LiveLine into block mode; route `StepOutput(subAddr, frame, final)` to the corresponding block row; in `FinishStep`/`FailStep`/`SkipStep` for a sub-step update the row to the final glyph; in `FinishGroup` end the block and emit the summary line.
 
-- [ ] in `StartGroup`: call `r.live.StartBlock(len(subIndices))` after emitting the group header; build a map `subAddr → blockRowIdx` so StepOutput can find the row; transition reporter state into "block mode for group=<addr>"
-- [ ] in `StepOutput`: when in block mode AND `subAddr` is in the map, call `r.live.SetBlockRow(idx, formatRow(spinner-glyph, subIdx, subTotal, subName, frame))` — the row icon during execution is a spinner glyph; truncated to terminal width
-- [ ] in `FinishStep` for a sub-step (detect via `r.subs[addr]` presence): call `r.live.SetBlockRow(idx, formatRow("✓", ..., "Done: <subName>"))` and update group counters
-- [ ] in `FailStep` for a sub-step: call `r.live.SetBlockRow(idx, formatRow("✗", ..., "Failed: <subName>"))`; print the error message via `r.live.Println(...)` so it lands above the block (will scroll up)
-- [ ] in `SkipStep` for a sub-step: `r.live.SetBlockRow(idx, formatRow("◎", ..., "Skipped: <subName> (<reason>)"))`
-- [ ] in `FinishGroup`: call `r.live.EndBlock()` (block rows persist in scrollback); then emit the aggregate-summary line via `Println`; transition reporter state out of block mode
-- [ ] non-final `\r` frames update the row in-place (NO log write, NO buffer commit — purely ephemeral `inProgress = frame`); on `final=true`, the frame is committed to the per-sub-step buffer AND written to the global log via `r.writeLog(frame)` (this is the SINGLE writeLog call per logical line — see "exactly once" guarantee below)
-- [ ] **introduce `r.commitTrailingTail(subAddr)` — the SINGLE commit point for any leftover `inProgress` tail**. Called as the FIRST step at every sub-step finish event (`FinishStep`/`FailStep`/`SkipStep`), BEFORE the buffer-dump policy decision. Behaviour:
+- [x] in `StartGroup`: call `r.live.StartBlock(len(subIndices))` after emitting the group header; build a map `subAddr → blockRowIdx` so StepOutput can find the row; transition reporter state into "block mode for group=<addr>"
+- [x] in `StepOutput`: when in block mode AND `subAddr` is in the map, call `r.live.SetBlockRow(idx, formatRow(spinner-glyph, subIdx, subTotal, subName, frame))` — the row icon during execution is a spinner glyph; truncated to terminal width
+- [x] in `FinishStep` for a sub-step (detect via `r.subs[addr]` presence): call `r.live.SetBlockRow(idx, formatRow("✓", ..., "Done: <subName>"))` and update group counters
+- [x] in `FailStep` for a sub-step: call `r.live.SetBlockRow(idx, formatRow("✗", ..., "Failed: <subName>"))`; print the error message via `r.live.Println(...)` so it lands above the block (will scroll up)
+- [x] in `SkipStep` for a sub-step: `r.live.SetBlockRow(idx, formatRow("◎", ..., "Skipped: <subName> (<reason>)"))`
+- [x] in `FinishGroup`: call `r.live.EndBlock()` (block rows persist in scrollback); then emit the aggregate-summary line via `Println`; transition reporter state out of block mode
+- [x] non-final `\r` frames update the row in-place (NO log write, NO buffer commit — purely ephemeral `inProgress = frame`); on `final=true`, the frame is committed to the per-sub-step buffer AND written to the global log via `r.writeLog(frame)` (this is the SINGLE writeLog call per logical line — see "exactly once" guarantee below)
+- [x] **introduce `r.commitTrailingTail(subAddr)` — the SINGLE commit point for any leftover `inProgress` tail**. Called as the FIRST step at every sub-step finish event (`FinishStep`/`FailStep`/`SkipStep`), BEFORE the buffer-dump policy decision. Behaviour:
   - if `r.subs[subAddr].inProgress == ""`: no-op
   - else: take the tail (`t := inProgress`)
     - append `t + "\n"` to the per-sub-step buffer (so it appears in any dump replay that follows)
     - `r.writeLog(t)` (the single canonical log entry for this tail — it was never `final=true`)
     - reset `inProgress = ""`
   - This is the ONLY place tails get committed. `StepOutput(final=false)` does not commit. `dumpSubStepBufferLocked` does not commit. Tests pin this property.
-- [ ] **buffer-dump policy for full sub-step output** (decided AFTER `commitTrailingTail` has flushed any tail, so the buffer is complete):
+- [x] **buffer-dump policy for full sub-step output** (decided AFTER `commitTrailingTail` has flushed any tail, so the buffer is complete):
   - non-TTY mode: ALWAYS dump every sub-step buffer between `───── output ─────` bars on `FinishStep`/`FailStep`/`SkipStep` (current behaviour preserved; Task 2 ensures dumps are `\r`-spam-free)
   - TTY mode, sub-step **FAILED** (`FailStep`): ALWAYS dump the failed sub-step's buffer between bars — the live block only showed final glyph + last frame, but the user needs the full history to diagnose
   - TTY mode, sub-step **succeeded or skipped** AND per-sub-step log file path is known (set via `SetSubStepLogPath`): SUPPRESS the buffer dump, instead emit ONE `r.live.Println("  Full log: " + subStepLogPath)` line in `FinishStep`/`SkipStep` so users know where to look. Even with dump suppressed, the tail has ALREADY been logged via `commitTrailingTail` — no data loss.
   - TTY mode, sub-step **succeeded or skipped** AND per-sub-step log file path is empty (log disabled at pipeline level — `OpenSubStepLog` returned nil): ALWAYS dump the buffer — there is no other record of full output on disk
   - keep `parallelOutputTopBar`/`parallelOutputBotBar` constants; they are still used for the dump path
-- [ ] **`dumpSubStepBufferLocked(subAddr)` is PURE SCREEN REPLAY**. The buffer is complete after `commitTrailingTail` has run; the buffer's contents (including any committed tail) were already `writeLog`'d at their respective commit moments. Re-writing during replay would double-log. Therefore:
+- [x] **`dumpSubStepBufferLocked(subAddr)` is PURE SCREEN REPLAY**. The buffer is complete after `commitTrailingTail` has run; the buffer's contents (including any committed tail) were already `writeLog`'d at their respective commit moments. Re-writing during replay would double-log. Therefore:
   - emit top bar `───── output ─────` via `live.Println + writeLog` (the bar line itself is a status line, one screen + one log copy)
   - for each line in the per-sub-step buffer: `live.Println(line)` ALONE — NO `writeLog`, NO special trailing-tail branch (the tail is already a regular buffered line because `commitTrailingTail` appended it before dump-policy ran)
   - emit bottom bar `──────────────────` via `live.Println + writeLog`
-- [ ] every call site that previously contained ad-hoc tail handling now uses `commitTrailingTail` instead: `FinishStep`, `FailStep`, `SkipStep` (sub-step path) all call `commitTrailingTail(subAddr)` first thing. For sequential (Task 6) `FinishStep`/`FailStep`/`SkipStep` also call `commitTrailingTail(stepAddr)` — for sequential the helper writes the tail to `live.Println(tail) + writeLog(tail)` directly (no buffer involved), but the API is uniform.
-- [ ] **add a new Reporter method** `SetSubStepLogPath(subAddr, path string)` to `Reporter` interface — the path of the per-sub-step log file is known only AFTER `OpenSubStepLog` runs inside each sub-step goroutine in `runParallelSubStep` (executor.go:823), strictly later than `StartGroup`. The reporter cannot infer the path; the runner must push it.
-- [ ] in `runParallelSubStep` (executor.go) right after the successful `OpenSubStepLog` call: `opts.Reporter.SetSubStepLogPath(subAddr, logPath)`. When `subFile` is nil (log disabled), call with empty `path` (no-op for PlainReporter; or skip the call) — TBD pick one convention; the reporter's `subStepEntry.logPath` is empty by default so skipping is fine.
-- [ ] in `PlainReporter`: implement `SetSubStepLogPath` to store `path` on the existing `r.subs[subAddr].logPath` field (the field is added on the `subStepEntry` struct in this task)
-- [ ] write integration tests with `termGrid`: simulate a 3-sub-step parallel group; assert block rows appear, get updated per StepOutput, finalize with icons, summary line appears below
-- [ ] write a glyph-discipline regression test: feed multiple `final=true` frames for a still-running sub-step (no FinishStep yet); assert each redraw of that block row shows the SPINNER glyph, NEVER `✓` — `✓` may appear only after `FinishStep` is called. Same for `✗` (only after `FailStep`) and `◎` (only after `SkipStep`).
-- [ ] write a TTY-failure test: simulate a failed sub-step; assert its buffer IS dumped between bars (full output visible) — regression guard
-- [ ] write a TTY-success-log-enabled test: simulate a successful sub-step with a non-nil log path; assert `Full log: <path>` line appears AND buffer is NOT dumped
-- [ ] write a TTY-success-log-disabled test: simulate a successful sub-step with no log file; assert buffer IS dumped
-- [ ] write tests for non-TTY parity: same simulation with `enabled=false`; assert clean buffer dumps without `\r`-spam
-- [ ] run `go test ./internal/pipeline/...` — must pass before Task 10
+- [x] every call site that previously contained ad-hoc tail handling now uses `commitTrailingTail` instead: `FinishStep`, `FailStep`, `SkipStep` (sub-step path) all call `commitTrailingTail(subAddr)` first thing. For sequential (Task 6) `FinishStep`/`FailStep`/`SkipStep` also call `commitTrailingTail(stepAddr)` — for sequential the helper writes the tail to `live.Println(tail) + writeLog(tail)` directly (no buffer involved), but the API is uniform.
+- [x] **add a new Reporter method** `SetSubStepLogPath(subAddr, path string)` to `Reporter` interface — the path of the per-sub-step log file is known only AFTER `OpenSubStepLog` runs inside each sub-step goroutine in `runParallelSubStep` (executor.go:823), strictly later than `StartGroup`. The reporter cannot infer the path; the runner must push it.
+- [x] in `runParallelSubStep` (executor.go) right after the successful `OpenSubStepLog` call: `opts.Reporter.SetSubStepLogPath(subAddr, logPath)`. When `subFile` is nil (log disabled), call with empty `path` (no-op for PlainReporter; or skip the call) — TBD pick one convention; the reporter's `subStepEntry.logPath` is empty by default so skipping is fine.
+- [x] in `PlainReporter`: implement `SetSubStepLogPath` to store `path` on the existing `r.subs[subAddr].logPath` field (the field is added on the `subStepEntry` struct in this task)
+- [x] write integration tests with `termGrid`: simulate a 3-sub-step parallel group; assert block rows appear, get updated per StepOutput, finalize with icons, summary line appears below
+- [x] write a glyph-discipline regression test: feed multiple `final=true` frames for a still-running sub-step (no FinishStep yet); assert each redraw of that block row shows the SPINNER glyph, NEVER `✓` — `✓` may appear only after `FinishStep` is called. Same for `✗` (only after `FailStep`) and `◎` (only after `SkipStep`).
+- [x] write a TTY-failure test: simulate a failed sub-step; assert its buffer IS dumped between bars (full output visible) — regression guard
+- [x] write a TTY-success-log-enabled test: simulate a successful sub-step with a non-nil log path; assert `Full log: <path>` line appears AND buffer is NOT dumped
+- [x] write a TTY-success-log-disabled test: simulate a successful sub-step with no log file; assert buffer IS dumped
+- [x] write tests for non-TTY parity: same simulation with `enabled=false`; assert clean buffer dumps without `\r`-spam
+- [x] run `go test ./internal/pipeline/...` — must pass before Task 10
 
 ### Task 10: Package-level huh hooks in `internal/ui` (pause LiveLine for ALL prompts)
 

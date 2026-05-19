@@ -90,6 +90,9 @@ func (m *mockReporter) FinishGroup(groupAddr string, group config.DeployStep, su
 func (m *mockReporter) StepOutput(addr string, frame string, final bool) {
 	m.append(reporterEvent{kind: "StepOutput", stepAddr: addr, reason: frame, final: final})
 }
+func (m *mockReporter) SetSubStepLogPath(addr string, path string) {
+	m.append(reporterEvent{kind: "SetSubStepLogPath", stepAddr: addr, reason: path})
+}
 
 // kindSeq returns the sequence of event kinds.
 func (m *mockReporter) kindSeq() []string {
