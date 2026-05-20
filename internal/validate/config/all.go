@@ -8,6 +8,7 @@ import (
 func All() []validate.Validator {
 	return []validate.Validator{
 		&devboxValidator{},
+		&uiValidator{},
 		&servicesValidator{},
 		&dockerValidator{},
 		&infoValidator{},

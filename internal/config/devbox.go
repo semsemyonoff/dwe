@@ -84,6 +84,7 @@ type DevboxConfig struct {
 	Compose       ComposeConfig  `yaml:"compose"`
 	Deploy        DeployConfig   `yaml:"-"`
 	Binaries      BinariesConfig `yaml:"binaries"`
+	UI            UIConfig       `yaml:"ui"`
 
 	// Services holds the fully resolved service definitions loaded from
 	// devbox/services.yml with Enabled populated from the 3-layer config merge.

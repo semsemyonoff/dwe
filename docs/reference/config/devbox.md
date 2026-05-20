@@ -375,6 +375,10 @@ If `local.yml` does not exist, layer 3 is silently skipped.
 - **Scalar collision** — if `defaults.yml` sets `state: ""` and `local.yml` sets `state: staging`, the effective value is `staging`. If `local.yml` omits `state`, the `defaults.yml` value wins.
 - **Lists replace, maps merge** — maps are deep-merged: redeclaring `runtime.ports` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `args.global: ["--ansi", "always"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
 
+## Optional `ui:` block
+
+`devbox.yml` may carry an optional top-level `ui:` block that configures the interactive command browser. See [`ui.md`](ui.md) for the schema, defaults, and the `*bool` omit-vs-`false` semantics. Behaviour is unchanged for projects that omit the block.
+
 ## Related commands
 
 - `devbox render env -o .env` — regenerate `.env` from the merged config

@@ -1,0 +1,121 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"sort"
+
+	"devbox-cli/internal/validate"
+
+	"gopkg.in/yaml.v3"
+)
+
+// uiCommandsKnownKeys lists the YAML keys recognised under ui.commands.
+// Unknown keys are surfaced as warnings by the validator since the
+// devbox.yml loader is lenient and silently ignores them.
+var uiCommandsKnownKeys = map[string]bool{
+	"default_expanded_depth": true,
+	"auto_collapse_empty":    true,
+	"show_type_badges":       true,
+}
+
+type uiValidator struct{}
+
+func (v *uiValidator) ID() string     { return "ui" }
+func (v *uiValidator) Domain() string { return "config" }
+
+func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
+	configPath := ctx.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(ctx.ProjectRoot, "devbox.yml")
+	}
+	file := relPath(ctx.ProjectRoot, configPath)
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		// devboxValidator already surfaces missing/invalid devbox.yml — stay silent.
+		return nil
+	}
+	var top struct {
+		UI yaml.Node `yaml:"ui"`
+	}
+	if err := yaml.Unmarshal(data, &top); err != nil {
+		return nil
+	}
+	if top.UI.Kind == 0 {
+		// Block absent — nothing to validate.
+		return nil
+	}
+
+	var diags []validate.Diagnostic
+	// Find ui.commands sub-node.
+	commands := findMappingChild(&top.UI, "commands")
+	if commands == nil {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.ui",
+			File:     file,
+		})
+		return diags
+	}
+
+	var unknown []string
+	for i := 0; i+1 < len(commands.Content); i += 2 {
+		keyNode := commands.Content[i]
+		valNode := commands.Content[i+1]
+		key := keyNode.Value
+		if !uiCommandsKnownKeys[key] {
+			unknown = append(unknown, key)
+			continue
+		}
+		if key == "default_expanded_depth" {
+			if valNode.Kind == yaml.ScalarNode && len(valNode.Value) > 0 && valNode.Value[0] == '-' {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   "config.ui",
+					File:     file,
+					Line:     valNode.Line,
+					Message:  "ui.commands.default_expanded_depth must be >= 0, got " + valNode.Value,
+					Hint:     "Use 0 to start with all groups collapsed, or a positive integer to expand to that depth.",
+				})
+			}
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		for _, k := range unknown {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityWarning,
+				Domain:   "config",
+				Target:   "config.ui",
+				File:     file,
+				Message:  "unknown key under ui.commands: " + k,
+				Hint:     "Known keys: default_expanded_depth, auto_collapse_empty, show_type_badges.",
+			})
+		}
+	}
+	if len(diags) == 0 {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.ui",
+			File:     file,
+		})
+	}
+	return diags
+}
+
+// findMappingChild returns the mapping node at key under parent, or nil.
+func findMappingChild(parent *yaml.Node, key string) *yaml.Node {
+	if parent == nil || parent.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(parent.Content); i += 2 {
+		if parent.Content[i].Value == key && parent.Content[i+1].Kind == yaml.MappingNode {
+			return parent.Content[i+1]
+		}
+	}
+	return nil
+}
