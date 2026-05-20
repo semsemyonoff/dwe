@@ -532,9 +532,38 @@ func printCommandInspect(w io.Writer, def *usercommands.CommandDef) {
 	case usercommands.CommandTypeWorkflow:
 		sub("Steps")
 		for i, step := range def.Steps {
-			if step.Confirm != "" {
+			switch {
+			case step.Confirm != "":
 				def2(fmt.Sprintf("[%d] confirm", i), step.Confirm, 4)
-			} else {
+			case step.Parallel != nil:
+				p := step.Parallel
+				label := fmt.Sprintf("[%d] parallel", i)
+				var meta []string
+				if p.MaxConcurrent > 0 {
+					meta = append(meta, fmt.Sprintf("max_concurrent=%d", p.MaxConcurrent))
+				}
+				if p.FailFast != nil {
+					meta = append(meta, fmt.Sprintf("fail_fast=%v", *p.FailFast))
+				}
+				desc := fmt.Sprintf("%d sub-steps", len(p.Steps))
+				if len(meta) > 0 {
+					desc += "  " + strings.Join(meta, ", ")
+				}
+				if step.When != "" {
+					desc += "  when: " + step.When
+				}
+				def2(label, desc, 4)
+				for j, sub := range p.Steps {
+					subDesc := sub.Command
+					if sub.When != "" {
+						subDesc += "  when: " + sub.When
+					}
+					if sub.ContinueOnError {
+						subDesc += "  (continue_on_error)"
+					}
+					def2(fmt.Sprintf("  [%d.%d]", i, j), subDesc, 6)
+				}
+			default:
 				label := fmt.Sprintf("[%d]", i)
 				desc := step.Command
 				if len(step.With) > 0 {

@@ -316,7 +316,6 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 	live.Start()
 	defer live.Stop()
 	live.StartBlock(n)
-	defer live.EndBlock()
 
 	eg, gctx := errgroup.WithContext(parentCtx)
 	eg.SetLimit(maxC)
@@ -449,6 +448,12 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 	if groupErr == nil && parentCtx.Err() != nil {
 		groupErr = parentCtx.Err()
 	}
+
+	// End the live block before the post-Wait emit so the ticker is no longer
+	// active while we write to stderr. Deferring EndBlock would leave the
+	// ticker running during the emit loop, causing cursor-sequence interleaving
+	// on TTY terminals where os.Stdout and os.Stderr share the same fd.
+	live.EndBlock()
 
 	for i, res := range results {
 		switch {

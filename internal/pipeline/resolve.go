@@ -282,6 +282,18 @@ func checkCommandInteractive(reg *registry.Registry, cmdID string, visited map[s
 				return err
 			}
 		}
+		if ws.Parallel != nil {
+			for _, sub := range ws.Parallel.Steps {
+				if sub.Confirm != "" {
+					return ErrInteractiveInParallel
+				}
+				if sub.Command != "" {
+					if err := checkCommandInteractive(reg, sub.Command, visited); err != nil {
+						return err
+					}
+				}
+			}
+		}
 	}
 	return nil
 }
