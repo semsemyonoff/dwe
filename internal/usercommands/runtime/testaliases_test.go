@@ -9,25 +9,26 @@ import (
 
 // type aliases for test files that reference model/registry types without package prefix
 type (
-	CommandDef      = model.CommandDef
-	CommandFile     = model.CommandFile
-	CommandMessages = model.CommandMessages
-	CommandType     = model.CommandType
-	ContextDef      = model.ContextDef
-	ExecMode        = model.ExecMode
-	FileAccess      = model.FileAccess
-	FileCandidate   = model.FileCandidate
-	FileOnError     = model.FileOnError
-	FileSort        = model.FileSort
-	FileSpec        = model.FileSpec
-	GroupMeta       = model.GroupMeta
-	ParamDef        = model.ParamDef
-	RunnerDef       = model.RunnerDef
-	ScriptDef       = model.ScriptDef
-	UserMode        = model.UserMode
-	WorkflowStep    = model.WorkflowStep
-	GroupNode       = registry.GroupNode
-	Registry        = registry.Registry
+	CommandDef       = model.CommandDef
+	CommandFile      = model.CommandFile
+	CommandMessages  = model.CommandMessages
+	CommandType      = model.CommandType
+	ContextDef       = model.ContextDef
+	ExecMode         = model.ExecMode
+	FileAccess       = model.FileAccess
+	FileCandidate    = model.FileCandidate
+	FileOnError      = model.FileOnError
+	FileSort         = model.FileSort
+	FileSpec         = model.FileSpec
+	GroupMeta        = model.GroupMeta
+	ParamDef         = model.ParamDef
+	RunnerDef        = model.RunnerDef
+	ScriptDef        = model.ScriptDef
+	UserMode         = model.UserMode
+	WorkflowStep     = model.WorkflowStep
+	WorkflowParallel = model.WorkflowParallel
+	GroupNode        = registry.GroupNode
+	Registry         = registry.Registry
 )
 
 const (

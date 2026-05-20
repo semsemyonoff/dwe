@@ -70,6 +70,13 @@ type RunContext struct {
 	// NonInteractive, when true, forces non-interactive code paths
 	// regardless of TTY attachment (e.g., in workflow confirm steps and script env).
 	NonInteractive bool
+
+	// UnderParallel is set when this RunContext executes a sub-step of a
+	// parallel group (pipeline or workflow). Runners use it to reject
+	// operations that need exclusive ownership of the terminal — interactive
+	// confirmations and nested parallel blocks. Task 6 adds the guards;
+	// Task 5 only propagates the flag.
+	UnderParallel bool
 }
 
 // stdinOrOS returns ctx.Stdin if set, otherwise os.Stdin.

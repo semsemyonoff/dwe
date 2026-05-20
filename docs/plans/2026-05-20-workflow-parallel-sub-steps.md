@@ -160,8 +160,8 @@ Surface the same plan-time rules through `devbox validate commands` with proper 
 
 Add the parallel dispatch path. **Task 5 is verifiable WITHOUT live UI**: all status / failure dumps emit textually to `rc.Stderr` from the post-Wait pass. Task 7 layers `liveui.LiveLine` block-row callbacks on top (no other behavioural change), so this task stays independently testable in non-TTY mode.
 
-- [ ] in `internal/usercommands/runtime/runner_workflow.go`, change the step loop to switch on step kind: `step.Parallel != nil` → `runParallelGroup`; `step.Confirm != ""` → `runConfirmStep`; else → `runCommandStep`. **Container-level `ContinueOnError`** is honoured at the workflow-loop call site (mirroring the existing per-step pattern), NOT inside `runParallelGroup`: `if err := runParallelGroup(...); err != nil { if step.ContinueOnError { /* warn + continue */ } else { return err } }`. `runParallelGroup`'s signature is `(ctx, rc, group, containerStepIdx) error` — no `continueOnError` parameter
-- [ ] add `runParallelGroup(ctx context.Context, rc RunContext, group *model.WorkflowParallel, containerStepIdx int) error` that:
+- [x] in `internal/usercommands/runtime/runner_workflow.go`, change the step loop to switch on step kind: `step.Parallel != nil` → `runParallelGroup`; `step.Confirm != ""` → `runConfirmStep`; else → `runCommandStep`. **Container-level `ContinueOnError`** is honoured at the workflow-loop call site (mirroring the existing per-step pattern), NOT inside `runParallelGroup`: `if err := runParallelGroup(...); err != nil { if step.ContinueOnError { /* warn + continue */ } else { return err } }`. `runParallelGroup`'s signature is `(ctx, rc, group, containerStepIdx) error` — no `continueOnError` parameter
+- [x] add `runParallelGroup(ctx context.Context, rc RunContext, group *model.WorkflowParallel, containerStepIdx int) error` that:
   - resolves `maxConcurrent` (default `min(runtime.NumCPU(), len(group.Steps))`)
   - resolves `failFast` (default `true` when `FailFast == nil`)
   - **preflight: when + confirmation scan** — before launching ANY goroutine, walk `group.Steps` and build a `whenDecisions := make([]subDecision, n)` where `type subDecision struct { skip bool; err error }`. For each `sub`:
@@ -175,21 +175,21 @@ Add the parallel dispatch path. **Task 5 is verifiable WITHOUT live UI**: all st
   - declares a unified error sink: `emit := func(wrapped error) error { if failFast { return wrapped }; errsMu.Lock(); errs = append(errs, wrapped); errsMu.Unlock(); return nil }` — **every error path inside a goroutine routes through `emit`**, including log-open errors, sub.When eval errors, and sub-step exec errors. This guarantees no error is silently swallowed by `_ = eg.Wait()` in the fail_fast=false branch
   - declares `results := make([]subResult, n)` where `subResult{sub, err, output, skipped}` is set inside each goroutine (each goroutine writes to its own `results[i]` index — no race, no mutex needed for slice access). The failure dump (output between separators) is emitted SEQUENTIALLY from `runParallelGroup` after `eg.Wait()` returns, never from inside a goroutine. Avoids `bytes.Buffer`/`os.Stderr` interleaving and removes any need for a `stderr` mutex
   - propagates SIGTERM via `context.Context` cancellation (already wired through `runCommandStep` → `RunCommand` → `exec.CommandContext`)
-- [ ] **per-sub-step `when:` is NOT re-evaluated inside the goroutine** — the goroutine reads `whenDecisions[i]` (populated by preflight). If `whenDecisions[i].err != nil` → goroutine routes it via `emit(fmt.Errorf("workflow sub-step %q: when: %w", sub.Command, whenDecisions[i].err))`. If `whenDecisions[i].skip == true` → set `results[i].skipped = true` and return nil. Else proceed to `runCommandStep`. **Extract the evaluator as a small helper `evalWorkflowStepWhen(expr string, rc RunContext) (bool, error)`** so the sequential main loop and the preflight share one implementation. **No `live.*` calls in this task** — the skipped state is rendered textually by the post-Wait emit pass
-- [ ] per-sub-step output capture:
+- [x] **per-sub-step `when:` is NOT re-evaluated inside the goroutine** — the goroutine reads `whenDecisions[i]` (populated by preflight). If `whenDecisions[i].err != nil` → goroutine routes it via `emit(fmt.Errorf("workflow sub-step %q: when: %w", sub.Command, whenDecisions[i].err))`. If `whenDecisions[i].skip == true` → set `results[i].skipped = true` and return nil. Else proceed to `runCommandStep`. **Extract the evaluator as a small helper `evalWorkflowStepWhen(expr string, rc RunContext) (bool, error)`** so the sequential main loop and the preflight share one implementation. **No `live.*` calls in this task** — the skipped state is rendered textually by the post-Wait emit pass
+- [x] per-sub-step output capture:
   - per-goroutine `gRC := rc; gRC.UnderParallel = true` (value-copy)
   - open per-sub-step log: `subFile, _, openErr := pipeline.OpenSubStepLog(rc.ProjectRoot, "workflow", sanitizedWorkflowID, sub.Command, true)`. On `openErr != nil`: route via `emit(fmt.Errorf("workflow sub-step %q: open log: %w", sub.Command, openErr))` and return nil. `defer subFile.Close()` per-goroutine
   - per-sub-step buffer (for failure dump): `var buf bytes.Buffer` (per-goroutine, not shared with siblings; stored into `results[i].output` after sub-step finishes)
   - per-sub-step `lineTee` whose callback (a) appends frame to `buf` and (b) writes frame to `subFile` via `fmt.Fprintln`. **No live-UI callback in this task** — Task 7 adds that as a third callback branch
   - override `gRC.Stdout = &liveui.ANSIOnlyStripper{W: tee}`, `gRC.Stderr = gRC.Stdout` so the sub-step's `runCommandStep` writes only into this per-goroutine writer
-- [ ] **per-sub-step error wrapping + results assignment**: wrap as `fmt.Errorf("workflow sub-step %q: %w", sub.Command, err)` before passing to `emit`. **CRITICAL: assign `results[i].err = wrapped` BEFORE calling `emit(wrapped)` on every error path** (when-eval failure, log-open failure, runCommandStep failure). Otherwise the post-Wait emit pass reads `results[i].err == nil` for a sub-step that failed in setup and prints `✓ Done` for it. The single rule: `emit` receives the error AFTER `results[i].err` has been set
-- [ ] **post-Wait emit pass** (sequential, no race): after `eg.Wait()` returns, iterate `results` in order; emit textual status lines to `stderr(rc)`:
+- [x] **per-sub-step error wrapping + results assignment**: wrap as `fmt.Errorf("workflow sub-step %q: %w", sub.Command, err)` before passing to `emit`. **CRITICAL: assign `results[i].err = wrapped` BEFORE calling `emit(wrapped)` on every error path** (when-eval failure, log-open failure, runCommandStep failure). Otherwise the post-Wait emit pass reads `results[i].err == nil` for a sub-step that failed in setup and prints `✓ Done` for it. The single rule: `emit` receives the error AFTER `results[i].err` has been set
+- [x] **post-Wait emit pass** (sequential, no race): after `eg.Wait()` returns, iterate `results` in order; emit textual status lines to `stderr(rc)`:
   - skipped: `◎ [i/N] Skipped: <sub.Command> (when=false)`
   - succeeded: `✓ [i/N] Done: <sub.Command>` (optional — keep verbose unless noisy)
   - failed: `✗ [i/N] Failed: <sub.Command>` + `───── output ─────` + `result.output` + `──────────────────`
 
   Single-writer (the runParallelGroup goroutine) — no mutex, no race
-- [ ] write unit tests (table-driven where applicable, `t.Run` named subtests, run with `-race`):
+- [x] write unit tests (table-driven where applicable, `t.Run` named subtests, run with `-race`):
   - parallel group of 3 trivial commands runs concurrently (assert via shared atomic counter — start counter at 0, each sub-step increments and waits until counter ≥ 3 before returning; if any sub-step times out the test fails, proving they actually overlap)
   - `fail_fast: true` cancels siblings when one fails (sibling sees `ctx.Done()` and exits with `context.Canceled`)
   - `fail_fast: false` runs all and aggregates errors via `errors.Join`; each error has the `"workflow sub-step %q: %w"` wrap
@@ -201,8 +201,8 @@ Add the parallel dispatch path. **Task 5 is verifiable WITHOUT live UI**: all st
   - group-level `when:` false skips the entire group (handled at workflow loop, like existing per-step `when:`)
   - **confirmation preflight (direct)**: a parallel group whose sub-step references a `confirmation: true` user-command — without `--yes`, `runParallelGroup` returns the preflight error BEFORE launching any goroutine; with `--yes`, the group proceeds (the Task 6 runtime guard then ensures any *transitive* confirmation request still fails clearly, not via huh-prompt)
   - **confirmation preflight + when=false (lenient semantics)**: a parallel group with a `when: false` sub-step that references a `confirmation: true` user-command — preflight MUST skip the confirmation check for that sub-step (so the group proceeds even without `--yes`); other sub-steps' confirmation checks still apply. Regression test for Issue 3 in this review
-- [ ] add (or extend) `internal/usercommands/runtime/main_test.go` with `goleak.VerifyTestMain` so the runtime package gains the same goroutine-leak guarantee that `internal/pipeline` and `internal/liveui` have
-- [ ] run `go test -race ./internal/usercommands/runtime/...` — must pass
+- [x] add (or extend) `internal/usercommands/runtime/main_test.go` with `goleak.VerifyTestMain` so the runtime package gains the same goroutine-leak guarantee that `internal/pipeline` and `internal/liveui` have
+- [x] run `go test -race ./internal/usercommands/runtime/...` — must pass
 
 ### Task 6: Parallel-context guards — nested parallel + transitive confirmation
 
