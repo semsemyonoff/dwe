@@ -271,6 +271,64 @@ func TestHuhHooks_ConcurrentSetAndSnapshot(t *testing.T) {
 	}
 }
 
+// --- RunWithPromptHooks tests ---
+
+func TestRunWithPromptHooks_Order(t *testing.T) {
+	resetHooks(t)
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
+	err := RunWithPromptHooks(func() error {
+		order = append(order, "fn")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 3 || order[0] != "before" || order[1] != "fn" || order[2] != "after" {
+		t.Errorf("order=%v", order)
+	}
+}
+
+func TestRunWithPromptHooks_AfterFiresOnError(t *testing.T) {
+	resetHooks(t)
+	var afterCalled bool
+	SetHuhHooks(nil, func() { afterCalled = true })
+	sentinel := errors.New("boom")
+	err := RunWithPromptHooks(func() error { return sentinel })
+	if !errors.Is(err, sentinel) {
+		t.Errorf("want sentinel, got %v", err)
+	}
+	if !afterCalled {
+		t.Error("after hook must fire on error")
+	}
+}
+
+func TestRunWithPromptHooks_NilSafe(t *testing.T) {
+	resetHooks(t)
+	if err := RunWithPromptHooks(func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunWithPromptHooks_SurvivesMidClear(t *testing.T) {
+	resetHooks(t)
+	var afterCalled bool
+	SetHuhHooks(func() {}, func() { afterCalled = true })
+	err := RunWithPromptHooks(func() error {
+		ClearHuhHooks()
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !afterCalled {
+		t.Error("after hook must fire even when cleared mid-fn (snapshot semantics)")
+	}
+}
+
 func TestBuildPaletteApplierAllFields(t *testing.T) {
 	c := &config.StylesColors{
 		SectionTitle: "6",

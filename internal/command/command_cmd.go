@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/ui/cmdbrowser"
 	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
@@ -98,7 +100,10 @@ directly without showing a selector.`,
 			if err != nil {
 				return err
 			}
-			selector := selectCommandFn(defaultSelectCommand)
+			// inspect is read-only; tolerate config load errors and fall through
+			// with a nil cfg so the nil-safe ui.commands accessors return defaults.
+			cfg, _ := config.LoadConfig(flags.configPath)
+			selector := makeBrowserSelector(cfg, cmdbrowser.ModeInspect, true, nil)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
@@ -157,7 +162,8 @@ it runs directly without showing a selector.`,
 			if err != nil {
 				return err
 			}
-			selector := selectCommandFn(defaultSelectCommand)
+			var skipConfirmFromTUI bool
+			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
@@ -196,6 +202,9 @@ it runs directly without showing a selector.`,
 			// 1. --yes flag takes precedence
 			// 2. inherited DEVBOX_NONINTERACTIVE env var
 			shouldSkip := skipConfirm
+			if !shouldSkip && skipConfirmFromTUI {
+				shouldSkip = true
+			}
 			if !shouldSkip && (os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true") {
 				shouldSkip = true
 			}
@@ -234,7 +243,48 @@ func loadCommandRegistry(configPath string) (*usercommands.Registry, error) {
 // It receives a slice of CommandDefs and a display title, and returns the chosen ID.
 type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string, error)
 
+// makeBrowserSelector returns a selectCommandFn that drives the cmdbrowser
+// TUI. The returned closure captures cfg (for resolving ui.commands.*
+// defaults via the nil-safe accessors), mode, the includePrivate flag, and
+// (run-site only) a pointer to a bool that receives Result.SkipConfirm.
+//
+// For ModeInspect the skipConfirmOut pointer is unused (the y binding is
+// disabled in inspect mode); pass nil.
+func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut *bool) selectCommandFn {
+	return func(defs []*usercommands.CommandDef, title string) (string, error) {
+		items := make([]cmdbrowser.Item, len(defs))
+		for i, d := range defs {
+			var buf bytes.Buffer
+			printCommandInspect(&buf, d)
+			items[i] = cmdbrowser.Item{
+				ID:          d.ID,
+				Description: d.Description,
+				Type:        string(d.Type),
+				Private:     d.Private,
+				Inspect:     buf.String(),
+			}
+		}
+		opts := cmdbrowser.Options{
+			DefaultExpandedDepth: config.UICommandsDefaultDepth(cfg),
+			AutoCollapseEmpty:    config.UICommandsAutoCollapseEmpty(cfg),
+			ShowTypeBadges:       config.UICommandsShowTypeBadges(cfg),
+			IncludePrivate:       includePrivate,
+			Mode:                 mode,
+		}
+		res, err := cmdbrowser.Run(title, items, opts)
+		if err != nil {
+			return "", err
+		}
+		if skipConfirmOut != nil && res.SkipConfirm {
+			*skipConfirmOut = true
+		}
+		return defs[res.Idx].ID, nil
+	}
+}
+
 // defaultSelectCommand shows an interactive selector via ui.RunSelector.
+// Retained as the simple injection target for unit tests that exercise
+// resolveCommandID through the selectCommandFn type.
 func defaultSelectCommand(defs []*usercommands.CommandDef, title string) (string, error) {
 	items := make([]ui.SelectorItem, len(defs))
 	for i, d := range defs {

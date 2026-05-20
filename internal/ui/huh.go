@@ -60,6 +60,26 @@ func SnapshotHuhHooks() (before, after func()) {
 	return snapshotHuhHooks()
 }
 
+// RunWithPromptHooks runs fn wrapped by the snapshotted before/after hook pair.
+// It is the canonical entry point for full-screen prompt-like UI (e.g. the
+// command browser TUI) outside of internal/ui's huh-backed primitives: it
+// snapshots the current (before, after) pair once, calls before(), defers
+// after(), then invokes fn(). The after hook still fires when fn returns an
+// error so a paused LiveLine always resumes.
+//
+// Production callers should prefer this over SnapshotHuhHooks (which is
+// scoped to cross-package tests per its docstring).
+func RunWithPromptHooks(fn func() error) error {
+	before, after := snapshotHuhHooks()
+	if before != nil {
+		before()
+	}
+	if after != nil {
+		defer after()
+	}
+	return fn()
+}
+
 // huhTheme is the package-level huh.Theme built from devbox/styles.yml.
 // It defaults to ThemeBase + devbox glyph overrides (no project palette
 // applied) until ApplyStyles is called.
