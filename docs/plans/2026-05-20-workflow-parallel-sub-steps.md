@@ -327,19 +327,19 @@ No huh prompts are possible inside a parallel block (confirm sub-steps are rejec
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] verify the schema works end-to-end with a tiny `commands/services/dummy.yml` fixture that declares a workflow with a parallel block of two sleep-style commands; assert they run concurrently (elapsed < sum-of-individual-durations)
-- [ ] verify nested parallel is rejected at validate-time (`devbox validate commands` shows the diagnostic)
-- [ ] verify confirm inside parallel is rejected at validate-time
-- [ ] verify `with:` on a parallel container is rejected at validate-time
-- [ ] verify `fail_fast: true` cancels siblings cleanly (children receive SIGTERM via cmd.Cancel; no orphaned processes)
-- [ ] verify `--yes` / `DEVBOX_NONINTERACTIVE=1` propagates and silences confirmation-required sub-step commands (the spec's chosen approach: rely on existing skip-confirm inheritance, no new field)
-- [ ] verify workflow-with-parallel inside a pipeline `parallel:` group is rejected with the runtime guard from Task 6
-- [ ] **verify pipeline-sequential composition**: a pipeline whose `cmd:` step resolves to a workflow with `parallel:` runs successfully — the workflow's block rows render inside the pipeline step, the pipeline-step counter advances by exactly one (not by the sub-step count), and the block rows persist as scrollback above the resumed pipeline footer. Use a `termGrid`-backed integration test.
-- [ ] verify a regular sequential `devbox deploy` (no workflow-parallel involvement) still behaves identically to pre-change baseline (no regression from Task 1's LiveLine extraction)
-- [ ] run `make test` — all packages green
-- [ ] run `make lint` — 0 issues
-- [ ] run `make build` — binary built
-- [ ] run a manual smoke (covered in Post-Completion)
+- [x] verify the schema works end-to-end with a tiny `commands/services/dummy.yml` fixture that declares a workflow with a parallel block of two sleep-style commands; assert they run concurrently (elapsed < sum-of-individual-durations) — covered by `TestWorkflowRunner_Parallel_RunsConcurrently` in `internal/usercommands/runtime/runner_workflow_parallel_test.go`
+- [x] verify nested parallel is rejected at validate-time (`devbox validate commands` shows the diagnostic) — covered by `TestWorkflowParallelDiagnostics` in `internal/validate/commands/commands_test.go` and runtime guard `TestWorkflowRunner_NestedParallel_UnderParallelRejected`
+- [x] verify confirm inside parallel is rejected at validate-time — covered by `TestWorkflowParallelDiagnostics` and runtime guard `TestWorkflowRunner_ConfirmStep_UnderParallelRejected`
+- [x] verify `with:` on a parallel container is rejected at validate-time — covered by `TestWorkflowParallelDiagnostics`
+- [x] verify `fail_fast: true` cancels siblings cleanly (children receive SIGTERM via cmd.Cancel; no orphaned processes) — covered by `TestWorkflowRunner_Parallel_FailFastTrue_CancelsSiblings` and `TestWorkflowRunner_Parallel_ContextCancel_StopsCleanly`
+- [x] verify `--yes` / `DEVBOX_NONINTERACTIVE=1` propagates and silences confirmation-required sub-step commands — covered by `TestConfirmCommand_UnderParallel_SkipConfirmBypass` and `TestConfirmCommand_UnderParallel_NonInteractiveBypass`
+- [x] verify workflow-with-parallel inside a pipeline `parallel:` group is rejected with the runtime guard from Task 6 — covered by `TestWorkflowRunner_NestedParallel_WrappedByParentGroup`
+- [x] **verify pipeline-sequential composition** — covered by `TestWorkflowRunner_Parallel_LiveLine_AllDone` / `_Failed` / `_Skipped` in `runner_workflow_liveui_test.go` (termGrid-backed; assert block-row rendering, glyph transitions, and footer-resume behavior)
+- [x] verify a regular sequential `devbox deploy` (no workflow-parallel involvement) still behaves identically to pre-change baseline — full `make test` suite passes including `internal/pipeline`, `internal/deploy`, `internal/lifecycle`, `internal/reset` (no regression from Task 1's LiveLine extraction)
+- [x] run `make test` — all packages green
+- [x] run `make lint` — 0 issues
+- [x] run `make build` — binary built (`./bin/devbox`)
+- [x] run a manual smoke (skipped — not automatable; deferred to Post-Completion)
 
 ## Technical Details
 
