@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"devbox-cli/internal/validate"
 
@@ -60,6 +61,22 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	var diags []validate.Diagnostic
+	// Warn on unknown keys directly under ui: (e.g. `command` instead of `commands`).
+	for i := 0; i+1 < len(top.UI.Content); i += 2 {
+		k := top.UI.Content[i].Value
+		if k != "commands" {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityWarning,
+				Domain:   "config",
+				Target:   "config.ui",
+				File:     file,
+				Line:     top.UI.Content[i].Line,
+				Message:  "unknown key under ui: " + k,
+				Hint:     "The only supported key under ui: is `commands:`.",
+			})
+		}
+	}
+
 	// Find ui.commands sub-node. Check for a non-mapping scalar before
 	// calling findMappingChild, which silently returns nil for non-mappings.
 	if raw := rawChild(&top.UI, "commands"); raw != nil && raw.Kind != yaml.MappingNode {
@@ -97,7 +114,8 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			unknown = append(unknown, unknownEntry{name: key, line: keyNode.Line})
 			continue
 		}
-		if key == "default_expanded_depth" {
+		switch key {
+		case "default_expanded_depth":
 			if valNode.Kind == yaml.ScalarNode {
 				if d, err := strconv.Atoi(valNode.Value); err != nil || d < 0 {
 					diags = append(diags, validate.Diagnostic{
@@ -119,6 +137,25 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					Line:     valNode.Line,
 					Message:  "ui.commands.default_expanded_depth must be an integer",
 					Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
+				})
+			}
+		case "auto_collapse_empty", "show_type_badges":
+			valid := false
+			if valNode.Kind == yaml.ScalarNode {
+				switch strings.ToLower(valNode.Value) {
+				case "true", "false", "yes", "no", "on", "off":
+					valid = true
+				}
+			}
+			if !valid {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   "config.ui",
+					File:     file,
+					Line:     valNode.Line,
+					Message:  "ui.commands." + key + " must be a boolean (true or false), got " + valNode.Value,
+					Hint:     "Use `true` or `false`.",
 				})
 			}
 		}

@@ -67,6 +67,24 @@ func TestUIValidator(t *testing.T) {
 			wantSev:    validate.SeverityError,
 			wantSubstr: "default_expanded_depth",
 		},
+		{
+			name:       "unknown key under ui is warning",
+			body:       "schema_version: \"2\"\nui:\n  command:\n    default_expanded_depth: 2\n",
+			wantSev:    validate.SeverityWarning,
+			wantSubstr: "command",
+		},
+		{
+			name:       "non-boolean auto_collapse_empty is error",
+			body:       "schema_version: \"2\"\nui:\n  commands:\n    auto_collapse_empty: 42\n",
+			wantSev:    validate.SeverityError,
+			wantSubstr: "auto_collapse_empty",
+		},
+		{
+			name:       "non-boolean show_type_badges is error",
+			body:       "schema_version: \"2\"\nui:\n  commands:\n    show_type_badges: [yes, no]\n",
+			wantSev:    validate.SeverityError,
+			wantSubstr: "show_type_badges",
+		},
 	}
 
 	for _, tc := range cases {

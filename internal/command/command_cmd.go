@@ -485,6 +485,10 @@ func printCommandInspect(w io.Writer, def *usercommands.CommandDef) {
 	}
 
 	switch def.Type {
+	case usercommands.CommandTypeDevbox:
+		if def.Cmd != "" {
+			def2("cmd", def.Cmd, 2)
+		}
 	case usercommands.CommandTypeShell:
 		if def.Cmd != "" {
 			def2("cmd", def.Cmd, 2)
