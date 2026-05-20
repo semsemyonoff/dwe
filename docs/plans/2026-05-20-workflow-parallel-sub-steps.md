@@ -140,21 +140,21 @@ Surface the same plan-time rules through `devbox validate commands` with proper 
   - `cf.Validate()` errors the validator did NOT specifically categorise → **error** severity with the raw `Validate()` message (so `devbox validate` still flags the problem; the user just doesn't get a polished category)
   - **No `info`-severity loader-fallback** — info diagnostics are reserved for "explanatory but non-failing" cases (e.g. template-pack override notices). Loader/validator failures are always actionable errors
 
-- [ ] in `internal/usercommands/registry/`, refactor the workflow-step cross-reference traversal into a recursive walker:
+- [x] in `internal/usercommands/registry/`, refactor the workflow-step cross-reference traversal into a recursive walker:
   - signature: `walkWorkflowSteps(steps []model.WorkflowStep, parentPath string, visit func(path string, step model.WorkflowStep))`
   - `parentPath` is the path prefix WITHOUT the trailing index, e.g. `"step"` for the root call or `"step[2].parallel.steps"` for nested
   - for each step at index `i`: compute `path := fmt.Sprintf("%s[%d]", parentPath, i)`; call `visit(path, step)`
   - if the step has `Parallel != nil`, recurse via `walkWorkflowSteps(step.Parallel.Steps, path+".parallel.steps", visit)`
   - initial call from the validator: `walkWorkflowSteps(cmd.Steps, "step", visit)`. Resulting paths: top-level `step[0]`, nested `step[2].parallel.steps[0]`, and (structurally) deeper-nested `step[2].parallel.steps[0].parallel.steps[1]` — though Task 2's `Validate()` already rejects depth ≥ 2 at decode time, the walker handles arbitrary depth defensively
-- [ ] update `Registry.Validate` / `Diagnostics` callers to use the walker for command-reference resolution; emit diagnostics with the path-qualified location string in the `Target` or `Message` column
-- [ ] in `internal/validate/commands/`, add diagnostics emitted by the workflow validator: nested parallel, confirm in parallel, with on parallel container, `parallel.steps` < 2, **unknown command referenced from `parallel.steps`** (with full path like `commands.<id>.steps[2].parallel.steps[0]`)
-- [ ] each diagnostic includes a `Hint:` line pointing the user at the constraint (e.g., "nested parallel is not supported in v1; flatten the group", "unknown command — check the spelling or define it in commands/")
-- [ ] write validator unit tests (table-driven, named subtests):
+- [x] update `Registry.Validate` / `Diagnostics` callers to use the walker for command-reference resolution; emit diagnostics with the path-qualified location string in the `Target` or `Message` column
+- [x] in `internal/validate/commands/`, add diagnostics emitted by the workflow validator: nested parallel, confirm in parallel, with on parallel container, `parallel.steps` < 2, **unknown command referenced from `parallel.steps`** (with full path like `commands.<id>.steps[2].parallel.steps[0]`)
+- [x] each diagnostic includes a `Hint:` line pointing the user at the constraint (e.g., "nested parallel is not supported in v1; flatten the group", "unknown command — check the spelling or define it in commands/")
+- [x] write validator unit tests (table-driven, named subtests):
   - nested parallel diagnostic fires with correct path
   - confirm in parallel diagnostic fires with correct path
   - **unknown command inside parallel.steps** → diagnostic with path `step[i].parallel.steps[j]` (regression test for Issue 2 in this review)
   - valid parallel workflow produces no diagnostics
-- [ ] run `go test ./internal/validate/... ./internal/usercommands/registry/...` — must pass
+- [x] run `go test ./internal/validate/... ./internal/usercommands/registry/...` — must pass
 
 ### Task 5: Workflow runner — branch + `runParallelGroup` + per-sub-step log capture (no live UI)
 

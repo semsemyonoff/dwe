@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -95,6 +96,208 @@ func TestValidator(t *testing.T) {
 			}
 			diags := v.Run(ctx)
 			tt.checkDiag(t, diags)
+		})
+	}
+}
+
+func TestWorkflowParallelDiagnostics(t *testing.T) {
+	tests := []struct {
+		name      string
+		yaml      string
+		checkDiag func(*testing.T, []validate.Diagnostic)
+	}{
+		{
+			name: "nested_parallel_rejected",
+			yaml: `commands:
+  outer:
+    description: outer workflow
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: workflow.inner
+            - parallel:
+                steps:
+                  - command: workflow.leaf-a
+                  - command: workflow.leaf-b
+  inner:
+    description: inner workflow
+    type: workflow
+    steps:
+      - command: workflow.leaf-a
+  leaf-a:
+    description: leaf
+    type: shell
+    cmd: echo a
+  leaf-b:
+    description: leaf
+    type: shell
+    cmd: echo b
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						d.Target == "commands:workflow.outer" &&
+						strings.Contains(d.Message, "step[0].parallel.steps[1]: nested parallel is not supported") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected nested-parallel diagnostic with path; got: %#v", diags)
+			},
+		},
+		{
+			name: "confirm_in_parallel_rejected",
+			yaml: `commands:
+  bad:
+    description: bad workflow
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: workflow.leaf-a
+            - confirm: are you sure
+  leaf-a:
+    description: leaf
+    type: shell
+    cmd: echo a
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Message, "step[0].parallel.steps[1]: confirm is not allowed inside a parallel group") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected confirm-in-parallel diagnostic; got: %#v", diags)
+			},
+		},
+		{
+			name: "with_on_parallel_container_rejected",
+			yaml: `commands:
+  bad:
+    description: bad workflow
+    type: workflow
+    steps:
+      - with:
+          foo: bar
+        parallel:
+          steps:
+            - command: workflow.leaf-a
+            - command: workflow.leaf-b
+  leaf-a:
+    description: leaf
+    type: shell
+    cmd: echo a
+  leaf-b:
+    description: leaf
+    type: shell
+    cmd: echo b
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Message, "step[0]: with may not be combined with parallel") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected with-on-container diagnostic; got: %#v", diags)
+			},
+		},
+		{
+			name: "parallel_steps_too_few_rejected",
+			yaml: `commands:
+  bad:
+    description: bad workflow
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: workflow.leaf-a
+  leaf-a:
+    description: leaf
+    type: shell
+    cmd: echo a
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Message, "step[0].parallel.steps: must contain at least 2 sub-steps") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected parallel-steps-too-few diagnostic; got: %#v", diags)
+			},
+		},
+		{
+			name: "unknown_command_in_parallel_steps_rejected",
+			yaml: `commands:
+  bad:
+    description: bad workflow
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: workflow.leaf-a
+            - command: workflow.does-not-exist
+  leaf-a:
+    description: leaf
+    type: shell
+    cmd: echo a
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						d.Target == "commands:workflow.bad" &&
+						strings.Contains(d.Message, "step[0].parallel.steps[1]") &&
+						strings.Contains(d.Message, "references unknown command") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected path-qualified unknown-command diagnostic; got: %#v", diags)
+			},
+		},
+		{
+			name: "valid_parallel_workflow_has_no_diagnostics",
+			yaml: `commands:
+  good:
+    description: good workflow
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: workflow.leaf-a
+            - command: workflow.leaf-b
+  leaf-a:
+    description: leaf
+    type: shell
+    cmd: echo a
+  leaf-b:
+    description: leaf
+    type: shell
+    cmd: echo b
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				for _, d := range diags {
+					require.NotEqual(t, validate.SeverityError, d.Severity, "unexpected error diagnostic: %#v", d)
+				}
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cmdDir := filepath.Join(dir, "devbox", "commands")
+			require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "workflow.yml"), []byte(tc.yaml), 0o644))
+
+			v := &Validator{}
+			diags := v.Run(validate.Context{ProjectRoot: dir})
+			tc.checkDiag(t, diags)
 		})
 	}
 }

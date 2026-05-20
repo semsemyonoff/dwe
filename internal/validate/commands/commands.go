@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"devbox-cli/internal/usercommands/loader"
 	"devbox-cli/internal/usercommands/model"
@@ -63,10 +65,12 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 		}
 	}
 
-	// Parse all command files
+	// Parse all command files WITHOUT running cf.Validate() — we want to surface
+	// categorised diagnostics for known semantic errors below before falling
+	// back to the raw Validate() message for anything else.
 	var parsedFiles []*model.CommandFile
 	for _, path := range paths {
-		cf, err := loader.LoadCommandFile(path, baseDir)
+		cf, err := loader.ParseCommandFile(path, baseDir)
 		if err != nil {
 			relFile, _ := filepath.Rel(ctx.ProjectRoot, path)
 			diags = append(diags, validate.Diagnostic{
@@ -81,6 +85,48 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 			continue
 		}
 		parsedFiles = append(parsedFiles, cf)
+	}
+
+	// Emit categorised structural diagnostics for workflow steps (parallel rules)
+	// before the cross-reference pass. Each command file is checked independently
+	// so that one bad file does not mask issues in another. We track per-file
+	// whether any structural diagnostic fired so the raw cf.Validate() fallback
+	// below only emits for files we did NOT specifically categorise.
+	categorised := make(map[string]bool)
+	for _, cf := range parsedFiles {
+		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
+		for _, name := range sortedCommandNames(cf) {
+			cmd := cf.Commands[name]
+			if cmd.Type != model.CommandTypeWorkflow {
+				continue
+			}
+			structural := workflowStructuralDiagnostics(cmd, relFile)
+			if len(structural) > 0 {
+				categorised[cf.FilePath] = true
+				diags = append(diags, structural...)
+			}
+		}
+	}
+
+	// Fallback: surface cf.Validate() failures for files where we did NOT emit
+	// any categorised diagnostic, so semantic errors we don't specifically
+	// recognise still produce an actionable error diagnostic.
+	for _, cf := range parsedFiles {
+		if categorised[cf.FilePath] {
+			continue
+		}
+		if err := cf.Validate(); err != nil {
+			relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "commands",
+				Target:   "commands",
+				File:     relFile,
+				Line:     0,
+				Message:  err.Error(),
+				Hint:     "fix the reported field combination",
+			})
+		}
 	}
 
 	// Build registry from parsed files
@@ -107,7 +153,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 			Target:   fmt.Sprintf("commands:%s", issue.CommandID),
 			File:     "",
 			Line:     0,
-			Message:  fmt.Sprintf("step[%d]: %s", issue.StepIndex, issue.Message),
+			Message:  fmt.Sprintf("%s: %s", issue.Path, issue.Message),
 			Hint:     "check that workflow steps reference valid command IDs",
 		})
 	}
@@ -133,4 +179,83 @@ func All() []validate.Validator {
 	return []validate.Validator{
 		&Validator{},
 	}
+}
+
+func sortedCommandNames(cf *model.CommandFile) []string {
+	names := make([]string, 0, len(cf.Commands))
+	for name := range cf.Commands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// workflowStructuralDiagnostics emits categorised diagnostics for known
+// workflow-step rule violations: nested parallel, confirm inside parallel,
+// with on a parallel container, and parallel.steps with fewer than two
+// sub-steps. It walks recursively so violations at any depth are reported
+// with a path-qualified location.
+func workflowStructuralDiagnostics(cmd model.CommandDef, relFile string) []validate.Diagnostic {
+	var out []validate.Diagnostic
+	target := fmt.Sprintf("commands:%s", cmd.ID)
+	registry.WalkWorkflowSteps(cmd.Steps, "step", func(path string, step model.WorkflowStep) {
+		if step.Parallel == nil {
+			return
+		}
+		if strings.Contains(path, ".parallel.steps[") {
+			out = append(out, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "commands",
+				Target:   target,
+				File:     relFile,
+				Message:  fmt.Sprintf("%s: nested parallel is not supported in v1", path),
+				Hint:     "flatten the parallel group or wrap the inner work in a separate workflow command",
+			})
+			return
+		}
+		if len(step.With) > 0 {
+			out = append(out, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "commands",
+				Target:   target,
+				File:     relFile,
+				Message:  fmt.Sprintf("%s: with may not be combined with parallel", path),
+				Hint:     "move `with:` onto each sub-step instead of the parallel container",
+			})
+		}
+		if len(step.Parallel.Steps) < 2 {
+			out = append(out, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "commands",
+				Target:   target,
+				File:     relFile,
+				Message:  fmt.Sprintf("%s.parallel.steps: must contain at least 2 sub-steps", path),
+				Hint:     "remove the parallel block or add another sub-step",
+			})
+		}
+		for j, sub := range step.Parallel.Steps {
+			subPath := fmt.Sprintf("%s.parallel.steps[%d]", path, j)
+			if sub.Confirm != "" {
+				out = append(out, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   target,
+					File:     relFile,
+					Message:  fmt.Sprintf("%s: confirm is not allowed inside a parallel group", subPath),
+					Hint:     "move confirm steps outside the parallel block",
+				})
+			}
+			if sub.Parallel == nil && sub.Confirm == "" && sub.Command == "" {
+				out = append(out, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   target,
+					File:     relFile,
+					Message:  fmt.Sprintf("%s: command is required", subPath),
+					Hint:     "set `command:` to a registered command ID",
+				})
+			}
+		}
+	})
+	return out
 }

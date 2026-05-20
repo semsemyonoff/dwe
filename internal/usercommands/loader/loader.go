@@ -58,13 +58,17 @@ func ComputeCommandID(group, localName string) string {
 	return group + "." + localName
 }
 
-// LoadCommandFile reads, parses, and validates a single command YAML file.
-// It sets the computed FilePath and GroupID fields and populates each
-// CommandDef's computed ID, Group, and LocalName fields.
+// ParseCommandFile reads and parses a single command YAML file and populates
+// the derived metadata fields (FilePath, GroupID, and each CommandDef's ID,
+// Group, LocalName) without running cf.Validate(). Callers that want strict
+// semantic validation should use LoadCommandFile instead.
+//
+// The split lets validate/commands emit categorised diagnostics for semantic
+// errors that cf.Validate() would otherwise reject up front.
 //
 // absPath must be an absolute path. baseDir is the commands root directory
 // used to derive the relative path for group computation.
-func LoadCommandFile(absPath, baseDir string) (*model.CommandFile, error) {
+func ParseCommandFile(absPath, baseDir string) (*model.CommandFile, error) {
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("read command file %s: %w", absPath, err)
@@ -89,9 +93,22 @@ func LoadCommandFile(absPath, baseDir string) (*model.CommandFile, error) {
 		cf.Commands[name] = cmd
 	}
 
+	return cf, nil
+}
+
+// LoadCommandFile reads, parses, and validates a single command YAML file.
+// It sets the computed FilePath and GroupID fields and populates each
+// CommandDef's computed ID, Group, and LocalName fields.
+//
+// absPath must be an absolute path. baseDir is the commands root directory
+// used to derive the relative path for group computation.
+func LoadCommandFile(absPath, baseDir string) (*model.CommandFile, error) {
+	cf, err := ParseCommandFile(absPath, baseDir)
+	if err != nil {
+		return cf, err
+	}
 	if err := cf.Validate(); err != nil {
 		return nil, err
 	}
-
 	return cf, nil
 }

@@ -376,3 +376,42 @@ func TestRegistry_Validate_NoWorkflows(t *testing.T) {
 		t.Errorf("expected no error with no workflows, got: %v", err)
 	}
 }
+
+func TestWalkWorkflowSteps_RecursesIntoParallel(t *testing.T) {
+	// Build a registry with a workflow whose parallel sub-step references an
+	// unknown command. Diagnostics() must surface it with a path-qualified
+	// location (regression for the recursive walker).
+	yml := `
+commands:
+  outer:
+    type: workflow
+    description: outer
+    steps:
+      - command: db.up
+      - parallel:
+          steps:
+            - command: db.up
+            - command: db.does-not-exist
+`
+	reg := mustRegistry(t, map[string]string{
+		"db.yml":       dbYAML,
+		"workflow.yml": yml,
+	})
+	issues := reg.Diagnostics()
+	var got *ValidationIssue
+	for i := range issues {
+		if strings.Contains(issues[i].Path, "step[1].parallel.steps[1]") {
+			got = &issues[i]
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("expected path-qualified diagnostic for parallel sub-step; got %#v", issues)
+	}
+	if got.CommandID != "workflow.outer" {
+		t.Errorf("CommandID = %q, want workflow.outer", got.CommandID)
+	}
+	if !strings.Contains(got.Message, "db.does-not-exist") {
+		t.Errorf("Message = %q, expected to reference unknown command", got.Message)
+	}
+}

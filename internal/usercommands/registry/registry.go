@@ -184,16 +184,16 @@ func (r *Registry) Validate() error {
 		if cmd.Type != model.CommandTypeWorkflow {
 			continue
 		}
-		for i, step := range cmd.Steps {
+		WalkWorkflowSteps(cmd.Steps, "step", func(path string, step model.WorkflowStep) {
 			if step.Command == "" {
-				continue
+				return
 			}
 			if _, ok := r.byID[step.Command]; !ok {
 				errs = append(errs,
-					fmt.Sprintf("command %q step[%d]: references unknown command %q",
-						cmd.ID, i, step.Command))
+					fmt.Sprintf("command %q %s: references unknown command %q",
+						cmd.ID, path, step.Command))
 			}
-		}
+		})
 	}
 	if len(errs) > 0 {
 		sort.Strings(errs)
@@ -205,37 +205,59 @@ func (r *Registry) Validate() error {
 // ValidationIssue represents a single cross-reference validation issue.
 type ValidationIssue struct {
 	CommandID string // the command ID that has the issue
-	StepIndex int    // index within command's Steps slice (0-based)
-	Message   string // the validation issue message
+	// Path is the human-readable location of the issue within the command's
+	// step tree. For top-level steps it is "step[i]"; for parallel sub-steps
+	// it is "step[i].parallel.steps[j]".
+	Path    string
+	Message string // the validation issue message
+}
+
+// WalkWorkflowSteps recursively visits every step in a workflow tree, including
+// sub-steps inside Parallel containers. parentPath is the path prefix WITHOUT
+// the trailing index; the root call uses "step".
+//
+// Each call to visit receives a path of the form parentPath[i] (e.g. "step[0]"
+// or "step[2].parallel.steps[1]") and the corresponding step.
+func WalkWorkflowSteps(steps []model.WorkflowStep, parentPath string, visit func(path string, step model.WorkflowStep)) {
+	for i := range steps {
+		step := steps[i]
+		path := fmt.Sprintf("%s[%d]", parentPath, i)
+		visit(path, step)
+		if step.Parallel != nil {
+			WalkWorkflowSteps(step.Parallel.Steps, path+".parallel.steps", visit)
+		}
+	}
 }
 
 // Diagnostics returns all cross-reference validation issues found in the registry.
-// Returns an empty slice if the registry is valid.
+// Returns an empty slice if the registry is valid. The walker recurses into
+// Parallel sub-steps so unknown command references inside parallel groups are
+// reported with a path-qualified location.
 func (r *Registry) Diagnostics() []ValidationIssue {
 	var issues []ValidationIssue
 	for _, cmd := range r.byID {
 		if cmd.Type != model.CommandTypeWorkflow {
 			continue
 		}
-		for i, step := range cmd.Steps {
+		WalkWorkflowSteps(cmd.Steps, "step", func(path string, step model.WorkflowStep) {
 			if step.Command == "" {
-				continue
+				return
 			}
 			if _, ok := r.byID[step.Command]; !ok {
 				issues = append(issues, ValidationIssue{
 					CommandID: cmd.ID,
-					StepIndex: i,
+					Path:      path,
 					Message:   fmt.Sprintf("references unknown command %q", step.Command),
 				})
 			}
-		}
+		})
 	}
-	// Sort for determinism: by command ID, then by step index
+	// Sort for determinism: by command ID, then by path
 	sort.Slice(issues, func(i, j int) bool {
 		if issues[i].CommandID != issues[j].CommandID {
 			return issues[i].CommandID < issues[j].CommandID
 		}
-		return issues[i].StepIndex < issues[j].StepIndex
+		return issues[i].Path < issues[j].Path
 	})
 	return issues
 }
