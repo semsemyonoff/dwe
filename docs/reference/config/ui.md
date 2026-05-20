@@ -18,7 +18,7 @@ ui:
 
 Controls how many tree levels are expanded by default when the command browser opens. Negative values are clamped to `0` by the accessor and rejected as an error by the validator.
 
-**Note:** Because `default_expanded_depth` is a plain `int`, YAML cannot distinguish an absent key from an explicit `0` — both are deserialized as zero and the accessor returns the default of `3`. Setting `default_expanded_depth: 0` is therefore equivalent to omitting the key. Use `1` to expand only the top-level groups; any positive integer expands to that depth.
+Like `auto_collapse_empty` and `show_type_badges`, this field uses a `*int` pointer so the loader can distinguish an absent key (nil → use the spec default of `3`) from an explicit value. Setting `default_expanded_depth: 0` means all-collapsed (no groups open on entry); omitting the key restores the default of `3`. Use `1` to expand only the top-level groups; any positive integer expands to that depth.
 
 ### `ui.commands.auto_collapse_empty`
 
@@ -28,11 +28,13 @@ When `true` (default), fuzzy-filter sessions automatically collapse and dim subt
 
 When `true` (default), the right-hand command list shows a colour-coded type badge (`shell`, `script`, `workflow`, `service_exec`, `service_run`, `builtin`, `devbox`) next to each command ID. Set `false` to suppress badges on narrow or monochrome terminals.
 
-## `*bool` semantics — omit vs `false`
+## Pointer semantics — omit vs explicit zero
 
-`auto_collapse_empty` and `show_type_badges` use the same `*bool` pattern as `deploy.log` and `service.render.<kind>.enabled`: an absent key means "use the spec default" (which is `true` for both), while an explicit `false` is treated as a deliberate opt-out and honoured by the accessors. Plain `bool` would conflate these two states because an absent key and an explicit `false` both deserialize to the zero value.
+All three fields (`default_expanded_depth`, `auto_collapse_empty`, `show_type_badges`) use pointer types (`*int` / `*bool`) so the loader can distinguish an absent key (nil → use the spec default) from an explicit value. Plain `int`/`bool` would conflate these two states because an absent key and an explicit `0`/`false` both deserialize to the zero value.
 
-Practical implication: to disable a default-true knob you must write the explicit `false`; deleting the key restores the default. This is the only knob in `devbox.yml` where the distinction is observable.
+Practical implications:
+- Setting `default_expanded_depth: 0` collapses all groups on entry; omitting the key gives the default of `3`.
+- Setting `auto_collapse_empty: false` or `show_type_badges: false` is a deliberate opt-out; omitting either key restores its default of `true`.
 
 ## Example
 

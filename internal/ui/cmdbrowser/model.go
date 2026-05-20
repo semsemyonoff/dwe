@@ -513,7 +513,7 @@ func leftWidth(w int) int {
 }
 
 func rightWidth(w int) int {
-	return max(w-leftWidth(w)-2, 10)
+	return max(w-leftWidth(w)-4, 10)
 }
 
 // showBadges returns true for the full two-panel bucket (≥ 100 cols).

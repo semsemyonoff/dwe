@@ -49,6 +49,13 @@ func (m *Model) exitFilter() {
 		}
 	}
 	m.filter.restoreExpansion(m.tree)
+	// After expansion is restored the saved state may have kept the focused
+	// node's parent collapsed, leaving focusedID pointing to a hidden node.
+	// Walk up to the nearest visible ancestor so the tree and right panel
+	// stay consistent.
+	if m.tree.focusedID != "" && m.tree.indexOfFocused() < 0 {
+		m.tree.focusedID = m.tree.nearestVisibleAncestor(m.tree.focusedID)
+	}
 	m.filter = nil
 	m.focus = focusRight
 	m.refreshList()

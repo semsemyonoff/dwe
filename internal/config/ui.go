@@ -12,18 +12,16 @@ type UIConfig struct {
 // UICommandsConfig configures the interactive command browser used by
 // `devbox commands run` / `inspect` when invoked without an exact ID.
 //
-// Boolean fields are pointers (*bool) so the loader can distinguish nil
-// (key absent → use the spec default) from &false (explicit user opt-out).
-// Plain bool would conflate these two states because an absent key and an
-// explicit `false` both deserialize to the zero value. Same pattern as
-// DeployConfig.Log already in this package.
+// All fields are pointers so the loader can distinguish nil (key absent →
+// use the spec default) from an explicit zero/false value. Plain int/bool
+// would conflate these two states because an absent key and an explicit 0/false
+// both deserialize to the zero value. Same pattern as DeployConfig.Log *bool
+// already in this package.
 type UICommandsConfig struct {
 	// DefaultExpandedDepth controls how many tree levels are expanded by
-	// default in the command browser. Negative values are clamped to 0.
-	// Because plain int cannot distinguish 0 from absent after YAML unmarshal,
-	// 0 is treated as "unset" and the default of 3 applies — see the accessor.
-	// Defaults to 3 when unset.
-	DefaultExpandedDepth int `yaml:"default_expanded_depth"`
+	// default in the command browser. Negative values are clamped to 0;
+	// 0 means all-collapsed. Defaults to 3 when nil (key absent).
+	DefaultExpandedDepth *int `yaml:"default_expanded_depth"`
 	// AutoCollapseEmpty controls whether zero-match subtrees collapse
 	// automatically during a fuzzy filter session. Defaults to true.
 	AutoCollapseEmpty *bool `yaml:"auto_collapse_empty"`
@@ -33,21 +31,14 @@ type UICommandsConfig struct {
 }
 
 // UICommandsDefaultDepth returns the resolved default-expanded-depth value
-// (negative values clamp to 0; default 3 when unset). Safe when cfg is nil.
+// (nil → 3; negative values clamp to 0; explicit 0 = all-collapsed). Safe when cfg is nil.
 func UICommandsDefaultDepth(cfg *DevboxConfig) int {
-	if cfg == nil {
+	if cfg == nil || cfg.UI.Commands.DefaultExpandedDepth == nil {
 		return 3
 	}
-	d := cfg.UI.Commands.DefaultExpandedDepth
+	d := *cfg.UI.Commands.DefaultExpandedDepth
 	if d < 0 {
 		return 0
-	}
-	// A zero value is indistinguishable from an absent key under YAML
-	// unmarshal for plain int. Both map to 3 (the default). Users cannot
-	// configure all-collapsed via this plain-int field; the validator hint
-	// documents this limitation. Documented behaviour.
-	if d == 0 {
-		return 3
 	}
 	return d
 }

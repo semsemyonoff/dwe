@@ -2,6 +2,8 @@ package config
 
 import "testing"
 
+func intPtr(v int) *int { return &v }
+
 func TestUICommandsDefaultDepth(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -11,9 +13,10 @@ func TestUICommandsDefaultDepth(t *testing.T) {
 	}{
 		{"nil cfg", nil, 3},
 		{"missing block", &DevboxConfig{}, 3},
-		{"zero treated as default", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: 0}}}, 3},
-		{"explicit positive", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: 5}}}, 5},
-		{"negative clamps to 0", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: -2}}}, 0},
+		{"nil field defaults to 3", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: nil}}}, 3},
+		{"explicit zero all-collapsed", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: intPtr(0)}}}, 0},
+		{"explicit positive", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: intPtr(5)}}}, 5},
+		{"negative clamps to 0", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: intPtr(-2)}}}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

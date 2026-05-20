@@ -160,6 +160,28 @@ func TestSinglePanel_EnterOnHeaderIsNoOp(t *testing.T) {
 	}
 }
 
+// TestTwoPanel_TotalWidthFitsTerminal verifies that the joined two-panel body
+// (left + right bordered panels) does not exceed the terminal width. Prior to
+// the fix rightWidth subtracted only 2 (left panel's borders) instead of 4
+// (both panels' borders), making the rendered output 2 columns too wide.
+func TestTwoPanel_TotalWidthFitsTerminal(t *testing.T) {
+	t.Parallel()
+	for _, w := range []int{80, 100, 120, 140} {
+		m := newModel("pick", narrowItems(), DefaultOptions(), w, 30)
+		out := m.View().Content
+		for line := range strings.SplitSeq(out, "\n") {
+			// Ignore the footer line — the help text may soft-wrap beyond the
+			// panel width on very wide terminals (it uses its own logic).
+			if !strings.ContainsAny(line, "│┌┐└┘") {
+				continue
+			}
+			if got := lipgloss.Width(line); got > w {
+				t.Errorf("w=%d: bordered line width=%d exceeds terminal; line=%q", w, got, line)
+			}
+		}
+	}
+}
+
 func TestSinglePanel_ResizeAcrossBoundaryRebuildsList(t *testing.T) {
 	// Start in two-panel mode, resize down into single-panel.
 	m := newModel("t", narrowItems(), DefaultOptions(), 120, 30)

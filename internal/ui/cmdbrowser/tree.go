@@ -266,6 +266,25 @@ func (tm *treeModel) toggleFocused() {
 	tm.rebuildVisible()
 }
 
+// nearestVisibleAncestor returns the id of the nearest ancestor of id (walking
+// upward via groupOf) that currently appears in the visible slice. Returns ""
+// when no non-root visible ancestor exists, meaning the right panel should show
+// root-level commands.
+func (tm *treeModel) nearestVisibleAncestor(id string) string {
+	visible := make(map[string]bool, len(tm.visible))
+	for _, n := range tm.visible {
+		visible[n.id] = true
+	}
+	g := id
+	for g != "" {
+		if visible[g] {
+			return g
+		}
+		g = groupOf(g)
+	}
+	return ""
+}
+
 // itemsForFocus returns the indices of items directly attached to the
 // focused group (after IncludePrivate filtering). Right-panel rendering
 // consumes this in Task 3; Task 4 wires the list.Model.

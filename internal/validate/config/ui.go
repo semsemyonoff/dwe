@@ -89,7 +89,7 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					File:     file,
 					Line:     valNode.Line,
 					Message:  "ui.commands.default_expanded_depth must be >= 0, got " + valNode.Value,
-					Hint:     "Use a positive integer to expand to that depth (e.g. 1 expands only top-level groups). 0 is indistinguishable from absent and treated as the default depth of 3.",
+					Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
 				})
 			}
 		}

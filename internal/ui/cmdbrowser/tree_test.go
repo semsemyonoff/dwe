@@ -354,3 +354,31 @@ func TestTree_Snapshot(t *testing.T) {
 func contains(haystack []string, needle string) bool {
 	return slices.Contains(haystack, needle)
 }
+
+func TestNearestVisibleAncestor(t *testing.T) {
+	t.Parallel()
+	// Depth 0: only top-level groups are visible (db, services). Their children
+	// and deeper nodes are collapsed.
+	tm := newTreeModel(sampleItems(), false, 0)
+
+	cases := []struct {
+		id   string
+		want string
+	}{
+		// Node that IS itself visible → returns itself.
+		{"db", "db"},
+		{"services", "services"},
+		// Child of visible node but not visible itself → nearest visible parent.
+		{"services.main", "services"},
+		{"services.main.cs", "services"},
+		{"services.api", "services"},
+		// Fully top-level (root group "") → "" (root).
+		{"", ""},
+	}
+	for _, tc := range cases {
+		got := tm.nearestVisibleAncestor(tc.id)
+		if got != tc.want {
+			t.Errorf("nearestVisibleAncestor(%q)=%q, want %q", tc.id, got, tc.want)
+		}
+	}
+}

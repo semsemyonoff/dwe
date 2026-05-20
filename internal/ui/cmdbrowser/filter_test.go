@@ -264,3 +264,56 @@ func TestEsc_InFilterExitsFilterOnly(t *testing.T) {
 		t.Errorf("esc inside filter must exit filter mode")
 	}
 }
+
+// TestFilter_ExitFilter_FocusedIDVisibleAfterRestoration verifies that when
+// the pre-filter state had the focused node's parent collapsed (making the node
+// invisible after restoration), exitFilter falls back to the nearest visible
+// ancestor so the tree cursor is never on a hidden node.
+func TestFilter_ExitFilter_FocusedIDVisibleAfterRestoration(t *testing.T) {
+	// Items with a two-level hierarchy: services.api.test, services.api.lint.
+	// After newModel at depth 3 all nodes are expanded. We then manually
+	// collapse "services" so that "services.api" is hidden, enter filter,
+	// set a query that matches services.api items, then exit filter. The
+	// focusedID must land on "services" (nearest visible ancestor), not
+	// "services.api".
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+
+	// Collapse "services" — its children (services.api) become invisible.
+	delete(m.tree.expanded, "services")
+	m.tree.rebuildVisible()
+	if contains(visibleIDs(m.tree), "services.api") {
+		t.Fatalf("test setup: services.api should be hidden when services is collapsed")
+	}
+
+	// Enter filter and set a query manually to avoid key-binding side-effects
+	// (e.g. 'i' in "api" would trigger the inspect overlay before reaching
+	// the printable-text branch).
+	m.enterFilter()
+	if m.filter == nil {
+		t.Fatalf("enterFilter did not create filter state")
+	}
+	m.filter.query = "ser"
+	m.refreshFilterMatches()
+
+	// Verify the filter matched services.api items.
+	if m.filter.matchCount["services.api"] == 0 {
+		t.Fatalf("filter did not match services.api items (query=%q)", m.filter.query)
+	}
+
+	// exitFilter should notice services.api is hidden after restoration and
+	// walk up to the nearest visible ancestor "services".
+	m.exitFilter()
+	if m.focus == focusFilter {
+		t.Fatalf("filter not exited")
+	}
+
+	// focusedID must be visible.
+	focused := m.tree.focusedID
+	if !contains(visibleIDs(m.tree), focused) && focused != "" {
+		t.Errorf("focusedID=%q is not visible after exitFilter; visible=%v", focused, visibleIDs(m.tree))
+	}
+	// It must be "services" (the nearest visible ancestor of services.api).
+	if focused != "services" {
+		t.Errorf("focusedID=%q, want %q", focused, "services")
+	}
+}
