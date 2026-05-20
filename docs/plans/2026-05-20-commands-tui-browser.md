@@ -134,16 +134,16 @@ Full design lives in the source spec attached to this plan; this document is the
 
 ### Task 3: Left tree panel — model, render, navigation, counts
 
-- [ ] in `internal/ui/cmdbrowser/tree.go` define `TreeModel` that builds the group hierarchy **internally from `[]Item.ID`** by splitting on `.` — cmdbrowser stays decoupled from `usercommands.GroupNode` (which `resolveCommandID` does not pass to the selector anyway). Per-node state: expanded flag, focused path. Leaf counts and `Private` filtering derive directly from the items slice.
-- [ ] implement expand / collapse semantics from §5.2: `→`/`l` expand; `←`/`h` collapse-or-up; `Space` toggle; `Home`/`End`; `↑/↓` navigate
-- [ ] compute per-node public-leaf counts (cached on the model; invalidate when `IncludePrivate` flips)
-- [ ] initial expansion: respect `opts.DefaultExpandedDepth`; depth 0 = all collapsed; missing config → default 3
-- [ ] in `tree_render.go` render the tree via Lipgloss using **existing** `styles.yml` keys only (see Task 4 mapping); cursor marker `❯` + left bar for focused row. No new keys in this task.
-- [ ] integrate into the model: tree owns left panel, focus state machine has `left` and `right`; right panel for now just lists items of the currently focused group as plain strings (final delegate lands in Task 4)
-- [ ] write table-driven tests for `TreeModel.Update`: each key in §5.2, expand depth init, focus path stability under expand/collapse — independent cases call `t.Parallel()`; subtest names lowercase phrases (`"right expands"`, `"left collapses then ascends"`)
-- [ ] write fuzz test for the count invariant: random ID set → group count == sum of child counts + matching leaves; collapse is idempotent; tree-from-IDs round-trip is stable across permutations
-- [ ] snapshot test for the initial tree at depth 3 with a fixture item set — drive via `m.Update`/`m.View` directly
-- [ ] run `make test` and `make lint` — must pass before Task 4
+- [x] in `internal/ui/cmdbrowser/tree.go` define `TreeModel` that builds the group hierarchy **internally from `[]Item.ID`** by splitting on `.` — cmdbrowser stays decoupled from `usercommands.GroupNode` (which `resolveCommandID` does not pass to the selector anyway). Per-node state: expanded flag, focused path. Leaf counts and `Private` filtering derive directly from the items slice.
+- [x] implement expand / collapse semantics from §5.2: `→`/`l` expand; `←`/`h` collapse-or-up; `Space` toggle; `Home`/`End`; `↑/↓` navigate
+- [x] compute per-node public-leaf counts (cached on the model; invalidate when `IncludePrivate` flips)
+- [x] initial expansion: respect `opts.DefaultExpandedDepth`; depth 0 = all collapsed; missing config → default 3
+- [x] in `tree_render.go` render the tree via Lipgloss using **existing** `styles.yml` keys only (see Task 4 mapping); cursor marker `❯` + left bar for focused row. No new keys in this task.
+- [x] integrate into the model: tree owns left panel, focus state machine has `left` and `right`; right panel for now just lists items of the currently focused group as plain strings (final delegate lands in Task 4)
+- [x] write table-driven tests for `TreeModel.Update`: each key in §5.2, expand depth init, focus path stability under expand/collapse — independent cases call `t.Parallel()`; subtest names lowercase phrases (`"right expands"`, `"left collapses then ascends"`)
+- [x] write fuzz test for the count invariant: random ID set → group count == sum of child counts + matching leaves; collapse is idempotent; tree-from-IDs round-trip is stable across permutations
+- [x] snapshot test for the initial tree at depth 3 with a fixture item set — drive via `m.Update`/`m.View` directly
+- [x] run `make test` and `make lint` — must pass before Task 4
 
 ### Task 4: Right list panel — `list.Model`, custom delegate, badges, breadcrumb
 

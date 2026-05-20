@@ -28,6 +28,7 @@ type Model struct {
 	width  int
 	height int
 	focus  focus
+	tree   *treeModel
 
 	cancelled bool
 	result    Result
@@ -46,6 +47,7 @@ func newModel(title string, items []Item, opts Options, w, h int) *Model {
 		width:  w,
 		height: h,
 		focus:  focusLeft,
+		tree:   newTreeModel(items, opts.IncludePrivate, opts.DefaultExpandedDepth),
 	}
 }
 
@@ -73,6 +75,40 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.focus == focusLeft {
+			return m.updateLeft(msg)
+		}
+		return m.updateRight(msg)
+	}
+	return m, nil
+}
+
+// updateLeft routes keypresses to the tree when the left panel is focused.
+func (m *Model) updateLeft(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Up):
+		m.tree.moveUp()
+	case key.Matches(msg, m.keys.Down):
+		m.tree.moveDown()
+	case key.Matches(msg, m.keys.Left):
+		m.tree.onLeft()
+	case key.Matches(msg, m.keys.Right):
+		m.tree.onRight()
+	case key.Matches(msg, m.keys.Home):
+		m.tree.moveHome()
+	case key.Matches(msg, m.keys.End):
+		m.tree.moveEnd()
+	case key.Matches(msg, m.keys.Space):
+		m.tree.toggleFocused()
+	}
+	return m, nil
+}
+
+// updateRight is a Task-3 stub. Task 4 wires list.Model navigation here; for
+// now Left simply hands focus back to the tree so users aren't stranded.
+func (m *Model) updateRight(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if key.Matches(msg, m.keys.Left) {
+		m.focus = focusLeft
 	}
 	return m, nil
 }
@@ -95,8 +131,10 @@ func (m *Model) View() tea.View {
 		rightStyle = rightStyle.BorderForeground(lipgloss.Color("12"))
 	}
 
-	leftPanel := leftStyle.Render(" groups ")
-	rightPanel := rightStyle.Render(" commands ")
+	leftBody := "groups\n" + m.tree.render(m.focus == focusLeft)
+	rightBody := "commands\n" + m.tree.renderRightForFocus()
+	leftPanel := leftStyle.Render(leftBody)
+	rightPanel := rightStyle.Render(rightBody)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 	titleBar := lipgloss.NewStyle().Bold(true).Render(m.title)

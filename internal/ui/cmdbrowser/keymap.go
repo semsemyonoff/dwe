@@ -10,6 +10,9 @@ type keymap struct {
 	Down    key.Binding
 	Left    key.Binding
 	Right   key.Binding
+	Home    key.Binding
+	End     key.Binding
+	Space   key.Binding
 	Tab     key.Binding
 	Enter   key.Binding
 	Cancel  key.Binding
@@ -23,6 +26,9 @@ func defaultKeymap() keymap {
 		Down:    key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		Left:    key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "collapse/back")),
 		Right:   key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "expand/forward")),
+		Home:    key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first")),
+		End:     key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last")),
+		Space:   key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle")),
 		Tab:     key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "switch panel")),
 		Enter:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
 		Cancel:  key.NewBinding(key.WithKeys("esc", "q"), key.WithHelp("esc/q", "quit")),
