@@ -701,15 +701,16 @@ bootstrap:
 
 ### Step shape
 
-Each step is either a **command** step or a **confirm** step (mutually exclusive).
+Each step is either a **command** step, a **confirm** step, or a **parallel** step (mutually exclusive).
 
 | Field | Used in | Description |
 |-------|---------|-------------|
 | `command` | command step | Full ID of the command to invoke |
 | `with` | command step | Map of param overrides (templated values) |
 | `confirm` | confirm step | Prompt text shown before continuing |
-| `when` | command step | Condition; step is skipped when falsy |
-| `continue_on_error` | command step | Failure logged as warning; workflow proceeds |
+| `parallel` | parallel step | Concurrent group of leaf command sub-steps (see [Parallel sub-steps](#parallel-sub-steps)) |
+| `when` | command / parallel step | Condition; step (or whole group) is skipped when falsy |
+| `continue_on_error` | command / parallel step | Failure logged as warning; workflow proceeds |
 
 ### with: param overrides
 
@@ -781,6 +782,50 @@ steps:
 ```
 
 Confirm steps are silently skipped under `--yes` or `DEVBOX_NONINTERACTIVE=1`. Otherwise huh prompts on TTY, and a `[y/N]` stdin fallback handles piped inputs.
+
+### Parallel sub-steps
+
+A workflow step can declare a `parallel:` block that fans out a group of sub-steps concurrently. This mirrors the pipeline `parallel:` schema in [deploy.yml → Parallel step groups](deploy.md#parallel-step-groups) — the same `max_concurrent` / `fail_fast` knobs and the same live-block UI — but lives inside a workflow so the group is reusable across pipelines and invocable ad-hoc via `devbox commands run`.
+
+```yaml
+services.all.composer-install:
+  type: workflow
+  description: Run composer install across every app service in parallel
+  steps:
+    - parallel:
+        max_concurrent: 4
+        fail_fast: true
+        steps:
+          - command: services.main.composer-install
+          - command: services.api.composer-install
+          - command: services.worker.composer-install
+          - command: services.admin.composer-install
+```
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `max_concurrent` | optional | `min(NumCPU, len(steps))` | Upper bound on goroutines running at once |
+| `fail_fast` | optional | `true` | When true, the first sub-step error cancels siblings via context; when false, all sub-steps run and errors aggregate via `errors.Join` |
+| `steps` | required | — | Sub-steps; each must be a leaf command step (no `confirm`, no nested `parallel`) |
+
+Group-level `when:` and `continue_on_error:` are valid on the step that carries `parallel:` (they govern the whole group). Per-sub-step `when:` and `continue_on_error:` are also valid and behave the same as in a sequential workflow. Sub-step `when:` is evaluated once at preflight (before any goroutine launches) so predicates with side-effects do not double-execute.
+
+#### Constraints
+
+1. **At least two sub-steps** — a `parallel.steps:` list of length 0 or 1 is rejected at validate-time.
+2. **No nested parallel** — a sub-step may not itself declare `parallel:`. Flatten the structure or split into separate workflow steps.
+3. **No confirm in sub-steps** — `confirm:` steps interactively prompt; the parallel live-block UI owns the terminal and cannot host a prompt. A sub-step that references a command with `confirmation: true` requires `--yes` (or `DEVBOX_NONINTERACTIVE=1`); preflight rejects the group otherwise, and a runtime guard catches transitive confirmation calls.
+4. **No `with:` on the container** — the parallel container holds no params of its own; each sub-step carries its own `with:`.
+
+#### Composition
+
+- **Ad-hoc**: `devbox commands run <workflow-id>` runs the workflow's own live-block on the terminal. Ctrl-C propagates as SIGINT through `signal.NotifyContext`, which cancels the group and gives children up to 5 s to exit before SIGTERM is escalated.
+- **Inside a sequential pipeline step**: when a pipeline's sequential `cmd:` resolves to a workflow with a `parallel:` block, the pipeline's footer is paused for the duration of the step body (existing `SuspendForExec` / `ResumeAfterExec` contract), and the workflow renders its own block rows in the gap. The pipeline-step counter advances by exactly one — sub-steps are NOT counted as pipeline steps.
+- **Inside a parallel pipeline group OR another parallel workflow**: rejected at runtime. Only one live-block can own the terminal at a time. The error is the `ErrWorkflowNestedParallel` sentinel.
+
+#### Per-sub-step logs
+
+Each sub-step's combined stdout/stderr is captured to `.devbox/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. On failure, the captured output is also dumped to stderr between separator bars so CI/non-TTY runs surface the failure context.
 
 ## Type: builtin
 
@@ -1069,7 +1114,7 @@ The loader enforces these rules and reports the offending file + field on failur
 - `type: script` requires a `script:` block in either simple (`path`) or phased (`run` + optional `plan` / `cleanup`) form.
 - `type: workflow` requires a non-empty `steps:` and forbids type-specific fields (`cmd`, `argv`, `service`, `script`, `workdir`, etc.).
 - `type: builtin` requires `cmd:` (the builtin name) and rejects type-specific fields of other types (`argv`, `script:`, `steps:`, `service`, `compose_args`, `workdir` / `workdir_from`, `user`, `mode`, `runner:`).
-- Each workflow step has exactly one of `command` / `confirm`; `with` / `continue_on_error` are valid only on command steps.
+- Each workflow step has exactly one of `command` / `confirm` / `parallel`; `with` / `continue_on_error` are valid only on command steps (and on the container of a `parallel` block — see [Parallel sub-steps](#parallel-sub-steps)).
 - Env variable names must be unique across `params.*.env`, `context.*.env`, `files.*.env`, and the `env:` block.
 - File IDs must match `^[a-zA-Z_][a-zA-Z0-9_]*$`.
 - File specs reject conflicting fields (e.g. `mkdir` outside `write`, `path` + `candidates`, `match` / `sort` without `glob`).

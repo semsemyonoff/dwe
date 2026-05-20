@@ -321,9 +321,9 @@ No huh prompts are possible inside a parallel block (confirm sub-steps are rejec
 
 ### Task 8: Documentation
 
-- [ ] add a "Parallel sub-steps" section to `docs/reference/config/commands.md` under "Type: workflow"; include schema, the four constraints (≥2 sub-steps, no nested parallel, no confirm in sub-steps, no `with:` on the container), and cross-link to `deploy.md#parallel-step-groups` (the engine is described once there)
-- [ ] update `AGENTS.md`: add the new `internal/liveui/` package to the package layout list (one short line) and mention `WorkflowParallel` next to `WorkflowStep` in the `internal/usercommands/model/` description
-- [ ] do NOT touch `docs/plans/completed/` — ralphex moves this plan file when the run finishes
+- [x] add a "Parallel sub-steps" section to `docs/reference/config/commands.md` under "Type: workflow"; include schema, the four constraints (≥2 sub-steps, no nested parallel, no confirm in sub-steps, no `with:` on the container), and cross-link to `deploy.md#parallel-step-groups` (the engine is described once there)
+- [x] update `AGENTS.md`: add the new `internal/liveui/` package to the package layout list (one short line) and mention `WorkflowParallel` next to `WorkflowStep` in the `internal/usercommands/model/` description
+- [x] do NOT touch `docs/plans/completed/` — ralphex moves this plan file when the run finishes
 
 ### Task 9: Verify acceptance criteria
 
