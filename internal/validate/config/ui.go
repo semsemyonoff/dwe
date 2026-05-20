@@ -46,6 +46,17 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		// Block absent — nothing to validate.
 		return nil
 	}
+	if top.UI.Kind != yaml.MappingNode {
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityError,
+			Domain:   "config",
+			Target:   "config.ui",
+			File:     file,
+			Line:     top.UI.Line,
+			Message:  "ui: must be a YAML mapping",
+			Hint:     "Expected:\n  ui:\n    commands:\n      ...",
+		}}
+	}
 
 	var diags []validate.Diagnostic
 	// Find ui.commands sub-node.

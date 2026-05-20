@@ -90,7 +90,8 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	}
 	badgeWidth := lipgloss.Width(badge)
 
-	idCellWidth := max(avail-len(cursor)-badgeWidth, 4)
+	cursorW := lipgloss.Width(cursor)
+	idCellWidth := max(avail-cursorW-badgeWidth, 4)
 	id := truncate(li.id, idCellWidth)
 	idStyled := id
 	if isSelected {
@@ -105,14 +106,14 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 
 	desc := li.desc
 	if desc != "" {
-		descAvail := max(avail-len(cursor), 8)
+		descAvail := max(avail-cursorW, 8)
 		desc = truncate(desc, descAvail)
 		desc = lipgloss.NewStyle().Faint(true).Render(desc)
-		line2 := strings.Repeat(" ", len(cursor)) + desc
+		line2 := strings.Repeat(" ", cursorW) + desc
 		_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 		return
 	}
-	_, _ = fmt.Fprintf(w, "%s\n%s", line1, strings.Repeat(" ", len(cursor)))
+	_, _ = fmt.Fprintf(w, "%s\n%s", line1, strings.Repeat(" ", cursorW))
 }
 
 // renderHeader emits the "── group ──" pseudo-header used in single-panel

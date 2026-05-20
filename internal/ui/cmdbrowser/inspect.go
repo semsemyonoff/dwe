@@ -9,9 +9,8 @@ import (
 // closed. inspectIdx remembers which item is being shown so Enter can return
 // the right Result.
 type inspectState struct {
-	vp           viewport.Model
-	inspectIdx   int  // index into Model.items
-	priorOnRight bool // remembers focus that was active before opening
+	vp         viewport.Model
+	inspectIdx int // index into Model.items
 }
 
 // newInspectState builds a viewport sized to fit inside the right panel.
@@ -23,5 +22,5 @@ func newInspectState(width, height int, content string, idx int) *inspectState {
 	h := max(height, 5)
 	vp := viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
 	vp.SetContent(content)
-	return &inspectState{vp: vp, inspectIdx: idx, priorOnRight: true}
+	return &inspectState{vp: vp, inspectIdx: idx}
 }

@@ -43,9 +43,9 @@ func UICommandsDefaultDepth(cfg *DevboxConfig) int {
 		return 0
 	}
 	// A zero value is indistinguishable from an absent key under YAML
-	// unmarshal for plain int. Treat zero as "use default 3" — users who
-	// genuinely want all-collapsed can set 0 and the validator will not
-	// flag it; this accessor returns the default. Documented behaviour.
+	// unmarshal for plain int. Both map to 3 (the default). Users cannot
+	// configure all-collapsed via this plain-int field; the validator hint
+	// documents this limitation. Documented behaviour.
 	if d == 0 {
 		return 3
 	}

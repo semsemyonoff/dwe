@@ -71,7 +71,7 @@ The command browser has four focus modes. The visible bindings change with focus
 | right | `y` | toggle skip-confirm (run mode only); footer shows `[--yes ON]` |
 | right | `←`, `Tab` | return focus to the tree |
 | right | `/` | enter filter mode |
-| right | `Esc` | return focus to the tree |
+| right | `Esc`, `q` | exit the browser |
 | filter | (typing) | refine the fuzzy query; `M/N` counts update in the tree |
 | filter | `↑/↓`, `Enter`, `i`, `y` | as in right mode, against the filtered result list |
 | filter | `Esc` | exit filter and restore the prior expansion state |
