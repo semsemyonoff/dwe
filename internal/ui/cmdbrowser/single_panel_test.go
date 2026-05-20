@@ -76,12 +76,15 @@ func TestSinglePanel_FilterActive(t *testing.T) {
 	if m.focus != focusFilter {
 		t.Fatalf("expected focusFilter after '/', got %v", m.focus)
 	}
-	// Type "mig" so only db.migrate matches.
-	for _, r := range "mig" {
+	// Type "grt" (g-r-t present in "migrate" in order, absent from all other items)
+	// so only db.migrate matches. Avoids 'i'/'y'/'?' which are now hotkeys in filter
+	// mode and would open inspect / toggle skip-confirm / toggle help instead of
+	// appending to the query.
+	for _, r := range "grt" {
 		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	out := m.View().Content
-	if !strings.Contains(out, "/mig") {
+	if !strings.Contains(out, "/grt") {
 		t.Errorf("filter query line missing:\n%s", out)
 	}
 	if !strings.Contains(out, "db.migrate") {

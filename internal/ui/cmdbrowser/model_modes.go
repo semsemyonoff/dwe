@@ -28,15 +28,20 @@ func (m *Model) exitFilter() {
 	}
 	// If a matched item is currently highlighted, try to keep tree focus on
 	// the nearest ancestor of that item in the restored tree.
-	if it, ok := m.list.SelectedItem().(listItem); ok {
+	if it, ok := m.list.SelectedItem().(listItem); ok && !it.header {
 		g := groupOf(m.items[it.origIdx].ID)
-		// Walk upward until we find a node that exists in the restored set.
-		for g != "" {
-			if _, exists := m.tree.nodesByID[g]; exists {
-				m.tree.focusedID = g
-				break
+		if g == "" {
+			// Root-level command: focus the root node.
+			m.tree.focusedID = ""
+		} else {
+			// Walk upward until we find a node that exists in the restored set.
+			for g != "" {
+				if _, exists := m.tree.nodesByID[g]; exists {
+					m.tree.focusedID = g
+					break
+				}
+				g = groupOf(g)
 			}
-			g = groupOf(g)
 		}
 	}
 	m.filter.restoreExpansion(m.tree)
@@ -75,10 +80,18 @@ func (m *Model) updateFilter(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if key.Matches(msg, m.keys.Inspect) && m.opts.Mode == ModeInspect {
+	if key.Matches(msg, m.keys.Inspect) {
 		// Inspect inside filter: leave filter session intact so Esc still
 		// restores expansion when the overlay closes.
 		m.openInspect()
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SkipConfirm) && m.opts.Mode == ModeRun {
+		m.skipConfirm = !m.skipConfirm
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.Help) {
+		m.showFullHelp = !m.showFullHelp
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Backspace) {
@@ -178,10 +191,13 @@ func (m *Model) updateInspect(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // selectedItemIdx returns the original-items index of the currently-
-// highlighted command, or -1 when nothing is selected. Used to seed the
-// inspect viewport regardless of focus / filter mode.
+// highlighted command, or -1 when nothing is selected or a header row is
+// focused. Used to seed the inspect viewport regardless of focus / filter mode.
 func (m *Model) selectedItemIdx() int {
 	if it, ok := m.list.SelectedItem().(listItem); ok {
+		if it.header {
+			return -1
+		}
 		return it.origIdx
 	}
 	return -1
