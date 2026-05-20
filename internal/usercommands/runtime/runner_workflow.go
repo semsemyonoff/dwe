@@ -19,6 +19,17 @@ import (
 	"devbox-cli/internal/usercommands/resolve"
 )
 
+// ErrWorkflowNestedParallel is returned when a workflow containing a
+// `parallel:` block is invoked from another parallel context (pipeline or
+// workflow). Only one LiveBlock owner is allowed per terminal.
+var ErrWorkflowNestedParallel = errors.New("nested workflow parallel block is not supported in v1")
+
+// ErrConfirmInsideParallel is returned when an interactive confirmation is
+// reached inside a parallel group. Preflight catches direct cases; this
+// sentinel catches transitive cases (workflow containing a confirm step or
+// referencing a confirmation: true command from within a parallel sub-step).
+var ErrConfirmInsideParallel = errors.New("interactive confirmation is not allowed inside a parallel group")
+
 // WorkflowRunner executes type=workflow commands by running each step in sequence.
 //
 // Each step is either a command reference or a confirm prompt:
@@ -35,6 +46,14 @@ type WorkflowRunner struct{}
 func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 	if rc.Registry == nil {
 		return fmt.Errorf("workflow runner: registry is required but not set in RunContext")
+	}
+
+	if rc.UnderParallel {
+		for i, step := range rc.Cmd.Steps {
+			if step.Parallel != nil {
+				return fmt.Errorf("%w: workflow %q step[%d]", ErrWorkflowNestedParallel, rc.Cmd.ID, i)
+			}
+		}
 	}
 
 	for i, step := range rc.Cmd.Steps {
@@ -83,6 +102,10 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 	if ctx.NonInteractive || isNonInteractive() {
 		return nil
+	}
+
+	if ctx.UnderParallel {
+		return fmt.Errorf("%w: confirm step %q in workflow %q", ErrConfirmInsideParallel, message, ctx.Cmd.ID)
 	}
 
 	stdin := ctx.Stdin

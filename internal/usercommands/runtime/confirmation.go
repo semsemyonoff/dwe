@@ -19,8 +19,12 @@ func ConfirmCommand(ctx RunContext) error {
 		return nil
 	}
 
-	if ctx.SkipConfirm {
+	if ctx.SkipConfirm || ctx.NonInteractive {
 		return nil
+	}
+
+	if ctx.UnderParallel {
+		return fmt.Errorf("%w: command %q requires confirmation", ErrConfirmInsideParallel, ctx.Cmd.ID)
 	}
 
 	message := ctx.Cmd.EffectiveConfirmationText()

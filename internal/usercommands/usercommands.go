@@ -37,6 +37,7 @@ type ParamDef = model.ParamDef
 type ContextDef = model.ContextDef
 type ScriptDef = model.ScriptDef
 type WorkflowStep = model.WorkflowStep
+type WorkflowParallel = model.WorkflowParallel
 type RunnerDef = model.RunnerDef
 type CommandMessages = model.CommandMessages
 type CommandDef = model.CommandDef

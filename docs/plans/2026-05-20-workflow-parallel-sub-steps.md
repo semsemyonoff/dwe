@@ -216,20 +216,20 @@ B. **Transitive confirmation guard** — Task 5's preflight only catches DIRECT 
 
 #### Propagate the `UnderParallel` marker
 
-- [ ] add `RunContext.UnderParallel bool` to the `RunContext` struct in `internal/usercommands/runtime/runner.go`. **Leave `BuildRunContext` unchanged** — it has no parent `RunContext` parameter, so threading a value through its signature is invasive. Instead, the marker is set explicitly at each call site that needs it (three places below)
-- [ ] **pipeline call site** — `internal/pipeline/executor.go:execCommandAction`: after `rctx, err := usercommands.BuildRunContext(...)`, set `rctx.UnderParallel = actx.Parallel` before passing `rctx` to `usercommands.RunCommand`. `actx.Parallel` is `true` for sub-steps of `executeParallelGroup` and `false` for sequential steps, so the marker propagates correctly into the inner workflow
-- [ ] **`runCommandStep` forward** (`runner_workflow.go:99-152`) — the existing implementation builds a fresh `subCtx` for each sub-step with explicit field assignments (around `:124`). Add `UnderParallel: rc.UnderParallel` to that struct literal. Without this, the marker set by Task 5's `gRC.UnderParallel = true` is dropped when `runCommandStep` constructs its subCtx for the inner `RunCommand` call, and workflow-parallel→workflow-parallel slips past the guard
-- [ ] **workflow parallel call site** — `runner_workflow.go:runParallelGroup` sets `gRC.UnderParallel = true` on the cloned RunContext (per-goroutine value-copy from Task 5). The `runCommandStep` forward (above) then carries it into the inner `RunCommand`
+- [x] add `RunContext.UnderParallel bool` to the `RunContext` struct in `internal/usercommands/runtime/runner.go`. **Leave `BuildRunContext` unchanged** — it has no parent `RunContext` parameter, so threading a value through its signature is invasive. Instead, the marker is set explicitly at each call site that needs it (three places below)
+- [x] **pipeline call site** — `internal/pipeline/executor.go:execCommandAction`: after `rctx, err := usercommands.BuildRunContext(...)`, set `rctx.UnderParallel = actx.Parallel` before passing `rctx` to `usercommands.RunCommand`. `actx.Parallel` is `true` for sub-steps of `executeParallelGroup` and `false` for sequential steps, so the marker propagates correctly into the inner workflow
+- [x] **`runCommandStep` forward** (`runner_workflow.go:99-152`) — the existing implementation builds a fresh `subCtx` for each sub-step with explicit field assignments (around `:124`). Add `UnderParallel: rc.UnderParallel` to that struct literal. Without this, the marker set by Task 5's `gRC.UnderParallel = true` is dropped when `runCommandStep` constructs its subCtx for the inner `RunCommand` call, and workflow-parallel→workflow-parallel slips past the guard
+- [x] **workflow parallel call site** — `runner_workflow.go:runParallelGroup` sets `gRC.UnderParallel = true` on the cloned RunContext (per-goroutine value-copy from Task 5). The `runCommandStep` forward (above) then carries it into the inner `RunCommand`
 
 #### Nested-parallel guard (sentinel + check)
 
-- [ ] define a sentinel error: `var ErrWorkflowNestedParallel = errors.New("nested workflow parallel block is not supported in v1")` in `runner_workflow.go`. The guard wraps it with the offending workflow ID: `fmt.Errorf("%w: workflow %q", ErrWorkflowNestedParallel, rc.Cmd.ID)`. Sentinel-based so tests use `errors.Is(err, ErrWorkflowNestedParallel)` rather than string match
-- [ ] in `WorkflowRunner.Run`: if `rc.UnderParallel` AND any `step.Parallel != nil` → return the wrapped sentinel — emit BEFORE launching any sub-step, so the failure surfaces at the parent parallel group's sub-step level cleanly
+- [x] define a sentinel error: `var ErrWorkflowNestedParallel = errors.New("nested workflow parallel block is not supported in v1")` in `runner_workflow.go`. The guard wraps it with the offending workflow ID: `fmt.Errorf("%w: workflow %q", ErrWorkflowNestedParallel, rc.Cmd.ID)`. Sentinel-based so tests use `errors.Is(err, ErrWorkflowNestedParallel)` rather than string match
+- [x] in `WorkflowRunner.Run`: if `rc.UnderParallel` AND any `step.Parallel != nil` → return the wrapped sentinel — emit BEFORE launching any sub-step, so the failure surfaces at the parent parallel group's sub-step level cleanly
 
 #### Transitive confirmation guard (safety net — independent of Task 5 preflight)
 
-- [ ] define a sentinel error: `var ErrConfirmInsideParallel = errors.New("interactive confirmation is not allowed inside a parallel group")` in `runner_workflow.go` (or a shared `errors.go` if it grows)
-- [ ] in `runConfirmStep` (`runner_workflow.go:68`) — **placement matters**: the existing function early-returns when `ctx.NonInteractive || isNonInteractive()` (the env-based check via `isNonInteractive()` is what makes `DEVBOX_NONINTERACTIVE=1` skip the prompt even when `rc.NonInteractive` wasn't explicitly populated). Place the new guard **AFTER** that early-return, so env-based non-interactive runs still proceed without false rejection. Concretely:
+- [x] define a sentinel error: `var ErrConfirmInsideParallel = errors.New("interactive confirmation is not allowed inside a parallel group")` in `runner_workflow.go` (or a shared `errors.go` if it grows)
+- [x] in `runConfirmStep` (`runner_workflow.go:68`) — **placement matters**: the existing function early-returns when `ctx.NonInteractive || isNonInteractive()` (the env-based check via `isNonInteractive()` is what makes `DEVBOX_NONINTERACTIVE=1` skip the prompt even when `rc.NonInteractive` wasn't explicitly populated). Place the new guard **AFTER** that early-return, so env-based non-interactive runs still proceed without false rejection. Concretely:
   ```go
   func runConfirmStep(ctx RunContext, message string) error {
       if ctx.SkipConfirm || ctx.NonInteractive || isNonInteractive() {
@@ -243,7 +243,7 @@ B. **Transitive confirmation guard** — Task 5's preflight only catches DIRECT 
       // ... existing huh prompt logic ...
   }
   ```
-- [ ] in `ConfirmCommand` (`internal/usercommands/runtime/confirmation.go:17`) — **placement matters**: the existing function early-returns for non-confirming commands via a `ctx.Cmd == nil || !ctx.Cmd.Confirmation` check. Place the new guard **AFTER** that check so it only fires for commands that actually want to prompt; placing it at function entry would reject every non-confirming command run from a parallel context AND could nil-deref `ctx.Cmd.ID`. Concretely, the function shape becomes:
+- [x] in `ConfirmCommand` (`internal/usercommands/runtime/confirmation.go:17`) — **placement matters**: the existing function early-returns for non-confirming commands via a `ctx.Cmd == nil || !ctx.Cmd.Confirmation` check. Place the new guard **AFTER** that check so it only fires for commands that actually want to prompt; placing it at function entry would reject every non-confirming command run from a parallel context AND could nil-deref `ctx.Cmd.ID`. Concretely, the function shape becomes:
   ```go
   func ConfirmCommand(rc RunContext) error {
       if rc.Cmd == nil || !rc.Cmd.Confirmation { return nil }
@@ -258,23 +258,23 @@ B. **Transitive confirmation guard** — Task 5's preflight only catches DIRECT 
   }
   ```
   This catches transitive cases — a parallel sub-step references a workflow that calls a `confirmation: true` command, where Task 5's preflight cannot see the transitive call
-- [ ] both guards intentionally short-circuit AFTER `!SkipConfirm && !NonInteractive` checks (either inline as one combined `if`, or via the early-returns shown above for `ConfirmCommand`) so `--yes` / `DEVBOX_NONINTERACTIVE=1` still allow the parallel group to run with confirmations auto-skipped. Identical semantics to the preflight
+- [x] both guards intentionally short-circuit AFTER `!SkipConfirm && !NonInteractive` checks (either inline as one combined `if`, or via the early-returns shown above for `ConfirmCommand`) so `--yes` / `DEVBOX_NONINTERACTIVE=1` still allow the parallel group to run with confirmations auto-skipped. Identical semantics to the preflight
 
 #### Tests
 
-- [ ] **explicit non-coverage**: `rc.UnderParallel=false` (sequential pipeline step → workflow with parallel) is the supported case and must NOT trigger any guard. Cover with a positive integration test
-- [ ] unit tests (table-driven, named subtests):
+- [x] **explicit non-coverage**: `rc.UnderParallel=false` (sequential pipeline step → workflow with parallel) is the supported case and must NOT trigger any guard. Cover with a positive integration test
+- [x] unit tests (table-driven, named subtests):
   - workflow with parallel block invoked with `UnderParallel=true` returns an error matching `errors.Is(err, ErrWorkflowNestedParallel)`
   - workflow with parallel block invoked with `UnderParallel=false` runs normally
   - workflow A (parallel) → sub-step references workflow B (parallel) → B fails with the nested-parallel sentinel; A's parallel group wraps it as `"workflow sub-step %q: %w"` (Task 5 wrapping rule preserves `errors.Is`)
-- [ ] transitive-confirmation unit tests (regression for this review's Issue 1):
+- [x] transitive-confirmation unit tests (regression for this review's Issue 1):
   - parallel sub-step → workflow with a `confirm:` step → workflow's `runConfirmStep` returns `ErrConfirmInsideParallel` when `!SkipConfirm`
   - parallel sub-step → workflow whose final step references a `confirmation: true` user-command → `ConfirmCommand` returns `ErrConfirmInsideParallel` when `!SkipConfirm`
   - same setups with `SkipConfirm=true` or `NonInteractive=true` — both guards pass through (no prompt reached, no error)
   - Task 5's preflight does NOT catch these cases (registry lookup of the immediate sub.Command returns `Confirmation=false` because the confirmation lives transitively in the workflow's body); the runtime guards are what makes the parallel group safe
-- [ ] integration test through pipeline: a `deploy.yml` `parallel:` group's sub-step referencing a workflow-with-parallel — assert the deploy fails at this step with `errors.Is(err, ErrWorkflowNestedParallel)`
-- [ ] POSITIVE integration test: a `deploy.yml` SEQUENTIAL step referencing a workflow-with-parallel — assert it runs successfully and the sub-step rows render
-- [ ] run `go test -race ./internal/usercommands/runtime/... ./internal/pipeline/...` — must pass
+- [x] integration test through pipeline: a `deploy.yml` `parallel:` group's sub-step referencing a workflow-with-parallel — assert the deploy fails at this step with `errors.Is(err, ErrWorkflowNestedParallel)`
+- [x] POSITIVE integration test: a `deploy.yml` SEQUENTIAL step referencing a workflow-with-parallel — assert it runs successfully and the sub-step rows render
+- [x] run `go test -race ./internal/usercommands/runtime/... ./internal/pipeline/...` — must pass
 
 ### Task 7: Live UI integration — workflow self-constructs LiveLine per parallel block
 

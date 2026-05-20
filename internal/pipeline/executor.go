@@ -266,6 +266,7 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	}
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
+	rctx.UnderParallel = actx.Parallel
 	return usercommands.RunCommand(ctx, rctx)
 }
 
