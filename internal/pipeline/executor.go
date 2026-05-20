@@ -23,6 +23,7 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/filesgate/spec"
+	"devbox-cli/internal/liveui"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
 )
@@ -677,7 +678,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	if opts.Parallel {
 		stepAddr := addr
 		subLog := opts.LogWriter // per-sub-step log writer (set by runParallelSubStep)
-		tee := newLineTee(func(frame string, final bool) {
+		tee := liveui.NewLineTee(func(frame string, final bool) {
 			opts.Reporter.StepOutput(stepAddr, frame, final)
 			// Write the assembled, ANSI-clean frame to the per-sub-step log
 			// file. Routing through the lineTee ensures OSC/CSI sequences
@@ -688,7 +689,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 				_, _ = fmt.Fprintln(subLog, frame)
 			}
 		})
-		stepWriter = &ansiOnlyStripper{w: tee}
+		stepWriter = &liveui.ANSIOnlyStripper{W: tee}
 		flushTee = tee.Flush
 		// tee.Flush must run BEFORE any reporter end-of-step event so the
 		// trailing non-newline-terminated tail (delivered as final=false via
@@ -705,7 +706,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		opts.Reporter.SuspendForExec()
 		closeStep = func() { opts.Reporter.ResumeAfterExec() }
 		if opts.LogWriter != nil {
-			stepWriter = io.MultiWriter(os.Stdout, &logSanitizer{w: opts.LogWriter})
+			stepWriter = io.MultiWriter(os.Stdout, &liveui.LogSanitizer{W: opts.LogWriter})
 		} else {
 			stepWriter = os.Stdout
 		}

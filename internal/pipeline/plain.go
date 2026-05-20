@@ -8,16 +8,18 @@ import (
 	"time"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/liveui"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 )
 
-// Icons used in step output lines.
+// Icons used in step output lines. Aliased from liveui for backwards-
+// compatible references inside the pipeline package.
 const (
-	iconDone    = "✓"
-	iconFailed  = "✗"
-	iconSkipped = "◎"
-	iconRunning = "·"
+	iconDone    = liveui.IconDone
+	iconFailed  = liveui.IconFailed
+	iconSkipped = liveui.IconSkipped
+	iconRunning = liveui.IconRunning
 )
 
 // timestampLayout is the per-line clock prefix format (YY-MM-DD HH:MM:SS).
@@ -114,7 +116,7 @@ type PlainReporter struct {
 	// termOut is io.Discard (non-TTY) the LiveLine is constructed disabled
 	// and every public call is a no-op except Println, which writes the
 	// data line straight to the screen writer (matching the legacy path).
-	live *LiveLine
+	live *liveui.LiveLine
 }
 
 // NewPlainReporter creates a PlainReporter.
@@ -131,7 +133,7 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 	}
 	var wrapped io.Writer
 	if logFile != nil {
-		wrapped = &logSanitizer{w: logFile}
+		wrapped = &liveui.LogSanitizer{W: logFile}
 	}
 	tty := termOut != io.Discard
 	r := &PlainReporter{
@@ -141,7 +143,7 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 		ttyMode: tty,
 		now:     time.Now,
 	}
-	r.live = NewLiveLine(termOut, screen.Writer(), tty)
+	r.live = liveui.NewLiveLine(termOut, screen.Writer(), tty)
 	// Register package-level prompt hooks so huh-based prompts (RunConfirm,
 	// RunSelector, RunMultiSelect) pause/resume the LiveLine automatically.
 	// Only one PlainReporter is expected per process; nested deploys are not
@@ -265,7 +267,7 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	defer r.mu.Unlock()
 	r.commitTrailingTail(stepAddr)
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
-		r.live.SetBlockRowFinal(entry.blockRowIdx, BlockRowSkipped, formatSkippedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName, reason))
+		r.live.SetBlockRowFinal(entry.blockRowIdx, liveui.BlockRowSkipped, formatSkippedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName, reason))
 	}
 	if index > 0 {
 		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
@@ -291,7 +293,7 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	defer r.mu.Unlock()
 	r.commitTrailingTail(stepAddr)
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
-		r.live.SetBlockRowFinal(entry.blockRowIdx, BlockRowDone, formatDoneLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
+		r.live.SetBlockRowFinal(entry.blockRowIdx, liveui.BlockRowDone, formatDoneLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
 	}
 	if index > 0 {
 		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
@@ -321,7 +323,7 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int
 
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" {
 		if r.inBlockMode && r.ttyMode {
-			r.live.SetBlockRowFinal(entry.blockRowIdx, BlockRowFailed, formatFailedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
+			r.live.SetBlockRowFinal(entry.blockRowIdx, liveui.BlockRowFailed, formatFailedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
 		}
 		if index > 0 {
 			r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, index, total, stepAddr))
@@ -393,22 +395,9 @@ func (r *PlainReporter) timestampPrefix() string {
 	return fmt.Sprintf("%s[%s]%s ", render.Gray, r.now().Format(timestampLayout), render.Reset)
 }
 
-// formatElapsed formats a duration as a human-readable elapsed time string.
-// Examples: "5s", "1m 23s", "2h 5m".
-func formatElapsed(d time.Duration) string {
-	d = d.Round(time.Second)
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	switch {
-	case h > 0:
-		return fmt.Sprintf("%dh %dm", h, m)
-	case m > 0:
-		return fmt.Sprintf("%dm %ds", m, s)
-	default:
-		return fmt.Sprintf("%ds", s)
-	}
-}
+// formatElapsed is an alias for liveui.FormatElapsed kept for backwards-
+// compatible references within the pipeline package.
+func formatElapsed(d time.Duration) string { return liveui.FormatElapsed(d) }
 
 // SetSubStepLogPath records the per-sub-step log file path for subAddr. Called
 // by the executor after OpenSubStepLog succeeds in runParallelSubStep. The

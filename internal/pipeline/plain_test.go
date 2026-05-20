@@ -969,7 +969,7 @@ func newTTYReporter() (*PlainReporter, *termGrid) {
 	// a real terminal consumes a single unified byte stream.
 	w := render.NewWriter(grid)
 	r := NewPlainReporter(w, nil, grid)
-	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.live.SetTestHooks(true, func() int { return 80 })
 	r.now = func() time.Time { return fixedTime }
 	return r, grid
 }
@@ -993,7 +993,7 @@ func TestPlainReporter_EnterPhase_UpdatesFooter(t *testing.T) {
 	r.StartPipeline("deploy", 1)
 	r.EnterPhase("env", config.DeployPhase{Name: "env", Description: "Environment"})
 	// Drive a tick so the new footer text actually paints.
-	r.live.tick()
+	r.live.Tick()
 	defer r.live.Stop()
 
 	// emit pushed the "Phase: env: Environment" line into scrollback (row 0),
@@ -1014,7 +1014,7 @@ func TestPlainReporter_StartStep_UpdatesFooter(t *testing.T) {
 	r.StartPipeline("deploy", 1)
 	step := config.DeployStep{Name: "render", Description: "Render env"}
 	r.StartStep("env/render", step, 1, 2)
-	r.live.tick()
+	r.live.Tick()
 	defer r.live.Stop()
 
 	if !strings.Contains(grid.line(0), "env/render") {
@@ -1036,7 +1036,7 @@ func TestPlainReporter_FinishPipeline_Success_StopsLiveLine(t *testing.T) {
 	if !strings.Contains(scrollback, "✓ Done") {
 		t.Errorf("expected '✓ Done' somewhere in grid; got %s", scrollback)
 	}
-	if r.live.stopped != true {
+	if !r.live.IsStopped() {
 		t.Errorf("LiveLine should be stopped after FinishPipeline(true)")
 	}
 }
@@ -1048,7 +1048,7 @@ func TestPlainReporter_FinishPipeline_Failure_StopsLiveLine(t *testing.T) {
 	r.StartPipeline("deploy", 1)
 	r.FinishPipeline(false)
 
-	if !r.live.stopped {
+	if !r.live.IsStopped() {
 		t.Fatalf("LiveLine must be stopped after FinishPipeline(false) — regression of the early-return bug")
 	}
 }
@@ -1072,7 +1072,7 @@ func TestPlainReporter_LogFile_StatusLines_ExactlyOnce(t *testing.T) {
 	w := render.NewWriter(scr)
 	grid := newTermGrid(24, 120)
 	r := NewPlainReporter(w, &logBuf, grid)
-	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.live.SetTestHooks(true, func() int { return 80 })
 	r.now = func() time.Time { return fixedTime }
 
 	r.StartPipeline("deploy", 2)
@@ -1106,7 +1106,7 @@ func TestPlainReporter_TTY_StartGroup_ReservesBlockRows(t *testing.T) {
 	r.StartPipeline("deploy", 3)
 	group := parallelGroup("dumps", "alpha", "beta", "charlie")
 	r.StartGroup("init/dumps", group, []int{1, 2, 3}, 3)
-	r.live.tick()
+	r.live.Tick()
 	defer r.live.Stop()
 
 	// Each block row should contain the sub-step name and a stopwatch segment.
@@ -1126,7 +1126,7 @@ func TestPlainReporter_TTY_StartGroup_ReservesBlockRows(t *testing.T) {
 			}
 		}
 		// The structured state must record the row as running (not finalized).
-		if r.live.blockSlots[i].finalized {
+		if r.live.BlockSlotAt(i).Finalized {
 			t.Errorf("block row %d should not be finalized during execution", i)
 		}
 	}
@@ -1145,7 +1145,7 @@ func TestPlainReporter_TTY_StepOutput_UpdatesBlockRow_RunningGlyph(t *testing.T)
 	r.StepOutput("init/alpha", "10%", true)
 	r.StepOutput("init/alpha", "50%", false)
 	r.StepOutput("init/alpha", "99%", true)
-	r.live.tick()
+	r.live.Tick()
 	defer r.live.Stop()
 
 	row := grid.line(1)
@@ -1154,8 +1154,8 @@ func TestPlainReporter_TTY_StepOutput_UpdatesBlockRow_RunningGlyph(t *testing.T)
 			t.Errorf("row must NOT carry terminal glyph %q before Finish/Fail/SkipStep; got %q", bad, row)
 		}
 	}
-	if r.live.blockSlots[0].finalized {
-		t.Errorf("row state must not be finalized before Finish/Fail/SkipStep; got %+v", r.live.blockSlots[0])
+	if r.live.BlockSlotAt(0).Finalized {
+		t.Errorf("row state must not be finalized before Finish/Fail/SkipStep; got %+v", r.live.BlockSlotAt(0))
 	}
 	if !strings.Contains(row, "99%") {
 		t.Errorf("row should reflect latest frame '99%%'; got %q", row)
@@ -1173,15 +1173,15 @@ func TestPlainReporter_TTY_FinishStep_SetsDoneGlyph(t *testing.T) {
 	r.FinishStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 1)
 	defer r.live.Stop()
 
-	slot := r.live.blockSlots[0]
-	if !slot.finalized {
+	slot := r.live.BlockSlotAt(0)
+	if !slot.Finalized {
 		t.Errorf("block row should be finalized after FinishStep; got %+v", slot)
 	}
-	if slot.icon != iconDone {
-		t.Errorf("block row should carry done glyph %q after FinishStep; got %q", iconDone, slot.icon)
+	if slot.Icon != iconDone {
+		t.Errorf("block row should carry done glyph %q after FinishStep; got %q", iconDone, slot.Icon)
 	}
-	if !strings.Contains(slot.label, "Done: alpha") {
-		t.Errorf("block row should contain 'Done: alpha'; got %q", slot.label)
+	if !strings.Contains(slot.Label, "Done: alpha") {
+		t.Errorf("block row should contain 'Done: alpha'; got %q", slot.Label)
 	}
 }
 
@@ -1195,15 +1195,15 @@ func TestPlainReporter_TTY_FailStep_SetsFailedGlyph(t *testing.T) {
 	r.FailStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 1, errors.New("boom"))
 	defer r.live.Stop()
 
-	slot := r.live.blockSlots[0]
-	if !slot.finalized {
+	slot := r.live.BlockSlotAt(0)
+	if !slot.Finalized {
 		t.Errorf("block row should be finalized after FailStep; got %+v", slot)
 	}
-	if slot.icon != iconFailed {
-		t.Errorf("block row should carry failed glyph %q after FailStep; got %q", iconFailed, slot.icon)
+	if slot.Icon != iconFailed {
+		t.Errorf("block row should carry failed glyph %q after FailStep; got %q", iconFailed, slot.Icon)
 	}
-	if !strings.Contains(slot.label, "Failed: alpha") {
-		t.Errorf("block row should contain 'Failed: alpha'; got %q", slot.label)
+	if !strings.Contains(slot.Label, "Failed: alpha") {
+		t.Errorf("block row should contain 'Failed: alpha'; got %q", slot.Label)
 	}
 }
 
@@ -1217,18 +1217,18 @@ func TestPlainReporter_TTY_SkipStep_SetsSkippedGlyph(t *testing.T) {
 	r.SkipStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 1, "when: false")
 	defer r.live.Stop()
 
-	slot := r.live.blockSlots[0]
-	if !slot.finalized {
+	slot := r.live.BlockSlotAt(0)
+	if !slot.Finalized {
 		t.Errorf("block row should be finalized after SkipStep; got %+v", slot)
 	}
-	if slot.icon != iconSkipped {
-		t.Errorf("block row should carry skipped glyph %q after SkipStep; got %q", iconSkipped, slot.icon)
+	if slot.Icon != iconSkipped {
+		t.Errorf("block row should carry skipped glyph %q after SkipStep; got %q", iconSkipped, slot.Icon)
 	}
-	if !strings.Contains(slot.label, "Skipped: alpha") {
-		t.Errorf("block row should contain 'Skipped: alpha'; got %q", slot.label)
+	if !strings.Contains(slot.Label, "Skipped: alpha") {
+		t.Errorf("block row should contain 'Skipped: alpha'; got %q", slot.Label)
 	}
-	if !strings.Contains(slot.label, "when: false") {
-		t.Errorf("block row should carry skip reason; got %q", slot.label)
+	if !strings.Contains(slot.Label, "when: false") {
+		t.Errorf("block row should carry skip reason; got %q", slot.Label)
 	}
 }
 
@@ -1239,15 +1239,15 @@ func TestPlainReporter_TTY_FinishGroup_EndsBlock(t *testing.T) {
 	r.StartPipeline("deploy", 1)
 	group := parallelGroup("dumps", "alpha")
 	r.StartGroup("init/dumps", group, []int{1}, 1)
-	if r.live.blockRows != 1 {
-		t.Fatalf("expected blockRows=1 after StartGroup; got %d", r.live.blockRows)
+	if r.live.BlockRows() != 1 {
+		t.Fatalf("expected blockRows=1 after StartGroup; got %d", r.live.BlockRows())
 	}
 	r.FinishStep("init/alpha", config.DeployStep{Name: "alpha"}, 1, 1)
 	r.FinishGroup("init/dumps", group, true)
 	defer r.live.Stop()
 
-	if r.live.blockRows != 0 {
-		t.Errorf("FinishGroup should EndBlock (blockRows=0); got %d", r.live.blockRows)
+	if r.live.BlockRows() != 0 {
+		t.Errorf("FinishGroup should EndBlock (blockRows=0); got %d", r.live.BlockRows())
 	}
 }
 
@@ -1259,7 +1259,7 @@ func TestPlainReporter_TTY_FailedSubStep_DumpsBuffer(t *testing.T) {
 	w := render.NewWriter(scr)
 	grid := newTermGrid(24, 120)
 	r := NewPlainReporter(w, nil, grid)
-	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.live.SetTestHooks(true, func() int { return 80 })
 	r.now = func() time.Time { return fixedTime }
 
 	r.StartPipeline("deploy", 1)
@@ -1291,7 +1291,7 @@ func TestPlainReporter_TTY_SuccessWithLogPath_SuppressesDump(t *testing.T) {
 	w := render.NewWriter(scr)
 	grid := newTermGrid(24, 120)
 	r := NewPlainReporter(w, nil, grid)
-	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.live.SetTestHooks(true, func() int { return 80 })
 	r.now = func() time.Time { return fixedTime }
 
 	r.StartPipeline("deploy", 1)
@@ -1320,7 +1320,7 @@ func TestPlainReporter_TTY_SuccessNoLogPath_DumpsBuffer(t *testing.T) {
 	w := render.NewWriter(scr)
 	grid := newTermGrid(24, 120)
 	r := NewPlainReporter(w, nil, grid)
-	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.live.SetTestHooks(true, func() int { return 80 })
 	r.now = func() time.Time { return fixedTime }
 
 	r.StartPipeline("deploy", 1)
@@ -1365,7 +1365,7 @@ func TestPlainReporter_TTY_FullParallelGroup_Integration(t *testing.T) {
 	w := render.NewWriter(scr)
 	grid := newTermGrid(24, 120)
 	r := NewPlainReporter(w, nil, grid)
-	r.live.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
+	r.live.SetTestHooks(true, func() int { return 80 })
 	r.now = func() time.Time { return fixedTime }
 	defer r.live.Stop()
 
@@ -1394,8 +1394,8 @@ func TestPlainReporter_TTY_FullParallelGroup_Integration(t *testing.T) {
 		}
 	}
 	// Block must be torn down after FinishGroup.
-	if r.live.blockRows != 0 {
-		t.Errorf("blockRows should be 0 after FinishGroup, got %d", r.live.blockRows)
+	if r.live.BlockRows() != 0 {
+		t.Errorf("blockRows should be 0 after FinishGroup, got %d", r.live.BlockRows())
 	}
 }
 
@@ -1450,19 +1450,13 @@ func TestPlainReporter_HuhHooksDriveLiveLinePauseResume(t *testing.T) {
 	// Invoke before (Pause): footer row should be cleared.
 	before()
 	// After Pause, the LiveLine should be marked paused.
-	r.live.mu.Lock()
-	paused := r.live.paused
-	r.live.mu.Unlock()
-	if !paused {
+	if !r.live.IsPaused() {
 		t.Error("before hook should pause LiveLine")
 	}
 
 	// Invoke after (Resume): footer repaints.
 	after()
-	r.live.mu.Lock()
-	paused = r.live.paused
-	r.live.mu.Unlock()
-	if paused {
+	if r.live.IsPaused() {
 		t.Error("after hook should resume LiveLine")
 	}
 

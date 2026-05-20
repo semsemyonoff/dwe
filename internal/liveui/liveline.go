@@ -1,4 +1,4 @@
-package pipeline
+package liveui
 
 import (
 	"fmt"
@@ -14,6 +14,16 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"devbox-cli/internal/render"
+)
+
+// Icon glyphs used by block-row finalisation and by pipeline reporter text
+// output. Exported so both PlainReporter and the workflow runner reference a
+// single source of truth.
+const (
+	IconDone    = "✓"
+	IconFailed  = "✗"
+	IconSkipped = "◎"
+	IconRunning = "·"
 )
 
 // liveLineTickPeriod is the redraw period for the LiveLine ticker (10 Hz).
@@ -167,6 +177,18 @@ func (l *LiveLine) tickLoop() {
 // tick drives one redraw frame deterministically. Test-only.
 func (l *LiveLine) tick() {
 	l.advance()
+}
+
+// Tick drives one redraw frame deterministically. Test-only helper exported
+// so tests in other packages (e.g. internal/pipeline) can drive the LiveLine
+// without leaking the unexported tick() through reflection.
+func (l *LiveLine) Tick() { l.advance() }
+
+// SetTestHooks installs the test hooks for deterministic testing. Test-only.
+// Pass noTicker=true to suppress the background ticker so the test can drive
+// frames via Tick. widthFn substitutes terminal width detection.
+func (l *LiveLine) SetTestHooks(noTicker bool, widthFn func() int) {
+	l.testHooks = &liveLineTestHooks{noTicker: noTicker, widthFn: widthFn}
 }
 
 func (l *LiveLine) advance() {
@@ -377,11 +399,11 @@ func (l *LiveLine) SetBlockRowFinal(idx int, kind BlockRowKind, label string) {
 func finalGlyph(kind BlockRowKind) (icon, color string) {
 	switch kind {
 	case BlockRowFailed:
-		return iconFailed, render.Red
+		return IconFailed, render.Red
 	case BlockRowSkipped:
-		return iconSkipped, render.Yellow
+		return IconSkipped, render.Yellow
 	default:
-		return iconDone, render.Green
+		return IconDone, render.Green
 	}
 }
 
@@ -440,7 +462,7 @@ func (l *LiveLine) renderBlockRowLocked(idx int) string {
 	} else if !slot.startTime.IsZero() {
 		elapsed = time.Since(slot.startTime)
 	}
-	elapsedText := render.Gray + "[" + formatElapsed(elapsed) + "]" + render.Reset
+	elapsedText := render.Gray + "[" + FormatElapsed(elapsed) + "]" + render.Reset
 	content := fmt.Sprintf("  %s %s %s", iconText, elapsedText, slot.label)
 	w := l.termWidth()
 	if lipgloss.Width(content) > w {
@@ -515,7 +537,7 @@ func (l *LiveLine) renderFooterLocked() string {
 	frame := render.Blue + l.spinner.View() + render.Reset
 	var elapsedText string
 	if !l.footerStart.IsZero() {
-		elapsedText = render.Gray + "[" + formatElapsed(time.Since(l.footerStart)) + "]" + render.Reset
+		elapsedText = render.Gray + "[" + FormatElapsed(time.Since(l.footerStart)) + "]" + render.Reset
 	}
 	frameW := lipgloss.Width(frame)
 	elapsedW := lipgloss.Width(elapsedText)
@@ -554,4 +576,21 @@ func truncateToWidth(s string, w int) string {
 // writeTerm is the single termOut writer; caller must hold l.mu.
 func (l *LiveLine) writeTerm(s string) {
 	_, _ = io.WriteString(l.termOut, s)
+}
+
+// FormatElapsed formats a duration as a human-readable elapsed time string.
+// Examples: "5s", "1m 23s", "2h 5m".
+func FormatElapsed(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	switch {
+	case h > 0:
+		return fmt.Sprintf("%dh %dm", h, m)
+	case m > 0:
+		return fmt.Sprintf("%dm %ds", m, s)
+	default:
+		return fmt.Sprintf("%ds", s)
+	}
 }
