@@ -669,6 +669,59 @@ func TestPlainReporter_StepOutput_CommitTheRightFrame(t *testing.T) {
 	}
 }
 
+// TestPlainReporter_FlushOutput_CommitsBodyTailBeforeCheckOutput is the
+// regression test for the P1 finding: a body's trailing non-newline-terminated
+// tail (stored as inProgress after tee.Flush) must survive into the output
+// even when a subsequent check: step emits a final=true line that would
+// otherwise wipe inProgress before commitTrailingTail sees it.
+//
+// Sequence mirrors what executeStepBody does:
+//  1. body emits trailing tail → StepOutput(addr, tail, false)
+//  2. tee.Flush implicit → FlushOutput(addr) commits the tail
+//  3. check emits a committed line → StepOutput(addr, line, true)
+//  4. FinishStep closes the step
+func TestPlainReporter_FlushOutput_CommitsBodyTailBeforeCheckOutput(t *testing.T) {
+	r, buf := newBufReporter()
+
+	// Sequential step (no StartGroup → groupAddr == "").
+	r.StepOutput("setup/build", "body-tail", false) // body trailing tail
+	if buf.Len() != 0 {
+		t.Fatalf("non-final frame must not write to screen immediately; got %q", buf.String())
+	}
+
+	r.FlushOutput("setup/build") // executor calls this between body and check
+	if !strings.Contains(clean(buf.String()), "body-tail") {
+		t.Errorf("FlushOutput must commit the body tail to screen; got %q", buf.String())
+	}
+	bufBeforeCheck := buf.String()
+
+	// Check step emits a final line. Without the fix this would clear
+	// inProgress before commitTrailingTail could save "body-tail".
+	r.StepOutput("setup/build", "check-line", true)
+	r.FinishStep("setup/build", config.DeployStep{Name: "build"}, 1, 1)
+
+	got := clean(buf.String())
+	if !strings.Contains(got, "body-tail") {
+		t.Errorf("body-tail must still be in output after check runs; got %q", got)
+	}
+	if !strings.Contains(got, "check-line") {
+		t.Errorf("check-line must appear in output; got %q", got)
+	}
+	_ = bufBeforeCheck
+}
+
+// TestPlainReporter_FlushOutput_NoopWhenEmpty verifies that FlushOutput is a
+// no-op when inProgress is empty (e.g. called for a step with no trailing tail).
+func TestPlainReporter_FlushOutput_NoopWhenEmpty(t *testing.T) {
+	r, buf := newBufReporter()
+	r.StepOutput("setup/build", "clean-line", true) // final, so inProgress=""
+	lenAfterFinal := buf.Len()
+	r.FlushOutput("setup/build") // must be a no-op
+	if buf.Len() != lenAfterFinal {
+		t.Errorf("FlushOutput on empty inProgress must not write anything extra; got %q", buf.String())
+	}
+}
+
 // --- Task 8: non-TTY parallel sub-step buffering and dump ---
 
 // helper: build a parallel-group DeployStep with the named sub-steps so

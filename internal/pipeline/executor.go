@@ -93,10 +93,10 @@ type ActionContext struct {
 	// (ad-hoc external callers outside RunWithOptions), childIO falls back to
 	// os.Stdout/os.Stderr passthrough.
 	StepWriter io.Writer
-	// LogWriter carries the per-sub-step log-file sink in parallel mode (a
-	// logSanitizer wrapping the per-sub-step file). It is folded into
-	// StepWriter's downstream destinations by executeStepBody. In sequential
-	// mode it is nil — the global pipeline log receives lines via PlainReporter.
+	// LogWriter carries the raw per-sub-step log file in parallel mode. The
+	// lineTee callback in executeStepBody writes each assembled ANSI-clean frame
+	// to it directly (via fmt.Fprintln). In sequential mode it is nil — the
+	// global pipeline log receives lines via PlainReporter's writeLog path.
 	LogWriter   io.Writer
 	SkipConfirm bool
 	// Parallel indicates the action is running as a sub-step of a parallel
@@ -306,7 +306,7 @@ type RunOptions struct {
 	// Parallel marks this RunOptions as describing a parallel sub-step. It is
 	// set by executeParallelGroup on a per-sub-step copy before delegating to
 	// executeStepBody, and is threaded into ActionContext.Parallel so that
-	// child I/O (childIO, execBuiltinAction) routes only to LogWriter — never
+	// child I/O (childIO, execBuiltinAction) routes only to StepWriter — never
 	// to os.Stdout / os.Stderr — and skips PTY allocation. Callers MUST NOT
 	// set this field directly; sequential pipelines leave it false.
 	Parallel bool
@@ -636,11 +636,21 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 
 	// Build the per-step tee: every frame the child emits flows through
 	// Reporter.StepOutput exactly once. In parallel mode the per-sub-step
-	// log-file sink (opts.LogWriter) is folded into the same writer so the
-	// sub-step's .log captures full output without a second tee.
+	// log-file sink (opts.LogWriter) receives each clean frame written by the
+	// callback — routing through the lineTee ensures that OSC/CSI sequences
+	// split across PTY read boundaries are reassembled and double-stripped
+	// before reaching the log file (a stateless per-Write logSanitizer cannot
+	// handle split sequences).
 	stepAddr := addr
+	subLog := opts.LogWriter // capture for closure; nil in sequential mode
 	tee := newLineTee(func(frame string, final bool) {
 		opts.Reporter.StepOutput(stepAddr, frame, final)
+		// Write the assembled, ANSI-clean frame to the per-sub-step log file.
+		// Both final and non-final frames are written (one line each) so
+		// progress rewrites like "50%\r100%\n" land as "50%\n100%\n" on disk.
+		if opts.Parallel && subLog != nil {
+			_, _ = fmt.Fprintln(subLog, frame)
+		}
 	})
 	// tee.Flush must run BEFORE any reporter end-of-step event so the
 	// trailing non-newline-terminated tail (delivered as final=false via
@@ -650,11 +660,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	// both eagerly (before each finish event) and via the defer for any
 	// short-circuit return paths is safe.
 	defer tee.Flush()
-	var stepDst io.Writer = tee
-	if opts.Parallel && opts.LogWriter != nil {
-		stepDst = joinWriters(tee, opts.LogWriter)
-	}
-	stepWriter := &ansiOnlyStripper{w: stepDst}
+	stepWriter := &ansiOnlyStripper{w: tee}
 
 	bodyActx := ActionContext{
 		WorkDir:     opts.WorkDir,
@@ -691,6 +697,11 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	}
 
 	if rs.Step.Check != nil {
+		// Commit any body trailing tail before check: runs. Without this, a
+		// final=true frame from the check displaces inProgress (set by
+		// tee.Flush above) before commitTrailingTail sees it, silently
+		// dropping the body's last non-newline-terminated line.
+		opts.Reporter.FlushOutput(addr)
 		actx := ActionContext{
 			WorkDir:     opts.WorkDir,
 			Cfg:         opts.Config,
@@ -837,14 +848,17 @@ func runParallelSubStep(ctx context.Context, opts RunOptions, group ResolvedStep
 	// SetSubStepLogPath. Strictly later than StartGroup, before any output.
 	opts.Reporter.SetSubStepLogPath(subAddr, logPath)
 
-	// Per-sub-step log file receives full output via logSanitizer (ANSI strip
-	// + `\r` → `\n` so progress frames land on separate lines). The per-step
-	// lineTee created in executeStepBody is the SINGLE source-of-truth tee for
-	// child frames; runParallelSubStep no longer wires its own. The global
-	// pipeline log is fed via PlainReporter.StepOutput's writeLog path.
+	// Per-sub-step log file is passed as a raw io.Writer to executeStepBody.
+	// The lineTee callback in executeStepBody writes each assembled, ANSI-clean
+	// frame (both final and non-final) to this writer via fmt.Fprintln, so the
+	// file receives clean line-separated output without needing a logSanitizer
+	// wrapper. This approach also handles OSC/CSI sequences split across PTY
+	// read boundaries — the double-strip inside lineTee reassembles them before
+	// the callback fires. The global pipeline log is fed via PlainReporter's
+	// writeLog side-channel, not via this writer.
 	subOpts := opts
 	if subFile != nil {
-		subOpts.LogWriter = &logSanitizer{w: subFile}
+		subOpts.LogWriter = subFile
 	} else {
 		subOpts.LogWriter = nil
 	}

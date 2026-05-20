@@ -78,4 +78,10 @@ type Reporter interface {
 	// successful or skipped sub-steps with a known log path suppress the dump
 	// and emit a "Full log: <path>" line instead.
 	SetSubStepLogPath(subAddr string, path string)
+
+	// FlushOutput commits any buffered inProgress tail for addr immediately.
+	// The executor calls this between body execution and check: execution so
+	// that a body's trailing non-newline-terminated tail is persisted to screen
+	// and log before check output arrives and would otherwise displace it.
+	FlushOutput(addr string)
 }

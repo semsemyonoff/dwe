@@ -17,7 +17,37 @@ import (
 // ansiOnlyRe matches ANSI/VT100 escape sequences only. It deliberately does
 // NOT match `\r` — bare carriage returns are data for the frame parser
 // (lineTee) and the log sanitiser (logSanitizer), each of which handles them.
-var ansiOnlyRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b[a-zA-Z]`)
+//
+// The three alternatives cover:
+//   - Standard and private-mode CSI: ESC [ <params> <intermediates> <final>
+//     where params are 0x30–0x3F (digits, :;<=>?), intermediates are 0x20–0x2F
+//     (space through /), and final bytes are 0x40–0x7E (@ through ~). This
+//     covers SGR colours, cursor moves, erase sequences, and DEC private modes
+//     like \x1b[?25l (hide cursor) and \x1b[?2026h (synchronized output).
+//   - OSC sequences terminated by BEL (0x07) OR ST (ESC \): a single combined
+//     branch `\x1b\][^\x1b\x07]*(?:\x07|\x1b\\)` stops at whichever terminator
+//     comes first. The content charset `[^\x1b\x07]*` excludes both ESC and BEL
+//     so the branch cannot over-match across a mixed-terminator sequence like
+//     `ESC]8;;url ESC\VISIBLE ESC]0;t BEL` — without this constraint the old
+//     BEL branch `[^\x07]*\x07` would greedily absorb ESC and consume VISIBLE.
+//     Covers window title changes and OSC 8 hyperlinks from curl, git, ls, etc.
+//   - Two-byte ESC sequences with optional intermediate bytes (0x20–0x2F) and
+//     a final byte in the Fp (0x30–0x3A), Fe (0x40–0x5A), or Fs (0x5E–0x7E)
+//     ranges. Three final bytes are intentionally excluded:
+//     0x5B ([) — CSI introducer, handled by the CSI branch above
+//     0x5C (\) — ST terminator; excluding it preserves split-write OSC
+//     correctness: the ST in chunk 2 of a split "ESC]…ESC\" must
+//     survive the per-write pass so the lineTee buffer can assemble
+//     the complete sequence for its double-strip
+//     0x5D (]) — OSC introducer, handled by the OSC branch above
+//     This covers ESC 7/ESC 8 (save/restore cursor from tput/ncurses),
+//     ESC = / ESC > (keypad modes), ESC M (reverse linefeed), ESC ( B / ESC # 8
+//     (charset designation, DEC alignment), and similar two-byte controls.
+var ansiOnlyRe = regexp.MustCompile("" +
+	`\x1b\[[0-9:;<=>?]*[ -/]*[@-~]` + // CSI (standard + private-mode)
+	`|\x1b\][^\x1b\x07]*(?:\x07|\x1b\\)` + // OSC terminated by BEL or ST (ESC \)
+	`|\x1b[\x20-\x2f]*[\x30-\x5a\x5e-\x7e]`, // Fp/Fe/Fs two-byte (+ intermediate) sequences
+)
 
 // unsafeFSRe matches characters not allowed in sanitised filesystem names.
 var unsafeFSRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -200,7 +230,11 @@ func newLineTee(cb func(frame string, final bool)) *lineTee {
 }
 
 func (t *lineTee) Write(p []byte) (int, error) {
-	// Strip ANSI but preserve `\r` so frame parsing sees it as data.
+	// Strip ANSI per-write (handles sequences that arrive in a single Write
+	// call) but preserve `\r` so the frame parser sees it as data.
+	// Sequences split across multiple Write calls are handled by a second
+	// ANSI-strip at frame-emit time below, where the full assembled line is
+	// available in the buffer.
 	stripped := ansiOnlyRe.ReplaceAll(p, nil)
 	t.mu.Lock()
 	t.buf.Write(stripped)
@@ -225,7 +259,11 @@ func (t *lineTee) Write(p []byte) (int, error) {
 			idx = idxN
 		}
 
-		frame := string(data[:idx])
+		// Strip ANSI a second time on the assembled frame bytes. This handles
+		// OSC/CSI sequences that were split across PTY read boundaries: neither
+		// half matched the regex during the per-write pass, but the reassembled
+		// line in the buffer contains the complete sequence.
+		frame := string(ansiOnlyRe.ReplaceAll(data[:idx], nil))
 		consume := idx + 1
 		final := !isR
 		// CRLF collapses to a single final frame.
@@ -251,7 +289,9 @@ func (t *lineTee) Flush() {
 		t.mu.Unlock()
 		return
 	}
-	tail := t.buf.String()
+	// Apply the same double-strip as Write: the tail may contain partial ANSI
+	// sequences that were split across PTY reads and are now complete in the buffer.
+	tail := string(ansiOnlyRe.ReplaceAll(t.buf.Bytes(), nil))
 	t.buf.Reset()
 	t.mu.Unlock()
 	t.cb(tail, false)

@@ -672,6 +672,14 @@ func (r *PlainReporter) commitTrailingTail(addr string) {
 	r.writeLog(tail)
 }
 
+// FlushOutput commits any buffered inProgress tail for addr immediately.
+// Called by the executor between body execution and check: execution.
+func (r *PlainReporter) FlushOutput(addr string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.commitTrailingTail(addr)
+}
+
 // writeLog side-writes a single committed step-output frame to the global
 // pipeline log file. No-op when logging is disabled.
 func (r *PlainReporter) writeLog(frame string) {

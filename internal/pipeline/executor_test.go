@@ -87,6 +87,9 @@ func (m *mockReporter) StepOutput(addr string, frame string, final bool) {
 func (m *mockReporter) SetSubStepLogPath(addr string, path string) {
 	m.append(reporterEvent{kind: "SetSubStepLogPath", stepAddr: addr, reason: path})
 }
+func (m *mockReporter) FlushOutput(addr string) {
+	m.append(reporterEvent{kind: "FlushOutput", stepAddr: addr})
+}
 
 // kindSeq returns the sequence of event kinds.
 func (m *mockReporter) kindSeq() []string {
