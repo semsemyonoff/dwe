@@ -76,13 +76,10 @@ func (s *ansiOnlyStripper) Write(p []byte) (int, error) {
 type logSanitizer struct{ w io.Writer }
 
 func (s *logSanitizer) Write(p []byte) (int, error) {
-	stripped := ansiOnlyRe.ReplaceAll(p, nil)
-	// Single-pass byte walk: replace every `\r` with `\n`.
-	for i, b := range stripped {
-		if b == '\r' {
-			stripped[i] = '\n'
-		}
-	}
+	// ReplaceAll returns the input slice unchanged when there are no matches, so
+	// we must not mutate the result in-place — that would corrupt the caller's
+	// buffer. Use bytes.ReplaceAll for the \r→\n pass instead.
+	stripped := bytes.ReplaceAll(ansiOnlyRe.ReplaceAll(p, nil), []byte{'\r'}, []byte{'\n'})
 	if _, err := s.w.Write(stripped); err != nil {
 		return 0, err
 	}

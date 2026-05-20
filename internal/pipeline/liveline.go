@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
@@ -31,7 +32,7 @@ const liveLineDefaultWidth = 80
 type LiveLine struct {
 	termOut io.Writer
 	screen  io.Writer
-	enabled bool
+	enabled atomic.Bool // set once at construction; Stop() flips it to false
 
 	mu       sync.Mutex
 	spinner  spinner.Model
@@ -74,20 +75,21 @@ func NewLiveLine(termOut, screen io.Writer, enabled bool) *LiveLine {
 	}
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	sp.Style = lipgloss.NewStyle()
-	return &LiveLine{
+	ll := &LiveLine{
 		termOut: termOut,
 		screen:  screen,
-		enabled: enabled,
 		spinner: sp,
 		stopCh:  make(chan struct{}),
 		doneCh:  make(chan struct{}),
 	}
+	ll.enabled.Store(enabled)
+	return ll
 }
 
 // Start begins the ticker (when enabled) and paints the initial footer row.
 // Idempotent: subsequent calls are no-ops.
 func (l *LiveLine) Start() {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		return
 	}
 	l.mu.Lock()
@@ -134,7 +136,7 @@ func (l *LiveLine) tick() {
 func (l *LiveLine) advance() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !l.enabled || !l.started || l.stopped || l.paused {
+	if !l.enabled.Load() || !l.started || l.stopped || l.paused {
 		return
 	}
 	// Synthesise a TickMsg the spinner accepts; discard the returned Cmd.
@@ -164,7 +166,7 @@ func (l *LiveLine) redrawLocked() {
 // multiple times via stopOnce. MUST be called from outside any LiveLine
 // callback (Invariant #5).
 func (l *LiveLine) Stop() {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		return
 	}
 	l.stopOnce.Do(func() {
@@ -203,7 +205,7 @@ func (l *LiveLine) Stop() {
 			// Paused already erased the footer; just show the cursor.
 			l.writeTerm("\x1b[?25h")
 		}
-		l.enabled = false
+		l.enabled.Store(false)
 		l.stopped = true
 		l.mu.Unlock()
 	})
@@ -214,7 +216,7 @@ func (l *LiveLine) Stop() {
 // starting at the current cursor row, so leaving the cursor below would
 // produce a blank gap above the prompt. Resume restores the invariant.
 func (l *LiveLine) Pause() {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		return
 	}
 	l.mu.Lock()
@@ -229,7 +231,7 @@ func (l *LiveLine) Pause() {
 // Resume repaints the footer at the current cursor row and advances the cursor
 // below it, restoring Invariant #9.
 func (l *LiveLine) Resume() {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		return
 	}
 	l.mu.Lock()
@@ -244,7 +246,7 @@ func (l *LiveLine) Resume() {
 // SetText updates the footer text. The next redraw / Println picks it up.
 // On the disabled path SetText is a no-op.
 func (l *LiveLine) SetText(s string) {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		return
 	}
 	l.mu.Lock()
@@ -257,7 +259,7 @@ func (l *LiveLine) SetText(s string) {
 // and is populated via [LiveLine.SetBlockRow]. Calling StartBlock when a block
 // is already active or when LiveLine is disabled/stopped is a no-op.
 func (l *LiveLine) StartBlock(rows int) {
-	if !l.enabled || rows <= 0 {
+	if !l.enabled.Load() || rows <= 0 {
 		return
 	}
 	l.mu.Lock()
@@ -278,7 +280,7 @@ func (l *LiveLine) StartBlock(rows int) {
 // SetBlockRow updates the content for block row idx and triggers an immediate
 // redraw. Out-of-range idx is silently ignored.
 func (l *LiveLine) SetBlockRow(idx int, content string) {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		return
 	}
 	l.mu.Lock()
@@ -299,7 +301,7 @@ func (l *LiveLine) SetBlockRow(idx int, content string) {
 // EndBlock freezes the current block (rows persist in scrollback) and paints a
 // fresh single-line footer below. Subsequent operations behave as single-line.
 func (l *LiveLine) EndBlock() {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		return
 	}
 	l.mu.Lock()
@@ -349,7 +351,7 @@ func (l *LiveLine) renderBlockRowLocked(idx int) string {
 // All three steps run under the LiveLine mutex so concurrent Println calls
 // produce well-formed output.
 func (l *LiveLine) Println(rawLine string) {
-	if !l.enabled {
+	if !l.enabled.Load() {
 		// After Stop() enabled flips to false; writes are safe no-ops on
 		// termOut and still need to land on screen if a caller writes "late".
 		// We still write to screen to preserve the disabled-mode contract.
