@@ -84,13 +84,17 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	var unknown []string
+	type unknownEntry struct {
+		name string
+		line int
+	}
+	var unknown []unknownEntry
 	for i := 0; i+1 < len(commands.Content); i += 2 {
 		keyNode := commands.Content[i]
 		valNode := commands.Content[i+1]
 		key := keyNode.Value
 		if !uiCommandsKnownKeys[key] {
-			unknown = append(unknown, key)
+			unknown = append(unknown, unknownEntry{name: key, line: keyNode.Line})
 			continue
 		}
 		if key == "default_expanded_depth" {
@@ -106,18 +110,29 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 						Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
 					})
 				}
+			} else {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   "config.ui",
+					File:     file,
+					Line:     valNode.Line,
+					Message:  "ui.commands.default_expanded_depth must be an integer",
+					Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
+				})
 			}
 		}
 	}
 	if len(unknown) > 0 {
-		sort.Strings(unknown)
-		for _, k := range unknown {
+		sort.Slice(unknown, func(i, j int) bool { return unknown[i].name < unknown[j].name })
+		for _, u := range unknown {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityWarning,
 				Domain:   "config",
 				Target:   "config.ui",
 				File:     file,
-				Message:  "unknown key under ui.commands: " + k,
+				Line:     u.line,
+				Message:  "unknown key under ui.commands: " + u.name,
 				Hint:     "Known keys: default_expanded_depth, auto_collapse_empty, show_type_badges.",
 			})
 		}

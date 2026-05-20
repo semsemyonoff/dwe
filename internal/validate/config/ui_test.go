@@ -55,6 +55,18 @@ func TestUIValidator(t *testing.T) {
 			wantSev:    validate.SeverityWarning,
 			wantSubstr: "bogus",
 		},
+		{
+			name:       "sequence depth is error",
+			body:       "schema_version: \"2\"\nui:\n  commands:\n    default_expanded_depth: [1, 2]\n",
+			wantSev:    validate.SeverityError,
+			wantSubstr: "default_expanded_depth",
+		},
+		{
+			name:       "mapping depth is error",
+			body:       "schema_version: \"2\"\nui:\n  commands:\n    default_expanded_depth: {a: b}\n",
+			wantSev:    validate.SeverityError,
+			wantSubstr: "default_expanded_depth",
+		},
 	}
 
 	for _, tc := range cases {
@@ -81,4 +93,23 @@ func TestUIValidator(t *testing.T) {
 			}
 		})
 	}
+
+	// unknown-key warnings must carry the YAML line number so the user can
+	// navigate to the offending key in their editor.
+	t.Run("unknown key warning has line number", func(t *testing.T) {
+		t.Parallel()
+		body := "schema_version: \"2\"\nui:\n  commands:\n    bogus: true\n"
+		root, cfgPath := writeTempDevbox(t, body)
+		v := &uiValidator{}
+		diags := v.Run(validate.Context{ProjectRoot: root, ConfigPath: cfgPath})
+		for _, d := range diags {
+			if d.Severity == validate.SeverityWarning && strings.Contains(d.Message, "bogus") {
+				if d.Line == 0 {
+					t.Fatalf("warning for unknown key 'bogus' has Line=0; expected the YAML source line")
+				}
+				return
+			}
+		}
+		t.Fatalf("warning for unknown key 'bogus' not found in %+v", diags)
+	})
 }

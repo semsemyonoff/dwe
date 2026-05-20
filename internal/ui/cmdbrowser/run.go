@@ -136,5 +136,11 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 	if m.cancelled {
 		return Result{}, ui.ErrCancelled
 	}
+	// ActionUnknown (zero value) means the program exited without the user
+	// making a selection — treat it as a cancellation rather than silently
+	// returning defs[0].
+	if m.result.Action == ActionUnknown {
+		return Result{}, ui.ErrCancelled
+	}
 	return m.result, nil
 }
