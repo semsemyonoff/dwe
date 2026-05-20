@@ -237,10 +237,11 @@ func evalWorkflowStepWhen(expr string, rc RunContext) (bool, error) {
 // subResult collects the outcome of one parallel sub-step. Each goroutine
 // writes to its own results[i] index; the post-Wait emit pass reads sequentially.
 type subResult struct {
-	sub     model.WorkflowStep
-	err     error
-	output  string
-	skipped bool
+	sub             model.WorkflowStep
+	err             error
+	output          string
+	skipped         bool
+	continueOnError bool
 }
 
 // runParallelGroup executes a workflow parallel sub-step group concurrently.
@@ -340,6 +341,13 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		eg.Go(func() error {
 			results[i].sub = sub
 
+			if gctx.Err() != nil {
+				// Group already cancelled (fail_fast sibling failed or SIGINT).
+				// Skip this sub-step silently; the initiating error is reported
+				// by the goroutine that caused cancellation.
+				return nil
+			}
+
 			d := whenDecisions[i]
 			if d.err != nil {
 				wrapped := fmt.Errorf("workflow sub-step %q: when: %w", sub.Command, d.err)
@@ -396,6 +404,7 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 				wrapped := fmt.Errorf("workflow sub-step %q: %w", sub.Command, err)
 				results[i].err = wrapped
 				if sub.ContinueOnError {
+					results[i].continueOnError = true
 					live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
 						fmt.Sprintf("[%d/%d] Failed (continue_on_error): %s", i+1, n, sub.Command))
 					return nil
@@ -424,11 +433,20 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		switch {
 		case res.skipped:
 			_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Skipped: %s (when=false)\n", i+1, n, res.sub.Command)
+		case res.err != nil && res.continueOnError:
+			_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Failed (continue_on_error): %s\n", i+1, n, res.sub.Command)
+			if res.output != "" {
+				_, _ = fmt.Fprintln(stderr(rc), "  ───── output ─────")
+				_, _ = fmt.Fprint(stderr(rc), res.output)
+				_, _ = fmt.Fprintln(stderr(rc), "  ──────────────────")
+			}
 		case res.err != nil:
 			_, _ = fmt.Fprintf(stderr(rc), "  ✗ [%d/%d] Failed: %s\n", i+1, n, res.sub.Command)
-			_, _ = fmt.Fprintln(stderr(rc), "  ───── output ─────")
-			_, _ = fmt.Fprint(stderr(rc), res.output)
-			_, _ = fmt.Fprintln(stderr(rc), "  ──────────────────")
+			if res.output != "" {
+				_, _ = fmt.Fprintln(stderr(rc), "  ───── output ─────")
+				_, _ = fmt.Fprint(stderr(rc), res.output)
+				_, _ = fmt.Fprintln(stderr(rc), "  ──────────────────")
+			}
 		default:
 			_, _ = fmt.Fprintf(stderr(rc), "  ✓ [%d/%d] Done: %s\n", i+1, n, res.sub.Command)
 		}
