@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
@@ -204,7 +206,13 @@ it runs directly without showing a selector.`,
 			rctx.SkipConfirm = shouldSkip
 			rctx.NonInteractive = shouldSkip
 
-			if err := usercommands.RunCommand(cmd.Context(), rctx); err != nil {
+			// Install signal-aware cancellation so a workflow's parallel group
+			// (and any child docker/exec processes it spawns) receive SIGTERM
+			// via exec.CommandContext when the user hits Ctrl-C.
+			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
+
+			if err := usercommands.RunCommand(ctx, rctx); err != nil {
 				return fmt.Errorf("running command %q: %w", id, err)
 			}
 			return nil

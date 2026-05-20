@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sync"
 
+	"github.com/charmbracelet/x/term"
 	"golang.org/x/sync/errgroup"
 
 	"devbox-cli/internal/liveui"
@@ -18,6 +20,29 @@ import (
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/resolve"
 )
+
+// workflowParallelStdoutIsTTY reports whether os.Stdout is attached to a
+// terminal. Overridable for tests so the LiveLine integration can be exercised
+// with both TTY-enabled and disabled paths.
+var workflowParallelStdoutIsTTY = func() bool {
+	return term.IsTerminal(os.Stdout.Fd())
+}
+
+// newWorkflowParallelLiveLine constructs the LiveLine used by
+// runParallelGroup. The production implementation picks os.Stdout when stdout
+// is a TTY, io.Discard otherwise; tests override it to inject a LiveLine
+// writing to a buffer with test hooks installed so block-row state can be
+// inspected without touching the real terminal.
+var newWorkflowParallelLiveLine = func(workflowID string) *liveui.LiveLine {
+	termOut := io.Writer(io.Discard)
+	isTTY := workflowParallelStdoutIsTTY()
+	if isTTY {
+		termOut = os.Stdout
+	}
+	live := liveui.NewLiveLine(termOut, os.Stdout, isTTY)
+	live.SetText(fmt.Sprintf("parallel: %s", workflowID))
+	return live
+}
 
 // ErrWorkflowNestedParallel is returned when a workflow containing a
 // `parallel:` block is invoked from another parallel context (pipeline or
@@ -281,6 +306,16 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		}
 	}
 
+	// LiveLine: when stdout is a TTY paint block rows directly to os.Stdout;
+	// otherwise disable so the post-Wait text emit pass remains the sole output
+	// channel (CI / piped invocations). All live.* methods are no-ops when
+	// disabled, so the same code path covers both modes.
+	live := newWorkflowParallelLiveLine(rc.Cmd.ID)
+	live.Start()
+	defer live.Stop()
+	live.StartBlock(n)
+	defer live.EndBlock()
+
 	eg, gctx := errgroup.WithContext(parentCtx)
 	eg.SetLimit(maxC)
 
@@ -310,12 +345,18 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 			if d.err != nil {
 				wrapped := fmt.Errorf("workflow sub-step %q: when: %w", sub.Command, d.err)
 				results[i].err = wrapped
+				live.SetBlockRowFinal(i, liveui.BlockRowFailed,
+					fmt.Sprintf("[%d/%d] Failed: %s", i+1, n, sub.Command))
 				return emit(wrapped)
 			}
 			if d.skip {
 				results[i].skipped = true
+				live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
+					fmt.Sprintf("[%d/%d] Skipped: %s (when=false)", i+1, n, sub.Command))
 				return nil
 			}
+
+			live.SetBlockRowRunning(i, fmt.Sprintf("[%d/%d] %s", i+1, n, sub.Command))
 
 			gRC := rc
 			gRC.UnderParallel = true
@@ -324,6 +365,8 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 			if openErr != nil {
 				wrapped := fmt.Errorf("workflow sub-step %q: open log: %w", sub.Command, openErr)
 				results[i].err = wrapped
+				live.SetBlockRowFinal(i, liveui.BlockRowFailed,
+					fmt.Sprintf("[%d/%d] Failed: %s", i+1, n, sub.Command))
 				return emit(wrapped)
 			}
 			if subFile != nil {
@@ -331,11 +374,15 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 			}
 
 			var buf bytes.Buffer
-			tee := liveui.NewLineTee(func(frame string, _ bool) {
+			tee := liveui.NewLineTee(func(frame string, final bool) {
 				buf.WriteString(frame)
 				buf.WriteByte('\n')
 				if subFile != nil {
 					_, _ = fmt.Fprintln(subFile, frame)
+				}
+				if final {
+					live.SetBlockRowRunning(i,
+						fmt.Sprintf("[%d/%d] %s: %s", i+1, n, sub.Command, frame))
 				}
 			})
 
@@ -350,10 +397,16 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 				wrapped := fmt.Errorf("workflow sub-step %q: %w", sub.Command, err)
 				results[i].err = wrapped
 				if sub.ContinueOnError {
+					live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
+						fmt.Sprintf("[%d/%d] Failed (continue_on_error): %s", i+1, n, sub.Command))
 					return nil
 				}
+				live.SetBlockRowFinal(i, liveui.BlockRowFailed,
+					fmt.Sprintf("[%d/%d] Failed: %s", i+1, n, sub.Command))
 				return emit(wrapped)
 			}
+			live.SetBlockRowFinal(i, liveui.BlockRowDone,
+				fmt.Sprintf("[%d/%d] Done: %s", i+1, n, sub.Command))
 			return nil
 		})
 	}
