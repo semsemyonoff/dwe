@@ -29,7 +29,12 @@ func (m *Model) exitFilter() {
 	// Track the target origIdx so we can re-position the list cursor after
 	// refreshList rebuilds the items (SetItems preserves index, not identity).
 	targetOrigIdx := -1
-	if it, ok := m.list.SelectedItem().(listItem); ok && !it.header {
+	if m.filter.query == "" {
+		// Empty query: user entered and immediately Esc'd without typing.
+		// The first item in the list is highlighted but that doesn't indicate
+		// intent — restore the exact cursor position from before filter entry.
+		m.tree.focusedID = m.filter.savedFocusID
+	} else if it, ok := m.list.SelectedItem().(listItem); ok && !it.header {
 		targetOrigIdx = it.origIdx
 		// If a matched item is currently highlighted, try to keep tree focus on
 		// the nearest ancestor of that item in the restored tree.

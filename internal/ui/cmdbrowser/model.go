@@ -326,6 +326,12 @@ func (m *Model) applyLayout() {
 	m.delegate.width = listW
 	m.delegate.showBadges = !nowSingle && showBadges(m.width) && m.opts.ShowTypeBadges
 	m.list.SetSize(listW, bh)
+	if m.inspect != nil {
+		// Resize the viewport in-place to preserve scroll position.
+		w := max(min(listW-4, 80), 20)
+		m.inspect.vp.SetWidth(w)
+		m.inspect.vp.SetHeight(max(bh-2, 5))
+	}
 	if nowSingle != m.lastSinglePanel {
 		m.lastSinglePanel = nowSingle
 		m.populateList()
