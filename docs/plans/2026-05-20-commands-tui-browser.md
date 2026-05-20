@@ -205,10 +205,10 @@ Full design lives in the source spec attached to this plan; this document is the
 
 ### Task 8: [Final] Documentation
 
-- [ ] add or update `docs/reference/config/ui.md` (new page) and cross-link from `docs/reference/config/devbox.md` and `docs/reference/config/commands.md`
-- [ ] cover: schema, defaults, hotkey table per focus mode, fallback ladder (full two-panel ≥100 cols → reduced two-panel 80–99 → single-panel 60–79 → flat `huh` <60 cols or <15 rows; non-TTY is gated at the call site, not in cmdbrowser, with the existing error message), example `ui:` block
-- [ ] regenerate CLI reference via `devbox docs generate --scope cli` if any help text was reworded
-- [ ] update `AGENTS.md` (`CLAUDE.md` is a symlink — don't touch) for the new `internal/ui/cmdbrowser/` package entry, mirroring the existing one-line summaries
+- [x] add or update `docs/reference/config/ui.md` (new page) and cross-link from `docs/reference/config/devbox.md` and `docs/reference/config/commands.md`
+- [x] cover: schema, defaults, hotkey table per focus mode, fallback ladder (full two-panel ≥100 cols → reduced two-panel 80–99 → single-panel 60–79 → flat `huh` <60 cols or <15 rows; non-TTY is gated at the call site, not in cmdbrowser, with the existing error message), example `ui:` block
+- [x] regenerate CLI reference via `devbox docs generate --scope cli` if any help text was reworded — no help text changes on this branch (verified via `git diff main..HEAD -- internal/command/`)
+- [x] update `AGENTS.md` (`CLAUDE.md` is a symlink — don't touch) for the new `internal/ui/cmdbrowser/` package entry, mirroring the existing one-line summaries
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
 

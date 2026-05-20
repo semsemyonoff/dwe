@@ -32,6 +32,67 @@ When `true` (default), the right-hand command list shows a colour-coded type bad
 
 Practical implication: to disable a default-true knob you must write the explicit `false`; deleting the key restores the default. This is the only knob in `devbox.yml` where the distinction is observable.
 
+## Example
+
+```yaml
+# devbox.yml
+schema_version: "2"
+
+ui:
+  commands:
+    default_expanded_depth: 2
+    auto_collapse_empty: true
+    show_type_badges: false
+```
+
+Omit the block entirely to accept all defaults; existing `devbox.yml` files without a `ui:` block keep behaving identically.
+
+## Hotkeys
+
+The command browser has four focus modes. The visible bindings change with focus; the dynamic help footer (`?`) lists the active subset.
+
+| Mode | Binding | Action |
+| --- | --- | --- |
+| left (tree) | `↑/↓`, `k/j` | move cursor within the tree |
+| left | `→`, `l` | expand focused group |
+| left | `←`, `h` | collapse focused group, or move to its parent |
+| left | `Space` | toggle expansion |
+| left | `Home` / `End` | jump to first / last visible row |
+| left | `Enter` | drill into focused group (expand if needed and move focus right) |
+| left | `Tab` | move focus to the right list |
+| left | `/` | enter filter mode |
+| left | `?` | toggle long help |
+| left | `Esc`, `q`, `Ctrl+C` | exit the browser |
+| right (list) | `↑/↓`, `k/j` | move cursor within the list |
+| right | `Enter` | confirm selection (run or inspect, depending on entry point) |
+| right | `i` | open inspect overlay for the highlighted command |
+| right | `y` | toggle skip-confirm (run mode only); footer shows `[--yes ON]` |
+| right | `←`, `Tab` | return focus to the tree |
+| right | `/` | enter filter mode |
+| right | `Esc` | return focus to the tree |
+| filter | (typing) | refine the fuzzy query; `M/N` counts update in the tree |
+| filter | `↑/↓`, `Enter`, `i`, `y` | as in right mode, against the filtered result list |
+| filter | `Esc` | exit filter and restore the prior expansion state |
+| inspect | `↑/↓`, `k/j`, `PgUp/PgDn` | scroll the inspect viewport |
+| inspect | `Enter` | confirm (returns the same `Result` as `Enter` from the list) |
+| inspect | `Esc` | close the overlay; focus returns to the right list |
+
+The `y` skip-confirm binding is only active in run mode (`devbox commands run`); under inspect mode it is removed from the keymap.
+
+## Fallback ladder
+
+The browser inspects the terminal at startup and degrades gracefully:
+
+| Condition | Behaviour |
+| --- | --- |
+| non-TTY | the call site short-circuits with the existing `no exact command ID given; pass a full command ID or run in an interactive terminal` error; the browser is never reached |
+| TTY, `width < 60` or `height < 15` | delegate to the flat `huh.NewSelect` list (today's pre-browser UX) |
+| TTY, `width ∈ [60, 79]` | single-panel mode with `── group ──` pseudo-headers; no tree, no badges |
+| TTY, `width ∈ [80, 99]` | two-panel mode without `(N)` group counts and without type badges |
+| TTY, `width ≥ 100` | full two-panel mode with badges, counts, and breadcrumb |
+
+`NO_COLOR=1` is honoured automatically via lipgloss/bubbletea: badges render as plain text and the focus marker uses bold instead of colour.
+
 ## Related
 
 - [`devbox.md`](devbox.md) — top-level configuration overview

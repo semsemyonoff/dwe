@@ -1137,3 +1137,5 @@ The loader enforces these rules and reports the offending file + field on failur
 - `devbox commands inspect <id>` — show the resolved definition (params, context, env, runner)
 - `devbox commands run <id> [--set k=v] [--yes]` — execute a command
 - `devbox docs generate` — regenerate the per-command reference under `docs/reference/commands/`
+
+When `devbox commands run` or `devbox commands inspect` is invoked without an exact command ID on an interactive terminal, an interactive two-panel command browser opens. Its behaviour (default expansion depth, auto-collapse during fuzzy filter, type badges) is configured via the [`ui:` block in `devbox.yml`](ui.md).
