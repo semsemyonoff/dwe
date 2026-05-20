@@ -147,9 +147,9 @@ Full design lives in the source spec attached to this plan; this document is the
 
 ### Task 4: Right list panel — `list.Model`, custom delegate, badges, breadcrumb
 
-- [ ] in `internal/ui/cmdbrowser/list_delegate.go` implement a two-line `list.ItemDelegate` (height=2, spacing=1): line 1 = command ID + right-aligned type badge, line 2 = description truncated with `lipgloss.NewStyle().MaxWidth(...)`
-- [ ] `FilterValue() = ID + " " + Description` for fuzzy match
-- [ ] type-badge styles in a new `internal/ui/cmdbrowser/styles.go`. **Use only existing `styles.yml` keys** (`StylesColors` has: `label`, `section_title`, `subheader`, `muted`, `warning`, `info`, `enabled`, `disabled`, `mandatory`, `partial`, `table_border`, `table_header`). Default mapping covering **all seven** command types (`CommandType*` constants at `internal/usercommands/model/types.go:21-38`, including the previously-missed `CommandTypeDevbox`):
+- [x] in `internal/ui/cmdbrowser/list_delegate.go` implement a two-line `list.ItemDelegate` (height=2, spacing=1): line 1 = command ID + right-aligned type badge, line 2 = description truncated with `lipgloss.NewStyle().MaxWidth(...)`
+- [x] `FilterValue() = ID + " " + Description` for fuzzy match
+- [x] type-badge styles in a new `internal/ui/cmdbrowser/styles.go`. **Use only existing `styles.yml` keys** (`StylesColors` has: `label`, `section_title`, `subheader`, `muted`, `warning`, `info`, `enabled`, `disabled`, `mandatory`, `partial`, `table_border`, `table_header`). Default mapping covering **all seven** command types (`CommandType*` constants at `internal/usercommands/model/types.go:21-38`, including the previously-missed `CommandTypeDevbox`):
   - `shell` → `info`
   - `script` → `label`
   - `workflow` → `warning`
@@ -160,13 +160,13 @@ Full design lives in the source spec attached to this plan; this document is the
   - unknown / missing type → `muted` (defensive fallback)
 
   Do NOT introduce new style keys in v1 — touching `styles.yml` / `LoadStylesConfig` / `ApplyStyles` / `docs/reference/config/styles.md` is a large surface and out of scope. If a future palette tweak is needed, file a follow-up.
-- [ ] hide the `(N)` count next to tree groups and the type-badge column on the right when terminal width is 80–99 (per §4.1)
-- [ ] right-panel title = breadcrumb of focused group + `· N commands`; paginator dots come from `list.Model` automatically
-- [ ] handle `Tab` to move focus left↔right; right-panel `←` returns focus to tree (§7 table)
-- [ ] handle `Enter` on the right panel: stop the program, return `Result{Idx: i, Action: ActionRun}` for `ModeRun` or `Result{Idx: i, Action: ActionInspect}` for `ModeInspect`. Action is derived from Mode in v1; the enum is kept distinct so future `e edit` can return a different Action.
-- [ ] handle `Enter` on a group in the tree per §7.1: collapsed → expand AND move focus right; expanded → just move focus right
-- [ ] write tests: delegate render snapshot for each command type (all seven — explicit case per type), breadcrumb formatting, `Enter`-on-group drill-in semantics, `Enter`-on-list returns the right `Result.Idx`, width-bucket badge/count visibility — table-driven cases use `t.Parallel()` where independent
-- [ ] run `make test` and `make lint` — must pass before Task 5
+- [x] hide the `(N)` count next to tree groups and the type-badge column on the right when terminal width is 80–99 (per §4.1)
+- [x] right-panel title = breadcrumb of focused group + `· N commands`; paginator dots come from `list.Model` automatically
+- [x] handle `Tab` to move focus left↔right; right-panel `←` returns focus to tree (§7 table)
+- [x] handle `Enter` on the right panel: stop the program, return `Result{Idx: i, Action: ActionRun}` for `ModeRun` or `Result{Idx: i, Action: ActionInspect}` for `ModeInspect`. Action is derived from Mode in v1; the enum is kept distinct so future `e edit` can return a different Action.
+- [x] handle `Enter` on a group in the tree per §7.1: collapsed → expand AND move focus right; expanded → just move focus right
+- [x] write tests: delegate render snapshot for each command type (all seven — explicit case per type), breadcrumb formatting, `Enter`-on-group drill-in semantics, `Enter`-on-list returns the right `Result.Idx`, width-bucket badge/count visibility — table-driven cases use `t.Parallel()` where independent
+- [x] run `make test` and `make lint` — must pass before Task 5
 
 ### Task 5: Filter mode (`/`) + inspect overlay (`i`) + skip-confirm (`y`) + dynamic help (`?`)
 

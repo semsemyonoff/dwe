@@ -161,7 +161,7 @@ func TestRun_FallbackPropagatesSelectorError(t *testing.T) {
 }
 
 func TestModel_ViewRendersTwoPanels(t *testing.T) {
-	m := newModel("pick", []Item{{ID: "a"}}, DefaultOptions(), 120, 26)
+	m := newModel("pick", []Item{{ID: "db.migrate"}, {ID: "db.seed"}}, DefaultOptions(), 120, 26)
 	v := m.View()
 	if !v.AltScreen {
 		t.Error("View must request AltScreen")
@@ -169,8 +169,14 @@ func TestModel_ViewRendersTwoPanels(t *testing.T) {
 	if !strings.Contains(v.Content, "pick") {
 		t.Errorf("view does not contain title; got:\n%s", v.Content)
 	}
-	if !strings.Contains(v.Content, "groups") || !strings.Contains(v.Content, "commands") {
-		t.Errorf("view missing panel placeholders; got:\n%s", v.Content)
+	if !strings.Contains(v.Content, "groups") {
+		t.Errorf("view missing left-panel label 'groups'; got:\n%s", v.Content)
+	}
+	if !strings.Contains(v.Content, "db") {
+		t.Errorf("view missing tree node 'db'; got:\n%s", v.Content)
+	}
+	if !strings.Contains(v.Content, "commands") {
+		t.Errorf("view missing breadcrumb 'commands' label; got:\n%s", v.Content)
 	}
 }
 
@@ -228,11 +234,11 @@ func TestModel_WindowSizeUpdates(t *testing.T) {
 // pin a byte-identical golden file here — the lipgloss border characters
 // are stable but small label changes would force constant churn in Task 3.
 func TestModel_EmptyLayoutSnapshot(t *testing.T) {
-	m := newModel("Select command", nil, DefaultOptions(), 120, 26)
+	m := newModel("Select command", []Item{{ID: "db.migrate"}}, DefaultOptions(), 120, 26)
 	// Drive the model with a window-size msg as bubbletea would.
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 26})
 	out := m.View().Content
-	for _, want := range []string{"Select command", "groups", "commands", "tab: switch"} {
+	for _, want := range []string{"Select command", "groups", "command", "tab: switch"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("snapshot missing %q\n---\n%s", want, out)
 		}
@@ -257,6 +263,14 @@ func syntheticKey(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "right":
+		return tea.KeyPressMsg{Code: tea.KeyRight}
 	default:
 		if len(s) == 1 {
 			return tea.KeyPressMsg{Code: rune(s[0]), Text: s}
