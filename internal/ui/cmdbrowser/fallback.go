@@ -29,14 +29,24 @@ var (
 // — the flat fallback cannot express inspect intent (the call site at
 // command_cmd.go for ModeInspect still proceeds to inspect because it builds
 // its own follow-up from the returned ID).
-func runFallback(title string, items []Item) (Result, error) {
-	si := make([]ui.SelectorItem, len(items))
+// includePrivate mirrors Options.IncludePrivate so private commands are
+// excluded from the selector when the caller has not opted in.
+func runFallback(title string, items []Item, includePrivate bool) (Result, error) {
+	si := make([]ui.SelectorItem, 0, len(items))
+	// selectorIdx maps selector-list position → original items index so that
+	// Result.Idx always refers into the unfiltered slice, matching the contract
+	// that two-panel mode provides.
+	selectorIdx := make([]int, 0, len(items))
 	for i, it := range items {
-		si[i] = ui.SelectorItem{Label: it.ID, Description: it.Description}
+		if !includePrivate && it.Private {
+			continue
+		}
+		si = append(si, ui.SelectorItem{Label: it.ID, Description: it.Description})
+		selectorIdx = append(selectorIdx, i)
 	}
 	idx, err := runSelectorFn(title, si)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Idx: idx, Action: ActionRun}, nil
+	return Result{Idx: selectorIdx[idx], Action: ActionRun}, nil
 }

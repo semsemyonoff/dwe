@@ -58,13 +58,19 @@ func (m *Model) exitFilter() {
 	}
 	m.filter = nil
 	m.focus = focusRight
-	m.refreshList()
+	// populateList routes to refreshSingleList in single-panel mode (flat list
+	// with pseudo-headers) and to refreshList in two-panel mode. Calling
+	// refreshList directly would emit only the focused-group items in
+	// single-panel mode, producing a broken view after filter exit.
+	m.populateList()
 	// Re-position the list cursor on the item the user had highlighted in
 	// filter mode. SetItems preserves the previous cursor index, not the item
 	// identity, so without this the cursor lands on the wrong entry.
+	// The !it.header guard prevents matching a pseudo-header whose origIdx
+	// zero-value would collide with the real items[0] when targetOrigIdx == 0.
 	if targetOrigIdx >= 0 {
 		for i, li := range m.list.Items() {
-			if it, ok := li.(listItem); ok && it.origIdx == targetOrigIdx {
+			if it, ok := li.(listItem); ok && !it.header && it.origIdx == targetOrigIdx {
 				m.list.Select(i)
 				break
 			}

@@ -59,7 +59,19 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	var diags []validate.Diagnostic
-	// Find ui.commands sub-node.
+	// Find ui.commands sub-node. Check for a non-mapping scalar before
+	// calling findMappingChild, which silently returns nil for non-mappings.
+	if raw := rawChild(&top.UI, "commands"); raw != nil && raw.Kind != yaml.MappingNode {
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityError,
+			Domain:   "config",
+			Target:   "config.ui",
+			File:     file,
+			Line:     raw.Line,
+			Message:  "ui.commands must be a YAML mapping",
+			Hint:     "Expected:\n  ui:\n    commands:\n      default_expanded_depth: 3",
+		}}
+	}
 	commands := findMappingChild(&top.UI, "commands")
 	if commands == nil {
 		diags = append(diags, validate.Diagnostic{
@@ -119,12 +131,29 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 }
 
 // findMappingChild returns the mapping node at key under parent, or nil.
+// If the key exists but its value is not a mapping, nil is returned.
+// Use rawChild to detect and report non-mapping values before calling this.
 func findMappingChild(parent *yaml.Node, key string) *yaml.Node {
 	if parent == nil || parent.Kind != yaml.MappingNode {
 		return nil
 	}
 	for i := 0; i+1 < len(parent.Content); i += 2 {
 		if parent.Content[i].Value == key && parent.Content[i+1].Kind == yaml.MappingNode {
+			return parent.Content[i+1]
+		}
+	}
+	return nil
+}
+
+// rawChild returns the value node for key under parent regardless of its kind,
+// or nil if the key is absent. Used to detect non-mapping values that
+// findMappingChild would silently treat as absent.
+func rawChild(parent *yaml.Node, key string) *yaml.Node {
+	if parent == nil || parent.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(parent.Content); i += 2 {
+		if parent.Content[i].Value == key {
 			return parent.Content[i+1]
 		}
 	}

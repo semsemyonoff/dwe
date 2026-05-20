@@ -117,7 +117,7 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 
 	width, height, err := terminalSizeFn()
 	if err != nil || width < minTwoPanelWidth || height < 15 {
-		return runFallback(title, items)
+		return runFallback(title, items, opts.IncludePrivate)
 	}
 
 	m := newModel(title, items, opts, width, height)
