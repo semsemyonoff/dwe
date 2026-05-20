@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"devbox-cli/internal/validate"
 
@@ -93,16 +94,18 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			continue
 		}
 		if key == "default_expanded_depth" {
-			if valNode.Kind == yaml.ScalarNode && len(valNode.Value) > 0 && valNode.Value[0] == '-' {
-				diags = append(diags, validate.Diagnostic{
-					Severity: validate.SeverityError,
-					Domain:   "config",
-					Target:   "config.ui",
-					File:     file,
-					Line:     valNode.Line,
-					Message:  "ui.commands.default_expanded_depth must be >= 0, got " + valNode.Value,
-					Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
-				})
+			if valNode.Kind == yaml.ScalarNode {
+				if d, err := strconv.Atoi(valNode.Value); err != nil || d < 0 {
+					diags = append(diags, validate.Diagnostic{
+						Severity: validate.SeverityError,
+						Domain:   "config",
+						Target:   "config.ui",
+						File:     file,
+						Line:     valNode.Line,
+						Message:  "ui.commands.default_expanded_depth must be >= 0, got " + valNode.Value,
+						Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
+					})
+				}
 			}
 		}
 	}

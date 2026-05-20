@@ -334,6 +334,9 @@ func (m *Model) applyLayout() {
 	}
 	if nowSingle != m.lastSinglePanel {
 		m.lastSinglePanel = nowSingle
+		if nowSingle && m.focus == focusLeft {
+			m.focus = focusRight
+		}
 		m.populateList()
 	}
 }

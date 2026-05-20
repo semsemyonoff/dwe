@@ -44,6 +44,12 @@ func TestUIValidator(t *testing.T) {
 			wantSubstr: "default_expanded_depth",
 		},
 		{
+			name:       "non-integer depth is error",
+			body:       "schema_version: \"2\"\nui:\n  commands:\n    default_expanded_depth: abc\n",
+			wantSev:    validate.SeverityError,
+			wantSubstr: "default_expanded_depth",
+		},
+		{
 			name:       "unknown key is warning",
 			body:       "schema_version: \"2\"\nui:\n  commands:\n    bogus: true\n",
 			wantSev:    validate.SeverityWarning,
