@@ -231,7 +231,7 @@ func (s *ScriptDef) Validate() error {
 }
 
 // WorkflowStep is one step in a workflow command.
-// Exactly one of Command or Confirm must be set.
+// Exactly one of Command, Confirm, or Parallel must be set.
 type WorkflowStep struct {
 	// Command is the full command ID (e.g. "services.main.migrate") to execute.
 	Command string `yaml:"command"`
@@ -246,22 +246,74 @@ type WorkflowStep struct {
 	// ContinueOnError allows a command step to fail without aborting the workflow.
 	// Not valid on confirm steps (a confirmation that is ignored is meaningless).
 	ContinueOnError bool `yaml:"continue_on_error"`
+	// Parallel, when non-nil, marks this step as a parallel container holding
+	// a group of leaf sub-steps to run concurrently. Mutually exclusive with
+	// Command, Confirm, and With. When and ContinueOnError remain valid at
+	// the container level.
+	Parallel *WorkflowParallel `yaml:"parallel,omitempty"`
 }
 
-// Validate checks that exactly one of Command or Confirm is set, and that
-// ContinueOnError is only used with command steps.
+// WorkflowParallel declares a group of workflow sub-steps to be executed concurrently.
+// Mirrors the pipeline ParallelGroup shape so deploy/lifecycle/reset and workflow
+// share the same concurrency semantics.
+type WorkflowParallel struct {
+	// MaxConcurrent caps how many sub-steps run at once.
+	// When <= 0, the runner picks min(runtime.NumCPU(), len(Steps)).
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
+	// FailFast controls whether the first sub-step error cancels siblings.
+	// nil (default) means true; explicit false aggregates errors via errors.Join.
+	FailFast *bool `yaml:"fail_fast,omitempty"`
+	// Steps holds the leaf sub-steps to execute concurrently.
+	// Must contain at least 2 entries; nested parallel and confirm sub-steps are rejected.
+	Steps []WorkflowStep `yaml:"steps"`
+}
+
+// Validate checks that exactly one of Command, Confirm, or Parallel is set, and
+// that container-only fields aren't combined incompatibly.
 func (s *WorkflowStep) Validate() error {
 	hasCommand := s.Command != ""
 	hasConfirm := s.Confirm != ""
+	hasParallel := s.Parallel != nil
+	set := 0
+	if hasCommand {
+		set++
+	}
+	if hasConfirm {
+		set++
+	}
+	if hasParallel {
+		set++
+	}
 	switch {
-	case hasCommand && hasConfirm:
-		return fmt.Errorf("workflow step: command and confirm are mutually exclusive")
-	case !hasCommand && !hasConfirm:
-		return fmt.Errorf("workflow step: one of command or confirm must be set")
+	case set > 1:
+		return fmt.Errorf("workflow step: command, confirm, and parallel are mutually exclusive")
+	case set == 0:
+		return fmt.Errorf("workflow step: one of command, confirm, or parallel must be set")
 	case hasConfirm && len(s.With) > 0:
 		return fmt.Errorf("workflow step: with may not be combined with confirm")
 	case hasConfirm && s.ContinueOnError:
 		return fmt.Errorf("workflow step: continue_on_error is not valid on confirm steps")
+	case hasParallel && len(s.With) > 0:
+		return fmt.Errorf("workflow step: with may not be combined with parallel")
+	}
+	if hasParallel {
+		if len(s.Parallel.Steps) < 2 {
+			return fmt.Errorf("workflow step: parallel.steps must contain at least 2 sub-steps")
+		}
+		for i, sub := range s.Parallel.Steps {
+			if sub.Parallel != nil {
+				return fmt.Errorf("workflow step: parallel.steps[%d]: nested parallel is not supported", i)
+			}
+			if sub.Confirm != "" {
+				return fmt.Errorf("workflow step: parallel.steps[%d]: confirm is not allowed inside a parallel group", i)
+			}
+			if sub.Command == "" {
+				return fmt.Errorf("workflow step: parallel.steps[%d]: command is required", i)
+			}
+			if err := sub.Validate(); err != nil {
+				return fmt.Errorf("workflow step: parallel.steps[%d]: %w", i, err)
+			}
+		}
 	}
 	return nil
 }

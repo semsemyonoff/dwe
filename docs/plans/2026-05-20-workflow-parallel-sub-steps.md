@@ -97,15 +97,15 @@ The workflow runner needs more than just LiveLine — it also needs the same `li
 
 Mirror the pipeline `ParallelGroup` shape and wire it into `WorkflowStep`. Tristate `FailFast` so `true` is the default and YAML can override.
 
-- [ ] in `internal/usercommands/model/types.go`, add `WorkflowParallel` struct: `MaxConcurrent int (yaml:"max_concurrent")`, `FailFast *bool (yaml:"fail_fast")`, `Steps []WorkflowStep (yaml:"steps")`
-- [ ] add `Parallel *WorkflowParallel (yaml:"parallel,omitempty")` field to `WorkflowStep`
-- [ ] extend `WorkflowStep.Validate()` (currently `types.go:253-267`):
+- [x] in `internal/usercommands/model/types.go`, add `WorkflowParallel` struct: `MaxConcurrent int (yaml:"max_concurrent")`, `FailFast *bool (yaml:"fail_fast")`, `Steps []WorkflowStep (yaml:"steps")`
+- [x] add `Parallel *WorkflowParallel (yaml:"parallel,omitempty")` field to `WorkflowStep`
+- [x] extend `WorkflowStep.Validate()` (currently `types.go:253-267`):
   - exactly one of `{Command, Confirm, Parallel}` must be set
   - `Parallel` is mutually exclusive with `With` (parallel container holds no params; each sub-step carries its own `With`)
   - `When` and `ContinueOnError` ARE valid on the parallel container (group-level)
   - validate sub-steps: every sub-step must be a leaf (`Command` set), NOT another parallel, NOT a confirm
   - `Parallel.Steps` must have length ≥ 2
-- [ ] write unit tests in `internal/usercommands/model/types_test.go` covering:
+- [x] write unit tests in `internal/usercommands/model/types_test.go` covering:
   - valid parallel step parses and validates
   - parallel + command coexistence rejected
   - parallel + confirm coexistence rejected
@@ -114,8 +114,8 @@ Mirror the pipeline `ParallelGroup` shape and wire it into `WorkflowStep`. Trist
   - nested parallel (sub-step has its own `Parallel`) rejected
   - confirm inside parallel.steps rejected
   - `FailFast` default vs explicit false vs explicit true (parse to `*bool` correctly)
-- [ ] run `go test ./internal/usercommands/model/...` — must pass
-- [ ] run `make lint` — 0 issues
+- [x] run `go test ./internal/usercommands/model/...` — must pass
+- [x] run `make lint` — 0 issues
 
 ### Task 3: Loader / parser — accept `parallel:` in workflow YAML
 

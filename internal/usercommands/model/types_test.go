@@ -835,6 +835,203 @@ commands:
 }
 
 // ---------------------------------------------------------------------------
+// WorkflowParallel tests
+// ---------------------------------------------------------------------------
+
+func TestParseYAML_WorkflowParallel_Valid(t *testing.T) {
+	yaml := `
+commands:
+  fanout:
+    type: workflow
+    steps:
+      - parallel:
+          max_concurrent: 4
+          fail_fast: false
+          steps:
+            - command: g.a
+            - command: g.b
+              with:
+                k: v
+`
+	cf := mustParse(t, yaml)
+	cmd := cf.Commands["fanout"]
+	if len(cmd.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(cmd.Steps))
+	}
+	p := cmd.Steps[0].Parallel
+	if p == nil {
+		t.Fatal("expected Parallel to be non-nil")
+	}
+	if p.MaxConcurrent != 4 {
+		t.Errorf("MaxConcurrent = %d, want 4", p.MaxConcurrent)
+	}
+	if p.FailFast == nil || *p.FailFast {
+		t.Errorf("FailFast = %v, want explicit false", p.FailFast)
+	}
+	if len(p.Steps) != 2 {
+		t.Fatalf("expected 2 sub-steps, got %d", len(p.Steps))
+	}
+	cmd.ID = "g.fanout"
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("unexpected validate err: %v", err)
+	}
+}
+
+func TestParseYAML_WorkflowParallel_FailFastDefaultsNil(t *testing.T) {
+	yaml := `
+commands:
+  fan:
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: g.a
+            - command: g.b
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["fan"].Steps[0].Parallel
+	if p == nil {
+		t.Fatal("expected Parallel non-nil")
+	}
+	if p.FailFast != nil {
+		t.Errorf("FailFast = %v, want nil (default)", *p.FailFast)
+	}
+}
+
+func TestParseYAML_WorkflowParallel_FailFastTrueExplicit(t *testing.T) {
+	yaml := `
+commands:
+  fan:
+    type: workflow
+    steps:
+      - parallel:
+          fail_fast: true
+          steps:
+            - command: g.a
+            - command: g.b
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["fan"].Steps[0].Parallel
+	if p.FailFast == nil || !*p.FailFast {
+		t.Errorf("FailFast = %v, want explicit true", p.FailFast)
+	}
+}
+
+func TestValidate_WorkflowStep_ParallelAndCommand(t *testing.T) {
+	step := WorkflowStep{
+		Command: "g.x",
+		Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+			{Command: "g.a"}, {Command: "g.b"},
+		}},
+	}
+	err := step.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutually exclusive, got %v", err)
+	}
+}
+
+func TestValidate_WorkflowStep_ParallelAndConfirm(t *testing.T) {
+	step := WorkflowStep{
+		Confirm: "go?",
+		Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+			{Command: "g.a"}, {Command: "g.b"},
+		}},
+	}
+	err := step.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutually exclusive, got %v", err)
+	}
+}
+
+func TestValidate_WorkflowStep_ParallelWithWith(t *testing.T) {
+	step := WorkflowStep{
+		With: map[string]string{"k": "v"},
+		Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+			{Command: "g.a"}, {Command: "g.b"},
+		}},
+	}
+	err := step.Validate()
+	if err == nil || !strings.Contains(err.Error(), "with may not be combined with parallel") {
+		t.Errorf("expected with+parallel error, got %v", err)
+	}
+}
+
+func TestValidate_WorkflowStep_ParallelStepsTooFew(t *testing.T) {
+	tests := []struct {
+		name  string
+		steps []WorkflowStep
+	}{
+		{"empty", []WorkflowStep{}},
+		{"one", []WorkflowStep{{Command: "g.a"}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			step := WorkflowStep{Parallel: &WorkflowParallel{Steps: tc.steps}}
+			err := step.Validate()
+			if err == nil || !strings.Contains(err.Error(), "at least 2 sub-steps") {
+				t.Errorf("expected at-least-2 error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestValidate_WorkflowStep_NestedParallelRejected(t *testing.T) {
+	step := WorkflowStep{
+		Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+			{Command: "g.a"},
+			{Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+				{Command: "g.x"}, {Command: "g.y"},
+			}}},
+		}},
+	}
+	err := step.Validate()
+	if err == nil || !strings.Contains(err.Error(), "nested parallel") {
+		t.Errorf("expected nested-parallel error, got %v", err)
+	}
+}
+
+func TestValidate_WorkflowStep_ConfirmInsideParallelRejected(t *testing.T) {
+	step := WorkflowStep{
+		Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+			{Command: "g.a"},
+			{Confirm: "Sure?"},
+		}},
+	}
+	err := step.Validate()
+	if err == nil || !strings.Contains(err.Error(), "confirm is not allowed inside a parallel group") {
+		t.Errorf("expected confirm-in-parallel error, got %v", err)
+	}
+}
+
+func TestValidate_WorkflowStep_ParallelSubStepCommandRequired(t *testing.T) {
+	step := WorkflowStep{
+		Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+			{Command: "g.a"},
+			{}, // empty sub-step
+		}},
+	}
+	err := step.Validate()
+	if err == nil || !strings.Contains(err.Error(), "command is required") {
+		t.Errorf("expected command-required error, got %v", err)
+	}
+}
+
+func TestValidate_Workflow_WithParallelStep(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeWorkflow,
+		ID:   "g.fanout",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{Steps: []WorkflowStep{
+				{Command: "g.a"}, {Command: "g.b"},
+			}}},
+		},
+	}
+	if err := cmd.Validate(); err != nil {
+		t.Errorf("expected workflow with parallel step to validate, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // File spec validation tests
 // ---------------------------------------------------------------------------
 
