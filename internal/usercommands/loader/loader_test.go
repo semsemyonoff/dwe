@@ -533,6 +533,182 @@ commands:
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Workflow parallel sub-steps
+// ---------------------------------------------------------------------------
+
+func TestLoadCommandFile_WorkflowParallel_Valid(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  all-install:
+    type: workflow
+    description: Install all services in parallel
+    steps:
+      - command: db.start
+      - parallel:
+          max_concurrent: 4
+          fail_fast: false
+          steps:
+            - command: services.main.composer-install
+            - command: services.catalog.composer-install
+            - command: services.sales.composer-install
+      - command: services.main.migrate
+`)
+
+	cf, err := LoadCommandFile(absPath, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cmd, ok := cf.Commands["all-install"]
+	if !ok {
+		t.Fatal("command 'all-install' not found")
+	}
+	if len(cmd.Steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(cmd.Steps))
+	}
+	parStep := cmd.Steps[1]
+	if parStep.Parallel == nil {
+		t.Fatal("step[1].Parallel is nil")
+	}
+	if parStep.Parallel.MaxConcurrent != 4 {
+		t.Errorf("MaxConcurrent = %d, want 4", parStep.Parallel.MaxConcurrent)
+	}
+	if parStep.Parallel.FailFast == nil || *parStep.Parallel.FailFast {
+		t.Errorf("FailFast should be explicitly false, got %v", parStep.Parallel.FailFast)
+	}
+	if len(parStep.Parallel.Steps) != 3 {
+		t.Fatalf("expected 3 parallel sub-steps, got %d", len(parStep.Parallel.Steps))
+	}
+}
+
+func TestLoadCommandFile_WorkflowParallel_FailFastDefault(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  fanout:
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: a.run
+            - command: b.run
+`)
+
+	cf, err := LoadCommandFile(absPath, dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	par := cf.Commands["fanout"].Steps[0].Parallel
+	if par == nil {
+		t.Fatal("parallel is nil")
+	}
+	if par.FailFast != nil {
+		t.Errorf("FailFast should be nil (default true), got %v", *par.FailFast)
+	}
+}
+
+func TestLoadCommandFile_WorkflowParallel_NestedRejected(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  bad:
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: a.run
+            - parallel:
+                steps:
+                  - command: b.run
+                  - command: c.run
+`)
+
+	_, err := LoadCommandFile(absPath, dir)
+	if err == nil {
+		t.Fatal("expected nested-parallel error, got nil")
+	}
+}
+
+func TestLoadCommandFile_WorkflowParallel_ConfirmInSubStepRejected(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  bad:
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: a.run
+            - confirm: "really?"
+`)
+
+	_, err := LoadCommandFile(absPath, dir)
+	if err == nil {
+		t.Fatal("expected confirm-in-parallel error, got nil")
+	}
+}
+
+func TestLoadCommandFile_WorkflowParallel_WithOnContainerRejected(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  bad:
+    type: workflow
+    steps:
+      - with:
+          foo: bar
+        parallel:
+          steps:
+            - command: a.run
+            - command: b.run
+`)
+
+	_, err := LoadCommandFile(absPath, dir)
+	if err == nil {
+		t.Fatal("expected with-on-parallel error, got nil")
+	}
+}
+
+func TestLoadCommandFile_WorkflowParallel_TooFewStepsRejected(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  bad:
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - command: a.run
+`)
+
+	_, err := LoadCommandFile(absPath, dir)
+	if err == nil {
+		t.Fatal("expected too-few-steps error, got nil")
+	}
+}
+
+func TestLoadCommandFile_WorkflowParallel_UnknownFieldRejected(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  bad:
+    type: workflow
+    steps:
+      - parallel:
+          bogus_field: 1
+          steps:
+            - command: a.run
+            - command: b.run
+`)
+
+	_, err := LoadCommandFile(absPath, dir)
+	if err == nil {
+		t.Fatal("expected unknown-field error from strict decode, got nil")
+	}
+}
+
 func TestLoadCommandFile_DumpDeployFixture(t *testing.T) {
 	// Load and validate the dump-deploy fixture with read-mode candidates and glob+match+sort.
 	dir := t.TempDir()

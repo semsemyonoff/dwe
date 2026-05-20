@@ -121,10 +121,10 @@ Mirror the pipeline `ParallelGroup` shape and wire it into `WorkflowStep`. Trist
 
 The YAML decoder already handles arbitrary fields via reflection; the work is mostly in plan-time validation hooks that run AFTER struct decode.
 
-- [ ] verify that the strict-decode workflow loader (`internal/usercommands/loader/`) accepts the new field — `WorkflowStep` with `Parallel` set parses without "unknown field" errors
-- [ ] add plan-time validation passes that call `WorkflowStep.Validate()` recursively on parallel sub-steps (the loader should do this anyway; add an explicit recursive walk if not already present)
-- [ ] write loader unit tests with fixture YAML files in `testdata/` covering: valid parallel workflow, nested-parallel-rejected, confirm-in-parallel-rejected, parallel-with-with-rejected
-- [ ] run `go test ./internal/usercommands/loader/...` — must pass
+- [x] verify that the strict-decode workflow loader (`internal/usercommands/loader/`) accepts the new field — `WorkflowStep` with `Parallel` set parses without "unknown field" errors
+- [x] add plan-time validation passes that call `WorkflowStep.Validate()` recursively on parallel sub-steps (already recursive via `WorkflowStep.Validate()` walking `Parallel.Steps`; no extra walker needed)
+- [x] write loader unit tests with fixture YAML files in `testdata/` covering: valid parallel workflow, nested-parallel-rejected, confirm-in-parallel-rejected, parallel-with-with-rejected (added inline YAML fixtures in `loader_test.go` — same pattern other loader tests use, no `testdata/` directory required)
+- [x] run `go test ./internal/usercommands/loader/...` — must pass
 
 ### Task 4: Validator — `devbox validate commands` diagnostics (recursive)
 
