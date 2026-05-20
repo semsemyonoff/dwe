@@ -88,11 +88,13 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	// Emit categorised structural diagnostics for workflow steps (parallel rules)
-	// before the cross-reference pass. Each command file is checked independently
-	// so that one bad file does not mask issues in another. We track per-file
-	// whether any structural diagnostic fired so the raw cf.Validate() fallback
-	// below only emits for files we did NOT specifically categorise.
-	categorised := make(map[string]bool)
+	// before the cross-reference pass. Track which commands were categorised so
+	// that the cmd.Validate() fallback below only covers commands we did NOT
+	// specifically categorise — preventing unrelated semantic errors in the same
+	// file from being silently swallowed.
+	//
+	// Key: "<filePath>/<commandName>"; value: true when categorised diags fired.
+	categorisedCmds := make(map[string]bool)
 	for _, cf := range parsedFiles {
 		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
 		for _, name := range sortedCommandNames(cf) {
@@ -102,30 +104,56 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 			}
 			structural := workflowStructuralDiagnostics(cmd, relFile)
 			if len(structural) > 0 {
-				categorised[cf.FilePath] = true
+				categorisedCmds[cf.FilePath+"/"+name] = true
 				diags = append(diags, structural...)
 			}
 		}
 	}
 
-	// Fallback: surface cf.Validate() failures for files where we did NOT emit
-	// any categorised diagnostic, so semantic errors we don't specifically
-	// recognise still produce an actionable error diagnostic.
+	// Fallback: surface cmd.Validate() failures that are not already covered by
+	// the categorised structural diagnostics above. Running per-command (rather
+	// than per-file cf.Validate()) ensures a categorised error in one command
+	// does not hide unrelated semantic errors in other commands of the same file.
+	//
+	// For commands that DID produce categorised parallel-structural diagnostics,
+	// we still run cmd.Validate() — it may surface unrelated field violations
+	// (e.g. workdir: or cmd: set on a workflow) that the structural walker does
+	// not cover. We only suppress the fallback when the error is step-level
+	// (the error string contains ": step["), meaning it duplicates something the
+	// structural diagnostics already reported more clearly.
 	for _, cf := range parsedFiles {
-		if categorised[cf.FilePath] {
-			continue
-		}
-		if err := cf.Validate(); err != nil {
-			relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
-			diags = append(diags, validate.Diagnostic{
-				Severity: validate.SeverityError,
-				Domain:   "commands",
-				Target:   "commands",
-				File:     relFile,
-				Line:     0,
-				Message:  err.Error(),
-				Hint:     "fix the reported field combination",
-			})
+		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
+		for _, name := range sortedCommandNames(cf) {
+			if strings.TrimSpace(name) == "" {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   "commands",
+					File:     relFile,
+					Line:     0,
+					Message:  "command name must not be empty or whitespace",
+					Hint:     "give every command a non-empty YAML key",
+				})
+				continue
+			}
+			cmd := cf.Commands[name]
+			if err := cmd.Validate(); err != nil {
+				// Skip step-level errors already covered by structural parallel
+				// diagnostics (e.g. nested-parallel, confirm-in-parallel). Non-step
+				// errors (workdir, cmd, service, etc.) are surfaced regardless.
+				if categorisedCmds[cf.FilePath+"/"+name] && strings.Contains(err.Error(), ": step[") {
+					continue
+				}
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   fmt.Sprintf("commands:%s", cmd.ID),
+					File:     relFile,
+					Line:     0,
+					Message:  err.Error(),
+					Hint:     "fix the reported field combination",
+				})
+			}
 		}
 	}
 

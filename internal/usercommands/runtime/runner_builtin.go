@@ -32,6 +32,13 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		return fmt.Errorf("builtin %q: %w", name, err)
 	}
 
+	// Guard: the confirm builtin is interactive. Reject it inside a parallel
+	// group when confirmation has not been pre-approved, so it never tries to
+	// read from shared stdin and never reaches the huh prompt.
+	if name == "confirm" && rc.UnderParallel && !rc.SkipConfirm && !rc.NonInteractive && !isNonInteractive() {
+		return fmt.Errorf("%w: builtin confirm in command %q", ErrConfirmInsideParallel, rc.Cmd.ID)
+	}
+
 	stdin := stdinOrOS(rc)
 	if f, ok := stdin.(*os.File); ok {
 		stdin = f
@@ -42,7 +49,7 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		ProjectRoot: rc.ProjectRoot,
 		Output:      render.NewWriter(stdout(rc)),
 		Stdin:       stdin,
-		SkipConfirm: rc.SkipConfirm,
+		SkipConfirm: rc.SkipConfirm || rc.NonInteractive || isNonInteractive(),
 	}
 	return builtin.Run(ctx, name, with, execCtx)
 }

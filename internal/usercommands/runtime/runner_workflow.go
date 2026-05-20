@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/charmbracelet/x/term"
@@ -241,6 +242,7 @@ type subResult struct {
 	err             error
 	output          string
 	skipped         bool
+	cancelled       bool // true when the sub-step never ran due to parent context cancellation
 	continueOnError bool
 }
 
@@ -343,8 +345,13 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 
 			if gctx.Err() != nil {
 				// Group already cancelled (fail_fast sibling failed or SIGINT).
-				// Skip this sub-step silently; the initiating error is reported
-				// by the goroutine that caused cancellation.
+				// Mark as cancelled so the post-Wait emit shows ◎ Cancelled
+				// rather than ✓ Done (which would be misleading for work that
+				// never ran). The initiating error is still reported by the
+				// goroutine that caused the cancellation.
+				results[i].cancelled = true
+				live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
+					fmt.Sprintf("[%d/%d] Cancelled: %s", i+1, n, sub.Command))
 				return nil
 			}
 
@@ -367,6 +374,11 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 
 			gRC := rc
 			gRC.UnderParallel = true
+			// Never let parallel sub-steps read from shared stdin. Interactive
+			// commands are rejected at plan time, but shell scripts or builtin
+			// confirm (without SkipConfirm) could still block on an unexpected
+			// read without this isolation.
+			gRC.Stdin = strings.NewReader("")
 
 			subFile, _, openErr := openWorkflowSubStepLog(rc.ProjectRoot, workflowID, sub.Command, rc.ProjectRoot != "")
 			if openErr != nil {
@@ -429,8 +441,19 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		}
 	}
 
+	// If no sub-step produced an error but the parent context was cancelled
+	// (e.g. SIGINT before the group started, or a sibling pipeline step
+	// triggering cancellation), surface that cancellation rather than
+	// returning success. Sibling fail-fast errors are already captured in
+	// groupErr by the errgroup, so this branch only fires when groupErr==nil.
+	if groupErr == nil && parentCtx.Err() != nil {
+		groupErr = parentCtx.Err()
+	}
+
 	for i, res := range results {
 		switch {
+		case res.cancelled:
+			_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Cancelled: %s\n", i+1, n, res.sub.Command)
 		case res.skipped:
 			_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Skipped: %s (when=false)\n", i+1, n, res.sub.Command)
 		case res.err != nil && res.continueOnError:

@@ -55,6 +55,19 @@ type RunContext = runtime.RunContext
 type ErrUnsupportedType = runtime.ErrUnsupportedType
 type FileProbeResult = runtime.FileProbeResult
 
+// ---- Error sentinels (runtime) ----
+
+// ErrWorkflowNestedParallel is returned when a workflow containing a
+// parallel: block is invoked from another parallel context (pipeline or
+// workflow). Callers can use errors.Is against this variable without
+// importing the runtime subpackage directly.
+var ErrWorkflowNestedParallel = runtime.ErrWorkflowNestedParallel
+
+// ErrConfirmInsideParallel is returned when an interactive confirmation is
+// reached inside a parallel group. Callers can use errors.Is against this
+// variable without importing the runtime subpackage directly.
+var ErrConfirmInsideParallel = runtime.ErrConfirmInsideParallel
+
 // ---- CommandType constants ----
 
 const (
