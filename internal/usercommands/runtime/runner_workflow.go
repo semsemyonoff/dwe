@@ -449,11 +449,14 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		groupErr = parentCtx.Err()
 	}
 
-	// End the live block before the post-Wait emit so the ticker is no longer
-	// active while we write to stderr. Deferring EndBlock would leave the
-	// ticker running during the emit loop, causing cursor-sequence interleaving
-	// on TTY terminals where os.Stdout and os.Stderr share the same fd.
+	// End the live block and stop the ticker before the post-Wait emit.
+	// EndBlock() alone does not stop the ticker — only Stop() does. Leaving
+	// the ticker running causes cursor-control ANSI sequences (written to
+	// os.Stdout) to interleave with status lines written to os.Stderr on a
+	// TTY where both fds share the same terminal. Stop() is idempotent; the
+	// deferred Stop() below is kept as a safety net for any early-return path.
 	live.EndBlock()
+	live.Stop()
 
 	for i, res := range results {
 		switch {
