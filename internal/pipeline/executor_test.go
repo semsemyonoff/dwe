@@ -39,8 +39,13 @@ type reporterEvent struct {
 }
 
 type mockReporter struct {
-	mu     sync.Mutex
-	events []reporterEvent
+	mu sync.Mutex
+	// events excludes SuspendForExec/ResumeAfterExec on purpose so existing
+	// event-ordering assertions stay stable; use suspendCalls/resumeCalls
+	// when the test cares about pause/resume specifically.
+	events       []reporterEvent
+	suspendCalls int
+	resumeCalls  int
 }
 
 func (m *mockReporter) append(e reporterEvent) {
@@ -89,6 +94,16 @@ func (m *mockReporter) SetSubStepLogPath(addr string, path string) {
 }
 func (m *mockReporter) FlushOutput(addr string) {
 	m.append(reporterEvent{kind: "FlushOutput", stepAddr: addr})
+}
+func (m *mockReporter) SuspendForExec() {
+	m.mu.Lock()
+	m.suspendCalls++
+	m.mu.Unlock()
+}
+func (m *mockReporter) ResumeAfterExec() {
+	m.mu.Lock()
+	m.resumeCalls++
+	m.mu.Unlock()
 }
 
 // kindSeq returns the sequence of event kinds.
@@ -476,11 +491,14 @@ func TestRunPipeline_ServiceStep_PhaseKeyIncludesService(t *testing.T) {
 	}
 }
 
-func TestRunPipeline_NoSuspendResumeAroundExec(t *testing.T) {
-	// Task 6 removed the SuspendForExec/ResumeAfterExec calls in
-	// executeStepBody — child output now routes through Reporter.StepOutput
-	// so the live footer stays visible the entire time. Guard that the
-	// executor does not regress and re-introduce the coarse hand-off.
+func TestRunPipeline_SuspendResumeAroundSequentialExec(t *testing.T) {
+	// Sequential step bodies must be wrapped in SuspendForExec/ResumeAfterExec
+	// so the LiveLine footer pauses while the child writes to the terminal,
+	// then resumes after the child returns. The previous attempt to route all
+	// child output through Reporter.StepOutput (Task 6 of
+	// docs/plans/completed/2026-05-19-live-pipeline-progress.md) stripped
+	// colors and broke docker compose's interactive UI; this test pins the
+	// restored pause/resume hand-off.
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "p"}
@@ -490,10 +508,9 @@ func TestRunPipeline_NoSuspendResumeAroundExec(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, k := range rep.kindSeq() {
-		if k == "SuspendForExec" || k == "ResumeAfterExec" {
-			t.Errorf("executor must not call %s after Task 6 (kinds=%v)", k, rep.kindSeq())
-		}
+	if rep.suspendCalls != 1 || rep.resumeCalls != 1 {
+		t.Errorf("expected one SuspendForExec/ResumeAfterExec pair, got suspend=%d resume=%d",
+			rep.suspendCalls, rep.resumeCalls)
 	}
 }
 
@@ -645,10 +662,11 @@ func TestRunPipeline_TrackedIndexContinuous(t *testing.T) {
 	}
 }
 
-func TestRunPipeline_ConfirmStep_RunsWithoutSuspendResume(t *testing.T) {
-	// Task 6 removed Suspend/Resume from the executor; confirm builtins now
-	// rely on the package-level huh hooks installed by PlainReporter (Task 10).
-	// This test just confirms the confirm step still runs cleanly.
+func TestRunPipeline_ConfirmStep_PausesAndResumes(t *testing.T) {
+	// Builtin confirm steps are sequential, so the executor must pair
+	// SuspendForExec with ResumeAfterExec around the body even though the
+	// huh prompt also installs its own package-level pause/resume hooks
+	// (those are an inner guard, not a replacement).
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
@@ -661,10 +679,9 @@ func TestRunPipeline_ConfirmStep_RunsWithoutSuspendResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, k := range rep.kindSeq() {
-		if k == "SuspendForExec" || k == "ResumeAfterExec" {
-			t.Errorf("executor must not call %s after Task 6", k)
-		}
+	if rep.suspendCalls != 1 || rep.resumeCalls != 1 {
+		t.Errorf("expected one suspend/resume pair around confirm step, got suspend=%d resume=%d",
+			rep.suspendCalls, rep.resumeCalls)
 	}
 }
 
@@ -2078,10 +2095,11 @@ func TestRunWithOptions_State_StepRuns_WithCheck(t *testing.T) {
 		t.Errorf("step should execute when it has a check: OnStepStart=%d OnStepFinish=%d", starts, finishes)
 	}
 
-	// Check should have run successfully.
-	// Reporter shows FinishStep after check.
+	// Check should have run successfully. Reporter shows FinishStep
+	// immediately before FinishPipeline (Suspend/Resume calls are tracked
+	// via counters, not in events).
 	if rep.eventAt(len(rep.events)-2).kind != "FinishStep" {
-		t.Error("FinishStep should come before FinishPipeline")
+		t.Errorf("FinishStep should come before FinishPipeline; got kinds=%v", rep.kindSeq())
 	}
 }
 

@@ -84,4 +84,16 @@ type Reporter interface {
 	// that a body's trailing non-newline-terminated tail is persisted to screen
 	// and log before check output arrives and would otherwise displace it.
 	FlushOutput(addr string)
+
+	// SuspendForExec hides the LiveLine footer so a child process can write
+	// directly to the host terminal without conflict. The executor wraps every
+	// sequential step body (and its check action) with Suspend → exec → Resume
+	// so colored output, cursor positioning and interactive prompts work as
+	// they would on a bare shell. Implementations must be idempotent and
+	// safe to call when the live UI is disabled (no-op).
+	SuspendForExec()
+
+	// ResumeAfterExec re-paints the LiveLine footer after a child process
+	// returns. Paired with SuspendForExec. Idempotent.
+	ResumeAfterExec()
 }

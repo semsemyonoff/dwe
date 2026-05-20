@@ -388,21 +388,23 @@ func TestLiveLine_SetBlockRowPaintsContent(t *testing.T) {
 	l.SetText("group")
 	l.Start()
 	l.StartBlock(3)
-	l.SetBlockRow(0, "sub-a running")
-	l.SetBlockRow(1, "sub-b running")
-	l.SetBlockRow(2, "sub-c running")
+	l.SetBlockRowRunning(0, "sub-a running")
+	l.SetBlockRowRunning(1, "sub-b running")
+	l.SetBlockRowRunning(2, "sub-c running")
 
-	require.Equal(t, "sub-a running", g.line(0))
-	require.Equal(t, "sub-b running", g.line(1))
-	require.Equal(t, "sub-c running", g.line(2))
+	// Rows are rendered as "  <spinner> [<elapsed>] <label>"; label suffix
+	// is what we care about here. ANSI codes are consumed by termGrid.
+	require.Contains(t, g.line(0), "sub-a running")
+	require.Contains(t, g.line(1), "sub-b running")
+	require.Contains(t, g.line(2), "sub-c running")
 	require.Contains(t, g.line(3), "group")
 	row, _ := g.cursor()
 	require.Equal(t, 4, row, "cursor below footer after SetBlockRow redraw")
 
-	// Out-of-range SetBlockRow is a silent no-op.
-	l.SetBlockRow(-1, "ignored")
-	l.SetBlockRow(99, "ignored")
-	require.Equal(t, "sub-a running", g.line(0))
+	// Out-of-range calls are silent no-ops.
+	l.SetBlockRowRunning(-1, "ignored")
+	l.SetBlockRowRunning(99, "ignored")
+	require.Contains(t, g.line(0), "sub-a running")
 
 	l.Stop()
 }
@@ -413,17 +415,17 @@ func TestLiveLine_PrintlnInBlockMode(t *testing.T) {
 	l.SetText("group")
 	l.Start()
 	l.StartBlock(3)
-	l.SetBlockRow(0, "a")
-	l.SetBlockRow(1, "b")
-	l.SetBlockRow(2, "c")
+	l.SetBlockRowRunning(0, "a")
+	l.SetBlockRowRunning(1, "b")
+	l.SetBlockRowRunning(2, "c")
 
 	l.Println("scrollback line")
 	// Data line lands at row 0, block shifts down to rows 1-3, footer at row 4,
 	// cursor at row 5.
 	require.Equal(t, "scrollback line", g.line(0))
-	require.Equal(t, "a", g.line(1))
-	require.Equal(t, "b", g.line(2))
-	require.Equal(t, "c", g.line(3))
+	require.Contains(t, g.line(1), "a")
+	require.Contains(t, g.line(2), "b")
+	require.Contains(t, g.line(3), "c")
 	require.Contains(t, g.line(4), "group")
 	row, _ := g.cursor()
 	require.Equal(t, 5, row, "cursor below new footer after Println in block mode")
@@ -431,33 +433,33 @@ func TestLiveLine_PrintlnInBlockMode(t *testing.T) {
 	l.Stop()
 }
 
-func TestLiveLine_EndBlockFreezesContent(t *testing.T) {
+func TestLiveLine_EndBlockErasesOldFooter(t *testing.T) {
 	g := newTermGrid(10, 80)
 	l := newTestLiveLine(g, g, true)
 	l.SetText("group")
 	l.Start()
 	l.StartBlock(2)
-	l.SetBlockRow(0, "✓ sub-a done")
-	l.SetBlockRow(1, "✗ sub-b failed")
+	l.SetBlockRowFinal(0, BlockRowDone, "sub-a done")
+	l.SetBlockRowFinal(1, BlockRowFailed, "sub-b failed")
 	// State: rows 0-1 block, row 2 footer, cursor row 3.
 
 	l.EndBlock()
-	// EndBlock paints a fresh footer at row 3 (where cursor was). Old block
-	// rows (0-1) and the frozen footer (row 2) persist.
-	require.Equal(t, "✓ sub-a done", g.line(0))
-	require.Equal(t, "✗ sub-b failed", g.line(1))
-	require.Contains(t, g.line(2), "group", "old footer frozen")
-	require.Contains(t, g.line(3), "group", "new single-line footer below")
+	// EndBlock erases the old live footer at row 2 and paints a fresh
+	// single-line footer there. The block rows (rows 0-1) persist as
+	// scrollback; the old footer is GONE so the user never sees a frozen
+	// spinner-mid-frame.
+	require.Contains(t, g.line(0), "sub-a done")
+	require.Contains(t, g.line(1), "sub-b failed")
+	require.Contains(t, g.line(2), "group", "new single-line footer at the row the old footer occupied")
 	row, _ := g.cursor()
-	require.Equal(t, 4, row, "cursor below new single-line footer")
+	require.Equal(t, 3, row, "cursor below new single-line footer")
 
-	// Subsequent Println goes through single-line path: footer at row 3,
-	// data lands there, footer repaints at row 4.
+	// Subsequent Println goes through single-line path.
 	l.Println("after block")
-	require.Equal(t, "after block", g.line(3))
-	require.Contains(t, g.line(4), "group")
+	require.Equal(t, "after block", g.line(2))
+	require.Contains(t, g.line(3), "group")
 	row, _ = g.cursor()
-	require.Equal(t, 5, row)
+	require.Equal(t, 4, row)
 
 	l.Stop()
 }
@@ -469,29 +471,25 @@ func TestLiveLine_BlockToSingleAndBackToBlock(t *testing.T) {
 	l.Start()
 
 	l.StartBlock(2)
-	l.SetBlockRow(0, "first-a")
-	l.SetBlockRow(1, "first-b")
+	l.SetBlockRowFinal(0, BlockRowDone, "first-a")
+	l.SetBlockRowFinal(1, BlockRowDone, "first-b")
 	l.EndBlock()
-	// First block's rows + frozen footer persist at rows 0-2; new single-line
-	// footer at row 3.
+	// First block's frozen rows persist at rows 0-1; the fresh single-line
+	// footer takes the slot the previous live footer occupied (row 2).
 
 	l.Println("between blocks")
-	// "between blocks" lands at row 3, new footer at row 4.
+	// "between blocks" lands at row 2 (former footer slot), new footer at row 3.
 
 	l.StartBlock(2)
-	l.SetBlockRow(0, "second-a")
-	l.SetBlockRow(1, "second-b")
-	// StartBlock erases footer at row 4, reserves 2 rows (cursor row 4→6),
-	// paints footer at row 6, cursor row 7. SetBlockRow then repaints block
-	// rows at rows 4-5 + footer at row 6.
+	l.SetBlockRowRunning(0, "second-a")
+	l.SetBlockRowRunning(1, "second-b")
 
-	require.Equal(t, "first-a", g.line(0))
-	require.Equal(t, "first-b", g.line(1))
-	require.Contains(t, g.line(2), "phase")
-	require.Equal(t, "between blocks", g.line(3))
-	require.Equal(t, "second-a", g.line(4))
-	require.Equal(t, "second-b", g.line(5))
-	require.Contains(t, g.line(6), "phase")
+	require.Contains(t, g.line(0), "first-a")
+	require.Contains(t, g.line(1), "first-b")
+	require.Equal(t, "between blocks", g.line(2))
+	require.Contains(t, g.line(3), "second-a")
+	require.Contains(t, g.line(4), "second-b")
+	require.Contains(t, g.line(5), "phase")
 
 	l.EndBlock()
 	l.Stop()
@@ -503,13 +501,13 @@ func TestLiveLine_BlockTickRedraws(t *testing.T) {
 	l.SetText("group")
 	l.Start()
 	l.StartBlock(2)
-	l.SetBlockRow(0, "row-a")
-	l.SetBlockRow(1, "row-b")
+	l.SetBlockRowRunning(0, "row-a")
+	l.SetBlockRowRunning(1, "row-b")
 
 	l.tick()
 	// tick advances spinner; block content + footer must remain intact.
-	require.Equal(t, "row-a", g.line(0))
-	require.Equal(t, "row-b", g.line(1))
+	require.Contains(t, g.line(0), "row-a")
+	require.Contains(t, g.line(1), "row-b")
 	require.Contains(t, g.line(2), "group")
 	row, _ := g.cursor()
 	require.Equal(t, 3, row)
@@ -523,8 +521,8 @@ func TestLiveLine_BlockChannelSeparation(t *testing.T) {
 	l.SetText("group")
 	l.Start()
 	l.StartBlock(2)
-	l.SetBlockRow(0, "alpha")
-	l.SetBlockRow(1, "beta")
+	l.SetBlockRowRunning(0, "alpha")
+	l.SetBlockRowRunning(1, "beta")
 	l.Println("data line")
 	l.EndBlock()
 	l.Stop()
@@ -542,7 +540,7 @@ func TestLiveLine_BlockNoOpWhenDisabled(t *testing.T) {
 	var term, scr bytes.Buffer
 	l := NewLiveLine(&term, &scr, false)
 	l.StartBlock(3)
-	l.SetBlockRow(0, "ignored")
+	l.SetBlockRowRunning(0, "ignored")
 	l.EndBlock()
 	require.Empty(t, term.String())
 	require.Empty(t, scr.String())
@@ -556,10 +554,10 @@ func TestLiveLine_StartBlockTwiceIsNoOp(t *testing.T) {
 	l.StartBlock(2)
 	// Second StartBlock while a block is active must not reserve more rows.
 	l.StartBlock(5)
-	l.SetBlockRow(0, "x")
-	l.SetBlockRow(1, "y")
-	require.Equal(t, "x", g.line(0))
-	require.Equal(t, "y", g.line(1))
+	l.SetBlockRowRunning(0, "x")
+	l.SetBlockRowRunning(1, "y")
+	require.Contains(t, g.line(0), "x")
+	require.Contains(t, g.line(1), "y")
 	require.Contains(t, g.line(2), "phase")
 	l.Stop()
 }
@@ -572,9 +570,9 @@ func TestLiveLine_BlockViewportScroll(t *testing.T) {
 	l.SetText("g")
 	l.Start()
 	l.StartBlock(3)
-	l.SetBlockRow(0, "a")
-	l.SetBlockRow(1, "b")
-	l.SetBlockRow(2, "c")
+	l.SetBlockRowRunning(0, "a")
+	l.SetBlockRowRunning(1, "b")
+	l.SetBlockRowRunning(2, "c")
 	// Footer must be visible somewhere in the grid; cursor must be in range.
 	row, _ := g.cursor()
 	require.GreaterOrEqual(t, row, 0)

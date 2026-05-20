@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -252,22 +251,28 @@ func TestLogSanitizer_LoneCR_BecomesNewline(t *testing.T) {
 	}
 }
 
-// TestLogSanitizer_CRLFInOneWrite_BecomesDoubleNewline documents the stateless
-// trade-off: `\r\n` within a single Write produces `\n\n` (one extra blank
-// line). Acceptable because PTY-captured child output rarely emits CRLF.
-func TestLogSanitizer_CRLFInOneWrite_BecomesDoubleNewline(t *testing.T) {
+// TestLogSanitizer_CRLFInOneWrite_CollapsesToOneNewline pins the
+// PTY-friendly behaviour: `\r\n` within a single Write collapses to one
+// `\n`. PTYs in cooked mode apply ONLCR and translate every `\n` from
+// the child into `\r\n`, so without this collapse the log would have a
+// blank line after every real line.
+func TestLogSanitizer_CRLFInOneWrite_CollapsesToOneNewline(t *testing.T) {
 	var buf bytes.Buffer
 	s := &logSanitizer{w: &buf}
-	if _, err := s.Write([]byte("a\r\nb")); err != nil {
+	if _, err := s.Write([]byte("a\r\nb\r\n")); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	if buf.String() != "a\n\nb" {
-		t.Errorf("CRLF: got %q, want %q", buf.String(), "a\n\nb")
+	if buf.String() != "a\nb\n" {
+		t.Errorf("CRLF: got %q, want %q", buf.String(), "a\nb\n")
 	}
 }
 
-// TestLogSanitizer_SplitWrite_CRThenLF documents that a `\r` and `\n` arriving
-// in separate Writes also produce two newlines (each Write is independent).
+// TestLogSanitizer_SplitWrite_CRThenLF documents that a `\r` and `\n`
+// arriving in separate Writes produce two newlines because the writer is
+// stateless: the first Write turns `\r` into `\n` (committed), the second
+// commits another `\n`. PTY output rarely splits CRLF this way, so the
+// extra blank line is an accepted trade-off for keeping the writer
+// stateless and lock-free.
 func TestLogSanitizer_SplitWrite_CRThenLF(t *testing.T) {
 	var buf bytes.Buffer
 	s := &logSanitizer{w: &buf}
@@ -665,10 +670,12 @@ func TestChildIO_Parallel_NoStdoutNoStderr(t *testing.T) {
 	}
 }
 
-// TestChildIO_Parallel_TTY_AllocatesPTY verifies that in parallel mode with a
-// TTY stdout, childIO allocates a pty and returns the slave as stdout/stderr.
-// os.Stdout is never returned.
-func TestChildIO_Parallel_TTY_AllocatesPTY(t *testing.T) {
+// TestChildIO_Parallel_TTY_NoPTY verifies that parallel mode never allocates
+// a pty even when stdout is a TTY. Granting the child a pty while stdin is
+// the empty reader causes `docker compose exec/run` to fail with
+// "cannot attach stdin to a TTY-enabled container because stdin is not a
+// terminal" — see docs/plans/completed/2026-05-19-live-pipeline-progress.md.
+func TestChildIO_Parallel_TTY_NoPTY(t *testing.T) {
 	prev := stdoutIsTTY
 	stdoutIsTTY = func() bool { return true }
 	defer func() { stdoutIsTTY = prev }()
@@ -676,31 +683,17 @@ func TestChildIO_Parallel_TTY_AllocatesPTY(t *testing.T) {
 	logBuf := &syncBuf{}
 	stdout, stderr, cleanup := childIO(logBuf, true)
 	defer cleanup()
-	if _, ok := stdout.(*os.File); !ok {
-		t.Fatalf("expected *os.File slave, got %T", stdout)
+
+	// The writer returned must be the stepWriter itself, not a pty slave.
+	if _, ok := stdout.(*os.File); ok {
+		t.Fatalf("parallel mode must not return a *os.File pty slave; got %T", stdout)
 	}
 	if stdout != stderr {
-		t.Error("expected stdout == stderr (same tty slave)")
+		t.Error("parallel mode must return the same writer for stdout and stderr")
 	}
-	if stdout == os.Stdout {
-		t.Error("parallel mode must not return os.Stdout")
+	if stdout == os.Stdout || stderr == os.Stderr {
+		t.Error("parallel mode must not return os.Stdout/os.Stderr — LiveBlock owns the terminal")
 	}
-}
-
-// TestChildIO_Parallel_TTY_NoLeakAfterCleanup verifies cleanup waits for the
-// copy goroutine to finish. The goleak check in TestMain catches a regression
-// — if the goroutine outlived cleanup the suite would fail with leaked
-// goroutines after the test exits.
-func TestChildIO_Parallel_TTY_NoLeakAfterCleanup(t *testing.T) {
-	prev := stdoutIsTTY
-	stdoutIsTTY = func() bool { return true }
-	defer func() { stdoutIsTTY = prev }()
-
-	logBuf := &syncBuf{}
-	stdout, _, cleanup := childIO(logBuf, true)
-	f := stdout.(*os.File)
-	_, _ = f.Write([]byte("byte stream\n"))
-	cleanup()
 }
 
 func TestChildIO_NilStepWriter_FallsBackToOsStdio(t *testing.T) {
@@ -880,37 +873,13 @@ func TestExecBuiltinAction_Parallel_NoStdoutWrite(t *testing.T) {
 	os.Stdout = origStdout
 }
 
-// TestExecBuiltinAction_RoutesViaStepOutput proves that builtin output flows
-// through Reporter.StepOutput like every other child line (so it never
-// bypasses LiveLine in later tasks).
-func TestExecBuiltinAction_RoutesViaStepOutput(t *testing.T) {
-	rep := &mockReporter{}
-	phase := config.DeployPhase{Name: "p"}
-	steps := []ResolvedStep{
-		{Phase: phase, Step: config.DeployStep{
-			Name: "say-hi", Type: "builtin", Cmd: "message",
-			With: map[string]any{"level": "info", "text": "hello world"},
-		}},
-	}
-	if err := Run(steps, rep, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	saw := false
-	for _, e := range rep.events {
-		if e.kind == "StepOutput" && e.stepAddr == "p/say-hi" && strings.Contains(e.reason, "hello world") && e.final {
-			saw = true
-			break
-		}
-	}
-	if !saw {
-		t.Errorf("expected builtin output via StepOutput(addr=p/say-hi, frame contains 'hello world', final=true); got events: %v", rep.events)
-	}
-}
-
-// TestSequentialStep_OutputReachesReporterAndLog wires a fake sequential step
-// that emits multi-line output and asserts StepOutput receives each line and
-// the global log captures each line exactly once via PlainReporter.writeLog.
-func TestSequentialStep_OutputReachesReporterAndLog(t *testing.T) {
+// TestSequentialStep_BypassesStepOutput pins the new contract: sequential
+// step output goes directly to os.Stdout (with the LiveLine paused) and to
+// the on-disk log via a MultiWriter; it MUST NOT flow through
+// Reporter.StepOutput, which is reserved for parallel sub-step block-row
+// updates. See docs/plans/completed/2026-05-19-live-pipeline-progress.md
+// for the design rationale.
+func TestSequentialStep_BypassesStepOutput(t *testing.T) {
 	rep := &mockReporter{}
 	phase := config.DeployPhase{Name: "p"}
 	steps := []ResolvedStep{
@@ -921,58 +890,59 @@ func TestSequentialStep_OutputReachesReporterAndLog(t *testing.T) {
 	if err := Run(steps, rep, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	var frames []string
 	for _, e := range rep.events {
-		if e.kind == "StepOutput" && e.final {
-			frames = append(frames, e.reason)
+		if e.kind == "StepOutput" {
+			t.Errorf("sequential steps must not emit StepOutput events; got %+v", e)
 		}
 	}
-	if !slices.Contains(frames, "alpha") || !slices.Contains(frames, "beta") {
-		t.Errorf("StepOutput must carry both sequential frames; got %v", frames)
-	}
 }
 
-// TestSequentialStep_TrailingTail_LoggedExactlyOnce verifies a child whose
-// stdout ends without a trailing newline still gets its tail flushed to the
-// log via commitTrailingTail (and only once).
-func TestSequentialStep_TrailingTail_LoggedExactlyOnce(t *testing.T) {
-	var screen bytes.Buffer
-	var logFile bytes.Buffer
-	r := NewPlainReporter(render.NewWriter(&screen), &logFile, nil)
-	r.now = func() time.Time { return time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC) }
-
-	phase := config.DeployPhase{Name: "p"}
-	step := config.DeployStep{Name: "tail", Type: "shell", Cmd: "printf 'no-newline-here'"}
-	steps := []ResolvedStep{{Phase: phase, Step: step}}
-	if err := Run(steps, r, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	n := strings.Count(logFile.String(), "no-newline-here")
-	if n != 1 {
-		t.Errorf("trailing tail must reach the log exactly once; got %d occurrences in %q", n, logFile.String())
-	}
-	if !strings.Contains(screen.String(), "no-newline-here") {
-		t.Errorf("trailing tail must also reach the screen; got %q", screen.String())
-	}
-}
-
-// TestNoDuplication_SequentialStepLog asserts each sequential child line
-// reaches the global log file exactly once (no double-emit via fan-out).
-func TestNoDuplication_SequentialStepLog(t *testing.T) {
-	var screen bytes.Buffer
-	var logFile bytes.Buffer
-	r := NewPlainReporter(render.NewWriter(&screen), &logFile, nil)
-	r.now = func() time.Time { return time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC) }
-
+// TestSequentialStep_LogTeeCapturesOutput pins that sequential child stdout
+// reaches the on-disk pipeline log via the MultiWriter tee in childIO. The
+// global log is the only persistent record once Suspend/Resume hands the
+// terminal to the child.
+func TestSequentialStep_LogTeeCapturesOutput(t *testing.T) {
+	rep := &mockReporter{}
+	var logBuf syncBuf
 	phase := config.DeployPhase{Name: "p"}
 	steps := []ResolvedStep{
-		{Phase: phase, Step: config.DeployStep{Name: "s", Type: "shell", Cmd: "printf 'unique-line\\n'"}},
+		{Phase: phase, Step: config.DeployStep{
+			Name: "echo", Type: "shell", Cmd: "printf 'unique-line\\n'",
+		}},
 	}
-	if err := Run(steps, r, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
+	opts := RunOptions{
+		Steps:     steps,
+		Reporter:  rep,
+		Name:      "deploy",
+		Config:    &config.DevboxConfig{Raw: map[string]any{}},
+		WorkDir:   t.TempDir(),
+		LogWriter: &logBuf,
+	}
+	if err := RunWithOptions(opts); err != nil {
+		t.Fatalf("RunWithOptions: %v", err)
+	}
+	if got := strings.Count(logBuf.String(), "unique-line"); got != 1 {
+		t.Errorf("sequential child output must reach the log exactly once; got %d in:\n%s", got, logBuf.String())
+	}
+}
+
+// TestSequentialStep_SuspendsAndResumesLive verifies the executor pauses
+// the LiveLine footer around each sequential step body and resumes after.
+// The previous design (Task 6 of the live-pipeline plan) tried to keep the
+// footer visible by routing child output through StepOutput; this broke
+// docker compose's interactive UI and stripped command colors.
+func TestSequentialStep_SuspendsAndResumesLive(t *testing.T) {
+	rep := &mockReporter{}
+	phase := config.DeployPhase{Name: "p"}
+	steps := buildResolvedSteps(phase, []config.DeployStep{
+		noopStep("a"), noopStep("b"), noopStep("c"),
+	})
+	if err := Run(steps, rep, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := strings.Count(logFile.String(), "unique-line"); got != 1 {
-		t.Errorf("sequential line must land in global log exactly once; got %d in:\n%s", got, logFile.String())
+	if rep.suspendCalls != 3 || rep.resumeCalls != 3 {
+		t.Errorf("expected one suspend/resume per sequential step; got suspend=%d resume=%d",
+			rep.suspendCalls, rep.resumeCalls)
 	}
 }
 

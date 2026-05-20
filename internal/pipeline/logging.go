@@ -66,20 +66,28 @@ func (s *ansiOnlyStripper) Write(p []byte) (int, error) {
 }
 
 // logSanitizer wraps an io.Writer for log-file destinations. It strips ANSI
-// escape sequences and converts EVERY `\r` byte to `\n`, in a single stateless
-// pass. This means `50%\r100%\n` becomes `50%\n100%\n` (one frame per line on
-// disk) and `\r\n` within one Write becomes `\n\n` (one extra blank line — an
-// accepted trade-off, see plan).
+// escape sequences and normalises carriage returns in a single stateless
+// pass:
 //
-// Stateless on purpose: no buffered trailing CR, no lifecycle (no Flush/Close
-// contract), no mutex. Safe for concurrent writes from multiple goroutines.
+//   - `\r\n` (CRLF, common when PTYs apply ONLCR translation) collapses to
+//     a single `\n`, so the on-disk log does not double-space every line.
+//   - lone `\r` (used by tools like docker compose and curl for in-place
+//     progress redraws) becomes `\n`, so the log records each redraw frame
+//     on its own line (`50%\r100%\n` → `50%\n100%\n`) instead of
+//     concatenating into `50%100%\n`.
+//
+// Stateless on purpose: no buffered trailing CR, no lifecycle (no Flush/
+// Close contract), no mutex. Safe for concurrent writes from multiple
+// goroutines.
 type logSanitizer struct{ w io.Writer }
 
 func (s *logSanitizer) Write(p []byte) (int, error) {
 	// ReplaceAll returns the input slice unchanged when there are no matches, so
 	// we must not mutate the result in-place — that would corrupt the caller's
-	// buffer. Use bytes.ReplaceAll for the \r→\n pass instead.
-	stripped := bytes.ReplaceAll(ansiOnlyRe.ReplaceAll(p, nil), []byte{'\r'}, []byte{'\n'})
+	// buffer. Build a fresh slice via bytes.ReplaceAll calls.
+	stripped := ansiOnlyRe.ReplaceAll(p, nil)
+	stripped = bytes.ReplaceAll(stripped, []byte("\r\n"), []byte{'\n'})
+	stripped = bytes.ReplaceAll(stripped, []byte{'\r'}, []byte{'\n'})
 	if _, err := s.w.Write(stripped); err != nil {
 		return 0, err
 	}

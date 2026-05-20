@@ -12,12 +12,40 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
+
+	"devbox-cli/internal/render"
 )
 
 // liveLineTickPeriod is the redraw period for the LiveLine ticker (10 Hz).
 const liveLineTickPeriod = 100 * time.Millisecond
 
 const liveLineDefaultWidth = 80
+
+// BlockRowKind enumerates the final-state icons used by SetBlockRowFinal.
+type BlockRowKind int
+
+const (
+	// BlockRowDone marks a sub-step that finished successfully (green ✓).
+	BlockRowDone BlockRowKind = iota
+	// BlockRowFailed marks a sub-step that returned an error (red ✗).
+	BlockRowFailed
+	// BlockRowSkipped marks a sub-step skipped by a when condition or
+	// files_gate (yellow ◎).
+	BlockRowSkipped
+)
+
+// blockRow holds the per-row state used by the LiveLine block renderer. A
+// row is either running (icon == "" — the spinner glyph + live elapsed are
+// composed at render time) or finalized (icon is the frozen glyph and
+// elapsed holds the wall-clock duration captured at finalisation).
+type blockRow struct {
+	label     string
+	icon      string
+	iconColor string
+	startTime time.Time
+	elapsed   time.Duration
+	finalized bool
+}
 
 // LiveLine owns the bottom-of-cursor footer rendered during pipeline execution.
 // It exposes a split-channel writer model:
@@ -45,9 +73,16 @@ type LiveLine struct {
 	doneCh   chan struct{}
 
 	// Block-mode state: when blockRows > 0 the LiveLine owns N reserved rows
-	// above the footer used by parallel-group sub-step displays.
-	blockRows    int
-	blockContent []string
+	// above the footer used by parallel-group sub-step displays. blockSlots
+	// holds the structured per-row state (icon, color, label, stopwatch).
+	blockRows  int
+	blockSlots []blockRow
+
+	// footerStart is the wall-clock time captured by Start(). The footer
+	// renders [<elapsed>] between the spinner and the text using this
+	// value, so the user sees a live pipeline stopwatch tick second-by-
+	// second alongside the current step name.
+	footerStart time.Time
 
 	// testHooks lets tests drive the ticker deterministically and to override
 	// width detection without poking at the terminal.
@@ -98,6 +133,7 @@ func (l *LiveLine) Start() {
 		return
 	}
 	l.started = true
+	l.footerStart = time.Now()
 	// Initial footer: hide cursor, paint spinner + text, newline brings cursor
 	// to the row below the footer (Invariant #9).
 	l.writeTerm("\x1b[?25l" + l.renderFooterLocked() + "\n")
@@ -255,9 +291,11 @@ func (l *LiveLine) SetText(s string) {
 }
 
 // StartBlock physically reserves `rows` rows above the footer for sub-step
-// content. The footer moves down by `rows` rows. Block content starts empty
-// and is populated via [LiveLine.SetBlockRow]. Calling StartBlock when a block
-// is already active or when LiveLine is disabled/stopped is a no-op.
+// content. The footer moves down by `rows` rows. Each block row starts in
+// the running state (spinner glyph + empty label + zero elapsed) — populate
+// with [LiveLine.SetBlockRowRunning] / [LiveLine.SetBlockRowFinal].
+// Calling StartBlock when a block is already active or when LiveLine is
+// disabled/stopped is a no-op.
 func (l *LiveLine) StartBlock(rows int) {
 	if !l.enabled.Load() || rows <= 0 {
 		return
@@ -272,34 +310,86 @@ func (l *LiveLine) StartBlock(rows int) {
 	// Reserve `rows` rows by writing newlines; terminal scrolls if needed.
 	l.writeTerm(strings.Repeat("\n", rows))
 	l.blockRows = rows
-	l.blockContent = make([]string, rows)
+	l.blockSlots = make([]blockRow, rows)
 	// Paint footer at the new bottom position; \n places cursor below footer.
 	l.writeTerm(l.renderFooterLocked() + "\n")
 }
 
-// SetBlockRow updates the content for block row idx and triggers an immediate
-// redraw. Out-of-range idx is silently ignored.
-func (l *LiveLine) SetBlockRow(idx int, content string) {
+// SetBlockRowRunning marks row idx as running with the given label. The
+// per-row stopwatch is started on the first running call and the row's
+// icon switches back to the spinner glyph if it was previously finalised.
+// Out-of-range idx is silently ignored.
+func (l *LiveLine) SetBlockRowRunning(idx int, label string) {
 	if !l.enabled.Load() {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !l.started || l.stopped || l.paused || l.blockRows == 0 {
-		if l.blockRows > 0 && idx >= 0 && idx < l.blockRows {
-			l.blockContent[idx] = content
-		}
+	if l.blockRows == 0 || idx < 0 || idx >= l.blockRows {
 		return
 	}
-	if idx < 0 || idx >= l.blockRows {
-		return
+	slot := &l.blockSlots[idx]
+	if slot.startTime.IsZero() {
+		slot.startTime = time.Now()
 	}
-	l.blockContent[idx] = content
-	l.redrawLocked()
+	slot.label = label
+	slot.finalized = false
+	slot.icon = ""
+	slot.iconColor = ""
+	slot.elapsed = 0
+	if l.started && !l.stopped && !l.paused {
+		l.redrawLocked()
+	}
 }
 
-// EndBlock freezes the current block (rows persist in scrollback) and paints a
-// fresh single-line footer below. Subsequent operations behave as single-line.
+// SetBlockRowFinal transitions row idx to a final state. The kind picks
+// the icon and colour:
+//
+//   - BlockRowDone:    green ✓
+//   - BlockRowFailed:  red ✗
+//   - BlockRowSkipped: yellow ◎
+//
+// The row's stopwatch freezes at the wall-clock duration since the running
+// state started (or 0 if SetBlockRowRunning was never called). Out-of-
+// range idx is silently ignored.
+func (l *LiveLine) SetBlockRowFinal(idx int, kind BlockRowKind, label string) {
+	if !l.enabled.Load() {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.blockRows == 0 || idx < 0 || idx >= l.blockRows {
+		return
+	}
+	slot := &l.blockSlots[idx]
+	if !slot.startTime.IsZero() {
+		slot.elapsed = time.Since(slot.startTime)
+	}
+	slot.label = label
+	slot.icon, slot.iconColor = finalGlyph(kind)
+	slot.finalized = true
+	if l.started && !l.stopped && !l.paused {
+		l.redrawLocked()
+	}
+}
+
+// finalGlyph maps a BlockRowKind to its icon glyph and ANSI colour escape.
+func finalGlyph(kind BlockRowKind) (icon, color string) {
+	switch kind {
+	case BlockRowFailed:
+		return iconFailed, render.Red
+	case BlockRowSkipped:
+		return iconSkipped, render.Yellow
+	default:
+		return iconDone, render.Green
+	}
+}
+
+// EndBlock returns LiveLine to single-line mode. The N block-content rows
+// remain in scrollback (they hold the per-sub-step final glyphs). The old
+// live footer that sat below them is ERASED so the user never sees a
+// frozen spinner-mid-frame next to the last-started sub-step's text — a
+// fresh single-line footer is painted in its place using current state.
 func (l *LiveLine) EndBlock() {
 	if !l.enabled.Load() {
 		return
@@ -309,11 +399,13 @@ func (l *LiveLine) EndBlock() {
 	if !l.started || l.stopped || l.blockRows == 0 {
 		return
 	}
-	// Cursor is at the row below the current (about-to-be-frozen) footer.
-	// Paint a fresh single-line footer here; \n lands cursor below it.
-	l.writeTerm(l.renderFooterLocked() + "\n")
+	// Cursor is at the row below the current footer (which sits at row
+	// `prevFooter`). Move up onto the footer row, clear it, and paint the
+	// fresh single-line footer there — \n lands the cursor below it
+	// (Invariant #9).
+	l.writeTerm("\x1b[1A\r\x1b[2K" + l.renderFooterLocked() + "\n")
 	l.blockRows = 0
-	l.blockContent = nil
+	l.blockSlots = nil
 }
 
 // termWidth returns the current terminal column count. Test hooks take
@@ -330,11 +422,27 @@ func (l *LiveLine) termWidth() int {
 	return liveLineDefaultWidth
 }
 
-// renderBlockRowLocked formats block row idx, truncating to terminal width.
-// Caller holds l.mu.
+// renderBlockRowLocked formats block row idx as
+// "  <icon> [<elapsed>] <label>", truncating to terminal width. Running
+// rows use the spinner frame coloured blue; finalised rows use the
+// stored icon + colour. Caller holds l.mu.
 func (l *LiveLine) renderBlockRowLocked(idx int) string {
+	slot := l.blockSlots[idx]
+	var iconText string
+	if slot.finalized {
+		iconText = slot.iconColor + slot.icon + render.Reset
+	} else {
+		iconText = render.Blue + l.spinner.View() + render.Reset
+	}
+	var elapsed time.Duration
+	if slot.finalized {
+		elapsed = slot.elapsed
+	} else if !slot.startTime.IsZero() {
+		elapsed = time.Since(slot.startTime)
+	}
+	elapsedText := render.Gray + "[" + formatElapsed(elapsed) + "]" + render.Reset
+	content := fmt.Sprintf("  %s %s %s", iconText, elapsedText, slot.label)
 	w := l.termWidth()
-	content := l.blockContent[idx]
 	if lipgloss.Width(content) > w {
 		content = truncateToWidth(content, w)
 	}
@@ -398,18 +506,29 @@ func (l *LiveLine) Println(rawLine string) {
 	l.mu.Unlock()
 }
 
-// renderFooterLocked returns the formatted footer string (no trailing newline).
-// Caller must hold l.mu.
+// renderFooterLocked returns the formatted footer string (no trailing
+// newline). Format: "<spinner-frame> [<pipeline-elapsed>] <text>". The
+// elapsed segment is the wall-clock duration since Start() recorded the
+// pipeline start time. Caller must hold l.mu.
 func (l *LiveLine) renderFooterLocked() string {
 	w := l.termWidth()
-	frame := l.spinner.View()
+	frame := render.Blue + l.spinner.View() + render.Reset
+	var elapsedText string
+	if !l.footerStart.IsZero() {
+		elapsedText = render.Gray + "[" + formatElapsed(time.Since(l.footerStart)) + "]" + render.Reset
+	}
 	frameW := lipgloss.Width(frame)
+	elapsedW := lipgloss.Width(elapsedText)
 	text := l.text
-	avail := max(w-frameW-1, 0) // 1 for the space between frame and text
+	// Reserve 2 spaces: one after the spinner, one after the elapsed segment.
+	avail := max(w-frameW-elapsedW-2, 0)
 	if lipgloss.Width(text) > avail {
 		text = truncateToWidth(text, avail)
 	}
-	return fmt.Sprintf("%s %s", frame, text)
+	if elapsedText == "" {
+		return fmt.Sprintf("%s %s", frame, text)
+	}
+	return fmt.Sprintf("%s %s %s", frame, elapsedText, text)
 }
 
 // truncateToWidth shortens s to fit within w display columns using lipgloss

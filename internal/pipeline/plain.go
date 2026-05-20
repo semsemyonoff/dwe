@@ -52,15 +52,15 @@ const timestampLayout = "06-01-02 15:04:05"
 // commitTrailingTail helper (Task 9) is responsible for flushing it on
 // step-finish events.
 type subStepEntry struct {
-	groupAddr   string
-	buf         strings.Builder
-	inProgress  string
-	flushed     bool
-	logPath     string // absolute path of per-sub-step log file; "" when disabled
-	blockRowIdx int    // 0-based row index inside the LiveLine block
-	subIdx      int    // 1-based sub-step index within the parallel group
-	subTotal    int    // total sub-steps in the parallel group
-	subName     string // sub-step display name
+	groupAddr     string
+	buf           strings.Builder
+	inProgress    string
+	flushed       bool
+	logPath       string // absolute path of per-sub-step log file; "" when disabled
+	blockRowIdx   int    // 0-based row index inside the LiveLine block
+	pipelineIdx   int    // 1-based pipeline-wide tracked index reserved for this sub-step
+	pipelineTotal int    // total tracked steps across the whole pipeline
+	subName       string // sub-step display name
 }
 
 // groupEntry tracks per-parallel-group aggregate state for the FinishGroup
@@ -103,13 +103,10 @@ type PlainReporter struct {
 	groups map[string]*groupEntry
 
 	// currentStepAddr tracks the most recently started sequential step (or
-	// the group address while a parallel group is active). footerPrefix is the
-	// footer text set by StartStep ("[N/M] label"), reused by StepOutput to
-	// show non-final sequential frames in the footer. inBlockMode is true
-	// between StartGroup and FinishGroup; blockGroupAddr holds the active
-	// group's address.
+	// the group address while a parallel group is active). inBlockMode is
+	// true between StartGroup and FinishGroup; blockGroupAddr holds the
+	// active group's address.
 	currentStepAddr string
-	footerPrefix    string
 	inBlockMode     bool
 	blockGroupAddr  string
 
@@ -161,6 +158,18 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 func (r *PlainReporter) Close() {
 	r.live.Stop()
 	ui.ClearHuhHooks()
+}
+
+// SuspendForExec hides the LiveLine footer for the duration of a child
+// process so the child can write to the host terminal directly. Idempotent
+// and safe to call when the live UI is disabled.
+func (r *PlainReporter) SuspendForExec() {
+	r.live.Pause()
+}
+
+// ResumeAfterExec re-paints the LiveLine footer after the child exits.
+func (r *PlainReporter) ResumeAfterExec() {
+	r.live.Resume()
 }
 
 // StartPipeline stores the pipeline name and records the start time for
@@ -233,7 +242,6 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 	}
 	r.mu.Lock()
 	r.currentStepAddr = stepAddr
-	r.footerPrefix = footer
 	if index > 0 {
 		r.emit(render.Blue, fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
 	} else {
@@ -257,7 +265,7 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	defer r.mu.Unlock()
 	r.commitTrailingTail(stepAddr)
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
-		r.live.SetBlockRow(entry.blockRowIdx, formatSkippedRow(entry.subIdx, entry.subTotal, entry.subName, reason))
+		r.live.SetBlockRowFinal(entry.blockRowIdx, BlockRowSkipped, formatSkippedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName, reason))
 	}
 	if index > 0 {
 		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
@@ -283,7 +291,7 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	defer r.mu.Unlock()
 	r.commitTrailingTail(stepAddr)
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
-		r.live.SetBlockRow(entry.blockRowIdx, formatDoneRow(entry.subIdx, entry.subTotal, entry.subName))
+		r.live.SetBlockRowFinal(entry.blockRowIdx, BlockRowDone, formatDoneLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
 	}
 	if index > 0 {
 		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
@@ -313,7 +321,7 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int
 
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" {
 		if r.inBlockMode && r.ttyMode {
-			r.live.SetBlockRow(entry.blockRowIdx, formatFailedRow(entry.subIdx, entry.subTotal, entry.subName))
+			r.live.SetBlockRowFinal(entry.blockRowIdx, BlockRowFailed, formatFailedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
 		}
 		if index > 0 {
 			r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, index, total, stepAddr))
@@ -424,27 +432,28 @@ func (r *PlainReporter) SetSubStepLogPath(subAddr string, path string) {
 	entry.logPath = path
 }
 
-// formatRunningRow formats a block-mode row for a sub-step that is still
-// executing. The leading glyph is the static "·" running marker — never ✓/✗/◎
-// during execution, regardless of how many final=true frames arrive (the
-// terminal glyphs are reserved for FinishStep/FailStep/SkipStep transitions).
-func formatRunningRow(subIdx, subTotal int, subName, frame string) string {
+// Block-row label helpers. These return the label portion only — LiveLine
+// composes the icon and stopwatch around it. The same shape is shared
+// across running / done / failed / skipped variants so the leftmost column
+// stays aligned regardless of state.
+
+func formatRunningLabel(subIdx, subTotal int, subName, frame string) string {
 	if frame == "" {
-		return fmt.Sprintf("  %s [%d/%d] %s", iconRunning, subIdx, subTotal, subName)
+		return fmt.Sprintf("[%d/%d] %s", subIdx, subTotal, subName)
 	}
-	return fmt.Sprintf("  %s [%d/%d] %s: %s", iconRunning, subIdx, subTotal, subName, frame)
+	return fmt.Sprintf("[%d/%d] %s: %s", subIdx, subTotal, subName, frame)
 }
 
-func formatDoneRow(subIdx, subTotal int, subName string) string {
-	return fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, subIdx, subTotal, subName)
+func formatDoneLabel(subIdx, subTotal int, subName string) string {
+	return fmt.Sprintf("[%d/%d] Done: %s", subIdx, subTotal, subName)
 }
 
-func formatFailedRow(subIdx, subTotal int, subName string) string {
-	return fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, subIdx, subTotal, subName)
+func formatFailedLabel(subIdx, subTotal int, subName string) string {
+	return fmt.Sprintf("[%d/%d] Failed: %s", subIdx, subTotal, subName)
 }
 
-func formatSkippedRow(subIdx, subTotal int, subName, reason string) string {
-	return fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, subIdx, subTotal, subName, reason)
+func formatSkippedLabel(subIdx, subTotal int, subName, reason string) string {
+	return fmt.Sprintf("[%d/%d] Skipped: %s (%s)", subIdx, subTotal, subName, reason)
 }
 
 // StartGroup prints a single header line announcing a parallel group:
@@ -454,7 +463,13 @@ func formatSkippedRow(subIdx, subTotal int, subName, reason string) string {
 // Per-sub-step lifecycle events still flow through StartStep / FinishStep /
 // FailStep / SkipStep; this also pre-registers a per-sub-step output buffer
 // and records the group's start time / total for the FinishGroup summary line.
-func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, _ int) {
+//
+// subIndices is the contiguous slice of pipeline-wide tracked indices reserved
+// for the sub-steps of this group (one per sub-step, declaration order). total
+// is the pipeline-wide tracked-step total. Block rows display
+// "[<pipelineIdx>/<pipelineTotal>] <label>" so the parallel sub-steps blend
+// into the surrounding [N/M] step counter rather than restarting from 1.
+func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, subIndices []int, total int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.inBlockMode = true
@@ -488,25 +503,33 @@ func (r *PlainReporter) StartGroup(groupAddr string, group config.DeployStep, su
 	if group.Parallel != nil {
 		for i, sub := range group.Parallel.Steps {
 			subAddr := phasePrefix + "/" + sub.Name
+			pipelineIdx := 0
+			if i < len(subIndices) {
+				pipelineIdx = subIndices[i]
+			}
 			r.subs[subAddr] = &subStepEntry{
-				groupAddr:   groupAddr,
-				blockRowIdx: i,
-				subIdx:      i + 1,
-				subTotal:    subTotal,
-				subName:     sub.Name,
+				groupAddr:     groupAddr,
+				blockRowIdx:   i,
+				pipelineIdx:   pipelineIdx,
+				pipelineTotal: total,
+				subName:       sub.Name,
 			}
 		}
 	}
 
 	// In TTY mode, reserve N rows for the parallel block and paint each row
 	// with the initial running-state line so the user immediately sees the
-	// group's shape. SetBlockRow is a no-op when LiveLine is disabled, so
+	// group's shape. The new API is a no-op when LiveLine is disabled, so
 	// non-TTY mode remains unaffected.
 	if r.ttyMode && subTotal > 0 {
 		r.live.StartBlock(subTotal)
 		if group.Parallel != nil {
 			for i, sub := range group.Parallel.Steps {
-				r.live.SetBlockRow(i, formatRunningRow(i+1, subTotal, sub.Name, ""))
+				pipelineIdx := 0
+				if i < len(subIndices) {
+					pipelineIdx = subIndices[i]
+				}
+				r.live.SetBlockRowRunning(i, formatRunningLabel(pipelineIdx, total, sub.Name, ""))
 			}
 		}
 	}
@@ -609,16 +632,12 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	}
 	if !final {
 		entry.inProgress = frame
-		// Ephemeral row update: for parallel sub-steps refresh the block row;
-		// for sequential steps update the footer text so live progress shows.
+		// Parallel sub-step: refresh the block row with the latest frame.
+		// Sequential steps no longer route through StepOutput (the child
+		// writes directly to os.Stdout while the LiveLine footer is paused),
+		// so the sequential branch is intentionally a no-op here.
 		if entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
-			r.live.SetBlockRow(entry.blockRowIdx, formatRunningRow(entry.subIdx, entry.subTotal, entry.subName, frame))
-		} else if entry.groupAddr == "" && r.ttyMode {
-			text := r.footerPrefix
-			if frame != "" {
-				text += ": " + frame
-			}
-			r.live.SetText(text)
+			r.live.SetBlockRowRunning(entry.blockRowIdx, formatRunningLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName, frame))
 		}
 		return
 	}
@@ -631,13 +650,13 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 	}
 	// Parallel sub-step: buffer for dump, side-write log once. Update the
 	// block row to the latest committed frame but keep the running-state
-	// glyph (·) — ✓ is reserved for FinishStep.
+	// glyph (the spinner) — ✓ is reserved for FinishStep.
 	entry.buf.WriteString(frame)
 	entry.buf.WriteByte('\n')
 	entry.inProgress = ""
 	r.writeLog(frame)
 	if r.inBlockMode && r.ttyMode {
-		r.live.SetBlockRow(entry.blockRowIdx, formatRunningRow(entry.subIdx, entry.subTotal, entry.subName, frame))
+		r.live.SetBlockRowRunning(entry.blockRowIdx, formatRunningLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName, frame))
 	}
 }
 
