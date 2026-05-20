@@ -116,7 +116,7 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 	}
 
 	width, height, err := terminalSizeFn()
-	if err != nil || width < 60 || height < 15 {
+	if err != nil || width < minTwoPanelWidth || height < 15 {
 		return runFallback(title, items)
 	}
 

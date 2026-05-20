@@ -251,7 +251,7 @@ func TestTreeRender_ShowsMarkerAndCount(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
 	tm.focusedID = "db"
-	out := tm.render(true)
+	out := tm.renderOpt(true, true)
 	if !strings.Contains(out, "db") || !strings.Contains(out, "(1)") {
 		t.Errorf("render missing db / count, got:\n%s", out)
 	}
@@ -259,7 +259,7 @@ func TestTreeRender_ShowsMarkerAndCount(t *testing.T) {
 		t.Errorf("render missing focus marker, got:\n%s", out)
 	}
 	// Unfocused render must drop the focus marker.
-	if strings.Contains(tm.render(false), "❯") {
+	if strings.Contains(tm.renderOpt(false, true), "❯") {
 		t.Errorf("unfocused render should not contain focus marker")
 	}
 }
@@ -267,7 +267,7 @@ func TestTreeRender_ShowsMarkerAndCount(t *testing.T) {
 func TestRenderEmptyTree(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(nil, false, 3)
-	out := tm.render(true)
+	out := tm.renderOpt(true, true)
 	if !strings.Contains(out, "no groups") {
 		t.Errorf("empty tree should render placeholder, got %q", out)
 	}
@@ -334,7 +334,7 @@ func TestTree_Snapshot(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
 	tm.focusedID = "db"
-	got := stripANSI(tm.render(true))
+	got := stripANSI(tm.renderOpt(true, true))
 	// db / api / cs / web have no sub-group children, so they render with a
 	// two-space gutter where the expand glyph would be. services and
 	// services.main carry the ▾ glyph because they have children.

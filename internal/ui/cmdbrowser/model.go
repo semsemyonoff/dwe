@@ -2,6 +2,7 @@ package cmdbrowser
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/help"
@@ -68,7 +69,7 @@ func newModel(title string, items []Item, opts Options, w, h int) *Model {
 	tm := newTreeModel(items, opts.IncludePrivate, opts.DefaultExpandedDepth)
 	listW := rightWidth(w)
 	if singlePanel(w) {
-		listW = singlePanelListWidth(w)
+		listW = singlePanelWidth(w)
 	}
 	dlg := newCmdDelegate(listW, !singlePanel(w) && showBadges(w) && opts.ShowTypeBadges)
 	l := list.New(nil, dlg, listW, max(h-3, 3))
@@ -319,7 +320,7 @@ func (m *Model) applyLayout() {
 	nowSingle := singlePanel(m.width)
 	listW := rightWidth(m.width)
 	if nowSingle {
-		listW = singlePanelListWidth(m.width)
+		listW = singlePanelWidth(m.width)
 	}
 	bh := max(m.height-3, 3)
 	m.delegate.width = listW
@@ -383,7 +384,7 @@ func (m *Model) View() tea.View {
 func (m *Model) viewSinglePanel() tea.View {
 	bodyHeight := max(m.height-3, 3)
 	border := lipgloss.NormalBorder()
-	style := lipgloss.NewStyle().Border(border).Width(singlePanelPanelWidth(m.width)).Height(bodyHeight)
+	style := lipgloss.NewStyle().Border(border).Width(singlePanelWidth(m.width)).Height(bodyHeight)
 	if m.focus == focusFilter || m.focus == focusInspect || m.focus == focusRight {
 		style = style.BorderForeground(lipgloss.Color("12"))
 	}
@@ -399,7 +400,7 @@ func (m *Model) viewSinglePanel() tea.View {
 			noun = "match"
 		}
 		header := lipgloss.NewStyle().Bold(true).Render(m.filter.renderQueryLine())
-		tail := lipgloss.NewStyle().Faint(true).Render(" · " + intStr(count) + " " + noun)
+		tail := lipgloss.NewStyle().Faint(true).Render(" · " + strconv.Itoa(count) + " " + noun)
 		body = header + tail + "\n" + m.list.View()
 	default:
 		body = m.list.View()
@@ -436,7 +437,7 @@ func (m *Model) renderRight() string {
 			noun = "match"
 		}
 		header := lipgloss.NewStyle().Bold(true).Render(m.filter.renderQueryLine())
-		tail := lipgloss.NewStyle().Faint(true).Render(" · " + intStr(count) + " " + noun)
+		tail := lipgloss.NewStyle().Faint(true).Render(" · " + strconv.Itoa(count) + " " + noun)
 		return header + tail + "\n" + m.list.View()
 	}
 	return m.breadcrumb() + "\n" + m.list.View()
@@ -500,31 +501,8 @@ func (m *Model) breadcrumb() string {
 		noun = "command"
 	}
 	header := lipgloss.NewStyle().Bold(true).Render(path)
-	tail := lipgloss.NewStyle().Faint(true).Render(" · " + intStr(count) + " " + noun)
+	tail := lipgloss.NewStyle().Faint(true).Render(" · " + strconv.Itoa(count) + " " + noun)
 	return header + tail
-}
-
-// intStr is a tiny strconv.Itoa replacement that keeps imports light.
-func intStr(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	negative := n < 0
-	if negative {
-		n = -n
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if negative {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
 }
 
 // Width bucket helpers — keep the layout rules in one place. The fallback
@@ -550,13 +528,7 @@ func showCounts(w int) bool { return w >= fullTwoPanelWidth }
 // huh fallback before the Model is ever constructed.
 func singlePanel(w int) bool { return w < reducedTwoPanelWidth }
 
-// singlePanelListWidth returns the width passed to the embedded list.Model in
-// single-panel mode. The bordered panel reserves 2 cells (one column per
-// vertical border); the list content must fit inside that to avoid wrapping
-// rows onto two visual lines.
-func singlePanelListWidth(w int) int { return max(w-2, 10) }
-
-// singlePanelPanelWidth mirrors singlePanelListWidth — both equal m.width-2.
-// Defined as a helper so the lipgloss style and the list size derive from the
-// same expression.
-func singlePanelPanelWidth(w int) int { return max(w-2, 10) }
+// singlePanelWidth returns the inner content width for single-panel mode.
+// The bordered panel reserves 2 cells (one per vertical border); the list and
+// the lipgloss style share the same expression so they stay in sync.
+func singlePanelWidth(w int) int { return max(w-2, 10) }

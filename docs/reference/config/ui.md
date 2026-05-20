@@ -16,7 +16,9 @@ ui:
 
 ### `ui.commands.default_expanded_depth`
 
-Controls how many tree levels are expanded by default when the command browser opens. A value of `0` keeps everything collapsed; larger values expand deeper. Negative values are clamped to `0` by the accessor and rejected as an error by the validator.
+Controls how many tree levels are expanded by default when the command browser opens. Negative values are clamped to `0` by the accessor and rejected as an error by the validator.
+
+**Note:** Because `default_expanded_depth` is a plain `int`, YAML cannot distinguish an absent key from an explicit `0` — both are deserialized as zero and the accessor returns the default of `3`. Setting `default_expanded_depth: 0` is therefore equivalent to omitting the key. Use `1` to expand only the top-level groups; any positive integer expands to that depth.
 
 ### `ui.commands.auto_collapse_empty`
 

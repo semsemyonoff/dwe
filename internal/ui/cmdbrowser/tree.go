@@ -15,7 +15,6 @@ type treeNode struct {
 	depth    int    // root is -1; top-level groups are 0
 	parent   *treeNode
 	children []*treeNode
-	childMap map[string]*treeNode
 
 	// leaves holds indices into treeModel.items for commands whose group is
 	// exactly this node's id.
@@ -48,7 +47,7 @@ func newTreeModel(items []Item, includePrivate bool, defaultDepth int) *treeMode
 	tm := &treeModel{
 		items:          items,
 		includePrivate: includePrivate,
-		root:           &treeNode{depth: -1, childMap: map[string]*treeNode{}},
+		root:           &treeNode{depth: -1},
 		expanded:       map[string]bool{},
 		nodesByID:      map[string]*treeNode{},
 	}
@@ -100,14 +99,12 @@ func (tm *treeModel) ensureGroup(id string) *treeNode {
 		name = id[i+1:]
 	}
 	n := &treeNode{
-		id:       id,
-		name:     name,
-		depth:    parent.depth + 1,
-		parent:   parent,
-		childMap: map[string]*treeNode{},
+		id:     id,
+		name:   name,
+		depth:  parent.depth + 1,
+		parent: parent,
 	}
 	parent.children = append(parent.children, n)
-	parent.childMap[name] = n
 	tm.nodesByID[id] = n
 	return n
 }

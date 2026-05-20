@@ -2,7 +2,6 @@ package cmdbrowser
 
 import (
 	"maps"
-	"strings"
 
 	"charm.land/bubbles/v2/list"
 )
@@ -122,9 +121,5 @@ func (f *filterState) hasMatch(nodeID string) bool { return f.matchCount[nodeID]
 // renderQueryLine returns the textinput-like prompt for the right-panel header
 // while filter mode is active. The trailing block █ is the visible cursor.
 func (f *filterState) renderQueryLine() string {
-	var b strings.Builder
-	b.WriteString("/")
-	b.WriteString(f.query)
-	b.WriteString("█")
-	return b.String()
+	return "/" + f.query + "█"
 }

@@ -66,12 +66,8 @@ func (m *Model) refreshFilterMatches() {
 
 // updateFilter handles keypresses while filter mode is active. Printable
 // characters extend the query; Backspace trims it; Esc exits; Enter selects;
-// arrow keys move the list cursor; everything else is forwarded to the list.
+// arrow keys move the list cursor (vi-keys j/k type into the query instead).
 func (m *Model) updateFilter(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Cancel) {
-		m.exitFilter()
-		return m, nil
-	}
 	if key.Matches(msg, m.keys.Enter) {
 		if it, ok := m.list.SelectedItem().(listItem); ok {
 			m.result = Result{Idx: it.origIdx, Action: actionForMode(m.opts.Mode), SkipConfirm: m.skipConfirm}
@@ -93,22 +89,28 @@ func (m *Model) updateFilter(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	// Forward navigation keys to the list (j/k/arrows/PgUp/PgDn/Home/End).
-	if key.Matches(msg, m.keys.Up) || key.Matches(msg, m.keys.Down) ||
-		key.Matches(msg, m.keys.PgUp) || key.Matches(msg, m.keys.PgDn) ||
-		key.Matches(msg, m.keys.Home) || key.Matches(msg, m.keys.End) {
-		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
-		return m, cmd
-	}
-	// Treat printable text as filter input. Use msg.Text (set for keys that
-	// produce a printable rune); ignore control keys and unset Text.
+	// Treat printable text as filter input before checking Cancel or navigation
+	// so that "q", "j", "k" and similar keys type into the query rather than
+	// acting as quit/vi-navigation shortcuts. Non-printable keys (esc, arrows,
+	// ctrl sequences) have empty or non-printable msg.Text and fall through.
 	if t := msg.Text; t != "" && isPrintable(t) {
 		if m.filter != nil {
 			m.filter.query += t
 			m.refreshFilterMatches()
 		}
 		return m, nil
+	}
+	// Esc exits filter. "q" is consumed by the printable branch above.
+	if key.Matches(msg, m.keys.Cancel) {
+		m.exitFilter()
+		return m, nil
+	}
+	// Forward arrow navigation keys only (j/k are printable and handled above).
+	switch msg.Code {
+	case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
+		var cmd tea.Cmd
+		m.list, cmd = m.list.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }

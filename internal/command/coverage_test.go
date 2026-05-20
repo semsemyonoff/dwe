@@ -423,16 +423,6 @@ func TestGenHiddenCLIMan_NoHidden(t *testing.T) {
 	}
 }
 
-// --- defaultSelectCommand ---
-
-func TestDefaultSelectCommand_EmptyItems(t *testing.T) {
-	// With nil defs, RunSelector gets empty items → returns error (no TTY needed).
-	_, err := defaultSelectCommand(nil, "pick")
-	if err == nil {
-		t.Fatal("expected error for nil/empty defs")
-	}
-}
-
 // --- walkAllCommands error propagation ---
 
 func TestWalkAllCommands_PropagatesError(t *testing.T) {

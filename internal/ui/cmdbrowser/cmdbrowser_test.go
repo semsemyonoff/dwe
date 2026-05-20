@@ -2,7 +2,6 @@ package cmdbrowser
 
 import (
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -22,7 +21,6 @@ func TestMain(m *testing.M) {
 	compat.Profile = colorprofile.NoTTY
 	// goleak verifies bubbletea spawns no orphaned goroutines after Run().
 	goleak.VerifyTestMain(m)
-	os.Exit(0)
 }
 
 // withSeams installs test stubs for the package-level seams and restores

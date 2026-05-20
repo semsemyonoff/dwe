@@ -282,24 +282,6 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 	}
 }
 
-// defaultSelectCommand shows an interactive selector via ui.RunSelector.
-// Retained as the simple injection target for unit tests that exercise
-// resolveCommandID through the selectCommandFn type.
-func defaultSelectCommand(defs []*usercommands.CommandDef, title string) (string, error) {
-	items := make([]ui.SelectorItem, len(defs))
-	for i, d := range defs {
-		items[i] = ui.SelectorItem{
-			Label:       d.ID,
-			Description: d.Description,
-		}
-	}
-	idx, err := ui.RunSelector(title, items)
-	if err != nil {
-		return "", err
-	}
-	return defs[idx].ID, nil
-}
-
 // resolveCommandID determines the target command ID from optional positional args.
 //
 //   - No args: calls selector with all public (or all when includePrivate is true) usercommands.

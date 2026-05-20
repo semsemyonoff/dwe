@@ -7,12 +7,6 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// renderTree returns the left-panel body (no border) for the given focus.
-// Lines use existing styles.yml semantics in spirit: focused row is bold,
-// muted faint is used for the (N) counts. No new style keys are required
-// at this stage — Task 4 swaps in the badge palette for the right panel.
-func (tm *treeModel) render(focused bool) string { return tm.renderOpt(focused, true) }
-
 // renderOpt renders the tree with control over count visibility — Task 4 hides
 // the (N) counts at 80–99 cols per §4.1.
 func (tm *treeModel) renderOpt(focused, showCounts bool) string {
