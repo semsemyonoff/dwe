@@ -170,18 +170,18 @@ Full design lives in the source spec attached to this plan; this document is the
 
 ### Task 5: Filter mode (`/`) + inspect overlay (`i`) + skip-confirm (`y`) + dynamic help (`?`)
 
-- [ ] filter mode: enter via `/`; right panel becomes flat ranked results using `list.DefaultFilter`; left tree gains `M/N` counts and dims groups with `M==0`
-- [ ] honour `opts.AutoCollapseEmpty`: when true, dim+collapse zero-match subtrees for the duration of the filter session; restore prior expanded state on `Esc`
-- [ ] cursor restoration on filter exit (§8): if highlighted command belongs to currently selected group, keep right-panel cursor on it; otherwise move tree focus to the nearest ancestor of that command and refresh right
-- [ ] inspect overlay: `bubbles/v2/viewport.Model` centred over the right panel, width `min(rightPanelWidth-4, 80)`; content is **`items[focusedIdx].Inspect`** — the precomputed string filled by the caller in Task 2 (`defaultSelectCommand` calls the unexported `printCommandInspect` from inside `internal/command` and stuffs the result into `Item.Inspect`). cmdbrowser performs no rendering of CommandDef shapes itself.
-- [ ] inspect key handling: `↑/↓`, `j/k`, `PgUp`/`PgDn` scroll; `Esc` closes (focus restored to right panel); `Enter` closes the program and returns `Result{Idx, Action: ActionInspect}` for `ModeInspect` or `ActionRun` for `ModeRun`
-- [ ] `y` toggles skip-confirm — **enabled only when `opts.Mode == ModeRun`**. Under `ModeInspect` the binding is removed from the keymap (so it does not appear in help) and the `y` keypress falls through as a no-op; inspect never runs the command so `Result.SkipConfirm` would be unobserved. When enabled, surface `[--yes ON]` in the footer when true. State propagates via **`Result.SkipConfirm`** (defined in Task 2); the call site at `command_cmd.go:160` reads it through the closure-captured `*bool` pattern and ORs it into the existing `shouldSkip` before building `rctx` — no `selectCommandFn` signature change.
-- [ ] dynamic help footer via `bubbles/v2/help.Model`: short form by default, long via `?`; the visible bindings change with focus state (left / right / filter / inspect)
-- [ ] `Esc` on top-level tree exits the TUI (per §19 — confirmed); `Esc` in filter exits filter only
-- [ ] write table-driven `Update` tests across all four focus modes (left, right, filter, inspect) × all hotkeys; assert transitions and that filter cursor restoration matches §8 — independent cases use `t.Parallel()`
-- [ ] test `Result.SkipConfirm` toggling: pressing `y` once flips it to true and the footer shows `[--yes ON]`; pressing again flips it back; the value survives selection and is in the returned `Result`
-- [ ] snapshot tests: filter active with matches, filter active with zero-match groups dimmed, inspect overlay open, footer in skip-confirm-ON state, footer in long-help state — all driven via direct `m.Update`/`m.View`, no `tea.NewProgram`
-- [ ] run `make test` and `make lint` — must pass before Task 6
+- [x] filter mode: enter via `/`; right panel becomes flat ranked results using `list.DefaultFilter`; left tree gains `M/N` counts and dims groups with `M==0`
+- [x] honour `opts.AutoCollapseEmpty`: when true, dim+collapse zero-match subtrees for the duration of the filter session; restore prior expanded state on `Esc`
+- [x] cursor restoration on filter exit (§8): if highlighted command belongs to currently selected group, keep right-panel cursor on it; otherwise move tree focus to the nearest ancestor of that command and refresh right
+- [x] inspect overlay: `bubbles/v2/viewport.Model` centred over the right panel, width `min(rightPanelWidth-4, 80)`; content is **`items[focusedIdx].Inspect`** — the precomputed string filled by the caller in Task 2 (`defaultSelectCommand` calls the unexported `printCommandInspect` from inside `internal/command` and stuffs the result into `Item.Inspect`). cmdbrowser performs no rendering of CommandDef shapes itself.
+- [x] inspect key handling: `↑/↓`, `j/k`, `PgUp`/`PgDn` scroll; `Esc` closes (focus restored to right panel); `Enter` closes the program and returns `Result{Idx, Action: ActionInspect}` for `ModeInspect` or `ActionRun` for `ModeRun`
+- [x] `y` toggles skip-confirm — **enabled only when `opts.Mode == ModeRun`**. Under `ModeInspect` the binding is removed from the keymap (so it does not appear in help) and the `y` keypress falls through as a no-op; inspect never runs the command so `Result.SkipConfirm` would be unobserved. When enabled, surface `[--yes ON]` in the footer when true. State propagates via **`Result.SkipConfirm`** (defined in Task 2); the call site at `command_cmd.go:160` reads it through the closure-captured `*bool` pattern and ORs it into the existing `shouldSkip` before building `rctx` — no `selectCommandFn` signature change.
+- [x] dynamic help footer via `bubbles/v2/help.Model`: short form by default, long via `?`; the visible bindings change with focus state (left / right / filter / inspect)
+- [x] `Esc` on top-level tree exits the TUI (per §19 — confirmed); `Esc` in filter exits filter only
+- [x] write table-driven `Update` tests across all four focus modes (left, right, filter, inspect) × all hotkeys; assert transitions and that filter cursor restoration matches §8 — independent cases use `t.Parallel()`
+- [x] test `Result.SkipConfirm` toggling: pressing `y` once flips it to true and the footer shows `[--yes ON]`; pressing again flips it back; the value survives selection and is in the returned `Result`
+- [x] snapshot tests: filter active with matches, filter active with zero-match groups dimmed, inspect overlay open, footer in skip-confirm-ON state, footer in long-help state — all driven via direct `m.Update`/`m.View`, no `tea.NewProgram`
+- [x] run `make test` and `make lint` — must pass before Task 6
 
 ### Task 6: Narrow-terminal single-panel fallback + colour profile audit
 

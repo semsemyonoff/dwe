@@ -3,19 +3,22 @@ package cmdbrowser
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
-// focus identifies which panel currently receives input. Future tasks add
-// focusFilter and focusInspect; Task 4 ships left/right only.
+// focus identifies which panel currently receives input. Filter and Inspect
+// are modal — they pause the underlying panels while active.
 type focus int
 
 const (
 	focusLeft focus = iota
 	focusRight
+	focusFilter
+	focusInspect
 )
 
 // Width buckets per §4.1 of the spec. width < 60 is handled by the fallback
@@ -43,6 +46,13 @@ type Model struct {
 
 	cancelled bool
 	result    Result
+
+	filter       *filterState
+	inspect      *inspectState
+	skipConfirm  bool
+	showFullHelp bool
+	help         help.Model
+	priorFocus   focus
 }
 
 // Compile-time guarantee that Model satisfies tea.Model. bubbletea/v2 is
@@ -69,6 +79,7 @@ func newModel(title string, items []Item, opts Options, w, h int) *Model {
 		tree:     tm,
 		list:     l,
 		delegate: dlg,
+		help:     help.New(),
 	}
 	m.refreshList()
 	return m
@@ -86,25 +97,58 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyLayout()
 		return m, nil
 	case tea.KeyPressMsg:
-		s := msg.String()
-		switch {
-		case key.Matches(msg, m.keys.Cancel), key.Matches(msg, m.keys.CtrlC), s == "ctrl+c":
-			m.cancelled = true
-			return m, tea.Quit
-		case key.Matches(msg, m.keys.Tab):
-			if m.focus == focusLeft {
-				m.focus = focusRight
-			} else {
-				m.focus = focusLeft
-			}
-			return m, nil
-		}
-		if m.focus == focusLeft {
-			return m.updateLeft(msg)
-		}
-		return m.updateRight(msg)
+		return m.handleKey(msg)
 	}
 	return m, nil
+}
+
+// handleKey routes keypresses based on the active focus mode. Ctrl-C and the
+// global help toggle apply in every mode; everything else is mode-specific.
+func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if key.Matches(msg, m.keys.CtrlC) {
+		m.cancelled = true
+		return m, tea.Quit
+	}
+	// Inspect captures all keys (modal overlay).
+	if m.focus == focusInspect {
+		return m.updateInspect(msg)
+	}
+	if m.focus == focusFilter {
+		return m.updateFilter(msg)
+	}
+	// Global toggles available in left/right modes.
+	if key.Matches(msg, m.keys.Help) {
+		m.showFullHelp = !m.showFullHelp
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.Filter) {
+		m.enterFilter()
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.Inspect) {
+		m.openInspect()
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SkipConfirm) && m.opts.Mode == ModeRun {
+		m.skipConfirm = !m.skipConfirm
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.Cancel) {
+		m.cancelled = true
+		return m, tea.Quit
+	}
+	if key.Matches(msg, m.keys.Tab) {
+		if m.focus == focusLeft {
+			m.focus = focusRight
+		} else {
+			m.focus = focusLeft
+		}
+		return m, nil
+	}
+	if m.focus == focusLeft {
+		return m.updateLeft(msg)
+	}
+	return m.updateRight(msg)
 }
 
 // updateLeft routes keypresses to the tree when the left panel is focused.
@@ -155,7 +199,7 @@ func (m *Model) updateRight(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if key.Matches(msg, m.keys.Enter) {
 		if it, ok := m.list.SelectedItem().(listItem); ok {
-			m.result = Result{Idx: it.origIdx, Action: actionForMode(m.opts.Mode)}
+			m.result = Result{Idx: it.origIdx, Action: actionForMode(m.opts.Mode), SkipConfirm: m.skipConfirm}
 			return m, tea.Quit
 		}
 		return m, nil
@@ -211,26 +255,99 @@ func (m *Model) View() tea.View {
 	leftStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bodyHeight)
 	rightStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bodyHeight)
 
-	if m.focus == focusLeft {
-		leftStyle = leftStyle.BorderForeground(lipgloss.Color("12"))
-	} else {
-		rightStyle = rightStyle.BorderForeground(lipgloss.Color("12"))
+	focusBorder := lipgloss.Color("12")
+	switch m.focus {
+	case focusLeft:
+		leftStyle = leftStyle.BorderForeground(focusBorder)
+	case focusRight, focusFilter, focusInspect:
+		rightStyle = rightStyle.BorderForeground(focusBorder)
 	}
 
-	leftBody := "groups\n" + m.tree.renderOpt(m.focus == focusLeft, showCounts(m.width))
-	rightBody := m.breadcrumb() + "\n" + m.list.View()
+	leftBody := "groups\n" + m.renderTree()
+	rightBody := m.renderRight()
+
+	if m.focus == focusInspect && m.inspect != nil {
+		rightBody = "inspect: " + m.items[m.inspect.inspectIdx].ID + "\n" + m.inspect.vp.View()
+	}
+
 	leftPanel := leftStyle.Render(leftBody)
 	rightPanel := rightStyle.Render(rightBody)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 	titleBar := lipgloss.NewStyle().Bold(true).Render(m.title)
-	footer := lipgloss.NewStyle().Faint(true).Render("tab: switch · enter: select · esc/q: quit")
+	if m.skipConfirm && m.opts.Mode == ModeRun {
+		titleBar += "  " + lipgloss.NewStyle().Bold(true).Render("[--yes ON]")
+	}
+	footer := m.renderHelpFooter()
 
 	content := strings.Join([]string{titleBar, body, footer}, "\n")
 
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+// renderTree renders the left-panel tree, switching to filter-aware mode (M/N
+// counts, zero-match dimming) when a filter session is active.
+func (m *Model) renderTree() string {
+	if m.filter != nil {
+		return m.tree.renderFilter(m.focus == focusLeft, showCounts(m.width), m.filter)
+	}
+	return m.tree.renderOpt(m.focus == focusLeft, showCounts(m.width))
+}
+
+// renderRight returns the right-panel body. While filter is active the header
+// becomes the query prompt and a match count; otherwise it is the breadcrumb.
+func (m *Model) renderRight() string {
+	if m.filter != nil {
+		count := len(m.filter.matched)
+		noun := "matches"
+		if count == 1 {
+			noun = "match"
+		}
+		header := lipgloss.NewStyle().Bold(true).Render(m.filter.renderQueryLine())
+		tail := lipgloss.NewStyle().Faint(true).Render(" · " + intStr(count) + " " + noun)
+		return header + tail + "\n" + m.list.View()
+	}
+	return m.breadcrumb() + "\n" + m.list.View()
+}
+
+// renderHelpFooter renders the short or long help line based on showFullHelp,
+// driven by the dynamic bindings for the current focus.
+func (m *Model) renderHelpFooter() string {
+	if m.showFullHelp {
+		return m.help.FullHelpView(m.fullBindings())
+	}
+	return m.help.ShortHelpView(m.shortBindings())
+}
+
+// shortBindings returns the bindings to show in the short-help footer. The
+// set depends on the active focus mode.
+func (m *Model) shortBindings() []key.Binding {
+	switch m.focus {
+	case focusFilter:
+		return []key.Binding{m.keys.Enter, m.keys.Cancel, m.keys.Help}
+	case focusInspect:
+		return []key.Binding{m.keys.Up, m.keys.Down, m.keys.Enter, m.keys.Cancel}
+	case focusRight:
+		base := []key.Binding{m.keys.Tab, m.keys.Enter, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
+		if m.opts.Mode == ModeRun {
+			base = append(base, m.keys.SkipConfirm)
+		}
+		return base
+	default: // focusLeft
+		return []key.Binding{m.keys.Up, m.keys.Down, m.keys.Tab, m.keys.Filter, m.keys.Cancel, m.keys.Help}
+	}
+}
+
+// fullBindings returns the grouped bindings for the long-help footer.
+func (m *Model) fullBindings() [][]key.Binding {
+	nav := []key.Binding{m.keys.Up, m.keys.Down, m.keys.Left, m.keys.Right, m.keys.Home, m.keys.End}
+	act := []key.Binding{m.keys.Enter, m.keys.Tab, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
+	if m.opts.Mode == ModeRun {
+		act = append(act, m.keys.SkipConfirm)
+	}
+	return [][]key.Binding{nav, act}
 }
 
 // breadcrumb formats the focused group's full path and item count for the

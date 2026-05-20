@@ -238,7 +238,7 @@ func TestModel_EmptyLayoutSnapshot(t *testing.T) {
 	// Drive the model with a window-size msg as bubbletea would.
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 26})
 	out := m.View().Content
-	for _, want := range []string{"Select command", "groups", "command", "tab: switch"} {
+	for _, want := range []string{"Select command", "groups", "command", "tab"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("snapshot missing %q\n---\n%s", want, out)
 		}

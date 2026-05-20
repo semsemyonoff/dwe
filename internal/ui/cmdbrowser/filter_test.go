@@ -1,0 +1,266 @@
+package cmdbrowser
+
+import (
+	"maps"
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+func filterTestItems() []Item {
+	return []Item{
+		{ID: "db.migrate", Description: "apply schema", Type: "shell"},
+		{ID: "db.seed", Description: "load fixtures", Type: "shell"},
+		{ID: "services.api.test", Description: "run api tests", Type: "shell"},
+		{ID: "services.api.lint", Description: "lint api", Type: "shell"},
+	}
+}
+
+func TestFilter_EnterAndExitRestoresExpansion(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	// Capture original expanded state.
+	want := make(map[string]bool, len(m.tree.expanded))
+	maps.Copy(want, m.tree.expanded)
+	// Enter filter, type a query that prunes most groups, then exit.
+	m.Update(syntheticKey("/"))
+	if m.focus != focusFilter || m.filter == nil {
+		t.Fatalf("entering filter failed; focus=%v filter=%v", m.focus, m.filter)
+	}
+	m.Update(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	if m.filter.query != "d" {
+		t.Errorf("query=%q, want %q", m.filter.query, "d")
+	}
+	m.Update(syntheticKey("esc"))
+	if m.focus == focusFilter || m.filter != nil {
+		t.Fatalf("exit filter failed; focus=%v filter=%v", m.focus, m.filter)
+	}
+	got := m.tree.expanded
+	if len(got) != len(want) {
+		t.Errorf("expanded set not restored; want %d entries, got %d", len(want), len(got))
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("expanded[%q]=%v, want %v", k, got[k], v)
+		}
+	}
+}
+
+func TestFilter_AutoCollapseHidesZeroMatchSubtrees(t *testing.T) {
+	opts := DefaultOptions()
+	opts.AutoCollapseEmpty = true
+	m := newModel("pick", filterTestItems(), opts, 120, 26)
+	m.Update(syntheticKey("/"))
+	m.Update(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	m.Update(tea.KeyPressMsg{Code: 'b', Text: "b"})
+	// "db" matches; "services.*" should not match.
+	if m.filter.matchCount["db"] == 0 {
+		t.Errorf("expected db matches, got 0")
+	}
+	if m.filter.matchCount["services"] != 0 {
+		t.Errorf("expected zero matches for services, got %d", m.filter.matchCount["services"])
+	}
+	// services should be collapsed.
+	if m.tree.expanded["services"] {
+		t.Errorf("services should be collapsed under AutoCollapseEmpty")
+	}
+}
+
+func TestFilter_BackspaceTrims(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	m.Update(syntheticKey("/"))
+	for _, r := range "db" {
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if m.filter.query != "db" {
+		t.Fatalf("query=%q", m.filter.query)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if m.filter.query != "d" {
+		t.Errorf("after backspace query=%q, want %q", m.filter.query, "d")
+	}
+}
+
+func TestFilter_EnterSelectsMatchedItem(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	m.Update(syntheticKey("/"))
+	m.Update(tea.KeyPressMsg{Code: 'm', Text: "m"})
+	// First match should be db.migrate.
+	_, cmd := m.Update(syntheticKey("enter"))
+	if cmd == nil {
+		t.Fatal("Enter on filter must Quit")
+	}
+	if m.items[m.result.Idx].ID != "db.migrate" {
+		t.Errorf("idx=%d (%q), want db.migrate", m.result.Idx, m.items[m.result.Idx].ID)
+	}
+}
+
+func TestFilter_MNCountsInView(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	m.Update(syntheticKey("/"))
+	m.Update(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	out := stripANSI(m.View().Content)
+	// db subtree has 2/2 matches.
+	if !strings.Contains(out, "(2/2)") {
+		t.Errorf("missing M/N count for db; got:\n%s", out)
+	}
+}
+
+func TestSkipConfirm_TogglesAndAppearsInResult(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	m.focus = focusRight
+	m.Update(syntheticKey("y"))
+	if !m.skipConfirm {
+		t.Errorf("y should turn skipConfirm on")
+	}
+	out := stripANSI(m.View().Content)
+	if !strings.Contains(out, "[--yes ON]") {
+		t.Errorf("title bar missing yes indicator; got:\n%s", out)
+	}
+	m.Update(syntheticKey("y"))
+	if m.skipConfirm {
+		t.Errorf("second y should turn it off")
+	}
+	// Toggle on, then Enter — Result.SkipConfirm must propagate.
+	m.Update(syntheticKey("y"))
+	m.list.Select(0)
+	m.Update(syntheticKey("enter"))
+	if !m.result.SkipConfirm {
+		t.Errorf("Result.SkipConfirm not propagated; got %+v", m.result)
+	}
+}
+
+func TestSkipConfirm_InspectModeIgnoresY(t *testing.T) {
+	opts := DefaultOptions()
+	opts.Mode = ModeInspect
+	m := newModel("pick", filterTestItems(), opts, 120, 26)
+	m.focus = focusRight
+	m.Update(syntheticKey("y"))
+	if m.skipConfirm {
+		t.Errorf("y must not toggle in inspect mode")
+	}
+}
+
+func TestInspect_OpensAndCloses(t *testing.T) {
+	items := filterTestItems()
+	items[0].Inspect = "inspect details for db.migrate"
+	m := newModel("pick", items, DefaultOptions(), 120, 26)
+	m.tree.focusedID = "db"
+	m.refreshList()
+	m.focus = focusRight
+	m.list.Select(0)
+	m.Update(syntheticKey("i"))
+	if m.focus != focusInspect || m.inspect == nil {
+		t.Fatalf("inspect did not open; focus=%v inspect=%v", m.focus, m.inspect)
+	}
+	out := m.View().Content
+	if !strings.Contains(out, "db.migrate") {
+		t.Errorf("inspect view missing id; got:\n%s", out)
+	}
+	if !strings.Contains(out, "inspect details") {
+		t.Errorf("inspect content not rendered; got:\n%s", out)
+	}
+	m.Update(syntheticKey("esc"))
+	if m.focus != focusRight || m.inspect != nil {
+		t.Errorf("esc should close inspect; focus=%v inspect=%v", m.focus, m.inspect)
+	}
+}
+
+func TestInspect_EnterReturnsInspectAction(t *testing.T) {
+	items := filterTestItems()
+	items[1].Inspect = "details"
+	opts := DefaultOptions()
+	opts.Mode = ModeInspect
+	m := newModel("pick", items, opts, 120, 26)
+	m.tree.focusedID = "db"
+	m.refreshList()
+	m.focus = focusRight
+	m.list.Select(1) // db.seed
+	m.Update(syntheticKey("i"))
+	if m.focus != focusInspect {
+		t.Fatalf("not in inspect mode; focus=%v", m.focus)
+	}
+	_, cmd := m.Update(syntheticKey("enter"))
+	if cmd == nil {
+		t.Fatal("Enter in inspect must Quit")
+	}
+	if m.result.Action != ActionInspect {
+		t.Errorf("Action=%v, want ActionInspect", m.result.Action)
+	}
+	if m.items[m.result.Idx].ID != "db.seed" {
+		t.Errorf("Idx=%d (%q), want db.seed", m.result.Idx, m.items[m.result.Idx].ID)
+	}
+}
+
+func TestInspect_EmptyContentShowsPlaceholder(t *testing.T) {
+	items := filterTestItems() // no Inspect set
+	m := newModel("pick", items, DefaultOptions(), 120, 26)
+	m.tree.focusedID = "db"
+	m.refreshList()
+	m.focus = focusRight
+	m.list.Select(0)
+	m.Update(syntheticKey("i"))
+	if m.inspect == nil {
+		t.Fatal("inspect did not open with empty content")
+	}
+	out := m.View().Content
+	if !strings.Contains(out, "no inspect content") {
+		t.Errorf("missing placeholder; got:\n%s", out)
+	}
+}
+
+func TestHelp_ToggleLongForm(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	if m.showFullHelp {
+		t.Fatal("initial showFullHelp should be false")
+	}
+	m.Update(syntheticKey("?"))
+	if !m.showFullHelp {
+		t.Errorf("? should toggle to full help")
+	}
+	m.Update(syntheticKey("?"))
+	if m.showFullHelp {
+		t.Errorf("? should toggle back to short help")
+	}
+}
+
+func TestHelp_BindingsDifferByFocus(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	leftKeys := m.shortBindings()
+	m.focus = focusRight
+	rightKeys := m.shortBindings()
+	// Right adds inspect / skip-confirm bindings that aren't in the left
+	// short-help set; an exact count match would mean the dynamic switch is
+	// a no-op.
+	if len(rightKeys) <= len(leftKeys) {
+		t.Errorf("right focus should expose more bindings than left; got left=%d right=%d", len(leftKeys), len(rightKeys))
+	}
+	m.focus = focusInspect
+	inspectKeys := m.shortBindings()
+	if len(inspectKeys) >= len(rightKeys) {
+		t.Errorf("inspect focus should narrow bindings vs right; got inspect=%d right=%d", len(inspectKeys), len(rightKeys))
+	}
+}
+
+// EscOnLeft exits the program at top-level.
+func TestEsc_OnTopLevelTreeExitsProgram(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	m.Update(syntheticKey("esc"))
+	if !m.cancelled {
+		t.Errorf("esc at top level should set cancelled")
+	}
+}
+
+// EscInFilterExitsFilterOnly verifies the §19 semantics: esc inside filter
+// returns focus to the right panel without cancelling the program.
+func TestEsc_InFilterExitsFilterOnly(t *testing.T) {
+	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
+	m.Update(syntheticKey("/"))
+	m.Update(syntheticKey("esc"))
+	if m.cancelled {
+		t.Errorf("esc inside filter must not cancel the program")
+	}
+	if m.focus == focusFilter {
+		t.Errorf("esc inside filter must exit filter mode")
+	}
+}
