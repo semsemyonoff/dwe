@@ -26,9 +26,13 @@ func (m *Model) exitFilter() {
 	if m.filter == nil {
 		return
 	}
-	// If a matched item is currently highlighted, try to keep tree focus on
-	// the nearest ancestor of that item in the restored tree.
+	// Track the target origIdx so we can re-position the list cursor after
+	// refreshList rebuilds the items (SetItems preserves index, not identity).
+	targetOrigIdx := -1
 	if it, ok := m.list.SelectedItem().(listItem); ok && !it.header {
+		targetOrigIdx = it.origIdx
+		// If a matched item is currently highlighted, try to keep tree focus on
+		// the nearest ancestor of that item in the restored tree.
 		g := groupOf(m.items[it.origIdx].ID)
 		if g == "" {
 			// Root-level command: focus the root node.
@@ -48,6 +52,17 @@ func (m *Model) exitFilter() {
 	m.filter = nil
 	m.focus = focusRight
 	m.refreshList()
+	// Re-position the list cursor on the item the user had highlighted in
+	// filter mode. SetItems preserves the previous cursor index, not the item
+	// identity, so without this the cursor lands on the wrong entry.
+	if targetOrigIdx >= 0 {
+		for i, li := range m.list.Items() {
+			if it, ok := li.(listItem); ok && it.origIdx == targetOrigIdx {
+				m.list.Select(i)
+				break
+			}
+		}
+	}
 }
 
 // refreshFilterMatches re-ranks against the current query and rebuilds the
@@ -153,6 +168,9 @@ func (m *Model) openInspect() {
 		content = "(no inspect content available)"
 	}
 	rw := rightWidth(m.width)
+	if singlePanel(m.width) {
+		rw = singlePanelWidth(m.width)
+	}
 	bh := max(m.height-3, 5)
 	m.inspect = newInspectState(rw, bh-2, content, idx)
 	m.priorFocus = m.focus

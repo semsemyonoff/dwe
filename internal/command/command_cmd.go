@@ -429,7 +429,7 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 		}
 		reg, err := loadCommandRegistry(configPath)
 		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		var defs []*usercommands.CommandDef
 		if includePrivate {

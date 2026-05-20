@@ -19,8 +19,10 @@ type UIConfig struct {
 // DeployConfig.Log already in this package.
 type UICommandsConfig struct {
 	// DefaultExpandedDepth controls how many tree levels are expanded by
-	// default in the command browser. 0 means all collapsed. Negative
-	// values are clamped to 0 by the accessor. Defaults to 3 when unset.
+	// default in the command browser. Negative values are clamped to 0.
+	// Because plain int cannot distinguish 0 from absent after YAML unmarshal,
+	// 0 is treated as "unset" and the default of 3 applies — see the accessor.
+	// Defaults to 3 when unset.
 	DefaultExpandedDepth int `yaml:"default_expanded_depth"`
 	// AutoCollapseEmpty controls whether zero-match subtrees collapse
 	// automatically during a fuzzy filter session. Defaults to true.
