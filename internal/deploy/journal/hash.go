@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"sort"
 
 	"devbox-cli/internal/condition"
@@ -183,8 +182,7 @@ func canonicalMap(m map[string]any) []byte {
 	// Use encoding/json.Marshal with a custom encoder to guarantee sorted keys
 	data, err := json.Marshal(sortedMap(m))
 	if err != nil {
-		// Should not happen for simple maps; panic on unexpected encoding errors
-		panic(fmt.Sprintf("failed to marshal map: %v", err))
+		return []byte("{}")
 	}
 	return data
 }

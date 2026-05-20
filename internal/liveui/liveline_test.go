@@ -181,7 +181,7 @@ func stripANSIBytes(b []byte) string {
 }
 
 // newTestLiveLine builds a LiveLine with the no-ticker test hook so the test
-// drives redraws via l.tick().
+// drives redraws via l.Tick().
 func newTestLiveLine(termOut, screen io.Writer, enabled bool) *LiveLine {
 	l := NewLiveLine(termOut, screen, enabled)
 	l.testHooks = &liveLineTestHooks{noTicker: true, widthFn: func() int { return 80 }}
@@ -209,7 +209,7 @@ func TestLiveLine_ChannelSeparation(t *testing.T) {
 	l.Start()
 	l.Println("hello")
 	l.Println("world")
-	l.tick()
+	l.Tick()
 	l.Stop()
 
 	// termOut must contain only ANSI + spinner glyphs — no data lines.
@@ -244,7 +244,7 @@ func TestLiveLine_CursorInvariantSingle(t *testing.T) {
 	require.Equal(t, "", g.line(2))
 
 	l.SetText("running step-B")
-	l.tick()
+	l.Tick()
 	// After tick: footer updates in place at row 1; cursor at row 2.
 	row, _ = g.cursor()
 	require.Equal(t, 2, row)
@@ -336,7 +336,7 @@ func TestLiveLine_Concurrency(t *testing.T) {
 	}
 	for range 10 {
 		wg.Go(func() {
-			l.tick()
+			l.Tick()
 		})
 	}
 	wg.Wait()
@@ -504,8 +504,8 @@ func TestLiveLine_BlockTickRedraws(t *testing.T) {
 	l.SetBlockRowRunning(0, "row-a")
 	l.SetBlockRowRunning(1, "row-b")
 
-	l.tick()
-	// tick advances spinner; block content + footer must remain intact.
+	l.Tick()
+	// Tick advances spinner; block content + footer must remain intact.
 	require.Contains(t, g.line(0), "row-a")
 	require.Contains(t, g.line(1), "row-b")
 	require.Contains(t, g.line(2), "group")

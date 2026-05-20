@@ -174,14 +174,9 @@ func (l *LiveLine) tickLoop() {
 	}
 }
 
-// tick drives one redraw frame deterministically. Test-only.
-func (l *LiveLine) tick() {
-	l.advance()
-}
-
 // Tick drives one redraw frame deterministically. Test-only helper exported
 // so tests in other packages (e.g. internal/pipeline) can drive the LiveLine
-// without leaking the unexported tick() through reflection.
+// without leaking internals through reflection.
 func (l *LiveLine) Tick() { l.advance() }
 
 // SetTestHooks installs the test hooks for deterministic testing. Test-only.

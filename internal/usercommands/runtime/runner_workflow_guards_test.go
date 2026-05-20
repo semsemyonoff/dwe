@@ -177,6 +177,22 @@ func TestWorkflowRunner_ConfirmStep_UnderParallel_NonInteractiveBypass(t *testin
 	}
 }
 
+func TestWorkflowRunner_ConfirmStep_UnderParallel_SkipConfirmBypass(t *testing.T) {
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.confirm",
+		Group:     "wf",
+		LocalName: "confirm",
+		Steps: []WorkflowStep{
+			{Confirm: "Are you sure?"},
+		},
+	}
+	reg := buildWorkflowRegistry(wf)
+	if _, err := runWorkflowUnderParallel(t, reg, wf, true, false); err != nil {
+		t.Fatalf("SkipConfirm should bypass guard; got %v", err)
+	}
+}
+
 // -----------------------------------------------------------------------------
 // Transitive confirmation guard — ConfirmCommand
 // -----------------------------------------------------------------------------

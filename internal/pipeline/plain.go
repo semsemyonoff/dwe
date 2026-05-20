@@ -395,8 +395,6 @@ func (r *PlainReporter) timestampPrefix() string {
 	return fmt.Sprintf("%s[%s]%s ", render.Gray, r.now().Format(timestampLayout), render.Reset)
 }
 
-// formatElapsed is an alias for liveui.FormatElapsed kept for backwards-
-// compatible references within the pipeline package.
 func formatElapsed(d time.Duration) string { return liveui.FormatElapsed(d) }
 
 // SetSubStepLogPath records the per-sub-step log file path for subAddr. Called
@@ -614,9 +612,7 @@ func (r *PlainReporter) StepOutput(addr string, frame string, final bool) {
 		// delivering a trailing non-newline-terminated frame. Route through
 		// LiveLine so the cursor invariant is maintained.
 		r.live.Println(frame)
-		if final {
-			r.writeLog(frame)
-		}
+		r.writeLog(frame)
 		return
 	}
 	if !final {

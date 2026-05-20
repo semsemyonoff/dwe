@@ -125,7 +125,7 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 
 // runConfirmStep handles a confirm step.
 func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
-	if ctx.NonInteractive || isNonInteractive() {
+	if ctx.SkipConfirm || ctx.NonInteractive || isNonInteractive() {
 		return nil
 	}
 
@@ -227,10 +227,9 @@ func isNonInteractive() bool {
 }
 
 // evalWorkflowStepWhen evaluates a workflow sub-step's `when:` expression.
-// Shared by the main sequential loop and parallel preflight so the predicate
-// runs through one path. Side-effectful predicates (`cmd:` shells) MUST be
-// evaluated exactly once per group execution — parallel preflight caches the
-// result for the goroutine to consume.
+// Used by parallel preflight, which evaluates all `when:` conditions once
+// before the goroutines start so that side-effectful shell predicates run
+// exactly once per group execution regardless of concurrency.
 func evalWorkflowStepWhen(expr string, rc RunContext) (bool, error) {
 	return tpl.EvalCommandCondition(expr, rc.Render, rc.ProjectRoot)
 }
