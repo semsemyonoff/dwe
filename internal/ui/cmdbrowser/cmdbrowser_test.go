@@ -7,16 +7,20 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2/compat"
+	"github.com/charmbracelet/colorprofile"
 	"go.uber.org/goleak"
 
 	"devbox-cli/internal/ui"
 )
 
 func TestMain(m *testing.M) {
+	// Pin the lipgloss/v2 colour profile to NoTTY so View() output is
+	// byte-identical across local + CI regardless of TERM / COLORTERM env.
+	// Without this, snapshot assertions and ANSI-escape checks would be
+	// non-deterministic.
+	compat.Profile = colorprofile.NoTTY
 	// goleak verifies bubbletea spawns no orphaned goroutines after Run().
-	// Lipgloss colour profile defaults to no-TTY under `go test` (stdout is
-	// not a real terminal), which already gives deterministic snapshot
-	// output for the smoke checks below.
 	goleak.VerifyTestMain(m)
 	os.Exit(0)
 }

@@ -185,12 +185,12 @@ Full design lives in the source spec attached to this plan; this document is the
 
 ### Task 6: Narrow-terminal single-panel fallback + colour profile audit
 
-- [ ] when width is in 60..79: render single-panel mode with `── group ──` pseudo-headers between groups (per §4.1); no tree, no badges
-- [ ] keep the same keymap subset (`↑/↓`, `Enter`, `/`, `i`, `y`, `?`, `Esc`); filter still works
-- [ ] verify `NO_COLOR=1` rendering — bubbletea/lipgloss respect this; snapshot one state with monochrome profile
-- [ ] verify long command IDs (e.g. `services.main.index.reindex-catalog-product-availability-search`) truncate cleanly with `…` and never overflow the panel
-- [ ] snapshot tests: 70-col single-panel initial, 70-col filter active, NO_COLOR variant
-- [ ] run `make test` and `make lint` — must pass before Task 7
+- [x] when width is in 60..79: render single-panel mode with `── group ──` pseudo-headers between groups (per §4.1); no tree, no badges
+- [x] keep the same keymap subset (`↑/↓`, `Enter`, `/`, `i`, `y`, `?`, `Esc`); filter still works
+- [x] verify `NO_COLOR=1` rendering — bubbletea/lipgloss respect this; snapshot one state with monochrome profile
+- [x] verify long command IDs (e.g. `services.main.index.reindex-catalog-product-availability-search`) truncate cleanly with `…` and never overflow the panel
+- [x] snapshot tests: 70-col single-panel initial, 70-col filter active, NO_COLOR variant
+- [x] run `make test` and `make lint` — must pass before Task 7
 
 ### Task 7: Verify acceptance criteria
 

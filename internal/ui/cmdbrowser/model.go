@@ -1,6 +1,7 @@
 package cmdbrowser
 
 import (
+	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/help"
@@ -53,6 +54,10 @@ type Model struct {
 	showFullHelp bool
 	help         help.Model
 	priorFocus   focus
+
+	// lastSinglePanel tracks the most recent layout bucket so applyLayout can
+	// repopulate the list when the user resizes across the 80-column boundary.
+	lastSinglePanel bool
 }
 
 // Compile-time guarantee that Model satisfies tea.Model. bubbletea/v2 is
@@ -61,8 +66,12 @@ var _ tea.Model = (*Model)(nil)
 
 func newModel(title string, items []Item, opts Options, w, h int) *Model {
 	tm := newTreeModel(items, opts.IncludePrivate, opts.DefaultExpandedDepth)
-	dlg := newCmdDelegate(rightWidth(w), showBadges(w) && opts.ShowTypeBadges)
-	l := list.New(nil, dlg, rightWidth(w), max(h-3, 3))
+	listW := rightWidth(w)
+	if singlePanel(w) {
+		listW = singlePanelListWidth(w)
+	}
+	dlg := newCmdDelegate(listW, !singlePanel(w) && showBadges(w) && opts.ShowTypeBadges)
+	l := list.New(nil, dlg, listW, max(h-3, 3))
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
 	l.SetShowHelp(false)
@@ -81,8 +90,65 @@ func newModel(title string, items []Item, opts Options, w, h int) *Model {
 		delegate: dlg,
 		help:     help.New(),
 	}
-	m.refreshList()
+	m.lastSinglePanel = singlePanel(w)
+	if m.lastSinglePanel {
+		m.focus = focusRight
+	}
+	m.populateList()
 	return m
+}
+
+// populateList rebuilds the list contents for the current focus / filter /
+// layout state. Single-panel mode bypasses the tree and emits all items with
+// pseudo-header rows between groups; two-panel mode delegates to refreshList.
+func (m *Model) populateList() {
+	switch {
+	case m.filter != nil:
+		m.refreshFilterMatches()
+	case singlePanel(m.width):
+		m.refreshSingleList()
+	default:
+		m.refreshList()
+	}
+}
+
+// refreshSingleList builds the flat single-panel list with "── group ──"
+// pseudo-header rows interleaved between groups. Honours IncludePrivate so
+// private commands stay hidden in the run path.
+func (m *Model) refreshSingleList() {
+	type indexed struct {
+		idx   int
+		group string
+		id    string
+	}
+	rows := make([]indexed, 0, len(m.items))
+	for i, it := range m.items {
+		if !m.opts.IncludePrivate && it.Private {
+			continue
+		}
+		rows = append(rows, indexed{idx: i, group: groupOf(it.ID), id: it.ID})
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].group != rows[j].group {
+			return rows[i].group < rows[j].group
+		}
+		return rows[i].id < rows[j].id
+	})
+	out := make([]list.Item, 0, len(rows)+8)
+	seen := "\x00" // sentinel guaranteed distinct from any group label
+	for _, r := range rows {
+		if r.group != seen {
+			label := r.group
+			if label == "" {
+				label = "(root)"
+			}
+			out = append(out, listItem{header: true, id: label})
+			seen = r.group
+		}
+		it := m.items[r.idx]
+		out = append(out, listItem{origIdx: r.idx, id: it.ID, desc: it.Description, typ: it.Type})
+	}
+	m.list.SetItems(out)
 }
 
 // Init implements tea.Model.
@@ -138,12 +204,19 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	if key.Matches(msg, m.keys.Tab) {
+		if singlePanel(m.width) {
+			return m, nil
+		}
 		if m.focus == focusLeft {
 			m.focus = focusRight
 		} else {
 			m.focus = focusLeft
 		}
 		return m, nil
+	}
+	// Single-panel mode has no tree: all navigation flows through the list.
+	if singlePanel(m.width) {
+		return m.updateRight(msg)
 	}
 	if m.focus == focusLeft {
 		return m.updateLeft(msg)
@@ -191,14 +264,18 @@ func (m *Model) updateLeft(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // updateRight handles right-panel input: Enter selects, Left returns focus to
-// the tree, all other keys are forwarded to the embedded list model.
+// the tree (two-panel only), all other keys are forwarded to the embedded
+// list model. Single-panel mode reuses this path with header-row skipping.
 func (m *Model) updateRight(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Left) {
+	if key.Matches(msg, m.keys.Left) && !singlePanel(m.width) {
 		m.focus = focusLeft
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Enter) {
 		if it, ok := m.list.SelectedItem().(listItem); ok {
+			if it.header {
+				return m, nil
+			}
 			m.result = Result{Idx: it.origIdx, Action: actionForMode(m.opts.Mode), SkipConfirm: m.skipConfirm}
 			return m, tea.Quit
 		}
@@ -235,18 +312,31 @@ func (m *Model) refreshList() {
 func (m *Model) visibleListItems() []list.Item { return m.list.Items() }
 
 // applyLayout pushes the current width/height to the list delegate and the
-// list model so resize is reflected in the next render.
+// list model so resize is reflected in the next render. When a resize crosses
+// the single-panel boundary, the list contents are rebuilt so the
+// pseudo-header rows appear (or disappear) accordingly.
 func (m *Model) applyLayout() {
-	rw := rightWidth(m.width)
+	nowSingle := singlePanel(m.width)
+	listW := rightWidth(m.width)
+	if nowSingle {
+		listW = singlePanelListWidth(m.width)
+	}
 	bh := max(m.height-3, 3)
-	m.delegate.width = rw
-	m.delegate.showBadges = showBadges(m.width) && m.opts.ShowTypeBadges
-	m.list.SetSize(rw, bh)
+	m.delegate.width = listW
+	m.delegate.showBadges = !nowSingle && showBadges(m.width) && m.opts.ShowTypeBadges
+	m.list.SetSize(listW, bh)
+	if nowSingle != m.lastSinglePanel {
+		m.lastSinglePanel = nowSingle
+		m.populateList()
+	}
 }
 
 // View implements tea.Model. AltScreen is set on the View so bubbletea hides
 // the caller's previous output for the duration of the program.
 func (m *Model) View() tea.View {
+	if singlePanel(m.width) {
+		return m.viewSinglePanel()
+	}
 	lw := leftWidth(m.width)
 	rw := rightWidth(m.width)
 	bodyHeight := max(m.height-3, 3)
@@ -282,6 +372,46 @@ func (m *Model) View() tea.View {
 
 	content := strings.Join([]string{titleBar, body, footer}, "\n")
 
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
+}
+
+// viewSinglePanel is the §4.1 60–79 col layout: title bar, full-width list
+// with "── group ──" pseudo-headers, footer. No tree, no badges. Inspect
+// overlay reuses the right-panel viewport contents inline.
+func (m *Model) viewSinglePanel() tea.View {
+	bodyHeight := max(m.height-3, 3)
+	border := lipgloss.NormalBorder()
+	style := lipgloss.NewStyle().Border(border).Width(singlePanelPanelWidth(m.width)).Height(bodyHeight)
+	if m.focus == focusFilter || m.focus == focusInspect || m.focus == focusRight {
+		style = style.BorderForeground(lipgloss.Color("12"))
+	}
+
+	var body string
+	switch {
+	case m.focus == focusInspect && m.inspect != nil:
+		body = "inspect: " + m.items[m.inspect.inspectIdx].ID + "\n" + m.inspect.vp.View()
+	case m.filter != nil:
+		count := len(m.filter.matched)
+		noun := "matches"
+		if count == 1 {
+			noun = "match"
+		}
+		header := lipgloss.NewStyle().Bold(true).Render(m.filter.renderQueryLine())
+		tail := lipgloss.NewStyle().Faint(true).Render(" · " + intStr(count) + " " + noun)
+		body = header + tail + "\n" + m.list.View()
+	default:
+		body = m.list.View()
+	}
+
+	panel := style.Render(body)
+	titleBar := lipgloss.NewStyle().Bold(true).Render(m.title)
+	if m.skipConfirm && m.opts.Mode == ModeRun {
+		titleBar += "  " + lipgloss.NewStyle().Bold(true).Render("[--yes ON]")
+	}
+	footer := m.renderHelpFooter()
+	content := strings.Join([]string{titleBar, panel, footer}, "\n")
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
@@ -330,7 +460,12 @@ func (m *Model) shortBindings() []key.Binding {
 	case focusInspect:
 		return []key.Binding{m.keys.Up, m.keys.Down, m.keys.Enter, m.keys.Cancel}
 	case focusRight:
-		base := []key.Binding{m.keys.Tab, m.keys.Enter, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
+		var base []key.Binding
+		if singlePanel(m.width) {
+			base = []key.Binding{m.keys.Up, m.keys.Down, m.keys.Enter, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
+		} else {
+			base = []key.Binding{m.keys.Tab, m.keys.Enter, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
+		}
 		if m.opts.Mode == ModeRun {
 			base = append(base, m.keys.SkipConfirm)
 		}
@@ -409,3 +544,19 @@ func showBadges(w int) bool { return w >= fullTwoPanelWidth }
 // showCounts mirrors showBadges — the (N) per-group counts hide at 80–99 cols
 // alongside the type badges (per §4.1).
 func showCounts(w int) bool { return w >= fullTwoPanelWidth }
+
+// singlePanel reports whether the layout should collapse to a single panel.
+// Width 60–79 falls into this bucket per §4.1; widths < 60 are handled by the
+// huh fallback before the Model is ever constructed.
+func singlePanel(w int) bool { return w < reducedTwoPanelWidth }
+
+// singlePanelListWidth returns the width passed to the embedded list.Model in
+// single-panel mode. The bordered panel reserves 2 cells (one column per
+// vertical border); the list content must fit inside that to avoid wrapping
+// rows onto two visual lines.
+func singlePanelListWidth(w int) int { return max(w-2, 10) }
+
+// singlePanelPanelWidth mirrors singlePanelListWidth — both equal m.width-2.
+// Defined as a helper so the lipgloss style and the list size derive from the
+// same expression.
+func singlePanelPanelWidth(w int) int { return max(w-2, 10) }

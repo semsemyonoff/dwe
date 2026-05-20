@@ -12,16 +12,24 @@ import (
 
 // listItem adapts an Item for bubbles/v2/list. The original-items index is
 // preserved so Result.Idx survives filtering and reordering inside the list.
+// In single-panel mode (width 60–79) the list is populated with pseudo-header
+// rows interleaved between groups; those rows set header=true and are not
+// selectable.
 type listItem struct {
 	origIdx int
 	id      string
 	desc    string
 	typ     string
+	header  bool
 }
 
 // FilterValue is the haystack used by list.DefaultFilter. Concatenating id and
-// description so the fuzzy match covers both — matches the §5 spec.
+// description so the fuzzy match covers both — matches the §5 spec. Header
+// rows return an empty value so they never appear in filtered results.
 func (li listItem) FilterValue() string {
+	if li.header {
+		return ""
+	}
 	if li.desc == "" {
 		return li.id
 	}
@@ -63,6 +71,10 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	if width <= 0 {
 		width = m.Width()
 	}
+	if li.header {
+		d.renderHeader(w, width, li.id)
+		return
+	}
 	// Reserve two cols of padding on each side so the badge doesn't kiss the border.
 	avail := max(width-4, 10)
 
@@ -101,6 +113,23 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 		return
 	}
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, strings.Repeat(" ", len(cursor)))
+}
+
+// renderHeader emits the "── group ──" pseudo-header used in single-panel
+// mode (width 60–79). The header consumes both lines of the delegate height
+// so spacing stays consistent with item rows.
+func (d *cmdDelegate) renderHeader(w io.Writer, width int, label string) {
+	if label == "" {
+		label = "(root)"
+	}
+	avail := max(width-2, 4)
+	inner := " " + label + " "
+	pad := max(avail-lipgloss.Width(inner)-4, 0)
+	leftPad := 2 + pad/2
+	rightPad := 2 + (pad - pad/2)
+	bar := strings.Repeat("─", leftPad) + inner + strings.Repeat("─", rightPad)
+	bar = lipgloss.NewStyle().Faint(true).Render(bar)
+	_, _ = fmt.Fprintf(w, "%s\n%s", bar, "")
 }
 
 // truncate clips s to fit within width cells (rune width approximated by
