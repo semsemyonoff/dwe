@@ -127,9 +127,9 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/ui/...` — passes; full `make test` green
 
 ### Task 5: Documentation — `styles.md` "Command browser" section
-- [ ] in `docs/reference/config/styles.md` add a `### Command browser` subsection: list of new palette keys, their defaults, what they affect (with a mapping to bubbles structures)
-- [ ] mention the test fallback: if a key is missing from `styles.yml`, the default from `internal/ui/styles.go` is used
-- [ ] no code tests required (docs), but verify `docs/reference/` remains internally consistent
+- [x] in `docs/reference/config/styles.md` add a `### Command browser` subsection: list of new palette keys, their defaults, what they affect (with a mapping to bubbles structures)
+- [x] mention the test fallback: if a key is missing from `styles.yml`, the default from `internal/ui/styles.go` is used
+- [x] no code tests required (docs), but verify `docs/reference/` remains internally consistent
 
 ### Task 6: CLI restructure — `commands`
 - [ ] in `internal/command/command_cmd.go` rewrite `newCommandCmd(flags)`:

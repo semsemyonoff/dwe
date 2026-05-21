@@ -9,6 +9,8 @@ UI styles configuration: ASCII header, color palette, and separator.
 - [Field reference](#field-reference)
   - [`header`](#header)
   - [`colors`](#colors)
+  - [`colors.help`](#colorshelp)
+  - [Command browser](#command-browser)
   - [`separator`](#separator)
 - [Omitting the file](#omitting-the-file)
 - [Customizing colors](#customizing-colors)
@@ -102,6 +104,37 @@ Fang/cobra help rendering colors. These override the default Fang color scheme.
 | `help.argument` | Argument placeholders (e.g. `[command]`) |
 
 Color values are ANSI 256-color codes (0–255) as quoted strings. Use an ANSI 256-color chart to pick values.
+
+### Command browser
+
+The interactive command browser (`devbox commands`, `devbox commands --inspect`) renders through `bubbles/v2` (`list`, `viewport`, `help`) using `charm.land/lipgloss/v2`. These palette keys feed those widgets through the shared `ui.Color*()` accessors so they stay consistent with the rest of the CLI palette.
+
+| Key | Default | Bubbles target | Affects |
+|-----|---------|----------------|---------|
+| `focus_border` | `12` | panel border, `list.Styles.Title`, viewport selection | Focused panel border, focused list title, inspect viewport highlight, focused tree row |
+| `description` | `8` | `list.DefaultItemStyles.NormalDesc` / `DimmedDesc`, `help.Styles.ShortDesc` / `FullDesc`, tree dimmed lines | Secondary text in the right-pane list and footer help; empty-tree placeholder |
+| `tree_count` | `8` | left-pane tree counters | The `(N)` group count rendered next to each tree node |
+| `tree_arrow` | `6` | left-pane tree disclosure arrow | The `▸`/`▾` expand/collapse glyph |
+| `filter_match` | `12` | `list.Styles.FilterPrompt` / `DefaultItemStyles.FilterMatch` | Filter prompt and match highlight inside the right pane |
+| `pagination_active` | `12` | `list.Styles.ActivePaginationDot` | Active page dot in the right-pane paginator |
+| `pagination_inactive` | `8` | `list.Styles.InactivePaginationDot` | Inactive page dots in the right-pane paginator |
+
+The browser title color and the `[--yes ON]` indicator reuse the existing `colors.label` and `colors.enabled` palette entries — there are no separate keys for them.
+
+Example:
+
+```yaml
+colors:
+  focus_border: "12"
+  description: "8"
+  tree_count: "8"
+  tree_arrow: "6"
+  filter_match: "12"
+  pagination_active: "12"
+  pagination_inactive: "8"
+```
+
+If a key is missing from `styles.yml`, the default from `internal/ui/styles.go` is used — `ApplyStyles` only overwrites palette variables when the YAML field is non-empty, so partial customization is supported.
 
 ### `separator`
 
