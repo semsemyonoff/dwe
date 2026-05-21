@@ -258,13 +258,13 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/ui/...` — must pass
 
 ### Task 9: Confirmation summary and `ConfirmRun`
-- [ ] in `internal/ui/confirm.go` add `ConfirmRun(title string, values map[string]string) (bool, error)` — receives the **already-rendered** confirmation title (caller is responsible for `${param.*}` template expansion) and the values map for the summary. Renders summary lines `key = value` above `title`, then a standard `huh.NewConfirm`.
+- [x] in `internal/ui/confirm.go` add `ConfirmRun(title string, values map[string]string) (bool, error)` — receives the **already-rendered** confirmation title (caller is responsible for `${param.*}` template expansion) and the values map for the summary. Renders summary lines `key = value` above `title`, then a standard `huh.NewConfirm`.
   - rationale: `internal/ui/` must not import `tpl`/`config`/`usercommands` — that would invert the layering. Orchestrator owns rendering (Task 10).
-- [ ] if `len(values) == 0` → fall back to existing `RunConfirm(title, "Yes", "No")` without a summary
-- [ ] helper `renderParamSummary(values)` — plain text with `=` alignment (sorted keys for determinism)
-- [ ] **cancel contract:** Esc / Ctrl+C → return `(false, ui.ErrCancelled)`. Mirrors the existing `RunSelector` / `RunConfirm` semantics. Orchestrator (Task 10) is responsible for translating this to `exit 0` via `errors.Is(err, ui.ErrCancelled)`. Do NOT normalize to `(false, nil)` here — that would prevent the caller from distinguishing "user pressed No" from "user cancelled the prompt entirely", which matters for future telemetry/logging.
-- [ ] unit tests in `internal/ui/confirm_test.go` (extend): summary content with sorted keys, behavior with empty values, cancel → `(false, ui.ErrCancelled)` (assert via `errors.Is`), user picked No → `(false, nil)`, user picked Yes → `(true, nil)`, title is passed through verbatim (no template expansion at this layer — caller's responsibility)
-- [ ] `make test ./internal/ui/...` — must pass
+- [x] if `len(values) == 0` → fall back to existing `RunConfirm(title, "Yes", "No")` without a summary
+- [x] helper `renderParamSummary(values)` — plain text with `=` alignment (sorted keys for determinism)
+- [x] **cancel contract:** Esc / Ctrl+C → return `(false, ui.ErrCancelled)`. Mirrors the existing `RunSelector` / `RunConfirm` semantics. Orchestrator (Task 10) is responsible for translating this to `exit 0` via `errors.Is(err, ui.ErrCancelled)`. Do NOT normalize to `(false, nil)` here — that would prevent the caller from distinguishing "user pressed No" from "user cancelled the prompt entirely", which matters for future telemetry/logging.
+- [x] unit tests in `internal/ui/confirm_test.go` (extend): summary content with sorted keys, behavior with empty values, cancel → `(false, ui.ErrCancelled)` (assert via `errors.Is`), user picked No → `(false, nil)`, user picked Yes → `(true, nil)`, title is passed through verbatim (no template expansion at this layer — caller's responsibility)
+- [x] `make test ./internal/ui/...` — must pass
 
 ### Task 10: Orchestrator — `runCommandByID` in `command_cmd.go`
 - [ ] extract `runCommandByID` in `internal/command/command_cmd.go` with this exact signature (all I/O channels and project root passed in — test-friendly):
