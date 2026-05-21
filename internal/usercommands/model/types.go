@@ -3,9 +3,11 @@ package model
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -35,7 +37,46 @@ const (
 	// CommandTypeBuiltin invokes an engine-internal builtin action by name.
 	// The cmd: field holds the builtin name; with: holds its parameters.
 	CommandTypeBuiltin CommandType = "builtin"
+	// CommandTypeDaemon is a declarative sugar type expanded at registry-load time
+	// into four virtual commands: <base>.start, <base>.logs, <base>.stop, <base>.restart.
+	// Daemon-typed commands are never executed directly — see internal/daemon/.
+	CommandTypeDaemon CommandType = "daemon"
 )
+
+// DaemonControlStart, etc. are the four control names that may appear in
+// DaemonSpec.Controls. They map to the four synthesized virtual commands.
+const (
+	DaemonControlStart   = "start"
+	DaemonControlLogs    = "logs"
+	DaemonControlStop    = "stop"
+	DaemonControlRestart = "restart"
+)
+
+// DefaultDaemonControls is the full set used when DaemonSpec.Controls is empty.
+var DefaultDaemonControls = []string{DaemonControlStart, DaemonControlLogs, DaemonControlStop, DaemonControlRestart}
+
+// DaemonSpec is the YAML schema block under a type=daemon command's daemon: key.
+// It describes how the source command expands into virtual .start/.logs/.stop/.restart
+// commands at registry-load time.
+type DaemonSpec struct {
+	// ContainerTemplate is a template literal rendered at runtime to produce the
+	// container name (after the project prefix). May reference ${param.X}.
+	ContainerTemplate string `yaml:"container_template"`
+	// OnAlreadyRunning controls .start behaviour when a container with the resolved
+	// name is already running. Values: "error" (default), "noop".
+	OnAlreadyRunning string `yaml:"on_already_running"`
+	// AutoRemove, when not explicitly false, adds --rm to docker compose run.
+	// Default true.
+	AutoRemove *bool `yaml:"auto_remove"`
+	// StopTimeout is the raw YAML duration string (e.g. "10s", "500ms") passed
+	// to docker stop -t at runtime. Empty → runtime uses 10s default. Stored
+	// as raw string so validate/commands can surface parseable diagnostics
+	// instead of YAML decode errors.
+	StopTimeout string `yaml:"stop_timeout"`
+	// Controls is the subset of {start,logs,stop,restart} to generate.
+	// Empty → all four.
+	Controls []string `yaml:"controls"`
+}
 
 // ParamType describes the expected value type of a command parameter.
 type ParamType string
@@ -417,6 +458,21 @@ type CommandDef struct {
 	// When set, its non-zero fields take precedence over the top-level fields.
 	Runner *RunnerDef `yaml:"runner"`
 
+	// --- type=daemon fields ---
+	// Daemon is the YAML schema block for type=daemon commands.
+	// Forbidden on any other type by validateDaemonType.
+	Daemon *DaemonSpec `yaml:"daemon"`
+	// SourceDaemon is expansion-time metadata populated by the registry
+	// expander on synthetic .start/.logs/.stop/.restart commands. It carries
+	// the source daemon's *DaemonSpec so inspect can render structural fields
+	// without round-tripping `with:`. Never loaded from YAML; never validated
+	// by validateBuiltinType/validateWorkflowType.
+	SourceDaemon *DaemonSpec `yaml:"-"`
+	// DerivedFromDaemon, when non-empty, is the base ID of the source daemon
+	// command this synthetic was expanded from. Populated by the registry
+	// expander; used by inspect to render the "derived from" line.
+	DerivedFromDaemon string `yaml:"-"`
+
 	// Computed fields — not part of YAML, populated by the loader.
 
 	// ID is the full qualified command ID, e.g. "services.main.migrate".
@@ -432,6 +488,10 @@ type CommandDef struct {
 func (c *CommandDef) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("command %q: type is required", c.ID)
+	}
+
+	if c.Type != CommandTypeDaemon && c.Daemon != nil {
+		return fmt.Errorf("command %q: %w (got type=%s)", c.ID, ErrDaemonLeakedOnNonDaemon, c.Type)
 	}
 
 	switch c.Type {
@@ -453,6 +513,10 @@ func (c *CommandDef) Validate() error {
 		}
 	case CommandTypeBuiltin:
 		if err := c.validateBuiltinType(); err != nil {
+			return fmt.Errorf("command %q: %w", c.ID, err)
+		}
+	case CommandTypeDaemon:
+		if err := c.validateDaemonType(); err != nil {
 			return fmt.Errorf("command %q: %w", c.ID, err)
 		}
 	default:
@@ -638,6 +702,99 @@ func (c *CommandDef) validateBuiltinType() error {
 	}
 	if c.Runner != nil {
 		return fmt.Errorf("runner is not valid for type=builtin")
+	}
+	return nil
+}
+
+// Sentinel errors emitted by validateDaemonType. validate/commands/daemon.go
+// uses errors.Is to detect them when suppressing duplicate fallback diagnostics.
+var (
+	ErrDaemonServiceRequired           = errors.New("daemon: service required")
+	ErrDaemonServiceNotLiteral         = errors.New("daemon: service must be literal (no ${...} or {{...}})")
+	ErrDaemonBlockRequired             = errors.New("daemon: daemon block required")
+	ErrDaemonContainerTemplateRequired = errors.New("daemon: container_template required")
+	ErrDaemonOnAlreadyRunningInvalid   = errors.New("daemon: on_already_running must be \"error\" or \"noop\"")
+	ErrDaemonStopTimeoutInvalid        = errors.New("daemon: stop_timeout invalid")
+	ErrDaemonControlsInvalid           = errors.New("daemon: controls invalid")
+	ErrDaemonLeakedOnNonDaemon         = errors.New("daemon: daemon block is only valid on type=daemon")
+)
+
+// validateDaemonType enforces runtime-critical checks on a type=daemon command.
+// Param-reference walks (every ${param.X} in container_template references a
+// declared param with a pattern: set) stay in validate/commands/daemon.go.
+//
+// Uses errors.Join to surface every field error rather than short-circuiting,
+// so users see all problems in a single cmd.Validate() pass.
+func (c *CommandDef) validateDaemonType() error {
+	var errs []error
+
+	// Type-foreign fields should not appear on daemon.
+	if c.Cmd != "" {
+		errs = append(errs, fmt.Errorf("cmd is not valid for type=daemon (use argv)"))
+	}
+	if c.Script != nil {
+		errs = append(errs, fmt.Errorf("script field is not valid for type=daemon"))
+	}
+	if len(c.Steps) > 0 {
+		errs = append(errs, fmt.Errorf("steps field is not valid for type=daemon"))
+	}
+
+	// service: required, literal.
+	effectiveService := c.Service
+	if c.Runner != nil && c.Runner.Service != "" {
+		effectiveService = c.Runner.Service
+	}
+	if effectiveService == "" {
+		errs = append(errs, ErrDaemonServiceRequired)
+	} else if strings.Contains(effectiveService, "${") || strings.Contains(effectiveService, "{{") {
+		errs = append(errs, ErrDaemonServiceNotLiteral)
+	}
+
+	// daemon block.
+	if c.Daemon == nil {
+		errs = append(errs, ErrDaemonBlockRequired)
+		if len(errs) > 0 {
+			return errors.Join(errs...)
+		}
+		return nil
+	}
+
+	if strings.TrimSpace(c.Daemon.ContainerTemplate) == "" {
+		errs = append(errs, ErrDaemonContainerTemplateRequired)
+	}
+
+	switch c.Daemon.OnAlreadyRunning {
+	case "", "error", "noop":
+	default:
+		errs = append(errs, fmt.Errorf("%w (got %q)", ErrDaemonOnAlreadyRunningInvalid, c.Daemon.OnAlreadyRunning))
+	}
+
+	if s := strings.TrimSpace(c.Daemon.StopTimeout); s != "" {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%w: parse %q: %v", ErrDaemonStopTimeoutInvalid, s, err))
+		} else if d <= 0 {
+			errs = append(errs, fmt.Errorf("%w: must be positive (got %q)", ErrDaemonStopTimeoutInvalid, s))
+		}
+	}
+
+	if len(c.Daemon.Controls) > 0 {
+		seen := make(map[string]bool, len(c.Daemon.Controls))
+		for _, ctrl := range c.Daemon.Controls {
+			switch ctrl {
+			case DaemonControlStart, DaemonControlLogs, DaemonControlStop, DaemonControlRestart:
+				seen[ctrl] = true
+			default:
+				errs = append(errs, fmt.Errorf("%w: unknown control: %q", ErrDaemonControlsInvalid, ctrl))
+			}
+		}
+		if seen[DaemonControlRestart] && !(seen[DaemonControlStart] && seen[DaemonControlStop]) {
+			errs = append(errs, fmt.Errorf("%w: restart requires start and stop", ErrDaemonControlsInvalid))
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	return nil
 }
