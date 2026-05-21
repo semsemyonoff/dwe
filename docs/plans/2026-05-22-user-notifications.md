@@ -100,12 +100,12 @@ Concrete file references gathered before drafting:
 
 **Design note (per Go skills review):** `New(cfg)` returns a **concrete `*Notifier`** struct, not the public `Notifier` interface. The interface that varies between implementations (`noopBackend` vs `nativeBackend`) is **unexported** (`backend`) and lives inside `notify` — that's exactly where it's consumed. This satisfies "accept interfaces, return structs" (golang-structs-interfaces) while keeping testability via the same backend seam.
 
-- [ ] create `internal/notify/types.go`:
+- [x] create `internal/notify/types.go`:
   - `Op` enum (`OpUnknown` at iota 0, `OpDeploy`, `OpRun`, `OpCommand`) — type name is `Op` so constants follow the type-name-prefix convention (golang-naming)
   - `Op.configKey() string` returning `"deploy"` / `"run"` / `"command"` / `""` for the userconfig gate accessor
   - `Outcome` enum (`OutcomeUnknown` at iota 0, `OutcomeSuccess`, `OutcomeFailure`)
   - `Event` struct: `Kind Op`, `Operation string` (human-readable display label used in the title), `Outcome`, `Duration time.Duration`, `Err error`, `Project string`
-- [ ] create `internal/notify/notifier.go`: **concrete `Notifier` struct** (not interface)
+- [x] create `internal/notify/notifier.go`: **concrete `Notifier` struct** (not interface)
   ```go
   type Notifier struct {
       cfg     *userconfig.Config
@@ -118,16 +118,16 @@ Concrete file references gathered before drafting:
       n.backend.notify(ctx, ev) // best-effort; backend swallows errors internally
   }
   ```
-- [ ] create `internal/notify/backend.go`: unexported `backend` interface with single method `notify(ctx context.Context, ev Event)`; two implementations:
+- [x] create `internal/notify/backend.go`: unexported `backend` interface with single method `notify(ctx context.Context, ev Event)`; two implementations:
   - `noopBackend struct{}` — does nothing
   - `nativeBackend struct{}` — Task 3 wires beeep here
-- [ ] add compile-time interface checks (`var _ backend = (*noopBackend)(nil)` and same for nativeBackend) — golang-structs-interfaces convention
-- [ ] create `internal/notify/factory.go`: `New(cfg *userconfig.Config) *Notifier` — returns `&Notifier{enabled: false, backend: &noopBackend{}}` if `cfg == nil`, `!cfg.NotifyEnabled` (master switch), `len(cfg.NotifyChannels) == 0`, or `!isInteractiveForNotify()`. Otherwise returns `&Notifier{cfg: cfg, backend: <picked-by-channels>, enabled: true}`. `isInteractiveForNotify()` is a package-level function var (test seam) that returns `false` if `os.Getenv("CI") != ""`, `os.Getenv("DEVBOX_NONINTERACTIVE") != ""`, or `!ui.IsInteractiveFn(os.Stdout)`. **A nil `*Notifier` is safe to call** — `Notify` short-circuits on `n == nil`. Hookpoints don't need nil-guards.
-- [ ] write tests for `New`: every factory-level disabled-condition produces a Notifier whose backend is `noopBackend` (probe via type assertion through an internal test accessor like `func (n *Notifier) backendForTest() backend`); enabled config produces `nativeBackend`
-- [ ] write tests for the per-op gate inside `Notifier.Notify`: `Kind=OpRun` + `NotifyRunEnabled=false` → backend NOT called; `Kind=OpRun` + `NotifyRunEnabled=true` → backend called; same matrix for `OpDeploy` and `OpCommand`; `Kind=OpUnknown` → backend NOT called (defensive); use a `recordingBackend` test double swapped in via a constructor option or direct field write in `_test.go`
-- [ ] write tests for `Notify` on nil receiver and on `enabled=false` Notifier — no panic, no backend call
-- [ ] write tests for the detection seam: each env-var / TTY combo flips the result
-- [ ] run `make test` — must pass before Task 3
+- [x] add compile-time interface checks (`var _ backend = (*noopBackend)(nil)` and same for nativeBackend) — golang-structs-interfaces convention
+- [x] create `internal/notify/factory.go`: `New(cfg *userconfig.Config) *Notifier` — returns `&Notifier{enabled: false, backend: &noopBackend{}}` if `cfg == nil`, `!cfg.NotifyEnabled` (master switch), `len(cfg.NotifyChannels) == 0`, or `!isInteractiveForNotify()`. Otherwise returns `&Notifier{cfg: cfg, backend: <picked-by-channels>, enabled: true}`. `isInteractiveForNotify()` is a package-level function var (test seam) that returns `false` if `os.Getenv("CI") != ""`, `os.Getenv("DEVBOX_NONINTERACTIVE") != ""`, or `!ui.IsInteractiveFn(os.Stdout)`. **A nil `*Notifier` is safe to call** — `Notify` short-circuits on `n == nil`. Hookpoints don't need nil-guards.
+- [x] write tests for `New`: every factory-level disabled-condition produces a Notifier whose backend is `noopBackend` (probe via type assertion through an internal test accessor like `func (n *Notifier) backendForTest() backend`); enabled config produces `nativeBackend`
+- [x] write tests for the per-op gate inside `Notifier.Notify`: `Kind=OpRun` + `NotifyRunEnabled=false` → backend NOT called; `Kind=OpRun` + `NotifyRunEnabled=true` → backend called; same matrix for `OpDeploy` and `OpCommand`; `Kind=OpUnknown` → backend NOT called (defensive); use a `recordingBackend` test double swapped in via a constructor option or direct field write in `_test.go`
+- [x] write tests for `Notify` on nil receiver and on `enabled=false` Notifier — no panic, no backend call
+- [x] write tests for the detection seam: each env-var / TTY combo flips the result
+- [x] run `make test` — must pass before Task 3
 
 ### Task 3: Wire `gen2brain/beeep` into `nativeBackend` with timeout
 
