@@ -2,6 +2,7 @@ package command
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,12 +14,31 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/render"
+	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/ui/cmdbrowser"
 	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/usercommands/model"
+	"devbox-cli/internal/usercommands/resolve"
 
 	"github.com/spf13/cobra"
 )
+
+// Test seams — overridden in command_cmd_test.go. Subtests that override these
+// MUST NOT call t.Parallel() (global state across goroutines).
+var (
+	runParamForm   = ui.RunParamForm
+	confirmRun     = ui.ConfirmRun
+	runUserCommand = usercommands.RunCommand
+	notifyContext  = signal.NotifyContext
+)
+
+// runOpts carries the per-invocation options for runCommandByID.
+type runOpts struct {
+	Inspect   bool
+	Yes       bool // user-explicit --yes OR'd with TUI y-toggle at the call site
+	SetValues []string
+}
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {
 	var (
@@ -55,30 +75,34 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			return registryIDCompletion(flags, inspect)(cmd, args, toComplete)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if inspectFlag {
-				if len(args) == 0 {
-					return errors.New("id required with --inspect")
-				}
-				reg, err := loadCommandRegistry(flags.configPath)
-				if err != nil {
-					return err
-				}
-				def, err := reg.Get(args[0])
-				if err != nil {
-					return err
-				}
-				printInspect(cmd.OutOrStdout(), def)
-				return nil
-			}
-
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
 			reg, err := loadCommandRegistry(flags.configPath)
 			if err != nil {
 				return err
 			}
+
+			// Inspect route: exact id required; private allowed; cfg load errors tolerated.
+			if inspectFlag {
+				if len(args) == 0 {
+					return errors.New("id required with --inspect")
+				}
+				cfg, _ := config.LoadConfig(flags.configPath)
+				return runCommandByID(
+					cmd.Context(),
+					cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
+					cfg, reg, flags.ProjectRoot(), args[0],
+					runOpts{Inspect: true},
+				)
+			}
+
+			// Run route: existing selector behavior.
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+
+			ctx, stop := notifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
+
 			var skipConfirmFromTUI bool
 			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
@@ -93,48 +117,15 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				}
 				return err
 			}
-			def, err := reg.Get(id)
-			if err != nil {
-				return err
-			}
-			if def.Private {
-				return fmt.Errorf("command %q is private and cannot be run directly", id)
-			}
-			provided, err := parseSetFlags(setFlags)
-			if err != nil {
-				return err
-			}
-			projectRoot := flags.ProjectRoot()
-			with := make(map[string]any, len(provided))
-			for k, v := range provided {
-				with[k] = v
-			}
-			rctx, err := usercommands.BuildRunContext(cfg, reg, def, with, projectRoot)
-			if err != nil {
-				return fmt.Errorf("building run context: %w", err)
-			}
-
-			shouldSkip := skipConfirm
-			if !shouldSkip && skipConfirmFromTUI {
-				shouldSkip = true
-			}
-			if !shouldSkip && (os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true") {
-				shouldSkip = true
-			}
-
-			rctx.Stdout = os.Stdout
-			rctx.Stderr = os.Stderr
-			rctx.Stdin = os.Stdin
-			rctx.SkipConfirm = shouldSkip
-			rctx.NonInteractive = shouldSkip
-
-			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
-			defer stop()
-
-			if err := usercommands.RunCommand(ctx, rctx); err != nil {
-				return fmt.Errorf("running command %q: %w", id, err)
-			}
-			return nil
+			return runCommandByID(
+				ctx,
+				cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
+				cfg, reg, flags.ProjectRoot(), id,
+				runOpts{
+					Yes:       skipConfirm || skipConfirmFromTUI,
+					SetValues: setFlags,
+				},
+			)
 		},
 	}
 	cmd.Flags().StringArrayVar(&setFlags, "set", nil, "Set a param value (key=value)")
@@ -145,6 +136,175 @@ Without an id, an interactive selector lists public commands. With a group prefi
 
 	cmd.AddCommand(newCommandListCmd(flags))
 	return cmd
+}
+
+// runCommandByID is the single execution path for both `devbox commands <id>`
+// and the TUI run flow. It handles inspect routing, param prompting,
+// confirmation summary, and dispatch to the runner.
+func runCommandByID(
+	ctx context.Context,
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+	cfg *config.DevboxConfig,
+	reg *usercommands.Registry,
+	projectRoot string,
+	id string,
+	opts runOpts,
+) error {
+	def, err := reg.Get(id)
+	if err != nil {
+		return err
+	}
+
+	// Inspect route — write the formatted definition and stop.
+	if opts.Inspect {
+		printInspect(stdout, def)
+		return nil
+	}
+
+	// Private guard: only block direct run; inspect already returned above.
+	if def.Private {
+		return fmt.Errorf("command %q is private and cannot be run directly", id)
+	}
+
+	provided, err := parseSetFlags(opts.SetValues)
+	if err != nil {
+		return err
+	}
+
+	nonInteractiveEnv := os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true"
+	skipPrompts := opts.Yes || nonInteractiveEnv
+	canPromptHuh := ui.IsInteractiveFn(stdin) && !skipPrompts
+
+	prefilled := resolve.ParamDefaults(def.Params, provided, cfg)
+
+	// Build the form values: either via huh form (canPromptHuh) or from prefilled.
+	values := prefilled
+	if canPromptHuh && len(def.Params) > 0 {
+		fields := paramFieldsFromDef(def, prefilled)
+		v, ferr := runParamForm("devbox commands › "+def.ID, fields)
+		if ferr != nil {
+			if errors.Is(ferr, ui.ErrCancelled) {
+				return nil
+			}
+			return ferr
+		}
+		values = v
+	} else if !canPromptHuh {
+		// Non-interactive (pipe or skip-prompts): pre-flight missing-required check
+		// so the user sees a clear error instead of the runtime "param required" surfaced
+		// later by resolve.Params.
+		var missing []string
+		for name, p := range def.Params {
+			if p.Required && prefilled[name] == "" {
+				missing = append(missing, name)
+			}
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			return fmt.Errorf("missing required params: %s", strings.Join(missing, ", "))
+		}
+	}
+
+	// Build the run context (final resolve.Params runs here — validates required,
+	// pattern, and type coercion). The form already ran per-field Validate, so any
+	// error here is a safety net.
+	with := make(map[string]any, len(values))
+	for k, v := range values {
+		with[k] = v
+	}
+	rctx, err := usercommands.BuildRunContext(cfg, reg, def, with, projectRoot)
+	if err != nil {
+		return fmt.Errorf("building run context: %w", err)
+	}
+
+	rctx.Stdin = stdin
+	rctx.Stdout = stdout
+	rctx.Stderr = stderr
+
+	if def.Confirmation && canPromptHuh {
+		title := def.EffectiveConfirmationText()
+		if rctx.Render != nil {
+			rendered, rerr := tpl.RenderCommand(title, rctx.Render)
+			if rerr != nil {
+				return fmt.Errorf("render confirmation_text: %w", rerr)
+			}
+			title = rendered
+		}
+		// Summary built from normalized rctx.Params (post-resolve) so the user
+		// sees what the command actually receives, not raw form input.
+		summary := stringifyParams(rctx.Params)
+		ok, cerr := confirmRun(title, summary)
+		if cerr != nil {
+			if errors.Is(cerr, ui.ErrCancelled) {
+				return nil
+			}
+			return cerr
+		}
+		if !ok {
+			return nil
+		}
+		// Prevent runtime ConfirmCommand from re-prompting.
+		rctx.SkipConfirm = true
+	} else {
+		rctx.SkipConfirm = skipPrompts
+		rctx.NonInteractive = skipPrompts
+	}
+
+	if err := runUserCommand(ctx, rctx); err != nil {
+		return fmt.Errorf("running command %q: %w", id, err)
+	}
+	return nil
+}
+
+// paramFieldsFromDef converts a command's params map into ordered ui.ParamField
+// values. Ordering is deterministic (sorted by name) so test assertions and the
+// rendered form do not depend on map iteration order.
+func paramFieldsFromDef(def *usercommands.CommandDef, prefilled map[string]string) []ui.ParamField {
+	names := make([]string, 0, len(def.Params))
+	for name := range def.Params {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	fields := make([]ui.ParamField, 0, len(names))
+	for _, name := range names {
+		p := def.Params[name]
+		fields = append(fields, ui.ParamField{
+			Name:        name,
+			Type:        paramFieldType(p.Type),
+			Description: p.Description,
+			Default:     prefilled[name],
+			Required:    p.Required,
+			Pattern:     p.Pattern,
+		})
+	}
+	return fields
+}
+
+func paramFieldType(pt model.ParamType) ui.ParamFieldType {
+	switch pt {
+	case model.ParamTypeBool:
+		return ui.FieldTypeBool
+	case model.ParamTypeInt:
+		return ui.FieldTypeInt
+	case model.ParamTypePath:
+		return ui.FieldTypePath
+	case model.ParamTypeString, "":
+		return ui.FieldTypeString
+	default:
+		return ui.FieldTypeString
+	}
+}
+
+// stringifyParams converts resolved params (map[string]any) into the
+// string map ConfirmRun consumes for its summary.
+func stringifyParams(params map[string]any) map[string]string {
+	out := make(map[string]string, len(params))
+	for k, v := range params {
+		out[k] = fmt.Sprintf("%v", v)
+	}
+	return out
 }
 
 func newCommandListCmd(flags *rootFlags) *cobra.Command {

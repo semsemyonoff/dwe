@@ -267,7 +267,7 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/ui/...` — must pass
 
 ### Task 10: Orchestrator — `runCommandByID` in `command_cmd.go`
-- [ ] extract `runCommandByID` in `internal/command/command_cmd.go` with this exact signature (all I/O channels and project root passed in — test-friendly):
+- [x] extract `runCommandByID` in `internal/command/command_cmd.go` with this exact signature (all I/O channels and project root passed in — test-friendly):
   ```go
   type runOpts struct {
       Inspect   bool
@@ -289,7 +289,7 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   ```
   Call site: `RunE` of `commands [id]` and the TUI flow. `stdin = cmd.InOrStdin()`, `stdout = cmd.OutOrStdout()`, `stderr = cmd.ErrOrStderr()`.
 
-- [ ] **Parent `commands [id]` `RunE` has TWO routes — inspect vs run.** Inspect requires an exact id (no selector, allow private; mirrors current `newCommandInspectCmd` at `command_cmd.go:81-130`). Run keeps the existing selector flow with `ModeRun, includePrivate=false` (mirrors `newCommandRunCmd` at `command_cmd.go:156-228`). cfg/reg are loaded **inside `RunE`**, NOT by `PersistentPreRunE` — current code does this at `command_cmd.go:157-164`/`99-105`; the schema-bypass `PersistentPreRunE` for `validate` is a separate special case documented in CLAUDE.md and does NOT apply here.
+- [x] **Parent `commands [id]` `RunE` has TWO routes — inspect vs run.** Inspect requires an exact id (no selector, allow private; mirrors current `newCommandInspectCmd` at `command_cmd.go:81-130`). Run keeps the existing selector flow with `ModeRun, includePrivate=false` (mirrors `newCommandRunCmd` at `command_cmd.go:156-228`). cfg/reg are loaded **inside `RunE`**, NOT by `PersistentPreRunE` — current code does this at `command_cmd.go:157-164`/`99-105`; the schema-bypass `PersistentPreRunE` for `validate` is a separate special case documented in CLAUDE.md and does NOT apply here.
   ```go
   RunE: func(cmd *cobra.Command, args []string) error {
       reg, err := loadCommandRegistry(flags.configPath)
@@ -360,8 +360,8 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   - `commands -i` (no args, `--inspect`): error `id required with --inspect`
   - `commands -i services.main` (group prefix, `--inspect`): error from `reg.Get` (id not found) — group prefix is not a valid command id; the user must specify a full id when bypassing the selector
   - non-TTY + no args + no `--inspect`: error matching today's `command_cmd.go:167-170` message
-- [ ] **TUI `y` propagation** — the cmdbrowser `y` toggle continues to set `Result.SkipConfirm` (captured by `makeBrowserSelector` into `skipFromTUI` at `command_cmd.go:278-280`). The orchestrator only sees `opts.Yes`, so the call site MUST do `Yes: yesFlag || skipFromTUI`. Forgetting this OR silently breaks the TUI y toggle. Alternative considered and rejected: adding a separate `runOpts.SkipFromTUI` field — the orchestrator has no behavior difference between the two sources, so a single combined `Yes` is cleaner.
-- [ ] **flow:**
+- [x] **TUI `y` propagation** — the cmdbrowser `y` toggle continues to set `Result.SkipConfirm` (captured by `makeBrowserSelector` into `skipFromTUI` at `command_cmd.go:278-280`). The orchestrator only sees `opts.Yes`, so the call site MUST do `Yes: yesFlag || skipFromTUI`. Forgetting this OR silently breaks the TUI y toggle. Alternative considered and rejected: adding a separate `runOpts.SkipFromTUI` field — the orchestrator has no behavior difference between the two sources, so a single combined `Yes` is cleaner.
+- [x] **flow:**
   - `def, err := reg.Get(id)` (registry API is `Get`, not `Lookup` — `internal/usercommands/registry/registry.go:134`). On error, return wrapped error.
   - **Private guard** (preserve existing semantics — `command_cmd.go:183`): if `def.Private && !opts.Inspect` → return `fmt.Errorf("command %q is private and cannot be run directly", id)`. Inspect MAY proceed for private commands (matches existing inspect subcommand behavior).
   - `opts.Inspect` → `printInspect(stdout, def)` and `return nil`
@@ -439,7 +439,7 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   - **`ConfirmRun` signature `(title, values)`** — orchestrator renders the title against `rctx.Render`, not `ui.ConfirmRun`. Keeps `internal/ui/` free of `tpl`/`config`/`usercommands` imports (same rule as Task 8's UI DTO).
   - `usercommands.RunCommand(ctx, rctx)` — its internal `ConfirmCommand` no-ops because `SkipConfirm=true` (huh-confirmed path) or `SkipConfirm=true && NonInteractive=true` (env/`-y` path). In the remaining `skipPrompts=false && canPromptHuh=false` case (pipe stdin, no `-y`, no env), `ConfirmCommand` runs its non-TTY `Y/n` fallback via `render.NewWriter(rctx.Stdout).Confirm(message, rctx.Stdin)` — which is why I/O channels MUST be attached before this call.
 
-- [ ] **Add four package-level seams in `internal/command/command_cmd.go`** so tests can stub heavy dependencies AND the signal handler installation without touching `internal/ui` globals or sending real signals. Production assignments are pure pass-throughs:
+- [x] **Add four package-level seams in `internal/command/command_cmd.go`** so tests can stub heavy dependencies AND the signal handler installation without touching `internal/ui` globals or sending real signals. Production assignments are pure pass-throughs:
   ```go
   // Test seams — overridden in command_cmd_test.go. Subtests that override these
   // MUST NOT call t.Parallel() (global state across goroutines).
@@ -451,9 +451,9 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   )
   ```
   The parent `RunE` calls `ctx, stop := notifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)` instead of `signal.NotifyContext(...)` directly. Without these, the test cases in this task cannot stub the form, confirmation, runner dispatch, or signal-handler registration — same pattern as `runtime/confirmation.go:14` (`var runConfirm = ui.RunConfirm`) and `internal/ui/selector.go:26` (`runSelectFormFn`). Critically, the `notifyContext` seam eliminates the need to send real `SIGINT` from tests, which would kill the test process if the implementation regresses and fails to wrap the context.
-- [ ] call from the parent `commands [id]` `RunE` (passing `cmd.OutOrStdout()` / `cmd.ErrOrStderr()`)
-- [ ] call from the TUI flow (`RunCommandBrowser` → result → `runCommandByID`)
-- [ ] wired unit tests in `command_cmd_test.go` — stub the three command-package seams declared above (`runParamForm`, `confirmRun`, `runUserCommand`); each captures call args and counts invocations. Fresh `cmd := newCommandCmd(flags)` (or `newRootCmd(flags)` for alias / parent-routing cases) per subtest. Note: do NOT confuse these with the `internal/ui/paramform.go` seam `runFormFn` from Task 8 — that one is for testing `RunParamForm` in isolation; here we stub one layer up:
+- [x] call from the parent `commands [id]` `RunE` (passing `cmd.OutOrStdout()` / `cmd.ErrOrStderr()`)
+- [x] call from the TUI flow (`RunCommandBrowser` → result → `runCommandByID`)
+- [x] wired unit tests in `command_cmd_test.go` — stub the three command-package seams declared above (`runParamForm`, `confirmRun`, `runUserCommand`); each captures call args and counts invocations. Fresh `cmd := newCommandCmd(flags)` (or `newRootCmd(flags)` for alias / parent-routing cases) per subtest. Note: do NOT confuse these with the `internal/ui/paramform.go` seam `runFormFn` from Task 8 — that one is for testing `RunParamForm` in isolation; here we stub one layer up:
   - all params required, all via `--set`, no `-y` → form is shown with pre-filled values
   - all params required, all via `--set`, with `-y` → form skipped
   - missing required + `-y` → error
@@ -582,8 +582,8 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
     - The seam-restore cleanups (`runUserCommand = origRun`, `notifyContext = origNotify`) run AFTER the drain cleanup, so by the time globals are restored the goroutine is guaranteed not to be inside the stub closure anymore.
     - `t.Errorf` (NOT `t.Fatalf`) is used inside the once-block — `Fatal*` is not supported in `t.Cleanup`, and on the success path the test's main assertions have already run.
   - **inspect route skips signal setup:** stub `notifyContext` with a counter; invoke the inspect path; assert the counter is 0 (`notifyContext` was never called). Safe to write because the assertion goes through the seam — no real signals, no process-disposition risk. Complements the `runUserCommand` count == 0 assertion from the inspect routing-table cases.
-- [ ] `make test ./internal/command/...` — must pass
-- [ ] `make lint` — no new issues
+- [x] `make test ./internal/command/...` — must pass
+- [x] `make lint` — no new issues
 
 ### Task 11: Cleanup runtime — verify no duplicate prompting
 - [ ] in `internal/usercommands/runtime/runner.go` (and related runner files) re-check that there is no interactive prompt for params (discovery shows only the confirmation prompt, see `confirmation_test.go`)
