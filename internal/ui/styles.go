@@ -64,6 +64,15 @@ var (
 	colorFilterMatch        = "12"
 	colorPaginationActive   = "12"
 	colorPaginationInactive = "8"
+
+	// Semantic palette mirrors of the v1 styleKey / styleInfoText / styleEnabled
+	// colors so cmdbrowser (v2 lipgloss) can pick them up through the shared
+	// string-typed Color*() accessors. Driven from the same YAML fields
+	// (Label / Info / Enabled) as the v1 styles so a single styles.yml update
+	// keeps both versions in sync.
+	colorKey     = "12"
+	colorInfo    = "12"
+	colorSuccess = "2"
 )
 
 // defSep is the delimiter used between a definition label and its value.
@@ -78,6 +87,7 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	c := cfg.Colors
 	if c.Label != "" {
 		styleKey = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Label)).Bold(true)
+		colorKey = c.Label
 	}
 	if c.SectionTitle != "" {
 		styleSectionTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.SectionTitle))
@@ -93,9 +103,11 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	}
 	if c.Info != "" {
 		styleInfoText = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Info))
+		colorInfo = c.Info
 	}
 	if c.Enabled != "" {
 		styleEnabled = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Enabled))
+		colorSuccess = c.Enabled
 	}
 	if c.Disabled != "" {
 		styleDisabled = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Disabled))
@@ -214,6 +226,21 @@ func ColorPaginationActive() string { return colorPaginationActive }
 // ColorPaginationInactive returns the raw color string for inactive pagination
 // dots.
 func ColorPaginationInactive() string { return colorPaginationInactive }
+
+// ColorKey returns the raw color string for high-prominence labels (titles,
+// breadcrumbs, focused emphasis). Mirrors the v1 styleKey color and is driven
+// by the StylesColors.Label YAML field.
+func ColorKey() string { return colorKey }
+
+// ColorInfo returns the raw color string for informational accents. Mirrors
+// the v1 styleInfoText color and is driven by the StylesColors.Info YAML
+// field.
+func ColorInfo() string { return colorInfo }
+
+// ColorSuccess returns the raw color string for success / enabled accents
+// (e.g. the cmdbrowser "[--yes ON]" toggle). Mirrors the v1 styleEnabled color
+// and is driven by the StylesColors.Enabled YAML field.
+func ColorSuccess() string { return colorSuccess }
 
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.

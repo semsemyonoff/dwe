@@ -117,14 +117,14 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/ui/cmdbrowser/...` — passes
 
 ### Task 4: Replace literals in `model.go` / `tree_render.go` / `list_delegate.go`
-- [ ] all replacements construct **`charm.land/lipgloss/v2`** styles inside `cmdbrowser` using palette strings from `ui.Color*()` accessors (Task 2). Do NOT import v1 `lipgloss.Style` here.
-- [ ] `internal/ui/cmdbrowser/model.go`: panel borders (lines 354–356) and focus color (line 358, `lipgloss.Color("12")`) — construct via `lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorFocusBorder()))` (v2 lipgloss)
-- [ ] `model.go:377-379, 419-421, 512` — title and `[--yes ON]` via palette strings (semantic picks: `ColorKey` / `ColorInfo` / `ColorSuccess`)
-- [ ] `tree_render.go` — tree nodes, `▸`/`▾` glyphs, `(N)` counters — via palette strings (`ColorTreeArrow`, `ColorTreeCount`, `ColorDescription`)
-- [ ] `list_delegate.go:98, 111, 132` — replace `Bold/Faint` literals with palette-driven v2 styles (the delegate already imports v2 lipgloss; this is a like-for-like swap of the color source, not a version swap)
-- [ ] verify there are no remaining `lipgloss.NewStyle().Bold(true)` / `Color("12")` literals in the listed files (grep gate)
-- [ ] update affected snapshot tests in `internal/ui/cmdbrowser/`
-- [ ] `make test ./internal/ui/cmdbrowser/...` — must pass
+- [x] all replacements construct **`charm.land/lipgloss/v2`** styles inside `cmdbrowser` using palette strings from `ui.Color*()` accessors (Task 2). Do NOT import v1 `lipgloss.Style` here.
+- [x] `internal/ui/cmdbrowser/model.go`: panel borders and focus color — now use `lipgloss.Color(ui.ColorFocusBorder())`
+- [x] `model.go` title and `[--yes ON]` — palette-driven via new `paletteKey()` / `paletteSuccess()` helpers backed by new `ui.ColorKey()` / `ui.ColorSuccess()` string accessors (driven from existing `c.Label` / `c.Enabled` YAML fields)
+- [x] `tree_render.go` — `(no groups)` / `(N)` counters / dimmed lines via `paletteDescription` / `paletteTreeCount`; focused-line bold via `paletteFocusBorder().Bold(true)`; v1 `lipgloss` import removed
+- [x] `list_delegate.go` — already palette-driven from Task 3 (no remaining literals)
+- [x] grep gate: no remaining `lipgloss.NewStyle().Bold(true)` / `Faint(true)` / `Color("…")` literals in the three files
+- [x] `palette_test.go` extended with `Key` / `Success` cases
+- [x] `make test ./internal/ui/...` — passes; full `make test` green
 
 ### Task 5: Documentation — `styles.md` "Command browser" section
 - [ ] in `docs/reference/config/styles.md` add a `### Command browser` subsection: list of new palette keys, their defaults, what they affect (with a mapping to bubbles structures)

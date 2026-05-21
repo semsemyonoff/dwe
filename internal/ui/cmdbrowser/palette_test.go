@@ -24,6 +24,8 @@ func TestPaletteConstructors_PickUpAppliedColors(t *testing.T) {
 			FilterMatch:        "12",
 			PaginationActive:   "12",
 			PaginationInactive: "8",
+			Label:              "12",
+			Enabled:            "2",
 		}})
 	})
 
@@ -35,6 +37,8 @@ func TestPaletteConstructors_PickUpAppliedColors(t *testing.T) {
 		FilterMatch:        "214",
 		PaginationActive:   "210",
 		PaginationInactive: "239",
+		Label:              "117",
+		Enabled:            "78",
 	}})
 
 	cases := []struct {
@@ -49,6 +53,8 @@ func TestPaletteConstructors_PickUpAppliedColors(t *testing.T) {
 		{"FilterMatch", paletteFilterMatch(), lipgloss.Color("214")},
 		{"PaginationActive", palettePaginationActive(), lipgloss.Color("210")},
 		{"PaginationInactive", palettePaginationInactive(), lipgloss.Color("239")},
+		{"Key", paletteKey(), lipgloss.Color("117")},
+		{"Success", paletteSuccess(), lipgloss.Color("78")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

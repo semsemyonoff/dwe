@@ -38,6 +38,19 @@ func paletteTreeArrow() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorTreeArrow()))
 }
 
+// paletteKey returns the v2 lipgloss style used for high-prominence labels
+// (titles, breadcrumb path, filter query header). Bold is intentionally NOT
+// applied here so callers can compose it (`paletteKey().Bold(true)`).
+func paletteKey() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorKey()))
+}
+
+// paletteSuccess returns the v2 lipgloss style used for success/enabled
+// accents (e.g. the "[--yes ON]" toggle).
+func paletteSuccess() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorSuccess()))
+}
+
 // paletteFilterMatch returns the v2 lipgloss style used to highlight
 // characters matched by the active filter inside the command list.
 func paletteFilterMatch() lipgloss.Style {

@@ -10,6 +10,8 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"devbox-cli/internal/ui"
 )
 
 // focus identifies which panel currently receives input. Filter and Inspect
@@ -358,7 +360,7 @@ func (m *Model) View() tea.View {
 	leftStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bh)
 	rightStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bh)
 
-	focusBorder := lipgloss.Color("12")
+	focusBorder := lipgloss.Color(ui.ColorFocusBorder())
 	switch m.focus {
 	case focusLeft:
 		leftStyle = leftStyle.BorderForeground(focusBorder)
@@ -377,9 +379,9 @@ func (m *Model) View() tea.View {
 	rightPanel := rightStyle.Render(rightBody)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-	titleBar := lipgloss.NewStyle().Bold(true).Render(m.title)
+	titleBar := paletteKey().Bold(true).Render(m.title)
 	if m.skipConfirm && m.opts.Mode == ModeRun {
-		titleBar += "  " + lipgloss.NewStyle().Bold(true).Render("[--yes ON]")
+		titleBar += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
 	}
 	footer := m.renderHelpFooter()
 
@@ -398,7 +400,7 @@ func (m *Model) viewSinglePanel() tea.View {
 	border := lipgloss.NormalBorder()
 	style := lipgloss.NewStyle().Border(border).Width(singlePanelWidth(m.width)).Height(bh)
 	if m.focus == focusFilter || m.focus == focusInspect || m.focus == focusRight {
-		style = style.BorderForeground(lipgloss.Color("12"))
+		style = style.BorderForeground(lipgloss.Color(ui.ColorFocusBorder()))
 	}
 
 	var body string
@@ -411,17 +413,17 @@ func (m *Model) viewSinglePanel() tea.View {
 		if count == 1 {
 			noun = "match"
 		}
-		header := lipgloss.NewStyle().Bold(true).Render(m.filter.renderQueryLine())
-		tail := lipgloss.NewStyle().Faint(true).Render(" · " + strconv.Itoa(count) + " " + noun)
+		header := paletteKey().Bold(true).Render(m.filter.renderQueryLine())
+		tail := paletteDescription().Render(" · " + strconv.Itoa(count) + " " + noun)
 		body = header + tail + "\n" + m.list.View()
 	default:
 		body = m.list.View()
 	}
 
 	panel := style.Render(body)
-	titleBar := lipgloss.NewStyle().Bold(true).Render(m.title)
+	titleBar := paletteKey().Bold(true).Render(m.title)
 	if m.skipConfirm && m.opts.Mode == ModeRun {
-		titleBar += "  " + lipgloss.NewStyle().Bold(true).Render("[--yes ON]")
+		titleBar += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
 	}
 	footer := m.renderHelpFooter()
 	content := strings.Join([]string{titleBar, panel, footer}, "\n")
@@ -448,8 +450,8 @@ func (m *Model) renderRight() string {
 		if count == 1 {
 			noun = "match"
 		}
-		header := lipgloss.NewStyle().Bold(true).Render(m.filter.renderQueryLine())
-		tail := lipgloss.NewStyle().Faint(true).Render(" · " + strconv.Itoa(count) + " " + noun)
+		header := paletteKey().Bold(true).Render(m.filter.renderQueryLine())
+		tail := paletteDescription().Render(" · " + strconv.Itoa(count) + " " + noun)
 		return header + tail + "\n" + m.list.View()
 	}
 	return m.breadcrumb() + "\n" + m.list.View()
@@ -512,8 +514,8 @@ func (m *Model) breadcrumb() string {
 	if count == 1 {
 		noun = "command"
 	}
-	header := lipgloss.NewStyle().Bold(true).Render(path)
-	tail := lipgloss.NewStyle().Faint(true).Render(" · " + strconv.Itoa(count) + " " + noun)
+	header := paletteKey().Bold(true).Render(path)
+	tail := paletteDescription().Render(" · " + strconv.Itoa(count) + " " + noun)
 	return header + tail
 }
 

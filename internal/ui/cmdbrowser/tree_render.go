@@ -3,15 +3,13 @@ package cmdbrowser
 import (
 	"fmt"
 	"strings"
-
-	"charm.land/lipgloss/v2"
 )
 
 // renderOpt renders the tree with control over count visibility — Task 4 hides
 // the (N) counts at 80–99 cols per §4.1.
 func (tm *treeModel) renderOpt(focused, showCounts bool) string {
 	if len(tm.visible) == 0 {
-		return lipgloss.NewStyle().Faint(true).Render("(no groups)")
+		return paletteDescription().Render("(no groups)")
 	}
 	var b strings.Builder
 	for i, n := range tm.visible {
@@ -35,11 +33,11 @@ func (tm *treeModel) renderOpt(focused, showCounts bool) string {
 			if tm.includePrivate {
 				count = n.countAll
 			}
-			countStr = lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf(" (%d)", count))
+			countStr = paletteTreeCount().Render(fmt.Sprintf(" (%d)", count))
 		}
 		line := fmt.Sprintf("%s %s%s%s%s", marker, indent, glyph, n.name, countStr)
 		if isFocused {
-			line = lipgloss.NewStyle().Bold(true).Render(line)
+			line = paletteFocusBorder().Bold(true).Render(line)
 		}
 		b.WriteString(line)
 		if i < len(tm.visible)-1 {
@@ -55,7 +53,7 @@ func (tm *treeModel) renderOpt(focused, showCounts bool) string {
 // structure.
 func (tm *treeModel) renderFilter(focused, showCounts bool, f *filterState) string {
 	if len(tm.visible) == 0 {
-		return lipgloss.NewStyle().Faint(true).Render("(no groups)")
+		return paletteDescription().Render("(no groups)")
 	}
 	var b strings.Builder
 	for i, n := range tm.visible {
@@ -80,14 +78,14 @@ func (tm *treeModel) renderFilter(focused, showCounts bool, f *filterState) stri
 				total = n.countAll
 			}
 			m := f.matchCount[n.id]
-			countStr = lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf(" (%d/%d)", m, total))
+			countStr = paletteTreeCount().Render(fmt.Sprintf(" (%d/%d)", m, total))
 		}
 		line := fmt.Sprintf("%s %s%s%s%s", marker, indent, glyph, n.name, countStr)
 		switch {
 		case !f.hasMatch(n.id):
-			line = lipgloss.NewStyle().Faint(true).Render(line)
+			line = paletteDescription().Render(line)
 		case isFocused:
-			line = lipgloss.NewStyle().Bold(true).Render(line)
+			line = paletteFocusBorder().Bold(true).Render(line)
 		}
 		b.WriteString(line)
 		if i < len(tm.visible)-1 {

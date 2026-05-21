@@ -35,6 +35,9 @@ func resetStyles() {
 	colorFilterMatch = "12"
 	colorPaginationActive = "12"
 	colorPaginationInactive = "8"
+	colorKey = "12"
+	colorInfo = "12"
+	colorSuccess = "2"
 	defSep = "—"
 }
 
