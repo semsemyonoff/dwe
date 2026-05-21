@@ -59,8 +59,10 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
+				<-b.sem // release before signalling so a concurrent notify() sees the slot as free
 				slog.Debug("notify backend panic recovered", "recover", r)
 				done <- fmt.Errorf("panic: %v", r)
+				return
 			}
 			<-b.sem
 		}()

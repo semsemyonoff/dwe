@@ -195,7 +195,7 @@ func TestIsInteractiveForNotify_NoTTY(t *testing.T) {
 	t.Setenv("CI", "")
 	t.Setenv("DEVBOX_NONINTERACTIVE", "")
 	if isInteractiveForNotify() {
-		t.Fatalf("expected non-interactive when stdin is not a TTY")
+		t.Fatalf("expected non-interactive when stdout is not a TTY")
 	}
 }
 
