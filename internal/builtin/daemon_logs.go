@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -70,7 +71,8 @@ func (daemonLogsBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 
 	if err := cmd.Run(); err != nil {
 		// Treat SIGINT-induced exit as success (user-initiated detach).
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 130 {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 130 {
 			return nil
 		}
 		if strings.Contains(err.Error(), "signal: interrupt") {

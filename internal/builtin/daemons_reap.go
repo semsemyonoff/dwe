@@ -71,6 +71,9 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 	var stopped []string
 	var hadStopError bool
 	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return nil // best-effort: partial reap is acceptable on cancellation
+		}
 		args := []string{"stop", "-t", strconv.Itoa(secs), name}
 		cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 		cmd.Env = compose.BuildEnv()

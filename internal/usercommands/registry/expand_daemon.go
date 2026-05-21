@@ -31,6 +31,13 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 
 	base := src.ID
 
+	// effectiveService mirrors validateDaemonType's resolution: runner.Service
+	// overrides top-level Service when set (both are literal-only in v1).
+	effectiveService := src.Service
+	if src.Runner != nil && src.Runner.Service != "" {
+		effectiveService = src.Runner.Service
+	}
+
 	// label_params: keys are declared param names, values are template literals
 	// rendered at runtime to the user's --set values. renderBuiltinWith walks
 	// map[string]any so we must use that concrete type.
@@ -64,7 +71,7 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 			"container_template": src.Daemon.ContainerTemplate,
 			"daemon_id":          base,
 			"label_params":       labelParams,
-			"service":            src.Service,
+			"service":            effectiveService,
 			"user":               string(src.User),
 			"workdir":            src.Workdir,
 			"workdir_from":       src.WorkdirFrom,
@@ -75,9 +82,6 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 		}
 		if src.Daemon.AutoRemove != nil {
 			with["auto_remove"] = *src.Daemon.AutoRemove
-		}
-		if src.Daemon.StopTimeout != "" {
-			with["stop_timeout"] = src.Daemon.StopTimeout
 		}
 		c.With = with
 		out = append(out, c)

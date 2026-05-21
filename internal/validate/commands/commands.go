@@ -192,11 +192,16 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	// Reserved-id check: warn when a command's computed top-level ID shadows a
 	// reserved `devbox commands` subcommand (e.g. "list"). Group-qualified IDs
-	// (e.g. "services.list") are not reserved.
+	// (e.g. "services.list") are not reserved. Daemon source commands are
+	// dropped from byID during registry expansion and are never runnable, so
+	// their IDs do not create real conflicts and are skipped here.
 	for _, cf := range parsedFiles {
 		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
 		for _, name := range sortedCommandNames(cf) {
 			cmd := cf.Commands[name]
+			if cmd.Type == model.CommandTypeDaemon {
+				continue
+			}
 			if !loader.IsReservedTopLevelID(cmd.ID) {
 				continue
 			}
