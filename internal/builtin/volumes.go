@@ -20,9 +20,11 @@ func (dockerRemoveProjectVolumesBuiltin) Describe(with map[string]any) string {
 }
 
 func (dockerRemoveProjectVolumesBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
-	dockerCfg, err := config.LoadDockerConfig(ectx.ProjectRoot, ectx.Config)
-	if err != nil {
-		return fmt.Errorf("loading docker config: %w", err)
+	// Use the pre-loaded docker config from ExecContext; callers normalise
+	// os.ErrNotExist to &config.DockerConfig{} so we never load it here.
+	dockerCfg := ectx.DockerConfig
+	if dockerCfg == nil {
+		dockerCfg = &config.DockerConfig{}
 	}
 	projectName := dockerCfg.ProjectName
 	if projectName == "" {

@@ -84,12 +84,14 @@ func (dockerWaitHealthyBuiltin) Run(ctx context.Context, with map[string]any, ec
 	interval, _ := getDurationParam(with, "interval", 2*time.Second)
 	services, _ := getStringSlice(with, "services")
 
-	// Load docker config.
-	dockerCfg, err := config.LoadDockerConfig(ectx.ProjectRoot, ectx.Config)
-	if err != nil {
-		return fmt.Errorf("docker_wait_healthy: loading docker config: %w", err)
+	// Use the pre-loaded docker config from ExecContext; callers normalise
+	// os.ErrNotExist to &config.DockerConfig{} so we never load it here.
+	dockerCfg := ectx.DockerConfig
+	if dockerCfg == nil {
+		dockerCfg = &config.DockerConfig{}
 	}
 
+	var err error
 	// Build compose.
 	compose := docker.NewCompose(ectx.Config, dockerCfg)
 

@@ -179,17 +179,63 @@ func decodeLabelsForCompletion(raw json.RawMessage) map[string]string {
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return nil
 	}
+	return parseLegacyLabelStringForCompletion(s)
+}
+
+// parseLegacyLabelStringForCompletion parses a "k=v,k=v" label string from
+// old Docker versions. It tracks JSON object depth and quoted strings so that
+// brace/comma characters inside a JSON string value (e.g.
+// devbox.daemon.params={"n":"a},b"}) are not treated as depth changes or
+// entry separators.
+func parseLegacyLabelStringForCompletion(s string) map[string]string {
 	out := make(map[string]string)
-	for part := range strings.SplitSeq(s, ",") {
+	depth := 0
+	inString := false
+	escaped := false
+	start := 0
+	addEntry := func(part string) {
 		part = strings.TrimSpace(part)
 		if part == "" {
-			continue
+			return
 		}
 		k, v, ok := strings.Cut(part, "=")
 		if !ok {
-			continue
+			return
 		}
 		out[strings.TrimSpace(k)] = strings.TrimSpace(v)
 	}
+	for i := 0; i < len(s); i++ {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inString {
+			switch s[i] {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+		switch s[i] {
+		case '"':
+			if depth > 0 {
+				inString = true
+			}
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				addEntry(s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	addEntry(s[start:])
 	return out
 }

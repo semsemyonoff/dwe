@@ -49,7 +49,11 @@ func (daemonLogsBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 
 	compose := docker.NewCompose(ectx.Config, dockerCfg)
 
-	if running, _ := isDaemonRunning(ctx, compose, fullName); !running {
+	running, probeErr := isDaemonRunning(ctx, compose, fullName)
+	if probeErr != nil {
+		return fmt.Errorf("docker_daemon_logs: probe failed: %w", probeErr)
+	}
+	if !running {
 		return fmt.Errorf("%w: %s (start it with .start)", daemon.ErrDaemonNotRunning, fullName)
 	}
 

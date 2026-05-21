@@ -44,6 +44,39 @@ func TestParseDaemonParamValuesForKey_legacyStringLabels(t *testing.T) {
 	}
 }
 
+func TestParseDaemonParamValuesForKey_legacyMultiParamJSON(t *testing.T) {
+	// Legacy string where devbox.daemon.params contains a multi-key JSON
+	// object. Commas inside the JSON must not split the entry.
+	nd := `{"Names":"my-proj-queue_a","Labels":"devbox.project=my-proj,devbox.daemon.id=queue,devbox.daemon.params={\"name\":\"a\",\"queue\":\"emails\"}"}
+`
+	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
+	want := []string{"a"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("multi-param legacy values mismatch\n got: %v\nwant: %v", got, want)
+	}
+	got2 := parseDaemonParamValuesForKey(strings.NewReader(nd), "queue")
+	want2 := []string{"emails"}
+	if !reflect.DeepEqual(got2, want2) {
+		t.Fatalf("multi-param legacy values (queue) mismatch\n got: %v\nwant: %v", got2, want2)
+	}
+}
+
+func TestParseDaemonParamValuesForKey_legacySpecialCharsInValue(t *testing.T) {
+	// A JSON string value containing '}' and ',' must not corrupt parsing.
+	nd := `{"Names":"my-proj-queue_a","Labels":"devbox.project=my-proj,devbox.daemon.id=queue,devbox.daemon.params={\"name\":\"foo},bar\",\"queue\":\"emails\"}"}
+`
+	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
+	want := []string{"foo},bar"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("special-chars name mismatch\n got: %v\nwant: %v", got, want)
+	}
+	got2 := parseDaemonParamValuesForKey(strings.NewReader(nd), "queue")
+	want2 := []string{"emails"}
+	if !reflect.DeepEqual(got2, want2) {
+		t.Fatalf("special-chars queue mismatch\n got: %v\nwant: %v", got2, want2)
+	}
+}
+
 func TestParseDaemonParamValuesForKey_missingKey(t *testing.T) {
 	nd := `{"Names":"x","Labels":{"devbox.daemon.params":"{\"queue\":\"emails\"}"}}
 `

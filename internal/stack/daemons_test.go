@@ -50,6 +50,45 @@ func TestParseDaemonRows_LegacyLabelsString(t *testing.T) {
 	}
 }
 
+func TestParseDaemonRows_LegacyLabelsStringMultiParam(t *testing.T) {
+	// Legacy string with a multi-param JSON value that contains commas.
+	// The depth-aware parser must not split inside the JSON object.
+	in := strings.NewReader(`{"Names":"proj-foo","Labels":"devbox.project=proj,devbox.daemon.id=svc.foo,devbox.daemon.params={\"name\":\"default\",\"queue\":\"emails\"}"}`)
+	rows, errs := parseDaemonRows(in)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errs: %v", errs)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	if rows[0].ID != "svc.foo" {
+		t.Errorf("ID mismatch: %q", rows[0].ID)
+	}
+	// prettyParams should render both keys sorted.
+	if rows[0].Params != "name=default, queue=emails" {
+		t.Errorf("Params mismatch: %q", rows[0].Params)
+	}
+}
+
+func TestParseDaemonRows_LegacyLabelsStringSpecialCharsInValue(t *testing.T) {
+	// A param value that contains '}' and ',' inside a JSON string must not
+	// confuse the depth/split logic.
+	in := strings.NewReader(`{"Names":"proj-foo","Labels":"devbox.project=proj,devbox.daemon.id=svc.foo,devbox.daemon.params={\"name\":\"foo},bar\",\"queue\":\"emails\"}"}`)
+	rows, errs := parseDaemonRows(in)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errs: %v", errs)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	if rows[0].ID != "svc.foo" {
+		t.Errorf("ID mismatch: %q", rows[0].ID)
+	}
+	if rows[0].Params != "name=foo},bar, queue=emails" {
+		t.Errorf("Params mismatch: %q", rows[0].Params)
+	}
+}
+
 func TestParseDaemonRows_SkipsContainerWithoutDaemonID(t *testing.T) {
 	in := strings.NewReader(`{"Names":"unmanaged","Labels":{"foo":"bar"}}`)
 	rows, _ := parseDaemonRows(in)
