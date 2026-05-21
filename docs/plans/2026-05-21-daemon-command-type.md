@@ -361,10 +361,10 @@ Both call sites have `cfg` available; only the signature needs threading.
 - [x] confirm `docs generate --scope all` succeeds against a fixture project that uses `type: daemon` (skipped — not automatable: repo has no fixture project shipping a `type: daemon` block; deferred to post-completion manual smoke)
 
 ### Task 13: [Final] Update AGENTS.md
-- [ ] add a one-paragraph entry under `internal/builtin/` enumerating the three new daemon builtins + `daemons_reap`
-- [ ] add a one-paragraph entry under `internal/usercommands/` (or extend the existing model bullet) describing `type: daemon` and registry-time expansion to four virtual commands
-- [ ] add a Key Pattern bullet if the inspect "Derived from" mechanism feels reusable (probably yes — future expansion of single-block → multi-command sugar)
-- [ ] no checkbox for tests — docs only
+- [x] add a one-paragraph entry under `internal/builtin/` enumerating the three new daemon builtins + `daemons_reap`
+- [x] add a one-paragraph entry under `internal/usercommands/` (or extend the existing model bullet) describing `type: daemon` and registry-time expansion to four virtual commands
+- [x] add a Key Pattern bullet if the inspect "Derived from" mechanism feels reusable (probably yes — future expansion of single-block → multi-command sugar)
+- [x] no checkbox for tests — docs only
 
 ## Technical Details
 
