@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/daemon"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
@@ -160,7 +161,7 @@ func runCommandByID(
 
 	// Inspect route — write the formatted definition and stop.
 	if opts.Inspect {
-		printInspect(stdout, def)
+		printInspect(stdout, def, cfg)
 		return nil
 	}
 
@@ -385,7 +386,7 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
 			var buf bytes.Buffer
-			printInspect(&buf, d)
+			printInspect(&buf, d, cfg)
 			items[i] = cmdbrowser.Item{
 				ID:          d.ID,
 				Description: d.Description,
@@ -604,7 +605,9 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 }
 
 // printInspect writes a detailed view of a command definition using Lipgloss styles.
-func printInspect(w io.Writer, def *usercommands.CommandDef) {
+// cfg may be nil at call sites that exercise the renderer purely structurally
+// (tests); the resolved container-name block is then omitted.
+func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig) {
 	def2 := func(name, value string, indent int) {
 		_, _ = fmt.Fprintln(w, ui.RenderDefinition(name, value, indent, ""))
 	}
@@ -614,6 +617,9 @@ func printInspect(w io.Writer, def *usercommands.CommandDef) {
 
 	_, _ = fmt.Fprintln(w, ui.RenderSectionTitle(def.ID))
 	def2("type", string(def.Type), 2)
+	if def.DerivedFromDaemon != "" {
+		def2("derived from", "daemon "+def.DerivedFromDaemon, 2)
+	}
 	if def.Description != "" {
 		def2("description", def.Description, 2)
 	}
@@ -767,6 +773,73 @@ func printInspect(w io.Writer, def *usercommands.CommandDef) {
 					desc += "  (continue_on_error)"
 				}
 				def2(label, desc, 4)
+			}
+		}
+	}
+
+	if def.DerivedFromDaemon != "" && def.SourceDaemon != nil {
+		sub("Daemon")
+		ds := def.SourceDaemon
+		def2("container_template", ds.ContainerTemplate, 4)
+		if ds.OnAlreadyRunning != "" {
+			def2("on_already_running", ds.OnAlreadyRunning, 4)
+		}
+		if ds.AutoRemove != nil {
+			def2("auto_remove", fmt.Sprintf("%v", *ds.AutoRemove), 4)
+		}
+		if ds.StopTimeout != "" {
+			def2("stop_timeout", ds.StopTimeout, 4)
+		}
+		// Execution fields live in def.With for synthetic commands (registry
+		// expansion packs Service/User/Workdir/Argv/etc into the rendered map).
+		if def.With != nil {
+			withStr := func(key string) string {
+				if v, ok := def.With[key]; ok {
+					if s, ok := v.(string); ok {
+						return s
+					}
+				}
+				return ""
+			}
+			if s := withStr("service"); s != "" {
+				def2("service", s, 4)
+			}
+			if s := withStr("user"); s != "" {
+				def2("user", s, 4)
+			}
+			if s := withStr("workdir"); s != "" {
+				def2("workdir", s, 4)
+			}
+			if s := withStr("workdir_from"); s != "" {
+				def2("workdir_from", s, 4)
+			}
+			if argv, ok := def.With["argv"].([]any); ok && len(argv) > 0 {
+				parts := make([]string, 0, len(argv))
+				for _, a := range argv {
+					if s, ok := a.(string); ok {
+						parts = append(parts, s)
+					}
+				}
+				if len(parts) > 0 {
+					def2("argv", strings.Join(parts, " "), 4)
+				}
+			}
+		}
+		if cfg != nil {
+			sub("Container")
+			defaults := make(map[string]any, len(def.Params))
+			for name, p := range def.Params {
+				defaults[name] = p.Default
+			}
+			rendered, err := tpl.RenderCommand(ds.ContainerTemplate, &tpl.RenderContext{
+				Raw:    cfg.Raw,
+				Params: defaults,
+			})
+			if err == nil {
+				name, err := daemon.ResolveContainerName(cfg.Project.FullName(), rendered)
+				if err == nil {
+					def2("resolved (with default params)", name, 4)
+				}
 			}
 		}
 	}

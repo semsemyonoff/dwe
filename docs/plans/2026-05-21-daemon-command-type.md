@@ -326,24 +326,24 @@ Checklist:
 
 Both call sites have `cfg` available; only the signature needs threading.
 
-- [ ] change signature to `printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig)` — `cfg` may be nil at call sites where the renderer is purely structural (tests); guard the resolved-name block on `cfg != nil && def.DerivedFromDaemon != ""`
-- [ ] update both call sites:
+- [x] change signature to `printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig)` — `cfg` may be nil at call sites where the renderer is purely structural (tests); guard the resolved-name block on `cfg != nil && def.DerivedFromDaemon != ""`
+- [x] update both call sites:
   - `command_cmd.go:162` — `printInspect(stdout, def, cfg)`
   - `command_cmd.go:387` — `printInspect(&buf, d, cfg)`
-- [ ] insert a new line **immediately after `type:` (line 615)** when `def.DerivedFromDaemon != ""`:
+- [x] insert a new line **immediately after `type:` (line 615)** when `def.DerivedFromDaemon != ""`:
   - `derived from: daemon <base>` (use `def2("derived from", "daemon "+def.DerivedFromDaemon, 2)` to match existing definition-row rendering)
-- [ ] for daemon-derived commands with non-nil `cfg` **and non-nil `def.SourceDaemon`**, add a `Container` subsection (use the existing `sub("Container")` helper at line 610) showing the resolved-with-defaults container name. Implementation:
+- [x] for daemon-derived commands with non-nil `cfg` **and non-nil `def.SourceDaemon`**, add a `Container` subsection (use the existing `sub("Container")` helper at line 610) showing the resolved-with-defaults container name. Implementation:
   1. build a param map from `def.Params` taking each param's `Default` (or empty string if none)
   2. render `def.SourceDaemon.ContainerTemplate` via `tpl.RenderCommand` against a `RenderContext` with `Raw: cfg.Raw`, `Params: defaultsMap` — handles `${param.X}` substitution
   3. call `daemon.ResolveContainerName(cfg.Project.FullName(), rendered)` → `<full>`
   4. emit `def2("resolved (with default params)", <full>, 4)`
   5. on any error (template render, regex fail), silently skip the subsection — inspect should never error
-- [ ] for daemon-derived commands, also surface `Argv`, `Service`, `User`, `Workdir`, container template literal, `On already running`, `Auto remove`, `Stop timeout` — per spec section 11. Read structural fields from `def.SourceDaemon` (container_template, on_already_running, auto_remove, stop_timeout) and execution fields from `def` itself (Argv, Service, User, Workdir — populated by registry expansion on the synthetic command from the base daemon's command-level fields). Emit under a new `Daemon` subsection
-- [ ] write tests asserting inspect output for `<base>.start`:
+- [x] for daemon-derived commands, also surface `Argv`, `Service`, `User`, `Workdir`, container template literal, `On already running`, `Auto remove`, `Stop timeout` — per spec section 11. Read structural fields from `def.SourceDaemon` (container_template, on_already_running, auto_remove, stop_timeout) and execution fields from `def.With` (registry expansion packs Service/User/Workdir/Argv into `with:` on the synthetic, not onto top-level CommandDef fields). Emit under a new `Daemon` subsection
+- [x] write tests asserting inspect output for `<base>.start`:
   - contains `derived from: daemon <base>` immediately after the type line
   - contains the resolved sample container name with default params applied (use a `Project{Name: "my-proj"}` + `Params{name: {Default: "default"}}` fixture → expects `my-proj-php_queue_default`)
   - test with `cfg == nil` (defensive) → renders the type + derived-from line but omits the resolved-name subsection without panicking
-- [ ] run `go test ./internal/command/...` — must pass before task 11
+- [x] run `go test ./internal/command/...` — must pass before task 11
 
 ### Task 11: Reference documentation
 - [ ] add a `## type: daemon` section to `docs/reference/config/commands.md` covering: YAML form (spec section 4), four virtual commands (spec section 3), container naming + labels (spec section 5), behaviour of each virtual command (spec section 6), validation rules (spec section 12), parallel restrictions (spec section 13), end-to-end flow (spec section 14)

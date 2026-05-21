@@ -13,8 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/usercommands/model"
 
 	"github.com/spf13/cobra"
 )
@@ -264,7 +266,7 @@ func TestPrintCommandInspect_workflow(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def)
+	printInspect(buf, def, nil)
 	out := buf.String()
 	if !contains(out, "services.main.bootstrap") {
 		t.Errorf("output should contain command ID")
@@ -289,7 +291,7 @@ func TestPrintCommandInspect_serviceExec(t *testing.T) {
 		Cmd:     "php artisan migrate",
 	}
 	buf := &testBuf{}
-	printInspect(buf, def)
+	printInspect(buf, def, nil)
 	out := buf.String()
 	if !contains(out, "service_exec") {
 		t.Errorf("output should contain type: %s", out)
@@ -312,7 +314,7 @@ func TestPrintCommandInspect_withParams(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def)
+	printInspect(buf, def, nil)
 	out := buf.String()
 	if !contains(out, "Params") {
 		t.Errorf("output should contain Params section: %s", out)
@@ -334,7 +336,7 @@ func TestPrintCommandInspect_withConfirmation(t *testing.T) {
 		ConfirmationText: "Drop database?",
 	}
 	buf := &testBuf{}
-	printInspect(buf, def)
+	printInspect(buf, def, nil)
 	out := buf.String()
 	if !contains(out, "confirmation") {
 		t.Errorf("output should contain confirmation flag: %s", out)
@@ -355,7 +357,7 @@ func TestPrintCommandInspect_withMessages(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def)
+	printInspect(buf, def, nil)
 	out := buf.String()
 	if !contains(out, "Messages") {
 		t.Errorf("output should contain Messages section: %s", out)
@@ -365,6 +367,68 @@ func TestPrintCommandInspect_withMessages(t *testing.T) {
 	}
 	if !contains(out, "Database create failed.") {
 		t.Errorf("output should contain error message: %s", out)
+	}
+}
+
+func TestPrintCommandInspect_daemonStart_derivedFromLine(t *testing.T) {
+	autoRemove := true
+	def := &usercommands.CommandDef{
+		ID:                "services.main.queue.start",
+		Type:              usercommands.CommandTypeBuiltin,
+		Cmd:               "docker_daemon_start",
+		DerivedFromDaemon: "services.main.queue",
+		SourceDaemon: &model.DaemonSpec{
+			ContainerTemplate: "php_queue_${param.name}",
+			OnAlreadyRunning:  "error",
+			AutoRemove:        &autoRemove,
+			StopTimeout:       "10s",
+		},
+		Params: map[string]usercommands.ParamDef{
+			"name": {Type: usercommands.ParamTypeString, Default: "default"},
+		},
+		With: map[string]any{
+			"service": "app-main",
+			"user":    "www-data",
+			"argv":    []any{"php", "artisan", "queue:listen"},
+		},
+	}
+
+	// Without cfg: derived-from line + Daemon subsection, no Container subsection.
+	buf := &testBuf{}
+	printInspect(buf, def, nil)
+	out := buf.String()
+	if !contains(out, "derived from") || !contains(out, "daemon services.main.queue") {
+		t.Errorf("expected 'derived from: daemon services.main.queue' line, got:\n%s", out)
+	}
+	if !contains(out, "Daemon") || !contains(out, "container_template") || !contains(out, "php_queue_${param.name}") {
+		t.Errorf("expected Daemon subsection with container_template, got:\n%s", out)
+	}
+	if !contains(out, "on_already_running") || !contains(out, "auto_remove") || !contains(out, "stop_timeout") {
+		t.Errorf("expected daemon structural fields, got:\n%s", out)
+	}
+	if !contains(out, "service") || !contains(out, "app-main") {
+		t.Errorf("expected service field from With, got:\n%s", out)
+	}
+	if !contains(out, "argv") || !contains(out, "php artisan queue:listen") {
+		t.Errorf("expected argv from With, got:\n%s", out)
+	}
+	if contains(out, "Container") {
+		t.Errorf("Container subsection should be omitted when cfg is nil, got:\n%s", out)
+	}
+
+	// With cfg: includes the resolved container name from defaults.
+	cfg := &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "my-proj"},
+		Raw:     map[string]any{},
+	}
+	buf2 := &testBuf{}
+	printInspect(buf2, def, cfg)
+	out2 := buf2.String()
+	if !contains(out2, "Container") {
+		t.Errorf("expected Container subsection when cfg is non-nil, got:\n%s", out2)
+	}
+	if !contains(out2, "my-proj-php_queue_default") {
+		t.Errorf("expected resolved container name 'my-proj-php_queue_default', got:\n%s", out2)
 	}
 }
 
