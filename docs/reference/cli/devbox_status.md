@@ -28,6 +28,7 @@ devbox status [flags]
 
 ```
   -h, --help          help for status
+      --no-daemons    suppress the daemons section
       --no-deploy     suppress the deploy section
       --no-git        suppress the git workspace section
       --no-services   suppress the services section
@@ -44,6 +45,7 @@ devbox status [flags]
 ### SEE ALSO
 
 * [devbox](devbox.md)	 - devbox-cli — local development environment toolkit
+* [devbox status daemons](devbox_status_daemons.md)	 - Show only the daemons section
 * [devbox status deploy](devbox_status_deploy.md)	 - Show deploy status (table) or per-service deploy detail
 * [devbox status git](devbox_status_git.md)	 - Show only the git workspace section
 * [devbox status services](devbox_status_services.md)	 - Show only the services section

@@ -29,7 +29,7 @@ It is loaded separately by `LoadLifecycleConfig()` and is **not** merged with th
 
 The file is optional.
 
-- **`devbox stop` does not require `lifecycle.yml`.** When the file is absent or has no `stop:` section, `devbox stop` runs only the auto-injected `_auto_reap_daemons` phase (which stops any background daemons started via [`type: daemon`](commands.md) commands) and prints the default final message `Project is stopped. Have a nice day!`.
+- **`devbox stop` does not require `lifecycle.yml`.** When the file is absent or has no `stop:` section, `devbox stop` runs only the auto-injected `_auto_reap_daemons` phase (which stops any background daemons started via [`type: daemon`](commands.md#type-daemon) commands) and prints the default final message `Project is stopped. Have a nice day!`.
 - **`devbox run` and `devbox restart` still require `lifecycle.yml` with a `run:` section.** When the file is absent, those commands fail with `no lifecycle.yml`. The lower-level commands (`devbox docker up`, `devbox docker down`) work either way.
 
 Whenever a `stop:` pipeline runs (synthetic or user-defined), the `_auto_reap_daemons` phase is prepended automatically; it has no opt-out and is visible in plan output for transparency.

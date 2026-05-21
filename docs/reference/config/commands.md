@@ -29,6 +29,7 @@ Declarative command definitions for the devbox project.
   - [`type: service_run`](#type-service_run)
   - [`type: workflow`](#type-workflow)
   - [`type: builtin`](#type-builtin)
+  - [`type: daemon`](#type-daemon)
 - [Workdir resolution](#workdir-resolution)
 - [Confirmation flow](#confirmation-flow)
 - [Visibility, registration, and discovery](#visibility-registration-and-discovery)
@@ -399,7 +400,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 
 ## Command types
 
-The six command types define different execution contexts:
+The command types define different execution contexts:
 
 | Type | Executor | Payload | Use case |
 |------|----------|---------|----------|
@@ -410,6 +411,7 @@ The six command types define different execution contexts:
 | `service_run` | Docker Compose run | `cmd` or `argv` | Throwaway container execution |
 | `workflow` | Command orchestrator | `steps[]` | Multi-command sequences (separate syntax, see below) |
 | `builtin` | Engine-internal action | `cmd` (builtin name) + `with` | Invoke a shared engine builtin (e.g. wait-for-healthy) without a subprocess |
+| `daemon` | Registry sugar | `daemon:` block + `service` + `argv` | Declare a long-running background container; expands to four virtual commands (`.start` / `.logs` / `.stop` / `.restart`) |
 
 All types except `script` and `workflow` use the canonical `cmd:` field for their payload. `type: script` uses its own `script:` block with `run`, `plan`, `cleanup` phases. `type: workflow` uses its own `steps:` block with string-based `command:` / `confirm:` / `with:` / `when:` syntax — see [Type: workflow](#type-workflow) below. `type: builtin` puts the builtin name in `cmd:` and its parameters in `with:` — see [Type: builtin](#type-builtin) below.
 
@@ -925,6 +927,142 @@ The most useful builtins to expose as commands tend to be the long-running, idem
 ### Invalid fields
 
 `type: builtin` is a leaf action — it rejects every type-specific field of the other types: `argv`, `script:`, `steps:`, `service`, `compose_args`, `workdir` / `workdir_from`, `user`, `mode`, and `runner:`. Use `params:` / `context:` / `env:` / `files:` / `messages:` as on any other type for inputs, env exposure, and styled output.
+
+## Type: daemon
+
+`type: daemon` is the declarative shape for long-running, parameterised background processes inside devbox services (canonical example: a Laravel queue worker). One YAML block expands at registry-load time into **four first-class virtual commands**:
+
+| Virtual ID | Behaviour | Blocking |
+|---|---|---|
+| `<base>.start` | `docker compose run -d --name <full> ...` | no |
+| `<base>.logs` | `docker logs -f --tail=100 <full>` | yes — Ctrl-C detaches (the container keeps running) |
+| `<base>.stop` | `docker stop -t <timeout> <full>` | no |
+| `<base>.restart` | `<base>.stop` followed by `<base>.start` | no |
+
+Each virtual command appears in the registry, the `devbox cmd` browser, completion, `inspect`, and is referenceable from workflows. The source `<base>` command is **not** runnable on its own — only the four virtual commands are.
+
+Container names are auto-prefixed with `ProjectConfig.FullName()` (so the same project can run on multiple checkouts side by side) and every container carries standardised labels so `devbox status daemons`, completion, and `_auto_reap_daemons` can find them via `docker ps` — **no separate state file**.
+
+### YAML form
+
+```yaml
+commands:
+  queue:
+    type: daemon
+    description: "Laravel queue worker"
+    service: app-main             # literal compose service name (no ${...})
+    workdir_from: services.main.work_dir_internal
+    user: www-data
+    env:
+      QUEUE_CONNECTION: redis
+    params:
+      name:
+        default: default
+        pattern: ^[a-zA-Z0-9_-]+$
+    argv:
+      - php
+      - artisan
+      - queue:listen
+      - --timeout=0
+      - --queue=${param.name}
+    daemon:
+      container_template: "php_queue_${param.name}"
+      on_already_running: error   # error | noop
+      auto_remove: true           # default true → adds --rm
+      stop_timeout: 10s
+      controls: [start, logs, stop, restart]
+```
+
+`service`, `workdir`/`workdir_from`, `user`, `env`, `params`, `argv`, `compose_args` follow the same semantics as [`type: service_run`](#type-service_run). The daemon-specific configuration lives entirely under the `daemon:` block.
+
+### `daemon:` block fields
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `container_template` | yes | — | Container-name template; rendered against the command template space and prefixed with `<project.full>-`. Post-render must match `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$`. |
+| `on_already_running` | optional | `error` | `error` aborts `.start` if the container already exists; `noop` makes `.start` idempotent. |
+| `auto_remove` | optional | `true` | When true, `.start` adds `--rm` so the container is removed when it stops. |
+| `stop_timeout` | optional | `10s` | Duration string. Converted to integer seconds at `docker stop -t <secs>`; values below 1s round up to 1s (never `0`). |
+| `controls` | optional | `[start, logs, stop, restart]` | Subset of the four virtual commands to generate. If `restart` is listed, both `start` AND `stop` must also be listed. |
+
+### Container naming
+
+```
+<project.full>-<rendered container_template>
+```
+
+`project.full` is `ProjectConfig.FullName()` — `<prefix>-<name>` if `prefix:` is set, else `<name>`. The post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` is the authoritative defense; invalid characters in rendered template values fail at runtime even if the param's `pattern:` happened to permit them.
+
+### Standard labels
+
+Every daemon container carries three labels so `docker ps` is the single source of truth:
+
+- `devbox.project=<project.full>`
+- `devbox.daemon.id=<base>` (e.g. `services.main.queue`)
+- `devbox.daemon.params=<json>` (e.g. `{"name":"emails"}`) — produced via `encoding/json.Marshal` to round-trip safely through quotes, backslashes, and control characters
+
+`devbox status daemons`, `--set` completion, and `_auto_reap_daemons` all filter on these labels.
+
+### Virtual command behaviour
+
+- **`.start`** — issues `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label devbox.project=… --label devbox.daemon.id=… --label devbox.daemon.params=… <service> <argv…>`. Environment **values** are passed via the child process environment (`cmd.Env`), never the host argv, so secrets do not appear in `ps` or `/proc/<pid>/cmdline`. `--no-deps` keeps the running stack untouched; `--entrypoint ""` ensures the user's `argv:` is what actually runs. On `on_already_running: error` plus a docker name-conflict error, the builtin surfaces `ErrDaemonAlreadyRunning`; on `noop`, the same error is swallowed and `.start` succeeds.
+- **`.logs`** — runs `docker logs -f --tail=100 <full>` foreground. Ctrl-C sends `SIGINT` to the `docker logs` process only (graceful detach via `cmd.Cancel`); the container is never signalled. If the container is not running, `.logs` errors with a hint pointing at `.start`.
+- **`.stop`** — runs `docker stop -t <stop_timeout-as-seconds> <full>`. Missing container is **not** an error (idempotent stop).
+- **`.restart`** — a virtual `type: workflow` of `<base>.stop` followed by `<base>.start`. Workflow steps explicitly forward each declared `param.<name>` via `with:`, so `devbox cmd queue.restart --set name=emails` restarts the `emails` daemon (not the default).
+
+### Validation
+
+`devbox validate` and load-time `cmd.Validate()` enforce:
+
+- `service:` is required and **must be literal** — no `${...}` or `{{...}}`. (Parameterised `service:` is intentionally out of scope for v1 to keep the `devbox.daemon.id` label stable.)
+- `daemon.container_template` is required and non-empty.
+- `daemon.on_already_running` is one of `error` / `noop` (empty = default `error`).
+- `daemon.stop_timeout` parses via `time.ParseDuration` and is strictly positive.
+- `daemon.controls` is a subset of `{start, logs, stop, restart}`; if `restart` is listed, `start` and `stop` must also be listed.
+- Every `${param.X}` referenced in `container_template` must be declared in `params:` AND carry a `pattern:` (advisory — the runtime regex on the rendered container name is the authoritative gate).
+- Synthetic IDs (`<base>.start`, `.logs`, `.stop`, `.restart`) must not collide with any explicit command in the registry.
+
+### Parallel and workflow restrictions
+
+`.logs` is **interactive** — it tails container output foreground and is detached by Ctrl-C. Like `confirm`, it is rejected anywhere inside a `parallel:` step group at plan time (deploy / lifecycle pipelines and workflow parallel blocks), regardless of `--yes`. `.start`, `.stop`, and `.restart` may appear inside parallel groups.
+
+### Lifecycle integration
+
+Whenever `devbox stop` runs (whether `lifecycle.yml` exists or not), a synthetic `_auto_reap_daemons` phase is prepended to the stop pipeline. It enumerates every container labelled `devbox.project=<full>` with a non-empty `devbox.daemon.id` and stops them in parallel. There is no opt-out; the phase is visible in plan output. See [lifecycle.md](lifecycle.md) for the stop pipeline shape.
+
+If `lifecycle.yml` is absent, `devbox stop` still runs (with only the `_auto_reap_daemons` phase plus the default `Project is stopped. Have a nice day!` message) — `lifecycle.yml` is no longer required for `stop`.
+
+### Security & privacy
+
+- **Param values land in `devbox.daemon.params` as JSON labels**, which `docker inspect` exposes to anyone with docker socket access on the host. **Do not put secrets in `params:`.** Use `env:` instead — env values are passed through the container environment (`docker compose run -e KEY` with the value in `cmd.Env`), never through the host process argv, so they do not appear in `ps` or `/proc/<pid>/cmdline`.
+- **The container-name regex is enforced after rendering** — invalid characters in rendered param values are a hard runtime error even if the YAML `pattern:` happened to allow them. The validator's param-pattern check is advisory; the rendered-name regex is the authoritative defense.
+- **`service:` parameterisation is rejected** in v1 — the `devbox.daemon.id` label needs to be stable across restarts so completion, status, and reap can reliably correlate state across invocations.
+
+### Invalid fields
+
+The source daemon command rejects fields that conflict with its declarative shape: `script:`, `steps:`, `cmd:` (the action is implicit), `mode`, `runner:` (each virtual command has its own runner). Use `params:` / `context:` / `env:` / `files:` / `messages:` / `argv` / `service` / `workdir` / `workdir_from` / `user` / `compose_args` as on any service runner. All of these flow into the virtual `.start` invocation.
+
+### End-to-end flow
+
+```bash
+# Start a worker for the "emails" queue
+devbox cmd queue.start --set name=emails
+
+# Tail it (Ctrl-C detaches, container stays)
+devbox cmd queue.logs --set name=emails
+
+# Check what's running
+devbox status daemons
+
+# Restart it
+devbox cmd queue.restart --set name=emails
+
+# Stop one daemon
+devbox cmd queue.stop --set name=emails
+
+# Stop everything (reaps all daemons in this project automatically)
+devbox stop
+```
 
 ## Workdir resolution
 

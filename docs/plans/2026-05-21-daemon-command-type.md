@@ -346,11 +346,11 @@ Both call sites have `cfg` available; only the signature needs threading.
 - [x] run `go test ./internal/command/...` — must pass before task 11
 
 ### Task 11: Reference documentation
-- [ ] add a `## type: daemon` section to `docs/reference/config/commands.md` covering: YAML form (spec section 4), four virtual commands (spec section 3), container naming + labels (spec section 5), behaviour of each virtual command (spec section 6), validation rules (spec section 12), parallel restrictions (spec section 13), end-to-end flow (spec section 14)
-- [ ] **add a "Security & privacy" subsection**: warn that `params` values land in the `devbox.daemon.params` label as JSON, which is visible via `docker inspect` to anyone with docker socket access on the host. **Secrets must go through `env:`** (the daemon runner passes env entries as `-e KEY` argv with values in the child process environment — values never appear in the host process argv where `ps` or `/proc/<pid>/cmdline` would expose them), **never through `params:`**. Also document that container naming uses `<project.full>-<rendered-template>` and that the post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` is enforced — invalid characters in rendered values are a hard error at runtime even if the YAML `pattern:` permits them.
-- [ ] cross-reference from `docs/reference/config/state.md` (no state file for daemons — `docker ps` is authoritative) and from `docs/reference/config/lifecycle.md` (auto-injected `_auto_reap_daemons` phase)
-- [ ] regen `docs/reference/cli/` via `devbox docs generate --scope cli` (the new `--no-daemons` flag adds to status help)
-- [ ] write no new tests — pure docs
+- [x] add a `## type: daemon` section to `docs/reference/config/commands.md` covering: YAML form (spec section 4), four virtual commands (spec section 3), container naming + labels (spec section 5), behaviour of each virtual command (spec section 6), validation rules (spec section 12), parallel restrictions (spec section 13), end-to-end flow (spec section 14)
+- [x] **add a "Security & privacy" subsection**: warn that `params` values land in the `devbox.daemon.params` label as JSON, which is visible via `docker inspect` to anyone with docker socket access on the host. **Secrets must go through `env:`** (the daemon runner passes env entries as `-e KEY` argv with values in the child process environment — values never appear in the host process argv where `ps` or `/proc/<pid>/cmdline` would expose them), **never through `params:`**. Also document that container naming uses `<project.full>-<rendered-template>` and that the post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` is enforced — invalid characters in rendered values are a hard error at runtime even if the YAML `pattern:` permits them.
+- [x] cross-reference from `docs/reference/config/state.md` (no state file for daemons — `docker ps` is authoritative) and from `docs/reference/config/lifecycle.md` (auto-injected `_auto_reap_daemons` phase)
+- [x] regen `docs/reference/cli/` via `devbox docs generate --scope cli` (the new `--no-daemons` flag adds to status help)
+- [x] write no new tests — pure docs
 
 ### Task 12: Verify acceptance criteria
 - [ ] verify every requirement from the Overview is implemented (spot-check each spec section 1–14)

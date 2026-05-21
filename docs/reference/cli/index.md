@@ -54,6 +54,7 @@ Generated reference for the `devbox` command tree.
   - [devbox services enable](devbox_services_enable.md) — Enable an optional service (writes to devbox/local.yml)
 - [devbox shell](devbox_shell.md) — Open a shell in a service container
 - [devbox status](devbox_status.md) — Show stack health and per-section status (read-only)
+  - [devbox status daemons](devbox_status_daemons.md) — Show only the daemons section
   - [devbox status deploy](devbox_status_deploy.md) — Show deploy status (table) or per-service deploy detail
   - [devbox status git](devbox_status_git.md) — Show only the git workspace section
   - [devbox status services](devbox_status_services.md) — Show only the services section
