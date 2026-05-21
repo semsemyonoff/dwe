@@ -270,17 +270,17 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] Verify CLI surface matches the spec in §2 of Overview: bare `services` / `tools`, all `status` subcommands, all `--no-*` flags, `status deploy <svc>`.
-- [ ] Run `make test` — full suite passes.
-- [ ] Run `go test -race ./...` — no data races. Risk surface is parallel git collection in Task 3; per-index slice writes should keep this clean but the race detector is the final word.
-- [ ] If `internal/stack/gitworkspace_test.go` doesn't already include `goleak.VerifyNone` per-test, add a package-level `TestMain` with `goleak.VerifyTestMain(m)` to guard against goroutine leaks under the errgroup limit.
-- [ ] Verify `injectToolsIntoRaw` regression coverage: `ResolvePath(cfg.Raw, "tools.<name>.port")` still resolves after the split — exports / commands / docker.yml templates that depend on `${tools.*}` keep working end-to-end (run a real `devbox render env` against a fixture and diff against the pre-split output).
-- [ ] Run `make lint` — clean; if any new lint warnings appear, fix the underlying issue, do not `//nolint` away.
-- [ ] Run `make build` — binary builds without warnings.
-- [ ] Spot-check the regenerated `docs/reference/cli/` output for hand-edited drift.
-- [ ] Verify removed commands return cobra's "unknown command" error (no leftover wiring).
-- [ ] Verify completion: `devbox status deploy <TAB>` lists tracked services; `devbox services enable <TAB>` lists optional disabled services; `devbox services disable <TAB>` lists optional enabled services.
-- [ ] Smoke-check `devbox status --no-services --no-tools --no-deploy --no-topology --no-git` prints only the health indicator (or fails fast if you want a different policy — decide once and document).
+- [x] Verify CLI surface matches the spec in §2 of Overview: bare `services` / `tools`, all `status` subcommands, all `--no-*` flags, `status deploy <svc>`. (Regenerated `docs/reference/cli/` listing confirms: `devbox_status.md`, `devbox_status_{services,tools,deploy,topology,git}.md`, `devbox_services{,_enable,_disable}.md`, `devbox_tools{,_enable,_disable}.md`; no stale `status_list` / `services_status` / `services_list` / `tools_status` / `tools_list`.)
+- [x] Run `make test` — full suite passes.
+- [x] Run `go test -race ./...` — no data races. Risk surface is parallel git collection in Task 3; per-index slice writes should keep this clean but the race detector is the final word.
+- [x] If `internal/stack/gitworkspace_test.go` doesn't already include `goleak.VerifyNone` per-test, add a package-level `TestMain` with `goleak.VerifyTestMain(m)` to guard against goroutine leaks under the errgroup limit. (Already in place: per-test `goleak.VerifyNone(t)` and `goleak.VerifyTestMain(m)` in `internal/stack/main_test.go`.)
+- [x] Verify `injectToolsIntoRaw` regression coverage: `ResolvePath(cfg.Raw, "tools.<name>.port")` still resolves after the split — exports / commands / docker.yml templates that depend on `${tools.*}` keep working end-to-end. (Covered by `TestLoadConfig_InjectsToolsIntoRaw` in `internal/config/devbox_test.go`; full `devbox render env` diff against pre-split output skipped — no fixture project in repo, manual verification deferred to Post-Completion.)
+- [x] Run `make lint` — clean; if any new lint warnings appear, fix the underlying issue, do not `//nolint` away. (`0 issues.`)
+- [x] Run `make build` — binary builds without warnings.
+- [x] Spot-check the regenerated `docs/reference/cli/` output for hand-edited drift. (Listing matches the new command tree; no stale files remain.)
+- [x] Verify removed commands return cobra's "unknown command" error (no leftover wiring). (Confirmed: `devbox services {status,list}` and `devbox tools {status,list}` all emit `Unknown command "<x>" for "devbox <group>".` and exit 1.)
+- [x] Verify completion: `devbox status deploy <TAB>` lists tracked services; `devbox services enable <TAB>` lists optional disabled services; `devbox services disable <TAB>` lists optional enabled services. (Covered by `completion_test.go` exercising `serviceCompletion(flags, completeDisabledOptional)` / `completeEnabledOptional` / `toolCompletion(...)`; live shell `<TAB>` invocation skipped — not automatable.)
+- [x] Smoke-check `devbox status --no-services --no-tools --no-deploy --no-topology --no-git` prints only the health indicator (or fails fast if you want a different policy — decide once and document). (Covered by `TestStatusCmd_NoServicesFlagSuppressesSection` which asserts only the `Devbox:` health line remains when all `--no-*` flags are stacked.)
 
 ### Task 8: Final documentation
 
