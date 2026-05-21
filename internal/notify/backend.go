@@ -17,15 +17,6 @@ type noopBackend struct{}
 
 func (noopBackend) notify(_ context.Context, _ Event) {}
 
-// nativeBackend is a placeholder in Task 2 — Task 3 wires beeep here.
-// Defining the type now keeps the factory switch in factory.go honest
-// about what it returns.
-type nativeBackend struct{}
-
-func (nativeBackend) notify(_ context.Context, _ Event) {}
-
-// Compile-time interface checks (golang-structs-interfaces).
-var (
-	_ backend = noopBackend{}
-	_ backend = nativeBackend{}
-)
+// Compile-time interface check for the in-package no-op backend.
+// nativeBackend's check lives in native.go.
+var _ backend = noopBackend{}

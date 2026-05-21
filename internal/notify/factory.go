@@ -50,7 +50,7 @@ func New(cfg *userconfig.Config) *Notifier {
 // know about yet).
 func pickBackend(channels []string) backend {
 	if slices.Contains(channels, "native") {
-		return nativeBackend{}
+		return newNativeBackend()
 	}
 	return nil
 }

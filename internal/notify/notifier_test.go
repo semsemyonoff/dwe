@@ -96,7 +96,7 @@ func TestNew_NativeChannel_ReturnsNative(t *testing.T) {
 	if !n.enabled {
 		t.Fatalf("expected enabled notifier")
 	}
-	if _, ok := n.backend.(nativeBackend); !ok {
+	if _, ok := n.backend.(*nativeBackend); !ok {
 		t.Fatalf("expected nativeBackend, got %T", n.backend)
 	}
 }
@@ -109,7 +109,7 @@ func TestNew_NativeAmongUnknown_PicksNative(t *testing.T) {
 	if !n.enabled {
 		t.Fatalf("expected enabled when native is present")
 	}
-	if _, ok := n.backend.(nativeBackend); !ok {
+	if _, ok := n.backend.(*nativeBackend); !ok {
 		t.Fatalf("expected nativeBackend, got %T", n.backend)
 	}
 }
@@ -230,7 +230,7 @@ func TestBackendForTest(t *testing.T) {
 	if !n.enabledForTest() {
 		t.Fatalf("expected enabled=true")
 	}
-	if _, ok := n.backendForTest().(nativeBackend); !ok {
+	if _, ok := n.backendForTest().(*nativeBackend); !ok {
 		t.Fatalf("expected nativeBackend via backendForTest, got %T", n.backendForTest())
 	}
 }

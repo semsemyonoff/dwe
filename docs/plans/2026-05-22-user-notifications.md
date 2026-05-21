@@ -131,8 +131,8 @@ Concrete file references gathered before drafting:
 
 ### Task 3: Wire `gen2brain/beeep` into `nativeBackend` with timeout
 
-- [ ] `go get github.com/gen2brain/beeep` and `go mod tidy`; verify `go.sum` and no transitive surprises (record the licence in case `make lint` has a license-check linter — current `.golangci.yml` does not, but check)
-- [ ] in `internal/notify/backend.go` (or a new `native.go`): implement `nativeBackend.notify(ctx, ev)` —
+- [x] `go get github.com/gen2brain/beeep` and `go mod tidy`; verify `go.sum` and no transitive surprises (record the licence in case `make lint` has a license-check linter — current `.golangci.yml` does not, but check)
+- [x] in `internal/notify/backend.go` (or a new `native.go`): implement `nativeBackend.notify(ctx, ev)` —
   - format title (`✓ Devbox: <op> succeeded` vs `✗ Devbox: <op> failed`), body (project name + humanised duration; on failure append first line of `Err.Error()` truncated to ~200 chars to keep the toast readable)
   - call beeep via a package-level function var `beeepNotify func(title, body, icon string) error` (test seam — default is `beeep.Notify`)
   - **Wrap in a timeout** (golang-design-patterns: "every external call should have a timeout"). `beeep` is synchronous and on some platforms the OS notifier daemon can stall. **Bounded-concurrency variant** (review finding: a naive goroutine + timeout leaks goroutines on stall):
@@ -180,11 +180,11 @@ Concrete file references gathered before drafting:
   - **Why a semaphore instead of `sync.Mutex` + `TryLock`**: with `mu.TryLock` + `defer mu.Unlock()` in the caller, the mutex would be released as soon as `notify` returns on the timeout/cancel branches — defeating the bound. Moving unlock ownership into the goroutine via a channel-based semaphore makes the "slot held until beeep returns" property structural rather than commentary.
   - **Drop-on-busy policy** is documented in `docs/reference/config/notifications.md` (Task 9): if a previous notification is still pending (or its OS notifier daemon hung), the new event is silently dropped with a debug log. Acceptable because devbox operations are long-running — back-to-back notifications within 2 seconds are unusual, and the policy bounds resource usage to one inner goroutine maximum per CLI process.
   - **Tests for the bound** (Task 3): use a `beeepNotify` test stub that blocks on a channel the test controls. Call `notify` once → assert goroutine running, slot occupied. Call `notify` a second time → assert it returns immediately with the debug-drop. Unblock the stub → assert the slot frees and a third call proceeds.
-- [ ] best-effort error handling: backend errors NEVER surface upward — `slog.Debug` only. This is intentional — the notification subsystem must never block a deploy or change its exit code.
-- [ ] wire `factory.New` to instantiate `nativeBackend` when `slices.Contains(cfg.NotifyChannels, "native")`; unknown channels logged at debug level and skipped (matches the forward-compat principle); a channel list containing only unknown entries falls back to `noopBackend` with `enabled: false`
-- [ ] write tests for `nativeBackend.notify`: success-event title format, failure-event title format + truncated err body, duration formatting (sub-second, seconds, minutes), beeep error swallowed via debug log only; **timeout case** — fake beeep that never returns, assert call returns within 2.1s without panic; **ctx.Done case** — pre-cancelled context returns immediately
-- [ ] write tests for `factory.New` selecting `nativeBackend` when `native` is in channels, `noopBackend` when an unknown channel is the only one present
-- [ ] run `make test` — must pass before Task 4
+- [x] best-effort error handling: backend errors NEVER surface upward — `slog.Debug` only. This is intentional — the notification subsystem must never block a deploy or change its exit code.
+- [x] wire `factory.New` to instantiate `nativeBackend` when `slices.Contains(cfg.NotifyChannels, "native")`; unknown channels logged at debug level and skipped (matches the forward-compat principle); a channel list containing only unknown entries falls back to `noopBackend` with `enabled: false`
+- [x] write tests for `nativeBackend.notify`: success-event title format, failure-event title format + truncated err body, duration formatting (sub-second, seconds, minutes), beeep error swallowed via debug log only; **timeout case** — fake beeep that never returns, assert call returns within 2.1s without panic; **ctx.Done case** — pre-cancelled context returns immediately
+- [x] write tests for `factory.New` selecting `nativeBackend` when `native` is in channels, `noopBackend` when an unknown channel is the only one present
+- [x] run `make test` — must pass before Task 4
 
 ### Task 4: Add `Notify bool` field to `model.CommandDef`
 
