@@ -230,16 +230,16 @@ Concrete file references gathered before drafting:
 
 ### Task 7: Hook notifier into `lifecycle.RunRun` with `SkipNotify` bypass
 
-- [ ] add `SkipNotify bool` to `lifecycle.RunContext` (`internal/lifecycle/run.go:27-36`)
-- [ ] in `RunRun`: change the signature to declare a named return `err error`. Follow the shared hookpoint contract (see Technical Details § "Hookpoint contract"):
+- [x] add `SkipNotify bool` to `lifecycle.RunContext` (`internal/lifecycle/run.go:27-36`)
+- [x] in `RunRun`: change the signature to declare a named return `err error`. Follow the shared hookpoint contract (see Technical Details § "Hookpoint contract"):
   - `if !ctx.SkipNotify { ...install notifier... }` — when `SkipNotify` is set (the `RunRestart` case) the entire notification setup block is skipped
   - inside the block: capture `start := time.Now()`; declare `var projectName string`; `ucfg, ucfgErr := userconfig.Load(...)`; on parser error `slog.Warn(...)` + `ucfg = nil`; `notifier := newNotifier(ucfg)` (consumer-local seam, see Task 6)
   - install `defer func() { notifier.Notify(context.Background(), notify.Event{Kind: notify.OpRun, Operation: "run", Outcome: outcomeFromErr(err), Duration: time.Since(start), Err: err, Project: projectName}) }()`
   - after the defer is installed, call the existing main-config load; on success `projectName = cfg.Project.Name`
-- [ ] in `RunRestart` (`internal/lifecycle/run.go:175`): set `ctx.SkipNotify = true` on the inner `RunRun` call so restart does not double-notify (and matches the spec's "restart does not notify" rule). Document the reason in a one-line comment because the why is non-obvious.
-- [ ] write tests in `internal/lifecycle/` for: `RunRun` invokes notifier on success and failure; `RunRun` with `SkipNotify=true` does **not** invoke notifier; `RunRestart` propagates `SkipNotify=true` to its inner `RunRun` (assert by intercepting the notifier factory). `RunStop` is not modified — no test addition needed there. Use the consumer-local `notifier` interface seam (`internal/lifecycle/notify.go`) declared per Task 6's pattern.
-- [ ] write tests for the `notify.Event.Project` field — the project name is correctly populated from `cfg.Project.Name`
-- [ ] run `make test` — must pass before Task 8
+- [x] in `RunRestart` (`internal/lifecycle/run.go:175`): set `ctx.SkipNotify = true` on the inner `RunRun` call so restart does not double-notify (and matches the spec's "restart does not notify" rule). Document the reason in a one-line comment because the why is non-obvious.
+- [x] write tests in `internal/lifecycle/` for: `RunRun` invokes notifier on success and failure; `RunRun` with `SkipNotify=true` does **not** invoke notifier; `RunRestart` propagates `SkipNotify=true` to its inner `RunRun` (assert by intercepting the notifier factory). `RunStop` is not modified — no test addition needed there. Use the consumer-local `notifier` interface seam (`internal/lifecycle/notify.go`) declared per Task 6's pattern.
+- [x] write tests for the `notify.Event.Project` field — the project name is correctly populated from `cfg.Project.Name`
+- [x] run `make test` — must pass before Task 8
 
 ### Task 8: Hook notifier into `usercommands.RunCommand` (gated on `Cmd.Notify` and not-`SkipNotify`)
 

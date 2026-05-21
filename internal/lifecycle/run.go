@@ -1,18 +1,23 @@
 package lifecycle
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/git"
+	"devbox-cli/internal/notify"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/userconfig"
 )
 
 // GitProbeFunc is a package-level variable so tests can inject stubs without
@@ -33,6 +38,10 @@ type RunContext struct {
 	// Callers inject this to avoid importing the cobra info renderer into this package.
 	// If nil, no info display is attempted.
 	ShowInfo func() error
+	// SkipNotify suppresses the end-of-run desktop notification. Set true by
+	// RunRestart on its inner RunRun call so a restart fires at most one
+	// notification (and the spec says restart never notifies).
+	SkipNotify bool
 }
 
 // resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
@@ -49,13 +58,39 @@ func resolveUpdateMode(cfg *config.LifecycleRunConfig, noUpdate bool, updateFlag
 }
 
 // RunRun executes the full run lifecycle driven by devbox/lifecycle.yml.
-func RunRun(ctx RunContext) error {
+func RunRun(ctx RunContext) (err error) {
 	workDir := filepath.Dir(ctx.ConfigPath)
+
+	// Install notifier defer before any error-returning step so an early
+	// config-load failure still fires a "run failed" notification.
+	// projectName stays empty until main config load succeeds and is read
+	// by the defer through closure capture.
+	var projectName string
+	if !ctx.SkipNotify {
+		start := time.Now()
+		ucfg, ucfgErr := userconfig.Load(workDir)
+		if ucfgErr != nil {
+			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
+			ucfg = nil
+		}
+		n := newNotifier(ucfg)
+		defer func() {
+			n.Notify(context.Background(), notify.Event{
+				Kind:      notify.OpRun,
+				Operation: "run",
+				Outcome:   notify.OutcomeFromErr(err),
+				Duration:  time.Since(start),
+				Err:       err,
+				Project:   projectName,
+			})
+		}()
+	}
 
 	cfg, err := config.LoadConfig(ctx.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	projectName = cfg.Project.Name
 
 	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
@@ -119,6 +154,7 @@ func RunRun(ctx RunContext) error {
 		if err != nil {
 			return fmt.Errorf("reloading config after pull: %w", err)
 		}
+		projectName = cfg.Project.Name
 		lifecycleCfg, err = config.LoadLifecycleConfig(lifecyclePath)
 		if err != nil {
 			return fmt.Errorf("reloading lifecycle config after pull: %w", err)
@@ -182,6 +218,10 @@ func RunRestart(ctx RunContext) error {
 	}
 	ctx.NoUpdate = true
 	ctx.UpdateMode = ""
+	// Restart never notifies — the inner run leg is part of a composite
+	// operation, not a user-invoked run. Spec: restart fires zero
+	// notifications.
+	ctx.SkipNotify = true
 	return RunRun(ctx)
 }
 
