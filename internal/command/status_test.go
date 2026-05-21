@@ -17,7 +17,16 @@ func statusFixture(t *testing.T) string {
 project:
   name: test
   prefix: devbox
-services:
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Services are loaded from devbox/services.yml — not from inline devbox.yml.
+	servicesYML := `services:
   main:
     type: app
     container: app-main
@@ -26,11 +35,7 @@ services:
     type: worker
     container: app-worker
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	devboxDir := filepath.Join(dir, "devbox")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return filepath.Join(dir, "devbox.yml")
@@ -70,6 +75,39 @@ func TestStatusCmd_NoServicesFlagSuppressesSection(t *testing.T) {
 	}
 	if strings.Contains(out, "Services") {
 		t.Errorf("--no-services should suppress Services title:\n%s", out)
+	}
+}
+
+func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
+	tests := []struct {
+		flag    string
+		section string
+	}{
+		{"--no-services", "Services"},
+		{"--no-tools", "Tools"},
+		{"--no-deploy", "Deploy Status"},
+		{"--no-topology", "Topology"},
+		{"--no-git", "Git Workspace"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.flag, func(t *testing.T) {
+			configPath := statusFixture(t)
+			root := NewRootCmd()
+			var buf bytes.Buffer
+			root.SetOut(&buf)
+			root.SetErr(&buf)
+			root.SetArgs([]string{"-c", configPath, "status", tt.flag})
+			if err := root.Execute(); err != nil {
+				t.Fatalf("execute: %v", err)
+			}
+			out := buf.String()
+			if strings.Contains(out, tt.section) {
+				t.Errorf("%s should suppress %q section:\n%s", tt.flag, tt.section, out)
+			}
+			if !strings.Contains(out, "Devbox:") {
+				t.Errorf("health line must still appear with %s:\n%s", tt.flag, out)
+			}
+		})
 	}
 }
 

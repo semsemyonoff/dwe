@@ -174,6 +174,9 @@ func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel,
 	if err != nil {
 		return "", err
 	}
+	if idx < 0 || idx >= len(names) {
+		return "", fmt.Errorf("selector returned invalid index %d for %d candidates", idx, len(names))
+	}
 	return names[idx], nil
 }
 
@@ -285,7 +288,7 @@ func serviceCompletion(flags *rootFlags, filter serviceFilter) func(*cobra.Comma
 		}
 		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		var names []string
 		for name, svc := range cfg.Services {

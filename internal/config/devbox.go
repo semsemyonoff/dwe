@@ -934,8 +934,8 @@ type toolsFile struct {
 }
 
 // LoadToolsConfig loads tool definitions from devbox/tools.yml using strict
-// known-field decoding. A missing file returns an empty ToolsConfig and nil
-// error (symmetric with the optional services.yml).
+// known-field decoding. A missing file returns (nil, os.ErrNotExist) — callers
+// must test with errors.Is(err, os.ErrNotExist).
 func LoadToolsConfig(path string) (ToolsConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

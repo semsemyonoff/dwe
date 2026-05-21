@@ -41,6 +41,9 @@ func RenderHealth(in StatusInput) string {
 // string when no rows.
 func RenderServices(in StatusInput) (string, []error) {
 	rows := collectServiceRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
+	if len(rows) == 0 {
+		return "", nil
+	}
 	extraCols := BuildCustomColumns(in.Cfg, KindService)
 	var errs []error
 	if len(extraCols) > 0 {
@@ -63,9 +66,12 @@ func RenderServices(in StatusInput) (string, []error) {
 }
 
 // RenderTools returns the Tools section title + table as a single string,
-// plus per-row custom-column template errors.
+// plus per-row custom-column template errors. Empty string when no rows.
 func RenderTools(in StatusInput) (string, []error) {
 	toolRows := collectToolRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
+	if len(toolRows) == 0 {
+		return "", nil
+	}
 	extraCols := BuildCustomColumns(in.Cfg, KindTool)
 	var errs []error
 	if len(extraCols) > 0 {

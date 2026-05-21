@@ -204,7 +204,7 @@ services:
 | `.Globals.<key>` | `cfg.Raw["globals"]` if present, else `nil` | lowercase YAML keys (`.Globals.baseImageTag`) |
 | `.Raw.<key>...` | full `cfg.Raw` map | lowercase YAML keys (`.Raw.runtime.ports.app`, `.Raw.project.name`) |
 
-The data root has only those four keys — there are no `.Project` / `.Runtime` / `.Tools` aliases at the root. Drill into `.Raw.project.*`, `.Raw.runtime.*`, `.Raw.tools.*` instead.
+The data root has only those three keys — there are no `.Project` / `.Runtime` / `.Tools` aliases at the root. Drill into `.Raw.project.*`, `.Raw.runtime.*`, `.Raw.tools.*` instead.
 
 **Failure handling**: a template that errors out renders as `—` in the table and contributes to a single aggregated warning (`warning: N custom status expression(s) failed to render`) on stderr. The command still exits 0.
 
