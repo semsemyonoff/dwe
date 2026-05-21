@@ -129,6 +129,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 		},
 	}
 	cmd.Flags().StringArrayVar(&setFlags, "set", nil, "Set a param value (key=value)")
+	_ = cmd.RegisterFlagCompletionFunc("set", daemonSetCompletion(flags))
 	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompts; intended for non-interactive use such as scripts and nested command runs")
 	cmd.Flags().BoolVarP(&inspectFlag, "inspect", "i", false, "Show the full definition of the given command id instead of running it")
 	cmd.MarkFlagsMutuallyExclusive("inspect", "set")
