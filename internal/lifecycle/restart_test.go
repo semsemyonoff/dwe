@@ -24,6 +24,9 @@ func TestRunRestart_MissingLifecycleYML(t *testing.T) {
 }
 
 func TestRunRestart_MissingStopSection(t *testing.T) {
+	// With the auto-reap contract, missing stop: is fine — the stop leg
+	// runs the synthetic reap phase only. Restart should therefore reach
+	// the run leg and succeed.
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -37,12 +40,8 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 	}
 
 	ctx := RunContext{ConfigPath: cfgPath}
-	err := RunRestart(ctx)
-	if err == nil {
-		t.Fatal("expected error for missing stop: section, got nil")
-	}
-	if !strings.Contains(err.Error(), "stop:") && !strings.Contains(err.Error(), "stop` section") {
-		t.Errorf("error should mention missing stop section, got: %v", err)
+	if err := RunRestart(ctx); err != nil {
+		t.Fatalf("RunRestart with missing stop: section should succeed, got: %v", err)
 	}
 }
 

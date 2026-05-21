@@ -3,8 +3,9 @@ package lifecycle
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"devbox-cli/internal/config"
 )
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {
@@ -12,12 +13,8 @@ func TestRunStop_MissingLifecycleYML(t *testing.T) {
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
 	ctx := StopContext{ConfigPath: cfgPath}
-	err := RunStop(ctx)
-	if err == nil {
-		t.Fatal("expected error for missing lifecycle.yml, got nil")
-	}
-	if !strings.Contains(err.Error(), "no lifecycle.yml") {
-		t.Errorf("error should mention 'no lifecycle.yml', got: %v", err)
+	if err := RunStop(ctx); err != nil {
+		t.Fatalf("RunStop with missing lifecycle.yml should succeed (auto-reap only), got: %v", err)
 	}
 }
 
@@ -35,12 +32,8 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	}
 
 	ctx := StopContext{ConfigPath: cfgPath}
-	err := RunStop(ctx)
-	if err == nil {
-		t.Fatal("expected error for missing stop: section, got nil")
-	}
-	if !strings.Contains(err.Error(), "stop:") && !strings.Contains(err.Error(), "stop` section") {
-		t.Errorf("error should mention missing stop section, got: %v", err)
+	if err := RunStop(ctx); err != nil {
+		t.Fatalf("RunStop with no stop: section should succeed (auto-reap only), got: %v", err)
 	}
 }
 
@@ -60,5 +53,65 @@ func TestRunStop_HappyPath(t *testing.T) {
 	ctx := StopContext{ConfigPath: cfgPath}
 	if err := RunStop(ctx); err != nil {
 		t.Errorf("unexpected error on happy path: %v", err)
+	}
+}
+
+func TestEnsureStopConfig_NilConfig(t *testing.T) {
+	out := EnsureStopConfig(nil)
+	if out == nil {
+		t.Fatal("EnsureStopConfig(nil) returned nil")
+	}
+	if len(out.Phases) != 1 {
+		t.Fatalf("expected 1 synthetic phase, got %d", len(out.Phases))
+	}
+	if out.Phases[0].Name != AutoReapPhaseName {
+		t.Errorf("expected phase name %q, got %q", AutoReapPhaseName, out.Phases[0].Name)
+	}
+	if out.FinalMessage == "" {
+		t.Error("expected default final message")
+	}
+}
+
+func TestEnsureStopConfig_NilStop(t *testing.T) {
+	out := EnsureStopConfig(&config.LifecycleConfig{Stop: nil})
+	if len(out.Phases) != 1 || out.Phases[0].Name != AutoReapPhaseName {
+		t.Fatalf("expected reap-only phases, got %+v", out.Phases)
+	}
+}
+
+func TestEnsureStopConfig_PrependsToUserPhases(t *testing.T) {
+	user := config.DeployPhase{Name: "user-down"}
+	in := &config.LifecycleConfig{
+		Stop: &config.LifecycleStopConfig{
+			FinalMessage: "Bye",
+			Phases:       []config.DeployPhase{user},
+		},
+	}
+	out := EnsureStopConfig(in)
+	if len(out.Phases) != 2 {
+		t.Fatalf("expected 2 phases, got %d", len(out.Phases))
+	}
+	if out.Phases[0].Name != AutoReapPhaseName {
+		t.Errorf("reap phase must be first, got %q", out.Phases[0].Name)
+	}
+	if out.Phases[1].Name != "user-down" {
+		t.Errorf("user phase must follow, got %q", out.Phases[1].Name)
+	}
+	if out.FinalMessage != "Bye" {
+		t.Errorf("expected final message preserved, got %q", out.FinalMessage)
+	}
+	// Ensure the caller's slice was not aliased / mutated.
+	if len(in.Stop.Phases) != 1 {
+		t.Errorf("EnsureStopConfig must not mutate the input slice; got len=%d", len(in.Stop.Phases))
+	}
+}
+
+func TestEnsureStopConfig_DefaultsFinalMessage(t *testing.T) {
+	in := &config.LifecycleConfig{
+		Stop: &config.LifecycleStopConfig{FinalMessage: "", Phases: nil},
+	}
+	out := EnsureStopConfig(in)
+	if out.FinalMessage == "" {
+		t.Error("expected fallback final message when empty")
 	}
 }

@@ -17,7 +17,11 @@ type StopContext struct {
 	Yes        bool
 }
 
-// RunStop executes the full stop lifecycle driven by devbox/lifecycle.yml.
+// RunStop executes the full stop lifecycle.
+//
+// lifecycle.yml is optional for stop: when absent, only the synthetic
+// _auto_reap_daemons phase runs, followed by the default final message.
+// When present, the auto-reap phase is prepended to the user-defined phases.
 func RunStop(ctx StopContext) error {
 	workDir := filepath.Dir(ctx.ConfigPath)
 
@@ -28,25 +32,21 @@ func RunStop(ctx StopContext) error {
 
 	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("no lifecycle.yml — see devbox/lifecycle.example.yml")
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("loading lifecycle config: %w", err)
 	}
-	if lifecycleCfg.Stop == nil {
-		return fmt.Errorf("lifecycle.yml has no `stop:` section — see devbox/lifecycle.example.yml")
-	}
+
+	stopCfg := EnsureStopConfig(lifecycleCfg)
 
 	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
 
-	if err := RunPhases(cfg, reg, workDir, lifecycleCfg.Stop.Phases, "stop", "stop", ctx.Yes, lifecycleCfg.Stop.LogEnabled()); err != nil {
+	if err := RunPhases(cfg, reg, workDir, stopCfg.Phases, "stop", "stop", ctx.Yes, stopCfg.LogEnabled()); err != nil {
 		return err
 	}
 
-	render.Stdout().Success(lifecycleCfg.Stop.FinalMessage)
+	render.Stdout().Success(stopCfg.FinalMessage)
 	return nil
 }

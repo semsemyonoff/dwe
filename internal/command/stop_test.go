@@ -3,7 +3,6 @@ package command
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -45,6 +44,8 @@ func TestStopCmd_RegisteredAtRoot(t *testing.T) {
 }
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {
+	// lifecycle.yml is optional for stop — the auto-injected reap phase
+	// runs alone.
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -54,16 +55,13 @@ func TestRunStop_MissingLifecycleYML(t *testing.T) {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("expected error for missing lifecycle.yml, got nil")
-	}
-	if !strings.Contains(err.Error(), "no lifecycle.yml") {
-		t.Errorf("error should mention 'no lifecycle.yml', got: %v", err)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("stop with missing lifecycle.yml should succeed, got: %v", err)
 	}
 }
 
 func TestRunStop_MissingStopSection(t *testing.T) {
+	// lifecycle.yml without a stop: section is fine — auto-reap runs alone.
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -82,11 +80,7 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("expected error for missing stop: section, got nil")
-	}
-	if !strings.Contains(err.Error(), "stop:") && !strings.Contains(err.Error(), "stop` section") {
-		t.Errorf("error should mention missing stop section, got: %v", err)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("stop with no stop: section should succeed, got: %v", err)
 	}
 }

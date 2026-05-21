@@ -276,21 +276,21 @@ Checklist:
 
 Checklist:
 
-- [ ] add `internal/builtin/daemons_reap.go` — `daemons_reap` builtin: computes `projectFullName := ectx.Config.Project.FullName()`, builds `compose := docker.NewCompose(ectx.Config, ectx.DockerConfig)` (DockerConfig from `ectx`, threaded via `ExecContext`; never loaded inside the builtin — see invariant #7). Used only for `BinName()` + `BuildEnv()` (`docker ps`/`docker stop` are NOT compose subcommands so `BuildArgs` is not used). Enumerates running containers via raw `<compose.BinName()> ps --format=json --filter label=devbox.project=<full> --filter label=devbox.daemon.id` (NDJSON — one JSON object per line; parse with `bufio.Scanner` + `json.Unmarshal`, **not** `json.Unmarshal` over the whole buffer) with `cmd.Env = compose.BuildEnv()` so `DOCKER_HOST` / `DOCKER_CONTEXT` from `docker.yml` `process_env` apply. Calls raw `<compose.BinName()> stop -t <default-timeout>` on each via `exec.CommandContext` with the same env. Prints either `✓ reaped N daemon(s): <names>` or `no daemons running`. Accepts no `with:` parameters in v1
-- [ ] register `daemons_reap` in `Builtins` map
-- [ ] **lifecycle.yml missing-file behavior change**: introduce `lifecycle.EnsureStopConfig(cfg *config.LifecycleConfig) *config.LifecycleStopConfig` (new file `internal/lifecycle/autoreap.go`) that:
+- [x] add `internal/builtin/daemons_reap.go` — `daemons_reap` builtin: computes `projectFullName := ectx.Config.Project.FullName()`, builds `compose := docker.NewCompose(ectx.Config, ectx.DockerConfig)` (DockerConfig from `ectx`, threaded via `ExecContext`; never loaded inside the builtin — see invariant #7). Used only for `BinName()` + `BuildEnv()` (`docker ps`/`docker stop` are NOT compose subcommands so `BuildArgs` is not used). Enumerates running containers via raw `<compose.BinName()> ps --format=json --filter label=devbox.project=<full> --filter label=devbox.daemon.id` (NDJSON — one JSON object per line; parse with `bufio.Scanner` + `json.Unmarshal`, **not** `json.Unmarshal` over the whole buffer) with `cmd.Env = compose.BuildEnv()` so `DOCKER_HOST` / `DOCKER_CONTEXT` from `docker.yml` `process_env` apply. Calls raw `<compose.BinName()> stop -t <default-timeout>` on each via `exec.CommandContext` with the same env. Prints either `✓ reaped N daemon(s): <names>` or `no daemons running`. Accepts no `with:` parameters in v1
+- [x] register `daemons_reap` in `Builtins` map
+- [x] **lifecycle.yml missing-file behavior change**: introduce `lifecycle.EnsureStopConfig(cfg *config.LifecycleConfig) *config.LifecycleStopConfig` (new file `internal/lifecycle/autoreap.go`) that:
   - returns a synthetic `&LifecycleStopConfig{Phases: [reap-phase], FinalMessage: defaultStopMessage}` if `cfg == nil` or `cfg.Stop == nil`
   - otherwise returns a copy of `cfg.Stop` with the `_auto_reap_daemons` phase prepended
-- [ ] update `internal/lifecycle/stop.go:30` `RunStop`: on `errors.Is(err, os.ErrNotExist)`, do NOT error; instead set `lifecycleCfg = nil` and continue. Always pass the result through `EnsureStopConfig`. Remove the now-stale `cfg.Stop == nil` hard error
-- [ ] **docs change**: this is a user-visible behavior change — `devbox stop` no longer requires `lifecycle.yml`. Update `docs/reference/config/lifecycle.md` to document: lifecycle.yml is optional for `stop`; when absent, only `_auto_reap_daemons` runs followed by the default "Project is stopped" message. `run`/`restart` still require lifecycle.yml (they're not in scope here, no change)
-- [ ] keep the synthetic phase name `_auto_reap_daemons` (leading underscore) visible in plan output for transparency; do **not** make it opt-out (per planning decision)
-- [ ] write tests:
+- [x] update `internal/lifecycle/stop.go:30` `RunStop`: on `errors.Is(err, os.ErrNotExist)`, do NOT error; instead set `lifecycleCfg = nil` and continue. Always pass the result through `EnsureStopConfig`. Remove the now-stale `cfg.Stop == nil` hard error
+- [x] **docs change**: this is a user-visible behavior change — `devbox stop` no longer requires `lifecycle.yml`. Update `docs/reference/config/lifecycle.md` to document: lifecycle.yml is optional for `stop`; when absent, only `_auto_reap_daemons` runs followed by the default "Project is stopped" message. `run`/`restart` still require lifecycle.yml (they're not in scope here, no change)
+- [x] keep the synthetic phase name `_auto_reap_daemons` (leading underscore) visible in plan output for transparency; do **not** make it opt-out (per planning decision)
+- [x] write tests:
   - `EnsureStopConfig(nil)` → returns synthetic with reap-only phase
   - `EnsureStopConfig(&LifecycleConfig{Stop: nil})` → same
   - `EnsureStopConfig(&LifecycleConfig{Stop: &LifecycleStopConfig{Phases: [user]}})` → reap is first phase, user phases follow
   - `RunStop` integration with missing lifecycle.yml file (use `t.TempDir` without writing the file) → no error, reap runs
   - `daemons_reap` builtin parses multi-object NDJSON correctly via docker-stdout seam
-- [ ] run `go test ./internal/lifecycle/... ./internal/config/... ./internal/builtin/...` — must pass before task 8
+- [x] run `go test ./internal/lifecycle/... ./internal/config/... ./internal/builtin/...` — must pass before task 8
 
 ### Task 8: `status daemons` section + `--no-daemons` flag
 - [ ] add `sectionDaemons` to the `Section` enum and `defaultSectionOrder` in `internal/command/status.go` (insert after `sectionTools`); add a `--no-daemons` flag honouring the existing default-only suppression pattern

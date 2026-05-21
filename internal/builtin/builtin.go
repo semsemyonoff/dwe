@@ -82,6 +82,7 @@ var registry = map[string]Builtin{
 	"docker_daemon_start":           daemonStartBuiltin{},
 	"docker_daemon_logs":            daemonLogsBuiltin{},
 	"docker_daemon_stop":            daemonStopBuiltin{},
+	"daemons_reap":                  daemonsReapBuiltin{},
 	"remove_paths":                  removePathsBuiltin{},
 }
 
