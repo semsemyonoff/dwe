@@ -55,10 +55,14 @@ func runGitStatus(ctx context.Context, dir string) ([]byte, error) {
 // one row per service that has services.<name>.dir configured. The slice is
 // alphabetically sorted by service name. Cancellation propagates via ctx.
 //
+// projectRoot is the resolved project root directory. Relative service dirs
+// are joined against it so the collector works correctly when devbox is
+// invoked from a subdirectory of the project.
+//
 // Per-row Err discriminates "service has no own repo" (Err == nil, blank
 // cells) from "configuration smells" (Err != nil — dir missing, shellout
 // failure, parse failure).
-func CollectGitWorkspace(ctx context.Context, cfg *config.DevboxConfig) []statusview.GitWorkspaceRow {
+func CollectGitWorkspace(ctx context.Context, cfg *config.DevboxConfig, projectRoot string) []statusview.GitWorkspaceRow {
 	if cfg == nil {
 		return nil
 	}
@@ -70,10 +74,14 @@ func CollectGitWorkspace(ctx context.Context, cfg *config.DevboxConfig) []status
 		if svc.Dir == "" {
 			continue
 		}
+		dir := svc.Dir
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(projectRoot, dir)
+		}
 		indices = append(indices, len(rows))
 		rows = append(rows, statusview.GitWorkspaceRow{
 			Service: name,
-			Dir:     svc.Dir,
+			Dir:     dir,
 		})
 	}
 

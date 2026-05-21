@@ -134,7 +134,7 @@ func TestCollectGitWorkspace_BlankWhenNoOwnGit(t *testing.T) {
 			"app": {Dir: svcDir},
 		},
 	}
-	rows := CollectGitWorkspace(t.Context(), cfg)
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row, got %d", len(rows))
 	}
@@ -158,7 +158,7 @@ func TestCollectGitWorkspace_DirMissingErrors(t *testing.T) {
 			"ghost": {Dir: "/definitely/does/not/exist/anywhere"},
 		},
 	}
-	rows := CollectGitWorkspace(t.Context(), cfg)
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row, got %d", len(rows))
 	}
@@ -176,7 +176,7 @@ func TestCollectGitWorkspace_SkipsServicesWithoutDir(t *testing.T) {
 			"without": {Dir: ""},
 		},
 	}
-	rows := CollectGitWorkspace(t.Context(), cfg)
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row, got %d", len(rows))
 	}
@@ -206,7 +206,7 @@ func TestCollectGitWorkspace_RealRepoClean(t *testing.T) {
 			"app": {Dir: svcDir},
 		},
 	}
-	rows := CollectGitWorkspace(t.Context(), cfg)
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row, got %d", len(rows))
 	}
@@ -254,7 +254,7 @@ func TestCollectGitWorkspace_RealRepoDirty(t *testing.T) {
 			"app": {Dir: svcDir},
 		},
 	}
-	rows := CollectGitWorkspace(t.Context(), cfg)
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
 	if !rows[0].Dirty {
 		t.Fatal("expected dirty")
 	}
@@ -280,7 +280,7 @@ func TestCollectGitWorkspace_ShelloutFailure(t *testing.T) {
 			"app": {Dir: svcDir},
 		},
 	}
-	rows := CollectGitWorkspace(t.Context(), cfg)
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
 	if rows[0].Err == nil {
 		t.Fatal("expected Err for shellout failure")
 	}
@@ -288,7 +288,7 @@ func TestCollectGitWorkspace_ShelloutFailure(t *testing.T) {
 
 func TestCollectGitWorkspace_NilCfg(t *testing.T) {
 	defer goleak.VerifyNone(t)
-	if rows := CollectGitWorkspace(t.Context(), nil); rows != nil {
+	if rows := CollectGitWorkspace(t.Context(), nil, ""); rows != nil {
 		t.Fatalf("want nil, got %v", rows)
 	}
 }
@@ -310,7 +310,7 @@ func TestCollectGitWorkspace_OrderingAlphabetical(t *testing.T) {
 			"b": {Dir: filepath.Join(root, "b")},
 		},
 	}
-	rows := CollectGitWorkspace(t.Context(), cfg)
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
 	want := []string{"a", "b", "c"}
 	if len(rows) != 3 {
 		t.Fatalf("want 3 rows, got %d", len(rows))
@@ -319,6 +319,44 @@ func TestCollectGitWorkspace_OrderingAlphabetical(t *testing.T) {
 		if r.Service != want[i] {
 			t.Fatalf("row %d: got %q want %q", i, r.Service, want[i])
 		}
+	}
+}
+
+// TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot verifies that
+// a service dir configured as a relative path (e.g. "services/app") is
+// resolved against projectRoot so the collector works when devbox is invoked
+// from a subdirectory of the project.
+func TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot(t *testing.T) {
+	requireGit(t)
+	defer goleak.VerifyNone(t)
+
+	projectRoot := t.TempDir()
+	svcDir := filepath.Join(projectRoot, "services", "app")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitInit(t, svcDir)
+	if err := os.WriteFile(filepath.Join(svcDir, "README"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, svcDir, "git", "add", ".")
+	mustRun(t, svcDir, "git", "commit", "-m", "init")
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"app": {Dir: "services/app"},
+		},
+	}
+	rows := CollectGitWorkspace(t.Context(), cfg, projectRoot)
+	if len(rows) != 1 {
+		t.Fatalf("want 1 row, got %d", len(rows))
+	}
+	r := rows[0]
+	if r.Err != nil {
+		t.Fatalf("unexpected Err: %v", r.Err)
+	}
+	if r.Branch != "main" {
+		t.Fatalf("got branch=%q, want main", r.Branch)
 	}
 }
 

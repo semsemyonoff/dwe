@@ -216,7 +216,7 @@ func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInpu
 	case sectionTopology:
 		writeNonEmpty(out, stack.RenderTopology(in))
 	case sectionGit:
-		rows := stack.CollectGitWorkspace(ctx, sc.Cfg)
+		rows := stack.CollectGitWorkspace(ctx, sc.Cfg, sc.ProjectRoot)
 		if len(rows) == 0 {
 			return nil
 		}
