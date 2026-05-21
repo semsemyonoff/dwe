@@ -189,3 +189,57 @@ func TestStatusCmd_RejectsPositionalArg_E2E(t *testing.T) {
 		t.Fatal("expected error: status accepts no positional args")
 	}
 }
+
+func TestStatusDeployCmd_NoArgs_RunsWithoutError(t *testing.T) {
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "deploy"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("status deploy with no args should succeed: %v", err)
+	}
+}
+
+func TestStatusDeployCmd_TwoArgs_Rejected(t *testing.T) {
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "deploy", "a", "b"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("expected error: status deploy accepts at most 1 arg")
+	}
+}
+
+func TestStatusCmd_TopologySubcommandRuns(t *testing.T) {
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "topology"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("status topology should succeed: %v", err)
+	}
+	if strings.Contains(buf.String(), "Devbox:") {
+		t.Errorf("topology subcommand should NOT print health indicator: %s", buf.String())
+	}
+}
+
+func TestStatusCmd_GitSubcommandRuns(t *testing.T) {
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "git"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("status git should succeed: %v", err)
+	}
+	if strings.Contains(buf.String(), "Devbox:") {
+		t.Errorf("git subcommand should NOT print health indicator: %s", buf.String())
+	}
+}

@@ -69,7 +69,7 @@ func loadStatusContext(flags *rootFlags) (*statusContext, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading deploy state: %w", err)
 	}
-	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath)
+	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath) // nil-tolerant: LoadTrackedServices skips gate validation on error
 	tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, flags.ProjectRoot())
 	if err != nil {
 		return nil, fmt.Errorf("loading tracked services: %w", err)

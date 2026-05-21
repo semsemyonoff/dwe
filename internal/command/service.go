@@ -84,7 +84,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 	}
 
 	if len(lockedNames) > 0 {
-		w := render.Stdout()
+		w := render.NewWriter(cmd.OutOrStdout())
 		_, _ = fmt.Fprintln(w.Writer(), ui.StyleSubheader("Always on: ")+ui.StyleMuted(strings.Join(lockedNames, ", ")))
 	}
 
@@ -116,13 +116,13 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 	if len(toDisable) > 0 {
 		parts = append(parts, "disabled: "+strings.Join(toDisable, ", "))
 	}
-	render.Stdout().Success(strings.Join(parts, "; "))
+	render.NewWriter(cmd.OutOrStdout()).Success(strings.Join(parts, "; "))
 
 	envPath, err := envfile.Regenerate(flags.configPath)
 	if err != nil {
 		return err
 	}
-	render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
+	render.NewWriter(cmd.OutOrStdout()).Info(fmt.Sprintf(".env regenerated → %s", envPath))
 	return nil
 }
 

@@ -178,6 +178,126 @@ func TestOptionalServiceNameCompletion_filtersOutMandatory(t *testing.T) {
 	}
 }
 
+func TestServiceCompletion_disabledOptional_filtersCorrectly(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxDir := filepath.Join(tmpDir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "devbox.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defaultsYML := `project:
+  name: test
+  prefix: test
+services:
+  api:
+    enabled: true
+  worker:
+    enabled: false
+runtime:
+  ports:
+    app: 3000
+  hosts:
+    main: localhost
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	servicesYML := `services:
+  main:
+    type: app
+    container: app-main
+    mandatory: true
+  api:
+    type: app
+    container: app-api
+  worker:
+    type: worker
+    container: app-worker
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flags := &rootFlags{configPath: filepath.Join(tmpDir, "devbox.yml"), projectRoot: tmpDir}
+
+	// completeDisabledOptional: should return only 'worker' (disabled, non-mandatory).
+	fn := serviceCompletion(flags, completeDisabledOptional)
+	completions, directive := fn(nil, []string{}, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
+	}
+	if len(completions) != 1 || completions[0] != "worker" {
+		t.Errorf("completeDisabledOptional: expected [worker], got %v", completions)
+	}
+
+	// completeEnabledOptional: should return only 'api' (enabled, non-mandatory).
+	fn2 := serviceCompletion(flags, completeEnabledOptional)
+	completions2, _ := fn2(nil, []string{}, "")
+	if len(completions2) != 1 || completions2[0] != "api" {
+		t.Errorf("completeEnabledOptional: expected [api], got %v", completions2)
+	}
+}
+
+func TestToolCompletion_enabledFilter_filtersCorrectly(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxDir := filepath.Join(tmpDir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "devbox.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defaultsYML := `project:
+  name: test
+  prefix: test
+tools:
+  adminer:
+    enabled: true
+  elasticvue:
+    enabled: false
+runtime:
+  ports:
+    app: 3000
+  hosts:
+    main: localhost
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	toolsYML := `tools:
+  adminer:
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+  elasticvue:
+    container: elasticvue
+    host: elasticvue.localhost
+    port: 8044
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flags := &rootFlags{configPath: filepath.Join(tmpDir, "devbox.yml"), projectRoot: tmpDir}
+
+	// completeToolDisabled: should return only 'elasticvue'.
+	fn := toolCompletion(flags, completeToolDisabled)
+	completions, directive := fn(nil, []string{}, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
+	}
+	if len(completions) != 1 || completions[0] != "elasticvue" {
+		t.Errorf("completeToolDisabled: expected [elasticvue], got %v", completions)
+	}
+
+	// completeToolEnabled: should return only 'adminer'.
+	fn2 := toolCompletion(flags, completeToolEnabled)
+	completions2, _ := fn2(nil, []string{}, "")
+	if len(completions2) != 1 || completions2[0] != "adminer" {
+		t.Errorf("completeToolEnabled: expected [adminer], got %v", completions2)
+	}
+}
+
 // --- toolNameCompletion ---
 
 func TestToolNameCompletion_returnsConfiguredTools(t *testing.T) {
