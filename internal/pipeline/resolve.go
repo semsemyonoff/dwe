@@ -198,10 +198,15 @@ func resolveParallelStep(cfg *config.DevboxConfig, reg *registry.Registry, phase
 			sub.SkipConfirm = true
 		}
 		// Reject interactive prompts in sub-steps unless skip_confirm is set.
+		// skip_confirm only suppresses the confirm builtin's auto-yes path.
+		// Other interactive builtins (e.g. docker_daemon_logs) have no
+		// auto-skip path and must be rejected regardless of skip_confirm.
 		if !sub.SkipConfirm {
 			if err := checkInteractive(reg, sub, map[string]bool{}); err != nil {
 				return nil, fmt.Errorf("step %s/%s: %w", prefix, sub.Name, err)
 			}
+		} else if sub.Type == "builtin" && builtin.IsInteractive(sub.Cmd) && sub.Cmd != "confirm" {
+			return nil, fmt.Errorf("step %s/%s: %w", prefix, sub.Name, ErrInteractiveInParallel)
 		}
 		rs, ok, err := resolveLeafStep(cfg, reg, phase, service, sub, phaseRuntimeWhen)
 		if err != nil {

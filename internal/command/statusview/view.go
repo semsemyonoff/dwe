@@ -47,7 +47,7 @@ type DeploySummary struct {
 // collector before reaching the renderer.
 type DaemonRow struct {
 	ID        string        // devbox.daemon.id label (e.g. services.main.queue)
-	Name      string        // params JSON or pretty key=value summary
+	Params    string        // params JSON or pretty key=value summary
 	Container string        // docker container name
 	Uptime    time.Duration // time since container start
 	StartedAt time.Time     // raw container start time

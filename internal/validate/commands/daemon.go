@@ -17,6 +17,7 @@ var daemonSentinels = []struct {
 	sentinel error
 	field    string
 }{
+	{model.ErrDaemonBlockRequired, "daemon_block"},
 	{model.ErrDaemonServiceRequired, "service"},
 	{model.ErrDaemonServiceNotLiteral, "service"},
 	{model.ErrDaemonContainerTemplateRequired, "container_template"},
@@ -71,8 +72,15 @@ func daemonStructuralDiagnostics(cmd model.CommandDef, relFile string) ([]valida
 	}
 
 	if cmd.Daemon == nil {
-		// The model emits ErrDaemonBlockRequired via fallback; nothing else
-		// here can fire without a daemon block.
+		fields["daemon_block"] = true
+		out = append(out, validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "commands",
+			Target:   target,
+			File:     relFile,
+			Message:  "daemon: daemon block required",
+			Hint:     "add a daemon: block with container_template:\nsee docs/reference/config/commands.md",
+		})
 		return out, fields
 	}
 

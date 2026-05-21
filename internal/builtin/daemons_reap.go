@@ -31,10 +31,15 @@ import (
 type daemonsReapBuiltin struct{}
 
 func (daemonsReapBuiltin) Validate(with map[string]any) error {
-	for key := range with {
-		return fmt.Errorf("daemons_reap: unknown key %q", key)
+	if len(with) == 0 {
+		return nil
 	}
-	return nil
+	keys := make([]string, 0, len(with))
+	for k := range with {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return fmt.Errorf("daemons_reap: unknown key %q", keys[0])
 }
 
 func (daemonsReapBuiltin) Describe(_ map[string]any) string {

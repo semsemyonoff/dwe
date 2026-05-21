@@ -25,8 +25,8 @@ func TestParseDaemonRows_ModernLabelsShape(t *testing.T) {
 	if rows[0].ID != "services.main.queue" || rows[1].ID != "services.main.queue" {
 		t.Errorf("ID mismatch: %+v", rows)
 	}
-	if rows[0].Name != "name=default" || rows[1].Name != "name=emails" {
-		t.Errorf("Name mismatch: %+v", rows)
+	if rows[0].Params != "name=default" || rows[1].Params != "name=emails" {
+		t.Errorf("Params mismatch: %+v", rows)
 	}
 	if rows[0].Container != "proj-php_queue_default" {
 		t.Errorf("container mismatch: %q", rows[0].Container)
@@ -97,7 +97,7 @@ func TestRenderDaemons_EmptyHidesSection(t *testing.T) {
 
 func TestRenderDaemons_TableContents(t *testing.T) {
 	rows := []statusview.DaemonRow{
-		{ID: "services.main.queue", Name: "name=default", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},
+		{ID: "services.main.queue", Params: "name=default", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},
 	}
 	body, _ := RenderDaemons(rows)
 	if !strings.Contains(body, "Daemons") {

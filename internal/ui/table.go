@@ -232,29 +232,29 @@ func RenderToolTable(rows []ToolTableRow, extraCols []string) string {
 // Values are passed in already-sanitised by the collector.
 type DaemonTableRow struct {
 	ID        string
-	Name      string
+	Params    string
 	Container string
 	Uptime    string
 }
 
 // RenderDaemonTable renders a styled Lipgloss table of running daemons.
-// Columns: ID, NAME, CONTAINER, UPTIME. Empty input returns an empty string.
+// Columns: ID, PARAMS, CONTAINER, UPTIME. Empty input returns an empty string.
 func RenderDaemonTable(rows []DaemonTableRow) string {
 	if len(rows) == 0 {
 		return ""
 	}
 	stringRows := make([][]string, len(rows))
 	for i, r := range rows {
-		name := r.Name
-		if name == "" {
-			name = "—"
+		params := r.Params
+		if params == "" {
+			params = "—"
 		}
-		stringRows[i] = []string{r.ID, name, r.Container, r.Uptime}
+		stringRows[i] = []string{r.ID, params, r.Container, r.Uptime}
 	}
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styleTableBorder).
-		Headers("ID", "NAME", "CONTAINER", "UPTIME").
+		Headers("ID", "PARAMS", "CONTAINER", "UPTIME").
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return styleTableHeader

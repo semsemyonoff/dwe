@@ -145,7 +145,7 @@ func parseDaemonRows(r io.Reader) ([]statusview.DaemonRow, []error) {
 		}
 		rows = append(rows, statusview.DaemonRow{
 			ID:        sanitiseDisplay(id),
-			Name:      sanitiseDisplay(prettyParams(labels[daemon.LabelDaemonParams])),
+			Params:    sanitiseDisplay(prettyParams(labels[daemon.LabelDaemonParams])),
 			Container: sanitiseDisplay(container),
 			Uptime:    uptime,
 			StartedAt: started,
@@ -266,7 +266,7 @@ func RenderDaemons(rows []statusview.DaemonRow) (string, []error) {
 	for i, r := range rows {
 		tableRows[i] = ui.DaemonTableRow{
 			ID:        r.ID,
-			Name:      r.Name,
+			Params:    r.Params,
 			Container: r.Container,
 			Uptime:    formatUptime(r.Uptime),
 		}
