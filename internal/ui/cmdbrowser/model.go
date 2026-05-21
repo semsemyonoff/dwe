@@ -72,7 +72,7 @@ func newModel(title string, items []Item, opts Options, w, h int) *Model {
 		listW = singlePanelWidth(w)
 	}
 	dlg := newCmdDelegate(listW, !singlePanel(w) && showBadges(w) && opts.ShowTypeBadges)
-	l := list.New(nil, dlg, listW, max(h-3, 3))
+	l := list.New(nil, dlg, listW, listHeight(h))
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
 	l.SetShowHelp(false)
@@ -322,10 +322,10 @@ func (m *Model) applyLayout() {
 	if nowSingle {
 		listW = singlePanelWidth(m.width)
 	}
-	bh := max(m.height-3, 3)
+	bh := bodyHeight(m.height)
 	m.delegate.width = listW
 	m.delegate.showBadges = !nowSingle && showBadges(m.width) && m.opts.ShowTypeBadges
-	m.list.SetSize(listW, bh)
+	m.list.SetSize(listW, listHeight(m.height))
 	if m.inspect != nil {
 		// Resize the viewport in-place to preserve scroll position.
 		w := max(min(listW-4, 80), 20)
@@ -349,11 +349,11 @@ func (m *Model) View() tea.View {
 	}
 	lw := leftWidth(m.width)
 	rw := rightWidth(m.width)
-	bodyHeight := max(m.height-3, 3)
+	bh := bodyHeight(m.height)
 
 	border := lipgloss.NormalBorder()
-	leftStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bodyHeight)
-	rightStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bodyHeight)
+	leftStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bh)
+	rightStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bh)
 
 	focusBorder := lipgloss.Color("12")
 	switch m.focus {
@@ -391,9 +391,9 @@ func (m *Model) View() tea.View {
 // with "── group ──" pseudo-headers, footer. No tree, no badges. Inspect
 // overlay reuses the right-panel viewport contents inline.
 func (m *Model) viewSinglePanel() tea.View {
-	bodyHeight := max(m.height-3, 3)
+	bh := bodyHeight(m.height)
 	border := lipgloss.NormalBorder()
-	style := lipgloss.NewStyle().Border(border).Width(singlePanelWidth(m.width)).Height(bodyHeight)
+	style := lipgloss.NewStyle().Border(border).Width(singlePanelWidth(m.width)).Height(bh)
 	if m.focus == focusFilter || m.focus == focusInspect || m.focus == focusRight {
 		style = style.BorderForeground(lipgloss.Color("12"))
 	}
@@ -516,6 +516,20 @@ func (m *Model) breadcrumb() string {
 
 // Width bucket helpers — keep the layout rules in one place. The fallback
 // path ensures width is always at least minTwoPanelWidth.
+
+// bodyHeight returns the inner content height for the bordered panel(s).
+// The View composes title(1) + bordered-panel(bh+2) + footer(≥1) — without
+// reserving a row for the footer it would be pushed off-screen at the
+// declared terminal height. Reserve 1 row for the short-help footer; full
+// help may still overflow when toggled on, which is acceptable.
+func bodyHeight(h int) int { return max(h-4, 3) }
+
+// listHeight returns the inner height for the bubbles list. The right panel
+// renders breadcrumb + list (or filter-query + list), so the list must be one
+// row shorter than the panel body to avoid overflowing Height(bodyHeight).
+// Single-panel non-filter mode renders just the list, so an unused row at the
+// bottom is acceptable.
+func listHeight(h int) int { return max(bodyHeight(h)-1, 3) }
 
 func leftWidth(w int) int {
 	return max(w/3, 20)

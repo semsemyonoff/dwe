@@ -247,6 +247,42 @@ func TestModel_EmptyLayoutSnapshot(t *testing.T) {
 	}
 }
 
+// TestModel_HelpFooterVisibleWithinTerminalHeight guards the regression where
+// title + bordered panel (h-3+2) + footer summed to h+1 lines, pushing the
+// help footer off-screen at the declared terminal height. The footer must
+// appear in View().Content (contains a binding label like "enter") AND the
+// total content height must not exceed the declared terminal height.
+func TestModel_HelpFooterVisibleWithinTerminalHeight(t *testing.T) {
+	cases := []struct {
+		name string
+		w, h int
+	}{
+		{"two_panel_full", 120, 26},
+		{"two_panel_reduced", 90, 26},
+		{"two_panel_min", 70, 26},
+		{"single_panel_60", 60, 20},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := newModel("pick", []Item{{ID: "db.migrate"}, {ID: "db.seed"}}, DefaultOptions(), tc.w, tc.h)
+			out := m.View().Content
+			// "help" is in the short-help footer's Help binding label across all
+			// focus modes (see defaultKeymap.Help WithHelp("?", "help")).
+			if !strings.Contains(out, "help") {
+				t.Errorf("footer binding label 'help' not in View().Content at %dx%d:\n%s", tc.w, tc.h, out)
+			}
+			// Trailing newline (if any) would inflate the count by one, so trim it.
+			content := strings.TrimRight(out, "\n")
+			lines := strings.Count(content, "\n") + 1
+			if lines > tc.h {
+				t.Errorf("View().Content has %d lines, exceeds terminal height %d (footer will be clipped):\n%s",
+					lines, tc.h, out)
+			}
+		})
+	}
+}
+
 // syntheticKey builds a minimal KeyPressMsg that responds to .String() with
 // the given keystroke. bubbletea/v2's KeyPressMsg.String() comes from the
 // underlying Key fields; setting Text only is enough for the alphabetic
