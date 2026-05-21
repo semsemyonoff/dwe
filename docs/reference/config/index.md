@@ -90,6 +90,7 @@ flowchart LR
 - [styles.yml](styles.md) — ASCII header, color palette, separator
 - [info.yml](info.md) — info dashboard sections, template expressions
 - [commands/](commands.md) — declarative commands: types, params, context, files, workflows, templates
+- [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
 - [Templates](../templates.md) — Go templates, `${...}` shorthand, sprout helpers (shared across info, commands, pipelines, render packs)
 
 ## Related commands

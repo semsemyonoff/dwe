@@ -307,7 +307,7 @@ Concrete file references gathered before drafting:
 
 ### Task 9: Documentation
 
-- [ ] create `docs/reference/config/notifications.md` with sections:
+- [x] create `docs/reference/config/notifications.md` with sections:
   - file locations + creation rules (`0600` for global, gitignored `.devbox/config` for project) with the per-OS path table from "Global config path resolution"
   - flat-format syntax + precedence order
   - complete key reference for MVP (`notify_enabled`, `notify_run_enabled`, `notify_deploy_enabled`, `notify_commands_enabled`, `notify_channels`); the gate-matrix table — master switch ANDed with per-op switch ANDed with environment-interactive
@@ -321,10 +321,10 @@ Concrete file references gathered before drafting:
   - non-interactive detection rules (CI / `DEVBOX_NONINTERACTIVE` / non-TTY)
   - **drop-on-busy policy**: if the OS notifier daemon stalls, subsequent notifications within that operation are dropped with a debug log (no user-visible error)
   - sample config block showing common settings (mute `notify_run_enabled` for the inner-loop case)
-- [ ] update `docs/reference/config/commands.md`: add `notify:` to the `CommandDef` schema reference; document the daemon-rejection rule (validator error); document the **top-level-only suppression rule** — "`notify: true` fires only when the command is the top-level `devbox commands <id>` target; commands invoked transitively (as a workflow sub-step, sequential or parallel, or from a deploy pipeline action) have their notification suppressed at runtime regardless of `notify:` value"; note that the validator emits an **info** diagnostic for the static-detectable direct-parallel-sub-step case as an early warning, but the runtime guard is the actual enforcement and covers transitive cases too; cross-link to `notifications.md`
-- [ ] update `AGENTS.md` (and thus `CLAUDE.md` via the symlink) "Key Patterns" or package list: brief mention of `internal/userconfig/` and `internal/notify/`, the notifier hookpoints, and the `SkipNotify` invariant on `lifecycle.RunRestart`. Keep it to ~3-4 lines total — same density as existing entries.
-- [ ] no code changes in this task; tests not applicable. (Docs-only task is the documented exception — no `run tests` checkbox needed beyond a final `make build` to confirm nothing broke during prior tasks' cleanup.)
-- [ ] run `make build` — must succeed before Task 10
+- [x] update `docs/reference/config/commands.md`: add `notify:` to the `CommandDef` schema reference; document the daemon-rejection rule (validator error); document the **top-level-only suppression rule** — "`notify: true` fires only when the command is the top-level `devbox commands <id>` target; commands invoked transitively (as a workflow sub-step, sequential or parallel, or from a deploy pipeline action) have their notification suppressed at runtime regardless of `notify:` value"; note that the validator emits an **info** diagnostic for the static-detectable direct-parallel-sub-step case as an early warning, but the runtime guard is the actual enforcement and covers transitive cases too; cross-link to `notifications.md`
+- [x] update `AGENTS.md` (and thus `CLAUDE.md` via the symlink) "Key Patterns" or package list: brief mention of `internal/userconfig/` and `internal/notify/`, the notifier hookpoints, and the `SkipNotify` invariant on `lifecycle.RunRestart`. Keep it to ~3-4 lines total — same density as existing entries.
+- [x] no code changes in this task; tests not applicable. (Docs-only task is the documented exception — no `run tests` checkbox needed beyond a final `make build` to confirm nothing broke during prior tasks' cleanup.)
+- [x] run `make build` — must succeed before Task 10
 
 ### Task 10: Verify acceptance criteria
 

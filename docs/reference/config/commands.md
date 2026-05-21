@@ -12,6 +12,7 @@ Declarative command definitions for the devbox project.
   - [Identity and visibility](#identity-and-visibility)
   - [Confirmation](#confirmation)
   - [Messages](#messages)
+  - [Notifications](#notifications)
   - [Params](#params)
   - [Context](#context)
   - [Env](#env)
@@ -154,6 +155,7 @@ The directives below are common to **all** command types unless the table notes 
 | `type` | enum | required | One of `shell`, `devbox`, `script`, `service_exec`, `service_run`, `workflow` |
 | `description` | string | — | Human-readable description shown in the devbox CLI (selectors, `commands list`, `commands inspect`) |
 | `private` | bool | `false` | Hides from `devbox commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
+| `notify` | bool | `false` | Fire a desktop notification when the command finishes. See [Notifications](#notifications) below. |
 
 ### Confirmation
 
@@ -190,6 +192,32 @@ messages:
   success: "Database `${param.database}` is ready."
   error: "Failed to create database `${param.database}`."
 ```
+
+### Notifications
+
+`notify: true` opts the command into a desktop notification when it finishes (success or failure). The notification only fires when **all** of the following hold:
+
+- the `CommandDef` declares `notify: true` (default is `false`);
+- the command is the **top-level** invocation — `devbox commands <id>` typed by the user. Commands invoked transitively as a workflow sub-step (sequential or parallel) or from a deploy pipeline action are **always suppressed at runtime** regardless of their own `notify:` value;
+- the user's `notify_enabled` master switch and `notify_commands_enabled` per-op gate are both true;
+- the environment is interactive (not CI / `DEVBOX_NONINTERACTIVE` / non-TTY).
+
+The rule: "the notification fires for the command you typed, not for any command it runs internally."
+
+```yaml
+db.import:
+  type: script
+  notify: true            # fires once when `devbox commands db.import` finishes
+  script:
+    inline: ...
+```
+
+Validation rules:
+
+- `notify: true` on a `type: daemon` command is a **validator error** — daemons have no completion event, so notifications are meaningless. Remove `notify:` or change the type.
+- `notify: true` on a direct sub-step inside a `parallel:` block produces an **info** diagnostic — purely an early warning, since the runtime already suppresses it. Make the command top-level if you want a notification.
+
+Full reference: [Notifications](notifications.md) — user-config keys, file locations, gate matrix, environment-variable overrides.
 
 ### Params
 
@@ -1326,6 +1354,7 @@ The loader enforces these rules and reports the offending file + field on failur
 - `workdir_from` is only valid for `service_exec` / `service_run`.
 - `compose_args` is only valid for `service_exec` / `service_run`.
 - `mode` on `service_run` must be empty or `run`.
+- `notify: true` is rejected on `type: daemon` (error). `notify: true` on a direct sub-step inside a `parallel:` block produces an info diagnostic; the runtime suppresses it.
 
 ## Common pitfalls
 
