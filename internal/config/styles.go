@@ -43,6 +43,15 @@ type StylesColors struct {
 	TableBorder string `yaml:"table_border"`
 	TableHeader string `yaml:"table_header"`
 
+	// Command browser (cmdbrowser TUI) — consumed via ui.Color*() string accessors.
+	FocusBorder        string `yaml:"focus_border"`
+	Description        string `yaml:"description"`
+	TreeCount          string `yaml:"tree_count"`
+	TreeArrow          string `yaml:"tree_arrow"`
+	FilterMatch        string `yaml:"filter_match"`
+	PaginationActive   string `yaml:"pagination_active"`
+	PaginationInactive string `yaml:"pagination_inactive"`
+
 	// Help/Fang color scheme (CLI help output)
 	Help StylesHelpColors `yaml:"help"`
 }

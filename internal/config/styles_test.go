@@ -100,6 +100,45 @@ func TestLoadStylesConfig(t *testing.T) {
 	}
 }
 
+const cmdbrowserStylesYML = `
+colors:
+  focus_border: "203"
+  description: "245"
+  tree_count: "240"
+  tree_arrow: "167"
+  filter_match: "214"
+  pagination_active: "210"
+  pagination_inactive: "239"
+`
+
+func TestLoadStylesConfig_CmdbrowserPalette(t *testing.T) {
+	path := writeTempYML(t, cmdbrowserStylesYML)
+	cfg, err := LoadStylesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadStylesConfig: %v", err)
+	}
+	cases := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"focus_border", cfg.Colors.FocusBorder, "203"},
+		{"description", cfg.Colors.Description, "245"},
+		{"tree_count", cfg.Colors.TreeCount, "240"},
+		{"tree_arrow", cfg.Colors.TreeArrow, "167"},
+		{"filter_match", cfg.Colors.FilterMatch, "214"},
+		{"pagination_active", cfg.Colors.PaginationActive, "210"},
+		{"pagination_inactive", cfg.Colors.PaginationInactive, "239"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("got %q, want %q", tc.got, tc.want)
+			}
+		})
+	}
+}
+
 func TestLoadStylesConfig_missingFile(t *testing.T) {
 	cfg, err := LoadStylesConfig("/tmp/devbox-nonexistent-styles.yml")
 	if err != nil {

@@ -52,6 +52,18 @@ var (
 	// Table styles.
 	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+
+	// Command browser palette — stored as raw color strings so both lipgloss v1
+	// and charm.land/lipgloss/v2 callers can consume the same source of truth
+	// via the Color*() accessors. internal/ui/cmdbrowser/palette.go is the only
+	// sanctioned bridge that wraps these into v2 styles.
+	colorFocusBorder        = "12"
+	colorDescription        = "8"
+	colorTreeCount          = "8"
+	colorTreeArrow          = "6"
+	colorFilterMatch        = "12"
+	colorPaginationActive   = "12"
+	colorPaginationInactive = "8"
 )
 
 // defSep is the delimiter used between a definition label and its value.
@@ -99,6 +111,27 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	}
 	if c.TableHeader != "" {
 		styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color(c.TableHeader)).Bold(true)
+	}
+	if c.FocusBorder != "" {
+		colorFocusBorder = c.FocusBorder
+	}
+	if c.Description != "" {
+		colorDescription = c.Description
+	}
+	if c.TreeCount != "" {
+		colorTreeCount = c.TreeCount
+	}
+	if c.TreeArrow != "" {
+		colorTreeArrow = c.TreeArrow
+	}
+	if c.FilterMatch != "" {
+		colorFilterMatch = c.FilterMatch
+	}
+	if c.PaginationActive != "" {
+		colorPaginationActive = c.PaginationActive
+	}
+	if c.PaginationInactive != "" {
+		colorPaginationInactive = c.PaginationInactive
 	}
 	if cfg.Separator != "" {
 		defSep = cfg.Separator
@@ -153,6 +186,34 @@ func StyleFailed(s string) string { return styleRunStopped.Render(s) }
 // StyleWarning renders s with the warning style (yellow).
 // Used for warning icons and cautionary prompts.
 func StyleWarning(s string) string { return styleWarn.Render(s) }
+
+// ColorFocusBorder returns the raw color string used by the command browser
+// for focused-panel borders. The value is consumable by both lipgloss v1 and
+// charm.land/lipgloss/v2 via their respective lipgloss.Color(s) constructors.
+func ColorFocusBorder() string { return colorFocusBorder }
+
+// ColorDescription returns the raw color string for secondary description text
+// (item subtitles, faint tree captions).
+func ColorDescription() string { return colorDescription }
+
+// ColorTreeCount returns the raw color string for "(N)" counters in the left
+// tree of the command browser.
+func ColorTreeCount() string { return colorTreeCount }
+
+// ColorTreeArrow returns the raw color string for tree disclosure glyphs (▸/▾).
+func ColorTreeArrow() string { return colorTreeArrow }
+
+// ColorFilterMatch returns the raw color string used to highlight characters
+// matched by the active filter inside the command list.
+func ColorFilterMatch() string { return colorFilterMatch }
+
+// ColorPaginationActive returns the raw color string for the active pagination
+// dot in the bubbles list.
+func ColorPaginationActive() string { return colorPaginationActive }
+
+// ColorPaginationInactive returns the raw color string for inactive pagination
+// dots.
+func ColorPaginationInactive() string { return colorPaginationInactive }
 
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.

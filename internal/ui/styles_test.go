@@ -28,6 +28,13 @@ func resetStyles() {
 	styleCatInfra = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	colorFocusBorder = "12"
+	colorDescription = "8"
+	colorTreeCount = "8"
+	colorTreeArrow = "6"
+	colorFilterMatch = "12"
+	colorPaginationActive = "12"
+	colorPaginationInactive = "8"
 	defSep = "—"
 }
 
@@ -138,6 +145,86 @@ func TestStyleHelpers_NonEmpty(t *testing.T) {
 				t.Errorf("%s returned empty string", tc.name)
 			}
 		})
+	}
+}
+
+func TestPaletteAccessors_Defaults(t *testing.T) {
+	resetStyles()
+	cases := []struct {
+		name string
+		got  func() string
+		want string
+	}{
+		{"FocusBorder", ColorFocusBorder, "12"},
+		{"Description", ColorDescription, "8"},
+		{"TreeCount", ColorTreeCount, "8"},
+		{"TreeArrow", ColorTreeArrow, "6"},
+		{"FilterMatch", ColorFilterMatch, "12"},
+		{"PaginationActive", ColorPaginationActive, "12"},
+		{"PaginationInactive", ColorPaginationInactive, "8"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.got(); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestApplyStyles_CmdbrowserPalette_Applied(t *testing.T) {
+	resetStyles()
+	cfg := &config.StylesConfig{
+		Colors: config.StylesColors{
+			FocusBorder:        "203",
+			Description:        "245",
+			TreeCount:          "240",
+			TreeArrow:          "167",
+			FilterMatch:        "214",
+			PaginationActive:   "210",
+			PaginationInactive: "239",
+		},
+	}
+	ApplyStyles(cfg)
+	cases := []struct {
+		name string
+		got  func() string
+		want string
+	}{
+		{"FocusBorder", ColorFocusBorder, "203"},
+		{"Description", ColorDescription, "245"},
+		{"TreeCount", ColorTreeCount, "240"},
+		{"TreeArrow", ColorTreeArrow, "167"},
+		{"FilterMatch", ColorFilterMatch, "214"},
+		{"PaginationActive", ColorPaginationActive, "210"},
+		{"PaginationInactive", ColorPaginationInactive, "239"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.got(); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestApplyStyles_CmdbrowserPalette_EmptyPreservesDefaults(t *testing.T) {
+	resetStyles()
+	cfg := &config.StylesConfig{
+		Colors: config.StylesColors{
+			FocusBorder: "203",
+			// Description, TreeCount, etc. intentionally empty.
+		},
+	}
+	ApplyStyles(cfg)
+	if ColorFocusBorder() != "203" {
+		t.Errorf("FocusBorder: got %q, want 203", ColorFocusBorder())
+	}
+	if ColorDescription() != "8" {
+		t.Errorf("Description should remain default '8', got %q", ColorDescription())
+	}
+	if ColorTreeArrow() != "6" {
+		t.Errorf("TreeArrow should remain default '6', got %q", ColorTreeArrow())
 	}
 }
 
