@@ -1,5 +1,3 @@
 tools:
   redis:
     container: redis
-    host: redis
-    port: 6379

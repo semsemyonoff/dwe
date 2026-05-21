@@ -25,16 +25,10 @@ const minimalToolsYML = `
 tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
   redis_insight:
     container: redis_insight
-    host: redis.localhost
-    port: 5540
   mailpit:
     container: mailpit
-    host: mail.localhost
-    port: 8025
 `
 
 // sampleToolsYML declares the standard tools with compose overlays for two.
@@ -42,21 +36,16 @@ const sampleToolsYML = `
 tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
   redis_insight:
     container: redis_insight
-    host: redis.localhost
-    port: 5540
     compose: compose/tools/redis_insight.yml
   mailpit:
     container: mailpit
-    host: mail.localhost
-    port: 8025
     compose: compose/tools/mailpit.yml
 `
 
-// minimalDefaultsYML carries only enable overlays and runtime — no tool definitions.
+// minimalDefaultsYML carries enable overlays plus runtime ports/hosts for the
+// sample tools — tool host/port live in runtime.{hosts,ports} alongside services.
 const minimalDefaultsYML = `
 schema_version: "1"
 tools:
@@ -72,14 +61,21 @@ runtime:
     app: 80
     db: 13306
     redis: 6379
+    adminer: 8080
+    redis_insight: 5540
+    mailpit: 8025
   hosts:
     main: app.localhost
+    adminer: adminer.localhost
+    redis_insight: redis.localhost
+    mailpit: mail.localhost
   spx:
     path: ""
 state: ""
 `
 
-// sampleDefaultsYML carries only enable overlays and runtime — no tool definitions.
+// sampleDefaultsYML carries enable overlays plus runtime ports/hosts for the
+// sample tools — tool host/port live in runtime.{hosts,ports} alongside services.
 const sampleDefaultsYML = `
 schema_version: "1"
 tools:
@@ -95,8 +91,14 @@ runtime:
     app: 80
     db: 13306
     redis: 6379
+    adminer: 8080
+    redis_insight: 5540
+    mailpit: 8025
   hosts:
     main: app.localhost
+    adminer: adminer.localhost
+    redis_insight: redis.localhost
+    mailpit: mail.localhost
   spx:
     path: ""
 state: ""
@@ -202,27 +204,24 @@ project:
 tools:
   adminer:
     enabled: false
-    container: adminer
-    host: adminer.localhost
-    port: 8080
   redis_insight:
     enabled: true
-    container: redis_insight
-    host: redis.localhost
-    port: 5540
   mailpit:
     enabled: true
-    container: mailpit
-    host: mail.localhost
-    port: 8025
 runtime:
   use_https: false
   ports:
     app: 80
     db: 13306
     redis: 6379
+    adminer: 8080
+    redis_insight: 5540
+    mailpit: 8025
   hosts:
     main: app.localhost
+    adminer: adminer.localhost
+    redis_insight: redis.localhost
+    mailpit: mail.localhost
   spx:
     path: ""
 state: ""
@@ -308,8 +307,8 @@ state: staging
 }
 
 func TestLoadConfig_noOptionalFiles(t *testing.T) {
-	// Works fine when defaults.yml and local.yml are absent.
-	path := writeLayeredFixture(t, sampleDevboxYML, "", "")
+	// Works fine when defaults.yml, local.yml, and tools.yml are absent.
+	path := writeFullFixture(t, sampleDevboxYML, "", "", "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -320,9 +319,10 @@ func TestLoadConfig_noOptionalFiles(t *testing.T) {
 }
 
 func TestLoadConfig_noDefaultsFile(t *testing.T) {
-	// local.yml present, defaults.yml absent.
+	// local.yml present, defaults.yml absent. Skip tools.yml to avoid requiring
+	// a runtime block solely to satisfy tool host/port validation.
 	userYML := `state: demo`
-	path := writeLayeredFixture(t, sampleDevboxYML, "", userYML)
+	path := writeFullFixture(t, sampleDevboxYML, "", userYML, "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -657,10 +657,10 @@ func TestValidateConfigKeys_runtimePortsAndHosts(t *testing.T) {
 		{"invalid port key leading digit", RuntimePorts{"1port": 3000}, nil, true},
 		{"invalid host key dash", nil, RuntimeHosts{"my-host": "x.localhost"}, true},
 		{"invalid host key dot", nil, RuntimeHosts{"my.host": "x.localhost"}, true},
-		// tool name duplicated in runtime.ports must be rejected (no backward compat)
-		{"port key duplicates tool name", RuntimePorts{"test_tool": 9090}, nil, true},
-		// tool name duplicated in runtime.hosts must be rejected
-		{"host key duplicates tool name", nil, RuntimeHosts{"test_tool": "test.localhost"}, true},
+		// Tool name appearing in runtime.ports / runtime.hosts is the canonical
+		// place for tool host/port (shared namespace with services).
+		{"port key shared with tool name", RuntimePorts{"test_tool": 9090}, nil, false},
+		{"host key shared with tool name", nil, RuntimeHosts{"test_tool": "test.localhost"}, false},
 	}
 
 	for _, tt := range tests {
@@ -723,7 +723,7 @@ schema_version: "1"
 project:
   name: test
 `
-	path := writeLayeredFixture(t, minimalYML, "", "")
+	path := writeFullFixture(t, minimalYML, "", "", "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -741,8 +741,6 @@ func TestLoadConfig_arbitraryToolKey(t *testing.T) {
 tools:
   elasticvue:
     container: elasticvue
-    host: elastic.localhost
-    port: 9200
     compose: compose/tools/elasticvue.yml
 `
 	defaultsWithNewTool := `
@@ -750,6 +748,11 @@ schema_version: "1"
 tools:
   elasticvue:
     enabled: false
+runtime:
+  hosts:
+    elasticvue: elastic.localhost
+  ports:
+    elasticvue: 9200
 `
 	path := writeFullFixture(t, sampleDevboxYML, defaultsWithNewTool, "", "", toolsWithNewTool)
 	cfg, err := LoadConfig(path)
@@ -759,7 +762,7 @@ tools:
 	tool, ok := cfg.Tools["elasticvue"]
 	if !ok {
 		t.Error("elasticvue tool not found in merged config")
-	} else if tool.Container != "elasticvue" || tool.Port != 9200 {
+	} else if tool.Container != "elasticvue" || tool.Port != 9200 || tool.Host != "elastic.localhost" {
 		t.Errorf("elasticvue tool definition incorrect: %+v", tool)
 	}
 }
@@ -2763,18 +2766,12 @@ func TestComposeFilesAll_baseAndDisabledToolOverlay(t *testing.T) {
 tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
     compose: compose/tools/adminer.yml
   mailpit:
     container: mailpit
-    host: mail.localhost
-    port: 8025
     compose: compose/tools/mailpit.yml
   redis_insight:
     container: redis_insight
-    host: redis.localhost
-    port: 5540
     compose: compose/tools/redis_insight.yml
 `
 	defaultsWithCompose := `
@@ -2792,8 +2789,14 @@ runtime:
     app: 80
     db: 13306
     redis: 6379
+    adminer: 8080
+    mailpit: 8025
+    redis_insight: 5540
   hosts:
     main: app.localhost
+    adminer: adminer.localhost
+    mailpit: mail.localhost
+    redis_insight: redis.localhost
   spx:
     path: ""
 compose:
@@ -3033,13 +3036,9 @@ func TestComposeFilesAll_unknownToolWithCompose(t *testing.T) {
 tools:
   elasticvue:
     container: elasticvue
-    host: elastic.localhost
-    port: 9200
     compose: compose/tools/elasticvue.yml
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
 `
 	defaultsWithElasticvue := `
 schema_version: "1"
@@ -3053,8 +3052,12 @@ runtime:
   ports:
     app: 80
     db: 13306
+    elasticvue: 9200
+    adminer: 8080
   hosts:
     main: app.localhost
+    elasticvue: elastic.localhost
+    adminer: adminer.localhost
   spx:
     path: ""
 compose:
@@ -3108,18 +3111,12 @@ func TestComposeFilesAll_determinismSortedOrder(t *testing.T) {
 tools:
   zebra:
     container: zebra
-    host: zebra.localhost
-    port: 8001
     compose: compose/tools/zebra.yml
   apple:
     container: apple
-    host: apple.localhost
-    port: 8002
     compose: compose/tools/apple.yml
   mango:
     container: mango
-    host: mango.localhost
-    port: 8003
     compose: compose/tools/mango.yml
 `
 	defaultsUnsorted := `
@@ -3136,8 +3133,14 @@ runtime:
   ports:
     app: 80
     db: 13306
+    zebra: 8001
+    apple: 8002
+    mango: 8003
   hosts:
     main: app.localhost
+    zebra: zebra.localhost
+    apple: apple.localhost
+    mango: mango.localhost
   spx:
     path: ""
 compose:
@@ -4069,12 +4072,8 @@ func TestLoadToolsConfig_success(t *testing.T) {
 tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
   mailpit:
     container: mailpit
-    host: mail.localhost
-    port: 8025
     status:
       - name: ENDPOINT
         value: "http://{{ .Tool.Host }}:{{ .Tool.Port }}"
@@ -4091,16 +4090,37 @@ tools:
 	if len(tools) != 2 {
 		t.Fatalf("expected 2 tools, got %d", len(tools))
 	}
-	if tools["adminer"].Port != 8080 {
-		t.Errorf("adminer port = %d, want 8080", tools["adminer"].Port)
+	if tools["adminer"].Container != "adminer" {
+		t.Errorf("adminer container = %q, want adminer", tools["adminer"].Container)
 	}
 	mp := tools["mailpit"]
 	if len(mp.Status) != 1 || mp.Status[0].Name != "ENDPOINT" {
 		t.Errorf("mailpit status block = %v, want one ENDPOINT entry", mp.Status)
 	}
+	// Host/Port are yaml:"-" — resolved later from runtime.{hosts,ports} in LoadConfig.
+	if tools["adminer"].Host != "" || tools["adminer"].Port != 0 {
+		t.Errorf("Host/Port should remain zero after LoadToolsConfig; got host=%q port=%d",
+			tools["adminer"].Host, tools["adminer"].Port)
+	}
 	// Enabled is yaml:"-" and zero by default at this layer.
 	if tools["adminer"].Enabled {
 		t.Error("Enabled should remain zero after LoadToolsConfig (resolved later in LoadConfig)")
+	}
+}
+
+func TestLoadToolsConfig_strictRejectsHostPort(t *testing.T) {
+	// host: and port: under tools.<name> in tools.yml are strict-decode errors —
+	// these values live in runtime.{hosts,ports} now.
+	for _, field := range []string{"host: x.local", "port: 1234"} {
+		yml := "tools:\n  adminer:\n    container: adminer\n    " + field + "\n"
+		dir := t.TempDir()
+		path := filepath.Join(dir, "tools.yml")
+		if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if _, err := LoadToolsConfig(path); err == nil {
+			t.Errorf("expected strict-decode error for %q in tools.yml", field)
+		}
 	}
 }
 
@@ -4109,8 +4129,6 @@ func TestLoadToolsConfig_strictRejectsUnknownField(t *testing.T) {
 tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
     bogus: yes
 `
 	dir := t.TempDir()
@@ -4209,19 +4227,13 @@ func TestLoadConfig_toolsInjectedIntoRaw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	val, ok := ResolvePath(cfg.Raw, "tools.adminer.port")
+	// container/enabled stay under tools.<name>.
+	val, ok := ResolvePath(cfg.Raw, "tools.adminer.container")
 	if !ok {
-		t.Fatal("tools.adminer.port not found in raw map after injectToolsIntoRaw")
+		t.Fatal("tools.adminer.container not found in raw map after injectToolsIntoRaw")
 	}
-	if fmt.Sprintf("%v", val) != "8080" {
-		t.Errorf("tools.adminer.port = %v, want 8080", val)
-	}
-	val, ok = ResolvePath(cfg.Raw, "tools.mailpit.host")
-	if !ok {
-		t.Fatal("tools.mailpit.host not found in raw map")
-	}
-	if val != "mail.localhost" {
-		t.Errorf("tools.mailpit.host = %v, want mail.localhost", val)
+	if val != "adminer" {
+		t.Errorf("tools.adminer.container = %v, want adminer", val)
 	}
 	val, ok = ResolvePath(cfg.Raw, "tools.adminer.enabled")
 	if !ok {
@@ -4230,29 +4242,58 @@ func TestLoadConfig_toolsInjectedIntoRaw(t *testing.T) {
 	if val != false {
 		t.Errorf("tools.adminer.enabled = %v, want false", val)
 	}
+	// host/port live under runtime.{hosts,ports}.<name> — the only canonical
+	// dot-paths for them. They are NOT mirrored under tools.<name>.
+	if _, present := ResolvePath(cfg.Raw, "tools.adminer.port"); present {
+		t.Error("tools.adminer.port should NOT be in raw map; use runtime.ports.adminer")
+	}
+	if _, present := ResolvePath(cfg.Raw, "tools.mailpit.host"); present {
+		t.Error("tools.mailpit.host should NOT be in raw map; use runtime.hosts.mailpit")
+	}
+	val, ok = ResolvePath(cfg.Raw, "runtime.ports.adminer")
+	if !ok {
+		t.Fatal("runtime.ports.adminer not found in raw map")
+	}
+	if fmt.Sprintf("%v", val) != "8080" {
+		t.Errorf("runtime.ports.adminer = %v, want 8080", val)
+	}
+	val, ok = ResolvePath(cfg.Raw, "runtime.hosts.mailpit")
+	if !ok {
+		t.Fatal("runtime.hosts.mailpit not found in raw map")
+	}
+	if val != "mail.localhost" {
+		t.Errorf("runtime.hosts.mailpit = %v, want mail.localhost", val)
+	}
 }
 
 // --- LoadConfig end-to-end: tools.yml + overlay precedence ---
 
 func TestLoadConfig_toolsFromToolsYAML_enabledFromOverlay(t *testing.T) {
-	// Defaults disables adminer; local enables it. tools.yml provides the definition.
+	// Defaults disables adminer and supplies host/port; local enables it and
+	// overrides the port. tools.yml provides only the structural definition.
 	defaults := `
 schema_version: "1"
 tools:
   adminer:
     enabled: false
+runtime:
+  hosts:
+    adminer: adminer.local
+  ports:
+    adminer: 1234
 `
 	local := `
 tools:
   adminer:
     enabled: true
+runtime:
+  ports:
+    adminer: 9999
 `
 	tools := `
 tools:
   adminer:
     container: adminer
-    host: adminer.local
-    port: 1234
 `
 	path := writeFullFixture(t, sampleDevboxYML, defaults, local, "", tools)
 	cfg, err := LoadConfig(path)
@@ -4263,8 +4304,14 @@ tools:
 	if !ok {
 		t.Fatal("adminer not loaded")
 	}
-	if tool.Port != 1234 || tool.Container != "adminer" || tool.Host != "adminer.local" {
-		t.Errorf("tool definition not loaded from tools.yml: %+v", tool)
+	if tool.Container != "adminer" {
+		t.Errorf("tool container = %q, want adminer", tool.Container)
+	}
+	if tool.Host != "adminer.local" {
+		t.Errorf("tool host = %q, want adminer.local (from defaults runtime.hosts)", tool.Host)
+	}
+	if tool.Port != 9999 {
+		t.Errorf("tool port = %d, want 9999 (overridden by local runtime.ports)", tool.Port)
 	}
 	if !tool.Enabled {
 		t.Error("adminer should be enabled by local overlay")
@@ -4289,10 +4336,16 @@ func TestLoadConfig_toolsYAMLPresent_noOverlay_defaultsDisabled(t *testing.T) {
 tools:
   adminer:
     container: adminer
-    host: adminer.local
-    port: 1234
 `
-	path := writeFullFixture(t, sampleDevboxYML, "", "", "", tools)
+	defaults := `
+schema_version: "1"
+runtime:
+  hosts:
+    adminer: adminer.local
+  ports:
+    adminer: 1234
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaults, "", "", tools)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -4310,13 +4363,16 @@ tools:
   adminer:
     enabled: true
     container: stale
+runtime:
+  hosts:
+    adminer: adminer.local
+  ports:
+    adminer: 1234
 `
 	tools := `
 tools:
   adminer:
     container: adminer
-    host: adminer.local
-    port: 1234
 `
 	path := writeFullFixture(t, sampleDevboxYML, defaults, "", "", tools)
 	_, err := LoadConfig(path)

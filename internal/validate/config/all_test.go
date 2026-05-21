@@ -21,6 +21,11 @@ project:
 tools:
   redis:
     enabled: false
+runtime:
+  ports:
+    redis: 6379
+  hosts:
+    redis: redis
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox.yml"), []byte(devboxYml), 0644))
 
@@ -32,8 +37,6 @@ tools:
 	toolsYml := `tools:
   redis:
     container: redis
-    host: redis
-    port: 6379
 `
 	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYml), 0644))
 

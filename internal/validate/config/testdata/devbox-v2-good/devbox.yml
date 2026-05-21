@@ -4,3 +4,8 @@ project:
 tools:
   redis:
     enabled: false
+runtime:
+  ports:
+    redis: 6379
+  hosts:
+    redis: redis

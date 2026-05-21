@@ -263,13 +263,12 @@ func TestFormatValue_boolFormatNonBoolValue(t *testing.T) {
 // --- Regression tests for data-driven tools (raw dot-path resolution) ---
 
 func TestBuildContent_toolPortResolution(t *testing.T) {
-	// Regression: verify that a tool's port can be resolved via raw dot-path
-	// (tools.adminer.port) without needing the old runtime.ports.adminer path
+	// Tool ports live alongside service-role ports in runtime.ports.<name>.
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "ADMINER_PORT", From: "tools.adminer.port", Format: "int"},
+		{Name: "ADMINER_PORT", From: "runtime.ports.adminer", Format: "int"},
 	}, map[string]any{
-		"tools": map[string]any{
-			"adminer": map[string]any{"port": 8080},
+		"runtime": map[string]any{
+			"ports": map[string]any{"adminer": 8080},
 		},
 	})
 
@@ -283,13 +282,12 @@ func TestBuildContent_toolPortResolution(t *testing.T) {
 }
 
 func TestBuildContent_toolHostResolution(t *testing.T) {
-	// Regression: verify that a tool's host can be resolved via raw dot-path
-	// (tools.adminer.host) without needing the old runtime.hosts.adminer path
+	// Tool hosts live alongside service-role hosts in runtime.hosts.<name>.
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "ADMINER_HOST", From: "tools.adminer.host"},
+		{Name: "ADMINER_HOST", From: "runtime.hosts.adminer"},
 	}, map[string]any{
-		"tools": map[string]any{
-			"adminer": map[string]any{"host": "adminer.localhost"},
+		"runtime": map[string]any{
+			"hosts": map[string]any{"adminer": "adminer.localhost"},
 		},
 	})
 

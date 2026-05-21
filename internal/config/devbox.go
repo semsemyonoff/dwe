@@ -581,13 +581,16 @@ func (c *ServiceCLIConfig) UnmarshalYAML(value *yaml.Node) error {
 // ToolConfig holds configuration for a single optional tool.
 // Keys in ToolsConfig are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$
 // (Go identifier safe) so they can be used with Go template dot syntax.
-// All definition fields (Container, Host, Port) are loaded from devbox/tools.yml;
+// Container, Compose, and Status are loaded from devbox/tools.yml.
 // Enabled is resolved programmatically from the 3-layer overlay merge.
+// Host and Port are resolved from the 3-layer runtime.hosts.<name> /
+// runtime.ports.<name> merge — they live in defaults.yml so they can be
+// overridden in local.yml without touching tools.yml.
 type ToolConfig struct {
 	Enabled   bool           `yaml:"-"` // resolved from tools.<name>.enabled overlay
 	Container string         `yaml:"container"`
-	Host      string         `yaml:"host"`
-	Port      int            `yaml:"port"`
+	Host      string         `yaml:"-"` // resolved from runtime.hosts.<name>
+	Port      int            `yaml:"-"` // resolved from runtime.ports.<name>
 	Compose   string         `yaml:"compose"`
 	Status    []StatusColumn `yaml:"status,omitempty"`
 }
@@ -692,9 +695,10 @@ func validIdentifierKey(s string) bool {
 
 // validateConfigKeys checks that all keys in Tools, Runtime.Ports, and Runtime.Hosts
 // are identifier-safe (^[A-Za-z_][A-Za-z0-9_]*$), and that every declared tool entry
-// (enabled or disabled) has non-empty container, host, and a positive (non-zero) port.
-// It also rejects runtime.ports and runtime.hosts keys that duplicate a declared tool
-// name — tool host/port live on the tool entry, not in runtime collections.
+// (enabled or disabled) has non-empty container plus a corresponding
+// runtime.hosts.<name> and positive runtime.ports.<name>.
+// Tool host/port live in the shared runtime.{hosts,ports} collections alongside
+// service roles — overrideable via the 3-layer merge.
 func validateConfigKeys(cfg *DevboxConfig) error {
 	for _, key := range slices.Sorted(maps.Keys(cfg.Tools)) {
 		if !validIdentifierKey(key) {
@@ -702,13 +706,13 @@ func validateConfigKeys(cfg *DevboxConfig) error {
 		}
 		tool := cfg.Tools[key]
 		if tool.Container == "" {
-			return fmt.Errorf("tool %q: container is required", key)
+			return fmt.Errorf("tool %q: container is required (set in devbox/tools.yml)", key)
 		}
 		if tool.Host == "" {
-			return fmt.Errorf("tool %q: host is required", key)
+			return fmt.Errorf("tool %q: host is required (set runtime.hosts.%s in devbox/defaults.yml)", key, key)
 		}
 		if tool.Port <= 0 {
-			return fmt.Errorf("tool %q: port must be positive, got %d", key, tool.Port)
+			return fmt.Errorf("tool %q: port must be positive (set runtime.ports.%s in devbox/defaults.yml), got %d", key, key, tool.Port)
 		}
 	}
 
@@ -716,17 +720,11 @@ func validateConfigKeys(cfg *DevboxConfig) error {
 		if !validIdentifierKey(key) {
 			return fmt.Errorf("invalid runtime.ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
 		}
-		if _, isDeclaredTool := cfg.Tools[key]; isDeclaredTool {
-			return fmt.Errorf("runtime.ports key %q duplicates a declared tool name; use tools.%s.port instead", key, key)
-		}
 	}
 
 	for _, key := range slices.Sorted(maps.Keys(cfg.Runtime.Hosts)) {
 		if !validIdentifierKey(key) {
 			return fmt.Errorf("invalid runtime.hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
-		}
-		if _, isDeclaredTool := cfg.Tools[key]; isDeclaredTool {
-			return fmt.Errorf("runtime.hosts key %q duplicates a declared tool name; use tools.%s.host instead", key, key)
 		}
 	}
 
@@ -857,6 +855,8 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	// Authoritative tool assignment: tools.yml is the only source for typed tool
 	// definitions. The marshal/unmarshal above may have populated cfg.Tools with
 	// zero-value entries from overlay tools.<name>.enabled blocks; replace it now.
+	// Host and Port are resolved from the merged runtime.hosts.<name> /
+	// runtime.ports.<name> so user-tunable values live in defaults.yml / local.yml.
 	cfg.Tools = tools
 	for name, tool := range cfg.Tools {
 		val, ok := ResolvePath(merged, "tools."+name+".enabled")
@@ -865,6 +865,8 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		} else {
 			tool.Enabled = false
 		}
+		tool.Host = cfg.Runtime.Hosts[name]
+		tool.Port = cfg.Runtime.Ports[name]
 		cfg.Tools[name] = tool
 	}
 
@@ -991,8 +993,10 @@ func validateToolsOverlay(layerPath string, raw map[string]any, declared ToolsCo
 }
 
 // injectToolsIntoRaw merges tool definitions into raw["tools"] so dot-path
-// lookups (e.g. tools.adminer.port) resolve against the merged map. Mirrors
-// injectServicesIntoRaw.
+// lookups (e.g. tools.adminer.container, tools.adminer.enabled) resolve
+// against the merged map. Host and port live under runtime.hosts.<name> /
+// runtime.ports.<name> and are NOT mirrored here — there is one canonical
+// dot-path per value.
 func injectToolsIntoRaw(raw map[string]any, tools ToolsConfig) {
 	toolsMap, ok := raw["tools"].(map[string]any)
 	if !ok {
@@ -1007,8 +1011,6 @@ func injectToolsIntoRaw(raw map[string]any, tools ToolsConfig) {
 		}
 		entry["enabled"] = tool.Enabled
 		entry["container"] = tool.Container
-		entry["host"] = tool.Host
-		entry["port"] = tool.Port
 		if tool.Compose != "" {
 			entry["compose"] = tool.Compose
 		}

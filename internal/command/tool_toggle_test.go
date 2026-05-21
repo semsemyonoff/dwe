@@ -20,6 +20,17 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 	t.Helper()
 	dir := t.TempDir()
 
+	toolDefs := map[string]struct {
+		container string
+		host      string
+		port      int
+	}{
+		"adminer":       {container: "adminer", host: "adminer.localhost", port: 8080},
+		"redis_insight": {container: "redis_insight", host: "redis.localhost", port: 5540},
+		"mailpit":       {container: "mailpit", host: "mail.localhost", port: 8025},
+	}
+	toolOrder := []string{"adminer", "redis_insight", "mailpit"}
+
 	var lines []string
 	lines = append(lines, "project:")
 	lines = append(lines, "  name: test")
@@ -27,10 +38,16 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 	lines = append(lines, "runtime:")
 	lines = append(lines, "  ports:")
 	lines = append(lines, "    app: 3000")
+	for _, name := range toolOrder {
+		lines = append(lines, "    "+name+": "+fmt.Sprint(toolDefs[name].port))
+	}
 	lines = append(lines, "  hosts:")
 	lines = append(lines, "    main: localhost")
+	for _, name := range toolOrder {
+		lines = append(lines, "    "+name+": "+toolDefs[name].host)
+	}
 	lines = append(lines, "tools:")
-	for _, name := range []string{"adminer", "redis_insight", "mailpit"} {
+	for _, name := range toolOrder {
 		lines = append(lines, "  "+name+":")
 		if tools[name] {
 			lines = append(lines, "    enabled: true")
@@ -47,23 +64,11 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
 
-	toolDefs := map[string]struct {
-		container string
-		host      string
-		port      int
-	}{
-		"adminer":       {container: "adminer", host: "adminer.localhost", port: 8080},
-		"redis_insight": {container: "redis_insight", host: "redis.localhost", port: 5540},
-		"mailpit":       {container: "mailpit", host: "mail.localhost", port: 8025},
-	}
 	var toolsLines []string
 	toolsLines = append(toolsLines, "tools:")
-	for _, name := range []string{"adminer", "redis_insight", "mailpit"} {
-		def := toolDefs[name]
+	for _, name := range toolOrder {
 		toolsLines = append(toolsLines, "  "+name+":")
-		toolsLines = append(toolsLines, "    container: "+def.container)
-		toolsLines = append(toolsLines, "    host: "+def.host)
-		toolsLines = append(toolsLines, "    port: "+fmt.Sprint(def.port))
+		toolsLines = append(toolsLines, "    container: "+toolDefs[name].container)
 	}
 	toolsYML := strings.Join(toolsLines, "\n") + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "devbox", "tools.yml"), []byte(toolsYML), 0o644); err != nil {

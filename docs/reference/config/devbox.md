@@ -55,16 +55,16 @@ The three files share a single namespace — the same key in different layers is
 | Project name and prefix | `devbox.yml` |
 | Schema version | `devbox.yml` |
 | Binary overrides (`binaries:`) | `devbox.yml` only (engine policy, not layered) |
-| Port defaults | `defaults.yml` |
-| Host defaults | `defaults.yml` |
-| Tool definitions | [`devbox/tools.yml`](tools.md) |
+| Service / tool port defaults | `defaults.yml` (under `runtime.ports.<name>`) |
+| Service / tool host defaults | `defaults.yml` (under `runtime.hosts.<name>`) |
+| Tool structural definitions (container / compose / status) | [`devbox/tools.yml`](tools.md) |
 | Tool enabled state | `defaults.yml` (overrideable in `local.yml`) |
 | Optional service defaults (enabled/disabled) | `defaults.yml` |
 | Export rules (`exports.env`) | `defaults.yml` |
 | IDE config defaults | `defaults.yml` |
 | `db` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
-| Personal port overrides | `local.yml` |
+| Personal port / host overrides (services and tools) | `local.yml` |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
 
@@ -194,7 +194,7 @@ debug:
 
 ### `runtime`
 
-All runtime settings that affect `.env` generation and the info dashboard. This section holds **non-tool runtime roles only** (app, database, redis, etc.); tool-specific host/port values live under `tools:<name>` instead.
+All runtime settings that affect `.env` generation and the info dashboard. The `runtime.ports` and `runtime.hosts` maps are a single shared namespace for both service roles (`app`, `db`, `redis`, `main`, …) and tool host/port (`adminer`, `mailpit`, …). Keep keys unique across the shared namespace; collisions silently shadow each other.
 
 ```yaml
 runtime:
@@ -203,9 +203,13 @@ runtime:
     app: 80
     db: 13306
     redis: 6379
+    adminer: 8080
+    mailpit: 8025
   hosts:
     main: laravel.localhost
     second: second.localhost
+    adminer: adminer.localhost
+    mailpit: mail.localhost
   spx:
     path: ""
 ```
@@ -213,11 +217,11 @@ runtime:
 | Field | Description |
 |-------|-------------|
 | `runtime.use_https` | Whether URLs use HTTPS (exported as `USE_HTTPS`) |
-| `runtime.ports.*` | Non-tool port mappings, keyed by role name (e.g., `app`, `db`, `redis`). Each key must be identifier-safe. Exported individually to `.env`. |
-| `runtime.hosts.*` | Non-tool hostnames, keyed by service/role name (e.g., `main`, `second`). Each key must be identifier-safe. |
+| `runtime.ports.*` | Port mappings keyed by role / tool name (e.g., `app`, `db`, `adminer`). Each key must be identifier-safe. Exported individually to `.env`. |
+| `runtime.hosts.*` | Hostnames keyed by service / tool name (e.g., `main`, `second`, `adminer`). Each key must be identifier-safe. |
 | `runtime.spx.path` | SPX profiler URL path (empty = disabled) |
 
-**Tool host/port:** Do not add tool-specific keys here. Each tool's `host` and `port` live under `tools.<toolname>.host` and `tools.<toolname>.port` in the `tools:` section (see above).
+**Tool host/port live here.** Every tool declared in [`devbox/tools.yml`](tools.md) needs a matching `runtime.hosts.<tool>` and `runtime.ports.<tool>` — the load-time validator rejects half-defined entries.
 
 ### `state`
 
@@ -229,7 +233,10 @@ Active state name. Empty string means no state. Exported as `STATE` in `.env`. O
 
 ### `exports.env`
 
-Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name. Tool paths use the format `tools.<toolname>.<field>` (e.g., `tools.adminer.port`, `tools.redis_insight.host`).
+Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name.
+
+- `tools.<toolname>.enabled` and `tools.<toolname>.container` come from the tool overlay + `tools.yml`.
+- `tools.<toolname>.host` / `tools.<toolname>.port` are **not** populated — use the canonical `runtime.hosts.<toolname>` / `runtime.ports.<toolname>` paths (the same namespace as service-role ports/hosts).
 
 ```yaml
 exports:
@@ -242,7 +249,7 @@ exports:
       format: bool
       when: tools.adminer.enabled
     - name: TOOL_ADMINER_PORT
-      from: tools.adminer.port
+      from: runtime.ports.adminer
       format: int
       when: tools.adminer.enabled
 ```
@@ -327,6 +334,7 @@ runtime:
   use_https: true
   ports:
     app: 8080
+    adminer: 18080      # personal adminer port override
 
 services:
   main-debug:
@@ -340,7 +348,7 @@ debug:
   idekey: VSCODE
 ```
 
-To override a tool's host or port (rare — normally set in `defaults.yml`), you would edit the tool entry directly in `local.yml`. However, the recommended practice is to keep tool definitions in `defaults.yml` and use `local.yml` only to toggle `enabled`.
+Tool host or port overrides also live here — under `runtime.{hosts,ports}.<toolname>` — so a developer can run a tool on a non-default port without committing the change.
 
 If `local.yml` does not exist, layer 3 is silently skipped.
 

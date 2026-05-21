@@ -49,7 +49,7 @@ The names `PROJECT`, `UID`, and `GID` are **reserved**: any export rule that tri
 
 ## Export rules
 
-Each rule maps a dot-path in the merged config to an env variable name. Tool paths use the format `tools.<toolname>.<field>` (e.g., `tools.adminer.port`, `tools.redis_insight.host`).
+Each rule maps a dot-path in the merged config to an env variable name. Tool host/port live in the shared runtime namespace (`runtime.hosts.<toolname>`, `runtime.ports.<toolname>`) — the same as service-role ports/hosts. `tools.<toolname>.enabled` and `tools.<toolname>.container` come from the overlay + `tools.yml`.
 
 ```yaml
 exports:
@@ -64,7 +64,7 @@ exports:
       when: tools.adminer.enabled
 
     - name: TOOL_ADMINER_PORT
-      from: tools.adminer.port
+      from: runtime.ports.adminer
       format: int
       when: tools.adminer.enabled
 
@@ -142,7 +142,7 @@ The same truthiness rule applies to both `when` and the string-format fallback:
 
 Example: `when: tools.adminer.enabled` skips the rule whenever the tool is unset, explicitly false, or a string `"false"` / `"0"`.
 
-**Dot-path syntax note:** Export rule `from:` / `when:` fields use **bare dot-paths** into the merged config, not the `{{ ... }}` template syntax. Tool paths use the format `tools.<name>.<field>` (e.g., `from: tools.adminer.port`, `when: tools.redis_insight.enabled`). Non-tool runtime roles use their bare key name (e.g., `from: runtime.ports.app`, `from: runtime.hosts.main`).
+**Dot-path syntax note:** Export rule `from:` / `when:` fields use **bare dot-paths** into the merged config, not the `{{ ... }}` template syntax. Tool host/port use the same shared `runtime.{hosts,ports}.<name>` namespace as service-role ports/hosts (e.g., `from: runtime.ports.adminer`, `from: runtime.hosts.mailpit`). The overlay-driven toggle and container name are reachable via `tools.<name>.enabled` and `tools.<name>.container`.
 
 ## Output format
 

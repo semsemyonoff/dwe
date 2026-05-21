@@ -28,6 +28,15 @@ project:
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	defaultsYML := `runtime:
+  ports:
+    adminer: 8080
+  hosts:
+    adminer: adminer.localhost
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	// Services are loaded from devbox/services.yml — not from inline devbox.yml.
 	// dir: services/main ensures CollectGitWorkspace returns a row (making --no-git non-vacuous).
 	servicesYML := `services:
@@ -50,8 +59,6 @@ project:
 	toolsYML := `tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYML), 0o644); err != nil {
 		t.Fatal(err)

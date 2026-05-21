@@ -259,8 +259,12 @@ tools:
 runtime:
   ports:
     app: 3000
+    adminer: 8080
+    elasticvue: 8044
   hosts:
     main: localhost
+    adminer: adminer.localhost
+    elasticvue: elasticvue.localhost
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
@@ -268,12 +272,8 @@ runtime:
 	toolsYML := `tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
   elasticvue:
     container: elasticvue
-    host: elasticvue.localhost
-    port: 8044
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYML), 0o644); err != nil {
 		t.Fatal(err)
@@ -322,8 +322,12 @@ tools:
 runtime:
   ports:
     app: 3000
+    adminer: 8080
+    elasticvue: 8044
   hosts:
     main: localhost
+    adminer: adminer.localhost
+    elasticvue: elasticvue.localhost
 `
 	if err := os.WriteFile(devboxDir+"/defaults.yml", []byte(defaultsYML), 0644); err != nil {
 		t.Fatalf("writing defaults.yml: %v", err)
@@ -333,12 +337,8 @@ runtime:
 	toolsYML := `tools:
   adminer:
     container: adminer
-    host: adminer.localhost
-    port: 8080
   elasticvue:
     container: elasticvue
-    host: elasticvue.localhost
-    port: 8044
 `
 	if err := os.WriteFile(devboxDir+"/tools.yml", []byte(toolsYML), 0644); err != nil {
 		t.Fatalf("writing tools.yml: %v", err)

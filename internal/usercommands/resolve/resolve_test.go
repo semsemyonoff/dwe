@@ -807,15 +807,14 @@ func TestParams_PatternPathType(t *testing.T) {
 // --- Regression tests for data-driven tools (raw dot-path resolution) ---
 
 func TestParams_DefaultFromToolHost(t *testing.T) {
-	// Regression: verify that a tool's host can be resolved via raw dot-path
-	// (tools.adminer.host) in default_from, without needing the old runtime.hosts.adminer path
+	// Tool hosts live alongside service-role hosts in runtime.hosts.<name>.
 	cfg := makeConfig(map[string]any{
-		"tools": map[string]any{
-			"adminer": map[string]any{"host": "adminer.localhost"},
+		"runtime": map[string]any{
+			"hosts": map[string]any{"adminer": "adminer.localhost"},
 		},
 	})
 	defs := map[string]ParamDef{
-		"tool_host": {Type: ParamTypeString, DefaultFrom: "tools.adminer.host"},
+		"tool_host": {Type: ParamTypeString, DefaultFrom: "runtime.hosts.adminer"},
 	}
 	got, err := Params(defs, nil, cfg)
 	if err != nil {
