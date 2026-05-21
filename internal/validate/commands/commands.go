@@ -95,17 +95,30 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	//
 	// Key: "<filePath>/<commandName>"; value: true when categorised diags fired.
 	categorisedCmds := make(map[string]bool)
+	// categorisedDaemonFields tracks per-field daemon suppression for the
+	// model-error fallback below. Keys are "<filePath>/<commandName>"; values
+	// are the set of daemon field markers (service, container_template,
+	// on_already_running, stop_timeout, controls) already surfaced richly.
+	categorisedDaemonFields := make(map[string]map[string]bool)
 	for _, cf := range parsedFiles {
 		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
 		for _, name := range sortedCommandNames(cf) {
 			cmd := cf.Commands[name]
-			if cmd.Type != model.CommandTypeWorkflow {
-				continue
-			}
-			structural := workflowStructuralDiagnostics(cmd, relFile)
-			if len(structural) > 0 {
-				categorisedCmds[cf.FilePath+"/"+name] = true
-				diags = append(diags, structural...)
+			switch cmd.Type {
+			case model.CommandTypeWorkflow:
+				structural := workflowStructuralDiagnostics(cmd, relFile)
+				if len(structural) > 0 {
+					categorisedCmds[cf.FilePath+"/"+name] = true
+					diags = append(diags, structural...)
+				}
+			case model.CommandTypeDaemon:
+				dDiags, fields := daemonStructuralDiagnostics(cmd, relFile)
+				if len(dDiags) > 0 {
+					diags = append(diags, dDiags...)
+				}
+				if len(fields) > 0 {
+					categorisedDaemonFields[cf.FilePath+"/"+name] = fields
+				}
 			}
 		}
 	}
@@ -138,6 +151,26 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 			}
 			cmd := cf.Commands[name]
 			if err := cmd.Validate(); err != nil {
+				// Daemon path: unwrap errors.Join and drop only constituents whose
+				// matching field has been categorised. Non-categorised constituents
+				// (e.g. `cmd is not valid for type=daemon`) still surface.
+				if cmd.Type == model.CommandTypeDaemon {
+					fields := categorisedDaemonFields[cf.FilePath+"/"+name]
+					for _, e := range unwrapJoined(err) {
+						if isSuppressedDaemonErr(e, fields) {
+							continue
+						}
+						diags = append(diags, validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Domain:   "commands",
+							Target:   fmt.Sprintf("commands:%s", cmd.ID),
+							File:     relFile,
+							Message:  e.Error(),
+							Hint:     "fix the reported daemon field",
+						})
+					}
+					continue
+				}
 				// Skip step-level errors already covered by structural parallel
 				// diagnostics (e.g. nested-parallel, confirm-in-parallel). Non-step
 				// errors (workdir, cmd, service, etc.) are surfaced regardless.
