@@ -7,7 +7,6 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 )
 
@@ -30,51 +29,108 @@ type StatusInput struct {
 	Tracked    []string
 }
 
-// RunStatus renders the full stack status view. The body is purely the
-// section ordering — to change the layout, reorder the calls below.
-func RunStatus(w *render.Writer, in StatusInput) error {
-	RenderHealth(w, in)
-	RenderDeployStatus(w, in)
-	RenderServices(w, in)
-	RenderTools(w, in)
-	RenderTopology(w, in)
-	return nil
-}
-
-// RenderHealth writes the "Devbox: ●/◐/○ ..." indicator line.
-func RenderHealth(w *render.Writer, in StatusInput) {
+// RenderHealth returns the "Devbox: ●/◐/○ ..." indicator line (no trailing newline).
+func RenderHealth(in StatusInput) string {
 	svcRows := collectServiceRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
 	indicator := selectHealthIndicator(svcRows, in.TopoStatus)
-	_, _ = fmt.Fprintf(w.Writer(), "Devbox: %s\n\n", indicator)
+	return fmt.Sprintf("Devbox: %s", indicator)
 }
 
-// RenderServices writes the Services section title and the services table.
-func RenderServices(w *render.Writer, in StatusInput) {
-	svcRows := collectServiceRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Services"))
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderServiceTable(svcRows, nil))
+// RenderServices returns the Services section title + table as a single
+// string, plus the slice of per-row custom-column template errors. Empty
+// string when no rows.
+func RenderServices(in StatusInput) (string, []error) {
+	rows := collectServiceRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
+	extraCols := BuildCustomColumns(in.Cfg, KindService)
+	var errs []error
+	if len(extraCols) > 0 {
+		for i, row := range rows {
+			svc := in.Cfg.Services[row.Name]
+			data := buildServiceTemplateData(in.Cfg, svc)
+			cells, cellErrs := RenderCustomCells(svc.Status, data)
+			if len(cellErrs) > 0 {
+				errs = append(errs, cellErrs...)
+			}
+			rows[i].Extras = cells
+		}
+	}
+	var b strings.Builder
+	b.WriteString(ui.RenderSectionTitle("Services"))
+	b.WriteByte('\n')
+	b.WriteString(ui.RenderServiceTable(rows, extraCols))
+	b.WriteByte('\n')
+	return b.String(), errs
 }
 
-// RenderTools writes the Tools section title and the tools table.
-func RenderTools(w *render.Writer, in StatusInput) {
+// RenderTools returns the Tools section title + table as a single string,
+// plus per-row custom-column template errors.
+func RenderTools(in StatusInput) (string, []error) {
 	toolRows := collectToolRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Tools"))
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(toolRows, nil))
+	extraCols := BuildCustomColumns(in.Cfg, KindTool)
+	var errs []error
+	if len(extraCols) > 0 {
+		for i, row := range toolRows {
+			tool := in.Cfg.Tools[row.Name]
+			data := buildToolTemplateData(in.Cfg, tool)
+			cells, cellErrs := RenderCustomCells(tool.Status, data)
+			if len(cellErrs) > 0 {
+				errs = append(errs, cellErrs...)
+			}
+			toolRows[i].Extras = cells
+		}
+	}
+	var b strings.Builder
+	b.WriteString(ui.RenderSectionTitle("Tools"))
+	b.WriteByte('\n')
+	b.WriteString(ui.RenderToolTable(toolRows, extraCols))
+	b.WriteByte('\n')
+	return b.String(), errs
 }
 
-// RenderTopology writes the Topology section, or a no-op when topology data
-// is absent or rendering produces nothing.
-func RenderTopology(w *render.Writer, in StatusInput) {
+// RenderTopology returns the Topology section, or an empty string when
+// topology data is absent or rendering produces nothing.
+func RenderTopology(in StatusInput) string {
 	if in.Topo == nil {
-		return
+		return ""
 	}
 	categories := BuildNodeCategories(in.Cfg)
 	rendered := ui.RenderTopology(in.Topo, in.TopoStatus, categories)
 	if rendered == "" {
-		return
+		return ""
 	}
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Topology"))
-	_, _ = fmt.Fprintln(w.Writer(), rendered)
+	var b strings.Builder
+	b.WriteString(ui.RenderSectionTitle("Topology"))
+	b.WriteByte('\n')
+	b.WriteString(rendered)
+	b.WriteByte('\n')
+	return b.String()
+}
+
+// buildServiceTemplateData prepares the template data map for a service row's
+// custom status columns. See docs/reference/config/services.md for the contract.
+func buildServiceTemplateData(cfg *config.DevboxConfig, svc config.ServiceConfig) map[string]any {
+	return map[string]any{
+		"ServiceCfg": svc,
+		"Globals":    rawSubtree(cfg, "globals"),
+		"Raw":        cfg.Raw,
+	}
+}
+
+// buildToolTemplateData prepares the template data map for a tool row's
+// custom status columns.
+func buildToolTemplateData(cfg *config.DevboxConfig, tool config.ToolConfig) map[string]any {
+	return map[string]any{
+		"Tool":    tool,
+		"Globals": rawSubtree(cfg, "globals"),
+		"Raw":     cfg.Raw,
+	}
+}
+
+func rawSubtree(cfg *config.DevboxConfig, key string) any {
+	if cfg == nil || cfg.Raw == nil {
+		return nil
+	}
+	return cfg.Raw[key]
 }
 
 func collectServiceRows(cfg *config.DevboxConfig, isRunning ContainerCheckFn, projectFull string) []ui.ServiceTableRow {

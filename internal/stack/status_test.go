@@ -1,16 +1,14 @@
 package stack
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 )
 
-func TestRunStatus_ContainsStackIndicator(t *testing.T) {
+func TestRenderHealth_ContainsIndicator(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Dir: "./services/main", Container: "app-main", Mandatory: true},
@@ -20,19 +18,13 @@ func TestRunStatus_ContainsStackIndicator(t *testing.T) {
 		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
-	}
-	out := buf.String()
+	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: neverRunning})
 	if !strings.Contains(out, "Devbox:") {
-		t.Errorf("output missing 'Devbox:' indicator\n%s", out)
+		t.Errorf("output missing 'Devbox:' indicator: %q", out)
 	}
 }
 
-func TestRunStatus_StoppedIndicator(t *testing.T) {
+func TestRenderHealth_Stopped(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
@@ -42,19 +34,13 @@ func TestRunStatus_StoppedIndicator(t *testing.T) {
 		config.RuntimeHosts(nil),
 	)
 	neverRunning := func(_, _ string) bool { return false }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
-	}
-	out := buf.String()
+	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: neverRunning})
 	if !strings.Contains(out, "○ stopped") {
-		t.Errorf("expected '○ stopped' indicator, got:\n%s", out)
+		t.Errorf("expected '○ stopped' indicator, got: %q", out)
 	}
 }
 
-func TestRunStatus_RunningIndicator(t *testing.T) {
+func TestRenderHealth_Running(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
@@ -64,19 +50,13 @@ func TestRunStatus_RunningIndicator(t *testing.T) {
 		config.RuntimeHosts(nil),
 	)
 	alwaysRunning := func(_, _ string) bool { return true }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: alwaysRunning}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
-	}
-	out := buf.String()
+	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: alwaysRunning})
 	if !strings.Contains(out, "● running") {
-		t.Errorf("expected '● running' indicator, got:\n%s", out)
+		t.Errorf("expected '● running' indicator, got: %q", out)
 	}
 }
 
-func TestRunStatus_PartialIndicator(t *testing.T) {
+func TestRenderHealth_Partial(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main":   {Type: "app", Container: "app-main", Mandatory: true},
@@ -89,48 +69,49 @@ func TestRunStatus_PartialIndicator(t *testing.T) {
 	partialRunning := func(_, container string) bool {
 		return container == "app-main"
 	}
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: partialRunning}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
-	}
-	out := buf.String()
+	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: partialRunning})
 	if !strings.Contains(out, "◐ partial") {
-		t.Errorf("expected '◐ partial' indicator, got:\n%s", out)
+		t.Errorf("expected '◐ partial' indicator, got: %q", out)
 	}
 }
 
-func TestRunStatus_ContainsServiceAndToolTables(t *testing.T) {
+func TestRenderServices_ContainsServiceName(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
+	)
+	out, errs := RenderServices(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	if len(errs) != 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+	if !strings.Contains(out, "main") {
+		t.Errorf("services output missing 'main': %s", out)
+	}
+}
+
+func TestRenderTools_ContainsToolName(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{},
 		config.ToolsConfig{
 			"adminer": {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 		},
 		config.RuntimePorts(nil),
 		config.RuntimeHosts(nil),
 	)
-	neverRunning := func(_, _ string) bool { return false }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
+	out, errs := RenderTools(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	if len(errs) != 0 {
+		t.Errorf("unexpected errors: %v", errs)
 	}
-	out := buf.String()
-
-	for _, want := range []string{"main", "adminer"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output missing %q\n%s", want, out)
-		}
+	if !strings.Contains(out, "adminer") {
+		t.Errorf("tools output missing 'adminer': %s", out)
 	}
 }
 
-// --- topology integration ---
-
-func TestRunStatus_WithTopologyShown(t *testing.T) {
+func TestRenderTopology_NilSkipped(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
@@ -139,29 +120,13 @@ func TestRunStatus_WithTopologyShown(t *testing.T) {
 		config.RuntimePorts(nil),
 		config.RuntimeHosts(nil),
 	)
-	neverRunning := func(_, _ string) bool { return false }
-
-	topo := map[string][]string{
-		"nginx":    {"app-main"},
-		"app-main": {"db"},
-		"db":       {},
-	}
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning, Topo: topo}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
-	}
-	out := buf.String()
-
-	for _, want := range []string{"nginx", "app-main", "db"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("topology output missing %q:\n%s", want, out)
-		}
+	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	if out != "" {
+		t.Errorf("expected empty topology output when topo is nil, got: %q", out)
 	}
 }
 
-func TestRunStatus_TopologyNilSkipped(t *testing.T) {
+func TestRenderTopology_WithStatus(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
@@ -170,30 +135,6 @@ func TestRunStatus_TopologyNilSkipped(t *testing.T) {
 		config.RuntimePorts(nil),
 		config.RuntimeHosts(nil),
 	)
-	neverRunning := func(_, _ string) bool { return false }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
-	}
-	out := buf.String()
-	if strings.Contains(out, "nginx") {
-		t.Errorf("unexpected 'nginx' in output when topo is nil:\n%s", out)
-	}
-}
-
-func TestRunStatus_TopologyWithStatus(t *testing.T) {
-	cfg := makeServicesCfg(
-		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
-		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
-	)
-	neverRunning := func(_, _ string) bool { return false }
-
 	topo := map[string][]string{
 		"nginx":    {"app-main"},
 		"app-main": {},
@@ -202,18 +143,35 @@ func TestRunStatus_TopologyWithStatus(t *testing.T) {
 		"nginx":    ui.NodeRunning,
 		"app-main": ui.NodeStopped,
 	}
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := RunStatus(w, StatusInput{Cfg: cfg, IsRunning: neverRunning, Topo: topo, TopoStatus: topoStatus}); err != nil {
-		t.Fatalf("RunStatus error: %v", err)
-	}
-	out := buf.String()
-
+	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }, Topo: topo, TopoStatus: topoStatus})
 	if !strings.Contains(out, "running") {
-		t.Errorf("expected 'running' status in topology output:\n%s", out)
+		t.Errorf("expected 'running' status in topology output: %s", out)
 	}
 	if !strings.Contains(out, "stopped") {
-		t.Errorf("expected 'stopped' status in topology output:\n%s", out)
+		t.Errorf("expected 'stopped' status in topology output: %s", out)
+	}
+}
+
+// TestRenderServices_CustomColumnsAggregateError verifies that
+// per-row template errors are aggregated into the returned slice.
+func TestRenderServices_CustomColumnsAggregateError(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {
+				Type:      "app",
+				Container: "app-main",
+				Mandatory: true,
+				Status: []config.StatusColumn{
+					{Name: "X", Value: "{{ this is broken syntax"},
+				},
+			},
+		},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
+	)
+	_, errs := RenderServices(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	if len(errs) == 0 {
+		t.Errorf("expected template error to be aggregated")
 	}
 }

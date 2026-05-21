@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"time"
 
 	"devbox-cli/internal/command/statusview"
@@ -13,19 +14,17 @@ import (
 	"devbox-cli/internal/ui"
 )
 
-// RenderDeployStatus writes the Deploy Status section title and the
-// per-service table. No-op when in.State is nil or no tracked service yields
-// a row.
-func RenderDeployStatus(w *render.Writer, in StatusInput) {
+// RenderDeployStatus returns the Deploy Status section title + table as a
+// single string. Returns empty string when in.State is nil or no tracked
+// service yields a row.
+func RenderDeployStatus(in StatusInput) string {
 	if in.State == nil {
-		return
+		return ""
 	}
 	view := BuildDeployStatusView(in.State, in.Cfg, in.SvcDeploys, in.Tracked)
 	if len(view.Rows) == 0 {
-		return
+		return ""
 	}
-
-	_, _ = fmt.Fprintf(w.Writer(), "%s\n", ui.RenderSectionTitle("Deploy Status"))
 
 	uiRows := make([]ui.DeployStatusRow, len(view.Rows))
 	for i, row := range view.Rows {
@@ -39,7 +38,12 @@ func RenderDeployStatus(w *render.Writer, in StatusInput) {
 			LastFailedStep:  row.LastFailedStep,
 		}
 	}
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderDeployStatus(uiRows))
+	var b strings.Builder
+	b.WriteString(ui.RenderSectionTitle("Deploy Status"))
+	b.WriteByte('\n')
+	b.WriteString(ui.RenderDeployStatus(uiRows))
+	b.WriteByte('\n')
+	return b.String()
 }
 
 // BuildDeployStatusView assembles a view model joining current config hashes

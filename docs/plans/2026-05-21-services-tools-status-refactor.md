@@ -202,12 +202,12 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
 
 (Tasks 4 and 5 are merged: the deploy subcommand cannot be tested in isolation from the group restructure, since cobra wiring + per-command `RunE` + `Args` validators + completion are one cohesive change.)
 
-- [ ] Convert `newStatusCmd` in `internal/command/status.go` into a group node. Its `RunE` (zero args) renders the **default** view (all sections), including the new health indicator and git workspace. Set `Args: cobra.NoArgs` on the group node — the positional `[service]` form is gone.
-- [ ] Add subcommands: `status services`, `status tools`, `status deploy`, `status topology`, `status git`. Each renders only its own section (no health indicator in individual subcommands).
-- [ ] Add `--no-services`, `--no-tools`, `--no-deploy`, `--no-topology`, `--no-git` boolean flags on the default `status` command. Each flag suppresses the named section; combining multiple flags is supported. Flags live on the group's `Flags()` (local), not `PersistentFlags()` — subcommands don't need them and shouldn't accept them.
-- [ ] **Shared init — DO NOT use `PersistentPreRunE` on the `status` group.** The root `PersistentPreRunE` resolves the project + validates schema (see CLAUDE.md `isValidateCommand` pattern); a child `PersistentPreRunE` *replaces* the parent's entirely (cobra does not chain). Instead, add a memoized helper `loadStatusContext(cmd, flags) (*statusContext, error)` that lazily loads config + journal + tracked services + topology once per command execution; call it from each subcommand's `RunE` (and from the default `status` RunE). Memoization can be a package-private `sync.Once` keyed off the cobra command pointer, or a plain pointer cached on a context value via `context.WithValue`. Keep it simple — these subcommands run once per process.
-- [ ] Define a typed `Section` enum + ordered list as the single source of truth for both the default orchestrator order and the `--no-*` flag set. Adding a future section means touching one slice plus one flag — they can't drift apart.
-- [ ] Replace single `stack.RunStatus` entrypoint with section-level calls from `internal/command/status.go`, iterating the `Section` enum honoring `--no-*`. **This task owns all signature migrations** for the section renderers (currently writer-based; see `stack/status.go:45/52/59/67`, `stack/deploystatus.go:19`). Convert each to a pure string-returning function so the orchestrator can compose output, write stdout via `cmd.OutOrStdout()`, and separately write warnings via `cmd.ErrOrStderr()`. Section call shapes (exact, post-Task 4):
+- [x] Convert `newStatusCmd` in `internal/command/status.go` into a group node. Its `RunE` (zero args) renders the **default** view (all sections), including the new health indicator and git workspace. Set `Args: cobra.NoArgs` on the group node — the positional `[service]` form is gone.
+- [x] Add subcommands: `status services`, `status tools`, `status deploy`, `status topology`, `status git`. Each renders only its own section (no health indicator in individual subcommands).
+- [x] Add `--no-services`, `--no-tools`, `--no-deploy`, `--no-topology`, `--no-git` boolean flags on the default `status` command. Each flag suppresses the named section; combining multiple flags is supported. Flags live on the group's `Flags()` (local), not `PersistentFlags()` — subcommands don't need them and shouldn't accept them.
+- [x] **Shared init — DO NOT use `PersistentPreRunE` on the `status` group.** The root `PersistentPreRunE` resolves the project + validates schema (see CLAUDE.md `isValidateCommand` pattern); a child `PersistentPreRunE` *replaces* the parent's entirely (cobra does not chain). Instead, add a memoized helper `loadStatusContext(cmd, flags) (*statusContext, error)` that lazily loads config + journal + tracked services + topology once per command execution; call it from each subcommand's `RunE` (and from the default `status` RunE). Memoization can be a package-private `sync.Once` keyed off the cobra command pointer, or a plain pointer cached on a context value via `context.WithValue`. Keep it simple — these subcommands run once per process.
+- [x] Define a typed `Section` enum + ordered list as the single source of truth for both the default orchestrator order and the `--no-*` flag set. Adding a future section means touching one slice plus one flag — they can't drift apart.
+- [x] Replace single `stack.RunStatus` entrypoint with section-level calls from `internal/command/status.go`, iterating the `Section` enum honoring `--no-*`. **This task owns all signature migrations** for the section renderers (currently writer-based; see `stack/status.go:45/52/59/67`, `stack/deploystatus.go:19`). Convert each to a pure string-returning function so the orchestrator can compose output, write stdout via `cmd.OutOrStdout()`, and separately write warnings via `cmd.ErrOrStderr()`. Section call shapes (exact, post-Task 4):
   - **Health** (default view only): `stack.RenderHealth(in StatusInput) string` (today: `RenderHealth(w *render.Writer, in StatusInput)` at `status.go:45`).
   - **Services**: `stack.RenderServices(in StatusInput) (string, []error)` (today: `RenderServices(w *render.Writer, in StatusInput)` at `status.go:52`). Inside: build extraCols via `BuildCustomColumns(cfg, KindService)`; for each row, fill `row.Extras` via `RenderCustomCells` (collecting errors); call `ui.RenderServiceTable(rows, extraCols)`. Caller writes string to stdout; if `len(errs) > 0`, writes one `warning: N custom status expression(s) failed to render` to `cmd.ErrOrStderr()`.
   - **Tools**: `stack.RenderTools(in StatusInput) (string, []error)` (today: `RenderTools(w *render.Writer, in StatusInput)` at `status.go:59`) — symmetric to services.
@@ -219,13 +219,13 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
     3. count `Err != nil` in rows; if positive, write `warning: git status failed for N service(s)` to `cmd.ErrOrStderr()`.
   - **Delete `stack.RunStatus`** once all sections are wired through the new orchestrator — no callers should remain.
   - Update any tests under `internal/stack/` that asserted writer-based output to assert against the returned string instead (`deploystatus_test.go`, `status_test.go`, `health_test.go`).
-- [ ] **`status deploy` wiring**:
+- [x] **`status deploy` wiring**:
   - `status deploy` with no args → renders the existing deploy table via `stack.RenderDeployStatus`.
   - `status deploy <svc>` → calls `stack.RenderServiceDeployDetail(w, state, tracked, svc)` (existing renderer, unchanged signature).
   - `Args: cobra.MaximumNArgs(1)` — not a hand-rolled `len(args)` check inside `RunE`. Gives the standard cobra error message ("accepts at most 1 arg(s), received N") for free.
   - `ValidArgsFunction` for `<svc>` completion — list tracked services. Use `completionConfigPath(flags, cmd)` (per CLAUDE.md, the `__complete` path bypasses `PersistentPreRunE`); return empty + `cobra.ShellCompDirectiveNoFileComp` on any error.
-- [ ] All output goes through `cmd.OutOrStdout()`; warnings via `cmd.ErrOrStderr()`. Audit any leftover `fmt.Println` / `os.Stdout` references in the affected files.
-- [ ] Update existing `status` tests to cover the new structure:
+- [x] All output goes through `cmd.OutOrStdout()`; warnings via `cmd.ErrOrStderr()`. Audit any leftover `fmt.Println` / `os.Stdout` references in the affected files.
+- [x] Update existing `status` tests to cover the new structure:
   - default order;
   - each `--no-*` flag suppresses its section;
   - each subcommand renders its section alone;
@@ -235,8 +235,8 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
   - `status deploy <unknown>` errors clearly;
   - `status deploy a b` rejected by `MaximumNArgs`;
   - completion returns expected services for a fixture project.
-- [ ] Build a fresh `newRootCmd()` per test (cobra accumulates flag state across `Execute()` calls — see golang-spf13-cobra skill).
-- [ ] Run `make test` — must pass before Task 5.
+- [x] Build a fresh `newRootCmd()` per test (cobra accumulates flag state across `Execute()` calls — see golang-spf13-cobra skill).
+- [x] Run `make test` — must pass before Task 5.
 
 ### Task 5: Refactor `services` and `tools` to mutating-only commands
 

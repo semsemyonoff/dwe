@@ -10,7 +10,6 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 
@@ -911,8 +910,66 @@ func TestPickService_SelectorReturnsErrCancelled_Propagated(t *testing.T) {
 func TestNewStatusCmd_UseField(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newStatusCmd(flags)
-	if cmd.Use != "status [service]" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "status [service]")
+	if cmd.Use != "status" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "status")
+	}
+}
+
+func TestNewStatusCmd_HasSubcommands(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newStatusCmd(flags)
+	want := map[string]bool{"services": false, "tools": false, "deploy": false, "topology": false, "git": false}
+	for _, sub := range cmd.Commands() {
+		if _, ok := want[sub.Name()]; ok {
+			want[sub.Name()] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("missing status subcommand %q", name)
+		}
+	}
+}
+
+func TestNewStatusCmd_HasNoFlags(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newStatusCmd(flags)
+	for _, name := range []string{"no-services", "no-tools", "no-deploy", "no-topology", "no-git"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Errorf("status command missing --%s flag", name)
+		}
+	}
+}
+
+func TestStatusDeployCmd_MaximumNArgs(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newStatusCmd(flags)
+	var deployCmd *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "deploy" {
+			deployCmd = sub
+			break
+		}
+	}
+	if deployCmd == nil {
+		t.Fatal("deploy subcommand not found")
+	}
+	if err := deployCmd.Args(deployCmd, []string{}); err != nil {
+		t.Errorf("0 args should be allowed: %v", err)
+	}
+	if err := deployCmd.Args(deployCmd, []string{"main"}); err != nil {
+		t.Errorf("1 arg should be allowed: %v", err)
+	}
+	if err := deployCmd.Args(deployCmd, []string{"a", "b"}); err == nil {
+		t.Error("2 args should be rejected")
+	}
+}
+
+func TestStatusCmd_RejectsPositionalArg(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newStatusCmd(flags)
+	if err := cmd.Args(cmd, []string{"main"}); err == nil {
+		t.Error("expected NoArgs to reject positional arg")
 	}
 }
 
@@ -939,11 +996,12 @@ func TestRunStatusViaCfg(t *testing.T) {
 
 	neverRunning := func(_, _ string) bool { return false }
 
+	in := stack.StatusInput{Cfg: cfg, IsRunning: neverRunning}
 	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := stack.RunStatus(w, stack.StatusInput{Cfg: cfg, IsRunning: neverRunning}); err != nil {
-		t.Fatalf("runStatus error: %v", err)
-	}
+	buf.WriteString(stack.RenderHealth(in))
+	buf.WriteString("\n")
+	body, _ := stack.RenderServices(in)
+	buf.WriteString(body)
 	out := buf.String()
 	if !strings.Contains(out, "main") {
 		t.Errorf("status output missing service name 'main'\n%s", out)

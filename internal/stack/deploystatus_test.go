@@ -8,7 +8,6 @@ import (
 	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 
 	"github.com/stretchr/testify/assert"
@@ -219,12 +218,11 @@ func TestRenderDeployStatusEmpty(t *testing.T) {
 		Services: make(map[string]config.ServiceConfig),
 	}
 
-	buf := &bytes.Buffer{}
-	RenderDeployStatus(render.NewWriter(buf), StatusInput{
+	out := RenderDeployStatus(StatusInput{
 		Cfg:        cfg,
 		State:      state,
 		SvcDeploys: make(map[string]*config.DeployConfig),
 		Tracked:    []string{},
 	})
-	assert.Empty(t, buf.String())
+	assert.Empty(t, out)
 }
