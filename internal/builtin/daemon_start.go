@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"devbox-cli/internal/config"
@@ -202,7 +203,7 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 // any error returns (false, err) and callers treat it as "not running" so the
 // authoritative race winner is docker's own name-uniqueness enforcement.
 func isDaemonRunning(ctx context.Context, compose *docker.Compose, fullName string) (bool, error) {
-	args := []string{"ps", "-q", "--filter", "name=^" + fullName + "$", "--filter", "status=running"}
+	args := []string{"ps", "-q", "--filter", "name=^" + regexp.QuoteMeta(fullName) + "$", "--filter", "status=running"}
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 	cmd.Env = compose.BuildEnv()
 	out, err := cmd.Output()

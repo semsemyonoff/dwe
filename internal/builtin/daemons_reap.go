@@ -69,6 +69,7 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 	secs := max(int(defaultStopTimeout.Round(time.Second).Seconds()), 1)
 
 	var stopped []string
+	var hadStopError bool
 	for _, name := range names {
 		args := []string{"stop", "-t", strconv.Itoa(secs), name}
 		cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
@@ -80,6 +81,7 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 			if strings.Contains(errOut, "No such container") {
 				continue
 			}
+			hadStopError = true
 			if errOut != "" {
 				_, _ = fmt.Fprintf(ectx.Output.Writer(), "warning: docker stop %s: %s\n", name, errOut)
 				continue
@@ -91,7 +93,12 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 	}
 
 	if len(stopped) == 0 {
-		_, _ = fmt.Fprintln(ectx.Output.Writer(), "no daemons running")
+		// Only claim no daemons are running when all containers were already
+		// gone (TOCTOU). If stop errors occurred, warnings were already printed
+		// above — printing "no daemons running" would contradict them.
+		if !hadStopError {
+			_, _ = fmt.Fprintln(ectx.Output.Writer(), "no daemons running")
+		}
 		return nil
 	}
 	_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ reaped %d daemon(s): %s\n", len(stopped), strings.Join(stopped, ", "))
