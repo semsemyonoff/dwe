@@ -91,6 +91,22 @@ func Get(name string) (Builtin, bool) {
 	return b, ok
 }
 
+// interactiveBuiltins is the single source of truth for which builtins require
+// interactive terminal access at runtime. Both the pipeline plan-time guard and
+// the workflow runtime dispatch consult this set to reject these builtins
+// inside parallel groups.
+var interactiveBuiltins = map[string]bool{
+	"confirm":            true,
+	"docker_daemon_logs": true,
+}
+
+// IsInteractive reports whether the named builtin requires interactive
+// terminal access (stdin or a foreground TTY) and therefore cannot run inside
+// a parallel group. Future interactive builtins register here.
+func IsInteractive(name string) bool {
+	return interactiveBuiltins[name]
+}
+
 // Validate checks that name is a known builtin and that with params are valid.
 func Validate(name string, with map[string]any) error {
 	b, ok := registry[name]

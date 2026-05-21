@@ -196,6 +196,44 @@ func TestResolvePhaseSteps_rejectsBuiltinConfirmInParallel(t *testing.T) {
 	}
 }
 
+func TestResolvePhaseSteps_rejectsBuiltinDaemonLogsInParallel(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			newParallelStep("g", 0, nil,
+				config.DeployStep{Name: "a", Type: "builtin", Cmd: "docker_daemon_logs"},
+				config.DeployStep{Name: "b", Type: "shell", Cmd: "echo b"},
+			),
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if !errors.Is(err, ErrInteractiveInParallel) {
+		t.Fatalf("expected ErrInteractiveInParallel, got %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_rejectsCommandResolvingToDaemonLogsBuiltin(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(&model.CommandDef{
+		ID: "queue.logs", Type: model.CommandTypeBuiltin, Cmd: "docker_daemon_logs",
+	})
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			newParallelStep("g", 0, nil,
+				config.DeployStep{Name: "a", Type: "command", Cmd: "queue.logs"},
+				config.DeployStep{Name: "b", Type: "shell", Cmd: "echo b"},
+			),
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, reg, phase, "")
+	if !errors.Is(err, ErrInteractiveInParallel) {
+		t.Fatalf("expected ErrInteractiveInParallel via command→daemon_logs, got %v", err)
+	}
+}
+
 func TestResolvePhaseSteps_acceptsBuiltinConfirmWithSkipConfirm(t *testing.T) {
 	cfg := &config.DevboxConfig{SchemaVersion: "2"}
 	phase := config.DeployPhase{

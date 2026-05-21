@@ -11,6 +11,31 @@ import (
 	"devbox-cli/internal/render"
 )
 
+// --- IsInteractive ---
+
+func TestIsInteractive(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"confirm", true},
+		{"docker_daemon_logs", true},
+		{"message", false},
+		{"docker_daemon_start", false},
+		{"docker_daemon_stop", false},
+		{"service_dirs_ensure", false},
+		{"unknown_builtin_xyz", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsInteractive(tc.name); got != tc.want {
+				t.Errorf("IsInteractive(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 // --- knownNames ---
 
 func TestKnownNames_AllRegistered(t *testing.T) {

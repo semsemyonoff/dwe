@@ -28,15 +28,23 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		return fmt.Errorf("builtin %q: render with: %w", name, err)
 	}
 
-	if err := builtin.Validate(name, with); err != nil {
-		return fmt.Errorf("builtin %q: %w", name, err)
+	// Guard: interactive builtins (confirm, docker_daemon_logs) cannot run
+	// inside a parallel group — they would compete for shared stdin / TTY.
+	// SkipConfirm semantics are asymmetric: `confirm` is safe under parallel
+	// when pre-approved (--yes auto-yes), but `docker_daemon_logs` tails a
+	// foreground process and has no auto-skip — it always rejects under
+	// parallel regardless of -y. The guard runs before Validate so the
+	// surfaced error is the architectural reason, not a downstream
+	// missing-field complaint.
+	if rc.UnderParallel && builtin.IsInteractive(name) {
+		skipOK := name == "confirm" && (rc.SkipConfirm || rc.NonInteractive || isNonInteractive())
+		if !skipOK {
+			return fmt.Errorf("%w: builtin %s in command %q", ErrConfirmInsideParallel, name, rc.Cmd.ID)
+		}
 	}
 
-	// Guard: the confirm builtin is interactive. Reject it inside a parallel
-	// group when confirmation has not been pre-approved, so it never tries to
-	// read from shared stdin and never reaches the huh prompt.
-	if name == "confirm" && rc.UnderParallel && !rc.SkipConfirm && !rc.NonInteractive && !isNonInteractive() {
-		return fmt.Errorf("%w: builtin confirm in command %q", ErrConfirmInsideParallel, rc.Cmd.ID)
+	if err := builtin.Validate(name, with); err != nil {
+		return fmt.Errorf("builtin %q: %w", name, err)
 	}
 
 	stdin := stdinOrOS(rc)

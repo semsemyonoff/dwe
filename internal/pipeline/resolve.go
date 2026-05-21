@@ -258,7 +258,7 @@ func resolveParallelStep(cfg *config.DevboxConfig, reg *registry.Registry, phase
 // When reg is nil, all registry-dependent checks are skipped (same nil-tolerant
 // pattern as files_gate validation).
 func checkInteractive(reg *registry.Registry, step config.DeployStep, visited map[string]bool) error {
-	if step.Type == "builtin" && step.Cmd == "confirm" {
+	if step.Type == "builtin" && builtin.IsInteractive(step.Cmd) {
 		return ErrInteractiveInParallel
 	}
 	if step.Type != "command" || reg == nil {
@@ -279,6 +279,9 @@ func checkCommandInteractive(reg *registry.Registry, cmdID string, visited map[s
 		return nil
 	}
 	if def.Confirmation {
+		return ErrInteractiveInParallel
+	}
+	if def.Type == model.CommandTypeBuiltin && builtin.IsInteractive(def.Cmd) {
 		return ErrInteractiveInParallel
 	}
 	if def.Type != model.CommandTypeWorkflow {

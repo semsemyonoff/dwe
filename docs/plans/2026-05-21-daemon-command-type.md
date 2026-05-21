@@ -234,14 +234,14 @@ Both must learn about `docker_daemon_logs`. Solution: a centralised registry-lev
 
 Checklist:
 
-- [ ] add `func IsInteractive(name string) bool` to `internal/builtin/builtin.go` — single source of truth. Returns true for `confirm` and `docker_daemon_logs`. Sits alongside `Validate` / `Describe` / `Run` so future interactive builtins register their flag in one place
-- [ ] update `pipeline/resolve.go:261` `checkInteractive` to use `builtin.IsInteractive(step.Cmd)` instead of `step.Cmd == "confirm"`
-- [ ] update `runner_builtin.go:38` to use `builtin.IsInteractive(name)`. **Subtle semantics**: the existing override `!rc.SkipConfirm` is meaningful for `confirm` (with `-y` the prompt auto-yes makes parallel use safe) but **not** for `.logs` (no auto-skip for a foreground tail). Keep the `SkipConfirm` override **only** for `name == "confirm"`; `.logs` always rejects under parallel regardless of `-y`
-- [ ] write tests for both call sites:
+- [x] add `func IsInteractive(name string) bool` to `internal/builtin/builtin.go` — single source of truth. Returns true for `confirm` and `docker_daemon_logs`. Sits alongside `Validate` / `Describe` / `Run` so future interactive builtins register their flag in one place
+- [x] update `pipeline/resolve.go:261` `checkInteractive` to use `builtin.IsInteractive(step.Cmd)` instead of `step.Cmd == "confirm"`
+- [x] update `runner_builtin.go:38` to use `builtin.IsInteractive(name)`. **Subtle semantics**: the existing override `!rc.SkipConfirm` is meaningful for `confirm` (with `-y` the prompt auto-yes makes parallel use safe) but **not** for `.logs` (no auto-skip for a foreground tail). Keep the `SkipConfirm` override **only** for `name == "confirm"`; `.logs` always rejects under parallel regardless of `-y`
+- [x] write tests for both call sites:
   - pipeline plan-time: a `deploy.yml` step with `type: builtin, cmd: docker_daemon_logs` inside a parallel group → `ResolvePlan` returns `ErrInteractiveInParallel`
   - workflow runtime: a workflow with a parallel block containing `command: <base>.logs` → runner returns `ErrConfirmInsideParallel` at run dispatch (transitive resolution; the parallel-confirm walker `checkCommandInteractive` at `resolve.go:270` must also be taught about daemon-derived commands — easiest: it sees `def.Type == builtin && IsInteractive(def.Cmd)`)
-- [ ] write a test for the SkipConfirm asymmetry: `confirm` + parallel + `SkipConfirm=true` → OK; `docker_daemon_logs` + parallel + `SkipConfirm=true` → still errors
-- [ ] run `go test ./internal/builtin/... ./internal/usercommands/runtime/... ./internal/pipeline/...` — must pass before task 6
+- [x] write a test for the SkipConfirm asymmetry: `confirm` + parallel + `SkipConfirm=true` → OK; `docker_daemon_logs` + parallel + `SkipConfirm=true` → still errors (runtime guard in `BuiltinRunner`; pipeline plan-time bypasses interactive checks entirely when `SkipConfirm=true` by existing design)
+- [x] run `go test ./internal/builtin/... ./internal/usercommands/runtime/... ./internal/pipeline/...` — must pass before task 6
 
 ### Task 6: Plan-time validation for daemon blocks — richer diagnostics layer
 
