@@ -58,7 +58,7 @@ func BuildParamForm(title string, fields []ParamField) (*huh.Form, []paramFormBi
 	huhFields := make([]huh.Field, 0, len(fields))
 	for _, f := range fields {
 		var re *regexp.Regexp
-		if f.Pattern != "" {
+		if f.Pattern != "" && (f.Type == FieldTypePath || f.Type == FieldTypeString || f.Type == FieldTypeUnknown) {
 			compiled, err := regexp.Compile(f.Pattern)
 			if err != nil {
 				return nil, nil, fmt.Errorf("param %q: invalid pattern %q: %w", f.Name, f.Pattern, err)
@@ -91,7 +91,20 @@ func buildField(f ParamField, re *regexp.Regexp, ptr *string) (huh.Field, error)
 		// huh.Select writes the first option into the bound value on render,
 		// so "false" goes first to make it the safe default when the field
 		// has no Default/--set prefill.
-		if *ptr != "true" && *ptr != "false" {
+		// Normalize all ParseBool-accepted forms (e.g. "1", "T") to canonical
+		// "true"/"false" so the select highlights the right option.
+		// Invalid non-empty values error immediately — mirrors coerceParam in resolve.go.
+		if *ptr != "" {
+			b, err := strconv.ParseBool(*ptr)
+			if err != nil {
+				return nil, fmt.Errorf("param %q: cannot parse %q as bool", f.Name, *ptr)
+			}
+			if b {
+				*ptr = "true"
+			} else {
+				*ptr = "false"
+			}
+		} else {
 			*ptr = "false"
 		}
 		return huh.NewSelect[string]().
@@ -101,11 +114,14 @@ func buildField(f ParamField, re *regexp.Regexp, ptr *string) (huh.Field, error)
 			Value(ptr), nil
 
 	case FieldTypeInt:
+		// Pattern validation is intentionally skipped for int fields: resolve.go:54
+		// only enforces patterns on string/path params. Passing nil keeps interactive
+		// and non-interactive validation aligned.
 		return huh.NewInput().
 			Title(displayTitle(f)).
 			Description(f.Description).
 			Value(ptr).
-			Validate(combineValidators(f, re, validateInt)), nil
+			Validate(combineValidators(f, nil, validateInt)), nil
 
 	case FieldTypePath, FieldTypeString, FieldTypeUnknown:
 		return huh.NewInput().
@@ -134,8 +150,11 @@ func combineValidators(f ParamField, re *regexp.Regexp, extra func(string) error
 		if s == "" {
 			return nil
 		}
-		if re != nil && !re.MatchString(s) {
-			return fmt.Errorf("does not match pattern %q", f.Pattern)
+		if re != nil {
+			loc := re.FindStringIndex(s)
+			if loc == nil || loc[0] != 0 || loc[1] != len(s) {
+				return fmt.Errorf("does not match pattern %q", f.Pattern)
+			}
 		}
 		if extra != nil {
 			return extra(s)
