@@ -95,7 +95,7 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	id := truncate(li.id, idCellWidth)
 	idStyled := id
 	if isSelected {
-		idStyled = lipgloss.NewStyle().Bold(true).Render(id)
+		idStyled = paletteFocusBorder().Bold(true).Render(id)
 	}
 	// Pad to the available width so the badge right-aligns. Pad on the
 	// rendered-id width to keep alignment stable with ANSI escapes.
@@ -108,7 +108,7 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	if desc != "" {
 		descAvail := max(avail-cursorW, 8)
 		desc = truncate(desc, descAvail)
-		desc = lipgloss.NewStyle().Faint(true).Render(desc)
+		desc = paletteDescription().Render(desc)
 		line2 := strings.Repeat(" ", cursorW) + desc
 		_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 		return
@@ -129,7 +129,7 @@ func (d *cmdDelegate) renderHeader(w io.Writer, width int, label string) {
 	leftPad := 2 + pad/2
 	rightPad := 2 + (pad - pad/2)
 	bar := strings.Repeat("─", leftPad) + inner + strings.Repeat("─", rightPad)
-	bar = lipgloss.NewStyle().Faint(true).Render(bar)
+	bar = paletteDescription().Render(bar)
 	_, _ = fmt.Fprintf(w, "%s\n%s", bar, "")
 }
 

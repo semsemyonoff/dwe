@@ -107,14 +107,14 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/config/... ./internal/ui/...` — must pass
 
 ### Task 3: Wire the palette into `bubbles/v2` `list`/`viewport`/`help`
-- [ ] in `internal/ui/cmdbrowser/palette.go` (created in Task 2) add `applyListStyles(*list.Model)`, `applyItemStyles(*list.DefaultItemStyles)`, `applyHelpStyles(*help.Styles)`, `applyViewportStyles(*viewport.Model)` — each consumes `ui.Color*()` strings and constructs `charm.land/lipgloss/v2` styles internally (the bubbles/v2 Style fields require v2 lipgloss types — never mix versions here)
-- [ ] switch the custom `list_delegate.go` either to `list.DefaultItemStyles` (if visuals match) or keep the custom delegate but read color sources from `ui.Color*()` strings (constructing v2 lipgloss styles inline) instead of the hardcoded values on lines 98, 111, 132
-- [ ] in the `cmdbrowser.Run` constructor, call the relevant `apply*` functions right after `list.Model` is built
-- [ ] viewport (inspect overlay) — also wire `Style` and `HighlightStyle` (v2 lipgloss styles built from `ui.Color*()` strings)
-- [ ] unit tests in `internal/ui/cmdbrowser/styles_test.go` (or a new `styles_apply_test.go`):
+- [x] in `internal/ui/cmdbrowser/palette.go` (created in Task 2) add `applyListStyles(*list.Model)`, `applyItemStyles(*list.DefaultItemStyles)`, `applyHelpStyles(*help.Styles)`, `applyViewportStyles(*viewport.Model)` — each consumes `ui.Color*()` strings and constructs `charm.land/lipgloss/v2` styles internally (the bubbles/v2 Style fields require v2 lipgloss types — never mix versions here)
+- [x] switch the custom `list_delegate.go` either to `list.DefaultItemStyles` (if visuals match) or keep the custom delegate but read color sources from `ui.Color*()` strings (constructing v2 lipgloss styles inline) instead of the hardcoded values on lines 98, 111, 132
+- [x] in the `cmdbrowser.Run` constructor, call the relevant `apply*` functions right after `list.Model` is built
+- [x] viewport (inspect overlay) — also wire `Style` and `HighlightStyle` (v2 lipgloss styles built from `ui.Color*()` strings)
+- [x] unit tests in `internal/ui/cmdbrowser/styles_test.go` (or a new `styles_apply_test.go`):
   - struct-level: after `apply*` the corresponding bubbles fields hold the expected colors (fast feedback)
   - render-level: at least one test renders the model via `Model.View()` with an overridden palette key and asserts the ANSI escape for that color appears in the output (guards against bubbles renaming internal fields)
-- [ ] `make test ./internal/ui/cmdbrowser/...` — must pass
+- [x] `make test ./internal/ui/cmdbrowser/...` — passes
 
 ### Task 4: Replace literals in `model.go` / `tree_render.go` / `list_delegate.go`
 - [ ] all replacements construct **`charm.land/lipgloss/v2`** styles inside `cmdbrowser` using palette strings from `ui.Color*()` accessors (Task 2). Do NOT import v1 `lipgloss.Style` here.

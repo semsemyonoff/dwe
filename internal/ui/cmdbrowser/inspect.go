@@ -21,6 +21,7 @@ func newInspectState(width, height int, content string, idx int) *inspectState {
 	w = max(w, 20)
 	h := max(height, 5)
 	vp := viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
+	applyViewportStyles(&vp)
 	vp.SetContent(content)
 	return &inspectState{vp: vp, inspectIdx: idx}
 }

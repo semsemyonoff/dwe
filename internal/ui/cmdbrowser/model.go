@@ -78,6 +78,9 @@ func newModel(title string, items []Item, opts Options, w, h int) *Model {
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
+	applyListStyles(&l)
+	hm := help.New()
+	applyHelpStyles(&hm.Styles)
 	m := &Model{
 		title:    title,
 		items:    items,
@@ -89,7 +92,7 @@ func newModel(title string, items []Item, opts Options, w, h int) *Model {
 		tree:     tm,
 		list:     l,
 		delegate: dlg,
-		help:     help.New(),
+		help:     hm,
 	}
 	m.lastSinglePanel = singlePanel(w)
 	if m.lastSinglePanel {
