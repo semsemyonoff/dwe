@@ -71,20 +71,8 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 			return nil, fmt.Errorf("load registry: %w", err)
 		}
 
-		gn := reg.ensureGroup(cf.GroupID)
-		if cf.Group.Title != "" || cf.Group.Description != "" {
-			gn.Meta = cf.Group
-		}
-
-		for name := range cf.Commands {
-			cmd := cf.Commands[name]
-			cmdCopy := cmd
-			if existing, dup := reg.byID[cmdCopy.ID]; dup {
-				return nil, fmt.Errorf("load registry: duplicate command ID %q (groups: %s and %s)",
-					cmdCopy.ID, existing.Group, cmdCopy.Group)
-			}
-			reg.byID[cmdCopy.ID] = &cmdCopy
-			gn.Commands = append(gn.Commands, &cmdCopy)
+		if err := reg.addCommandFile(cf); err != nil {
+			return nil, fmt.Errorf("load registry: %w", err)
 		}
 	}
 
@@ -98,6 +86,44 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 	}
 
 	return reg, nil
+}
+
+// addCommandFile inserts every CommandDef in cf into the registry. Daemon
+// commands are expanded into virtual .start/.logs/.stop/.restart synthetics
+// under a new group node; the source daemon itself is consumed and never
+// inserted into byID (so reg.Get("<base>") returns not-found).
+//
+// Commands are iterated in lexical name order so collision error messages
+// are deterministic.
+func (r *Registry) addCommandFile(cf *model.CommandFile) error {
+	gn := r.ensureGroup(cf.GroupID)
+	if cf.Group.Title != "" || cf.Group.Description != "" {
+		gn.Meta = cf.Group
+	}
+
+	names := make([]string, 0, len(cf.Commands))
+	for n := range cf.Commands {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		cmd := cf.Commands[name]
+		if cmd.Type == model.CommandTypeDaemon {
+			if err := r.expandAndInsertDaemon(cmd); err != nil {
+				return err
+			}
+			continue
+		}
+		cmdCopy := cmd
+		if existing, dup := r.byID[cmdCopy.ID]; dup {
+			return fmt.Errorf("duplicate command ID %q (groups: %s and %s)",
+				cmdCopy.ID, existing.Group, cmdCopy.Group)
+		}
+		r.byID[cmdCopy.ID] = &cmdCopy
+		gn.Commands = append(gn.Commands, &cmdCopy)
+	}
+	return nil
 }
 
 // ensureGroup returns the GroupNode for the given dot-separated group ID,
@@ -275,20 +301,8 @@ func BuildRegistryFromParsed(files []*model.CommandFile) (*Registry, error) {
 
 	// Check for duplicate command IDs across all files
 	for _, cf := range files {
-		gn := reg.ensureGroup(cf.GroupID)
-		if cf.Group.Title != "" || cf.Group.Description != "" {
-			gn.Meta = cf.Group
-		}
-
-		for name := range cf.Commands {
-			cmd := cf.Commands[name]
-			cmdCopy := cmd
-			if existing, dup := reg.byID[cmdCopy.ID]; dup {
-				return nil, fmt.Errorf("duplicate command ID %q (groups: %s and %s)",
-					cmdCopy.ID, existing.Group, cmdCopy.Group)
-			}
-			reg.byID[cmdCopy.ID] = &cmdCopy
-			gn.Commands = append(gn.Commands, &cmdCopy)
+		if err := reg.addCommandFile(cf); err != nil {
+			return nil, err
 		}
 	}
 
