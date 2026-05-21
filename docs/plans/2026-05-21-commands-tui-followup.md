@@ -586,11 +586,11 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make lint` — no new issues
 
 ### Task 11: Cleanup runtime — verify no duplicate prompting
-- [ ] in `internal/usercommands/runtime/runner.go` (and related runner files) re-check that there is no interactive prompt for params (discovery shows only the confirmation prompt, see `confirmation_test.go`)
-- [ ] if found — remove and verify the confirmation prompt still works (it continues to be invoked from `runtime` via `ConfirmCommand` until the new flow is integrated; or it migrates to the orchestrator)
-- [ ] if nothing is found — task is NO-OP, mark complete with a note
-- [ ] add a regression test: invoking the runner with already-filled params + `skip_confirm=true` does NOT read stdin (verifiable via a `Runner.Stdin` stub)
-- [ ] `make test ./internal/usercommands/...` — must pass
+- [x] in `internal/usercommands/runtime/runner.go` (and related runner files) re-check that there is no interactive prompt for params — confirmed: grep for `Prompt|interactive|os.Stdin` shows only the `ConfirmCommand` prompt (`confirmation.go`) and stdin pass-through into child processes via `stdinOrOS` (host/script/service/workflow runners). No param-prompt code path exists.
+- [x] if found — remove and verify the confirmation prompt still works — N/A (nothing to remove)
+- [x] if nothing is found — task is NO-OP, mark complete with a note — confirmed NO-OP; the orchestrator (Task 10) is now the single param-prompt site
+- [x] add a regression test: invoking the runner with already-filled params + `skip_confirm=true` does NOT read stdin — added `TestConfirmCommand_FilledParams_SkipConfirm_DoesNotReadStdin` in `confirmation_test.go` using a `trackingReader` that counts `Read` calls. Tests the confirmation path directly (the only runtime site that could prompt). Note: testing the full `RunCommand` host path is not meaningful for this assertion — host/script/service runners legitimately attach stdin to the child process via `cmd.Stdin = stdinOrOS(rc)`, which counts as a "read" by the OS even when the user-authored shell never consumes it.
+- [x] `make test ./internal/usercommands/...` — passes
 
 ### Task 12: Verify acceptance criteria
 - [ ] all Overview requirements implemented (help bar visible, palette customizable via `styles.yml`, `commands [id]` works, `cmd` alias, `-i/--inspect`, parameter form with pre-filled values, confirmation summary)

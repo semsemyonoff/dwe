@@ -140,6 +140,55 @@ func TestRunCommand_Confirmation_TTYUsesCustomText(t *testing.T) {
 	}
 }
 
+// trackingReader records whether Read was ever called.
+type trackingReader struct{ reads int }
+
+func (r *trackingReader) Read(p []byte) (int, error) {
+	r.reads++
+	return 0, io.EOF
+}
+
+// TestConfirmCommand_FilledParams_SkipConfirm_DoesNotReadStdin guards against
+// a regression where the runtime prompts (via stdin) for parameter values or
+// confirmation after the orchestrator has already resolved params and asked
+// the user. With Params already filled and SkipConfirm=true, the confirmation
+// path — the only place runtime could prompt — must not touch stdin nor invoke
+// the runConfirm seam.
+func TestConfirmCommand_FilledParams_SkipConfirm_DoesNotReadStdin(t *testing.T) {
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	origRC := runConfirm
+	t.Cleanup(func() { runConfirm = origRC })
+	runConfirm = func(title, affirmative, negative string) (bool, error) {
+		t.Fatalf("runConfirm should not be called when SkipConfirm is true")
+		return false, nil
+	}
+
+	cmd := &CommandDef{
+		ID:           "test.filled-params",
+		Type:         CommandTypeShell,
+		Confirmation: true,
+		Cmd:          `true`,
+	}
+
+	stdin := &trackingReader{}
+	err := ConfirmCommand(RunContext{
+		Cmd:         cmd,
+		Render:      &tpl.RenderContext{},
+		Params:      map[string]any{"name": "value"},
+		Stdin:       stdin,
+		SkipConfirm: true,
+	})
+	if err != nil {
+		t.Fatalf("ConfirmCommand returned error: %v", err)
+	}
+	if stdin.reads != 0 {
+		t.Errorf("expected zero stdin reads, got %d", stdin.reads)
+	}
+}
+
 func TestRunCommand_Confirmation_SkipConfirmSkipsPrompt(t *testing.T) {
 	origRC := runConfirm
 	t.Cleanup(func() { runConfirm = origRC })
