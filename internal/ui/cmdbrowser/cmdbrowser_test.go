@@ -267,10 +267,10 @@ func TestModel_HelpFooterVisibleWithinTerminalHeight(t *testing.T) {
 			t.Parallel()
 			m := newModel("pick", []Item{{ID: "db.migrate"}, {ID: "db.seed"}}, DefaultOptions(), tc.w, tc.h)
 			out := m.View().Content
-			// "help" is in the short-help footer's Help binding label across all
-			// focus modes (see defaultKeymap.Help WithHelp("?", "help")).
-			if !strings.Contains(out, "help") {
-				t.Errorf("footer binding label 'help' not in View().Content at %dx%d:\n%s", tc.w, tc.h, out)
+			// "enter" is in the full-help footer's Enter binding label across all
+			// focus modes (see defaultKeymap.Enter WithHelp("enter", "select")).
+			if !strings.Contains(out, "enter") {
+				t.Errorf("footer binding label 'enter' not in View().Content at %dx%d:\n%s", tc.w, tc.h, out)
 			}
 			// Trailing newline (if any) would inflate the count by one, so trim it.
 			content := strings.TrimRight(out, "\n")

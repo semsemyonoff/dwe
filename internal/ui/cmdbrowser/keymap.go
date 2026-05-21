@@ -22,7 +22,6 @@ type keymap struct {
 	Filter      key.Binding
 	Inspect     key.Binding
 	SkipConfirm key.Binding
-	Help        key.Binding
 	Backspace   key.Binding
 }
 
@@ -44,7 +43,6 @@ func defaultKeymap() keymap {
 		Filter:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		Inspect:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "inspect")),
 		SkipConfirm: key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "skip confirm")),
-		Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Backspace:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("backspace", "delete")),
 	}
 }

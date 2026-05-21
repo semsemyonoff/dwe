@@ -123,10 +123,6 @@ func (m *Model) updateFilter(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.skipConfirm = !m.skipConfirm
 		return m, nil
 	}
-	if key.Matches(msg, m.keys.Help) {
-		m.showFullHelp = !m.showFullHelp
-		return m, nil
-	}
 	if key.Matches(msg, m.keys.Backspace) {
 		if m.filter != nil && len(m.filter.query) > 0 {
 			runes := []rune(m.filter.query)

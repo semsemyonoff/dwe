@@ -51,12 +51,11 @@ type Model struct {
 	cancelled bool
 	result    Result
 
-	filter       *filterState
-	inspect      *inspectState
-	skipConfirm  bool
-	showFullHelp bool
-	help         help.Model
-	priorFocus   focus
+	filter      *filterState
+	inspect     *inspectState
+	skipConfirm bool
+	help        help.Model
+	priorFocus  focus
 
 	// lastSinglePanel tracks the most recent layout bucket so applyLayout can
 	// repopulate the list when the user resizes across the 80-column boundary.
@@ -189,10 +188,6 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateFilter(msg)
 	}
 	// Global toggles available in left/right modes.
-	if key.Matches(msg, m.keys.Help) {
-		m.showFullHelp = !m.showFullHelp
-		return m, nil
-	}
 	if key.Matches(msg, m.keys.Filter) {
 		m.enterFilter()
 		return m, nil
@@ -457,43 +452,17 @@ func (m *Model) renderRight() string {
 	return m.breadcrumb() + "\n" + m.list.View()
 }
 
-// renderHelpFooter renders the short or long help line based on showFullHelp,
-// driven by the dynamic bindings for the current focus.
+// renderHelpFooter renders the full help footer (grouped key bindings) for
+// the current focus mode. The footer is always full-width; there is no
+// short/long toggle.
 func (m *Model) renderHelpFooter() string {
-	if m.showFullHelp {
-		return m.help.FullHelpView(m.fullBindings())
-	}
-	return m.help.ShortHelpView(m.shortBindings())
-}
-
-// shortBindings returns the bindings to show in the short-help footer. The
-// set depends on the active focus mode.
-func (m *Model) shortBindings() []key.Binding {
-	switch m.focus {
-	case focusFilter:
-		return []key.Binding{m.keys.Enter, m.keys.Cancel, m.keys.Help}
-	case focusInspect:
-		return []key.Binding{m.keys.Up, m.keys.Down, m.keys.Enter, m.keys.Cancel}
-	case focusRight:
-		var base []key.Binding
-		if singlePanel(m.width) {
-			base = []key.Binding{m.keys.Up, m.keys.Down, m.keys.Enter, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
-		} else {
-			base = []key.Binding{m.keys.Tab, m.keys.Enter, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
-		}
-		if m.opts.Mode == ModeRun {
-			base = append(base, m.keys.SkipConfirm)
-		}
-		return base
-	default: // focusLeft
-		return []key.Binding{m.keys.Up, m.keys.Down, m.keys.Tab, m.keys.Filter, m.keys.Cancel, m.keys.Help}
-	}
+	return m.help.FullHelpView(m.fullBindings())
 }
 
 // fullBindings returns the grouped bindings for the long-help footer.
 func (m *Model) fullBindings() [][]key.Binding {
 	nav := []key.Binding{m.keys.Up, m.keys.Down, m.keys.Left, m.keys.Right, m.keys.Home, m.keys.End}
-	act := []key.Binding{m.keys.Enter, m.keys.Tab, m.keys.Filter, m.keys.Inspect, m.keys.Cancel, m.keys.Help}
+	act := []key.Binding{m.keys.Enter, m.keys.Tab, m.keys.Filter, m.keys.Inspect, m.keys.Cancel}
 	if m.opts.Mode == ModeRun {
 		act = append(act, m.keys.SkipConfirm)
 	}
@@ -522,12 +491,16 @@ func (m *Model) breadcrumb() string {
 // Width bucket helpers — keep the layout rules in one place. The fallback
 // path ensures width is always at least minTwoPanelWidth.
 
+// footerRows is the fixed height of the full-help footer. The help model
+// renders nav and act binding groups side-by-side; nav has 6 bindings so the
+// column max — and therefore the footer height — is always 6.
+const footerRows = 6
+
 // bodyHeight returns the inner content height for the bordered panel(s).
-// The View composes title(1) + bordered-panel(bh+2) + footer(≥1) — without
-// reserving a row for the footer it would be pushed off-screen at the
-// declared terminal height. Reserve 1 row for the short-help footer; full
-// help may still overflow when toggled on, which is acceptable.
-func bodyHeight(h int) int { return max(h-4, 3) }
+// The View composes title(1) + bordered-panel(bh+2) + footer(footerRows), so
+// at the declared terminal height: bh = h - 3 - footerRows. Without the
+// reservation the footer would be pushed off-screen.
+func bodyHeight(h int) int { return max(h-3-footerRows, 3) }
 
 // listHeight returns the inner height for the bubbles list. The right panel
 // renders breadcrumb + list (or filter-query + list), so the list must be one

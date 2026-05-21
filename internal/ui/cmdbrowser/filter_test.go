@@ -209,36 +209,14 @@ func TestInspect_EmptyContentShowsPlaceholder(t *testing.T) {
 	}
 }
 
-func TestHelp_ToggleLongForm(t *testing.T) {
+func TestHelp_FullFooterIncludesNavAndActions(t *testing.T) {
 	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
-	if m.showFullHelp {
-		t.Fatal("initial showFullHelp should be false")
+	groups := m.fullBindings()
+	if len(groups) != 2 {
+		t.Fatalf("fullBindings should return [nav, act] (2 groups), got %d", len(groups))
 	}
-	m.Update(syntheticKey("?"))
-	if !m.showFullHelp {
-		t.Errorf("? should toggle to full help")
-	}
-	m.Update(syntheticKey("?"))
-	if m.showFullHelp {
-		t.Errorf("? should toggle back to short help")
-	}
-}
-
-func TestHelp_BindingsDifferByFocus(t *testing.T) {
-	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
-	leftKeys := m.shortBindings()
-	m.focus = focusRight
-	rightKeys := m.shortBindings()
-	// Right adds inspect / skip-confirm bindings that aren't in the left
-	// short-help set; an exact count match would mean the dynamic switch is
-	// a no-op.
-	if len(rightKeys) <= len(leftKeys) {
-		t.Errorf("right focus should expose more bindings than left; got left=%d right=%d", len(leftKeys), len(rightKeys))
-	}
-	m.focus = focusInspect
-	inspectKeys := m.shortBindings()
-	if len(inspectKeys) >= len(rightKeys) {
-		t.Errorf("inspect focus should narrow bindings vs right; got inspect=%d right=%d", len(inspectKeys), len(rightKeys))
+	if len(groups[0]) == 0 || len(groups[1]) == 0 {
+		t.Errorf("nav and act groups must be non-empty; got nav=%d act=%d", len(groups[0]), len(groups[1]))
 	}
 }
 

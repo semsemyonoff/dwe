@@ -1,12 +1,14 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -431,7 +433,7 @@ func TestResolveCommandID_exactID(t *testing.T) {
 	reg := usercommands.NewEmptyRegistry()
 	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Private: false})
 
-	got, err := resolveCommandID(reg, []string{"db.up"}, false, mockSelector)
+	got, err := resolveCommandID(reg, []string{"db.up"}, false, "", mockSelector)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -451,7 +453,7 @@ func TestResolveCommandID_noArg_callsSelector(t *testing.T) {
 	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: usercommands.CommandTypeShell, Private: true})
 
 	cs := &captureSelector{}
-	_, err := resolveCommandID(reg, []string{}, false, cs.selector)
+	_, err := resolveCommandID(reg, []string{}, false, "", cs.selector)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -473,7 +475,7 @@ func TestResolveCommandID_noArg_includePrivate(t *testing.T) {
 	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.secret", LocalName: "secret", Group: "db", Type: usercommands.CommandTypeShell, Private: true})
 
 	cs := &captureSelector{}
-	_, err := resolveCommandID(reg, []string{}, true, cs.selector)
+	_, err := resolveCommandID(reg, []string{}, true, "", cs.selector)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -490,7 +492,7 @@ func TestResolveCommandID_groupPrefix_callsFilteredSelector(t *testing.T) {
 	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Private: false})
 
 	cs := &captureSelector{}
-	_, err := resolveCommandID(reg, []string{"services.main"}, false, cs.selector)
+	_, err := resolveCommandID(reg, []string{"services.main"}, false, "", cs.selector)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -509,12 +511,99 @@ func TestResolveCommandID_groupPrefix_callsFilteredSelector(t *testing.T) {
 	}
 }
 
+func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Private: false})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.down", LocalName: "down", Group: "db", Type: usercommands.CommandTypeShell, Private: false})
+
+	t.Run("no_arg", func(t *testing.T) {
+		cs := &captureSelector{}
+		if _, err := resolveCommandID(reg, []string{}, false, "laravel", cs.selector); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cs.title != "Devbox · laravel · Select command" {
+			t.Errorf("title = %q, want %q", cs.title, "Devbox · laravel · Select command")
+		}
+	})
+
+	t.Run("group_prefix", func(t *testing.T) {
+		cs := &captureSelector{}
+		if _, err := resolveCommandID(reg, []string{"db"}, false, "laravel", cs.selector); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cs.title != "Devbox · laravel · Select command (db)" {
+			t.Errorf("title = %q, want %q", cs.title, "Devbox · laravel · Select command (db)")
+		}
+	})
+
+	t.Run("empty_project_name", func(t *testing.T) {
+		cs := &captureSelector{}
+		if _, err := resolveCommandID(reg, []string{}, false, "", cs.selector); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cs.title != "Devbox · Select command" {
+			t.Errorf("title = %q, want %q", cs.title, "Devbox · Select command")
+		}
+	})
+}
+
+func TestPrintRunHeader(t *testing.T) {
+	cases := []struct {
+		name string
+		def  *usercommands.CommandDef
+		want []string // substrings that must all be present
+		not  []string // substrings that must NOT be present
+	}{
+		{
+			name: "id_type_description",
+			def: &usercommands.CommandDef{
+				ID:          "db.cli",
+				Type:        usercommands.CommandTypeServiceExec,
+				Description: "Connect to the database",
+			},
+			want: []string{"db.cli", "[service_exec]", "Connect to the database"},
+		},
+		{
+			name: "no_description",
+			def:  &usercommands.CommandDef{ID: "app.up", Type: usercommands.CommandTypeShell},
+			want: []string{"app.up", "[shell]"},
+		},
+		{
+			name: "id_only",
+			def:  &usercommands.CommandDef{ID: "lonely"},
+			want: []string{"lonely"},
+			not:  []string{"[", "]"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			printRunHeader(&buf, tc.def)
+			got := buf.String()
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("output missing %q\n---\n%s", w, got)
+				}
+			}
+			for _, n := range tc.not {
+				if strings.Contains(got, n) {
+					t.Errorf("output unexpectedly contains %q\n---\n%s", n, got)
+				}
+			}
+			if !strings.HasSuffix(got, "\n") {
+				t.Errorf("output must end with newline")
+			}
+		})
+	}
+}
+
 func TestResolveCommandID_unknownArg_error(t *testing.T) {
 	// When arg is neither a command ID nor a group prefix, return an error.
 	reg := usercommands.NewEmptyRegistry()
 	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Private: false})
 
-	_, err := resolveCommandID(reg, []string{"nonexistent"}, false, noopSelector)
+	_, err := resolveCommandID(reg, []string{"nonexistent"}, false, "", noopSelector)
 	if err == nil {
 		t.Fatal("expected error for unknown arg, got nil")
 	}
@@ -523,7 +612,7 @@ func TestResolveCommandID_unknownArg_error(t *testing.T) {
 func TestResolveCommandID_noArg_emptyRegistry_error(t *testing.T) {
 	// When no arg and no commands exist, return an error.
 	reg := usercommands.NewEmptyRegistry()
-	_, err := resolveCommandID(reg, []string{}, false, noopSelector)
+	_, err := resolveCommandID(reg, []string{}, false, "", noopSelector)
 	if err == nil {
 		t.Fatal("expected error for empty registry, got nil")
 	}
@@ -537,7 +626,7 @@ func TestResolveCommandID_nonInteractiveSelector_noArg_returnsError(t *testing.T
 	nonTTYSelector := func(_ []*usercommands.CommandDef, _ string) (string, error) {
 		return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 	}
-	_, err := resolveCommandID(reg, []string{}, false, nonTTYSelector)
+	_, err := resolveCommandID(reg, []string{}, false, "", nonTTYSelector)
 	if err == nil {
 		t.Fatal("expected error from non-TTY selector, got nil")
 	}
@@ -551,7 +640,7 @@ func TestResolveCommandID_nonInteractiveSelector_groupPrefix_returnsError(t *tes
 	nonTTYSelector := func(_ []*usercommands.CommandDef, _ string) (string, error) {
 		return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 	}
-	_, err := resolveCommandID(reg, []string{"db"}, false, nonTTYSelector)
+	_, err := resolveCommandID(reg, []string{"db"}, false, "", nonTTYSelector)
 	if err == nil {
 		t.Fatal("expected error from non-TTY selector for group prefix, got nil")
 	}
@@ -567,7 +656,7 @@ func TestResolveCommandID_nonInteractiveSelector_exactID_succeeds(t *testing.T) 
 		selectorCalled = true
 		return "", fmt.Errorf("not interactive")
 	}
-	got, err := resolveCommandID(reg, []string{"db.up"}, false, nonTTYSelector)
+	got, err := resolveCommandID(reg, []string{"db.up"}, false, "", nonTTYSelector)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

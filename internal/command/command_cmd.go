@@ -110,7 +110,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 				}
 			}
-			id, err := resolveCommandID(reg, args, false, selector)
+			id, err := resolveCommandID(reg, args, false, cfg.Project.Name, selector)
 			if err != nil {
 				if errors.Is(err, ui.ErrCancelled) {
 					return nil
@@ -252,10 +252,27 @@ func runCommandByID(
 		rctx.NonInteractive = skipPrompts
 	}
 
+	printRunHeader(stdout, def)
+
 	if err := runUserCommand(ctx, rctx); err != nil {
 		return fmt.Errorf("running command %q: %w", id, err)
 	}
 	return nil
+}
+
+// printRunHeader writes a one-line banner identifying the command about to
+// execute so the user has context for the runner output that follows.
+// Format: `▶ <id>  [<type>]  <description>`. Type and description are omitted
+// when empty.
+func printRunHeader(w io.Writer, def *usercommands.CommandDef) {
+	parts := []string{"▶ " + ui.StyleKey(def.ID)}
+	if def.Type != "" {
+		parts = append(parts, ui.StyleMuted("["+string(def.Type)+"]"))
+	}
+	if def.Description != "" {
+		parts = append(parts, ui.StyleMuted(def.Description))
+	}
+	_, _ = fmt.Fprintln(w, strings.Join(parts, "  "))
 }
 
 // paramFieldsFromDef converts a command's params map into ordered ui.ParamField
@@ -404,7 +421,11 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 //   - One arg that is a group prefix (registry.List returns results): calls selector
 //     filtered to that group.
 //   - One arg that is neither: returns an error.
-func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate bool, selector selectCommandFn) (string, error) {
+//
+// projectName, when non-empty, is prepended to the selector title as
+// "<project> · Select command [...]" so the TUI header makes clear which
+// devbox project is active.
+func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate bool, projectName string, selector selectCommandFn) (string, error) {
 	if len(args) == 1 {
 		arg := args[0]
 		// Exact command ID — use directly without selector.
@@ -421,7 +442,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 		if len(defs) == 0 {
 			return "", fmt.Errorf("command %q not found", arg)
 		}
-		return selector(defs, "Select command ("+arg+")")
+		return selector(defs, selectorTitle(projectName, "Select command ("+arg+")"))
 	}
 	// No arg — show full list.
 	var defs []*usercommands.CommandDef
@@ -433,7 +454,20 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 	if len(defs) == 0 {
 		return "", fmt.Errorf("no commands available")
 	}
-	return selector(defs, "Select command")
+	return selector(defs, selectorTitle(projectName, "Select command"))
+}
+
+// selectorTitle composes the selector header from a fixed "Devbox" prefix,
+// the project name (when set), and the base title, joined with middots. The
+// "Devbox" prefix is always present so the TUI advertises which tool owns the
+// window regardless of project context.
+func selectorTitle(projectName, base string) string {
+	parts := []string{"Devbox"}
+	if projectName != "" {
+		parts = append(parts, projectName)
+	}
+	parts = append(parts, base)
+	return strings.Join(parts, " · ")
 }
 
 // parseSetFlags parses --set key=value flags into a map.
