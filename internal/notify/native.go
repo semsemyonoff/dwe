@@ -41,6 +41,9 @@ func newNativeBackend() *nativeBackend {
 
 func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 	title, body := formatEvent(ev)
+	if title == "" {
+		return
+	}
 
 	select {
 	case b.sem <- struct{}{}:
@@ -55,12 +58,14 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 		done <- beeepNotify(title, body, "")
 	}()
 
+	timer := time.NewTimer(nativeBackendTimeout)
+	defer timer.Stop()
 	select {
 	case err := <-done:
 		if err != nil {
 			slog.Debug("notify backend failed", "err", err)
 		}
-	case <-time.After(nativeBackendTimeout):
+	case <-timer.C:
 		slog.Debug("notify backend timed out; slot remains occupied until beeep returns", "kind", ev.Kind)
 	case <-ctx.Done():
 		slog.Debug("notify backend cancelled by ctx; slot remains occupied until beeep returns", "err", ctx.Err())
@@ -87,9 +92,12 @@ func formatEvent(ev Event) (title, body string) {
 		if ev.Err != nil {
 			body += "\n" + truncateErr(ev.Err.Error(), failBodyMaxErrLen)
 		}
-	default:
+	case OutcomeSuccess:
 		title = fmt.Sprintf("✓ Devbox: %s succeeded", op)
 		body = fmt.Sprintf("%s · %s", project, dur)
+	default:
+		slog.Debug("notify: unexpected zero-value Outcome; dropping event", "kind", ev.Kind)
+		return "", ""
 	}
 	return title, body
 }
@@ -100,8 +108,9 @@ func truncateErr(s string, max int) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
-	if len(s) > max {
-		return s[:max] + "…"
+	r := []rune(s)
+	if len(r) > max {
+		return string(r[:max]) + "…"
 	}
 	return s
 }

@@ -198,7 +198,7 @@ messages:
 `notify: true` opts the command into a desktop notification when it finishes (success or failure). The notification only fires when **all** of the following hold:
 
 - the `CommandDef` declares `notify: true` (default is `false`);
-- the command is the **top-level** invocation — `devbox commands <id>` typed by the user. Commands invoked transitively as a workflow sub-step (sequential or parallel) or from a deploy pipeline action are **always suppressed at runtime** regardless of their own `notify:` value;
+- the command is the **top-level** invocation — `devbox commands <id>` typed by the user. Commands invoked transitively as a workflow sub-step (sequential or parallel), from a deploy pipeline action, or from a reset pipeline action are **always suppressed at runtime** regardless of their own `notify:` value;
 - the user's `notify_enabled` master switch and `notify_commands_enabled` per-op gate are both true;
 - the environment is interactive (not CI / `DEVBOX_NONINTERACTIVE` / non-TTY).
 

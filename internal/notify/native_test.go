@@ -81,6 +81,35 @@ func TestFormatEvent_FailureKeepsFirstLineOnly(t *testing.T) {
 	}
 }
 
+func TestFormatEvent_OutcomeUnknown_ReturnsEmpty(t *testing.T) {
+	title, body := formatEvent(Event{
+		Operation: "deploy",
+		Outcome:   OutcomeUnknown,
+		Project:   "p",
+	})
+	if title != "" || body != "" {
+		t.Fatalf("expected empty strings for OutcomeUnknown, got title=%q body=%q", title, body)
+	}
+}
+
+func TestFormatEvent_MultibyteTruncation(t *testing.T) {
+	long := strings.Repeat("日", 300)
+	_, body := formatEvent(Event{
+		Operation: "run",
+		Outcome:   OutcomeFailure,
+		Project:   "p",
+		Err:       errors.New(long),
+	})
+	if !strings.HasSuffix(body, "…") {
+		t.Fatalf("expected truncation marker, body=%q", body)
+	}
+	bodyLines := strings.Split(body, "\n")
+	last := bodyLines[len(bodyLines)-1]
+	if len([]rune(last)) != 201 {
+		t.Fatalf("truncated rune len=%d, want 201", len([]rune(last)))
+	}
+}
+
 func TestHumaniseDuration(t *testing.T) {
 	cases := []struct {
 		d    time.Duration
@@ -135,7 +164,7 @@ func TestNativeBackend_SwallowsBeeepError(t *testing.T) {
 		return fmt.Errorf("boom")
 	})
 	b := newNativeBackend()
-	b.notify(context.Background(), Event{Operation: "deploy"})
+	b.notify(context.Background(), Event{Operation: "deploy", Outcome: OutcomeSuccess})
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -157,7 +186,7 @@ func TestNativeBackend_TimeoutDoesNotBlock(t *testing.T) {
 	// just assert the call returns within timeout + slack.
 	b := newNativeBackend()
 	start := time.Now()
-	b.notify(context.Background(), Event{Operation: "deploy"})
+	b.notify(context.Background(), Event{Operation: "deploy", Outcome: OutcomeSuccess})
 	elapsed := time.Since(start)
 	// Allow some slack on slow CI.
 	if elapsed > nativeBackendTimeout+500*time.Millisecond {
@@ -177,7 +206,7 @@ func TestNativeBackend_CtxCancelReturnsImmediately(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	start := time.Now()
-	b.notify(ctx, Event{Operation: "deploy"})
+	b.notify(ctx, Event{Operation: "deploy", Outcome: OutcomeSuccess})
 	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
 		t.Fatalf("cancelled notify took %v; expected near-immediate return", elapsed)
 	}
@@ -203,7 +232,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	// beeepNotify before we attempt the second call.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	b.notify(ctx, Event{Operation: "deploy"})
+	b.notify(ctx, Event{Operation: "deploy", Outcome: OutcomeSuccess})
 	select {
 	case <-started:
 	case <-time.After(5 * time.Second):
@@ -212,7 +241,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 
 	// Slot should still be occupied. Second call must drop without
 	// invoking beeepNotify again.
-	b.notify(ctx, Event{Operation: "deploy"})
+	b.notify(ctx, Event{Operation: "deploy", Outcome: OutcomeSuccess})
 	if got := firstCalls.Load(); got != 1 {
 		t.Fatalf("firstCalls=%d want 1 (second call should drop)", got)
 	}
@@ -240,7 +269,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 		close(freshDone)
 		return nil
 	})
-	b.notify(context.Background(), Event{Operation: "deploy"})
+	b.notify(context.Background(), Event{Operation: "deploy", Outcome: OutcomeSuccess})
 	select {
 	case <-freshDone:
 	case <-time.After(2 * time.Second):

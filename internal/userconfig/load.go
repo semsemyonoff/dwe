@@ -85,7 +85,7 @@ func applyEnv(cfg *Config) error {
 		}
 		parsed, err := parseBool(strings.TrimSpace(v), 0, b.env)
 		if err != nil {
-			return fmt.Errorf("userconfig: env %s: invalid boolean %q", b.env, v)
+			return fmt.Errorf("userconfig: env %s: %w", b.env, err)
 		}
 		b.set(parsed)
 	}

@@ -30,6 +30,17 @@ func (r *recordingNotifier) snapshot() []notify.Event {
 	return out
 }
 
+// pointHomeAtTempDir isolates os.UserConfigDir resolution for the test
+// process so global userconfig reads can't accidentally pick up the
+// developer's real config.
+func pointHomeAtTempDir(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
+	t.Setenv("AppData", filepath.Join(dir, "AppData"))
+}
+
 // installRecordingNotifier swaps the package-level newNotifier with a
 // recorder for the duration of the test and returns the recorder.
 func installRecordingNotifier(t *testing.T) *recordingNotifier {
@@ -42,6 +53,7 @@ func installRecordingNotifier(t *testing.T) *recordingNotifier {
 }
 
 func TestRunRun_FiresNotifyOnSuccess(t *testing.T) {
+	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
@@ -75,6 +87,7 @@ func TestRunRun_FiresNotifyOnSuccess(t *testing.T) {
 }
 
 func TestRunRun_FiresNotifyOnFailure(t *testing.T) {
+	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
@@ -102,6 +115,7 @@ func TestRunRun_FiresNotifyOnFailure(t *testing.T) {
 }
 
 func TestRunRun_EarlyConfigFailure_PopulatesEmptyProject(t *testing.T) {
+	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	// No devbox.yml — RunRun fails at the first config.LoadConfig step.
@@ -143,6 +157,7 @@ func TestRunRun_SkipNotify_NoEvent(t *testing.T) {
 }
 
 func TestRunRestart_PropagatesSkipNotify(t *testing.T) {
+	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)

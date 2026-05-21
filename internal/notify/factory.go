@@ -18,7 +18,7 @@ var isInteractiveForNotify = func() bool {
 	if os.Getenv("DEVBOX_NONINTERACTIVE") != "" {
 		return false
 	}
-	return ui.IsInteractiveFn(os.Stdin)
+	return ui.IsInteractiveFn(os.Stdout)
 }
 
 // New constructs a Notifier from a userconfig. Returns a disabled
