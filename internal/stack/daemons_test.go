@@ -2,6 +2,7 @@ package stack
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -127,6 +128,33 @@ func TestFormatUptime(t *testing.T) {
 		if got != c.want {
 			t.Errorf("formatUptime(%s) = %q, want %q", c.d, got, c.want)
 		}
+	}
+}
+
+func TestCollectDaemons_ShellError(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
+	)
+	cfg.Project.Name = "proj"
+	orig := daemonsShellOutFn
+	defer func() { daemonsShellOutFn = orig }()
+	daemonsShellOutFn = func(_ context.Context, _ *docker.Compose, _ string) ([]byte, error) {
+		return nil, errors.New("permission denied")
+	}
+	rows, errs := CollectDaemons(context.Background(), cfg, &config.DockerConfig{})
+	if rows != nil {
+		t.Errorf("expected nil rows on error, got %v", rows)
+	}
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
+	}
+	if !strings.Contains(errs[0].Error(), "docker ps") {
+		t.Errorf("expected 'docker ps' in error message, got: %v", errs[0])
 	}
 }
 

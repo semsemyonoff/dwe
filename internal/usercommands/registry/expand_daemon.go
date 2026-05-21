@@ -89,8 +89,6 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 		c.Cmd = "docker_daemon_logs"
 		c.With = map[string]any{
 			"container_template": src.Daemon.ContainerTemplate,
-			"daemon_id":          base,
-			"label_params":       labelParams,
 		}
 		out = append(out, c)
 	}
@@ -101,8 +99,6 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 		c.Cmd = "docker_daemon_stop"
 		with := map[string]any{
 			"container_template": src.Daemon.ContainerTemplate,
-			"daemon_id":          base,
-			"label_params":       labelParams,
 		}
 		if src.Daemon.StopTimeout != "" {
 			with["stop_timeout"] = src.Daemon.StopTimeout

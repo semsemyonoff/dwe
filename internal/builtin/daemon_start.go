@@ -119,8 +119,8 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 		if err != nil {
 			return fmt.Errorf("docker_daemon_start: workdir_from %q: %w", workdirFrom, err)
 		}
-		if v != nil {
-			workdir = v.(string)
+		if s, ok := v.(string); ok {
+			workdir = s
 		}
 	}
 

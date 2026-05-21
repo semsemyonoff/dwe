@@ -116,11 +116,11 @@ func TestStandardLabels_KeyStability(t *testing.T) {
 	if got[0] != "--label" || got[2] != "--label" || got[4] != "--label" {
 		t.Fatalf("flag positions wrong: %v", got)
 	}
-	if !strings.HasPrefix(got[1], LabelProject+"=") {
-		t.Errorf("first label not project: %q", got[1])
+	if got[1] != LabelProject+"=my-proj" {
+		t.Errorf("first label wrong: got %q, want %q", got[1], LabelProject+"=my-proj")
 	}
-	if !strings.HasPrefix(got[3], LabelDaemonID+"=") {
-		t.Errorf("second label not daemon.id: %q", got[3])
+	if got[3] != LabelDaemonID+"=services.main.queue" {
+		t.Errorf("second label wrong: got %q, want %q", got[3], LabelDaemonID+"=services.main.queue")
 	}
 	if !strings.HasPrefix(got[5], LabelDaemonParams+"=") {
 		t.Errorf("third label not daemon.params: %q", got[5])

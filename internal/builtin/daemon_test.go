@@ -24,6 +24,11 @@ func TestBuildStartExtraArgs_orderAndFlags(t *testing.T) {
 	// Header flags present, in order:
 	mustContainOrdered(t, args, "-d", "--no-deps", "--entrypoint", "", "--rm", "--name", "proj-php_queue_default")
 
+	// Workdir flag present.
+	if !hasPair(args, "--workdir", "/var/www") {
+		t.Fatalf("--workdir /var/www missing; args=%v", args)
+	}
+
 	// compose_args must appear BEFORE --user/--workdir/-e/--label/service/argv.
 	pullIdx := slices.Index(args, "--pull")
 	userIdx := slices.Index(args, "--user")

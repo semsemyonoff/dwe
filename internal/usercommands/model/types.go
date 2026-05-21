@@ -753,10 +753,7 @@ func (c *CommandDef) validateDaemonType() error {
 	// daemon block.
 	if c.Daemon == nil {
 		errs = append(errs, ErrDaemonBlockRequired)
-		if len(errs) > 0 {
-			return errors.Join(errs...)
-		}
-		return nil
+		return errors.Join(errs...)
 	}
 
 	if strings.TrimSpace(c.Daemon.ContainerTemplate) == "" {

@@ -142,6 +142,9 @@ func TestLoadRegistry_Daemon_StartHasExecutionFields(t *testing.T) {
 	if cmd.With["daemon_id"] != "services.main.queue" {
 		t.Errorf("with[daemon_id] = %v", cmd.With["daemon_id"])
 	}
+	if cmd.With["on_already_running"] != "error" {
+		t.Errorf("with[on_already_running] = %v, want \"error\"", cmd.With["on_already_running"])
+	}
 	// argv must be []any so renderBuiltinWith can template each element.
 	argv, ok := cmd.With["argv"].([]any)
 	if !ok {

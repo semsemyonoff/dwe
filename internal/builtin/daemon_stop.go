@@ -13,10 +13,7 @@ import (
 	"devbox-cli/internal/docker"
 )
 
-const (
-	defaultStopTimeout = 10 * time.Second
-	secondUnit         = time.Second
-)
+const defaultStopTimeout = 10 * time.Second
 
 func parseDurationPositive(s string) (time.Duration, error) {
 	d, err := time.ParseDuration(s)
@@ -41,7 +38,7 @@ func stopTimeoutSeconds(raw string) int {
 			timeout = d
 		}
 	}
-	return max(int(timeout.Round(secondUnit).Seconds()), 1)
+	return max(int(timeout.Round(time.Second).Seconds()), 1)
 }
 
 // daemonStopBuiltin implements docker_daemon_stop.
@@ -86,8 +83,7 @@ func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 	cmd.Env = compose.BuildEnv()
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
+	if err := cmd.Run(); err != nil {
 		errOut := stderr.String()
 		if strings.Contains(errOut, "No such container") {
 			_, _ = fmt.Fprintf(ectx.Output.Writer(), "no daemon to stop: %s\n", fullName)
@@ -98,7 +94,6 @@ func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 		}
 		return fmt.Errorf("docker stop: %w", err)
 	}
-	_ = out
 	_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ daemon stopped: %s\n", fullName)
 	return nil
 }

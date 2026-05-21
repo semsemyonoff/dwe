@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/daemon"
@@ -65,7 +66,7 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 		return nil
 	}
 
-	secs := max(int(defaultStopTimeout.Round(secondUnit).Seconds()), 1)
+	secs := max(int(defaultStopTimeout.Round(time.Second).Seconds()), 1)
 
 	var stopped []string
 	for _, name := range names {

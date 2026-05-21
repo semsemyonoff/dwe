@@ -13,14 +13,18 @@
 // and file-system operations safe, auditable, and visible in plan output.
 //
 // Canonical builtins:
-//   - confirm                      — interactive user confirmation prompt
-//   - message                      — output styled text
-//   - service_configs_copy         — copy service template configs into the hub
-//   - service_configs_check        — verify service config files exist
-//   - service_dirs_ensure          — ensure service hub directories exist
+//   - confirm                       — interactive user confirmation prompt
+//   - message                       — output styled text
+//   - service_configs_copy          — copy service template configs into the hub
+//   - service_configs_check         — verify service config files exist
+//   - service_dirs_ensure           — ensure service hub directories exist
 //   - docker_remove_project_volumes — remove all Docker volumes for the project
-//   - docker_wait_healthy          — wait until containers are healthy
-//   - remove_paths                 — delete declared paths inside the project root
+//   - docker_wait_healthy           — wait until containers are healthy
+//   - docker_daemon_start           — start a named daemon container (docker compose run -d)
+//   - docker_daemon_logs            — tail daemon container logs foreground (interactive)
+//   - docker_daemon_stop            — stop a named daemon container (idempotent)
+//   - daemons_reap                  — stop all project daemon containers; auto-injected as _auto_reap_daemons
+//   - remove_paths                  — delete declared paths inside the project root
 package builtin
 
 import (
