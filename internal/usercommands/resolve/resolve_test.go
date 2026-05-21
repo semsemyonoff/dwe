@@ -825,3 +825,73 @@ func TestParams_DefaultFromToolHost(t *testing.T) {
 		t.Errorf("expected tool_host=adminer.localhost, got %v", got["tool_host"])
 	}
 }
+
+// --- ParamDefaults -----------------------------------------------------------
+
+func TestParamDefaults(t *testing.T) {
+	cfg := makeConfig(map[string]any{
+		"runtime": map[string]any{"ports": map[string]any{"app": 8080}},
+	})
+	tests := []struct {
+		name     string
+		defs     map[string]ParamDef
+		provided map[string]string
+		cfg      *config.DevboxConfig
+		want     map[string]string
+	}{
+		{
+			name:     "provided wins over default",
+			defs:     map[string]ParamDef{"env": {Default: "production"}},
+			provided: map[string]string{"env": "staging"},
+			want:     map[string]string{"env": "staging"},
+		},
+		{
+			name:     "default_from resolves cfg path",
+			defs:     map[string]ParamDef{"port": {DefaultFrom: "runtime.ports.app"}},
+			provided: nil,
+			cfg:      cfg,
+			want:     map[string]string{"port": "8080"},
+		},
+		{
+			name: "literal default fallback",
+			defs: map[string]ParamDef{"env": {Default: "production"}},
+			want: map[string]string{"env": "production"},
+		},
+		{
+			name: "missing required returns empty, not error",
+			defs: map[string]ParamDef{"name": {Required: true}},
+			want: map[string]string{"name": ""},
+		},
+		{
+			name:     "pattern mismatch returned as-is",
+			defs:     map[string]ParamDef{"x": {Pattern: "^[a-z]+$"}},
+			provided: map[string]string{"x": "ABC123"},
+			want:     map[string]string{"x": "ABC123"},
+		},
+		{
+			name:     "no type coercion for bool",
+			defs:     map[string]ParamDef{"flag": {Type: ParamTypeBool}},
+			provided: map[string]string{"flag": "true"},
+			want:     map[string]string{"flag": "true"},
+		},
+		{
+			name:     "empty provided treated as missing, falls back to default",
+			defs:     map[string]ParamDef{"x": {Default: "d"}},
+			provided: map[string]string{"x": ""},
+			want:     map[string]string{"x": "d"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParamDefaults(tt.defs, tt.provided, tt.cfg)
+			if len(got) != len(tt.want) {
+				t.Fatalf("len mismatch: got %v, want %v", got, tt.want)
+			}
+			for k, v := range tt.want {
+				if got[k] != v {
+					t.Errorf("key %q: got %q, want %q", k, got[k], v)
+				}
+			}
+		})
+	}
+}

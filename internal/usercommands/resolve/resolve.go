@@ -67,6 +67,43 @@ func Params(defs map[string]model.ParamDef, provided map[string]string, cfg *con
 	return result, nil
 }
 
+// ParamDefaults returns the raw string values that would prefill a parameter form.
+//
+// For each declared parameter:
+//  1. Use provided[name] (treated as missing when empty — matches Params semantics).
+//  2. Fall back to DefaultFrom (dot-path into cfg.Raw); a missing path or empty
+//     resolved value falls through.
+//  3. Fall back to Default (literal string).
+//
+// Required-checks, type coercion, and pattern validation are intentionally
+// skipped — those are enforced by the form (per-field Validate) and by Params
+// at run time. Missing or pattern-mismatched values are returned as-is (or as
+// the empty string), never as an error.
+func ParamDefaults(defs map[string]model.ParamDef, provided map[string]string, cfg *config.DevboxConfig) map[string]string {
+	result := make(map[string]string, len(defs))
+	for name, def := range defs {
+		raw, ok := provided[name]
+		if !ok || raw == "" {
+			if def.DefaultFrom != "" && cfg != nil {
+				if v, found := config.ResolvePath(cfg.Raw, def.DefaultFrom); found {
+					s := fmt.Sprintf("%v", v)
+					if s != "" {
+						raw = s
+						ok = true
+					}
+				}
+			}
+		}
+		if !ok || raw == "" {
+			if def.Default != "" {
+				raw = def.Default
+			}
+		}
+		result[name] = raw
+	}
+	return result
+}
+
 // coerceParam converts a raw string value to the Go type implied by pt.
 // An empty raw string coerces to the zero value of the type.
 func coerceParam(name, raw string, pt model.ParamType) (any, error) {

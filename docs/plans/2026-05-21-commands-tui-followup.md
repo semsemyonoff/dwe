@@ -195,8 +195,8 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/validate/... ./internal/usercommands/...` — must pass
 
 ### Task 7.5: Add a raw/defaults-only resolver alongside `resolve.Params`
-- [ ] **Constraint confirmed by code review:** existing `resolve.Params` (`internal/usercommands/resolve/resolve.go:26`) is wrong for pre-form prefill because it (a) returns `map[string]any` after type coercion, (b) errors on missing required (line 47–49), (c) errors on pattern violation (line 60–62). The form is meant to display partial values, accept missing required (user fills them in), and run pattern checks inline via huh's per-field `Validate`. Reusing `Params` here would block the entire feature.
-- [ ] **Add a NEW function** in `internal/usercommands/resolve/resolve.go`:
+- [x] **Constraint confirmed by code review:** existing `resolve.Params` (`internal/usercommands/resolve/resolve.go:26`) is wrong for pre-form prefill because it (a) returns `map[string]any` after type coercion, (b) errors on missing required (line 47–49), (c) errors on pattern violation (line 60–62). The form is meant to display partial values, accept missing required (user fills them in), and run pattern checks inline via huh's per-field `Validate`. Reusing `Params` here would block the entire feature.
+- [x] **Add a NEW function** in `internal/usercommands/resolve/resolve.go`:
   ```go
   // ParamDefaults returns the raw string values that would prefill a parameter form.
   // For each declared parameter: provided[name] (treated as missing when empty —
@@ -205,12 +205,12 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   // those are enforced by the form (huh per-field Validate) and by Params() at run time.
   func ParamDefaults(defs map[string]model.ParamDef, provided map[string]string, cfg *config.DevboxConfig) map[string]string
   ```
-- [ ] **Empty-as-missing parity:** `provided[name] == ""` is treated identically to `provided[name]` not present — falls through to `DefaultFrom`/`Default`. This MUST match `resolve.Params` line 30 (`if !ok || raw == ""`) so a `--set x=` invocation produces the same effective prefill as omitting `--set x` entirely. Without this parity, the form prefill and the post-`BuildRunContext` normalized params diverge, breaking the confirmation summary (Task 10 builds the summary from normalized `rctx.Params`, so the form's prefill MUST match what `Params()` will eventually resolve to).
-- [ ] keep `Params()` untouched — it remains the single source of truth for runtime validation, called by `BuildRunContext` after the user submits the form
-- [ ] flow: orchestrator → `ParamDefaults` (raw strings → form prefill) → form Run (huh inline validates pattern + required) → `BuildRunContext` → internally calls `Params` (final coerce + sanity)
-- [ ] tests in `resolve_test.go`: cases for `ParamDefaults` — (a) `provided` wins over default, (b) `DefaultFrom` resolves cfg path, (c) `Default` literal as final fallback, (d) missing-required returns "" (NOT an error), (e) pattern-mismatched value is returned as-is (NOT an error), (f) no type coercion (`"true"` for bool stays as string `"true"`), (g) **empty-as-missing parity:** `provided["x"]=""` with `Default:"d"` returns `"d"` (NOT `""`) — same result as omitting `"x"` from `provided`
-- [ ] no test for ordering interaction with `Params()` needed at this layer — that's covered in Task 10 integration tests
-- [ ] `make test ./internal/usercommands/...` — must pass before Task 8 starts
+- [x] **Empty-as-missing parity:** `provided[name] == ""` is treated identically to `provided[name]` not present — falls through to `DefaultFrom`/`Default`. This MUST match `resolve.Params` line 30 (`if !ok || raw == ""`) so a `--set x=` invocation produces the same effective prefill as omitting `--set x` entirely. Without this parity, the form prefill and the post-`BuildRunContext` normalized params diverge, breaking the confirmation summary (Task 10 builds the summary from normalized `rctx.Params`, so the form's prefill MUST match what `Params()` will eventually resolve to).
+- [x] keep `Params()` untouched — it remains the single source of truth for runtime validation, called by `BuildRunContext` after the user submits the form
+- [x] flow: orchestrator → `ParamDefaults` (raw strings → form prefill) → form Run (huh inline validates pattern + required) → `BuildRunContext` → internally calls `Params` (final coerce + sanity)
+- [x] tests in `resolve_test.go`: cases for `ParamDefaults` — (a) `provided` wins over default, (b) `DefaultFrom` resolves cfg path, (c) `Default` literal as final fallback, (d) missing-required returns "" (NOT an error), (e) pattern-mismatched value is returned as-is (NOT an error), (f) no type coercion (`"true"` for bool stays as string `"true"`), (g) **empty-as-missing parity:** `provided["x"]=""` with `Default:"d"` returns `"d"` (NOT `""`) — same result as omitting `"x"` from `provided`
+- [x] no test for ordering interaction with `Params()` needed at this layer — that's covered in Task 10 integration tests
+- [x] `make test ./internal/usercommands/...` — must pass before Task 8 starts
 
 ### Task 8: `internal/ui/paramform.go` — form builder (with UI-layer DTO)
 - [ ] **Layering constraint:** `internal/ui/` must NOT import `internal/usercommands/model`, `internal/usercommands/...`, `internal/config`, or `internal/tpl`. (Same rule applied to `ConfirmRun` in Task 9.) Existing pattern: `RenderServiceTable` / `RenderDeployStatus` already use view-model types defined under `internal/command/statusview/`. Follow it here.
