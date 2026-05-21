@@ -2,9 +2,12 @@ package command
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"devbox-cli/internal/usercommands"
+
+	"github.com/spf13/cobra"
 )
 
 // --- parseSetFlags ---
@@ -239,7 +242,7 @@ func TestCommandDefToTreeNode_private(t *testing.T) {
 	}
 }
 
-// --- printCommandInspect ---
+// --- printInspect ---
 
 func TestPrintCommandInspect_workflow(t *testing.T) {
 	def := &usercommands.CommandDef{
@@ -252,7 +255,7 @@ func TestPrintCommandInspect_workflow(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printCommandInspect(buf, def)
+	printInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "services.main.bootstrap") {
 		t.Errorf("output should contain command ID")
@@ -277,7 +280,7 @@ func TestPrintCommandInspect_serviceExec(t *testing.T) {
 		Cmd:     "php artisan migrate",
 	}
 	buf := &testBuf{}
-	printCommandInspect(buf, def)
+	printInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "service_exec") {
 		t.Errorf("output should contain type: %s", out)
@@ -300,7 +303,7 @@ func TestPrintCommandInspect_withParams(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printCommandInspect(buf, def)
+	printInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "Params") {
 		t.Errorf("output should contain Params section: %s", out)
@@ -322,7 +325,7 @@ func TestPrintCommandInspect_withConfirmation(t *testing.T) {
 		ConfirmationText: "Drop database?",
 	}
 	buf := &testBuf{}
-	printCommandInspect(buf, def)
+	printInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "confirmation") {
 		t.Errorf("output should contain confirmation flag: %s", out)
@@ -343,7 +346,7 @@ func TestPrintCommandInspect_withMessages(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printCommandInspect(buf, def)
+	printInspect(buf, def)
 	out := buf.String()
 	if !contains(out, "Messages") {
 		t.Errorf("output should contain Messages section: %s", out)
@@ -569,28 +572,11 @@ func TestResolveCommandID_nonInteractiveSelector_exactID_succeeds(t *testing.T) 
 	}
 }
 
-// --- commands run/inspect accept optional arg ---
+// --- commands parent command surface ---
 
-func TestCommandRunCmd_AcceptsOptionalArg(t *testing.T) {
+func TestCommandCmd_AcceptsOptionalArg(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newCommandRunCmd(flags)
-	// 0 args OK
-	if err := cmd.Args(cmd, []string{}); err != nil {
-		t.Errorf("0 args should be accepted: %v", err)
-	}
-	// 1 arg OK
-	if err := cmd.Args(cmd, []string{"db.up"}); err != nil {
-		t.Errorf("1 arg should be accepted: %v", err)
-	}
-	// 2 args should fail
-	if err := cmd.Args(cmd, []string{"db.up", "extra"}); err == nil {
-		t.Error("2 args should be rejected")
-	}
-}
-
-func TestCommandInspectCmd_AcceptsOptionalArg(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newCommandInspectCmd(flags)
+	cmd := newCommandCmd(flags)
 	if err := cmd.Args(cmd, []string{}); err != nil {
 		t.Errorf("0 args should be accepted: %v", err)
 	}
@@ -602,35 +588,118 @@ func TestCommandInspectCmd_AcceptsOptionalArg(t *testing.T) {
 	}
 }
 
-// --- commands run flag tests ---
-
-func TestCommandRunCmd_HasYesFlag(t *testing.T) {
+func TestCommandCmd_HasFlags(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newCommandRunCmd(flags)
+	cmd := newCommandCmd(flags)
 
-	// Check that the --yes flag exists
-	yesFlag := cmd.Flags().Lookup("yes")
-	if yesFlag == nil {
-		t.Fatal("--yes flag not found")
+	cases := []struct {
+		name      string
+		flag      string
+		shorthand string
+		kind      string
+	}{
+		{name: "yes", flag: "yes", shorthand: "y", kind: "bool"},
+		{name: "inspect", flag: "inspect", shorthand: "i", kind: "bool"},
+		{name: "set", flag: "set", shorthand: "", kind: "stringArray"},
 	}
-
-	// Check that -y is the shorthand
-	if yesFlag.Shorthand != "y" {
-		t.Errorf("expected shorthand 'y', got %q", yesFlag.Shorthand)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := cmd.Flags().Lookup(tc.flag)
+			if f == nil {
+				t.Fatalf("flag %q not found", tc.flag)
+			}
+			if f.Shorthand != tc.shorthand {
+				t.Errorf("flag %q shorthand: want %q, got %q", tc.flag, tc.shorthand, f.Shorthand)
+			}
+			if f.Value.Type() != tc.kind {
+				t.Errorf("flag %q type: want %q, got %q", tc.flag, tc.kind, f.Value.Type())
+			}
+		})
 	}
 }
 
-func TestCommandRunCmd_YesFlag_BoolType(t *testing.T) {
+func TestCommandCmd_HasCmdAlias(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newCommandRunCmd(flags)
-
-	yesFlag := cmd.Flags().Lookup("yes")
-	if yesFlag == nil {
-		t.Fatal("--yes flag not found")
+	cmd := newCommandCmd(flags)
+	if !slices.Contains(cmd.Aliases, "cmd") {
+		t.Errorf("commands command should have 'cmd' alias, got %v", cmd.Aliases)
 	}
+}
 
-	// Verify flag is a boolean type
-	if yesFlag.Value.Type() != "bool" {
-		t.Errorf("expected bool type, got %q", yesFlag.Value.Type())
+func TestCommandCmd_StillHasListSubcommand(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandCmd(flags)
+	var found *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "list" {
+			found = sub
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("commands command should still have a 'list' subcommand")
+	}
+}
+
+func TestCommandCmd_NoRunOrInspectSubcommand(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandCmd(flags)
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "run" || sub.Name() == "inspect" {
+			t.Errorf("subcommand %q should have been removed", sub.Name())
+		}
+	}
+}
+
+func TestCommandCmd_InspectWithoutID_Error(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandCmd(flags)
+	if err := cmd.Flags().Set("inspect", "true"); err != nil {
+		t.Fatal(err)
+	}
+	err := cmd.RunE(cmd, []string{})
+	if err == nil {
+		t.Fatal("expected error when --inspect is set without an id")
+	}
+	if !contains(err.Error(), "id required with --inspect") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestCommandCmd_InspectAndSet_MutuallyExclusive(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	parent := &cobra.Command{Use: "test"}
+	parent.AddCommand(newCommandCmd(flags))
+	parent.SetArgs([]string{"commands", "--inspect", "--set", "k=v", "db.up"})
+	parent.SetOut(&testBuf{})
+	parent.SetErr(&testBuf{})
+	if err := parent.Execute(); err == nil {
+		t.Fatal("expected mutual-exclusion error for --inspect + --set")
+	}
+}
+
+func TestCommandCmd_InspectAndYes_MutuallyExclusive(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	parent := &cobra.Command{Use: "test"}
+	parent.AddCommand(newCommandCmd(flags))
+	parent.SetArgs([]string{"commands", "--inspect", "--yes", "db.up"})
+	parent.SetOut(&testBuf{})
+	parent.SetErr(&testBuf{})
+	if err := parent.Execute(); err == nil {
+		t.Fatal("expected mutual-exclusion error for --inspect + --yes")
+	}
+}
+
+func TestCommandCmd_AliasDispatch(t *testing.T) {
+	// Verify the 'cmd' alias resolves through cobra parent dispatch.
+	flags := &rootFlags{configPath: "devbox.yml"}
+	parent := &cobra.Command{Use: "devbox"}
+	parent.AddCommand(newCommandCmd(flags))
+
+	parent.SetArgs([]string{"cmd", "--help"})
+	parent.SetOut(&testBuf{})
+	parent.SetErr(&testBuf{})
+	if err := parent.Execute(); err != nil {
+		t.Fatalf("alias dispatch failed: %v", err)
 	}
 }

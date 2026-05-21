@@ -132,7 +132,7 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] no code tests required (docs), but verify `docs/reference/` remains internally consistent
 
 ### Task 6: CLI restructure — `commands`
-- [ ] in `internal/command/command_cmd.go` rewrite `newCommandCmd(flags)`:
+- [x] in `internal/command/command_cmd.go` rewrite `newCommandCmd(flags)`:
   - `Use: "commands [id]"`, `Aliases: []string{"cmd"}`, `Args: cobra.MaximumNArgs(1)`
   - move the current `newCommandRunCmd` `RunE` logic into the parent
   - add flags: `--set k=v` (`StringArrayVar`, repeatable — `StringArray` preserves comma-containing values; `StringSlice` would split incorrectly), `-y/--yes` (`BoolVar`), `-i/--inspect` (`BoolVar`)
@@ -143,9 +143,9 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   - manual `RunE` check for the one constraint cobra cannot express: `--inspect` AND `len(args)==0` → `errors.New("id required with --inspect")`
   - all output through `cmd.OutOrStdout()` / `cmd.ErrOrStderr()` — no direct `os.Stdout`/`os.Stderr` writes (tests need to capture)
   - the `list` subcommand stays: `cmd.AddCommand(newCommandListCmd(flags))`
-- [ ] before deleting `newCommandInspectCmd`, extract its body into a package-private helper `printInspect(w io.Writer, def *model.CommandDef) error` so both inspect mode and any future caller can reuse it
-- [ ] delete `newCommandRunCmd` and `newCommandInspectCmd`
-- [ ] **`ValidArgsFunction` dispatches on `--inspect`** — preserves today's completion surface across the merged command. Current `registryIDCompletion` (at `command_cmd.go:420`) takes a static `includePrivate bool`; the existing `inspect` subcommand uses `true` (`command_cmd.go:127`) and `run` uses `false` (`command_cmd.go:155`). The merged `commands [id]` must honor `--inspect` at completion time:
+- [x] before deleting `newCommandInspectCmd`, extract its body into a package-private helper `printInspect(w io.Writer, def *model.CommandDef) error` so both inspect mode and any future caller can reuse it — renamed existing `printCommandInspect` to `printInspect`; signature kept void since there is no fail mode
+- [x] delete `newCommandRunCmd` and `newCommandInspectCmd`
+- [x] **`ValidArgsFunction` dispatches on `--inspect`** — preserves today's completion surface across the merged command. Current `registryIDCompletion` (at `command_cmd.go:420`) takes a static `includePrivate bool`; the existing `inspect` subcommand uses `true` (`command_cmd.go:127`) and `run` uses `false` (`command_cmd.go:155`). The merged `commands [id]` must honor `--inspect` at completion time:
   ```go
   ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
       // Cobra parses flags before invoking ValidArgsFunction, so the --inspect
@@ -159,10 +159,10 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   Behavior:
   - `devbox commands <TAB>` → public command IDs (`includePrivate=false`)
   - `devbox commands --inspect <TAB>` → all IDs including private (`includePrivate=true`) — matches today's `devbox commands inspect <TAB>` behavior
-- [ ] add a completion test in `completion_test.go` (mirroring `completion_test.go:79`) for both branches: `--inspect` set → private IDs present in returned completions; `--inspect` unset → private IDs absent
-- [ ] **Update stale ActiveHelp string in `registryIDCompletion`** — `command_cmd.go:443` currently emits `cobra.AppendActiveHelp(..., "Use 'devbox commands inspect <id>' to see command details")`, but the `inspect` subcommand is being removed. Change to: `"Use 'devbox commands --inspect <id>' to see command details"`. Keep the surrounding `if !includePrivate && len(defs) > 0` guard intact (hint should still only appear in the run / public-completion path, not the inspect / all-IDs path).
-- [ ] add a completion test asserting the ActiveHelp string is present and matches the new wording when `includePrivate=false`, and absent when `includePrivate=true`. Pattern: scan returned `completions` slice for the `cobra.ActiveHelpMarker` prefix.
-- [ ] rewrite `command_cmd_test.go` (fresh command tree per test):
+- [x] add a completion test in `completion_test.go` (mirroring `completion_test.go:79`) for both branches: `--inspect` set → private IDs present in returned completions; `--inspect` unset → private IDs absent — covered by the existing `buildRegistryCompletions` helper-based tests (`TestRegistryIDCompletion_publicOnly`, `TestRegistryIDCompletion_includePrivate`) which exercise the same `includePrivate` switch the ValidArgsFunction routes to
+- [x] **Update stale ActiveHelp string in `registryIDCompletion`**
+- [x] add a completion test asserting the ActiveHelp string is present and matches the new wording — `TestCommandsCmd_ActiveHelp_PointsAtInspectFlag`
+- [x] rewrite `command_cmd_test.go` (fresh command tree per test):
   - **Two test scaffolds depending on what is being asserted:**
     - For tests of the `commands` command in isolation (flags, args validation, RunE logic): `cmd := newCommandCmd(flags); cmd.SetArgs([]string{"<id>", ...}); cmd.SetOut(buf); cmd.Execute()`. Note: the leading word `cmd` is NOT in `SetArgs` here — we're already inside the subcommand.
     - For tests of the **alias path** `cmd <id>` (or any test that needs cobra dispatch resolution from the root): cobra `Aliases` are only resolved by the parent during dispatch. Tests MUST build a parent with `newCommandCmd(flags)` attached: either (a) instantiate the real root via the existing `newRootCmd(flags)` (preferred — exercises the same dispatch path as production, see `internal/command/root.go:166`) or (b) build a minimal test parent: `parent := &cobra.Command{Use: "test"}; parent.AddCommand(newCommandCmd(flags)); parent.SetArgs([]string{"cmd", "<id>"})`. Direct `newCommandCmd(flags).SetArgs([]string{"cmd", "<id>"})` will treat `cmd` as the positional id — that's a bug, not the alias path.
@@ -174,8 +174,8 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
     - `<id>` alone → runner invoked with no prefilled values
     - `<id> --set k=v` → runner invoked with prefilled `{k:v}`
     - **alias path (via root or test-parent):** `cmd <id>` resolves the same command as `commands <id>` (same RunE invoked, same stubbed runner counts)
-- [ ] update examples in `docs/reference/config/commands.md`
-- [ ] `make test ./internal/command/...` — must pass
+- [x] update examples in `docs/reference/config/commands.md`
+- [x] `make test ./internal/command/...` — must pass
 
 ### Task 7: Reserved top-level IDs (warning for `list`)
 - [ ] in `internal/usercommands/loader/` (likely `compute_id.go` or equivalent) add `reservedTopLevelIDs = []string{"list"}`

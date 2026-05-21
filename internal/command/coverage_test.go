@@ -170,7 +170,7 @@ func TestLoadCommandRegistry_WithCommands(t *testing.T) {
 	}
 }
 
-// --- printCommandInspect ---
+// --- printInspect ---
 
 func TestPrintCommandInspect_BasicCommand(t *testing.T) {
 	def := &usercommands.CommandDef{
@@ -180,7 +180,7 @@ func TestPrintCommandInspect_BasicCommand(t *testing.T) {
 		Cmd:         "docker compose up db",
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	for _, want := range []string{"db.up", "shell", "Start the database", "docker compose up db"} {
 		if !strings.Contains(out, want) {
@@ -197,7 +197,7 @@ func TestPrintCommandInspect_PrivateCommand(t *testing.T) {
 		Cmd:     "mysql -e 'CREATE DATABASE'",
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	if !strings.Contains(out, "true") {
 		t.Errorf("expected private=true in output:\n%s", out)
@@ -212,7 +212,7 @@ func TestPrintCommandInspect_ServiceExec(t *testing.T) {
 		Cmd:     "php artisan migrate",
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	for _, want := range []string{"service_exec", "app-main", "php artisan migrate"} {
 		if !strings.Contains(out, want) {
@@ -232,7 +232,7 @@ func TestPrintCommandInspect_WorkflowWithSteps(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	if !strings.Contains(out, "workflow") {
 		t.Errorf("expected workflow type in output:\n%s", out)
@@ -260,7 +260,7 @@ func TestPrintCommandInspect_WithParams(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	if !strings.Contains(out, "Params") {
 		t.Errorf("expected Params section:\n%s", out)
@@ -283,7 +283,7 @@ func TestPrintCommandInspect_WithContext(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	if !strings.Contains(out, "Context") {
 		t.Errorf("expected Context section:\n%s", out)
@@ -301,7 +301,7 @@ func TestPrintCommandInspect_WithEnv(t *testing.T) {
 		Env:  map[string]string{"APP_ENV": "local", "DEBUG": "true"},
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	if !strings.Contains(out, "Env") {
 		t.Errorf("expected Env section:\n%s", out)
@@ -323,7 +323,7 @@ func TestPrintCommandInspect_Script(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	if !strings.Contains(out, "bash") {
 		t.Errorf("expected script shell:\n%s", out)
@@ -340,7 +340,7 @@ func TestPrintCommandInspect_ScriptNilShellDefaultsSh(t *testing.T) {
 		Script: &usercommands.ScriptDef{Run: "make build"},
 	}
 	var buf bytes.Buffer
-	printCommandInspect(&buf, def)
+	printInspect(&buf, def)
 	out := buf.String()
 	if !strings.Contains(out, "sh") {
 		t.Errorf("expected default shell 'sh':\n%s", out)
@@ -590,7 +590,10 @@ func TestCommandInspectCmd_RunE_DirectID(t *testing.T) {
 		t.Fatal(err)
 	}
 	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
-	cmd := newCommandInspectCmd(flags)
+	cmd := newCommandCmd(flags)
+	if err := cmd.Flags().Set("inspect", "true"); err != nil {
+		t.Fatal(err)
+	}
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	if err := cmd.RunE(cmd, []string{"db.up"}); err != nil {
@@ -714,7 +717,10 @@ func TestRunRenderEnv_InvalidConfig(t *testing.T) {
 func TestCommandInspectCmd_RunE_NotFoundID(t *testing.T) {
 	dir := makeMinimalProject(t)
 	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
-	cmd := newCommandInspectCmd(flags)
+	cmd := newCommandCmd(flags)
+	if err := cmd.Flags().Set("inspect", "true"); err != nil {
+		t.Fatal(err)
+	}
 	err := cmd.RunE(cmd, []string{"nonexistent.cmd"})
 	if err == nil {
 		t.Fatal("expected error for non-existent command ID")

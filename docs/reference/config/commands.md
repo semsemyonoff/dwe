@@ -42,7 +42,7 @@ Declarative command definitions for the devbox project.
 
 `devbox/commands/` is the home of every reusable, scriptable action the project exposes through the CLI: container shells, build steps, database operations, multi-step workflows, deploy hooks, custom scripts, etc.
 
-Each YAML file declares one or more named commands. Commands are discovered automatically by walking the directory tree, are addressable by a dot-separated ID, and can be executed directly (`devbox commands run <id>`) or referenced from workflows and pipelines (`deploy.yml`, `lifecycle.yml`).
+Each YAML file declares one or more named commands. Commands are discovered automatically by walking the directory tree, are addressable by a dot-separated ID, and can be executed directly (`devbox commands <id>`) or referenced from workflows and pipelines (`deploy.yml`, `lifecycle.yml`).
 
 This page is the configuration reference: it lists every directive, explains how directives interact, and shows the patterns you will use when authoring new commands.
 
@@ -163,7 +163,7 @@ The directives below are common to **all** command types unless the table notes 
 
 The prompt is bypassed only when `SkipConfirm` is set on the in-process `RunContext`. That happens for:
 
-- `commands run --yes` / `-y`,
+- `commands --yes` / `-y`,
 - workflow children inheriting `SkipConfirm` from a parent that was started with `--yes`,
 - callers in tests that construct a `RunContext{SkipConfirm: true}` directly.
 
@@ -548,7 +548,7 @@ The runner always injects the following env vars into the script process:
 | `DEVBOX_BIN` | Absolute path to the running devbox binary |
 | `DEVBOX_COMMAND_ID` | Full ID of this invocation |
 | `DEVBOX_TEMP_DIR` | Writable temp dir scoped to this invocation (auto-removed) |
-| `DEVBOX_NONINTERACTIVE` | `1` when the parent `RunContext` has `NonInteractive: true` (set by `commands run --yes` / `-y`) **or** the runner inherits `DEVBOX_NONINTERACTIVE=1` from its own environment (e.g. nested invocations). Otherwise `0`. TTY detection alone does not flip this — scripts that need to behave differently on a non-TTY should test their own stdin. |
+| `DEVBOX_NONINTERACTIVE` | `1` when the parent `RunContext` has `NonInteractive: true` (set by `commands --yes` / `-y`) **or** the runner inherits `DEVBOX_NONINTERACTIVE=1` from its own environment (e.g. nested invocations). Otherwise `0`. TTY detection alone does not flip this — scripts that need to behave differently on a non-TTY should test their own stdin. |
 | `DEVBOX_PARAMS_JSON` | Resolved params as a JSON object |
 | `DEVBOX_CONTEXT_JSON` | Resolved context as a JSON object |
 | `DEVBOX_FILES_JSON` | JSON object mapping file IDs to `{path}` |
@@ -808,7 +808,7 @@ Confirm steps are silently skipped under `--yes` or `DEVBOX_NONINTERACTIVE=1`. O
 
 ### Parallel sub-steps
 
-A workflow step can declare a `parallel:` block that fans out a group of sub-steps concurrently. This mirrors the pipeline `parallel:` schema in [deploy.yml → Parallel step groups](deploy.md#parallel-step-groups) — the same `max_concurrent` / `fail_fast` knobs and the same live-block UI — but lives inside a workflow so the group is reusable across pipelines and invocable ad-hoc via `devbox commands run`.
+A workflow step can declare a `parallel:` block that fans out a group of sub-steps concurrently. This mirrors the pipeline `parallel:` schema in [deploy.yml → Parallel step groups](deploy.md#parallel-step-groups) — the same `max_concurrent` / `fail_fast` knobs and the same live-block UI — but lives inside a workflow so the group is reusable across pipelines and invocable ad-hoc via `devbox commands`.
 
 ```yaml
 services.all.composer-install:
@@ -989,7 +989,7 @@ flowchart TD
 
 Operational notes:
 
-- `commands run --yes` sets `SkipConfirm` and `NonInteractive` on the in-process `RunContext` so every confirm call (top-level command, builtin `confirm`, workflow confirm steps) skips the prompt for the duration of the invocation.
+- `commands --yes` sets `SkipConfirm` and `NonInteractive` on the in-process `RunContext` so every confirm call (top-level command, builtin `confirm`, workflow confirm steps) skips the prompt for the duration of the invocation.
 - Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DEVBOX_NONINTERACTIVE=1` (along with `DEVBOX_PARAMS_JSON`, `DEVBOX_CONTEXT_JSON`, etc.) into the script's environment. `type: shell` exports a smaller contract — `DEVBOX_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (see [Shell env contract](#shell-env-contract)) — but **not** `DEVBOX_NONINTERACTIVE`. `type: devbox`, `service_exec`, and `service_run` export none of these — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
 - Inside a workflow, child commands inherit `NonInteractive` and `SkipConfirm` from the parent `RunContext`.
 - The non-TTY fallback is `render.Writer.Confirm`; under `CI=1` it auto-confirms.
@@ -998,7 +998,7 @@ Operational notes:
 
 - Files under `devbox/commands/` are discovered recursively at startup.
 - Each file is parsed and validated; a load failure halts startup with a structured error pointing to the file and field.
-- `private: true` hides commands from `devbox commands list` and rejects direct invocation via `devbox commands run`. Private commands can still be referenced from workflows and pipelines — useful for steps that should only run as part of a larger sequence.
+- `private: true` hides commands from `devbox commands list` and rejects direct invocation via `devbox commands`. Private commands can still be referenced from workflows and pipelines — useful for steps that should only run as part of a larger sequence.
 
 ```yaml
 db.up:
@@ -1170,7 +1170,7 @@ db.start:
     - command: db.wait
 ```
 
-`db.start` cannot be invoked directly via `devbox commands run db.start`, but `bootstrap` can reference it from its `steps:`. The composition above is the canonical pattern: a thin `type: devbox` for the start, a `type: builtin` for the wait, and a `type: workflow` that strings them together.
+`db.start` cannot be invoked directly via `devbox commands db.start`, but `bootstrap` can reference it from its `steps:`. The composition above is the canonical pattern: a thin `type: devbox` for the start, a `type: builtin` for the wait, and a `type: workflow` that strings them together.
 
 ## Validation rules (cheat sheet)
 
@@ -1201,8 +1201,10 @@ The loader enforces these rules and reports the offending file + field on failur
 ## Related commands
 
 - `devbox commands list` — list all public commands grouped by file
-- `devbox commands inspect <id>` — show the resolved definition (params, context, env, runner)
-- `devbox commands run <id> [--set k=v] [--yes]` — execute a command
+- `devbox commands <id> [--set k=v] [--yes]` — execute a command (alias: `devbox cmd <id>`)
+- `devbox commands --inspect <id>` (or `-i`) — show the resolved definition (params, context, env, runner)
 - `devbox docs generate` — regenerate the per-command reference under `docs/reference/commands/`
 
-When `devbox commands run` or `devbox commands inspect` is invoked without an exact command ID on an interactive terminal, an interactive two-panel command browser opens. Its behaviour (default expansion depth, auto-collapse during fuzzy filter, type badges) is configured via the [`ui:` block in `devbox.yml`](ui.md).
+When `devbox commands` is invoked without an exact command ID on an interactive terminal, an interactive two-panel command browser opens. Its behaviour (default expansion depth, auto-collapse during fuzzy filter, type badges) is configured via the [`ui:` block in `devbox.yml`](ui.md).
+
+`--inspect` / `-i` is mutually exclusive with `--set` and `--yes`; it requires an exact command id and prints the definition without running it.

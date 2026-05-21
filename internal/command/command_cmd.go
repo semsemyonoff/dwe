@@ -21,22 +21,129 @@ import (
 )
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {
+	var (
+		setFlags    []string
+		skipConfirm bool
+		inspectFlag bool
+	)
+
 	cmd := &cobra.Command{
-		Use:   "commands",
-		Short: "List, inspect, and run devbox commands",
+		Use:     "commands [id]",
+		Aliases: []string{"cmd"},
+		Short:   "Run, inspect, and list devbox commands",
 		Long: `Manage declarative commands defined in devbox/commands/.
 
 Commands are YAML-defined operations organized into groups (e.g. db, app, services.main).
-They can be shell commands, scripts, service exec/run operations, or multi-step workflows.`,
-		Example: `  devbox commands list
-  devbox commands list db
-  devbox commands inspect db.up
-  devbox commands run db.up`,
+They can be shell commands, scripts, service exec/run operations, or multi-step workflows.
+
+Without an id, an interactive selector lists public commands. With a group prefix
+(e.g. services.main), the selector is filtered. With a full command id, it runs
+(or inspects with -i) directly without a selector.`,
+		Example: `  devbox commands
+  devbox commands list
+  devbox commands db.up
+  devbox commands db.up --set env=local
+  devbox commands -i db.up
+  devbox cmd db.up --yes`,
+		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			// Cobra parses flags before invoking ValidArgsFunction, so --inspect
+			// is available even though PersistentPreRunE is bypassed in the
+			// __complete path.
+			inspect, _ := cmd.Flags().GetBool("inspect")
+			return registryIDCompletion(flags, inspect)(cmd, args, toComplete)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if inspectFlag {
+				if len(args) == 0 {
+					return errors.New("id required with --inspect")
+				}
+				reg, err := loadCommandRegistry(flags.configPath)
+				if err != nil {
+					return err
+				}
+				def, err := reg.Get(args[0])
+				if err != nil {
+					return err
+				}
+				printInspect(cmd.OutOrStdout(), def)
+				return nil
+			}
+
+			cfg, err := config.LoadConfig(flags.configPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+			reg, err := loadCommandRegistry(flags.configPath)
+			if err != nil {
+				return err
+			}
+			var skipConfirmFromTUI bool
+			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI)
+			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
+					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
+				}
+			}
+			id, err := resolveCommandID(reg, args, false, selector)
+			if err != nil {
+				if errors.Is(err, ui.ErrCancelled) {
+					return nil
+				}
+				return err
+			}
+			def, err := reg.Get(id)
+			if err != nil {
+				return err
+			}
+			if def.Private {
+				return fmt.Errorf("command %q is private and cannot be run directly", id)
+			}
+			provided, err := parseSetFlags(setFlags)
+			if err != nil {
+				return err
+			}
+			projectRoot := flags.ProjectRoot()
+			with := make(map[string]any, len(provided))
+			for k, v := range provided {
+				with[k] = v
+			}
+			rctx, err := usercommands.BuildRunContext(cfg, reg, def, with, projectRoot)
+			if err != nil {
+				return fmt.Errorf("building run context: %w", err)
+			}
+
+			shouldSkip := skipConfirm
+			if !shouldSkip && skipConfirmFromTUI {
+				shouldSkip = true
+			}
+			if !shouldSkip && (os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true") {
+				shouldSkip = true
+			}
+
+			rctx.Stdout = os.Stdout
+			rctx.Stderr = os.Stderr
+			rctx.Stdin = os.Stdin
+			rctx.SkipConfirm = shouldSkip
+			rctx.NonInteractive = shouldSkip
+
+			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
+
+			if err := usercommands.RunCommand(ctx, rctx); err != nil {
+				return fmt.Errorf("running command %q: %w", id, err)
+			}
+			return nil
+		},
 	}
+	cmd.Flags().StringArrayVar(&setFlags, "set", nil, "Set a param value (key=value)")
+	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompts; intended for non-interactive use such as scripts and nested command runs")
+	cmd.Flags().BoolVarP(&inspectFlag, "inspect", "i", false, "Show the full definition of the given command id instead of running it")
+	cmd.MarkFlagsMutuallyExclusive("inspect", "set")
+	cmd.MarkFlagsMutuallyExclusive("inspect", "yes")
+
 	cmd.AddCommand(newCommandListCmd(flags))
-	cmd.AddCommand(newCommandInspectCmd(flags))
-	cmd.AddCommand(newCommandRunCmd(flags))
 	return cmd
 }
 
@@ -78,161 +185,6 @@ Use --all to include private commands.`,
 	return cmd
 }
 
-func newCommandInspectCmd(flags *rootFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "inspect [id|group]",
-		Short: "Show full command definition",
-		Long: `Show the full definition of a declarative command by its dot-separated ID.
-
-Displays type, run/argv, params, context variables, env, and workflow steps.
-
-When called without an argument, an interactive selector lists all commands.
-When called with a group prefix (e.g. 'services.main'), the selector is
-filtered to that group.  When called with a full command ID, it inspects
-directly without showing a selector.`,
-		Example: `  devbox commands inspect
-  devbox commands inspect services.main
-  devbox commands inspect db.up
-  devbox commands inspect services.main.migrate`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			reg, err := loadCommandRegistry(flags.configPath)
-			if err != nil {
-				return err
-			}
-			// inspect is read-only; tolerate config load errors and fall through
-			// with a nil cfg so the nil-safe ui.commands accessors return defaults.
-			cfg, _ := config.LoadConfig(flags.configPath)
-			selector := makeBrowserSelector(cfg, cmdbrowser.ModeInspect, true, nil)
-			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
-					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
-				}
-			}
-			id, err := resolveCommandID(reg, args, true, selector)
-			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
-					return nil
-				}
-				return err
-			}
-			def, err := reg.Get(id)
-			if err != nil {
-				return err
-			}
-			printCommandInspect(cmd.OutOrStdout(), def)
-			return nil
-		},
-		SilenceUsage:      true,
-		ValidArgsFunction: registryIDCompletion(flags, true),
-	}
-	return cmd
-}
-
-func newCommandRunCmd(flags *rootFlags) *cobra.Command {
-	var setFlags []string
-	var skipConfirm bool
-
-	cmd := &cobra.Command{
-		Use:   "run [id|group]",
-		Short: "Run a devbox command",
-		Long: `Execute a declarative command by its dot-separated ID.
-
-Use --set key=value to override declared params at runtime.
-Use --yes to skip confirmation prompts (intended for non-interactive use).
-Private commands cannot be run directly.
-
-When called without an argument, an interactive selector lists all public
-commands.  When called with a group prefix (e.g. 'services.main'), the
-selector is filtered to that group.  When called with a full command ID,
-it runs directly without showing a selector.`,
-		Example: `  devbox commands run
-  devbox commands run services.main
-  devbox commands run db.up
-  devbox commands run services.main.migrate --set db=mydb
-  devbox commands run db.drop --set database=mydb --yes`,
-		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: registryIDCompletion(flags, false),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			reg, err := loadCommandRegistry(flags.configPath)
-			if err != nil {
-				return err
-			}
-			var skipConfirmFromTUI bool
-			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI)
-			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
-					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
-				}
-			}
-			id, err := resolveCommandID(reg, args, false, selector)
-			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
-					return nil
-				}
-				return err
-			}
-			def, err := reg.Get(id)
-			if err != nil {
-				return err
-			}
-			if def.Private {
-				return fmt.Errorf("command %q is private and cannot be run directly", id)
-			}
-			provided, err := parseSetFlags(setFlags)
-			if err != nil {
-				return err
-			}
-			projectRoot := flags.ProjectRoot()
-			// Convert map[string]string to map[string]any for BuildRunContext.
-			with := make(map[string]any, len(provided))
-			for k, v := range provided {
-				with[k] = v
-			}
-			rctx, err := usercommands.BuildRunContext(cfg, reg, def, with, projectRoot)
-			if err != nil {
-				return fmt.Errorf("building run context: %w", err)
-			}
-
-			// Determine if we should skip confirmation:
-			// 1. --yes flag takes precedence
-			// 2. inherited DEVBOX_NONINTERACTIVE env var
-			shouldSkip := skipConfirm
-			if !shouldSkip && skipConfirmFromTUI {
-				shouldSkip = true
-			}
-			if !shouldSkip && (os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true") {
-				shouldSkip = true
-			}
-
-			rctx.Stdout = os.Stdout
-			rctx.Stderr = os.Stderr
-			rctx.Stdin = os.Stdin
-			rctx.SkipConfirm = shouldSkip
-			rctx.NonInteractive = shouldSkip
-
-			// Install signal-aware cancellation so a workflow's parallel group
-			// (and any child docker/exec processes it spawns) receive SIGTERM
-			// via exec.CommandContext when the user hits Ctrl-C.
-			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
-			defer stop()
-
-			if err := usercommands.RunCommand(ctx, rctx); err != nil {
-				return fmt.Errorf("running command %q: %w", id, err)
-			}
-			return nil
-		},
-		SilenceUsage: true,
-	}
-	cmd.Flags().StringArrayVar(&setFlags, "set", nil, "Set a param value (key=value)")
-	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompts; intended for non-interactive use such as scripts and nested command runs")
-	return cmd
-}
-
 // loadCommandRegistry loads the command registry from devbox/commands/ relative
 // to the config file. Returns an empty registry when the directory does not exist.
 func loadCommandRegistry(configPath string) (*usercommands.Registry, error) {
@@ -255,7 +207,7 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
 			var buf bytes.Buffer
-			printCommandInspect(&buf, d)
+			printInspect(&buf, d)
 			items[i] = cmdbrowser.Item{
 				ID:          d.ID,
 				Description: d.Description,
@@ -440,7 +392,7 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 		completions := make([]string, 0, len(defs)+1)
 		if !includePrivate && len(defs) > 0 {
 			// Active Help: hint for run subcommand.
-			completions = cobra.AppendActiveHelp(completions, "Use 'devbox commands inspect <id>' to see command details")
+			completions = cobra.AppendActiveHelp(completions, "Use 'devbox commands --inspect <id>' to see command details")
 		}
 		for _, d := range defs {
 			entry := d.ID
@@ -453,8 +405,8 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 	}
 }
 
-// printCommandInspect writes a detailed view of a command definition using Lipgloss styles.
-func printCommandInspect(w io.Writer, def *usercommands.CommandDef) {
+// printInspect writes a detailed view of a command definition using Lipgloss styles.
+func printInspect(w io.Writer, def *usercommands.CommandDef) {
 	def2 := func(name, value string, indent int) {
 		_, _ = fmt.Fprintln(w, ui.RenderDefinition(name, value, indent, ""))
 	}

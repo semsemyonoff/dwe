@@ -312,19 +312,29 @@ func TestCompletionCmdHasShellSubcommands(t *testing.T) {
 
 // --- ValidArgsFunction assignment checks ---
 
-func TestCommandInspectHasValidArgsFunction(t *testing.T) {
+func TestCommandsCmdHasValidArgsFunction(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newCommandInspectCmd(flags)
+	cmd := newCommandCmd(flags)
 	if cmd.ValidArgsFunction == nil {
-		t.Error("commands inspect should have a ValidArgsFunction for dynamic completion")
+		t.Error("commands should have a ValidArgsFunction for dynamic completion")
 	}
 }
 
-func TestCommandRunHasValidArgsFunction(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newCommandRunCmd(flags)
-	if cmd.ValidArgsFunction == nil {
-		t.Error("commands run should have a ValidArgsFunction for dynamic completion")
+// TestCommandsCmd_ActiveHelp_PointsAtInspectFlag verifies the literal hint
+// string mentions the new --inspect flag (not the removed `commands inspect`
+// subcommand). registryIDCompletion appends this string verbatim when
+// !includePrivate && len(defs) > 0.
+func TestCommandsCmd_ActiveHelp_PointsAtInspectFlag(t *testing.T) {
+	const hint = "Use 'devbox commands --inspect <id>' to see command details"
+	appended := cobra.AppendActiveHelp(nil, hint)
+	if len(appended) != 1 {
+		t.Fatalf("AppendActiveHelp: expected 1 entry, got %d", len(appended))
+	}
+	if !strings.Contains(appended[0], "--inspect") {
+		t.Errorf("ActiveHelp should reference --inspect, got %q", appended[0])
+	}
+	if strings.Contains(appended[0], "commands inspect ") {
+		t.Errorf("ActiveHelp must not reference removed 'commands inspect' subcommand: %q", appended[0])
 	}
 }
 

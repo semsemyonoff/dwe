@@ -1016,8 +1016,8 @@ func TestServiceCmdSubcommands(t *testing.T) {
 func TestCommandCmdUsesCommandsName(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
-	if cmd.Use != "commands" {
-		t.Errorf("newCommandCmd Use = %q, want %q", cmd.Use, "commands")
+	if cmd.Name() != "commands" {
+		t.Errorf("newCommandCmd Name = %q, want %q", cmd.Name(), "commands")
 	}
 }
 
