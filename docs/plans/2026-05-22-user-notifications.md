@@ -247,14 +247,14 @@ Concrete file references gathered before drafting:
 
 **Fix**: add a dedicated **`SkipNotify bool`** field on `runtime.RunContext`. Semantics: "this invocation is not the user's top-level command — do not fire end-of-command notifications." Set transitively by **every** internal invocation site; only the top-level orchestrator leaves it at zero-value `false`.
 
-- [ ] add `SkipNotify bool` to `runtime.RunContext` (`internal/usercommands/runtime/runner.go:28-88`), documented with the rule "always set true when one runtime invokes another"
-- [ ] in `internal/usercommands/runtime/runner.go` `RunCommand` (`:125-176`): after `runner.Run(ctx, rc)`, gate notification on `rc.Cmd.Notify == true && !rc.SkipNotify`. Use defer pattern with named return `err`. Build `Event.Kind = notify.OpCommand`, `Event.Operation = "command:" + rc.Cmd.ID`. (Field is `rc.Cmd`, not `rc.CommandDef`.) The `OpCommand` kind routes the per-op gate to `NotifyCommandsEnabled`.
-- [ ] **Propagate `SkipNotify=true` at every internal invocation site:**
+- [x] add `SkipNotify bool` to `runtime.RunContext` (`internal/usercommands/runtime/runner.go:28-88`), documented with the rule "always set true when one runtime invokes another"
+- [x] in `internal/usercommands/runtime/runner.go` `RunCommand` (`:125-176`): after `runner.Run(ctx, rc)`, gate notification on `rc.Cmd.Notify == true && !rc.SkipNotify`. Use defer pattern with named return `err`. Build `Event.Kind = notify.OpCommand`, `Event.Operation = "command:" + rc.Cmd.ID`. (Field is `rc.Cmd`, not `rc.CommandDef`.) The `OpCommand` kind routes the per-op gate to `NotifyCommandsEnabled`.
+- [x] **Propagate `SkipNotify=true` at every internal invocation site:**
   - **`runner_workflow.go` sequential dispatch** (`:225` area): set `subRC.SkipNotify = true` (in addition to inheriting `UnderParallel`)
-  - **`runner_workflow.go` parallel dispatch**: same — `subRC.SkipNotify = true`
+  - **`runner_workflow.go` parallel dispatch**: same — `subRC.SkipNotify = true` (parallel path funnels through `runCommandStep`, single propagation point)
   - **`internal/pipeline/executor.go` action dispatch** (`:276` area, where `actx.Parallel` becomes `UnderParallel`): also set `SkipNotify = true` when building the inner `RunContext` for pipeline-invoked commands. Pipeline-invoked commands are by definition not top-level.
-- [ ] **Top-level entry points** explicitly **leave `SkipNotify` at false**: `internal/command/commands.go` `runCommandByID` is the canonical top-level orchestrator — no change needed (zero-value is correct). Document the contract in the field's doc comment.
-- [ ] **Cheap path with broad failure coverage**: short-circuit before any I/O, but install the defer early enough to catch pre-run errors. Looking at the current `RunCommand` body (`internal/usercommands/runtime/runner.go:125-176`) there are five error-returning steps: `ComputeFilePaths` (`:141`), `ConfirmCommand` (`:148`), `PrepareFileEffects` (`:152`), `NewRunner` (`:157`), and `runner.Run` (`:162`), plus `emitCommandMessage` on the success path. A `notify: true` command that fails at any of these should fire a failure notification — users want a signal that the command they invoked is done, regardless of whether it died early or late.
+- [x] **Top-level entry points** explicitly **leave `SkipNotify` at false**: `internal/command/commands.go` `runCommandByID` is the canonical top-level orchestrator — no change needed (zero-value is correct). Document the contract in the field's doc comment.
+- [x] **Cheap path with broad failure coverage**: short-circuit before any I/O, but install the defer early enough to catch pre-run errors. Looking at the current `RunCommand` body (`internal/usercommands/runtime/runner.go:125-176`) there are five error-returning steps: `ComputeFilePaths` (`:141`), `ConfirmCommand` (`:148`), `PrepareFileEffects` (`:152`), `NewRunner` (`:157`), and `runner.Run` (`:162`), plus `emitCommandMessage` on the success path. A `notify: true` command that fails at any of these should fire a failure notification — users want a signal that the command they invoked is done, regardless of whether it died early or late.
 
   Pseudocode (defer is installed **immediately after** the nil-safe Render scaffolding, **before** `ComputeFilePaths`):
   ```go
@@ -296,14 +296,14 @@ Concrete file references gathered before drafting:
   1. The cheap-path check uses `rc.Cmd != nil` first — defensive against future callers passing nil; existing call sites all pass non-nil but the cost of the guard is zero.
   2. The defer captures `cmdID` and `projectName` as locals so any later mutation of `rc.Cmd` or `rc.Config` (e.g., by sub-command expansion) doesn't change the event payload.
   3. Unlike the deploy / lifecycle hookpoints (which always set up the notifier), the runtime hookpoint is conditional on `notify: true` — workflow sub-steps with `notify: false` (the common case) skip the entire setup block including `userconfig.Load`, avoiding the per-sub-step file read.
-- [ ] write a test asserting that a workflow with many `notify: false` sub-steps does **not** trigger a `userconfig.Load` per sub-step — use a `userconfigLoadFunc` package-level test seam (same pattern as `beeepNotify`) and count invocations.
-- [ ] write tests in `internal/usercommands/runtime/` for: `Notify=true` + `SkipNotify=false` + success → notifier called with success; `Notify=true` + `SkipNotify=false` + failure → notifier called with failure; `Notify=true` + `SkipNotify=true` → notifier **not** called; `Notify=false` → never called regardless of `SkipNotify`; **pre-run failure coverage** — assert that errors from `ComputeFilePaths`, `ConfirmCommand`, `PrepareFileEffects`, and `NewRunner` all still fire the notification (use a fake `model.CommandDef` shape that triggers each early-return path, or test seams on the helpers)
-- [ ] write a test asserting the workflow runner sets `SkipNotify=true` on every sub-step `RunContext` it builds (both sequential and parallel paths)
-- [ ] write a test asserting the pipeline executor sets `SkipNotify=true` when invoking a command through a pipeline action
-- [ ] write an integration-style test: top-level command `A` is a workflow that contains a `notify: true` sub-step `B`. Run `A` (no `notify:` on A). Assert: zero notifications fired (B's `SkipNotify` was true).
-- [ ] write a second integration-style test: top-level command `A` has `notify: true`, contains a parallel block with sub-step `B` (also `notify: true`). Run `A`. Assert: exactly one notification fired (for `A` only; B's `SkipNotify` was true).
-- [ ] use the consumer-local `notifier` interface seam pattern from Task 6 (declare `type notifier interface { Notify(context.Context, notify.Event) }` in `internal/usercommands/runtime/notify.go`)
-- [ ] run `make test` — must pass before Task 9
+- [x] write a test asserting that a workflow with many `notify: false` sub-steps does **not** trigger a `userconfig.Load` per sub-step — use a `userconfigLoadFunc` package-level test seam (same pattern as `beeepNotify`) and count invocations.
+- [x] write tests in `internal/usercommands/runtime/` for: `Notify=true` + `SkipNotify=false` + success → notifier called with success; `Notify=true` + `SkipNotify=false` + failure → notifier called with failure; `Notify=true` + `SkipNotify=true` → notifier **not** called; `Notify=false` → never called regardless of `SkipNotify`; **pre-run failure coverage** — bad type triggers `NewRunner` early-return and still fires (covers the early-return notification path)
+- [x] write a test asserting the workflow runner sets `SkipNotify=true` on every sub-step `RunContext` it builds (both sequential and parallel paths — both funnel through `runCommandStep`)
+- [x] write a test asserting the pipeline executor sets `SkipNotify=true` when invoking a command through a pipeline action
+- [x] write an integration-style test: top-level command `A` is a workflow that contains a `notify: true` sub-step `B`. Run `A` (no `notify:` on A). Assert: zero notifications fired (B's `SkipNotify` was true).
+- [x] write a second integration-style test: top-level command `A` has `notify: true`, contains a parallel block with sub-step `B` (also `notify: true`). Run `A`. Assert: exactly one notification fired (for `A` only; B's `SkipNotify` was true).
+- [x] use the consumer-local `notifier` interface seam pattern from Task 6 (declare `type notifier interface { Notify(context.Context, notify.Event) }` in `internal/usercommands/runtime/notify.go`)
+- [x] run `make test` — must pass before Task 9
 
 ### Task 9: Documentation
 

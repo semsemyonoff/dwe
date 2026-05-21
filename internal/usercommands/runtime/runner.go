@@ -5,11 +5,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/notify"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands/model"
@@ -78,6 +81,15 @@ type RunContext struct {
 	// Task 5 only propagates the flag.
 	UnderParallel bool
 
+	// SkipNotify suppresses the end-of-command desktop notification for
+	// this invocation. Always set true when one runtime invokes another:
+	// only the top-level user-invoked command should fire notifications.
+	// The workflow runner, pipeline executor action dispatch, and any
+	// future internal call site must set this to true on the inner
+	// RunContext they build. Top-level entry points leave the zero value
+	// (false), enabling notification when Cmd.Notify is true.
+	SkipNotify bool
+
 	// WorkflowSubStepOverrides carries pipeline-side per-sub-step directives
 	// (currently files_gate) for the workflow being invoked. Set by the
 	// pipeline executor when the originating DeployStep declares
@@ -122,7 +134,10 @@ func NewRunner(cmd *model.CommandDef) (Runner, error) {
 // behavior such as file preparation and confirmation prompts before dispatching
 // to the concrete runner for the command type. The supplied ctx is threaded
 // through to the runner so child processes can be cancelled.
-func RunCommand(ctx context.Context, rc RunContext) error {
+func RunCommand(ctx context.Context, rc RunContext) (err error) {
+	if TestSnapshotRC != nil {
+		TestSnapshotRC(rc)
+	}
 	if rc.Render == nil {
 		rc.Render = &tpl.RenderContext{}
 	}
@@ -136,6 +151,35 @@ func RunCommand(ctx context.Context, rc RunContext) error {
 	}
 	if rc.Render.Context == nil {
 		rc.Render.Context = make(map[string]any)
+	}
+
+	// Conditional notifier install — only when this is the top-level user
+	// invocation of a command opted into notifications. Workflow sub-steps
+	// and pipeline-invoked commands have SkipNotify=true and skip this
+	// block entirely, avoiding the per-sub-step userconfig.Load.
+	if rc.Cmd != nil && rc.Cmd.Notify && !rc.SkipNotify {
+		start := time.Now()
+		var projectName string
+		if rc.Config != nil {
+			projectName = rc.Config.Project.Name
+		}
+		ucfg, ucfgErr := userconfigLoadFunc(rc.ProjectRoot)
+		if ucfgErr != nil {
+			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
+			ucfg = nil
+		}
+		n := newNotifier(ucfg)
+		cmdID := rc.Cmd.ID
+		defer func() {
+			n.Notify(context.Background(), notify.Event{
+				Kind:      notify.OpCommand,
+				Operation: "command:" + cmdID,
+				Outcome:   notify.OutcomeFromErr(err),
+				Duration:  time.Since(start),
+				Err:       err,
+				Project:   projectName,
+			})
+		}()
 	}
 
 	paths, err := ComputeFilePaths(rc)

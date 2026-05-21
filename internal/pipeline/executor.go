@@ -274,6 +274,10 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
 	rctx.UnderParallel = actx.Parallel
+	// Pipeline-invoked commands are never the user's top-level command —
+	// suppress notifications regardless of the referenced CommandDef's
+	// notify: field. Only the operation (deploy / run) notifies.
+	rctx.SkipNotify = true
 	if len(actx.SubStepOverrides) > 0 {
 		rctx.WorkflowSubStepOverrides = actx.SubStepOverrides
 	}
