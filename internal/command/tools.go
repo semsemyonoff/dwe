@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -141,7 +142,7 @@ disabled tools.`,
 					return err
 				}
 			}
-			return setToolEnabled(cfg, flags.configPath, name, true)
+			return setToolEnabled(cmd.OutOrStdout(), cfg, flags.configPath, name, true)
 		},
 		SilenceUsage: true,
 	}
@@ -181,7 +182,7 @@ enabled tools.`,
 					return err
 				}
 			}
-			return setToolEnabled(cfg, flags.configPath, name, false)
+			return setToolEnabled(cmd.OutOrStdout(), cfg, flags.configPath, name, false)
 		},
 		SilenceUsage: true,
 	}
@@ -294,7 +295,7 @@ func applyToolTogglesBatch(cfg *config.DevboxConfig, configPath string, toEnable
 	return localconfig.WriteLocalYAML(localPath, local)
 }
 
-func setToolEnabled(cfg *config.DevboxConfig, configPath string, name string, enabled bool) error {
+func setToolEnabled(out io.Writer, cfg *config.DevboxConfig, configPath string, name string, enabled bool) error {
 	var toEnable, toDisable []string
 	if enabled {
 		toEnable = []string{name}
@@ -307,7 +308,7 @@ func setToolEnabled(cfg *config.DevboxConfig, configPath string, name string, en
 
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
-	w := render.Stdout()
+	w := render.NewWriter(out)
 	if enabled {
 		w.Success(fmt.Sprintf("tool %q enabled (written to %s)", name, localPath))
 	} else {
@@ -317,6 +318,6 @@ func setToolEnabled(cfg *config.DevboxConfig, configPath string, name string, en
 	if err != nil {
 		return err
 	}
-	render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
+	w.Info(fmt.Sprintf(".env regenerated → %s", envPath))
 	return nil
 }

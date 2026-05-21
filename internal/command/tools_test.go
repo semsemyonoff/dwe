@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -106,7 +107,7 @@ func TestSetToolEnabled_UnknownToolReturnsErrorMentioningAvailable(t *testing.T)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	err = setToolEnabled(cfg, configPath, "nonexistent_tool", true)
+	err = setToolEnabled(io.Discard, cfg, configPath, "nonexistent_tool", true)
 	if err == nil {
 		t.Fatal("expected error for unknown tool, got nil")
 	}

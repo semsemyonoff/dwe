@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -219,7 +220,7 @@ disabled optional services.`,
 					return err
 				}
 			}
-			return setServiceEnabled(flags.configPath, cfg, name, true)
+			return setServiceEnabled(cmd.OutOrStdout(), flags.configPath, cfg, name, true)
 		},
 		SilenceUsage: true,
 	}
@@ -263,7 +264,7 @@ enabled optional services.`,
 					return err
 				}
 			}
-			return setServiceEnabled(flags.configPath, cfg, name, false)
+			return setServiceEnabled(cmd.OutOrStdout(), flags.configPath, cfg, name, false)
 		},
 		SilenceUsage: true,
 	}
@@ -331,7 +332,7 @@ func applyServiceTogglesBatch(configPath string, cfg *config.DevboxConfig, toEna
 
 // setServiceEnabled writes services.<name>.enabled = value to devbox/local.yml,
 // prints a confirmation, and regenerates .env.
-func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
+func setServiceEnabled(out io.Writer, configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
 	var toEnable, toDisable []string
 	if enabled {
 		toEnable = []string{name}
@@ -344,7 +345,7 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
-	w := render.Stdout()
+	w := render.NewWriter(out)
 	if enabled {
 		w.Success(fmt.Sprintf("service %q enabled (written to %s)", name, localPath))
 	} else {
@@ -354,6 +355,6 @@ func setServiceEnabled(configPath string, cfg *config.DevboxConfig, name string,
 	if err != nil {
 		return err
 	}
-	render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
+	w.Info(fmt.Sprintf(".env regenerated → %s", envPath))
 	return nil
 }
