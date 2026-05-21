@@ -49,19 +49,20 @@ Generated reference for the `devbox` command tree.
   - [devbox reset step](devbox_reset_step.md) — Run a single reset step by <phase>/<step> address
 - [devbox restart](devbox_restart.md) — Restart the project (stop, then run --no-update)
 - [devbox run](devbox_run.md) — Start the project (full lifecycle: update probe → up → wait → info)
-- [devbox services](devbox_services.md) — Manage application services
+- [devbox services](devbox_services.md) — Toggle services (interactive) or enable/disable individually
   - [devbox services disable](devbox_services_disable.md) — Disable an optional service (writes to devbox/local.yml)
   - [devbox services enable](devbox_services_enable.md) — Enable an optional service (writes to devbox/local.yml)
-  - [devbox services list](devbox_services_list.md) — Toggle services interactively (TTY) or show status table (non-TTY)
-  - [devbox services status](devbox_services_status.md) — Show all services and their current state (read-only table)
 - [devbox shell](devbox_shell.md) — Open a shell in a service container
-- [devbox status](devbox_status.md) — Show stack health and services/tools status
+- [devbox status](devbox_status.md) — Show stack health and per-section status (read-only)
+  - [devbox status deploy](devbox_status_deploy.md) — Show deploy status (table) or per-service deploy detail
+  - [devbox status git](devbox_status_git.md) — Show only the git workspace section
+  - [devbox status services](devbox_status_services.md) — Show only the services section
+  - [devbox status tools](devbox_status_tools.md) — Show only the tools section
+  - [devbox status topology](devbox_status_topology.md) — Show only the topology section
 - [devbox stop](devbox_stop.md) — Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)
-- [devbox tools](devbox_tools.md) — Manage optional tools
+- [devbox tools](devbox_tools.md) — Toggle tools (interactive) or enable/disable individually
   - [devbox tools disable](devbox_tools_disable.md) — Disable an optional tool (writes to devbox/local.yml)
   - [devbox tools enable](devbox_tools_enable.md) — Enable an optional tool (writes to devbox/local.yml)
-  - [devbox tools list](devbox_tools_list.md) — Toggle tools interactively (TTY) or show status table (non-TTY)
-  - [devbox tools status](devbox_tools_status.md) — Show all tools and their current state (read-only table)
 - [devbox validate](devbox_validate.md) — Validate project configuration and files
   - [devbox validate commands](devbox_validate_commands.md) — Validate command definitions
   - [devbox validate config](devbox_validate_config.md) — Validate configuration files

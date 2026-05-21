@@ -101,5 +101,5 @@ flowchart LR
 - `devbox info` — render the info dashboard from `info.yml`
 - `devbox deploy plan` — show the resolved deploy pipeline
 - `devbox compose files` — show active compose file list (diagnostic)
-- `devbox services list` — list services with enabled/disabled status
-- `devbox tools list` — list tools with enabled/disabled status
+- `devbox status services` — list services with enabled/disabled status
+- `devbox status tools` — list tools with enabled/disabled status

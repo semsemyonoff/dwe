@@ -255,18 +255,18 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
 
 ### Task 6: Documentation, regenerated CLI reference, AGENTS.md sync
 
-- [ ] Expand the `docs/reference/config/tools.md` stub created in Task 1 into the full reference page — mirrors `services.md`: definitions in `devbox/tools.yml`, overlay `enabled:` in defaults/local, optional `status:` block, template-data contract for `status[].value`.
-- [ ] Update `docs/reference/config/services.md` — add the `status:` block subsection.
-- [ ] Update `docs/reference/config/devbox.md` — tools section now points to `tools.yml`; main config keeps only the enable overlay.
-- [ ] Update `docs/reference/config/state.md` and any other doc referencing `devbox status <svc>` to point at `devbox status deploy <svc>`.
-- [ ] Regenerate `docs/reference/cli/` via `devbox docs generate --scope cli` (or `make docs` if that target exists — check `Makefile`).
-- [ ] Update `AGENTS.md` (the canonical file; `CLAUDE.md` is a symlink — do NOT edit `CLAUDE.md` directly):
-  - Update `internal/command/` description to reflect the new `status` group structure and mutating-only `services` / `tools`.
-  - Update `internal/config/` description to mention `LoadToolsConfig`, `StatusColumn`, and the symmetric tools/services pattern.
-  - Update `internal/stack/` description to mention `CollectGitWorkspace`.
-  - Update `internal/ui/` description to mention `RenderGitWorkspace` and the dynamic-column extensions to `RenderServiceTable` / `RenderToolTable`.
-- [ ] No new tests in this task — docs only. Run `make build` to ensure `devbox docs generate` succeeds.
-- [ ] Run `make test` — sanity check before final verification.
+- [x] Expand the `docs/reference/config/tools.md` stub created in Task 1 into the full reference page — mirrors `services.md`: definitions in `devbox/tools.yml`, overlay `enabled:` in defaults/local, optional `status:` block, template-data contract for `status[].value`.
+- [x] Update `docs/reference/config/services.md` — add the `status:` block subsection.
+- [x] Update `docs/reference/config/devbox.md` — tools section now points to `tools.yml`; main config keeps only the enable overlay. (Done in Task 1; Related commands now point at `status services` / `status tools`.)
+- [x] Update `docs/reference/config/state.md` and any other doc referencing `devbox status <svc>` to point at `devbox status deploy <svc>`. (No live references in config docs; only the removed-command CLI reference page was stale and is now regenerated.)
+- [x] Regenerate `docs/reference/cli/` via `devbox docs generate --scope cli` (or `make docs` if that target exists — check `Makefile`). Removed stale `devbox_services_status.md` / `devbox_services_list.md` / `devbox_tools_status.md` / `devbox_tools_list.md`; new `devbox_status_{services,tools,deploy,topology,git}.md` generated.
+- [x] Update `AGENTS.md` (the canonical file; `CLAUDE.md` is a symlink — do NOT edit `CLAUDE.md` directly):
+  - Updated `internal/command/` description to reflect the new `status` group structure and mutating-only `services` / `tools`.
+  - Updated `internal/config/` description to mention `LoadToolsConfig`, `StatusColumn`, and the symmetric tools/services pattern.
+  - Updated `internal/stack/` description to mention `CollectGitWorkspace` plus the new section renderers + `BuildCustomColumns` / `RenderCustomCells`.
+  - Updated `internal/ui/` description to mention `RenderGitWorkspace` and the dynamic-column extensions to `RenderServiceTable` / `RenderToolTable`.
+- [x] No new tests in this task — docs only. Run `make build` to ensure `devbox docs generate` succeeds.
+- [x] Run `make test` — sanity check before final verification.
 
 ### Task 7: Verify acceptance criteria
 

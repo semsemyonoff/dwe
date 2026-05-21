@@ -12,6 +12,7 @@ Service declarations for the devbox project.
   - [`configs` field](#configs-field)
   - [`dirs` field](#dirs-field)
   - [`cli` block](#cli-block)
+  - [`status` block](#status-block)
   - [`ide` block](#ide-block)
   - [`ai` block](#ai-block)
   - [`git` block](#git-block)
@@ -172,6 +173,42 @@ cli:
 ```
 
 The list form is convenient when copy-pasting from a `.env` file; the map form is friendlier for inheriting and overriding individual keys via `extends:`.
+
+### `status` block
+
+Optional list of custom columns to append to the `devbox status services` table. Each entry declares a column name and a hermetic Go template that is evaluated per row against the merged config.
+
+```yaml
+services:
+  main:
+    type: app
+    container: app-main
+    dir: ./services/main
+    status:
+      - name: CONTAINER
+        value: "{{ .ServiceCfg.Container }}"
+      - name: TAG
+        value: "{{ .Globals.baseImageTag }}"
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Column header (uppercased in the rendered table). |
+| `value` | string | yes | Go template evaluated via `tpl.Render`. Hermetic — no env / FS / network access. |
+
+**Template data contract** (Go templates are case-sensitive):
+
+| Path | Source | Casing |
+|------|--------|--------|
+| `.ServiceCfg.<Field>` | typed `ServiceConfig` for this row's service | PascalCase Go field names (`.ServiceCfg.Container`, `.ServiceCfg.Dir`) |
+| `.Globals.<key>` | `cfg.Raw["globals"]` if present, else `nil` | lowercase YAML keys (`.Globals.baseImageTag`) |
+| `.Raw.<key>...` | full `cfg.Raw` map | lowercase YAML keys (`.Raw.runtime.ports.app`, `.Raw.project.name`) |
+
+The data root has only those four keys — there are no `.Project` / `.Runtime` / `.Tools` aliases at the root. Drill into `.Raw.project.*`, `.Raw.runtime.*`, `.Raw.tools.*` instead.
+
+**Failure handling**: a template that errors out renders as `—` in the table and contributes to a single aggregated warning (`warning: N custom status expression(s) failed to render`) on stderr. The command still exits 0.
+
+**Column ordering**: when multiple services declare overlapping columns, the column order in the rendered table is "first appearance" during deterministic alphabetical iteration over services. Services declaring fewer columns leave missing cells as `—`.
 
 ### `render` block
 
@@ -524,6 +561,7 @@ services:
 ## Related commands
 
 - `devbox shell [service]` — open shell in service container
-- `devbox services list` — list all services with status
-- `devbox services enable/disable <service>` — toggle optional services
+- `devbox status services` — read-only services table (with any custom `status:` columns)
+- `devbox services` — interactive multi-select toggle for optional services
+- `devbox services enable/disable <service>` — toggle optional services individually
 - `devbox deploy run` — runs the full deploy pipeline, including `service_dirs_ensure` in the setup phase

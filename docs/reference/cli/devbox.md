@@ -34,11 +34,11 @@ devbox [flags]
 * [devbox reset](devbox_reset.md)	 - Reset pipeline commands
 * [devbox restart](devbox_restart.md)	 - Restart the project (stop, then run --no-update)
 * [devbox run](devbox_run.md)	 - Start the project (full lifecycle: update probe → up → wait → info)
-* [devbox services](devbox_services.md)	 - Manage application services
+* [devbox services](devbox_services.md)	 - Toggle services (interactive) or enable/disable individually
 * [devbox shell](devbox_shell.md)	 - Open a shell in a service container
-* [devbox status](devbox_status.md)	 - Show stack health and services/tools status
+* [devbox status](devbox_status.md)	 - Show stack health and per-section status (read-only)
 * [devbox stop](devbox_stop.md)	 - Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)
-* [devbox tools](devbox_tools.md)	 - Manage optional tools
+* [devbox tools](devbox_tools.md)	 - Toggle tools (interactive) or enable/disable individually
 * [devbox validate](devbox_validate.md)	 - Validate project configuration and files
 * [devbox version](devbox_version.md)	 - Print version information
 
