@@ -45,11 +45,12 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 	}
 
 	execCtx := builtin.ExecContext{
-		Config:      rc.Config,
-		ProjectRoot: rc.ProjectRoot,
-		Output:      render.NewWriter(stdout(rc)),
-		Stdin:       stdin,
-		SkipConfirm: rc.SkipConfirm || rc.NonInteractive || isNonInteractive(),
+		Config:       rc.Config,
+		DockerConfig: rc.DockerConfig,
+		ProjectRoot:  rc.ProjectRoot,
+		Output:       render.NewWriter(stdout(rc)),
+		Stdin:        stdin,
+		SkipConfirm:  rc.SkipConfirm || rc.NonInteractive || isNonInteractive(),
 	}
 	return builtin.Run(ctx, name, with, execCtx)
 }

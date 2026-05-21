@@ -183,13 +183,14 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 
 	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("loading docker config: %w", err)
-	}
-	if dockerCfg != nil {
-		if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
-			return fmt.Errorf("ensuring volumes: %w", err)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("loading docker config: %w", err)
 		}
+		dockerCfg = &config.DockerConfig{}
+	}
+	if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
+		return fmt.Errorf("ensuring volumes: %w", err)
 	}
 
 	reg, err := loadCommandRegistry(flags.configPath)
@@ -510,6 +511,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		Reporter:     rep,
 		Name:         "deploy",
 		Config:       cfg,
+		DockerConfig: dockerCfg,
 		Registry:     reg,
 		WorkDir:      workDir,
 		LogWriter:    logWriter,

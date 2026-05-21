@@ -92,9 +92,10 @@ func childIO(stepWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cle
 // ActionContext carries the inputs needed by ExecAction.
 // It is constructed once per step by Run and reused for both body and check.
 type ActionContext struct {
-	WorkDir string
-	Cfg     *config.DevboxConfig
-	Reg     *usercommands.Registry
+	WorkDir   string
+	Cfg       *config.DevboxConfig
+	DockerCfg *config.DockerConfig
+	Reg       *usercommands.Registry
 	// StepWriter is the per-step destination for child output, populated by
 	// executeStepBody. Its shape depends on Parallel:
 	//
@@ -235,11 +236,12 @@ func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext)
 		stdinForBuiltin = os.Stdin
 	}
 	ectx := builtin.ExecContext{
-		Config:      actx.Cfg,
-		ProjectRoot: actx.WorkDir,
-		Output:      render.NewWriter(out),
-		Stdin:       stdinForBuiltin,
-		SkipConfirm: actx.SkipConfirm,
+		Config:       actx.Cfg,
+		DockerConfig: actx.DockerCfg,
+		ProjectRoot:  actx.WorkDir,
+		Output:       render.NewWriter(out),
+		Stdin:        stdinForBuiltin,
+		SkipConfirm:  actx.SkipConfirm,
 	}
 	return builtin.Run(ctx, a.Cmd, a.With, ectx)
 }
@@ -316,6 +318,7 @@ type RunOptions struct {
 	Reporter     Reporter
 	Name         string
 	Config       *config.DevboxConfig
+	DockerConfig *config.DockerConfig
 	Registry     *usercommands.Registry
 	WorkDir      string
 	LogWriter    io.Writer
@@ -730,6 +733,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	bodyActx := ActionContext{
 		WorkDir:          opts.WorkDir,
 		Cfg:              opts.Config,
+		DockerCfg:        opts.DockerConfig,
 		Reg:              opts.Registry,
 		StepWriter:       stepWriter,
 		LogWriter:        opts.LogWriter,
@@ -773,6 +777,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		actx := ActionContext{
 			WorkDir:     opts.WorkDir,
 			Cfg:         opts.Config,
+			DockerCfg:   opts.DockerConfig,
 			Reg:         opts.Registry,
 			StepWriter:  stepWriter,
 			LogWriter:   opts.LogWriter,

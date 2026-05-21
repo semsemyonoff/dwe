@@ -145,12 +145,12 @@ Related patterns:
 
 Checklist:
 
-- [ ] extract `config.LookupDotPath(cfg *config.DevboxConfig, path string) (any, error)` from `runner_service.go`'s unexported resolver; runtime's `resolveServiceFields` becomes a thin wrapper over it; add unit tests for `services.<name>.work_dir_internal`-style paths and error cases (missing key, non-string leaf)
-- [ ] verify `docker.Compose.BuildEnv() []string` is exported (line 122 of `compose.go` invokes it on the receiver — confirm method visibility). If not exported, promote it. Also confirm it's safe to call from a non-compose invocation context (it should only return `os.Environ()` merged with `ProcessEnv` — no compose-specific assumptions)
-- [ ] **add `DockerConfig *config.DockerConfig` to `builtin.ExecContext`** (`internal/builtin/builtin.go:39`); update **all** call sites that construct `ExecContext` to populate it:
+- [x] extract `config.LookupDotPath(cfg *config.DevboxConfig, path string) (any, error)` from `runner_service.go`'s unexported resolver; runtime's `resolveServiceFields` becomes a thin wrapper over it; add unit tests for `services.<name>.work_dir_internal`-style paths and error cases (missing key, non-string leaf)
+- [x] verify `docker.Compose.BuildEnv() []string` is exported (line 122 of `compose.go` invokes it on the receiver — confirm method visibility). If not exported, promote it. Also confirm it's safe to call from a non-compose invocation context (it should only return `os.Environ()` merged with `ProcessEnv` — no compose-specific assumptions)
+- [x] **add `DockerConfig *config.DockerConfig` to `builtin.ExecContext`** (`internal/builtin/builtin.go:39`); update **all** call sites that construct `ExecContext` to populate it:
   - `runner_builtin.go:47` — set `DockerConfig: rc.DockerConfig` (already loaded by `BuildRunContext` at `build_context.go:63-70` with `os.ErrNotExist` → `&DockerConfig{}` normalisation)
   - pipeline executor's ExecContext build site (used for pipeline-step builtins including auto-injected `daemons_reap`) — load `dockerCfg` once at the executor's setup, apply the same `os.ErrNotExist` → `&DockerConfig{}` normalisation, pass through to every step's ExecContext
-- [ ] add `internal/builtin/daemon_start.go` — `docker_daemon_start`:
+- [x] add `internal/builtin/daemon_start.go` — `docker_daemon_start`:
   - read pre-rendered fields from `with:` (`service`, `user`, `workdir`/`workdir_from`, `env`, `argv`, `compose_args`, `auto_remove`, `on_already_running`, `container_template`, `daemon_id`, `label_params`)
   - resolve `workdir_from` via `config.LookupDotPath(ectx.Config, ...)` when `workdir` is empty
   - compute `projectFullName := ectx.Config.Project.FullName()` at runtime (NOT from `with:`)
@@ -169,13 +169,13 @@ Checklist:
     9. append the `--label` argv pairs from `StandardLabels`
     10. append `<service>`, then `<argv...>`
   - `args := compose.BuildArgs("run", extraArgs...)`; `cmd := exec.CommandContext(ctx, compose.BinName(), args...)`; `cmd.Env = docker.MergeEnv(combined)` where `combined = compose.ProcessEnv ∪ envVars` (the env-values pathway — mirrors `runner_service.go:329-332`)
-- [ ] **TOCTOU mitigation**: pre-check `docker ps -q --filter name=^<full>$ --filter status=running` (with `BinName()` + `BuildEnv()`) is best-effort. **Authoritative** anti-duplicate is docker's atomic name-uniqueness; the builtin MUST parse the docker name-conflict error string and translate to `ErrDaemonAlreadyRunning` so `on_already_running: noop` correctly swallows it under race
-- [ ] add `internal/builtin/daemon_logs.go` — `docker_daemon_logs` builtin: resolves full name from `with:` + runtime `ectx.Config.Project.FullName()`, pre-checks existence (returns typed `ErrDaemonNotRunning` with hint pointing to `.start`), builds `compose := docker.NewCompose(ectx.Config, ectx.DockerConfig)` (DockerConfig from `ectx`, not loaded here), then runs `<compose.BinName()> logs -f --tail=100 <full>` via `exec.CommandContext(ctx, ...)` with `cmd.Env = compose.BuildEnv()` (ProcessEnv applied) wired to `ectx.Output` stdout/stderr
-- [ ] **Cancellation semantics (golang-context)**: set `cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }` and `cmd.WaitDelay = 3 * time.Second` so Ctrl-C → ctx cancel → SIGINT (graceful detach of `docker logs`, container untouched) rather than default SIGKILL. Container itself is never signalled by `.logs`
-- [ ] add `internal/builtin/daemon_stop.go` — `docker_daemon_stop` builtin: convert `stop_timeout` duration to whole seconds via `max(1, int(d.Round(time.Second).Seconds()))` (see *Technical Details § implementation invariant #9*); builds `compose := docker.NewCompose(ectx.Config, ectx.DockerConfig)`; runs `<compose.BinName()> stop -t <secs> <full>` via `exec.CommandContext` with `cmd.Env = compose.BuildEnv()`; missing-container always succeeds (`if_missing: noop` fixed — parse the "No such container" docker error); prints `✓ daemon stopped: <full>` or `no daemon to stop`
-- [ ] define sentinel errors in `internal/daemon/`: `ErrContainerNameInvalid`, `ErrDaemonAlreadyRunning`, `ErrDaemonNotRunning`. Wrap docker stderr via `%w` when bubbling unknown failures
-- [ ] register all three in the `Builtins` map in `internal/builtin/builtin.go`
-- [ ] write unit tests for argv-building (extract assembly into pure funcs taking primitives):
+- [x] **TOCTOU mitigation**: pre-check `docker ps -q --filter name=^<full>$ --filter status=running` (with `BinName()` + `BuildEnv()`) is best-effort. **Authoritative** anti-duplicate is docker's atomic name-uniqueness; the builtin MUST parse the docker name-conflict error string and translate to `ErrDaemonAlreadyRunning` so `on_already_running: noop` correctly swallows it under race
+- [x] add `internal/builtin/daemon_logs.go` — `docker_daemon_logs` builtin: resolves full name from `with:` + runtime `ectx.Config.Project.FullName()`, pre-checks existence (returns typed `ErrDaemonNotRunning` with hint pointing to `.start`), builds `compose := docker.NewCompose(ectx.Config, ectx.DockerConfig)` (DockerConfig from `ectx`, not loaded here), then runs `<compose.BinName()> logs -f --tail=100 <full>` via `exec.CommandContext(ctx, ...)` with `cmd.Env = compose.BuildEnv()` (ProcessEnv applied) wired to `ectx.Output` stdout/stderr
+- [x] **Cancellation semantics (golang-context)**: set `cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }` and `cmd.WaitDelay = 3 * time.Second` so Ctrl-C → ctx cancel → SIGINT (graceful detach of `docker logs`, container untouched) rather than default SIGKILL. Container itself is never signalled by `.logs`
+- [x] add `internal/builtin/daemon_stop.go` — `docker_daemon_stop` builtin: convert `stop_timeout` duration to whole seconds via `max(1, int(d.Round(time.Second).Seconds()))` (see *Technical Details § implementation invariant #9*); builds `compose := docker.NewCompose(ectx.Config, ectx.DockerConfig)`; runs `<compose.BinName()> stop -t <secs> <full>` via `exec.CommandContext` with `cmd.Env = compose.BuildEnv()`; missing-container always succeeds (`if_missing: noop` fixed — parse the "No such container" docker error); prints `✓ daemon stopped: <full>` or `no daemon to stop`
+- [x] define sentinel errors in `internal/daemon/`: `ErrContainerNameInvalid`, `ErrDaemonAlreadyRunning`, `ErrDaemonNotRunning`. Wrap docker stderr via `%w` when bubbling unknown failures
+- [x] register all three in the `Builtins` map in `internal/builtin/builtin.go`
+- [x] write unit tests for argv-building (extract assembly into pure funcs taking primitives):
   - each builtin's `with:` shape
   - assembled argv goes through `compose.BuildArgs` (assert `-p`, `-f`, configured global args, run defaults all appear)
   - env includes `ProcessEnv` and per-call env vars (via `MergeEnv`); binary is taken from `DockerBin(cfg)` (test with `podman`)
@@ -188,7 +188,7 @@ Checklist:
   - that no shell metacharacters in param values escape argv boundaries
   - that `label_params` after rendering produces a valid JSON string in the `--label` argv
   - **nil-tolerance**: builtin invoked with `ectx.DockerConfig = &DockerConfig{}` (empty zero value) does not panic; argv excludes `-p`/`-f` when project_name/files are empty
-- [ ] run `go test ./internal/builtin/... ./internal/config/...` — must pass before task 4
+- [x] run `go test ./internal/builtin/... ./internal/config/...` — must pass before task 4
 
 ### Task 4: Registry-time expansion of `type: daemon` into four virtual `CommandDef`s
 

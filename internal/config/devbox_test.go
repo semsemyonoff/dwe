@@ -443,6 +443,49 @@ func TestResolvePath_nilMap(t *testing.T) {
 	}
 }
 
+// --- LookupDotPath ---
+
+func TestLookupDotPath_stringLeaf(t *testing.T) {
+	cfg := &DevboxConfig{Raw: map[string]any{
+		"services": map[string]any{
+			"main": map[string]any{"work_dir_internal": "/var/www"},
+		},
+	}}
+	v, err := LookupDotPath(cfg, "services.main.work_dir_internal")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v != "/var/www" {
+		t.Errorf("got %v, want /var/www", v)
+	}
+}
+
+func TestLookupDotPath_missingReturnsNil(t *testing.T) {
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+	v, err := LookupDotPath(cfg, "a.b.c")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v != nil {
+		t.Errorf("got %v, want nil", v)
+	}
+}
+
+func TestLookupDotPath_nonStringErrors(t *testing.T) {
+	cfg := &DevboxConfig{Raw: map[string]any{"port": 8080}}
+	_, err := LookupDotPath(cfg, "port")
+	if err == nil {
+		t.Fatal("expected error for non-string leaf")
+	}
+}
+
+func TestLookupDotPath_nilConfig(t *testing.T) {
+	v, err := LookupDotPath(nil, "any.path")
+	if err != nil || v != nil {
+		t.Errorf("got v=%v, err=%v; want nil, nil", v, err)
+	}
+}
+
 // --- LoadConfig populates Raw ---
 
 func TestLoadConfig_rawPopulated(t *testing.T) {

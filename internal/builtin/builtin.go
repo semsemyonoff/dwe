@@ -39,6 +39,10 @@ import (
 type ExecContext struct {
 	// Config is the merged devbox configuration.
 	Config *config.DevboxConfig
+	// DockerConfig is the resolved docker policy. Callers must pre-normalise
+	// missing-file (os.ErrNotExist) to &config.DockerConfig{} so builtins can
+	// pass it directly to docker.NewCompose without nil-checks.
+	DockerConfig *config.DockerConfig
 	// ProjectRoot is the absolute path to the project root (directory of devbox.yml).
 	ProjectRoot string
 	// Output is the render writer for styled terminal output. All builtin
@@ -75,6 +79,9 @@ var registry = map[string]Builtin{
 	"service_dirs_ensure":           serviceDirsEnsureBuiltin{},
 	"docker_remove_project_volumes": dockerRemoveProjectVolumesBuiltin{},
 	"docker_wait_healthy":           dockerWaitHealthyBuiltin{},
+	"docker_daemon_start":           daemonStartBuiltin{},
+	"docker_daemon_logs":            daemonLogsBuiltin{},
+	"docker_daemon_stop":            daemonStopBuiltin{},
 	"remove_paths":                  removePathsBuiltin{},
 }
 
@@ -161,6 +168,80 @@ func getStringSlice(with map[string]any, key string) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("param %q: expected string or list, got %T", key, v)
 	}
+}
+
+// getBoolParam returns the boolean value of key from with, or defaultVal if
+// absent/nil. Accepts bool or string ("true"/"false") values.
+func getBoolParam(with map[string]any, key string, defaultVal bool) bool {
+	if with == nil {
+		return defaultVal
+	}
+	v, ok := with[key]
+	if !ok || v == nil {
+		return defaultVal
+	}
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		switch strings.ToLower(strings.TrimSpace(val)) {
+		case "true", "yes", "1":
+			return true
+		case "false", "no", "0", "":
+			return false
+		}
+	}
+	return defaultVal
+}
+
+// getStringMap returns a string map from with[key], rendering values via
+// fmt.Sprint when they are not already strings. Returns nil when key absent.
+func getStringMap(with map[string]any, key string) (map[string]string, error) {
+	if with == nil {
+		return nil, nil
+	}
+	v, ok := with[key]
+	if !ok || v == nil {
+		return nil, nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		if ms, ok := v.(map[string]string); ok {
+			return ms, nil
+		}
+		return nil, fmt.Errorf("param %q: expected map, got %T", key, v)
+	}
+	out := make(map[string]string, len(m))
+	for k, val := range m {
+		out[k] = fmt.Sprint(val)
+	}
+	return out, nil
+}
+
+// getMapAny returns a map[string]any from with[key]. Returns nil when absent.
+func getMapAny(with map[string]any, key string) (map[string]any, error) {
+	if with == nil {
+		return nil, nil
+	}
+	v, ok := with[key]
+	if !ok || v == nil {
+		return nil, nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("param %q: expected map, got %T", key, v)
+	}
+	return m, nil
+}
+
+// sortedKeys returns the sorted keys of a string map for deterministic iteration.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // getDurationParam returns the time.Duration value of key from with, or defaultVal if absent/nil.

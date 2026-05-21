@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"devbox-cli/internal/condition"
@@ -120,6 +121,14 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("loading docker config: %w", err)
+		}
+		dockerCfg = &config.DockerConfig{}
+	}
+
 	reg, err := loadCommandRegistry(flags.configPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
@@ -141,14 +150,15 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 	defer rep.Close()
 
 	opts := pipeline.RunOptions{
-		Steps:       steps,
-		Reporter:    rep,
-		Name:        "reset",
-		Config:      cfg,
-		Registry:    reg,
-		WorkDir:     workDir,
-		LogWriter:   logWriter,
-		SkipConfirm: yes,
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "reset",
+		Config:       cfg,
+		DockerConfig: dockerCfg,
+		Registry:     reg,
+		WorkDir:      workDir,
+		LogWriter:    logWriter,
+		SkipConfirm:  yes,
 	}
 
 	if err := pipeline.RunWithOptions(opts); err != nil {

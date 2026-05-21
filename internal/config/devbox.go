@@ -1568,6 +1568,24 @@ func LoadDevboxConfig(path string) (*DevboxConfig, error) {
 	return &cfg, nil
 }
 
+// LookupDotPath resolves a dot-separated path (e.g. "services.main.work_dir_internal")
+// against cfg.Raw and returns the value. Returns (nil, nil) when cfg is nil or the
+// path is missing. Returns an error when the resolved value is not a string — the
+// only currently-supported leaf type for dot-path lookups in user-facing config.
+func LookupDotPath(cfg *DevboxConfig, path string) (any, error) {
+	if cfg == nil || path == "" {
+		return nil, nil
+	}
+	v, found := ResolvePath(cfg.Raw, path)
+	if !found {
+		return nil, nil
+	}
+	if _, ok := v.(string); !ok {
+		return nil, fmt.Errorf("dot-path %q: value is not a string", path)
+	}
+	return v, nil
+}
+
 // ResolvePath resolves a dot-separated path (e.g. "runtime.ports.app") in a
 // nested map and returns the value and whether it was found.
 func ResolvePath(m map[string]any, path string) (any, bool) {

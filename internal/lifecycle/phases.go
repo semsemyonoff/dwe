@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
@@ -47,7 +48,25 @@ func RunPhases(
 	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
 	defer rep.Close()
 
-	if err := pipeline.Run(steps, rep, name, cfg, reg, workDir, logWriter, skipConfirm, nil); err != nil {
+	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("loading docker config: %w", err)
+		}
+		dockerCfg = &config.DockerConfig{}
+	}
+
+	if err := pipeline.RunWithOptions(pipeline.RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         name,
+		Config:       cfg,
+		DockerConfig: dockerCfg,
+		Registry:     reg,
+		WorkDir:      workDir,
+		LogWriter:    logWriter,
+		SkipConfirm:  skipConfirm,
+	}); err != nil {
 		if errors.Is(err, pipeline.ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}

@@ -207,18 +207,14 @@ func lookupServiceCLIUser(cfg *config.DevboxConfig, container string) string {
 // resolveWorkdirFrom resolves a dot-path into the config Raw map and returns
 // the string value.
 func resolveWorkdirFrom(dotPath string, ctx RunContext) (string, error) {
-	if ctx.Config == nil {
+	v, err := config.LookupDotPath(ctx.Config, dotPath)
+	if err != nil {
+		return "", fmt.Errorf("workdir_from %q: %w", dotPath, err)
+	}
+	if v == nil {
 		return "", nil
 	}
-	v, found := config.ResolvePath(ctx.Config.Raw, dotPath)
-	if !found {
-		return "", nil
-	}
-	s, ok := v.(string)
-	if !ok {
-		return "", fmt.Errorf("workdir_from %q: value is not a string", dotPath)
-	}
-	return s, nil
+	return v.(string), nil
 }
 
 // buildRenderedComposeArgs renders each compose_args entry via templates and returns the slice.
