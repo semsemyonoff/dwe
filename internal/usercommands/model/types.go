@@ -408,6 +408,11 @@ type CommandDef struct {
 	// ConfirmationText is the prompt shown when Confirmation is true.
 	// Defaults to DefaultConfirmationText when empty.
 	ConfirmationText string `yaml:"confirmation_text"`
+	// Notify opts the command in to a desktop notification when it
+	// finishes. Only fires when the command is the top-level invocation —
+	// transitive invocations (workflow sub-steps, pipeline actions) are
+	// suppressed at runtime regardless of this field.
+	Notify bool `yaml:"notify,omitempty"`
 
 	// Params declares named parameters accepted by the command.
 	Params map[string]ParamDef `yaml:"params"`

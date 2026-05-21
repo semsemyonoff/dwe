@@ -365,6 +365,56 @@ commands:
 	}
 }
 
+func TestParseCommandFile_NotifyField(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+		want bool
+	}{
+		{
+			name: "notify true",
+			yaml: `
+commands:
+  build:
+    type: shell
+    notify: true
+    cmd: echo build
+`,
+			want: true,
+		},
+		{
+			name: "notify false",
+			yaml: `
+commands:
+  build:
+    type: shell
+    notify: false
+    cmd: echo build
+`,
+			want: false,
+		},
+		{
+			name: "notify absent",
+			yaml: `
+commands:
+  build:
+    type: shell
+    cmd: echo build
+`,
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := mustParse(t, tc.yaml)
+			cmd := cf.Commands["build"]
+			if cmd.Notify != tc.want {
+				t.Errorf("Notify = %v, want %v", cmd.Notify, tc.want)
+			}
+		})
+	}
+}
+
 func TestParseCommandFile_RunnerOverride(t *testing.T) {
 	yaml := `
 commands:

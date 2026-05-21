@@ -188,11 +188,11 @@ Concrete file references gathered before drafting:
 
 ### Task 4: Add `Notify bool` field to `model.CommandDef`
 
-- [ ] add `Notify bool \`yaml:"notify,omitempty"\`` to `CommandDef` in `internal/usercommands/model/types.go`
-- [ ] verify the field round-trips through `loader.ParseCommandFile` / `loader.LoadCommandFile` (strict KnownFields decoding) — should be free since we added a `yaml` tag matching the new key
-- [ ] write tests in `internal/usercommands/model/` (or `loader/`) for: command file with `notify: true`, `notify: false`, and `notify` absent (zero value)
-- [ ] confirm `validate/commands/` validator tests for unknown-field rejection are unaffected by the new field (no regressions in the fixtures)
-- [ ] run `make test` — must pass before Task 5
+- [x] add `Notify bool \`yaml:"notify,omitempty"\`` to `CommandDef` in `internal/usercommands/model/types.go`
+- [x] verify the field round-trips through `loader.ParseCommandFile` / `loader.LoadCommandFile` (strict KnownFields decoding) — should be free since we added a `yaml` tag matching the new key
+- [x] write tests in `internal/usercommands/model/` (or `loader/`) for: command file with `notify: true`, `notify: false`, and `notify` absent (zero value)
+- [x] confirm `validate/commands/` validator tests for unknown-field rejection are unaffected by the new field (no regressions in the fixtures)
+- [x] run `make test` — must pass before Task 5
 
 ### Task 5: Add validator rules for `notify:`
 
