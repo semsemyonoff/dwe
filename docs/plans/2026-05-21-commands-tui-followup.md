@@ -601,10 +601,10 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `devbox docs generate --scope cli` locally, verify `docs/reference/cli/` updates without unexpected diffs (skipped — deferred to user per plan note: "run ONLY locally; commit separately if the user decides to")
 
 ### Task 13: [Final] Update documentation
-- [ ] `docs/reference/config/styles.md` — Command browser section (Task 5 created it — final pass here)
-- [ ] `docs/reference/config/commands.md` — updated CLI surface, examples with `--set` / `-i` / `-y`
-- [ ] `AGENTS.md` (= `CLAUDE.md` symlink): refresh the `internal/ui/cmdbrowser/` blurb (if `styles.go` grew new public surface) and the `internal/command/` blurb (removal of `run`/`inspect` subcommands, addition of `runCommandByID`)
-- [ ] final self-check of this plan file: every box `[x]`, every newly added ➕ task documented
+- [x] `docs/reference/config/styles.md` — Command browser section verified present (Task 5 added it; final pass confirms the palette keys list matches the accessors shipped in `internal/ui/styles.go`)
+- [x] `docs/reference/config/commands.md` — verified `Related commands` block already documents `commands <id> [--set k=v] [--yes]`, `cmd` alias, and `--inspect`/`-i` exclusivity (Task 6 update)
+- [x] `AGENTS.md` (= `CLAUDE.md` symlink): refreshed `internal/ui/` (added `RunParamForm`/`BuildParamForm`/`ConfirmRun` + `Color*()` accessors), `internal/ui/cmdbrowser/` (palette wiring via `palette.go`, height math footer reservation), `internal/usercommands/resolve/` (`ParamDefaults`), and `internal/command/` (new `commands [id]` surface + `runCommandByID` orchestrator + test seams)
+- [x] final self-check of this plan file: every box `[x]`, every newly added ➕ task documented
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
 
