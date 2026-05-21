@@ -1,10 +1,17 @@
 package command
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"slices"
+	"syscall"
 	"testing"
+	"time"
 
+	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
@@ -701,5 +708,136 @@ func TestCommandCmd_AliasDispatch(t *testing.T) {
 	parent.SetErr(&testBuf{})
 	if err := parent.Execute(); err != nil {
 		t.Fatalf("alias dispatch failed: %v", err)
+	}
+}
+
+// --- signal-aware context ------------------------------------------------
+
+// TestCommandCmd_InspectSkipsSignalSetup asserts that the inspect route never
+// calls notifyContext — only the run route registers signal handlers.
+func TestCommandCmd_InspectSkipsSignalSetup(t *testing.T) {
+	origNotify := notifyContext
+	t.Cleanup(func() { notifyContext = origNotify })
+
+	var calls int
+	notifyContext = func(parent context.Context, sigs ...os.Signal) (context.Context, context.CancelFunc) {
+		calls++
+		return context.WithCancel(parent)
+	}
+
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newCommandCmd(flags)
+	if err := cmd.Flags().Set("inspect", "true"); err != nil {
+		t.Fatal(err)
+	}
+	// Unknown ID is fine; we only care that notifyContext was not called.
+	_ = cmd.RunE(cmd, []string{"does.not.exist"})
+
+	if calls != 0 {
+		t.Errorf("notifyContext must not be called in inspect route; got %d calls", calls)
+	}
+}
+
+// TestCommandCmd_SignalAwareContext verifies that the run route wraps the
+// cobra context with notifyContext(SIGINT, SIGTERM) and forwards the wrapped
+// context to runUserCommand.
+func TestCommandCmd_SignalAwareContext(t *testing.T) {
+	// Create a minimal temp project so config.LoadConfig and loadCommandRegistry
+	// both succeed.
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "devbox.yml")
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmdDir := filepath.Join(dir, "devbox", "commands")
+	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte("commands:\n  up:\n    type: shell\n    cmd: echo hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stub notifyContext to capture the signals and hand back a cancellable ctx.
+	origNotify := notifyContext
+	t.Cleanup(func() { notifyContext = origNotify })
+	signalsCh := make(chan []os.Signal, 1)
+	cancelCh := make(chan context.CancelFunc, 1)
+	notifyContext = func(parent context.Context, sigs ...os.Signal) (context.Context, context.CancelFunc) {
+		cp := make([]os.Signal, len(sigs))
+		copy(cp, sigs)
+		signalsCh <- cp
+		ctx, cancel := context.WithCancel(parent)
+		cancelCh <- cancel
+		return ctx, cancel
+	}
+
+	// Stub runUserCommand to capture the ctx it receives and block until released.
+	origRun := runUserCommand
+	t.Cleanup(func() { runUserCommand = origRun })
+	receivedCtx := make(chan context.Context, 1)
+	releaseCh := make(chan struct{})
+	runUserCommand = func(ctx context.Context, rc usercommands.RunContext) error {
+		receivedCtx <- ctx
+		<-releaseCh
+		return nil
+	}
+
+	// Non-TTY so no selector fires; pass exact ID as arg.
+	origInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origInteractive })
+	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+
+	flags := &rootFlags{configPath: cfgPath}
+	cmd := newCommandCmd(flags)
+	cmd.SetContext(context.Background())
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- cmd.RunE(cmd, []string{"db.up"})
+	}()
+
+	// 1. Assert notifyContext was called with exactly SIGINT and SIGTERM.
+	select {
+	case sigs := <-signalsCh:
+		want := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
+		if len(sigs) != len(want) {
+			t.Errorf("signal count: want %d, got %d (%v)", len(want), len(sigs), sigs)
+		} else {
+			for i, s := range want {
+				if sigs[i] != s {
+					t.Errorf("sig[%d]: want %v, got %v", i, s, sigs[i])
+				}
+			}
+		}
+	case <-time.After(3 * time.Second):
+		close(releaseCh)
+		t.Fatal("notifyContext was not called within timeout")
+	}
+
+	cancel := <-cancelCh
+
+	// 2. The ctx forwarded to runUserCommand is the wrapped one.
+	var runCtx context.Context
+	select {
+	case runCtx = <-receivedCtx:
+	case <-time.After(3 * time.Second):
+		close(releaseCh)
+		t.Fatal("runUserCommand was not called within timeout")
+	}
+
+	// 3. Cancelling via the seam propagates to the runner's ctx.
+	cancel()
+	select {
+	case <-runCtx.Done():
+		// expected
+	case <-time.After(time.Second):
+		close(releaseCh)
+		t.Fatal("ctx not cancelled after notifyContext cancel")
+	}
+
+	// 4. Let runUserCommand complete and collect RunE result.
+	close(releaseCh)
+	if err := <-errCh; err != nil {
+		t.Fatalf("RunE returned error: %v", err)
 	}
 }

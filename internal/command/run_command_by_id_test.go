@@ -15,18 +15,21 @@ import (
 )
 
 // stubOrchestratorSeams replaces the four package-level seams in command_cmd.go
-// and restores them on cleanup. Subtests using this MUST NOT call t.Parallel().
+// and ui.IsInteractiveFn, restoring them on cleanup.
+// Subtests using this MUST NOT call t.Parallel().
 func stubOrchestratorSeams(t *testing.T) *orchestratorStubs {
 	t.Helper()
 	s := &orchestratorStubs{}
 	origForm := runParamForm
 	origConfirm := confirmRun
 	origRun := runUserCommand
+	origNotify := notifyContext
 	origInteractive := ui.IsInteractiveFn
 	t.Cleanup(func() {
 		runParamForm = origForm
 		confirmRun = origConfirm
 		runUserCommand = origRun
+		notifyContext = origNotify
 		ui.IsInteractiveFn = origInteractive
 	})
 	return s
@@ -585,6 +588,44 @@ func TestRunCommandByID_NoDoublePrompt(t *testing.T) {
 	}
 	if !s.runRC.SkipConfirm {
 		t.Errorf("SkipConfirm must be true to prevent runtime re-prompt")
+	}
+}
+
+// --- non-TTY Y/n fallback ------------------------------------------------
+
+// TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved guards the pipe-stdin
+// Y/n path: when stdin is non-TTY and neither --yes nor DEVBOX_NONINTERACTIVE
+// is set, the orchestrator must not call confirmRun and must leave
+// rctx.SkipConfirm=false so RunCommand's internal ConfirmCommand uses its
+// non-TTY Y/n branch.
+func TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+	s.installConfirm()
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.x", LocalName: "x", Group: "db",
+		Type:         usercommands.CommandTypeShell,
+		Cmd:          "echo",
+		Confirmation: true,
+	}
+	reg := newTestRegistry(def)
+	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		newCfg(), reg, t.TempDir(), "db.x", runOpts{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.confirmCalls != 0 {
+		t.Errorf("confirmRun must not be called when canPromptHuh=false; got %d calls", s.confirmCalls)
+	}
+	if s.runCalls != 1 {
+		t.Errorf("runner must be called once; got %d calls", s.runCalls)
+	}
+	if s.runRC.SkipConfirm {
+		t.Errorf("rctx.SkipConfirm must be false to preserve the non-TTY Y/n fallback")
+	}
+	if s.runRC.NonInteractive {
+		t.Errorf("rctx.NonInteractive must be false to preserve the non-TTY Y/n fallback")
 	}
 }
 
