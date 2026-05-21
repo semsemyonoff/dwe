@@ -11,6 +11,7 @@ import "time"
 // OpUnknown lets tests catch unset-Kind bugs.
 type Op int
 
+// Operation kinds.
 const (
 	OpUnknown Op = iota
 	OpDeploy
@@ -37,6 +38,7 @@ func (k Op) configKey() string {
 // the Event.
 type Outcome int
 
+// Outcome values.
 const (
 	OutcomeUnknown Outcome = iota
 	OutcomeSuccess

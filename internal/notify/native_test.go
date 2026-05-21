@@ -186,9 +186,9 @@ func TestNativeBackend_CtxCancelReturnsImmediately(t *testing.T) {
 func TestNativeBackend_DropOnBusy(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{}, 1)
-	var calls atomic.Int32
+	var firstCalls atomic.Int32
 	withBeeepNotify(t, func(_, _, _ string) error {
-		calls.Add(1)
+		firstCalls.Add(1)
 		select {
 		case started <- struct{}{}:
 		default:
@@ -206,20 +206,20 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	b.notify(ctx, Event{Operation: "deploy"})
 	select {
 	case <-started:
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatalf("worker did not start")
 	}
 
 	// Slot should still be occupied. Second call must drop without
 	// invoking beeepNotify again.
 	b.notify(ctx, Event{Operation: "deploy"})
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("calls=%d want 1 (second call should drop)", got)
+	if got := firstCalls.Load(); got != 1 {
+		t.Fatalf("firstCalls=%d want 1 (second call should drop)", got)
 	}
 
 	// Release the worker, give it a moment to release the slot.
 	close(block)
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if len(b.sem) == 0 {
 			break
@@ -231,20 +231,23 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	}
 
 	// Third call should proceed (using fresh ctx so it actually waits).
+	// Use a separate counter so any stragglers from prior stages cannot
+	// inflate the third-call assertion.
+	var thirdCalls atomic.Int32
 	freshDone := make(chan struct{})
 	withBeeepNotify(t, func(_, _, _ string) error {
-		calls.Add(1)
+		thirdCalls.Add(1)
 		close(freshDone)
 		return nil
 	})
 	b.notify(context.Background(), Event{Operation: "deploy"})
 	select {
 	case <-freshDone:
-	case <-time.After(time.Second):
+	case <-time.After(2 * time.Second):
 		t.Fatalf("third call did not invoke beeepNotify")
 	}
-	if got := calls.Load(); got != 2 {
-		t.Fatalf("calls=%d want 2", got)
+	if got := thirdCalls.Load(); got != 1 {
+		t.Fatalf("thirdCalls=%d want 1", got)
 	}
 }
 

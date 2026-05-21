@@ -60,7 +60,7 @@ func loadFile(path string, cfg *Config) error {
 		}
 		return fmt.Errorf("userconfig: open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := parse(f, cfg); err != nil {
 		return fmt.Errorf("userconfig: parsing %s: %w", path, err)
 	}

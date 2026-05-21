@@ -328,7 +328,7 @@ Concrete file references gathered before drafting:
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented:
+- [x] verify all requirements from Overview are implemented:
   - userconfig package loads global + project flat configs with precedence
   - notify package: native + noop + factory with detection seam
   - `model.CommandDef.Notify` field + YAML round-trip (accessed at runtime as `rc.Cmd.Notify`)
@@ -336,15 +336,15 @@ Concrete file references gathered before drafting:
   - deploy + RunRun + RunCommand all wired with defer-based notification
   - `RunRestart` bypasses notification via `SkipNotify`
   - docs page exists, commands schema updated
-- [ ] verify edge cases:
+- [x] verify edge cases:
   - userconfig parser errors don't crash deploy / run / command (warning + noop fallback)
   - non-TTY / CI / `DEVBOX_NONINTERACTIVE=1` short-circuit to `noopNotifier`
   - beeep backend error swallowed (debug log only)
   - command failure path still fires `OutcomeFailure` notification
   - parallel sub-step with `notify: true` is silently skipped at runtime
-- [ ] run `make test` — full unit test suite must pass
-- [ ] run `make lint` — all lint issues must be fixed (no `nolint` shortcuts without justification)
-- [ ] run `make build` — binary builds cleanly
+- [x] run `make test` — full unit test suite must pass
+- [x] run `make lint` — all lint issues must be fixed (no `nolint` shortcuts without justification)
+- [x] run `make build` — binary builds cleanly
 
 ## Technical Details
 
