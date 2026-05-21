@@ -18,31 +18,31 @@ import (
 
 func TestParsePorcelainV2_Clean(t *testing.T) {
 	out := []byte("# branch.oid 1234567890abcdef\n# branch.head main\n# branch.ab +0 -0\n")
-	branch, oid, ahead, behind, dirty, err := parsePorcelainV2(out)
+	branch, oid, ahead, behind, hasAB, dirty, err := parsePorcelainV2(out)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if branch != "main" || oid != "1234567890abcdef" || ahead != 0 || behind != 0 || dirty {
-		t.Fatalf("got branch=%q oid=%q ahead=%d behind=%d dirty=%v",
-			branch, oid, ahead, behind, dirty)
+	if branch != "main" || oid != "1234567890abcdef" || ahead != 0 || behind != 0 || !hasAB || dirty {
+		t.Fatalf("got branch=%q oid=%q ahead=%d behind=%d hasAB=%v dirty=%v",
+			branch, oid, ahead, behind, hasAB, dirty)
 	}
 }
 
 func TestParsePorcelainV2_Dirty(t *testing.T) {
 	out := []byte("# branch.oid deadbeefcafebabe\n# branch.head feature/x\n# branch.ab +2 -1\n1 .M N... 100644 100644 100644 abc abc file.go\n")
-	branch, oid, ahead, behind, dirty, err := parsePorcelainV2(out)
+	branch, oid, ahead, behind, hasAB, dirty, err := parsePorcelainV2(out)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if branch != "feature/x" || oid != "deadbeefcafebabe" || ahead != 2 || behind != 1 || !dirty {
-		t.Fatalf("got branch=%q oid=%q ahead=%d behind=%d dirty=%v",
-			branch, oid, ahead, behind, dirty)
+	if branch != "feature/x" || oid != "deadbeefcafebabe" || ahead != 2 || behind != 1 || !hasAB || !dirty {
+		t.Fatalf("got branch=%q oid=%q ahead=%d behind=%d hasAB=%v dirty=%v",
+			branch, oid, ahead, behind, hasAB, dirty)
 	}
 }
 
 func TestParsePorcelainV2_Detached(t *testing.T) {
 	out := []byte("# branch.oid abcdef0123456789\n# branch.head (detached)\n")
-	branch, _, _, _, _, err := parsePorcelainV2(out)
+	branch, _, _, _, _, _, err := parsePorcelainV2(out)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestParsePorcelainV2_Detached(t *testing.T) {
 
 func TestParsePorcelainV2_InitialOID(t *testing.T) {
 	out := []byte("# branch.oid (initial)\n# branch.head main\n")
-	_, oid, _, _, _, err := parsePorcelainV2(out)
+	_, oid, _, _, _, _, err := parsePorcelainV2(out)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -62,9 +62,20 @@ func TestParsePorcelainV2_InitialOID(t *testing.T) {
 	}
 }
 
+func TestParsePorcelainV2_NoUpstream(t *testing.T) {
+	out := []byte("# branch.oid 1234567890abcdef\n# branch.head main\n")
+	_, _, _, _, hasAB, _, err := parsePorcelainV2(out)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if hasAB {
+		t.Fatal("expected hasAB=false when branch.ab not in output")
+	}
+}
+
 func TestParsePorcelainV2_MalformedAB(t *testing.T) {
 	out := []byte("# branch.head main\n# branch.ab plus minus\n")
-	_, _, _, _, _, err := parsePorcelainV2(out)
+	_, _, _, _, _, _, err := parsePorcelainV2(out)
 	if err == nil {
 		t.Fatal("expected parse error for malformed branch.ab")
 	}
@@ -212,8 +223,9 @@ func TestCollectGitWorkspace_RealRepoClean(t *testing.T) {
 	if r.Dirty {
 		t.Fatal("expected clean")
 	}
-	if r.AheadBehind != "+0/-0" {
-		t.Fatalf("got ab=%q", r.AheadBehind)
+	// No upstream configured → branch.ab absent → AheadBehind stays empty.
+	if r.AheadBehind != "" {
+		t.Fatalf("expected empty AheadBehind for no-upstream repo, got %q", r.AheadBehind)
 	}
 }
 
@@ -323,7 +335,7 @@ func TestParsePorcelainV2_LineSeparators(t *testing.T) {
 		"# branch.ab +1 -2",
 		"",
 	}, "\n"))
-	branch, _, ahead, behind, _, err := parsePorcelainV2(out)
+	branch, _, ahead, behind, _, _, err := parsePorcelainV2(out)
 	if err != nil || branch != "main" || ahead != 1 || behind != 2 {
 		t.Fatalf("got branch=%q ahead=%d behind=%d err=%v", branch, ahead, behind, err)
 	}

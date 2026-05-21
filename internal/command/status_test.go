@@ -38,6 +38,15 @@ project:
 	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	toolsYML := `tools:
+  adminer:
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	return filepath.Join(dir, "devbox.yml")
 }
 
@@ -127,6 +136,28 @@ func TestStatusCmd_ServicesSubcommandRendersOnlyServices(t *testing.T) {
 	}
 	if strings.Contains(out, "Devbox:") {
 		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
+	}
+}
+
+func TestStatusCmd_ToolsSubcommandRendersOnlyTools(t *testing.T) {
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "tools"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Tools") {
+		t.Errorf("expected Tools section title:\n%s", out)
+	}
+	if strings.Contains(out, "Devbox:") {
+		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
+	}
+	if strings.Contains(out, "Services") {
+		t.Errorf("tools subcommand should NOT print Services section:\n%s", out)
 	}
 }
 

@@ -114,7 +114,7 @@ func fillGitRow(ctx context.Context, row *statusview.GitWorkspaceRow) {
 		row.Err = fmt.Errorf("git status: %w", err)
 		return
 	}
-	branch, oid, ahead, behind, dirty, perr := parsePorcelainV2(out)
+	branch, oid, ahead, behind, hasAB, dirty, perr := parsePorcelainV2(out)
 	if perr != nil {
 		row.Err = perr
 		return
@@ -122,7 +122,9 @@ func fillGitRow(ctx context.Context, row *statusview.GitWorkspaceRow) {
 	row.Branch = branch
 	row.SHA = shortenOID(oid)
 	row.Dirty = dirty
-	row.AheadBehind = fmt.Sprintf("+%d/-%d", ahead, behind)
+	if hasAB {
+		row.AheadBehind = fmt.Sprintf("+%d/-%d", ahead, behind)
+	}
 }
 
 // hasOwnGitDir reports whether dir contains its own `.git` entry. The entry
@@ -154,7 +156,7 @@ func shortenOID(oid string) string {
 //
 // Any non-comment record means the working tree is dirty. Detached HEAD is
 // surfaced as branch = "detached" (parens stripped).
-func parsePorcelainV2(out []byte) (branch, oid string, ahead, behind int, dirty bool, err error) {
+func parsePorcelainV2(out []byte) (branch, oid string, ahead, behind int, hasAB, dirty bool, err error) {
 	for line := range bytes.Lines(out) {
 		line = bytes.TrimRight(line, "\n")
 		if len(line) == 0 {
@@ -191,6 +193,7 @@ func parsePorcelainV2(out []byte) (branch, oid string, ahead, behind int, dirty 
 					return
 				}
 				ahead, behind = a, b
+				hasAB = true
 			}
 		}
 	}
