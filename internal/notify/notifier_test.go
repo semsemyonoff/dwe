@@ -192,8 +192,8 @@ func TestIsInteractiveForNotify_NoTTY(t *testing.T) {
 	prevUI := ui.IsInteractiveFn
 	ui.IsInteractiveFn = func(io.Reader) bool { return false }
 	t.Cleanup(func() { ui.IsInteractiveFn = prevUI })
-	_ = os.Unsetenv("CI")
-	_ = os.Unsetenv("DEVBOX_NONINTERACTIVE")
+	t.Setenv("CI", "")
+	t.Setenv("DEVBOX_NONINTERACTIVE", "")
 	if isInteractiveForNotify() {
 		t.Fatalf("expected non-interactive when stdin is not a TTY")
 	}

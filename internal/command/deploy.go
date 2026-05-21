@@ -181,7 +181,11 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		ucfg = nil
 	}
 	n := newNotifier(ucfg)
+	var skipNotify bool
 	defer func() {
+		if skipNotify {
+			return
+		}
 		n.Notify(context.Background(), notify.Event{
 			Kind:      notify.OpDeploy,
 			Operation: "deploy",
@@ -389,7 +393,9 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 
 		lastRunFailed := scopeLastRunStatus == journal.StatusFailed
 		if allTrackedDeployed && !hasCheckSteps && !hasFilesGateSteps && scopeConfigHash == scopeExpectedHash && !lastRunFailed {
-			// In-scope state matches and is clean — skip the pipeline
+			// In-scope state matches and is clean — skip the pipeline.
+			// Not a meaningful deploy event; suppress the notification.
+			skipNotify = true
 			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
 			return nil
 		}

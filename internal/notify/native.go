@@ -54,7 +54,13 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 
 	done := make(chan error, 1)
 	go func() {
-		defer func() { <-b.sem }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Debug("notify backend panic recovered", "recover", r)
+				done <- fmt.Errorf("panic: %v", r)
+			}
+			<-b.sem
+		}()
 		done <- beeepNotify(title, body, "")
 	}()
 
