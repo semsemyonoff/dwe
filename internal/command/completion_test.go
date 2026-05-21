@@ -189,7 +189,7 @@ func TestToolNameCompletion_returnsConfiguredTools(t *testing.T) {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
 
-	// Write a defaults.yml with tools. All required fields must be present.
+	// Write a defaults.yml with tool overlays (toggles only).
 	defaultsYML := `
 project:
   name: test
@@ -197,14 +197,8 @@ project:
 tools:
   adminer:
     enabled: false
-    container: adminer
-    host: adminer.localhost
-    port: 8080
   elasticvue:
     enabled: false
-    container: elasticvue
-    host: elasticvue.localhost
-    port: 8044
 runtime:
   ports:
     app: 3000
@@ -213,6 +207,21 @@ runtime:
 `
 	if err := os.WriteFile(devboxDir+"/defaults.yml", []byte(defaultsYML), 0644); err != nil {
 		t.Fatalf("writing defaults.yml: %v", err)
+	}
+
+	// Write the tool definitions in devbox/tools.yml.
+	toolsYML := `tools:
+  adminer:
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+  elasticvue:
+    container: elasticvue
+    host: elasticvue.localhost
+    port: 8044
+`
+	if err := os.WriteFile(devboxDir+"/tools.yml", []byte(toolsYML), 0644); err != nil {
+		t.Fatalf("writing tools.yml: %v", err)
 	}
 
 	// Write a minimal devbox.yml with schema_version.

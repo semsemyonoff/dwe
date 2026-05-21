@@ -3,6 +3,4 @@ project:
   name: test
 tools:
   redis-insight:
-    container: redis
-    host: redis
-    port: 8001
+    enabled: true

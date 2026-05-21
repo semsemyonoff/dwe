@@ -1,0 +1,5 @@
+tools:
+  redis-insight:
+    container: redis
+    host: redis
+    port: 8001

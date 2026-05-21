@@ -20,25 +20,52 @@ project:
   prefix: devbox
 `
 
-// minimalDefaultsYML has no tools with compose files, for testing base-only scenarios.
+// minimalToolsYML declares the standard tools without compose overlays.
+const minimalToolsYML = `
+tools:
+  adminer:
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+  redis_insight:
+    container: redis_insight
+    host: redis.localhost
+    port: 5540
+  mailpit:
+    container: mailpit
+    host: mail.localhost
+    port: 8025
+`
+
+// sampleToolsYML declares the standard tools with compose overlays for two.
+const sampleToolsYML = `
+tools:
+  adminer:
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+  redis_insight:
+    container: redis_insight
+    host: redis.localhost
+    port: 5540
+    compose: compose/tools/redis_insight.yml
+  mailpit:
+    container: mailpit
+    host: mail.localhost
+    port: 8025
+    compose: compose/tools/mailpit.yml
+`
+
+// minimalDefaultsYML carries only enable overlays and runtime — no tool definitions.
 const minimalDefaultsYML = `
 schema_version: "1"
 tools:
   adminer:
     enabled: false
-    container: adminer
-    host: adminer.localhost
-    port: 8080
   redis_insight:
     enabled: false
-    container: redis_insight
-    host: redis.localhost
-    port: 5540
   mailpit:
     enabled: false
-    container: mailpit
-    host: mail.localhost
-    port: 8025
 runtime:
   use_https: false
   ports:
@@ -52,27 +79,16 @@ runtime:
 state: ""
 `
 
-// sampleDefaultsYML mirrors devbox/defaults.yml.
+// sampleDefaultsYML carries only enable overlays and runtime — no tool definitions.
 const sampleDefaultsYML = `
 schema_version: "1"
 tools:
   adminer:
     enabled: false
-    container: adminer
-    host: adminer.localhost
-    port: 8080
   redis_insight:
     enabled: true
-    container: redis_insight
-    host: redis.localhost
-    port: 5540
-    compose: compose/tools/redis_insight.yml
   mailpit:
     enabled: true
-    container: mailpit
-    host: mail.localhost
-    port: 8025
-    compose: compose/tools/mailpit.yml
 runtime:
   use_https: false
   ports:
@@ -106,14 +122,26 @@ func writeTempYML(t *testing.T, content string) string {
 //	<tmp>/devbox.yml
 //	<tmp>/devbox/defaults.yml   (optional)
 //	<tmp>/devbox/local.yml       (optional)
+//	<tmp>/devbox/tools.yml       (sampleToolsYML)
+//
+// Tests that need a non-standard tools.yml should call writeFullFixture with an
+// explicit tools argument; tests that want no tools.yml at all should pass
+// "<NONE>" sentinel for tools.
 func writeLayeredFixture(t *testing.T, devbox, defaults, user string) string {
 	t.Helper()
-	return writeFullFixture(t, devbox, defaults, user, "")
+	return writeFullFixture(t, devbox, defaults, user, "", sampleToolsYML)
 }
 
+// noToolsYML is a sentinel passed as the tools argument to writeFullFixture to
+// suppress creation of devbox/tools.yml entirely.
+const noToolsYML = "<NONE>"
+
 // writeFullFixture creates the complete file layout used by LoadConfig,
-// including an optional services.yml.
-func writeFullFixture(t *testing.T, devbox, defaults, user, services string) string {
+// including optional services.yml and tools.yml.
+//
+// Pass tools=noToolsYML to suppress creating devbox/tools.yml. Empty string
+// falls back to sampleToolsYML so existing layered tests stay terse.
+func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools string) string {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -124,7 +152,8 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services string) str
 
 	devboxDir := filepath.Join(dir, "devbox")
 
-	if defaults != "" || services != "" || user != "" {
+	writeTools := tools != noToolsYML
+	if defaults != "" || services != "" || user != "" || writeTools {
 		if err := os.MkdirAll(devboxDir, 0755); err != nil {
 			t.Fatalf("mkdir devbox/: %v", err)
 		}
@@ -145,6 +174,16 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services string) str
 	if services != "" {
 		if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(services), 0644); err != nil {
 			t.Fatalf("write services.yml: %v", err)
+		}
+	}
+
+	if writeTools {
+		content := tools
+		if content == "" {
+			content = sampleToolsYML
+		}
+		if err := os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(content), 0644); err != nil {
+			t.Fatalf("write tools.yml: %v", err)
 		}
 	}
 
@@ -655,17 +694,21 @@ project:
 
 func TestLoadConfig_arbitraryToolKey(t *testing.T) {
 	// An arbitrary new tool (elasticvue) should be preserved through the merge.
-	defaultsWithNewTool := `
-schema_version: "1"
+	toolsWithNewTool := `
 tools:
   elasticvue:
-    enabled: false
     container: elasticvue
     host: elastic.localhost
     port: 9200
     compose: compose/tools/elasticvue.yml
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithNewTool, "")
+	defaultsWithNewTool := `
+schema_version: "1"
+tools:
+  elasticvue:
+    enabled: false
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithNewTool, "", "", toolsWithNewTool)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -785,7 +828,7 @@ services:
   main-debug:
     enabled: false
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaults, "", sampleServicesYML)
+	path := writeFullFixture(t, sampleDevboxYML, defaults, "", sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -811,7 +854,7 @@ services:
   main-debug:
     enabled: true
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaults, local, sampleServicesYML)
+	path := writeFullFixture(t, sampleDevboxYML, defaults, local, sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -823,7 +866,7 @@ services:
 }
 
 func TestLoadConfig_servicesInjectedIntoRaw(t *testing.T) {
-	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", sampleServicesYML)
+	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2655,7 +2698,7 @@ func TestComposeFilesAll_baseOnly(t *testing.T) {
 compose:
   base: compose.yaml
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", "", minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2672,28 +2715,34 @@ compose:
 
 func TestComposeFilesAll_baseAndDisabledToolOverlay(t *testing.T) {
 	// Base + disabled tool overlay. ComposeFilesAll must include disabled overlays.
-	// Create a defaults with all tools having compose files, adminer disabled.
-	defaultsWithCompose := `
-schema_version: "1"
+	// Create a tools.yml with all 3 tools having compose files; defaults disables adminer.
+	customTools := `
 tools:
   adminer:
-    enabled: false
     container: adminer
     host: adminer.localhost
     port: 8080
     compose: compose/tools/adminer.yml
   mailpit:
-    enabled: true
     container: mailpit
     host: mail.localhost
     port: 8025
     compose: compose/tools/mailpit.yml
   redis_insight:
-    enabled: true
     container: redis_insight
     host: redis.localhost
     port: 5540
     compose: compose/tools/redis_insight.yml
+`
+	defaultsWithCompose := `
+schema_version: "1"
+tools:
+  adminer:
+    enabled: false
+  mailpit:
+    enabled: true
+  redis_insight:
+    enabled: true
 runtime:
   use_https: false
   ports:
@@ -2707,7 +2756,7 @@ runtime:
 compose:
   base: compose.yaml
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", "", customTools)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2779,7 +2828,7 @@ services:
     compose:
       - compose/services/worker/base.yml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", servicesYML)
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", servicesYML, minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2825,7 +2874,7 @@ func TestComposeFilesAll_fullMixedScenario(t *testing.T) {
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithBase, "", sampleServicesYML)
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithBase, "", sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2879,8 +2928,8 @@ func TestComposeFilesAll_noBase(t *testing.T) {
 
 func TestComposeFilesAll_empty(t *testing.T) {
 	// No compose section at all, and no tools with compose files.
-	// Use minimalDefaultsYML which has no compose section and no enabled tools with compose files.
-	path := writeLayeredFixture(t, sampleDevboxYML, minimalDefaultsYML, "")
+	// Use minimalDefaultsYML/minimalToolsYML which have no compose section and no tool compose files.
+	path := writeFullFixture(t, sampleDevboxYML, minimalDefaultsYML, "", "", minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2912,7 +2961,7 @@ services:
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", serviceYML)
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", serviceYML, minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -2937,20 +2986,25 @@ compose:
 func TestComposeFilesAll_unknownToolWithCompose(t *testing.T) {
 	// An unknown/new tool (elasticvue) with compose file should be included
 	// when enabled. This confirms the data-driven path works for any tool key.
-	defaultsWithElasticvue := `
-schema_version: "1"
+	customTools := `
 tools:
   elasticvue:
-    enabled: true
     container: elasticvue
     host: elastic.localhost
     port: 9200
     compose: compose/tools/elasticvue.yml
   adminer:
-    enabled: false
     container: adminer
     host: adminer.localhost
     port: 8080
+`
+	defaultsWithElasticvue := `
+schema_version: "1"
+tools:
+  elasticvue:
+    enabled: true
+  adminer:
+    enabled: false
 runtime:
   use_https: false
   ports:
@@ -2963,7 +3017,7 @@ runtime:
 compose:
   base: compose.yaml
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithElasticvue, "")
+	path := writeFullFixture(t, sampleDevboxYML, defaultsWithElasticvue, "", "", customTools)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3007,27 +3061,33 @@ func TestComposeFilesAll_determinismSortedOrder(t *testing.T) {
 	// Verify that ComposeFiles returns tools in sorted key order, not declaration order.
 	// Build a config with 3+ tools whose keys sort differently from declaration order.
 	// Run 100 times to catch any non-determinism due to Go's randomized map iteration.
-	defaultsUnsorted := `
-schema_version: "1"
+	customTools := `
 tools:
   zebra:
-    enabled: true
     container: zebra
     host: zebra.localhost
     port: 8001
     compose: compose/tools/zebra.yml
   apple:
-    enabled: true
     container: apple
     host: apple.localhost
     port: 8002
     compose: compose/tools/apple.yml
   mango:
-    enabled: true
     container: mango
     host: mango.localhost
     port: 8003
     compose: compose/tools/mango.yml
+`
+	defaultsUnsorted := `
+schema_version: "1"
+tools:
+  zebra:
+    enabled: true
+  apple:
+    enabled: true
+  mango:
+    enabled: true
 runtime:
   use_https: false
   ports:
@@ -3040,7 +3100,7 @@ runtime:
 compose:
   base: compose.yaml
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsUnsorted, "")
+	path := writeFullFixture(t, sampleDevboxYML, defaultsUnsorted, "", "", customTools)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3673,7 +3733,7 @@ func TestLoadConfig_GitNotInjectedIntoRaw(t *testing.T) {
         enabled: true
         template: custom
 `
-	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", svcYml)
+	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", svcYml, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3957,4 +4017,270 @@ parallel:
 
 func yamlUnmarshalForTest(src string, out any) error {
 	return yaml.Unmarshal([]byte(src), out)
+}
+
+// --- LoadToolsConfig ---
+
+func TestLoadToolsConfig_success(t *testing.T) {
+	yml := `
+tools:
+  adminer:
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+  mailpit:
+    container: mailpit
+    host: mail.localhost
+    port: 8025
+    status:
+      - name: ENDPOINT
+        value: "http://{{ .Tool.Host }}:{{ .Tool.Port }}"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tools.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	tools, err := LoadToolsConfig(path)
+	if err != nil {
+		t.Fatalf("LoadToolsConfig: %v", err)
+	}
+	if len(tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(tools))
+	}
+	if tools["adminer"].Port != 8080 {
+		t.Errorf("adminer port = %d, want 8080", tools["adminer"].Port)
+	}
+	mp := tools["mailpit"]
+	if len(mp.Status) != 1 || mp.Status[0].Name != "ENDPOINT" {
+		t.Errorf("mailpit status block = %v, want one ENDPOINT entry", mp.Status)
+	}
+	// Enabled is yaml:"-" and zero by default at this layer.
+	if tools["adminer"].Enabled {
+		t.Error("Enabled should remain zero after LoadToolsConfig (resolved later in LoadConfig)")
+	}
+}
+
+func TestLoadToolsConfig_strictRejectsUnknownField(t *testing.T) {
+	yml := `
+tools:
+  adminer:
+    container: adminer
+    host: adminer.localhost
+    port: 8080
+    bogus: yes
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tools.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadToolsConfig(path)
+	if err == nil {
+		t.Fatal("expected strict-decode error for unknown field")
+	}
+}
+
+func TestLoadToolsConfig_missingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tools.yml")
+	_, err := LoadToolsConfig(path)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing file should return os.ErrNotExist, got %v", err)
+	}
+}
+
+func TestLoadToolsConfig_malformed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tools.yml")
+	if err := os.WriteFile(path, []byte("{[ not yaml"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadToolsConfig(path)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+}
+
+// --- validateToolsOverlay ---
+
+func TestValidateToolsOverlay_acceptsEnabledOnly(t *testing.T) {
+	declared := ToolsConfig{"adminer": ToolConfig{Container: "x", Host: "y", Port: 1}}
+	raw := map[string]any{
+		"tools": map[string]any{
+			"adminer": map[string]any{"enabled": true},
+		},
+	}
+	if err := validateToolsOverlay("path/to/defaults.yml", raw, declared); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateToolsOverlay_rejectsDefinitionField(t *testing.T) {
+	declared := ToolsConfig{"adminer": ToolConfig{Container: "x", Host: "y", Port: 1}}
+	for _, layer := range []string{"devbox.yml", "devbox/defaults.yml", "devbox/local.yml"} {
+		raw := map[string]any{
+			"tools": map[string]any{
+				"adminer": map[string]any{"container": "stale"},
+			},
+		}
+		err := validateToolsOverlay(layer, raw, declared)
+		if err == nil {
+			t.Errorf("%s: expected error for stale definition field", layer)
+			continue
+		}
+		if !strings.Contains(err.Error(), layer) || !strings.Contains(err.Error(), "adminer") {
+			t.Errorf("%s: error %q should mention layer and tool name", layer, err)
+		}
+	}
+}
+
+func TestValidateToolsOverlay_rejectsUnknownTool(t *testing.T) {
+	declared := ToolsConfig{"adminer": ToolConfig{Container: "x", Host: "y", Port: 1}}
+	raw := map[string]any{
+		"tools": map[string]any{
+			"ghost": map[string]any{"enabled": true},
+		},
+	}
+	err := validateToolsOverlay("devbox/local.yml", raw, declared)
+	if err == nil {
+		t.Fatal("expected error for unknown tool name")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error %q should mention the unknown tool name", err)
+	}
+}
+
+func TestValidateToolsOverlay_noToolsBlock(t *testing.T) {
+	declared := ToolsConfig{"adminer": ToolConfig{Container: "x", Host: "y", Port: 1}}
+	if err := validateToolsOverlay("devbox.yml", map[string]any{"project": "x"}, declared); err != nil {
+		t.Errorf("missing tools block should not error: %v", err)
+	}
+}
+
+// --- injectToolsIntoRaw end-to-end via LoadConfig ---
+
+func TestLoadConfig_toolsInjectedIntoRaw(t *testing.T) {
+	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	val, ok := ResolvePath(cfg.Raw, "tools.adminer.port")
+	if !ok {
+		t.Fatal("tools.adminer.port not found in raw map after injectToolsIntoRaw")
+	}
+	if fmt.Sprintf("%v", val) != "8080" {
+		t.Errorf("tools.adminer.port = %v, want 8080", val)
+	}
+	val, ok = ResolvePath(cfg.Raw, "tools.mailpit.host")
+	if !ok {
+		t.Fatal("tools.mailpit.host not found in raw map")
+	}
+	if val != "mail.localhost" {
+		t.Errorf("tools.mailpit.host = %v, want mail.localhost", val)
+	}
+	val, ok = ResolvePath(cfg.Raw, "tools.adminer.enabled")
+	if !ok {
+		t.Fatal("tools.adminer.enabled not found in raw map")
+	}
+	if val != false {
+		t.Errorf("tools.adminer.enabled = %v, want false", val)
+	}
+}
+
+// --- LoadConfig end-to-end: tools.yml + overlay precedence ---
+
+func TestLoadConfig_toolsFromToolsYAML_enabledFromOverlay(t *testing.T) {
+	// Defaults disables adminer; local enables it. tools.yml provides the definition.
+	defaults := `
+schema_version: "1"
+tools:
+  adminer:
+    enabled: false
+`
+	local := `
+tools:
+  adminer:
+    enabled: true
+`
+	tools := `
+tools:
+  adminer:
+    container: adminer
+    host: adminer.local
+    port: 1234
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaults, local, "", tools)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	tool, ok := cfg.Tools["adminer"]
+	if !ok {
+		t.Fatal("adminer not loaded")
+	}
+	if tool.Port != 1234 || tool.Container != "adminer" || tool.Host != "adminer.local" {
+		t.Errorf("tool definition not loaded from tools.yml: %+v", tool)
+	}
+	if !tool.Enabled {
+		t.Error("adminer should be enabled by local overlay")
+	}
+}
+
+func TestLoadConfig_toolsMissingFile_emptyTools(t *testing.T) {
+	// No tools.yml — Tools should be empty.
+	path := writeFullFixture(t, sampleDevboxYML, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(cfg.Tools) != 0 {
+		t.Errorf("Tools should be empty without tools.yml, got %v", cfg.Tools)
+	}
+}
+
+func TestLoadConfig_toolsYAMLPresent_noOverlay_defaultsDisabled(t *testing.T) {
+	// tools.yml declares adminer but no layer enables it.
+	tools := `
+tools:
+  adminer:
+    container: adminer
+    host: adminer.local
+    port: 1234
+`
+	path := writeFullFixture(t, sampleDevboxYML, "", "", "", tools)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Tools["adminer"].Enabled {
+		t.Error("adminer should default to disabled when no overlay sets enabled")
+	}
+}
+
+func TestLoadConfig_overlayDefinitionRejected(t *testing.T) {
+	// defaults.yml contains a stale tool definition field — should error.
+	defaults := `
+schema_version: "1"
+tools:
+  adminer:
+    enabled: true
+    container: stale
+`
+	tools := `
+tools:
+  adminer:
+    container: adminer
+    host: adminer.local
+    port: 1234
+`
+	path := writeFullFixture(t, sampleDevboxYML, defaults, "", "", tools)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected error rejecting stale tool definition in defaults overlay")
+	}
+	if !strings.Contains(err.Error(), "defaults.yml") || !strings.Contains(err.Error(), "container") {
+		t.Errorf("error %q should mention defaults.yml and the offending field", err)
+	}
 }

@@ -29,23 +29,12 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 	lines = append(lines, "  hosts:")
 	lines = append(lines, "    main: localhost")
 	lines = append(lines, "tools:")
-	toolDefs := map[string]struct {
-		container string
-		host      string
-		port      int
-	}{
-		"adminer":       {container: "adminer", host: "adminer.localhost", port: 8080},
-		"redis_insight": {container: "redis_insight", host: "redis.localhost", port: 5540},
-		"mailpit":       {container: "mailpit", host: "mail.localhost", port: 8025},
-	}
 	for _, name := range []string{"adminer", "redis_insight", "mailpit"} {
-		def := toolDefs[name]
 		lines = append(lines, "  "+name+":")
-		lines = append(lines, "    container: "+def.container)
-		lines = append(lines, "    host: "+def.host)
-		lines = append(lines, "    port: "+fmt.Sprint(def.port))
 		if tools[name] {
 			lines = append(lines, "    enabled: true")
+		} else {
+			lines = append(lines, "    enabled: false")
 		}
 	}
 
@@ -55,6 +44,29 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
+	}
+
+	toolDefs := map[string]struct {
+		container string
+		host      string
+		port      int
+	}{
+		"adminer":       {container: "adminer", host: "adminer.localhost", port: 8080},
+		"redis_insight": {container: "redis_insight", host: "redis.localhost", port: 5540},
+		"mailpit":       {container: "mailpit", host: "mail.localhost", port: 8025},
+	}
+	var toolsLines []string
+	toolsLines = append(toolsLines, "tools:")
+	for _, name := range []string{"adminer", "redis_insight", "mailpit"} {
+		def := toolDefs[name]
+		toolsLines = append(toolsLines, "  "+name+":")
+		toolsLines = append(toolsLines, "    container: "+def.container)
+		toolsLines = append(toolsLines, "    host: "+def.host)
+		toolsLines = append(toolsLines, "    port: "+fmt.Sprint(def.port))
+	}
+	toolsYML := strings.Join(toolsLines, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "devbox", "tools.yml"), []byte(toolsYML), 0o644); err != nil {
+		t.Fatalf("write tools.yml: %v", err)
 	}
 
 	return filepath.Join(dir, "devbox.yml")

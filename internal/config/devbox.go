@@ -430,6 +430,13 @@ type ServiceRenderConfig struct {
 	Git ServiceGitHooksConfig `yaml:"git"`
 }
 
+// StatusColumn declares one custom column rendered in the status table for a
+// service or tool. Value is a hermetic Go template evaluated via tpl.Render.
+type StatusColumn struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
+}
+
 // ServiceConfig describes a single application service.
 // Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
 // from the 3-layer config merge (mandatory services are always enabled).
@@ -448,6 +455,7 @@ type ServiceConfig struct {
 	Compose         []string             `yaml:"compose"`
 	CLI             ServiceCLIConfig     `yaml:"cli"`
 	Render          ServiceRenderConfig  `yaml:"render"`
+	Status          []StatusColumn       `yaml:"status,omitempty"`
 }
 
 // IDERenderEnabledExplicit returns the IDE render enabled state and whether it was explicitly set.
@@ -573,15 +581,15 @@ func (c *ServiceCLIConfig) UnmarshalYAML(value *yaml.Node) error {
 // ToolConfig holds configuration for a single optional tool.
 // Keys in ToolsConfig are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$
 // (Go identifier safe) so they can be used with Go template dot syntax.
-// All fields (Enabled, Container, Host, Port) must be provided for every declared
-// tool entry, regardless of enabled state. Tools are user-visible in `tools status`
-// and toggling a tool should never flip a half-defined entry.
+// All definition fields (Container, Host, Port) are loaded from devbox/tools.yml;
+// Enabled is resolved programmatically from the 3-layer overlay merge.
 type ToolConfig struct {
-	Enabled   bool   `yaml:"enabled"`
-	Container string `yaml:"container"`
-	Host      string `yaml:"host"`
-	Port      int    `yaml:"port"`
-	Compose   string `yaml:"compose"`
+	Enabled   bool           `yaml:"-"` // resolved from tools.<name>.enabled overlay
+	Container string         `yaml:"container"`
+	Host      string         `yaml:"host"`
+	Port      int            `yaml:"port"`
+	Compose   string         `yaml:"compose"`
+	Status    []StatusColumn `yaml:"status,omitempty"`
 }
 
 // ToolsConfig is a map of tool names to their configurations.
@@ -756,21 +764,31 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 //
 // Later layers win on conflict; maps are merged recursively.
 // The merged raw map is stored in DevboxConfig.Raw for dot-path resolution.
+//
+// Tool definitions live in devbox/tools.yml; the three layers above may carry
+// only `tools.<name>.enabled` overlays.
 func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	baseDir := filepath.Dir(devboxPath)
-	merged := make(map[string]any)
+
+	// Read each layer separately so the cross-layer tools overlay validator can
+	// attribute errors to a specific source file.
+	type rawLayer struct {
+		path string
+		data map[string]any
+	}
+	var layers []rawLayer
 
 	// Layer 1: devbox.yml (required)
 	base, err := loadRawYAML(devboxPath)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", devboxPath, err)
 	}
-	deepMerge(merged, base)
+	layers = append(layers, rawLayer{path: devboxPath, data: base})
 
 	// Layer 2: devbox/defaults.yml (optional)
 	defaultsPath := filepath.Join(baseDir, "devbox", "defaults.yml")
 	if defaults, err := loadRawYAML(defaultsPath); err == nil {
-		deepMerge(merged, defaults)
+		layers = append(layers, rawLayer{path: defaultsPath, data: defaults})
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", defaultsPath, err)
 	}
@@ -778,9 +796,33 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	// Layer 3: devbox/local.yml (optional)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 	if local, err := loadRawYAML(localPath); err == nil {
-		deepMerge(merged, local)
+		layers = append(layers, rawLayer{path: localPath, data: local})
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", localPath, err)
+	}
+
+	// Load devbox/tools.yml — the only source of typed tool definitions.
+	toolsPath := filepath.Join(baseDir, "devbox", "tools.yml")
+	tools, err := LoadToolsConfig(toolsPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read %s: %w", toolsPath, err)
+	}
+	if tools == nil {
+		tools = ToolsConfig{}
+	}
+
+	// Cross-layer validate: each layer may only carry tools.<name>.enabled
+	// against the declared tool set.
+	for _, layer := range layers {
+		if err := validateToolsOverlay(layer.path, layer.data, tools); err != nil {
+			return nil, err
+		}
+	}
+
+	// Merge the layers.
+	merged := make(map[string]any)
+	for _, layer := range layers {
+		deepMerge(merged, layer.data)
 	}
 
 	data, err := yaml.Marshal(merged)
@@ -812,9 +854,28 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		}
 	}
 
+	// Authoritative tool assignment: tools.yml is the only source for typed tool
+	// definitions. The marshal/unmarshal above may have populated cfg.Tools with
+	// zero-value entries from overlay tools.<name>.enabled blocks; replace it now.
+	cfg.Tools = tools
+	for name, tool := range cfg.Tools {
+		val, ok := ResolvePath(merged, "tools."+name+".enabled")
+		if ok {
+			tool.Enabled = isTruthy(val)
+		} else {
+			tool.Enabled = false
+		}
+		cfg.Tools[name] = tool
+	}
+
 	cfg.Raw = merged
 	// Store config path so deploy resolution can find service deploy files.
 	cfg.Raw["__configPath"] = devboxPath
+
+	// Inject tool definitions into the raw map so dot-paths like
+	// tools.<name>.port resolve via ResolvePath for export rules, info.yml,
+	// docker.yml template expressions, and user command default_from.
+	injectToolsIntoRaw(merged, cfg.Tools)
 
 	// Normalize Raw["binaries"] so dot-path lookups (e.g. ${binaries.docker} in
 	// export rules) see the same effective values as cfg.Binaries.* Go callers.
@@ -865,6 +926,93 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+// toolsFile is the top-level structure of devbox/tools.yml.
+type toolsFile struct {
+	Tools ToolsConfig `yaml:"tools"`
+}
+
+// LoadToolsConfig loads tool definitions from devbox/tools.yml using strict
+// known-field decoding. A missing file returns an empty ToolsConfig and nil
+// error (symmetric with the optional services.yml).
+func LoadToolsConfig(path string) (ToolsConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	var f toolsFile
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&f); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if f.Tools == nil {
+		f.Tools = ToolsConfig{}
+	}
+	return f.Tools, nil
+}
+
+// validateToolsOverlay rejects any field other than `enabled:` under a layer's
+// tools.<name> mapping and any tools.<name> entry naming a tool not declared in
+// devbox/tools.yml. The layerPath is included in the error message so the user
+// knows which file to edit.
+func validateToolsOverlay(layerPath string, raw map[string]any, declared ToolsConfig) error {
+	toolsRaw, ok := raw["tools"]
+	if !ok || toolsRaw == nil {
+		return nil
+	}
+	toolsMap, ok := toolsRaw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: tools: must be a mapping", layerPath)
+	}
+	for _, name := range slices.Sorted(maps.Keys(toolsMap)) {
+		if _, declaredOK := declared[name]; !declaredOK {
+			return fmt.Errorf("%s: tools.%s: unknown tool (declared tools live in devbox/tools.yml)", layerPath, name)
+		}
+		entryRaw := toolsMap[name]
+		if entryRaw == nil {
+			continue
+		}
+		entry, ok := entryRaw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s: tools.%s: must be a mapping", layerPath, name)
+		}
+		for _, key := range slices.Sorted(maps.Keys(entry)) {
+			if key != "enabled" {
+				return fmt.Errorf("%s: tools.%s.%s: tool definitions belong in devbox/tools.yml; overlays may only set enabled", layerPath, name, key)
+			}
+		}
+	}
+	return nil
+}
+
+// injectToolsIntoRaw merges tool definitions into raw["tools"] so dot-path
+// lookups (e.g. tools.adminer.port) resolve against the merged map. Mirrors
+// injectServicesIntoRaw.
+func injectToolsIntoRaw(raw map[string]any, tools ToolsConfig) {
+	toolsMap, ok := raw["tools"].(map[string]any)
+	if !ok {
+		toolsMap = make(map[string]any)
+		raw["tools"] = toolsMap
+	}
+	for name, tool := range tools {
+		entry, ok := toolsMap[name].(map[string]any)
+		if !ok {
+			entry = make(map[string]any)
+			toolsMap[name] = entry
+		}
+		entry["enabled"] = tool.Enabled
+		entry["container"] = tool.Container
+		entry["host"] = tool.Host
+		entry["port"] = tool.Port
+		if tool.Compose != "" {
+			entry["compose"] = tool.Compose
+		}
+	}
 }
 
 // servicesFile is the top-level structure of devbox/services.yml.

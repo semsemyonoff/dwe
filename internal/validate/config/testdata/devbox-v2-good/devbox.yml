@@ -3,6 +3,4 @@ project:
   name: test
 tools:
   redis:
-    container: redis
-    host: redis
-    port: 6379
+    enabled: false

@@ -20,15 +20,22 @@ project:
   name: test-project
 tools:
   redis:
-    container: redis
-    host: redis
-    port: 6379
+    enabled: false
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox.yml"), []byte(devboxYml), 0644))
 
 	// Create devbox directory
 	devboxDir := filepath.Join(tmpDir, "devbox")
 	require.NoError(t, os.Mkdir(devboxDir, 0755))
+
+	// Create tools.yml
+	toolsYml := `tools:
+  redis:
+    container: redis
+    host: redis
+    port: 6379
+`
+	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYml), 0644))
 
 	// Create services.yml
 	servicesYml := `services:

@@ -57,7 +57,8 @@ The three files share a single namespace — the same key in different layers is
 | Binary overrides (`binaries:`) | `devbox.yml` only (engine policy, not layered) |
 | Port defaults | `defaults.yml` |
 | Host defaults | `defaults.yml` |
-| Tool definitions and enabled state | `defaults.yml` |
+| Tool definitions | [`devbox/tools.yml`](tools.md) |
+| Tool enabled state | `defaults.yml` (overrideable in `local.yml`) |
 | Optional service defaults (enabled/disabled) | `defaults.yml` |
 | Export rules (`exports.env`) | `defaults.yml` |
 | IDE config defaults | `defaults.yml` |
@@ -152,43 +153,19 @@ The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}
 
 ### `tools`
 
-Declares optional tool containers. Each tool is identified by a key (e.g., `adminer`, `redis_insight`). Tool keys must be identifier-safe (`^[A-Za-z_][A-Za-z0-9_]*$` — no dashes, dots, or leading digits — so they work in Go templates with dot syntax).
+Tool **definitions** live in [`devbox/tools.yml`](tools.md). The overlay you write in `defaults.yml` (and optionally `local.yml`) carries only the per-tool toggle:
 
 ```yaml
 tools:
   adminer:
     enabled: false
-    container: adminer
-    host: adminer.localhost
-    port: 8080
-    compose: compose/tools/adminer.yml
   redis_insight:
     enabled: true
-    container: redis-insight
-    host: redis.localhost
-    port: 5540
-    compose: compose/tools/redis_insight.yml
   mailpit:
     enabled: true
-    container: mailpit
-    host: mail.localhost
-    port: 8025
-    compose: compose/tools/mailpit.yml
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | bool | yes | Whether the tool is active. Set in `defaults.yml`; override in `local.yml` via `devbox tools enable/disable`. |
-| `container` | string | yes | Docker image or container name. |
-| `host` | string | yes | Virtual hostname for the tool (used in reverse proxy, exported to templates and env). |
-| `port` | int | yes | Container port (non-zero). Exposed to templates and env for direct-container access; tool URLs use this host and the app port via reverse proxy. |
-| `compose` | string | no | Relative path to the docker-compose overlay file that defines the tool service. Used to build the active compose file list. When omitted, the tool contributes no compose overlay but still appears in `tools status` and can be enabled/disabled. |
-
-The `container`, `host`, and `port` fields are required; any tool entry (enabled or disabled) missing one of these causes a config-load error. This catches mistakes early — a tool visible in `tools status` must be fully defined. The `compose` field is optional.
-
-Tool host/port do not go in the generic `runtime.hosts` / `runtime.ports` maps. Access them via `.Tools.<key>.Host` and `.Tools.<key>.Port` in templates, or via raw dot-paths like `tools.<key>.host` / `tools.<key>.port` in export rules.
-
-Adding a new tool requires only a YAML edit in `defaults.yml` — no Go code changes needed.
+Any other field under `tools.<name>` is rejected at config load with a layer-aware error pointing at the offending file — tool definitions belong in `devbox/tools.yml`.
 
 ### `services`
 
