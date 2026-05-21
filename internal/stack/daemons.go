@@ -213,9 +213,7 @@ func parseLegacyLabelString(s string) map[string]string {
 		}
 		switch s[i] {
 		case '"':
-			if depth > 0 {
-				inString = true
-			}
+			inString = true
 		case '{':
 			depth++
 		case '}':

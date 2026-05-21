@@ -79,7 +79,15 @@ func (daemonLogsBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == 130 {
 			return nil
 		}
+		// SIGKILL after WaitDelay expiry: exit code is -1.
+		if errors.As(err, &exitErr) && exitErr.ExitCode() < 0 {
+			return nil
+		}
 		if strings.Contains(err.Error(), "signal: interrupt") {
+			return nil
+		}
+		// WaitDelay fired after context cancel — I/O pipes closed while flushing.
+		if errors.Is(err, exec.ErrWaitDelay) {
 			return nil
 		}
 		return fmt.Errorf("docker logs: %w", err)
