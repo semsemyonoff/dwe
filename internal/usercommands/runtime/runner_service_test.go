@@ -785,6 +785,170 @@ func TestServiceExecRunner_BuildCommand_ComposeArgsPositioning(t *testing.T) {
 	}
 }
 
+func TestServiceExecRunner_BuildCommand_ServiceTemplated(t *testing.T) {
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeServiceExec,
+			Service: "app-${param.service}",
+			Mode:    ExecModeExec,
+			Cmd:     "id",
+		},
+		Render: &tpl.RenderContext{
+			Host:   tpl.CurrentHostInfo(),
+			Params: map[string]any{"service": "catalog"},
+		},
+		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Params:  map[string]any{"service": "catalog"},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, " app-catalog") {
+		t.Errorf("expected rendered 'app-catalog' as service in args, got: %s", args)
+	}
+	if strings.Contains(args, "${param.service}") {
+		t.Errorf("expected service template to be rendered, found literal in: %s", args)
+	}
+}
+
+func TestServiceRunRunner_BuildCommand_ServiceTemplated(t *testing.T) {
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeServiceRun,
+			Service: "app-${param.service}",
+			Cmd:     "id",
+		},
+		Render: &tpl.RenderContext{
+			Host:   tpl.CurrentHostInfo(),
+			Params: map[string]any{"service": "main"},
+		},
+		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Params:  map[string]any{"service": "main"},
+		Context: map[string]any{},
+	}
+	r := &ServiceRunRunner{}
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, " app-main") {
+		t.Errorf("expected rendered 'app-main' as service in args, got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
+	// workdir_from itself can be a template so the same generic command works
+	// across multiple services keyed by ${param.service}.
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:        CommandTypeServiceExec,
+			Service:     "app-${param.service}",
+			WorkdirFrom: "services.${param.service}.work_dir_internal",
+			Mode:        ExecModeExec,
+			Cmd:         "ls",
+		},
+		Render: &tpl.RenderContext{
+			Params: map[string]any{"service": "catalog"},
+		},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Raw: map[string]any{
+				"services": map[string]any{
+					"catalog": map[string]any{"work_dir_internal": "/workspace/src"},
+				},
+			},
+		},
+		Params:  map[string]any{"service": "catalog"},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--workdir /workspace/src") {
+		t.Errorf("expected rendered workdir_from to resolve to '/workspace/src', got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_WorkdirLiteralTemplated(t *testing.T) {
+	// The literal workdir field is also rendered as a template, matching the
+	// same contract as argv/cmd/compose_args.
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeServiceExec,
+			Service: "app-main",
+			Workdir: "/workspace/${param.subdir}",
+			Mode:    ExecModeExec,
+			Cmd:     "ls",
+		},
+		Render: &tpl.RenderContext{
+			Params: map[string]any{"subdir": "src"},
+		},
+		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Params:  map[string]any{"subdir": "src"},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, "--workdir /workspace/src") {
+		t.Errorf("expected rendered workdir '/workspace/src', got: %s", args)
+	}
+}
+
+func TestServiceExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
+	// runner.service / runner.workdir_from are also rendered so the override
+	// block behaves identically to the top-level fields.
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:    CommandTypeServiceExec,
+			Service: "app-main",
+			Mode:    ExecModeExec,
+			Cmd:     "id",
+			Runner: &RunnerDef{
+				Service:     "app-${param.service}",
+				WorkdirFrom: "services.${param.service}.work_dir_internal",
+			},
+		},
+		Render: &tpl.RenderContext{
+			Host:   tpl.CurrentHostInfo(),
+			Params: map[string]any{"service": "catalog"},
+		},
+		Config: &config.DevboxConfig{
+			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Raw: map[string]any{
+				"services": map[string]any{
+					"catalog": map[string]any{"work_dir_internal": "/workspace/catalog"},
+				},
+			},
+		},
+		Params:  map[string]any{"service": "catalog"},
+		Context: map[string]any{},
+	}
+	r := &ServiceExecRunner{}
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	args := strings.Join(c.Args, " ")
+	if !strings.Contains(args, " app-catalog") {
+		t.Errorf("expected runner.service template rendered to 'app-catalog', got: %s", args)
+	}
+	if !strings.Contains(args, "--workdir /workspace/catalog") {
+		t.Errorf("expected runner.workdir_from template resolved to '/workspace/catalog', got: %s", args)
+	}
+}
+
 // TestBuildServiceArgv_ShellFromConfig verifies that buildServiceArgv uses
 // cfg.Binaries.Shell instead of a hardcoded "sh".
 func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {

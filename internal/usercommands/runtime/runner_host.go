@@ -126,14 +126,58 @@ func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd
 	if err != nil {
 		return nil, err
 	}
-	if len(envMap) > 0 {
+	contractEnv := hostContractEnv(rc)
+	if len(envMap) > 0 || len(contractEnv) > 0 {
 		c.Env = os.Environ()
 		for k, v := range envMap {
 			c.Env = append(c.Env, k+"="+v)
 		}
+		c.Env = append(c.Env, contractEnv...)
 	}
 
 	return c, nil
+}
+
+// hostContractEnv returns the contract environment variables exported into
+// every type:shell subprocess so shell snippets can talk back to the host
+// devbox CLI and the active docker compose project without rediscovery:
+//
+//	DEVBOX_BIN            absolute path to the running devbox binary
+//	COMPOSE_PROJECT_NAME  active compose project name (e.g. devbox-laravel)
+//	COMPOSE_FILE          colon-joined list of active overlay paths
+//	                      (absolute when ProjectRoot is known)
+//
+// These mirror the equivalent contract used by type:script, scoped to what
+// makes sense for a shell snippet (no params/context JSON, no temp dir).
+// Variables already exported by the parent process or the user's env: block
+// remain visible — Go's os/exec uses the last entry for duplicate keys, so
+// contract values placed after user env take precedence (matching script).
+func hostContractEnv(rc RunContext) []string {
+	var out []string
+
+	devboxBin, err := os.Executable()
+	if err != nil || devboxBin == "" {
+		devboxBin = config.DevboxBin(rc.Config)
+	}
+	out = append(out, "DEVBOX_BIN="+devboxBin)
+
+	compose := rc.Compose()
+	if compose.ProjectName != "" {
+		out = append(out, "COMPOSE_PROJECT_NAME="+compose.ProjectName)
+	}
+	if len(compose.Files) > 0 {
+		joined := make([]string, len(compose.Files))
+		for i, f := range compose.Files {
+			if filepath.IsAbs(f) || rc.ProjectRoot == "" {
+				joined[i] = f
+			} else {
+				joined[i] = filepath.Join(rc.ProjectRoot, f)
+			}
+		}
+		out = append(out, "COMPOSE_FILE="+strings.Join(joined, ":"))
+	}
+
+	return out
 }
 
 // Run executes the command on the host.

@@ -449,6 +449,29 @@ commit-config:
 
 `cmd` and `argv` are mutually exclusive.
 
+### Shell env contract
+
+`type: shell` subprocesses inherit the parent process environment plus the values from the command's `env:` block. On top of that, the runner exports a small contract so shell snippets can talk back to the host devbox CLI and the active compose project without rediscovery:
+
+| Variable | Value |
+|----------|-------|
+| `DEVBOX_BIN` | Absolute path to the running devbox binary — use it instead of hardcoding `./bin/devbox` |
+| `COMPOSE_PROJECT_NAME` | Active compose project name (e.g. `devbox-laravel`) — `docker compose ...` picks this up without `-p` |
+| `COMPOSE_FILE` | Colon-joined list of active overlay paths, made absolute against the project root — `docker compose ...` picks this up without any `-f` flags |
+
+This is what lets a `type: shell` command reach docker compose with the same overlay set the rest of devbox uses:
+
+```yaml
+hub.chown-src-host:
+  type: shell
+  description: Chown the host-side mount via the running container
+  cmd: |
+    "$DEVBOX_BIN" docker exec -u root app-main -- \
+      chown -R www-data:www-data /workspace/src
+```
+
+`COMPOSE_FILE` is omitted when no overlay files are configured; `COMPOSE_PROJECT_NAME` is omitted when no project name is set. Entries already declared in the command's `env:` block are kept but the contract entry wins when keys collide — Go's `os/exec` uses the last entry for duplicate keys, and the contract is appended after `env:`.
+
 ## Type: devbox
 
 Invokes another devbox subcommand using the currently running binary. This avoids hard-coding `./bin/devbox` in command definitions and makes invocations relocatable.
@@ -931,6 +954,24 @@ flowchart LR
 - `workdir_from` resolves to a non-string value → hard error (configuration bug).
 - Neither set → the runner does not pass `--workdir` (container default applies).
 
+### Templated service / workdir / workdir_from
+
+`service`, `workdir`, and `workdir_from` are rendered through the command template space before resolution, the same as `argv`, `cmd`, and `compose_args`. This lets one definition target multiple services without duplication:
+
+```yaml
+hub.chown-src:
+  type: service_run
+  private: true
+  params:
+    service: { type: string, required: true, pattern: '^[a-z0-9_-]+$' }
+  service: app-${param.service}
+  workdir_from: services.${param.service}.work_dir_internal
+  user: root
+  argv: [sh, -c, "chown -R www-data:www-data /workspace/src"]
+```
+
+A pipeline (or another command) then invokes the same definition per service via `--set service=<name>`. The `runner:` block fields (`runner.service`, `runner.workdir`, `runner.workdir_from`) are rendered identically.
+
 ## Confirmation flow
 
 Every command goes through the same four-tier dispatch when `confirmation: true` (or for builtin/workflow `confirm` steps):
@@ -949,7 +990,7 @@ flowchart TD
 Operational notes:
 
 - `commands run --yes` sets `SkipConfirm` and `NonInteractive` on the in-process `RunContext` so every confirm call (top-level command, builtin `confirm`, workflow confirm steps) skips the prompt for the duration of the invocation.
-- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DEVBOX_NONINTERACTIVE=1` (along with `DEVBOX_BIN`, `DEVBOX_PARAMS_JSON`, etc.) into the script's environment. `type: shell`, `devbox`, `service_exec`, and `service_run` do not export this variable — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
+- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DEVBOX_NONINTERACTIVE=1` (along with `DEVBOX_PARAMS_JSON`, `DEVBOX_CONTEXT_JSON`, etc.) into the script's environment. `type: shell` exports a smaller contract — `DEVBOX_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (see [Shell env contract](#shell-env-contract)) — but **not** `DEVBOX_NONINTERACTIVE`. `type: devbox`, `service_exec`, and `service_run` export none of these — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
 - Inside a workflow, child commands inherit `NonInteractive` and `SkipConfirm` from the parent `RunContext`.
 - The non-TTY fallback is `render.Writer.Confirm`; under `CI=1` it auto-confirms.
 

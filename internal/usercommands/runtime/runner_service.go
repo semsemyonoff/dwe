@@ -119,6 +119,12 @@ func (r *ServiceRunRunner) Run(ctx context.Context, rc RunContext) error {
 
 // resolveServiceFields returns the effective service, user, workdir, and mode
 // for the command, applying runner overrides when present.
+//
+// The string-valued fields (service, workdir, workdir_from) are rendered as
+// command-template expressions so they can reference ${param.*}, ${context.*},
+// or any other entry in the command template space — same contract as argv,
+// cmd, and compose_args. This unblocks generic per-service commands such as
+// `service: app-${param.service}` invoked from a per-service deploy pipeline.
 func resolveServiceFields(ctx RunContext) (svc string, user model.UserMode, workdir string, mode model.ExecMode, err error) {
 	cmd := ctx.Cmd
 
@@ -144,6 +150,19 @@ func resolveServiceFields(ctx RunContext) (svc string, user model.UserMode, work
 		if cmd.Runner.WorkdirFrom != "" {
 			wdFrom = cmd.Runner.WorkdirFrom
 		}
+	}
+
+	if svc, err = tpl.RenderCommand(svc, ctx.Render); err != nil {
+		err = fmt.Errorf("render service: %w", err)
+		return
+	}
+	if wdLiteral, err = tpl.RenderCommand(wdLiteral, ctx.Render); err != nil {
+		err = fmt.Errorf("render workdir: %w", err)
+		return
+	}
+	if wdFrom, err = tpl.RenderCommand(wdFrom, ctx.Render); err != nil {
+		err = fmt.Errorf("render workdir_from: %w", err)
+		return
 	}
 
 	if wdFrom != "" {
