@@ -52,14 +52,14 @@ func RenderHealth(w *render.Writer, in StatusInput) {
 func RenderServices(w *render.Writer, in StatusInput) {
 	svcRows := collectServiceRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
 	_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Services"))
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderServiceTable(svcRows))
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderServiceTable(svcRows, nil))
 }
 
 // RenderTools writes the Tools section title and the tools table.
 func RenderTools(w *render.Writer, in StatusInput) {
 	toolRows := collectToolRows(in.Cfg, in.IsRunning, in.Cfg.Project.FullName())
 	_, _ = fmt.Fprintln(w.Writer(), ui.RenderSectionTitle("Tools"))
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(toolRows))
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(toolRows, nil))
 }
 
 // RenderTopology writes the Topology section, or a no-op when topology data

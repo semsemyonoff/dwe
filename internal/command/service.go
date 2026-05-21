@@ -209,7 +209,7 @@ func runServiceList(w *render.Writer, cfg *config.DevboxConfig, isRunning stack.
 		})
 	}
 
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderServiceTable(rows))
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderServiceTable(rows, nil))
 	return nil
 }
 

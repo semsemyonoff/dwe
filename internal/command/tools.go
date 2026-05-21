@@ -177,7 +177,7 @@ func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning stack.Con
 		}
 	}
 
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(rows))
+	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(rows, nil))
 	return nil
 }
 

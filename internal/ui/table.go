@@ -40,6 +40,9 @@ type ServiceTableRow struct {
 	Enabled   bool
 	// Running is only meaningful when Mandatory or Enabled is true.
 	Running bool
+	// Extras holds custom status-column values keyed by column name.
+	// Missing keys render as "—".
+	Extras map[string]string
 }
 
 // rowCellStyle holds per-column styles for a single table row.
@@ -50,10 +53,11 @@ type rowCellStyle struct {
 }
 
 // RenderServiceTable renders a styled Lipgloss table of services.
-// Columns: NAME, CONTAINER, STATE, RUNNING.
-// Cell colors depend on the service state: disabled=gray, enabled=white,
-// STATE column reflects the state value, RUNNING column is green/red/gray.
-func RenderServiceTable(rows []ServiceTableRow) string {
+// Built-in columns: NAME, CONTAINER, STATE, RUNNING.
+// extraCols, if non-nil, lists additional column names appended after the
+// built-ins; each row's value is read from ServiceTableRow.Extras (missing
+// key → "—"). Pass nil to render the table with only the built-in columns.
+func RenderServiceTable(rows []ServiceTableRow, extraCols []string) string {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]rowCellStyle, len(rows))
 
@@ -89,14 +93,19 @@ func RenderServiceTable(rows []ServiceTableRow) string {
 			cs.run = styleDisabled
 		}
 
-		stringRows[i] = []string{r.Name, r.Container, stateStr, runStr}
+		row := []string{r.Name, r.Container, stateStr, runStr}
+		for _, col := range extraCols {
+			row = append(row, extraCell(r.Extras, col))
+		}
+		stringRows[i] = row
 		cellStyles[i] = cs
 	}
 
+	headers := append([]string{"NAME", "CONTAINER", "STATE", "RUNNING"}, extraCols...)
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styleTableBorder).
-		Headers("NAME", "CONTAINER", "STATE", "RUNNING").
+		Headers(headers...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return styleTableHeader
@@ -122,6 +131,14 @@ func RenderServiceTable(rows []ServiceTableRow) string {
 	return t.String()
 }
 
+// extraCell returns the value for col in extras, or "—" if missing.
+func extraCell(extras map[string]string, col string) string {
+	if v, ok := extras[col]; ok {
+		return v
+	}
+	return "—"
+}
+
 // ToolTableRow holds data for one row in the tools Lipgloss table.
 type ToolTableRow struct {
 	Name      string
@@ -131,13 +148,17 @@ type ToolTableRow struct {
 	Enabled   bool
 	// Running is only meaningful when Enabled is true.
 	Running bool
+	// Extras holds custom status-column values keyed by column name.
+	// Missing keys render as "—".
+	Extras map[string]string
 }
 
 // RenderToolTable renders a styled Lipgloss table of optional tools.
-// Columns: NAME, HOST, PORT, STATE, RUNNING.
-// Cell colors depend on the tool state: disabled=gray, enabled=white,
-// STATE column reflects the state value, RUNNING column is green/red/gray.
-func RenderToolTable(rows []ToolTableRow) string {
+// Built-in columns: NAME, HOST, PORT, STATE, RUNNING.
+// extraCols, if non-nil, lists additional column names appended after the
+// built-ins; each row's value is read from ToolTableRow.Extras (missing
+// key → "—"). Pass nil to render the table with only the built-in columns.
+func RenderToolTable(rows []ToolTableRow, extraCols []string) string {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]rowCellStyle, len(rows))
 
@@ -169,14 +190,19 @@ func RenderToolTable(rows []ToolTableRow) string {
 			portStr = "—"
 		}
 
-		stringRows[i] = []string{r.Name, r.Host, portStr, stateStr, runStr}
+		row := []string{r.Name, r.Host, portStr, stateStr, runStr}
+		for _, col := range extraCols {
+			row = append(row, extraCell(r.Extras, col))
+		}
+		stringRows[i] = row
 		cellStyles[i] = cs
 	}
 
+	headers := append([]string{"NAME", "HOST", "PORT", "STATE", "RUNNING"}, extraCols...)
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styleTableBorder).
-		Headers("NAME", "HOST", "PORT", "STATE", "RUNNING").
+		Headers(headers...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return styleTableHeader

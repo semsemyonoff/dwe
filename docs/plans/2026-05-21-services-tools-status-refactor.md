@@ -147,21 +147,21 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
 
 ### Task 2: Render custom `status:` columns for services and tools
 
-- [ ] Add a helper in `internal/stack/` (e.g. `BuildCustomColumns(cfg, kind)`) that computes ordered column names. **Deterministic ordering**: iterate items alphabetically by name (matching the existing `buildServiceRows` / `BuildToolRows` sort). The column order is "first appearance during this deterministic iteration" — guaranteed reproducible across runs.
-- [ ] Per-row render: evaluate each declared `status[].value` via `tpl.Render` (the hermetic entry point), **never** `tpl.RenderCommand` — that adds `resolve` / `resolveMap` / `resolveFile` which are command-scope only and would break the no-FS contract.
-- [ ] **Template data shape (explicit, case-sensitive)** — Go templates are case-sensitive and `cfg.Raw` keys are lowercase YAML identifiers (`binaries`, `services`, `tools`, `runtime`, `project`, …). The render data is a `map[string]any` with these top-level keys:
+- [x] Add a helper in `internal/stack/` (e.g. `BuildCustomColumns(cfg, kind)`) that computes ordered column names. **Deterministic ordering**: iterate items alphabetically by name (matching the existing `buildServiceRows` / `BuildToolRows` sort). The column order is "first appearance during this deterministic iteration" — guaranteed reproducible across runs.
+- [x] Per-row render: evaluate each declared `status[].value` via `tpl.Render` (the hermetic entry point), **never** `tpl.RenderCommand` — that adds `resolve` / `resolveMap` / `resolveFile` which are command-scope only and would break the no-FS contract.
+- [x] **Template data shape (explicit, case-sensitive)** — Go templates are case-sensitive and `cfg.Raw` keys are lowercase YAML identifiers (`binaries`, `services`, `tools`, `runtime`, `project`, …). The render data is a `map[string]any` with these top-level keys:
   - `ServiceCfg` (services rows only) — the typed merged `ServiceConfig` for this svc. Access struct fields with their Go PascalCase names: `{{ .ServiceCfg.Container }}`, `{{ .ServiceCfg.Dir }}`.
   - `Tool` (tools rows only) — the typed merged `ToolConfig` for this tool: `{{ .Tool.Host }}`, `{{ .Tool.Port }}`.
   - `Globals` — `cfg.Raw["globals"]` if present, else `nil` (template-safe via `{{ if .Globals }}…{{ end }}`). The value is whatever the user put in `globals:` — typically a `map[string]any` accessed with the user's own (lowercase) keys: `{{ .Globals.baseImageTag }}`.
   - `Raw` — the full `cfg.Raw` map (after `injectToolsIntoRaw` / `injectServicesIntoRaw`). Drill in with the original lowercase YAML keys for any other top-level access: `{{ .Raw.runtime.ports.app }}`, `{{ .Raw.project.name }}`, `{{ .Raw.tools.mailpit.host }}`. Do **not** merge cfg.Raw's lowercase keys at the data root — that would create case-mismatch foot-guns next to the PascalCase synthetic keys.
   - **Do not** add ad-hoc capitalised aliases (`.Project`, `.Runtime`, `.Tools`) — they don't exist; users go through `.Raw.*`.
   - If a public accessor for `cfg.Raw` doesn't exist yet, add one rather than reaching into private fields.
-- [ ] On `tpl.Render` error: cell becomes `—`; collect errors per-row in the helper's return value (do not write to any writer from inside the helper). Warning aggregation is **Task 4's responsibility** — Task 2 stays self-contained.
-- [ ] **Scope decision**: Task 2 introduces *only* the helpers and the `ui` table-row extensions. It does **not** modify `stack.RenderServices` / `stack.RenderTools` signatures, and it does **not** wire custom columns into the existing `RunStatus` orchestrator. Reasons:
+- [x] On `tpl.Render` error: cell becomes `—`; collect errors per-row in the helper's return value (do not write to any writer from inside the helper). Warning aggregation is **Task 4's responsibility** — Task 2 stays self-contained.
+- [x] **Scope decision**: Task 2 introduces *only* the helpers and the `ui` table-row extensions. It does **not** modify `stack.RenderServices` / `stack.RenderTools` signatures, and it does **not** wire custom columns into the existing `RunStatus` orchestrator. Reasons:
   - Changing those signatures while `RunStatus` still calls them breaks the build mid-task (`RunStatus` has no warning-output contract today).
   - Task 4 deletes the single `RunStatus` entrypoint anyway in favour of section-level calls — that's the natural place to introduce `(string, []error)` returns and the `cmd.ErrOrStderr()` summary line.
   - As a consequence, custom columns do not appear in `devbox status` output until Task 4 ships. Tests in Task 2 cover the helpers + ui in isolation; end-to-end visibility is acceptance-checked in Task 4.
-- [ ] **Exact signatures introduced in Task 2** — `ui` packages render only; the new helpers in `stack` are pure data transforms; no stderr writing anywhere:
+- [x] **Exact signatures introduced in Task 2** — `ui` packages render only; the new helpers in `stack` are pure data transforms; no stderr writing anywhere:
   - `stack.BuildCustomColumns(cfg *config.DevboxConfig, kind Kind) []string` — returns deterministic ordered column names (alphabetical-iteration + first-encounter, see above). `Kind` is `KindService` / `KindTool` (small enum).
   - `stack.RenderCustomCells(defs []config.StatusColumn, data map[string]any) (map[string]string, []error)` — pure per-row helper: evaluates each declared `value` via `tpl.Render`, returns the cell values keyed by column name and the slice of evaluation errors. Failing cells are omitted (callers map missing key → `—`).
   - Extend existing `ui.ServiceTableRow` (at `internal/ui/table.go:36`) and `ui.ToolTableRow` (`table.go:126`) with `Extras map[string]string` field — DO NOT introduce parallel `statusview.ServiceRow` / `ToolRow` types. These row structs are the working view-model already used by `collectServiceRows` / `collectToolRows` in `stack/status.go`.
@@ -173,13 +173,13 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
     - `internal/command/tools.go:180` (the `tools status` subcommand — same caveat)
     - `internal/ui/table_test.go` test cases
   - Existing `stack.RenderServices` / `stack.RenderTools` signatures unchanged in Task 2.
-- [ ] Tests (helpers in isolation, no command-layer wiring yet):
+- [x] Tests (helpers in isolation, no command-layer wiring yet):
   - `BuildCustomColumns`: zero custom columns (empty slice), single service declaring columns, multiple services with overlapping and disjoint column sets — superset ordering verified, **stable across `t.Run` repetitions** (asserts the alphabetical-iteration determinism).
   - `RenderCustomCells`: success path (cell values populated), per-cell template failure (key omitted, error in slice), multiple failures aggregated.
   - `ui.RenderServiceTable` / `ui.RenderToolTable` with `nil` extraCols (output identical to pre-change), with extraCols + populated `Extras` (cell rendered), with extraCols + missing key (cell `—`).
   - Hermetic-contract sanity — confirm `tpl.Render` cannot access env / FS / network through `status[].value` (sample `{{ env "X" }}` errors as today).
   - **No** end-to-end test against the full `status` command in Task 2 — that lands in Task 4 where the orchestrator changes.
-- [ ] Run `make test` — must pass before Task 3.
+- [x] Run `make test` — must pass before Task 3.
 
 ### Task 3: Add git workspace section
 
