@@ -29,6 +29,35 @@ func TestRenderTable_Basic(t *testing.T) {
 	}
 }
 
+func TestRenderDaemonTable_Empty(t *testing.T) {
+	resetStyles()
+	if got := RenderDaemonTable(nil); got != "" {
+		t.Errorf("expected empty string, got %q", got)
+	}
+}
+
+func TestRenderDaemonTable_RendersRows(t *testing.T) {
+	resetStyles()
+	out := RenderDaemonTable([]DaemonTableRow{
+		{ID: "services.main.queue", Name: "name=default", Container: "proj-php_queue_default", Uptime: "5m0s"},
+	})
+	for _, want := range []string{"ID", "NAME", "CONTAINER", "UPTIME", "services.main.queue", "proj-php_queue_default", "5m0s"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected output to contain %q, got %q", want, out)
+		}
+	}
+}
+
+func TestRenderDaemonTable_EmptyNameFallback(t *testing.T) {
+	resetStyles()
+	out := RenderDaemonTable([]DaemonTableRow{
+		{ID: "single", Name: "", Container: "c1", Uptime: "1s"},
+	})
+	if !strings.Contains(out, "—") {
+		t.Errorf("expected em-dash fallback for empty name, got %q", out)
+	}
+}
+
 func TestRenderTable_Empty(t *testing.T) {
 	resetStyles()
 	out := RenderTable([]string{"COL1", "COL2"}, nil)

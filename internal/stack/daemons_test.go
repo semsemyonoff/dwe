@@ -1,0 +1,162 @@
+package stack
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"devbox-cli/internal/command/statusview"
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/docker"
+)
+
+func TestParseDaemonRows_ModernLabelsShape(t *testing.T) {
+	in := strings.NewReader(`{"Names":"proj-php_queue_default","Labels":{"devbox.project":"proj","devbox.daemon.id":"services.main.queue","devbox.daemon.params":"{\"name\":\"default\"}"},"CreatedAt":"2026-05-21 12:00:00 +0000 UTC"}
+{"Names":"proj-php_queue_emails","Labels":{"devbox.project":"proj","devbox.daemon.id":"services.main.queue","devbox.daemon.params":"{\"name\":\"emails\"}"},"CreatedAt":"2026-05-21 12:00:00 +0000 UTC"}`)
+	rows, errs := parseDaemonRows(in)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errs: %v", errs)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2", len(rows))
+	}
+	if rows[0].ID != "services.main.queue" || rows[1].ID != "services.main.queue" {
+		t.Errorf("ID mismatch: %+v", rows)
+	}
+	if rows[0].Name != "name=default" || rows[1].Name != "name=emails" {
+		t.Errorf("Name mismatch: %+v", rows)
+	}
+	if rows[0].Container != "proj-php_queue_default" {
+		t.Errorf("container mismatch: %q", rows[0].Container)
+	}
+}
+
+func TestParseDaemonRows_LegacyLabelsString(t *testing.T) {
+	// Older docker emits Labels as a comma-separated string. The parser
+	// tolerates both shapes so future docker version changes don't silently
+	// break completion / status.
+	in := strings.NewReader(`{"Names":"proj-foo","Labels":"devbox.project=proj,devbox.daemon.id=svc.foo,devbox.daemon.params={\"k\":\"v\"}"}`)
+	rows, errs := parseDaemonRows(in)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errs: %v", errs)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	if rows[0].ID != "svc.foo" {
+		t.Errorf("ID mismatch: %q", rows[0].ID)
+	}
+}
+
+func TestParseDaemonRows_SkipsContainerWithoutDaemonID(t *testing.T) {
+	in := strings.NewReader(`{"Names":"unmanaged","Labels":{"foo":"bar"}}`)
+	rows, _ := parseDaemonRows(in)
+	if len(rows) != 0 {
+		t.Fatalf("expected 0 rows, got %d", len(rows))
+	}
+}
+
+func TestParseDaemonRows_InvalidJSONLineYieldsError(t *testing.T) {
+	in := strings.NewReader("{not json}\n{\"Names\":\"ok\",\"Labels\":{\"devbox.daemon.id\":\"a\"}}\n")
+	rows, errs := parseDaemonRows(in)
+	if len(errs) != 1 {
+		t.Fatalf("got %d errs, want 1", len(errs))
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+}
+
+func TestParseDaemonRows_SanitisesControlChars(t *testing.T) {
+	// Container created by an external actor with newline + ANSI in the
+	// labels MUST not reach the renderer untouched.
+	in := strings.NewReader("{\"Names\":\"bad\\u001b[31mname\",\"Labels\":{\"devbox.daemon.id\":\"i\\u0007d\"}}")
+	rows, errs := parseDaemonRows(in)
+	if len(rows) != 1 {
+		t.Fatalf("want 1 row, got %d (errs=%v)", len(rows), errs)
+	}
+	if strings.ContainsAny(rows[0].Container, "\x1b\x07") {
+		t.Errorf("control chars leaked through: %q", rows[0].Container)
+	}
+	if strings.ContainsAny(rows[0].ID, "\x1b\x07") {
+		t.Errorf("control chars leaked through: %q", rows[0].ID)
+	}
+}
+
+func TestRenderDaemons_EmptyHidesSection(t *testing.T) {
+	body, errs := RenderDaemons(nil)
+	if body != "" {
+		t.Errorf("expected empty body, got %q", body)
+	}
+	if len(errs) != 0 {
+		t.Errorf("expected no errs, got %v", errs)
+	}
+}
+
+func TestRenderDaemons_TableContents(t *testing.T) {
+	rows := []statusview.DaemonRow{
+		{ID: "services.main.queue", Name: "name=default", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},
+	}
+	body, _ := RenderDaemons(rows)
+	if !strings.Contains(body, "Daemons") {
+		t.Errorf("missing section title: %q", body)
+	}
+	if !strings.Contains(body, "services.main.queue") || !strings.Contains(body, "proj-php_queue_default") {
+		t.Errorf("missing row content: %q", body)
+	}
+	if !strings.Contains(body, "5m0s") {
+		t.Errorf("uptime missing: %q", body)
+	}
+}
+
+func TestFormatUptime(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, ""},
+		{500 * time.Millisecond, "<1s"},
+		{30 * time.Second, "30s"},
+		{90 * time.Second, "1m30s"},
+		{2*time.Hour + 15*time.Minute, "2h15m"},
+		{49 * time.Hour, "2d1h"},
+	}
+	for _, c := range cases {
+		got := formatUptime(c.d)
+		if got != c.want {
+			t.Errorf("formatUptime(%s) = %q, want %q", c.d, got, c.want)
+		}
+	}
+}
+
+func TestCollectDaemons_NilCfg(t *testing.T) {
+	rows, errs := CollectDaemons(context.Background(), nil, nil)
+	if rows != nil || errs != nil {
+		t.Errorf("nil cfg → expected (nil, nil), got (%v, %v)", rows, errs)
+	}
+}
+
+func TestCollectDaemons_ShellSeam(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		config.ToolsConfig(nil),
+		config.RuntimePorts(nil),
+		config.RuntimeHosts(nil),
+	)
+	cfg.Project.Name = "proj"
+	orig := daemonsShellOutFn
+	defer func() { daemonsShellOutFn = orig }()
+	daemonsShellOutFn = func(_ context.Context, _ *docker.Compose, _ string) ([]byte, error) {
+		return []byte(`{"Names":"proj-php_queue_default","Labels":{"devbox.daemon.id":"services.main.queue","devbox.daemon.params":"{\"name\":\"default\"}"}}`), nil
+	}
+	rows, errs := CollectDaemons(context.Background(), cfg, &config.DockerConfig{})
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errs: %v", errs)
+	}
+	if len(rows) != 1 || rows[0].ID != "services.main.queue" {
+		t.Fatalf("expected 1 row id=services.main.queue, got %+v", rows)
+	}
+}

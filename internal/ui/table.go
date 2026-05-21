@@ -228,6 +228,45 @@ func RenderToolTable(rows []ToolTableRow, extraCols []string) string {
 	return t.String()
 }
 
+// DaemonTableRow holds the data for one row in the daemons Lipgloss table.
+// Values are passed in already-sanitised by the collector.
+type DaemonTableRow struct {
+	ID        string
+	Name      string
+	Container string
+	Uptime    string
+}
+
+// RenderDaemonTable renders a styled Lipgloss table of running daemons.
+// Columns: ID, NAME, CONTAINER, UPTIME. Empty input returns an empty string.
+func RenderDaemonTable(rows []DaemonTableRow) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	stringRows := make([][]string, len(rows))
+	for i, r := range rows {
+		name := r.Name
+		if name == "" {
+			name = "—"
+		}
+		stringRows[i] = []string{r.ID, name, r.Container, r.Uptime}
+	}
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(styleTableBorder).
+		Headers("ID", "NAME", "CONTAINER", "UPTIME").
+		StyleFunc(func(row, _ int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return styleTableHeader
+			}
+			return lipgloss.NewStyle()
+		})
+	for _, r := range stringRows {
+		t.Row(r...)
+	}
+	return t.String()
+}
+
 // DeployStatusRow holds data for one row in the deploy status table.
 // Imported from statusview, re-exported here for brevity in test utilities.
 type DeployStatusRow struct {

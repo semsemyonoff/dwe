@@ -157,6 +157,7 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 		{"--no-deploy", "Deploy Status", statusFixtureWithDeploy},
 		{"--no-topology", "Topology", statusFixture},
 		{"--no-git", "Git Workspace", statusFixture},
+		{"--no-daemons", "Daemons", statusFixture},
 	}
 	for _, tt := range tests {
 		t.Run(tt.flag, func(t *testing.T) {
@@ -218,6 +219,42 @@ func TestStatusCmd_ToolsSubcommandRendersOnlyTools(t *testing.T) {
 	}
 	if strings.Contains(out, "Services") {
 		t.Errorf("tools subcommand should NOT print Services section:\n%s", out)
+	}
+}
+
+func TestStatusCmd_DaemonsSubcommandRuns(t *testing.T) {
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "daemons"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "Devbox:") {
+		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
+	}
+}
+
+func TestStatusCmd_DefaultOrderContainsDaemonsAfterTools(t *testing.T) {
+	idxTools, idxDaemons, idxDeploy := -1, -1, -1
+	for i, s := range defaultSectionOrder {
+		switch s {
+		case sectionTools:
+			idxTools = i
+		case sectionDaemons:
+			idxDaemons = i
+		case sectionDeploy:
+			idxDeploy = i
+		}
+	}
+	if idxTools == -1 || idxDaemons == -1 || idxDeploy == -1 {
+		t.Fatalf("missing sections; tools=%d daemons=%d deploy=%d", idxTools, idxDaemons, idxDeploy)
+	}
+	if !(idxTools < idxDaemons && idxDaemons < idxDeploy) {
+		t.Errorf("expected order tools<daemons<deploy, got tools=%d daemons=%d deploy=%d", idxTools, idxDaemons, idxDeploy)
 	}
 }
 

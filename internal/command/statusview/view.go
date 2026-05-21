@@ -42,6 +42,17 @@ type DeploySummary struct {
 	ProjectStatus journal.Status
 }
 
+// DaemonRow holds data for one row in the daemons status table.
+// All string fields are sanitised (control characters stripped) by the
+// collector before reaching the renderer.
+type DaemonRow struct {
+	ID        string        // devbox.daemon.id label (e.g. services.main.queue)
+	Name      string        // params JSON or pretty key=value summary
+	Container string        // docker container name
+	Uptime    time.Duration // time since container start
+	StartedAt time.Time     // raw container start time
+}
+
 // GitWorkspaceRow holds data for one row in the git workspace status table.
 // Service is the devbox service name; Dir is the configured directory.
 // When the service directory has no own `.git` (boundary check fails),

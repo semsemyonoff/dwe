@@ -25,6 +25,7 @@ type section int
 const (
 	sectionServices section = iota + 1
 	sectionTools
+	sectionDaemons
 	sectionDeploy
 	sectionTopology
 	sectionGit
@@ -35,6 +36,7 @@ const (
 var defaultSectionOrder = []section{
 	sectionServices,
 	sectionTools,
+	sectionDaemons,
 	sectionDeploy,
 	sectionTopology,
 	sectionGit,
@@ -100,6 +102,16 @@ func loadStatusContext(flags *rootFlags, errW io.Writer) (*statusContext, error)
 	}, nil
 }
 
+// normalisedDockerCfg returns DockerCfg with the standard
+// "missing file → empty value" normalisation applied, mirroring
+// build_context.go:63-70. Always non-nil.
+func (sc *statusContext) normalisedDockerCfg() *config.DockerConfig {
+	if sc.DockerCfg == nil {
+		return &config.DockerConfig{}
+	}
+	return sc.DockerCfg
+}
+
 // statusInput projects a statusContext into stack.StatusInput.
 func (sc *statusContext) statusInput() stack.StatusInput {
 	return stack.StatusInput{
@@ -116,6 +128,7 @@ func (sc *statusContext) statusInput() stack.StatusInput {
 type noSectionFlags struct {
 	noServices bool
 	noTools    bool
+	noDaemons  bool
 	noDeploy   bool
 	noTopology bool
 	noGit      bool
@@ -127,6 +140,8 @@ func (f *noSectionFlags) isSuppressed(s section) bool {
 		return f.noServices
 	case sectionTools:
 		return f.noTools
+	case sectionDaemons:
+		return f.noDaemons
 	case sectionDeploy:
 		return f.noDeploy
 	case sectionTopology:
@@ -164,12 +179,14 @@ in the default view.`,
 	}
 	cmd.Flags().BoolVar(&noFlags.noServices, "no-services", false, "suppress the services section")
 	cmd.Flags().BoolVar(&noFlags.noTools, "no-tools", false, "suppress the tools section")
+	cmd.Flags().BoolVar(&noFlags.noDaemons, "no-daemons", false, "suppress the daemons section")
 	cmd.Flags().BoolVar(&noFlags.noDeploy, "no-deploy", false, "suppress the deploy section")
 	cmd.Flags().BoolVar(&noFlags.noTopology, "no-topology", false, "suppress the topology section")
 	cmd.Flags().BoolVar(&noFlags.noGit, "no-git", false, "suppress the git workspace section")
 
 	cmd.AddCommand(newStatusServicesCmd(flags))
 	cmd.AddCommand(newStatusToolsCmd(flags))
+	cmd.AddCommand(newStatusDaemonsCmd(flags))
 	cmd.AddCommand(newStatusDeployCmd(flags))
 	cmd.AddCommand(newStatusTopologyCmd(flags))
 	cmd.AddCommand(newStatusGitCmd(flags))
@@ -211,6 +228,13 @@ func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInpu
 		writeNonEmpty(out, body)
 		if len(errs) > 0 {
 			_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
+		}
+	case sectionDaemons:
+		rows, errs := stack.CollectDaemons(ctx, sc.Cfg, sc.normalisedDockerCfg())
+		body, _ := stack.RenderDaemons(rows)
+		writeNonEmpty(out, body)
+		if len(errs) > 0 {
+			_, _ = fmt.Fprintf(errW, "warning: %d daemon row(s) failed to render\n", len(errs))
 		}
 	case sectionDeploy:
 		writeNonEmpty(out, stack.RenderDeployStatus(in))
