@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 )
@@ -347,5 +348,214 @@ func TestResolvePhaseSteps_registryNilSkipsCommandInteractiveCheck(t *testing.T)
 	}
 	if _, err := ResolvePhaseSteps(cfg, nil, phase, ""); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// --- sub_step_overrides validation -----------------------------------------
+
+func newReadableGate() filesgate.FilesGate {
+	return filesgate.FilesGate{State: filesgate.StateReadable, Require: filesgate.RequireRequired{}}
+}
+
+func makeDumpDeployRegistry(t *testing.T) *registry.Registry {
+	t.Helper()
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(&model.CommandDef{
+		ID:   "db.dump-deploy",
+		Type: model.CommandTypeShell,
+		Cmd:  "echo restore",
+		Files: map[string]model.FileSpec{
+			"dump": {Access: model.FileAccessRead, Path: "/tmp/devbox-test-not-there", Required: true},
+		},
+	})
+	reg.AddCommandForTest(&model.CommandDef{
+		ID:   "db.dumps-deploy",
+		Type: model.CommandTypeWorkflow,
+		Steps: []model.WorkflowStep{
+			{Parallel: &model.WorkflowParallel{Steps: []model.WorkflowStep{
+				{Name: "deploy-main", Command: "db.dump-deploy"},
+				{Name: "deploy-stock", Command: "db.dump-deploy"},
+				{Name: "deploy-price", Command: "db.dump-deploy"},
+			}}},
+		},
+	})
+	return reg
+}
+
+func TestResolvePhaseSteps_subStepOverridesValid(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	reg := makeDumpDeployRegistry(t)
+	gate := newReadableGate()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "db-dumps",
+				Type: "command",
+				Cmd:  "db.dumps-deploy",
+				SubStepOverrides: map[string]config.SubStepOverride{
+					"deploy-main": {FilesGate: &gate},
+				},
+			},
+		},
+	}
+	if _, err := ResolvePhaseSteps(cfg, reg, phase, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_subStepOverridesUnknownKey(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	reg := makeDumpDeployRegistry(t)
+	gate := newReadableGate()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "db-dumps",
+				Type: "command",
+				Cmd:  "db.dumps-deploy",
+				SubStepOverrides: map[string]config.SubStepOverride{
+					"does-not-exist": {FilesGate: &gate},
+				},
+			},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, reg, phase, "")
+	if !errors.Is(err, ErrSubStepOverridesInvalid) {
+		t.Fatalf("expected ErrSubStepOverridesInvalid, got %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_subStepOverridesAmbiguousName(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(&model.CommandDef{
+		ID:   "db.dump-deploy",
+		Type: model.CommandTypeShell,
+		Cmd:  "echo restore",
+		Files: map[string]model.FileSpec{
+			"dump": {Access: model.FileAccessRead, Path: "/tmp/x", Required: true},
+		},
+	})
+	// Two sub-steps share `db.dump-deploy` as their effective name (no explicit Name).
+	reg.AddCommandForTest(&model.CommandDef{
+		ID:   "db.dumps-deploy",
+		Type: model.CommandTypeWorkflow,
+		Steps: []model.WorkflowStep{
+			{Parallel: &model.WorkflowParallel{Steps: []model.WorkflowStep{
+				{Command: "db.dump-deploy"},
+				{Command: "db.dump-deploy"},
+			}}},
+		},
+	})
+	gate := newReadableGate()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "db-dumps",
+				Type: "command",
+				Cmd:  "db.dumps-deploy",
+				SubStepOverrides: map[string]config.SubStepOverride{
+					"db.dump-deploy": {FilesGate: &gate},
+				},
+			},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, reg, phase, "")
+	if !errors.Is(err, ErrSubStepOverridesInvalid) {
+		t.Fatalf("expected ErrSubStepOverridesInvalid, got %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_subStepOverridesRejectsNestedWorkflow(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(&model.CommandDef{
+		ID:   "inner.wf",
+		Type: model.CommandTypeWorkflow,
+		Steps: []model.WorkflowStep{
+			{Command: "leaf.shell"},
+		},
+	})
+	reg.AddCommandForTest(&model.CommandDef{
+		ID:   "leaf.shell",
+		Type: model.CommandTypeShell,
+		Cmd:  "echo",
+	})
+	reg.AddCommandForTest(&model.CommandDef{
+		ID:   "outer.wf",
+		Type: model.CommandTypeWorkflow,
+		Steps: []model.WorkflowStep{
+			{Name: "nested", Command: "inner.wf"},
+		},
+	})
+	gate := newReadableGate()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "step",
+				Type: "command",
+				Cmd:  "outer.wf",
+				SubStepOverrides: map[string]config.SubStepOverride{
+					"nested": {FilesGate: &gate},
+				},
+			},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, reg, phase, "")
+	if !errors.Is(err, ErrSubStepOverridesInvalid) {
+		t.Fatalf("expected ErrSubStepOverridesInvalid, got %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_subStepOverridesRejectsNonCommandStep(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	reg := makeDumpDeployRegistry(t)
+	gate := newReadableGate()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "step",
+				Type: "shell",
+				Cmd:  "echo x",
+				SubStepOverrides: map[string]config.SubStepOverride{
+					"deploy-main": {FilesGate: &gate},
+				},
+			},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, reg, phase, "")
+	if !errors.Is(err, ErrSubStepOverridesInvalid) {
+		t.Fatalf("expected ErrSubStepOverridesInvalid, got %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_subStepOverridesRejectsNonWorkflowTarget(t *testing.T) {
+	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(&model.CommandDef{
+		ID: "g.shell", Type: model.CommandTypeShell, Cmd: "echo",
+	})
+	gate := newReadableGate()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{
+				Name: "step",
+				Type: "command",
+				Cmd:  "g.shell",
+				SubStepOverrides: map[string]config.SubStepOverride{
+					"x": {FilesGate: &gate},
+				},
+			},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, reg, phase, "")
+	if !errors.Is(err, ErrSubStepOverridesInvalid) {
+		t.Fatalf("expected ErrSubStepOverridesInvalid, got %v", err)
 	}
 }

@@ -10,10 +10,13 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/x/term"
 	"golang.org/x/sync/errgroup"
 
+	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/filesgate/spec"
 	"devbox-cli/internal/liveui"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
@@ -110,6 +113,15 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				return fmt.Errorf("workflow %q step[%d] confirm: %w", rc.Cmd.ID, i, err)
 			}
 		default:
+			gateSkip, gateReason, gateErr := evalSubStepOverrideGate(rc, step)
+			if gateErr != nil {
+				return fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, i, step.Command, gateErr)
+			}
+			if gateSkip {
+				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d] %q: skipped (%s)\n",
+					rc.Cmd.ID, i, step.Command, gateReason)
+				continue
+			}
 			if err := r.runCommandStep(ctx, rc, i, step); err != nil {
 				if step.ContinueOnError {
 					_, _ = fmt.Fprintf(stderr(rc), "  ⚠ workflow %q step[%d] %q: continue_on_error: %v\n",
@@ -312,10 +324,16 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 	// otherwise disable so the post-Wait text emit pass remains the sole output
 	// channel (CI / piped invocations). All live.* methods are no-ops when
 	// disabled, so the same code path covers both modes.
+	//
+	// isTTY mirrors the factory's decision so the post-Wait emit can suppress
+	// per-sub-step status lines when the user already saw them in the live
+	// block (TTY mode), or print them as the sole channel (non-TTY / CI).
+	isTTY := workflowParallelStdoutIsTTY()
 	live := newWorkflowParallelLiveLine(rc.Cmd.ID)
 	live.Start()
 	defer live.Stop()
 	live.StartBlock(n)
+	groupStart := time.Now()
 
 	eg, gctx := errgroup.WithContext(parentCtx)
 	eg.SetLimit(maxC)
@@ -369,6 +387,22 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 				return nil
 			}
 
+			gateSkip, gateReason, gateErr := evalSubStepOverrideGate(rc, sub)
+			if gateErr != nil {
+				wrapped := fmt.Errorf("workflow sub-step %q: %w", sub.Command, gateErr)
+				results[i].err = wrapped
+				live.SetBlockRowFinal(i, liveui.BlockRowFailed,
+					fmt.Sprintf("[%d/%d] Failed: %s", i+1, n, sub.Command))
+				return emit(wrapped)
+			}
+			if gateSkip {
+				results[i].skipped = true
+				results[i].output = gateReason
+				live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
+					fmt.Sprintf("[%d/%d] Skipped: %s (%s)", i+1, n, sub.Command, gateReason))
+				return nil
+			}
+
 			live.SetBlockRowRunning(i, fmt.Sprintf("[%d/%d] %s", i+1, n, sub.Command))
 
 			gRC := rc
@@ -393,14 +427,25 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 
 			var buf bytes.Buffer
 			tee := liveui.NewLineTee(func(frame string, final bool) {
+				// Always refresh the live block row with the latest frame so
+				// `\r`-overwritten progress (curl/wget/docker pulls) is shown.
+				// Mirrors PlainReporter.StepOutput's behaviour for parallel
+				// sub-steps; without this only newline-terminated lines would
+				// surface on the row and the first header line would freeze
+				// while the actual progress is hidden.
+				live.SetBlockRowRunning(i,
+					fmt.Sprintf("[%d/%d] %s: %s", i+1, n, sub.Command, frame))
+				// Commit to buffer + per-sub-step log ONLY on newline frames.
+				// Non-final frames are transient display state — writing them
+				// would balloon logs with overwritten progress bars and the
+				// failure-dump output would be unreadable.
+				if !final {
+					return
+				}
 				buf.WriteString(frame)
 				buf.WriteByte('\n')
 				if subFile != nil {
 					_, _ = fmt.Fprintln(subFile, frame)
-				}
-				if final {
-					live.SetBlockRowRunning(i,
-						fmt.Sprintf("[%d/%d] %s: %s", i+1, n, sub.Command, frame))
 				}
 			})
 
@@ -458,30 +503,165 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 	live.EndBlock()
 	live.Stop()
 
+	// Post-Wait emit. TTY users already saw the per-sub-step rows finalise
+	// inside the live block — re-printing "✓ [i/N] Done: ..." for every
+	// sub-step duplicates that information. Instead:
+	//   - TTY mode: print only failure dumps (the captured output between
+	//     separator bars, which the live row cannot show), then a single
+	//     green-✓ summary footer matching the workflow's live header.
+	//   - Non-TTY: print the per-sub-step status lines (sole output channel),
+	//     followed by the summary footer.
+	emitStatus := !isTTY
+	failures := 0
 	for i, res := range results {
 		switch {
 		case res.cancelled:
-			_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Cancelled: %s\n", i+1, n, res.sub.Command)
+			if emitStatus {
+				_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Cancelled: %s\n", i+1, n, res.sub.Command)
+			}
 		case res.skipped:
-			_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Skipped: %s (when=false)\n", i+1, n, res.sub.Command)
+			if emitStatus {
+				reason := "when=false"
+				if res.output != "" {
+					reason = res.output
+				}
+				_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Skipped: %s (%s)\n", i+1, n, res.sub.Command, reason)
+			}
 		case res.err != nil && res.continueOnError:
-			_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Failed (continue_on_error): %s\n", i+1, n, res.sub.Command)
+			failures++
+			if emitStatus {
+				_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Failed (continue_on_error): %s\n", i+1, n, res.sub.Command)
+			}
 			if res.output != "" {
 				_, _ = fmt.Fprintln(stderr(rc), "  ───── output ─────")
 				_, _ = fmt.Fprint(stderr(rc), res.output)
 				_, _ = fmt.Fprintln(stderr(rc), "  ──────────────────")
 			}
 		case res.err != nil:
-			_, _ = fmt.Fprintf(stderr(rc), "  ✗ [%d/%d] Failed: %s\n", i+1, n, res.sub.Command)
+			failures++
+			if emitStatus {
+				_, _ = fmt.Fprintf(stderr(rc), "  ✗ [%d/%d] Failed: %s\n", i+1, n, res.sub.Command)
+			}
 			if res.output != "" {
 				_, _ = fmt.Fprintln(stderr(rc), "  ───── output ─────")
 				_, _ = fmt.Fprint(stderr(rc), res.output)
 				_, _ = fmt.Fprintln(stderr(rc), "  ──────────────────")
 			}
 		default:
-			_, _ = fmt.Fprintf(stderr(rc), "  ✓ [%d/%d] Done: %s\n", i+1, n, res.sub.Command)
+			if emitStatus {
+				_, _ = fmt.Fprintf(stderr(rc), "  ✓ [%d/%d] Done: %s\n", i+1, n, res.sub.Command)
+			}
 		}
 	}
 
+	writeParallelSummary(stderr(rc), rc.Cmd.ID, time.Since(groupStart), failures > 0, isTTY)
+
 	return groupErr
+}
+
+// writeParallelSummary prints a single-line summary footer for a workflow
+// parallel block, replacing the live header "parallel: <id>" with a final
+// ✓/✗ glyph + elapsed time. Colors are ANSI-coded only when colored is true
+// (TTY mode); non-TTY callers (CI / piped stdout) get a plain-text line so
+// log scrapers do not see escape sequences.
+func writeParallelSummary(w io.Writer, workflowID string, elapsed time.Duration, failed, colored bool) {
+	icon := liveui.IconDone
+	color := render.Green
+	if failed {
+		icon = liveui.IconFailed
+		color = render.Red
+	}
+	if !colored {
+		_, _ = fmt.Fprintf(w, "%s [%s] parallel: %s\n", icon, liveui.FormatElapsed(elapsed), workflowID)
+		return
+	}
+	elapsedText := render.Gray + "[" + liveui.FormatElapsed(elapsed) + "]" + render.Reset
+	_, _ = fmt.Fprintf(w, "%s%s%s %s parallel: %s\n", color, icon, render.Reset, elapsedText, workflowID)
+}
+
+// evalSubStepOverrideGate probes the files_gate override (if any) registered
+// against this workflow sub-step. Returns (skip=true, reason, nil) when the
+// gate is not satisfied and the sub-step should be skipped without running.
+// Returns (false, "", nil) when no override applies or the gate is satisfied.
+// Returns a non-nil error only for configuration failures the user should see.
+//
+// The override is intentionally consumed once per sub-step: the inner
+// RunContext built by runCommandStep does NOT propagate the map, so an inner
+// workflow does not see the outer pipeline-step's overrides.
+func evalSubStepOverrideGate(rc RunContext, step model.WorkflowStep) (skip bool, reason string, err error) {
+	if len(rc.WorkflowSubStepOverrides) == 0 {
+		return false, "", nil
+	}
+	name := step.StepName()
+	if name == "" {
+		return false, "", nil
+	}
+	ov, ok := rc.WorkflowSubStepOverrides[name]
+	if !ok || ov.FilesGate == nil {
+		return false, "", nil
+	}
+	if rc.Registry == nil {
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: registry required to evaluate files_gate", name)
+	}
+
+	targetCmd := ov.FilesGate.Command
+	if targetCmd == "" {
+		targetCmd = step.Command
+	}
+	def, err := rc.Registry.Get(targetCmd)
+	if err != nil {
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: command %q: %w", name, targetCmd, err)
+	}
+	if len(def.Files) == 0 {
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: command %q has no files: block", name, targetCmd)
+	}
+
+	gateWith := ov.FilesGate.With
+	if len(gateWith) == 0 {
+		gateWith = make(map[string]any, len(step.With))
+		for k, v := range step.With {
+			gateWith[k] = v
+		}
+	}
+
+	if rc.Config == nil {
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: config required to evaluate files_gate", name)
+	}
+	probeCtx, err := BuildRunContext(rc.Config, rc.Registry, def, gateWith, rc.ProjectRoot)
+	if err != nil {
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: build context: %w", name, err)
+	}
+
+	ids, err := spec.ResolveRequireIDs(ov.FilesGate.Require, def.Files)
+	if err != nil {
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: %w", name, err)
+	}
+	probeResults, err := ComputeFilePathsProbe(probeCtx, ids)
+	if err != nil {
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: probe: %w", name, err)
+	}
+
+	var offending []string
+	switch ov.FilesGate.State {
+	case filesgate.StateReadable:
+		for _, id := range ids {
+			if !probeResults[id].Resolved {
+				offending = append(offending, id)
+			}
+		}
+	case filesgate.StateMissing:
+		for _, id := range ids {
+			if probeResults[id].Resolved {
+				offending = append(offending, id)
+			}
+		}
+	default:
+		return false, "", fmt.Errorf("sub_step_overrides[%q]: invalid state %q", name, ov.FilesGate.State)
+	}
+
+	if len(offending) == 0 {
+		return false, "", nil
+	}
+	reason = fmt.Sprintf("files_gate: %s [%s]", ov.FilesGate.State, strings.Join(offending, ","))
+	return true, reason, nil
 }

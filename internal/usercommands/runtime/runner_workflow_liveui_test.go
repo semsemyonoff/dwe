@@ -111,8 +111,16 @@ func TestWorkflowRunner_Parallel_LiveLine_Failed(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from failing sub-step")
 	}
-	if !strings.Contains(errOut, "✗ [2/2] Failed: liveui.fail") {
-		t.Errorf("expected failed row in stderr; got:\n%s", errOut)
+	// TTY mode suppresses per-sub-step status lines (already shown in live
+	// block); only the summary footer and the failure-output dump remain.
+	if strings.Contains(errOut, "✗ [2/2] Failed: liveui.fail") {
+		t.Errorf("TTY mode should suppress per-sub-step Failed line; got:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, "parallel: liveui.failwf") {
+		t.Errorf("expected summary footer naming the workflow; got:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, liveui.IconFailed) {
+		t.Errorf("expected ✗ glyph in summary footer; got:\n%s", errOut)
 	}
 	if len(cap.lines) != 1 {
 		t.Fatalf("expected one LiveLine; got %d", len(cap.lines))
@@ -149,8 +157,17 @@ func TestWorkflowRunner_Parallel_LiveLine_Skipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if !strings.Contains(errOut, "◎ [1/2] Skipped: liveui.runa (when=false)") {
-		t.Errorf("expected skipped row; got:\n%s", errOut)
+	// TTY mode suppresses per-sub-step status lines (skipped sub-steps are
+	// shown finalised in the live block via SetBlockRowFinal). Only the
+	// summary footer remains.
+	if strings.Contains(errOut, "◎ [1/2] Skipped: liveui.runa") {
+		t.Errorf("TTY mode should suppress per-sub-step Skipped line; got:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, "parallel: liveui.skipwf") {
+		t.Errorf("expected summary footer; got:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, liveui.IconDone) {
+		t.Errorf("expected ✓ glyph in summary footer (no failures); got:\n%s", errOut)
 	}
 	if len(cap.lines) != 1 {
 		t.Fatalf("expected one LiveLine; got %d", len(cap.lines))
@@ -220,6 +237,102 @@ func TestWorkflowRunner_Parallel_ContextCancel_StopsCleanly(t *testing.T) {
 	}
 	if !cap.lines[0].IsStopped() {
 		t.Errorf("expected LiveLine stopped after cancel")
+	}
+}
+
+// TestWorkflowRunner_Parallel_LiveLine_CarriageReturnProgress is a regression
+// test for the case where a sub-step's child writes a progress bar via
+// carriage-return frames (curl, wget, docker pull, …). The lineTee callback
+// must refresh the block row on every frame (final + non-final) so the latest
+// progress is visible — not only newline-terminated lines. The buffer/log
+// only commit on final frames so transient progress does not bloat logs.
+func TestWorkflowRunner_Parallel_LiveLine_CarriageReturnProgress(t *testing.T) {
+	dir := t.TempDir()
+	// printf emits "header\n" (one final frame) then 3 \r-frames; the LAST
+	// non-final frame must drive the live block row. Failure of the sub-step
+	// after the progress is so the captured per-sub-step dump can be inspected.
+	progressLeaf := makeShellLeaf("prog.run",
+		`printf 'header\n'; printf 'p10\r'; printf 'p55\r'; printf 'p99\r'; exit 1`)
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "prog.wf",
+		Group:     "prog",
+		LocalName: "wf",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				FailFast: ffFalse,
+				Steps: []WorkflowStep{
+					{Command: "prog.run"},
+					{Command: "prog.run"},
+				},
+			}},
+		},
+	}
+	reg := buildWorkflowRegistry(wf, progressLeaf)
+
+	cap, cleanup := installLiveLineCapture(t)
+	defer cleanup()
+
+	_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+	if err == nil {
+		t.Fatal("expected sub-steps to fail; got nil")
+	}
+	// The latest \r-frame ("p99") must have reached the rendered block row.
+	if !strings.Contains(cap.buf.String(), "p99") {
+		t.Errorf("expected latest progress frame 'p99' in LiveLine output; got:\n%s", cap.buf.String())
+	}
+	// Transient progress frames must NOT pollute the failure dump — only the
+	// newline-terminated "header" line should appear between separator bars.
+	if !strings.Contains(errOut, "header") {
+		t.Errorf("expected 'header' (final frame) in dump; got:\n%s", errOut)
+	}
+	for _, transient := range []string{"p10", "p55", "p99"} {
+		if strings.Contains(errOut, transient) {
+			t.Errorf("transient frame %q must not appear in failure dump; got:\n%s", transient, errOut)
+		}
+	}
+}
+
+// TestWorkflowRunner_Parallel_LiveLine_AllDone_SuppressesPerStepDone verifies
+// that in TTY mode the workflow does NOT re-print "✓ [i/N] Done: ..." for
+// every sub-step (those rows are already visible in the live block); a single
+// green-✓ summary footer is printed instead.
+func TestWorkflowRunner_Parallel_LiveLine_AllDone_SuppressesPerStepDone(t *testing.T) {
+	dir := t.TempDir()
+	a := makeShellLeaf("sumok.a", `true`)
+	b := makeShellLeaf("sumok.b", `true`)
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "sumok.wf",
+		Group:     "sumok",
+		LocalName: "wf",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				Steps: []WorkflowStep{
+					{Command: "sumok.a"},
+					{Command: "sumok.b"},
+				},
+			}},
+		},
+	}
+	reg := buildWorkflowRegistry(wf, a, b)
+
+	_, cleanup := installLiveLineCapture(t)
+	defer cleanup()
+
+	_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if strings.Contains(errOut, "Done: sumok.a") || strings.Contains(errOut, "Done: sumok.b") {
+		t.Errorf("TTY mode must not duplicate per-sub-step Done lines; got:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, "parallel: sumok.wf") {
+		t.Errorf("expected summary footer 'parallel: sumok.wf'; got:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, liveui.IconDone) {
+		t.Errorf("expected ✓ glyph in summary footer; got:\n%s", errOut)
 	}
 }
 

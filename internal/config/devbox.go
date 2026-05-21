@@ -165,6 +165,21 @@ type DeployStep struct {
 	ContinueOnError bool                 `yaml:"continue_on_error,omitempty"`
 	SkipConfirm     bool                 `yaml:"skip_confirm,omitempty"`
 	Parallel        *ParallelGroup       `yaml:"parallel,omitempty"`
+	// SubStepOverrides applies pipeline-side orchestration directives (currently
+	// files_gate) to named sub-steps of the workflow referenced by Cmd. Keys are
+	// the sub-step Name (or, when absent, the sub-step's referenced Command).
+	// Only valid when Type == "command" and the target command is a workflow.
+	// Plan-time validation lives in internal/pipeline.ResolvePhaseSteps.
+	SubStepOverrides map[string]SubStepOverride `yaml:"sub_step_overrides,omitempty"`
+}
+
+// SubStepOverride is the pipeline-side overlay for a single workflow sub-step.
+// It carries per-sub-step orchestration directives (currently files_gate) from
+// the originating DeployStep through to the workflow runner via
+// RunContext.WorkflowSubStepOverrides. Workflow YAML never declares these —
+// they live exclusively on the pipeline side so workflows stay opaque.
+type SubStepOverride struct {
+	FilesGate *filesgate.FilesGate `yaml:"files_gate,omitempty"`
 }
 
 // ParallelGroup represents a step-group container that runs sub-steps concurrently.
@@ -182,23 +197,24 @@ type ParallelGroup struct {
 // KnownFields(true), so we hand-validate keys here to preserve strict-decode
 // semantics. Keep in sync with the DeployStep field tags above.
 var deployStepKnownFields = map[string]bool{
-	"name":              true,
-	"description":       true,
-	"type":              true,
-	"cmd":               true,
-	"with":              true,
-	"when":              true,
-	"check":             true,
-	"files_gate":        true,
-	"continue_on_error": true,
-	"skip_confirm":      true,
-	"parallel":          true,
+	"name":               true,
+	"description":        true,
+	"type":               true,
+	"cmd":                true,
+	"with":               true,
+	"when":               true,
+	"check":              true,
+	"files_gate":         true,
+	"continue_on_error":  true,
+	"skip_confirm":       true,
+	"parallel":           true,
+	"sub_step_overrides": true,
 }
 
 // deployStepLeafOnlyFields are keys that may appear only on a leaf step
 // (Parallel == nil). Their presence alongside parallel: is a hard error.
 var deployStepLeafOnlyFields = []string{
-	"type", "cmd", "with", "check", "files_gate", "continue_on_error",
+	"type", "cmd", "with", "check", "files_gate", "continue_on_error", "sub_step_overrides",
 }
 
 // UnmarshalYAML enforces:

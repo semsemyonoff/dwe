@@ -233,6 +233,12 @@ func (s *ScriptDef) Validate() error {
 // WorkflowStep is one step in a workflow command.
 // Exactly one of Command, Confirm, or Parallel must be set.
 type WorkflowStep struct {
+	// Name is an optional identifier for the step within its enclosing workflow.
+	// When omitted on a Command step it defaults to Command at lookup time
+	// (StepName()); pipeline-side sub_step_overrides target this name.
+	// Names must be unique across all sub-steps of a workflow (top-level + nested
+	// parallel container leaves combined); collisions are rejected at load time.
+	Name string `yaml:"name,omitempty"`
 	// Command is the full command ID (e.g. "services.main.migrate") to execute.
 	Command string `yaml:"command"`
 	// With holds parameter overrides passed to the referenced command.
@@ -251,6 +257,17 @@ type WorkflowStep struct {
 	// Command, Confirm, and With. When and ContinueOnError remain valid at
 	// the container level.
 	Parallel *WorkflowParallel `yaml:"parallel,omitempty"`
+}
+
+// StepName returns the effective sub-step identifier used for pipeline
+// sub_step_overrides lookups: the explicit Name when set, otherwise the
+// referenced Command. Returns an empty string for confirm/parallel containers
+// that carry neither Name nor Command.
+func (s WorkflowStep) StepName() string {
+	if s.Name != "" {
+		return s.Name
+	}
+	return s.Command
 }
 
 // WorkflowParallel declares a group of workflow sub-steps to be executed concurrently.

@@ -77,6 +77,14 @@ type RunContext struct {
 	// confirmations and nested parallel blocks. Task 6 adds the guards;
 	// Task 5 only propagates the flag.
 	UnderParallel bool
+
+	// WorkflowSubStepOverrides carries pipeline-side per-sub-step directives
+	// (currently files_gate) for the workflow being invoked. Set by the
+	// pipeline executor when the originating DeployStep declares
+	// sub_step_overrides; nil for ad-hoc workflow invocations. The workflow
+	// runner consumes it inside both sequential and parallel dispatch paths.
+	// Keys are sub-step names (StepName()); values are the matching override.
+	WorkflowSubStepOverrides map[string]config.SubStepOverride
 }
 
 // stdinOrOS returns ctx.Stdin if set, otherwise os.Stdin.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sort"
 	"strings"
 
 	"devbox-cli/internal/builtin"
@@ -39,6 +40,11 @@ var (
 	// The journal keys entries by (phase, step.Name); collisions cause
 	// incorrect resume behaviour.
 	ErrDuplicateStepName = errors.New("duplicate step name in phase")
+	// ErrSubStepOverridesInvalid is returned when a step's sub_step_overrides
+	// block fails plan-time validation: target is not a workflow, key does not
+	// match any sub-step, key targets a nested workflow, or files_gate inside
+	// the override is invalid against the sub-step's command.
+	ErrSubStepOverridesInvalid = errors.New("sub_step_overrides invalid")
 )
 
 // ResolvePhaseSteps resolves steps for a single phase, evaluating when conditions.
@@ -138,6 +144,11 @@ func resolveLeafStep(cfg *config.DevboxConfig, reg *registry.Registry, phase con
 				msgs[i] = iss.Message
 			}
 			return ResolvedStep{}, false, fmt.Errorf("step %s: %s", stepPrefix(phase, service, step.Name), strings.Join(msgs, "; "))
+		}
+	}
+	if len(step.SubStepOverrides) > 0 {
+		if err := validateSubStepOverrides(cfg, reg, phase, service, step); err != nil {
+			return ResolvedStep{}, false, err
 		}
 	}
 	return ResolvedStep{
@@ -323,6 +334,115 @@ func checkUniqueStepNames(steps []ResolvedStep, phase config.DeployPhase, servic
 			return fmt.Errorf("phase %s: %w: %q", stepPrefix(phase, service, ""), ErrDuplicateStepName, rs.Step.Name)
 		}
 		seen[rs.Step.Name] = true
+	}
+	return nil
+}
+
+// validateSubStepOverrides validates a step's sub_step_overrides map against
+// the target workflow's leaf sub-steps. Rules:
+//   - step must have type=command (others have no workflow to override)
+//   - reg must resolve the referenced command to a workflow
+//   - each override key must match a leaf sub-step name in the workflow
+//   - keys must not target nested workflows (sub-step whose Command is itself
+//     a workflow); v1 only supports one level of override
+//   - each override.files_gate is validated against the sub-step's command
+//     using the same filesgate/spec rules as step-level files_gate
+//
+// A nil registry is tolerated (test / internal-tool callers): only the
+// dependent registry checks are skipped.
+func validateSubStepOverrides(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep) error {
+	prefix := stepPrefix(phase, service, step.Name)
+	if step.Type != "command" {
+		return fmt.Errorf("step %s: %w: only steps with type=command can declare sub_step_overrides", prefix, ErrSubStepOverridesInvalid)
+	}
+	if reg == nil {
+		return nil
+	}
+	def, err := reg.Get(step.Cmd)
+	if err != nil {
+		return fmt.Errorf("step %s: %w: unknown command %q", prefix, ErrSubStepOverridesInvalid, step.Cmd)
+	}
+	if def.Type != model.CommandTypeWorkflow {
+		return fmt.Errorf("step %s: %w: command %q is not a workflow", prefix, ErrSubStepOverridesInvalid, step.Cmd)
+	}
+
+	// Build a name → sub-step(s) map of all leaf sub-steps directly declared
+	// by the workflow (top-level Command steps + parallel-leaf Command steps).
+	// Multiple sub-steps may share a name when neither sets an explicit
+	// `name:` and the same command appears more than once; we only flag the
+	// ambiguity when an override key actually targets that name.
+	// Nested workflows are flagged when an override key matches a step whose
+	// Command itself targets another workflow.
+	leaves := make(map[string][]model.WorkflowStep)
+	for _, ws := range def.Steps {
+		if ws.Command != "" {
+			name := ws.StepName()
+			if name != "" {
+				leaves[name] = append(leaves[name], ws)
+			}
+		}
+		if ws.Parallel != nil {
+			for _, sub := range ws.Parallel.Steps {
+				if sub.Command == "" {
+					continue
+				}
+				name := sub.StepName()
+				if name == "" {
+					continue
+				}
+				leaves[name] = append(leaves[name], sub)
+			}
+		}
+	}
+
+	// Determinism: walk keys in sorted order so plan errors are stable across runs.
+	keys := make([]string, 0, len(step.SubStepOverrides))
+	for k := range step.SubStepOverrides {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		matches, ok := leaves[name]
+		if !ok || len(matches) == 0 {
+			return fmt.Errorf("step %s: %w: sub_step_overrides[%q] does not match any sub-step of workflow %q",
+				prefix, ErrSubStepOverridesInvalid, name, step.Cmd)
+		}
+		if len(matches) > 1 {
+			return fmt.Errorf("step %s: %w: sub_step_overrides[%q] is ambiguous (%d sub-steps share this name in workflow %q); set explicit name: on the workflow sub-steps to disambiguate",
+				prefix, ErrSubStepOverridesInvalid, name, len(matches), step.Cmd)
+		}
+		ws := matches[0]
+		// Reject targeting a sub-step whose Command itself is a workflow —
+		// the override cannot reach inside the nested workflow.
+		subDef, subErr := reg.Get(ws.Command)
+		if subErr == nil && subDef != nil && subDef.Type == model.CommandTypeWorkflow {
+			return fmt.Errorf("step %s: %w: sub_step_overrides[%q] targets workflow %q; nested workflow overrides are not supported in v1",
+				prefix, ErrSubStepOverridesInvalid, name, ws.Command)
+		}
+		ov := step.SubStepOverrides[name]
+		if ov.FilesGate != nil {
+			if subErr != nil || subDef == nil {
+				return fmt.Errorf("step %s: %w: sub_step_overrides[%q] files_gate target command %q not found",
+					prefix, ErrSubStepOverridesInvalid, name, ws.Command)
+			}
+			// Use the sub-step's With (rendered later at runtime) as the
+			// inherited base. The override may set its own files_gate.with.
+			refWith := make(map[string]any, len(ws.With))
+			for k, v := range ws.With {
+				refWith[k] = v
+			}
+			ref := filesgate.StepRef{Type: "command", Cmd: ws.Command, With: refWith}
+			issues := spec.Validate(cfg, reg, ref, ov.FilesGate)
+			if len(issues) > 0 {
+				msgs := make([]string, len(issues))
+				for i, iss := range issues {
+					msgs[i] = iss.Message
+				}
+				return fmt.Errorf("step %s: %w: sub_step_overrides[%q]: %s",
+					prefix, ErrSubStepOverridesInvalid, name, strings.Join(msgs, "; "))
+			}
+		}
 	}
 	return nil
 }

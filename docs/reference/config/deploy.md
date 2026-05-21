@@ -32,6 +32,7 @@ Deploy and reset pipeline declarations.
 - [Example: orchestrator pipeline](#example-orchestrator-pipeline)
 - [Example: per-service pipeline](#example-per-service-pipeline)
 - [Parallel step groups](#parallel-step-groups)
+- [Targeting workflow sub-steps with overrides](#targeting-workflow-sub-steps-with-overrides)
 - [Common pitfalls](#common-pitfalls)
 - [Related commands](#related-commands)
 
@@ -750,6 +751,87 @@ Validation runs at `devbox validate` and at plan resolution; either path catches
 - No DAG / `depends_on` between sub-steps. Flat groups only.
 - No auto-parallelisation flag — explicit YAML opt-in only.
 - No PTY in sub-steps. `service_run` with `-it`-style compose args will fail at the child with "cannot allocate tty" (surfaces as a normal sub-step failure subject to `continue_on_error` / `fail_fast`).
+
+## Targeting workflow sub-steps with overrides
+
+A pipeline step whose `type: command` targets a workflow can attach **per-sub-step orchestration directives** to that workflow without modifying the workflow itself. This keeps `WorkflowStep` minimal (only `command:` / `with:` / `confirm:` / `when:` / `continue_on_error:` / `parallel:`) and keeps gating decisions on the pipeline side, where they belong.
+
+### Schema
+
+```yaml
+phases:
+  - name: deploy-dumps
+    steps:
+      - name: db-dumps-deploy
+        type: command
+        cmd: services.main.db.dumps-deploy   # a workflow with a parallel block
+        skip_confirm: true
+        sub_step_overrides:
+          deploy-main:
+            files_gate:
+              state: readable
+              command: services.main.db.dump-deploy
+          deploy-stock:
+            files_gate:
+              state: readable
+              command: services.main.db.dump-deploy
+              with: { database: "${db.stock_database}" }
+          deploy-price:
+            files_gate:
+              state: readable
+              command: services.main.db.dump-deploy
+              with: { database: "${db.price_database}" }
+```
+
+The referenced workflow stays opaque and reusable:
+
+```yaml
+# devbox/commands/services/main/db.yml
+commands:
+  dumps-deploy:
+    type: workflow
+    description: Restore all dumps in parallel
+    steps:
+      - parallel:
+          steps:
+            - name: deploy-main
+              command: services.main.db.dump-deploy
+            - name: deploy-stock
+              command: services.main.db.dump-deploy-stock
+            - name: deploy-price
+              command: services.main.db.dump-deploy-price
+```
+
+### Resolution
+
+- Sub-step lookup uses `WorkflowStep.name` when set, otherwise the referenced `command`. Names must be unambiguous within the target workflow when an override key references them; collisions are rejected at plan time with `sub_step_overrides[<key>] is ambiguous`.
+- Each override key must match a leaf sub-step (top-level Command step or a Command leaf inside the workflow's `parallel:` block). Sub-steps whose command is itself a workflow are not addressable in v1 — the override must reach a non-workflow sub-step.
+- `files_gate:` inside an override is validated against the **sub-step's** target command using the same rules as a step-level `files_gate:` (state, require spec, with/default-from coverage of required params).
+- Overrides only apply when the workflow is invoked via the originating pipeline step. The same workflow invoked ad-hoc (`devbox commands run …`) or as a sub-step of another workflow runs as-written. Overrides do NOT propagate through nested workflow invocations.
+
+### Runtime semantics
+
+When the workflow executes, every leaf sub-step is matched against `sub_step_overrides[<step-name>]`:
+
+- **gate satisfied** → the sub-step runs normally.
+- **gate not satisfied** → the sub-step is **skipped**, reported as `Skipped: <command> (files_gate: <state> [<offending-id>…])` on stderr and in the live block row. Skips do not fail the workflow.
+- **gate evaluation error** (unknown command, missing files: block, bad require spec) → the sub-step **fails** with a wrapped error; standard `continue_on_error` / `fail_fast` apply.
+
+The workflow's own `when:` on a sub-step is evaluated first; an override gate is only consulted when `when:` is true.
+
+### When to use this versus a step-level `files_gate:`
+
+| Situation | Use |
+|---|---|
+| Single non-workflow leaf step whose run depends on a file | step-level `files_gate:` |
+| Workflow that orchestrates several similar sub-steps and you want gating per sub-step from the pipeline | `sub_step_overrides:` |
+| You want the workflow to fail loudly when a required input is missing during ad-hoc invocation | leave overrides off — the underlying command's `files: required: true` enforces it |
+
+### Restrictions (v1)
+
+- Only `files_gate` is supported inside an override. Future versions may extend this to `when:` and `continue_on_error:` at the override level.
+- Overrides cannot target a sub-step whose command is itself a workflow. Refactor the inner workflow to expose the leaf, or move the override one level deeper by re-declaring the pipeline-step against that inner workflow.
+- Override keys must refer to sub-step names that exist in the immediate workflow. Validation runs at `devbox validate` and at plan resolution.
 
 ## Common pitfalls
 

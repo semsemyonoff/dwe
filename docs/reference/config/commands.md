@@ -823,9 +823,35 @@ Group-level `when:` and `continue_on_error:` are valid on the step that carries 
 - **Inside a sequential pipeline step**: when a pipeline's sequential `cmd:` resolves to a workflow with a `parallel:` block, the pipeline's footer is paused for the duration of the step body (existing `SuspendForExec` / `ResumeAfterExec` contract), and the workflow renders its own block rows in the gap. The pipeline-step counter advances by exactly one — sub-steps are NOT counted as pipeline steps.
 - **Inside a parallel pipeline group OR another parallel workflow**: rejected at runtime. Only one live-block can own the terminal at a time. The error is the `ErrWorkflowNestedParallel` sentinel.
 
+#### Live rendering and reporting
+
+- **Block rows (TTY)**: each sub-step has a row showing `<spinner-or-glyph> [<elapsed>] [<i>/<N>] <command>[: <latest-line>]`. The latest line tracks both newline-terminated output AND carriage-return frames, so `curl` / `wget` / `docker pull` progress bars are visible in-place (the row updates every time the child writes a frame).
+- **End-of-block summary (TTY)**: when the parallel group finishes, the rows freeze with their final glyph (✓/✗/◎) in scrollback and a single one-line summary footer is printed in their place: `✓ [<elapsed>] parallel: <workflow-id>` in green on success, `✗ ...` in red when any sub-step failed. The per-sub-step `✓ [i/N] Done: …` lines are NOT re-emitted on TTY because the same information is already in the frozen block rows above.
+- **Non-TTY mode** (CI / piped stdout): no live block. Each sub-step prints its terminal-state line (`✓ [i/N] Done`, `◎ [i/N] Skipped`, `✗ [i/N] Failed`, `◎ [i/N] Cancelled`) followed by a plain-text summary footer (`✓ [<elapsed>] parallel: <workflow-id>`).
+- **Failure dumps**: a failed sub-step's captured output is replayed between `───── output ─────` / `──────────────────` bars on stderr in BOTH TTY and non-TTY modes — the live row cannot show the full buffer.
+
 #### Per-sub-step logs
 
-Each sub-step's combined stdout/stderr is captured to `.devbox/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. On failure, the captured output is also dumped to stderr between separator bars so CI/non-TTY runs surface the failure context.
+Each sub-step's combined stdout/stderr is captured to `.devbox/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Only newline-terminated frames are written to the log file (carriage-return progress frames stay on the live row and are dropped from logs), so the file stays readable without `\r`-spam.
+
+#### Sub-step naming and pipeline overrides
+
+Each workflow sub-step may set an explicit `name:` (optional). When absent the effective name defaults to the referenced `command`. This name is the handle the pipeline uses for `sub_step_overrides:` — see [deploy.md → Targeting workflow sub-steps with overrides](deploy.md#targeting-workflow-sub-steps-with-overrides). When two sub-steps in the same workflow share the same effective name, a pipeline override targeting that name is rejected at plan time as ambiguous; set explicit `name:` on the sub-steps to disambiguate.
+
+```yaml
+commands:
+  dumps-deploy:
+    type: workflow
+    steps:
+      - parallel:
+          steps:
+            - name: deploy-main          # explicit name → pipeline can target it
+              command: services.main.db.dump-deploy
+            - name: deploy-stock
+              command: services.main.db.dump-deploy-stock
+```
+
+Workflows never know whether overrides are attached to them — they are opaque to gating decisions. Invoking a workflow with overrides only happens through a pipeline step that declares `sub_step_overrides:`.
 
 ## Type: builtin
 

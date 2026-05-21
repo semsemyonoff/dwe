@@ -123,6 +123,11 @@ type ActionContext struct {
 	// terminal. Sequential steps run with cmd.Stdin = os.Stdin and may
 	// receive a PTY when stdout is a TTY (set up by childIO).
 	Parallel bool
+	// SubStepOverrides forwards the originating DeployStep's
+	// sub_step_overrides map to execCommandAction so the workflow runner can
+	// apply per-sub-step files_gate (or future overrides). Empty for steps
+	// that do not target a workflow.
+	SubStepOverrides map[string]config.SubStepOverride
 }
 
 // buildDevboxCmd constructs an exec.Cmd for a devbox: pipeline step.
@@ -267,6 +272,9 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
 	rctx.UnderParallel = actx.Parallel
+	if len(actx.SubStepOverrides) > 0 {
+		rctx.WorkflowSubStepOverrides = actx.SubStepOverrides
+	}
 	return usercommands.RunCommand(ctx, rctx)
 }
 
@@ -720,13 +728,14 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	}
 
 	bodyActx := ActionContext{
-		WorkDir:     opts.WorkDir,
-		Cfg:         opts.Config,
-		Reg:         opts.Registry,
-		StepWriter:  stepWriter,
-		LogWriter:   opts.LogWriter,
-		SkipConfirm: skipConfirm,
-		Parallel:    opts.Parallel,
+		WorkDir:          opts.WorkDir,
+		Cfg:              opts.Config,
+		Reg:              opts.Registry,
+		StepWriter:       stepWriter,
+		LogWriter:        opts.LogWriter,
+		SkipConfirm:      skipConfirm,
+		Parallel:         opts.Parallel,
+		SubStepOverrides: rs.Step.SubStepOverrides,
 	}
 	startTime := time.Now()
 	stepErr := ExecAction(ctx, rs.Step.Action(), bodyActx)
