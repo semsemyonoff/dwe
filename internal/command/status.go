@@ -154,7 +154,6 @@ in the default view.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			sc, err := loadStatusContext(flags)
 			if err != nil {
 				return err
@@ -253,7 +252,6 @@ func newStatusServicesCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			sc, err := loadStatusContext(flags)
 			if err != nil {
 				return err
@@ -270,7 +268,6 @@ func newStatusToolsCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			sc, err := loadStatusContext(flags)
 			if err != nil {
 				return err
@@ -287,7 +284,6 @@ func newStatusTopologyCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			sc, err := loadStatusContext(flags)
 			if err != nil {
 				return err
@@ -304,7 +300,6 @@ func newStatusGitCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			sc, err := loadStatusContext(flags)
 			if err != nil {
 				return err
@@ -325,7 +320,6 @@ With a service name, shows the per-phase/step deploy breakdown for that service.
 		ValidArgsFunction: trackedServiceCompletion(flags),
 		SilenceUsage:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 			sc, err := loadStatusContext(flags)
 			if err != nil {
 				return err

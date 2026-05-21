@@ -48,7 +48,6 @@ For a read-only view, run 'devbox status services'.`,
 // runServicesToggle opens the interactive multi-select toggle form. Non-TTY
 // returns ErrInteractiveRequired with a hint. All-mandatory short-circuits.
 func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
-	applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 		return fmt.Errorf("%w: services: interactive toggle requires a TTY; use 'devbox status services' for read-only view", ErrInteractiveRequired)
 	}

@@ -6,10 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/deploy/journal"
 )
 
 // statusFixture creates a minimal devbox project on disk for end-to-end
 // status command tests and returns the devbox.yml path.
+// The main service has dir: services/main so CollectGitWorkspace produces rows.
 func statusFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -26,16 +29,22 @@ project:
 		t.Fatal(err)
 	}
 	// Services are loaded from devbox/services.yml — not from inline devbox.yml.
+	// dir: services/main ensures CollectGitWorkspace returns a row (making --no-git non-vacuous).
 	servicesYML := `services:
   main:
     type: app
     container: app-main
     mandatory: true
+    dir: services/main
   worker:
     type: worker
     container: app-worker
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Create the service directory so fillGitRow can stat it (no .git → blank cells, no error).
+	if err := os.MkdirAll(filepath.Join(dir, "services", "main"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	toolsYML := `tools:
@@ -48,6 +57,56 @@ project:
 		t.Fatal(err)
 	}
 	return filepath.Join(dir, "devbox.yml")
+}
+
+// statusFixtureWithDeploy extends statusFixture with a minimal deploy pipeline
+// and a persisted state, so RenderDeployStatus produces output.
+func statusFixtureWithDeploy(t *testing.T) string {
+	t.Helper()
+	configPath := statusFixture(t)
+	dir := filepath.Dir(configPath)
+	devboxDir := filepath.Join(dir, "devbox")
+
+	// Project-level deploy.yml: a deploy_services phase so main is tracked.
+	deployYML := `phases:
+  - name: services
+    deploy_services: true
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(deployYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Per-service deploy pipeline for main.
+	deployDir := filepath.Join(devboxDir, "deploy")
+	if err := os.MkdirAll(deployDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mainDeployYML := `phases:
+  - name: setup
+    steps:
+      - name: noop
+        type: shell
+        cmd: echo hello
+`
+	if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte(mainDeployYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// State file so RenderDeployStatus produces a non-empty section.
+	statePath := filepath.Join(dir, journal.DefaultRelPath)
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state := &journal.ProjectState{
+		Services: map[string]*journal.ServiceState{
+			"main": {Status: journal.StatusDeployed},
+		},
+	}
+	if err := journal.Save(statePath, state); err != nil {
+		t.Fatal(err)
+	}
+
+	return configPath
 }
 
 func TestStatusCmd_DefaultPrintsHealthAndSections(t *testing.T) {
@@ -89,18 +148,19 @@ func TestStatusCmd_NoServicesFlagSuppressesSection(t *testing.T) {
 
 func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 	tests := []struct {
-		flag    string
-		section string
+		flag      string
+		section   string
+		fixtureOn func(*testing.T) string // fixture that produces the section
 	}{
-		{"--no-services", "Services"},
-		{"--no-tools", "Tools"},
-		{"--no-deploy", "Deploy Status"},
-		{"--no-topology", "Topology"},
-		{"--no-git", "Git Workspace"},
+		{"--no-services", "Services", statusFixture},
+		{"--no-tools", "Tools", statusFixture},
+		{"--no-deploy", "Deploy Status", statusFixtureWithDeploy},
+		{"--no-topology", "Topology", statusFixture},
+		{"--no-git", "Git Workspace", statusFixture},
 	}
 	for _, tt := range tests {
 		t.Run(tt.flag, func(t *testing.T) {
-			configPath := statusFixture(t)
+			configPath := tt.fixtureOn(t)
 			root := NewRootCmd()
 			var buf bytes.Buffer
 			root.SetOut(&buf)

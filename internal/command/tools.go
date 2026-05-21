@@ -45,7 +45,6 @@ For a read-only view, run 'devbox status tools'.`,
 // runToolsToggle opens the interactive multi-select toggle form for tools.
 // Non-TTY returns ErrInteractiveRequired. No-togglable short-circuits.
 func runToolsToggle(cmd *cobra.Command, flags *rootFlags) error {
-	applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
 	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 		return fmt.Errorf("%w: tools: interactive toggle requires a TTY; use 'devbox status tools' for read-only view", ErrInteractiveRequired)
 	}
