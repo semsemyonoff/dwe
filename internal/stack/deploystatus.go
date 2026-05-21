@@ -118,6 +118,10 @@ func findLatestFailedStep(svcState *journal.ServiceState) (phase, step string) {
 // RenderServiceDeployDetail prints the per-phase/step breakdown for a single
 // tracked service. It returns an error when the service is not tracked.
 func RenderServiceDeployDetail(w io.Writer, state *journal.ProjectState, tracked []string, serviceName string) error {
+	if state == nil {
+		_, _ = fmt.Fprintf(w, "Deploy state not available\n")
+		return nil
+	}
 	if !slices.Contains(tracked, serviceName) {
 		return fmt.Errorf("service %q is not tracked (not deployed)", serviceName)
 	}

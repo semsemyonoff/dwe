@@ -67,7 +67,8 @@ func loadStatusContext(flags *rootFlags) (*statusContext, error) {
 	statePath := filepath.Join(flags.ProjectRoot(), journal.DefaultRelPath)
 	state, err := journal.Load(statePath)
 	if err != nil {
-		return nil, fmt.Errorf("loading deploy state: %w", err)
+		// Corrupt/unreadable state: degrade gracefully — deploy section is skipped.
+		state = nil
 	}
 	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath) // nil-tolerant: LoadTrackedServices skips gate validation on error
 	tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, flags.ProjectRoot())

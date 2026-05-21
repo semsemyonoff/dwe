@@ -46,13 +46,13 @@ For a read-only view, run 'devbox status tools'.`,
 // Non-TTY returns ErrInteractiveRequired. No-togglable short-circuits.
 func runToolsToggle(cmd *cobra.Command, flags *rootFlags) error {
 	applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
+	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+		return fmt.Errorf("%w: tools: interactive toggle requires a TTY; use 'devbox status tools' for read-only view", ErrInteractiveRequired)
+	}
+
 	cfg, err := config.LoadConfig(flags.configPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
-	}
-
-	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-		return fmt.Errorf("%w: tools: interactive toggle requires a TTY; use 'devbox status tools' for read-only view", ErrInteractiveRequired)
 	}
 
 	rows := stack.BuildToolRows(cfg)
