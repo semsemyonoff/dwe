@@ -213,8 +213,8 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/usercommands/...` — must pass before Task 8 starts
 
 ### Task 8: `internal/ui/paramform.go` — form builder (with UI-layer DTO)
-- [ ] **Layering constraint:** `internal/ui/` must NOT import `internal/usercommands/model`, `internal/usercommands/...`, `internal/config`, or `internal/tpl`. (Same rule applied to `ConfirmRun` in Task 9.) Existing pattern: `RenderServiceTable` / `RenderDeployStatus` already use view-model types defined under `internal/command/statusview/`. Follow it here.
-- [ ] **UI DTO** — define in `internal/ui/paramform.go`:
+- [x] **Layering constraint:** `internal/ui/` must NOT import `internal/usercommands/model`, `internal/usercommands/...`, `internal/config`, or `internal/tpl`. (Same rule applied to `ConfirmRun` in Task 9.) Existing pattern: `RenderServiceTable` / `RenderDeployStatus` already use view-model types defined under `internal/command/statusview/`. Follow it here.
+- [x] **UI DTO** — define in `internal/ui/paramform.go`:
   ```go
   // ParamField is the UI-layer description of one parameter. Caller (orchestrator)
   // converts model.ParamDef → ParamField; ui does not import usercommands.
@@ -238,24 +238,24 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
   )
   ```
   Naming follows the project convention: `*Unknown` at iota 0 (see `cmdbrowser.Action`/`Mode` in CLAUDE.md, `internal/command/statusview.ConfigDelta`).
-- [ ] **Orchestrator side** (`internal/command/command_cmd.go`, lands in Task 10): a small adapter `paramFieldsFromDef(def *model.CommandDef, prefilled map[string]string) []ui.ParamField` translates `model.ParamDef` → `ui.ParamField` (deterministic order: sorted by name, or honoring declared order if accessible). Tested under `command_cmd_test.go`.
-- [ ] **API in `paramform.go`:**
+- [x] **Orchestrator side** (`internal/command/command_cmd.go`, lands in Task 10): a small adapter `paramFieldsFromDef(def *model.CommandDef, prefilled map[string]string) []ui.ParamField` translates `model.ParamDef` → `ui.ParamField` (deterministic order: sorted by name, or honoring declared order if accessible). Tested under `command_cmd_test.go`.
+- [x] **API in `paramform.go`:**
   ```go
   func BuildParamForm(title string, fields []ParamField, values *map[string]string) (*huh.Form, error)
   func RunParamForm(title string, fields []ParamField) (map[string]string, error)
   ```
   `BuildParamForm` constructs the form, does not run it (testable in isolation). `RunParamForm` wraps build + run via a test seam.
-- [ ] type mapping:
+- [x] type mapping:
   - `FieldTypeString`/`FieldTypePath` → `huh.NewInput()` (`Path` with `Suggestions` if available)
   - `FieldTypeInt` → `Input + Validate(strconv.Atoi)`
   - `FieldTypeBool` → `huh.NewSelect[string]().Options("false", "true")` — **order matters.** `huh.Select.Options(...)` writes the selected option into the bound value on render, so if the value pointer starts empty (optional bool, no `Default`, no `--set`), the FIRST option wins. Putting `"false"` first ensures the safe default. When `field.Default != ""`, pre-set the bound value to it before constructing the form so huh selects the matching option. Add a test case for an optional bool with no default → submit without interacting → values map yields `"false"` (NOT `"true"`).
-- [ ] pattern validation: `re, err := regexp.Compile(field.Pattern)` (NOT `regexp.MustCompile` — `resolve.Params` already validates patterns lazily at `resolve.go:55-58` returning errors, and command-loader validation does not currently catch invalid regex; a panic here would crash the CLI on a malformed user pattern). On compile error, `BuildParamForm` returns `fmt.Errorf("param %q: invalid pattern %q: %w", name, pattern, err)`. Add an invalid-regex test case asserting `BuildParamForm` returns the error without invoking huh.
-- [ ] required validation: `huh.NewInput().Validate(func(s string) error { if s=="" {return ErrRequired}; ... })`
-- [ ] show ALL fields (required + optional) — pre-filled from `field.Default`
-- [ ] test seam: package-level var `runFormFn = (*huh.Form).Run` — override in tests; **subtests overriding it MUST NOT call `t.Parallel()`** (global state across goroutines)
-- [ ] form cancel (`huh.ErrUserAborted` or equivalent — verify against `go.mod` huh version) → return `ui.ErrCancelled` (consistent with `RunSelector` / `RunConfirm` today)
-- [ ] unit tests in `internal/ui/paramform_test.go`: table-driven, named subtests per `ParamFieldType`, pattern violation, missing required, cancel, bool/int validation. Add a top-level `runFormFn` snapshot/restore helper in `TestMain` or per-test `defer` so test runs are hermetic.
-- [ ] `make test ./internal/ui/...` — must pass
+- [x] pattern validation: `re, err := regexp.Compile(field.Pattern)` (NOT `regexp.MustCompile` — `resolve.Params` already validates patterns lazily at `resolve.go:55-58` returning errors, and command-loader validation does not currently catch invalid regex; a panic here would crash the CLI on a malformed user pattern). On compile error, `BuildParamForm` returns `fmt.Errorf("param %q: invalid pattern %q: %w", name, pattern, err)`. Add an invalid-regex test case asserting `BuildParamForm` returns the error without invoking huh.
+- [x] required validation: `huh.NewInput().Validate(func(s string) error { if s=="" {return ErrRequired}; ... })`
+- [x] show ALL fields (required + optional) — pre-filled from `field.Default`
+- [x] test seam: package-level var `runFormFn = (*huh.Form).Run` — override in tests; **subtests overriding it MUST NOT call `t.Parallel()`** (global state across goroutines)
+- [x] form cancel (`huh.ErrUserAborted` or equivalent — verify against `go.mod` huh version) → return `ui.ErrCancelled` (consistent with `RunSelector` / `RunConfirm` today)
+- [x] unit tests in `internal/ui/paramform_test.go`: table-driven, named subtests per `ParamFieldType`, pattern violation, missing required, cancel, bool/int validation. Add a top-level `runFormFn` snapshot/restore helper in `TestMain` or per-test `defer` so test runs are hermetic.
+- [x] `make test ./internal/ui/...` — must pass
 
 ### Task 9: Confirmation summary and `ConfirmRun`
 - [ ] in `internal/ui/confirm.go` add `ConfirmRun(title string, values map[string]string) (bool, error)` — receives the **already-rendered** confirmation title (caller is responsible for `${param.*}` template expansion) and the values map for the summary. Renders summary lines `key = value` above `title`, then a standard `huh.NewConfirm`.
