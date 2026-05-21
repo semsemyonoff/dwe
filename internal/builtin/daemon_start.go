@@ -120,9 +120,11 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 		if err != nil {
 			return fmt.Errorf("docker_daemon_start: workdir_from %q: %w", workdirFrom, err)
 		}
-		if s, ok := v.(string); ok {
-			workdir = s
+		s, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("docker_daemon_start: workdir_from %q: resolved to non-string %T", workdirFrom, v)
 		}
+		workdir = s
 	}
 
 	argv, err := getStringSlice(with, "argv")

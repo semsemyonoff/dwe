@@ -161,79 +161,8 @@ func parseDaemonParamValuesForKey(r io.Reader, key string) []string {
 	return values
 }
 
-// decodeLabelsForCompletion handles both shapes the docker CLI has used for
-// the `Labels` field of `ps --format=json` output:
-//   - modern: object (map[string]string)
-//   - legacy: string ("k=v,k=v")
-//
-// Returns nil if the value is neither shape (completion silently skips the line).
+// decodeLabelsForCompletion delegates to daemon.DecodeLabels, which handles
+// both label wire-encodings: modern map[string]string and legacy "k=v,k=v".
 func decodeLabelsForCompletion(raw json.RawMessage) map[string]string {
-	if len(raw) == 0 {
-		return nil
-	}
-	var m map[string]string
-	if err := json.Unmarshal(raw, &m); err == nil {
-		return m
-	}
-	var s string
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return nil
-	}
-	return parseLegacyLabelStringForCompletion(s)
-}
-
-// parseLegacyLabelStringForCompletion parses a "k=v,k=v" label string from
-// old Docker versions. It tracks JSON object depth and quoted strings so that
-// brace/comma characters inside a JSON string value (e.g.
-// devbox.daemon.params={"n":"a},b"}) are not treated as depth changes or
-// entry separators.
-func parseLegacyLabelStringForCompletion(s string) map[string]string {
-	out := make(map[string]string)
-	depth := 0
-	inString := false
-	escaped := false
-	start := 0
-	addEntry := func(part string) {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			return
-		}
-		k, v, ok := strings.Cut(part, "=")
-		if !ok {
-			return
-		}
-		out[strings.TrimSpace(k)] = strings.TrimSpace(v)
-	}
-	for i := 0; i < len(s); i++ {
-		if escaped {
-			escaped = false
-			continue
-		}
-		if inString {
-			switch s[i] {
-			case '\\':
-				escaped = true
-			case '"':
-				inString = false
-			}
-			continue
-		}
-		switch s[i] {
-		case '"':
-			inString = true
-		case '{':
-			depth++
-		case '}':
-			if depth > 0 {
-				depth--
-			}
-		case ',':
-			if depth == 0 {
-				addEntry(s[start:i])
-				start = i + 1
-			}
-		}
-	}
-	addEntry(s[start:])
-	return out
+	return daemon.DecodeLabels(raw)
 }
