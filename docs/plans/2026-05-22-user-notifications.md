@@ -209,16 +209,16 @@ Concrete file references gathered before drafting:
 
 ### Task 6: Hook notifier into `devbox deploy`
 
-- [ ] in `internal/command/deploy.go` `deployRunCmd`: install the notifier defer **before** `config.LoadConfig` so a malformed `devbox.yml` still triggers a failure notification. Follow the shared hookpoint contract exactly (see Technical Details § "Hookpoint contract"):
+- [x] in `internal/command/deploy.go` `deployRunCmd`: install the notifier defer **before** `config.LoadConfig` so a malformed `devbox.yml` still triggers a failure notification. Follow the shared hookpoint contract exactly (see Technical Details § "Hookpoint contract"):
   - capture `start := time.Now()` at function entry
   - declare `var projectName string` (defaults to empty; assigned only after main config load succeeds — panic-safe on early `LoadConfig` failure)
   - `ucfg, ucfgErr := userconfig.Load(projectRoot)`; on parser error, `slog.Warn(...)` and set `ucfg = nil` (deploy must never be blocked by the notification subsystem)
   - `notifier := newNotifier(ucfg)` — using the consumer-local seam, not `notify.New` directly (see test-seam bullet below)
   - install `defer func() { notifier.Notify(context.Background(), notify.Event{Kind: notify.OpDeploy, Operation: "deploy", Outcome: outcomeFromErr(err), Duration: time.Since(start), Err: err, Project: projectName}) }()` — uses `context.Background()` because the notification fires after the operation has finished (see Technical Details § "Context propagation at hookpoints")
   - after the defer is installed, call `cfg, err := config.LoadConfig(...)`; on success, `projectName = cfg.Project.Name`
-- [ ] `outcomeFromErr` helper: `nil` → `OutcomeSuccess`, anything else → `OutcomeFailure`. Define once in `internal/notify/` so all three hookpoints share it.
-- [ ] userconfig load failure (parser error in a user-edited file) → log warning via `slog.Warn` and proceed with a nil-`cfg` notifier (which `notify.New` tolerates → returns a notifier with `enabled=false` that no-ops every call). Deploy must never be blocked by a notification subsystem.
-- [ ] write tests in `internal/command/` for: success path fires notifier with `OutcomeSuccess`; failure path fires with `OutcomeFailure` and the err attached; userconfig load error → warning printed, deploy continues; **early main-config-load failure** → notifier still fires (`OutcomeFailure`, `Project == ""`, no panic) — this guards the panic-safe `projectName` ordering documented in the hookpoint contract. **Test seam shape** — because `notify.New` returns the concrete `*notify.Notifier` with unexported backend fields, the test seam needs a **consumer-local interface**. In `internal/command/notify.go` (new tiny file) declare:
+- [x] `outcomeFromErr` helper: `nil` → `OutcomeSuccess`, anything else → `OutcomeFailure`. Define once in `internal/notify/` so all three hookpoints share it.
+- [x] userconfig load failure (parser error in a user-edited file) → log warning via `slog.Warn` and proceed with a nil-`cfg` notifier (which `notify.New` tolerates → returns a notifier with `enabled=false` that no-ops every call). Deploy must never be blocked by a notification subsystem.
+- [x] write tests in `internal/command/` for: success path fires notifier with `OutcomeSuccess`; failure path fires with `OutcomeFailure` and the err attached; userconfig load error → warning printed, deploy continues; **early main-config-load failure** → notifier still fires (`OutcomeFailure`, `Project == ""`, no panic) — this guards the panic-safe `projectName` ordering documented in the hookpoint contract. **Test seam shape** — because `notify.New` returns the concrete `*notify.Notifier` with unexported backend fields, the test seam needs a **consumer-local interface**. In `internal/command/notify.go` (new tiny file) declare:
   ```go
   type notifier interface { Notify(context.Context, notify.Event) }
   var newNotifier func(*userconfig.Config) notifier = func(cfg *userconfig.Config) notifier {
@@ -226,7 +226,7 @@ Concrete file references gathered before drafting:
   }
   ```
   Tests override `newNotifier` with a recording fake. This pattern satisfies "define interfaces where consumed" (golang-structs-interfaces) — `command` declares exactly the contract it needs. Apply the same pattern in `internal/lifecycle/notify.go` and `internal/usercommands/runtime/notify.go` for Tasks 7 and 8.
-- [ ] run `make test` — must pass before Task 7
+- [x] run `make test` — must pass before Task 7
 
 ### Task 7: Hook notifier into `lifecycle.RunRun` with `SkipNotify` bypass
 

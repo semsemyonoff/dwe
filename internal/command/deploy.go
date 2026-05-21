@@ -1,10 +1,13 @@
 package command
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
@@ -12,10 +15,12 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/lock"
+	"devbox-cli/internal/notify"
 	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -157,11 +162,35 @@ func (e *lockHeldError) Error() string {
 
 func (e *lockHeldError) ExitCode() int { return 2 }
 
-func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool) error {
+func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool) (err error) {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 	lockPath := filepath.Join(stateDir, "deploy.lock")
+
+	// Install notifier defer before any error-returning step so even an
+	// early config-load failure produces a "deploy failed" notification.
+	// projectName stays empty until main config load succeeds, which is
+	// fine — the backend renders just the operation + duration in that
+	// case.
+	start := time.Now()
+	var projectName string
+	ucfg, ucfgErr := userconfig.Load(workDir)
+	if ucfgErr != nil {
+		slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
+		ucfg = nil
+	}
+	n := newNotifier(ucfg)
+	defer func() {
+		n.Notify(context.Background(), notify.Event{
+			Kind:      notify.OpDeploy,
+			Operation: "deploy",
+			Outcome:   notify.OutcomeFromErr(err),
+			Duration:  time.Since(start),
+			Err:       err,
+			Project:   projectName,
+		})
+	}()
 
 	// Acquire file lock to prevent parallel deploys
 	lck, err := lock.Acquire(lockPath)
@@ -181,6 +210,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	projectName = cfg.Project.Name
 
 	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
 	if err != nil {
