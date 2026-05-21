@@ -20,164 +20,90 @@ import (
 func newToolCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tools",
-		Short: "Manage optional tools",
-		Long: `List, enable, or disable optional tool services.
+		Short: "Toggle tools (interactive) or enable/disable individually",
+		Long: `Open an interactive multi-select form to enable or disable optional tools.
 
-Enabling or disabling a tool writes the change to devbox/local.yml and regenerates .env.
+Changes are written to devbox/local.yml and .env is regenerated.
 Use 'devbox run' to start newly enabled tools.
 
-Use 'tools status' to display a read-only table of all tools and their current state.
-Use 'tools list' for an interactive toggle form (TTY) or the same table (non-TTY).`,
-		Example: `  devbox tools status
-  devbox tools list
+For a read-only view, run 'devbox status tools'.`,
+		Example: `  devbox tools
   devbox tools enable adminer
   devbox tools disable mailpit`,
+		Args:         cobra.NoArgs,
 		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runToolsToggle(cmd, flags)
+		},
 	}
-	cmd.AddCommand(newToolStatusCmd(flags))
-	cmd.AddCommand(newToolListCmd(flags))
 	cmd.AddCommand(newToolEnableCmd(flags))
 	cmd.AddCommand(newToolDisableCmd(flags))
 	return cmd
 }
 
-func newToolStatusCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:     "status",
-		Short:   "Show all tools and their current state (read-only table)",
-		Long:    `Show all optional tools with their host, port, enabled state, and running status.`,
-		Example: "  devbox tools status",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			projectName, err := resolveProjectName(flags.configPath, cfg)
-			if err != nil {
-				return err
-			}
-			dockerBin := config.DockerBin(cfg)
-			isRunning := func(_, container string) bool {
-				return stack.ContainerRunning(projectName, container, dockerBin)
-			}
-			return runToolList(render.Stdout(), cfg, isRunning)
-		},
-		SilenceUsage: true,
+// runToolsToggle opens the interactive multi-select toggle form for tools.
+// Non-TTY returns ErrInteractiveRequired. No-togglable short-circuits.
+func runToolsToggle(cmd *cobra.Command, flags *rootFlags) error {
+	applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
 	}
-}
 
-func newToolListCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: "Toggle tools interactively (TTY) or show status table (non-TTY)",
-		Long: `Toggle optional tools on or off using an interactive multi-select form.
+	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+		return fmt.Errorf("%w: tools: interactive toggle requires a TTY; use 'devbox status tools' for read-only view", ErrInteractiveRequired)
+	}
 
-On submit, newly-checked tools are enabled and newly-unchecked tools are
-disabled in devbox/local.yml; .env is regenerated once.
+	rows := stack.BuildToolRows(cfg)
+	if len(rows) == 0 {
+		return fmt.Errorf("nothing to toggle, see 'devbox status tools'")
+	}
 
-In non-TTY mode (piped stdin or no terminal) the command falls back to printing
-the read-only status table.`,
-		Example: `  devbox tools list
-  devbox tools list | cat   # non-TTY: prints the table`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
+	items := make([]ui.MultiSelectItem, len(rows))
+	for i, row := range rows {
+		items[i] = ui.MultiSelectItem{
+			Key:      row.Name,
+			Label:    row.Name,
+			Locked:   false,
+			Selected: row.Enabled,
+		}
+	}
 
-			// Non-TTY: fall back to the read-only table.
-			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-				projectName, err := resolveProjectName(flags.configPath, cfg)
-				if err != nil {
-					return err
-				}
-				dockerBin := config.DockerBin(cfg)
-				isRunning := func(_, container string) bool {
-					return stack.ContainerRunning(projectName, container, dockerBin)
-				}
-				return runToolList(render.Stdout(), cfg, isRunning)
-			}
-
-			// TTY: build multi-select items from tool rows.
-			rows := stack.BuildToolRows(cfg)
-			items := make([]ui.MultiSelectItem, len(rows))
-			for i, row := range rows {
-				items[i] = ui.MultiSelectItem{
-					Key:      row.Name,
-					Label:    row.Name,
-					Locked:   false,
-					Selected: row.Enabled,
-				}
-			}
-
-			result, err := runMultiSelect("Toggle tools:", items)
-			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
-					return nil
-				}
-				return err
-			}
-
-			toolSelections := make([]localconfig.ToolSelection, len(rows))
-			for i, row := range rows {
-				toolSelections[i] = localconfig.ToolSelection{Name: row.Name, Enabled: row.Enabled}
-			}
-			toEnable, toDisable := localconfig.DiffToolSelection(toolSelections, result.Kept)
-			if len(toEnable) == 0 && len(toDisable) == 0 {
-				return nil
-			}
-
-			if err := applyToolTogglesBatch(cfg, flags.configPath, toEnable, toDisable); err != nil {
-				return err
-			}
-
-			// Print one-line summary of all changes.
-			var parts []string
-			if len(toEnable) > 0 {
-				parts = append(parts, "enabled: "+strings.Join(toEnable, ", "))
-			}
-			if len(toDisable) > 0 {
-				parts = append(parts, "disabled: "+strings.Join(toDisable, ", "))
-			}
-			render.Stdout().Success(strings.Join(parts, "; "))
-
-			envPath, err := envfile.Regenerate(flags.configPath)
-			if err != nil {
-				return err
-			}
-			render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
+	result, err := runMultiSelect("Toggle tools:", items)
+	if err != nil {
+		if errors.Is(err, ui.ErrCancelled) {
 			return nil
-		},
-		SilenceUsage: true,
-	}
-}
-
-// runToolList prints the tool list as a styled Lipgloss table.
-func runToolList(w *render.Writer, cfg *config.DevboxConfig, isRunning stack.ContainerCheckFn) error {
-	toolData := stack.BuildToolRows(cfg)
-	projectFull := cfg.Project.FullName()
-
-	rows := make([]ui.ToolTableRow, len(toolData))
-	for i, t := range toolData {
-		running := false
-		if t.Enabled {
-			running = isRunning(projectFull, t.Container)
 		}
-		rows[i] = ui.ToolTableRow{
-			Name:      t.Name,
-			Host:      t.Host,
-			Port:      t.Port,
-			Container: t.Container,
-			Enabled:   t.Enabled,
-			Running:   running,
-		}
+		return err
 	}
 
-	_, _ = fmt.Fprintln(w.Writer(), ui.RenderToolTable(rows, nil))
+	toolSelections := make([]localconfig.ToolSelection, len(rows))
+	for i, row := range rows {
+		toolSelections[i] = localconfig.ToolSelection{Name: row.Name, Enabled: row.Enabled}
+	}
+	toEnable, toDisable := localconfig.DiffToolSelection(toolSelections, result.Kept)
+	if len(toEnable) == 0 && len(toDisable) == 0 {
+		return nil
+	}
+
+	if err := applyToolTogglesBatch(cfg, flags.configPath, toEnable, toDisable); err != nil {
+		return err
+	}
+
+	var parts []string
+	if len(toEnable) > 0 {
+		parts = append(parts, "enabled: "+strings.Join(toEnable, ", "))
+	}
+	if len(toDisable) > 0 {
+		parts = append(parts, "disabled: "+strings.Join(toDisable, ", "))
+	}
+	render.Stdout().Success(strings.Join(parts, "; "))
+
+	envPath, err := envfile.Regenerate(flags.configPath)
+	if err != nil {
+		return err
+	}
+	render.Stdout().Info(fmt.Sprintf(".env regenerated → %s", envPath))
 	return nil
 }
 
@@ -187,14 +113,14 @@ func newToolEnableCmd(flags *rootFlags) *cobra.Command {
 		Short: "Enable an optional tool (writes to devbox/local.yml)",
 		Long: `Enable an optional tool by writing tools.<name>.enabled = true to devbox/local.yml.
 
-Available tools are configured in devbox/defaults.yml; run 'devbox tools status' to list them.
+Available tools are configured in devbox/tools.yml; run 'devbox status tools' to list them.
 The .env file is regenerated automatically after the change.
 
 When no tool name is given, an interactive selector shows all currently
 disabled tools.`,
 		Example:           "  devbox tools enable adminer",
 		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: toolNameCompletion(flags),
+		ValidArgsFunction: toolCompletion(flags, completeToolDisabled),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -227,14 +153,14 @@ func newToolDisableCmd(flags *rootFlags) *cobra.Command {
 		Short: "Disable an optional tool (writes to devbox/local.yml)",
 		Long: `Disable an optional tool by writing tools.<name>.enabled = false to devbox/local.yml.
 
-Available tools are configured in devbox/defaults.yml; run 'devbox tools status' to list them.
+Available tools are configured in devbox/tools.yml; run 'devbox status tools' to list them.
 The .env file is regenerated automatically after the change.
 
 When no tool name is given, an interactive selector shows all currently
 enabled tools.`,
 		Example:           "  devbox tools disable adminer",
 		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: toolNameCompletion(flags),
+		ValidArgsFunction: toolCompletion(flags, completeToolEnabled),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.configPath)
 			if err != nil {
@@ -262,8 +188,6 @@ enabled tools.`,
 }
 
 // pickToolToEnable returns the name of a disabled tool to enable.
-// If no disabled tools exist, returns an error.
-// Otherwise the selector is called.
 func pickToolToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []stack.ToolRow
 	for _, row := range stack.BuildToolRows(cfg) {
@@ -275,8 +199,6 @@ func pickToolToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string
 }
 
 // pickToolToDisable returns the name of an enabled tool to disable.
-// If no enabled tools exist, returns an error.
-// Otherwise the selector is called.
 func pickToolToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []stack.ToolRow
 	for _, row := range stack.BuildToolRows(cfg) {
@@ -287,9 +209,6 @@ func pickToolToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (strin
 	return pickToolCandidates(candidates, "enabled", "Select a tool to disable:", selector)
 }
 
-// pickToolCandidates resolves a tool name from a candidate list.
-// - Empty list → error mentioning statusLabel.
-// - One or more → selector is always invoked.
 func pickToolCandidates(rows []stack.ToolRow, statusLabel, title string, selector selectToggleFn) (string, error) {
 	if len(rows) == 0 {
 		return "", fmt.Errorf("no %s tools found", statusLabel)
@@ -311,8 +230,6 @@ func pickToolCandidates(rows []stack.ToolRow, statusLabel, title string, selecto
 	return rows[idx].Name, nil
 }
 
-// toolNameSet returns the set of tool names declared in cfg.Tools.
-// cfg must come from LoadConfig of the same configPath; the helper never re-loads config.
 func toolNameSet(cfg *config.DevboxConfig) map[string]bool {
 	set := make(map[string]bool, len(cfg.Tools))
 	for name := range cfg.Tools {
@@ -321,36 +238,45 @@ func toolNameSet(cfg *config.DevboxConfig) map[string]bool {
 	return set
 }
 
-// toolNameCompletion returns a ValidArgsFunction that completes tool names from the
-// loaded config. It gates on schema validation so that legacy v1 projects do not
-// appear functional through tab-completion.
-func toolNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+// tool completion filters.
+type toolFilter int
+
+const (
+	completeToolDisabled toolFilter = iota
+	completeToolEnabled
+)
+
+func toolCompletion(flags *rootFlags, filter toolFilter) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		// Gate on project discovery + schema validation.
 		configPath, _, err := completionConfigPath(flags, cmd)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		// Load config to derive tool names from the actual config, not a static list.
 		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		names := make([]string, 0, len(cfg.Tools))
-		for name := range cfg.Tools {
-			names = append(names, name)
+		var names []string
+		for name, tool := range cfg.Tools {
+			switch filter {
+			case completeToolDisabled:
+				if !tool.Enabled {
+					names = append(names, name)
+				}
+			case completeToolEnabled:
+				if tool.Enabled {
+					names = append(names, name)
+				}
+			}
 		}
 		sort.Strings(names)
 		return names, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 
-// applyToolTogglesBatch loads devbox/local.yml once, validates and applies all
-// toggles in-memory, then writes the file once. See applyServiceTogglesBatch.
-// cfg must come from LoadConfig of the same configPath; the helper never re-loads config.
 func applyToolTogglesBatch(cfg *config.DevboxConfig, configPath string, toEnable, toDisable []string) error {
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
@@ -368,9 +294,6 @@ func applyToolTogglesBatch(cfg *config.DevboxConfig, configPath string, toEnable
 	return localconfig.WriteLocalYAML(localPath, local)
 }
 
-// setToolEnabled writes tools.<name>.enabled = value to devbox/local.yml,
-// prints a confirmation, and regenerates .env.
-// cfg must come from LoadConfig of the same configPath; the helper never re-loads config.
 func setToolEnabled(cfg *config.DevboxConfig, configPath string, name string, enabled bool) error {
 	var toEnable, toDisable []string
 	if enabled {

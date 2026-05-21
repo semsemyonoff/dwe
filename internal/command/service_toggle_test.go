@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 )
 
 // writeTempServiceConfig creates a minimal devbox config in a temp dir and
-// returns the path to devbox.yml. Services map: name → {mandatory, enabled}.
+// returns the path to devbox.yml. Services map: name → {mandatory, enabled, container}.
 func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	mandatory bool
 	enabled   bool
@@ -23,7 +24,6 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	t.Helper()
 	dir := t.TempDir()
 
-	// devbox.yml: project block + enabled states (Enabled is computed from merge)
 	var devboxLines []string
 	devboxLines = append(devboxLines, "project:")
 	devboxLines = append(devboxLines, "  name: test")
@@ -44,7 +44,6 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
-	// devbox/services.yml: Container and Mandatory
 	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
@@ -69,22 +68,19 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	return filepath.Join(dir, "devbox.yml")
 }
 
-func TestServiceListCmd_NonTTY_NoMultiSelect(t *testing.T) {
+func TestServicesToggle_NonTTY_ReturnsInteractiveRequired(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
 		mandatory bool
 		enabled   bool
 		container string
 	}{
-		"main":   {mandatory: true, enabled: false},
 		"second": {mandatory: false, enabled: false},
 	})
 
-	// Simulate non-TTY: IsInteractiveFn returns false.
 	oldInteractive := ui.IsInteractiveFn
 	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
-	// runMultiSelect must not be called.
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
 	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
@@ -93,19 +89,51 @@ func TestServiceListCmd_NonTTY_NoMultiSelect(t *testing.T) {
 	}
 
 	flags := &rootFlags{configPath: configPath}
-	cmd := newServiceListCmd(flags)
-	if err := cmd.RunE(cmd, nil); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cmd := newServiceCmd(flags)
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected non-TTY error, got nil")
 	}
-
-	// local.yml must not be created.
-	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
-	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
-		t.Error("local.yml should not have been created in non-TTY mode")
+	if !errors.Is(err, ErrInteractiveRequired) {
+		t.Errorf("expected ErrInteractiveRequired, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "devbox status services") {
+		t.Errorf("error should hint at 'devbox status services', got: %v", err)
 	}
 }
 
-func TestServiceListCmd_TTY_EnablesAndDisables(t *testing.T) {
+func TestServicesToggle_AllMandatory_ReturnsError(t *testing.T) {
+	configPath := writeTempServiceConfig(t, map[string]struct {
+		mandatory bool
+		enabled   bool
+		container string
+	}{
+		"main": {mandatory: true, enabled: true},
+	})
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		t.Fatal("runMultiSelect should not be called when all mandatory")
+		return ui.MultiSelectResult{}, nil
+	}
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when all services mandatory, got nil")
+	}
+	if !strings.Contains(err.Error(), "nothing to toggle") {
+		t.Errorf("error should say 'nothing to toggle', got: %v", err)
+	}
+}
+
+func TestServicesToggle_TTY_EnablesAndDisables(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
 		mandatory bool
 		enabled   bool
@@ -116,12 +144,10 @@ func TestServiceListCmd_TTY_EnablesAndDisables(t *testing.T) {
 		"third":  {mandatory: false, enabled: true},
 	})
 
-	// Simulate TTY.
 	oldInteractive := ui.IsInteractiveFn
 	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
-	// Fake multi-select: user enables "second", disables "third".
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
 	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
@@ -129,12 +155,11 @@ func TestServiceListCmd_TTY_EnablesAndDisables(t *testing.T) {
 	}
 
 	flags := &rootFlags{configPath: configPath}
-	cmd := newServiceListCmd(flags)
+	cmd := newServiceCmd(flags)
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Read local.yml and verify the changes.
 	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
 	data, err := os.ReadFile(localPath)
 	if err != nil {
@@ -144,60 +169,52 @@ func TestServiceListCmd_TTY_EnablesAndDisables(t *testing.T) {
 	if err := yaml.Unmarshal(data, &local); err != nil {
 		t.Fatalf("unmarshal local.yml: %v", err)
 	}
-
 	svcMap, _ := local["services"].(map[string]any)
 	if svcMap == nil {
 		t.Fatal("local.yml missing services key")
 	}
-
-	// "second" should be enabled = true.
 	secondEntry, _ := svcMap["second"].(map[string]any)
 	if secondEntry == nil || secondEntry["enabled"] != true {
-		t.Errorf("second should be enabled=true in local.yml, got %v", secondEntry)
+		t.Errorf("second should be enabled=true, got %v", secondEntry)
 	}
-
-	// "third" should be enabled = false.
 	thirdEntry, _ := svcMap["third"].(map[string]any)
 	if thirdEntry == nil || thirdEntry["enabled"] != false {
-		t.Errorf("third should be enabled=false in local.yml, got %v", thirdEntry)
+		t.Errorf("third should be enabled=false, got %v", thirdEntry)
 	}
 }
 
-func TestServiceListCmd_TTY_NoChanges_NoWrites(t *testing.T) {
+func TestServicesToggle_TTY_CancelNoWrites(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
 		mandatory bool
 		enabled   bool
 		container string
 	}{
-		"second": {mandatory: false, enabled: true},
+		"second": {mandatory: false, enabled: false},
 	})
 
 	oldInteractive := ui.IsInteractiveFn
 	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
-	// Fake multi-select: user leaves second checked (no change).
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
 	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"second"}, Locked: nil}, nil
+		return ui.MultiSelectResult{}, ui.ErrCancelled
 	}
 
 	flags := &rootFlags{configPath: configPath}
-	cmd := newServiceListCmd(flags)
+	cmd := newServiceCmd(flags)
 	if err := cmd.RunE(cmd, nil); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("cancel should return nil, got: %v", err)
 	}
-
-	// No changes → local.yml must not be created.
 	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
 	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
-		t.Error("local.yml should not be created when no changes were made")
+		t.Error("local.yml should not be created after cancel")
 	}
 }
 
-// TestApplyServiceTogglesBatch_AllOrNothing verifies that when validation
-// rejects any toggle in the batch, no partial state is written to local.yml.
+// TestApplyServiceTogglesBatch_AllOrNothing verifies that batch validation
+// rejects mandatory toggles without writing partial state.
 func TestApplyServiceTogglesBatch_AllOrNothing(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
 		mandatory bool
@@ -213,7 +230,6 @@ func TestApplyServiceTogglesBatch_AllOrNothing(t *testing.T) {
 		t.Fatalf("load config: %v", err)
 	}
 
-	// "second" is valid; "main" is mandatory — batch must reject before writing.
 	err = applyServiceTogglesBatch(configPath, cfg, []string{"second"}, []string{"main"})
 	if err == nil {
 		t.Fatal("expected error for mandatory toggle, got nil")
@@ -222,37 +238,5 @@ func TestApplyServiceTogglesBatch_AllOrNothing(t *testing.T) {
 	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
 	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
 		t.Error("local.yml must not be written when batch validation fails")
-	}
-}
-
-func TestServiceListCmd_TTY_CancelNoWrites(t *testing.T) {
-	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
-		enabled   bool
-		container string
-	}{
-		"second": {mandatory: false, enabled: false},
-	})
-
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
-
-	// Fake multi-select: user presses Esc.
-	oldMS := runMultiSelect
-	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{}, ui.ErrCancelled
-	}
-
-	flags := &rootFlags{configPath: configPath}
-	cmd := newServiceListCmd(flags)
-	if err := cmd.RunE(cmd, nil); err != nil {
-		t.Fatalf("cancel should return nil, got: %v", err)
-	}
-
-	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
-	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
-		t.Error("local.yml should not be created after cancel")
 	}
 }

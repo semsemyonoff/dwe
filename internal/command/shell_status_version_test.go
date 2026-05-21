@@ -1055,7 +1055,7 @@ func TestServiceCmdUsesServicesName(t *testing.T) {
 func TestServiceCmdSubcommands(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newServiceCmd(flags)
-	want := []string{"list", "enable", "disable"}
+	want := []string{"enable", "disable"}
 	nameSet := make(map[string]bool)
 	for _, c := range cmd.Commands() {
 		nameSet[c.Name()] = true

@@ -145,7 +145,7 @@ func TestServiceNameCompletionFromConfig(t *testing.T) {
 
 func TestOptionalServiceNameCompletion_noSecondArg(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
-	fn := optionalServiceNameCompletion(flags)
+	fn := serviceCompletion(flags, completeDisabledOptional)
 	completions, directive := fn(nil, []string{"already"}, "")
 	if len(completions) != 0 {
 		t.Errorf("expected 0 completions when arg already set, got %d", len(completions))
@@ -232,7 +232,7 @@ runtime:
 	}
 
 	flags := &rootFlags{configPath: tempDir + "/devbox.yml", projectRoot: tempDir}
-	fn := toolNameCompletion(flags)
+	fn := toolCompletion(flags, completeToolDisabled)
 	completions, directive := fn(nil, []string{}, "")
 
 	if directive != cobra.ShellCompDirectiveNoFileComp {
@@ -266,7 +266,7 @@ runtime:
 func TestToolNameCompletion_noSecondArg(t *testing.T) {
 	// The len(args) != 0 guard fires before any config access, so cmd can be nil.
 	flags := &rootFlags{configPath: "/fake/devbox.yml", projectRoot: "/fake"}
-	fn := toolNameCompletion(flags)
+	fn := toolCompletion(flags, completeToolDisabled)
 	completions, directive := fn(nil, []string{"already"}, "")
 	if len(completions) != 0 {
 		t.Errorf("expected 0 completions when arg already set, got %d", len(completions))
@@ -596,19 +596,19 @@ func TestCompletionConfigPath_legacyV1_noCompletions(t *testing.T) {
 		t.Errorf("expected schema_version error, got: %v", err)
 	}
 
-	// Verify that optionalServiceNameCompletion returns no completions for v1.
-	completions, directive := optionalServiceNameCompletion(flags)(root, []string{}, "")
+	// Verify that serviceCompletion returns no completions for v1.
+	completions, directive := serviceCompletion(flags, completeDisabledOptional)(root, []string{}, "")
 	if len(completions) != 0 {
-		t.Errorf("expected 0 completions from optionalServiceNameCompletion for v1 project, got %d", len(completions))
+		t.Errorf("expected 0 completions from serviceCompletion for v1 project, got %d", len(completions))
 	}
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
 	}
 
-	// Verify that toolNameCompletion also returns no completions for v1.
-	toolCompletions, toolDirective := toolNameCompletion(flags)(root, []string{}, "")
+	// Verify that toolCompletion also returns no completions for v1.
+	toolCompletions, toolDirective := toolCompletion(flags, completeToolDisabled)(root, []string{}, "")
 	if len(toolCompletions) != 0 {
-		t.Errorf("expected 0 completions from toolNameCompletion for v1 project, got %d", len(toolCompletions))
+		t.Errorf("expected 0 completions from toolCompletion for v1 project, got %d", len(toolCompletions))
 	}
 	if toolDirective != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", toolDirective)

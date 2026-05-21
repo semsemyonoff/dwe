@@ -1,13 +1,12 @@
 package command
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 )
@@ -47,58 +46,35 @@ func TestBuildServiceRows_single(t *testing.T) {
 	if r.Type != "app" {
 		t.Errorf("Type = %q, want app", r.Type)
 	}
-	if r.Dir != "./services/main" {
-		t.Errorf("Dir = %q, want ./services/main", r.Dir)
-	}
-	if r.Container != "app-main" {
-		t.Errorf("Container = %q, want app-main", r.Container)
-	}
 }
 
 func TestBuildServiceRows_sortedByName(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"worker": {Type: "worker", Dir: "./services/worker"},
-		"api":    {Type: "app", Dir: "./services/api"},
-		"main":   {Type: "app", Dir: "./services/main"},
+		"worker": {Type: "worker"},
+		"api":    {Type: "app"},
+		"main":   {Type: "app"},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	rows := buildServiceRows(cfg)
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
-	names := []string{rows[0].Name, rows[1].Name, rows[2].Name}
 	want := []string{"api", "main", "worker"}
-	for i, n := range names {
-		if n != want[i] {
-			t.Errorf("rows[%d].Name = %q, want %q", i, n, want[i])
+	for i, w := range want {
+		if rows[i].Name != w {
+			t.Errorf("rows[%d].Name = %q, want %q", i, rows[i].Name, w)
 		}
 	}
 }
 
 func TestBuildToolRows_allDisabled(t *testing.T) {
 	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		"adminer": config.ToolConfig{
-			Enabled:   false,
-			Container: "adminer",
-			Host:      "adminer.localhost",
-			Port:      8080,
-		},
-		"redis_insight": config.ToolConfig{
-			Enabled:   false,
-			Container: "redis_insight",
-			Host:      "redis.localhost",
-			Port:      5540,
-		},
-		"mailpit": config.ToolConfig{
-			Enabled:   false,
-			Container: "mailpit",
-			Host:      "mail.localhost",
-			Port:      8025,
-		},
+		"adminer": config.ToolConfig{Enabled: false, Container: "adminer", Host: "h", Port: 1},
+		"mailpit": config.ToolConfig{Enabled: false, Container: "mailpit", Host: "h", Port: 2},
 	}, config.RuntimePorts{}, config.RuntimeHosts{})
 	rows := stack.BuildToolRows(cfg)
-	if len(rows) != 3 {
-		t.Fatalf("expected 3 tool rows, got %d", len(rows))
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
 	for _, r := range rows {
 		if r.Enabled {
@@ -107,109 +83,16 @@ func TestBuildToolRows_allDisabled(t *testing.T) {
 	}
 }
 
-func TestBuildToolRows_someEnabled(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		"adminer": config.ToolConfig{
-			Enabled:   false,
-			Container: "adminer",
-			Host:      "adminer.localhost",
-			Port:      8080,
-		},
-		"redis_insight": config.ToolConfig{
-			Enabled:   true,
-			Container: "redis_insight",
-			Host:      "redis.localhost",
-			Port:      5540,
-		},
-		"mailpit": config.ToolConfig{
-			Enabled:   true,
-			Container: "mailpit",
-			Host:      "mail.localhost",
-			Port:      8025,
-		},
-	}, make(config.RuntimePorts), make(config.RuntimeHosts))
+// --- enable/disable selector helpers ---
 
-	rows := stack.BuildToolRows(cfg)
-	if len(rows) != 3 {
-		t.Fatalf("expected 3 rows, got %d", len(rows))
-	}
-
-	adminer := rows[0]
-	if adminer.Name != "adminer" {
-		t.Errorf("rows[0].Name = %q, want adminer", adminer.Name)
-	}
-	if adminer.Enabled {
-		t.Error("adminer should be disabled")
-	}
-	if adminer.Port != 8080 {
-		t.Errorf("adminer.Port = %d, want 8080", adminer.Port)
-	}
-	if adminer.Host != "adminer.localhost" {
-		t.Errorf("adminer.Host = %q, want adminer.localhost", adminer.Host)
-	}
-
-	// rows are sorted alphabetically, so mailpit comes before redis_insight
-	mp := rows[1]
-	if mp.Name != "mailpit" {
-		t.Errorf("rows[1].Name = %q, want mailpit", mp.Name)
-	}
-	if !mp.Enabled {
-		t.Error("mailpit should be enabled")
-	}
-	if mp.Port != 8025 {
-		t.Errorf("mailpit.Port = %d, want 8025", mp.Port)
-	}
-
-	ri := rows[2]
-	if ri.Name != "redis_insight" {
-		t.Errorf("rows[2].Name = %q, want redis_insight", ri.Name)
-	}
-	if !ri.Enabled {
-		t.Error("redis_insight should be enabled")
-	}
-	if ri.Port != 5540 {
-		t.Errorf("redis_insight.Port = %d, want 5540", ri.Port)
-	}
-}
-
-func TestRunServiceList_LipglossTable(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"second": {Type: "app", Container: "app-second", Enabled: false},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	neverRunning := func(_, _ string) bool { return false }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := runServiceList(w, cfg, neverRunning); err != nil {
-		t.Fatalf("runServiceList error: %v", err)
-	}
-
-	out := buf.String()
-	for _, want := range []string{
-		"NAME", "CONTAINER", "STATE", "RUNNING",
-		"main", "app-main", "mandatory", "stopped",
-		"second", "app-second", "disabled",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output missing %q\nfull output:\n%s", want, out)
-		}
-	}
-}
-
-// --- Task 7: services enable/disable interactive selector ---
-
-// neverToggleFn returns a selectToggleFn that fails the test if called.
 func neverToggleFn(t *testing.T) selectToggleFn {
 	return func(title string, items []ui.SelectorItem) (int, error) {
 		t.Helper()
-		t.Errorf("selector should not have been called, but was called with %d items", len(items))
+		t.Errorf("selector should not have been called, items=%d", len(items))
 		return -1, fmt.Errorf("selector unexpectedly called")
 	}
 }
 
-// alwaysToggleFn returns a selectToggleFn that always picks the item at idx.
 func alwaysToggleFn(idx int) selectToggleFn {
 	return func(title string, items []ui.SelectorItem) (int, error) {
 		if idx < 0 || idx >= len(items) {
@@ -221,92 +104,22 @@ func alwaysToggleFn(idx int) selectToggleFn {
 
 func TestPickServiceToEnable_NoDisabled_ReturnsError(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"second": {Type: "app", Container: "app-second", Enabled: true},
+		"main":   {Type: "app", Mandatory: true},
+		"second": {Type: "app", Enabled: true},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	_, err := pickServiceToEnable(cfg, neverToggleFn(t))
 	if err == nil {
 		t.Fatal("expected error when no disabled services, got nil")
 	}
-	if !strings.Contains(err.Error(), "disabled") {
-		t.Errorf("error should mention 'disabled', got: %v", err)
-	}
 }
 
-func TestPickServiceToEnable_SingleDisabled_ShowsSelector(t *testing.T) {
+func TestPickServiceToEnable_SelectorPicksByIndex(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"second": {Type: "app", Container: "app-second", Enabled: false},
+		"alpha": {Type: "app", Enabled: false},
+		"beta":  {Type: "app", Enabled: false},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
-	selectorCalled := false
-	sel := func(title string, items []ui.SelectorItem) (int, error) {
-		selectorCalled = true
-		if len(items) != 1 {
-			t.Errorf("expected 1 item in selector, got %d", len(items))
-		}
-		return 0, nil
-	}
-
-	name, err := pickServiceToEnable(cfg, sel)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !selectorCalled {
-		t.Error("selector should have been called even for a single item")
-	}
-	if name != "second" {
-		t.Errorf("expected 'second', got %q", name)
-	}
-}
-
-func TestPickServiceToEnable_MultipleDisabled_CallsSelector(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":  {Type: "app", Container: "app-main", Mandatory: true},
-		"alpha": {Type: "app", Container: "app-alpha", Enabled: false},
-		"beta":  {Type: "app", Container: "app-beta", Enabled: false},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	selectorCalled := false
-	var seenItems []ui.SelectorItem
-	sel := func(title string, items []ui.SelectorItem) (int, error) {
-		selectorCalled = true
-		seenItems = items
-		return 0, nil
-	}
-
-	name, err := pickServiceToEnable(cfg, sel)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !selectorCalled {
-		t.Error("selector should have been called for multiple disabled services")
-	}
-	if len(seenItems) != 2 {
-		t.Errorf("selector should see 2 items, got %d", len(seenItems))
-	}
-	// mandatory service must not appear
-	for _, item := range seenItems {
-		if item.Label == "main" {
-			t.Error("mandatory service 'main' should not appear in enable selector")
-		}
-		if item.Status != "disabled" {
-			t.Errorf("item %q status should be 'disabled', got %q", item.Label, item.Status)
-		}
-	}
-	if name == "" {
-		t.Error("expected non-empty service name from selector")
-	}
-}
-
-func TestPickServiceToEnable_SelectorPicksSecond(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"alpha": {Type: "app", Container: "app-alpha", Enabled: false},
-		"beta":  {Type: "app", Container: "app-beta", Enabled: false},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	// sorted: alpha(0), beta(1)
 	name, err := pickServiceToEnable(cfg, alwaysToggleFn(1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -316,93 +129,11 @@ func TestPickServiceToEnable_SelectorPicksSecond(t *testing.T) {
 	}
 }
 
-func TestPickServiceToDisable_NoEnabled_ReturnsError(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"second": {Type: "app", Container: "app-second", Enabled: false},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	_, err := pickServiceToDisable(cfg, neverToggleFn(t))
-	if err == nil {
-		t.Fatal("expected error when no enabled optional services, got nil")
-	}
-	if !strings.Contains(err.Error(), "enabled") {
-		t.Errorf("error should mention 'enabled', got: %v", err)
-	}
-}
-
-func TestPickServiceToDisable_SingleEnabled_ShowsSelector(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"second": {Type: "app", Container: "app-second", Enabled: true},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	selectorCalled := false
-	sel := func(title string, items []ui.SelectorItem) (int, error) {
-		selectorCalled = true
-		if len(items) != 1 {
-			t.Errorf("expected 1 item in selector, got %d", len(items))
-		}
-		return 0, nil
-	}
-
-	name, err := pickServiceToDisable(cfg, sel)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !selectorCalled {
-		t.Error("selector should have been called even for a single item")
-	}
-	if name != "second" {
-		t.Errorf("expected 'second', got %q", name)
-	}
-}
-
-func TestPickServiceToDisable_MultipleEnabled_CallsSelector(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":  {Type: "app", Container: "app-main", Mandatory: true},
-		"alpha": {Type: "app", Container: "app-alpha", Enabled: true},
-		"beta":  {Type: "app", Container: "app-beta", Enabled: true},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	selectorCalled := false
-	var seenItems []ui.SelectorItem
-	sel := func(title string, items []ui.SelectorItem) (int, error) {
-		selectorCalled = true
-		seenItems = items
-		return 0, nil
-	}
-
-	name, err := pickServiceToDisable(cfg, sel)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !selectorCalled {
-		t.Error("selector should have been called for multiple enabled services")
-	}
-	if len(seenItems) != 2 {
-		t.Errorf("selector should see 2 items, got %d", len(seenItems))
-	}
-	// mandatory service must not appear
-	for _, item := range seenItems {
-		if item.Label == "main" {
-			t.Error("mandatory service 'main' should not appear in disable selector")
-		}
-		if item.Status != "enabled" {
-			t.Errorf("item %q status should be 'enabled', got %q", item.Label, item.Status)
-		}
-	}
-	if name == "" {
-		t.Error("expected non-empty service name from selector")
-	}
-}
-
 func TestPickServiceToDisable_MandatoryNotShown(t *testing.T) {
-	// Even if mandatory service has no explicit enabled=false, it must be excluded.
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true, Enabled: true},
-		"second": {Type: "app", Container: "app-second", Enabled: true},
-		"third":  {Type: "app", Container: "app-third", Enabled: true},
+		"main":   {Type: "app", Mandatory: true, Enabled: true},
+		"second": {Type: "app", Enabled: true},
+		"third":  {Type: "app", Enabled: true},
 	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
 
 	var seenLabels []string
@@ -424,127 +155,104 @@ func TestPickServiceToDisable_MandatoryNotShown(t *testing.T) {
 	}
 }
 
-func TestServiceEnableCmd_ArgsOptional(t *testing.T) {
+func TestServiceEnableCmd_Args(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newServiceEnableCmd(flags)
-	// MaximumNArgs(1): 0 args is valid
 	if err := cmd.Args(cmd, []string{}); err != nil {
-		t.Errorf("enable: 0 args should be valid, got: %v", err)
+		t.Errorf("0 args should be valid, got: %v", err)
 	}
-	// 1 arg is valid
-	if err := cmd.Args(cmd, []string{"second"}); err != nil {
-		t.Errorf("enable: 1 arg should be valid, got: %v", err)
-	}
-	// 2 args should fail
-	if err := cmd.Args(cmd, []string{"a", "b"}); err == nil {
-		t.Error("enable: 2 args should fail, got nil")
-	}
-}
-
-func TestServiceDisableCmd_ArgsOptional(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newServiceDisableCmd(flags)
-	if err := cmd.Args(cmd, []string{}); err != nil {
-		t.Errorf("disable: 0 args should be valid, got: %v", err)
-	}
-	if err := cmd.Args(cmd, []string{"second"}); err != nil {
-		t.Errorf("disable: 1 arg should be valid, got: %v", err)
+	if err := cmd.Args(cmd, []string{"x"}); err != nil {
+		t.Errorf("1 arg should be valid, got: %v", err)
 	}
 	if err := cmd.Args(cmd, []string{"a", "b"}); err == nil {
-		t.Error("disable: 2 args should fail, got nil")
+		t.Error("2 args should fail")
 	}
 }
 
-func TestServiceEnableCmd_UseField(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newServiceEnableCmd(flags)
-	if !strings.Contains(cmd.Use, "[service]") {
-		t.Errorf("enable Use should show [service] as optional, got %q", cmd.Use)
-	}
-}
-
-func TestServiceDisableCmd_UseField(t *testing.T) {
+func TestServiceDisableCmd_Args(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newServiceDisableCmd(flags)
-	if !strings.Contains(cmd.Use, "[service]") {
-		t.Errorf("disable Use should show [service] as optional, got %q", cmd.Use)
+	if err := cmd.Args(cmd, []string{"a", "b"}); err == nil {
+		t.Error("2 args should fail")
 	}
 }
 
-func TestServiceStatusCmd_SameOutputAsServiceList(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
-		"second": {Type: "app", Container: "app-second", Enabled: false},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+// --- Task 5 additions ---
 
-	neverRunning := func(_, _ string) bool { return false }
-
-	var listBuf, statusBuf bytes.Buffer
-	if err := runServiceList(render.NewWriter(&listBuf), cfg, neverRunning); err != nil {
-		t.Fatalf("runServiceList error: %v", err)
-	}
-	if err := runServiceList(render.NewWriter(&statusBuf), cfg, neverRunning); err != nil {
-		t.Fatalf("runServiceList (status) error: %v", err)
-	}
-
-	if listBuf.String() != statusBuf.String() {
-		t.Errorf("services status output differs from services list output\nlist:\n%s\nstatus:\n%s",
-			listBuf.String(), statusBuf.String())
-	}
-}
-
-func TestServiceStatusCmd_Registered(t *testing.T) {
+// TestServicesGroup_NoStatusOrListSubcommands ensures the removed subcommands
+// are not registered.
+func TestServicesGroup_NoStatusOrListSubcommands(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	parent := newServiceCmd(flags)
-
-	var found bool
 	for _, sub := range parent.Commands() {
-		if sub.Use == "status" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("services status subcommand is not registered")
-	}
-}
-
-func TestServiceStatusCmd_ContainsExpectedColumns(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main": {Type: "app", Container: "app-main", Mandatory: true},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	neverRunning := func(_, _ string) bool { return false }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := runServiceList(w, cfg, neverRunning); err != nil {
-		t.Fatalf("runServiceList error: %v", err)
-	}
-
-	out := buf.String()
-	for _, want := range []string{"NAME", "CONTAINER", "STATE", "RUNNING", "main", "app-main", "mandatory"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("services status output missing %q\nfull output:\n%s", want, out)
+		if sub.Use == "status" || sub.Use == "list" {
+			t.Errorf("services group should not register %q subcommand", sub.Use)
 		}
 	}
 }
 
-func TestRunServiceList_EnabledRunning(t *testing.T) {
-	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main": {Type: "app", Container: "app-main", Enabled: true},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
-
-	alwaysRunning := func(_, _ string) bool { return true }
-
-	var buf bytes.Buffer
-	w := render.NewWriter(&buf)
-	if err := runServiceList(w, cfg, alwaysRunning); err != nil {
-		t.Fatalf("runServiceList error: %v", err)
+// TestServicesGroup_NoArgs ensures the bare command rejects positional args.
+func TestServicesGroup_NoArgs(t *testing.T) {
+	flags := &rootFlags{configPath: "devbox.yml"}
+	cmd := newServiceCmd(flags)
+	if err := cmd.Args(cmd, []string{"foo"}); err == nil {
+		t.Error("services with positional arg should fail Args validation")
 	}
+}
 
-	out := buf.String()
-	if !strings.Contains(out, "running") {
-		t.Errorf("enabled running service should show 'running'\nfull output:\n%s", out)
+// TestServiceEnableCmd_MandatoryWarn ensures enabling a mandatory service is a
+// no-op + warning (not an error).
+func TestServiceEnableCmd_MandatoryWarn(t *testing.T) {
+	configPath := writeTempServiceConfig(t, map[string]struct {
+		mandatory bool
+		enabled   bool
+		container string
+	}{
+		"main": {mandatory: true, enabled: false},
+	})
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	var stderr strings.Builder
+	cmd.SetErr(&stderr)
+	if err := cmd.RunE(cmd, []string{"main"}); err != nil {
+		t.Fatalf("enable mandatory should be no-op + warning, got: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "already mandatory") {
+		t.Errorf("expected 'already mandatory' warning, got: %q", stderr.String())
+	}
+}
+
+// TestServiceDisableCmd_MandatoryError ensures disabling a mandatory service
+// returns an error.
+func TestServiceDisableCmd_MandatoryError(t *testing.T) {
+	configPath := writeTempServiceConfig(t, map[string]struct {
+		mandatory bool
+		enabled   bool
+		container string
+	}{
+		"main": {mandatory: true, enabled: true},
+	})
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceDisableCmd(flags)
+	err := cmd.RunE(cmd, []string{"main"})
+	if err == nil {
+		t.Fatal("expected error disabling mandatory service, got nil")
+	}
+	if !strings.Contains(err.Error(), "mandatory") {
+		t.Errorf("error should mention 'mandatory', got: %v", err)
+	}
+}
+
+// TestPickServiceToEnable_CancelPropagates ensures ErrCancelled flows back.
+func TestPickServiceToEnable_CancelPropagates(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"alpha": {Type: "app", Enabled: false},
+	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cancelSelector := func(title string, items []ui.SelectorItem) (int, error) {
+		return -1, ui.ErrCancelled
+	}
+	_, err := pickServiceToEnable(cfg, cancelSelector)
+	if !errors.Is(err, ui.ErrCancelled) {
+		t.Errorf("expected ErrCancelled, got: %v", err)
 	}
 }

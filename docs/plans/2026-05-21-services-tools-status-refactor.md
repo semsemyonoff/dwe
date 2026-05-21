@@ -240,18 +240,18 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
 
 ### Task 5: Refactor `services` and `tools` to mutating-only commands
 
-- [ ] Remove subcommands `services status`, `services list`, `tools status`, `tools list` outright (no aliases, pilot phase).
-- [ ] Convert bare `devbox services` and `devbox tools` to open the existing multi-select toggle form (TTY only). Mandatory services are pre-checked and disabled (cannot be unchecked) — same data structure used today by `services list`. Set `Args: cobra.NoArgs` on both group commands.
-- [ ] Non-TTY behavior: return an error with hint via `cmd.ErrOrStderr()`: `services: interactive toggle requires a TTY; use 'devbox status services' for read-only view`. Symmetric message for tools. Return a sentinel error type so the cobra main loop yields exit code 1 (or wire into the existing `ExitCode` interface if a specific code is wanted).
-- [ ] All-mandatory short-circuit: if no togglable items remain, error before opening the form: `nothing to toggle, see 'devbox status services'`. Symmetric for tools (no all-mandatory case in tools today, but keep the check consistent so future "mandatory tool" concept doesn't bite us).
-- [ ] Keep `services {enable, disable} <name>` and `tools {enable, disable} <name>` as today; tighten semantics:
+- [x] Remove subcommands `services status`, `services list`, `tools status`, `tools list` outright (no aliases, pilot phase).
+- [x] Convert bare `devbox services` and `devbox tools` to open the existing multi-select toggle form (TTY only). Mandatory services are pre-checked and disabled (cannot be unchecked) — same data structure used today by `services list`. Set `Args: cobra.NoArgs` on both group commands.
+- [x] Non-TTY behavior: return an error with hint via `cmd.ErrOrStderr()`: `services: interactive toggle requires a TTY; use 'devbox status services' for read-only view`. Symmetric message for tools. Return a sentinel error type so the cobra main loop yields exit code 1 (or wire into the existing `ExitCode` interface if a specific code is wanted). (`ErrInteractiveRequired` sentinel; tests assert `errors.Is`.)
+- [x] All-mandatory short-circuit: if no togglable items remain, error before opening the form: `nothing to toggle, see 'devbox status services'`. Symmetric for tools (no all-mandatory case in tools today, but keep the check consistent so future "mandatory tool" concept doesn't bite us).
+- [x] Keep `services {enable, disable} <name>` and `tools {enable, disable} <name>` as today; tighten semantics:
   - `services enable <mandatory>` → no-op + warning to `cmd.ErrOrStderr()` (`already mandatory`), exit 0.
   - `services disable <mandatory>` → error (`cannot disable mandatory service`), non-zero exit.
   - Tools: same shape; tools have no mandatory concept, so these branches don't fire — keep checks defensive only.
-- [ ] Update completion: `services enable <name>` lists optional disabled services; `services disable <name>` lists optional enabled services. Tools symmetric. Reuse existing `pickService*` / `pickTool*` filters. Routes through `completionConfigPath` like other completions.
-- [ ] Update existing `services_test.go` / `service_toggle_test.go` / `tools_test.go` / `tool_toggle_test.go` to drop coverage of removed subcommands and add coverage for: bare `services` / `tools` TTY toggle, non-TTY error, all-mandatory error, mandatory enable warning, mandatory disable error.
-- [ ] **`t.Parallel()` caveat**: tests that override package-level seams (`ui.IsInteractiveFn`, `runMultiSelect`, etc.) MUST NOT call `t.Parallel()` — same constraint as the existing TUI test pattern documented in CLAUDE.md.
-- [ ] Run `make test` — must pass before Task 6.
+- [x] Update completion: `services enable <name>` lists optional disabled services; `services disable <name>` lists optional enabled services. Tools symmetric. (`serviceCompletion`/`toolCompletion` with `completeDisabledOptional`/`completeEnabledOptional` and `completeToolDisabled`/`completeToolEnabled` filters; routes through `completionConfigPath`.)
+- [x] Update existing `services_test.go` / `service_toggle_test.go` / `tools_test.go` / `tool_toggle_test.go` to drop coverage of removed subcommands and add coverage for: bare `services` / `tools` TTY toggle, non-TTY error, all-mandatory error, mandatory enable warning, mandatory disable error.
+- [x] **`t.Parallel()` caveat**: tests that override package-level seams (`ui.IsInteractiveFn`, `runMultiSelect`, etc.) MUST NOT call `t.Parallel()` — same constraint as the existing TUI test pattern documented in CLAUDE.md.
+- [x] Run `make test` — must pass before Task 6.
 
 ### Task 6: Documentation, regenerated CLI reference, AGENTS.md sync
 
