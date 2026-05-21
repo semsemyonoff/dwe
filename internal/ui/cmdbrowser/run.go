@@ -1,8 +1,7 @@
 // Package cmdbrowser implements the interactive two-panel TUI used by
-// `devbox commands run` and `devbox commands inspect` when no exact command
-// ID is supplied. It is a sibling of internal/ui — callers import it
-// directly. A facade in internal/ui would form a cycle
-// (ui → cmdbrowser → ui).
+// `devbox commands` when no exact command ID is supplied. It is a sibling of
+// internal/ui — callers import it directly. A facade in internal/ui would
+// form a cycle (ui → cmdbrowser → ui).
 package cmdbrowser
 
 import (

@@ -4,10 +4,8 @@ Generated reference for the `devbox` command tree.
 
 ## Commands
 
-- [devbox commands](devbox_commands.md) — List, inspect, and run devbox commands
-  - [devbox commands inspect](devbox_commands_inspect.md) — Show full command definition
+- [devbox commands](devbox_commands.md) — Run, inspect, and list devbox commands
   - [devbox commands list](devbox_commands_list.md) — List available commands
-  - [devbox commands run](devbox_commands_run.md) — Run a devbox command
 - [devbox completion](devbox_completion.md) — Generate the autocompletion script for the specified shell
   - [devbox completion bash](devbox_completion_bash.md) — Generate the autocompletion script for bash
   - [devbox completion fish](devbox_completion_fish.md) — Generate the autocompletion script for fish

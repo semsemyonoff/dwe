@@ -1,6 +1,6 @@
 # `ui` configuration
 
-The optional `ui:` block in `devbox.yml` configures the interactive command browser used by `devbox commands run` and `devbox commands inspect` when invoked without an exact command ID.
+The optional `ui:` block in `devbox.yml` configures the interactive command browser used by `devbox commands` when invoked without an exact command ID.
 
 The block is loaded with the same lenient loader as the rest of `devbox.yml`: an absent block and unknown keys are silently ignored at load time. The dedicated `ui` validator (run via `devbox validate`) surfaces unknown keys as warnings and invalid values (e.g. a negative depth) as errors.
 
@@ -81,7 +81,7 @@ The command browser has four focus modes. The visible bindings change with focus
 | inspect | `Enter` | confirm (returns the same `Result` as `Enter` from the list) |
 | inspect | `Esc` | close the overlay; focus returns to the right list |
 
-The `y` skip-confirm binding is only active in run mode (`devbox commands run`); under inspect mode it is removed from the keymap.
+The `y` skip-confirm binding is only active in run mode (the default when `--inspect` / `-i` is not set); under inspect mode it is removed from the keymap.
 
 ## Fallback ladder
 

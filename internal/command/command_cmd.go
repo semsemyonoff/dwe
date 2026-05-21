@@ -390,6 +390,9 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 		if skipConfirmOut != nil && res.SkipConfirm {
 			*skipConfirmOut = true
 		}
+		if res.Idx < 0 || res.Idx >= len(defs) {
+			return "", fmt.Errorf("cmdbrowser: result index %d out of range [0, %d)", res.Idx, len(defs))
+		}
 		return defs[res.Idx].ID, nil
 	}
 }

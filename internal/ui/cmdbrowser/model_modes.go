@@ -107,7 +107,7 @@ func (m *Model) refreshFilterMatches() {
 // arrow keys move the list cursor (vi-keys j/k type into the query instead).
 func (m *Model) updateFilter(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Enter) {
-		if it, ok := m.list.SelectedItem().(listItem); ok {
+		if it, ok := m.list.SelectedItem().(listItem); ok && !it.header {
 			m.result = Result{Idx: it.origIdx, Action: actionForMode(m.opts.Mode), SkipConfirm: m.skipConfirm}
 			return m, tea.Quit
 		}
