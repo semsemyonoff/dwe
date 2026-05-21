@@ -82,6 +82,7 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 		args := []string{"stop", "-t", strconv.Itoa(secs), name}
 		cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 		cmd.Env = compose.BuildEnv()
+		cmd.Stdout = io.Discard
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {

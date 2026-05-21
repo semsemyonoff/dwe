@@ -31,11 +31,23 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 
 	base := src.ID
 
-	// effectiveService mirrors validateDaemonType's resolution: runner.Service
-	// overrides top-level Service when set (both are literal-only in v1).
+	// effectiveService/User/Workdir/WorkdirFrom mirror validateDaemonType's
+	// resolution: runner.* overrides top-level fields when set.
 	effectiveService := src.Service
 	if src.Runner != nil && src.Runner.Service != "" {
 		effectiveService = src.Runner.Service
+	}
+	effectiveUser := src.User
+	if src.Runner != nil && src.Runner.User != "" {
+		effectiveUser = src.Runner.User
+	}
+	effectiveWorkdir := src.Workdir
+	if src.Runner != nil && src.Runner.Workdir != "" {
+		effectiveWorkdir = src.Runner.Workdir
+	}
+	effectiveWorkdirFrom := src.WorkdirFrom
+	if src.Runner != nil && src.Runner.WorkdirFrom != "" {
+		effectiveWorkdirFrom = src.Runner.WorkdirFrom
 	}
 
 	// label_params: keys are declared param names, values are template literals
@@ -49,7 +61,7 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 	mk := func(local string) model.CommandDef {
 		return model.CommandDef{
 			Description:       src.Description,
-			Private:           false,
+			Private:           src.Private,
 			Params:            src.Params,
 			Context:           src.Context,
 			Env:               src.Env,
@@ -72,9 +84,9 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 			"daemon_id":          base,
 			"label_params":       labelParams,
 			"service":            effectiveService,
-			"user":               string(src.User),
-			"workdir":            src.Workdir,
-			"workdir_from":       src.WorkdirFrom,
+			"user":               string(effectiveUser),
+			"workdir":            effectiveWorkdir,
+			"workdir_from":       effectiveWorkdirFrom,
 			"argv":               stringsToAnySlice(src.Argv),
 			"compose_args":       stringsToAnySlice(src.ComposeArgs),
 			"env":                stringMapToAnyMap(src.Env),

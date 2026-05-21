@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -81,6 +82,7 @@ func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 	args := []string{"stop", "-t", strconv.Itoa(secs), fullName}
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 	cmd.Env = compose.BuildEnv()
+	cmd.Stdout = io.Discard
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
