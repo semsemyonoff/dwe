@@ -41,3 +41,20 @@ type DeploySummary struct {
 	Total         int
 	ProjectStatus journal.Status
 }
+
+// GitWorkspaceRow holds data for one row in the git workspace status table.
+// Service is the devbox service name; Dir is the configured directory.
+// When the service directory has no own `.git` (boundary check fails),
+// Branch / SHA / AheadBehind are empty, Dirty is false, and Err is nil
+// (the normal "service has no own repo" case — rendered as blank cells).
+// When something actually went wrong (dir missing, shellout failure),
+// Err is non-nil so the caller can count and emit a single warning.
+type GitWorkspaceRow struct {
+	Service     string
+	Dir         string
+	Branch      string
+	SHA         string
+	Dirty       bool
+	AheadBehind string
+	Err         error
+}

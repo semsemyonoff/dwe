@@ -183,35 +183,20 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
 
 ### Task 3: Add git workspace section
 
-- [ ] Add view-model type `GitWorkspaceRow` in `internal/command/statusview/` (NOT in `stack/` — per CLAUDE.md, `statusview/` owns view-model types passed to `internal/ui` renderers; ui must never load YAML or compute hashes). Fields: `Service`, `Dir`, `Branch`, `SHA` (8 chars), `Dirty` (bool), `AheadBehind` (`+N/-N`), `Err` (error captured per row for "—" rendering and warning aggregation).
-- [ ] Create `internal/stack/gitworkspace.go` with `CollectGitWorkspace(ctx, cfg) []statusview.GitWorkspaceRow`. Signature returns only the slice — per-row errors live on each row's `Err`. No aggregate `[]error` return.
-- [ ] **Concurrency contract** (must follow exactly):
-  - Pre-allocate result slice with `len == len(services-with-dir)`; each goroutine writes to a fixed index → no mutex needed.
-  - Use `errgroup.WithContext(ctx)` + `g.SetLimit(8)`.
-  - Each goroutine **always returns `nil`** — failures are captured in `row.Err`, never bubbled through errgroup. (errgroup-with-context cancels siblings on first non-nil error; we want every row.)
-  - Spawn via `exec.CommandContext(ctx, "git", "-C", dir, "status", "-b", "--porcelain=v2")` so Ctrl+C / parent ctx cancellation kills shellouts.
-  - Wait via `g.Wait()` (always returns `nil` here but keeps API stable in case we ever bubble errors).
-  - Plumb `ctx` from cobra via `cmd.Context()`.
-- [ ] **Per-service repo boundary check** (intentional behavior decision): the section reports per-service workspace metadata. `git -C <dir> status` walks **up** to the nearest enclosing repo, so a service directory inside the project's own git repo would report the *project* repo's status instead of "not a repo" — misleading.
-  - Before shelling out, require a service-rooted repo: check `<dir>/.git` exists (either a directory, or a regular file pointing at a worktree gitdir). If absent, render the row with all cells `—` (no `git` invocation).
-  - This is the documented behavior in the spec (§4.6): "no `.git` → all cells `—`". Parent-repo discovery is **explicitly out of scope** — projects that ship services as nested directories of one big monorepo will simply see `—` rows, which matches user intent (the table is meant to summarise per-service repos, not the umbrella repo).
-- [ ] Pure-function parser `parsePorcelainV2(out []byte) (branch, oid string, ahead, behind int, dirty bool)` separable from the collector. Tested without a git binary.
-- [ ] Parse the porcelain v2 header lines: `# branch.head <name>`, `# branch.oid <oid>`, `# branch.ab +N -N`. Treat any non-comment record as "dirty".
-- [ ] Skip services with no `services.<svc>.dir`. Edge-case matrix (`row.Err` is the discriminator between "expected blank" and "something went wrong"):
-  - service dir exists but no `<dir>/.git` → all cells `—`, **`row.Err == nil`** (boundary check short-circuits before any shellout; this is the normal "service has no own repo" case);
-  - detached HEAD (`branch.head (detached)`) → `BRANCH=detached`, `row.Err == nil`;
-  - service dir does not exist on disk → all cells `—`, **`row.Err != nil`** (configuration smells, surface to the user);
-  - shallow / corrupted / shellout error → all cells `—`, **`row.Err != nil`**.
-  - Aggregate warning at end of section counts only rows with `Err != nil`. **Exact API shape** mirrors Task 2: `stack.CollectGitWorkspace(ctx, cfg) []statusview.GitWorkspaceRow` returns the slice with per-row `Err` populated; `ui.RenderGitWorkspace(rows []statusview.GitWorkspaceRow) string` is pure rendering (no error return — ui owns no error formatting); the command-layer caller iterates rows, counts `Err != nil`, and writes one summary line `warning: git status failed for N service(s)` to `cmd.ErrOrStderr()` if the count is positive. Neither `stack` nor `ui` touches a stderr-shaped writer.
-- [ ] Add `ui.RenderGitWorkspace([]statusview.GitWorkspaceRow) string` in `internal/ui/` (table style consistent with `RenderServiceTable`).
-- [ ] Tests: pure parser unit tests for porcelain v2 outputs (clean, dirty, ahead/behind, detached) — no git binary required.
-- [ ] Tests: collector integration via `t.TempDir()` + `exec.Command("git", "init")`. Skip the test if `git` binary missing on `PATH` (`exec.LookPath("git")`) so CI without git still runs unit tests.
-- [ ] Tests: collector error-vs-blank distinction (matches the design above — only true failures set `row.Err`):
-  - **Blank row, `row.Err == nil`**: service dir exists, no `<dir>/.git` (the boundary check short-circuits before any shellout — non-error case).
-  - **`row.Err != nil`**: service dir does not exist on disk; git shellout fails (e.g. corrupted `.git`, permission denied, killed by ctx).
-- [ ] Tests: **boundary check** — service dir is a non-git subdirectory inside an outer `git init`-ed parent. Expect all cells `—`, `row.Err == nil`, no `git` invocation (verify via a test-seam counter on the shell-out function).
-- [ ] Tests: add `defer goleak.VerifyNone(t)` to the collector test to catch goroutine leaks under errgroup limit pressure.
-- [ ] Run `make test` — must pass before Task 4.
+- [x] Add view-model type `GitWorkspaceRow` in `internal/command/statusview/`.
+- [x] Create `internal/stack/gitworkspace.go` with `CollectGitWorkspace(ctx, cfg) []statusview.GitWorkspaceRow`.
+- [x] Concurrency contract: pre-allocated indexed slice, `errgroup.WithContext` + `SetLimit(8)`, goroutines always return `nil`, `exec.CommandContext` for cancellation.
+- [x] Per-service repo boundary check via `hasOwnGitDir` (`.git` is dir or regular file). No shellout when absent.
+- [x] Pure parser `parsePorcelainV2(out []byte)` separable from the collector.
+- [x] Porcelain v2 header parsing (`branch.head` / `branch.oid` / `branch.ab`); non-`#` records → dirty.
+- [x] Skip services with empty `Dir`. Edge-case matrix implemented (blank-nil-err vs error rows).
+- [x] `ui.RenderGitWorkspace([]statusview.GitWorkspaceRow) string` added.
+- [x] Tests: pure parser unit tests (clean, dirty, ahead/behind, detached, initial OID, malformed ab, line separators).
+- [x] Tests: collector integration via `t.TempDir()` + `git init` (skipped if no git on PATH).
+- [x] Tests: error-vs-blank distinction (blank row no-`.git`, dir-missing error, shellout error).
+- [x] Tests: boundary check — service dir is non-git inside an outer `git init`-ed parent; verifies zero shellouts via test-seam counter.
+- [x] Tests: `goleak.VerifyNone(t)` per collector test + package `goleak.VerifyTestMain` in `internal/stack/main_test.go`.
+- [x] Run `make test` — passed before Task 4.
 
 ### Task 4: Restructure `status` as a group with subcommands, `--no-*` flags, and `status deploy <svc>`
 
