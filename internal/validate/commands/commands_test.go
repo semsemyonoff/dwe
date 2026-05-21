@@ -84,6 +84,85 @@ func TestValidator(t *testing.T) {
 				require.Contains(t, diags[0].Message, "references unknown command")
 			},
 		},
+		{
+			name: "reserved_top_level_id_list_warns",
+			buildDir: func(t *testing.T) string {
+				dir := t.TempDir()
+				cmdDir := filepath.Join(dir, "devbox", "commands")
+				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+				// A file named ".yml" produces an empty group, so the command id
+				// equals its local name — the only way to author a root-level id.
+				cmdFile := filepath.Join(cmdDir, ".yml")
+				content := `commands:
+  list:
+    description: shadows reserved subcommand
+    type: shell
+    cmd: echo hi
+`
+				require.NoError(t, os.WriteFile(cmdFile, []byte(content), 0o644))
+				return dir
+			},
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityWarning &&
+						d.Target == "commands:list" &&
+						strings.Contains(d.Message, `command id "list" conflicts with the reserved subcommand "devbox commands list"`) &&
+						strings.Contains(d.Message, "interactive browser") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected reserved-id warning for list; got: %#v", diags)
+			},
+		},
+		{
+			name: "grouped_list_id_does_not_warn",
+			buildDir: func(t *testing.T) string {
+				dir := t.TempDir()
+				cmdDir := filepath.Join(dir, "devbox", "commands")
+				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+				cmdFile := filepath.Join(cmdDir, "services.yml")
+				content := `commands:
+  list:
+    description: grouped list is fine
+    type: shell
+    cmd: echo hi
+`
+				require.NoError(t, os.WriteFile(cmdFile, []byte(content), 0o644))
+				return dir
+			},
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				for _, d := range diags {
+					if d.Severity == validate.SeverityWarning && strings.Contains(d.Message, "reserved subcommand") {
+						t.Fatalf("did not expect reserved warning for services.list; got: %#v", d)
+					}
+				}
+			},
+		},
+		{
+			name: "no_reserved_id_no_warning",
+			buildDir: func(t *testing.T) string {
+				dir := t.TempDir()
+				cmdDir := filepath.Join(dir, "devbox", "commands")
+				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+				cmdFile := filepath.Join(cmdDir, "ok.yml")
+				content := `commands:
+  hello:
+    description: ok
+    type: shell
+    cmd: echo hi
+`
+				require.NoError(t, os.WriteFile(cmdFile, []byte(content), 0o644))
+				return dir
+			},
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				for _, d := range diags {
+					if d.Severity == validate.SeverityWarning && strings.Contains(d.Message, "reserved subcommand") {
+						t.Fatalf("did not expect reserved warning; got: %#v", d)
+					}
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

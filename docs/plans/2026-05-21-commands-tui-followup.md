@@ -178,21 +178,21 @@ The CLI surface has no external users yet, so no deprecation runway is needed �
 - [x] `make test ./internal/command/...` — must pass
 
 ### Task 7: Reserved top-level IDs (warning for `list`)
-- [ ] in `internal/usercommands/loader/` (likely `compute_id.go` or equivalent) add `reservedTopLevelIDs = []string{"list"}`
-- [ ] in `internal/validate/commands/` add a new validator emitting `Diagnostic` severity=warning when a command's computed top-level ID matches a reserved word (domain `commands`, target = id)
-- [ ] **Cobra dispatch reality:** `devbox commands list` ALWAYS routes to the cobra subcommand `list` — cobra resolves subcommand before `ValidArgsFunction` / positional args. A root-level user command with id literally `list` is therefore NOT reachable through `devbox commands list`. The warning is the only signal — keep it warning-only (no runtime block) but make the diagnostic message explicit:
+- [x] in `internal/usercommands/loader/` (likely `compute_id.go` or equivalent) add `reservedTopLevelIDs = []string{"list"}`
+- [x] in `internal/validate/commands/` add a new validator emitting `Diagnostic` severity=warning when a command's computed top-level ID matches a reserved word (domain `commands`, target = id)
+- [x] **Cobra dispatch reality:** `devbox commands list` ALWAYS routes to the cobra subcommand `list` — cobra resolves subcommand before `ValidArgsFunction` / positional args. A root-level user command with id literally `list` is therefore NOT reachable through `devbox commands list`. The warning is the only signal — keep it warning-only (no runtime block) but make the diagnostic message explicit:
   ```
   command id "list" conflicts with the reserved subcommand "devbox commands list".
   The command will only be reachable from the interactive browser (devbox commands).
   Consider renaming or moving it under a group (e.g. "tools.list").
   ```
-- [ ] grouped IDs containing `list` are fine — only the top-level id `list` is reserved (e.g. `services.list` is allowed and reachable as-is). The check applies after `ComputeCommandID` produces the final dotted id and only fires when the result equals one of `reservedTopLevelIDs` exactly.
-- [ ] runtime is NOT blocked — the command loads, runs from TUI, runs from `devbox commands <full-id>` (which equals `list` here, but that path is shadowed by the subcommand). Hence "browser-only".
-- [ ] tests in `internal/validate/commands/`:
+- [x] grouped IDs containing `list` are fine — only the top-level id `list` is reserved (e.g. `services.list` is allowed and reachable as-is). The check applies after `ComputeCommandID` produces the final dotted id and only fires when the result equals one of `reservedTopLevelIDs` exactly.
+- [x] runtime is NOT blocked — the command loads, runs from TUI, runs from `devbox commands <full-id>` (which equals `list` here, but that path is shadowed by the subcommand). Hence "browser-only".
+- [x] tests in `internal/validate/commands/`:
   - fixture with top-level id `list` → diagnostic emitted with the message above
   - fixture with `services.list` → NO diagnostic (substring match must not trigger)
   - fixture without `list` at all → NO diagnostic
-- [ ] `make test ./internal/validate/... ./internal/usercommands/...` — must pass
+- [x] `make test ./internal/validate/... ./internal/usercommands/...` — must pass
 
 ### Task 7.5: Add a raw/defaults-only resolver alongside `resolve.Params`
 - [ ] **Constraint confirmed by code review:** existing `resolve.Params` (`internal/usercommands/resolve/resolve.go:26`) is wrong for pre-form prefill because it (a) returns `map[string]any` after type coercion, (b) errors on missing required (line 47–49), (c) errors on pattern violation (line 60–62). The form is meant to display partial values, accept missing required (user fills them in), and run pattern checks inline via huh's per-field `Validate`. Reusing `Params` here would block the entire feature.

@@ -157,6 +157,30 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 		}
 	}
 
+	// Reserved-id check: warn when a command's computed top-level ID shadows a
+	// reserved `devbox commands` subcommand (e.g. "list"). Group-qualified IDs
+	// (e.g. "services.list") are not reserved.
+	for _, cf := range parsedFiles {
+		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
+		for _, name := range sortedCommandNames(cf) {
+			cmd := cf.Commands[name]
+			if !loader.IsReservedTopLevelID(cmd.ID) {
+				continue
+			}
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityWarning,
+				Domain:   "commands",
+				Target:   fmt.Sprintf("commands:%s", cmd.ID),
+				File:     relFile,
+				Line:     0,
+				Message: fmt.Sprintf(
+					"command id %q conflicts with the reserved subcommand \"devbox commands %s\".\nThe command will only be reachable from the interactive browser (devbox commands).",
+					cmd.ID, cmd.ID),
+				Hint: "rename the command or move it under a group (e.g. \"tools." + cmd.ID + "\")",
+			})
+		}
+	}
+
 	// Build registry from parsed files
 	reg, err := registry.BuildRegistryFromParsed(parsedFiles)
 	if err != nil {

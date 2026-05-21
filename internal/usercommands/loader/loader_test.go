@@ -57,6 +57,26 @@ func TestComputeCommandID(t *testing.T) {
 	}
 }
 
+func TestIsReservedTopLevelID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{"list_reserved", "list", true},
+		{"grouped_list_not_reserved", "services.list", false},
+		{"unrelated_id_not_reserved", "hello", false},
+		{"empty_id_not_reserved", "", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsReservedTopLevelID(tc.id); got != tc.want {
+				t.Errorf("IsReservedTopLevelID(%q) = %v, want %v", tc.id, got, tc.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DiscoverCommandFiles
 // ---------------------------------------------------------------------------
