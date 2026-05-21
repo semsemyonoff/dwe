@@ -120,6 +120,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 					categorisedDaemonFields[cf.FilePath+"/"+name] = fields
 				}
 			}
+			diags = append(diags, notifyDaemonDiagnostics(cmd, relFile)...)
 		}
 	}
 
@@ -233,6 +234,9 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 		})
 		return diags
 	}
+
+	// Notify on direct parallel sub-steps (registry-aware, info-level).
+	diags = append(diags, notifyParallelSubStepDiagnostics(reg)...)
 
 	// Run cross-reference validation
 	issues := reg.Diagnostics()
