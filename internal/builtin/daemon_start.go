@@ -148,24 +148,24 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 	// Best-effort pre-check via docker ps for the resolved container name.
 	if running, _ := isDaemonRunning(ctx, compose, fullName); running {
 		if onAlreadyRunning == "noop" {
-			fmt.Fprintf(ectx.Output.Writer(), "daemon already running: %s\n", fullName)
+			_, _ = fmt.Fprintf(ectx.Output.Writer(), "daemon already running: %s\n", fullName)
 			return nil
 		}
 		return fmt.Errorf("%w: %s", daemon.ErrDaemonAlreadyRunning, fullName)
 	}
 
 	extraArgs := buildStartExtraArgs(startArgsInput{
-		FullName:     fullName,
-		Service:      service,
-		User:         user,
-		Workdir:      workdir,
-		AutoRemove:   autoRemove,
-		Argv:         argv,
-		ComposeArgs:  composeArgs,
-		EnvKeys:      sortedKeys(envVars),
-		ProjectFull:  projectFull,
-		DaemonID:     daemonID,
-		LabelParams:  labelParams,
+		FullName:    fullName,
+		Service:     service,
+		User:        user,
+		Workdir:     workdir,
+		AutoRemove:  autoRemove,
+		Argv:        argv,
+		ComposeArgs: composeArgs,
+		EnvKeys:     sortedKeys(envVars),
+		ProjectFull: projectFull,
+		DaemonID:    daemonID,
+		LabelParams: labelParams,
 	})
 
 	args := compose.BuildArgs("run", extraArgs...)
@@ -184,7 +184,7 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 		// when the name collides under race. Translate to typed sentinel.
 		if strings.Contains(errOut, "is already in use") {
 			if onAlreadyRunning == "noop" {
-				fmt.Fprintf(ectx.Output.Writer(), "daemon already running: %s\n", fullName)
+				_, _ = fmt.Fprintf(ectx.Output.Writer(), "daemon already running: %s\n", fullName)
 				return nil
 			}
 			return fmt.Errorf("%w: %s", daemon.ErrDaemonAlreadyRunning, fullName)
@@ -194,7 +194,7 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 		}
 		return fmt.Errorf("docker compose run: %w", err)
 	}
-	fmt.Fprintf(ectx.Output.Writer(), "✓ daemon started: %s\n", fullName)
+	_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ daemon started: %s\n", fullName)
 	return nil
 }
 

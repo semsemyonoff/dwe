@@ -90,7 +90,7 @@ func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 	if err != nil {
 		errOut := stderr.String()
 		if strings.Contains(errOut, "No such container") {
-			fmt.Fprintf(ectx.Output.Writer(), "no daemon to stop: %s\n", fullName)
+			_, _ = fmt.Fprintf(ectx.Output.Writer(), "no daemon to stop: %s\n", fullName)
 			return nil
 		}
 		if errOut != "" {
@@ -99,6 +99,6 @@ func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 		return fmt.Errorf("docker stop: %w", err)
 	}
 	_ = out
-	fmt.Fprintf(ectx.Output.Writer(), "✓ daemon stopped: %s\n", fullName)
+	_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ daemon stopped: %s\n", fullName)
 	return nil
 }

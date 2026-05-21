@@ -260,8 +260,8 @@ commands:
     cmd: "echo hi"
 `
 	_, err := buildTestRegistry(t, map[string]string{
-		"services/main.yml":             collide,
-		"services/main/queue.yml":       explicit,
+		"services/main.yml":       collide,
+		"services/main/queue.yml": explicit,
 	})
 	if err == nil {
 		t.Fatal("expected collision error, got nil")

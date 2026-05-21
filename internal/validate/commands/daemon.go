@@ -154,7 +154,7 @@ func daemonStructuralDiagnostics(cmd model.CommandDef, relFile string) ([]valida
 				Hint:     "valid controls: start, logs, stop, restart",
 			})
 		}
-		if seen[model.DaemonControlRestart] && !(seen[model.DaemonControlStart] && seen[model.DaemonControlStop]) {
+		if seen[model.DaemonControlRestart] && (!seen[model.DaemonControlStart] || !seen[model.DaemonControlStop]) {
 			fields["controls"] = true
 			out = append(out, validate.Diagnostic{
 				Severity: validate.SeverityError,

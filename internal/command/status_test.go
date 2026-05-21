@@ -253,7 +253,7 @@ func TestStatusCmd_DefaultOrderContainsDaemonsAfterTools(t *testing.T) {
 	if idxTools == -1 || idxDaemons == -1 || idxDeploy == -1 {
 		t.Fatalf("missing sections; tools=%d daemons=%d deploy=%d", idxTools, idxDaemons, idxDeploy)
 	}
-	if !(idxTools < idxDaemons && idxDaemons < idxDeploy) {
+	if idxTools >= idxDaemons || idxDaemons >= idxDeploy {
 		t.Errorf("expected order tools<daemons<deploy, got tools=%d daemons=%d deploy=%d", idxTools, idxDaemons, idxDeploy)
 	}
 }

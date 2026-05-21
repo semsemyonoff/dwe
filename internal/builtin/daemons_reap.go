@@ -57,11 +57,11 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 		// Reap is best-effort: if docker is unreachable (daemon down,
 		// permission denied, remote-context unavailable) we warn and exit
 		// successfully rather than failing the entire stop pipeline.
-		fmt.Fprintf(ectx.Output.Writer(), "warning: daemons_reap: %v\n", err)
+		_, _ = fmt.Fprintf(ectx.Output.Writer(), "warning: daemons_reap: %v\n", err)
 		return nil
 	}
 	if len(names) == 0 {
-		fmt.Fprintln(ectx.Output.Writer(), "no daemons running")
+		_, _ = fmt.Fprintln(ectx.Output.Writer(), "no daemons running")
 		return nil
 	}
 
@@ -80,20 +80,20 @@ func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecCo
 				continue
 			}
 			if errOut != "" {
-				fmt.Fprintf(ectx.Output.Writer(), "warning: docker stop %s: %s\n", name, errOut)
+				_, _ = fmt.Fprintf(ectx.Output.Writer(), "warning: docker stop %s: %s\n", name, errOut)
 				continue
 			}
-			fmt.Fprintf(ectx.Output.Writer(), "warning: docker stop %s: %v\n", name, err)
+			_, _ = fmt.Fprintf(ectx.Output.Writer(), "warning: docker stop %s: %v\n", name, err)
 			continue
 		}
 		stopped = append(stopped, name)
 	}
 
 	if len(stopped) == 0 {
-		fmt.Fprintln(ectx.Output.Writer(), "no daemons running")
+		_, _ = fmt.Fprintln(ectx.Output.Writer(), "no daemons running")
 		return nil
 	}
-	fmt.Fprintf(ectx.Output.Writer(), "✓ reaped %d daemon(s): %s\n", len(stopped), strings.Join(stopped, ", "))
+	_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ reaped %d daemon(s): %s\n", len(stopped), strings.Join(stopped, ", "))
 	return nil
 }
 

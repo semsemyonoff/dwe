@@ -788,7 +788,7 @@ func (c *CommandDef) validateDaemonType() error {
 				errs = append(errs, fmt.Errorf("%w: unknown control: %q", ErrDaemonControlsInvalid, ctrl))
 			}
 		}
-		if seen[DaemonControlRestart] && !(seen[DaemonControlStart] && seen[DaemonControlStop]) {
+		if seen[DaemonControlRestart] && (!seen[DaemonControlStart] || !seen[DaemonControlStop]) {
 			errs = append(errs, fmt.Errorf("%w: restart requires start and stop", ErrDaemonControlsInvalid))
 		}
 	}

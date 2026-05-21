@@ -98,11 +98,11 @@ func CollectDaemons(ctx context.Context, cfg *config.DevboxConfig, dockerCfg *co
 //
 // The parser tolerates both via json.RawMessage + type switch.
 type psRecord struct {
-	Names     string          `json:"Names"`
-	Name      string          `json:"Name"`
-	Labels    json.RawMessage `json:"Labels"`
-	CreatedAt string          `json:"CreatedAt"`
-	RunningFor string         `json:"RunningFor"`
+	Names      string          `json:"Names"`
+	Name       string          `json:"Name"`
+	Labels     json.RawMessage `json:"Labels"`
+	CreatedAt  string          `json:"CreatedAt"`
+	RunningFor string          `json:"RunningFor"`
 }
 
 // parseDaemonRows turns NDJSON `docker ps --format=json` output into

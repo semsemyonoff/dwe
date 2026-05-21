@@ -186,14 +186,14 @@ func TestStopTimeoutSeconds(t *testing.T) {
 		in   string
 		want int
 	}{
-		{"", 10},                // default
+		{"", 10}, // default
 		{"5s", 5},
-		{"500ms", 1},            // round up from sub-second
-		{"400ms", 1},            // round to 0s → clamp to 1
+		{"500ms", 1}, // round up from sub-second
+		{"400ms", 1}, // round to 0s → clamp to 1
 		{"1m30s", 90},
-		{"-5s", 10},             // negative falls back to default
-		{"garbage", 10},         // unparseable falls back
-		{"0s", 10},              // zero falls back
+		{"-5s", 10},     // negative falls back to default
+		{"garbage", 10}, // unparseable falls back
+		{"0s", 10},      // zero falls back
 	}
 	for _, tc := range tests {
 		got := stopTimeoutSeconds(tc.in)
