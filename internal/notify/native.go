@@ -52,6 +52,9 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 		return
 	}
 
+	// Snapshot the seam before spawning so tests that swap beeepNotify
+	// and then restore it on cleanup cannot race with the goroutine read.
+	beeepFn := beeepNotify
 	done := make(chan error, 1)
 	go func() {
 		defer func() {
@@ -61,7 +64,7 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 			}
 			<-b.sem
 		}()
-		done <- beeepNotify(title, body, "")
+		done <- beeepFn(title, body, "")
 	}()
 
 	timer := time.NewTimer(nativeBackendTimeout)

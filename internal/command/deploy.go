@@ -562,6 +562,12 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 			w.Warning("Full output saved to: " + logPath)
 		}
 		if recErr := recorder.Err(); recErr != nil {
+			if errors.Is(pipeErr, ErrSilent) {
+				// ErrSilent suppresses all error output; warn explicitly so
+				// the state-save failure is not silently swallowed.
+				w.Warning("deploy state could not be saved: " + recErr.Error())
+				return pipeErr
+			}
 			return errors.Join(pipeErr, fmt.Errorf("deploy state could not be saved: %w", recErr))
 		}
 		return pipeErr
