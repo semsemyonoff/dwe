@@ -58,8 +58,8 @@ type statusContext struct {
 }
 
 // loadStatusContext loads the full status context. Called from each
-// subcommand's RunE.
-func loadStatusContext(flags *rootFlags) (*statusContext, error) {
+// subcommand's RunE. errW receives warnings (e.g. corrupt state file).
+func loadStatusContext(flags *rootFlags, errW io.Writer) (*statusContext, error) {
 	cfg, err := config.LoadConfig(flags.configPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
@@ -67,7 +67,8 @@ func loadStatusContext(flags *rootFlags) (*statusContext, error) {
 	statePath := filepath.Join(flags.ProjectRoot(), journal.DefaultRelPath)
 	state, err := journal.Load(statePath)
 	if err != nil {
-		// Corrupt/unreadable state: degrade gracefully — deploy section is skipped.
+		// Corrupt/unreadable state: warn then degrade gracefully — deploy section is skipped.
+		_, _ = fmt.Fprintf(errW, "warning: deploy state unreadable (%v); deploy section suppressed\n", err)
 		state = nil
 	}
 	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath) // nil-tolerant: LoadTrackedServices skips gate validation on error
@@ -154,7 +155,7 @@ in the default view.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags)
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -252,7 +253,7 @@ func newStatusServicesCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags)
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -268,7 +269,7 @@ func newStatusToolsCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags)
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -284,7 +285,7 @@ func newStatusTopologyCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags)
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -300,7 +301,7 @@ func newStatusGitCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags)
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -320,7 +321,7 @@ With a service name, shows the per-phase/step deploy breakdown for that service.
 		ValidArgsFunction: trackedServiceCompletion(flags),
 		SilenceUsage:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags)
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}

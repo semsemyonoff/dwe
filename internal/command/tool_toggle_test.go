@@ -172,7 +172,7 @@ func TestToolsToggle_TTY_CancelNoWrites(t *testing.T) {
 }
 
 func TestToolsToggle_EmptyTools_ReturnsError(t *testing.T) {
-	// Tools config with no tools at all → "nothing to toggle"
+	// Tools config with no tools at all → "no tools configured"
 	dir := t.TempDir()
 	devboxYML := `project:
   name: test
@@ -195,7 +195,7 @@ func TestToolsToggle_EmptyTools_ReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no tools to toggle, got nil")
 	}
-	if !strings.Contains(err.Error(), "nothing to toggle") {
-		t.Errorf("error should say 'nothing to toggle', got: %v", err)
+	if !strings.Contains(err.Error(), "no tools configured") {
+		t.Errorf("error should say 'no tools configured', got: %v", err)
 	}
 }

@@ -56,7 +56,7 @@ func runToolsToggle(cmd *cobra.Command, flags *rootFlags) error {
 
 	rows := stack.BuildToolRows(cfg)
 	if len(rows) == 0 {
-		return fmt.Errorf("nothing to toggle, see 'devbox status tools'")
+		return fmt.Errorf("no tools configured; see 'devbox status tools'")
 	}
 
 	items := make([]ui.MultiSelectItem, len(rows))
