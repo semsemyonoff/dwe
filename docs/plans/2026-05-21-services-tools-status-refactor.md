@@ -284,8 +284,8 @@ Style across the package: table-driven, plain `if err != nil` checks, minimal te
 
 ### Task 8: Final documentation
 
-- [ ] Re-read `AGENTS.md` end-to-end after the Task 6 edits to catch any stale cross-references introduced by the refactor.
-- [ ] If any new patterns emerged worth recording (e.g. shared `PersistentPreRunE` for grouped commands), add a short note under `## Key Patterns` in `AGENTS.md`.
+- [x] Re-read `AGENTS.md` end-to-end after the Task 6 edits to catch any stale cross-references introduced by the refactor. (No stale references — Task 6 edits caught everything; grep for `services status` / `services list` / `tools status` / `tools list` / `status <svc>` returned empty.)
+- [x] If any new patterns emerged worth recording (e.g. shared `PersistentPreRunE` for grouped commands), add a short note under `## Key Patterns` in `AGENTS.md`. (Added two entries: the no-child-`PersistentPreRunE` trap with `loadStatusContext` as canonical pattern, and the section-renderer signature contract that keeps `internal/stack/` and `internal/ui/` output-agnostic.)
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
 
