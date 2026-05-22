@@ -2,6 +2,8 @@ package command
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -169,4 +171,53 @@ func TestDeployCancelledError_ExitCode(t *testing.T) {
 	if e.Error() != "deploy cancelled" {
 		t.Errorf("Error() = %q, want \"deploy cancelled\"", e.Error())
 	}
+}
+
+// TestDeployRunCmd_SuppressedConditions guards against regressions in the
+// three branches where the notifier defer deliberately skips firing:
+//   - lockHeldError  — another process holds the deploy lock
+//   - deployCancelledError — user explicitly cancelled the interactive dialog
+//   - isNoop — project already up-to-date, nothing ran
+//
+// The suppression guard in deployRunCmd is:
+//
+//	if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*deployCancelledError)) || isNoop { return }
+//
+// Full integration paths (cross-process lock contention, deployed-state
+// journal, interactive cancellation) require test infrastructure beyond
+// unit scope; these tests verify the error-type matching that drives the
+// guard so that any refactoring of the error types keeps the guard intact.
+func TestDeployRunCmd_SuppressedConditions(t *testing.T) {
+	t.Run("lockHeldError matches suppression guard", func(t *testing.T) {
+		var err error = &lockHeldError{operation: "deploy", pid: 999}
+		if !errors.As(err, new(*lockHeldError)) {
+			t.Error("errors.As should match *lockHeldError")
+		}
+		wrapped := fmt.Errorf("outer: %w", err)
+		if !errors.As(wrapped, new(*lockHeldError)) {
+			t.Error("errors.As should match *lockHeldError through wrapping")
+		}
+	})
+	t.Run("deployCancelledError matches suppression guard", func(t *testing.T) {
+		var err error = &deployCancelledError{}
+		if !errors.As(err, new(*deployCancelledError)) {
+			t.Error("errors.As should match *deployCancelledError")
+		}
+		wrapped := fmt.Errorf("outer: %w", err)
+		if !errors.As(wrapped, new(*deployCancelledError)) {
+			t.Error("errors.As should match *deployCancelledError through wrapping")
+		}
+	})
+	t.Run("normal error does not match suppression guard", func(t *testing.T) {
+		err := errors.New("some deploy failure")
+		if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*deployCancelledError)) {
+			t.Error("ordinary error should not trigger suppression guard")
+		}
+	})
+	t.Run("lockHeldError ExitCode is 2", func(t *testing.T) {
+		lhe := &lockHeldError{operation: "deploy", pid: 12345}
+		if got := lhe.ExitCode(); got != 2 {
+			t.Errorf("lockHeldError.ExitCode() = %d, want 2", got)
+		}
+	})
 }
