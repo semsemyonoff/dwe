@@ -106,8 +106,8 @@ Any miss → silent no-op.
 Notifications are short-circuited when any of the following hold:
 
 - `CI` environment variable is set to any non-empty value.
-- `DEVBOX_NONINTERACTIVE` is set to any non-empty value.
-- `stdout` is not attached to a terminal.
+- `DEVBOX_NONINTERACTIVE` is set to a truthy value (`1` or `true`; case-insensitive).
+- `stdin` is not attached to a terminal (stdout is intentionally not checked — piping output while keeping stdin interactive is exactly the scenario where a passive toast notification is most valuable).
 
 This means CI runs, piped output, and scripted invocations never produce a desktop notification regardless of config.
 
