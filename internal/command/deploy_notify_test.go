@@ -157,3 +157,16 @@ func TestDeployRunCmd_NotifierSeamDefaultProducesRealNotifier(t *testing.T) {
 	// Should be a no-op on nil cfg — calling Notify must not panic.
 	got.Notify(context.Background(), notify.Event{Kind: notify.OpDeploy})
 }
+
+// TestDeployCancelledError_ExitCode verifies that deployCancelledError
+// returns exit code 0 so fang suppresses the "Error:" line and exits
+// cleanly when the user deliberately cancels.
+func TestDeployCancelledError_ExitCode(t *testing.T) {
+	e := &deployCancelledError{}
+	if got := e.ExitCode(); got != 0 {
+		t.Errorf("ExitCode() = %d, want 0", got)
+	}
+	if e.Error() != "deploy cancelled" {
+		t.Errorf("Error() = %q, want \"deploy cancelled\"", e.Error())
+	}
+}

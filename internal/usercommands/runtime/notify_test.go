@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
 	"devbox-cli/internal/userconfig"
 )
 
@@ -221,6 +223,42 @@ func TestRunCommand_NilCmd_NoPanic_NoNotify(t *testing.T) {
 	_ = RunCommand(context.Background(), rc)
 	if got := len(rec.snapshot()); got != 0 {
 		t.Errorf("want 0 events for nil Cmd guard, got %d", got)
+	}
+}
+
+// TestRunCommand_NotifyTrue_CommandAborted_NoEvent verifies that an explicit
+// user confirmation refusal (commandAbortedError) does not fire a notification.
+func TestRunCommand_NotifyTrue_CommandAborted_NoEvent(t *testing.T) {
+	origIsInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+
+	rec := installRecordingNotifier(t)
+	cmd := &CommandDef{
+		ID:           "test.abort_cmd",
+		Type:         CommandTypeShell,
+		Files:        map[string]FileSpec{},
+		Cmd:          "true",
+		Notify:       true,
+		Confirmation: true,
+	}
+	rc := RunContext{
+		Cmd:    cmd,
+		Render: &tpl.RenderContext{},
+		Stdout: &bytes.Buffer{},
+		Stderr: &bytes.Buffer{},
+		Stdin:  bytes.NewBufferString("n\n"),
+	}
+	err := RunCommand(context.Background(), rc)
+	if err == nil {
+		t.Fatal("expected error when user aborts")
+	}
+	var aborted *commandAbortedError
+	if !errors.As(err, &aborted) {
+		t.Errorf("err type = %T, want *commandAbortedError", err)
+	}
+	if got := len(rec.snapshot()); got != 0 {
+		t.Errorf("want 0 notify events on command abort, got %d", got)
 	}
 }
 

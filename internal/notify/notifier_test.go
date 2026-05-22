@@ -170,7 +170,11 @@ func TestIsInteractiveForNotify_EnvVars(t *testing.T) {
 	}{
 		{"clean env, TTY", nil, true},
 		{"CI=1 disables", map[string]string{"CI": "1"}, false},
-		{"DEVBOX_NONINTERACTIVE disables", map[string]string{"DEVBOX_NONINTERACTIVE": "1"}, false},
+		{"DEVBOX_NONINTERACTIVE=1 disables", map[string]string{"DEVBOX_NONINTERACTIVE": "1"}, false},
+		{"DEVBOX_NONINTERACTIVE=true disables", map[string]string{"DEVBOX_NONINTERACTIVE": "true"}, false},
+		{"DEVBOX_NONINTERACTIVE=TRUE disables", map[string]string{"DEVBOX_NONINTERACTIVE": "TRUE"}, false},
+		{"DEVBOX_NONINTERACTIVE=false does not disable", map[string]string{"DEVBOX_NONINTERACTIVE": "false"}, true},
+		{"DEVBOX_NONINTERACTIVE=0 does not disable", map[string]string{"DEVBOX_NONINTERACTIVE": "0"}, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

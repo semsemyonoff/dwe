@@ -3,6 +3,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -171,6 +172,10 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 		n := newNotifier(ucfg)
 		cmdID := rc.Cmd.ID
 		defer func() {
+			// User explicitly declined the confirmation prompt — not a failure.
+			if errors.As(err, new(*commandAbortedError)) {
+				return
+			}
 			n.Notify(context.Background(), notify.Event{
 				Kind:      notify.OpCommand,
 				Operation: "command:" + cmdID,

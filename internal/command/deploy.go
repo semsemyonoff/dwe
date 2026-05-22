@@ -164,10 +164,11 @@ func (e *lockHeldError) ExitCode() int { return 2 }
 
 // deployCancelledError is returned when the user explicitly cancels via the
 // interactive dialog. Notification is suppressed — cancellation is intentional,
-// not a failure.
+// not a failure. ExitCode returns 0 so fang suppresses the "Error:" line.
 type deployCancelledError struct{}
 
 func (e *deployCancelledError) Error() string { return "deploy cancelled" }
+func (e *deployCancelledError) ExitCode() int { return 0 }
 
 func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool) (err error) {
 	workDir := flags.ProjectRoot()
@@ -182,6 +183,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	// case.
 	start := time.Now()
 	var projectName string
+	var isNoop bool
 	ucfg, ucfgErr := userconfig.Load(workDir)
 	if ucfgErr != nil {
 		slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
@@ -189,8 +191,8 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 	n := newNotifier(ucfg)
 	defer func() {
-		// Lock-held or user-cancelled — neither is a run failure.
-		if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*deployCancelledError)) {
+		// Lock-held, user-cancelled, or already-up-to-date — none is a run failure.
+		if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*deployCancelledError)) || isNoop {
 			return
 		}
 		n.Notify(context.Background(), notify.Event{
@@ -401,6 +403,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		lastRunFailed := scopeLastRunStatus == journal.StatusFailed
 		if allTrackedDeployed && !hasCheckSteps && !hasFilesGateSteps && scopeConfigHash == scopeExpectedHash && !lastRunFailed {
 			// In-scope state matches and is clean — skip the pipeline.
+			isNoop = true
 			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
 			return nil
 		}

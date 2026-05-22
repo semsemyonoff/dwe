@@ -3,6 +3,7 @@ package notify
 import (
 	"os"
 	"slices"
+	"strings"
 
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/userconfig"
@@ -15,7 +16,7 @@ var isInteractiveForNotify = func() bool {
 	if os.Getenv("CI") != "" {
 		return false
 	}
-	if os.Getenv("DEVBOX_NONINTERACTIVE") != "" {
+	if v := os.Getenv("DEVBOX_NONINTERACTIVE"); v == "1" || strings.EqualFold(v, "true") {
 		return false
 	}
 	return ui.IsInteractiveFn(os.Stdin)

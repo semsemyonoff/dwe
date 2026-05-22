@@ -10,6 +10,15 @@ import (
 	"devbox-cli/internal/ui"
 )
 
+// commandAbortedError is returned when the user explicitly declines a
+// confirmation prompt. Notifications are suppressed for this error —
+// cancellation is intentional, not a failure. ExitCode returns 0 so
+// fang suppresses the "Error:" line.
+type commandAbortedError struct{}
+
+func (e *commandAbortedError) Error() string { return "aborted by user" }
+func (e *commandAbortedError) ExitCode() int { return 0 }
+
 // runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
 var runConfirm = ui.RunConfirm
 
@@ -45,12 +54,12 @@ func ConfirmCommand(ctx RunContext) error {
 		confirmed, err := runConfirm(message, "Yes", "No")
 		if err != nil {
 			if errors.Is(err, ui.ErrCancelled) {
-				return fmt.Errorf("aborted by user")
+				return &commandAbortedError{}
 			}
 			return err
 		}
 		if !confirmed {
-			return fmt.Errorf("aborted by user")
+			return &commandAbortedError{}
 		}
 		return nil
 	}
@@ -58,5 +67,5 @@ func ConfirmCommand(ctx RunContext) error {
 	if render.NewWriter(stdout(ctx)).Confirm(message, stdin) {
 		return nil
 	}
-	return fmt.Errorf("aborted by user")
+	return &commandAbortedError{}
 }
