@@ -180,7 +180,8 @@ Templates receive a single object with these top-level fields:
 | `.Service` | **canonical config identity** — the root of the rendering service's `extends:` chain. | Use this for raw-config lookups keyed by service name (e.g. `(index .Cfg.Raw.cs .Service).standard`). Equals `.Resolved` when no extends chain. |
 | `.Resolved` | **rendering identity** — the service whose hub is actually being rendered (the deepest-extends collision winner). | Equals `.Service` in the no-collision case. |
 | `.ServiceCfg` | the effective service config of `.Resolved`, after `extends` resolution. | e.g. `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` reflect the rendering service's overlay. |
-| `.Runtime` | merged `runtime` block | e.g. `.Runtime.Ports.app`, `.Runtime.Hosts.main` (non-tool roles; lowercase keys). Tool host/port use `.Tools.<name>.Host` / `.Tools.<name>.Port` instead. |
+| `.Runtime` | merged `runtime` block | `.Runtime.UseHTTPS`, `.Runtime.SPX.Path`. Per-service ports / hosts live on each service entry — use `((index .Services "<name>").Port "<port-name>")` / `((index .Services "<name>").Host "<host-name>")`. |
+| `.Services` | `map[string]ServiceConfig` keyed by service name | Indexed access only (Go template requirement): `(index .Services "main")`. Filter by type via `.AppServices` / `.ToolServices` / `.InfraServices` (zero-arg methods returning typed subsets). |
 | `.Cfg` | merged `DevboxConfig` (advanced) | `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
 > **Advisory.** IDE outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in IDE templates: any value layered in from `devbox/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
@@ -196,7 +197,7 @@ Go's `text/template` resolves dot-segments only when each segment matches `[A-Za
 {{ index .Cfg.Raw "my-tool" "api-key" }}       {{- /* index — hyphenated keys */ -}}
 ```
 
-Note: Runtime roles are now lowercase scalars (`.Runtime.Ports.app`, `.Runtime.Hosts.main`). Tool references use mixed-case (`.Tools.adminer.Enabled`, `.Tools.adminer.Host`).
+Note: per-service ports / hosts live on the `ServiceConfig` value for that service — `((index .Services "main").Port "http")`, `((index .Services "adminer").Host "web")`. There is no separate `.Runtime.Ports` / `.Runtime.Hosts` / `.Tools` namespace.
 
 The full set of helper functions available inside `*.tmpl` files (`appURL`, sprout registries, `text/template` built-ins) is documented in [Templates](../templates.md).
 

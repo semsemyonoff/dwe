@@ -11,7 +11,6 @@ The three layers of the merged devbox config.
 - [devbox.yml](#devboxyml)
   - [Field reference](#field-reference)
 - [devbox/defaults.yml](#devboxdefaultsyml)
-  - [`tools`](#tools)
   - [`services`](#services)
   - [`debug`](#debug)
   - [`runtime`](#runtime)
@@ -55,30 +54,29 @@ The three files share a single namespace — the same key in different layers is
 | Project name and prefix | `devbox.yml` |
 | Schema version | `devbox.yml` |
 | Binary overrides (`binaries:`) | `devbox.yml` only (engine policy, not layered) |
-| Service / tool port defaults | `defaults.yml` (under `runtime.ports.<name>`) |
-| Service / tool host defaults | `defaults.yml` (under `runtime.hosts.<name>`) |
-| Tool structural definitions (container / compose / status) | [`devbox/tools.yml`](tools.md) |
-| Tool enabled state | `defaults.yml` (overrideable in `local.yml`) |
-| Optional service defaults (enabled/disabled) | `defaults.yml` |
+| Service ports / hosts (apps, tools, infra) | [`devbox/services.yml`](services.md) (per-entry `ports:` / `hosts:` maps) |
+| Service structural definitions (container / compose / status / render) | [`devbox/services.yml`](services.md) |
+| Optional service enabled state (across all types) | `defaults.yml` (overrideable in `local.yml`) |
 | Export rules (`exports.env`) | `defaults.yml` |
 | IDE config defaults | `defaults.yml` |
 | `db` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
-| Personal port / host overrides (services and tools) | `local.yml` |
+| Personal per-service port / host overrides | `local.yml` (under `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>`) |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
 
-Service definitions themselves live in [`devbox/services.yml`](services.md), which is loaded separately and not part of this merge.
+Service definitions themselves (apps, tools, infra — including their ports / hosts) live in [`devbox/services.yml`](services.md), which is loaded separately and not part of this merge. The 3-layer overlay only carries `services.<name>.enabled` toggles.
 
 ## Dot-path resolution
 
-The CLI stores the merged result in two places: a typed `DevboxConfig` struct (with fields like `DevboxConfig.Runtime.Ports`, accessed via map keys like `.Runtime.Ports.app`) and a plain `DevboxConfig.Raw` map. The Raw map drives dot-path resolution.
+The CLI stores the merged result in two places: a typed `DevboxConfig` struct (with fields like `DevboxConfig.Services` and `DevboxConfig.Runtime.UseHTTPS`) and a plain `DevboxConfig.Raw` map. The Raw map drives dot-path resolution.
 
 A dot-path is a `.`-separated key chain that navigates the merged YAML map. Examples:
 
-- `runtime.ports.app` → `80`
-- `tools.adminer.enabled` → `false`
-- `services.main.container` → `"app-main"` (injected from `services.yml`)
+- `services.main.ports.http` → `80`
+- `services.adminer.enabled` → `false`
+- `services.main.container` → `"app-main"`
+- `services.main.hosts.web` → `"app.localhost"`
 
 Dot-paths are consumed by:
 
@@ -89,7 +87,7 @@ Dot-paths are consumed by:
 
 ### Where service fields come from
 
-`services.<name>.*` paths in the merged map are populated by `LoadConfig`. After parsing the 3 layers it loads `devbox/services.yml`, resolves `enabled` against the merged map (mandatory services force `enabled: true`), then injects each service's `type`, `container`, `mandatory`, `enabled`, `dir`, `dir_internal`, `work_dir_internal`, `compose`, and `configs` into `raw["services"]`. Export rules can therefore use both `services.main.container` and `services.second.enabled` without separate awareness of `services.yml`.
+`services.<name>.*` paths in the merged map are populated by `LoadConfig`. After loading `devbox/services.yml` (canonical declarations with `type:`), the loader validates every overlay layer against the declared set (`validateServicesOverlay`), merges the 3 layers, then resolves `enabled` per service (mandatory wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — is injected into `raw["services"]`. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of `services.yml`.
 
 ## devbox.yml
 
@@ -152,35 +150,23 @@ The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}
 
 **Sections**:
 
-### `tools`
-
-Tool **definitions** live in [`devbox/tools.yml`](tools.md). The overlay you write in `defaults.yml` (and optionally `local.yml`) carries only the per-tool toggle:
-
-```yaml
-tools:
-  adminer:
-    enabled: false
-  redis_insight:
-    enabled: true
-  mailpit:
-    enabled: true
-```
-
-Any other field under `tools.<name>` is rejected at config load with a layer-aware error pointing at the offending file — tool definitions belong in `devbox/tools.yml`.
-
 ### `services`
 
-Toggle optional services (services defined in `services.yml` with `mandatory: false`).
+Toggle optional services of any type (services declared in [`devbox/services.yml`](services.md) without `mandatory: true`). Apps, tools, and infra share one overlay namespace — the `type:` discriminator lives in `services.yml`, not here.
 
 ```yaml
 services:
-  main-debug:
+  main-debug:        # type: app
     enabled: false
-  second:
+  catalog:           # type: app
+    enabled: true
+  adminer:           # type: tool
     enabled: false
+  mailpit:           # type: tool
+    enabled: true
 ```
 
-Mandatory services (e.g. `main`) are always active and have no toggle here.
+`enabled:` is the **only** field allowed under `services.<name>` in any overlay layer. Adding `container:`, `ports:`, `compose:`, etc. here is a layer-aware overlay error — those fields live in `services.yml`. Mandatory services are always active and have no toggle.
 
 ### `debug`
 
@@ -195,34 +181,19 @@ debug:
 
 ### `runtime`
 
-All runtime settings that affect `.env` generation and the info dashboard. The `runtime.ports` and `runtime.hosts` maps are a single shared namespace for both service roles (`app`, `db`, `redis`, `main`, …) and tool host/port (`adminer`, `mailpit`, …). Keep keys unique across the shared namespace; collisions silently shadow each other.
+Runtime settings that affect `.env` generation and the info dashboard but are not per-service. Per-service ports / hosts live in [`devbox/services.yml`](services.md) under each entry's `ports:` / `hosts:` maps (and are reachable as `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>` dot-paths).
 
 ```yaml
 runtime:
   use_https: false
-  ports:
-    app: 80
-    db: 13306
-    redis: 6379
-    adminer: 8080
-    mailpit: 8025
-  hosts:
-    main: laravel.localhost
-    second: second.localhost
-    adminer: adminer.localhost
-    mailpit: mail.localhost
   spx:
     path: ""
 ```
 
 | Field | Description |
 |-------|-------------|
-| `runtime.use_https` | Whether URLs use HTTPS (exported as `USE_HTTPS`) |
-| `runtime.ports.*` | Port mappings keyed by role / tool name (e.g., `app`, `db`, `adminer`). Each key must be identifier-safe. Exported individually to `.env`. |
-| `runtime.hosts.*` | Hostnames keyed by service / tool name (e.g., `main`, `second`, `adminer`). Each key must be identifier-safe. |
-| `runtime.spx.path` | SPX profiler URL path (empty = disabled) |
-
-**Tool host/port live here.** Every tool declared in [`devbox/tools.yml`](tools.md) needs a matching `runtime.hosts.<tool>` and `runtime.ports.<tool>` — the load-time validator rejects half-defined entries.
+| `runtime.use_https` | Whether URLs use HTTPS (exported as `USE_HTTPS`). |
+| `runtime.spx.path` | SPX profiler URL path (empty = disabled). |
 
 ### `state`
 
@@ -234,25 +205,24 @@ Active state name. Empty string means no state. Exported as `STATE` in `.env`. O
 
 ### `exports.env`
 
-Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name.
-
-- `tools.<toolname>.enabled` and `tools.<toolname>.container` come from the tool overlay + `tools.yml`.
-- `tools.<toolname>.host` / `tools.<toolname>.port` are **not** populated — use the canonical `runtime.hosts.<toolname>` / `runtime.ports.<toolname>` paths (the same namespace as service-role ports/hosts).
+Declarative export rules that drive `.env` generation. Each rule maps a dot-path in the merged config to an env variable name. All per-service fields — `container`, `enabled`, `ports.<name>`, `hosts.<name>` — live under `services.<name>.*`.
 
 ```yaml
 exports:
   env:
     - name: APP_PORT
-      from: runtime.ports.app
+      from: services.main.ports.http
       format: int
     - name: TOOL_ADMINER_ENABLED
-      from: tools.adminer.enabled
+      from: services.adminer.enabled
       format: bool
-      when: tools.adminer.enabled
-    - name: TOOL_ADMINER_PORT
-      from: runtime.ports.adminer
+    - name: ADMINER_PORT
+      from: services.adminer.ports.http
       format: int
-      when: tools.adminer.enabled
+      when: services.adminer.enabled
+    - name: ADMINER_HOST
+      from: services.adminer.hosts.web
+      when: services.adminer.enabled
 ```
 
 | Rule field | Type | Description |
@@ -313,7 +283,7 @@ compose:
 |-------|-------------|
 | `compose.base` | Base compose file (always included) |
 
-Service overlays live under `services:<name>.compose` (a list of file paths per service). Tool overlays live under `tools:<name>.compose` (a single file path per tool) — see the `tools:` section above.
+Service-specific overlays live under `services.<name>.compose` (a list of file paths per service entry) in [`devbox/services.yml`](services.md). The compose-file emission order is `base → tools (sorted) → infra (sorted) → apps (sorted)`.
 
 ---
 
@@ -327,19 +297,14 @@ Service overlays live under `services:<name>.compose` (a list of file paths per 
 ```yaml
 state: staging
 
-tools:
+services:
+  main-debug:
+    enabled: true
   redis_insight:
     enabled: false
 
 runtime:
   use_https: true
-  ports:
-    app: 8080
-    adminer: 18080      # personal adminer port override
-
-services:
-  main-debug:
-    enabled: true
 
 db:
   user: myuser
@@ -349,7 +314,7 @@ debug:
   idekey: VSCODE
 ```
 
-Tool host or port overrides also live here — under `runtime.{hosts,ports}.<toolname>` — so a developer can run a tool on a non-default port without committing the change.
+> Per-developer port / host overrides require editing `devbox/services.yml` directly — the 3-layer overlay carries only `services.<name>.enabled`.
 
 If `local.yml` does not exist, layer 3 is silently skipped.
 
@@ -359,7 +324,7 @@ If `local.yml` does not exist, layer 3 is silently skipped.
 - **Committing `local.yml`** — it is gitignored for a reason (may contain credentials).
 - **Setting `state:` in `defaults.yml`** — state is inherently per-user, put it in `local.yml`.
 - **Scalar collision** — if `defaults.yml` sets `state: ""` and `local.yml` sets `state: staging`, the effective value is `staging`. If `local.yml` omits `state`, the `defaults.yml` value wins.
-- **Lists replace, maps merge** — maps are deep-merged: redeclaring `runtime.ports` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `args.global: ["--ansi", "always"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
+- **Lists replace, maps merge** — maps are deep-merged: redeclaring `services` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `args.global: ["--ansi", "always"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
 
 ## Optional `ui:` block
 
@@ -370,6 +335,6 @@ If `local.yml` does not exist, layer 3 is silently skipped.
 - `devbox render env -o .env` — regenerate `.env` from the merged config
 - `devbox render ide` / `devbox render ai` / `devbox render git` — pack-based renderers; see [render reference](../render/index.md)
 - `devbox info` — show dashboard (uses merged config + `info.yml`)
-- `devbox status services` — show services with enabled/disabled status
-- `devbox status tools` — show tools with enabled/disabled status
+- `devbox status` — composite read-only view (apps + tools + infra + deploy + topology + git + daemons)
+- `devbox status apps` / `devbox status tools` / `devbox status infra` — per-type tables
 - `devbox compose argv` — show the effective compose command with all flags (useful for debugging dot-path resolution into `docker.yml`)

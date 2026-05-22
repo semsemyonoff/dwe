@@ -321,6 +321,11 @@ type WorkflowParallel struct {
 	// FailFast controls whether the first sub-step error cancels siblings.
 	// nil (default) means true; explicit false aggregates errors via errors.Join.
 	FailFast *bool `yaml:"fail_fast,omitempty"`
+	// AlwaysShowOutput, when true, dumps each successful sub-step's captured
+	// stdout/stderr between separator bars after the group completes. The
+	// default (false) keeps the failure-only behaviour. Skipped and cancelled
+	// sub-steps never produce output and are unaffected.
+	AlwaysShowOutput bool `yaml:"always_show_output,omitempty"`
 	// Steps holds the leaf sub-steps to execute concurrently.
 	// Must contain at least 2 entries; nested parallel and confirm sub-steps are rejected.
 	Steps []WorkflowStep `yaml:"steps"`

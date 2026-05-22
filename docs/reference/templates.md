@@ -26,9 +26,9 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 | `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Merged `DevboxConfig` | Evaluated at plan time. See [deploy.md](config/deploy.md) |
 | `message` builtin — `text:` | `{{ ... }}` | Merged `DevboxConfig` | See [deploy.md](config/deploy.md#message) |
 | `docker.yml` — `project_name` | `${...}` only | Merged `DevboxConfig.Raw` | Dot-path lookups (no `{{ }}` logic). See [docker.md](config/docker.md) |
-| `devbox/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .ServiceCfg, .Runtime, .Cfg}` | Strict mode. See [render/git.md](render/git.md) |
-| `devbox/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .ServiceCfg, .Runtime, .Cfg}` | Strict mode. See [render/ide.md](render/ide.md) |
-| `devbox/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .ServiceCfg, .Runtime, .Cfg}` | Strict mode. See [render/ai.md](render/ai.md) |
+| `devbox/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Strict mode. See [render/git.md](render/git.md) |
+| `devbox/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Strict mode. See [render/ide.md](render/ide.md) |
+| `devbox/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Strict mode. See [render/ai.md](render/ai.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Plain dot-paths only (no template expressions). |
 
 ## Two syntaxes: shorthand and full templates
@@ -92,7 +92,7 @@ The data exposed to a template depends on the site. All sites converge on a stru
 | `.Files` | Resolved file artefacts (map keyed by file id; each has a `.Path` field) |
 | `.Host.UID` / `.Host.GID` | Host UID/GID strings |
 
-**Info, pipelines, `message` builtin:** The merged typed `DevboxConfig` (e.g. `.Project.Name`, `.Runtime.Ports.app`, `.Services.<name>.Enabled`).
+**Info, pipelines, `message` builtin:** The merged typed `DevboxConfig` (e.g. `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
 
 **Render packs (git / ide / ai, strict):**
 
@@ -101,7 +101,8 @@ The data exposed to a template depends on the site. All sites converge on a stru
 | `.Project` | `project:` block from `devbox.yml` |
 | `.Service` | service name (the map key in `services:`) |
 | `.ServiceCfg` | effective service config after `extends` resolution |
-| `.Runtime` | merged `runtime` block |
+| `.Runtime` | merged `runtime` block (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Per-service ports / hosts live on each service entry (see `.Services` below). |
+| `.Services` | `map[string]ServiceConfig` keyed by service name. Use `(index .Services "<name>")` to fetch; per-entry helpers `.Port "<port-name>"` / `.Host "<host-name>"`. Type-filtered subsets via `.AppServices` / `.ToolServices` / `.InfraServices`. |
 | `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
 
 IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.
@@ -160,12 +161,12 @@ The only project-specific helper. Builds a URL from host, port, HTTPS flag, and 
 Signature: `appURL host port useHTTPS [path]`
 
 ```yaml
-# Non-tool hostname + app port (non-tool role)
-value: "{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}"
+# App hostname + app port (proxied via the main service)
+value: '{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}'
 # → "http://laravel.localhost" or "https://laravel.localhost"
 
-# Tool hostname + app port (note: tool host + reverse-proxy app port, not tool's direct port)
-value: "{{ appURL .Tools.adminer.Host .Runtime.Ports.app .Runtime.UseHTTPS \"/login\" }}"
+# Tool hostname + main reverse-proxy port (tool routed via the main app, not the tool's direct port)
+value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS "/login" }}'
 # → "http://adminer.localhost/login"
 ```
 
@@ -225,7 +226,7 @@ Other sites (info, commands, pipeline conditions, `message`) use lenient renderi
 | Empty-guarded block | `{{ with .Params.database }} -D{{ . }}{{ end }}` |
 | Join list | `{{ join "," .Params.tags }}` |
 | Raw config lookup | `{{ resolve .Raw "db.host" }}` (commands only) |
-| Build URL | `{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}` |
+| Build URL | `{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}` |
 
 ## Conventions and gotchas
 

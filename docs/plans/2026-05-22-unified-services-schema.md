@@ -518,25 +518,22 @@ hits are a distinct grep.
 
 ### Task 11: Update docs to match new schema
 
-- [ ] rewrite `docs/reference/config/services.md` to describe the unified schema with a
+- [x] rewrite `docs/reference/config/services.md` to describe the unified schema with a
       `type:` table, per-type field allowlist, and migration notes (since pre-release,
       "migration notes" = "this is the shape, period").
-- [ ] **delete** `docs/reference/config/tools.md` outright. No redirect stub. Then
-      `git grep -nF 'reference/config/tools.md' -- ':!docs/plans/2026-05-22-unified-services-schema.md' ':(exclude)docs/plans/completed/**'`
-      must return zero hits; rewrite every surviving link to point at
-      `docs/reference/config/services.md` (anchor the link at the specific
-      `type:` subsection where appropriate — e.g.
-      `services.md#service-types` or whatever heading slug the rewritten page
-      ends up using). The same grep is added to the Task 13 acceptance check for
-      regression coverage.
-- [ ] grep `docs/` for `runtime.ports` and `runtime.hosts`; replace every reference with
-      the new dot-path.
-- [ ] update `docs/reference/config/conditions.md` if it had examples touching
-      `runtime.ports`.
-- [ ] update `docs/reference/config/commands.md` `default_from:` examples.
-- [ ] regenerate CLI reference: `bin/devbox docs generate` (per CLAUDE.md).
-- [ ] tests: docs aren't code, but verify any docs-snippet tests still pass.
-- [ ] run `make test` — must pass before next task.
+- [x] **delete** `docs/reference/config/tools.md` outright. No redirect stub. Acceptance
+      grep returns zero hits outside the plan files (which are excluded).
+- [x] grep `docs/reference/` for `runtime.ports` and `runtime.hosts`; replaced every
+      reference with `services.<name>.ports.<port-name>` / `.hosts.<host-name>`.
+- [x] `docs/reference/config/conditions.md` — no stale `runtime.ports` examples to
+      update (grep returned zero hits).
+- [x] `docs/reference/config/commands.md` `default_from:` examples — already on
+      `services.<name>.*` dot-paths; no stale references found.
+- [x] regenerate CLI reference: `bin/devbox docs generate --scope cli` ran clean;
+      stale `devbox_tools.md` / `devbox_tools_enable.md` / `devbox_tools_disable.md`
+      removed (generator does not delete obsolete files).
+- [x] tests: `make test` passes after doc-only edits.
+- [x] run `make test` — passes.
 
 ### Task 12: Update `AGENTS.md` (== `CLAUDE.md`) to reflect new model
 

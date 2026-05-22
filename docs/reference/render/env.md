@@ -49,24 +49,30 @@ The names `PROJECT`, `UID`, and `GID` are **reserved**: any export rule that tri
 
 ## Export rules
 
-Each rule maps a dot-path in the merged config to an env variable name. Tool host/port live in the shared runtime namespace (`runtime.hosts.<toolname>`, `runtime.ports.<toolname>`) — the same as service-role ports/hosts. `tools.<toolname>.enabled` and `tools.<toolname>.container` come from the overlay + `tools.yml`.
+Each rule maps a dot-path in the merged config to an env variable name. All per-service values — `enabled`, `container`, `ports.<port-name>`, `hosts.<host-name>` — are reachable under `services.<name>.*` regardless of type (`app` / `tool` / `infra`).
 
 ```yaml
 exports:
   env:
     - name: APP_PORT
-      from: runtime.ports.app
+      from: services.main.ports.http
       format: int
+
+    - name: APP_HOST
+      from: services.main.hosts.web
 
     - name: TOOL_ADMINER_ENABLED
-      from: tools.adminer.enabled
+      from: services.adminer.enabled
       format: bool
-      when: tools.adminer.enabled
 
-    - name: TOOL_ADMINER_PORT
-      from: runtime.ports.adminer
+    - name: ADMINER_PORT
+      from: services.adminer.ports.http
       format: int
-      when: tools.adminer.enabled
+      when: services.adminer.enabled
+
+    - name: ADMINER_HOST
+      from: services.adminer.hosts.web
+      when: services.adminer.enabled
 
     - name: APP_URL
       from: runtime.urls.app
@@ -79,7 +85,7 @@ exports:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | yes | Env variable name written to `.env` |
-| `from` | string | yes | Dot-path navigated against the merged config (e.g. `runtime.ports.app`, `services.main.container`) |
+| `from` | string | yes | Dot-path navigated against the merged config (e.g. `services.main.ports.http`, `services.main.container`) |
 | `default` | string | no | Fallback when `from` resolves to nothing or to a falsy string (see [Value resolution](#value-resolution)) |
 | `required` | bool | no | If `true` and `from` is absent and `default` is empty, rendering fails with an error |
 | `format` | string | no | One of `string` (default), `bool`, `int` — controls how the resolved value is rendered |
@@ -140,9 +146,9 @@ The same truthiness rule applies to both `when` and the string-format fallback:
 | `"0"` | no |
 | anything else | yes |
 
-Example: `when: tools.adminer.enabled` skips the rule whenever the tool is unset, explicitly false, or a string `"false"` / `"0"`.
+Example: `when: services.adminer.enabled` skips the rule whenever the service is unset, explicitly false, or a string `"false"` / `"0"`.
 
-**Dot-path syntax note:** Export rule `from:` / `when:` fields use **bare dot-paths** into the merged config, not the `{{ ... }}` template syntax. Tool host/port use the same shared `runtime.{hosts,ports}.<name>` namespace as service-role ports/hosts (e.g., `from: runtime.ports.adminer`, `from: runtime.hosts.mailpit`). The overlay-driven toggle and container name are reachable via `tools.<name>.enabled` and `tools.<name>.container`.
+**Dot-path syntax note:** Export rule `from:` / `when:` fields use **bare dot-paths** into the merged config, not the `{{ ... }}` template syntax. Per-service values live under `services.<name>.*` for every type — e.g. `from: services.adminer.ports.http`, `from: services.mailpit.hosts.web`, `from: services.main.container`, `when: services.adminer.enabled`.
 
 ## Output format
 
@@ -167,33 +173,49 @@ When `-o <path>` is supplied:
 
 ## Worked example
 
+`devbox/services.yml`:
+
+```yaml
+services:
+  main:
+    type: app
+    container: app-main
+    mandatory: true
+    dir: ./services/main
+    ports:
+      http: 8080
+  adminer:
+    type: tool
+    container: adminer
+    ports:
+      http: 8027
+```
+
 `devbox/defaults.yml`:
 
 ```yaml
-runtime:
-  ports:
-    app: 8080
-  urls:
-    app: ""
-tools:
+services:
   adminer:
     enabled: true
+runtime:
+  urls:
+    app: ""
 exports:
   env:
     - name: APP_PORT
-      from: runtime.ports.app
+      from: services.main.ports.http
       format: int
     - name: APP_URL
       from: runtime.urls.app
       default: http://localhost
     - name: TOOL_ADMINER
-      from: tools.adminer.enabled
+      from: services.adminer.enabled
       format: bool
-      when: tools.adminer.enabled
+      when: services.adminer.enabled
     - name: TOOL_REDIS
-      from: tools.redis.enabled
+      from: services.redis_insight.enabled
       format: bool
-      when: tools.redis.enabled
+      when: services.redis_insight.enabled
 ```
 
 `devbox.yml`:
@@ -221,7 +243,7 @@ Walk-through:
 - `APP_PORT` — `format: int`, value `8080`, emitted directly.
 - `APP_URL` — `from` resolves to empty string (falsy under `format: string`), so `default` is used.
 - `TOOL_ADMINER` — `when` resolves truthy, value `true` rendered as literal `true`.
-- `TOOL_REDIS` — `when` resolves to absent (path missing), rule skipped, no line emitted.
+- `TOOL_REDIS` — `when` resolves to absent (no `redis_insight` entry), rule skipped, no line emitted.
 
 ## Common pitfalls
 

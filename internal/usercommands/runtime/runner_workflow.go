@@ -434,7 +434,11 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 			}
 
 			var buf bytes.Buffer
-			tee := liveui.NewLineTee(func(frame string, final bool) {
+			tee := liveui.NewLineTeePreserveANSI(func(frame string, final bool) {
+				// Strip ANSI for the live row label and the per-sub-step
+				// log; the buffered failure-dump copy keeps colours so the
+				// dump on stderr preserves the child's formatting.
+				stripped := liveui.ANSIOnlyRe.ReplaceAllString(frame, "")
 				// Always refresh the live block row with the latest frame so
 				// `\r`-overwritten progress (curl/wget/docker pulls) is shown.
 				// Mirrors PlainReporter.StepOutput's behaviour for parallel
@@ -442,7 +446,7 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 				// surface on the row and the first header line would freeze
 				// while the actual progress is hidden.
 				live.SetBlockRowRunning(i,
-					fmt.Sprintf("[%d/%d] %s: %s", i+1, n, sub.Command, frame))
+					fmt.Sprintf("[%d/%d] %s: %s", i+1, n, sub.Command, stripped))
 				// Commit to buffer + per-sub-step log ONLY on newline frames.
 				// Non-final frames are transient display state — writing them
 				// would balloon logs with overwritten progress bars and the
@@ -453,11 +457,11 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 				buf.WriteString(frame)
 				buf.WriteByte('\n')
 				if subFile != nil {
-					_, _ = fmt.Fprintln(subFile, frame)
+					_, _ = fmt.Fprintln(subFile, stripped)
 				}
 			})
 
-			gRC.Stdout = &liveui.ANSIOnlyStripper{W: tee}
+			gRC.Stdout = tee
 			gRC.Stderr = gRC.Stdout
 
 			err := r.runCommandStep(gctx, gRC, i, sub)
@@ -520,6 +524,7 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 	//   - Non-TTY: print the per-sub-step status lines (sole output channel),
 	//     followed by the summary footer.
 	emitStatus := !isTTY
+	alwaysShowOutput := group.AlwaysShowOutput
 	failures := 0
 	for i, res := range results {
 		switch {
@@ -540,24 +545,19 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 			if emitStatus {
 				_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Failed (continue_on_error): %s\n", i+1, n, res.sub.Command)
 			}
-			if res.output != "" {
-				_, _ = fmt.Fprintln(stderr(rc), "  ───── output ─────")
-				_, _ = fmt.Fprint(stderr(rc), res.output)
-				_, _ = fmt.Fprintln(stderr(rc), "  ──────────────────")
-			}
+			dumpSubStepOutput(stderr(rc), res.sub.Command, res.output)
 		case res.err != nil:
 			failures++
 			if emitStatus {
 				_, _ = fmt.Fprintf(stderr(rc), "  ✗ [%d/%d] Failed: %s\n", i+1, n, res.sub.Command)
 			}
-			if res.output != "" {
-				_, _ = fmt.Fprintln(stderr(rc), "  ───── output ─────")
-				_, _ = fmt.Fprint(stderr(rc), res.output)
-				_, _ = fmt.Fprintln(stderr(rc), "  ──────────────────")
-			}
+			dumpSubStepOutput(stderr(rc), res.sub.Command, res.output)
 		default:
 			if emitStatus {
 				_, _ = fmt.Fprintf(stderr(rc), "  ✓ [%d/%d] Done: %s\n", i+1, n, res.sub.Command)
+			}
+			if alwaysShowOutput {
+				dumpSubStepOutput(stderr(rc), res.sub.Command, res.output)
 			}
 		}
 	}
@@ -565,6 +565,22 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 	writeParallelSummary(stderr(rc), rc.Cmd.ID, time.Since(groupStart), failures > 0, isTTY)
 
 	return groupErr
+}
+
+// dumpSubStepOutput writes a sub-step's captured output between labelled
+// separator bars on w. The top bar names the sub-step so multi-failure dumps
+// stay attributable; ANSI escape sequences in output are forwarded verbatim
+// so the child's colours survive the round-trip. No-op when output is empty.
+func dumpSubStepOutput(w io.Writer, command, output string) {
+	if output == "" {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "  ───── output: %s ─────\n", command)
+	_, _ = fmt.Fprint(w, output)
+	if !strings.HasSuffix(output, "\n") {
+		_, _ = fmt.Fprintln(w)
+	}
+	_, _ = fmt.Fprintln(w, "  ──────────────────")
 }
 
 // writeParallelSummary prints a single-line summary footer for a workflow

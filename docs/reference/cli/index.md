@@ -54,16 +54,14 @@ Generated reference for the `devbox` command tree.
   - [devbox services enable](devbox_services_enable.md) — Enable an optional service (writes to devbox/local.yml)
 - [devbox shell](devbox_shell.md) — Open a shell in a service container
 - [devbox status](devbox_status.md) — Show stack health and per-section status (read-only)
+  - [devbox status apps](devbox_status_apps.md) — Show only the apps section
   - [devbox status daemons](devbox_status_daemons.md) — Show only the daemons section
   - [devbox status deploy](devbox_status_deploy.md) — Show deploy status (table) or per-service deploy detail
   - [devbox status git](devbox_status_git.md) — Show only the git workspace section
-  - [devbox status services](devbox_status_services.md) — Show only the services section
+  - [devbox status infra](devbox_status_infra.md) — Show only the infra section
   - [devbox status tools](devbox_status_tools.md) — Show only the tools section
   - [devbox status topology](devbox_status_topology.md) — Show only the topology section
 - [devbox stop](devbox_stop.md) — Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)
-- [devbox tools](devbox_tools.md) — Toggle tools (interactive) or enable/disable individually
-  - [devbox tools disable](devbox_tools_disable.md) — Disable an optional tool (writes to devbox/local.yml)
-  - [devbox tools enable](devbox_tools_enable.md) — Enable an optional tool (writes to devbox/local.yml)
 - [devbox validate](devbox_validate.md) — Validate project configuration and files
   - [devbox validate commands](devbox_validate_commands.md) — Validate command definitions
   - [devbox validate config](devbox_validate_config.md) — Validate configuration files

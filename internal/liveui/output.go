@@ -112,22 +112,33 @@ func JoinWriters(ws ...io.Writer) io.Writer {
 // LineTee buffers writes and invokes cb once per frame — a segment ending in
 // `\r` (in-progress redraw, `final=false`) or `\n` (committed line,
 // `final=true`). CRLF (`\r\n`) within one buffer scan collapses to a single
-// `final=true` frame. ANSI escape sequences are stripped before scanning so
-// callbacks see plain text. Trailing un-terminated bytes are flushed via
-// Flush() as `(tail, false)`.
+// `final=true` frame. By default ANSI escape sequences are stripped before
+// scanning so callbacks see plain text; use NewLineTeePreserveANSI when the
+// caller needs to forward colours (e.g. captured failure dumps). Trailing
+// un-terminated bytes are flushed via Flush() as `(tail, false)`.
 //
 // LineTee is safe for concurrent Write calls from a single source (one
 // sub-step) but is NOT designed for concurrent writes from multiple goroutines
 // — each parallel sub-step gets its own LineTee instance.
 type LineTee struct {
-	cb  func(frame string, final bool)
-	mu  sync.Mutex
-	buf bytes.Buffer
+	cb           func(frame string, final bool)
+	preserveANSI bool
+	mu           sync.Mutex
+	buf          bytes.Buffer
 }
 
-// NewLineTee constructs a LineTee whose cb is invoked once per frame.
+// NewLineTee constructs a LineTee whose cb is invoked once per frame with
+// ANSI escape sequences stripped.
 func NewLineTee(cb func(frame string, final bool)) *LineTee {
 	return &LineTee{cb: cb}
+}
+
+// NewLineTeePreserveANSI constructs a LineTee that keeps ANSI escape
+// sequences intact when invoking cb. `\r` and `\n` remain the frame
+// terminators — they never appear inside the ANSI sequences this package
+// matches, so frame detection is unaffected.
+func NewLineTeePreserveANSI(cb func(frame string, final bool)) *LineTee {
+	return &LineTee{cb: cb, preserveANSI: true}
 }
 
 func (t *LineTee) Write(p []byte) (int, error) {
@@ -135,10 +146,14 @@ func (t *LineTee) Write(p []byte) (int, error) {
 	// call) but preserve `\r` so the frame parser sees it as data.
 	// Sequences split across multiple Write calls are handled by a second
 	// ANSI-strip at frame-emit time below, where the full assembled line is
-	// available in the buffer.
-	stripped := ANSIOnlyRe.ReplaceAll(p, nil)
+	// available in the buffer. When preserveANSI is set both passes are
+	// skipped — the buffered bytes are forwarded verbatim.
+	in := p
+	if !t.preserveANSI {
+		in = ANSIOnlyRe.ReplaceAll(p, nil)
+	}
 	t.mu.Lock()
-	t.buf.Write(stripped)
+	t.buf.Write(in)
 	for {
 		data := t.buf.Bytes()
 		// Find the earliest of `\r` or `\n` as the frame terminator.
@@ -163,8 +178,14 @@ func (t *LineTee) Write(p []byte) (int, error) {
 		// Strip ANSI a second time on the assembled frame bytes. This handles
 		// OSC/CSI sequences that were split across PTY read boundaries: neither
 		// half matched the regex during the per-write pass, but the reassembled
-		// line in the buffer contains the complete sequence.
-		frame := string(ANSIOnlyRe.ReplaceAll(data[:idx], nil))
+		// line in the buffer contains the complete sequence. Skipped when
+		// preserveANSI is set so callers receive coloured frames verbatim.
+		var frame string
+		if t.preserveANSI {
+			frame = string(data[:idx])
+		} else {
+			frame = string(ANSIOnlyRe.ReplaceAll(data[:idx], nil))
+		}
 		consume := idx + 1
 		final := !isR
 		// CRLF collapses to a single final frame.
@@ -192,7 +213,13 @@ func (t *LineTee) Flush() {
 	}
 	// Apply the same double-strip as Write: the tail may contain partial ANSI
 	// sequences that were split across PTY reads and are now complete in the buffer.
-	tail := string(ANSIOnlyRe.ReplaceAll(t.buf.Bytes(), nil))
+	// Skipped when preserveANSI is set.
+	var tail string
+	if t.preserveANSI {
+		tail = string(t.buf.Bytes())
+	} else {
+		tail = string(ANSIOnlyRe.ReplaceAll(t.buf.Bytes(), nil))
+	}
 	t.buf.Reset()
 	t.mu.Unlock()
 	t.cb(tail, false)
