@@ -301,11 +301,11 @@ Validator diagnostics in Task 5 only run under `devbox validate`. Normal `devbox
 `devbox up`, `devbox compose …` paths must also reject illegal type combinations — they
 do not run the validator. Add hard errors in the load + plan paths:
 
-- [ ] **Loader (`LoadConfig`)**: after services parse, walk every service's `DependsOn`
+- [x] **Loader (`LoadConfig`)**: after services parse, walk every service's `DependsOn`
       and return an error if any target resolves to a `type: tool` service. Sentinel
       `ErrDependsOnTool`. This is the canonical gate — every caller goes through
       `LoadConfig`, so the rule cannot be bypassed.
-- [ ] **Loader: add `ValidateServiceDeployFiles(baseDir string, allServices
+- [x] **Loader: add `ValidateServiceDeployFiles(baseDir string, allServices
       map[string]ServiceConfig) error`** in `internal/config/`. Walks
       `devbox/deploy/*.yml`, maps each filename stem to a declared service, and
       returns an error if any deploy file's owner is not `type: app`. Sentinel
@@ -317,31 +317,38 @@ do not run the validator. Add hard errors in the load + plan paths:
       Also reject deploy files whose stem matches no declared service at all (today
       these are silently skipped — same class of "silently wrong" the pre-release
       policy forbids).
-- [ ] **`ResolveServicesPlan`** (`internal/deploy/service_plan.go:51`): filter the
+- [x] **`ResolveServicesPlan`** (`internal/deploy/service_plan.go:51`): filter the
       `enabled` map to `IsApp()` only. Tool/infra services with `Enabled: true` are
       legal at the runtime layer (they show up in compose), but they must never
       appear in the deploy enumeration. Today the loop is type-blind.
-- [ ] **`ResolveServicePlan`** (`internal/deploy/service_plan.go:15`, the `--service`
+- [x] **`ResolveServicePlan`** (`internal/deploy/service_plan.go:15`, the `--service`
       single-target path): return a typed error if the named service is not `app`.
       Sentinel `ErrDeployTargetNotApp`.
-- [ ] **Topology / `TrackedServices`**: audit `internal/deploy/journal/`'s tracked-set
+- [x] **Topology / `TrackedServices`**: audit `internal/deploy/journal/`'s tracked-set
       logic and `config.TopoSortServices`. Both must filter to `IsApp()` if they
       currently iterate all services. Note any other deploy-side service enumeration
-      site found during the audit as a `➕` task.
-- [ ] **`ComposeFiles()` / `ComposeFilesAll()`** (`internal/config/devbox.go:339`):
+      site found during the audit as a `➕` task. Audit result: `TrackedServices`
+      derives from the resolved plan (already filtered upstream by the new
+      `ResolveServicesPlan` IsApp gate), and `config.TopoSortServices` is a generic
+      dependency-ordering helper called only with already-filtered name slices —
+      no type-blind iteration to patch. Journal hash/state helpers iterate only
+      tracked services. No additional filter required.
+- [x] **`ComposeFiles()` / `ComposeFilesAll()`** (`internal/config/devbox.go:339`):
       currently emits `base → tools (sorted) → services (sorted)`. After unification
       pin the new order **explicitly**: `base → tools (sorted by name) →
       infra (sorted by name) → apps (sorted by name)`. Group by type, then sort by
       name within each group. Reordering would silently break overlay precedence in
       live `next/tbm` and any user fixture; the order is part of the public surface.
       Implement as: iterate services partitioned by `IsTool()` / `IsInfra()` /
-      `IsApp()` in that order, sorting each partition by name.
-- [ ] write tests for each new sentinel + each new filter (table-driven; one fixture
+      `IsApp()` in that order, sorting each partition by name. (Already implemented
+      in Task 4 — see `composeFiles` at internal/config/devbox.go:350. Task 6 adds
+      the explicit regression test in `type_gates_test.go`.)
+- [x] write tests for each new sentinel + each new filter (table-driven; one fixture
       per illegal case).
-- [ ] write a `ComposeFiles` ordering test with a mixed app/tool/infra service set
+- [x] write a `ComposeFiles` ordering test with a mixed app/tool/infra service set
       that asserts the exact emitted order (covers both `ComposeFiles` and
       `ComposeFilesAll`).
-- [ ] run `go test ./internal/config/... ./internal/deploy/...` — must pass before
+- [x] run `go test ./internal/config/... ./internal/deploy/...` — must pass before
       next task.
 
 ### Task 7: Adapt status renderers and command-layer toggle/enable/disable

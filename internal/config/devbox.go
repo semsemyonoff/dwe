@@ -471,6 +471,9 @@ var (
 	ErrServicePortsShape       = errors.New("config: ports must be a map of name to port number")
 	ErrServiceHostsShape       = errors.New("config: hosts must be a map of name to hostname")
 	ErrServicePortOutOfRange   = errors.New("config: port value out of range 1..65535")
+	ErrDependsOnTool           = errors.New("config: depends_on target must not be a tool service")
+	ErrDeployFileForNonApp     = errors.New("config: deploy file only permitted for type app")
+	ErrDeployTargetNotApp      = errors.New("config: deploy target must be type app")
 )
 
 // validServiceTypes is the closed set of allowed ServiceType values.
@@ -953,6 +956,16 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	// `services.main.ports.http` resolve via ResolvePath for export rules,
 	// info.yml, docker.yml templates, and user command default_from.
 	injectServicesIntoRaw(merged, services)
+
+	// Type-semantics gates: depends_on targets must not be tool-typed; deploy
+	// files may only exist for app-typed services. These rules fire on every
+	// LoadConfig path (deploy, lifecycle, compose) — not just `devbox validate`.
+	if err := validateDependsOnTypes(services); err != nil {
+		return nil, err
+	}
+	if err := ValidateServiceDeployFiles(baseDir, services); err != nil {
+		return nil, err
+	}
 
 	// Load devbox/deploy.yml separately (not merged with config layers).
 	deployPath := filepath.Join(baseDir, "devbox", "deploy.yml")
@@ -1594,6 +1607,67 @@ func validateStepShape(step *DeployStep, phaseName string) error {
 		}
 	}
 	return nil
+}
+
+// validateDependsOnTypes returns an error if any service's depends_on list
+// names a service whose type is tool. Unknown depends_on targets are tolerated
+// here — TopoSortServices already validates them at plan time.
+func validateDependsOnTypes(services map[string]ServiceConfig) error {
+	var diags []error
+	for _, name := range slices.Sorted(maps.Keys(services)) {
+		svc := services[name]
+		for _, dep := range svc.DependsOn {
+			target, ok := services[dep]
+			if !ok {
+				continue
+			}
+			if target.IsTool() {
+				diags = append(diags, fmt.Errorf("%w: service %q depends_on %q (type tool)", ErrDependsOnTool, name, dep))
+			}
+		}
+	}
+	if len(diags) == 0 {
+		return nil
+	}
+	return errors.Join(diags...)
+}
+
+// ValidateServiceDeployFiles walks devbox/deploy/*.yml under baseDir and
+// returns an error if any deploy file belongs to a non-app service or to no
+// declared service at all. The check is independent of which subset later
+// callers pass to LoadServiceDeployConfigs; it is the authoritative gate.
+func ValidateServiceDeployFiles(baseDir string, allServices map[string]ServiceConfig) error {
+	deployDir := filepath.Join(baseDir, "devbox", "deploy")
+	entries, err := os.ReadDir(deployDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", deployDir, err)
+	}
+	var diags []error
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		stem := strings.TrimSuffix(name, ".yml")
+		svc, ok := allServices[stem]
+		if !ok {
+			diags = append(diags, fmt.Errorf("%w: deploy file %s names no declared service", ErrDeployFileForNonApp, filepath.Join("devbox", "deploy", name)))
+			continue
+		}
+		if !svc.IsApp() {
+			diags = append(diags, fmt.Errorf("%w: deploy file %s belongs to service %q (type %s)", ErrDeployFileForNonApp, filepath.Join("devbox", "deploy", name), stem, svc.Type))
+		}
+	}
+	if len(diags) == 0 {
+		return nil
+	}
+	return errors.Join(diags...)
 }
 
 // LoadServiceDeployConfigs loads per-service deploy pipelines from devbox/deploy/<name>.yml.

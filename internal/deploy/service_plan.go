@@ -24,8 +24,15 @@ func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, servic
 		return nil, fmt.Errorf("internal: __configPath missing from config")
 	}
 	baseDir := filepath.Dir(cfgPath)
+	svc, declared := cfg.Services[serviceName]
+	if !declared {
+		return nil, fmt.Errorf("service %q is not declared in devbox/services.yml", serviceName)
+	}
+	if !svc.IsApp() {
+		return nil, fmt.Errorf("%w: service %q has type %s", config.ErrDeployTargetNotApp, serviceName, svc.Type)
+	}
 	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
-		serviceName: cfg.Services[serviceName],
+		serviceName: svc,
 	})
 	if err != nil {
 		return nil, err
@@ -55,9 +62,11 @@ func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pi
 	}
 	baseDir := filepath.Dir(cfgPath)
 
+	// Deploy enumeration is restricted to app-typed services: tool/infra
+	// services may be Enabled (and show up in compose) but never deployable.
 	enabled := make(map[string]config.ServiceConfig)
 	for name, svc := range cfg.Services {
-		if svc.Enabled {
+		if svc.Enabled && svc.IsApp() {
 			enabled[name] = svc
 		}
 	}
