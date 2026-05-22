@@ -43,14 +43,14 @@ func TestParams_LiteralDefault(t *testing.T) {
 
 func TestParams_DefaultFrom(t *testing.T) {
 	cfg := makeConfig(map[string]any{
-		"runtime": map[string]any{
-			"ports": map[string]any{
-				"app": 8080,
+		"services": map[string]any{
+			"app": map[string]any{
+				"ports": map[string]any{"http": 8080},
 			},
 		},
 	})
 	defs := map[string]ParamDef{
-		"port": {Type: ParamTypeString, DefaultFrom: "runtime.ports.app"},
+		"port": {Type: ParamTypeString, DefaultFrom: "services.app.ports.http"},
 	}
 	got, err := Params(defs, nil, cfg)
 	if err != nil {
@@ -807,14 +807,16 @@ func TestParams_PatternPathType(t *testing.T) {
 // --- Regression tests for data-driven tools (raw dot-path resolution) ---
 
 func TestParams_DefaultFromToolHost(t *testing.T) {
-	// Tool hosts live alongside service-role hosts in runtime.hosts.<name>.
+	// Tool hosts live under services.<name>.hosts.<host-name> in the unified schema.
 	cfg := makeConfig(map[string]any{
-		"runtime": map[string]any{
-			"hosts": map[string]any{"adminer": "adminer.localhost"},
+		"services": map[string]any{
+			"adminer": map[string]any{
+				"hosts": map[string]any{"web": "adminer.localhost"},
+			},
 		},
 	})
 	defs := map[string]ParamDef{
-		"tool_host": {Type: ParamTypeString, DefaultFrom: "runtime.hosts.adminer"},
+		"tool_host": {Type: ParamTypeString, DefaultFrom: "services.adminer.hosts.web"},
 	}
 	got, err := Params(defs, nil, cfg)
 	if err != nil {
@@ -829,7 +831,9 @@ func TestParams_DefaultFromToolHost(t *testing.T) {
 
 func TestParamDefaults(t *testing.T) {
 	cfg := makeConfig(map[string]any{
-		"runtime": map[string]any{"ports": map[string]any{"app": 8080}},
+		"services": map[string]any{
+			"app": map[string]any{"ports": map[string]any{"http": 8080}},
+		},
 	})
 	tests := []struct {
 		name     string
@@ -846,7 +850,7 @@ func TestParamDefaults(t *testing.T) {
 		},
 		{
 			name:     "default_from resolves cfg path",
-			defs:     map[string]ParamDef{"port": {DefaultFrom: "runtime.ports.app"}},
+			defs:     map[string]ParamDef{"port": {DefaultFrom: "services.app.ports.http"}},
 			provided: nil,
 			cfg:      cfg,
 			want:     map[string]string{"port": "8080"},

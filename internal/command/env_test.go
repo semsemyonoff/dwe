@@ -79,10 +79,12 @@ func TestBuildEnvContent_boolFormatFalse(t *testing.T) {
 
 func TestBuildEnvContent_intFormat(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "APP_PORT", From: "runtime.ports.app", Format: "int"},
+		{Name: "APP_PORT", From: "services.app.ports.http", Format: "int"},
 	}, map[string]any{
-		"runtime": map[string]any{
-			"ports": map[string]any{"app": 8080},
+		"services": map[string]any{
+			"app": map[string]any{
+				"ports": map[string]any{"http": 8080},
+			},
 		},
 	})
 

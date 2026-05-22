@@ -34,16 +34,16 @@ sections:
           - type: definition
             indent: 2
             name: URL
-            value: "{{ appURL .Runtime.Hosts.main .Runtime.Ports.app .Runtime.UseHTTPS }}"
+            value: '{{ appURL (index .Services "main").Host "web" (index .Services "app").Port "http" .Runtime.UseHTTPS }}'
       - type: subgroup
         title: Tools
-        when: "{{ .Tools.AnyEnabled }}"
+        when: '{{ len .ToolServices }}'
         items:
           - type: definition
             indent: 2
             name: Adminer
             value: "adminer-url"
-            when: "{{ .Tools.adminer.Enabled }}"
+            when: '{{ (index .Services "adminer").Enabled }}'
 
 footer: true
 `
@@ -99,8 +99,8 @@ func TestLoadInfoConfig(t *testing.T) {
 
 	// The second subgroup (Tools) has a when: expression — verify it is parsed.
 	toolsSubgroup := urls.Items[1]
-	if toolsSubgroup.When != "{{ .Tools.AnyEnabled }}" {
-		t.Errorf("tools subgroup when = %q, want {{ .Tools.AnyEnabled }}", toolsSubgroup.When)
+	if toolsSubgroup.When != "{{ len .ToolServices }}" {
+		t.Errorf("tools subgroup when = %q, want {{ len .ToolServices }}", toolsSubgroup.When)
 	}
 }
 
@@ -525,7 +525,7 @@ sections:
           - type: definition
             name: ElasticVue
             value: "elasticvue-dashboard"
-            when: "{{ .Tools.elasticvue.Enabled }}"
+            when: '{{ (index .Services "elasticvue").Enabled }}'
 `
 	path := writeTempYML(t, yml)
 	cfg, err := LoadInfoConfig(path)
@@ -539,7 +539,7 @@ sections:
 
 	subgroup := cfg.Sections[0].Items[0]
 	item := subgroup.Items[0]
-	if item.When != "{{ .Tools.elasticvue.Enabled }}" {
-		t.Errorf("expected mixed-case template for arbitrary tool, got: %q", item.When)
+	if item.When != `{{ (index .Services "elasticvue").Enabled }}` {
+		t.Errorf("expected services template for arbitrary tool, got: %q", item.When)
 	}
 }

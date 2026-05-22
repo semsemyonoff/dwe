@@ -189,6 +189,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		Resolved:   name,
 		ServiceCfg: svc,
 		Runtime:    cfg.Runtime,
+		Services:   cfg.Services,
 		Cfg:        cfg,
 	}
 

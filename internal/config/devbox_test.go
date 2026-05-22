@@ -432,13 +432,13 @@ func TestResolvePath_topLevel(t *testing.T) {
 
 func TestResolvePath_nested(t *testing.T) {
 	m := map[string]any{
-		"runtime": map[string]any{
-			"ports": map[string]any{
-				"app": 8080,
+		"services": map[string]any{
+			"app": map[string]any{
+				"ports": map[string]any{"http": 8080},
 			},
 		},
 	}
-	v, ok := ResolvePath(m, "runtime.ports.app")
+	v, ok := ResolvePath(m, "services.app.ports.http")
 	if !ok || v != 8080 {
 		t.Errorf("got %v, %v", v, ok)
 	}
@@ -1606,7 +1606,7 @@ func TestLoadConfig_exportsLoaded(t *testing.T) {
 exports:
   env:
     - name: APP_PORT
-      from: runtime.ports.app
+      from: services.app.ports.http
       format: int
     - name: STATE
       from: state
@@ -1622,7 +1622,7 @@ exports:
 	if cfg.Exports.Env[0].Name != "APP_PORT" {
 		t.Errorf("rule[0].Name = %q", cfg.Exports.Env[0].Name)
 	}
-	if cfg.Exports.Env[0].From != "runtime.ports.app" {
+	if cfg.Exports.Env[0].From != "services.app.ports.http" {
 		t.Errorf("rule[0].From = %q", cfg.Exports.Env[0].From)
 	}
 	if cfg.Exports.Env[0].Format != "int" {
@@ -1637,7 +1637,7 @@ func TestLoadConfig_reservedExportNameRejected(t *testing.T) {
 exports:
   env:
     - name: ` + name + `
-      from: runtime.ports.app
+      from: services.app.ports.http
 `
 			path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithReservedRule, "")
 			_, err := LoadConfig(path)

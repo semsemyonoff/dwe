@@ -106,10 +106,12 @@ func TestBuildContent_boolFormatFalse(t *testing.T) {
 
 func TestBuildContent_intFormat(t *testing.T) {
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "APP_PORT", From: "runtime.ports.app", Format: "int"},
+		{Name: "APP_PORT", From: "services.app.ports.http", Format: "int"},
 	}, map[string]any{
-		"runtime": map[string]any{
-			"ports": map[string]any{"app": 8080},
+		"services": map[string]any{
+			"app": map[string]any{
+				"ports": map[string]any{"http": 8080},
+			},
 		},
 	})
 
@@ -263,12 +265,14 @@ func TestFormatValue_boolFormatNonBoolValue(t *testing.T) {
 // --- Regression tests for data-driven tools (raw dot-path resolution) ---
 
 func TestBuildContent_toolPortResolution(t *testing.T) {
-	// Tool ports live alongside service-role ports in runtime.ports.<name>.
+	// Tool ports live under services.<name>.ports.<port-name> in the unified schema.
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "ADMINER_PORT", From: "runtime.ports.adminer", Format: "int"},
+		{Name: "ADMINER_PORT", From: "services.adminer.ports.web", Format: "int"},
 	}, map[string]any{
-		"runtime": map[string]any{
-			"ports": map[string]any{"adminer": 8080},
+		"services": map[string]any{
+			"adminer": map[string]any{
+				"ports": map[string]any{"web": 8080},
+			},
 		},
 	})
 
@@ -282,12 +286,14 @@ func TestBuildContent_toolPortResolution(t *testing.T) {
 }
 
 func TestBuildContent_toolHostResolution(t *testing.T) {
-	// Tool hosts live alongside service-role hosts in runtime.hosts.<name>.
+	// Tool hosts live under services.<name>.hosts.<host-name>.
 	cfg := makeEnvCfg([]config.ExportRule{
-		{Name: "ADMINER_HOST", From: "runtime.hosts.adminer"},
+		{Name: "ADMINER_HOST", From: "services.adminer.hosts.web"},
 	}, map[string]any{
-		"runtime": map[string]any{
-			"hosts": map[string]any{"adminer": "adminer.localhost"},
+		"services": map[string]any{
+			"adminer": map[string]any{
+				"hosts": map[string]any{"web": "adminer.localhost"},
+			},
 		},
 	})
 
@@ -297,5 +303,31 @@ func TestBuildContent_toolHostResolution(t *testing.T) {
 	}
 	if !strings.Contains(out, "ADMINER_HOST=adminer.localhost") {
 		t.Errorf("expected ADMINER_HOST=adminer.localhost, got:\n%s", out)
+	}
+}
+
+// TestBuildContent_multiPortService exercises a service that declares two
+// named ports — proves the loader/raw-injection roundtrip and the export
+// rule resolution both handle multi-port maps.
+func TestBuildContent_multiPortService(t *testing.T) {
+	cfg := makeEnvCfg([]config.ExportRule{
+		{Name: "APP_HTTP_PORT", From: "services.app.ports.http", Format: "int"},
+		{Name: "APP_GRPC_PORT", From: "services.app.ports.grpc", Format: "int"},
+	}, map[string]any{
+		"services": map[string]any{
+			"app": map[string]any{
+				"ports": map[string]any{"http": 8080, "grpc": 9090},
+			},
+		},
+	})
+
+	out, err := BuildContent(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{"APP_HTTP_PORT=8080", "APP_GRPC_PORT=9090"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q, got:\n%s", want, out)
+		}
 	}
 }

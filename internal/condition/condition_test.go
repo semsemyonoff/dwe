@@ -23,7 +23,7 @@ func TestClassify_emptyIsTemplate(t *testing.T) {
 func TestClassify_goTemplate(t *testing.T) {
 	cases := []string{
 		"{{.Runtime.UseHTTPS}}",
-		"{{ .Tools.adminer.Enabled }}",
+		"{{ (index .Services \"adminer\").Enabled }}",
 		"prefix {{.Foo}} suffix",
 	}
 	for _, expr := range cases {

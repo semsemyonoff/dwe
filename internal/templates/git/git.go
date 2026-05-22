@@ -329,7 +329,33 @@ type TemplateData struct {
 	Resolved   string
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
+	Services   map[string]config.ServiceConfig
 	Cfg        *config.DevboxConfig
+}
+
+// AppServices returns services whose Type is "app".
+func (d TemplateData) AppServices() map[string]config.ServiceConfig {
+	return filterServices(d.Services, config.ServiceTypeApp)
+}
+
+// ToolServices returns services whose Type is "tool".
+func (d TemplateData) ToolServices() map[string]config.ServiceConfig {
+	return filterServices(d.Services, config.ServiceTypeTool)
+}
+
+// InfraServices returns services whose Type is "infra".
+func (d TemplateData) InfraServices() map[string]config.ServiceConfig {
+	return filterServices(d.Services, config.ServiceTypeInfra)
+}
+
+func filterServices(svcs map[string]config.ServiceConfig, t config.ServiceType) map[string]config.ServiceConfig {
+	out := make(map[string]config.ServiceConfig, len(svcs))
+	for name, svc := range svcs {
+		if svc.Type == t {
+			out[name] = svc
+		}
+	}
+	return out
 }
 
 // Context carries the inputs for rendering all hooks for one service.
@@ -400,6 +426,7 @@ func RenderHooks(ctx Context) error {
 		Resolved:   resolved,
 		ServiceCfg: ctx.ServiceCfg,
 		Runtime:    ctx.Cfg.Runtime,
+		Services:   ctx.Cfg.Services,
 		Cfg:        ctx.Cfg,
 	}
 

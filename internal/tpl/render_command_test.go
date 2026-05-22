@@ -40,8 +40,8 @@ func TestCompileVarSyntax_dotPath(t *testing.T) {
 }
 
 func TestCompileVarSyntax_deepDotPath(t *testing.T) {
-	got := CompileVarSyntax("${runtime.ports.app}")
-	want := `{{ resolve .Raw "runtime.ports.app" }}`
+	got := CompileVarSyntax("${services.app.ports.http}")
+	want := `{{ resolve .Raw "services.app.ports.http" }}`
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

@@ -76,6 +76,7 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 		Resolved:   name,
 		ServiceCfg: svc,
 		Runtime:    cfg.Runtime,
+		Services:   cfg.Services,
 		Cfg:        cfg,
 	}
 

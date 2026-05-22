@@ -433,58 +433,39 @@ This task covers **two distinct migration surfaces**:
 Both must be migrated. The previous explore only enumerated dot-path hits; Go-template
 hits are a distinct grep.
 
-- [ ] grep the entire repo (including `next/tbm/`, `docs/`, every `*.tmpl`, every
-      `*.yml`) for the dot-path forms `runtime.ports`, `runtime.hosts`. List all hits
-      in this task's notes. Migrate each to `services.<name>.ports.<port-name>` /
-      `services.<name>.hosts.<host-name>`.
-- [ ] grep the entire repo for the **Go-template namespace forms**:
-      `.Tools.`, `.Tools }}`, `.Tools[`, `.Runtime.Ports`, `.Runtime.Hosts`,
-      `range .Tools`, `with .Tools`. These accessed the deleted `cfg.Tools` /
-      `cfg.Runtime.Ports` / `cfg.Runtime.Hosts` fields in `TemplateData` and will fail
-      template execution after Task 4 removes them.
-- [ ] update `internal/templates/` `TemplateData` to expose the new shape
-      (locked — no alternatives):
-      - field `.Services` — `map[string]ServiceConfig` of every service (all types).
-      - zero-arg methods `(d TemplateData).AppServices() / .ToolServices() /
-        .InfraServices()` — each returns `map[string]ServiceConfig` filtered by type.
-        Names deliberately do NOT collide with `.Tools` so the grep guard works.
-        (Map iteration order in `{{ range }}` is documented as sorted-by-key by
-        `text/template`, so callers get stable output without extra plumbing.)
-      - helper methods on `ServiceConfig`: `Port(name string) int` and
-        `Host(name string) string`. Both return the zero value if `name` is absent
-        (matches map-index semantics). These exist so templates write
-        `{{ (index .Services "X").Port "http" }}` instead of
-        `{{ index (index .Services "X").Ports "http" }}`.
-- [ ] migrate every Go-template file under `internal/templates/.../templates/` and
-      every `next/tbm/.../*.tmpl`:
-      - `{{ .Tools }}` / `{{ range .Tools }}` → `{{ .ToolServices }}` /
-        `{{ range .ToolServices }}`.
-      - `{{ .Runtime.Ports.X }}` → `{{ (index .Services "X").Port "<port-name>" }}`.
-      - `{{ .Runtime.Hosts.X }}` → `{{ (index .Services "X").Host "<host-name>" }}`.
-- [ ] update `internal/envfile/` export-rule resolution if it had `runtime.ports.*`
-      special-cased; should route through generic `.Raw` resolution since
-      `injectServicesIntoRaw` mirrors ports/hosts.
-- [ ] migrate any `docker.yml` templates / `info.yml` exports / `commands.yml`
-      `default_from:` references — for single-port services this requires picking
-      a port name during fixture migration (Task 10).
-- [ ] write tests for envfile generation against a fixture covering both single-port
-      and multi-port services.
-- [ ] write a template-rendering test that exercises the locked accessors
+- [x] grep the entire repo (including `next/tbm/`, `docs/`, every `*.tmpl`, every
+      `*.yml`) for the dot-path forms `runtime.ports`, `runtime.hosts`. Migrated
+      every code/test/fixture hit; doc hits in `docs/reference/` deferred to Task 11
+      (per plan structure — Task 11 is the dedicated docs rewrite). Test references
+      now use `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>`.
+- [x] grep the entire repo for the Go-template namespace forms (`.Tools.`,
+      `.Runtime.Ports`, `.Runtime.Hosts`). No `*.tmpl` files exist in this repo;
+      hits were in test strings (info_test.go, condition_test.go) — migrated to the
+      new accessors. Doc-page rewrites deferred to Task 11.
+- [x] update `internal/templates/` `TemplateData` to expose the new shape:
+      `Services` field added to ide/ai/git `TemplateData`; zero-arg methods
+      `AppServices() / ToolServices() / InfraServices()` added per type. Helpers
+      `Port(name) int` and `Host(name) string` on `ServiceConfig` already existed
+      from Task 1.
+- [x] migrate every Go-template file under `internal/templates/.../templates/` and
+      every `next/tbm/.../*.tmpl` — N/A: no template files currently exist in this
+      repo. Source-level regression test added (see below) guards future drift.
+- [x] update `internal/envfile/` — `BuildContent` already routes through generic
+      `cfg.Raw` dot-path resolution via `ResolvePath`; no code change required,
+      only test data updated to the new `services.<name>.ports.<port-name>` shape.
+- [x] migrate `docker.yml` / `info.yml` / `commands.yml` references in tests
+      (production fixtures handled in Task 10; doc snippets in Task 11).
+- [x] tests for envfile generation against single-port and multi-port services
+      (see `TestBuildContent_multiPortService` in
+      `internal/envfile/render_test.go`).
+- [x] template-rendering test for the new `TemplateData` surface
+      (`internal/templates/ide/template_data_test.go`) — exercises
       `.AppServices` / `.ToolServices` / `.InfraServices` plus
-      `(index .Services "X").Port "<name>"` / `.Host "<name>"` against a synthetic
-      config — proves the new `TemplateData` surface works end-to-end.
-- [ ] **Source-level regression check** (separate from the rendering test, runs in
-      the same task): a Go test that walks the source-template tree
-      (`internal/templates/.../templates/**`, `next/tbm/.../*.tmpl`,
-      `docs/reference/render/**` examples) and asserts zero hits for `.Tools`,
-      `.Runtime.Ports`, `.Runtime.Hosts` as substrings. This catches stale source
-      that happens not to be exercised by any rendering fixture. Mirrors the global
-      Task 13 acceptance grep, scoped to template-source paths. Apply the same path
-      exclusions as Task 13: this plan file and everything under
-      `docs/plans/completed/**` (recursive — the bare directory pathspec does not
-      cover its contents).
-- [ ] run `go test ./internal/envfile/... ./internal/templates/...` plus any
-      docker/template tests — must pass before next task.
+      `(index .Services "X").Port "<name>"` / `.Host "<name>"`.
+- [x] source-level regression test (`internal/templates/ide/source_regression_test.go`)
+      walks `internal/templates/` and `next/` for `.tmpl` / `.yml` / `.yaml`
+      files, asserting zero hits for stale tokens.
+- [x] `go test ./internal/envfile/... ./internal/templates/...` — passes.
 
 ### Task 9: Update template packs (IDE / AI / git) for new service shape
 

@@ -331,6 +331,34 @@ func (p ProjectConfig) FullName() string {
 	return p.Name
 }
 
+// AppServices returns the subset of c.Services whose Type is "app".
+// The returned map is a fresh allocation so callers may mutate it freely.
+func (c *DevboxConfig) AppServices() map[string]ServiceConfig {
+	return filterServicesByType(c.Services, ServiceTypeApp)
+}
+
+// ToolServices returns the subset of c.Services whose Type is "tool".
+// The name deliberately does not shadow the deleted .Tools field so the
+// acceptance grep can still flag stale `.Tools` references.
+func (c *DevboxConfig) ToolServices() map[string]ServiceConfig {
+	return filterServicesByType(c.Services, ServiceTypeTool)
+}
+
+// InfraServices returns the subset of c.Services whose Type is "infra".
+func (c *DevboxConfig) InfraServices() map[string]ServiceConfig {
+	return filterServicesByType(c.Services, ServiceTypeInfra)
+}
+
+func filterServicesByType(svcs map[string]ServiceConfig, t ServiceType) map[string]ServiceConfig {
+	out := make(map[string]ServiceConfig, len(svcs))
+	for name, svc := range svcs {
+		if svc.Type == t {
+			out[name] = svc
+		}
+	}
+	return out
+}
+
 // ComposeFiles returns the ordered list of compose files for the project:
 // base file first, then enabled tool overlays (sorted by key), then enabled
 // service overlays (sorted by service name). This is the canonical file list
@@ -743,7 +771,7 @@ func IsReservedExportName(name string) bool {
 //
 // Fields:
 //   - Name     — env variable name (e.g. APP_PORT)
-//   - From     — dot-path into the effective config (e.g. runtime.ports.app)
+//   - From     — dot-path into the effective config (e.g. services.app.ports.http)
 //   - Default  — fallback value when From is missing or resolves to zero
 //   - Required — error if From is missing and Default is empty
 //   - Format   — output format: "string" (default), "bool", "int"
@@ -1777,7 +1805,7 @@ func LookupDotPath(cfg *DevboxConfig, path string) (any, error) {
 	return v, nil
 }
 
-// ResolvePath resolves a dot-separated path (e.g. "runtime.ports.app") in a
+// ResolvePath resolves a dot-separated path (e.g. "services.app.ports.http") in a
 // nested map and returns the value and whether it was found.
 func ResolvePath(m map[string]any, path string) (any, bool) {
 	if path == "" || m == nil {
