@@ -461,7 +461,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 				return err
 			}
 			if choice == 2 {
-				return errors.New("deploy cancelled")
+				return &deployCancelledError{}
 			}
 			if choice == 1 {
 				force = true // Re-run all steps (state ignored; when: still applies)

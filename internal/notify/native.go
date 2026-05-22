@@ -57,16 +57,16 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 	beeepFn := beeepNotify
 	done := make(chan error, 1)
 	go func() {
+		var result error
 		defer func() {
 			if r := recover(); r != nil {
-				<-b.sem // release before signalling so a concurrent notify() sees the slot as free
 				slog.Debug("notify backend panic recovered", "recover", r)
-				done <- fmt.Errorf("panic: %v", r)
-				return
+				result = fmt.Errorf("panic: %v", r)
 			}
-			<-b.sem
+			<-b.sem // always release before signalling so a concurrent notify() sees the slot as free
+			done <- result
 		}()
-		done <- beeepFn(title, body, "")
+		result = beeepFn(title, body, "")
 	}()
 
 	timer := time.NewTimer(nativeBackendTimeout)
