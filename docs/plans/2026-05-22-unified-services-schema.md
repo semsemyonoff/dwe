@@ -537,15 +537,15 @@ hits are a distinct grep.
 
 ### Task 12: Update `AGENTS.md` (== `CLAUDE.md`) to reflect new model
 
-- [ ] update the long `internal/config/` paragraph in `AGENTS.md` to describe:
+- [x] update the long `internal/config/` paragraph in `AGENTS.md` to describe:
       unified `ServiceConfig`, type discriminator, removal of `ToolConfig` /
       `LoadToolsConfig` / `validateToolsOverlay` / `runtime.ports` / `runtime.hosts`.
-- [ ] update the binary-accessor pattern note (no change to accessors themselves).
-- [ ] update `internal/stack/` paragraph to mention type-keyed status sections.
-- [ ] update `internal/command/` paragraph for unified toggle / completion / status
+- [x] update the binary-accessor pattern note (no change to accessors themselves).
+- [x] update `internal/stack/` paragraph to mention type-keyed status sections.
+- [x] update `internal/command/` paragraph for unified toggle / completion / status
       subcommands.
-- [ ] update `Key Patterns` section if any pattern referenced tools-vs-services duality.
-- [ ] **do not** edit `CLAUDE.md` directly — it is a symlink to `AGENTS.md`.
+- [x] update `Key Patterns` section if any pattern referenced tools-vs-services duality.
+- [x] **do not** edit `CLAUDE.md` directly — it is a symlink to `AGENTS.md`.
 
 ### Task 13: Verify acceptance criteria
 

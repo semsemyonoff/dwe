@@ -859,6 +859,7 @@ services.all.composer-install:
 |-------|----------|---------|-------------|
 | `max_concurrent` | optional | `min(NumCPU, len(steps))` | Upper bound on goroutines running at once |
 | `fail_fast` | optional | `true` | When true, the first sub-step error cancels siblings via context; when false, all sub-steps run and errors aggregate via `errors.Join` |
+| `always_show_output` | optional | `false` | When true, every sub-step's captured stdout/stderr is dumped between `───── output: <command> ─────` / `──────────────────` bars after the group finishes — including successful sub-steps. The default keeps the failure-only behaviour. Skipped and cancelled sub-steps never produce output and are unaffected. |
 | `steps` | required | — | Sub-steps; each must be a leaf command step (no `confirm`, no nested `parallel`) |
 
 Group-level `when:` and `continue_on_error:` are valid on the step that carries `parallel:` (they govern the whole group). Per-sub-step `when:` and `continue_on_error:` are also valid and behave the same as in a sequential workflow. Sub-step `when:` is evaluated once at preflight (before any goroutine launches) so predicates with side-effects do not double-execute.
@@ -881,7 +882,7 @@ Group-level `when:` and `continue_on_error:` are valid on the step that carries 
 - **Block rows (TTY)**: each sub-step has a row showing `<spinner-or-glyph> [<elapsed>] [<i>/<N>] <command>[: <latest-line>]`. The latest line tracks both newline-terminated output AND carriage-return frames, so `curl` / `wget` / `docker pull` progress bars are visible in-place (the row updates every time the child writes a frame).
 - **End-of-block summary (TTY)**: when the parallel group finishes, the rows freeze with their final glyph (✓/✗/◎) in scrollback and a single one-line summary footer is printed in their place: `✓ [<elapsed>] parallel: <workflow-id>` in green on success, `✗ ...` in red when any sub-step failed. The per-sub-step `✓ [i/N] Done: …` lines are NOT re-emitted on TTY because the same information is already in the frozen block rows above.
 - **Non-TTY mode** (CI / piped stdout): no live block. Each sub-step prints its terminal-state line (`✓ [i/N] Done`, `◎ [i/N] Skipped`, `✗ [i/N] Failed`, `◎ [i/N] Cancelled`) followed by a plain-text summary footer (`✓ [<elapsed>] parallel: <workflow-id>`).
-- **Failure dumps**: a failed sub-step's captured output is replayed between `───── output ─────` / `──────────────────` bars on stderr in BOTH TTY and non-TTY modes — the live row cannot show the full buffer.
+- **Failure dumps**: a failed sub-step's captured output is replayed between `───── output: <command> ─────` / `──────────────────` bars on stderr in BOTH TTY and non-TTY modes — the live row cannot show the full buffer. The top bar names the sub-step so multi-failure dumps stay attributable, and ANSI escape sequences in the child's output are forwarded verbatim so colours survive the round-trip.
 
 #### Per-sub-step logs
 
