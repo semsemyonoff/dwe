@@ -5,9 +5,21 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/ui"
 	"devbox-cli/internal/userconfig"
+
+	"github.com/charmbracelet/x/term"
 )
+
+// isStdinTTY is a package-level seam so tests can simulate TTY/non-TTY stdin
+// without forking or manipulating real file descriptors.
+//
+// Only stdin needs to be a TTY — desktop notifications are OS toasts and
+// don't use stdout. Checking stdout (like ui.IsInteractiveFn does for TUI
+// forms) would suppress notifications when output is piped, which is exactly
+// the scenario where a passive toast is most valuable.
+var isStdinTTY = func() bool {
+	return term.IsTerminal(os.Stdin.Fd())
+}
 
 // isInteractiveForNotify reports whether the current process should
 // fire desktop notifications. Wrapped in a package-level var so tests
@@ -19,7 +31,7 @@ var isInteractiveForNotify = func() bool {
 	if v := os.Getenv("DEVBOX_NONINTERACTIVE"); v == "1" || strings.EqualFold(v, "true") {
 		return false
 	}
-	return ui.IsInteractiveFn(os.Stdin)
+	return isStdinTTY()
 }
 
 // New constructs a Notifier from a userconfig. Returns a disabled

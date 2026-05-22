@@ -83,9 +83,9 @@ func applyEnv(cfg *Config) error {
 		if !ok {
 			continue
 		}
-		parsed, err := parseBool(strings.TrimSpace(v), 0, b.env)
+		parsed, err := parseBoolEnv(strings.TrimSpace(v), b.env)
 		if err != nil {
-			return fmt.Errorf("userconfig: env %s: %w", b.env, err)
+			return err
 		}
 		b.set(parsed)
 	}

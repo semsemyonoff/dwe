@@ -138,6 +138,7 @@ func TestRunRun_EarlyConfigFailure_PopulatesEmptyProject(t *testing.T) {
 }
 
 func TestRunRun_SkipNotify_NoEvent(t *testing.T) {
+	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)

@@ -103,6 +103,19 @@ func parseBool(val string, line int, key string) (bool, error) {
 	}
 }
 
+// parseBoolEnv is parseBool for environment variable sources; it produces a
+// clean error without a file-line suffix.
+func parseBoolEnv(val, envKey string) (bool, error) {
+	switch strings.ToLower(val) {
+	case "1", "true", "yes":
+		return true, nil
+	case "0", "false", "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("userconfig: invalid boolean %q for env var %s", val, envKey)
+	}
+}
+
 func parseList(val string) []string {
 	if strings.TrimSpace(val) == "" {
 		return nil

@@ -411,6 +411,10 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 
 			gRC := rc
 			gRC.UnderParallel = true
+			// Parallel sub-steps are never the top-level invocation; runCommandStep
+			// sets SkipNotify on the inner subCtx it builds, but set it here too
+			// so any future code path that bypasses runCommandStep stays correct.
+			gRC.SkipNotify = true
 			// Never let parallel sub-steps read from shared stdin. Interactive
 			// commands are rejected at plan time, but shell scripts or builtin
 			// confirm (without SkipConfirm) could still block on an unexpected

@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"devbox-cli/internal/ui"
 	"devbox-cli/internal/userconfig"
 )
 
@@ -158,10 +157,15 @@ func TestNotify_PerOpGate(t *testing.T) {
 	}
 }
 
+func withStdinTTY(t *testing.T, v bool) {
+	t.Helper()
+	prev := isStdinTTY
+	isStdinTTY = func() bool { return v }
+	t.Cleanup(func() { isStdinTTY = prev })
+}
+
 func TestIsInteractiveForNotify_EnvVars(t *testing.T) {
-	prevUI := ui.IsInteractiveFn
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
-	t.Cleanup(func() { ui.IsInteractiveFn = prevUI })
+	withStdinTTY(t, true)
 
 	tests := []struct {
 		name string
@@ -193,13 +197,11 @@ func TestIsInteractiveForNotify_EnvVars(t *testing.T) {
 }
 
 func TestIsInteractiveForNotify_NoTTY(t *testing.T) {
-	prevUI := ui.IsInteractiveFn
-	ui.IsInteractiveFn = func(io.Reader) bool { return false }
-	t.Cleanup(func() { ui.IsInteractiveFn = prevUI })
+	withStdinTTY(t, false)
 	t.Setenv("CI", "")
 	t.Setenv("DEVBOX_NONINTERACTIVE", "")
 	if isInteractiveForNotify() {
-		t.Fatalf("expected non-interactive when stdout is not a TTY")
+		t.Fatalf("expected non-interactive when stdin is not a TTY")
 	}
 }
 
