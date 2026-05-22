@@ -177,17 +177,21 @@ canonical dot-path becomes `services.<name>.ports.<port-name>` and
 
 ### Task 2: Verify template dot-path resolution and `runtime.*` namespace handling
 
-- [ ] read `internal/tpl/render_command.go` `CompileVarSyntax` (l.87) and confirm whether
+- [x] read `internal/tpl/render_command.go` `CompileVarSyntax` (l.87) and confirm whether
       `runtime.*` had any special-case rewriting (the explore report says it routes
-      through `.Raw` by default, but verify before deleting).
-- [ ] confirm `resolveMapPath` (l.206) walks nested maps without needing patches for
-      `services.X.ports.Y` (two-level nested map).
-- [ ] write a tpl-level test fixture that resolves `${services.foo.ports.http}` against
+      through `.Raw` by default, but verify before deleting). Confirmed: only `files`,
+      `host`, `param`, `context` namespaces are special-cased; `runtime.*` and
+      `services.*` both route through the default `resolve .Raw` path.
+- [x] confirm `resolveMapPath` (l.206) walks nested maps without needing patches for
+      `services.X.ports.Y` (two-level nested map). Confirmed: recursive walk over
+      `map[string]any` handles arbitrary depth.
+- [x] write a tpl-level test fixture that resolves `${services.foo.ports.http}` against
       a synthetic `Raw` map shaped per the new model — verifies plumbing works before we
       change the producer.
-- [ ] document any required tpl changes (expected: none) inline in the test as a comment;
-      open a `⚠️` blocker entry here if it turns out tpl needs modification.
-- [ ] run `go test ./internal/tpl/...` — must pass before next task.
+- [x] document any required tpl changes (expected: none) inline in the test as a comment;
+      open a `⚠️` blocker entry here if it turns out tpl needs modification. No tpl
+      changes required.
+- [x] run `go test ./internal/tpl/...` — must pass before next task.
 
 ### Task 3: Rewrite `LoadServicesConfig` to strict-decode with type discriminator
 

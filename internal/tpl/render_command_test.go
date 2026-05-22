@@ -612,6 +612,50 @@ func TestEvalCommandCondition_malformedBuiltin(t *testing.T) {
 	}
 }
 
+// TestRenderCommand_ServicesNestedPortsHosts verifies that the generic dot-path
+// resolver walks two-level nested maps for the new services.<name>.ports.<port-name>
+// and services.<name>.hosts.<host-name> shapes without any tpl-side changes.
+//
+// This is a plumbing-verification test for the unified-services-schema refactor:
+// the producer (injectServicesIntoRaw) hasn't been rewritten yet, but the consumer
+// (CompileVarSyntax → resolve → resolveMapPath) already walks nested maps via .Raw
+// generically. No tpl changes are required.
+func TestRenderCommand_ServicesNestedPortsHosts(t *testing.T) {
+	raw := map[string]any{
+		"services": map[string]any{
+			"foo": map[string]any{
+				"ports": map[string]any{
+					"http": 8080,
+					"grpc": 9090,
+				},
+				"hosts": map[string]any{
+					"main": "foo.local",
+				},
+			},
+		},
+	}
+	ctx := &RenderContext{Raw: raw}
+	cases := []struct {
+		expr string
+		want string
+	}{
+		{"${services.foo.ports.http}", "8080"},
+		{"${services.foo.ports.grpc}", "9090"},
+		{"${services.foo.hosts.main}", "foo.local"},
+		{"${services.foo.ports.missing}", ""},
+		{"${services.missing.ports.http}", ""},
+	}
+	for _, tc := range cases {
+		got, err := RenderCommand(tc.expr, ctx)
+		if err != nil {
+			t.Fatalf("RenderCommand(%q): %v", tc.expr, err)
+		}
+		if got != tc.want {
+			t.Errorf("RenderCommand(%q) = %q, want %q", tc.expr, got, tc.want)
+		}
+	}
+}
+
 func TestEvalCommandCondition_typoOnBuiltinVerb(t *testing.T) {
 	ctx := &RenderContext{}
 	// dir-emty (typo) instead of dir-empty
