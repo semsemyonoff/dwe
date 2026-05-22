@@ -36,9 +36,10 @@ var (
 
 // runOpts carries the per-invocation options for runCommandByID.
 type runOpts struct {
-	Inspect   bool
-	Yes       bool // user-explicit --yes OR'd with TUI y-toggle at the call site
-	SetValues []string
+	Inspect        bool
+	Yes            bool // user-explicit --yes OR'd with TUI y-toggle at the call site
+	ForceParamForm bool // TUI-only: user picked the item via the edit-params key
+	SetValues      []string
 }
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {
@@ -104,8 +105,11 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			ctx, stop := notifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
-			var skipConfirmFromTUI bool
-			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI)
+			var (
+				skipConfirmFromTUI bool
+				forceFormFromTUI   bool
+			)
+			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
@@ -123,8 +127,9 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
 				cfg, reg, flags.ProjectRoot(), id,
 				runOpts{
-					Yes:       skipConfirm || skipConfirmFromTUI,
-					SetValues: setFlags,
+					Yes:            skipConfirm || skipConfirmFromTUI,
+					ForceParamForm: forceFormFromTUI,
+					SetValues:      setFlags,
 				},
 			)
 		},
@@ -181,10 +186,17 @@ func runCommandByID(
 
 	prefilled := resolve.ParamDefaults(def.Params, provided, cfg)
 
+	// Skip the form when every required param already has a value (from --set
+	// or a declared Default / DefaultFrom) — pressing Enter on a form full of
+	// pre-filled values is just friction. The TUI exposes the EditParams key
+	// for the "I want to tweak the defaults" case, which sets ForceParamForm.
+	showForm := canPromptHuh && len(def.Params) > 0 &&
+		(opts.ForceParamForm || !allRequiredSatisfied(def.Params, prefilled))
+
 	// Build the form values: either via huh form (canPromptHuh) or from prefilled.
 	values := prefilled
-	if canPromptHuh && len(def.Params) > 0 {
-		fields := paramFieldsFromDef(def, prefilled)
+	if showForm {
+		fields := paramFieldsFromDef(def, prefilled, provided)
 		v, ferr := runParamForm("devbox commands › "+def.ID, fields)
 		if ferr != nil {
 			if errors.Is(ferr, ui.ErrCancelled) {
@@ -280,7 +292,11 @@ func printRunHeader(w io.Writer, def *usercommands.CommandDef) {
 // paramFieldsFromDef converts a command's params map into ordered ui.ParamField
 // values. Ordering is deterministic (sorted by name) so test assertions and the
 // rendered form do not depend on map iteration order.
-func paramFieldsFromDef(def *usercommands.CommandDef, prefilled map[string]string) []ui.ParamField {
+//
+// IsDefault marks fields whose prefilled value comes from a declared Default
+// or DefaultFrom — anything the user provided via --set is treated as
+// user-explicit and stays unmarked.
+func paramFieldsFromDef(def *usercommands.CommandDef, prefilled, provided map[string]string) []ui.ParamField {
 	names := make([]string, 0, len(def.Params))
 	for name := range def.Params {
 		names = append(names, name)
@@ -294,11 +310,25 @@ func paramFieldsFromDef(def *usercommands.CommandDef, prefilled map[string]strin
 			Type:        paramFieldType(p.Type),
 			Description: p.Description,
 			Default:     prefilled[name],
+			IsDefault:   prefilled[name] != "" && provided[name] == "",
 			Required:    p.Required,
 			Pattern:     p.Pattern,
 		})
 	}
 	return fields
+}
+
+// allRequiredSatisfied reports whether every required param already has a
+// non-empty value in prefilled (which is the merge of provided ∪ DefaultFrom
+// ∪ Default). Optional params are satisfied regardless of value — an empty
+// optional param is a valid input that resolve.Params will accept.
+func allRequiredSatisfied(defs map[string]model.ParamDef, prefilled map[string]string) bool {
+	for name, p := range defs {
+		if p.Required && prefilled[name] == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func paramFieldType(pt model.ParamType) ui.ParamFieldType {
@@ -377,11 +407,12 @@ type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string
 // makeBrowserSelector returns a selectCommandFn that drives the cmdbrowser
 // TUI. The returned closure captures cfg (for resolving ui.commands.*
 // defaults via the nil-safe accessors), mode, the includePrivate flag, and
-// (run-site only) a pointer to a bool that receives Result.SkipConfirm.
+// (run-site only) pointers to bools that receive Result.SkipConfirm and
+// Result.ForceParamForm.
 //
-// For ModeInspect the skipConfirmOut pointer is unused (the y binding is
-// disabled in inspect mode); pass nil.
-func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut *bool) selectCommandFn {
+// For ModeInspect the skipConfirmOut / forceFormOut pointers are unused
+// (their key bindings are disabled in inspect mode); pass nil.
+func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool) selectCommandFn {
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
@@ -392,6 +423,7 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 				Description: d.Description,
 				Type:        string(d.Type),
 				Private:     d.Private,
+				ParamCount:  len(d.Params),
 				Inspect:     buf.String(),
 			}
 		}
@@ -408,6 +440,9 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 		}
 		if skipConfirmOut != nil && res.SkipConfirm {
 			*skipConfirmOut = true
+		}
+		if forceFormOut != nil && res.ForceParamForm {
+			*forceFormOut = true
 		}
 		if res.Idx < 0 || res.Idx >= len(defs) {
 			return "", fmt.Errorf("cmdbrowser: result index %d out of range [0, %d)", res.Idx, len(defs))

@@ -94,7 +94,7 @@ func (m *Model) refreshFilterMatches() {
 	out := make([]list.Item, 0, len(m.filter.matched))
 	for _, idx := range m.filter.matched {
 		it := m.items[idx]
-		out = append(out, listItem{origIdx: idx, id: it.ID, desc: it.Description, typ: it.Type})
+		out = append(out, listItem{origIdx: idx, id: it.ID, desc: it.Description, typ: it.Type, paramCount: it.ParamCount})
 	}
 	m.list.SetItems(out)
 	if m.opts.AutoCollapseEmpty {

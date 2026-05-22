@@ -44,12 +44,15 @@ const (
 // Item is one row in the browser. The caller precomputes Inspect by
 // rendering the inspect view of its CommandDef into a string; cmdbrowser is
 // decoupled from usercommands.CommandDef and does no rendering of command
-// shapes itself.
+// shapes itself. ParamCount is rendered as a small `[N]` badge in the list
+// so the user can see at a glance which commands take parameters (and how
+// many) before opening the param form.
 type Item struct {
 	ID          string
 	Description string
 	Type        string
 	Private     bool
+	ParamCount  int
 	Inspect     string
 }
 
@@ -76,10 +79,16 @@ func (o *Options) applyDefaults() {
 // Result is the value returned by Run. Extending Result with additional
 // fields later (e.g. an `edit` intent) is additive — call sites destructure
 // only what they need.
+//
+// ForceParamForm is set when the user picks an item via the EditParams key
+// (default `e`) instead of Enter. The orchestrator interprets it as
+// "open the param form even if all defaults are already satisfied" — Enter
+// auto-skips the form in that case. Inspect mode ignores it.
 type Result struct {
-	Idx         int
-	Action      Action
-	SkipConfirm bool
+	Idx            int
+	Action         Action
+	SkipConfirm    bool
+	ForceParamForm bool
 }
 
 // DefaultOptions returns the spec defaults for callers that don't have a

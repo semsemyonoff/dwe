@@ -25,11 +25,18 @@ const (
 // ParamField is the UI-layer description of one parameter form field. The
 // orchestrator (internal/command) translates model.ParamDef → ParamField so
 // internal/ui stays free of usercommands/model/config/tpl imports.
+//
+// IsDefault is set by the orchestrator when the prefilled value came from a
+// declared Default / DefaultFrom (i.e. neither --set nor user input). The
+// form decorates such fields with a "(default)" title suffix and a
+// "default: <value>" description line so users can tell at a glance which
+// values they would accept by hitting Enter.
 type ParamField struct {
 	Name        string
 	Type        ParamFieldType
 	Description string
 	Default     string // raw string prefill (already merged: --set ∪ DefaultFrom ∪ Default)
+	IsDefault   bool   // prefilled value originates from Default / DefaultFrom
 	Required    bool
 	Pattern     string // empty = no pattern check
 }
@@ -86,6 +93,7 @@ func BuildParamForm(title string, fields []ParamField) (*huh.Form, []paramFormBi
 }
 
 func buildField(f ParamField, re *regexp.Regexp, ptr *string) (huh.Field, error) {
+	desc := displayDescription(f)
 	switch f.Type {
 	case FieldTypeBool:
 		// huh.Select writes the first option into the bound value on render,
@@ -109,7 +117,7 @@ func buildField(f ParamField, re *regexp.Regexp, ptr *string) (huh.Field, error)
 		}
 		return huh.NewSelect[string]().
 			Title(displayTitle(f)).
-			Description(f.Description).
+			Description(desc).
 			Options(huh.NewOption("false", "false"), huh.NewOption("true", "true")).
 			Value(ptr), nil
 
@@ -119,14 +127,14 @@ func buildField(f ParamField, re *regexp.Regexp, ptr *string) (huh.Field, error)
 		// and non-interactive validation aligned.
 		return huh.NewInput().
 			Title(displayTitle(f)).
-			Description(f.Description).
+			Description(desc).
 			Value(ptr).
 			Validate(combineValidators(f, nil, validateInt)), nil
 
 	case FieldTypePath, FieldTypeString, FieldTypeUnknown:
 		return huh.NewInput().
 			Title(displayTitle(f)).
-			Description(f.Description).
+			Description(desc).
 			Value(ptr).
 			Validate(combineValidators(f, re, nil)), nil
 
@@ -136,10 +144,29 @@ func buildField(f ParamField, re *regexp.Regexp, ptr *string) (huh.Field, error)
 }
 
 func displayTitle(f ParamField) string {
+	title := f.Name
 	if f.Required {
-		return f.Name + " *"
+		title += " *"
 	}
-	return f.Name
+	if f.IsDefault {
+		title += " (default)"
+	}
+	return title
+}
+
+// displayDescription augments the user-authored description with a
+// "default: <value>" line when the field's prefilled value came from a
+// declared default. The augmentation is appended on a new line so an empty
+// description stays empty when IsDefault is false.
+func displayDescription(f ParamField) string {
+	if !f.IsDefault {
+		return f.Description
+	}
+	defaultLine := "default: " + f.Default
+	if f.Description == "" {
+		return defaultLine
+	}
+	return f.Description + "\n" + defaultLine
 }
 
 func combineValidators(f ParamField, re *regexp.Regexp, extra func(string) error) func(string) error {

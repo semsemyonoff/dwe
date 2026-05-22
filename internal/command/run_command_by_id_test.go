@@ -183,7 +183,42 @@ func TestRunCommandByID_PrivateDirectRun_Error(t *testing.T) {
 
 // --- form invocation -----------------------------------------------------
 
-func TestRunCommandByID_FormInvokedWhenInteractive(t *testing.T) {
+func TestRunCommandByID_FormInvokedWhenRequiredUnsatisfied(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	// Stub the form to return a user-supplied value so BuildRunContext's
+	// required-check passes after the form runs.
+	s.formValues = map[string]string{"env": "prod"}
+	s.installForm()
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Cmd: "echo",
+		Params: map[string]model.ParamDef{
+			"env": {Type: model.ParamTypeString, Required: true},
+		},
+	}
+	reg := newTestRegistry(def)
+	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		newCfg(), reg, t.TempDir(), "db.up", runOpts{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.formCalls != 1 {
+		t.Errorf("form should be invoked when a required param has no default; got %d", s.formCalls)
+	}
+	if len(s.formFields) != 1 || s.formFields[0].Name != "env" || !s.formFields[0].Required {
+		t.Errorf("expected required field env; got %+v", s.formFields)
+	}
+	if s.runCalls != 1 {
+		t.Errorf("runner should be invoked once; got %d", s.runCalls)
+	}
+}
+
+// TestRunCommandByID_FormSkippedWhenAllDefaultsPresent verifies the new
+// "auto-skip form when every required param is already satisfied" semantics:
+// when interactive but every param has a usable default, the form is bypassed
+// and the prefilled values flow straight through to the runner.
+func TestRunCommandByID_FormSkippedWhenAllDefaultsPresent(t *testing.T) {
 	s := stubOrchestratorSeams(t)
 	ui.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.installForm()
@@ -200,14 +235,42 @@ func TestRunCommandByID_FormInvokedWhenInteractive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if s.formCalls != 1 {
-		t.Errorf("form should be invoked once; got %d", s.formCalls)
-	}
-	if len(s.formFields) != 1 || s.formFields[0].Default != "dev" {
-		t.Errorf("expected prefilled field env=dev; got %+v", s.formFields)
+	if s.formCalls != 0 {
+		t.Errorf("form should be auto-skipped when every required param is defaulted; got %d calls", s.formCalls)
 	}
 	if s.runCalls != 1 {
 		t.Errorf("runner should be invoked once; got %d", s.runCalls)
+	}
+	if got, _ := s.runRC.Params["env"].(string); got != "dev" {
+		t.Errorf("runner should receive prefilled default env=dev; got %v", s.runRC.Params["env"])
+	}
+}
+
+// TestRunCommandByID_ForceParamFormOpensFormDespiteDefaults covers the TUI
+// edit-params key: when the cmdbrowser returns ForceParamForm, the form must
+// open even though every required param is already satisfied.
+func TestRunCommandByID_ForceParamFormOpensFormDespiteDefaults(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	s.installForm()
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Cmd: "echo",
+		Params: map[string]model.ParamDef{
+			"env": {Type: model.ParamTypeString, Default: "dev"},
+		},
+	}
+	reg := newTestRegistry(def)
+	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		newCfg(), reg, t.TempDir(), "db.up", runOpts{ForceParamForm: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.formCalls != 1 {
+		t.Errorf("form should open under ForceParamForm even with defaults; got %d", s.formCalls)
+	}
+	if len(s.formFields) != 1 || !s.formFields[0].IsDefault {
+		t.Errorf("default-sourced field should carry IsDefault=true; got %+v", s.formFields)
 	}
 }
 
@@ -296,7 +359,8 @@ func TestRunCommandByID_FormCancel_ExitZero(t *testing.T) {
 	s.installRunner()
 	def := &usercommands.CommandDef{
 		ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Cmd: "echo",
-		Params: map[string]model.ParamDef{"env": {Type: model.ParamTypeString}},
+		// Required-without-default forces the form to open so cancel is reachable.
+		Params: map[string]model.ParamDef{"env": {Type: model.ParamTypeString, Required: true}},
 	}
 	reg := newTestRegistry(def)
 	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
@@ -640,7 +704,7 @@ func TestParamFieldsFromDef_DeterministicOrder(t *testing.T) {
 		},
 	}
 	pre := map[string]string{"alpha": "xy", "beta": "3"}
-	fields := paramFieldsFromDef(def, pre)
+	fields := paramFieldsFromDef(def, pre, nil)
 	if len(fields) != 3 {
 		t.Fatalf("expected 3 fields; got %d", len(fields))
 	}

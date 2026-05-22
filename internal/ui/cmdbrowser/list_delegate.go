@@ -16,11 +16,12 @@ import (
 // rows interleaved between groups; those rows set header=true and are not
 // selectable.
 type listItem struct {
-	origIdx int
-	id      string
-	desc    string
-	typ     string
-	header  bool
+	origIdx    int
+	id         string
+	desc       string
+	typ        string
+	paramCount int
+	header     bool
 }
 
 // FilterValue is the haystack used by list.DefaultFilter. Concatenating id and
@@ -90,8 +91,25 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	}
 	badgeWidth := lipgloss.Width(badge)
 
+	// Param-count indicator: rendered as `[N]` in the muted description colour
+	// so users can spot input-taking commands without opening the param form.
+	// Placed left of the type badge with a one-space gap. Hidden in
+	// single-panel and reduced (80–99) buckets via the same showBadges gate
+	// the type badge uses — these widths already drop secondary chrome to keep
+	// the list scannable.
+	paramBadge := ""
+	if d.showBadges && li.paramCount > 0 {
+		paramBadge = paletteDescription().Render(fmt.Sprintf("[%d]", li.paramCount))
+	}
+	gap := ""
+	if paramBadge != "" && badge != "" {
+		gap = " "
+	}
+	gapWidth := lipgloss.Width(gap)
+	paramBadgeWidth := lipgloss.Width(paramBadge)
+
 	cursorW := lipgloss.Width(cursor)
-	idCellWidth := max(avail-cursorW-badgeWidth, 4)
+	idCellWidth := max(avail-cursorW-badgeWidth-paramBadgeWidth-gapWidth, 4)
 	id := truncate(li.id, idCellWidth)
 	idStyled := id
 	if isSelected {
@@ -102,7 +120,7 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 	padCount := max(idCellWidth-lipgloss.Width(idStyled), 0)
 	pad := strings.Repeat(" ", padCount)
 
-	line1 := cursor + idStyled + pad + badge
+	line1 := cursor + idStyled + pad + paramBadge + gap + badge
 
 	desc := li.desc
 	if desc != "" {

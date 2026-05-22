@@ -151,7 +151,7 @@ func (m *Model) refreshSingleList() {
 			seen = r.group
 		}
 		it := m.items[r.idx]
-		out = append(out, listItem{origIdx: r.idx, id: it.ID, desc: it.Description, typ: it.Type})
+		out = append(out, listItem{origIdx: r.idx, id: it.ID, desc: it.Description, typ: it.Type, paramCount: it.ParamCount})
 	}
 	m.list.SetItems(out)
 }
@@ -282,6 +282,24 @@ func (m *Model) updateRight(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	// EditParams is an alt-Enter: same selection, but signals to the orchestrator
+	// that the param form must open even when all defaults are already
+	// satisfied. Inspect mode ignores it (no params to edit during inspect).
+	if key.Matches(msg, m.keys.EditParams) && m.opts.Mode == ModeRun {
+		if it, ok := m.list.SelectedItem().(listItem); ok {
+			if it.header {
+				return m, nil
+			}
+			m.result = Result{
+				Idx:            it.origIdx,
+				Action:         actionForMode(m.opts.Mode),
+				SkipConfirm:    m.skipConfirm,
+				ForceParamForm: true,
+			}
+			return m, tea.Quit
+		}
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
@@ -303,7 +321,7 @@ func (m *Model) refreshList() {
 	out := make([]list.Item, 0, len(idxs))
 	for _, idx := range idxs {
 		it := m.items[idx]
-		out = append(out, listItem{origIdx: idx, id: it.ID, desc: it.Description, typ: it.Type})
+		out = append(out, listItem{origIdx: idx, id: it.ID, desc: it.Description, typ: it.Type, paramCount: it.ParamCount})
 	}
 	m.list.SetItems(out)
 }
@@ -464,7 +482,7 @@ func (m *Model) fullBindings() [][]key.Binding {
 	nav := []key.Binding{m.keys.Up, m.keys.Down, m.keys.Left, m.keys.Right, m.keys.Home, m.keys.End}
 	act := []key.Binding{m.keys.Enter, m.keys.Tab, m.keys.Filter, m.keys.Inspect, m.keys.Cancel}
 	if m.opts.Mode == ModeRun {
-		act = append(act, m.keys.SkipConfirm)
+		act = append(act, m.keys.EditParams, m.keys.SkipConfirm)
 	}
 	return [][]key.Binding{nav, act}
 }
@@ -492,9 +510,12 @@ func (m *Model) breadcrumb() string {
 // path ensures width is always at least minTwoPanelWidth.
 
 // footerRows is the fixed height of the full-help footer. The help model
-// renders nav and act binding groups side-by-side; nav has 6 bindings so the
-// column max — and therefore the footer height — is always 6.
-const footerRows = 6
+// renders nav and act binding groups side-by-side; in ModeRun act has 7
+// bindings (enter, tab, filter, inspect, cancel, edit-params, skip-confirm),
+// so the column max — and therefore the footer height — is 7. ModeInspect
+// uses fewer act bindings but keeps the same reservation to avoid layout
+// jitter between modes.
+const footerRows = 7
 
 // bodyHeight returns the inner content height for the bordered panel(s).
 // The View composes title(1) + bordered-panel(bh+2) + footer(footerRows), so
