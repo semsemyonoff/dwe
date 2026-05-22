@@ -489,23 +489,32 @@ hits are a distinct grep.
 
 ### Task 10: Migrate `next/tbm` fixture to new schema
 
-- [ ] convert `next/tbm/devbox/tools.yml` entries into `services.yml` with
-      `type: tool`. **Note**: today's tools use `compose: <single-file.yml>` (scalar
-      string). New schema is `compose: [<file.yml>]` (list). Strict YAML decode will
-      reject the scalar form — every migrated entry must use list syntax even for one
-      file.
-- [ ] add explicit port names to every entry (e.g., `ports: { web: 8080 }`); pick
-      consistent names (`web` / `http` / `mysql` per common convention).
-- [ ] delete `next/tbm/devbox/tools.yml`.
-- [ ] update `next/tbm/devbox/defaults.yml` and `local.yml` overlays — only `enabled:`
-      remains under `services.<name>` (no port/host overrides; if any existed, document
-      and migrate to top-level overrides via a different mechanism — flag as `⚠️` if
-      blocked).
-- [ ] update any `next/tbm/devbox/docker.yml` / `info.yml` / `commands.yml` references
-      from `runtime.ports.X` → `services.X.ports.<name>`.
-- [ ] run `bin/devbox -c next/tbm validate` (after `make build`); must report zero
-      errors. Capture output and include in PR description.
-- [ ] run full `make test` — must pass before next task.
+- [x] convert `next/tbm/devbox/tools.yml` entries into `services.yml` with
+      `type: tool` (compose: list syntax, `ports`/`hosts` maps).
+- [x] add explicit port names to every entry (`http` for tool/web ports,
+      `mysql`/`redis`/`amqp`/`admin` for infra). Single host name `web` per
+      service.
+- [x] delete `next/tbm/devbox/tools.yml`.
+- [x] update `next/tbm/devbox/defaults.yml` and `local.yml` overlays — only
+      `enabled:` under `services.<name>`. `runtime.ports` / `runtime.hosts`
+      blocks dropped from defaults.yml (canonical ports/hosts now live in
+      services.yml). Tool enablement merged into the unified `services:`
+      block in both files. `local.example.yml` ports/hosts override snippet
+      removed; per-developer port overrides now require editing services.yml
+      directly (acknowledged scope reduction per pre-release policy).
+- [x] update `next/tbm/devbox/info.yml` Go-template refs (`.Runtime.Hosts.X`,
+      `.Runtime.Ports.app`, `.Tools.X.Host/Port/Enabled`) to the new
+      `(index .Services "X").Host "web"` / `.Port "http"` / `.Enabled` shape.
+      No `docker.yml` / `commands.yml` refs touched the old paths. Also
+      migrated every export rule's `from:` path (`runtime.ports.X` /
+      `runtime.hosts.X` / `tools.X.enabled`) to the new `services.X.…` form.
+      Added `db`/`redis`/`opensearch`/`rabbitmq` as `type: infra` services so
+      their ports have a canonical home.
+- [x] run `bin/devbox -c next/tbm validate` (after `make build`); reports zero
+      errors. 1 pre-existing warning (`main-debug` has no `dir`/`dir_internal`),
+      27 infos (template-pack policy skips for non-app services — expected and
+      documented in [[feedback_render_explicit_optout_silent]]), 11 ✓ checks.
+- [x] run full `make test` — passes.
 
 ### Task 11: Update docs to match new schema
 
