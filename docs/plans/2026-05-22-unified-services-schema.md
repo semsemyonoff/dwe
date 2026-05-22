@@ -577,10 +577,10 @@ hits are a distinct grep.
 
 ### Task 14: [Final] Update plan and supporting docs
 
-- [ ] mark all checkboxes `[x]` in this plan.
-- [ ] confirm no `⚠️` entries are unresolved.
-- [ ] note any newly-discovered `➕` tasks added during implementation and confirm they're
-      checked off too.
+- [x] mark all checkboxes `[x]` in this plan.
+- [x] confirm no `⚠️` entries are unresolved. No blocker entries were ever added.
+- [x] note any newly-discovered `➕` tasks added during implementation and confirm they're
+      checked off too. No `➕` tasks were added during implementation.
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
 
