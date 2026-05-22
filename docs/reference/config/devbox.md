@@ -61,7 +61,7 @@ The three files share a single namespace — the same key in different layers is
 | IDE config defaults | `defaults.yml` |
 | `db` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
-| Personal per-service port / host overrides | Edit `devbox/services.yml` directly — port and host values live there, not in the 3-layer overlay |
+| Service port / host values | [`devbox/services.yml`](services.md) — project-level definitions; per-developer port / host overrides are not supported |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
 
@@ -314,7 +314,7 @@ debug:
   idekey: VSCODE
 ```
 
-> Per-developer port / host overrides require editing `devbox/services.yml` directly — the 3-layer overlay carries only `services.<name>.enabled`.
+> Per-developer port / host overrides are not supported — the 3-layer overlay carries only `services.<name>.enabled`. Port and host values are project-level definitions in `devbox/services.yml` and are shared by the whole team.
 
 If `local.yml` does not exist, layer 3 is silently skipped.
 

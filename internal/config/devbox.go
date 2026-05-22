@@ -1185,6 +1185,9 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		}
 		// Parent is guaranteed to be fully resolved already.
 		parent := f.Services[svc.Extends]
+		if svc.Container == "" {
+			svc.Container = parent.Container
+		}
 		if svc.Dir == "" {
 			svc.Dir = parent.Dir
 		}

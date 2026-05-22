@@ -801,6 +801,40 @@ func TestLoadServicesConfig_extendsResolved(t *testing.T) {
 	}
 }
 
+func TestLoadServicesConfig_extendsInheritsContainer(t *testing.T) {
+	yml := `
+services:
+  parent:
+    type: app
+    container: parent-ctr
+    dir: ./services/parent
+  child-no-container:
+    type: app
+    extends: parent
+  child-own-container:
+    type: app
+    container: child-ctr
+    extends: parent
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "services.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	services, err := LoadServicesConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServicesConfig: %v", err)
+	}
+	// child with no container should inherit parent's container
+	if got := services["child-no-container"].Container; got != "parent-ctr" {
+		t.Errorf("child-no-container.Container = %q, want parent-ctr (inherited from parent)", got)
+	}
+	// child with its own container should keep it
+	if got := services["child-own-container"].Container; got != "child-ctr" {
+		t.Errorf("child-own-container.Container = %q, want child-ctr (own value)", got)
+	}
+}
+
 func TestLoadServicesConfig_extendsUnknownParent(t *testing.T) {
 	yml := `
 services:

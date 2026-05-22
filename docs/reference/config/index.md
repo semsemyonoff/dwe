@@ -15,8 +15,8 @@ Overview of all configuration files in the devbox system.
 | File | Tracked | Loader | Purpose |
 |------|---------|--------|---------|
 | `devbox.yml` | yes | layer 1 | Project identity and service structure |
-| `devbox/defaults.yml` | yes | layer 2 | Versioned defaults: tools, runtime, ports, exports |
-| `devbox/local.yml` | no (gitignored) | layer 3 | Per-user overrides: state, ports, tools |
+| `devbox/defaults.yml` | yes | layer 2 | Versioned defaults: runtime, exports, service enabled toggles |
+| `devbox/local.yml` | no (gitignored) | layer 3 | Per-user overrides: state, service enabled toggles |
 | `devbox/services.yml` | yes | standalone | Service declarations with dirs, cli, configs |
 | `devbox/deploy.yml` | yes | standalone | Orchestrator deploy pipeline (phases + steps) |
 | `devbox/deploy/<svc>.yml` | yes | standalone | Per-service deploy pipelines |

@@ -161,7 +161,7 @@ services:
 
 ### `ports` field
 
-`ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Per-developer port overrides live under `services.<name>.ports.<port-name>` in `devbox/local.yml` — never in this file.
+`ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Port values are defined here in `devbox/services.yml`; `devbox/local.yml` overlays may only toggle `enabled:` — per-developer port changes are not supported.
 
 ```yaml
 services:
@@ -187,7 +187,7 @@ services:
       web: app.localhost
 ```
 
-Per-developer host overrides live under `services.<name>.hosts.<host-name>` in `devbox/local.yml`.
+Host values are defined here in `devbox/services.yml`; `devbox/local.yml` overlays may only toggle `enabled:` — per-developer host changes are not supported.
 
 ### `configs` field
 
