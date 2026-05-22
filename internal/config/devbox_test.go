@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -139,9 +140,7 @@ func mergeServicesYAML(t *testing.T, a, b string) string {
 		if err := yaml.Unmarshal([]byte(frag), &w); err != nil {
 			t.Fatalf("mergeServicesYAML: parse fragment: %v\nfragment:\n%s", err, frag)
 		}
-		for k, v := range w.Services {
-			out.Services[k] = v
-		}
+		maps.Copy(out.Services, w.Services)
 	}
 	data, err := yaml.Marshal(out)
 	if err != nil {
@@ -4059,12 +4058,6 @@ func yamlUnmarshalForTest(src string, out any) error {
 // the file's structure remains unchanged; the new behaviour is exercised by
 // the dedicated services-overlay/injection tests added in services_overlay_test.go.
 var _ = sampleToolsServicesYML
-
-func skipLegacyToolsTest(t *testing.T) string {
-	t.Helper()
-	t.Skip("legacy tools.yml shape removed — see internal/config/services_overlay_test.go")
-	return ""
-}
 
 // Legacy tools.yml shape removed in the unified-services-schema refactor.
 // New behaviour is exercised by services_overlay_test.go.

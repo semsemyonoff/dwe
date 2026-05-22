@@ -6,8 +6,6 @@ import (
 	"devbox-cli/internal/config"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 func TestSelectServices_typeDefaults(t *testing.T) {
 	t.Run("all types selected by default when dir is set", func(t *testing.T) {
 		svcs := map[string]config.ServiceConfig{
@@ -25,7 +23,7 @@ func TestSelectServices_typeDefaults(t *testing.T) {
 		svcs := map[string]config.ServiceConfig{
 			"app1": {
 				Enabled: true, Type: config.ServiceTypeApp, Dir: "services/app1",
-				Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: boolPtr(false)}},
+				Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: new(bool)}},
 			},
 		}
 		selected, skipped := SelectServices(svcs)

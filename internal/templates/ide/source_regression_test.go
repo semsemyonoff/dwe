@@ -33,10 +33,10 @@ func TestSourceTemplates_noStaleAccessors(t *testing.T) {
 		filepath.Join(repoRoot, "next"),
 	}
 	exts := map[string]bool{
-		".tmpl":    true,
-		".gotmpl":  true,
-		".yml":     true,
-		".yaml":    true,
+		".tmpl":   true,
+		".gotmpl": true,
+		".yml":    true,
+		".yaml":   true,
 	}
 	skipSuffixes := []string{
 		"_test.go",

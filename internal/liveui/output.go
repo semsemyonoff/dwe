@@ -216,7 +216,7 @@ func (t *LineTee) Flush() {
 	// Skipped when preserveANSI is set.
 	var tail string
 	if t.preserveANSI {
-		tail = string(t.buf.Bytes())
+		tail = t.buf.String()
 	} else {
 		tail = string(ANSIOnlyRe.ReplaceAll(t.buf.Bytes(), nil))
 	}

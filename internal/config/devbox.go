@@ -484,6 +484,7 @@ type StatusColumn struct {
 // Decoded natively by gopkg.in/yaml.v3 since it's a named string type.
 type ServiceType string
 
+// Service type discriminator values.
 const (
 	ServiceTypeApp   ServiceType = "app"
 	ServiceTypeTool  ServiceType = "tool"

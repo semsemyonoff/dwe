@@ -28,8 +28,8 @@ func TestValidateDependsOnTypes_rejectsTool(t *testing.T) {
 // legal, and depends_on on infra is legal as well.
 func TestValidateDependsOnTypes_allowsAppAndInfra(t *testing.T) {
 	services := map[string]ServiceConfig{
-		"main": {Type: ServiceTypeApp, Container: "main", DependsOn: []string{"db", "worker"}},
-		"db":   {Type: ServiceTypeInfra, Container: "db"},
+		"main":   {Type: ServiceTypeApp, Container: "main", DependsOn: []string{"db", "worker"}},
+		"db":     {Type: ServiceTypeInfra, Container: "db"},
 		"worker": {Type: ServiceTypeApp, Container: "worker"},
 	}
 	if err := validateDependsOnTypes(services); err != nil {

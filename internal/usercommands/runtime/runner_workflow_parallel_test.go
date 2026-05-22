@@ -431,3 +431,155 @@ func TestWorkflowRunner_Parallel_MaxConcurrent(t *testing.T) {
 		t.Errorf("cap=2 too fast (%v); expected >= ~200ms", elapsed)
 	}
 }
+
+// TestWorkflowRunner_Parallel_FailureDumpLabelled verifies that the failure
+// dump separator is labelled with the failing sub-step's command name so
+// multi-failure dumps stay attributable.
+func TestWorkflowRunner_Parallel_FailureDumpLabelled(t *testing.T) {
+	dir := t.TempDir()
+	a := makeShellLeaf("wf.fa", `echo aaaa; exit 1`)
+	b := makeShellLeaf("wf.fb", `echo bbbb; exit 1`)
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.dump",
+		Group:     "wf",
+		LocalName: "dump",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				FailFast: ffFalse,
+				Steps: []WorkflowStep{
+					{Command: "wf.fa"},
+					{Command: "wf.fb"},
+				},
+			}},
+		},
+	}
+	reg := buildWorkflowRegistry(wf, a, b)
+	_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+	if err == nil {
+		t.Fatal("expected aggregated error")
+	}
+	for _, want := range []string{
+		"───── output: wf.fa ─────",
+		"───── output: wf.fb ─────",
+		"aaaa",
+		"bbbb",
+	} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("expected %q in stderr; got:\n%s", want, errOut)
+		}
+	}
+}
+
+// TestWorkflowRunner_Parallel_FailureDumpPreservesANSI verifies that ANSI
+// escape sequences emitted by a failing sub-step survive in the captured
+// failure dump (the live row strips ANSI, but the dump on stderr keeps it
+// so the user sees the child's colours).
+func TestWorkflowRunner_Parallel_FailureDumpPreservesANSI(t *testing.T) {
+	dir := t.TempDir()
+	// printf the SGR red sequence + text + reset, terminated with \n so it
+	// commits as a final frame. Then exit non-zero to trigger the dump.
+	colored := makeShellLeaf("wf.col", `printf '\033[31mRED-TEXT\033[0m\n'; exit 1`)
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.ansi",
+		Group:     "wf",
+		LocalName: "ansi",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				FailFast: ffFalse,
+				Steps: []WorkflowStep{
+					{Command: "wf.col"},
+					{Command: "wf.col"},
+				},
+			}},
+		},
+	}
+	reg := buildWorkflowRegistry(wf, colored)
+	_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(errOut, "\x1b[31mRED-TEXT\x1b[0m") {
+		t.Errorf("expected raw ANSI sequence preserved in dump; got:\n%q", errOut)
+	}
+}
+
+// TestWorkflowRunner_Parallel_AlwaysShowOutput verifies that the new
+// always_show_output flag dumps every sub-step's output between separator
+// bars even when the sub-step succeeded.
+func TestWorkflowRunner_Parallel_AlwaysShowOutput(t *testing.T) {
+	dir := t.TempDir()
+	a := makeShellLeaf("wf.ok-a", `echo greeting-a`)
+	b := makeShellLeaf("wf.ok-b", `echo greeting-b`)
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.always",
+		Group:     "wf",
+		LocalName: "always",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				AlwaysShowOutput: true,
+				Steps: []WorkflowStep{
+					{Command: "wf.ok-a"},
+					{Command: "wf.ok-b"},
+				},
+			}},
+		},
+	}
+	reg := buildWorkflowRegistry(wf, a, b)
+	_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr:\n%s", err, errOut)
+	}
+	for _, want := range []string{
+		"───── output: wf.ok-a ─────",
+		"───── output: wf.ok-b ─────",
+		"greeting-a",
+		"greeting-b",
+	} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("expected %q in stderr; got:\n%s", want, errOut)
+		}
+	}
+}
+
+// TestWorkflowRunner_Parallel_AlwaysShowOutput_DefaultsToFailureOnly verifies
+// that with the default (always_show_output: false) successful sub-step
+// output is NOT dumped — only failures continue to be shown.
+func TestWorkflowRunner_Parallel_AlwaysShowOutput_DefaultsToFailureOnly(t *testing.T) {
+	dir := t.TempDir()
+	a := makeShellLeaf("wf.qa", `echo quiet-a`)
+	b := makeShellLeaf("wf.qb", `echo quiet-b`)
+
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.quiet",
+		Group:     "wf",
+		LocalName: "quiet",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				Steps: []WorkflowStep{
+					{Command: "wf.qa"},
+					{Command: "wf.qb"},
+				},
+			}},
+		},
+	}
+	reg := buildWorkflowRegistry(wf, a, b)
+	_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr:\n%s", err, errOut)
+	}
+	for _, unwanted := range []string{
+		"───── output:",
+		"quiet-a",
+		"quiet-b",
+	} {
+		if strings.Contains(errOut, unwanted) {
+			t.Errorf("did not expect %q in stderr (default should hide success output); got:\n%s", unwanted, errOut)
+		}
+	}
+}

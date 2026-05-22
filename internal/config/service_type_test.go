@@ -95,10 +95,10 @@ func TestAllowedFieldsFor(t *testing.T) {
 	dependsOn := "depends_on"
 
 	tests := []struct {
-		name      string
-		t         ServiceType
-		mustHave  []string
-		mustLack  []string
+		name     string
+		t        ServiceType
+		mustHave []string
+		mustLack []string
 	}{
 		{
 			name:     "app allows everything",

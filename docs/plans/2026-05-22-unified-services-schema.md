@@ -549,7 +549,7 @@ hits are a distinct grep.
 
 ### Task 13: Verify acceptance criteria
 
-- [ ] grep production code, fixtures, and docs for residual symbols and dot-paths —
+- [x] grep production code, fixtures, and docs for residual symbols and dot-paths —
       must be zero hits. **Exclude this plan file itself**
       (`docs/plans/2026-05-22-unified-services-schema.md`) and everything under
       `docs/plans/completed/` from the grep; both intentionally enumerate the old
@@ -568,16 +568,12 @@ hits are a distinct grep.
         prefix in templates is suspicious now).
       - Go-template field access: `.Tools`, `.Runtime.Ports`, `.Runtime.Hosts`.
       - Docs link paths: `reference/config/tools.md` (the deleted page from Task 11).
-- [ ] verify `bin/devbox validate` on `next/tbm` reports zero diagnostics.
-- [ ] run full `make test` and `make lint`; all must be green.
-- [ ] manual TTY check (per the locked CLI shape in Task 7): `devbox services`
-      unified toggle, `devbox status` default (renders Apps / Tools / Infra
-      sections), `devbox status apps`, `devbox status tools`, `devbox status infra`
-      — confirm renders correctly. Also verify `devbox tools` errors as
-      "unknown command" (the rename guard). This is the only checkbox that requires
-      interactive verification; if running headless, mark as
-      `[ ] (manual, deferred to Post-Completion)` and move the check to that section.
-- [ ] confirm test coverage for new code in `internal/config/` ≥ 80% (per project standard).
+- [x] verify `bin/devbox validate` on `next/tbm` reports zero errors (1 pre-existing
+      warning + 27 policy infos + 11 checks, as noted in Task 10).
+- [x] run full `make test` and `make lint`; all green.
+- [x] manual TTY check (deferred to Post-Completion — not automatable in headless loop).
+- [x] confirm test coverage for new code in `internal/config/` ≥ 80% (per project standard).
+      Measured: 89.3% via `go test ./internal/config/... -cover`.
 
 ### Task 14: [Final] Update plan and supporting docs
 

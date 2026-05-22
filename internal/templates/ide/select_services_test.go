@@ -6,8 +6,6 @@ import (
 	"devbox-cli/internal/config"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 func TestSelectServices_typeDefaults(t *testing.T) {
 	t.Run("apps selected by default; tool and infra dropped as ide-policy", func(t *testing.T) {
 		svcs := map[string]config.ServiceConfig{
@@ -29,10 +27,11 @@ func TestSelectServices_typeDefaults(t *testing.T) {
 	})
 
 	t.Run("tool with explicit ide.enabled=true is selected", func(t *testing.T) {
+		bTrue := true
 		svcs := map[string]config.ServiceConfig{
 			"adminer": {
 				Enabled: true, Type: config.ServiceTypeTool, Dir: "services/adminer",
-				Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: boolPtr(true)}},
+				Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &bTrue}},
 			},
 		}
 		selected, _ := SelectServices(svcs)
@@ -45,7 +44,7 @@ func TestSelectServices_typeDefaults(t *testing.T) {
 		svcs := map[string]config.ServiceConfig{
 			"app1": {
 				Enabled: true, Type: config.ServiceTypeApp, Dir: "services/app1",
-				Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: boolPtr(false)}},
+				Render: config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: new(bool)}},
 			},
 		}
 		selected, skipped := SelectServices(svcs)

@@ -10,9 +10,9 @@ import (
 // without error and that key per-type fields decode through cleanly.
 func TestLoadServicesConfig_happyPathByType(t *testing.T) {
 	tests := []struct {
-		name    string
-		file    string
-		assert  func(t *testing.T, services map[string]ServiceConfig)
+		name   string
+		file   string
+		assert func(t *testing.T, services map[string]ServiceConfig)
 	}{
 		{
 			name: "app",

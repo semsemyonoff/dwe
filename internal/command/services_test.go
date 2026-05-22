@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
@@ -21,9 +22,7 @@ type testTool struct {
 
 func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool, _ any, _ any) *config.DevboxConfig {
 	merged := make(map[string]config.ServiceConfig, len(services)+len(tools))
-	for k, v := range services {
-		merged[k] = v
-	}
+	maps.Copy(merged, services)
 	for k, v := range tools {
 		svc := config.ServiceConfig{
 			Type:      config.ServiceTypeTool,
