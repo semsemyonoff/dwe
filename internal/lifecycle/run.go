@@ -113,7 +113,7 @@ func RunRun(ctx RunContext) (err error) {
 	w := render.Stdout()
 	var pulled bool
 	if effectiveMode != "off" {
-		status, err := GitProbeFunc(workDir, true)
+		status, err := GitProbeFunc(config.GitBin(cfg), workDir, true)
 		if err != nil {
 			return fmt.Errorf("git probe: %w", err)
 		}
@@ -122,7 +122,7 @@ func RunRun(ctx RunContext) (err error) {
 		case git.ActionWarn:
 			w.Warning(msg)
 		case git.ActionPullAuto:
-			moved, pullErr := GitPullFFOnlyFunc(workDir)
+			moved, pullErr := GitPullFFOnlyFunc(config.GitBin(cfg), workDir)
 			if pullErr != nil {
 				w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
 			} else {
@@ -134,7 +134,7 @@ func RunRun(ctx RunContext) (err error) {
 				"Pull", "Skip",
 			)
 			if confirmErr == nil && confirmed {
-				moved, pullErr := GitPullFFOnlyFunc(workDir)
+				moved, pullErr := GitPullFFOnlyFunc(config.GitBin(cfg), workDir)
 				if pullErr != nil {
 					w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
 				} else {

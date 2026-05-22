@@ -107,14 +107,24 @@ func requireGit(t *testing.T) {
 	}
 }
 
+// makeSrcDir creates <root>/<name>/src/ and returns its absolute path. Tests
+// that exercise the collector use this helper because the collector probes
+// <svc.Dir>/src/ by project convention.
+func makeSrcDir(t *testing.T, root, name string) string {
+	t.Helper()
+	src := filepath.Join(root, name, "src")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return src
+}
+
 func TestCollectGitWorkspace_BlankWhenNoOwnGit(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "svc")
-	if err := os.MkdirAll(svcDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	srcDir := makeSrcDir(t, root, "svc")
 
 	// Outer parent IS a git repo — confirms our boundary check prevents
 	// `git -C` from walking up to it.
@@ -123,9 +133,9 @@ func TestCollectGitWorkspace_BlankWhenNoOwnGit(t *testing.T) {
 
 	var calls atomic.Int32
 	prev := gitShellOutFn
-	gitShellOutFn = func(ctx context.Context, dir string) ([]byte, error) {
+	gitShellOutFn = func(ctx context.Context, bin, dir string) ([]byte, error) {
 		calls.Add(1)
-		return prev(ctx, dir)
+		return prev(ctx, bin, dir)
 	}
 	t.Cleanup(func() { gitShellOutFn = prev })
 
@@ -142,6 +152,10 @@ func TestCollectGitWorkspace_BlankWhenNoOwnGit(t *testing.T) {
 	if r.Err != nil {
 		t.Fatalf("expected nil Err, got %v", r.Err)
 	}
+	// projectRoot empty in this fixture → no display rewrite, absolute path stays.
+	if r.Dir != srcDir {
+		t.Fatalf("Dir = %q, want %q (no projectRoot → absolute)", r.Dir, srcDir)
+	}
 	if r.Branch != "" || r.SHA != "" || r.AheadBehind != "" || r.Dirty {
 		t.Fatalf("expected blank row, got %+v", r)
 	}
@@ -150,7 +164,31 @@ func TestCollectGitWorkspace_BlankWhenNoOwnGit(t *testing.T) {
 	}
 }
 
-func TestCollectGitWorkspace_DirMissingErrors(t *testing.T) {
+// Services whose <dir> has no src/ subdirectory are silently omitted from the
+// output (per spec: "if src missing → ignore the service").
+func TestCollectGitWorkspace_OmitsServicesWithoutSrcSubdir(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	root := t.TempDir()
+	svcDir := filepath.Join(root, "svc")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Note: no svcDir/src/ created.
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"app": {Dir: svcDir},
+		},
+	}
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
+	if len(rows) != 0 {
+		t.Fatalf("want 0 rows, got %d (%+v)", len(rows), rows)
+	}
+}
+
+// Service dir entirely missing on disk is also silently omitted.
+func TestCollectGitWorkspace_OmitsWhenDirMissing(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	cfg := &config.DevboxConfig{
@@ -159,20 +197,21 @@ func TestCollectGitWorkspace_DirMissingErrors(t *testing.T) {
 		},
 	}
 	rows := CollectGitWorkspace(t.Context(), cfg, "")
-	if len(rows) != 1 {
-		t.Fatalf("want 1 row, got %d", len(rows))
-	}
-	if rows[0].Err == nil {
-		t.Fatal("expected Err for missing dir")
+	if len(rows) != 0 {
+		t.Fatalf("want 0 rows, got %d", len(rows))
 	}
 }
 
 func TestCollectGitWorkspace_SkipsServicesWithoutDir(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
+	root := t.TempDir()
+	withDir := filepath.Join(root, "with")
+	makeSrcDir(t, root, "with")
+
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"with":    {Dir: "/tmp"},
+			"with":    {Dir: withDir},
 			"without": {Dir: ""},
 		},
 	}
@@ -191,15 +230,13 @@ func TestCollectGitWorkspace_RealRepoClean(t *testing.T) {
 
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "svc")
-	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+	srcDir := makeSrcDir(t, root, "svc")
+	gitInit(t, srcDir)
+	if err := os.WriteFile(filepath.Join(srcDir, "README"), []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitInit(t, svcDir)
-	if err := os.WriteFile(filepath.Join(svcDir, "README"), []byte("hi"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mustRun(t, svcDir, "git", "add", ".")
-	mustRun(t, svcDir, "git", "commit", "-m", "init")
+	mustRun(t, srcDir, "git", "add", ".")
+	mustRun(t, srcDir, "git", "commit", "-m", "init")
 
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
@@ -235,17 +272,15 @@ func TestCollectGitWorkspace_RealRepoDirty(t *testing.T) {
 
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "svc")
-	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+	srcDir := makeSrcDir(t, root, "svc")
+	gitInit(t, srcDir)
+	if err := os.WriteFile(filepath.Join(srcDir, "README"), []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitInit(t, svcDir)
-	if err := os.WriteFile(filepath.Join(svcDir, "README"), []byte("hi"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mustRun(t, svcDir, "git", "add", ".")
-	mustRun(t, svcDir, "git", "commit", "-m", "init")
+	mustRun(t, srcDir, "git", "add", ".")
+	mustRun(t, srcDir, "git", "commit", "-m", "init")
 	// Untracked file → working tree dirty.
-	if err := os.WriteFile(filepath.Join(svcDir, "new.txt"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "new.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -265,12 +300,13 @@ func TestCollectGitWorkspace_ShelloutFailure(t *testing.T) {
 
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "svc")
-	if err := os.MkdirAll(filepath.Join(svcDir, ".git"), 0o755); err != nil {
+	srcDir := makeSrcDir(t, root, "svc")
+	if err := os.MkdirAll(filepath.Join(srcDir, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	prev := gitShellOutFn
-	gitShellOutFn = func(ctx context.Context, dir string) ([]byte, error) {
+	gitShellOutFn = func(ctx context.Context, bin, dir string) ([]byte, error) {
 		return nil, errors.New("synthetic failure")
 	}
 	t.Cleanup(func() { gitShellOutFn = prev })
@@ -298,9 +334,7 @@ func TestCollectGitWorkspace_OrderingAlphabetical(t *testing.T) {
 
 	root := t.TempDir()
 	for _, name := range []string{"a", "b", "c"} {
-		if err := os.MkdirAll(filepath.Join(root, name), 0o755); err != nil {
-			t.Fatal(err)
-		}
+		makeSrcDir(t, root, name)
 	}
 
 	cfg := &config.DevboxConfig{
@@ -322,6 +356,52 @@ func TestCollectGitWorkspace_OrderingAlphabetical(t *testing.T) {
 	}
 }
 
+// TestDisplayDir covers the abs→`…/<rel>` rewrite and its fallback paths.
+func TestDisplayDir(t *testing.T) {
+	root := "/proj"
+	cases := []struct {
+		name, root, in, want string
+	}{
+		{"strips project root prefix", root, "/proj/services/main/src", "…/services/main/src"},
+		{"empty root → unchanged absolute", "", "/proj/services/main/src", "/proj/services/main/src"},
+		{"already relative → unchanged", root, "services/main/src", "services/main/src"},
+		{"probe == root → absolute fallback", root, "/proj", "/proj"},
+		{"escapes root via .. → absolute fallback", root, "/elsewhere/x", "/elsewhere/x"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := displayDir(tc.root, tc.in); got != tc.want {
+				t.Fatalf("displayDir(%q, %q) = %q, want %q", tc.root, tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCollectGitWorkspace_DisplayDirIsProjectRelative checks the end-to-end
+// rewrite: with a projectRoot set, the rendered DIR column should be the
+// `…/<rel>` form, not the absolute path.
+func TestCollectGitWorkspace_DisplayDirIsProjectRelative(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	projectRoot := t.TempDir()
+	svcDir := filepath.Join(projectRoot, "services", "app")
+	makeSrcDir(t, projectRoot, filepath.Join("services", "app"))
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"app": {Dir: svcDir},
+		},
+	}
+	rows := CollectGitWorkspace(t.Context(), cfg, projectRoot)
+	if len(rows) != 1 {
+		t.Fatalf("want 1 row, got %d", len(rows))
+	}
+	want := "…/" + filepath.Join("services", "app", "src")
+	if rows[0].Dir != want {
+		t.Fatalf("Dir = %q, want %q", rows[0].Dir, want)
+	}
+}
+
 // TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot verifies that
 // a service dir configured as a relative path (e.g. "services/app") is
 // resolved against projectRoot so the collector works when devbox is invoked
@@ -331,16 +411,16 @@ func TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot(t *testing.T)
 	defer goleak.VerifyNone(t)
 
 	projectRoot := t.TempDir()
-	svcDir := filepath.Join(projectRoot, "services", "app")
-	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+	srcDir := filepath.Join(projectRoot, "services", "app", "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	gitInit(t, svcDir)
-	if err := os.WriteFile(filepath.Join(svcDir, "README"), []byte("hi"), 0o644); err != nil {
+	gitInit(t, srcDir)
+	if err := os.WriteFile(filepath.Join(srcDir, "README"), []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	mustRun(t, svcDir, "git", "add", ".")
-	mustRun(t, svcDir, "git", "commit", "-m", "init")
+	mustRun(t, srcDir, "git", "add", ".")
+	mustRun(t, srcDir, "git", "commit", "-m", "init")
 
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
@@ -357,6 +437,70 @@ func TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot(t *testing.T)
 	}
 	if r.Branch != "main" {
 		t.Fatalf("got branch=%q, want main", r.Branch)
+	}
+}
+
+// TestCollectGitWorkspace_ExtendsDedup verifies that a sidecar service which
+// extends another (and therefore inherits its Dir) is dropped from the output:
+// the extends-chain root wins because it carries the canonical identity.
+func TestCollectGitWorkspace_ExtendsDedup(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	root := t.TempDir()
+	svcDir := filepath.Join(root, "main")
+	makeSrcDir(t, root, "main")
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"main":       {Dir: svcDir},
+			"main-debug": {Dir: svcDir, Extends: "main"},
+		},
+	}
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
+	if len(rows) != 1 {
+		t.Fatalf("want 1 row after extends-dedup, got %d (%+v)", len(rows), rows)
+	}
+	if rows[0].Service != "main" {
+		t.Fatalf("dedup kept %q, want canonical root %q", rows[0].Service, "main")
+	}
+}
+
+// TestCollectGitWorkspace_UsesConfiguredGitBin verifies that the configured
+// binaries.git is forwarded to the shellout seam.
+func TestCollectGitWorkspace_UsesConfiguredGitBin(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	root := t.TempDir()
+	svcDir := filepath.Join(root, "svc")
+	srcDir := makeSrcDir(t, root, "svc")
+	if err := os.MkdirAll(filepath.Join(srcDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotBin string
+	prev := gitShellOutFn
+	gitShellOutFn = func(ctx context.Context, bin, dir string) ([]byte, error) {
+		gotBin = bin
+		// Return a minimal valid porcelain-v2 payload so the row populates cleanly.
+		return []byte("# branch.oid 0123456789abcdef\n# branch.head main\n"), nil
+	}
+	t.Cleanup(func() { gitShellOutFn = prev })
+
+	cfg := &config.DevboxConfig{
+		Binaries: config.BinariesConfig{Git: "custom-git"},
+		Services: map[string]config.ServiceConfig{
+			"app": {Dir: svcDir},
+		},
+	}
+	rows := CollectGitWorkspace(t.Context(), cfg, "")
+	if len(rows) != 1 {
+		t.Fatalf("want 1 row, got %d", len(rows))
+	}
+	if rows[0].Err != nil {
+		t.Fatalf("unexpected Err: %v", rows[0].Err)
+	}
+	if gotBin != "custom-git" {
+		t.Fatalf("shellout bin = %q, want %q", gotBin, "custom-git")
 	}
 }
 

@@ -128,16 +128,17 @@ binaries:
   devbox: devbox          # nested devbox calls and plan display
   docker: docker          # all docker compose execution
   shell: sh               # host-side script / lifecycle step execution
+  git: git                # git update probe / pull and `devbox status git` shellouts
 ```
 
-All three keys are optional; any key omitted uses its default. Partial overrides are safe:
+All four keys are optional; any key omitted uses its default. Partial overrides are safe:
 
 ```yaml
 binaries:
-  docker: podman          # only substitute docker; devbox and shell stay at defaults
+  docker: podman          # only substitute docker; devbox/shell/git stay at defaults
 ```
 
-The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}`, and `${binaries.shell}` in template expressions (commands, docker.yml project_name, export rules).
+The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}`, `${binaries.shell}`, and `${binaries.git}` in template expressions (commands, docker.yml project_name, export rules).
 
 > **Engine policy, not user state.** The `binaries:` block controls which executables the CLI itself invokes — it is part of the project's engine contract, not per-user configuration. Commit it in `devbox.yml`; do not put it in `local.yml`.
 

@@ -2536,6 +2536,9 @@ func TestLoadConfig_binariesAllDefaulted(t *testing.T) {
 	if cfg.Binaries.Shell != "sh" {
 		t.Errorf("Binaries.Shell = %q, want sh", cfg.Binaries.Shell)
 	}
+	if cfg.Binaries.Git != "git" {
+		t.Errorf("Binaries.Git = %q, want git", cfg.Binaries.Git)
+	}
 	// Raw map must also reflect defaults.
 	rawBin, ok := cfg.Raw["binaries"].(map[string]any)
 	if !ok {
@@ -2550,6 +2553,9 @@ func TestLoadConfig_binariesAllDefaulted(t *testing.T) {
 	if rawBin["shell"] != "sh" {
 		t.Errorf("Raw[binaries][shell] = %v, want sh", rawBin["shell"])
 	}
+	if rawBin["git"] != "git" {
+		t.Errorf("Raw[binaries][git] = %v, want git", rawBin["git"])
+	}
 }
 
 func TestLoadConfig_binariesExplicitOverrides(t *testing.T) {
@@ -2562,6 +2568,7 @@ binaries:
   devbox: my-devbox
   docker: podman
   shell: bash
+  git: /opt/git/bin/git
 `
 	path := writeLayeredFixture(t, devboxYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
@@ -2577,12 +2584,18 @@ binaries:
 	if cfg.Binaries.Shell != "bash" {
 		t.Errorf("Binaries.Shell = %q, want bash", cfg.Binaries.Shell)
 	}
+	if cfg.Binaries.Git != "/opt/git/bin/git" {
+		t.Errorf("Binaries.Git = %q, want /opt/git/bin/git", cfg.Binaries.Git)
+	}
 	rawBin, ok := cfg.Raw["binaries"].(map[string]any)
 	if !ok {
 		t.Fatal("cfg.Raw[\"binaries\"] is not map[string]any")
 	}
 	if rawBin["docker"] != "podman" {
 		t.Errorf("Raw[binaries][docker] = %v, want podman", rawBin["docker"])
+	}
+	if rawBin["git"] != "/opt/git/bin/git" {
+		t.Errorf("Raw[binaries][git] = %v, want /opt/git/bin/git", rawBin["git"])
 	}
 }
 
@@ -2687,6 +2700,19 @@ func TestBinariesAccessors(t *testing.T) {
 	cfg3 := &DevboxConfig{Binaries: BinariesConfig{Docker: "podman"}}
 	if got := DockerBin(cfg3); got != "podman" {
 		t.Errorf("DockerBin(cfg3) = %q, want podman", got)
+	}
+	// GitBin(nil) == "git"
+	if got := GitBin(nil); got != "git" {
+		t.Errorf("GitBin(nil) = %q, want git", got)
+	}
+	// GitBin(&DevboxConfig{}) == "git"
+	if got := GitBin(&DevboxConfig{}); got != "git" {
+		t.Errorf("GitBin(&DevboxConfig{}) = %q, want git", got)
+	}
+	// GitBin with explicit value
+	cfg4 := &DevboxConfig{Binaries: BinariesConfig{Git: "/opt/git/bin/git"}}
+	if got := GitBin(cfg4); got != "/opt/git/bin/git" {
+		t.Errorf("GitBin(cfg4) = %q, want /opt/git/bin/git", got)
 	}
 }
 

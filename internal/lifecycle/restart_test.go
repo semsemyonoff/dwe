@@ -104,7 +104,7 @@ run:
 	t.Cleanup(func() { GitProbeFunc = origProbe })
 
 	fetchCalled := false
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		if fetch {
 			fetchCalled = true
 		}

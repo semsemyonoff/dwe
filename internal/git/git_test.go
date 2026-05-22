@@ -45,7 +45,7 @@ func fail(stderr string) stubCall {
 
 func TestProbe_NotARepo(t *testing.T) {
 	r := newStub(fail(""))
-	s, err := probeWith("/tmp/notarepo", false, r)
+	s, err := probeWith("git", "/tmp/notarepo", false, r)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -62,7 +62,7 @@ func TestProbe_CleanUpToDate_NoFetch(t *testing.T) {
 		ok("origin/main"), // rev-parse @{u}
 		ok("0\t0"),        // rev-list --left-right --count (fetch=false, still runs count)
 	)
-	s, err := probeWith("/repo", false, r)
+	s, err := probeWith("git", "/repo", false, r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestProbe_DirtyWorktree(t *testing.T) {
 		// no fetch (fetch=false), still runs rev-list
 		ok("3\t1"), // rev-list counts
 	)
-	s, err := probeWith("/repo", false, r)
+	s, err := probeWith("git", "/repo", false, r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestProbe_NoUpstream(t *testing.T) {
 		fail(""),   // @{u} → no upstream configured
 		// rev-list skipped because HasUpstream=false
 	)
-	s, err := probeWith("/repo", false, r)
+	s, err := probeWith("git", "/repo", false, r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestProbe_FetchSuccess(t *testing.T) {
 		ok(""),            // git fetch --quiet origin → success
 		ok("2\t0"),        // rev-list: behind 2, ahead 0
 	)
-	s, err := probeWith("/repo", true, r)
+	s, err := probeWith("git", "/repo", true, r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestProbe_FetchFailure(t *testing.T) {
 		ok("origin/main"), // upstream
 		fail("fatal: could not read from remote repository"),
 	)
-	s, err := probeWith("/repo", true, r)
+	s, err := probeWith("git", "/repo", true, r)
 	if err != nil {
 		t.Fatalf("probe should not return error on fetch failure: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestProbe_FetchNotAttemptedWhenModeOff(t *testing.T) {
 		ok("origin/main"), // upstream
 		ok("0\t0"),        // rev-list (no fetch)
 	)
-	s, err := probeWith("/repo", false, r)
+	s, err := probeWith("git", "/repo", false, r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestPullFFOnly_Moved(t *testing.T) {
 		ok(""),       // git pull --ff-only
 		ok("def456"), // rev-parse HEAD after
 	)
-	moved, err := pullFFOnlyWith("/repo", r)
+	moved, err := pullFFOnlyWith("git", "/repo", r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestPullFFOnly_NotMoved(t *testing.T) {
 		ok(""),       // pull
 		ok("abc123"), // after (same)
 	)
-	moved, err := pullFFOnlyWith("/repo", r)
+	moved, err := pullFFOnlyWith("git", "/repo", r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestPullFFOnly_Error(t *testing.T) {
 		ok("abc123"),
 		fail("fatal: not possible to fast-forward, aborting"),
 	)
-	_, err := pullFFOnlyWith("/repo", r)
+	_, err := pullFFOnlyWith("git", "/repo", r)
 	if err == nil {
 		t.Error("expected error on pull failure")
 	}

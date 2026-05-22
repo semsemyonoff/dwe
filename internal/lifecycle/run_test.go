@@ -143,7 +143,7 @@ func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 		GitPullFFOnlyFunc = origPull
 	})
 
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		return git.Status{
 			IsRepo:      true,
 			HasUpstream: true,
@@ -154,7 +154,7 @@ func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 		}, nil
 	}
 
-	GitPullFFOnlyFunc = func(workDir string) (bool, error) {
+	GitPullFFOnlyFunc = func(_, workDir string) (bool, error) {
 		writeLifecycleYML(t, devboxDir, "after-reload")
 		return true, nil
 	}
@@ -179,7 +179,7 @@ func TestRunRun_NoUpdateFlag_SkipsFetch(t *testing.T) {
 	t.Cleanup(func() { GitProbeFunc = origProbe })
 
 	fetchCalled := false
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		if fetch {
 			fetchCalled = true
 		}
@@ -213,7 +213,7 @@ func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 	t.Cleanup(func() { GitProbeFunc = origProbe })
 
 	fetchCalled := false
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		if fetch {
 			fetchCalled = true
 		}
@@ -246,7 +246,7 @@ func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 	t.Cleanup(func() { GitProbeFunc = origProbe })
 
 	fetchCalled := false
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		if fetch {
 			fetchCalled = true
 		}
@@ -274,7 +274,7 @@ func TestRunRun_ProbeError(t *testing.T) {
 	origProbe := GitProbeFunc
 	t.Cleanup(func() { GitProbeFunc = origProbe })
 
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		return git.Status{}, errors.New("probe failed")
 	}
 
@@ -319,7 +319,7 @@ func TestRunRun_WarnOnFetchFailed(t *testing.T) {
 	origProbe := GitProbeFunc
 	t.Cleanup(func() { GitProbeFunc = origProbe })
 
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		return git.Status{
 			IsRepo:      true,
 			HasUpstream: true,
@@ -353,13 +353,13 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 		GitPullFFOnlyFunc = origPull
 	})
 
-	GitProbeFunc = func(workDir string, fetch bool) (git.Status, error) {
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
 		return git.Status{
 			IsRepo: true, HasUpstream: true, FetchOK: true, Behind: 1,
 			Branch: "main", Upstream: "origin/main",
 		}, nil
 	}
-	GitPullFFOnlyFunc = func(workDir string) (bool, error) {
+	GitPullFFOnlyFunc = func(_, workDir string) (bool, error) {
 		return false, errors.New("network error")
 	}
 

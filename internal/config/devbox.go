@@ -22,11 +22,12 @@ import (
 //
 // Fields are read from the top-level devbox.yml only — not layered with
 // defaults.yml or local.yml. Empty fields fall back to built-in defaults
-// (devbox, docker, sh). Use DevboxBin/DockerBin/ShellBin accessors to read.
+// (devbox, docker, sh, git). Use DevboxBin/DockerBin/ShellBin/GitBin accessors to read.
 type BinariesConfig struct {
 	Devbox string `yaml:"devbox"`
 	Docker string `yaml:"docker"`
 	Shell  string `yaml:"shell"`
+	Git    string `yaml:"git"`
 }
 
 // DevboxBin returns the configured devbox binary name (default: "devbox").
@@ -56,6 +57,15 @@ func ShellBin(cfg *DevboxConfig) string {
 	return cfg.Binaries.Shell
 }
 
+// GitBin returns the configured git binary name (default: "git").
+// Safe when cfg is nil.
+func GitBin(cfg *DevboxConfig) string {
+	if cfg == nil || cfg.Binaries.Git == "" {
+		return "git"
+	}
+	return cfg.Binaries.Git
+}
+
 // applyBinariesDefaults fills empty BinariesConfig fields with built-in defaults.
 func applyBinariesDefaults(b *BinariesConfig) {
 	if b.Devbox == "" {
@@ -66,6 +76,9 @@ func applyBinariesDefaults(b *BinariesConfig) {
 	}
 	if b.Shell == "" {
 		b.Shell = "sh"
+	}
+	if b.Git == "" {
+		b.Git = "git"
 	}
 }
 
@@ -886,6 +899,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		"devbox": cfg.Binaries.Devbox,
 		"docker": cfg.Binaries.Docker,
 		"shell":  cfg.Binaries.Shell,
+		"git":    cfg.Binaries.Git,
 	}
 
 	// Load devbox/services.yml separately (not merged with config layers).
