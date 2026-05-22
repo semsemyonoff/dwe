@@ -469,15 +469,23 @@ hits are a distinct grep.
 
 ### Task 9: Update template packs (IDE / AI / git) for new service shape
 
-- [ ] in `internal/templates/`, audit `SelectServices` and `TemplateData` to confirm
+- [x] in `internal/templates/`, audit `SelectServices` and `TemplateData` to confirm
       they consume only the unified `ServiceConfig` (the explore report says they're
-      already generic; verify against the changes in Task 8).
-- [ ] update default-IDE-render-enabled-for-app logic to use the new
-      `(ServiceConfig).IsApp()` predicate.
-- [ ] verify pack manifest validators still apply uniformly (no type-specific gates).
-- [ ] write tests for `SelectServices` with each type (apps render IDE by default;
-      tool/infra do not unless explicit `render.<kind>.enabled: true`).
-- [ ] run `go test ./internal/templates/...` — must pass before next task.
+      already generic; verify against the changes in Task 8). Confirmed: all three
+      packs key off `config.ServiceConfig` only — no `ToolConfig` / `Runtime.*` refs.
+- [x] update default-IDE-render-enabled-for-app logic to use the new
+      `(ServiceConfig).IsApp()` predicate (`internal/config/devbox.go`:627,661 — IDE
+      and Git default helpers now route through `s.IsApp()` instead of literal
+      `s.Type == "app"`).
+- [x] verify pack manifest validators still apply uniformly (no type-specific gates) —
+      grep of `internal/templates/manifest` returns zero hits for `ServiceType` /
+      `IsApp` / `svc.Type`. Manifest schema is type-agnostic.
+- [x] write tests for `SelectServices` with each type (apps render IDE by default;
+      tool/infra do not unless explicit `render.<kind>.enabled: true`). Added
+      `internal/templates/ide/select_services_test.go`,
+      `internal/templates/ai/select_services_test.go`, and extended
+      `internal/templates/git/git_test.go` to cover all three types.
+- [x] run `go test ./internal/templates/...` — passes.
 
 ### Task 10: Migrate `next/tbm` fixture to new schema
 

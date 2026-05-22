@@ -624,7 +624,7 @@ func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) 
 	if s.Render.IDE.Enabled != nil {
 		return *s.Render.IDE.Enabled, true
 	}
-	return s.Type == "app", false
+	return s.IsApp(), false
 }
 
 // IDERenderEnabled returns whether this service should participate in IDE rendering.
@@ -658,7 +658,7 @@ func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) 
 	if s.Render.Git.Enabled != nil {
 		return *s.Render.Git.Enabled, true
 	}
-	return s.Type == "app", false
+	return s.IsApp(), false
 }
 
 // GitRenderEnabled returns whether this service should participate in git-hooks rendering.

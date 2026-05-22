@@ -169,16 +169,34 @@ func TestSelectServices(t *testing.T) {
 			t.Errorf("skipped[1]=%+v want {b git-disabled}", skipped[1])
 		}
 	})
-	t.Run("non-app type dropped as git-policy", func(t *testing.T) {
+	t.Run("non-app types dropped as git-policy", func(t *testing.T) {
 		svcs := map[string]config.ServiceConfig{
-			"db": {Enabled: true, Type: "db", Dir: "services/db"},
+			"db":      {Enabled: true, Type: config.ServiceTypeInfra, Dir: "services/db"},
+			"adminer": {Enabled: true, Type: config.ServiceTypeTool, Dir: "services/adminer"},
 		}
 		selected, skipped := SelectServices(svcs)
 		if len(selected) != 0 {
 			t.Errorf("selected=%v", selected)
 		}
-		if len(skipped) != 1 || skipped[0].Reason != "git-policy" {
-			t.Errorf("skipped=%v want [{db git-policy}]", skipped)
+		if len(skipped) != 2 {
+			t.Fatalf("skipped=%v", skipped)
+		}
+		for _, sk := range skipped {
+			if sk.Reason != "git-policy" {
+				t.Errorf("skipped[%s]=%+v want reason git-policy", sk.Name, sk)
+			}
+		}
+	})
+	t.Run("tool with explicit git enabled is selected", func(t *testing.T) {
+		svcs := map[string]config.ServiceConfig{
+			"adminer": {
+				Enabled: true, Type: config.ServiceTypeTool, Dir: "services/adminer",
+				Render: config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Enabled: ptrBool(true)}},
+			},
+		}
+		selected, _ := SelectServices(svcs)
+		if len(selected) != 1 || selected[0] != "adminer" {
+			t.Errorf("selected=%v", selected)
 		}
 	})
 	t.Run("empty dir dropped", func(t *testing.T) {
