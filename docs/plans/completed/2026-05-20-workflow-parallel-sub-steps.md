@@ -73,7 +73,7 @@ The current workaround — hiding the fan-out in a `type: shell` script — defe
 ## What Goes Where
 
 - **Implementation Steps** (`[ ]` checkboxes): code, tests, and doc updates achievable within this repo.
-- **Post-Completion** (no checkboxes): manual real-terminal smoke testing — run `devbox commands run services.all.composer-install` against the tbm project and visually verify behaviour.
+- **Post-Completion** (no checkboxes): manual real-terminal smoke testing — run `devbox commands run services.all.composer-install` against the pilot project and visually verify behaviour.
 
 ## Implementation Steps
 
@@ -660,7 +660,7 @@ When a sub-step references a command with `confirmation: true`, the existing `ru
 
 *Items requiring manual intervention or external systems — no checkboxes, informational only.*
 
-**Manual smoke test** (against the tbm project):
+**Manual smoke test** (against the pilot project):
 
 - `devbox commands run services.all.composer-install` — observe 4 parallel block rows with spinners + stopwatch + colors (blue spinner → green ✓); no leftover spinner line in scrollback after exit.
 - `devbox commands run services.all.composer-install --yes` — confirmation-required sub-steps run without prompts.

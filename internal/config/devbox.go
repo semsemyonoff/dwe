@@ -967,7 +967,11 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		"git":    cfg.Binaries.Git,
 	}
 
-	// Step 4: resolve per-service Enabled from the merged overlay.
+	// Step 4: resolve per-service Enabled and per-developer port/host overrides
+	// from the merged overlay (devbox/defaults.yml + devbox/local.yml). The
+	// overlay validator (validateServicesOverlay) has already enforced shape;
+	// here we deep-merge entries by port-name / host-name so a partial override
+	// only touches the listed keys.
 	for name, svc := range services {
 		if svc.Mandatory {
 			svc.Enabled = true
@@ -977,6 +981,8 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 				svc.Enabled = isTruthy(val)
 			}
 		}
+		applyOverlayPorts(merged, name, &svc)
+		applyOverlayHosts(merged, name, &svc)
 		services[name] = svc
 	}
 	cfg.Services = services
@@ -1015,10 +1021,27 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	return &cfg, nil
 }
 
-// validateServicesOverlay rejects any field other than `enabled:` under a
-// layer's services.<name> mapping and any services.<name> entry naming a
-// service not declared in devbox/services.yml. layerPath is included in the
-// error message so the user knows which file to edit.
+// overlayAllowedKeys is the closed set of per-developer overridable keys
+// under a layer's services.<name> mapping. Structural fields (container,
+// dir, configs, compose, extends, etc.) belong in devbox/services.yml and
+// are rejected by validateServicesOverlay.
+//
+// Ports and hosts are deliberately overridable: a developer commonly needs
+// to change a port that clashes with something already bound on their host,
+// or switch the `*.local` hostname they use, without editing the shared
+// devbox/services.yml. Each is deep-merged by port-name / host-name on top
+// of the declared map so a partial override only touches the listed entries.
+var overlayAllowedKeys = map[string]bool{
+	"enabled": true,
+	"ports":   true,
+	"hosts":   true,
+}
+
+// validateServicesOverlay rejects any non-overlay-allowed field under a
+// layer's services.<name> mapping, any services.<name> entry naming a
+// service not declared in devbox/services.yml, and malformed ports/hosts
+// blocks. layerPath is included in error messages so the user knows which
+// file to edit.
 func validateServicesOverlay(layerPath string, raw map[string]any, declared map[string]ServiceConfig) error {
 	svcRaw, ok := raw["services"]
 	if !ok || svcRaw == nil {
@@ -1041,9 +1064,65 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 			return fmt.Errorf("%s: services.%s: must be a mapping", layerPath, name)
 		}
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
-			if key != "enabled" {
-				return fmt.Errorf("%s: services.%s.%s: service definitions belong in devbox/services.yml; overlays may only set enabled", layerPath, name, key)
+			if !overlayAllowedKeys[key] {
+				return fmt.Errorf("%s: services.%s.%s: service definitions belong in devbox/services.yml; overlays may only set %s",
+					layerPath, name, key, overlayAllowedKeysList())
 			}
+		}
+		if err := validateOverlayPorts(layerPath, name, entry["ports"]); err != nil {
+			return err
+		}
+		if err := validateOverlayHosts(layerPath, name, entry["hosts"]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// overlayAllowedKeysList returns a sorted, human-friendly comma-separated
+// list of overlay-allowed keys for use in error hints.
+func overlayAllowedKeysList() string {
+	keys := slices.Sorted(maps.Keys(overlayAllowedKeys))
+	return strings.Join(keys, ", ")
+}
+
+// validateOverlayPorts rejects malformed `ports:` blocks in overlay layers.
+// Accepts nil (key absent or null) and map[string]any where every value is
+// an integer in the 1..65535 range.
+func validateOverlayPorts(layerPath, svcName string, raw any) error {
+	if raw == nil {
+		return nil
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: services.%s.ports: %w", layerPath, svcName, ErrServicePortsShape)
+	}
+	for _, portName := range slices.Sorted(maps.Keys(m)) {
+		n, ok := m[portName].(int)
+		if !ok {
+			return fmt.Errorf("%s: services.%s.ports.%s: %w (not an integer)", layerPath, svcName, portName, ErrServicePortsShape)
+		}
+		if n < 1 || n > 65535 {
+			return fmt.Errorf("%s: services.%s.ports.%s = %d: %w", layerPath, svcName, portName, n, ErrServicePortOutOfRange)
+		}
+	}
+	return nil
+}
+
+// validateOverlayHosts rejects malformed `hosts:` blocks in overlay layers.
+// Accepts nil (key absent or null) and map[string]any where every value is
+// a string.
+func validateOverlayHosts(layerPath, svcName string, raw any) error {
+	if raw == nil {
+		return nil
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: services.%s.hosts: %w", layerPath, svcName, ErrServiceHostsShape)
+	}
+	for _, hostName := range slices.Sorted(maps.Keys(m)) {
+		if _, ok := m[hostName].(string); !ok {
+			return fmt.Errorf("%s: services.%s.hosts.%s: %w (not a string)", layerPath, svcName, hostName, ErrServiceHostsShape)
 		}
 	}
 	return nil
@@ -1313,6 +1392,52 @@ func topoSortServices(services map[string]ServiceConfig) ([]string, error) {
 		return nil, fmt.Errorf("services config contains a circular extends dependency")
 	}
 	return result, nil
+}
+
+// applyOverlayPorts deep-merges any ports defined under
+// services.<name>.ports in the merged overlay onto svc.Ports. Existing
+// declared ports are preserved unless the overlay names the same key; new
+// keys are added. A nil or non-map overlay value is a no-op (the validator
+// would have rejected a malformed shape already).
+func applyOverlayPorts(merged map[string]any, name string, svc *ServiceConfig) {
+	raw, ok := ResolvePath(merged, "services."+name+".ports")
+	if !ok {
+		return
+	}
+	m, ok := raw.(map[string]any)
+	if !ok || len(m) == 0 {
+		return
+	}
+	if svc.Ports == nil {
+		svc.Ports = make(map[string]int, len(m))
+	}
+	for portName, portVal := range m {
+		if n, ok := portVal.(int); ok {
+			svc.Ports[portName] = n
+		}
+	}
+}
+
+// applyOverlayHosts deep-merges any hosts defined under
+// services.<name>.hosts in the merged overlay onto svc.Hosts. Same
+// semantics as applyOverlayPorts.
+func applyOverlayHosts(merged map[string]any, name string, svc *ServiceConfig) {
+	raw, ok := ResolvePath(merged, "services."+name+".hosts")
+	if !ok {
+		return
+	}
+	m, ok := raw.(map[string]any)
+	if !ok || len(m) == 0 {
+		return
+	}
+	if svc.Hosts == nil {
+		svc.Hosts = make(map[string]string, len(m))
+	}
+	for hostName, hostVal := range m {
+		if s, ok := hostVal.(string); ok {
+			svc.Hosts[hostName] = s
+		}
+	}
 }
 
 // injectServicesIntoRaw merges service definitions into raw["services"] so

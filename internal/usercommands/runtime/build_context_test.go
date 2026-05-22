@@ -241,7 +241,7 @@ func TestBuildRunContext_WithTemplateRender(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Raw: map[string]any{
 			"db": map[string]any{
-				"stock_database": "tbm_stock",
+				"stock_database": "app_stock",
 			},
 		},
 	}
@@ -266,8 +266,8 @@ func TestBuildRunContext_WithTemplateRender(t *testing.T) {
 		t.Fatalf("BuildRunContext returned error: %v", err)
 	}
 
-	if rctx.Params["database"] != "tbm_stock" {
-		t.Errorf("param database = %v, want %q", rctx.Params["database"], "tbm_stock")
+	if rctx.Params["database"] != "app_stock" {
+		t.Errorf("param database = %v, want %q", rctx.Params["database"], "app_stock")
 	}
 }
 

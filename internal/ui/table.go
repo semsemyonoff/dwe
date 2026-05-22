@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"fmt"
+	"slices"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 )
@@ -35,6 +39,13 @@ type ServiceTableRow struct {
 	Name      string
 	Dir       string
 	Container string
+	// Hosts / Ports are the resolved per-developer values (declared in
+	// services.yml, optionally overridden via defaults.yml / local.yml).
+	// They render as built-in HOSTS / PORTS columns; the formatter shows
+	// a single value bare (e.g. "app.local" / "80") and multi-entry maps
+	// as `name=value` pairs sorted by name.
+	Hosts     map[string]string
+	Ports     map[string]int
 	Mandatory bool
 	Enabled   bool
 	// Running is only meaningful when Mandatory or Enabled is true.
@@ -51,13 +62,65 @@ type rowCellStyle struct {
 	run   lipgloss.Style // RUNNING column
 }
 
+// formatHostsCell renders a service's hosts map as a single table cell.
+// One entry → bare value ("app.local"). Multiple → "name=value" pairs
+// sorted by name, comma-joined. Empty → em-dash.
+func formatHostsCell(hosts map[string]string) string {
+	if len(hosts) == 0 {
+		return "—"
+	}
+	if len(hosts) == 1 {
+		for _, v := range hosts {
+			return v
+		}
+	}
+	names := make([]string, 0, len(hosts))
+	for k := range hosts {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		parts = append(parts, fmt.Sprintf("%s=%s", n, hosts[n]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// formatPortsCell renders a service's ports map as a single table cell.
+// One entry → bare value ("80"). Multiple → "name=value" pairs sorted by
+// name, comma-joined. Empty → em-dash.
+func formatPortsCell(ports map[string]int) string {
+	if len(ports) == 0 {
+		return "—"
+	}
+	if len(ports) == 1 {
+		for _, v := range ports {
+			return fmt.Sprintf("%d", v)
+		}
+	}
+	names := make([]string, 0, len(ports))
+	for k := range ports {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		parts = append(parts, fmt.Sprintf("%s=%d", n, ports[n]))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // RenderServicesTable renders a styled Lipgloss table of services.
-// Built-in columns: NAME, [DIR if withDirCol,] CONTAINER, STATE, RUNNING.
+// Built-in columns: NAME, [DIR if withDirCol,] CONTAINER, HOSTS, PORTS, STATE, RUNNING.
 // extraCols, if non-nil, lists additional column names appended after the
 // built-ins; each row's value is read from ServiceTableRow.Extras (missing
 // key → "—"). Pass nil to render the table with only the built-in columns.
 // withDirCol=true inserts a DIR column between NAME and CONTAINER (apps);
 // pass false for tool/infra rows that have no source directory.
+//
+// HOSTS / PORTS columns are populated from ServiceTableRow.Hosts / .Ports —
+// devbox treats per-developer port and host overrides as a core feature, so
+// these are always-visible built-in columns rather than opt-in extras.
 func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]rowCellStyle, len(rows))
@@ -94,15 +157,18 @@ func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol 
 			cs.run = styleDisabled
 		}
 
+		hostsStr := formatHostsCell(r.Hosts)
+		portsStr := formatPortsCell(r.Ports)
+
 		var row []string
 		if withDirCol {
 			dir := r.Dir
 			if dir == "" {
 				dir = "—"
 			}
-			row = []string{r.Name, dir, r.Container, stateStr, runStr}
+			row = []string{r.Name, dir, r.Container, hostsStr, portsStr, stateStr, runStr}
 		} else {
-			row = []string{r.Name, r.Container, stateStr, runStr}
+			row = []string{r.Name, r.Container, hostsStr, portsStr, stateStr, runStr}
 		}
 		for _, col := range extraCols {
 			row = append(row, extraCell(r.Extras, col))
@@ -114,11 +180,11 @@ func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol 
 	var headers []string
 	var stateCol, runCol int
 	if withDirCol {
-		headers = append([]string{"NAME", "DIR", "CONTAINER", "STATE", "RUNNING"}, extraCols...)
-		stateCol, runCol = 3, 4
+		headers = append([]string{"NAME", "DIR", "CONTAINER", "HOSTS", "PORTS", "STATE", "RUNNING"}, extraCols...)
+		stateCol, runCol = 5, 6
 	} else {
-		headers = append([]string{"NAME", "CONTAINER", "STATE", "RUNNING"}, extraCols...)
-		stateCol, runCol = 2, 3
+		headers = append([]string{"NAME", "CONTAINER", "HOSTS", "PORTS", "STATE", "RUNNING"}, extraCols...)
+		stateCol, runCol = 4, 5
 	}
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).

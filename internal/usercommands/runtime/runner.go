@@ -131,11 +131,21 @@ func NewRunner(cmd *model.CommandDef) (Runner, error) {
 	}
 }
 
+// ErrNilCmd is returned by RunCommand when rc.Cmd is nil. Real call sites
+// resolve the CommandDef from the registry before invoking RunCommand, so
+// a nil Cmd indicates a programmer error in a caller, not a runtime
+// condition. The explicit error avoids a nil-deref panic deeper in the
+// runner pipeline and lets tests assert the contract directly.
+var ErrNilCmd = errors.New("runtime: RunCommand called with nil Cmd")
+
 // RunCommand executes a command definition, applying command-level pre-run
 // behavior such as file preparation and confirmation prompts before dispatching
 // to the concrete runner for the command type. The supplied ctx is threaded
 // through to the runner so child processes can be cancelled.
 func RunCommand(ctx context.Context, rc RunContext) (err error) {
+	if rc.Cmd == nil {
+		return ErrNilCmd
+	}
 	if TestSnapshotRC != nil {
 		TestSnapshotRC(rc)
 	}

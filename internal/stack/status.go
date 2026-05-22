@@ -139,6 +139,8 @@ func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, pro
 			Name:      name,
 			Dir:       svc.Dir,
 			Container: svc.Container,
+			Hosts:     svc.Hosts,
+			Ports:     svc.Ports,
 			Mandatory: svc.Mandatory,
 			Enabled:   svc.Enabled,
 			Running:   running,

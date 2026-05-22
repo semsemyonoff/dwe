@@ -10,7 +10,7 @@ The group is a content-neutral primitive: "run these N independent steps at once
 
 The executor today runs steps strictly sequentially. Correct as a default (declaration order is the only dependency contract), but it serialises independent IO-bound work:
 
-- TBM pilot dump download: 3 dumps ≈ 2–3 min sequential vs. max-of ≈ 50 s
+- Pilot dump download: 3 dumps ≈ 2–3 min sequential vs. max-of ≈ 50 s
 - Reset: per-volume removals, prune
 - Deploy: composer install on N services, migrations on 4 independent DBs
 
@@ -539,11 +539,11 @@ Notes:
 *Items requiring manual intervention or external systems — informational only*
 
 **Manual verification on a real project**:
-- Run the TBM-pilot deploy with a parallel group of 3 dump downloads; confirm the live spinner block on TTY and the buffered-dump output on `CI=1`.
+- Run the pilot project deploy with a parallel group of 3 dump downloads; confirm the live spinner block on TTY and the buffered-dump output on `CI=1`.
 - Trigger SIGINT mid-group; verify all in-flight children are killed and per-substep log files contain truncated-but-readable output.
 - Run with `fail_fast: false` and one intentionally-failing sub-step; verify the other sub-steps complete and the group reports failure.
 - Inspect `.devbox/deploy/state.yml` after a parallel run; verify each sub-step has a distinct journal entry with the right `step_hash` and status.
 
 **External system updates**:
-- Update consuming projects' deploy YAMLs that have been waiting for this feature (TBM pilot at minimum).
+- Update consuming projects' deploy YAMLs that have been waiting for this feature (the pilot project at minimum).
 - Mention the feature in the next devbox release notes / CHANGELOG.

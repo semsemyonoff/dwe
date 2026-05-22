@@ -1132,7 +1132,7 @@ func TestRunPipeline_FilesGate_NilRegistry_FailsStep(t *testing.T) {
 func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
 	workDir := t.TempDir()
 	// Create the file whose path includes the rendered database name.
-	probeFile := filepath.Join(workDir, "tbm_stock.sql.gz")
+	probeFile := filepath.Join(workDir, "app_stock.sql.gz")
 	if err := os.WriteFile(probeFile, []byte("fake dump"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1163,7 +1163,7 @@ func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
 	rep := &mockReporter{}
 	cfg := &config.DevboxConfig{Raw: map[string]any{
 		"db": map[string]any{
-			"stock_database": "tbm_stock",
+			"stock_database": "app_stock",
 		},
 	}}
 	phase := config.DeployPhase{Name: "setup"}

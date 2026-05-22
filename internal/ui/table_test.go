@@ -106,7 +106,7 @@ func TestRenderServicesTable_Basic(t *testing.T) {
 	out := RenderServicesTable(rows, nil, false)
 
 	for _, want := range []string{
-		"NAME", "CONTAINER", "STATE", "RUNNING",
+		"NAME", "CONTAINER", "HOSTS", "PORTS", "STATE", "RUNNING",
 		"main", "app-main", "mandatory", "running",
 		"second", "app-second", "enabled", "stopped",
 		"worker", "app-worker", "disabled",
@@ -117,6 +117,61 @@ func TestRenderServicesTable_Basic(t *testing.T) {
 	}
 	if strings.Contains(out, "DIR") {
 		t.Errorf("withDirCol=false should NOT include DIR column:\n%s", out)
+	}
+}
+
+func TestRenderServicesTable_HostsPortsRendered(t *testing.T) {
+	resetStyles()
+	rows := []ServiceTableRow{
+		{
+			Name: "adminer", Container: "adminer", Enabled: true, Running: true,
+			Hosts: map[string]string{"web": "admin.local"},
+			Ports: map[string]int{"http": 8027},
+		},
+		{
+			Name: "rabbitmq", Container: "rabbitmq", Mandatory: true, Running: true,
+			Ports: map[string]int{"amqp": 5672, "admin": 15672},
+		},
+		{
+			Name: "bare", Container: "bare", Enabled: true, Running: false,
+		},
+	}
+	out := RenderServicesTable(rows, nil, false)
+	for _, want := range []string{
+		"HOSTS", "PORTS",
+		"admin.local", "8027", // single-entry: bare value
+		"admin=15672", "amqp=5672", // multi-entry: name=value pairs, sorted
+		"—", // empty maps → em-dash
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+func TestFormatHostsCell(t *testing.T) {
+	if got := formatHostsCell(nil); got != "—" {
+		t.Errorf("nil hosts: got %q, want em-dash", got)
+	}
+	if got := formatHostsCell(map[string]string{"web": "app.local"}); got != "app.local" {
+		t.Errorf("single host: got %q, want bare value", got)
+	}
+	got := formatHostsCell(map[string]string{"api": "api.local", "web": "web.local"})
+	if got != "api=api.local, web=web.local" {
+		t.Errorf("multi host: got %q, want sorted name=value pairs", got)
+	}
+}
+
+func TestFormatPortsCell(t *testing.T) {
+	if got := formatPortsCell(nil); got != "—" {
+		t.Errorf("nil ports: got %q, want em-dash", got)
+	}
+	if got := formatPortsCell(map[string]int{"http": 80}); got != "80" {
+		t.Errorf("single port: got %q, want bare value", got)
+	}
+	got := formatPortsCell(map[string]int{"amqp": 5672, "admin": 15672})
+	if got != "admin=15672, amqp=5672" {
+		t.Errorf("multi port: got %q, want sorted name=value pairs", got)
 	}
 }
 

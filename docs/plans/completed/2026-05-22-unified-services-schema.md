@@ -36,7 +36,7 @@ canonical dot-path becomes `services.<name>.ports.<port-name>` and
 - `mandatory:` — universal flag for any type.
 - No `port:` / `host:` shorthand. Single port is `ports: { http: 80 }`.
 - No backwards compatibility (pre-release policy in CLAUDE.md).
-- Big-bang single PR. `next/tbm` fixture updated in same PR.
+- Big-bang single PR. `next/<fixture>` fixture updated in same PR.
 
 ## Context (from discovery)
 
@@ -55,7 +55,7 @@ canonical dot-path becomes `services.<name>.ports.<port-name>` and
 - `internal/envfile/` — export rules referencing `runtime.ports.*`.
 - `internal/templates/` — already generic across kinds (only `Render.IDE.Enabled` default
   differs for `type: "app"`).
-- `next/tbm/devbox/` — in-repo fixture project. Updated alongside.
+- `next/<fixture>/devbox/` — in-repo fixture project. Updated alongside.
 - Docs: `docs/reference/config/services.md`, `tools.md`, `docker.md`, anything referencing
   `runtime.ports` / `runtime.hosts`.
 - `CLAUDE.md` (== `AGENTS.md`) — extensive description of current shape needs updating.
@@ -101,7 +101,7 @@ canonical dot-path becomes `services.<name>.ports.<port-name>` and
   helpers returning the union across all types, per-type `devbox status apps` /
   `tools` / `infra` subcommands, `--no-apps` / `--no-tools` / `--no-infra` flag
   suppression, plus a guard test that `devbox tools` is an unknown command.
-- **End-to-end check**: `next/tbm` fixture must `make build && bin/devbox validate` cleanly
+- **End-to-end check**: `next/<fixture>` fixture must `make build && bin/devbox validate` cleanly
   at end of refactor.
 - **No e2e UI suite** exists — manual TTY checks for toggle/cmdbrowser belong in
   Post-Completion.
@@ -338,7 +338,7 @@ do not run the validator. Add hard errors in the load + plan paths:
       pin the new order **explicitly**: `base → tools (sorted by name) →
       infra (sorted by name) → apps (sorted by name)`. Group by type, then sort by
       name within each group. Reordering would silently break overlay precedence in
-      live `next/tbm` and any user fixture; the order is part of the public surface.
+      live `next/<fixture>` and any user fixture; the order is part of the public surface.
       Implement as: iterate services partitioned by `IsTool()` / `IsInfra()` /
       `IsApp()` in that order, sorting each partition by name. (Already implemented
       in Task 4 — see `composeFiles` at internal/config/devbox.go:350. Task 6 adds
@@ -433,7 +433,7 @@ This task covers **two distinct migration surfaces**:
 Both must be migrated. The previous explore only enumerated dot-path hits; Go-template
 hits are a distinct grep.
 
-- [x] grep the entire repo (including `next/tbm/`, `docs/`, every `*.tmpl`, every
+- [x] grep the entire repo (including `next/<fixture>/`, `docs/`, every `*.tmpl`, every
       `*.yml`) for the dot-path forms `runtime.ports`, `runtime.hosts`. Migrated
       every code/test/fixture hit; doc hits in `docs/reference/` deferred to Task 11
       (per plan structure — Task 11 is the dedicated docs rewrite). Test references
@@ -448,7 +448,7 @@ hits are a distinct grep.
       `Port(name) int` and `Host(name) string` on `ServiceConfig` already existed
       from Task 1.
 - [x] migrate every Go-template file under `internal/templates/.../templates/` and
-      every `next/tbm/.../*.tmpl` — N/A: no template files currently exist in this
+      every `next/<fixture>/.../*.tmpl` — N/A: no template files currently exist in this
       repo. Source-level regression test added (see below) guards future drift.
 - [x] update `internal/envfile/` — `BuildContent` already routes through generic
       `cfg.Raw` dot-path resolution via `ResolvePath`; no code change required,
@@ -487,22 +487,22 @@ hits are a distinct grep.
       `internal/templates/git/git_test.go` to cover all three types.
 - [x] run `go test ./internal/templates/...` — passes.
 
-### Task 10: Migrate `next/tbm` fixture to new schema
+### Task 10: Migrate `next/<fixture>` fixture to new schema
 
-- [x] convert `next/tbm/devbox/tools.yml` entries into `services.yml` with
+- [x] convert `next/<fixture>/devbox/tools.yml` entries into `services.yml` with
       `type: tool` (compose: list syntax, `ports`/`hosts` maps).
 - [x] add explicit port names to every entry (`http` for tool/web ports,
       `mysql`/`redis`/`amqp`/`admin` for infra). Single host name `web` per
       service.
-- [x] delete `next/tbm/devbox/tools.yml`.
-- [x] update `next/tbm/devbox/defaults.yml` and `local.yml` overlays — only
+- [x] delete `next/<fixture>/devbox/tools.yml`.
+- [x] update `next/<fixture>/devbox/defaults.yml` and `local.yml` overlays — only
       `enabled:` under `services.<name>`. `runtime.ports` / `runtime.hosts`
       blocks dropped from defaults.yml (canonical ports/hosts now live in
       services.yml). Tool enablement merged into the unified `services:`
       block in both files. `local.example.yml` ports/hosts override snippet
       removed; per-developer port overrides now require editing services.yml
       directly (acknowledged scope reduction per pre-release policy).
-- [x] update `next/tbm/devbox/info.yml` Go-template refs (`.Runtime.Hosts.X`,
+- [x] update `next/<fixture>/devbox/info.yml` Go-template refs (`.Runtime.Hosts.X`,
       `.Runtime.Ports.app`, `.Tools.X.Host/Port/Enabled`) to the new
       `(index .Services "X").Host "web"` / `.Port "http"` / `.Enabled` shape.
       No `docker.yml` / `commands.yml` refs touched the old paths. Also
@@ -510,7 +510,7 @@ hits are a distinct grep.
       `runtime.hosts.X` / `tools.X.enabled`) to the new `services.X.…` form.
       Added `db`/`redis`/`opensearch`/`rabbitmq` as `type: infra` services so
       their ports have a canonical home.
-- [x] run `bin/devbox -c next/tbm validate` (after `make build`); reports zero
+- [x] run `bin/devbox -c next/<fixture> validate` (after `make build`); reports zero
       errors. 1 pre-existing warning (`main-debug` has no `dir`/`dir_internal`),
       27 infos (template-pack policy skips for non-app services — expected and
       documented in [[feedback_render_explicit_optout_silent]]), 11 ✓ checks.
@@ -568,7 +568,7 @@ hits are a distinct grep.
         prefix in templates is suspicious now).
       - Go-template field access: `.Tools`, `.Runtime.Ports`, `.Runtime.Hosts`.
       - Docs link paths: `reference/config/tools.md` (the deleted page from Task 11).
-- [x] verify `bin/devbox validate` on `next/tbm` reports zero errors (1 pre-existing
+- [x] verify `bin/devbox validate` on `next/<fixture>` reports zero errors (1 pre-existing
       warning + 27 policy infos + 11 checks, as noted in Task 10).
 - [x] run full `make test` and `make lint`; all green.
 - [x] manual TTY check (deferred to Post-Completion — not automatable in headless loop).
@@ -722,11 +722,11 @@ source attribution (matches today's `validateToolsOverlay` behavior, generalized
 *Items requiring manual intervention or external systems — no checkboxes, informational only.*
 
 **Manual verification:**
-- TTY: run `bin/devbox -c next/tbm services` (multi-select toggle); confirm mandatory
+- TTY: run `bin/devbox -c next/<fixture> services` (multi-select toggle); confirm mandatory
   apps appear pre-checked + disabled.
-- TTY: run `bin/devbox -c next/tbm status` and confirm Apps/Tools/Infra sections render
+- TTY: run `bin/devbox -c next/<fixture> status` and confirm Apps/Tools/Infra sections render
   with correct columns and custom status cells.
-- Run `bin/devbox -c next/tbm commands` and confirm cmdbrowser still works (no service
+- Run `bin/devbox -c next/<fixture> commands` and confirm cmdbrowser still works (no service
   identity coupling beyond what changed).
 - Exercise a deploy step that references a port (e.g., a `commands.yml` with a
   `default_from: services.X.ports.Y`) and confirm rendering succeeds.

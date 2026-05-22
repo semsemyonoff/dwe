@@ -203,7 +203,11 @@ func TestRunCommand_NotifyTrue_PreRunFailure(t *testing.T) {
 	}
 }
 
-func TestRunCommand_NilCmd_NoPanic_NoNotify(t *testing.T) {
+// TestRunCommand_NilCmd_ReturnsErrorNoNotify verifies the contract that
+// RunCommand defensively rejects a nil Cmd: it returns ErrNilCmd before
+// touching any field that would nil-deref, and the notifier path never
+// fires (the nil-Cmd guard runs ahead of every Notify dispatch).
+func TestRunCommand_NilCmd_ReturnsErrorNoNotify(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	rc := RunContext{
 		Cmd:    nil,
@@ -211,18 +215,12 @@ func TestRunCommand_NilCmd_NoPanic_NoNotify(t *testing.T) {
 		Stdout: &bytes.Buffer{},
 		Stderr: &bytes.Buffer{},
 	}
-	// nil Cmd causes NewRunner to be invoked on nil — will panic. So short
-	// circuit at notifier-guard check: notify path must not fire. We can't
-	// safely call NewRunner(nil) so we check earlier behavior: just make
-	// sure the guard reads rc.Cmd.Notify safely. Defensive call must be a
-	// no-panic on the guard expression.
-	defer func() {
-		// recover any later panic from NewRunner — out of our scope here.
-		_ = recover()
-	}()
-	_ = RunCommand(context.Background(), rc)
+	err := RunCommand(context.Background(), rc)
+	if !errors.Is(err, ErrNilCmd) {
+		t.Fatalf("RunCommand(nil Cmd) = %v, want ErrNilCmd", err)
+	}
 	if got := len(rec.snapshot()); got != 0 {
-		t.Errorf("want 0 events for nil Cmd guard, got %d", got)
+		t.Errorf("want 0 notify events for nil Cmd, got %d", got)
 	}
 }
 
