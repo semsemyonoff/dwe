@@ -69,9 +69,13 @@ func (r *ServiceExecRunner) Run(ctx context.Context, rc RunContext) error {
 	if err != nil {
 		return err
 	}
-	c.Stdout = stdout(rc)
-	c.Stderr = stderr(rc)
-	c.Stdin = stdinOrOS(rc)
+	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	defer cleanup()
+	if !used {
+		c.Stdout = stdout(rc)
+		c.Stderr = stderr(rc)
+		c.Stdin = stdinOrOS(rc)
+	}
 	return c.Run()
 }
 
@@ -111,9 +115,13 @@ func (r *ServiceRunRunner) Run(ctx context.Context, rc RunContext) error {
 	if err != nil {
 		return err
 	}
-	c.Stdout = stdout(rc)
-	c.Stderr = stderr(rc)
-	c.Stdin = stdinOrOS(rc)
+	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	defer cleanup()
+	if !used {
+		c.Stdout = stdout(rc)
+		c.Stderr = stderr(rc)
+		c.Stdin = stdinOrOS(rc)
+	}
 	return c.Run()
 }
 
@@ -311,6 +319,24 @@ func buildDockerComposeCmd(
 
 	if workdir != "" {
 		args = append(args, "--workdir", workdir)
+	}
+
+	// Forward colour-forcing env vars into the container when running as a
+	// workflow parallel sub-step. The captured stdout is then dumped to the
+	// user's terminal verbatim (failure dumps + always_show_output), so we
+	// want the child to keep its colours even though docker compose attaches
+	// a pipe rather than a TTY.
+	if envVars == nil {
+		envVars = make(map[string]string)
+	}
+	for _, kv := range parallelColorForceEnv(rc) {
+		// kv is "KEY=VALUE"; split once.
+		if eq := strings.IndexByte(kv, '='); eq > 0 {
+			k, v := kv[:eq], kv[eq+1:]
+			if _, exists := envVars[k]; !exists {
+				envVars[k] = v
+			}
+		}
 	}
 
 	for k := range envVars {

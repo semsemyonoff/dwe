@@ -35,6 +35,9 @@ func parallelColorForceEnv(rc RunContext) []string {
 	if !rc.UnderParallel {
 		return nil
 	}
+	if os.Getenv("NO_COLOR") != "" {
+		return nil
+	}
 	return []string{
 		"CLICOLOR_FORCE=1",    // BSD ls, brew, lipgloss
 		"FORCE_COLOR=1",       // Node ecosystem (npm/yarn/jest/eslint/chalk)
@@ -88,12 +91,22 @@ func (r *DevboxRunner) Run(ctx context.Context, rc RunContext) error {
 		for k, v := range envMap {
 			cmd.Env = append(cmd.Env, k+"="+v)
 		}
-		cmd.Env = append(cmd.Env, colorEnv...)
+		for _, kv := range colorEnv {
+			if eq := strings.IndexByte(kv, '='); eq > 0 {
+				if _, exists := envMap[kv[:eq]]; !exists {
+					cmd.Env = append(cmd.Env, kv)
+				}
+			}
+		}
 	}
 
-	cmd.Stdout = stdout(rc)
-	cmd.Stderr = stderr(rc)
-	cmd.Stdin = stdinOrOS(rc)
+	used, cleanup := parallelChildIO(rc, cmd, stdout(rc))
+	defer cleanup()
+	if !used {
+		cmd.Stdout = stdout(rc)
+		cmd.Stderr = stderr(rc)
+		cmd.Stdin = stdinOrOS(rc)
+	}
 	return cmd.Run()
 }
 
@@ -211,9 +224,13 @@ func (r *HostRunner) Run(ctx context.Context, rc RunContext) error {
 	if err != nil {
 		return err
 	}
-	c.Stdout = stdout(rc)
-	c.Stderr = stderr(rc)
-	c.Stdin = stdinOrOS(rc)
+	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	defer cleanup()
+	if !used {
+		c.Stdout = stdout(rc)
+		c.Stderr = stderr(rc)
+		c.Stdin = stdinOrOS(rc)
+	}
 	return c.Run()
 }
 

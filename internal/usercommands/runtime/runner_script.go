@@ -190,10 +190,15 @@ func (r *ScriptRunner) execScript(ctx context.Context, rc RunContext, shell, scr
 		c.Env = append(c.Env, k+"="+v)
 	}
 	c.Env = append(c.Env, contractEnv...)
+	c.Env = append(c.Env, parallelColorForceEnv(rc)...)
 
-	c.Stdout = stdout(rc)
-	c.Stderr = stderr(rc)
-	c.Stdin = stdinOrOS(rc)
+	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	defer cleanup()
+	if !used {
+		c.Stdout = stdout(rc)
+		c.Stderr = stderr(rc)
+		c.Stdin = stdinOrOS(rc)
+	}
 
 	if err := c.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

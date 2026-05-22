@@ -472,6 +472,48 @@ func TestWorkflowRunner_Parallel_FailureDumpLabelled(t *testing.T) {
 	}
 }
 
+// TestWorkflowRunner_Parallel_ForceColorEnv_Exported verifies that workflow
+// parallel sub-steps inherit the colour-forcing env vars used to coax CLI
+// tools into emitting ANSI even when their stdout is a pipe (`docker compose`,
+// `npm`, lipgloss-based CLIs, …). Without these vars most tools auto-disable
+// colours and the captured failure / always_show_output dump on stderr ends
+// up plain text. The shell echoes each var verbatim; the assertion checks
+// every expected key surfaces in the captured output.
+func TestWorkflowRunner_Parallel_ForceColorEnv_Exported(t *testing.T) {
+	dir := t.TempDir()
+	leaf := makeShellLeaf("wf.envprobe",
+		`printf 'CLICOLOR_FORCE=%s\nFORCE_COLOR=%s\nCOLORTERM=%s\n' "$CLICOLOR_FORCE" "$FORCE_COLOR" "$COLORTERM"`)
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.env",
+		Group:     "wf",
+		LocalName: "env",
+		Steps: []WorkflowStep{
+			{Parallel: &WorkflowParallel{
+				AlwaysShowOutput: true,
+				Steps: []WorkflowStep{
+					{Command: "wf.envprobe"},
+					{Command: "wf.envprobe"},
+				},
+			}},
+		},
+	}
+	reg := buildWorkflowRegistry(wf, leaf)
+	_, errOut, err := runParallelWorkflowCtx(t, dir, reg, wf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr:\n%s", err, errOut)
+	}
+	for _, want := range []string{
+		"CLICOLOR_FORCE=1",
+		"FORCE_COLOR=1",
+		"COLORTERM=truecolor",
+	} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("expected %q in parallel sub-step output (always_show_output dump); got:\n%s", want, errOut)
+		}
+	}
+}
+
 // TestWorkflowRunner_Parallel_FailureDumpPreservesANSI verifies that ANSI
 // escape sequences emitted by a failing sub-step survive in the captured
 // failure dump (the live row strips ANSI, but the dump on stderr keeps it
