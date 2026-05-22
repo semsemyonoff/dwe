@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
@@ -24,7 +25,7 @@ func resetStyles() {
 	stylePartial = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	styleRunStopped = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	styleCatService = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleCatTool = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	styleCatTool = lipgloss.NewStyle().Foreground(lipgloss.Color("67"))
 	styleCatInfra = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
@@ -148,6 +149,42 @@ func TestStyleHelpers_NonEmpty(t *testing.T) {
 				t.Errorf("%s returned empty string", tc.name)
 			}
 		})
+	}
+}
+
+func TestServiceInactiveStyle_DimmedAndNotBold(t *testing.T) {
+	resetStyles()
+	st := styleInactiveService()
+	if !st.GetFaint() {
+		t.Error("inactive service style should be faint")
+	}
+	if st.GetBold() {
+		t.Error("inactive service style should not be bold")
+	}
+	if st.GetForeground() != styleMuted.GetForeground() {
+		t.Errorf("inactive service foreground = %v, want muted foreground %v", st.GetForeground(), styleMuted.GetForeground())
+	}
+}
+
+func TestServiceOptionStyles_UseForegroundOnlyReset(t *testing.T) {
+	resetStyles()
+	out := StyleServiceOptionName("app", "main")
+	if out == "main" {
+		t.Fatal("expected ANSI styling")
+	}
+	if !strings.Contains(out, "\x1b[38;5;6m") {
+		t.Errorf("expected app foreground color, got %q", out)
+	}
+	if strings.Contains(out, "\x1b[0m") {
+		t.Errorf("option styles must not emit full reset, got %q", out)
+	}
+	if !strings.Contains(out, "\x1b[39m") {
+		t.Errorf("option styles should reset foreground only, got %q", out)
+	}
+
+	tool := StyleServiceOptionName("tool", "adminer")
+	if !strings.Contains(tool, "\x1b[38;5;67m") {
+		t.Errorf("expected neutral tool foreground color, got %q", tool)
 	}
 }
 

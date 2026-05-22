@@ -112,6 +112,17 @@ func TestValidateServiceToggle_MandatoryService(t *testing.T) {
 	}
 }
 
+func TestValidateServiceToggle_InfraService(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"db": {Type: config.ServiceTypeInfra},
+		},
+	}
+	if err := ValidateServiceToggle(cfg, "db"); err == nil {
+		t.Error("expected error for infra service, got nil")
+	}
+}
+
 func TestValidateServiceToggle_OptionalService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{

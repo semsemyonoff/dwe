@@ -5,6 +5,7 @@ package ui
 
 import (
 	"os"
+	"strconv"
 
 	huh "charm.land/huh/v2"
 	"github.com/charmbracelet/lipgloss"
@@ -46,7 +47,7 @@ var (
 
 	// Topology category styles.
 	styleCatService = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleCatTool    = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	styleCatTool    = lipgloss.NewStyle().Foreground(lipgloss.Color("67"))
 	styleCatInfra   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 	// Table styles.
@@ -198,6 +199,88 @@ func StyleFailed(s string) string { return styleRunStopped.Render(s) }
 // StyleWarning renders s with the warning style (yellow).
 // Used for warning icons and cautionary prompts.
 func StyleWarning(s string) string { return styleWarn.Render(s) }
+
+// StyleServiceName renders a service name with the color assigned to its type.
+// Inactive services are dimmed and intentionally not bold.
+func StyleServiceName(serviceType, s string, active bool) string {
+	if !active {
+		return styleInactiveService().Render(s)
+	}
+	return serviceTypeStyle(serviceType).Bold(true).Render(s)
+}
+
+// StyleServiceType renders a service type badge with its type color.
+func StyleServiceType(serviceType, s string, active bool) string {
+	if !active {
+		return styleInactiveService().Render(s)
+	}
+	return serviceTypeStyle(serviceType).Render(s)
+}
+
+// StyleServiceContainer renders service container metadata as secondary text.
+func StyleServiceContainer(s string, active bool) string {
+	if !active {
+		return styleInactiveService().Render(s)
+	}
+	return styleMuted.Render(s)
+}
+
+// StyleServiceOptionName renders a service option segment without a full ANSI
+// reset, so huh can still apply dynamic selected/unselected bold/faint styles
+// around the full option line.
+func StyleServiceOptionName(serviceType, s string) string {
+	return renderFGOnly(serviceTypeColor(serviceType), s)
+}
+
+// StyleServiceOptionType renders a service type badge for huh option text.
+func StyleServiceOptionType(serviceType, s string) string {
+	return renderFGOnly(serviceTypeColor(serviceType), s)
+}
+
+// StyleServiceOptionContainer renders container metadata for huh option text.
+func StyleServiceOptionContainer(s string) string {
+	return renderFGOnly(colorDescription, s)
+}
+
+func styleInactiveService() lipgloss.Style {
+	return styleMuted.Faint(true)
+}
+
+func serviceTypeStyle(serviceType string) lipgloss.Style {
+	switch serviceType {
+	case "app":
+		return styleCatService
+	case "tool":
+		return styleCatTool
+	case "infra":
+		return styleCatInfra
+	default:
+		return styleMuted
+	}
+}
+
+func serviceTypeColor(serviceType string) string {
+	switch serviceType {
+	case "app":
+		return "6"
+	case "tool":
+		return "67"
+	case "infra":
+		return "8"
+	default:
+		return colorDescription
+	}
+}
+
+func renderFGOnly(color, s string) string {
+	if s == "" {
+		return ""
+	}
+	if _, err := strconv.Atoi(color); err != nil {
+		return s
+	}
+	return "\x1b[38;5;" + color + "m" + s + "\x1b[39m"
+}
 
 // ColorFocusBorder returns the raw color string used by the command browser
 // for focused-panel borders. The value is consumable by both lipgloss v1 and

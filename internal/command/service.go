@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"devbox-cli/internal/config"
@@ -24,8 +23,9 @@ var ErrInteractiveRequired = errors.New("interactive terminal required")
 func newServiceCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
-		Short: "Toggle services (interactive) or enable/disable individually",
-		Long: `Open an interactive multi-select form to enable or disable application services.
+		Short: "Toggle app/tool services (interactive) or enable/disable individually",
+		Long: `Open an interactive multi-select form to enable or disable app/tool services.
+Infra services are config-managed and are intentionally not shown here.
 
 Mandatory services are always active and shown pre-checked / locked.
 On submit, changes are written to devbox/local.yml and .env is regenerated.
@@ -73,13 +73,13 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 	for i, row := range rows {
 		items[i] = ui.MultiSelectItem{
 			Key:         row.Name,
-			Label:       row.Name,
-			Description: row.Type + "  " + row.Container,
+			Label:       formatServiceToggleOptionLabel(row),
+			Description: formatServiceToggleOptionDescription(row),
 			Locked:      row.Mandatory,
 			Selected:    row.Enabled,
 		}
 		if row.Mandatory {
-			lockedNames = append(lockedNames, row.Name)
+			lockedNames = append(lockedNames, formatServiceLockedLabel(row))
 		}
 	}
 
@@ -126,6 +126,42 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 	return nil
 }
 
+func formatServiceToggleLabel(row serviceRow) string {
+	return ui.StyleServiceName(row.Type, row.Name, rowActive(row))
+}
+
+func formatServiceToggleOptionLabel(row serviceRow) string {
+	return ui.StyleServiceOptionName(row.Type, row.Name)
+}
+
+func formatServiceToggleDescription(row serviceRow) string {
+	active := rowActive(row)
+	typeBadge := ui.StyleServiceType(row.Type, "["+row.Type+"]", active)
+	container := ui.StyleServiceContainer(displayContainer(row.Container), active)
+	return typeBadge + " " + container
+}
+
+func formatServiceToggleOptionDescription(row serviceRow) string {
+	typeBadge := ui.StyleServiceOptionType(row.Type, "["+row.Type+"]")
+	container := ui.StyleServiceOptionContainer(displayContainer(row.Container))
+	return typeBadge + " " + container
+}
+
+func formatServiceLockedLabel(row serviceRow) string {
+	return formatServiceToggleLabel(row) + " " + formatServiceToggleDescription(row)
+}
+
+func displayContainer(container string) string {
+	if container == "" {
+		return "-"
+	}
+	return container
+}
+
+func rowActive(row serviceRow) bool {
+	return row.Mandatory || row.Enabled
+}
+
 // selectToggleFn is a function type for interactive service selection used by
 // enable/disable commands when no service argument is provided.
 type selectToggleFn func(title string, items []ui.SelectorItem) (int, error)
@@ -136,9 +172,9 @@ var defaultSelectToggle selectToggleFn = ui.RunSelector
 // pickServiceToEnable returns the name of a disabled non-mandatory service to enable.
 func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
-	for _, name := range sortedKeys(cfg.Services) {
+	for _, name := range sortedServiceNames(cfg.Services) {
 		svc := cfg.Services[name]
-		if !svc.Mandatory && !svc.Enabled {
+		if isServiceManageable(svc) && !svc.Mandatory && !svc.Enabled {
 			candidates = append(candidates, name)
 		}
 	}
@@ -148,9 +184,9 @@ func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (str
 // pickServiceToDisable returns the name of an enabled non-mandatory service to disable.
 func pickServiceToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
-	for _, name := range sortedKeys(cfg.Services) {
+	for _, name := range sortedServiceNames(cfg.Services) {
 		svc := cfg.Services[name]
-		if !svc.Mandatory && svc.Enabled {
+		if isServiceManageable(svc) && !svc.Mandatory && svc.Enabled {
 			candidates = append(candidates, name)
 		}
 	}
@@ -164,9 +200,16 @@ func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel,
 	items := make([]ui.SelectorItem, len(names))
 	for i, name := range names {
 		svc := cfg.Services[name]
+		row := serviceRow{
+			Name:      name,
+			Type:      string(svc.Type),
+			Container: svc.Container,
+			Mandatory: svc.Mandatory,
+			Enabled:   svc.Enabled,
+		}
 		items[i] = ui.SelectorItem{
-			Label:       name,
-			Description: svc.Container,
+			Label:       formatServiceToggleLabel(row),
+			Description: formatServiceToggleDescription(row),
 			Status:      statusLabel,
 		}
 	}
@@ -202,6 +245,9 @@ disabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
+				if svc, ok := cfg.Services[name]; ok && !isServiceManageable(svc) {
+					return fmt.Errorf("cannot enable infra service %q; infra services are managed by config, not devbox services", name)
+				}
 				// Tightened semantics: mandatory enable is a no-op + warning.
 				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: service %q is already mandatory; nothing to do\n", name)
@@ -247,6 +293,9 @@ enabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
+				if svc, ok := cfg.Services[name]; ok && !isServiceManageable(svc) {
+					return fmt.Errorf("cannot disable infra service %q; infra services are managed by config, not devbox services", name)
+				}
 				// Tightened semantics: cannot disable mandatory.
 				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
 					return fmt.Errorf("cannot disable mandatory service %q", name)
@@ -291,8 +340,9 @@ func serviceCompletion(flags *rootFlags, filter serviceFilter) func(*cobra.Comma
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		var names []string
-		for name, svc := range cfg.Services {
-			if svc.Mandatory {
+		for _, name := range sortedServiceNames(cfg.Services) {
+			svc := cfg.Services[name]
+			if svc.Mandatory || !isServiceManageable(svc) {
 				continue
 			}
 			switch filter {
@@ -306,7 +356,6 @@ func serviceCompletion(flags *rootFlags, filter serviceFilter) func(*cobra.Comma
 				}
 			}
 		}
-		sort.Strings(names)
 		return names, cobra.ShellCompDirectiveNoFileComp
 	}
 }
@@ -345,10 +394,14 @@ func setServiceEnabled(out io.Writer, configPath string, cfg *config.DevboxConfi
 	baseDir := filepath.Dir(configPath)
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 	w := render.NewWriter(out)
+	typeLabel := ""
+	if svc, ok := cfg.Services[name]; ok && svc.Type != "" {
+		typeLabel = fmt.Sprintf(" [%s]", svc.Type)
+	}
 	if enabled {
-		w.Success(fmt.Sprintf("service %q enabled (written to %s)", name, localPath))
+		w.Success(fmt.Sprintf("service %q%s enabled (written to %s)", name, typeLabel, localPath))
 	} else {
-		w.Success(fmt.Sprintf("service %q disabled (written to %s)", name, localPath))
+		w.Success(fmt.Sprintf("service %q%s disabled (written to %s)", name, typeLabel, localPath))
 	}
 	envPath, err := envfile.Regenerate(configPath)
 	if err != nil {

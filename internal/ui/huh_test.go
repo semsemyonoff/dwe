@@ -49,6 +49,32 @@ func TestThemeReturnsNonNilStyles(t *testing.T) {
 	}
 }
 
+func TestDefaultThemeMultiSelectStateStyles(t *testing.T) {
+	original := huhTheme
+	t.Cleanup(func() { huhTheme = original })
+	resetStyles()
+	huhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
+		s := huh.ThemeBase(isDark)
+		applyFormGlyphs(s)
+		applyMultiSelectStateStyles(s, colorSuccess, colorDescription)
+		return s
+	})
+
+	styles := Theme().Theme(false)
+	if !styles.Focused.SelectedOption.GetBold() {
+		t.Error("selected multi-select options should be bold")
+	}
+	if styles.Focused.SelectedOption.GetFaint() {
+		t.Error("selected multi-select options should not be faint")
+	}
+	if styles.Focused.UnselectedOption.GetBold() {
+		t.Error("unselected multi-select options should not be bold")
+	}
+	if !styles.Focused.UnselectedOption.GetFaint() {
+		t.Error("unselected multi-select options should be faint")
+	}
+}
+
 func TestApplyStylesPaletteReflected(t *testing.T) {
 	original := huhTheme
 	t.Cleanup(func() { huhTheme = original })
@@ -372,5 +398,12 @@ func TestBuildPaletteApplierAllFields(t *testing.T) {
 				t.Errorf("got %v (%T), want %v (%T)", tt.got, tt.got, tt.want, tt.want)
 			}
 		})
+	}
+
+	if !s.Focused.SelectedOption.GetBold() || s.Focused.SelectedOption.GetFaint() {
+		t.Error("focused selected option should be bold and not faint")
+	}
+	if s.Focused.UnselectedOption.GetBold() || !s.Focused.UnselectedOption.GetFaint() {
+		t.Error("focused unselected option should be faint and not bold")
 	}
 }

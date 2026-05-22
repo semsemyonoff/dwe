@@ -86,6 +86,7 @@ func RunWithPromptHooks(fn func() error) error {
 var huhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 	s := huh.ThemeBase(isDark)
 	applyFormGlyphs(s)
+	applyMultiSelectStateStyles(s, colorSuccess, colorDescription)
 	return s
 })
 
@@ -97,6 +98,21 @@ func applyFormGlyphs(s *huh.Styles) {
 	s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.SetString("• ")
 	s.Blurred.SelectedPrefix = s.Blurred.SelectedPrefix.SetString("✓ ")
 	s.Blurred.UnselectedPrefix = s.Blurred.UnselectedPrefix.SetString("• ")
+}
+
+func applyMultiSelectStateStyles(s *huh.Styles, selectedColor, unselectedColor string) {
+	selected := lipgloss.Color(selectedColor)
+	unselected := lipgloss.Color(unselectedColor)
+
+	s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(selected).Bold(true).Faint(false)
+	s.Focused.SelectedPrefix = s.Focused.SelectedPrefix.Foreground(selected).Bold(true).Faint(false)
+	s.Blurred.SelectedOption = s.Blurred.SelectedOption.Foreground(selected).Bold(true).Faint(false)
+	s.Blurred.SelectedPrefix = s.Blurred.SelectedPrefix.Foreground(selected).Bold(true).Faint(false)
+
+	s.Focused.UnselectedOption = s.Focused.UnselectedOption.Foreground(unselected).Bold(false).Faint(true)
+	s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.Foreground(unselected).Bold(false).Faint(true)
+	s.Blurred.UnselectedOption = s.Blurred.UnselectedOption.Foreground(unselected).Bold(false).Faint(true)
+	s.Blurred.UnselectedPrefix = s.Blurred.UnselectedPrefix.Foreground(unselected).Bold(false).Faint(true)
 }
 
 // Theme returns the current package-level huh.Theme.
@@ -124,6 +140,8 @@ func buildPaletteApplier(c *config.StylesColors) func(*huh.Styles) {
 		if c == nil {
 			return
 		}
+		selectedColor := colorSuccess
+		unselectedColor := colorDescription
 		if c.SectionTitle != "" {
 			col := lipgloss.Color(c.SectionTitle)
 			s.Focused.Title = s.Focused.Title.Foreground(col).Bold(true)
@@ -142,16 +160,13 @@ func buildPaletteApplier(c *config.StylesColors) func(*huh.Styles) {
 		}
 		if c.Muted != "" {
 			col := lipgloss.Color(c.Muted)
+			unselectedColor = c.Muted
 			s.Blurred.Title = s.Blurred.Title.Foreground(col)
 			s.Blurred.Description = s.Blurred.Description.Foreground(col)
-			s.Focused.UnselectedOption = s.Focused.UnselectedOption.Foreground(col)
-			s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.Foreground(col)
 			s.Focused.TextInput.Placeholder = s.Focused.TextInput.Placeholder.Foreground(col)
 		}
 		if c.Enabled != "" {
-			col := lipgloss.Color(c.Enabled)
-			s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(col)
-			s.Focused.SelectedPrefix = s.Focused.SelectedPrefix.Foreground(col)
+			selectedColor = c.Enabled
 		}
 		if c.Warning != "" {
 			col := lipgloss.Color(c.Warning)
@@ -164,5 +179,6 @@ func buildPaletteApplier(c *config.StylesColors) func(*huh.Styles) {
 			s.Focused.NextIndicator = s.Focused.NextIndicator.Foreground(col)
 			s.Focused.PrevIndicator = s.Focused.PrevIndicator.Foreground(col)
 		}
+		applyMultiSelectStateStyles(s, selectedColor, unselectedColor)
 	}
 }

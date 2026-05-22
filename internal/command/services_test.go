@@ -66,18 +66,21 @@ func TestBuildServiceRows_single(t *testing.T) {
 	}
 }
 
-func TestBuildServiceRows_sortedByName(t *testing.T) {
+func TestBuildServiceRows_sortedByTypeThenName(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"worker": {Type: "worker"},
-		"api":    {Type: "app"},
-		"main":   {Type: "app"},
+		"worker":  {Type: "worker"},
+		"api":     {Type: "app"},
+		"main":    {Type: "app"},
+		"mailpit": {Type: "tool"},
+		"adminer": {Type: "tool"},
+		"db":      {Type: "infra"},
 	}, map[string]testTool{}, nil, nil)
 
 	rows := buildServiceRows(cfg)
-	if len(rows) != 3 {
-		t.Fatalf("expected 3 rows, got %d", len(rows))
+	if len(rows) != 5 {
+		t.Fatalf("expected 5 rows, got %d", len(rows))
 	}
-	want := []string{"api", "main", "worker"}
+	want := []string{"api", "main", "adminer", "mailpit", "worker"}
 	for i, w := range want {
 		if rows[i].Name != w {
 			t.Errorf("rows[%d].Name = %q, want %q", i, rows[i].Name, w)

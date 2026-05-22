@@ -43,6 +43,9 @@ func ValidateServiceToggle(cfg *config.DevboxConfig, name string) error {
 	if svc.Mandatory {
 		return fmt.Errorf("service %q is mandatory and cannot be toggled", name)
 	}
+	if svc.IsInfra() {
+		return fmt.Errorf("service %q is infra and cannot be toggled", name)
+	}
 	return nil
 }
 

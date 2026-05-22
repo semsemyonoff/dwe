@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -215,8 +216,35 @@ func TestServicesToggle_TTY_CancelNoWrites(t *testing.T) {
 	}
 }
 
-// TestServicesToggle_MixedTypes verifies the unified toggle iterates services
-// across all types (app + tool + infra) in a single form.
+var ansiSeqRe = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
+
+func stripANSI(s string) string {
+	return ansiSeqRe.ReplaceAllString(s, "")
+}
+
+func TestFormatServiceToggleLabel_DisabledPreservesVisibleText(t *testing.T) {
+	active := serviceRow{Name: "adminer", Type: "tool", Container: "adminer", Enabled: true}
+	disabled := serviceRow{Name: "adminer", Type: "tool", Container: "adminer", Enabled: false}
+
+	activeLabel := formatServiceToggleLabel(active)
+	disabledLabel := formatServiceToggleLabel(disabled)
+
+	if stripANSI(activeLabel) != stripANSI(disabledLabel) {
+		t.Fatalf("labels should differ only by style, got active=%q disabled=%q", activeLabel, disabledLabel)
+	}
+}
+
+func TestFormatServiceToggleLabel_MandatoryLooksActive(t *testing.T) {
+	active := serviceRow{Name: "main", Type: "app", Container: "app-main", Enabled: true}
+	mandatory := serviceRow{Name: "main", Type: "app", Container: "app-main", Mandatory: true, Enabled: false}
+
+	if got, want := formatServiceToggleLabel(mandatory), formatServiceToggleLabel(active); got != want {
+		t.Errorf("mandatory service should render as active, got %q, want %q", got, want)
+	}
+}
+
+// TestServicesToggle_MixedTypes verifies the unified toggle iterates manageable
+// services (app + tool) and omits infra because infra is config-managed.
 func TestServicesToggle_MixedTypes(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
@@ -250,7 +278,9 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
 	var seenKeys []string
+	var seenItems []ui.MultiSelectItem
 	runMultiSelect = func(_ string, items []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		seenItems = append(seenItems, items...)
 		for _, item := range items {
 			seenKeys = append(seenKeys, item.Key)
 		}
@@ -262,11 +292,99 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// All three names should be presented (app, tool, infra alike).
-	for _, want := range []string{"main", "adminer", "db"} {
+	wantOrder := []string{"main", "adminer"}
+	if !slices.Equal(seenKeys, wantOrder) {
+		t.Errorf("unified toggle order = %v, want %v", seenKeys, wantOrder)
+	}
+	for _, want := range wantOrder {
 		if !slices.Contains(seenKeys, want) {
 			t.Errorf("unified toggle should include %q (any type), got %v", want, seenKeys)
 		}
+	}
+	for _, item := range seenItems {
+		if item.Label == stripANSI(item.Label) || item.Description == stripANSI(item.Description) {
+			t.Errorf("multi-select option text should keep per-field ANSI styling, got label=%q description=%q", item.Label, item.Description)
+		}
+		if strings.Contains(item.Label, "\x1b[0m") || strings.Contains(item.Description, "\x1b[0m") {
+			t.Errorf("multi-select option text must not use full ANSI reset because huh owns dynamic state styling, got label=%q description=%q", item.Label, item.Description)
+		}
+		visible := stripANSI(item.Label + " " + item.Description)
+		if !strings.Contains(visible, item.Key) {
+			t.Errorf("visible item should include service name %q, got %q", item.Key, visible)
+		}
+		wantContainer := map[string]string{
+			"main":    "app-main",
+			"adminer": "adminer",
+		}[item.Key]
+		if !strings.Contains(visible, wantContainer) {
+			t.Errorf("visible item should include container %q, got %q", wantContainer, visible)
+		}
+		if strings.Contains(visible, "container=") {
+			t.Errorf("visible item should not include container= prefix, got %q", visible)
+		}
+		if !strings.Contains(visible, "[") || !strings.Contains(visible, "]") {
+			t.Errorf("visible item should include a type badge, got %q", visible)
+		}
+	}
+}
+
+func TestPickServiceToEnable_TypeSortedAndDecorated(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"adminer": {Type: config.ServiceTypeTool, Container: "adminer", Enabled: false},
+		"api":     {Type: config.ServiceTypeApp, Container: "app-api", Enabled: false},
+		"db":      {Type: config.ServiceTypeInfra, Container: "db", Enabled: false},
+	}, map[string]testTool{}, nil, nil)
+
+	var labels []string
+	var descriptions []string
+	selector := func(title string, items []ui.SelectorItem) (int, error) {
+		for _, item := range items {
+			labels = append(labels, stripANSI(item.Label))
+			descriptions = append(descriptions, stripANSI(item.Description))
+		}
+		return 0, nil
+	}
+
+	name, err := pickServiceToEnable(cfg, selector)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "api" {
+		t.Errorf("expected first type-sorted candidate api, got %q", name)
+	}
+	if !slices.Equal(labels, []string{"api", "adminer"}) {
+		t.Errorf("selector labels = %v, want [api adminer]", labels)
+	}
+	if !strings.Contains(descriptions[0], "[app]") || !strings.Contains(descriptions[1], "[tool]") {
+		t.Errorf("selector descriptions should include type badges, got %v", descriptions)
+	}
+}
+
+func TestServiceEnableCmd_InfraError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	servicesYML := `services:
+  db:
+    type: infra
+    container: db
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	cmd := newServiceEnableCmd(flags)
+	err := cmd.RunE(cmd, []string{"db"})
+	if err == nil {
+		t.Fatal("expected error enabling infra service, got nil")
+	}
+	if !strings.Contains(err.Error(), "infra") {
+		t.Errorf("error should mention infra, got %v", err)
 	}
 }
 
