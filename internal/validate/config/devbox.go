@@ -3,8 +3,12 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+
+	"gopkg.in/yaml.v3"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
@@ -88,6 +92,9 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 type servicesValidator struct{}
 
+// Compile-time interface check.
+var _ validate.Validator = (*servicesValidator)(nil)
+
 func (v *servicesValidator) ID() string {
 	return "services"
 }
@@ -96,19 +103,43 @@ func (v *servicesValidator) Domain() string {
 	return "config"
 }
 
+// servicesAllowedFields mirrors the per-type field allowlist owned by the
+// loader (config.allowedFieldsFor). Duplicated here intentionally — the loader
+// helper stays unexported per project Go conventions, and the table is small
+// and stable. Any change in the loader allowlist must be mirrored here (the
+// services_loader tests guard the loader side; servicesValidator tests guard
+// this side).
+var servicesAllowedFields = map[config.ServiceType]map[string]bool{
+	config.ServiceTypeApp: {
+		"type": true, "container": true, "mandatory": true, "compose": true,
+		"ports": true, "hosts": true, "status": true,
+		"depends_on": true,
+		"dir":        true, "dir_internal": true, "work_dir_internal": true,
+		"configs": true, "dirs": true, "extends": true, "cli": true, "render": true,
+	},
+	config.ServiceTypeInfra: {
+		"type": true, "container": true, "mandatory": true, "compose": true,
+		"ports": true, "hosts": true, "status": true, "depends_on": true,
+	},
+	config.ServiceTypeTool: {
+		"type": true, "container": true, "mandatory": true, "compose": true,
+		"ports": true, "hosts": true, "status": true,
+	},
+}
+
 func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	servicesPath := filepath.Join(ctx.ProjectRoot, "devbox", "services.yml")
+	file := relPath(ctx.ProjectRoot, servicesPath)
 
-	// Load services separately; missing is Info, not error
-	services, err := config.LoadServicesConfig(servicesPath)
+	data, err := os.ReadFile(servicesPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityInfo,
 				Domain:   "config",
 				Target:   "config.services",
-				File:     relPath(ctx.ProjectRoot, servicesPath),
+				File:     file,
 				Message:  "no services.yml; services may be defined inline",
 			})
 		} else {
@@ -116,52 +147,191 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Severity: validate.SeverityError,
 				Domain:   "config",
 				Target:   "config.services",
-				File:     relPath(ctx.ProjectRoot, servicesPath),
+				File:     file,
 				Message:  err.Error(),
 			})
 		}
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.services",
-		File:     relPath(ctx.ProjectRoot, servicesPath),
-	})
-
-	// Use the fully merged service map for extends validation when available,
-	// so services defined inline in devbox.yml are visible to the check.
-	allServices := map[string]config.ServiceConfig(services)
-	if ctx.Cfg != nil && len(ctx.Cfg.Services) > 0 {
-		allServices = ctx.Cfg.Services
+	// Lenient pre-parse: walks raw entries so we can emit per-field diagnostics
+	// instead of bailing on the first strict-decode error like the loader does.
+	var rawFile struct {
+		Services map[string]map[string]any `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(data, &rawFile); err != nil {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "config",
+			Target:   "config.services",
+			File:     file,
+			Message:  fmt.Sprintf("parse services.yml: %v", err),
+		})
+		return diags
 	}
 
-	// Check service definitions
-	for name, svc := range services {
-		if svc.Dir == "" && svc.DirInternal == "" {
-			diags = append(diags, validate.Diagnostic{
-				Severity: validate.SeverityWarning,
-				Domain:   "config",
-				Target:   "config.services:" + name,
-				File:     relPath(ctx.ProjectRoot, servicesPath),
-				Message:  "service has no dir or dir_internal",
+	// Build name → type index from raw entries so depends_on can cross-reference
+	// targets declared in the same file. Merged map from ctx.Cfg wins when set
+	// (catches services defined inline in devbox.yml, though that's uncommon).
+	typesByName := make(map[string]config.ServiceType, len(rawFile.Services))
+	for name, entry := range rawFile.Services {
+		if t, ok := entry["type"].(string); ok {
+			typesByName[name] = config.ServiceType(t)
+		}
+	}
+	if ctx.Cfg != nil {
+		for name, svc := range ctx.Cfg.Services {
+			typesByName[name] = svc.Type
+		}
+	}
+
+	perServiceDiags := []validate.Diagnostic{}
+	emit := func(d validate.Diagnostic) {
+		d.Domain = "config"
+		d.File = file
+		perServiceDiags = append(perServiceDiags, d)
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(rawFile.Services)) {
+		entry := rawFile.Services[name]
+		target := "config.services:" + name
+
+		// type required + valid.
+		typeRaw, hasType := entry["type"]
+		if !hasType {
+			emit(validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Target:   target,
+				Message:  fmt.Sprintf("service %q: missing type", name),
+				Hint:     "add type: app | tool | infra",
+			})
+			continue
+		}
+		typeStr, _ := typeRaw.(string)
+		svcType := config.ServiceType(typeStr)
+		if err := svcType.Validate(); err != nil {
+			emit(validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Target:   target,
+				Message:  fmt.Sprintf("service %q: %v", name, err),
+				Hint:     "type must be one of: app, tool, infra",
+			})
+			continue
+		}
+
+		// Per-type field allowlist.
+		allowed := servicesAllowedFields[svcType]
+		for _, key := range slices.Sorted(maps.Keys(entry)) {
+			if !allowed[key] {
+				emit(validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Target:   target,
+					Message:  fmt.Sprintf("service %q (type %s): field %q not allowed", name, svcType, key),
+				})
+			}
+		}
+
+		// extends only for app.
+		if extRaw, ok := entry["extends"]; ok && extRaw != nil && !svcType.IsApp() {
+			emit(validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Target:   target,
+				Message:  fmt.Sprintf("service %q (type %s): extends only permitted for type app", name, svcType),
 			})
 		}
-		// Extends validation: check if parent exists in merged service set.
-		if svc.Extends != "" {
-			if _, exists := allServices[svc.Extends]; !exists {
-				diags = append(diags, validate.Diagnostic{
+
+		// ports shape + range.
+		if v, ok := entry["ports"]; ok && v != nil {
+			m, isMap := v.(map[string]any)
+			if !isMap {
+				emit(validate.Diagnostic{
 					Severity: validate.SeverityError,
-					Domain:   "config",
-					Target:   "config.services:" + name,
-					File:     relPath(ctx.ProjectRoot, servicesPath),
-					Message:  "extends: parent service \"" + svc.Extends + "\" not found",
+					Target:   target,
+					Message:  fmt.Sprintf("service %q: ports must be a map of name to port number", name),
+				})
+			} else {
+				for _, p := range slices.Sorted(maps.Keys(m)) {
+					n, ok := m[p].(int)
+					if !ok {
+						emit(validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Target:   target,
+							Message:  fmt.Sprintf("service %q port %q: not an integer", name, p),
+						})
+						continue
+					}
+					if n < 1 || n > 65535 {
+						emit(validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Target:   target,
+							Message:  fmt.Sprintf("service %q port %q = %d: out of range 1..65535", name, p, n),
+						})
+					}
+				}
+			}
+		}
+		// hosts shape.
+		if v, ok := entry["hosts"]; ok && v != nil {
+			if _, isMap := v.(map[string]any); !isMap {
+				emit(validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Target:   target,
+					Message:  fmt.Sprintf("service %q: hosts must be a map of name to hostname", name),
+				})
+			}
+		}
+
+		// depends_on cannot point at a type:tool service.
+		if v, ok := entry["depends_on"]; ok && v != nil {
+			if list, isList := v.([]any); isList {
+				for _, item := range list {
+					t, _ := item.(string)
+					if t == "" {
+						continue
+					}
+					if parentType, has := typesByName[t]; has && parentType.IsTool() {
+						emit(validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Target:   target,
+							Message:  fmt.Sprintf("service %q: depends_on target %q is type tool", name, t),
+							Hint:     "tools cannot be depends_on targets; convert target to type infra",
+						})
+					}
+				}
+			}
+		}
+
+		// App missing dir/dir_internal → warning.
+		if svcType.IsApp() {
+			_, hasDir := entry["dir"]
+			_, hasDirInternal := entry["dir_internal"]
+			if !hasDir && !hasDirInternal {
+				emit(validate.Diagnostic{
+					Severity: validate.SeverityWarning,
+					Target:   target,
+					Message:  fmt.Sprintf("service %q (type app) has no dir or dir_internal", name),
 				})
 			}
 		}
 	}
 
+	// Emit an OK summary diagnostic only when nothing errored at the file level.
+	hasError := false
+	for _, d := range perServiceDiags {
+		if d.Severity == validate.SeverityError {
+			hasError = true
+			break
+		}
+	}
+	if !hasError {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.services",
+			File:     file,
+		})
+	}
+	diags = append(diags, perServiceDiags...)
 	return diags
 }
 

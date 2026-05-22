@@ -277,7 +277,7 @@ Tools are no longer a separate load step. Step 1 covers them.
 
 ### Task 5: Update `internal/validate/config/` for unified schema
 
-- [ ] in `internal/validate/config/devbox.go`, replace the services validator with a
+- [x] in `internal/validate/config/devbox.go`, replace the services validator with a
       type-aware version that emits per-field diagnostics:
       - missing/unknown `type:` → error;
       - tool/infra with app-only fields → error (point at file:line if available);
@@ -285,14 +285,15 @@ Tools are no longer a separate load step. Step 1 covers them.
       - `extends:` on non-app → error;
       - `depends_on:` referencing a `type: tool` → error (`infra` and `app` allowed);
       - `ports` / `hosts` shape mismatch → error.
-- [ ] delete or merge the tools validator (was: tool-overlay strictness check) into the
+- [x] delete or merge the tools validator (was: tool-overlay strictness check) into the
       unified services validator; keep file as a thin re-export if other packages import
-      by name.
-- [ ] add a compile-time interface check next to the new validator:
+      by name. No separate tools validator existed after Task 4 — `all.go` already
+      registers only `servicesValidator`, so nothing to delete here.
+- [x] add a compile-time interface check next to the new validator:
       `var _ validate.Validator = (*servicesValidator)(nil)` so future signature drift
       fails the build immediately.
-- [ ] write tests covering each new diagnostic.
-- [ ] run `go test ./internal/validate/...` — must pass before next task.
+- [x] write tests covering each new diagnostic.
+- [x] run `go test ./internal/validate/...` — must pass before next task.
 
 ### Task 6: Enforce type semantics at runtime (loader + deploy + compose)
 
