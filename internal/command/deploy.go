@@ -162,6 +162,13 @@ func (e *lockHeldError) Error() string {
 
 func (e *lockHeldError) ExitCode() int { return 2 }
 
+// deployCancelledError is returned when the user explicitly cancels via the
+// interactive dialog. Notification is suppressed — cancellation is intentional,
+// not a failure.
+type deployCancelledError struct{}
+
+func (e *deployCancelledError) Error() string { return "deploy cancelled" }
+
 func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool) (err error) {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
@@ -182,8 +189,8 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 	n := newNotifier(ucfg)
 	defer func() {
-		// Lock-held means another deploy is already running — not a failure.
-		if errors.As(err, new(*lockHeldError)) {
+		// Lock-held or user-cancelled — neither is a run failure.
+		if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*deployCancelledError)) {
 			return
 		}
 		n.Notify(context.Background(), notify.Event{
@@ -415,7 +422,7 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 					return err
 				}
 				if choice == 2 {
-					return errors.New("deploy cancelled")
+					return &deployCancelledError{}
 				}
 				if choice == 1 {
 					force = true // Full re-deploy

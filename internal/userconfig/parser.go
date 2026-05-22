@@ -31,14 +31,14 @@ func parse(r io.Reader, cfg *Config) error {
 		if idx := strings.Index(trimmed, "#"); idx > 0 {
 			return fmt.Errorf("userconfig: inline comments not supported at line %d", line)
 		}
-		if !keyLineRe.MatchString(trimmed) {
-			return fmt.Errorf("userconfig: malformed line %d", line)
-		}
-		keyRaw, valRaw, _ := strings.Cut(trimmed, "=")
+		keyRaw, valRaw, hasEq := strings.Cut(trimmed, "=")
 		key := strings.TrimSpace(keyRaw)
 		val := strings.TrimSpace(valRaw)
-		if strings.Contains(key, ".") {
+		if hasEq && strings.Contains(key, ".") {
 			return fmt.Errorf("userconfig: dotted keys not allowed at line %d; use _ separators", line)
+		}
+		if !keyLineRe.MatchString(trimmed) {
+			return fmt.Errorf("userconfig: malformed line %d", line)
 		}
 		if err := apply(cfg, key, val, line); err != nil {
 			return err

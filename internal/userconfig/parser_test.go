@@ -50,7 +50,7 @@ func TestParse_DottedKeyRejected(t *testing.T) {
 	cfg := Defaults()
 	err := parse(strings.NewReader(in), cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "malformed")
+	assert.Contains(t, err.Error(), "dotted keys not allowed")
 }
 
 func TestParse_InvalidBoolean(t *testing.T) {
