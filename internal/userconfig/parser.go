@@ -12,10 +12,8 @@ import (
 var keyLineRe = regexp.MustCompile(`^[a-z][a-z0-9_]*\s*=\s*.*$`)
 
 // parse reads a flat key=value config from r and merges into cfg in place.
-// Empty source merges no keys (defaults survive). Parser errors are
-// returned with the "userconfig: " prefix, lowercase, no trailing
-// punctuation, so callers can wrap with fmt.Errorf("userconfig: parsing
-// %s: %w", path, err).
+// Empty source merges no keys (defaults survive). Parser errors are returned
+// without a package prefix; loadFile wraps them with path context.
 func parse(r io.Reader, cfg *Config) error {
 	sc := bufio.NewScanner(r)
 	line := 0
@@ -26,26 +24,27 @@ func parse(r io.Reader, cfg *Config) error {
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		// Inline comments are not allowed — would conflict with values
-		// containing literal '#' characters.
-		if idx := strings.Index(trimmed, "#"); idx > 0 {
-			return fmt.Errorf("userconfig: inline comments not supported at line %d", line)
-		}
 		keyRaw, valRaw, hasEq := strings.Cut(trimmed, "=")
 		key := strings.TrimSpace(keyRaw)
 		val := strings.TrimSpace(valRaw)
+		// Space-hash in the value portion signals an inline comment attempt.
+		// Bare '#' without a preceding space is allowed (e.g. URL fragments
+		// like https://example.com#section).
+		if hasEq && (strings.Contains(valRaw, " #") || strings.Contains(valRaw, "\t#")) {
+			return fmt.Errorf("inline comments not supported at line %d", line)
+		}
 		if hasEq && strings.Contains(key, ".") {
-			return fmt.Errorf("userconfig: dotted keys not allowed at line %d; use _ separators", line)
+			return fmt.Errorf("dotted keys not allowed at line %d; use _ separators", line)
 		}
 		if !keyLineRe.MatchString(trimmed) {
-			return fmt.Errorf("userconfig: malformed line %d", line)
+			return fmt.Errorf("malformed line %d", line)
 		}
 		if err := apply(cfg, key, val, line); err != nil {
 			return err
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return fmt.Errorf("userconfig: read: %w", err)
+		return fmt.Errorf("read: %w", err)
 	}
 	return nil
 }
@@ -99,7 +98,7 @@ func parseBool(val string, line int, key string) (bool, error) {
 	case "0", "false", "no":
 		return false, nil
 	default:
-		return false, fmt.Errorf("userconfig: invalid boolean %q for key %s at line %d", val, key, line)
+		return false, fmt.Errorf("invalid boolean %q for key %s at line %d", val, key, line)
 	}
 }
 

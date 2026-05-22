@@ -101,6 +101,15 @@ notify_webhook_urls = https://a.example, https://b.example
 	assert.Equal(t, []string{"https://a.example", "https://b.example"}, cfg.notifyWebhookURLs)
 }
 
+func TestParse_HashInValueAllowed(t *testing.T) {
+	// Bare '#' without a preceding space is a URL fragment, not an inline
+	// comment — must be accepted.
+	in := "notify_webhook_urls = https://example.com#section\n"
+	cfg := Defaults()
+	require.NoError(t, parse(strings.NewReader(in), cfg))
+	assert.Equal(t, []string{"https://example.com#section"}, cfg.notifyWebhookURLs)
+}
+
 func TestParse_Empty(t *testing.T) {
 	cfg := Defaults()
 	require.NoError(t, parse(strings.NewReader(""), cfg))
