@@ -170,7 +170,13 @@ func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd
 			c.Env = append(c.Env, k+"="+v)
 		}
 		c.Env = append(c.Env, contractEnv...)
-		c.Env = append(c.Env, colorEnv...)
+		for _, kv := range colorEnv {
+			if eq := strings.IndexByte(kv, '='); eq > 0 {
+				if _, exists := envMap[kv[:eq]]; !exists {
+					c.Env = append(c.Env, kv)
+				}
+			}
+		}
 	}
 
 	return c, nil
