@@ -100,7 +100,7 @@ func formatEvent(ev Event) (title, body string) {
 	case OutcomeFailure:
 		title = fmt.Sprintf("✗ Devbox: %s failed", op)
 		body = fmt.Sprintf("%s · %s", project, dur)
-		if ev.Err != nil {
+		if ev.Err != nil && ev.Err.Error() != "" {
 			body += "\n" + truncateErr(ev.Err.Error(), failBodyMaxErrLen)
 		}
 	case OutcomeSuccess:

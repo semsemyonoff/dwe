@@ -182,6 +182,10 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 	n := newNotifier(ucfg)
 	defer func() {
+		// Lock-held means another deploy is already running — not a failure.
+		if errors.As(err, new(*lockHeldError)) {
+			return
+		}
 		n.Notify(context.Background(), notify.Event{
 			Kind:      notify.OpDeploy,
 			Operation: "deploy",
