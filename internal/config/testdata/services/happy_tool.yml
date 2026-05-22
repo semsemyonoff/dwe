@@ -1,0 +1,10 @@
+services:
+  adminer:
+    type: tool
+    container: adminer
+    compose:
+      - compose/tools/adminer.yml
+    ports:
+      web: 8080
+    hosts:
+      main: adminer.localhost

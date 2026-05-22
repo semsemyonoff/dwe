@@ -46,7 +46,7 @@ project:
     mandatory: true
     dir: services/main
   worker:
-    type: worker
+    type: app
     container: app-worker
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {

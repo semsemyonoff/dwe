@@ -1,0 +1,5 @@
+services:
+  bad:
+    type: tool
+    container: bad
+    dir: ./not-allowed

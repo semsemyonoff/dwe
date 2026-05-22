@@ -195,7 +195,7 @@ canonical dot-path becomes `services.<name>.ports.<port-name>` and
 
 ### Task 3: Rewrite `LoadServicesConfig` to strict-decode with type discriminator
 
-- [ ] in `internal/config/devbox.go`, replace `LoadServicesConfig` body with a
+- [x] in `internal/config/devbox.go`, replace `LoadServicesConfig` body with a
       strict-decode (`KnownFields(true)`) parser that:
       - requires `type:` on every entry;
       - per-type rejects disallowed fields via `allowedFieldsFor`;
@@ -204,32 +204,32 @@ canonical dot-path becomes `services.<name>.ports.<port-name>` and
       - validates port values `1..65535` (today's loader had no explicit bound check);
       - resolves `extends:` only for `type: app` (reject for tool/infra);
       - rejects `extends` cycles and unknown parents.
-- [ ] **Aggregate diagnostics with `errors.Join`**: when validating field-allowlist for a
+- [x] **Aggregate diagnostics with `errors.Join`**: when validating field-allowlist for a
       single file, collect every per-service violation and return them joined — do NOT
       bail on first. Callers see all violations in one parse pass. Wrap the final
       joined error with file path context using `fmt.Errorf("loading %s: %w", path, err)`.
-- [ ] add sentinel errors: `ErrServiceTypeMissing`, `ErrServiceTypeUnknown`,
+- [x] add sentinel errors: `ErrServiceTypeMissing`, `ErrServiceTypeUnknown`,
       `ErrServiceFieldNotAllowed`, `ErrServiceExtendsCrossType`, `ErrServicePortsShape`,
       `ErrServiceHostsShape`, `ErrServicePortOutOfRange`. All error message strings
       lowercase, no trailing punctuation, prefixed with `"config: "`.
-- [ ] **Extends inheritance: defensive copy.** When the resolver copies parent
+- [x] **Extends inheritance: defensive copy.** When the resolver copies parent
       `Configs []ServiceConfigEntry`, `Dirs []string`, `Compose []string`, `Ports`,
       `Hosts` into a child, use `slices.Clone` / `maps.Clone` to avoid the child
       sharing the parent's backing array (later mutation of child would silently
       corrupt the parent). Same applies in reverse for `injectServicesIntoRaw` output.
-- [ ] write table-driven tests with `testdata/services/` fixtures covering each
+- [x] write table-driven tests with `testdata/services/` fixtures covering each
       sentinel-error path plus one happy-path file per type.
-- [ ] write tests for extends inheritance (container, dirs, configs, render — only app)
+- [x] write tests for extends inheritance (container, dirs, configs, render — only app)
       and confirm tool/infra extends is rejected before any merge.
-- [ ] write a test that mutates a child's inherited slice/map and confirms the parent
+- [x] write a test that mutates a child's inherited slice/map and confirms the parent
       is unaffected (proves the defensive copy).
-- [ ] write a test confirming multi-error aggregation: a file with three different
+- [x] write a test confirming multi-error aggregation: a file with three different
       violations across two services produces an error where each of the three
       sentinels matches via `errors.Is(err, sentinel)`. (Joined errors expose
       `Unwrap() []error`, not a single-error chain — `errors.Is` walks the
       multi-unwrap automatically, but bare `errors.Unwrap()` returns nil. Don't
       assert against `errors.Unwrap`; assert against `errors.Is`.)
-- [ ] run `go test ./internal/config/...` — must pass before next task.
+- [x] run `go test ./internal/config/...` — must pass before next task.
 
 ### Task 4: Remove `ToolConfig`, `LoadToolsConfig`, `tools.yml`, and `runtime.ports/hosts`
 

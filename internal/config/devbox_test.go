@@ -2876,6 +2876,9 @@ func TestComposeFilesAll_baseAndDisabledServiceOverlay(t *testing.T) {
 	defaultsWithCompose := minimalDefaultsYML + `
 compose:
   base: compose.yaml
+services:
+  worker:
+    enabled: false
 `
 	servicesYML := `
 services:
@@ -2886,7 +2889,6 @@ services:
     dir: ./services/main
     dir_internal: /workspace
     work_dir_internal: /workspace/src
-    enabled: true
     compose:
       - compose/services/main/base.yml
   worker:
@@ -2896,7 +2898,6 @@ services:
     dir: ./services/worker
     dir_internal: /workspace
     work_dir_internal: /workspace/src
-    enabled: false
     compose:
       - compose/services/worker/base.yml
 `

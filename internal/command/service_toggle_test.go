@@ -51,6 +51,7 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	svcLines = append(svcLines, "services:")
 	for name, spec := range services {
 		svcLines = append(svcLines, "  "+name+":")
+		svcLines = append(svcLines, "    type: app")
 		container := spec.container
 		if container == "" {
 			container = "app-" + name

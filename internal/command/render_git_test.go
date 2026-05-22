@@ -397,8 +397,7 @@ services:
     dir: services/app2
     container: c2
   dbsvc:
-    type: db
-    dir: services/db
+    type: infra
     container: c3
   off:
     type: app

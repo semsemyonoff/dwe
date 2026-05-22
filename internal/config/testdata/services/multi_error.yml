@@ -1,0 +1,11 @@
+services:
+  one:
+    type: tool
+    container: one
+    dir: ./not-allowed-for-tool
+  two:
+    type: infra
+    container: two
+    extends: one
+    ports:
+      bad: 70000

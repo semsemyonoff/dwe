@@ -213,7 +213,7 @@ runtime:
     type: app
     container: app-api
   worker:
-    type: worker
+    type: app
     container: app-worker
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
@@ -643,7 +643,7 @@ project:
     type: app
     dir: services/main
   worker:
-    type: worker
+    type: app
     dir: services/worker
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0644); err != nil {
