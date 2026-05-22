@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -98,8 +99,8 @@ func TestServicesToggle_NonTTY_ReturnsInteractiveRequired(t *testing.T) {
 	if !errors.Is(err, ErrInteractiveRequired) {
 		t.Errorf("expected ErrInteractiveRequired, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "devbox status services") {
-		t.Errorf("error should hint at 'devbox status services', got: %v", err)
+	if !strings.Contains(err.Error(), "devbox status") {
+		t.Errorf("error should hint at 'devbox status', got: %v", err)
 	}
 }
 
@@ -211,6 +212,61 @@ func TestServicesToggle_TTY_CancelNoWrites(t *testing.T) {
 	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
 	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
 		t.Error("local.yml should not be created after cancel")
+	}
+}
+
+// TestServicesToggle_MixedTypes verifies the unified toggle iterates services
+// across all types (app + tool + infra) in a single form.
+func TestServicesToggle_MixedTypes(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	servicesYML := `services:
+  main:
+    type: app
+    container: app-main
+    mandatory: true
+  adminer:
+    type: tool
+    container: adminer
+    ports:
+      web: 8080
+  db:
+    type: infra
+    container: db
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	var seenKeys []string
+	runMultiSelect = func(_ string, items []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		for _, item := range items {
+			seenKeys = append(seenKeys, item.Key)
+		}
+		return ui.MultiSelectResult{Kept: []string{"adminer"}, Locked: []string{"main"}}, nil
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	cmd := newServiceCmd(flags)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// All three names should be presented (app, tool, infra alike).
+	for _, want := range []string{"main", "adminer", "db"} {
+		if !slices.Contains(seenKeys, want) {
+			t.Errorf("unified toggle should include %q (any type), got %v", want, seenKeys)
+		}
 	}
 }
 

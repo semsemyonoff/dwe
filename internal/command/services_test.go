@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 )
 
@@ -87,18 +86,18 @@ func TestBuildServiceRows_sortedByName(t *testing.T) {
 	}
 }
 
-func TestBuildToolRows_allDisabled(t *testing.T) {
+func TestBuildServiceRows_includesTools(t *testing.T) {
 	cfg := makeServicesCfg(nil, map[string]testTool{
 		"adminer": {Enabled: false, Container: "adminer", Host: "h", Port: 1},
 		"mailpit": {Enabled: false, Container: "mailpit", Host: "h", Port: 2},
 	}, nil, nil)
-	rows := stack.BuildToolRows(cfg)
+	rows := buildServiceRows(cfg)
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
 	for _, r := range rows {
-		if r.Enabled {
-			t.Errorf("tool %q should be disabled", r.Name)
+		if r.Type != "tool" {
+			t.Errorf("row %q: expected type=tool, got %q", r.Name, r.Type)
 		}
 	}
 }

@@ -23,23 +23,25 @@ import (
 type section int
 
 const (
-	sectionServices section = iota + 1
+	sectionApps section = iota + 1
 	sectionTools
-	sectionDaemons
+	sectionInfra
 	sectionDeploy
 	sectionTopology
 	sectionGit
+	sectionDaemons
 )
 
 // defaultSectionOrder is the single source of truth for both the default
 // status orchestrator order and the --no-* flag set.
 var defaultSectionOrder = []section{
-	sectionServices,
+	sectionApps,
 	sectionTools,
-	sectionDaemons,
+	sectionInfra,
 	sectionDeploy,
 	sectionTopology,
 	sectionGit,
+	sectionDaemons,
 }
 
 // statusContext bundles everything a status subcommand needs. Built lazily
@@ -69,11 +71,10 @@ func loadStatusContext(flags *rootFlags, errW io.Writer) (*statusContext, error)
 	statePath := filepath.Join(flags.ProjectRoot(), journal.DefaultRelPath)
 	state, err := journal.Load(statePath)
 	if err != nil {
-		// Corrupt/unreadable state: warn then degrade gracefully — deploy section is skipped.
 		_, _ = fmt.Fprintf(errW, "warning: deploy state unreadable (%v); deploy section suppressed\n", err)
 		state = nil
 	}
-	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath) // nil-tolerant: LoadTrackedServices skips gate validation on error
+	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath)
 	tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, flags.ProjectRoot())
 	if err != nil {
 		return nil, fmt.Errorf("loading tracked services: %w", err)
@@ -102,9 +103,6 @@ func loadStatusContext(flags *rootFlags, errW io.Writer) (*statusContext, error)
 	}, nil
 }
 
-// normalisedDockerCfg returns DockerCfg with the standard
-// "missing file → empty value" normalisation applied, mirroring
-// build_context.go:63-70. Always non-nil.
 func (sc *statusContext) normalisedDockerCfg() *config.DockerConfig {
 	if sc.DockerCfg == nil {
 		return &config.DockerConfig{}
@@ -112,7 +110,6 @@ func (sc *statusContext) normalisedDockerCfg() *config.DockerConfig {
 	return sc.DockerCfg
 }
 
-// statusInput projects a statusContext into stack.StatusInput.
 func (sc *statusContext) statusInput() stack.StatusInput {
 	return stack.StatusInput{
 		Cfg:        sc.Cfg,
@@ -126,28 +123,31 @@ func (sc *statusContext) statusInput() stack.StatusInput {
 }
 
 type noSectionFlags struct {
-	noServices bool
+	noApps     bool
 	noTools    bool
-	noDaemons  bool
+	noInfra    bool
 	noDeploy   bool
 	noTopology bool
 	noGit      bool
+	noDaemons  bool
 }
 
 func (f *noSectionFlags) isSuppressed(s section) bool {
 	switch s {
-	case sectionServices:
-		return f.noServices
+	case sectionApps:
+		return f.noApps
 	case sectionTools:
 		return f.noTools
-	case sectionDaemons:
-		return f.noDaemons
+	case sectionInfra:
+		return f.noInfra
 	case sectionDeploy:
 		return f.noDeploy
 	case sectionTopology:
 		return f.noTopology
 	case sectionGit:
 		return f.noGit
+	case sectionDaemons:
+		return f.noDaemons
 	}
 	return false
 }
@@ -160,11 +160,11 @@ func newStatusCmd(flags *rootFlags) *cobra.Command {
 		Long: `Display the running status of the entire devbox stack.
 
 The default view prints a health indicator followed by all sections in order:
-services, tools, deploy, topology, git workspace. Each section is also
-addressable as 'status <section>'; --no-<section> flags suppress sections
+apps, tools, infra, deploy, topology, git workspace, daemons. Each section is
+also addressable as 'status <section>'; --no-<section> flags suppress sections
 in the default view.`,
 		Example: `  devbox status
-  devbox status services
+  devbox status apps
   devbox status deploy main
   devbox status --no-git --no-topology`,
 		Args:         cobra.NoArgs,
@@ -177,15 +177,17 @@ in the default view.`,
 			return renderDefaultStatus(cmd, sc, noFlags)
 		},
 	}
-	cmd.Flags().BoolVar(&noFlags.noServices, "no-services", false, "suppress the services section")
+	cmd.Flags().BoolVar(&noFlags.noApps, "no-apps", false, "suppress the apps section")
 	cmd.Flags().BoolVar(&noFlags.noTools, "no-tools", false, "suppress the tools section")
-	cmd.Flags().BoolVar(&noFlags.noDaemons, "no-daemons", false, "suppress the daemons section")
+	cmd.Flags().BoolVar(&noFlags.noInfra, "no-infra", false, "suppress the infra section")
 	cmd.Flags().BoolVar(&noFlags.noDeploy, "no-deploy", false, "suppress the deploy section")
 	cmd.Flags().BoolVar(&noFlags.noTopology, "no-topology", false, "suppress the topology section")
 	cmd.Flags().BoolVar(&noFlags.noGit, "no-git", false, "suppress the git workspace section")
+	cmd.Flags().BoolVar(&noFlags.noDaemons, "no-daemons", false, "suppress the daemons section")
 
-	cmd.AddCommand(newStatusServicesCmd(flags))
+	cmd.AddCommand(newStatusAppsCmd(flags))
 	cmd.AddCommand(newStatusToolsCmd(flags))
+	cmd.AddCommand(newStatusInfraCmd(flags))
 	cmd.AddCommand(newStatusDaemonsCmd(flags))
 	cmd.AddCommand(newStatusDeployCmd(flags))
 	cmd.AddCommand(newStatusTopologyCmd(flags))
@@ -193,8 +195,6 @@ in the default view.`,
 	return cmd
 }
 
-// renderDefaultStatus renders the default (no-arg) status output:
-// health line followed by each non-suppressed section.
 func renderDefaultStatus(cmd *cobra.Command, sc *statusContext, no *noSectionFlags) error {
 	in := sc.statusInput()
 	out := cmd.OutOrStdout()
@@ -214,17 +214,22 @@ func renderDefaultStatus(cmd *cobra.Command, sc *statusContext, no *noSectionFla
 	return nil
 }
 
-// renderSection writes one section's output to out and any warnings to errW.
 func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInput, sc *statusContext, s section) error {
 	switch s {
-	case sectionServices:
-		body, errs := stack.RenderServices(in)
+	case sectionApps:
+		body, errs := stack.RenderApps(in)
 		writeNonEmpty(out, body)
 		if len(errs) > 0 {
 			_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
 		}
 	case sectionTools:
 		body, errs := stack.RenderTools(in)
+		writeNonEmpty(out, body)
+		if len(errs) > 0 {
+			_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
+		}
+	case sectionInfra:
+		body, errs := stack.RenderInfra(in)
 		writeNonEmpty(out, body)
 		if len(errs) > 0 {
 			_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
@@ -270,10 +275,10 @@ func writeNonEmpty(w io.Writer, s string) {
 	}
 }
 
-func newStatusServicesCmd(flags *rootFlags) *cobra.Command {
+func newStatusAppsCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:          "services",
-		Short:        "Show only the services section",
+		Use:          "apps",
+		Short:        "Show only the apps section",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -281,7 +286,7 @@ func newStatusServicesCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionServices)
+			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionApps)
 		},
 	}
 }
@@ -298,6 +303,22 @@ func newStatusToolsCmd(flags *rootFlags) *cobra.Command {
 				return err
 			}
 			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionTools)
+		},
+	}
+}
+
+func newStatusInfraCmd(flags *rootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:          "infra",
+		Short:        "Show only the infra section",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionInfra)
 		},
 	}
 }

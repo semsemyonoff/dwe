@@ -120,18 +120,13 @@ func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv [
 	return result
 }
 
-// DisabledNodes returns the compose service names for services and tools that
+// DisabledNodes returns the compose service names for services that
 // are neither mandatory nor enabled in the current config.
 func DisabledNodes(cfg *config.DevboxConfig) []string {
 	var names []string
 	for _, svc := range cfg.Services {
 		if !svc.Mandatory && !svc.Enabled && svc.Container != "" {
 			names = append(names, svc.Container)
-		}
-	}
-	for _, t := range BuildToolRows(cfg) {
-		if !t.Enabled && t.Container != "" {
-			names = append(names, t.Container)
 		}
 	}
 	sort.Strings(names)
@@ -186,18 +181,18 @@ func RemoveHiddenNodes(topo map[string][]string, status map[string]ui.NodeStatus
 }
 
 // BuildNodeCategories maps compose service names to topology categories
-// based on the devbox config. Service containers → CatService, tool
+// based on the devbox config. app/infra containers → CatService, tool
 // containers → CatTool, everything else defaults to CatInfra.
 func BuildNodeCategories(cfg *config.DevboxConfig) map[string]ui.NodeCategory {
 	cats := make(map[string]ui.NodeCategory)
 	for _, svc := range cfg.Services {
-		if svc.Container != "" {
-			cats[svc.Container] = ui.CatService
+		if svc.Container == "" {
+			continue
 		}
-	}
-	for _, t := range BuildToolRows(cfg) {
-		if t.Container != "" {
-			cats[t.Container] = ui.CatTool
+		if svc.IsTool() {
+			cats[svc.Container] = ui.CatTool
+		} else {
+			cats[svc.Container] = ui.CatService
 		}
 	}
 	return cats

@@ -281,21 +281,21 @@ services:
 	}
 	flags := &rootFlags{configPath: filepath.Join(tmpDir, "devbox.yml"), projectRoot: tmpDir}
 
-	// completeToolDisabled: should return only 'elasticvue'.
-	fn := toolCompletion(flags, completeToolDisabled)
+	// completeDisabledOptional (unified): should return only 'elasticvue'.
+	fn := serviceCompletion(flags, completeDisabledOptional)
 	completions, directive := fn(nil, []string{}, "")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
 	}
 	if len(completions) != 1 || completions[0] != "elasticvue" {
-		t.Errorf("completeToolDisabled: expected [elasticvue], got %v", completions)
+		t.Errorf("completeDisabledOptional: expected [elasticvue], got %v", completions)
 	}
 
-	// completeToolEnabled: should return only 'adminer'.
-	fn2 := toolCompletion(flags, completeToolEnabled)
+	// completeEnabledOptional (unified): should return only 'adminer'.
+	fn2 := serviceCompletion(flags, completeEnabledOptional)
 	completions2, _ := fn2(nil, []string{}, "")
 	if len(completions2) != 1 || completions2[0] != "adminer" {
-		t.Errorf("completeToolEnabled: expected [adminer], got %v", completions2)
+		t.Errorf("completeEnabledOptional: expected [adminer], got %v", completions2)
 	}
 }
 
@@ -354,7 +354,7 @@ services:
 	}
 
 	flags := &rootFlags{configPath: tempDir + "/devbox.yml", projectRoot: tempDir}
-	fn := toolCompletion(flags, completeToolDisabled)
+	fn := serviceCompletion(flags, completeDisabledOptional)
 	completions, directive := fn(nil, []string{}, "")
 
 	if directive != cobra.ShellCompDirectiveNoFileComp {
@@ -388,7 +388,7 @@ services:
 func TestToolNameCompletion_noSecondArg(t *testing.T) {
 	// The len(args) != 0 guard fires before any config access, so cmd can be nil.
 	flags := &rootFlags{configPath: "/fake/devbox.yml", projectRoot: "/fake"}
-	fn := toolCompletion(flags, completeToolDisabled)
+	fn := serviceCompletion(flags, completeDisabledOptional)
 	completions, directive := fn(nil, []string{"already"}, "")
 	if len(completions) != 0 {
 		t.Errorf("expected 0 completions when arg already set, got %d", len(completions))
@@ -493,19 +493,15 @@ func TestServiceDisableCmdHasValidArgsFunction(t *testing.T) {
 	}
 }
 
-func TestToolEnableCmdHasValidArgsFunction(t *testing.T) {
+// (Tool-specific completion variants removed; serviceCompletion covers all
+// service types after the services/tools unification.)
+func TestServiceEnableDisableHaveUnifiedCompletion(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newToolEnableCmd(flags)
-	if cmd.ValidArgsFunction == nil {
-		t.Error("tools enable should have a ValidArgsFunction for dynamic completion")
+	if newServiceEnableCmd(flags).ValidArgsFunction == nil {
+		t.Error("services enable should have a ValidArgsFunction for dynamic completion")
 	}
-}
-
-func TestToolDisableCmdHasValidArgsFunction(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
-	cmd := newToolDisableCmd(flags)
-	if cmd.ValidArgsFunction == nil {
-		t.Error("tools disable should have a ValidArgsFunction for dynamic completion")
+	if newServiceDisableCmd(flags).ValidArgsFunction == nil {
+		t.Error("services disable should have a ValidArgsFunction for dynamic completion")
 	}
 }
 
@@ -727,12 +723,4 @@ func TestCompletionConfigPath_legacyV1_noCompletions(t *testing.T) {
 		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", directive)
 	}
 
-	// Verify that toolCompletion also returns no completions for v1.
-	toolCompletions, toolDirective := toolCompletion(flags, completeToolDisabled)(root, []string{}, "")
-	if len(toolCompletions) != 0 {
-		t.Errorf("expected 0 completions from toolCompletion for v1 project, got %d", len(toolCompletions))
-	}
-	if toolDirective != cobra.ShellCompDirectiveNoFileComp {
-		t.Errorf("expected ShellCompDirectiveNoFileComp, got %v", toolDirective)
-	}
 }

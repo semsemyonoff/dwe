@@ -45,8 +45,8 @@ func TestCommandGroups(t *testing.T) {
 		}
 	}
 
-	// Configuration group: services, tools, render, validate
-	for _, name := range []string{"services", "tools", "render", "validate"} {
+	// Configuration group: services, render, validate
+	for _, name := range []string{"services", "render", "validate"} {
 		if cmdGroupID[name] != groupConfiguration {
 			t.Errorf("command %q groupID = %q, want %q", name, cmdGroupID[name], groupConfiguration)
 		}

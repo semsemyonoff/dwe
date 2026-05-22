@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"fmt"
-
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 )
@@ -35,6 +33,7 @@ func RenderTable(headers []string, rows [][]string) string {
 // ServiceTableRow holds data for one row in the services Lipgloss table.
 type ServiceTableRow struct {
 	Name      string
+	Dir       string
 	Container string
 	Mandatory bool
 	Enabled   bool
@@ -52,12 +51,14 @@ type rowCellStyle struct {
 	run   lipgloss.Style // RUNNING column
 }
 
-// RenderServiceTable renders a styled Lipgloss table of services.
-// Built-in columns: NAME, CONTAINER, STATE, RUNNING.
+// RenderServicesTable renders a styled Lipgloss table of services.
+// Built-in columns: NAME, [DIR if withDirCol,] CONTAINER, STATE, RUNNING.
 // extraCols, if non-nil, lists additional column names appended after the
 // built-ins; each row's value is read from ServiceTableRow.Extras (missing
 // key → "—"). Pass nil to render the table with only the built-in columns.
-func RenderServiceTable(rows []ServiceTableRow, extraCols []string) string {
+// withDirCol=true inserts a DIR column between NAME and CONTAINER (apps);
+// pass false for tool/infra rows that have no source directory.
+func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]rowCellStyle, len(rows))
 
@@ -93,7 +94,16 @@ func RenderServiceTable(rows []ServiceTableRow, extraCols []string) string {
 			cs.run = styleDisabled
 		}
 
-		row := []string{r.Name, r.Container, stateStr, runStr}
+		var row []string
+		if withDirCol {
+			dir := r.Dir
+			if dir == "" {
+				dir = "—"
+			}
+			row = []string{r.Name, dir, r.Container, stateStr, runStr}
+		} else {
+			row = []string{r.Name, r.Container, stateStr, runStr}
+		}
 		for _, col := range extraCols {
 			row = append(row, extraCell(r.Extras, col))
 		}
@@ -101,7 +111,15 @@ func RenderServiceTable(rows []ServiceTableRow, extraCols []string) string {
 		cellStyles[i] = cs
 	}
 
-	headers := append([]string{"NAME", "CONTAINER", "STATE", "RUNNING"}, extraCols...)
+	var headers []string
+	var stateCol, runCol int
+	if withDirCol {
+		headers = append([]string{"NAME", "DIR", "CONTAINER", "STATE", "RUNNING"}, extraCols...)
+		stateCol, runCol = 3, 4
+	} else {
+		headers = append([]string{"NAME", "CONTAINER", "STATE", "RUNNING"}, extraCols...)
+		stateCol, runCol = 2, 3
+	}
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styleTableBorder).
@@ -115,9 +133,9 @@ func RenderServiceTable(rows []ServiceTableRow, extraCols []string) string {
 			}
 			cs := cellStyles[row]
 			switch col {
-			case 2:
+			case stateCol:
 				return cs.state
-			case 3:
+			case runCol:
 				return cs.run
 			default:
 				return cs.base
@@ -137,95 +155,6 @@ func extraCell(extras map[string]string, col string) string {
 		return v
 	}
 	return "—"
-}
-
-// ToolTableRow holds data for one row in the tools Lipgloss table.
-type ToolTableRow struct {
-	Name      string
-	Host      string
-	Port      int
-	Container string
-	Enabled   bool
-	// Running is only meaningful when Enabled is true.
-	Running bool
-	// Extras holds custom status-column values keyed by column name.
-	// Missing keys render as "—".
-	Extras map[string]string
-}
-
-// RenderToolTable renders a styled Lipgloss table of optional tools.
-// Built-in columns: NAME, HOST, PORT, STATE, RUNNING.
-// extraCols, if non-nil, lists additional column names appended after the
-// built-ins; each row's value is read from ToolTableRow.Extras (missing
-// key → "—"). Pass nil to render the table with only the built-in columns.
-func RenderToolTable(rows []ToolTableRow, extraCols []string) string {
-	stringRows := make([][]string, len(rows))
-	cellStyles := make([]rowCellStyle, len(rows))
-
-	for i, r := range rows {
-		var stateStr, runStr string
-		var cs rowCellStyle
-
-		if r.Enabled {
-			stateStr = "enabled"
-			cs.base = lipgloss.NewStyle()
-			cs.state = lipgloss.NewStyle()
-			if r.Running {
-				runStr = "running"
-				cs.run = styleEnabled
-			} else {
-				runStr = "stopped"
-				cs.run = styleRunStopped
-			}
-		} else {
-			stateStr = "disabled"
-			runStr = "—"
-			cs.base = styleDisabled
-			cs.state = styleDisabled
-			cs.run = styleDisabled
-		}
-
-		portStr := fmt.Sprintf("%d", r.Port)
-		if r.Port == 0 {
-			portStr = "—"
-		}
-
-		row := []string{r.Name, r.Host, portStr, stateStr, runStr}
-		for _, col := range extraCols {
-			row = append(row, extraCell(r.Extras, col))
-		}
-		stringRows[i] = row
-		cellStyles[i] = cs
-	}
-
-	headers := append([]string{"NAME", "HOST", "PORT", "STATE", "RUNNING"}, extraCols...)
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleTableBorder).
-		Headers(headers...).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return styleTableHeader
-			}
-			if row < 0 || row >= len(cellStyles) {
-				return lipgloss.NewStyle()
-			}
-			cs := cellStyles[row]
-			switch col {
-			case 3:
-				return cs.state
-			case 4:
-				return cs.run
-			default:
-				return cs.base
-			}
-		})
-
-	for _, r := range stringRows {
-		t.Row(r...)
-	}
-
-	return t.String()
 }
 
 // DaemonTableRow holds the data for one row in the daemons Lipgloss table.

@@ -32,7 +32,7 @@ On submit, changes are written to devbox/local.yml and .env is regenerated.
 
 For a read-only view, run 'devbox status services'.`,
 		Example: `  devbox services
-  devbox services enable second
+  devbox services enable adminer
   devbox services disable second`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -49,7 +49,7 @@ For a read-only view, run 'devbox status services'.`,
 // returns ErrInteractiveRequired with a hint. All-mandatory short-circuits.
 func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-		return fmt.Errorf("%w: services: interactive toggle requires a TTY; use 'devbox status services' for read-only view", ErrInteractiveRequired)
+		return fmt.Errorf("%w: services: interactive toggle requires a TTY; use 'devbox status' for read-only view", ErrInteractiveRequired)
 	}
 
 	cfg, err := config.LoadConfig(flags.configPath)
@@ -65,7 +65,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 		}
 	}
 	if togglable == 0 {
-		return fmt.Errorf("nothing to toggle, see 'devbox status services'")
+		return fmt.Errorf("nothing to toggle, see 'devbox status'")
 	}
 
 	items := make([]ui.MultiSelectItem, len(rows))

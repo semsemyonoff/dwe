@@ -8,50 +8,27 @@ import (
 	"devbox-cli/internal/tpl"
 )
 
-// Kind selects between service and tool when computing custom status columns.
-type Kind int
-
-const (
-	// KindService selects services as the source of status[] declarations.
-	KindService Kind = iota + 1
-	// KindTool selects tools as the source of status[] declarations.
-	KindTool
-)
-
 // BuildCustomColumns returns the ordered list of custom status-column names
-// declared across all services (KindService) or all tools (KindTool).
-// Ordering is deterministic: items are iterated alphabetically by name and
-// column names are appended in first-encounter order during that walk.
-func BuildCustomColumns(cfg *config.DevboxConfig, kind Kind) []string {
+// declared across all services of the given type. Ordering is deterministic:
+// services are iterated alphabetically by name and column names are appended
+// in first-encounter order during that walk.
+func BuildCustomColumns(cfg *config.DevboxConfig, t config.ServiceType) []string {
 	if cfg == nil {
 		return nil
 	}
 	var names []string
 	seen := make(map[string]struct{})
-	switch kind {
-	case KindService:
-		for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
-			for _, col := range cfg.Services[name].Status {
-				if _, ok := seen[col.Name]; ok {
-					continue
-				}
-				seen[col.Name] = struct{}{}
-				names = append(names, col.Name)
-			}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
+		svc := cfg.Services[name]
+		if svc.Type != t {
+			continue
 		}
-	case KindTool:
-		for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
-			svc := cfg.Services[name]
-			if !svc.IsTool() {
+		for _, col := range svc.Status {
+			if _, ok := seen[col.Name]; ok {
 				continue
 			}
-			for _, col := range svc.Status {
-				if _, ok := seen[col.Name]; ok {
-					continue
-				}
-				seen[col.Name] = struct{}{}
-				names = append(names, col.Name)
-			}
+			seen[col.Name] = struct{}{}
+			names = append(names, col.Name)
 		}
 	}
 	return names

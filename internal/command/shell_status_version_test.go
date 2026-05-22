@@ -918,7 +918,7 @@ func TestNewStatusCmd_UseField(t *testing.T) {
 func TestNewStatusCmd_HasSubcommands(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newStatusCmd(flags)
-	want := map[string]bool{"services": false, "tools": false, "deploy": false, "topology": false, "git": false}
+	want := map[string]bool{"apps": false, "tools": false, "infra": false, "deploy": false, "topology": false, "git": false, "daemons": false}
 	for _, sub := range cmd.Commands() {
 		if _, ok := want[sub.Name()]; ok {
 			want[sub.Name()] = true
@@ -934,7 +934,7 @@ func TestNewStatusCmd_HasSubcommands(t *testing.T) {
 func TestNewStatusCmd_HasNoFlags(t *testing.T) {
 	flags := &rootFlags{configPath: "devbox.yml"}
 	cmd := newStatusCmd(flags)
-	for _, name := range []string{"no-services", "no-tools", "no-deploy", "no-topology", "no-git"} {
+	for _, name := range []string{"no-apps", "no-tools", "no-infra", "no-deploy", "no-topology", "no-git", "no-daemons"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("status command missing --%s flag", name)
 		}
@@ -1000,7 +1000,7 @@ func TestRunStatusViaCfg(t *testing.T) {
 	var buf bytes.Buffer
 	buf.WriteString(stack.RenderHealth(in))
 	buf.WriteString("\n")
-	body, _ := stack.RenderServices(in)
+	body, _ := stack.RenderApps(in)
 	buf.WriteString(body)
 	out := buf.String()
 	if !strings.Contains(out, "main") {
@@ -1143,7 +1143,6 @@ func TestPublicCommandsHaveLongDescription(t *testing.T) {
 		{"status", newStatusCmd(flags)},
 		{"commands", newCommandCmd(flags)},
 		{"services", newServiceCmd(flags)},
-		{"tools", newToolCmd(flags)},
 		{"render", newRenderCmd(flags)},
 		{"deploy", newDeployCmd(flags)},
 	}

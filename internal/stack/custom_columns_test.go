@@ -9,16 +9,16 @@ import (
 
 func TestBuildCustomColumns_Empty(t *testing.T) {
 	cfg := &config.DevboxConfig{}
-	if got := BuildCustomColumns(cfg, KindService); got != nil {
+	if got := BuildCustomColumns(cfg, config.ServiceTypeApp); got != nil {
 		t.Errorf("services: want nil, got %v", got)
 	}
-	if got := BuildCustomColumns(cfg, KindTool); got != nil {
+	if got := BuildCustomColumns(cfg, config.ServiceTypeTool); got != nil {
 		t.Errorf("tools: want nil, got %v", got)
 	}
 }
 
 func TestBuildCustomColumns_NilCfg(t *testing.T) {
-	if got := BuildCustomColumns(nil, KindService); got != nil {
+	if got := BuildCustomColumns(nil, config.ServiceTypeApp); got != nil {
 		t.Errorf("nil cfg: want nil, got %v", got)
 	}
 }
@@ -26,13 +26,13 @@ func TestBuildCustomColumns_NilCfg(t *testing.T) {
 func TestBuildCustomColumns_SingleService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"main": {Status: []config.StatusColumn{
+			"main": {Type: config.ServiceTypeApp, Status: []config.StatusColumn{
 				{Name: "CONTAINER", Value: "{{ .ServiceCfg.Container }}"},
 				{Name: "TAG", Value: "v1"},
 			}},
 		},
 	}
-	got := BuildCustomColumns(cfg, KindService)
+	got := BuildCustomColumns(cfg, config.ServiceTypeApp)
 	want := []string{"CONTAINER", "TAG"}
 	if !equalSlice(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -42,15 +42,15 @@ func TestBuildCustomColumns_SingleService(t *testing.T) {
 func TestBuildCustomColumns_OverlappingAndDisjoint(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"beta": {Status: []config.StatusColumn{
+			"beta": {Type: config.ServiceTypeApp, Status: []config.StatusColumn{
 				{Name: "BETA_ONLY", Value: "b"},
 				{Name: "SHARED", Value: "b"},
 			}},
-			"alpha": {Status: []config.StatusColumn{
+			"alpha": {Type: config.ServiceTypeApp, Status: []config.StatusColumn{
 				{Name: "ALPHA_ONLY", Value: "a"},
 				{Name: "SHARED", Value: "a"},
 			}},
-			"gamma": {Status: []config.StatusColumn{
+			"gamma": {Type: config.ServiceTypeApp, Status: []config.StatusColumn{
 				{Name: "GAMMA_ONLY", Value: "g"},
 			}},
 		},
@@ -61,7 +61,7 @@ func TestBuildCustomColumns_OverlappingAndDisjoint(t *testing.T) {
 
 	// Repeat to confirm stability across runs.
 	for i := range 5 {
-		got := BuildCustomColumns(cfg, KindService)
+		got := BuildCustomColumns(cfg, config.ServiceTypeApp)
 		if !equalSlice(got, want) {
 			t.Errorf("iteration %d: got %v, want %v", i, got, want)
 		}
@@ -75,7 +75,7 @@ func TestBuildCustomColumns_Tools(t *testing.T) {
 			"adminer": {Type: config.ServiceTypeTool, Status: []config.StatusColumn{{Name: "VERSION", Value: "x"}}},
 		},
 	}
-	got := BuildCustomColumns(cfg, KindTool)
+	got := BuildCustomColumns(cfg, config.ServiceTypeTool)
 	want := []string{"VERSION", "ENDPOINT"} // adminer < mailpit alphabetically
 	if !equalSlice(got, want) {
 		t.Errorf("got %v, want %v", got, want)

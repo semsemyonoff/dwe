@@ -64,6 +64,43 @@ project:
 	return filepath.Join(dir, "devbox.yml")
 }
 
+// statusFixtureWithInfra builds a fixture that includes a type=infra service
+// so the Infra section produces output.
+func statusFixtureWithInfra(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	devboxYML := `schema_version: "2"
+project:
+  name: test
+  prefix: devbox
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	servicesYML := `services:
+  main:
+    type: app
+    container: app-main
+    mandatory: true
+    dir: services/main
+  db:
+    type: infra
+    container: db
+    mandatory: true
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "services", "main"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, "devbox.yml")
+}
+
 // statusFixtureWithDeploy extends statusFixture with a minimal deploy pipeline
 // and a persisted state, so RenderDeployStatus produces output.
 func statusFixtureWithDeploy(t *testing.T) string {
@@ -125,20 +162,20 @@ func TestStatusCmd_DefaultPrintsHealthAndSections(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Devbox:", "Services"} {
+	for _, want := range []string{"Devbox:", "Apps", "Tools"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in default status output:\n%s", want, out)
 		}
 	}
 }
 
-func TestStatusCmd_NoServicesFlagSuppressesSection(t *testing.T) {
+func TestStatusCmd_NoAppsFlagSuppressesSection(t *testing.T) {
 	configPath := statusFixture(t)
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "--no-services", "--no-tools", "--no-deploy", "--no-topology", "--no-git"})
+	root.SetArgs([]string{"-c", configPath, "status", "--no-apps", "--no-tools", "--no-infra", "--no-deploy", "--no-topology", "--no-git", "--no-daemons"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -146,8 +183,8 @@ func TestStatusCmd_NoServicesFlagSuppressesSection(t *testing.T) {
 	if !strings.Contains(out, "Devbox:") {
 		t.Errorf("health line must still appear when sections suppressed: %s", out)
 	}
-	if strings.Contains(out, "Services") {
-		t.Errorf("--no-services should suppress Services title:\n%s", out)
+	if strings.Contains(out, "Apps") {
+		t.Errorf("--no-apps should suppress Apps title:\n%s", out)
 	}
 }
 
@@ -157,7 +194,7 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 		section   string
 		fixtureOn func(*testing.T) string // fixture that produces the section
 	}{
-		{"--no-services", "Services", statusFixture},
+		{"--no-apps", "Apps", statusFixture},
 		{"--no-tools", "Tools", statusFixture},
 		{"--no-deploy", "Deploy Status", statusFixtureWithDeploy},
 		{"--no-topology", "Topology", statusFixture},
@@ -186,19 +223,19 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 	}
 }
 
-func TestStatusCmd_ServicesSubcommandRendersOnlyServices(t *testing.T) {
+func TestStatusCmd_AppsSubcommandRendersOnlyApps(t *testing.T) {
 	configPath := statusFixture(t)
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "services"})
+	root.SetArgs([]string{"-c", configPath, "status", "apps"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "Services") {
-		t.Errorf("expected Services section title:\n%s", out)
+	if !strings.Contains(out, "Apps") {
+		t.Errorf("expected Apps section title:\n%s", out)
 	}
 	if strings.Contains(out, "Devbox:") {
 		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
@@ -222,8 +259,41 @@ func TestStatusCmd_ToolsSubcommandRendersOnlyTools(t *testing.T) {
 	if strings.Contains(out, "Devbox:") {
 		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
 	}
-	if strings.Contains(out, "Services") {
-		t.Errorf("tools subcommand should NOT print Services section:\n%s", out)
+	if strings.Contains(out, "Apps") {
+		t.Errorf("tools subcommand should NOT print Apps section:\n%s", out)
+	}
+}
+
+func TestStatusCmd_InfraSubcommandRendersOnlyInfra(t *testing.T) {
+	configPath := statusFixtureWithInfra(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "infra"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Infra") {
+		t.Errorf("expected Infra section title:\n%s", out)
+	}
+	if strings.Contains(out, "Apps") {
+		t.Errorf("infra subcommand should NOT print Apps section:\n%s", out)
+	}
+}
+
+// TestStatusCmd_UnknownToolsCommand_RemovedFromRoot verifies the rename guard:
+// `devbox tools` should error as unknown after the unification.
+func TestStatusCmd_ToolsRootCmdRemoved(t *testing.T) {
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "tools"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("expected error: 'devbox tools' should be unknown command after unification")
 	}
 }
 
@@ -243,23 +313,19 @@ func TestStatusCmd_DaemonsSubcommandRuns(t *testing.T) {
 	}
 }
 
-func TestStatusCmd_DefaultOrderContainsDaemonsAfterTools(t *testing.T) {
-	idxTools, idxDaemons, idxDeploy := -1, -1, -1
+func TestStatusCmd_DefaultOrderAppsToolsInfra(t *testing.T) {
+	idx := make(map[section]int)
 	for i, s := range defaultSectionOrder {
-		switch s {
-		case sectionTools:
-			idxTools = i
-		case sectionDaemons:
-			idxDaemons = i
-		case sectionDeploy:
-			idxDeploy = i
+		idx[s] = i + 1 // 1-indexed so 0 means missing
+	}
+	want := []section{sectionApps, sectionTools, sectionInfra, sectionDeploy, sectionTopology, sectionGit, sectionDaemons}
+	for i, s := range want {
+		if idx[s] == 0 {
+			t.Fatalf("missing section %d in defaultSectionOrder", s)
 		}
-	}
-	if idxTools == -1 || idxDaemons == -1 || idxDeploy == -1 {
-		t.Fatalf("missing sections; tools=%d daemons=%d deploy=%d", idxTools, idxDaemons, idxDeploy)
-	}
-	if idxTools >= idxDaemons || idxDaemons >= idxDeploy {
-		t.Errorf("expected order tools<daemons<deploy, got tools=%d daemons=%d deploy=%d", idxTools, idxDaemons, idxDeploy)
+		if i > 0 && idx[want[i-1]] >= idx[s] {
+			t.Errorf("expected section %d before %d", want[i-1], s)
+		}
 	}
 }
 

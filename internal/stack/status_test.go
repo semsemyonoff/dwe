@@ -75,7 +75,7 @@ func TestRenderHealth_Partial(t *testing.T) {
 	}
 }
 
-func TestRenderServices_ContainsServiceName(t *testing.T) {
+func TestRenderApps_ContainsServiceName(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
@@ -84,12 +84,34 @@ func TestRenderServices_ContainsServiceName(t *testing.T) {
 		nil,
 		nil,
 	)
-	out, errs := RenderServices(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	out, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
 	if len(errs) != 0 {
 		t.Errorf("unexpected errors: %v", errs)
 	}
 	if !strings.Contains(out, "main") {
-		t.Errorf("services output missing 'main': %s", out)
+		t.Errorf("apps output missing 'main': %s", out)
+	}
+	if !strings.Contains(out, "Apps") {
+		t.Errorf("apps output missing 'Apps' title: %s", out)
+	}
+}
+
+func TestRenderInfra_FiltersByType(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"db":   {Type: config.ServiceTypeInfra, Container: "db", Mandatory: true},
+			"main": {Type: config.ServiceTypeApp, Container: "app-main", Mandatory: true},
+		},
+	}
+	out, _ := RenderInfra(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	if !strings.Contains(out, "Infra") {
+		t.Errorf("infra output missing title: %s", out)
+	}
+	if !strings.Contains(out, "db") {
+		t.Errorf("infra output missing 'db': %s", out)
+	}
+	if strings.Contains(out, "main") {
+		t.Errorf("infra output should NOT contain app 'main': %s", out)
 	}
 }
 
@@ -152,9 +174,9 @@ func TestRenderTopology_WithStatus(t *testing.T) {
 	}
 }
 
-// TestRenderServices_CustomColumnsAggregateError verifies that
+// TestRenderApps_CustomColumnsAggregateError verifies that
 // per-row template errors are aggregated into the returned slice.
-func TestRenderServices_CustomColumnsAggregateError(t *testing.T) {
+func TestRenderApps_CustomColumnsAggregateError(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
 			"main": {
@@ -170,7 +192,7 @@ func TestRenderServices_CustomColumnsAggregateError(t *testing.T) {
 		nil,
 		nil,
 	)
-	_, errs := RenderServices(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	_, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
 	if len(errs) == 0 {
 		t.Errorf("expected template error to be aggregated")
 	}

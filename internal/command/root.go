@@ -154,7 +154,6 @@ Run 'devbox info' for the full info dashboard.`,
 
 	// Configuration group: services, tools, rendering, validation.
 	addCmd(root, groupConfiguration, newServiceCmd(flags))
-	addCmd(root, groupConfiguration, newToolCmd(flags))
 	addCmd(root, groupConfiguration, newRenderCmd(flags))
 	addCmd(root, groupConfiguration, newValidateCmd(flags))
 

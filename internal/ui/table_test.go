@@ -96,14 +96,14 @@ func TestRenderTable_UsesTableStyles(t *testing.T) {
 	resetStyles()
 }
 
-func TestRenderServiceTable_Basic(t *testing.T) {
+func TestRenderServicesTable_Basic(t *testing.T) {
 	resetStyles()
 	rows := []ServiceTableRow{
 		{Name: "main", Container: "app-main", Mandatory: true, Running: true},
 		{Name: "second", Container: "app-second", Enabled: true, Running: false},
 		{Name: "worker", Container: "app-worker", Mandatory: false, Enabled: false},
 	}
-	out := RenderServiceTable(rows, nil)
+	out := RenderServicesTable(rows, nil, false)
 
 	for _, want := range []string{
 		"NAME", "CONTAINER", "STATE", "RUNNING",
@@ -115,11 +115,31 @@ func TestRenderServiceTable_Basic(t *testing.T) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "DIR") {
+		t.Errorf("withDirCol=false should NOT include DIR column:\n%s", out)
+	}
 }
 
-func TestRenderServiceTable_Empty(t *testing.T) {
+func TestRenderServicesTable_WithDirCol(t *testing.T) {
 	resetStyles()
-	out := RenderServiceTable(nil, nil)
+	rows := []ServiceTableRow{
+		{Name: "main", Dir: "./services/main", Container: "app-main", Mandatory: true, Running: true},
+		{Name: "worker", Dir: "", Container: "app-worker", Enabled: true},
+	}
+	out := RenderServicesTable(rows, nil, true)
+	for _, want := range []string{"DIR", "./services/main"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "—") {
+		t.Errorf("empty Dir should render as em-dash:\n%s", out)
+	}
+}
+
+func TestRenderServicesTable_Empty(t *testing.T) {
+	resetStyles()
+	out := RenderServicesTable(nil, nil, false)
 	if !strings.Contains(out, "NAME") {
 		t.Error("expected header NAME in empty service table")
 	}
@@ -128,56 +148,18 @@ func TestRenderServiceTable_Empty(t *testing.T) {
 	}
 }
 
-func TestRenderServiceTable_DisabledRunStr(t *testing.T) {
+func TestRenderServicesTable_DisabledRunStr(t *testing.T) {
 	resetStyles()
 	rows := []ServiceTableRow{
 		{Name: "tool", Container: "c-tool", Mandatory: false, Enabled: false},
 	}
-	out := RenderServiceTable(rows, nil)
+	out := RenderServicesTable(rows, nil, false)
 	if !strings.Contains(out, "—") {
 		t.Errorf("disabled service should show em-dash run status\nfull output:\n%s", out)
 	}
 }
 
-func TestRenderToolTable_Basic(t *testing.T) {
-	resetStyles()
-	rows := []ToolTableRow{
-		{Name: "adminer", Host: "localhost", Port: 8080, Enabled: true, Running: true},
-		{Name: "mailpit", Host: "localhost", Port: 8025, Enabled: true, Running: false},
-		{Name: "redis-insight", Host: "localhost", Port: 8001, Enabled: false},
-	}
-	out := RenderToolTable(rows, nil)
-	for _, want := range []string{
-		"NAME", "HOST", "PORT", "STATE", "RUNNING",
-		"adminer", "mailpit", "redis-insight",
-		"running", "stopped", "disabled",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output missing %q\nfull output:\n%s", want, out)
-		}
-	}
-}
-
-func TestRenderToolTable_ZeroPort(t *testing.T) {
-	resetStyles()
-	rows := []ToolTableRow{
-		{Name: "tool", Host: "localhost", Port: 0, Enabled: true, Running: false},
-	}
-	out := RenderToolTable(rows, nil)
-	if !strings.Contains(out, "—") {
-		t.Errorf("zero port should render as em-dash:\n%s", out)
-	}
-}
-
-func TestRenderToolTable_Empty(t *testing.T) {
-	resetStyles()
-	out := RenderToolTable(nil, nil)
-	if !strings.Contains(out, "NAME") {
-		t.Error("expected header NAME in empty tool table")
-	}
-}
-
-func TestRenderServiceTable_ExtraCols_Populated(t *testing.T) {
+func TestRenderServicesTable_ExtraCols_Populated(t *testing.T) {
 	resetStyles()
 	rows := []ServiceTableRow{
 		{
@@ -185,7 +167,7 @@ func TestRenderServiceTable_ExtraCols_Populated(t *testing.T) {
 			Extras: map[string]string{"TAG": "v1.2", "ENDPOINT": "http://main"},
 		},
 	}
-	out := RenderServiceTable(rows, []string{"TAG", "ENDPOINT"})
+	out := RenderServicesTable(rows, []string{"TAG", "ENDPOINT"}, false)
 	for _, want := range []string{"TAG", "ENDPOINT", "v1.2", "http://main"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
@@ -193,7 +175,7 @@ func TestRenderServiceTable_ExtraCols_Populated(t *testing.T) {
 	}
 }
 
-func TestRenderServiceTable_ExtraCols_MissingKey(t *testing.T) {
+func TestRenderServicesTable_ExtraCols_MissingKey(t *testing.T) {
 	resetStyles()
 	rows := []ServiceTableRow{
 		{
@@ -201,40 +183,12 @@ func TestRenderServiceTable_ExtraCols_MissingKey(t *testing.T) {
 			Extras: map[string]string{"TAG": "v1"},
 		},
 	}
-	out := RenderServiceTable(rows, []string{"TAG", "MISSING"})
+	out := RenderServicesTable(rows, []string{"TAG", "MISSING"}, false)
 	if !strings.Contains(out, "—") {
 		t.Errorf("missing key should render as em-dash:\n%s", out)
 	}
 	if !strings.Contains(out, "MISSING") {
 		t.Error("expected header MISSING")
-	}
-}
-
-func TestRenderToolTable_ExtraCols_Populated(t *testing.T) {
-	resetStyles()
-	rows := []ToolTableRow{
-		{
-			Name: "mailpit", Host: "mailpit.local", Port: 1080, Enabled: true, Running: true,
-			Extras: map[string]string{"ENDPOINT": "http://mailpit.local:1080"},
-		},
-	}
-	out := RenderToolTable(rows, []string{"ENDPOINT"})
-	if !strings.Contains(out, "ENDPOINT") {
-		t.Error("expected ENDPOINT header")
-	}
-	if !strings.Contains(out, "http://mailpit.local:1080") {
-		t.Errorf("expected endpoint cell value:\n%s", out)
-	}
-}
-
-func TestRenderToolTable_ExtraCols_MissingKey(t *testing.T) {
-	resetStyles()
-	rows := []ToolTableRow{
-		{Name: "mailpit", Host: "h", Port: 1, Enabled: true, Running: true},
-	}
-	out := RenderToolTable(rows, []string{"ENDPOINT"})
-	if !strings.Contains(out, "—") {
-		t.Errorf("missing extras key should render as em-dash:\n%s", out)
 	}
 }
 

@@ -382,13 +382,13 @@ do not run the validator. Add hard errors in the load + plan paths:
 
 **Implementation steps:**
 
-- [ ] in `internal/stack/status.go`, replace `RenderServices` / `RenderTools` with
+- [x] in `internal/stack/status.go`, replace `RenderServices` / `RenderTools` with
       **three** type-keyed section renderers: `RenderApps`, `RenderTools`,
       `RenderInfra`. Each returns `(string, []error)`. The command layer composes
       them in the order locked above.
-- [ ] update `BuildCustomColumns` / `RenderCustomCells` to accept `ServiceType`
+- [x] update `BuildCustomColumns` / `RenderCustomCells` to accept `ServiceType`
       instead of the old `Kind` enum; only one underlying data shape now.
-- [ ] in `internal/command/`:
+- [x] in `internal/command/`:
       - merge `service.go` + `tool.go` toggle commands into a single
         `newServicesCmd` with a unified `runServicesToggle` that walks every
         optional service of any type.
@@ -407,17 +407,17 @@ do not run the validator. Add hard errors in the load + plan paths:
       - `status` subcommands: add `status apps` / `status tools` / `status infra`
         (each calls `loadStatusContext(flags)` then the corresponding renderer).
         Delete `status services`.
-- [ ] in `internal/ui/`, collapse `RenderServiceTable` + `RenderToolTable` into one
+- [x] in `internal/ui/`, collapse `RenderServiceTable` + `RenderToolTable` into one
       `RenderServicesTable(rows, extraCols, withDirCol bool)`. Apps pass
       `withDirCol=true`; tool/infra pass `false`.
-- [ ] write tests for: unified toggle (mandatory short-circuit still applies across
+- [x] write tests for: unified toggle (mandatory short-circuit still applies across
       types; mixed app+tool+infra fixture); `enable`/`disable` across types by name;
       completion returns the union across types filtered by enabled-state;
       `RenderApps` / `RenderTools` / `RenderInfra` each produce the expected table;
       `--no-apps` / `--no-tools` / `--no-infra` suppress their sections in default
       `status` output; `devbox tools` is unknown (verify cobra emits the standard
       "unknown command" error to guard against accidental re-introduction).
-- [ ] run `go test ./internal/command/... ./internal/stack/... ./internal/ui/...` —
+- [x] run `go test ./internal/command/... ./internal/stack/... ./internal/ui/...` —
       must pass before next task.
 
 ### Task 8: Migrate envfile, docker.yml, and Go-template references
