@@ -1095,9 +1095,19 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 			diags = append(diags, fmt.Errorf("service %q: %w", name, err))
 			continue
 		}
-		// Per-type field allowlist.
+		// Extends only permitted between app services. Check before the allowlist
+		// so we emit ErrServiceExtendsCrossType (more specific) rather than the
+		// generic ErrServiceFieldNotAllowed for the "extends" key.
+		if extRaw, ok := entry["extends"]; ok && extRaw != nil && !svcType.IsApp() {
+			diags = append(diags, fmt.Errorf("%w: service %q (type %s)", ErrServiceExtendsCrossType, name, svcType))
+		}
+		// Per-type field allowlist. Skip "extends" for non-app types — the
+		// cross-type check above already covers that case.
 		allowed := allowedFieldsFor(svcType)
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
+			if key == "extends" && !svcType.IsApp() {
+				continue // already covered by ErrServiceExtendsCrossType above
+			}
 			if !allowed[key] {
 				diags = append(diags, fmt.Errorf("%w: service %q (type %s): field %q", ErrServiceFieldNotAllowed, name, svcType, key))
 			}
@@ -1124,11 +1134,6 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 			if _, isMap := v.(map[string]any); !isMap {
 				diags = append(diags, fmt.Errorf("%w: service %q", ErrServiceHostsShape, name))
 			}
-		}
-		// Extends only permitted between app services. Parent type checked
-		// after strict decode (parent existence is checked by topoSort).
-		if extRaw, ok := entry["extends"]; ok && extRaw != nil && !svcType.IsApp() {
-			diags = append(diags, fmt.Errorf("%w: service %q (type %s)", ErrServiceExtendsCrossType, name, svcType))
 		}
 	}
 

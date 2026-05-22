@@ -1,11 +1,3 @@
 schema_version: "2"
 project:
   name: test
-tools:
-  redis:
-    enabled: false
-runtime:
-  ports:
-    redis: 6379
-  hosts:
-    redis: redis

@@ -219,9 +219,23 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			continue
 		}
 
-		// Per-type field allowlist.
+		// extends only for app — check before the allowlist so we emit the
+		// more specific error rather than a generic "field not allowed".
+		if extRaw, ok := entry["extends"]; ok && extRaw != nil && !svcType.IsApp() {
+			emit(validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Target:   target,
+				Message:  fmt.Sprintf("service %q (type %s): extends only permitted for type app", name, svcType),
+			})
+		}
+
+		// Per-type field allowlist. Skip "extends" for non-app types — the
+		// cross-type check above already emits a more specific diagnostic.
 		allowed := servicesAllowedFields[svcType]
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
+			if key == "extends" && !svcType.IsApp() {
+				continue
+			}
 			if !allowed[key] {
 				emit(validate.Diagnostic{
 					Severity: validate.SeverityError,
@@ -229,15 +243,6 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					Message:  fmt.Sprintf("service %q (type %s): field %q not allowed", name, svcType, key),
 				})
 			}
-		}
-
-		// extends only for app.
-		if extRaw, ok := entry["extends"]; ok && extRaw != nil && !svcType.IsApp() {
-			emit(validate.Diagnostic{
-				Severity: validate.SeverityError,
-				Target:   target,
-				Message:  fmt.Sprintf("service %q (type %s): extends only permitted for type app", name, svcType),
-			})
 		}
 
 		// ports shape + range.

@@ -208,7 +208,7 @@ services:
 	root := writeServicesFile(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, `field "dir" not allowed`)
-	hasDiag(t, diags, validate.SeverityError, `field "extends" not allowed`)
+	// "extends" on a non-app emits the more specific cross-type error only.
 	hasDiag(t, diags, validate.SeverityError, "extends only permitted for type app")
 }
 

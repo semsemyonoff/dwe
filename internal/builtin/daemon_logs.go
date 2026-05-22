@@ -79,8 +79,10 @@ func (daemonLogsBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == 130 {
 			return nil
 		}
-		// SIGKILL after WaitDelay expiry: exit code is -1.
-		if errors.As(err, &exitErr) && exitErr.ExitCode() < 0 {
+		// SIGKILL after WaitDelay expiry: exit code is -1. Only treat as
+		// success when the context was already cancelled — otherwise a
+		// negative exit code means the docker process was killed externally.
+		if errors.As(err, &exitErr) && exitErr.ExitCode() < 0 && ctx.Err() != nil {
 			return nil
 		}
 		if strings.Contains(err.Error(), "signal: interrupt") {
