@@ -76,7 +76,7 @@ func RenderTools(in StatusInput) (string, []error) {
 	var errs []error
 	if len(extraCols) > 0 {
 		for i, row := range toolRows {
-			tool := in.Cfg.Tools[row.Name]
+			tool := in.Cfg.Services[row.Name]
 			data := buildToolTemplateData(in.Cfg, tool)
 			cells, cellErrs := RenderCustomCells(tool.Status, data)
 			if len(cellErrs) > 0 {
@@ -123,12 +123,14 @@ func buildServiceTemplateData(cfg *config.DevboxConfig, svc config.ServiceConfig
 }
 
 // buildToolTemplateData prepares the template data map for a tool row's
-// custom status columns.
-func buildToolTemplateData(cfg *config.DevboxConfig, tool config.ToolConfig) map[string]any {
+// custom status columns. The Tool key is kept for backwards-compatibility
+// with existing status: templates that reference {{ .Tool.Container }}.
+func buildToolTemplateData(cfg *config.DevboxConfig, tool config.ServiceConfig) map[string]any {
 	return map[string]any{
-		"Tool":    tool,
-		"Globals": rawSubtree(cfg, "globals"),
-		"Raw":     cfg.Raw,
+		"Tool":       tool,
+		"ServiceCfg": tool,
+		"Globals":    rawSubtree(cfg, "globals"),
+		"Raw":        cfg.Raw,
 	}
 }
 

@@ -70,9 +70,9 @@ func TestBuildCustomColumns_OverlappingAndDisjoint(t *testing.T) {
 
 func TestBuildCustomColumns_Tools(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Tools: config.ToolsConfig{
-			"mailpit": {Status: []config.StatusColumn{{Name: "ENDPOINT", Value: "x"}}},
-			"adminer": {Status: []config.StatusColumn{{Name: "VERSION", Value: "x"}}},
+		Services: map[string]config.ServiceConfig{
+			"mailpit": {Type: config.ServiceTypeTool, Status: []config.StatusColumn{{Name: "ENDPOINT", Value: "x"}}},
+			"adminer": {Type: config.ServiceTypeTool, Status: []config.StatusColumn{{Name: "VERSION", Value: "x"}}},
 		},
 	}
 	got := BuildCustomColumns(cfg, KindTool)

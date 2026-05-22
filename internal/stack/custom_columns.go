@@ -40,8 +40,12 @@ func BuildCustomColumns(cfg *config.DevboxConfig, kind Kind) []string {
 			}
 		}
 	case KindTool:
-		for _, name := range slices.Sorted(maps.Keys(cfg.Tools)) {
-			for _, col := range cfg.Tools[name].Status {
+		for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
+			svc := cfg.Services[name]
+			if !svc.IsTool() {
+				continue
+			}
+			for _, col := range svc.Status {
 				if _, ok := seen[col.Name]; ok {
 					continue
 				}

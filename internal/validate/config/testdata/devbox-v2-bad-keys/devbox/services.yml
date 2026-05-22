@@ -1,0 +1,6 @@
+services:
+  redis_insight:
+    type: tool
+    container: redis
+    ports:
+      bad-port: 6379

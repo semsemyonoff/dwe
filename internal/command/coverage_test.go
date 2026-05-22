@@ -490,16 +490,20 @@ func makeMinimalProject(t *testing.T) string {
 	devboxYML := `project:
   name: test
   prefix: devbox
-services:
-  main:
-    type: app
-    dir: ./services/main
 `
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	devboxDir := filepath.Join(dir, "devbox")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	servicesYML := `services:
+  main:
+    type: app
+    dir: ./services/main
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	dockerYML := "project_name: devbox-test\n"

@@ -11,19 +11,39 @@ import (
 	"devbox-cli/internal/ui"
 )
 
-func makeServicesCfg(services map[string]config.ServiceConfig, tools config.ToolsConfig, ports config.RuntimePorts, hosts config.RuntimeHosts) *config.DevboxConfig {
-	return &config.DevboxConfig{
-		Services: services,
-		Tools:    tools,
-		Runtime: config.RuntimeConfig{
-			Ports: ports,
-			Hosts: hosts,
-		},
+// testTool is the legacy tool shape used pre-unification, converted into a
+// ServiceConfig with Type=tool by makeServicesCfg.
+type testTool struct {
+	Enabled   bool
+	Container string
+	Host      string
+	Port      int
+}
+
+func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool, _ any, _ any) *config.DevboxConfig {
+	merged := make(map[string]config.ServiceConfig, len(services)+len(tools))
+	for k, v := range services {
+		merged[k] = v
 	}
+	for k, v := range tools {
+		svc := config.ServiceConfig{
+			Type:      config.ServiceTypeTool,
+			Container: v.Container,
+			Enabled:   v.Enabled,
+		}
+		if v.Port != 0 {
+			svc.Ports = map[string]int{"main": v.Port}
+		}
+		if v.Host != "" {
+			svc.Hosts = map[string]string{"main": v.Host}
+		}
+		merged[k] = svc
+	}
+	return &config.DevboxConfig{Services: merged}
 }
 
 func TestBuildServiceRows_empty(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, map[string]testTool{}, nil, nil)
 	rows := buildServiceRows(cfg)
 	if len(rows) != 0 {
 		t.Errorf("expected 0 rows, got %d", len(rows))
@@ -33,7 +53,7 @@ func TestBuildServiceRows_empty(t *testing.T) {
 func TestBuildServiceRows_single(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"main": {Type: "app", Dir: "./services/main", Container: "app-main"},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	}, map[string]testTool{}, nil, nil)
 
 	rows := buildServiceRows(cfg)
 	if len(rows) != 1 {
@@ -53,7 +73,7 @@ func TestBuildServiceRows_sortedByName(t *testing.T) {
 		"worker": {Type: "worker"},
 		"api":    {Type: "app"},
 		"main":   {Type: "app"},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	}, map[string]testTool{}, nil, nil)
 
 	rows := buildServiceRows(cfg)
 	if len(rows) != 3 {
@@ -68,10 +88,10 @@ func TestBuildServiceRows_sortedByName(t *testing.T) {
 }
 
 func TestBuildToolRows_allDisabled(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		"adminer": config.ToolConfig{Enabled: false, Container: "adminer", Host: "h", Port: 1},
-		"mailpit": config.ToolConfig{Enabled: false, Container: "mailpit", Host: "h", Port: 2},
-	}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, map[string]testTool{
+		"adminer": {Enabled: false, Container: "adminer", Host: "h", Port: 1},
+		"mailpit": {Enabled: false, Container: "mailpit", Host: "h", Port: 2},
+	}, nil, nil)
 	rows := stack.BuildToolRows(cfg)
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
@@ -106,7 +126,7 @@ func TestPickServiceToEnable_NoDisabled_ReturnsError(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"main":   {Type: "app", Mandatory: true},
 		"second": {Type: "app", Enabled: true},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	}, map[string]testTool{}, nil, nil)
 
 	_, err := pickServiceToEnable(cfg, neverToggleFn(t))
 	if err == nil {
@@ -118,7 +138,7 @@ func TestPickServiceToEnable_SelectorPicksByIndex(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"alpha": {Type: "app", Enabled: false},
 		"beta":  {Type: "app", Enabled: false},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	}, map[string]testTool{}, nil, nil)
 
 	name, err := pickServiceToEnable(cfg, alwaysToggleFn(1))
 	if err != nil {
@@ -134,7 +154,7 @@ func TestPickServiceToDisable_MandatoryNotShown(t *testing.T) {
 		"main":   {Type: "app", Mandatory: true, Enabled: true},
 		"second": {Type: "app", Enabled: true},
 		"third":  {Type: "app", Enabled: true},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	}, map[string]testTool{}, nil, nil)
 
 	var seenLabels []string
 	sel := func(title string, items []ui.SelectorItem) (int, error) {
@@ -247,7 +267,7 @@ func TestServiceDisableCmd_MandatoryError(t *testing.T) {
 func TestPickServiceToEnable_CancelPropagates(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"alpha": {Type: "app", Enabled: false},
-	}, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	}, map[string]testTool{}, nil, nil)
 	cancelSelector := func(title string, items []ui.SelectorItem) (int, error) {
 		return -1, ui.ErrCancelled
 	}

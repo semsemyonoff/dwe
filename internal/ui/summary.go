@@ -57,11 +57,11 @@ func countServices(cfg *config.DevboxConfig) (int, int) {
 	return enabled, total
 }
 
-// countTools returns the number of enabled tools.
+// countTools returns the number of enabled services of type "tool".
 func countTools(cfg *config.DevboxConfig) int {
 	n := 0
-	for _, t := range cfg.Tools {
-		if t.Enabled {
+	for _, svc := range cfg.Services {
+		if svc.IsTool() && svc.Enabled {
 			n++
 		}
 	}

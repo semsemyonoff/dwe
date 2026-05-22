@@ -31,9 +31,9 @@ func alwaysToolToggleFn(idx int) selectToggleFn {
 }
 
 func TestPickToolToEnable_NoneDisabled_ReturnsError(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		"adminer": config.ToolConfig{Enabled: true, Container: "adminer", Host: "h", Port: 1},
-	}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, map[string]testTool{
+		"adminer": {Enabled: true, Container: "adminer", Host: "h", Port: 1},
+	}, nil, nil)
 
 	_, err := pickToolToEnable(cfg, neverToolToggleFn(t))
 	if err == nil {
@@ -45,11 +45,11 @@ func TestPickToolToEnable_NoneDisabled_ReturnsError(t *testing.T) {
 }
 
 func TestPickToolToEnable_SelectorPicksSecond(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		"adminer":       config.ToolConfig{Enabled: false, Container: "adminer", Host: "h", Port: 1},
-		"mailpit":       config.ToolConfig{Enabled: false, Container: "mailpit", Host: "h", Port: 2},
-		"redis_insight": config.ToolConfig{Enabled: false, Container: "redis_insight", Host: "h", Port: 3},
-	}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, map[string]testTool{
+		"adminer":       {Enabled: false, Container: "adminer", Host: "h", Port: 1},
+		"mailpit":       {Enabled: false, Container: "mailpit", Host: "h", Port: 2},
+		"redis_insight": {Enabled: false, Container: "redis_insight", Host: "h", Port: 3},
+	}, nil, nil)
 
 	name, err := pickToolToEnable(cfg, alwaysToolToggleFn(1))
 	if err != nil {
@@ -61,7 +61,7 @@ func TestPickToolToEnable_SelectorPicksSecond(t *testing.T) {
 }
 
 func TestPickToolToDisable_NoneEnabled_ReturnsError(t *testing.T) {
-	cfg := makeServicesCfg(nil, make(config.ToolsConfig), config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, map[string]testTool{}, nil, nil)
 
 	_, err := pickToolToDisable(cfg, neverToolToggleFn(t))
 	if err == nil {
@@ -70,9 +70,9 @@ func TestPickToolToDisable_NoneEnabled_ReturnsError(t *testing.T) {
 }
 
 func TestPickToolToEnable_CancelPropagates(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		"adminer": config.ToolConfig{Enabled: false, Container: "adminer", Host: "h", Port: 1},
-	}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, map[string]testTool{
+		"adminer": {Enabled: false, Container: "adminer", Host: "h", Port: 1},
+	}, nil, nil)
 	cancelSelector := func(title string, items []ui.SelectorItem) (int, error) {
 		return -1, ui.ErrCancelled
 	}
@@ -118,10 +118,10 @@ func TestSetToolEnabled_UnknownToolReturnsErrorMentioningAvailable(t *testing.T)
 }
 
 func TestToolNameSet_DerivedFromConfig(t *testing.T) {
-	cfg := makeServicesCfg(nil, config.ToolsConfig{
-		"elasticvue": config.ToolConfig{Enabled: false},
-		"adminer":    config.ToolConfig{Enabled: true},
-	}, config.RuntimePorts{}, config.RuntimeHosts{})
+	cfg := makeServicesCfg(nil, map[string]testTool{
+		"elasticvue": {Enabled: false},
+		"adminer":    {Enabled: true},
+	}, nil, nil)
 
 	set := toolNameSet(cfg)
 	if !set["elasticvue"] || !set["adminer"] {

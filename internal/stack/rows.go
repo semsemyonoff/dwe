@@ -16,21 +16,40 @@ type ToolRow struct {
 	Container string
 }
 
-// BuildToolRows returns tool rows for all declared tools in sorted order with enabled state, port, host, and container name.
-// Safe when cfg.Tools is nil (nil map iterates zero times); cfg itself must be non-nil.
+// BuildToolRows returns tool rows for all declared services of type "tool" in
+// sorted order with enabled state, port, host, and container name.
+// Single-port / single-host tools surface those values; multi-port tools
+// surface the first sorted entry. Safe when cfg.Services is nil.
 func BuildToolRows(cfg *config.DevboxConfig) []ToolRow {
-	rows := make([]ToolRow, 0, len(cfg.Tools))
-	for _, name := range slices.Sorted(maps.Keys(cfg.Tools)) {
-		t := cfg.Tools[name]
+	rows := make([]ToolRow, 0)
+	for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
+		svc := cfg.Services[name]
+		if !svc.IsTool() {
+			continue
+		}
 		rows = append(rows, ToolRow{
 			Name:      name,
-			Enabled:   t.Enabled,
-			Port:      t.Port,
-			Host:      t.Host,
-			Container: t.Container,
+			Enabled:   svc.Enabled,
+			Port:      firstPort(svc.Ports),
+			Host:      firstHost(svc.Hosts),
+			Container: svc.Container,
 		})
 	}
 	return rows
+}
+
+func firstPort(m map[string]int) int {
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		return m[k]
+	}
+	return 0
+}
+
+func firstHost(m map[string]string) string {
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		return m[k]
+	}
+	return ""
 }
 
 func sortedKeys[V any](m map[string]V) []string {

@@ -16,7 +16,7 @@ import (
 )
 
 // Minimal inline templates used by RenderTemplateFile unit tests.
-const minimalDevcontainerTpl = `{"name":"{{ .Project.Name }}","service":"{{ .ServiceCfg.Container }}","workspaceFolder":"{{ .ServiceCfg.DirInternal }}","forwardPorts":[{{ .Runtime.Ports.app }}]}`
+const minimalDevcontainerTpl = `{"name":"{{ .Project.Name }}","service":"{{ .ServiceCfg.Container }}","workspaceFolder":"{{ .ServiceCfg.DirInternal }}","forwardPorts":[{{ .ServiceCfg.Port "http" }}]}`
 const minimalVscodeLaunchTpl = `{"type":"php","pathMappings":{"{{ .ServiceCfg.WorkDirInternal }}":"${workspaceFolder}/src"}}`
 const minimalVscodeSettingsTpl = `{"php.validate.executablePath":"/usr/local/bin/php","editor.formatOnSave":true}`
 
@@ -77,10 +77,8 @@ func makeIDECfg(name string) *config.DevboxConfig {
 				Container:       "app-" + name,
 				DirInternal:     "/workspace",
 				WorkDirInternal: "/workspace/src",
+				Ports:           map[string]int{"http": 80},
 			},
-		},
-		Runtime: config.RuntimeConfig{
-			Ports: config.RuntimePorts{"app": 80},
 		},
 		Raw: map[string]any{},
 	}
@@ -118,9 +116,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 			Container:       "app-main",
 			DirInternal:     "/workspace",
 			WorkDirInternal: "/workspace/src",
-		},
-		Runtime: config.RuntimeConfig{
-			Ports: config.RuntimePorts{"app": 8080},
+			Ports:           map[string]int{"http": 8080},
 		},
 		Cfg: &config.DevboxConfig{Raw: map[string]any{}},
 	}
@@ -1231,12 +1227,12 @@ func TestRenderIDETemplateFile_backwardCompat(t *testing.T) {
 			t.Fatal(err)
 		}
 		writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
-			`{"name":"{{ .Project.Name }}","port":{{ .Runtime.Ports.app }}}`)
+			`{"name":"{{ .Project.Name }}","port":{{ .ServiceCfg.Port "http" }}}`)
 		data := ide.TemplateData{
-			Project: config.ProjectConfig{Name: "myapp"},
-			Service: "main",
-			Runtime: config.RuntimeConfig{Ports: config.RuntimePorts{"app": 8080}},
-			Cfg:     cfg,
+			Project:    config.ProjectConfig{Name: "myapp"},
+			Service:    "main",
+			ServiceCfg: config.ServiceConfig{Ports: map[string]int{"http": 8080}},
+			Cfg:        cfg,
 		}
 		if _, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", data, "settings.json", hubDir, projectRoot); err != nil {
 			t.Fatalf("render: %v", err)

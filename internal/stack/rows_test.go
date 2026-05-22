@@ -7,6 +7,23 @@ import (
 	"devbox-cli/internal/config"
 )
 
+// mkTool returns a ServiceConfig with Type=tool and the single-port shape
+// used by stack tests pre-unification.
+func mkTool(enabled bool, container, host string, port int) config.ServiceConfig {
+	svc := config.ServiceConfig{
+		Type:      config.ServiceTypeTool,
+		Enabled:   enabled,
+		Container: container,
+	}
+	if port != 0 {
+		svc.Ports = map[string]int{"main": port}
+	}
+	if host != "" {
+		svc.Hosts = map[string]string{"main": host}
+	}
+	return svc
+}
+
 func TestBuildToolRows_Empty(t *testing.T) {
 	cfg := &config.DevboxConfig{}
 	rows := BuildToolRows(cfg)
@@ -20,7 +37,7 @@ func TestBuildToolRows_Empty(t *testing.T) {
 
 func TestBuildToolRows_NilTools(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Tools: config.ToolsConfig(nil),
+		Services: nil,
 	}
 	rows := BuildToolRows(cfg)
 	if rows == nil {
@@ -33,10 +50,10 @@ func TestBuildToolRows_NilTools(t *testing.T) {
 
 func TestBuildToolRows_SortedOrder(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Tools: config.ToolsConfig{
-			"zebra":  {Enabled: true, Container: "zebra", Host: "z.local", Port: 9000},
-			"apple":  {Enabled: false, Container: "apple", Host: "a.local", Port: 9001},
-			"middle": {Enabled: true, Container: "middle", Host: "m.local", Port: 9002},
+		Services: map[string]config.ServiceConfig{
+			"zebra":  mkTool(true, "zebra", "z.local", 9000),
+			"apple":  mkTool(false, "apple", "a.local", 9001),
+			"middle": mkTool(true, "middle", "m.local", 9002),
 		},
 	}
 
@@ -54,13 +71,8 @@ func TestBuildToolRows_SortedOrder(t *testing.T) {
 
 func TestBuildToolRows_PopulatesFields(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Tools: config.ToolsConfig{
-			"adminer": {
-				Enabled:   true,
-				Container: "adminer",
-				Host:      "adminer.localhost",
-				Port:      8080,
-			},
+		Services: map[string]config.ServiceConfig{
+			"adminer": mkTool(true, "adminer", "adminer.localhost", 8080),
 		},
 	}
 
@@ -89,19 +101,9 @@ func TestBuildToolRows_PopulatesFields(t *testing.T) {
 
 func TestBuildToolRows_ArbitraryToolNames(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Tools: config.ToolsConfig{
-			"elasticvue": {
-				Enabled:   true,
-				Container: "elasticvue",
-				Host:      "elasticvue.localhost",
-				Port:      8050,
-			},
-			"opensearch_dashboard": {
-				Enabled:   false,
-				Container: "opensearch-dashboard",
-				Host:      "dashboard.localhost",
-				Port:      5601,
-			},
+		Services: map[string]config.ServiceConfig{
+			"elasticvue":           mkTool(true, "elasticvue", "elasticvue.localhost", 8050),
+			"opensearch_dashboard": mkTool(false, "opensearch-dashboard", "dashboard.localhost", 5601),
 		},
 	}
 
@@ -127,13 +129,27 @@ func TestBuildToolRows_ArbitraryToolNames(t *testing.T) {
 	}
 }
 
+func TestBuildToolRows_FiltersOutNonTools(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"adminer": mkTool(true, "adminer", "adminer.localhost", 8080),
+			"main":    {Type: config.ServiceTypeApp, Container: "app-main"},
+			"db":      {Type: config.ServiceTypeInfra, Container: "db"},
+		},
+	}
+	rows := BuildToolRows(cfg)
+	if len(rows) != 1 || rows[0].Name != "adminer" {
+		t.Errorf("expected only adminer in tool rows, got %v", rows)
+	}
+}
+
 func TestBuildToolRows_DeterministicOrdering_MultipleInvocations(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Tools: config.ToolsConfig{
-			"zebra":  {Enabled: true, Container: "zebra", Host: "z.local", Port: 9000},
-			"apple":  {Enabled: false, Container: "apple", Host: "a.local", Port: 9001},
-			"banana": {Enabled: true, Container: "banana", Host: "b.local", Port: 9002},
-			"middle": {Enabled: true, Container: "middle", Host: "m.local", Port: 9003},
+		Services: map[string]config.ServiceConfig{
+			"zebra":  mkTool(true, "zebra", "z.local", 9000),
+			"apple":  mkTool(false, "apple", "a.local", 9001),
+			"banana": mkTool(true, "banana", "b.local", 9002),
+			"middle": mkTool(true, "middle", "m.local", 9003),
 		},
 	}
 

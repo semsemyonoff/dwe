@@ -8,15 +8,42 @@ import (
 	"devbox-cli/internal/config"
 )
 
-func makeServicesCfg(services map[string]config.ServiceConfig, tools config.ToolsConfig, ports config.RuntimePorts, hosts config.RuntimeHosts) *config.DevboxConfig {
-	return &config.DevboxConfig{
-		Services: services,
-		Tools:    tools,
-		Runtime: config.RuntimeConfig{
-			Ports: ports,
-			Hosts: hosts,
-		},
+// testTool is the legacy tool shape used by stack tests pre-unification. It
+// is converted into a ServiceConfig with Type=tool by makeServicesCfg.
+type testTool struct {
+	Enabled   bool
+	Container string
+	Host      string
+	Port      int
+	Status    []config.StatusColumn
+}
+
+// makeServicesCfg builds a minimal DevboxConfig for stack tests. Optional
+// tools are merged into services with Type=ServiceTypeTool.
+func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool, _ any, _ any) *config.DevboxConfig {
+	merged := make(map[string]config.ServiceConfig, len(services)+len(tools))
+	for k, v := range services {
+		if v.Type == "" {
+			v.Type = config.ServiceTypeApp
+		}
+		merged[k] = v
 	}
+	for k, v := range tools {
+		svc := config.ServiceConfig{
+			Type:      config.ServiceTypeTool,
+			Container: v.Container,
+			Enabled:   v.Enabled,
+			Status:    v.Status,
+		}
+		if v.Port != 0 {
+			svc.Ports = map[string]int{"main": v.Port}
+		}
+		if v.Host != "" {
+			svc.Hosts = map[string]string{"main": v.Host}
+		}
+		merged[k] = svc
+	}
+	return &config.DevboxConfig{Services: merged}
 }
 
 func makeMinimalProject(t *testing.T) string {

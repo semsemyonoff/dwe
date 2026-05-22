@@ -77,11 +77,11 @@ func runToolsToggle(cmd *cobra.Command, flags *rootFlags) error {
 		return err
 	}
 
-	toolSelections := make([]localconfig.ToolSelection, len(rows))
+	toolSelections := make([]localconfig.ServiceSelection, len(rows))
 	for i, row := range rows {
-		toolSelections[i] = localconfig.ToolSelection{Name: row.Name, Enabled: row.Enabled}
+		toolSelections[i] = localconfig.ServiceSelection{Name: row.Name, Enabled: row.Enabled}
 	}
-	toEnable, toDisable := localconfig.DiffToolSelection(toolSelections, result.Kept)
+	toEnable, toDisable := localconfig.DiffServiceSelection(toolSelections, result.Kept)
 	if len(toEnable) == 0 && len(toDisable) == 0 {
 		return nil
 	}
@@ -231,9 +231,11 @@ func pickToolCandidates(rows []stack.ToolRow, statusLabel, title string, selecto
 }
 
 func toolNameSet(cfg *config.DevboxConfig) map[string]bool {
-	set := make(map[string]bool, len(cfg.Tools))
-	for name := range cfg.Tools {
-		set[name] = true
+	set := make(map[string]bool)
+	for name, svc := range cfg.Services {
+		if svc.IsTool() {
+			set[name] = true
+		}
 	}
 	return set
 }
@@ -260,14 +262,17 @@ func toolCompletion(flags *rootFlags, filter toolFilter) func(*cobra.Command, []
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		var names []string
-		for name, tool := range cfg.Tools {
+		for name, svc := range cfg.Services {
+			if !svc.IsTool() {
+				continue
+			}
 			switch filter {
 			case completeToolDisabled:
-				if !tool.Enabled {
+				if !svc.Enabled {
 					names = append(names, name)
 				}
 			case completeToolEnabled:
-				if tool.Enabled {
+				if svc.Enabled {
 					names = append(names, name)
 				}
 			}
@@ -286,8 +291,7 @@ func applyToolTogglesBatch(cfg *config.DevboxConfig, configPath string, toEnable
 		return err
 	}
 
-	knownTools := toolNameSet(cfg)
-	if err := localconfig.ApplyToolTogglesToYAML(knownTools, local, toEnable, toDisable); err != nil {
+	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
 		return err
 	}
 

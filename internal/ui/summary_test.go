@@ -46,7 +46,9 @@ func TestRenderSummary_NoURL(t *testing.T) {
 		Project: config.ProjectConfig{Name: "myapp"},
 		Runtime: config.RuntimeConfig{
 			UseHTTPS: false,
-			Hosts:    config.RuntimeHosts{"main": "myapp.localhost"},
+		},
+		Services: map[string]config.ServiceConfig{
+			"main": {Type: config.ServiceTypeApp, Hosts: map[string]string{"main": "myapp.localhost"}},
 		},
 	}
 	out := RenderSummary(cfg, nil)
@@ -88,10 +90,10 @@ func TestRenderSummary_MandatoryCountsAsEnabled(t *testing.T) {
 func TestRenderSummary_ToolCounts(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
-		Tools: config.ToolsConfig{
-			"adminer":       {Enabled: true},
-			"redis_insight": {Enabled: false},
-			"mailpit":       {Enabled: true},
+		Services: map[string]config.ServiceConfig{
+			"adminer":       {Type: config.ServiceTypeTool, Enabled: true},
+			"redis_insight": {Type: config.ServiceTypeTool, Enabled: false},
+			"mailpit":       {Type: config.ServiceTypeTool, Enabled: true},
 		},
 	}
 	out := RenderSummary(cfg, nil)
@@ -113,8 +115,8 @@ func TestRenderSummary_TwoLines(t *testing.T) {
 
 func TestRenderSummary_NilTools(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Project: config.ProjectConfig{Name: "myapp"},
-		Tools:   nil,
+		Project:  config.ProjectConfig{Name: "myapp"},
+		Services: nil,
 	}
 	out := RenderSummary(cfg, nil)
 	if !strings.Contains(out, "tools 0 enabled") {

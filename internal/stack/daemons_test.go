@@ -175,9 +175,9 @@ func TestCollectDaemons_ShellError(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	cfg.Project.Name = "proj"
 	orig := daemonsShellOutFn
@@ -209,9 +209,9 @@ func TestCollectDaemons_ShellSeam(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	cfg.Project.Name = "proj"
 	orig := daemonsShellOutFn

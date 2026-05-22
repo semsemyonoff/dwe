@@ -13,9 +13,9 @@ func TestRenderHealth_ContainsIndicator(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Dir: "./services/main", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	neverRunning := func(_, _ string) bool { return false }
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: neverRunning})
@@ -29,9 +29,9 @@ func TestRenderHealth_Stopped(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	neverRunning := func(_, _ string) bool { return false }
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: neverRunning})
@@ -45,9 +45,9 @@ func TestRenderHealth_Running(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	alwaysRunning := func(_, _ string) bool { return true }
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: alwaysRunning})
@@ -62,9 +62,9 @@ func TestRenderHealth_Partial(t *testing.T) {
 			"main":   {Type: "app", Container: "app-main", Mandatory: true},
 			"second": {Type: "app", Container: "app-second", Enabled: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	partialRunning := func(_, container string) bool {
 		return container == "app-main"
@@ -80,9 +80,9 @@ func TestRenderServices_ContainsServiceName(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	out, errs := RenderServices(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
 	if len(errs) != 0 {
@@ -96,11 +96,11 @@ func TestRenderServices_ContainsServiceName(t *testing.T) {
 func TestRenderTools_ContainsToolName(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{},
-		config.ToolsConfig{
+		map[string]testTool{
 			"adminer": {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 		},
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		nil,
+		nil,
 	)
 	out, errs := RenderTools(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
 	if len(errs) != 0 {
@@ -116,9 +116,9 @@ func TestRenderTopology_NilSkipped(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
 	if out != "" {
@@ -131,9 +131,9 @@ func TestRenderTopology_WithStatus(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	topo := map[string][]string{
 		"nginx":    {"app-main"},
@@ -166,9 +166,9 @@ func TestRenderServices_CustomColumnsAggregateError(t *testing.T) {
 				},
 			},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 	_, errs := RenderServices(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
 	if len(errs) == 0 {

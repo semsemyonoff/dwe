@@ -16,6 +16,8 @@ import (
 
 // writeTempToolConfig creates a minimal devbox config in a temp dir and
 // returns the path to devbox.yml. tools map: name → enabled.
+// Post-unification: tools are declared as type=tool services in services.yml,
+// and enable overlays live in devbox.yml under services.<name>.enabled.
 func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -35,18 +37,7 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 	lines = append(lines, "project:")
 	lines = append(lines, "  name: test")
 	lines = append(lines, "  prefix: devbox")
-	lines = append(lines, "runtime:")
-	lines = append(lines, "  ports:")
-	lines = append(lines, "    app: 3000")
-	for _, name := range toolOrder {
-		lines = append(lines, "    "+name+": "+fmt.Sprint(toolDefs[name].port))
-	}
-	lines = append(lines, "  hosts:")
-	lines = append(lines, "    main: localhost")
-	for _, name := range toolOrder {
-		lines = append(lines, "    "+name+": "+toolDefs[name].host)
-	}
-	lines = append(lines, "tools:")
+	lines = append(lines, "services:")
 	for _, name := range toolOrder {
 		lines = append(lines, "  "+name+":")
 		if tools[name] {
@@ -55,7 +46,6 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 			lines = append(lines, "    enabled: false")
 		}
 	}
-
 	devboxYML := strings.Join(lines, "\n") + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
@@ -64,15 +54,20 @@ func writeTempToolConfig(t *testing.T, tools map[string]bool) string {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
 
-	var toolsLines []string
-	toolsLines = append(toolsLines, "tools:")
+	var svcLines []string
+	svcLines = append(svcLines, "services:")
 	for _, name := range toolOrder {
-		toolsLines = append(toolsLines, "  "+name+":")
-		toolsLines = append(toolsLines, "    container: "+toolDefs[name].container)
+		svcLines = append(svcLines, "  "+name+":")
+		svcLines = append(svcLines, "    type: tool")
+		svcLines = append(svcLines, "    container: "+toolDefs[name].container)
+		svcLines = append(svcLines, "    ports:")
+		svcLines = append(svcLines, "      main: "+fmt.Sprint(toolDefs[name].port))
+		svcLines = append(svcLines, "    hosts:")
+		svcLines = append(svcLines, "      main: "+toolDefs[name].host)
 	}
-	toolsYML := strings.Join(toolsLines, "\n") + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "tools.yml"), []byte(toolsYML), 0o644); err != nil {
-		t.Fatalf("write tools.yml: %v", err)
+	servicesYML := strings.Join(svcLines, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatalf("write services.yml: %v", err)
 	}
 
 	return filepath.Join(dir, "devbox.yml")
@@ -138,15 +133,15 @@ func TestToolsToggle_TTY_EnablesAndDisables(t *testing.T) {
 	if err := yaml.Unmarshal(data, &local); err != nil {
 		t.Fatalf("unmarshal local.yml: %v", err)
 	}
-	toolsMap, _ := local["tools"].(map[string]any)
-	if toolsMap == nil {
-		t.Fatal("local.yml missing tools key")
+	svcMap, _ := local["services"].(map[string]any)
+	if svcMap == nil {
+		t.Fatal("local.yml missing services key")
 	}
-	adminerEntry, _ := toolsMap["adminer"].(map[string]any)
+	adminerEntry, _ := svcMap["adminer"].(map[string]any)
 	if adminerEntry == nil || adminerEntry["enabled"] != true {
 		t.Errorf("adminer should be enabled=true, got %v", adminerEntry)
 	}
-	mailpitEntry, _ := toolsMap["mailpit"].(map[string]any)
+	mailpitEntry, _ := svcMap["mailpit"].(map[string]any)
 	if mailpitEntry == nil || mailpitEntry["enabled"] != false {
 		t.Errorf("mailpit should be enabled=false, got %v", mailpitEntry)
 	}

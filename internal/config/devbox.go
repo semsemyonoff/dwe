@@ -90,7 +90,6 @@ func applyBinariesDefaults(b *BinariesConfig) {
 type DevboxConfig struct {
 	SchemaVersion string         `yaml:"schema_version"`
 	Project       ProjectConfig  `yaml:"project"`
-	Tools         ToolsConfig    `yaml:"tools"`
 	Runtime       RuntimeConfig  `yaml:"runtime"`
 	State         string         `yaml:"state"`
 	Exports       ExportsConfig  `yaml:"exports"`
@@ -349,27 +348,30 @@ func (c *DevboxConfig) ComposeFilesAll() []string {
 }
 
 func (c *DevboxConfig) composeFiles(all bool) []string {
-	files := make([]string, 0, 1+len(c.Tools)+len(c.Services))
+	files := make([]string, 0, 1+len(c.Services))
 	if c.Compose.Base != "" {
 		files = append(files, c.Compose.Base)
 	}
 
-	for _, name := range slices.Sorted(maps.Keys(c.Tools)) {
-		tool := c.Tools[name]
-		if tool.Compose == "" {
-			continue
-		}
-		if all || tool.Enabled {
-			files = append(files, tool.Compose)
+	// Group by type: tools, then infra, then apps; sorted by name within each group.
+	// Services with an empty Type are emitted last in the same pass as apps so
+	// tests that build ServiceConfig literals without setting Type still work.
+	// Order is part of the public surface — see Task 6 in
+	// docs/plans/2026-05-22-unified-services-schema.md.
+	emitGroup := func(match func(ServiceType) bool) {
+		for _, name := range slices.Sorted(maps.Keys(c.Services)) {
+			svc := c.Services[name]
+			if !match(svc.Type) {
+				continue
+			}
+			if (all || svc.Enabled) && len(svc.Compose) > 0 {
+				files = append(files, svc.Compose...)
+			}
 		}
 	}
-
-	for _, name := range slices.Sorted(maps.Keys(c.Services)) {
-		svc := c.Services[name]
-		if (all || svc.Enabled) && len(svc.Compose) > 0 {
-			files = append(files, svc.Compose...)
-		}
-	}
+	emitGroup(func(t ServiceType) bool { return t == ServiceTypeTool })
+	emitGroup(func(t ServiceType) bool { return t == ServiceTypeInfra })
+	emitGroup(func(t ServiceType) bool { return t == ServiceTypeApp || t == "" })
 
 	return files
 }
@@ -704,59 +706,12 @@ func (c *ServiceCLIConfig) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// ToolConfig holds configuration for a single optional tool.
-// Keys in ToolsConfig are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$
-// (Go identifier safe) so they can be used with Go template dot syntax.
-// Container, Compose, and Status are loaded from devbox/tools.yml.
-// Enabled is resolved programmatically from the 3-layer overlay merge.
-// Host and Port are resolved from the 3-layer runtime.hosts.<name> /
-// runtime.ports.<name> merge — they live in defaults.yml so they can be
-// overridden in local.yml without touching tools.yml.
-type ToolConfig struct {
-	Enabled   bool           `yaml:"-"` // resolved from tools.<name>.enabled overlay
-	Container string         `yaml:"container"`
-	Host      string         `yaml:"-"` // resolved from runtime.hosts.<name>
-	Port      int            `yaml:"-"` // resolved from runtime.ports.<name>
-	Compose   string         `yaml:"compose"`
-	Status    []StatusColumn `yaml:"status,omitempty"`
-}
-
-// ToolsConfig is a map of tool names to their configurations.
-// Keys are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$
-// (Go identifier safe) so they can be used with Go template dot syntax.
-// Examples: map[string]ToolConfig{"adminer": {...}, "elasticvue": {...}}
-type ToolsConfig map[string]ToolConfig
-
-// AnyEnabled returns true when at least one tool is enabled.
-// Safe on a nil map receiver; range over a nil map runs zero iterations.
-func (t ToolsConfig) AnyEnabled() bool {
-	for _, tool := range t {
-		if tool.Enabled {
-			return true
-		}
-	}
-	return false
-}
-
-// RuntimeConfig describes ports, hostnames, and other runtime settings.
+// RuntimeConfig describes runtime settings that are not service-specific.
+// Per-service host/port have moved to ServiceConfig.Hosts/Ports.
 type RuntimeConfig struct {
-	UseHTTPS bool         `yaml:"use_https"`
-	Ports    RuntimePorts `yaml:"ports"`
-	Hosts    RuntimeHosts `yaml:"hosts"`
-	SPX      SPXConfig    `yaml:"spx"`
+	UseHTTPS bool      `yaml:"use_https"`
+	SPX      SPXConfig `yaml:"spx"`
 }
-
-// RuntimePorts maps runtime role names (e.g. "app", "db", "redis", "main") to host ports.
-// Keys are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$ (Go identifier safe)
-// so they can be used with Go template dot syntax.
-// Non-tool roles live here (app, db, redis, main); tool port references live under Tools.<name>.Port.
-type RuntimePorts map[string]int
-
-// RuntimeHosts maps runtime role names (e.g. "main", "app") to virtual hostnames.
-// Keys are constrained to match the regex ^[A-Za-z_][A-Za-z0-9_]*$ (Go identifier safe)
-// so they can be used with Go template dot syntax.
-// Non-tool roles live here (main, app); tool host references live under Tools.<name>.Host.
-type RuntimeHosts map[string]string
 
 // SPXConfig holds SPX profiler settings.
 type SPXConfig struct {
@@ -819,41 +774,23 @@ func validIdentifierKey(s string) bool {
 	return true
 }
 
-// validateConfigKeys checks that all keys in Tools, Runtime.Ports, and Runtime.Hosts
-// are identifier-safe (^[A-Za-z_][A-Za-z0-9_]*$), and that every declared tool entry
-// (enabled or disabled) has non-empty container plus a corresponding
-// runtime.hosts.<name> and positive runtime.ports.<name>.
-// Tool host/port live in the shared runtime.{hosts,ports} collections alongside
-// service roles — overrideable via the 3-layer merge.
+// validateConfigKeys checks per-service identifier-safety of Ports/Hosts keys
+// so they can be used with Go template dot syntax (^[A-Za-z_][A-Za-z0-9_]*$).
+// Top-level service names are checked as well.
 func validateConfigKeys(cfg *DevboxConfig) error {
-	for _, key := range slices.Sorted(maps.Keys(cfg.Tools)) {
-		if !validIdentifierKey(key) {
-			return fmt.Errorf("invalid tool key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
+	for _, svcName := range slices.Sorted(maps.Keys(cfg.Services)) {
+		svc := cfg.Services[svcName]
+		for _, k := range slices.Sorted(maps.Keys(svc.Ports)) {
+			if !validIdentifierKey(k) {
+				return fmt.Errorf("service %q: invalid ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", svcName, k)
+			}
 		}
-		tool := cfg.Tools[key]
-		if tool.Container == "" {
-			return fmt.Errorf("tool %q: container is required (set in devbox/tools.yml)", key)
-		}
-		if tool.Host == "" {
-			return fmt.Errorf("tool %q: host is required (set runtime.hosts.%s in devbox/defaults.yml)", key, key)
-		}
-		if tool.Port <= 0 {
-			return fmt.Errorf("tool %q: port must be positive (set runtime.ports.%s in devbox/defaults.yml), got %d", key, key, tool.Port)
+		for _, k := range slices.Sorted(maps.Keys(svc.Hosts)) {
+			if !validIdentifierKey(k) {
+				return fmt.Errorf("service %q: invalid hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", svcName, k)
+			}
 		}
 	}
-
-	for _, key := range slices.Sorted(maps.Keys(cfg.Runtime.Ports)) {
-		if !validIdentifierKey(key) {
-			return fmt.Errorf("invalid runtime.ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
-		}
-	}
-
-	for _, key := range slices.Sorted(maps.Keys(cfg.Runtime.Hosts)) {
-		if !validIdentifierKey(key) {
-			return fmt.Errorf("invalid runtime.hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", key)
-		}
-	}
-
 	return nil
 }
 
@@ -889,12 +826,17 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 // Later layers win on conflict; maps are merged recursively.
 // The merged raw map is stored in DevboxConfig.Raw for dot-path resolution.
 //
-// Tool definitions live in devbox/tools.yml; the three layers above may carry
-// only `tools.<name>.enabled` overlays.
+// Sequencing:
+//  1. Load devbox/services.yml (canonical service declarations).
+//  2. Validate each overlay layer against the declared service set
+//     (only services.<name>.enabled permitted in overlays).
+//  3. Merge the raw YAML layers.
+//  4. Resolve per-service Enabled from the merged overlay.
+//  5. Inject services into Raw for dot-path resolution.
 func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	baseDir := filepath.Dir(devboxPath)
 
-	// Read each layer separately so the cross-layer tools overlay validator can
+	// Read each layer separately so the cross-layer overlay validator can
 	// attribute errors to a specific source file.
 	type rawLayer struct {
 		path string
@@ -925,25 +867,26 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		return nil, fmt.Errorf("read %s: %w", localPath, err)
 	}
 
-	// Load devbox/tools.yml — the only source of typed tool definitions.
-	toolsPath := filepath.Join(baseDir, "devbox", "tools.yml")
-	tools, err := LoadToolsConfig(toolsPath)
+	// Step 1: load devbox/services.yml — the canonical service declarations.
+	servicesPath := filepath.Join(baseDir, "devbox", "services.yml")
+	services, err := LoadServicesConfig(servicesPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", toolsPath, err)
+		return nil, err
 	}
-	if tools == nil {
-		tools = ToolsConfig{}
+	if services == nil {
+		services = map[string]ServiceConfig{}
 	}
 
-	// Cross-layer validate: each layer may only carry tools.<name>.enabled
-	// against the declared tool set.
+	// Step 2: validate overlay shape against the declared services set
+	// before merging. This is the ordering that catches "silently wrong"
+	// overlays that would otherwise be tolerated by the deep merge.
 	for _, layer := range layers {
-		if err := validateToolsOverlay(layer.path, layer.data, tools); err != nil {
+		if err := validateServicesOverlay(layer.path, layer.data, services); err != nil {
 			return nil, err
 		}
 	}
 
-	// Merge the layers.
+	// Step 3: merge the layers.
 	merged := make(map[string]any)
 	for _, layer := range layers {
 		deepMerge(merged, layer.data)
@@ -978,32 +921,9 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		}
 	}
 
-	// Authoritative tool assignment: tools.yml is the only source for typed tool
-	// definitions. The marshal/unmarshal above may have populated cfg.Tools with
-	// zero-value entries from overlay tools.<name>.enabled blocks; replace it now.
-	// Host and Port are resolved from the merged runtime.hosts.<name> /
-	// runtime.ports.<name> so user-tunable values live in defaults.yml / local.yml.
-	cfg.Tools = tools
-	for name, tool := range cfg.Tools {
-		val, ok := ResolvePath(merged, "tools."+name+".enabled")
-		if ok {
-			tool.Enabled = isTruthy(val)
-		} else {
-			tool.Enabled = false
-		}
-		tool.Host = cfg.Runtime.Hosts[name]
-		tool.Port = cfg.Runtime.Ports[name]
-		cfg.Tools[name] = tool
-	}
-
 	cfg.Raw = merged
 	// Store config path so deploy resolution can find service deploy files.
 	cfg.Raw["__configPath"] = devboxPath
-
-	// Inject tool definitions into the raw map so dot-paths like
-	// tools.<name>.port resolve via ResolvePath for export rules, info.yml,
-	// docker.yml template expressions, and user command default_from.
-	injectToolsIntoRaw(merged, cfg.Tools)
 
 	// Normalize Raw["binaries"] so dot-path lookups (e.g. ${binaries.docker} in
 	// export rules) see the same effective values as cfg.Binaries.* Go callers.
@@ -1015,28 +935,24 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		"git":    cfg.Binaries.Git,
 	}
 
-	// Load devbox/services.yml separately (not merged with config layers).
-	servicesPath := filepath.Join(baseDir, "devbox", "services.yml")
-	if services, err := LoadServicesConfig(servicesPath); err == nil {
-		// Resolve enabled state from the 3-layer merge.
-		for name, svc := range services {
-			if svc.Mandatory {
-				svc.Enabled = true
-			} else {
-				val, ok := ResolvePath(merged, "services."+name+".enabled")
-				if ok {
-					svc.Enabled = isTruthy(val)
-				}
+	// Step 4: resolve per-service Enabled from the merged overlay.
+	for name, svc := range services {
+		if svc.Mandatory {
+			svc.Enabled = true
+		} else {
+			val, ok := ResolvePath(merged, "services."+name+".enabled")
+			if ok {
+				svc.Enabled = isTruthy(val)
 			}
-			services[name] = svc
 		}
-		cfg.Services = services
-		// Inject service definitions into the raw map so export rules
-		// like "from: services.main.container" resolve via dot-path.
-		injectServicesIntoRaw(merged, services)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", servicesPath, err)
+		services[name] = svc
 	}
+	cfg.Services = services
+
+	// Step 5: inject service definitions into the raw map so dot-paths like
+	// `services.main.ports.http` resolve via ResolvePath for export rules,
+	// info.yml, docker.yml templates, and user command default_from.
+	injectServicesIntoRaw(merged, services)
 
 	// Load devbox/deploy.yml separately (not merged with config layers).
 	deployPath := filepath.Join(baseDir, "devbox", "deploy.yml")
@@ -1057,91 +973,38 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	return &cfg, nil
 }
 
-// toolsFile is the top-level structure of devbox/tools.yml.
-type toolsFile struct {
-	Tools ToolsConfig `yaml:"tools"`
-}
-
-// LoadToolsConfig loads tool definitions from devbox/tools.yml using strict
-// known-field decoding. A missing file returns (nil, os.ErrNotExist) — callers
-// must test with errors.Is(err, os.ErrNotExist).
-func LoadToolsConfig(path string) (ToolsConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-	var f toolsFile
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&f); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	if f.Tools == nil {
-		f.Tools = ToolsConfig{}
-	}
-	return f.Tools, nil
-}
-
-// validateToolsOverlay rejects any field other than `enabled:` under a layer's
-// tools.<name> mapping and any tools.<name> entry naming a tool not declared in
-// devbox/tools.yml. The layerPath is included in the error message so the user
-// knows which file to edit.
-func validateToolsOverlay(layerPath string, raw map[string]any, declared ToolsConfig) error {
-	toolsRaw, ok := raw["tools"]
-	if !ok || toolsRaw == nil {
+// validateServicesOverlay rejects any field other than `enabled:` under a
+// layer's services.<name> mapping and any services.<name> entry naming a
+// service not declared in devbox/services.yml. layerPath is included in the
+// error message so the user knows which file to edit.
+func validateServicesOverlay(layerPath string, raw map[string]any, declared map[string]ServiceConfig) error {
+	svcRaw, ok := raw["services"]
+	if !ok || svcRaw == nil {
 		return nil
 	}
-	toolsMap, ok := toolsRaw.(map[string]any)
+	svcMap, ok := svcRaw.(map[string]any)
 	if !ok {
-		return fmt.Errorf("%s: tools: must be a mapping", layerPath)
+		return fmt.Errorf("%s: services: must be a mapping", layerPath)
 	}
-	for _, name := range slices.Sorted(maps.Keys(toolsMap)) {
+	for _, name := range slices.Sorted(maps.Keys(svcMap)) {
 		if _, declaredOK := declared[name]; !declaredOK {
-			return fmt.Errorf("%s: tools.%s: unknown tool (declared tools live in devbox/tools.yml)", layerPath, name)
+			return fmt.Errorf("%s: services.%s: unknown service (declared services live in devbox/services.yml)", layerPath, name)
 		}
-		entryRaw := toolsMap[name]
+		entryRaw := svcMap[name]
 		if entryRaw == nil {
 			continue
 		}
 		entry, ok := entryRaw.(map[string]any)
 		if !ok {
-			return fmt.Errorf("%s: tools.%s: must be a mapping", layerPath, name)
+			return fmt.Errorf("%s: services.%s: must be a mapping", layerPath, name)
 		}
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
 			if key != "enabled" {
-				return fmt.Errorf("%s: tools.%s.%s: tool definitions belong in devbox/tools.yml; overlays may only set enabled", layerPath, name, key)
+				return fmt.Errorf("%s: services.%s.%s: service definitions belong in devbox/services.yml; overlays may only set enabled", layerPath, name, key)
 			}
 		}
 	}
 	return nil
-}
-
-// injectToolsIntoRaw merges tool definitions into raw["tools"] so dot-path
-// lookups (e.g. tools.adminer.container, tools.adminer.enabled) resolve
-// against the merged map. Host and port live under runtime.hosts.<name> /
-// runtime.ports.<name> and are NOT mirrored here — there is one canonical
-// dot-path per value.
-func injectToolsIntoRaw(raw map[string]any, tools ToolsConfig) {
-	toolsMap, ok := raw["tools"].(map[string]any)
-	if !ok {
-		toolsMap = make(map[string]any)
-		raw["tools"] = toolsMap
-	}
-	for name, tool := range tools {
-		entry, ok := toolsMap[name].(map[string]any)
-		if !ok {
-			entry = make(map[string]any)
-			toolsMap[name] = entry
-		}
-		entry["enabled"] = tool.Enabled
-		entry["container"] = tool.Container
-		if tool.Compose != "" {
-			entry["compose"] = tool.Compose
-		}
-	}
 }
 
 // servicesFile is the top-level structure of devbox/services.yml.
@@ -1402,9 +1265,15 @@ func topoSortServices(services map[string]ServiceConfig) ([]string, error) {
 	return result, nil
 }
 
-// injectServicesIntoRaw merges service definitions into raw["services"] so that
-// export rules can resolve dot-paths like "services.main.container".
+// injectServicesIntoRaw merges service definitions into raw["services"] so
+// that export rules and dot-path templates resolve against the merged map.
+// Intermediate maps are lazy-initialized; empty Ports/Hosts/Configs/Compose
+// are omitted (no empty-map placeholder) so `(index .Services "X").Ports`
+// existence checks behave consistently across services.
 func injectServicesIntoRaw(raw map[string]any, services map[string]ServiceConfig) {
+	if raw["services"] == nil {
+		raw["services"] = map[string]any{}
+	}
 	svcMap, ok := raw["services"].(map[string]any)
 	if !ok {
 		svcMap = make(map[string]any)
@@ -1416,7 +1285,7 @@ func injectServicesIntoRaw(raw map[string]any, services map[string]ServiceConfig
 			entry = make(map[string]any)
 			svcMap[name] = entry
 		}
-		entry["type"] = svc.Type
+		entry["type"] = string(svc.Type)
 		entry["container"] = svc.Container
 		entry["mandatory"] = svc.Mandatory
 		entry["enabled"] = svc.Enabled
@@ -1436,6 +1305,20 @@ func injectServicesIntoRaw(raw map[string]any, services map[string]ServiceConfig
 				configs[i] = c.File
 			}
 			entry["configs"] = configs
+		}
+		if len(svc.Ports) > 0 {
+			ports := make(map[string]any, len(svc.Ports))
+			for k, v := range svc.Ports {
+				ports[k] = v
+			}
+			entry["ports"] = ports
+		}
+		if len(svc.Hosts) > 0 {
+			hosts := make(map[string]any, len(svc.Hosts))
+			for k, v := range svc.Hosts {
+				hosts[k] = v
+			}
+			entry["hosts"] = hosts
 		}
 	}
 }

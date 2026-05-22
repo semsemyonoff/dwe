@@ -306,7 +306,7 @@ func TestResolveShellOptions_EnvFlagInvalidFormat_ReturnsError(t *testing.T) {
 
 // makeMultiServiceCfg builds a DevboxConfig with multiple services for selector tests.
 func makeMultiServiceCfg(services map[string]config.ServiceConfig) *config.DevboxConfig {
-	return makeServicesCfg(services, config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{})
+	return makeServicesCfg(services, map[string]testTool{}, nil, nil)
 }
 
 // alwaysSelectFn returns a selectServiceFn that always picks the service at the given index.
@@ -450,7 +450,7 @@ func testCfg(container string, cli config.ServiceCLIConfig) *config.DevboxConfig
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: container, CLI: cli},
 		},
-		config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{},
+		map[string]testTool{}, nil, nil,
 	)
 }
 
@@ -757,7 +757,7 @@ func TestRunServicesCLI_NoContainer_ReturnsError(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: ""},
 		},
-		config.ToolsConfig{}, config.RuntimePorts{}, config.RuntimeHosts{},
+		map[string]testTool{}, nil, nil,
 	)
 	compose := testCompose()
 	flags := shellCLIFlags{}
@@ -989,9 +989,9 @@ func TestRunStatusViaCfg(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Dir: "./services/main", Container: "app-main"},
 		},
-		config.ToolsConfig{},
-		config.RuntimePorts{},
-		config.RuntimeHosts{},
+		map[string]testTool{},
+		nil,
+		nil,
 	)
 
 	neverRunning := func(_, _ string) bool { return false }

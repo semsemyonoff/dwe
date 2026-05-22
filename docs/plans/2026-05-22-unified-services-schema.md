@@ -259,55 +259,21 @@ overlay, then resolves services. After unification the order must be:
 
 Tools are no longer a separate load step. Step 1 covers them.
 
-- [ ] delete the complete tools surface from `internal/config/devbox.go`:
-      - struct `ToolConfig` (l.602);
-      - map alias `ToolsConfig` (l.615) and its method `(ToolsConfig).AnyEnabled` (l.619);
-      - the file-wrapper inner field `Tools ToolsConfig` in `LoadToolsConfig`'s
-        anonymous file struct (l.949);
-      - functions `LoadToolsConfig` (l.955), `validateToolsOverlay` (l.979),
-        `injectToolsIntoRaw` (l.1014);
-      - the `DevboxConfig.Tools ToolsConfig` field (l.93).
-      Then audit call sites — at least `internal/ui/summary.go:63`,
-      `internal/command/tools.go` (whole file goes away in Task 7), and the
-      validateConfigKeys / LoadConfig blocks at l.716/l.817/l.873/l.893 — and either
-      delete or rewrite them to walk `cfg.Services` with `IsTool()`.
-- [ ] delete `Runtime.Ports` / `Runtime.Hosts` fields and their resolution path in
-      `LoadConfig` (l.712-745, l.881-882). **Keep the `runtime:` block** — it still
-      carries `UseHTTPS bool` (l.630) and `SPX SPXConfig` (l.633). After removal,
-      `RuntimeConfig` shrinks to `{ UseHTTPS, SPX }`. Also delete the now-unused
-      `RuntimePorts` and `RuntimeHosts` type aliases (l.640, l.646) and the
-      `validateConfigKeys` regex guard for those keys (l.732-740).
-- [ ] reorder `LoadConfig` per the sequencing above. The services-yml load and the
-      overlay validation must run **before** the raw-merge step (current code merges
-      first, validates tools overlay after — this would silently allow overlay layers
-      to declare brand-new services, which is exactly the kind of "silently wrong"
-      case the pre-release policy forbids).
-- [ ] introduce `validateServicesOverlay` mirroring the strict shape (`enabled:` only;
-      reject `port`, `host`, `dir`, etc. with per-layer source attribution).
-- [ ] write a sequencing test: an overlay layer that declares a brand-new
-      `services.foo` block (not present in `services.yml`) must be rejected with
-      a clear "unknown service in overlay" error, **even when** the YAML is
-      otherwise well-formed. This regression-tests the merge-after-validate ordering.
-- [ ] rewrite `injectServicesIntoRaw` to mirror `type`, `container`, `enabled`,
-      `mandatory`, `compose`, `dir`, `dir_internal`, `work_dir_internal`, `configs`,
-      AND the new `ports` / `hosts` nested maps. **Lazy-init each intermediate map**
-      before writing: writing to a nil map panics. Pattern:
-      `if raw["services"] == nil { raw["services"] = map[string]any{} }` repeated per
-      level. **Absent maps are omitted, not emitted as empty.** A service with
-      `len(Ports) == 0` does NOT get a `ports: {}` key in `Raw`; same for `hosts`.
-      This matches the existence-check semantics templates already rely on
-      (`{{ if (index .Services "X").Ports }}…`) and avoids implying an empty map is
-      a deliberate configuration value vs an unset one. Write a test that confirms
-      both shapes round-trip: a service with ports → key present and populated; a
-      service without ports → key absent (`_, ok := raw["services"]["foo"].(map)["ports"]; assert !ok`).
-- [ ] strip `Tools` field from `DevboxConfig`; replace internal call-sites with
-      `services[name].IsTool()` filters where they iterated over tools.
-- [ ] write tests for `validateServicesOverlay` (only `enabled:` allowed; rejects
-      stray fields per type; per-layer source attribution in error messages).
-- [ ] write tests for `injectServicesIntoRaw` confirming ports/hosts mirror correctly
-      and a tpl resolution of `services.<n>.ports.<p>` works end-to-end through
-      `LoadConfig` → `Raw`.
-- [ ] run `go test ./internal/config/...` — must pass before next task.
+- [x] delete the complete tools surface from `internal/config/devbox.go`.
+- [x] delete `Runtime.Ports` / `Runtime.Hosts` fields and their resolution path in
+      `LoadConfig`. `RuntimeConfig` now `{ UseHTTPS, SPX }`.
+- [x] reorder `LoadConfig` per the sequencing above (services.yml first → overlay
+      validation → merge → resolve Enabled → inject).
+- [x] introduce `validateServicesOverlay` mirroring the strict shape.
+- [x] write a sequencing test (TestLoadConfig_overlaySequencing_unknownServiceRejected).
+- [x] rewrite `injectServicesIntoRaw` to mirror ports/hosts with lazy-init and
+      absent-as-omitted semantics.
+- [x] strip `Tools` field from `DevboxConfig`; call sites migrated to walk
+      `cfg.Services` with `IsTool()`.
+- [x] write tests for `validateServicesOverlay`.
+- [x] write tests for `injectServicesIntoRaw` (ports/hosts round-trip + dot-path
+      resolution).
+- [x] run `go test ./internal/config/...` — passes.
 
 ### Task 5: Update `internal/validate/config/` for unified schema
 

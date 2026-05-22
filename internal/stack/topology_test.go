@@ -104,11 +104,11 @@ func TestDisabledNodes_ReturnsDisabledServiceContainers(t *testing.T) {
 			"main":   {Type: "app", Container: "app-main", Mandatory: true},
 			"second": {Type: "app", Container: "app-second", Enabled: false},
 		},
-		config.ToolsConfig{
+		map[string]testTool{
 			"adminer": {Enabled: false, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 		},
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		nil,
+		nil,
 	)
 
 	names := DisabledNodes(cfg)
@@ -140,11 +140,11 @@ func TestDisabledNodes_ReturnsDisabledServiceContainers(t *testing.T) {
 func TestDisabledNodes_EnabledToolExcluded(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{},
-		config.ToolsConfig{
+		map[string]testTool{
 			"adminer": {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 		},
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		nil,
+		nil,
 	)
 
 	for _, name := range DisabledNodes(cfg) {
@@ -161,9 +161,9 @@ func TestAugmentWithDisabled_AddsDisabledNodes(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"second": {Type: "app", Container: "app-second", Enabled: false},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 
 	topo := map[string][]string{
@@ -191,9 +191,9 @@ func TestAugmentWithDisabled_NilTopoInitialised(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"second": {Type: "app", Container: "app-second", Enabled: false},
 		},
-		config.ToolsConfig(nil),
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		map[string]testTool(nil),
+		nil,
+		nil,
 	)
 
 	newTopo, newStatus := AugmentWithDisabled(cfg, nil, nil)
@@ -214,13 +214,13 @@ func TestAugmentWithDisabled_NoDisabledNoop(t *testing.T) {
 		map[string]config.ServiceConfig{
 			"main": {Type: "app", Container: "app-main", Mandatory: true},
 		},
-		config.ToolsConfig{
+		map[string]testTool{
 			"adminer":       {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
 			"redis_insight": {Enabled: true, Container: "redis-insight", Host: "redis-insight.localhost", Port: 8081},
 			"mailpit":       {Enabled: true, Container: "mailpit", Host: "mailpit.localhost", Port: 8082},
 		},
-		config.RuntimePorts(nil),
-		config.RuntimeHosts(nil),
+		nil,
+		nil,
 	)
 
 	topo := map[string][]string{"nginx": {}}

@@ -502,6 +502,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 		},
 		Services: map[string]config.ServiceConfig{
 			"api": {
+				Type:    config.ServiceTypeApp,
 				Enabled: false,
 				Compose: []string{"compose.api.yaml"},
 			},
@@ -632,6 +633,7 @@ func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
 		},
 		Services: map[string]config.ServiceConfig{
 			"api": {
+				Type:    config.ServiceTypeApp,
 				Enabled: false,
 				Compose: []string{"compose.api.yaml"},
 			},

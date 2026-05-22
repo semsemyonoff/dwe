@@ -28,11 +28,9 @@ project:
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	defaultsYML := `runtime:
-  ports:
-    adminer: 8080
-  hosts:
-    adminer: adminer.localhost
+	defaultsYML := `services:
+  adminer:
+    enabled: true
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
@@ -48,19 +46,19 @@ project:
   worker:
     type: app
     container: app-worker
+  adminer:
+    type: tool
+    container: adminer
+    ports:
+      main: 8080
+    hosts:
+      main: adminer.localhost
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Create the service directory so fillGitRow can stat it (no .git → blank cells, no error).
 	if err := os.MkdirAll(filepath.Join(dir, "services", "main"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	toolsYML := `tools:
-  adminer:
-    container: adminer
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return filepath.Join(dir, "devbox.yml")

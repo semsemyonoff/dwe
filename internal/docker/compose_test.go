@@ -410,13 +410,13 @@ func TestNewComposeAll(t *testing.T) {
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
-		Tools: config.ToolsConfig{
-			"adminer": config.ToolConfig{
-				Compose: "compose/tools/adminer.yml",
-			},
-		},
 		Services: map[string]config.ServiceConfig{
+			"adminer": {
+				Type:    config.ServiceTypeTool,
+				Compose: []string{"compose/tools/adminer.yml"},
+			},
 			"api": {
+				Type:    config.ServiceTypeApp,
 				Compose: []string{"compose/services/api.yml"},
 			},
 		},

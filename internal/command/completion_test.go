@@ -251,31 +251,32 @@ func TestToolCompletion_enabledFilter_filtersCorrectly(t *testing.T) {
 	defaultsYML := `project:
   name: test
   prefix: test
-tools:
+services:
   adminer:
     enabled: true
   elasticvue:
     enabled: false
-runtime:
-  ports:
-    app: 3000
-    adminer: 8080
-    elasticvue: 8044
-  hosts:
-    main: localhost
-    adminer: adminer.localhost
-    elasticvue: elasticvue.localhost
 `
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	toolsYML := `tools:
+	servicesYML := `services:
   adminer:
+    type: tool
     container: adminer
+    ports:
+      main: 8080
+    hosts:
+      main: adminer.localhost
   elasticvue:
+    type: tool
     container: elasticvue
+    ports:
+      main: 8044
+    hosts:
+      main: elasticvue.localhost
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	flags := &rootFlags{configPath: filepath.Join(tmpDir, "devbox.yml"), projectRoot: tmpDir}
@@ -314,34 +315,35 @@ func TestToolNameCompletion_returnsConfiguredTools(t *testing.T) {
 project:
   name: test
   prefix: test
-tools:
+services:
   adminer:
     enabled: false
   elasticvue:
     enabled: false
-runtime:
-  ports:
-    app: 3000
-    adminer: 8080
-    elasticvue: 8044
-  hosts:
-    main: localhost
-    adminer: adminer.localhost
-    elasticvue: elasticvue.localhost
 `
 	if err := os.WriteFile(devboxDir+"/defaults.yml", []byte(defaultsYML), 0644); err != nil {
 		t.Fatalf("writing defaults.yml: %v", err)
 	}
 
-	// Write the tool definitions in devbox/tools.yml.
-	toolsYML := `tools:
+	// Write the tool definitions in devbox/services.yml.
+	servicesYML := `services:
   adminer:
+    type: tool
     container: adminer
+    ports:
+      main: 8080
+    hosts:
+      main: adminer.localhost
   elasticvue:
+    type: tool
     container: elasticvue
+    ports:
+      main: 8044
+    hosts:
+      main: elasticvue.localhost
 `
-	if err := os.WriteFile(devboxDir+"/tools.yml", []byte(toolsYML), 0644); err != nil {
-		t.Fatalf("writing tools.yml: %v", err)
+	if err := os.WriteFile(devboxDir+"/services.yml", []byte(servicesYML), 0644); err != nil {
+		t.Fatalf("writing services.yml: %v", err)
 	}
 
 	// Write a minimal devbox.yml with schema_version.
