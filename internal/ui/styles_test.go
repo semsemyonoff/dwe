@@ -154,15 +154,20 @@ func TestStyleHelpers_NonEmpty(t *testing.T) {
 
 func TestServiceInactiveStyle_DimmedAndNotBold(t *testing.T) {
 	resetStyles()
-	st := styleInactiveService()
+	st := styleInactiveService("app")
 	if !st.GetFaint() {
 		t.Error("inactive service style should be faint")
 	}
 	if st.GetBold() {
 		t.Error("inactive service style should not be bold")
 	}
-	if st.GetForeground() != styleMuted.GetForeground() {
-		t.Errorf("inactive service foreground = %v, want muted foreground %v", st.GetForeground(), styleMuted.GetForeground())
+	if st.GetForeground() != styleCatService.GetForeground() {
+		t.Errorf("inactive service foreground = %v, want app foreground %v", st.GetForeground(), styleCatService.GetForeground())
+	}
+
+	tool := styleInactiveService("tool")
+	if tool.GetForeground() != styleCatTool.GetForeground() {
+		t.Errorf("inactive tool foreground = %v, want tool foreground %v", tool.GetForeground(), styleCatTool.GetForeground())
 	}
 }
 

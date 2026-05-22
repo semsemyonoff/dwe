@@ -204,7 +204,7 @@ func StyleWarning(s string) string { return styleWarn.Render(s) }
 // Inactive services are dimmed and intentionally not bold.
 func StyleServiceName(serviceType, s string, active bool) string {
 	if !active {
-		return styleInactiveService().Render(s)
+		return styleInactiveService(serviceType).Render(s)
 	}
 	return serviceTypeStyle(serviceType).Bold(true).Render(s)
 }
@@ -212,7 +212,7 @@ func StyleServiceName(serviceType, s string, active bool) string {
 // StyleServiceType renders a service type badge with its type color.
 func StyleServiceType(serviceType, s string, active bool) string {
 	if !active {
-		return styleInactiveService().Render(s)
+		return styleInactiveService(serviceType).Render(s)
 	}
 	return serviceTypeStyle(serviceType).Render(s)
 }
@@ -220,7 +220,7 @@ func StyleServiceType(serviceType, s string, active bool) string {
 // StyleServiceContainer renders service container metadata as secondary text.
 func StyleServiceContainer(s string, active bool) string {
 	if !active {
-		return styleInactiveService().Render(s)
+		return styleMuted.Faint(true).Render(s)
 	}
 	return styleMuted.Render(s)
 }
@@ -242,8 +242,8 @@ func StyleServiceOptionContainer(s string) string {
 	return renderFGOnly(colorDescription, s)
 }
 
-func styleInactiveService() lipgloss.Style {
-	return styleMuted.Faint(true)
+func styleInactiveService(serviceType string) lipgloss.Style {
+	return serviceTypeStyle(serviceType).Bold(false).Faint(true)
 }
 
 func serviceTypeStyle(serviceType string) lipgloss.Style {
