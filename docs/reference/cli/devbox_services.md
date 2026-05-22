@@ -9,7 +9,7 @@ Open an interactive multi-select form to enable or disable application services.
 Mandatory services are always active and shown pre-checked / locked.
 On submit, changes are written to devbox/local.yml and .env is regenerated.
 
-For a read-only view, run 'devbox status services'.
+For a read-only view, run 'devbox status' or one of 'devbox status apps / tools / infra'.
 
 ```
 devbox services [flags]

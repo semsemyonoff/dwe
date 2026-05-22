@@ -61,7 +61,7 @@ The three files share a single namespace — the same key in different layers is
 | IDE config defaults | `defaults.yml` |
 | `db` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
-| Personal per-service port / host overrides | `local.yml` (under `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>`) |
+| Personal per-service port / host overrides | Edit `devbox/services.yml` directly — port and host values live there, not in the 3-layer overlay |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
 

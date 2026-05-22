@@ -91,6 +91,7 @@ flowchart LR
 - [info.yml](info.md) — info dashboard sections, template expressions
 - [commands/](commands.md) — declarative commands: types, params, context, files, workflows, templates
 - [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
+- [UI](ui.md) — interactive command browser configuration: depth, collapse, badges, hotkeys, fallback ladder
 - [Templates](../templates.md) — Go templates, `${...}` shorthand, sprout helpers (shared across info, commands, pipelines, render packs)
 
 ## Related commands
@@ -102,5 +103,6 @@ flowchart LR
 - `devbox info` — render the info dashboard from `info.yml`
 - `devbox deploy plan` — show the resolved deploy pipeline
 - `devbox compose files` — show active compose file list (diagnostic)
-- `devbox status services` — list services with enabled/disabled status
-- `devbox status tools` — list tools with enabled/disabled status
+- `devbox status apps` — show app services with health and deploy status
+- `devbox status tools` — show tool services table (read-only)
+- `devbox status infra` — show infra services table (read-only)

@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/daemon"
 )
 
 func TestBuildDaemonSetPSArgs_endToEnd(t *testing.T) {
@@ -119,14 +121,14 @@ func TestParseDaemonParamValuesForKey_nonStringValueCoerced(t *testing.T) {
 }
 
 func TestDecodeLabelsForCompletion_emptyRawReturnsNil(t *testing.T) {
-	if got := decodeLabelsForCompletion(nil); got != nil {
+	if got := daemon.DecodeLabels(nil); got != nil {
 		t.Errorf("expected nil for empty raw, got %v", got)
 	}
 }
 
 func TestDecodeLabelsForCompletion_neitherShapeReturnsNil(t *testing.T) {
 	// A number is neither a map nor a string.
-	got := decodeLabelsForCompletion([]byte(`42`))
+	got := daemon.DecodeLabels([]byte(`42`))
 	if got != nil {
 		t.Errorf("expected nil for non-map non-string Labels, got %v", got)
 	}

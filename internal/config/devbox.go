@@ -839,14 +839,14 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 	}
 	overlays, ok := overlaysRaw.(map[string]any)
 	if !ok || len(overlays) == 0 {
-		return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual tools: tools.<name>.compose instead. See docs/reference/config/devbox.md for migration details")
+		return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/devbox.md for migration details")
 	}
 	var keys []string
 	for k := range overlays {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual tools: tools.<name>.compose instead. See docs/reference/config/devbox.md for migration details. Found overlays: %v", keys)
+	return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/devbox.md for migration details. Found overlays: %v", keys)
 }
 
 // LoadConfig loads the merged DevboxConfig by layering:

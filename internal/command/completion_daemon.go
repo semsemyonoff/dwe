@@ -137,7 +137,7 @@ func parseDaemonParamValuesForKey(r io.Reader, key string) []string {
 		if err := json.Unmarshal(line, &rec); err != nil {
 			continue
 		}
-		labels := decodeLabelsForCompletion(rec.Labels)
+		labels := daemon.DecodeLabels(rec.Labels)
 		rawParams := labels[daemon.LabelDaemonParams]
 		if rawParams == "" {
 			continue
@@ -159,10 +159,4 @@ func parseDaemonParamValuesForKey(r io.Reader, key string) []string {
 	}
 	sort.Strings(values)
 	return values
-}
-
-// decodeLabelsForCompletion delegates to daemon.DecodeLabels, which handles
-// both label wire-encodings: modern map[string]string and legacy "k=v,k=v".
-func decodeLabelsForCompletion(raw json.RawMessage) map[string]string {
-	return daemon.DecodeLabels(raw)
 }

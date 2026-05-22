@@ -218,7 +218,7 @@ Executes an engine-internal Go function. Builtins run in-process and have access
 
 ## Available builtins
 
-The full registry lives in `internal/builtin/`. Eight builtins ship today:
+The following builtins are available for use in pipeline steps (`type: builtin`):
 
 | Builtin | Purpose |
 |---------|---------|

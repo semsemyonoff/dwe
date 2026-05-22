@@ -30,7 +30,7 @@ func newServiceCmd(flags *rootFlags) *cobra.Command {
 Mandatory services are always active and shown pre-checked / locked.
 On submit, changes are written to devbox/local.yml and .env is regenerated.
 
-For a read-only view, run 'devbox status services'.`,
+For a read-only view, run 'devbox status' or one of 'devbox status apps / tools / infra'.`,
 		Example: `  devbox services
   devbox services enable adminer
   devbox services disable second`,
@@ -74,7 +74,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 		items[i] = ui.MultiSelectItem{
 			Key:         row.Name,
 			Label:       row.Name,
-			Description: row.Container,
+			Description: row.Type + "  " + row.Container,
 			Locked:      row.Mandatory,
 			Selected:    row.Enabled,
 		}

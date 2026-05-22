@@ -21,6 +21,27 @@ import (
 // SIGTERM before sending SIGKILL when ctx is cancelled.
 const childTermDelay = 5 * time.Second
 
+// parallelColorForceEnv returns env entries that coerce common CLI tools to
+// keep ANSI colours when the child's stdout is a pipe rather than a TTY.
+// Inside a workflow parallel sub-step each child writes through a LineTee
+// (no PTY is allocated — concurrent sub-steps cannot share one), so without
+// these vars tools like lipgloss, npm/yarn, jest, chalk-based tools, BSD
+// ls, brew, and others auto-disable colours and the captured failure /
+// always_show_output dump on stderr ends up plain text.
+//
+// Returns nil outside parallel so non-parallel runs keep the existing
+// auto-detection behaviour.
+func parallelColorForceEnv(rc RunContext) []string {
+	if !rc.UnderParallel {
+		return nil
+	}
+	return []string{
+		"CLICOLOR_FORCE=1",    // BSD ls, brew, lipgloss
+		"FORCE_COLOR=1",       // Node ecosystem (npm/yarn/jest/eslint/chalk)
+		"COLORTERM=truecolor", // anything that key-checks COLORTERM
+	}
+}
+
 // bindCancel configures cmd to send SIGTERM (instead of the default SIGKILL)
 // when its context is cancelled, and to force-kill after childTermDelay.
 // Call this immediately after exec.CommandContext to give children a chance
@@ -61,11 +82,13 @@ func (r *DevboxRunner) Run(ctx context.Context, rc RunContext) error {
 	if err != nil {
 		return err
 	}
-	if len(envMap) > 0 {
+	colorEnv := parallelColorForceEnv(rc)
+	if len(envMap) > 0 || len(colorEnv) > 0 {
 		cmd.Env = os.Environ()
 		for k, v := range envMap {
 			cmd.Env = append(cmd.Env, k+"="+v)
 		}
+		cmd.Env = append(cmd.Env, colorEnv...)
 	}
 
 	cmd.Stdout = stdout(rc)
@@ -127,12 +150,14 @@ func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd
 		return nil, err
 	}
 	contractEnv := hostContractEnv(rc)
-	if len(envMap) > 0 || len(contractEnv) > 0 {
+	colorEnv := parallelColorForceEnv(rc)
+	if len(envMap) > 0 || len(contractEnv) > 0 || len(colorEnv) > 0 {
 		c.Env = os.Environ()
 		for k, v := range envMap {
 			c.Env = append(c.Env, k+"="+v)
 		}
 		c.Env = append(c.Env, contractEnv...)
+		c.Env = append(c.Env, colorEnv...)
 	}
 
 	return c, nil
