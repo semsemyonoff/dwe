@@ -450,14 +450,107 @@ type StatusColumn struct {
 	Value string `yaml:"value"`
 }
 
-// ServiceConfig describes a single application service.
-// Definitions are loaded from devbox/services.yml; the Enabled flag is resolved
-// from the 3-layer config merge (mandatory services are always enabled).
+// ServiceType is the type discriminator for entries in devbox/services.yml.
+// Decoded natively by gopkg.in/yaml.v3 since it's a named string type.
+type ServiceType string
+
+const (
+	ServiceTypeApp   ServiceType = "app"
+	ServiceTypeTool  ServiceType = "tool"
+	ServiceTypeInfra ServiceType = "infra"
+)
+
+// Sentinel errors for ServiceType validation and unified-services-schema enforcement.
+var (
+	ErrServiceTypeMissing = errors.New("config: service type missing")
+	ErrServiceTypeUnknown = errors.New("config: unknown service type")
+)
+
+// validServiceTypes is the closed set of allowed ServiceType values.
+var validServiceTypes = map[ServiceType]bool{
+	ServiceTypeApp:   true,
+	ServiceTypeTool:  true,
+	ServiceTypeInfra: true,
+}
+
+// IsValid reports whether t is one of the recognised service types.
+func (t ServiceType) IsValid() bool { return validServiceTypes[t] }
+
+// Validate returns nil for valid service types; ErrServiceTypeMissing for the
+// empty string; ErrServiceTypeUnknown (wrapped with the offending value) for
+// anything else.
+func (t ServiceType) Validate() error {
+	if t == "" {
+		return ErrServiceTypeMissing
+	}
+	if !validServiceTypes[t] {
+		return fmt.Errorf("%w: %q", ErrServiceTypeUnknown, string(t))
+	}
+	return nil
+}
+
+// IsApp reports whether t == ServiceTypeApp.
+func (t ServiceType) IsApp() bool { return t == ServiceTypeApp }
+
+// IsTool reports whether t == ServiceTypeTool.
+func (t ServiceType) IsTool() bool { return t == ServiceTypeTool }
+
+// IsInfra reports whether t == ServiceTypeInfra.
+func (t ServiceType) IsInfra() bool { return t == ServiceTypeInfra }
+
+// allowedFieldsFor returns the set of YAML field names permitted for entries
+// of the given service type. Used by validators and loader strict-decode error
+// messages as the single source of truth for per-type field allowlists.
+// Returns a fresh map each call so callers cannot corrupt shared state.
+func allowedFieldsFor(t ServiceType) map[string]bool {
+	// Fields permitted for every service type.
+	common := []string{
+		"type", "container", "mandatory", "compose",
+		"ports", "hosts", "status",
+	}
+	switch t {
+	case ServiceTypeApp:
+		out := make(map[string]bool, len(common)+10)
+		for _, k := range common {
+			out[k] = true
+		}
+		for _, k := range []string{
+			"depends_on",
+			"dir", "dir_internal", "work_dir_internal",
+			"configs", "dirs", "extends", "cli", "render",
+		} {
+			out[k] = true
+		}
+		return out
+	case ServiceTypeInfra:
+		out := make(map[string]bool, len(common)+1)
+		for _, k := range common {
+			out[k] = true
+		}
+		out["depends_on"] = true
+		return out
+	case ServiceTypeTool:
+		out := make(map[string]bool, len(common))
+		for _, k := range common {
+			out[k] = true
+		}
+		return out
+	default:
+		return map[string]bool{}
+	}
+}
+
+// ServiceConfig describes a single service entry in devbox/services.yml.
+// The Type field discriminates the per-entry shape (app / tool / infra).
+// The Enabled flag is resolved from the 3-layer config merge (mandatory
+// services are always enabled).
 type ServiceConfig struct {
-	Type            string               `yaml:"type"`
+	Type            ServiceType          `yaml:"type"`
 	Container       string               `yaml:"container"`
 	Mandatory       bool                 `yaml:"mandatory"`
 	Enabled         bool                 `yaml:"-"` // computed: mandatory || services.<name>.enabled
+	Ports           map[string]int       `yaml:"ports,omitempty"`
+	Hosts           map[string]string    `yaml:"hosts,omitempty"`
 	Dir             string               `yaml:"dir"`
 	DirInternal     string               `yaml:"dir_internal"`
 	WorkDirInternal string               `yaml:"work_dir_internal"`
@@ -470,6 +563,21 @@ type ServiceConfig struct {
 	Render          ServiceRenderConfig  `yaml:"render"`
 	Status          []StatusColumn       `yaml:"status,omitempty"`
 }
+
+// IsApp reports whether this service has type "app".
+func (s ServiceConfig) IsApp() bool { return s.Type.IsApp() }
+
+// IsTool reports whether this service has type "tool".
+func (s ServiceConfig) IsTool() bool { return s.Type.IsTool() }
+
+// IsInfra reports whether this service has type "infra".
+func (s ServiceConfig) IsInfra() bool { return s.Type.IsInfra() }
+
+// Port returns the host port for the named entry in s.Ports, or 0 if absent.
+func (s ServiceConfig) Port(name string) int { return s.Ports[name] }
+
+// Host returns the hostname for the named entry in s.Hosts, or "" if absent.
+func (s ServiceConfig) Host(name string) string { return s.Hosts[name] }
 
 // IDERenderEnabledExplicit returns the IDE render enabled state and whether it was explicitly set.
 // If Enabled is non-nil, returns its value and true.

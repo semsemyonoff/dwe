@@ -26,7 +26,7 @@ func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 		svc := cfg.Services[name]
 		rows = append(rows, serviceRow{
 			Name:      name,
-			Type:      svc.Type,
+			Type:      string(svc.Type),
 			Dir:       svc.Dir,
 			Container: svc.Container,
 			Mandatory: svc.Mandatory,
