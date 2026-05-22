@@ -193,6 +193,60 @@ func TestTemplateValidatorIDs(t *testing.T) {
 	require.Equal(t, "templates", ai.Domain())
 }
 
+func TestTemplateValidatorsIgnoreNonAppServices(t *testing.T) {
+	tr := true
+	ctx := validate.Context{
+		ProjectRoot: t.TempDir(),
+		Cfg: &config.DevboxConfig{
+			Services: map[string]config.ServiceConfig{
+				"adminer": {
+					Enabled: true,
+					Type:    config.ServiceTypeTool,
+					Dir:     "services/adminer",
+					Render: config.ServiceRenderConfig{
+						IDE: config.ServiceIDEConfig{Enabled: &tr},
+						AI:  config.ServiceAIConfig{Enabled: &tr},
+						Git: config.ServiceGitHooksConfig{Enabled: &tr},
+					},
+				},
+				"db": {
+					Enabled: true,
+					Type:    config.ServiceTypeInfra,
+					Dir:     "services/db",
+					Render: config.ServiceRenderConfig{
+						IDE: config.ServiceIDEConfig{Enabled: &tr},
+						AI:  config.ServiceAIConfig{Enabled: &tr},
+						Git: config.ServiceGitHooksConfig{Enabled: &tr},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		validator validate.Validator
+		target    string
+	}{
+		{name: "ide", validator: &IDEValidator{}, target: "templates.ide"},
+		{name: "ai", validator: &AIValidator{}, target: "templates.ai"},
+		{name: "git", validator: &GitValidator{}, target: "templates.git"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diags := tt.validator.Run(ctx)
+			require.Len(t, diags, 1)
+			require.Equal(t, validate.SeverityOK, diags[0].Severity)
+			require.Equal(t, tt.target, diags[0].Target)
+			for _, d := range diags {
+				require.NotContains(t, d.Target, "adminer")
+				require.NotContains(t, d.Target, "db")
+			}
+		})
+	}
+}
+
 func TestAllFunction(t *testing.T) {
 	validators := All()
 	require.Len(t, validators, 3)

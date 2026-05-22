@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/validate"
 )
 
-// IDEValidator validates IDE template packs for all services.
+// IDEValidator validates IDE template packs for app services.
 type IDEValidator struct{}
 
 // ID returns the validator's unique ID within its domain.
@@ -23,7 +23,7 @@ func (v *IDEValidator) Domain() string {
 	return "templates"
 }
 
-// Run validates all IDE template packs and returns a list of diagnostics.
+// Run validates app IDE template packs and returns a list of diagnostics.
 func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 
@@ -36,8 +36,10 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}}
 	}
 
-	// Select services that participate in IDE rendering
-	selected, skipped := ide.SelectServices(ctx.Cfg.Services)
+	// Template validation is scoped to app services. Tools/infra may have
+	// runtime UI or support containers, but they do not own source hubs.
+	services := appServices(ctx.Cfg.Services)
+	selected, skipped := ide.SelectServices(services)
 
 	// Emit info diagnostics for skipped services with actionable reasons
 	for _, skip := range skipped {
@@ -71,7 +73,7 @@ func (v *IDEValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	// Validate each selected service's template pack
 	for _, name := range selected {
-		svc := ctx.Cfg.Services[name]
+		svc := services[name]
 		diags = append(diags, v.validateService(name, svc, ctx.ProjectRoot)...)
 	}
 

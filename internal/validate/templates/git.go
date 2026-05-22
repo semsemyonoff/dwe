@@ -9,7 +9,7 @@ import (
 	"devbox-cli/internal/validate"
 )
 
-// GitValidator validates git-hooks template packs for all services.
+// GitValidator validates git-hooks template packs for app services.
 type GitValidator struct{}
 
 // ID returns the validator's unique ID within its domain.
@@ -22,7 +22,7 @@ func (v *GitValidator) Domain() string {
 	return "templates"
 }
 
-// Run validates all git template packs and returns a list of diagnostics.
+// Run validates app git template packs and returns a list of diagnostics.
 func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 
@@ -35,7 +35,10 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}}
 	}
 
-	selected, skipped := git.SelectServices(ctx.Cfg.Services)
+	// Template validation is scoped to app services. Tools/infra may have
+	// runtime UI or support containers, but they do not own source hubs.
+	services := appServices(ctx.Cfg.Services)
+	selected, skipped := git.SelectServices(services)
 
 	for _, skip := range skipped {
 		var message, hint string
@@ -65,7 +68,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	for _, name := range selected {
-		svc := ctx.Cfg.Services[name]
+		svc := services[name]
 		serviceDiags := v.validateService(name, svc, ctx.ProjectRoot)
 		diags = append(diags, serviceDiags...)
 	}

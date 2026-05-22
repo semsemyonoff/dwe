@@ -306,10 +306,28 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			}
 		}
 
-		// App missing dir/dir_internal → warning.
+		// App missing dir/dir_internal → warning. Prefer the merged config so
+		// services that inherit dir/dir_internal via extends are not flagged.
 		if svcType.IsApp() {
-			_, hasDir := entry["dir"]
-			_, hasDirInternal := entry["dir_internal"]
+			hasDir := false
+			hasDirInternal := false
+			hasMergedService := false
+			if ctx.Cfg != nil {
+				if svc, ok := ctx.Cfg.Services[name]; ok {
+					hasMergedService = true
+					hasDir = svc.Dir != ""
+					hasDirInternal = svc.DirInternal != ""
+				}
+			}
+			if !hasDir && !hasDirInternal {
+				_, hasDir = entry["dir"]
+				_, hasDirInternal = entry["dir_internal"]
+			}
+			if !hasMergedService && !hasDir && !hasDirInternal {
+				if _, extends := entry["extends"]; extends {
+					continue
+				}
+			}
 			if !hasDir && !hasDirInternal {
 				emit(validate.Diagnostic{
 					Severity: validate.SeverityWarning,

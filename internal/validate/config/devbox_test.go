@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	devconfig "devbox-cli/internal/config"
 	"devbox-cli/internal/validate"
 )
 
@@ -236,6 +237,68 @@ services:
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	d := hasDiag(t, diags, validate.SeverityWarning, "no dir or dir_internal")
 	require.Equal(t, "config.services:api", d.Target)
+}
+
+func TestServicesValidator_AppExtendsDirDoesNotWarn(t *testing.T) {
+	body := `
+services:
+  main:
+    type: app
+    container: app-main
+    dir: services/main
+    dir_internal: /workspace
+  main-debug:
+    type: app
+    container: app-main-debug
+    extends: main
+`
+	root := writeServicesFile(t, body)
+	ctx := validate.Context{
+		ProjectRoot: root,
+		Cfg: &devconfig.DevboxConfig{
+			Services: map[string]devconfig.ServiceConfig{
+				"main": {
+					Type:        devconfig.ServiceTypeApp,
+					Dir:         "services/main",
+					DirInternal: "/workspace",
+				},
+				"main-debug": {
+					Type:        devconfig.ServiceTypeApp,
+					Dir:         "services/main",
+					DirInternal: "/workspace",
+				},
+			},
+		},
+	}
+
+	diags := (&servicesValidator{}).Run(ctx)
+	for _, d := range diags {
+		require.False(t,
+			d.Severity == validate.SeverityWarning && contains(d.Message, "main-debug") && contains(d.Message, "no dir or dir_internal"),
+			"unexpected inherited-dir warning: %+v",
+			d,
+		)
+	}
+}
+
+func TestServicesValidator_AppExtendsSkipsDirWarningWhenConfigUnavailable(t *testing.T) {
+	body := `
+services:
+  main-debug:
+    type: app
+    container: app-main-debug
+    extends: main
+`
+	root := writeServicesFile(t, body)
+
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	for _, d := range diags {
+		require.False(t,
+			d.Severity == validate.SeverityWarning && contains(d.Message, "main-debug") && contains(d.Message, "no dir or dir_internal"),
+			"unexpected overlay warning: %+v",
+			d,
+		)
+	}
 }
 
 func TestServicesValidator_DependsOnToolRejected(t *testing.T) {

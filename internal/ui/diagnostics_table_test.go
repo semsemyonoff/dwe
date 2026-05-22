@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"devbox-cli/internal/validate"
 )
 
@@ -70,6 +72,29 @@ func TestRenderDiagnosticsTable(t *testing.T) {
 	}
 }
 
+func TestRenderDiagnosticsTable_WrapsLongMessageAndHint(t *testing.T) {
+	rows := []DiagnosticRow{
+		{
+			Severity: validate.SeverityError,
+			Domain:   "config",
+			Target:   "target",
+			File:     "file.yml",
+			Message:  "workflow step services.main.database.restore declares a files_gate require entry that references command files but the command registry could not resolve the referenced file id",
+			Hint:     "make sure the command file declares the referenced files entry or remove the files_gate require block from this step",
+		},
+	}
+
+	output := RenderDiagnosticsTable(rows)
+	if !strings.Contains(output, "file id") {
+		t.Fatalf("rendered output missing wrapped message tail: %q", output)
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if got := lipgloss.Width(line); got > 130 {
+			t.Fatalf("rendered diagnostics line width = %d, want <= 130: %q", got, line)
+		}
+	}
+}
+
 func TestFormatDiagnostics_Quiet(t *testing.T) {
 	diags := []validate.Diagnostic{
 		{Severity: validate.SeverityOK, Domain: "config", Target: "config.devbox"},
@@ -94,6 +119,35 @@ func TestFormatDiagnostics_Quiet(t *testing.T) {
 	}
 	if rows[1].Severity != validate.SeverityError {
 		t.Error("expected second row to be error")
+	}
+}
+
+func TestWrapDiagnosticText(t *testing.T) {
+	longMessage := "workflow step services.main.database.restore declares a files_gate require entry that references command files but the command registry could not resolve the referenced file id"
+
+	wrapped := wrapDiagnosticText(longMessage)
+	lines := strings.Split(wrapped, "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected wrapped text to span multiple lines, got %q", wrapped)
+	}
+	for _, line := range lines {
+		if got := lipgloss.Width(line); got > diagnosticTextWrapWidth {
+			t.Fatalf("wrapped line width = %d, want <= %d: %q", got, diagnosticTextWrapWidth, line)
+		}
+	}
+	if !strings.Contains(wrapped, "\n") {
+		t.Fatalf("expected newline in wrapped text, got %q", wrapped)
+	}
+}
+
+func TestWrapDiagnosticText_LongToken(t *testing.T) {
+	longToken := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	wrapped := wrapDiagnosticText(longToken)
+	for _, line := range strings.Split(wrapped, "\n") {
+		if got := lipgloss.Width(line); got > diagnosticTextWrapWidth {
+			t.Fatalf("wrapped line width = %d, want <= %d: %q", got, diagnosticTextWrapWidth, line)
+		}
 	}
 }
 

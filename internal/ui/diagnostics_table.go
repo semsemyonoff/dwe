@@ -3,12 +3,17 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 
 	"devbox-cli/internal/validate"
 )
+
+// Keep MESSAGE/HINT narrow enough that the six-column diagnostics table stays
+// readable on a wide-but-normal terminal instead of expanding indefinitely.
+const diagnosticTextWrapWidth = 44
 
 // DiagnosticRow holds data for one row in the diagnostics Lipgloss table.
 type DiagnosticRow struct {
@@ -37,8 +42,17 @@ func RenderDiagnosticsTable(rows []DiagnosticRow) string {
 			fileStr = "—"
 		}
 
-		// Message and Hint may be empty strings; keep them as-is (table will render empty cells).
-		stringRows[i] = []string{statusGlyph, r.Domain, r.Target, fileStr, r.Message, r.Hint}
+		// Message and Hint are the only unbounded prose columns. Wrap them
+		// before table rendering so one long diagnostic does not widen the
+		// whole table past a normal terminal.
+		stringRows[i] = []string{
+			statusGlyph,
+			r.Domain,
+			r.Target,
+			fileStr,
+			wrapDiagnosticText(r.Message),
+			wrapDiagnosticText(r.Hint),
+		}
 
 		// Per-column styles: only the status column is styled; others inherit base.
 		cellStyles[i] = map[int]lipgloss.Style{
@@ -120,6 +134,87 @@ func FormatDiagnostics(diags []validate.Diagnostic, quiet bool) []DiagnosticRow 
 		})
 	}
 	return rows
+}
+
+func wrapDiagnosticText(s string) string {
+	return wrapText(s, diagnosticTextWrapWidth)
+}
+
+func wrapText(s string, width int) string {
+	if s == "" || width <= 0 {
+		return s
+	}
+
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = wrapLine(line, width)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func wrapLine(line string, width int) string {
+	if lipgloss.Width(line) <= width {
+		return line
+	}
+
+	words := strings.Fields(line)
+	if len(words) == 0 {
+		return line
+	}
+
+	var out []string
+	current := ""
+	for _, word := range words {
+		for lipgloss.Width(word) > width {
+			head, tail := splitDisplayWidth(word, width)
+			if current != "" {
+				out = append(out, current)
+				current = ""
+			}
+			out = append(out, head)
+			word = tail
+		}
+
+		if current == "" {
+			current = word
+			continue
+		}
+		candidate := current + " " + word
+		if lipgloss.Width(candidate) <= width {
+			current = candidate
+			continue
+		}
+		out = append(out, current)
+		current = word
+	}
+	if current != "" {
+		out = append(out, current)
+	}
+	return strings.Join(out, "\n")
+}
+
+func splitDisplayWidth(s string, width int) (string, string) {
+	if width <= 0 {
+		return "", s
+	}
+
+	byteIdx := 0
+	for byteIdx < len(s) {
+		r, size := utf8.DecodeRuneInString(s[byteIdx:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		candidate := s[:byteIdx+size]
+		if lipgloss.Width(candidate) > width {
+			break
+		}
+		byteIdx += size
+	}
+	if byteIdx == 0 {
+		_, size := utf8.DecodeRuneInString(s)
+		byteIdx = size
+	}
+	return s[:byteIdx], s[byteIdx:]
 }
 
 // FormatSummary returns a summary line based on the aggregate counts.
