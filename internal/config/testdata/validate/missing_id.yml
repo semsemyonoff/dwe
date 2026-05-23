@@ -1,0 +1,5 @@
+checks:
+  - description: no id
+    stages: [deploy]
+    type: builtin
+    cmd: shell

@@ -1,0 +1,7 @@
+checks:
+  - id: foo
+    description: x
+    stages: [deploy]
+    type: builtin
+    cmd: shell
+    bogus: 1

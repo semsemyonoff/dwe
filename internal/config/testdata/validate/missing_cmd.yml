@@ -1,0 +1,5 @@
+checks:
+  - id: foo
+    description: x
+    stages: [deploy]
+    type: builtin

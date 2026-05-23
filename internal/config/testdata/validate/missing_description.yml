@@ -1,0 +1,5 @@
+checks:
+  - id: foo
+    stages: [deploy]
+    type: builtin
+    cmd: shell

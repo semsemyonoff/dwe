@@ -1,0 +1,8 @@
+checks:
+  - id: foo
+    description: custom stage entry
+    stages: [deploy, preview]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'

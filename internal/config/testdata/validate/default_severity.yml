@@ -1,0 +1,6 @@
+checks:
+  - id: foo
+    description: severity omitted
+    stages: [deploy]
+    type: builtin
+    cmd: shell

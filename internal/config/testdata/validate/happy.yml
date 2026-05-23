@@ -1,0 +1,18 @@
+checks:
+  - id: ghcr-login
+    description: ensure docker is logged into ghcr.io
+    stages: [deploy]
+    severity: error
+    hint: run `docker login ghcr.io`
+    type: builtin
+    cmd: shell
+    with:
+      cmd: docker info | grep -q ghcr.io
+  - id: app-secrets
+    description: required keys present in .env
+    stages: [run, deploy]
+    type: builtin
+    cmd: env_keys_present
+    with:
+      file: .env
+      keys: [DATABASE_URL, API_KEY]

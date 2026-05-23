@@ -109,20 +109,22 @@ Additional review-driven constraints (incorporated into the relevant tasks below
 
 ### Task 2: Add `LoadValidateConfig` strict-decode loader
 
-- [ ] add `internal/config/validate.go` — types: `ValidateConfig { Checks []CheckEntry }`, `CheckEntry { ID, Description string; Stages []string; Severity validate.Severity; Hint string; Type string; Cmd string; With map[string]any; SourceLine int }`. Note: `Severity` is the `validate.Severity` enum (parsed from string at load time), NOT a string field.
-- [ ] implement `LoadValidateConfig(path string) (*ValidateConfig, []validate.Diagnostic, error)` mirroring `LoadDeployConfig` for strict decoding (`yaml.NewDecoder(...).KnownFields(true)`); capture source line numbers per entry (use `yaml.Node` walk like the deploy loader does for steps). Return signature includes a `[]validate.Diagnostic` slice for soft warnings (consumed by Task 5).
-- [ ] enforce required fields at load time (hard errors → returned `error`):
-  - [ ] `id`, `description`, `type`, `cmd` non-empty.
-  - [ ] `stages` non-empty.
-  - [ ] `id` unique across entries.
-  - [ ] `type` ∈ `{"builtin", "command"}` — unknown values are hard errors; do not fall through to `checks` dispatch.
-  - [ ] `severity` parsed via `parseSeverity(string) (validate.Severity, error)` — accepts `"error"|"warning"|"info"`, defaults to `SeverityError` on empty, rejects anything else (NOT silently coerced to error — would break the aggregate counts in `validate.Aggregate`).
-- [ ] emit soft warnings (added to the returned diagnostic slice, NOT errors):
-  - [ ] stages outside `{"deploy", "run", "stop", "command"}` → `SeverityInfo`, message `"stage \"X\" not bound to built-in hooks"`, file/line filled in.
-- [ ] `with:` shape is NOT validated here (validation lives in `internal/validate/checks/` so it can use the builtin registry to check param requirements — Task 4).
-- [ ] add canonical resolver: `internal/config/paths.go` (or wherever `DeployConfigPath` lives) gets `ValidateConfigPath(devboxDir string) string` → `devbox/validate.yml`.
-- [ ] write `internal/config/validate_test.go` with `testdata/validate/*.yml` fixtures: happy path, unknown top-level field rejected, missing required field rejected, duplicate id rejected, severity defaults to `SeverityError`, unknown `severity` rejected, unknown `type` rejected, unknown stage produces info diagnostic (not error).
-- [ ] run `go test ./internal/config/...` — must pass before Task 3.
+- [x] add `internal/config/validate.go` — types: `ValidateConfig { Checks []CheckEntry }`, `CheckEntry { ID, Description string; Stages []string; Severity diag.Severity; Hint string; Type string; Cmd string; With map[string]any; SourceLine int }`. Note: `Severity` is the `diag.Severity` enum (== `validate.Severity` via type alias — see "Deviation" below), parsed from string at load time.
+- [x] implement `LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)` mirroring `LoadDeployConfig` for strict decoding (`yaml.NewDecoder(...).KnownFields(true)`); capture source line numbers per entry via a `yaml.Node` walk. Returns `[]diag.Diagnostic` for soft warnings (consumed by Task 5).
+- [x] enforce required fields at load time (hard errors → returned `error`):
+  - [x] `id`, `description`, `type`, `cmd` non-empty.
+  - [x] `stages` non-empty.
+  - [x] `id` unique across entries.
+  - [x] `type` ∈ `{"builtin", "command"}` — unknown values are hard errors.
+  - [x] `severity` parsed via `parseSeverity(string) (diag.Severity, error)` — accepts `"error"|"warning"|"info"`, defaults to `SeverityError` on empty, rejects anything else.
+- [x] emit soft warnings (added to the returned diagnostic slice, NOT errors):
+  - [x] stages outside `{"deploy", "run", "stop", "command"}` → `SeverityInfo`, message `"stage \"X\" not bound to built-in hooks"`, file/line filled in.
+- [x] `with:` shape is NOT validated here (validation lives in `internal/validate/checks/` so it can use the builtin registry — Task 4).
+- [x] add canonical resolver: `ValidateConfigPath(baseDir string) string` → `<baseDir>/devbox/validate.yml`, exported from `internal/config/validate.go` (no `paths.go` file existed; resolver lives next to the loader).
+- [x] write `internal/config/validate_test.go` with `testdata/validate/*.yml` fixtures: happy path, unknown top-level field rejected, missing required field rejected, duplicate id rejected, severity defaults to `SeverityError`, unknown `severity` rejected, unknown `type` rejected, unknown stage produces info diagnostic (not error).
+- [x] run `go test ./internal/config/...` — passed.
+
+**Deviation from plan (import cycle resolution):** the plan specified `Severity validate.Severity` for `CheckEntry.Severity`, but `internal/validate` already imports `internal/config` (for `Context.Cfg *config.DevboxConfig`), and adding the reverse direction would create a cycle. Resolved by extracting `Severity` + `Diagnostic` into a new leaf package `internal/validate/diag` (no imports outside stdlib) and re-exporting them from `internal/validate` via type aliases (`type Severity = diag.Severity` plus const aliases). All ~497 existing references to `validate.Severity` / `validate.Diagnostic` continue to work unchanged. `internal/config` imports `internal/validate/diag` directly. The signatures throughout the plan referencing `validate.Diagnostic` and `validate.Severity` remain semantically correct via the aliases — Task 4/5 callers may use either spelling.
 
 ### Task 3: Add `internal/validate/env/` (hardcoded probes)
 

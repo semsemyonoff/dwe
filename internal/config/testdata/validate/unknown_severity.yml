@@ -1,0 +1,7 @@
+checks:
+  - id: foo
+    description: x
+    stages: [deploy]
+    severity: critical
+    type: builtin
+    cmd: shell

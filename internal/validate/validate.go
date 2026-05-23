@@ -4,30 +4,25 @@ import (
 	"sort"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/validate/diag"
 )
 
-// Severity represents the severity level of a validation diagnostic.
-type Severity int
+// Severity is the validation diagnostic severity. Re-exported from the leaf
+// diag package so loaders that cannot import internal/validate (e.g.
+// internal/config, which validate depends on) can still produce diagnostics.
+type Severity = diag.Severity
 
-// Severity levels.
+// Severity levels (re-exported from diag).
 const (
-	SeverityUnknown Severity = iota // Zero value guard.
-	SeverityOK
-	SeverityInfo
-	SeverityWarning
-	SeverityError
+	SeverityUnknown = diag.SeverityUnknown
+	SeverityOK      = diag.SeverityOK
+	SeverityInfo    = diag.SeverityInfo
+	SeverityWarning = diag.SeverityWarning
+	SeverityError   = diag.SeverityError
 )
 
-// Diagnostic represents a single validation finding.
-type Diagnostic struct {
-	Severity Severity
-	Domain   string
-	Target   string
-	File     string
-	Line     int
-	Message  string
-	Hint     string
-}
+// Diagnostic is a single validation finding. Re-exported from diag.
+type Diagnostic = diag.Diagnostic
 
 // Context carries data for validator execution.
 type Context struct {
