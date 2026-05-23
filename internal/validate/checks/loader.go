@@ -157,7 +157,7 @@ func (v *builtinRunner) Run(ctx validate.Context) []validate.Diagnostic {
 	if err := builtin.Run(runCtx, v.entry.Cmd, v.entry.With, ectx); err != nil {
 		return []validate.Diagnostic{toDiagnostic(v.entry, err.Error())}
 	}
-	return nil
+	return []validate.Diagnostic{okDiagnostic(v.entry)}
 }
 
 type commandRunner struct {
@@ -202,7 +202,7 @@ func (v *commandRunner) Run(ctx validate.Context) []validate.Diagnostic {
 		}
 		return []validate.Diagnostic{toDiagnostic(v.entry, msg)}
 	}
-	return nil
+	return []validate.Diagnostic{okDiagnostic(v.entry)}
 }
 
 func toDiagnostic(entry config.CheckEntry, msg string) validate.Diagnostic {
@@ -214,6 +214,16 @@ func toDiagnostic(entry config.CheckEntry, msg string) validate.Diagnostic {
 		Line:     entry.SourceLine,
 		Message:  msg,
 		Hint:     entry.Hint,
+	}
+}
+
+func okDiagnostic(entry config.CheckEntry) validate.Diagnostic {
+	return validate.Diagnostic{
+		Severity: validate.SeverityOK,
+		Domain:   "checks",
+		Target:   entry.ID,
+		File:     diagFile,
+		Line:     entry.SourceLine,
 	}
 }
 

@@ -68,8 +68,10 @@ func TestDeployRunCmd_PreflightBlocksBeforeLock(t *testing.T) {
 	}
 	t.Cleanup(func() { preflightRun = prev })
 
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
 	flags := &rootFlags{configPath: cfgPath}
-	err := deployRunCmd(&cobra.Command{}, flags, "", false, false, true, false)
+	err := deployRunCmd(cmd, flags, "", false, false, true, false)
 	if err == nil {
 		t.Fatal("expected preflight failure to abort deploy")
 	}
@@ -100,8 +102,10 @@ func TestDeployRunCmd_SkipPreflightIsThreaded(t *testing.T) {
 	}
 	t.Cleanup(func() { preflightRun = prev })
 
+	cmd2 := &cobra.Command{}
+	cmd2.SetContext(context.Background())
 	flags := &rootFlags{configPath: cfgPath}
-	_ = deployRunCmd(&cobra.Command{}, flags, "", false, false, true, true)
+	_ = deployRunCmd(cmd2, flags, "", false, false, true, true)
 	if !sawSkip {
 		t.Error("preflight should have been invoked with skip=true")
 	}

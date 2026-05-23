@@ -88,6 +88,11 @@ func RunRun(ctx RunContext) (err error) {
 		}
 		n := newNotifier(ucfg)
 		defer func() {
+			// Preflight-blocked is not a run failure — suppress the notification
+			// (matches the same suppression in deploy.go for *preflight.Error).
+			if errors.As(err, new(*preflight.Error)) {
+				return
+			}
 			n.Notify(context.Background(), notify.Event{
 				Kind:      notify.OpRun,
 				Operation: "run",

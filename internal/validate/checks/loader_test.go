@@ -234,8 +234,8 @@ func TestBuiltinRunner_Success(t *testing.T) {
 	}
 	v := buildValidator(entry, dir, nil)
 	diags := v.Run(validate.Context{Cfg: newCfg(), ProjectRoot: dir})
-	if len(diags) != 0 {
-		t.Fatalf("expected pass, got %+v", diags)
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityOK {
+		t.Fatalf("expected one SeverityOK diagnostic on pass, got %+v", diags)
 	}
 }
 
@@ -345,8 +345,8 @@ func TestCommandRunner_PassesWithToParams(t *testing.T) {
 	}
 	v := buildValidator(entry, dir, reg)
 	diags := v.Run(validate.Context{Cfg: newCfg(), ProjectRoot: dir})
-	if len(diags) != 0 {
-		t.Fatalf("expected pass, got %+v", diags)
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityOK {
+		t.Fatalf("expected one SeverityOK diagnostic on pass, got %+v", diags)
 	}
 	got, err := os.ReadFile(sentinel)
 	if err != nil {
@@ -380,8 +380,8 @@ func TestCommandRunner_NonInteractiveSkipsConfirm(t *testing.T) {
 	// and the test would time out rather than fail. A clean pass proves the
 	// override path works.
 	diags := v.Run(validate.Context{Cfg: newCfg()})
-	if len(diags) != 0 {
-		t.Fatalf("expected pass, got %+v", diags)
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityOK {
+		t.Fatalf("expected one SeverityOK diagnostic on pass, got %+v", diags)
 	}
 }
 
