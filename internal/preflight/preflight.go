@@ -81,7 +81,7 @@ func Run(_ context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommands.
 	}
 
 	diags := reg.Run(vctx)
-	rows := ui.FormatDiagnostics(diags, false)
+	rows := ui.FormatDiagnostics(diags, true)
 	if len(rows) > 0 {
 		_, _ = fmt.Fprintln(errOut, ui.RenderDiagnosticsTable(rows))
 	}
