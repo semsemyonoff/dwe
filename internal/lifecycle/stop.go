@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/lock"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
 )
@@ -59,6 +60,15 @@ func RunStop(ctx StopContext) error {
 	if regErr != nil {
 		return fmt.Errorf("loading command registry: %w", regErr)
 	}
+
+	// Acquire deploy + snapshot project locks AFTER preflight (preflight may
+	// invoke user type:command checks that must not hold operation locks).
+	// Locks are released on function exit.
+	releaseLocks, err := lock.AcquireProjectLocks(workDir)
+	if err != nil {
+		return err
+	}
+	defer releaseLocks()
 
 	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)

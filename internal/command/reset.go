@@ -100,21 +100,19 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
-	lockPath := filepath.Join(stateDir, "deploy.lock")
 
-	// Acquire file lock to prevent parallel resets
-	lck, err := lock.Acquire(lockPath)
+	// Acquire deploy + snapshot project locks to prevent parallel resets
+	// and to be mutually exclusive with snapshot mutating operations.
+	releaseLocks, err := lock.AcquireProjectLocks(workDir)
 	if err != nil {
-		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			lhe := &lockHeldError{operation: "reset", pid: heldErr.PID}
+		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
+			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
 			render.Stdout().Error(lhe.Error())
 			return lhe
 		}
-		return fmt.Errorf("acquiring lock: %w", err)
+		return fmt.Errorf("acquiring project locks: %w", err)
 	}
-	defer func() {
-		_ = lck.Release()
-	}()
+	defer releaseLocks()
 
 	cfg, err := config.LoadConfig(flags.configPath)
 	if err != nil {

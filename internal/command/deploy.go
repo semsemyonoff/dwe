@@ -152,15 +152,17 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 	return cmd
 }
 
-// lockHeldError is returned when a deploy or reset lock is held by another process.
-// Implements ExitCode() int so main.go translates it to exit code 2.
+// lockHeldError is returned when one of the project locks (deploy.lock or
+// snapshot.lock) is held by another live process. operation names the
+// blocking operation ("deploy" or "snapshot"). Implements ExitCode() int so
+// main.go translates it to exit code 2.
 type lockHeldError struct {
 	operation string
 	pid       int
 }
 
 func (e *lockHeldError) Error() string {
-	return fmt.Sprintf("cannot start %s: lock held by process %d (wait for that process to finish or kill it and retry)", e.operation, e.pid)
+	return fmt.Sprintf("%s operation in progress: pid %d (wait for it to finish or kill it and retry)", e.operation, e.pid)
 }
 
 func (e *lockHeldError) ExitCode() int { return 2 }
@@ -177,7 +179,6 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
-	lockPath := filepath.Join(stateDir, "deploy.lock")
 
 	// Install notifier defer before any error-returning step so even an
 	// early config-load failure produces a "deploy failed" notification.
@@ -230,19 +231,18 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
-	// Acquire file lock to prevent parallel deploys
-	lck, err := lock.Acquire(lockPath)
+	// Acquire deploy + snapshot project locks to prevent parallel deploys
+	// and to be mutually exclusive with snapshot mutating operations.
+	releaseLocks, err := lock.AcquireProjectLocks(workDir)
 	if err != nil {
-		if heldErr, ok := errors.AsType[*lock.HeldError](err); ok {
-			lhe := &lockHeldError{operation: "deploy", pid: heldErr.PID}
+		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
+			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
 			render.Stdout().Error(lhe.Error())
 			return lhe
 		}
-		return fmt.Errorf("acquiring lock: %w", err)
+		return fmt.Errorf("acquiring project locks: %w", err)
 	}
-	defer func() {
-		_ = lck.Release()
-	}()
+	defer releaseLocks()
 
 	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
 	if err != nil {

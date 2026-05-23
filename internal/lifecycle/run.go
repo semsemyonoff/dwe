@@ -14,6 +14,7 @@ import (
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/git"
+	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/render"
@@ -88,9 +89,13 @@ func RunRun(ctx RunContext) (err error) {
 		}
 		n := newNotifier(ucfg)
 		defer func() {
-			// Preflight-blocked is not a run failure — suppress the notification
-			// (matches the same suppression in deploy.go for *preflight.Error).
+			// Preflight-blocked and lock-held are not run failures — suppress
+			// the notification (matches deploy.go which also skips notify for
+			// *preflight.Error and *lockHeldError).
 			if errors.As(err, new(*preflight.Error)) {
+				return
+			}
+			if errors.As(err, new(*lock.ProjectLockHeldError)) {
 				return
 			}
 			n.Notify(context.Background(), notify.Event{
@@ -135,6 +140,16 @@ func RunRun(ctx RunContext) (err error) {
 	if err := PreflightFunc(pfCtx, cfg, reg, workDir, "run", ctx.SkipPreflight, errOut); err != nil {
 		return err
 	}
+
+	// Acquire deploy + snapshot project locks AFTER preflight (preflight may
+	// invoke user type:command checks that must not hold operation locks).
+	// Locks are released on function exit.
+	releaseLocks, err := lock.AcquireProjectLocks(workDir)
+	if err != nil {
+		return err
+	}
+	defer releaseLocks()
+
 	// Surface a deferred registry load failure now that preflight is past —
 	// only fail when the registry was non-empty-relevant (i.e. it actually
 	// failed, not just absent). LoadRegistryFromConfigPath returns nil error
