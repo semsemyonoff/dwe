@@ -128,14 +128,14 @@ Additional review-driven constraints (incorporated into the relevant tasks below
 
 ### Task 3: Add `internal/validate/env/` (hardcoded probes)
 
-- [ ] create `internal/validate/env/env.go` with shared helpers (project context accessor, diagnostic builder).
-- [ ] create `internal/validate/env/docker.go` — three validators: `env.docker_bin` (LookPath on `config.DockerBin(cfg)`), `env.docker_daemon` (`docker version` exits 0), `env.docker_compose` (`docker compose version` exits 0, plugin v2 detected).
-- [ ] create `internal/validate/env/binaries.go` — `env.git_bin` (`config.GitBin(cfg)`), `env.shell_bin` (`config.ShellBin(cfg)`).
-- [ ] create `internal/validate/env/project_perms.go` — `env.project_perms`: verify `.devbox/` is writable and the lock path is creatable (try-create-temp-file pattern).
-- [ ] create `internal/validate/env/all.go` — `All(cfg *config.DevboxConfig) []validate.Validator` returning the six probes.
-- [ ] each validator returns rich `Hint` on failure (e.g. install URL for compose plugin). Hints follow the project's existing `Diagnostic.Hint` formatting rule (concise; `\n` splits long ones).
-- [ ] write per-probe unit tests using temp dirs and stub binaries on `$PATH` (or skip if a clean test is impractical — note in test).
-- [ ] run `go test ./internal/validate/env/...` — must pass before Task 4.
+- [x] create `internal/validate/env/env.go` with shared helpers (project context accessor, diagnostic builder).
+- [x] create `internal/validate/env/docker.go` — three validators: `env.docker_bin` (LookPath on `config.DockerBin(cfg)`), `env.docker_daemon` (`docker version` exits 0), `env.docker_compose` (`docker compose version` exits 0, plugin v2 detected).
+- [x] create `internal/validate/env/binaries.go` — `env.git_bin` (`config.GitBin(cfg)`), `env.shell_bin` (`config.ShellBin(cfg)`).
+- [x] create `internal/validate/env/project_perms.go` — `env.project_perms`: verify `.devbox/` is writable and the lock path is creatable (try-create-temp-file pattern).
+- [x] create `internal/validate/env/all.go` — `All(cfg *config.DevboxConfig) []validate.Validator` returning the six probes.
+- [x] each validator returns rich `Hint` on failure (e.g. install URL for compose plugin). Hints follow the project's existing `Diagnostic.Hint` formatting rule (concise; `\n` splits long ones).
+- [x] write per-probe unit tests using temp dirs and stub binaries on `$PATH` (or skip if a clean test is impractical — note in test).
+- [x] run `go test ./internal/validate/env/...` — must pass before Task 4.
 
 ### Task 4: Add `internal/validate/checks/` (synthetic validators from validate.yml)
 
