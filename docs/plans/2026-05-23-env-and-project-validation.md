@@ -177,20 +177,20 @@ Additional review-driven constraints (incorporated into the relevant tasks below
 
 ### Task 6: Wire env + checks into `devbox validate` and add `--stage` flag
 
-- [ ] in `internal/command/validate.go:runValidate`, after loading `cfg`, perform the single parse of validate.yml: `validateCfg, warnings, loadErr := config.LoadValidateConfig(ValidateConfigPath(...))`. **Never short-circuit** — `runValidate` is an aggregator (see `loadForValidate`'s `errPartialLoad` pattern at validate.go:163). Always continue regardless of `loadErr`:
-  - [ ] populate the `validate.Context` with all three: `ctx.ValidateCfg = validateCfg` (nil-tolerant downstream), `ctx.ValidateCfgWarnings = warnings`, `ctx.ValidateCfgLoadErr = loadErr`.
-  - [ ] `validateCfg` may be nil when `loadErr != nil`; that's fine — `checks.All(ctx)` / `checks.AllForStage(ctx, stage)` accept a nil config and produce zero validators.
-  - [ ] do NOT call `LoadValidateConfig` a second time anywhere else in the run. Task 5's `config.validate` validator reads from `ctx.ValidateCfgLoadErr` / `ctx.ValidateCfgWarnings` and is the sole emitter of the load-error diagnostic.
-  - [ ] NEVER `return fmt.Errorf("loading validate.yml: %w", err)` here: a malformed `validate.yml` must not hide diagnostics from `config`, `templates`, `commands`, `env`, etc. — the `config.validate` validator surfaces the load failure inline with everything else.
-  - [ ] no `_ = err` discards anywhere.
-- [ ] also load the user-command registry (same pattern as deploy command).
-- [ ] register validators into the validate `Registry`. Stage selection happens at *assembly time*, not via a registry-level filter (the registry only knows domain/id via `MatchScope`):
-  - [ ] when `--stage` is empty: `env.All(cfg)` + `checks.All(validateCfg, baseDir, cmdRegistry)` + existing config/templates/commands rosters.
-  - [ ] when `--stage <name>` is set: `env.All(cfg)` (always — env probes have no stages) + `checks.AllForStage(validateCfg, baseDir, cmdRegistry, stage)` + existing config/templates/commands rosters (unaffected — stage is a checks-only concept).
-- [ ] `--stage <name>` is a local flag on the validate command. No changes to `validate.Registry` or `MatchScope`.
-- [ ] update scope handling so `devbox validate env` / `devbox validate checks` / `devbox validate checks ghcr-login` work via the existing `MatchScope` mechanism — no new dispatch logic needed, just registration.
-- [ ] write tests in `internal/command/validate_test.go`: `--stage deploy` filters out run-only checks but keeps env probes; scope `env` shows only env probes; scope `checks foo` shows only that check; missing validate.yml is silently tolerated; malformed validate.yml does NOT short-circuit the command — diagnostics from other domains (`config`, `templates`, `commands`) still render, plus one `config.validate` error diagnostic surfaces the load failure.
-- [ ] run `go test ./internal/command/...` — must pass before Task 7.
+- [x] in `internal/command/validate.go:runValidate`, after loading `cfg`, perform the single parse of validate.yml: `validateCfg, warnings, loadErr := config.LoadValidateConfig(ValidateConfigPath(...))`. **Never short-circuit** — `runValidate` is an aggregator (see `loadForValidate`'s `errPartialLoad` pattern at validate.go:163). Always continue regardless of `loadErr`:
+  - [x] populate the `validate.Context` with all three: `ctx.ValidateCfg = validateCfg` (nil-tolerant downstream), `ctx.ValidateCfgWarnings = warnings`, `ctx.ValidateCfgLoadErr = loadErr`.
+  - [x] `validateCfg` may be nil when `loadErr != nil`; that's fine — `checks.All(ctx)` / `checks.AllForStage(ctx, stage)` accept a nil config and produce zero validators.
+  - [x] do NOT call `LoadValidateConfig` a second time anywhere else in the run. Task 5's `config.validate` validator reads from `ctx.ValidateCfgLoadErr` / `ctx.ValidateCfgWarnings` and is the sole emitter of the load-error diagnostic.
+  - [x] NEVER `return fmt.Errorf("loading validate.yml: %w", err)` here: a malformed `validate.yml` must not hide diagnostics from `config`, `templates`, `commands`, `env`, etc. — the `config.validate` validator surfaces the load failure inline with everything else.
+  - [x] no `_ = err` discards anywhere.
+- [x] also load the user-command registry (same pattern as deploy command).
+- [x] register validators into the validate `Registry`. Stage selection happens at *assembly time*, not via a registry-level filter (the registry only knows domain/id via `MatchScope`):
+  - [x] when `--stage` is empty: `env.All(cfg)` + `checks.All(validateCfg, baseDir, cmdRegistry)` + existing config/templates/commands rosters.
+  - [x] when `--stage <name>` is set: `env.All(cfg)` (always — env probes have no stages) + `checks.AllForStage(validateCfg, baseDir, cmdRegistry, stage)` + existing config/templates/commands rosters (unaffected — stage is a checks-only concept).
+- [x] `--stage <name>` is a local flag on the validate command. No changes to `validate.Registry` or `MatchScope`.
+- [x] update scope handling so `devbox validate env` / `devbox validate checks` / `devbox validate checks ghcr-login` work via the existing `MatchScope` mechanism — no new dispatch logic needed, just registration.
+- [x] write tests in `internal/command/validate_test.go`: `--stage deploy` filters out run-only checks but keeps env probes; scope `env` shows only env probes; scope `checks foo` shows only that check; missing validate.yml is silently tolerated; malformed validate.yml does NOT short-circuit the command — diagnostics from other domains (`config`, `templates`, `commands`) still render, plus one `config.validate` error diagnostic surfaces the load failure.
+- [x] run `go test ./internal/command/...` — passed.
 
 ### Task 7: Preflight hook in `deploy run` / `run` / `stop`
 

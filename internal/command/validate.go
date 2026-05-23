@@ -10,8 +10,10 @@ import (
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/validate"
+	valchecks "devbox-cli/internal/validate/checks"
 	valcmds "devbox-cli/internal/validate/commands"
 	valconfig "devbox-cli/internal/validate/config"
+	valenv "devbox-cli/internal/validate/env"
 	valtmpl "devbox-cli/internal/validate/templates"
 
 	"github.com/spf13/cobra"
@@ -36,11 +38,12 @@ func (e *validationFailedError) ExitCode() int {
 // newValidateCmd builds the root validate command with all subcommands.
 func newValidateCmd(flags *rootFlags) *cobra.Command {
 	var strict, quiet bool
+	var stage string
 
 	cmd := &cobra.Command{
 		Use:   "validate",
 		Short: "Validate project configuration and files",
-		Long: `Check project configuration files, template packs, and command definitions for errors and warnings.
+		Long: `Check project configuration files, template packs, command definitions, environment readiness, and project checks for errors and warnings.
 
 Validation runs statically without executing any commands or starting services. Results are
 reported in a table with severity levels (ok, info, warning, error). Use --strict to
@@ -57,22 +60,25 @@ Exit code:
   1 - one or more errors, or warnings with --strict
 
 Scope targets:
-  devbox validate                              - all (config + templates + commands)
+  devbox validate                              - all (config + templates + commands + env + checks)
   devbox validate config                       - all config validators
   devbox validate config <devbox|services|...> - specific config validator
   devbox validate templates                    - all template validators (ide, ai, git)
   devbox validate templates <ide|ai|git>       - specific template validator
   devbox validate commands                     - commands validator
+  devbox validate env                          - environment readiness probes
+  devbox validate checks [id]                  - project checks from devbox/validate.yml
 `,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, nil)
+			return runValidate(cmd, flags, strict, quiet, stage, nil)
 		},
 	}
 
 	cmd.PersistentFlags().BoolVar(&strict, "strict", false, "treat warnings as errors (exit code 1)")
 	cmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "hide ok/info rows")
+	cmd.PersistentFlags().StringVar(&stage, "stage", "", "filter checks by stage (deploy, run, stop, command)")
 
 	// Config validators subtree.
 	configCmd := &cobra.Command{
@@ -82,19 +88,19 @@ Scope targets:
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, []string{"config"})
+			return runValidate(cmd, flags, strict, quiet, stage, []string{"config"})
 		},
 	}
 	configCmd.AddCommand(
-		newValidateConfigSubCmd(flags, &strict, &quiet, "devbox", "Validate main devbox.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "services", "Validate devbox/services.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "docker", "Validate devbox/docker.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "info", "Validate devbox/info.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "styles", "Validate devbox/styles.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "lifecycle", "Validate devbox/lifecycle.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "deploy", "Validate devbox/deploy.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "reset", "Validate devbox/reset.yml (replaces 'devbox reset config check')"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, "service-deploy", "Validate service deploy configs"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "devbox", "Validate main devbox.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "services", "Validate devbox/services.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "docker", "Validate devbox/docker.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "info", "Validate devbox/info.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "styles", "Validate devbox/styles.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "lifecycle", "Validate devbox/lifecycle.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "deploy", "Validate devbox/deploy.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "reset", "Validate devbox/reset.yml (replaces 'devbox reset config check')"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "service-deploy", "Validate service deploy configs"),
 	)
 	cmd.AddCommand(configCmd)
 
@@ -106,13 +112,13 @@ Scope targets:
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, []string{"templates"})
+			return runValidate(cmd, flags, strict, quiet, stage, []string{"templates"})
 		},
 	}
 	templatesCmd.AddCommand(
-		newValidateTemplateSubCmd(flags, &strict, &quiet, "ide", "Validate IDE template pack"),
-		newValidateTemplateSubCmd(flags, &strict, &quiet, "ai", "Validate AI template pack"),
-		newValidateTemplateSubCmd(flags, &strict, &quiet, "git", "Validate git hooks template pack"),
+		newValidateTemplateSubCmd(flags, &strict, &quiet, &stage, "ide", "Validate IDE template pack"),
+		newValidateTemplateSubCmd(flags, &strict, &quiet, &stage, "ai", "Validate AI template pack"),
+		newValidateTemplateSubCmd(flags, &strict, &quiet, &stage, "git", "Validate git hooks template pack"),
 	)
 	cmd.AddCommand(templatesCmd)
 
@@ -124,7 +130,35 @@ Scope targets:
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, []string{"commands"})
+			return runValidate(cmd, flags, strict, quiet, stage, []string{"commands"})
+		},
+	})
+
+	// Env probes.
+	cmd.AddCommand(&cobra.Command{
+		Use:          "env",
+		Short:        "Validate environment readiness",
+		Long:         `Run built-in environment probes (docker binary, docker daemon, compose plugin, git/shell binaries, .devbox writable).`,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runValidate(cmd, flags, strict, quiet, stage, []string{"env"})
+		},
+	})
+
+	// Checks (project-defined in devbox/validate.yml).
+	cmd.AddCommand(&cobra.Command{
+		Use:          "checks [id]",
+		Short:        "Validate project checks from devbox/validate.yml",
+		Long:         `Run project-defined checks from devbox/validate.yml. With an id, runs only that check.`,
+		Args:         cobra.MaximumNArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scope := []string{"checks"}
+			if len(args) > 0 {
+				scope = append(scope, args[0])
+			}
+			return runValidate(cmd, flags, strict, quiet, stage, scope)
 		},
 	})
 
@@ -132,34 +166,34 @@ Scope targets:
 }
 
 // newValidateConfigSubCmd creates a leaf command for a single config validator.
-func newValidateConfigSubCmd(flags *rootFlags, strict, quiet *bool, id, short string) *cobra.Command {
+func newValidateConfigSubCmd(flags *rootFlags, strict, quiet *bool, stage *string, id, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:          id,
 		Short:        short,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, *strict, *quiet, []string{"config", id})
+			return runValidate(cmd, flags, *strict, *quiet, *stage, []string{"config", id})
 		},
 	}
 }
 
 // newValidateTemplateSubCmd creates a leaf command for a single template validator.
-func newValidateTemplateSubCmd(flags *rootFlags, strict, quiet *bool, id, short string) *cobra.Command {
+func newValidateTemplateSubCmd(flags *rootFlags, strict, quiet *bool, stage *string, id, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:          id,
 		Short:        short,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, *strict, *quiet, []string{"templates", id})
+			return runValidate(cmd, flags, *strict, *quiet, *stage, []string{"templates", id})
 		},
 	}
 }
 
 // runValidate executes validators matching the given scope and renders diagnostics.
 // scope may be nil (run all), or a list like ["config"], ["config", "deploy"], etc.
-func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, scope []string) error {
+func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage string, scope []string) error {
 	cfg, configPath, projectRoot, err := loadForValidate(flags)
 	// cfg may be nil if load failed, but that's OK — validators will report the error.
 	// Only abort for infrastructure errors (cwd unreadable, etc.)
@@ -172,7 +206,7 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, scope
 	}
 
 	// Load the command registry diagnostically (nil is OK if it fails or project isn't found).
-	var cmdReg any // *usercommands.Registry
+	var cmdReg *usercommands.Registry
 	if projectRoot != "" {
 		configPathForReg := configPath
 		if configPathForReg == "" {
@@ -184,10 +218,31 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, scope
 		// Ignore registry load errors — validators will self-skip on nil.
 	}
 
-	ctx := validate.Context{ProjectRoot: projectRoot, ConfigPath: configPath, Cfg: cfg, CommandRegistry: cmdReg}
+	// Single-parse point for devbox/validate.yml. The load result (including
+	// any error) is threaded via validate.Context so the config.validate
+	// validator and the checks roster can read it without re-parsing.
+	var (
+		validateCfg      *config.ValidateConfig
+		validateWarnings []validate.Diagnostic
+		validateLoadErr  error
+	)
+	if projectRoot != "" {
+		validateCfg, validateWarnings, validateLoadErr = config.LoadValidateConfig(config.ValidateConfigPath(projectRoot))
+	}
 
-	// Build the registry and run validators.
-	registry := buildRegistry()
+	ctx := validate.Context{
+		ProjectRoot:         projectRoot,
+		ConfigPath:          configPath,
+		Cfg:                 cfg,
+		CommandRegistry:     cmdReg,
+		ValidateCfg:         validateCfg,
+		ValidateCfgWarnings: validateWarnings,
+		ValidateCfgLoadErr:  validateLoadErr,
+	}
+
+	// Build the registry and run validators. Stage filtering happens at
+	// assembly time for checks; env probes always run (they have no stages).
+	registry := buildRegistry(cfg, validateCfg, projectRoot, cmdReg, stage)
 	diags := registry.Run(ctx, scope...)
 
 	// Render the diagnostics table (skip when no rows to avoid an empty bordered box).
@@ -243,8 +298,10 @@ func loadForValidate(flags *rootFlags) (*config.DevboxConfig, string, string, er
 	return cfg, configPath, projectRoot, nil
 }
 
-// buildRegistry assembles all validators from the three domains.
-func buildRegistry() *validate.Registry {
+// buildRegistry assembles validators from all domains (config / templates /
+// commands / env / checks). Stage filtering is applied at assembly time for
+// checks; env probes have no stages and always register.
+func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, baseDir string, cmdReg *usercommands.Registry, stage string) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)
@@ -253,6 +310,12 @@ func buildRegistry() *validate.Registry {
 		reg.Register(v)
 	}
 	for _, v := range valcmds.All() {
+		reg.Register(v)
+	}
+	for _, v := range valenv.All(cfg) {
+		reg.Register(v)
+	}
+	for _, v := range valchecks.AllForStage(validateCfg, baseDir, cmdReg, stage) {
 		reg.Register(v)
 	}
 	return reg

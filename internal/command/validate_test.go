@@ -160,6 +160,77 @@ func TestValidateUsesLoadForValidate(t *testing.T) {
 	require.True(t, len(outStr) > 0, "command should produce output")
 }
 
+func TestValidateStageFlag(t *testing.T) {
+	cmd := newValidateCmd(&rootFlags{})
+	stageFlag := cmd.PersistentFlags().Lookup("stage")
+	require.NotNil(t, stageFlag)
+	require.Equal(t, "", stageFlag.DefValue)
+}
+
+func TestValidateEnvAndChecksSubcommands(t *testing.T) {
+	cmd := newValidateCmd(&rootFlags{})
+
+	envCmd, _, _ := cmd.Find([]string{"env"})
+	require.NotNil(t, envCmd)
+	require.Equal(t, "env", envCmd.Name())
+
+	checksCmd, _, _ := cmd.Find([]string{"checks"})
+	require.NotNil(t, checksCmd)
+	require.Equal(t, "checks", checksCmd.Name())
+}
+
+// TestValidateMalformedValidateYmlDoesNotShortCircuit: a malformed validate.yml
+// must NOT abort the validate run — the config.validate validator surfaces the
+// load failure inline alongside diagnostics from other domains.
+func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Minimal devbox.yml so locate succeeds.
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	// Malformed validate.yml: unknown top-level field.
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{})
+	_ = cmd.Execute()
+
+	out := output.String()
+	// The config.validate error diagnostic should appear in the rendered table.
+	require.Contains(t, out, "validate.yml", "malformed validate.yml diagnostic should surface")
+	// And the run should still produce a summary line (proves no short-circuit).
+	require.Contains(t, out, "error")
+}
+
+// TestValidateMissingValidateYmlIsSilent: a missing validate.yml is silently
+// tolerated — no diagnostic, no error.
+func TestValidateMissingValidateYmlIsSilent(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"checks"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	// No checks domain rows expected since validate.yml is absent.
+	require.NotContains(t, out, "checks/")
+}
+
 func TestValidateExitCodeInterface(t *testing.T) {
 	// Verify that validationFailedError implements ExitCode() int.
 	err := &validationFailedError{
