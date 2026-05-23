@@ -30,6 +30,17 @@ type Context struct {
 	ConfigPath      string
 	Cfg             *config.DevboxConfig
 	CommandRegistry any // *usercommands.Registry; nil-tolerant
+
+	// ValidateCfg is the parsed devbox/validate.yml (nil when the load failed
+	// or the file was absent). Single-parse point: the validate command and
+	// preflight populate this once; validators and checks.All* read it.
+	ValidateCfg *config.ValidateConfig
+	// ValidateCfgWarnings carries soft warnings produced by LoadValidateConfig
+	// (typically unknown-stage info diagnostics).
+	ValidateCfgWarnings []Diagnostic
+	// ValidateCfgLoadErr is nil on success, os.ErrNotExist when validate.yml is
+	// absent (silently tolerated), or any other error when the load failed.
+	ValidateCfgLoadErr error
 }
 
 // Validator is the interface for domain-specific validators.

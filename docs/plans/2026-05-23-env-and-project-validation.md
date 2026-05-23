@@ -165,15 +165,15 @@ Additional review-driven constraints (incorporated into the relevant tasks below
 
 ### Task 5: Add config-validator for validate.yml itself
 
-- [ ] extend `validate.Context` in `internal/validate/validate.go` with three fields: `ValidateCfg *config.ValidateConfig`, `ValidateCfgWarnings []Diagnostic`, `ValidateCfgLoadErr error`. The validator and `checks.All`/`AllForStage` read these; no validator calls `LoadValidateConfig` itself.
-- [ ] add `internal/validate/config/validate_yml.go` — validator `config.validate`. Implementation reads exclusively from the passed-in `Context`:
-  - [ ] `ctx.ValidateCfgLoadErr == nil` → emit the `ctx.ValidateCfgWarnings` slice unchanged (typically unknown-stage info diagnostics).
-  - [ ] `errors.Is(ctx.ValidateCfgLoadErr, os.ErrNotExist)` → emit nothing (validate.yml is optional).
-  - [ ] any other `ctx.ValidateCfgLoadErr` → emit a single `SeverityError` diagnostic `{Domain: "config", Target: "validate", File: "devbox/validate.yml", Message: ctx.ValidateCfgLoadErr.Error()}`. Covers strict-decode failures, unknown `type`, unknown `severity`, missing required fields, duplicate ids.
-- [ ] NO call to `config.LoadValidateConfig` from inside the validator — Task 2 is the single parse point; Task 6 (and Task 7's preflight) do the one-and-only parse and populate the Context.
-- [ ] register it in `internal/validate/config/all.go`.
-- [ ] write tests covering: nil-load-err + no warnings → no diagnostics; nil-load-err + custom-stage warning → one info diagnostic; ErrNotExist load-err → no diagnostics; strict-decode load-err → one error diagnostic; unknown-severity load-err → one error diagnostic. Tests construct `validate.Context` directly with the desired fields — no disk I/O needed.
-- [ ] run `go test ./internal/validate/config/...` — must pass before Task 6.
+- [x] extend `validate.Context` in `internal/validate/validate.go` with three fields: `ValidateCfg *config.ValidateConfig`, `ValidateCfgWarnings []Diagnostic`, `ValidateCfgLoadErr error`. The validator and `checks.All`/`AllForStage` read these; no validator calls `LoadValidateConfig` itself.
+- [x] add `internal/validate/config/validate_yml.go` — validator `config.validate`. Implementation reads exclusively from the passed-in `Context`:
+  - [x] `ctx.ValidateCfgLoadErr == nil` → emit the `ctx.ValidateCfgWarnings` slice unchanged (typically unknown-stage info diagnostics).
+  - [x] `errors.Is(ctx.ValidateCfgLoadErr, os.ErrNotExist)` → emit nothing (validate.yml is optional).
+  - [x] any other `ctx.ValidateCfgLoadErr` → emit a single `SeverityError` diagnostic `{Domain: "config", Target: "validate", File: "devbox/validate.yml", Message: ctx.ValidateCfgLoadErr.Error()}`. Covers strict-decode failures, unknown `type`, unknown `severity`, missing required fields, duplicate ids.
+- [x] NO call to `config.LoadValidateConfig` from inside the validator — Task 2 is the single parse point; Task 6 (and Task 7's preflight) do the one-and-only parse and populate the Context.
+- [x] register it in `internal/validate/config/all.go`.
+- [x] write tests covering: nil-load-err + no warnings → no diagnostics; nil-load-err + custom-stage warning → one info diagnostic; ErrNotExist load-err → no diagnostics; strict-decode load-err → one error diagnostic; unknown-severity load-err → one error diagnostic. Tests construct `validate.Context` directly with the desired fields — no disk I/O needed.
+- [x] run `go test ./internal/validate/config/...` — passed.
 
 ### Task 6: Wire env + checks into `devbox validate` and add `--stage` flag
 
