@@ -221,16 +221,16 @@ func splitDisplayWidth(s string, width int) (string, string) {
 func FormatSummary(summary validate.Summary) string {
 	parts := []string{}
 	if summary.Errors > 0 {
-		parts = append(parts, fmt.Sprintf("%d %s", summary.Errors, pluralize("error", summary.Errors)))
+		parts = append(parts, StyleFailed(fmt.Sprintf("%d %s", summary.Errors, pluralize("error", summary.Errors))))
 	}
 	if summary.Warnings > 0 {
-		parts = append(parts, fmt.Sprintf("%d %s", summary.Warnings, pluralize("warning", summary.Warnings)))
+		parts = append(parts, StyleWarning(fmt.Sprintf("%d %s", summary.Warnings, pluralize("warning", summary.Warnings))))
 	}
 	if summary.Infos > 0 {
-		parts = append(parts, fmt.Sprintf("%d %s", summary.Infos, pluralize("info", summary.Infos)))
+		parts = append(parts, StyleInfo(fmt.Sprintf("%d %s", summary.Infos, pluralize("info", summary.Infos))))
 	}
 	if summary.OKs > 0 {
-		parts = append(parts, fmt.Sprintf("%d %s", summary.OKs, pluralize("check", summary.OKs)))
+		parts = append(parts, RenderEnabled(fmt.Sprintf("%d %s", summary.OKs, pluralize("check", summary.OKs))))
 	}
 
 	if len(parts) == 0 {
