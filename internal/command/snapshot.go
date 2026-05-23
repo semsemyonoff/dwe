@@ -35,6 +35,7 @@ and restore or roll back to it. Workflows live in devbox/snapshot.yml.`,
 	cmd.AddCommand(newSnapshotListCmd(flags))
 	cmd.AddCommand(newSnapshotCurrentCmd(flags))
 	cmd.AddCommand(newSnapshotInspectCmd(flags))
+	cmd.AddCommand(newSnapshotCreateCmd(flags))
 	return cmd
 }
 

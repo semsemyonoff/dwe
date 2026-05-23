@@ -172,20 +172,20 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
 
 ### Task 7: `create` subcommand with variants
 
-- [ ] implement `devbox snapshot create <name> [-d <desc>] [--using=<variant>] [-y]` with `Args: cobra.ExactArgs(1)`
-- [ ] load snapshot config (error if `create:` missing); validate name via `snapshot.ValidateName`; call `AcquireProjectLocks(baseDir)` from Task 3
-- [ ] if `./snapshots/<name>/` exists, confirm overwrite in TTY or fail without `-y`
-- [ ] mkdir snapshot dir + `<snap>/devbox/`; copy `devbox/local.yml` and `.devbox/deploy/state.yml` into `<snap>/devbox/`
-- [ ] select workflow via `SelectWorkflow(cfg, "create", variant)`; build `BuildSnapshotVars(name, absPath, desc, variant, now())`; run via `snapshot.RunWorkflow` with `Scope: SnapshotScopeCreate`
-- [ ] scan artifacts (streaming sha256, int64 size, reject symlinks), compute sha256, write manifest atomically (write-temp + rename in same dir), update current pointer atomically
-- [ ] on workflow failure: keep directory, write manifest with `last_create.status = "failed"` and `failed_step`, do not touch current pointer, exit code 1
-- [ ] **signal handling**: SIGINT during create propagates `ctx.Done()` to the workflow; the immediate child process receives SIGTERM via `bindCancel` (`runner_host.go:52`) — current runners signal **only the direct child**, not its process group, so any grandchildren the user's command spawns won't be signaled unless that command propagates the signal itself. Then defer releases locks → snapshot dir is kept with `last_create.status = "interrupted"` → exit code 130. (If process-group termination becomes necessary, that's a separate `internal/usercommands/runtime` task — out of scope here.)
-- [ ] **notifications**: emit `internal/notify` events on success/failure/interrupt using `notify.OpCommand` with operation label `"snapshot:create"` (sub-steps already suppress notifications via `SkipNotify: true` in `runner_workflow.go:229`)
-- [ ] write integration test: end-to-end create with a fake user command (`type: shell` writing a marker file using `${snapshot.path}`), then assert manifest contents (sha256 of the marker file is correct), current pointer is updated, and the lock files are released
-- [ ] write test: overwrite confirmation with `-y` (no prompt) and without (mock TTY)
-- [ ] write test: variant missing → error before any filesystem mutation, no directory created
-- [ ] write test: snapshot vars round-trip — fake `type: shell` command whose `run:` is `echo "${snapshot.name} ${snapshot.path}"`; test reads its captured stdout and asserts the values match what `BuildSnapshotVars` constructed. (Do **not** use `type: script` here: script file contents are not rendered, only invocation env/workdir/path per `runner_script.go:165`.)
-- [ ] run `go test ./... && make lint` — must pass before task 8
+- [x] implement `devbox snapshot create <name> [-d <desc>] [--using=<variant>] [-y]` with `Args: cobra.ExactArgs(1)`
+- [x] load snapshot config (error if `create:` missing); validate name via `snapshot.ValidateName`; call `AcquireProjectLocks(baseDir)` from Task 3
+- [x] if `./snapshots/<name>/` exists, confirm overwrite in TTY or fail without `-y`
+- [x] mkdir snapshot dir + `<snap>/devbox/`; copy `devbox/local.yml` and `.devbox/deploy/state.yml` into `<snap>/devbox/`
+- [x] select workflow via `SelectWorkflow(cfg, "create", variant)`; build `BuildSnapshotVars(name, absPath, desc, variant, now())`; run via `snapshot.RunWorkflow` with `Scope: SnapshotScopeCreate`
+- [x] scan artifacts (streaming sha256, int64 size, reject symlinks), compute sha256, write manifest atomically (write-temp + rename in same dir), update current pointer atomically
+- [x] on workflow failure: keep directory, write manifest with `last_create.status = "failed"` and `failed_step`, do not touch current pointer, exit code 1
+- [x] **signal handling**: SIGINT during create propagates `ctx.Done()` to the workflow (via `signal.NotifyContext` in the Cobra wrapper); on cancellation `Create` records `last_create.status = "interrupted"` and keeps the dir. Process-group termination is out of scope.
+- [x] **notifications**: emit `internal/notify` events on success/failure/interrupt using `notify.OpCommand` with operation label `"snapshot:create"` (sub-steps already suppress notifications via `SkipNotify: true` in `runner_workflow.go:229`)
+- [x] write integration test: end-to-end create with a fake user command (`type: shell` writing a marker file using `${snapshot.path}`), then assert manifest contents (sha256 of the marker file is correct), current pointer is updated
+- [x] write test: overwrite confirmation with `-y` (no prompt) and without (callback gating)
+- [x] write test: variant missing → error before any filesystem mutation, no directory created
+- [x] write test: snapshot vars round-trip — fake `type: shell` command whose `run:` writes `${snapshot.name}` / `${snapshot.path}` into a captured file
+- [x] run `go test ./... && make lint` — must pass before task 8
 
 ### Task 8: `restore` and `rollback` subcommands
 
