@@ -17,6 +17,7 @@ import (
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
 	pipeline "devbox-cli/internal/pipeline"
+	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
@@ -114,6 +115,7 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var force bool
 	var resume bool
 	var nonInteractive bool
+	var skipPreflight bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -138,7 +140,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return deployRunCmd(flags, serviceName, force, resume, nonInteractive)
+			return deployRunCmd(cmd, flags, serviceName, force, resume, nonInteractive, skipPreflight)
 		},
 	}
 
@@ -146,6 +148,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 	cmd.Flags().BoolVar(&force, "force", false, "ignore state and re-run all steps (when: still applies; use 'devbox reset run && devbox deploy run' for a true clean install)")
 	cmd.Flags().BoolVar(&resume, "resume", false, "continue from the last failed step")
 	cmd.Flags().BoolVarP(&nonInteractive, "non-interactive", "y", false, "suppress interactive prompts")
+	addSkipPreflightFlag(cmd, &skipPreflight)
 	return cmd
 }
 
@@ -170,7 +173,7 @@ type deployCancelledError struct{}
 func (e *deployCancelledError) Error() string { return "deploy cancelled" }
 func (e *deployCancelledError) ExitCode() int { return 0 }
 
-func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool) (err error) {
+func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool) (err error) {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
@@ -191,8 +194,9 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 	n := newNotifier(ucfg)
 	defer func() {
-		// Lock-held, user-cancelled, or already-up-to-date — none is a run failure.
-		if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*deployCancelledError)) || isNoop {
+		// Lock-held, preflight-blocked, user-cancelled, or already-up-to-date
+		// — none is a deploy *run* failure; suppress the notification.
+		if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*preflight.Error)) || errors.As(err, new(*deployCancelledError)) || isNoop {
 			return
 		}
 		n.Notify(context.Background(), notify.Event{
@@ -204,6 +208,27 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 			Project:   projectName,
 		})
 	}()
+
+	// Load cfg + registry BEFORE acquiring the deploy lock so preflight can
+	// reject without leaving a stale lock file in .devbox/deploy/.
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	projectName = cfg.Project.Name
+
+	reg, regErr := loadCommandRegistry(flags.configPath)
+	if regErr != nil {
+		// nil-tolerant during preflight; surface the real error after.
+		reg = nil
+	}
+
+	if err := preflightRun(context.Background(), cfg, reg, workDir, "deploy", skipPreflight, cmd.ErrOrStderr()); err != nil {
+		return err
+	}
+	if regErr != nil {
+		return fmt.Errorf("loading command registry: %w", regErr)
+	}
 
 	// Acquire file lock to prevent parallel deploys
 	lck, err := lock.Acquire(lockPath)
@@ -219,12 +244,6 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 		_ = lck.Release()
 	}()
 
-	cfg, err := config.LoadConfig(flags.configPath)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-	projectName = cfg.Project.Name
-
 	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -234,11 +253,6 @@ func deployRunCmd(flags *rootFlags, serviceName string, force bool, resume bool,
 	}
 	if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
 		return fmt.Errorf("ensuring volumes: %w", err)
-	}
-
-	reg, err := loadCommandRegistry(flags.configPath)
-	if err != nil {
-		return fmt.Errorf("loading command registry: %w", err)
 	}
 
 	var steps []pipeline.ResolvedStep

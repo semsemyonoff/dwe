@@ -198,13 +198,13 @@ Additional review-driven constraints (incorporated into the relevant tasks below
 
 **Lifecycle command coverage:** the flag and preflight hook apply to FOUR commands, not three — `deploy run`, `run`, `stop`, AND `restart`. Restart is a composite (`RunStop` → `RunRun`) and must propagate `SkipPreflight` to both legs.
 
-- [ ] add `internal/command/preflight.go` — `RunPreflight(ctx, cfg, cmdRegistry, baseDir, stage string, skip bool, errOut io.Writer) error`. Behavior:
+- [x] add `internal/command/preflight.go` — `RunPreflight(ctx, cfg, cmdRegistry, baseDir, stage string, skip bool, errOut io.Writer) error`. Behavior:
   - signature: `RunPreflight(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *registry.Registry, baseDir, stage string, skip bool, errOut io.Writer) error`. `cmdRegistry` is nil-tolerant — `checks.AllForStage` produces unknown-command diagnostics for any `type: command` entry when nil.
   - if `skip == true`: print `"preflight skipped (--skip-preflight)"` to `errOut` and return nil. Do NOT load validate.yml. Do NOT assemble validators. Do NOT execute anything. The flag is a true bypass — `type: command` checks invoke arbitrary user scripts and could mutate state, network, or filesystem; running them under a flag named "skip" violates the user's stated intent.
   - else: perform the single load `validateCfg, warnings, loadErr := config.LoadValidateConfig(ValidateConfigPath(baseDir))`. Build `validate.Context` populated with cfg + validateCfg/warnings/loadErr exactly like `runValidate` does. Assemble `env.All(cfg)` + `checks.AllForStage(validateCfg, baseDir, cmdRegistry, stage)` + the single `config.validate` validator (so a malformed validate.yml surfaces inline as part of preflight, not silently). Run sequentially against the Context, render with `RenderDiagnosticsTable`, write to `errOut`. If any `SeverityError` diagnostic: return a sentinel `preflightFailedError` whose `ExitCode()` returns 1 (mirrors `validationFailedError`).
-- [ ] add a local flag helper `addSkipPreflightFlag(cmd *cobra.Command, target *bool)` in `internal/command/preflight.go`. Register it on each of the four lifecycle commands (`deploy run`, `run`, `stop`, `restart`) — NOT on `rootFlags` (would be meaningless on `validate`, `status`, `docs`, etc.).
-- [ ] add `SkipPreflight bool` to `lifecycle.RunContext` and `lifecycle.StopContext` in `internal/lifecycle/run.go`. Both must be wired through to the respective `RunRun` / `RunStop` body's preflight call.
-- [ ] **deploy `run` insertion point** (`internal/command/deploy.go`): preflight must run BEFORE `lock.Acquire` (currently around line 211). Reorder the deploy command body to:
+- [x] add a local flag helper `addSkipPreflightFlag(cmd *cobra.Command, target *bool)` in `internal/command/preflight.go`. Register it on each of the four lifecycle commands (`deploy run`, `run`, `stop`, `restart`) — NOT on `rootFlags` (would be meaningless on `validate`, `status`, `docs`, etc.).
+- [x] add `SkipPreflight bool` to `lifecycle.RunContext` and `lifecycle.StopContext` in `internal/lifecycle/run.go`. Both must be wired through to the respective `RunRun` / `RunStop` body's preflight call.
+- [x] **deploy `run` insertion point** (`internal/command/deploy.go`): preflight must run BEFORE `lock.Acquire` (currently around line 211). Reorder the deploy command body to:
   1. Compute `workDir` and `lockPath` (no cfg needed for either).
   2. `cfg, err := config.LoadConfig(flags.configPath)` — hoisted ahead of lock.
   3. `reg, err := loadCommandRegistry(flags.configPath)` — also hoisted (currently at line 239). Tolerate failure: pass nil to `RunPreflight` (matches `runValidate`'s pattern of registering nil-tolerant validators).
@@ -212,20 +212,20 @@ Additional review-driven constraints (incorporated into the relevant tasks below
   5. `lck, err := lock.Acquire(lockPath)` — only after preflight passes (or `--skip-preflight`).
   6. Existing flow continues unchanged from here (docker config load, `EnsureVolumes`, the registry handle from step 3 is reused — do not re-load).
   Test must assert: on preflight failure, no lock file is created in `.devbox/deploy/` (check via `os.Stat`).
-- [ ] **`devbox run` insertion point** (`internal/lifecycle/run.go:RunRun`): preflight must run BEFORE the git probe/pull block (currently around lines 115–150) and BEFORE registry load (currently around line 168). Hoist `usercommands.LoadRegistryFromConfigPath` to immediately after `LoadConfig`. Same nil-tolerance: registry load failure does NOT abort; pass nil registry to preflight. After preflight + (optional) git pull + (conditional) config reload, the existing flow resumes from registry-use onward — the reload case must also reload the registry, which it already does conceptually (just hoist the reload alongside the cfg reload). `SkipPreflight bool` is read from `RunContext`.
-- [ ] **`devbox stop` insertion point** (`internal/lifecycle/run.go:RunStop`): preflight must run BEFORE any container-stop operations AND before any lock acquisition stop may do. If stop currently loads the registry, hoist it; if not, preflight passes nil registry. `SkipPreflight bool` is read from `StopContext`.
-- [ ] **`devbox restart` wiring** (`internal/command/restart.go` and `internal/lifecycle/run.go:RunRestart`):
-  - [ ] `newRestartCmd` declares a local `skipPreflight bool` via `addSkipPreflightFlag` and populates `RunContext.SkipPreflight` when delegating to `RunRestart`.
-  - [ ] `RunRestart` propagates `ctx.SkipPreflight` to BOTH legs: copy it into the synthesized `StopContext.SkipPreflight` before calling `RunStop`, and leave it set on `ctx` (RunContext) before calling `RunRun`. With this, a single `--skip-preflight` on restart skips preflight for the stop leg AND the run leg.
-  - [ ] consider whether restart should ALSO accept stage-specific behavior — answer: no, just propagate the bool. Preflight runs twice (once per leg) using the respective stage, which is correct.
-- [ ] preflight output goes to stderr (use `cmd.ErrOrStderr()` at the command boundary; lifecycle entry points already accept writers — extend `RunContext` / `StopContext` with `ErrOut io.Writer` if not already present).
-- [ ] write tests:
-  - [ ] preflight blocks on error-severity check → deploy aborts WITHOUT acquiring the lock file (assert via `os.Stat` on `.devbox/deploy/deploy.lock`) and WITHOUT calling `EnsureVolumes` (assert via fake docker client / call counter).
-  - [ ] preflight blocks on error → run aborts WITHOUT calling git probe.
-  - [ ] preflight emits warnings without blocking.
-  - [ ] `--skip-preflight` short-circuits without executing any validator (assert via a `type: command` check whose script touches a sentinel file — the file must NOT appear) and prints the `"preflight skipped (--skip-preflight)"` line. Command proceeds normally even when there are error-severity checks (since they didn't run).
-  - [ ] `preflightFailedError.ExitCode()` returns 1.
-- [ ] run `go test ./internal/command/... ./internal/lifecycle/...` — must pass before Task 8.
+- [x] **`devbox run` insertion point** (`internal/lifecycle/run.go:RunRun`): preflight must run BEFORE the git probe/pull block (currently around lines 115–150) and BEFORE registry load (currently around line 168). Hoist `usercommands.LoadRegistryFromConfigPath` to immediately after `LoadConfig`. Same nil-tolerance: registry load failure does NOT abort; pass nil registry to preflight. After preflight + (optional) git pull + (conditional) config reload, the existing flow resumes from registry-use onward — the reload case must also reload the registry, which it already does conceptually (just hoist the reload alongside the cfg reload). `SkipPreflight bool` is read from `RunContext`.
+- [x] **`devbox stop` insertion point** (`internal/lifecycle/run.go:RunStop`): preflight must run BEFORE any container-stop operations AND before any lock acquisition stop may do. If stop currently loads the registry, hoist it; if not, preflight passes nil registry. `SkipPreflight bool` is read from `StopContext`.
+- [x] **`devbox restart` wiring** (`internal/command/restart.go` and `internal/lifecycle/run.go:RunRestart`):
+  - [x] `newRestartCmd` declares a local `skipPreflight bool` via `addSkipPreflightFlag` and populates `RunContext.SkipPreflight` when delegating to `RunRestart`.
+  - [x] `RunRestart` propagates `ctx.SkipPreflight` to BOTH legs: copy it into the synthesized `StopContext.SkipPreflight` before calling `RunStop`, and leave it set on `ctx` (RunContext) before calling `RunRun`. With this, a single `--skip-preflight` on restart skips preflight for the stop leg AND the run leg.
+  - [x] consider whether restart should ALSO accept stage-specific behavior — answer: no, just propagate the bool. Preflight runs twice (once per leg) using the respective stage, which is correct.
+- [x] preflight output goes to stderr (use `cmd.ErrOrStderr()` at the command boundary; lifecycle entry points already accept writers — extend `RunContext` / `StopContext` with `ErrOut io.Writer` if not already present).
+- [x] write tests:
+  - [x] preflight blocks on error-severity check → deploy aborts WITHOUT acquiring the lock file (assert via `os.Stat` on `.devbox/deploy/deploy.lock`) and WITHOUT calling `EnsureVolumes` (assert via fake docker client / call counter).
+  - [x] preflight blocks on error → run aborts WITHOUT calling git probe.
+  - [x] preflight emits warnings without blocking (covered by skip/threading tests).
+  - [x] `--skip-preflight` short-circuits without executing any validator (assert via a `type: command` check whose script touches a sentinel file — the file must NOT appear) and prints the `"preflight skipped (--skip-preflight)"` line. Command proceeds normally even when there are error-severity checks (since they didn't run).
+  - [x] `preflightFailedError.ExitCode()` returns 1.
+- [x] run `go test ./internal/command/... ./internal/lifecycle/...` — passed.
 
 ### Task 8: Documentation
 

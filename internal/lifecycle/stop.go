@@ -1,8 +1,10 @@
 package lifecycle
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -15,6 +17,10 @@ import (
 type StopContext struct {
 	ConfigPath string
 	Yes        bool
+	// SkipPreflight bypasses env probes + project checks for this stop.
+	SkipPreflight bool
+	// ErrOut receives preflight diagnostic output. nil falls back to os.Stderr.
+	ErrOut io.Writer
 }
 
 // RunStop executes the full stop lifecycle.
@@ -30,6 +36,24 @@ func RunStop(ctx StopContext) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// Hoist registry load ahead of preflight (nil-tolerant — preflight will
+	// surface unknown-command diagnostics for any type: command checks).
+	reg, regErr := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
+	if regErr != nil {
+		reg = nil
+	}
+
+	errOut := ctx.ErrOut
+	if errOut == nil {
+		errOut = os.Stderr
+	}
+	if err := PreflightFunc(context.Background(), cfg, reg, workDir, "stop", ctx.SkipPreflight, errOut); err != nil {
+		return err
+	}
+	if regErr != nil {
+		return fmt.Errorf("loading command registry: %w", regErr)
+	}
+
 	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -37,11 +61,6 @@ func RunStop(ctx StopContext) error {
 	}
 
 	stopCfg := EnsureStopConfig(lifecycleCfg)
-
-	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("loading command registry: %w", err)
-	}
 
 	if err := RunPhases(cfg, reg, workDir, stopCfg.Phases, "stop", "stop", ctx.Yes, stopCfg.LogEnabled()); err != nil {
 		return err

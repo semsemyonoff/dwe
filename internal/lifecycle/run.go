@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/git"
 	"devbox-cli/internal/notify"
+	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
@@ -27,6 +29,11 @@ var GitProbeFunc = git.Probe
 // GitPullFFOnlyFunc is a package-level variable so tests can inject a stub
 // pull implementation without touching a real git repository.
 var GitPullFFOnlyFunc = git.PullFFOnly
+
+// PreflightFunc is a package-level variable so tests can stub preflight
+// without setting up env probes / validate.yml on disk. Same pattern as
+// GitProbeFunc / GitPullFFOnlyFunc.
+var PreflightFunc = preflight.Run
 
 // RunContext carries all parameters for the run (and restart) lifecycle entry points.
 type RunContext struct {
@@ -42,6 +49,10 @@ type RunContext struct {
 	// RunRestart on its inner RunRun call so a restart fires at most one
 	// notification (and the spec says restart never notifies).
 	SkipNotify bool
+	// SkipPreflight bypasses env probes + project checks for this run.
+	SkipPreflight bool
+	// ErrOut receives preflight diagnostic output. nil falls back to os.Stderr.
+	ErrOut io.Writer
 }
 
 // resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
@@ -92,6 +103,14 @@ func RunRun(ctx RunContext) (err error) {
 	}
 	projectName = cfg.Project.Name
 
+	// Hoist registry load ahead of preflight so type: command checks can
+	// dispatch. nil-tolerant: load failure does not abort — preflight will
+	// surface unknown-command diagnostics for any checks that referenced it.
+	reg, regErr := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
+	if regErr != nil {
+		reg = nil
+	}
+
 	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil {
@@ -106,6 +125,21 @@ func RunRun(ctx RunContext) (err error) {
 
 	if ctx.UpdateMode != "" && !config.ValidUpdateMode(ctx.UpdateMode) {
 		return fmt.Errorf("invalid --update mode %q: must be one of: prompt, auto, check, off", ctx.UpdateMode)
+	}
+
+	errOut := ctx.ErrOut
+	if errOut == nil {
+		errOut = os.Stderr
+	}
+	if err := PreflightFunc(context.Background(), cfg, reg, workDir, "run", ctx.SkipPreflight, errOut); err != nil {
+		return err
+	}
+	// Surface a deferred registry load failure now that preflight is past —
+	// only fail when the registry was non-empty-relevant (i.e. it actually
+	// failed, not just absent). LoadRegistryFromConfigPath returns nil error
+	// when the commands dir is missing, so any error here is a real fault.
+	if regErr != nil {
+		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
 	effectiveMode := resolveUpdateMode(lifecycleCfg.Run, ctx.NoUpdate, ctx.UpdateMode)
@@ -162,12 +196,10 @@ func RunRun(ctx RunContext) (err error) {
 		if lifecycleCfg.Run == nil {
 			return fmt.Errorf("lifecycle.yml has no `run:` section after pull reload")
 		}
-	}
-
-	// Load registry first (needed by LoadTrackedServices).
-	reg, err := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("loading command registry: %w", err)
+		reg, err = usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
+		if err != nil {
+			return fmt.Errorf("reloading command registry after pull: %w", err)
+		}
 	}
 
 	// Gate: ensure all tracked services are deployed.
@@ -210,8 +242,10 @@ func RunRun(ctx RunContext) (err error) {
 // RunRestart runs the full stop lifecycle then the full run lifecycle with NoUpdate forced to true.
 func RunRestart(ctx RunContext) error {
 	stopCtx := StopContext{
-		ConfigPath: ctx.ConfigPath,
-		Yes:        ctx.Yes,
+		ConfigPath:    ctx.ConfigPath,
+		Yes:           ctx.Yes,
+		SkipPreflight: ctx.SkipPreflight,
+		ErrOut:        ctx.ErrOut,
 	}
 	if err := RunStop(stopCtx); err != nil {
 		return err

@@ -12,6 +12,8 @@ import (
 
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/userconfig"
+
+	"github.com/spf13/cobra"
 )
 
 type recordingNotifier struct {
@@ -67,7 +69,7 @@ func TestDeployRunCmd_NotifierFiresOnEarlyConfigLoadFailure(t *testing.T) {
 	// configPath points at a non-existent file → LoadConfig fails.
 	flags := &rootFlags{configPath: filepath.Join(t.TempDir(), "does-not-exist.yml")}
 
-	err := deployRunCmd(flags, "", false, false, true)
+	err := deployRunCmd(&cobra.Command{}, flags, "", false, false, true, false)
 	if err == nil {
 		t.Fatal("expected deployRunCmd to fail when config missing")
 	}
@@ -119,7 +121,7 @@ func TestDeployRunCmd_MalformedUserConfigDoesNotBlockDeploy(t *testing.T) {
 	rec := swapNewNotifier(t)
 	flags := &rootFlags{configPath: filepath.Join(t.TempDir(), "does-not-exist.yml")}
 
-	err := deployRunCmd(flags, "", false, false, true)
+	err := deployRunCmd(&cobra.Command{}, flags, "", false, false, true, false)
 	if err == nil {
 		t.Fatal("expected deployRunCmd to fail when devbox config missing")
 	}

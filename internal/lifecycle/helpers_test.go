@@ -1,10 +1,24 @@
 package lifecycle
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/usercommands"
 )
+
+// init replaces PreflightFunc with a no-op for the test binary so lifecycle
+// tests don't pick up the host's docker / compose / git binaries and fail
+// preflight. Tests that exercise preflight behavior explicitly swap it back.
+func init() {
+	PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+		return nil
+	}
+}
 
 // makeMinimalDevboxYML writes the minimum devbox.yml needed for config.LoadConfig to succeed.
 func makeMinimalDevboxYML(t *testing.T, dir string) string {

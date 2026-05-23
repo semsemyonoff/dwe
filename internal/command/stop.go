@@ -8,6 +8,7 @@ import (
 
 func newStopCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
+	var skipPreflight bool
 
 	cmd := &cobra.Command{
 		Use:   "stop",
@@ -23,12 +24,15 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecycle.RunStop(lifecycle.StopContext{
-				ConfigPath: flags.configPath,
-				Yes:        yes,
+				ConfigPath:    flags.configPath,
+				Yes:           yes,
+				SkipPreflight: skipPreflight,
+				ErrOut:        cmd.ErrOrStderr(),
 			})
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
+	addSkipPreflightFlag(cmd, &skipPreflight)
 	return cmd
 }

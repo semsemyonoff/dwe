@@ -8,6 +8,7 @@ import (
 
 func newRestartCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
+	var skipPreflight bool
 
 	cmd := &cobra.Command{
 		Use:   "restart",
@@ -22,13 +23,16 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecycle.RunRestart(lifecycle.RunContext{
-				ConfigPath: flags.configPath,
-				Yes:        yes,
-				ShowInfo:   func() error { return runInfo(cmd, flags) },
+				ConfigPath:    flags.configPath,
+				Yes:           yes,
+				ShowInfo:      func() error { return runInfo(cmd, flags) },
+				SkipPreflight: skipPreflight,
+				ErrOut:        cmd.ErrOrStderr(),
 			})
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
+	addSkipPreflightFlag(cmd, &skipPreflight)
 	return cmd
 }
