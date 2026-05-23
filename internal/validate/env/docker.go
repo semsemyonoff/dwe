@@ -11,6 +11,13 @@ import (
 	"devbox-cli/internal/validate"
 )
 
+// Legacy `docker-compose` (v1) was a standalone Python binary invoked as
+// `docker-compose ...`. The plugin (v2 and later) is invoked as the
+// `docker compose ...` subcommand. So a non-error response from
+// `docker compose version` is itself proof the plugin is installed — the
+// version-major number does not matter and changes with Docker Desktop
+// releases (v2 → v5 etc.).
+
 // dockerProbeTimeout caps the `docker version` / `docker compose version`
 // invocations so a hung daemon does not block validate forever.
 const dockerProbeTimeout = 5 * time.Second
@@ -79,15 +86,14 @@ func (v *dockerComposeValidator) Run(_ validate.Context) []validate.Diagnostic {
 		return []validate.Diagnostic{fail(
 			v.ID(),
 			fmt.Sprintf("docker compose plugin not available: %s", firstLine(string(out), err.Error())),
-			"install the Compose v2 plugin\nhttps://docs.docker.com/compose/install/",
+			"install the Docker Compose plugin\nhttps://docs.docker.com/compose/install/",
 		)}
 	}
-	version := strings.TrimSpace(string(out))
-	if !strings.HasPrefix(version, "2.") && !strings.HasPrefix(version, "v2.") {
+	if strings.TrimSpace(string(out)) == "" {
 		return []validate.Diagnostic{fail(
 			v.ID(),
-			fmt.Sprintf("docker compose v2 required (got %q)", version),
-			"upgrade Docker Desktop or install the Compose v2 plugin\nhttps://docs.docker.com/compose/install/",
+			"docker compose plugin returned no version",
+			"reinstall the Docker Compose plugin\nhttps://docs.docker.com/compose/install/",
 		)}
 	}
 	return []validate.Diagnostic{ok(v.ID())}

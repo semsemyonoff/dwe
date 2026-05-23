@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/project"
@@ -246,14 +247,15 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 	registry := buildRegistry(cfg, validateCfg, validateLoadErr, projectRoot, cmdReg, stage, scope)
 	diags := registry.Run(ctx, scope...)
 
+	// Compute summary first so the header can reflect overall severity.
+	summary := validate.Aggregate(diags)
+
 	// Render the diagnostics table (skip when no rows to avoid an empty bordered box).
 	rows := ui.FormatDiagnostics(diags, quiet)
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), styleValidateHeader(validateHeader(scope, stage), summary))
 	if len(rows) > 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderDiagnosticsTable(rows))
 	}
-
-	// Compute summary and print it.
-	summary := validate.Aggregate(diags)
 	summaryLine := ui.FormatSummary(summary)
 	if partialLoadErr != nil {
 		summaryLine += " (main config did not load; some validations skipped)"
@@ -297,6 +299,62 @@ func loadForValidate(flags *rootFlags) (*config.DevboxConfig, string, string, er
 	}
 
 	return cfg, configPath, projectRoot, nil
+}
+
+// styleValidateHeader colors the validate header by overall severity:
+// red when any errors were found, yellow on warnings-only, cyan otherwise.
+func styleValidateHeader(text string, summary validate.Summary) string {
+	switch {
+	case summary.Errors > 0:
+		return ui.StyleFailed(text)
+	case summary.Warnings > 0:
+		return ui.StyleWarning(text)
+	default:
+		return ui.StyleSectionTitle(text)
+	}
+}
+
+// validateHeader returns a friendly description of what Devbox is checking,
+// shown above the diagnostics table so the user has context for the rows.
+// The wording intentionally avoids jargon like "validator" / "scope" so the
+// header reads naturally to someone who has not internalised our domain
+// model.
+func validateHeader(scope []string, stage string) string {
+	stageSuffix := ""
+	if stage != "" {
+		stageSuffix = fmt.Sprintf(" (stage: %s)", stage)
+	}
+	what := validateScopeLabel(scope)
+	return fmt.Sprintf("Devbox checked %s%s. Results:", what, stageSuffix)
+}
+
+// validateScopeLabel produces a human label for the scope being validated.
+func validateScopeLabel(scope []string) string {
+	if len(scope) == 0 {
+		return "your project (config, templates, commands, environment, and project checks)"
+	}
+	switch scope[0] {
+	case "config":
+		if len(scope) > 1 {
+			return "config file " + scope[1]
+		}
+		return "your configuration files"
+	case "templates":
+		if len(scope) > 1 {
+			return "template pack " + scope[1]
+		}
+		return "your template packs"
+	case "commands":
+		return "your command definitions"
+	case "env":
+		return "environment readiness"
+	case "checks":
+		if len(scope) > 1 {
+			return "project check " + scope[1]
+		}
+		return "your project checks (devbox/validate.yml)"
+	}
+	return strings.Join(scope, " ")
 }
 
 // buildRegistry assembles validators from all domains (config / templates /

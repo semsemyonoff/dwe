@@ -101,29 +101,28 @@ func TestDockerDaemon_OK(t *testing.T) {
 	}
 }
 
-func TestDockerCompose_WrongVersion(t *testing.T) {
-	dir := t.TempDir()
-	// Stub prints "1.29.2" regardless of args.
-	writeStubBinary(t, dir, "docker", 0, "1.29.2")
-	withIsolatedPath(t, dir)
-	v := &dockerComposeValidator{}
-	diags := v.Run(validate.Context{})
-	if findSeverity(diags, "docker_compose") != validate.SeverityError {
-		t.Fatalf("want error, got %+v", diags)
-	}
-	if !strings.Contains(diags[0].Message, "v2") {
-		t.Fatalf("expected v2 message, got %q", diags[0].Message)
-	}
-}
-
 func TestDockerCompose_OK(t *testing.T) {
 	dir := t.TempDir()
-	writeStubBinary(t, dir, "docker", 0, "2.20.0")
+	// Modern Docker Desktop ships Compose v5+ — the major version is no
+	// longer load-bearing; what matters is that the `compose` subcommand
+	// answers (proving the plugin is installed, not legacy docker-compose).
+	writeStubBinary(t, dir, "docker", 0, "5.1.4")
 	withIsolatedPath(t, dir)
 	v := &dockerComposeValidator{}
 	diags := v.Run(validate.Context{})
 	if findSeverity(diags, "docker_compose") != validate.SeverityOK {
 		t.Fatalf("want OK, got %+v", diags)
+	}
+}
+
+func TestDockerCompose_EmptyVersion(t *testing.T) {
+	dir := t.TempDir()
+	writeStubBinary(t, dir, "docker", 0, "")
+	withIsolatedPath(t, dir)
+	v := &dockerComposeValidator{}
+	diags := v.Run(validate.Context{})
+	if findSeverity(diags, "docker_compose") != validate.SeverityError {
+		t.Fatalf("want error, got %+v", diags)
 	}
 }
 

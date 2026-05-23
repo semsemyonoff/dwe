@@ -33,6 +33,41 @@ func (e *Error) Error() string { return "preflight failed" }
 // without printing fang's "Error: ..." prefix.
 func (e *Error) ExitCode() int { return 1 }
 
+// preflightHeader returns a user-facing message shown above the diagnostics
+// table. Preflight runs implicitly before lifecycle commands, so the header
+// must make it clear *why* a table suddenly appeared. The blocking flag
+// switches the tone between "this stops the command" and "FYI, here are
+// some non-blocking notices" so we never tell a user they're blocked when
+// they aren't.
+func preflightHeader(stage string, blocking bool) string {
+	action := preflightActionLabel(stage)
+	if blocking {
+		return fmt.Sprintf("Devbox can't %s — please fix the issues below and try again:", action)
+	}
+	return fmt.Sprintf("Devbox is about to %s. A few things to know:", action)
+}
+
+// preflightActionLabel translates the internal stage name into a short
+// human verb so the header reads naturally.
+func preflightActionLabel(stage string) string {
+	switch stage {
+	case "deploy":
+		return "deploy the project"
+	case "run":
+		return "start the project"
+	case "stop":
+		return "stop the project"
+	case "restart":
+		return "restart the project"
+	case "command":
+		return "run this command"
+	case "":
+		return "continue"
+	default:
+		return "continue (" + stage + ")"
+	}
+}
+
 // Run executes env + checks (filtered by stage) and renders diagnostics to
 // errOut. Returns *Error on any error-severity diagnostic.
 //
@@ -96,11 +131,19 @@ func Run(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommand
 			filtered = append(filtered, r)
 		}
 	}
+	summary := validate.Aggregate(diags)
+	blocking := validate.ExitCode(summary, false) != 0
 	if len(filtered) > 0 {
+		header := preflightHeader(stage, blocking)
+		if blocking {
+			header = ui.StyleFailed(header)
+		} else {
+			header = ui.StyleWarning(header)
+		}
+		_, _ = fmt.Fprintln(errOut, header)
 		_, _ = fmt.Fprintln(errOut, ui.RenderDiagnosticsTable(filtered))
 	}
-	summary := validate.Aggregate(diags)
-	if validate.ExitCode(summary, false) != 0 {
+	if blocking {
 		return &Error{Summary: summary}
 	}
 	return nil
