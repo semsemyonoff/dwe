@@ -205,6 +205,36 @@ func parseEnvKeys(data []byte) map[string]bool {
 	return keys
 }
 
+// ParseEnvEntries returns a map of KEY=VALUE pairs found in env file content.
+// Values are trimmed and shell-style quoted strings ("..." or '...') have their
+// surrounding quotes stripped, mirroring deploy.SourceDotEnv's behavior. A bare
+// "KEY=" or quoted-empty value yields an empty-string value.
+// Exported for use in tests.
+func ParseEnvEntries(data []byte) map[string]string {
+	entries := make(map[string]string)
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		val := strings.TrimSpace(value)
+		if n := len(val); n >= 2 && val[0] == val[n-1] && (val[0] == '"' || val[0] == '\'') {
+			val = val[1 : n-1]
+		}
+		entries[key] = val
+	}
+	return entries
+}
+
 // EnvLineKey returns the KEY part of a "KEY=VALUE" env line.
 // Returns "" for blank lines and comment lines.
 // Exported for use in tests.

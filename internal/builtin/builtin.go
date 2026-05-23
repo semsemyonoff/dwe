@@ -88,6 +88,11 @@ var registry = map[string]Builtin{
 	"docker_daemon_stop":            daemonStopBuiltin{},
 	"daemons_reap":                  daemonsReapBuiltin{},
 	"remove_paths":                  removePathsBuiltin{},
+	"shell":                         shellBuiltin{},
+	"file_exists":                   fileExistsBuiltin{},
+	"executable_in_path":            executableInPathBuiltin{},
+	"env_keys_present":              envKeysPresentBuiltin{},
+	"tcp_reachable":                 tcpReachableBuiltin{},
 }
 
 // Get returns the named builtin, or false if unknown.
