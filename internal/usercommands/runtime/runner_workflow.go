@@ -207,6 +207,10 @@ func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, step
 	if rc.Config != nil {
 		renderCtx.Raw = rc.Config.Raw
 	}
+	if rc.Render != nil {
+		renderCtx.Snapshot = rc.Render.Snapshot
+		renderCtx.SnapshotScope = rc.Render.SnapshotScope
+	}
 
 	subCtx := RunContext{
 		Cmd:            cmd,

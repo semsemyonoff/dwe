@@ -122,7 +122,7 @@ The plan does **not** add `AcquireExclusive`. Per `lock.go:120-125`, lock files 
 
 The architectural shift: a snapshot workflow IS a `type: workflow` user command, just constructed at runtime from `snapshot.yml` instead of read from `devbox/commands/*.yml`. This reuses the entire existing executor (`usercommands.RunCommand` → `runner_workflow.go`) and avoids a parallel pipeline.
 
-- [ ] add `internal/snapshot/exec.go` with `RunWorkflow(ctx context.Context, p ExecParams) error` where:
+- [x] add `internal/snapshot/exec.go` with `RunWorkflow(ctx context.Context, p ExecParams) error` where:
   ```
   ExecParams {
     Cfg       *config.DevboxConfig
@@ -135,7 +135,7 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
     Stderr    io.Writer
   }
   ```
-- [ ] inside, build a synthetic `*model.CommandDef` — note that `CommandDef` carries workflow steps **directly** as `Steps []WorkflowStep` (`types.go:461`); there is no `model.Workflow` wrapper type:
+- [x] inside, build a synthetic `*model.CommandDef` — note that `CommandDef` carries workflow steps **directly** as `Steps []WorkflowStep` (`types.go:461`); there is no `model.Workflow` wrapper type:
   ```
   cmd := &model.CommandDef{
       ID:    "<internal>.snapshot." + scope.String(),
@@ -144,16 +144,16 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
   }
   if err := cmd.Validate(); err != nil { /* abort with clear error */ }
   ```
-- [ ] build the top-level `runtime.RunContext` via a new helper `BuildSnapshotRunContext` (mirrors `BuildRunContext` but injects `Snapshot` + `SnapshotScope` into `Render`); `RunContext.Render` becomes the parent that `runner_workflow.go:202` will copy from
-- [ ] **render-context propagation**: in `runner_workflow.go` where the sub-step `RenderContext` is constructed (line 202), copy `rc.Render.Snapshot` and `rc.Render.SnapshotScope` into the new sub-step `renderCtx`. Without this propagation, `${snapshot.*}` in `with:` values of leaf user commands resolves to empty under the current behavior.
-- [ ] same propagation in `build_context.go` at the two `RenderContext` constructions (lines 32 and 56) — the early `with:` rendering and the post-resolve render context. Snapshot vars must be available to leaf commands invoked by `usercommands.RunCommand` directly (not just via workflow).
-- [ ] add `SelectWorkflow(cfg *config.SnapshotConfig, kind string, variant string) (*SnapshotWorkflow, error)` with semantics: empty variant → default block; non-empty variant on create → `Variants[variant]` or error if missing; non-empty variant on restore → `Variants[variant]` with fallback to default block if missing
-- [ ] write tests with a fake `type: shell` user command whose `run:` is `echo "${snapshot.path}"` (script contents are not rendered — see Testing Strategy note above):
+- [x] build the top-level `runtime.RunContext` via a new helper `BuildSnapshotRunContext` (mirrors `BuildRunContext` but injects `Snapshot` + `SnapshotScope` into `Render`); `RunContext.Render` becomes the parent that `runner_workflow.go:202` will copy from
+- [x] **render-context propagation**: in `runner_workflow.go` where the sub-step `RenderContext` is constructed (line 202), copy `rc.Render.Snapshot` and `rc.Render.SnapshotScope` into the new sub-step `renderCtx`. Without this propagation, `${snapshot.*}` in `with:` values of leaf user commands resolves to empty under the current behavior.
+- [x] same propagation in `build_context.go` at the two `RenderContext` constructions (lines 32 and 56) — the early `with:` rendering and the post-resolve render context. Snapshot vars must be available to leaf commands invoked by `usercommands.RunCommand` directly (not just via workflow).
+- [x] add `SelectWorkflow(cfg *config.SnapshotConfig, kind string, variant string) (*SnapshotWorkflow, error)` with semantics: empty variant → default block; non-empty variant on create → `Variants[variant]` or error if missing; non-empty variant on restore → `Variants[variant]` with fallback to default block if missing
+- [x] write tests with a fake `type: shell` user command whose `run:` is `echo "${snapshot.path}"` (script contents are not rendered — see Testing Strategy note above):
   - end-to-end: `RunWorkflow` with a single-step workflow invokes the fake shell command, assert captured stdout equals the path constructed by the caller
   - same with a 2-level workflow (workflow → sub-step) to prove propagation through `runner_workflow.go:202`
   - `when: file-exists ${snapshot.path}/x` short-circuits when file missing
   - missing variant on create errors; missing variant on restore falls back to default
-- [ ] run `go test ./internal/snapshot/... ./internal/usercommands/... ./internal/tpl/... && make lint` — must pass before task 6
+- [x] run `go test ./internal/snapshot/... ./internal/usercommands/... ./internal/tpl/... && make lint` — must pass before task 6
 
 ### Task 6: Cobra command tree — read-only subcommands
 
