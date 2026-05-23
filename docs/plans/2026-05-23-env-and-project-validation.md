@@ -139,29 +139,29 @@ Additional review-driven constraints (incorporated into the relevant tasks below
 
 ### Task 4: Add `internal/validate/checks/` (synthetic validators from validate.yml)
 
-- [ ] create `internal/validate/checks/loader.go` with two exported entry points:
-  - [ ] `All(cfg *config.ValidateConfig, baseDir string, cmdRegistry *registry.Registry) []validate.Validator` — produces synthetic validators for every entry. **Nil-tolerant**: `cfg == nil` (which happens when Task 6's single load failed) returns an empty slice without panicking.
-  - [ ] `AllForStage(cfg *config.ValidateConfig, baseDir string, cmdRegistry *registry.Registry, stage string) []validate.Validator` — same, but filtered by `MatchStage(entry, stage)`. Empty stage = all (same as `All`). Same nil-tolerance. This is the entry point used by Task 6's `--stage` flag and Task 7's preflight.
-  - [ ] both signatures return `[]Validator` only — NO `error` (the `Validator` interface has no error return path; all problems must surface as diagnostics).
-  - [ ] both signatures take `*config.ValidateConfig` directly, NOT a path. Disk I/O is the caller's responsibility (Task 6 / Task 7 do the single load).
-- [ ] for each `CheckEntry` produce one synthetic validator: ID = `checks.<id>`, Domain = `checks`.
-- [ ] **Load-time dispatch decisions happen inside `All`/`AllForStage`**, producing either a "runner" validator (resolved, will dispatch at `Run` time) or a "pre-baked failure" validator (carries a cached `Diagnostic` and emits it from `Run`). The pre-baked path covers:
-  - [ ] `Type == "builtin"` with unknown `entry.Cmd` → diagnostic `"unknown builtin: <name>"` at error severity.
-  - [ ] `Type == "builtin"` where `builtin.Validate(entry.Cmd, entry.With)` rejects → diagnostic carrying that error verbatim.
-  - [ ] `Type == "command"` with unknown `entry.Cmd` in `cmdRegistry` → diagnostic `"unknown command: <id>"` at error severity.
-  - [ ] `Type == "command"` with target `CommandDef.Type` outside the allowed whitelist `{shell, script}` → diagnostic `"checks may only invoke user commands of type shell or script (got: <type>)"` at error severity. Rejects `workflow`, `service_exec`, `service_run`, `devbox`, `builtin`.
-- [ ] runner validator behavior at `Run` time:
-  - [ ] `Type == "builtin"`: call `builtin.Run(ctx, entry.Cmd, entry.With, ectx)`. Map nil → no diagnostics; non-nil → `Diagnostic{Severity: entry.Severity, Message: err.Error(), Hint: entry.Hint, File: "devbox/validate.yml", Line: entry.SourceLine}`.
-  - [ ] `Type == "command"`: dispatch via the locked-down path described below. Same diagnostic mapping on error; on success, attach a short tail of captured stderr to the diagnostic message only if non-empty (helps users see *why* it passed/failed).
-- [ ] **Locked-down user-command dispatch**. In the runner validator's `Run`:
-  - [ ] `rc, err := runtime.BuildRunContext(cfg, cmdRegistry, def, entry.With, projectRoot)` — `entry.With` IS the user-command params payload and MUST be threaded through; passing nil would silently drop user-declared parameterization. Error from BuildRunContext (e.g. param resolution failure) becomes a runtime diagnostic.
-  - [ ] override IO/interactivity fields: `rc.SkipConfirm = true`, `rc.NonInteractive = true`, `rc.SkipNotify = true`, `rc.Stdout = io.Discard`, `rc.Stderr = &bytes.Buffer{}` (kept for diagnostic message), `rc.Stdin = nil`. Do NOT override `rc.UnderParallel` — let it propagate.
-  - [ ] call `runtime.RunCommand(ctx, rc)`. Non-nil error → diagnostic; nil → pass.
-- [ ] add a checks-loader test that verifies `entry.With` reaches the user command — set up a `type: shell` user command whose script writes `${param.foo}` to a file, configure a check with `with: { foo: bar }`, run the validator, assert the file contains `bar`.
-- [ ] add `internal/validate/checks/stages.go` — stage filtering helper `MatchStage(entry CheckEntry, stage string) bool` (empty stage = match all; otherwise membership test). Single source of truth used by both `AllForStage` and Task 7's preflight assembly.
-- [ ] write tests: golden fixtures in `testdata/`, covering — happy builtin dispatch (mock builtin), failed dispatch propagates message+hint+line, unknown builtin surfaces as cached diagnostic, unknown command surfaces as cached diagnostic, type-whitelist rejection (workflow/service_exec) surfaces as cached diagnostic, invalid `with:` surfaces as cached diagnostic, `MatchStage` table-driven, `AllForStage("deploy")` excludes run-only entries.
-- [ ] integration test: a `type: shell` user command with a `confirm:` block does NOT hang — `NonInteractive=true` skips the prompt path.
-- [ ] run `go test ./internal/validate/checks/...` — must pass before Task 5.
+- [x] create `internal/validate/checks/loader.go` with two exported entry points:
+  - [x] `All(cfg *config.ValidateConfig, baseDir string, cmdRegistry *registry.Registry) []validate.Validator` — produces synthetic validators for every entry. **Nil-tolerant**: `cfg == nil` (which happens when Task 6's single load failed) returns an empty slice without panicking.
+  - [x] `AllForStage(cfg *config.ValidateConfig, baseDir string, cmdRegistry *registry.Registry, stage string) []validate.Validator` — same, but filtered by `MatchStage(entry, stage)`. Empty stage = all (same as `All`). Same nil-tolerance. This is the entry point used by Task 6's `--stage` flag and Task 7's preflight.
+  - [x] both signatures return `[]Validator` only — NO `error` (the `Validator` interface has no error return path; all problems must surface as diagnostics).
+  - [x] both signatures take `*config.ValidateConfig` directly, NOT a path. Disk I/O is the caller's responsibility (Task 6 / Task 7 do the single load).
+- [x] for each `CheckEntry` produce one synthetic validator: ID = `<id>` (no `checks.` prefix — Domain = `checks` provides the namespace), Domain = `checks`.
+- [x] **Load-time dispatch decisions happen inside `All`/`AllForStage`**, producing either a "runner" validator (resolved, will dispatch at `Run` time) or a "pre-baked failure" validator (carries a cached `Diagnostic` and emits it from `Run`). The pre-baked path covers:
+  - [x] `Type == "builtin"` with unknown `entry.Cmd` → diagnostic `"unknown builtin: <name>"` at error severity.
+  - [x] `Type == "builtin"` where `builtin.Validate(entry.Cmd, entry.With)` rejects → diagnostic carrying that error verbatim.
+  - [x] `Type == "command"` with unknown `entry.Cmd` in `cmdRegistry` → diagnostic `"unknown command: <id>"` at error severity.
+  - [x] `Type == "command"` with target `CommandDef.Type` outside the allowed whitelist `{shell, script}` → diagnostic `"checks may only invoke user commands of type shell or script (got: <type>)"` at error severity. Rejects `workflow`, `service_exec`, `service_run`, `devbox`, `builtin`.
+- [x] runner validator behavior at `Run` time:
+  - [x] `Type == "builtin"`: call `builtin.Run(ctx, entry.Cmd, entry.With, ectx)`. Map nil → no diagnostics; non-nil → `Diagnostic{Severity: entry.Severity, Message: err.Error(), Hint: entry.Hint, File: "devbox/validate.yml", Line: entry.SourceLine}`.
+  - [x] `Type == "command"`: dispatch via the locked-down path described below. Same diagnostic mapping on error; on success, attach a short tail of captured stderr to the diagnostic message only if non-empty (helps users see *why* it passed/failed).
+- [x] **Locked-down user-command dispatch**. In the runner validator's `Run`:
+  - [x] `rc, err := runtime.BuildRunContext(cfg, cmdRegistry, def, entry.With, projectRoot)` — `entry.With` IS the user-command params payload and MUST be threaded through; passing nil would silently drop user-declared parameterization. Error from BuildRunContext (e.g. param resolution failure) becomes a runtime diagnostic.
+  - [x] override IO/interactivity fields: `rc.SkipConfirm = true`, `rc.NonInteractive = true`, `rc.SkipNotify = true`, `rc.Stdout = io.Discard`, `rc.Stderr = &bytes.Buffer{}` (kept for diagnostic message), `rc.Stdin = nil`. Do NOT override `rc.UnderParallel` — let it propagate.
+  - [x] call `runtime.RunCommand(ctx, rc)`. Non-nil error → diagnostic; nil → pass.
+- [x] add a checks-loader test that verifies `entry.With` reaches the user command — set up a `type: shell` user command whose script writes `${param.foo}` to a file, configure a check with `with: { foo: bar }`, run the validator, assert the file contains `bar`.
+- [x] add `internal/validate/checks/stages.go` — stage filtering helper `MatchStage(entry CheckEntry, stage string) bool` (empty stage = match all; otherwise membership test). Single source of truth used by both `AllForStage` and Task 7's preflight assembly.
+- [x] write tests: covering happy builtin dispatch (file_exists against a temp dir), failed dispatch propagates message+hint+line, unknown builtin surfaces as cached diagnostic, unknown command surfaces as cached diagnostic, type-whitelist rejection (workflow) surfaces as cached diagnostic, invalid `with:` surfaces as cached diagnostic, `MatchStage` table-driven, `AllForStage("deploy")` excludes run-only entries.
+- [x] integration test: a `type: shell` user command with `confirmation: true` does NOT hang — `NonInteractive=true` skips the prompt path.
+- [x] run `go test ./internal/validate/checks/...` — passed.
 
 ### Task 5: Add config-validator for validate.yml itself
 
