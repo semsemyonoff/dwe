@@ -112,16 +112,6 @@ func RunRun(ctx RunContext) (err error) {
 	}
 
 	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
-	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("no lifecycle.yml — see devbox/lifecycle.example.yml")
-		}
-		return fmt.Errorf("loading lifecycle config: %w", err)
-	}
-	if lifecycleCfg.Run == nil {
-		return fmt.Errorf("lifecycle.yml has no `run:` section — see devbox/lifecycle.example.yml")
-	}
 
 	if ctx.UpdateMode != "" && !config.ValidUpdateMode(ctx.UpdateMode) {
 		return fmt.Errorf("invalid --update mode %q: must be one of: prompt, auto, check, off", ctx.UpdateMode)
@@ -140,6 +130,20 @@ func RunRun(ctx RunContext) (err error) {
 	// when the commands dir is missing, so any error here is a real fault.
 	if regErr != nil {
 		return fmt.Errorf("loading command registry: %w", regErr)
+	}
+
+	// Load lifecycle config after preflight so env diagnostics (docker daemon
+	// not running, binary missing, etc.) are surfaced even when lifecycle.yml
+	// is absent or malformed — consistent with how RunStop orders things.
+	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("no lifecycle.yml — see devbox/lifecycle.example.yml")
+		}
+		return fmt.Errorf("loading lifecycle config: %w", err)
+	}
+	if lifecycleCfg.Run == nil {
+		return fmt.Errorf("lifecycle.yml has no `run:` section — see devbox/lifecycle.example.yml")
 	}
 
 	effectiveMode := resolveUpdateMode(lifecycleCfg.Run, ctx.NoUpdate, ctx.UpdateMode)

@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"devbox-cli/internal/config"
@@ -238,6 +239,15 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 		ValidateCfg:         validateCfg,
 		ValidateCfgWarnings: validateWarnings,
 		ValidateCfgLoadErr:  validateLoadErr,
+	}
+
+	// When scope targets checks and validate.yml failed to load (not merely
+	// absent), surface the parse error immediately rather than returning zero
+	// diagnostics — a silent empty result would mislead the user into thinking
+	// their checks passed.
+	if len(scope) > 0 && scope[0] == "checks" &&
+		validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
+		return fmt.Errorf("devbox/validate.yml: %w", validateLoadErr)
 	}
 
 	// Build the registry and run validators. Stage filtering happens at

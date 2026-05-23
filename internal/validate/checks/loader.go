@@ -36,6 +36,19 @@ var allowedCommandTypes = map[model.CommandType]struct{}{
 	model.CommandTypeScript: {},
 }
 
+// allowedBuiltinCmds is the allowlist of builtins safe to invoke from check
+// entries. Destructive builtins (docker_remove_project_volumes, daemons_reap,
+// docker_daemon_start, docker_daemon_stop, remove_paths, service_configs_copy,
+// service_dirs_ensure) and interactive ones (confirm, docker_daemon_logs) are
+// intentionally excluded — checks must not produce side effects.
+var allowedBuiltinCmds = map[string]struct{}{
+	"shell":              {},
+	"file_exists":        {},
+	"executable_in_path": {},
+	"env_keys_present":   {},
+	"tcp_reachable":      {},
+}
+
 // AllForStage produces synthetic validators for every entry whose Stages
 // contains stage. An empty stage returns all entries. A nil cfg yields an
 // empty slice.
@@ -61,6 +74,10 @@ func buildValidator(entry config.CheckEntry, baseDir string, cmdRegistry *regist
 	case "builtin":
 		if _, ok := builtin.Get(entry.Cmd); !ok {
 			return cached(entry, fmt.Sprintf("unknown builtin: %s", entry.Cmd))
+		}
+		if _, ok := allowedBuiltinCmds[entry.Cmd]; !ok {
+			return cached(entry, fmt.Sprintf(
+				"checks may only use builtins: shell, file_exists, executable_in_path, env_keys_present, tcp_reachable (got: %s)", entry.Cmd))
 		}
 		if err := builtin.Validate(entry.Cmd, entry.With); err != nil {
 			return cached(entry, err.Error())

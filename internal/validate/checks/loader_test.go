@@ -91,6 +91,21 @@ func TestBuildValidator_InvalidWithRejected(t *testing.T) {
 	}
 }
 
+func TestBuildValidator_DisallowedBuiltin(t *testing.T) {
+	for _, cmd := range []string{"daemons_reap", "docker_remove_project_volumes", "docker_daemon_start", "docker_daemon_stop", "confirm", "docker_daemon_logs"} {
+		t.Run(cmd, func(t *testing.T) {
+			entry := config.CheckEntry{
+				ID: "x", Type: "builtin", Cmd: cmd, Severity: diag.SeverityError,
+			}
+			v := buildValidator(entry, "", nil)
+			diags := runOne(t, v)
+			if len(diags) != 1 || !strings.Contains(diags[0].Message, "may only use builtins:") {
+				t.Fatalf("expected allowlist rejection for %q, got %+v", cmd, diags)
+			}
+		})
+	}
+}
+
 func TestBuildValidator_UnknownCommand(t *testing.T) {
 	entry := config.CheckEntry{
 		ID: "x", Type: "command", Cmd: "nope.missing",
