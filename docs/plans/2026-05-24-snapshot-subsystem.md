@@ -81,14 +81,14 @@ Affected packages (new + touched):
 
 ### Task 2: Snapshot core package — paths, manifest, current pointer
 
-- [ ] create `internal/snapshot/` with `paths.go` exposing canonical paths: `SnapshotsDir(baseDir, cfg)` → `./snapshots`, `SnapshotDir(baseDir, cfg, name)`, `CurrentPointer(baseDir)` → `.devbox/snapshots/current`, `LockPath(baseDir)` → `.devbox/snapshots/snapshot.lock`, `PreRestoreBackup(baseDir)` → `.devbox/snapshots/.pre-restore-backup`
-- [ ] add `manifest.go` with `Manifest` struct matching spec §8 minus `schema_version`: `name`, `created_at time.Time`, `description`, `project{name, config_hash}`, `devbox_version`, `variant`, `artifacts []ArtifactInfo{ path string; size int64; sha256 string }`, `devbox_files`, `last_create`, `last_restore`; provide `LoadManifest(path)` and `SaveManifest(path, m)` using write-temp + rename **in the same directory as the final file** (cross-filesystem rename is not atomic — required for POSIX atomicity guarantee)
-- [ ] inject `now func() time.Time` into the manifest constructor for testability; default to `time.Now`
-- [ ] add `current.go` with atomic `ReadCurrent(baseDir)`, `WriteCurrent(baseDir, name)`, `ClearCurrent(baseDir)` using the same write-temp + rename pattern
-- [ ] add `name.go` with `ValidateName(s)` enforcing `[a-z0-9][a-z0-9._-]{0,62}`
-- [ ] add `scan.go` with `ScanArtifacts(snapDir)` walking the snapshot directory excluding `manifest.yml` and `devbox/`, computing size + sha256 for each file via **streaming `io.Copy(hasher, f)` (never `io.ReadAll`)** so that multi-GB dumps don't OOM; size must be typed `int64`; **reject symlink entries** (`fi.Mode()&os.ModeSymlink != 0`) with a clear error — workflows are not allowed to produce symlinks in the snapshot dir
-- [ ] write tests for: name validation, manifest round-trip with injected `now`, atomic write (interrupt simulation via temp file leftover handling), artifact scan over a synthetic fixture, symlink rejection, sha256 streaming on a >100 MB synthetic file (skip if running under `-short`)
-- [ ] run `go test ./internal/snapshot/... && make lint` — must pass before task 3
+- [x] create `internal/snapshot/` with `paths.go` exposing canonical paths: `SnapshotsDir(baseDir, cfg)` → `./snapshots`, `SnapshotDir(baseDir, cfg, name)`, `CurrentPointer(baseDir)` → `.devbox/snapshots/current`, `LockPath(baseDir)` → `.devbox/snapshots/snapshot.lock`, `PreRestoreBackup(baseDir)` → `.devbox/snapshots/.pre-restore-backup`
+- [x] add `manifest.go` with `Manifest` struct matching spec §8 minus `schema_version`: `name`, `created_at time.Time`, `description`, `project{name, config_hash}`, `devbox_version`, `variant`, `artifacts []ArtifactInfo{ path string; size int64; sha256 string }`, `devbox_files`, `last_create`, `last_restore`; provide `LoadManifest(path)` and `SaveManifest(path, m)` using write-temp + rename **in the same directory as the final file** (cross-filesystem rename is not atomic — required for POSIX atomicity guarantee)
+- [x] inject `now func() time.Time` into the manifest constructor for testability; default to `time.Now`
+- [x] add `current.go` with atomic `ReadCurrent(baseDir)`, `WriteCurrent(baseDir, name)`, `ClearCurrent(baseDir)` using the same write-temp + rename pattern
+- [x] add `name.go` with `ValidateName(s)` enforcing `[a-z0-9][a-z0-9._-]{0,62}`
+- [x] add `scan.go` with `ScanArtifacts(snapDir)` walking the snapshot directory excluding `manifest.yml` and `devbox/`, computing size + sha256 for each file via **streaming `io.Copy(hasher, f)` (never `io.ReadAll`)** so that multi-GB dumps don't OOM; size must be typed `int64`; **reject symlink entries** (`fi.Mode()&os.ModeSymlink != 0`) with a clear error — workflows are not allowed to produce symlinks in the snapshot dir
+- [x] write tests for: name validation, manifest round-trip with injected `now`, atomic write (interrupt simulation via temp file leftover handling), artifact scan over a synthetic fixture, symlink rejection, sha256 streaming on a >100 MB synthetic file (skip if running under `-short`)
+- [x] run `go test ./internal/snapshot/... && make lint` — must pass before task 3
 
 ### Task 3: Lock interaction — acquire-both pattern, no API change
 
