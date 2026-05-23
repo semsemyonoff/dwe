@@ -22,10 +22,10 @@ func runOne(t *testing.T, v validate.Validator) []validate.Diagnostic {
 	return v.Run(validate.Context{Cfg: newCfg()})
 }
 
-// --- All / AllForStage ---
+// --- AllForStage ---
 
-func TestAll_NilCfg(t *testing.T) {
-	if got := All(nil, "", nil); len(got) != 0 {
+func TestAllForStage_NilCfg(t *testing.T) {
+	if got := AllForStage(nil, "", nil, ""); len(got) != 0 {
 		t.Errorf("nil cfg should yield empty slice, got %d", len(got))
 	}
 }

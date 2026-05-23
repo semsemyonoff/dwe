@@ -34,7 +34,7 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
 - **User commands**: `internal/usercommands/{model,loader,registry,resolve,runtime}`
 - **UI / Rendering**: `internal/render`, `internal/ui`, `internal/ui/cmdbrowser`, `internal/liveui`
 - **Notifications**: `internal/notify` + hookpoints in `command/deploy`, `lifecycle/RunRun`, `usercommands/runtime/RunCommand`
-- **Validation**: `internal/validate/{config,templates,commands}`
+- **Validation**: `internal/validate/{config,templates,commands,env,checks,diag}`, `internal/preflight`
 - **Commands (Cobra)**: `internal/command`, `internal/command/statusview`
 
 ## Configuration Documentation

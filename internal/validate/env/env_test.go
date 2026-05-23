@@ -3,6 +3,7 @@ package env
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,30 +27,11 @@ func writeStubBinary(t *testing.T, dir, name string, exitCode int, stdout string
 		body += "echo '" + strings.ReplaceAll(stdout, "'", "'\\''") + "'\n"
 	}
 	if exitCode != 0 {
-		body += "exit " + itoa(exitCode) + "\n"
+		body += "exit " + strconv.Itoa(exitCode) + "\n"
 	}
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
 		t.Fatalf("write stub %s: %v", name, err)
 	}
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	if neg {
-		b = append([]byte{'-'}, b...)
-	}
-	return string(b)
 }
 
 func findSeverity(diags []validate.Diagnostic, target string) validate.Severity {

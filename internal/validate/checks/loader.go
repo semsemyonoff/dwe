@@ -36,13 +36,6 @@ var allowedCommandTypes = map[model.CommandType]struct{}{
 	model.CommandTypeScript: {},
 }
 
-// All produces synthetic validators for every entry in cfg, with no stage
-// filtering. A nil cfg yields an empty slice (callers may have failed to
-// load validate.yml; that's surfaced separately by config.validate).
-func All(cfg *config.ValidateConfig, baseDir string, cmdRegistry *registry.Registry) []validate.Validator {
-	return AllForStage(cfg, baseDir, cmdRegistry, "")
-}
-
 // AllForStage produces synthetic validators for every entry whose Stages
 // contains stage. An empty stage returns all entries. A nil cfg yields an
 // empty slice.

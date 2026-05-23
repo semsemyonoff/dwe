@@ -42,10 +42,5 @@ func (v *validateYmlValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	// Successful load: pass through any soft warnings produced by the loader.
-	if len(ctx.ValidateCfgWarnings) == 0 {
-		return nil
-	}
-	out := make([]validate.Diagnostic, len(ctx.ValidateCfgWarnings))
-	copy(out, ctx.ValidateCfgWarnings)
-	return out
+	return ctx.ValidateCfgWarnings
 }

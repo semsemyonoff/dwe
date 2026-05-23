@@ -37,7 +37,7 @@ func (tcpReachableBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("builtin: tcp_reachable(host=%s, port=%d)", host, port)
 }
 
-func (tcpReachableBuiltin) Run(_ context.Context, with map[string]any, _ ExecContext) error {
+func (tcpReachableBuiltin) Run(ctx context.Context, with map[string]any, _ ExecContext) error {
 	host := getStringParam(with, "host", "")
 	port, err := getIntParam(with, "port")
 	if err != nil {
@@ -49,9 +49,9 @@ func (tcpReachableBuiltin) Run(_ context.Context, with map[string]any, _ ExecCon
 	}
 
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
-	conn, dialErr := net.DialTimeout("tcp", addr, timeout)
+	conn, dialErr := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", addr)
 	if dialErr != nil {
-		return fmt.Errorf("dial tcp %s: %s", addr, dialErr.Error())
+		return dialErr
 	}
 	_ = conn.Close()
 	return nil
