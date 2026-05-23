@@ -229,12 +229,12 @@ Additional review-driven constraints (incorporated into the relevant tasks below
 
 ### Task 8: Documentation
 
-- [ ] create `docs/reference/config/validate.md` — schema for `validate.yml`, full list of builtins usable in checks (with required `with:` keys for each), worked examples mirroring the chat spec (ghcr-login, db-dump-present, app-secrets, corporate-vpn, project-deps), the `--stage` and `--skip-preflight` flags, the reserved-stages list and open-enum behavior.
-- [ ] in `validate.md`, dedicate a prominent section to **"Checks should be idempotent inspection"** — explain the convention that `type: command` checks answer a yes/no readiness question and SHOULD NOT mutate state. State explicitly: the CLI does not enforce this (no sandbox), but enforces non-interactive execution, suppresses notifications, and discards stdout/stderr (only error output reaches diagnostics). User commands invoked from checks are restricted to `type: shell` and `type: script` (workflow/service_*/devbox/builtin types are rejected at load time).
-- [ ] update `docs/reference/cli/` by running `devbox docs generate` (the existing CLI doc generator). Verify the new `--skip-preflight` / `--stage` flags appear.
-- [ ] update `docs/internals/packages.md` — add subsections for `internal/validate/env/` and `internal/validate/checks/` describing invariants (env probes are hardcoded and config-blind beyond `cfg` binary accessors; checks are loaded with strict decoding and dispatch via builtin/usercommand registries; preflight is invoked from the command boundary and writes to stderr).
-- [ ] update `CLAUDE.md` / `AGENTS.md` "Key Patterns" section with a one-paragraph note on preflight and the env/checks domains so future agents pick it up.
-- [ ] no tests for docs, but verify rendered markdown displays the tables correctly with a markdown previewer or `glow`.
+- [x] create `docs/reference/config/validate.md` — schema for `validate.yml`, full list of builtins usable in checks (with required `with:` keys for each), worked examples mirroring the chat spec (ghcr-login, db-dump-present, app-secrets, corporate-vpn, project-deps), the `--stage` and `--skip-preflight` flags, the reserved-stages list and open-enum behavior.
+- [x] in `validate.md`, dedicate a prominent section to **"Checks should be idempotent inspection"** — explain the convention that `type: command` checks answer a yes/no readiness question and SHOULD NOT mutate state. State explicitly: the CLI does not enforce this (no sandbox), but enforces non-interactive execution, suppresses notifications, and discards stdout/stderr (only error output reaches diagnostics). User commands invoked from checks are restricted to `type: shell` and `type: script` (workflow/service_*/devbox/builtin types are rejected at load time).
+- [x] update `docs/reference/cli/` by running `devbox docs generate` (the existing CLI doc generator). Verified `--skip-preflight` appears on deploy run / run / stop / restart and `--stage` appears on validate.
+- [x] update `docs/internals/packages.md` — add subsections for `internal/validate/env/` and `internal/validate/checks/` describing invariants (env probes are hardcoded and config-blind beyond `cfg` binary accessors; checks are loaded with strict decoding and dispatch via builtin/usercommand registries; preflight is invoked from the command boundary and writes to stderr).
+- [x] update `CLAUDE.md` / `AGENTS.md` "Key Patterns" section with a one-paragraph note on preflight and the env/checks domains so future agents pick it up.
+- [x] no tests for docs (rendered tables verified by inspection — see validate.md).
 
 ### Task 9: Final verification
 

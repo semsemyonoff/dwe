@@ -27,6 +27,7 @@ Overview of all configuration files in the devbox system.
 | `devbox/styles.yml` | yes | standalone | ASCII header, color palette, separator |
 | `devbox/info.yml` | yes | standalone | Info dashboard sections |
 | `devbox/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
+| `devbox/validate.yml` | yes | standalone | Project readiness checks (preflight + `devbox validate`) |
 
 ## Runtime artifacts
 
@@ -90,6 +91,7 @@ flowchart LR
 - [styles.yml](styles.md) — ASCII header, color palette, separator
 - [info.yml](info.md) — info dashboard sections, template expressions
 - [commands/](commands.md) — declarative commands: types, params, context, files, workflows, templates
+- [validate.yml](validate.md) — project readiness checks: env probes, declarative checks, builtins, stages, preflight
 - [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
 - [UI](ui.md) — interactive command browser configuration: depth, collapse, badges, hotkeys, fallback ladder
 - [Templates](../templates.md) — Go templates, `${...}` shorthand, sprout helpers (shared across info, commands, pipelines, render packs)
