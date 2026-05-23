@@ -108,15 +108,15 @@ The plan does **not** add `AcquireExclusive`. Per `lock.go:120-125`, lock files 
 
 ### Task 4: Template namespace `${snapshot.*}` with scope enum
 
-- [ ] in `internal/tpl/render_command.go`, extend `RenderContext`:
+- [x] in `internal/tpl/render_command.go`, extend `RenderContext`:
   - add `Snapshot map[string]any`
   - add `SnapshotScope SnapshotScope` where `SnapshotScope` is an enum: `SnapshotScopeNone` (zero value, default — `${snapshot.*}` is a compile error), `SnapshotScopeCreate` (`name`/`path`/`description`/`variant` valid, `created_at` rejected — doesn't exist yet), `SnapshotScopeRestoreOrRemove` (all keys valid)
-- [ ] **API shape decision**: keep `CompileVarSyntax(input string) string` unchanged (it has many callers and its current contract is pure-syntactic rewriting with no error). Instead, add a pre-scan helper `validateSnapshotScope(input string, scope SnapshotScope) error` in the same file. `RenderCommand` (at `render_command.go:135`) calls `validateSnapshotScope(expr, data.SnapshotScope)` **before** calling `CompileVarSyntax`. The scan walks `${...}` expressions textually (cheap; same regex `CompileVarSyntax` already uses), and for any `${snapshot.<key>}` it returns an error when the scope rules forbid it. This keeps `CompileVarSyntax` untouched, localizes the scope check at the one entry point where `RenderContext` is available, and gives callers without a `RenderContext` (if any) unchanged behavior.
-- [ ] inside `CompileVarSyntax`, route `${snapshot.<key>}` to resolve from `.Snapshot` (same template-rewrite pattern as `${param.*}`/`${context.*}`); at this point the scope check has already run in `RenderCommand` so the compile step itself is unconditional
-- [ ] expose `BuildSnapshotVars(name, path, description, variant string, createdAt time.Time) map[string]any` helper in `internal/snapshot/vars.go` for callers to construct the map; `created_at` is included unconditionally (the scope enum, not the map, gates visibility)
-- [ ] existing callers in deploy/lifecycle/reset get `SnapshotScope: SnapshotScopeNone` (zero value) — no behavior change required
-- [ ] write tests: `${snapshot.name}` resolves in Create scope; same expression in None scope produces a compile error; `${snapshot.created_at}` in Create scope produces a compile error; `${snapshot.created_at}` resolves in RestoreOrRemove scope; missing key within an active scope returns empty string (consistent with `${param.*}`)
-- [ ] run `go test ./internal/tpl/... && make lint` — must pass before task 5
+- [x] **API shape decision**: keep `CompileVarSyntax(input string) string` unchanged (it has many callers and its current contract is pure-syntactic rewriting with no error). Instead, add a pre-scan helper `validateSnapshotScope(input string, scope SnapshotScope) error` in the same file. `RenderCommand` (at `render_command.go:135`) calls `validateSnapshotScope(expr, data.SnapshotScope)` **before** calling `CompileVarSyntax`. The scan walks `${...}` expressions textually (cheap; same regex `CompileVarSyntax` already uses), and for any `${snapshot.<key>}` it returns an error when the scope rules forbid it. This keeps `CompileVarSyntax` untouched, localizes the scope check at the one entry point where `RenderContext` is available, and gives callers without a `RenderContext` (if any) unchanged behavior.
+- [x] inside `CompileVarSyntax`, route `${snapshot.<key>}` to resolve from `.Snapshot` (same template-rewrite pattern as `${param.*}`/`${context.*}`); at this point the scope check has already run in `RenderCommand` so the compile step itself is unconditional
+- [x] expose `BuildSnapshotVars(name, path, description, variant string, createdAt time.Time) map[string]any` helper in `internal/snapshot/vars.go` for callers to construct the map; `created_at` is included unconditionally (the scope enum, not the map, gates visibility)
+- [x] existing callers in deploy/lifecycle/reset get `SnapshotScope: SnapshotScopeNone` (zero value) — no behavior change required
+- [x] write tests: `${snapshot.name}` resolves in Create scope; same expression in None scope produces a compile error; `${snapshot.created_at}` in Create scope produces a compile error; `${snapshot.created_at}` resolves in RestoreOrRemove scope; missing key within an active scope returns empty string (consistent with `${param.*}`)
+- [x] run `go test ./internal/tpl/... && make lint` — must pass before task 5
 
 ### Task 5: Workflow execution — synthetic `CommandDef` + render-context propagation
 

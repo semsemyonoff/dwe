@@ -30,6 +30,42 @@ type RenderContext struct {
 	Files map[string]ResolvedFile
 	// Host provides runtime host information.
 	Host HostInfo
+	// Snapshot holds snapshot variables (name, path, description, variant,
+	// created_at) when rendering inside a snapshot workflow scope. Visibility
+	// is gated by SnapshotScope — see SnapshotScope and validateSnapshotScope.
+	Snapshot map[string]any
+	// SnapshotScope governs which ${snapshot.*} keys are allowed at compile
+	// time. Zero value (SnapshotScopeNone) makes any ${snapshot.*} reference
+	// a compile error.
+	SnapshotScope SnapshotScope
+}
+
+// SnapshotScope controls which ${snapshot.*} keys are valid at compile time.
+type SnapshotScope int
+
+const (
+	// SnapshotScopeNone is the default scope outside any snapshot workflow.
+	// Any ${snapshot.*} reference is a compile error.
+	SnapshotScopeNone SnapshotScope = iota
+	// SnapshotScopeCreate is the scope of a `create:` workflow. All keys
+	// except created_at are valid; created_at is rejected because it
+	// doesn't exist yet at create time.
+	SnapshotScopeCreate
+	// SnapshotScopeRestoreOrRemove is the scope of `restore:` and `remove:`
+	// workflows. All keys (including created_at) are valid.
+	SnapshotScopeRestoreOrRemove
+)
+
+// String returns a stable identifier for the scope (used in synthetic command IDs).
+func (s SnapshotScope) String() string {
+	switch s {
+	case SnapshotScopeCreate:
+		return "create"
+	case SnapshotScopeRestoreOrRemove:
+		return "restore"
+	default:
+		return "none"
+	}
 }
 
 // HostInfo holds runtime host values injected into templates.
@@ -123,6 +159,10 @@ func CompileVarSyntax(input string) string {
 			if hasTail {
 				return fmt.Sprintf(`{{ resolveMap .Context %q }}`, tail)
 			}
+		case "snapshot":
+			if hasTail {
+				return fmt.Sprintf(`{{ resolveMap .Snapshot %q }}`, tail)
+			}
 		}
 
 		// Default: resolve against .Raw config map
@@ -130,9 +170,38 @@ func CompileVarSyntax(input string) string {
 	})
 }
 
+// validateSnapshotScope walks ${snapshot.<key>} references in expr and rejects
+// any use that the active scope forbids. CompileVarSyntax itself stays pure;
+// this pre-scan runs once before compile from RenderCommand.
+func validateSnapshotScope(expr string, scope SnapshotScope) error {
+	for _, m := range varPattern.FindAllStringSubmatch(expr, -1) {
+		inner := m[1]
+		head, tail, hasTail := strings.Cut(inner, ".")
+		if head != "snapshot" || !hasTail {
+			continue
+		}
+		switch scope {
+		case SnapshotScopeNone:
+			return fmt.Errorf("template uses ${snapshot.%s} outside a snapshot workflow", tail)
+		case SnapshotScopeCreate:
+			if tail == "created_at" {
+				return fmt.Errorf("template uses ${snapshot.created_at} in create scope (not yet known at create time)")
+			}
+		}
+	}
+	return nil
+}
+
 // RenderCommand compiles ${...} syntax in expr, then evaluates the resulting
 // Go template against data.
 func RenderCommand(expr string, data *RenderContext) (string, error) {
+	scope := SnapshotScopeNone
+	if data != nil {
+		scope = data.SnapshotScope
+	}
+	if err := validateSnapshotScope(expr, scope); err != nil {
+		return "", err
+	}
 	compiled := CompileVarSyntax(expr)
 	if !strings.Contains(compiled, "{{") {
 		return compiled, nil
