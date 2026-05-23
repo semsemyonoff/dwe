@@ -24,6 +24,7 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecycle.RunStop(lifecycle.StopContext{
+				Ctx:           cmd.Context(),
 				ConfigPath:    flags.configPath,
 				Yes:           yes,
 				SkipPreflight: skipPreflight,

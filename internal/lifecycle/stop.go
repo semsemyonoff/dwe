@@ -15,6 +15,8 @@ import (
 
 // StopContext carries all parameters for the stop lifecycle entry point.
 type StopContext struct {
+	// Ctx is the parent context for preflight checks. Nil defaults to context.Background().
+	Ctx        context.Context
 	ConfigPath string
 	Yes        bool
 	// SkipPreflight bypasses env probes + project checks for this stop.
@@ -47,7 +49,11 @@ func RunStop(ctx StopContext) error {
 	if errOut == nil {
 		errOut = os.Stderr
 	}
-	if err := PreflightFunc(context.Background(), cfg, reg, workDir, "stop", ctx.SkipPreflight, errOut); err != nil {
+	pfCtx := ctx.Ctx
+	if pfCtx == nil {
+		pfCtx = context.Background()
+	}
+	if err := PreflightFunc(pfCtx, cfg, reg, workDir, "stop", ctx.SkipPreflight, errOut); err != nil {
 		return err
 	}
 	if regErr != nil {

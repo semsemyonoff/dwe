@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"context"
 	"sort"
 
 	"devbox-cli/internal/config"
@@ -26,6 +27,9 @@ type Diagnostic = diag.Diagnostic
 
 // Context carries data for validator execution.
 type Context struct {
+	// Ctx is the parent context for cancellable validator operations (builtin
+	// and command runners). Nil is safe; runners fall back to context.Background().
+	Ctx             context.Context
 	ProjectRoot     string
 	ConfigPath      string
 	Cfg             *config.DevboxConfig
@@ -50,6 +54,26 @@ type Validator interface {
 	Run(ctx Context) []Diagnostic
 }
 
+// DomainLevelValidator is an optional interface for validators that represent
+// domain-wide structural errors (e.g. a parse failure that prevents any
+// specific entry from loading). When a two-part scope [domain, id] is
+// requested, domain-level validators whose domain matches still run — the
+// structural error prevents any specific ID from being resolved, so hiding it
+// would produce silent zero-diagnostic output.
+type DomainLevelValidator interface {
+	Validator
+	IsDomainLevel() bool
+}
+
+// GlobalValidator is an optional interface for validators that must run
+// regardless of scope. Used for cross-cutting structural errors (e.g. a
+// broken validate.yml) that affect all domains and must be surfaced even when
+// the user scopes to a single domain like "env" or "templates".
+type GlobalValidator interface {
+	Validator
+	IsGlobal() bool
+}
+
 // Registry manages and runs validators.
 type Registry struct {
 	validators []Validator
@@ -69,7 +93,24 @@ func (r *Registry) Register(v Validator) {
 func (r *Registry) Run(ctx Context, scope ...string) []Diagnostic {
 	var diags []Diagnostic
 	for _, v := range r.validators {
-		if MatchScope(v.Domain(), v.ID(), scope) {
+		matches := MatchScope(v.Domain(), v.ID(), scope)
+		if !matches {
+			if dl, ok := v.(DomainLevelValidator); ok && dl.IsDomainLevel() {
+				// Domain-level validators run for any scope that includes their
+				// domain, even when a specific ID is requested. The structural
+				// error (e.g. a parse failure) prevents any ID from being found.
+				matches = len(scope) == 0 || (len(scope) >= 1 && v.Domain() == scope[0])
+			}
+		}
+		if !matches {
+			if gv, ok := v.(GlobalValidator); ok && gv.IsGlobal() {
+				// Global validators run for every scope — used for cross-cutting
+				// structural errors (e.g. broken validate.yml) that must be
+				// surfaced even when the user scopes to an unrelated domain.
+				matches = true
+			}
+		}
+		if matches {
 			diags = append(diags, v.Run(ctx)...)
 		}
 	}

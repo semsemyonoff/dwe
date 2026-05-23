@@ -37,6 +37,8 @@ var PreflightFunc = preflight.Run
 
 // RunContext carries all parameters for the run (and restart) lifecycle entry points.
 type RunContext struct {
+	// Ctx is the parent context for preflight checks. Nil defaults to context.Background().
+	Ctx        context.Context
 	ConfigPath string
 	NoUpdate   bool
 	UpdateMode string
@@ -121,7 +123,11 @@ func RunRun(ctx RunContext) (err error) {
 	if errOut == nil {
 		errOut = os.Stderr
 	}
-	if err := PreflightFunc(context.Background(), cfg, reg, workDir, "run", ctx.SkipPreflight, errOut); err != nil {
+	pfCtx := ctx.Ctx
+	if pfCtx == nil {
+		pfCtx = context.Background()
+	}
+	if err := PreflightFunc(pfCtx, cfg, reg, workDir, "run", ctx.SkipPreflight, errOut); err != nil {
 		return err
 	}
 	// Surface a deferred registry load failure now that preflight is past —
@@ -246,6 +252,7 @@ func RunRun(ctx RunContext) (err error) {
 // RunRestart runs the full stop lifecycle then the full run lifecycle with NoUpdate forced to true.
 func RunRestart(ctx RunContext) error {
 	stopCtx := StopContext{
+		Ctx:           ctx.Ctx,
 		ConfigPath:    ctx.ConfigPath,
 		Yes:           ctx.Yes,
 		SkipPreflight: ctx.SkipPreflight,

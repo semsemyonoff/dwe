@@ -28,6 +28,7 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecycle.RunRun(lifecycle.RunContext{
+				Ctx:           cmd.Context(),
 				ConfigPath:    flags.configPath,
 				NoUpdate:      noUpdate,
 				UpdateMode:    updateMode,

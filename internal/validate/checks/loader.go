@@ -10,8 +10,10 @@ package checks
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"devbox-cli/internal/builtin"
@@ -50,10 +52,17 @@ var allowedBuiltinCmds = map[string]struct{}{
 }
 
 // AllForStage produces synthetic validators for every entry whose Stages
-// contains stage. An empty stage returns all entries. A nil cfg yields an
-// empty slice.
-func AllForStage(cfg *config.ValidateConfig, baseDir string, cmdRegistry *registry.Registry, stage string) []validate.Validator {
+// contains stage. An empty stage returns all entries.
+//
+// When cfg is nil and loadErr is a real parse error (not os.ErrNotExist), a
+// synthetic error validator in the "checks" domain is returned so callers
+// scoped to "checks" still surface the validate.yml failure via the normal
+// diagnostic table rather than silently producing zero results.
+func AllForStage(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdRegistry *registry.Registry, stage string) []validate.Validator {
 	if cfg == nil {
+		if loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
+			return []validate.Validator{&validateYmlErrValidator{err: loadErr}}
+		}
 		return nil
 	}
 	out := make([]validate.Validator, 0, len(cfg.Checks))
@@ -118,7 +127,9 @@ type cachedValidator struct {
 func (v *cachedValidator) ID() string     { return v.entry.ID }
 func (v *cachedValidator) Domain() string { return "checks" }
 func (v *cachedValidator) Run(_ validate.Context) []validate.Diagnostic {
-	return []validate.Diagnostic{toDiagnostic(v.entry, v.message)}
+	d := toDiagnostic(v.entry, v.message)
+	d.Severity = validate.SeverityError
+	return []validate.Diagnostic{d}
 }
 
 type builtinRunner struct {
@@ -139,7 +150,11 @@ func (v *builtinRunner) Run(ctx validate.Context) []validate.Diagnostic {
 		Output:      render.NewWriter(io.Discard),
 		SkipConfirm: true,
 	}
-	if err := builtin.Run(context.Background(), v.entry.Cmd, v.entry.With, ectx); err != nil {
+	runCtx := ctx.Ctx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
+	if err := builtin.Run(runCtx, v.entry.Cmd, v.entry.With, ectx); err != nil {
 		return []validate.Diagnostic{toDiagnostic(v.entry, err.Error())}
 	}
 	return nil
@@ -155,6 +170,11 @@ type commandRunner struct {
 func (v *commandRunner) ID() string     { return v.entry.ID }
 func (v *commandRunner) Domain() string { return "checks" }
 func (v *commandRunner) Run(ctx validate.Context) []validate.Diagnostic {
+	if ctx.Cfg == nil {
+		d := toDiagnostic(v.entry, "config not loaded: cannot run command check")
+		d.Severity = validate.SeverityError
+		return []validate.Diagnostic{d}
+	}
 	projectRoot := v.baseDir
 	if projectRoot == "" {
 		projectRoot = ctx.ProjectRoot
@@ -171,7 +191,11 @@ func (v *commandRunner) Run(ctx validate.Context) []validate.Diagnostic {
 	rc.Stderr = stderrBuf
 	rc.Stdin = nil
 
-	if err := runtime.RunCommand(context.Background(), rc); err != nil {
+	runCtx := ctx.Ctx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
+	if err := runtime.RunCommand(runCtx, rc); err != nil {
 		msg := err.Error()
 		if tail := lastLine(stderrBuf.String()); tail != "" {
 			msg = fmt.Sprintf("%s: %s", msg, tail)
@@ -191,6 +215,37 @@ func toDiagnostic(entry config.CheckEntry, msg string) validate.Diagnostic {
 		Message:  msg,
 		Hint:     entry.Hint,
 	}
+}
+
+// validateYmlErrValidator surfaces a validate.yml parse failure inside the
+// "checks" domain. It is returned by AllForStage when cfg is nil due to a
+// real load error (not os.ErrNotExist), so scoped runs still produce a
+// visible diagnostic rather than zero rows.
+//
+// It implements validate.DomainLevelValidator so that Registry.Run includes
+// it even when a two-part scope ["checks", "<id>"] is requested — the parse
+// error prevents any specific check from being resolved.
+//
+// It also implements validate.GlobalValidator so that the error is surfaced
+// even when the requested scope does not include "config" or "checks" (e.g.
+// "devbox validate env" with a broken validate.yml must not silently succeed).
+// Duplication with config.validate is prevented upstream: buildRegistry sets
+// checksLoadErr to nil when config.validate is already in scope, so this
+// validator is only created when config.validate will not run.
+type validateYmlErrValidator struct{ err error }
+
+func (v *validateYmlErrValidator) ID() string          { return "_config" }
+func (v *validateYmlErrValidator) Domain() string      { return "checks" }
+func (v *validateYmlErrValidator) IsDomainLevel() bool { return true }
+func (v *validateYmlErrValidator) IsGlobal() bool      { return true }
+func (v *validateYmlErrValidator) Run(_ validate.Context) []validate.Diagnostic {
+	return []validate.Diagnostic{{
+		Severity: validate.SeverityError,
+		Domain:   "checks",
+		Target:   "_config",
+		File:     diagFile,
+		Message:  v.err.Error(),
+	}}
 }
 
 // lastLine returns the last non-empty trimmed line of s. Used to attach a

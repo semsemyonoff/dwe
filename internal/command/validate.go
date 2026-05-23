@@ -3,7 +3,6 @@ package command
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"devbox-cli/internal/config"
@@ -232,6 +231,7 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 	}
 
 	ctx := validate.Context{
+		Ctx:                 cmd.Context(),
 		ProjectRoot:         projectRoot,
 		ConfigPath:          configPath,
 		Cfg:                 cfg,
@@ -241,18 +241,9 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 		ValidateCfgLoadErr:  validateLoadErr,
 	}
 
-	// When scope targets checks and validate.yml failed to load (not merely
-	// absent), surface the parse error immediately rather than returning zero
-	// diagnostics — a silent empty result would mislead the user into thinking
-	// their checks passed.
-	if len(scope) > 0 && scope[0] == "checks" &&
-		validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
-		return fmt.Errorf("devbox/validate.yml: %w", validateLoadErr)
-	}
-
 	// Build the registry and run validators. Stage filtering happens at
 	// assembly time for checks; env probes always run (they have no stages).
-	registry := buildRegistry(cfg, validateCfg, projectRoot, cmdReg, stage)
+	registry := buildRegistry(cfg, validateCfg, validateLoadErr, projectRoot, cmdReg, stage, scope)
 	diags := registry.Run(ctx, scope...)
 
 	// Render the diagnostics table (skip when no rows to avoid an empty bordered box).
@@ -311,7 +302,13 @@ func loadForValidate(flags *rootFlags) (*config.DevboxConfig, string, string, er
 // buildRegistry assembles validators from all domains (config / templates /
 // commands / env / checks). Stage filtering is applied at assembly time for
 // checks; env probes have no stages and always register.
-func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, baseDir string, cmdReg *usercommands.Registry, stage string) *validate.Registry {
+//
+// scope is passed so that the checks domain only receives the validateLoadErr
+// sentinel when config.validate (domain="config", id="validate") is outside
+// scope. When config.validate IS in scope it already surfaces the same parse
+// error, so passing the error to AllForStage as well would emit a duplicate
+// diagnostic and inflate the error count.
+func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string, cmdReg *usercommands.Registry, stage string, scope []string) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)
@@ -325,7 +322,14 @@ func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig,
 	for _, v := range valenv.All(cfg) {
 		reg.Register(v)
 	}
-	for _, v := range valchecks.AllForStage(validateCfg, baseDir, cmdReg, stage) {
+	// Only propagate the load error into the checks domain when config.validate
+	// will not run (e.g. scope is ["checks"] or ["checks", "<id>"]). When
+	// config.validate IS in scope it emits the same diagnostic already.
+	checksLoadErr := validateLoadErr
+	if validate.MatchScope("config", "validate", scope) {
+		checksLoadErr = nil
+	}
+	for _, v := range valchecks.AllForStage(validateCfg, checksLoadErr, baseDir, cmdReg, stage) {
 		reg.Register(v)
 	}
 	return reg

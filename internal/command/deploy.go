@@ -223,7 +223,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		reg = nil
 	}
 
-	if err := preflightRun(context.Background(), cfg, reg, workDir, "deploy", skipPreflight, cmd.ErrOrStderr()); err != nil {
+	if err := preflightRun(cmd.Context(), cfg, reg, workDir, "deploy", skipPreflight, cmd.ErrOrStderr()); err != nil {
 		return err
 	}
 	if regErr != nil {

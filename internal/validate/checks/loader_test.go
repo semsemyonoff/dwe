@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,8 +26,53 @@ func runOne(t *testing.T, v validate.Validator) []validate.Diagnostic {
 // --- AllForStage ---
 
 func TestAllForStage_NilCfg(t *testing.T) {
-	if got := AllForStage(nil, "", nil, ""); len(got) != 0 {
-		t.Errorf("nil cfg should yield empty slice, got %d", len(got))
+	if got := AllForStage(nil, nil, "", nil, ""); len(got) != 0 {
+		t.Errorf("nil cfg with nil loadErr should yield empty slice, got %d", len(got))
+	}
+}
+
+func TestAllForStage_NilCfgWithLoadErr(t *testing.T) {
+	// A real parse error (not ErrNotExist) should produce a synthetic error
+	// validator in the "checks" domain so scoped "checks" runs surface the
+	// failure via the normal diagnostic table rather than silently returning zero.
+	loadErr := errors.New("yaml: line 1: unknown field")
+	vs := AllForStage(nil, loadErr, "", nil, "")
+	if len(vs) != 1 {
+		t.Fatalf("want 1 synthetic validator, got %d", len(vs))
+	}
+	v := vs[0]
+	if v.Domain() != "checks" {
+		t.Errorf("domain: want checks, got %s", v.Domain())
+	}
+	// Must implement GlobalValidator so "devbox validate env" surfaces the error
+	// even though the env scope does not include the checks domain.
+	gv, ok := v.(validate.GlobalValidator)
+	if !ok {
+		t.Error("validateYmlErrValidator must implement GlobalValidator")
+	} else if !gv.IsGlobal() {
+		t.Error("IsGlobal() must return true")
+	}
+	diags := v.Run(validate.Context{})
+	if len(diags) != 1 {
+		t.Fatalf("want 1 diagnostic, got %d", len(diags))
+	}
+	d := diags[0]
+	if d.Severity != validate.SeverityError {
+		t.Errorf("severity: want error, got %v", d.Severity)
+	}
+	if d.Message != loadErr.Error() {
+		t.Errorf("message: want %q, got %q", loadErr.Error(), d.Message)
+	}
+	if d.File != diagFile {
+		t.Errorf("file: want %q, got %q", diagFile, d.File)
+	}
+}
+
+func TestAllForStage_NilCfgErrNotExist(t *testing.T) {
+	// os.ErrNotExist means the file is absent (silently tolerated) — no validator.
+	vs := AllForStage(nil, os.ErrNotExist, "", nil, "")
+	if len(vs) != 0 {
+		t.Errorf("ErrNotExist should yield empty slice, got %d", len(vs))
 	}
 }
 
@@ -37,7 +83,7 @@ func TestAllForStage_FiltersByStage(t *testing.T) {
 		{ID: "b", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
 			Stages: []string{"run"}, Severity: diag.SeverityError},
 	}}
-	vs := AllForStage(cfg, "", nil, "deploy")
+	vs := AllForStage(cfg, nil, "", nil, "deploy")
 	if len(vs) != 1 || vs[0].ID() != "a" {
 		t.Fatalf("expected [a], got %#v", ids(vs))
 	}
@@ -72,6 +118,23 @@ func TestBuildValidator_UnknownBuiltin(t *testing.T) {
 	}
 	if d.File != "devbox/validate.yml" || d.Line != 7 || d.Hint != "hint" {
 		t.Errorf("wrong location/hint: %+v", d)
+	}
+}
+
+func TestCachedValidator_AlwaysEmitsError(t *testing.T) {
+	// A load-time failure must be SeverityError regardless of the entry's declared severity.
+	for _, sev := range []diag.Severity{diag.SeverityWarning, diag.SeverityInfo, diag.SeverityError} {
+		entry := config.CheckEntry{
+			ID: "x", Type: "builtin", Cmd: "no_such_builtin", Severity: sev,
+		}
+		v := buildValidator(entry, "", nil)
+		diags := runOne(t, v)
+		if len(diags) != 1 {
+			t.Fatalf("want 1 diag, got %d", len(diags))
+		}
+		if diags[0].Severity != diag.SeverityError {
+			t.Errorf("load-time failure with declared severity %d should always emit SeverityError, got %d", sev, diags[0].Severity)
+		}
 	}
 }
 
@@ -202,6 +265,57 @@ func TestBuiltinRunner_FailurePropagatesEntryMeta(t *testing.T) {
 	}
 	if !strings.Contains(d.Message, "missing.txt") {
 		t.Errorf("message should mention missing path: %q", d.Message)
+	}
+}
+
+func TestCommandRunner_NilCfgReturnsDiagnostic(t *testing.T) {
+	def := &model.CommandDef{
+		Type: model.CommandTypeShell,
+		Cmd:  "true",
+		ID:   "niltest",
+	}
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(def)
+
+	entry := config.CheckEntry{
+		ID: "niltest", Type: "command", Cmd: "niltest",
+		Severity: diag.SeverityError,
+	}
+	v := buildValidator(entry, t.TempDir(), reg)
+	// Must not panic; must return a diagnostic instead.
+	diags := v.Run(validate.Context{Cfg: nil})
+	if len(diags) != 1 {
+		t.Fatalf("want 1 diag on nil cfg, got %d", len(diags))
+	}
+	if diags[0].Severity != diag.SeverityError {
+		t.Errorf("expected error severity, got %d", diags[0].Severity)
+	}
+}
+
+func TestCommandRunner_NilCfgAlwaysEmitsError(t *testing.T) {
+	// A config-load failure is an infrastructure problem, not a check result.
+	// The diagnostic must be SeverityError regardless of the entry's declared severity.
+	for _, sev := range []diag.Severity{diag.SeverityWarning, diag.SeverityInfo, diag.SeverityError} {
+		def := &model.CommandDef{
+			Type: model.CommandTypeShell,
+			Cmd:  "true",
+			ID:   "sevtest",
+		}
+		reg := registry.NewEmptyRegistry()
+		reg.AddCommandForTest(def)
+
+		entry := config.CheckEntry{
+			ID: "sevtest", Type: "command", Cmd: "sevtest",
+			Severity: sev,
+		}
+		v := buildValidator(entry, t.TempDir(), reg)
+		diags := v.Run(validate.Context{Cfg: nil})
+		if len(diags) != 1 {
+			t.Fatalf("severity %d: want 1 diag on nil cfg, got %d", sev, len(diags))
+		}
+		if diags[0].Severity != diag.SeverityError {
+			t.Errorf("severity %d: nil-cfg failure must always be SeverityError, got %d", sev, diags[0].Severity)
+		}
 	}
 }
 

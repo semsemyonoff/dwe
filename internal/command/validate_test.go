@@ -210,6 +210,62 @@ func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
 	require.Contains(t, out, "error")
 }
 
+// TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic: running
+// "devbox validate checks" with a malformed validate.yml must surface an error
+// diagnostic (not a raw error) and must not silently return zero diagnostics.
+func TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"checks"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	// The validate.yml error must appear in the table (not as a raw "Error: ..." line).
+	require.Contains(t, out, "validate.yml", "malformed validate.yml diagnostic should appear in scoped checks run")
+	require.Contains(t, out, "error", "summary must report an error")
+}
+
+// TestValidateChecksScopedByIDMalformedValidateYmlSurfacesDiagnostic: running
+// "devbox validate checks <id>" on a malformed validate.yml must still surface
+// the parse error — not silently return zero diagnostics and exit 0.
+func TestValidateChecksScopedByIDMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"checks", "some-specific-check"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	// The parse error must surface even though a specific ID was requested.
+	require.Contains(t, out, "validate.yml", "malformed validate.yml diagnostic should appear for checks <id> run")
+	require.Contains(t, out, "error", "summary must report an error, not zero diagnostics")
+}
+
 // TestValidateMissingValidateYmlIsSilent: a missing validate.yml is silently
 // tolerated — no diagnostic, no error.
 func TestValidateMissingValidateYmlIsSilent(t *testing.T) {
@@ -229,6 +285,35 @@ func TestValidateMissingValidateYmlIsSilent(t *testing.T) {
 	out := output.String()
 	// No checks domain rows expected since validate.yml is absent.
 	require.NotContains(t, out, "checks/")
+}
+
+// TestValidateEnvScopedMalformedValidateYmlSurfacesDiagnostic: running
+// "devbox validate env" with a malformed validate.yml must surface an error
+// diagnostic. Previously the error was silently dropped because neither the
+// "config" nor "checks" domain ran for an "env" scope.
+func TestValidateEnvScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"env"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	// The parse error must surface even though the scope is "env", not "config" or "checks".
+	require.Contains(t, out, "validate.yml", "malformed validate.yml must surface even when scope is env")
+	require.Contains(t, out, "error", "summary must report an error, not zero diagnostics")
 }
 
 func TestValidateExitCodeInterface(t *testing.T) {

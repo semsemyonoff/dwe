@@ -172,9 +172,29 @@ func TestProjectPerms_OK(t *testing.T) {
 	if findSeverity(diags, "project_perms") != validate.SeverityOK {
 		t.Fatalf("want OK, got %+v", diags)
 	}
-	// .devbox/ should have been created.
+	// .devbox/ and .devbox/deploy/ should have been created.
 	if _, err := os.Stat(filepath.Join(root, ".devbox")); err != nil {
 		t.Fatalf(".devbox not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".devbox", "deploy")); err != nil {
+		t.Fatalf(".devbox/deploy not created: %v", err)
+	}
+}
+
+func TestProjectPerms_DeployDirBlockedByFile(t *testing.T) {
+	root := t.TempDir()
+	devboxDir := filepath.Join(root, ".devbox")
+	if err := os.Mkdir(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Place a regular file where the deploy directory should be.
+	if err := os.WriteFile(filepath.Join(devboxDir, "deploy"), []byte("block"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v := &projectPermsValidator{}
+	diags := v.Run(validate.Context{ProjectRoot: root})
+	if findSeverity(diags, "project_perms") != validate.SeverityError {
+		t.Fatalf("want error when .devbox/deploy is a file, got %+v", diags)
 	}
 }
 
@@ -183,6 +203,75 @@ func TestProjectPerms_NoRoot(t *testing.T) {
 	diags := v.Run(validate.Context{})
 	if findSeverity(diags, "project_perms") != validate.SeverityError {
 		t.Fatalf("want error when ProjectRoot empty, got %+v", diags)
+	}
+}
+
+func TestProjectPerms_LockFileIsDirectory(t *testing.T) {
+	root := t.TempDir()
+	deployDir := filepath.Join(root, ".devbox", "deploy")
+	if err := os.MkdirAll(deployDir, 0o755); err != nil {
+		t.Fatalf("mkdir deploy: %v", err)
+	}
+	// Place a directory where deploy.lock should be.
+	lockDir := filepath.Join(deployDir, "deploy.lock")
+	if err := os.Mkdir(lockDir, 0o755); err != nil {
+		t.Fatalf("mkdir deploy.lock: %v", err)
+	}
+	v := &projectPermsValidator{}
+	diags := v.Run(validate.Context{ProjectRoot: root})
+	if findSeverity(diags, "project_perms") != validate.SeverityError {
+		t.Fatalf("want error when deploy.lock is a directory, got %+v", diags)
+	}
+	if len(diags) == 0 || !strings.Contains(diags[0].Message, "deploy.lock") {
+		t.Errorf("expected deploy.lock in message, got %+v", diags)
+	}
+}
+
+func TestProjectPerms_ExistingLockFileNotWritable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permission bits")
+	}
+	root := t.TempDir()
+	devboxDir := filepath.Join(root, ".devbox")
+	deployDir := filepath.Join(devboxDir, "deploy")
+	if err := os.MkdirAll(deployDir, 0o755); err != nil {
+		t.Fatalf("mkdir -p deploy: %v", err)
+	}
+	// Create deploy.lock with no permissions — mirrors an existing lock file
+	// that lock.Acquire would fail to open with O_RDWR.
+	lockFile := filepath.Join(deployDir, "deploy.lock")
+	if err := os.WriteFile(lockFile, []byte("42\n"), 0o000); err != nil {
+		t.Fatalf("write lock file: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(lockFile, 0o644) })
+	v := &projectPermsValidator{}
+	diags := v.Run(validate.Context{ProjectRoot: root})
+	if findSeverity(diags, "project_perms") != validate.SeverityError {
+		t.Fatalf("want error when deploy.lock is not writable, got %+v", diags)
+	}
+	if len(diags) == 0 || !strings.Contains(diags[0].Message, "deploy.lock") {
+		t.Errorf("expected deploy.lock in message, got %+v", diags)
+	}
+}
+
+func TestProjectPerms_UnwritableDeployDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permission bits")
+	}
+	root := t.TempDir()
+	devboxDir := filepath.Join(root, ".devbox")
+	deployDir := filepath.Join(devboxDir, "deploy")
+	if err := os.Mkdir(devboxDir, 0o755); err != nil {
+		t.Fatalf("mkdir .devbox: %v", err)
+	}
+	if err := os.Mkdir(deployDir, 0o555); err != nil {
+		t.Fatalf("mkdir deploy: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(deployDir, 0o755) })
+	v := &projectPermsValidator{}
+	diags := v.Run(validate.Context{ProjectRoot: root})
+	if findSeverity(diags, "project_perms") != validate.SeverityError {
+		t.Fatalf("want error on unwritable .devbox/deploy, got %+v", diags)
 	}
 }
 

@@ -251,9 +251,11 @@ func TestSortDeterminism(t *testing.T) {
 }
 
 type mockValidator struct {
-	domain string
-	id     string
-	diags  []Diagnostic
+	domain      string
+	id          string
+	diags       []Diagnostic
+	domainLevel bool
+	global      bool
 }
 
 func (m *mockValidator) ID() string {
@@ -266,6 +268,93 @@ func (m *mockValidator) Domain() string {
 
 func (m *mockValidator) Run(ctx Context) []Diagnostic {
 	return m.diags
+}
+
+func (m *mockValidator) IsDomainLevel() bool {
+	return m.domainLevel
+}
+
+func (m *mockValidator) IsGlobal() bool {
+	return m.global
+}
+
+func TestRegistryRun_DomainLevelValidator(t *testing.T) {
+	// A domain-level validator (e.g. a parse-error reporter) must run even
+	// when a two-part scope [domain, id] is requested and the validator's own
+	// ID does not match the requested ID. This ensures a broken validate.yml
+	// surfaces an error for "validate checks foo" rather than returning zero rows.
+	domainErr := &mockValidator{
+		domain:      "checks",
+		id:          "_config",
+		domainLevel: true,
+		diags:       []Diagnostic{{Severity: SeverityError, Domain: "checks", Target: "_config"}},
+	}
+	normalCheck := &mockValidator{
+		domain: "checks",
+		id:     "my-check",
+		diags:  []Diagnostic{{Severity: SeverityOK, Domain: "checks", Target: "my-check"}},
+	}
+	r := NewRegistry()
+	r.Register(domainErr)
+	r.Register(normalCheck)
+
+	// Domain-only scope: both should run.
+	diags := r.Run(Context{}, "checks")
+	assert.Equal(t, 2, len(diags), "domain-only scope should include domain-level validator")
+
+	// Two-part scope with matching ID: domain-level + normal check both run.
+	diags = r.Run(Context{}, "checks", "my-check")
+	assert.Equal(t, 2, len(diags), "two-part scope should include domain-level validator even when ID differs")
+
+	// Two-part scope with non-matching ID: domain-level still runs; normal check does not.
+	diags = r.Run(Context{}, "checks", "other-check")
+	assert.Equal(t, 1, len(diags), "domain-level validator runs for any same-domain scoped query")
+	assert.Equal(t, "_config", diags[0].Target)
+
+	// Non-domain-level validator with mismatched ID does NOT run under two-part scope.
+	assert.False(t, normalCheck.domainLevel)
+	diags = r.Run(Context{}, "checks", "other-check")
+	for _, d := range diags {
+		assert.NotEqual(t, "my-check", d.Target, "normal validator must not run when ID does not match scope")
+	}
+}
+
+func TestRegistryRun_GlobalValidator(t *testing.T) {
+	// A global validator (e.g. a broken validate.yml error) must run for every
+	// scope, including scopes that don't include its own domain. This ensures
+	// "devbox validate env" surfaces a malformed validate.yml instead of
+	// silently succeeding with zero diagnostics from the checks domain.
+	globalErr := &mockValidator{
+		domain: "checks",
+		id:     "_config",
+		global: true,
+		diags:  []Diagnostic{{Severity: SeverityError, Domain: "checks", Target: "_config"}},
+	}
+	envCheck := &mockValidator{
+		domain: "env",
+		id:     "docker_bin",
+		diags:  []Diagnostic{{Severity: SeverityOK, Domain: "env", Target: "docker_bin"}},
+	}
+	r := NewRegistry()
+	r.Register(globalErr)
+	r.Register(envCheck)
+
+	// Scoped to "env": global validator runs despite being in "checks" domain.
+	diags := r.Run(Context{}, "env")
+	assert.Equal(t, 2, len(diags), "global validator must run even when scoped to unrelated domain")
+
+	// Scoped to "templates": global validator still runs.
+	diags = r.Run(Context{}, "templates")
+	assert.Equal(t, 1, len(diags), "global validator must run for templates scope")
+	assert.Equal(t, "_config", diags[0].Target)
+
+	// Scoped to "checks": global validator also runs (via domain match, and via global).
+	diags = r.Run(Context{}, "checks")
+	assert.Equal(t, 1, len(diags), "global validator runs for its own domain scope")
+
+	// Empty scope: both run.
+	diags = r.Run(Context{})
+	assert.Equal(t, 2, len(diags), "empty scope runs all validators including global")
 }
 
 func TestRegistryRun(t *testing.T) {

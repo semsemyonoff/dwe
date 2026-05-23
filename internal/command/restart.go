@@ -23,6 +23,7 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecycle.RunRestart(lifecycle.RunContext{
+				Ctx:           cmd.Context(),
 				ConfigPath:    flags.configPath,
 				Yes:           yes,
 				ShowInfo:      func() error { return runInfo(cmd, flags) },
