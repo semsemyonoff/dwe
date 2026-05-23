@@ -88,7 +88,7 @@ func TestRenderDiagnosticsTable_WrapsLongMessageAndHint(t *testing.T) {
 	if !strings.Contains(output, "file id") {
 		t.Fatalf("rendered output missing wrapped message tail: %q", output)
 	}
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if got := lipgloss.Width(line); got > 130 {
 			t.Fatalf("rendered diagnostics line width = %d, want <= 130: %q", got, line)
 		}
@@ -144,7 +144,7 @@ func TestWrapDiagnosticText_LongToken(t *testing.T) {
 	longToken := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 	wrapped := wrapDiagnosticText(longToken)
-	for _, line := range strings.Split(wrapped, "\n") {
+	for line := range strings.SplitSeq(wrapped, "\n") {
 		if got := lipgloss.Width(line); got > diagnosticTextWrapWidth {
 			t.Fatalf("wrapped line width = %d, want <= %d: %q", got, diagnosticTextWrapWidth, line)
 		}

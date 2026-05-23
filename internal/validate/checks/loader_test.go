@@ -165,9 +165,9 @@ func TestBuiltinRunner_FailurePropagatesEntryMeta(t *testing.T) {
 	dir := t.TempDir()
 	entry := config.CheckEntry{
 		ID: "exists", Type: "builtin", Cmd: "file_exists",
-		With:     map[string]any{"path": "missing.txt"},
-		Severity: diag.SeverityWarning,
-		Hint:     "create the file first",
+		With:       map[string]any{"path": "missing.txt"},
+		Severity:   diag.SeverityWarning,
+		Hint:       "create the file first",
 		SourceLine: 42,
 	}
 	v := buildValidator(entry, dir, nil)
@@ -283,11 +283,11 @@ func TestCommandRunner_FailureAttachesStderrTail(t *testing.T) {
 
 func TestLastLine(t *testing.T) {
 	cases := map[string]string{
-		"":              "",
-		"only":          "only",
-		"a\nb\nc":       "c",
-		"a\nb\nc\n":     "c",
-		"a\nb\n  \n":    "",
+		"":             "",
+		"only":         "only",
+		"a\nb\nc":      "c",
+		"a\nb\nc\n":    "c",
+		"a\nb\n  \n":   "",
 		"line\n  end ": "end",
 	}
 	for in, want := range cases {
