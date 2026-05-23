@@ -209,7 +209,7 @@ func toDiagnostic(entry config.CheckEntry, msg string) validate.Diagnostic {
 	return validate.Diagnostic{
 		Severity: entry.Severity,
 		Domain:   "checks",
-		Target:   entry.ID,
+		Target:   targetWithStages(entry),
 		File:     diagFile,
 		Line:     entry.SourceLine,
 		Message:  msg,
@@ -221,10 +221,21 @@ func okDiagnostic(entry config.CheckEntry) validate.Diagnostic {
 	return validate.Diagnostic{
 		Severity: validate.SeverityOK,
 		Domain:   "checks",
-		Target:   entry.ID,
+		Target:   targetWithStages(entry),
 		File:     diagFile,
 		Line:     entry.SourceLine,
 	}
+}
+
+// targetWithStages renders the check id with the stages it applies to on a
+// second line so the diagnostics table makes the stage scope visible without
+// a dedicated column (no other domain has stages). A check with no stages
+// is rendered as just the id.
+func targetWithStages(entry config.CheckEntry) string {
+	if len(entry.Stages) == 0 {
+		return entry.ID
+	}
+	return entry.ID + "\n(" + strings.Join(entry.Stages, ", ") + ")"
 }
 
 // validateYmlErrValidator surfaces a validate.yml parse failure inside the

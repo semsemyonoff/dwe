@@ -239,6 +239,25 @@ func TestBuiltinRunner_Success(t *testing.T) {
 	}
 }
 
+func TestTargetWithStages(t *testing.T) {
+	tests := []struct {
+		name   string
+		entry  config.CheckEntry
+		expect string
+	}{
+		{"no stages", config.CheckEntry{ID: "foo"}, "foo"},
+		{"one stage", config.CheckEntry{ID: "foo", Stages: []string{"deploy"}}, "foo\n(deploy)"},
+		{"multi stage", config.CheckEntry{ID: "foo", Stages: []string{"deploy", "run"}}, "foo\n(deploy, run)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := targetWithStages(tt.entry); got != tt.expect {
+				t.Errorf("targetWithStages: want %q, got %q", tt.expect, got)
+			}
+		})
+	}
+}
+
 func TestBuiltinRunner_FailurePropagatesEntryMeta(t *testing.T) {
 	dir := t.TempDir()
 	entry := config.CheckEntry{
