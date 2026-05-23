@@ -157,21 +157,18 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
 
 ### Task 6: Cobra command tree — read-only subcommands
 
-- [ ] add `internal/command/snapshot.go` with `newSnapshotCmd(flags *rootFlags)` returning the `snapshot` group; register on root in `internal/command/root.go`
-- [ ] **every subcommand declares its `Args:` validator** — never `len(args)` in `RunE`:
+- [x] add `internal/command/snapshot.go` with `newSnapshotCmd(flags *rootFlags)` returning the `snapshot` group; register on root in `internal/command/root.go`
+- [x] **every subcommand declares its `Args:` validator** — never `len(args)` in `RunE`:
   - `list`, `current`, `rollback` → `cobra.NoArgs`
-  - `create`, `restore`, `inspect`, `remove`, `pack`, `unpack` → `cobra.ExactArgs(1)`
-- [ ] implement `devbox snapshot list [--json]` — reads `./snapshots/`, loads each `manifest.yml`, renders a table (name, created_at, size, description); `--json` emits structured output on stdout
-- [ ] implement `devbox snapshot current` — prints the current pointer (empty if cleared) and the matching manifest summary
-- [ ] implement `devbox snapshot inspect <name|tar-path> [--json]` — loads manifest, prints name, config-hash with current-config comparison (`DIVERGED` marker), artifacts list, last_create / last_restore; for a tar path, reads manifest from inside the archive without unpacking (apply tar safety from Task 9 even for inspection — a malicious tar can't be inspected safely otherwise)
-- [ ] **shell completion**: register a `ValidArgsFunction` for `<name>` arguments on `restore`, `inspect`, `remove`, `pack` that:
-  - calls `completionConfigPath(flags, cmd)` first (CLAUDE.md completion contract — `__complete` bypasses `PersistentPreRunE`)
-  - on any error returns `nil, cobra.ShellCompDirectiveNoFileComp`
-  - otherwise lists `./snapshots/*/manifest.yml` parents as candidates
-- [ ] follow the `loadStatusContext`-style per-`RunE` helper pattern (no child `PersistentPreRunE` — would silently drop the root's hook per CLAUDE.md)
-- [ ] **stdout vs stderr discipline**: structured/table output to `cmd.OutOrStdout()`; progress, info, errors to `cmd.ErrOrStderr()`; renderers in `internal/snapshot/` return strings, the command layer writes — matches the project's "section renderer signature contract" from CLAUDE.md
-- [ ] write Cobra tests using `SetArgs`/`SetOut`/`SetErr`: list (empty + two snapshots), current (cleared + set), inspect against fixture, JSON output schema stability, completion handler returns candidates without project resolution
-- [ ] run `go test ./internal/command/... && make lint` — must pass before task 7
+  - `create`, `restore`, `inspect`, `remove`, `pack`, `unpack` → `cobra.ExactArgs(1)` [deferred: only `list`/`current`/`inspect` exist in this task; mutating subcommands land with their `Args` validators in tasks 7–9]
+- [x] implement `devbox snapshot list [--json]` — reads `./snapshots/`, loads each `manifest.yml`, renders a table (name, created_at, size, description); `--json` emits structured output on stdout
+- [x] implement `devbox snapshot current` — prints the current pointer (empty if cleared) and the matching manifest summary
+- [x] implement `devbox snapshot inspect <name|tar-path> [--json]` — loads manifest, prints name, config-hash with current-config comparison (`DIVERGED` marker), artifacts list, last_create / last_restore; for a tar path, reads manifest from inside the archive without unpacking (safe in-archive manifest reader rejects symlink/hardlink/device entries and caps the manifest payload)
+- [x] **shell completion**: `snapshotNameCompletion` registered on `inspect` here, reusable by `restore`/`remove`/`pack` in later tasks; follows the CLAUDE.md completion contract (calls `completionConfigPath` first, returns `ShellCompDirectiveNoFileComp` on any error)
+- [x] follow the `loadStatusContext`-style per-`RunE` helper pattern (no child `PersistentPreRunE` — would silently drop the root's hook per CLAUDE.md)
+- [x] **stdout vs stderr discipline**: structured/table output to `cmd.OutOrStdout()`; progress, info, errors to `cmd.ErrOrStderr()`; renderers in `internal/snapshot/` return data (`ListSnapshots`/`ReadManifestFromTar`), the command layer writes — matches the project's "section renderer signature contract"
+- [x] write Cobra tests: list (empty + two snapshots), current (cleared + set), inspect against fixture (dir + tar + DIVERGED), JSON output schema stability, completion handler returns candidates without project resolution, Args validators reject extra/missing args
+- [x] run `go test ./internal/command/... && make lint` — must pass before task 7
 
 ### Task 7: `create` subcommand with variants
 

@@ -157,9 +157,10 @@ Run 'devbox info' for the full info dashboard.`,
 	addCmd(root, groupConfiguration, newRenderCmd(flags))
 	addCmd(root, groupConfiguration, newValidateCmd(flags))
 
-	// Pipelines group: deploy and reset.
+	// Pipelines group: deploy, reset, snapshot.
 	addCmd(root, groupPipelines, newDeployCmd(flags))
 	addCmd(root, groupPipelines, newResetCmd(flags))
+	addCmd(root, groupPipelines, newSnapshotCmd(flags))
 
 	// Advanced group: low-level and diagnostic commands.
 	addCmd(root, groupAdvanced, newCommandCmd(flags))
