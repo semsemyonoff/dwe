@@ -38,10 +38,12 @@ The validate command runs two new domains in addition to the existing YAML-shape
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
-| `env.*` | Hardcoded in Go (`internal/validate/env/`) | No — six fixed probes |
+| `env.*` | Hardcoded in Go (`internal/validate/env/`) | No — seven fixed probes |
 | `checks.*` | `devbox/validate.yml` entries | Yes — declarative |
 
-The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`. They run on every `devbox validate` invocation and on every preflight (regardless of stage — env has no stage concept).
+The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `devbox validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
+
+`env.ports_free` reads every host port declared under `services.<name>.ports` (enabled services only) and checks whether each is bindable. It queries `docker ps --format=json` once to learn which containers currently hold which ports: containers labelled `com.docker.compose.project=<our project>` are treated as "ours" (compose will reuse them on `up`); containers from any other compose project trigger a conflict diagnostic that names the foreign container and project; for ports not held by any container the probe falls back to `net.Listen` to detect non-Docker processes. Docker unreachability falls through silently — `env.docker_daemon` covers that case.
 
 The `checks.*` validators are synthesized one per `validate.yml` entry. Each dispatches to either a built-in inspection routine or a locked-down user command at run time.
 

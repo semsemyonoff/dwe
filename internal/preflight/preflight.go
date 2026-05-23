@@ -97,6 +97,7 @@ func Run(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommand
 		ValidateCfg:         validateCfg,
 		ValidateCfgWarnings: warnings,
 		ValidateCfgLoadErr:  loadErr,
+		Stage:               stage,
 	}
 
 	reg := validate.NewRegistry()

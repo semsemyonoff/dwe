@@ -295,8 +295,8 @@ func TestProjectPerms_Unwritable(t *testing.T) {
 func TestAll_Composition(t *testing.T) {
 	cfg := &config.DevboxConfig{}
 	got := All(cfg)
-	if len(got) != 6 {
-		t.Fatalf("want 6 validators, got %d", len(got))
+	if len(got) != 7 {
+		t.Fatalf("want 7 validators, got %d", len(got))
 	}
 	ids := map[string]bool{}
 	for _, v := range got {
@@ -307,7 +307,7 @@ func TestAll_Composition(t *testing.T) {
 	}
 	for _, want := range []string{
 		"docker_bin", "docker_daemon", "docker_compose",
-		"git_bin", "shell_bin", "project_perms",
+		"git_bin", "shell_bin", "project_perms", "ports_free",
 	} {
 		if !ids[want] {
 			t.Errorf("missing validator: %s", want)
@@ -318,7 +318,7 @@ func TestAll_Composition(t *testing.T) {
 func TestAll_NilCfg(t *testing.T) {
 	// All must accept a nil cfg without panicking; the binary accessors handle it.
 	got := All(nil)
-	if len(got) != 6 {
-		t.Fatalf("want 6 validators, got %d", len(got))
+	if len(got) != 7 {
+		t.Fatalf("want 7 validators, got %d", len(got))
 	}
 }

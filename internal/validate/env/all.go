@@ -16,5 +16,6 @@ func All(cfg *config.DevboxConfig) []validate.Validator {
 		&gitBinValidator{cfg: cfg},
 		&shellBinValidator{cfg: cfg},
 		&projectPermsValidator{},
+		&portsFreeValidator{cfg: cfg},
 	}
 }

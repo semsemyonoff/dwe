@@ -1,0 +1,293 @@
+package env
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"os/exec"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/daemon"
+	"devbox-cli/internal/validate"
+)
+
+// portsProbeTimeout caps the `docker ps` invocation so a hung daemon does not
+// block validate forever.
+const portsProbeTimeout = 5 * time.Second
+
+// composeProjectLabel is the standard label every container created via
+// `docker compose` carries. We use it to distinguish our containers (which
+// are expected to bind the declared ports) from foreign processes.
+const composeProjectLabel = "com.docker.compose.project"
+
+// dockerPSOutFn is the seam used by portsFreeValidator.Run to query Docker.
+// Tests override it to return canned NDJSON without spawning a process.
+var dockerPSOutFn = runDockerPS
+
+// portListenFn is the seam used by portsFreeValidator.Run to probe host
+// availability. Tests override it to simulate busy ports without binding
+// real sockets.
+var portListenFn = listenTCP
+
+type portsFreeValidator struct {
+	cfg *config.DevboxConfig
+}
+
+func (v *portsFreeValidator) ID() string     { return "ports_free" }
+func (v *portsFreeValidator) Domain() string { return "env" }
+
+func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
+	// Stopping the project cannot fail on a port conflict — irrelevant scope.
+	if vctx.Stage == "stop" {
+		return nil
+	}
+	declared := collectDeclaredPorts(v.cfg)
+	if len(declared) == 0 {
+		return nil
+	}
+	bin := config.DockerBin(v.cfg)
+	if _, err := exec.LookPath(bin); err != nil {
+		// docker_bin will surface this; do not double-report.
+		return nil
+	}
+
+	ourProject := resolveComposeProject(vctx.ProjectRoot, v.cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), portsProbeTimeout)
+	defer cancel()
+	bindings, _ := queryDockerPortBindings(ctx, bin)
+
+	var diags []validate.Diagnostic
+	for _, dp := range declared {
+		if conflict := classifyPort(dp, bindings, ourProject); conflict != "" {
+			diags = append(diags, fail(
+				"ports_free",
+				conflict,
+				"free the port (stop the conflicting process or container) and retry\nlsof -i :"+strconv.Itoa(dp.HostPort),
+			))
+		}
+	}
+	if len(diags) == 0 {
+		return []validate.Diagnostic{ok("ports_free")}
+	}
+	return diags
+}
+
+// declaredPort identifies a host port that one of our services declared in
+// devbox/services.yml (or overlays). Service + PortName are kept so the
+// diagnostic can pinpoint exactly which service expected the port.
+type declaredPort struct {
+	Service  string
+	PortName string
+	HostPort int
+}
+
+// collectDeclaredPorts walks cfg.Services and produces one entry per declared
+// host port on an enabled service. Disabled services are skipped — they do not
+// bind ports, so a conflict on their declared port does not block startup.
+// Output is sorted (service, portName) for deterministic diagnostics.
+func collectDeclaredPorts(cfg *config.DevboxConfig) []declaredPort {
+	if cfg == nil {
+		return nil
+	}
+	var out []declaredPort
+	for name, svc := range cfg.Services {
+		if !svc.Enabled {
+			continue
+		}
+		for portName, hostPort := range svc.Ports {
+			if hostPort <= 0 || hostPort > 65535 {
+				continue
+			}
+			out = append(out, declaredPort{
+				Service:  name,
+				PortName: portName,
+				HostPort: hostPort,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Service != out[j].Service {
+			return out[i].Service < out[j].Service
+		}
+		return out[i].PortName < out[j].PortName
+	})
+	return out
+}
+
+// portOwner describes who owns a host port observed via `docker ps`.
+type portOwner struct {
+	Container      string
+	ComposeProject string
+}
+
+// classifyPort returns "" if the port is acceptable (free, or held by one of
+// our own compose containers), otherwise a user-facing reason string.
+func classifyPort(dp declaredPort, bindings map[int][]portOwner, ourProject string) string {
+	owners := bindings[dp.HostPort]
+	if len(owners) > 0 {
+		for _, o := range owners {
+			if ourProject != "" && o.ComposeProject == ourProject {
+				// Our own container holds it — compose will reuse on `up`.
+				return ""
+			}
+		}
+		o := owners[0]
+		who := o.Container
+		if o.ComposeProject != "" && o.ComposeProject != ourProject {
+			who += " (compose project: " + o.ComposeProject + ")"
+		}
+		return fmt.Sprintf("port %d (%s.%s) is bound by container %s",
+			dp.HostPort, dp.Service, dp.PortName, who)
+	}
+	// Not held by Docker — probe directly.
+	if err := portListenFn(dp.HostPort); err != nil {
+		return fmt.Sprintf("port %d (%s.%s) is in use: %s",
+			dp.HostPort, dp.Service, dp.PortName, firstLine(err.Error(), "address already in use"))
+	}
+	return ""
+}
+
+// resolveComposeProject returns the compose project name for the current
+// devbox project, or "" if it cannot be determined. A missing docker.yml is
+// silent (the config.docker validator surfaces real load errors).
+func resolveComposeProject(baseDir string, cfg *config.DevboxConfig) string {
+	if baseDir == "" || cfg == nil {
+		return ""
+	}
+	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+	if err != nil || dockerCfg == nil {
+		return ""
+	}
+	return dockerCfg.ProjectName
+}
+
+// runDockerPS shells out to `docker ps --format=json --no-trunc` (no filter)
+// to get every running container's name, ports, and labels in one call. The
+// no-filter approach lets us see foreign containers from other projects so we
+// can name them in the conflict message instead of just saying "in use."
+func runDockerPS(ctx context.Context, bin string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, bin, "ps", "--format=json", "--no-trunc") //nolint:gosec
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// queryDockerPortBindings parses `docker ps --format=json` NDJSON into a
+// host-port → owners map. Returns an empty map (not nil) if Docker is
+// unreachable or output is unparseable — the caller falls back to net.Listen
+// for ports not present in the map.
+func queryDockerPortBindings(ctx context.Context, bin string) (map[int][]portOwner, error) {
+	out, err := dockerPSOutFn(ctx, bin)
+	if err != nil || len(out) == 0 {
+		return map[int][]portOwner{}, err
+	}
+	return parsePortBindings(out), nil
+}
+
+// psPortRecord mirrors the minimal `docker ps --format=json` fields we need.
+// Labels carries two on-the-wire encodings (object or "k=v,k=v" string),
+// handled via daemon.DecodeLabels.
+type psPortRecord struct {
+	Names  string          `json:"Names"`
+	Ports  string          `json:"Ports"`
+	Labels json.RawMessage `json:"Labels"`
+}
+
+// parsePortBindings turns NDJSON `docker ps --format=json` output into a map
+// from host port to the list of containers binding it. Invalid lines are
+// skipped silently (best-effort: we'd rather miss one container than fail the
+// whole probe).
+func parsePortBindings(data []byte) map[int][]portOwner {
+	result := map[int][]portOwner{}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var rec psPortRecord
+		if err := json.Unmarshal(line, &rec); err != nil {
+			continue
+		}
+		ports := parsePortsField(rec.Ports)
+		if len(ports) == 0 {
+			continue
+		}
+		labels := daemon.DecodeLabels(rec.Labels)
+		owner := portOwner{
+			Container:      rec.Names,
+			ComposeProject: labels[composeProjectLabel],
+		}
+		for _, p := range ports {
+			result[p] = append(result[p], owner)
+		}
+	}
+	return result
+}
+
+// parsePortsField extracts host port numbers from the `Ports` field returned
+// by `docker ps --format=json`. The field is a comma-separated list of
+// entries like:
+//
+//	"0.0.0.0:5432->5432/tcp"            — bound on all v4 interfaces
+//	"127.0.0.1:5432->5432/tcp"          — bound on localhost only
+//	":::5432->5432/tcp"                 — IPv6 wildcard
+//	"5432/tcp"                          — exposed but not published (skipped)
+//
+// Only entries with "->" are host-published; the host port sits to the left
+// of the arrow after the last colon. We dedupe — IPv4 + IPv6 lines on the
+// same port count once.
+func parsePortsField(s string) []int {
+	if s == "" {
+		return nil
+	}
+	seen := map[int]struct{}{}
+	for entry := range strings.SplitSeq(s, ",") {
+		entry = strings.TrimSpace(entry)
+		left, _, ok := strings.Cut(entry, "->")
+		if !ok {
+			continue
+		}
+		// Strip optional "IP:" prefix — keep only the rightmost ":" component.
+		if i := strings.LastIndex(left, ":"); i >= 0 {
+			left = left[i+1:]
+		}
+		p, err := strconv.Atoi(left)
+		if err != nil || p <= 0 || p > 65535 {
+			continue
+		}
+		seen[p] = struct{}{}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]int, 0, len(seen))
+	for p := range seen {
+		out = append(out, p)
+	}
+	sort.Ints(out)
+	return out
+}
+
+// listenTCP attempts to bind a TCP listener on the wildcard interface for the
+// given port and closes it immediately. Used as the fallback check for ports
+// not bound by any docker container — if listen succeeds the port is free,
+// if it fails some non-docker process owns it (or the kernel disallows it).
+func listenTCP(port int) error {
+	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	if err != nil {
+		return err
+	}
+	return l.Close()
+}

@@ -45,6 +45,13 @@ type Context struct {
 	// ValidateCfgLoadErr is nil on success, os.ErrNotExist when validate.yml is
 	// absent (silently tolerated), or any other error when the load failed.
 	ValidateCfgLoadErr error
+
+	// Stage is the lifecycle stage that triggered validation (e.g. "deploy",
+	// "run", "stop", "restart", "command"). Empty when invoked outside the
+	// preflight hook (i.e. by `devbox validate` directly). Validators can
+	// read this to self-skip when their check is irrelevant for the stage
+	// (e.g. env.ports_free skips on "stop").
+	Stage string
 }
 
 // Validator is the interface for domain-specific validators.
