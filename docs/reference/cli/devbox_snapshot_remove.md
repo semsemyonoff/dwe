@@ -9,8 +9,9 @@ devbox snapshot remove <name> [flags]
 ### Options
 
 ```
-  -h, --help   help for remove
-  -y, --yes    skip remove confirmation
+  -h, --help      help for remove
+      --no-live   disable the per-step live UI; emit plain stdout
+  -y, --yes       skip remove confirmation
 ```
 
 ### Options inherited from parent commands

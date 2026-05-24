@@ -1,13 +1,14 @@
 ## devbox services
 
-Toggle app/tool services (interactive) or enable/disable individually
+Toggle optional services (interactive) or enable/disable individually
 
 ### Synopsis
 
-Open an interactive multi-select form to enable or disable app/tool services.
-Infra services are config-managed and are intentionally not shown here.
+Open an interactive multi-select form to enable or disable optional services.
+Mandatory services (including mandatory infra) are always active and shown
+pre-checked / locked. Optional infra services (mandatory: false) appear
+alongside apps and tools.
 
-Mandatory services are always active and shown pre-checked / locked.
 On submit, changes are written to devbox/local.yml and .env is regenerated.
 
 For a read-only view, run 'devbox status' or one of 'devbox status apps / tools / infra'.

@@ -230,12 +230,12 @@ Pinned beeep (v0.11.2) already takes `Notify(title, body string, icon any) error
 
 ### Task 15: [Final] Acceptance criteria sweep
 
-- [ ] verify all 7 spec sections have a corresponding completed task
-- [ ] run `make test` and `make lint` cleanly on the branch
-- [ ] regenerate CLI docs: `bin/devbox docs generate` (or whatever the project command is) and commit any deltas in `docs/reference/cli/`
-- [ ] update `docs/internals/packages.md` if invariants for `internal/notify`, `internal/ui`, or `internal/render` changed (in particular: `Writer.ASCII` signature change, `LogoMark` exclusion list, notification icon embed)
-- [ ] confirm no `docs/design/` leftovers remain in working tree
-- [ ] verify acceptance criteria from spec §9
+- [x] verify all 7 spec sections have a corresponding completed task (Tasks 1-14 cover styles foundation, header, logo, cmd-browser fixes, notifications, docs)
+- [x] run `make test` and `make lint` cleanly on the branch
+- [x] regenerate CLI docs: `bin/devbox docs generate --scope cli` (committed deltas in `docs/reference/cli/`)
+- [x] update `docs/internals/packages.md` for `internal/render` `Writer.ASCII` signature change, `internal/ui` 7-token palette + `LogoMark`/`LogoMarkPlain` + exclusion list + `RenderBrandedSectionTitle`, `internal/notify` `beeepNotify` widened to `icon any`, `beeep.AppName`, embedded `icon.png`, new title/body format
+- [x] confirm no `docs/design/` leftovers remain in working tree (logo-256.png relocated to `internal/notify/assets/icon.png` per Task 12; logo-16.png / logo-48.png intentionally retained for potential README / docs-site reuse per Task 12 decision)
+- [x] verify acceptance criteria from spec §9 (manual visual verification listed under Post-Completion — not automatable here)
 
 ## Technical Details
 

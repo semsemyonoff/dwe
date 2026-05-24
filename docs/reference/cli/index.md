@@ -49,7 +49,7 @@ Generated reference for the `devbox` command tree.
   - [devbox reset step](devbox_reset_step.md) — Run a single reset step by <phase>/<step> address
 - [devbox restart](devbox_restart.md) — Restart the project (stop, then run --no-update)
 - [devbox run](devbox_run.md) — Start the project (full lifecycle: update probe → up → wait → info)
-- [devbox services](devbox_services.md) — Toggle app/tool services (interactive) or enable/disable individually
+- [devbox services](devbox_services.md) — Toggle optional services (interactive) or enable/disable individually
   - [devbox services disable](devbox_services_disable.md) — Disable an optional service (writes to devbox/local.yml)
   - [devbox services enable](devbox_services_enable.md) — Enable an optional service (writes to devbox/local.yml)
 - [devbox shell](devbox_shell.md) — Open a shell in a service container
@@ -58,7 +58,7 @@ Generated reference for the `devbox` command tree.
   - [devbox snapshot current](devbox_snapshot_current.md) — Show the snapshot currently restored into the project
   - [devbox snapshot inspect](devbox_snapshot_inspect.md) — Inspect a snapshot directory or a packed .tar.gz archive
   - [devbox snapshot list](devbox_snapshot_list.md) — List snapshots in ./snapshots/
-  - [devbox snapshot pack](devbox_snapshot_pack.md) — Pack a snapshot into a .tar.gz archive with a .sha256 sidecar
+  - [devbox snapshot pack](devbox_snapshot_pack.md) — Pack a snapshot into a .tar.gz archive
   - [devbox snapshot remove](devbox_snapshot_remove.md) — Delete a snapshot (runs remove: workflow if defined)
   - [devbox snapshot restore](devbox_snapshot_restore.md) — Restore a snapshot into the current project
   - [devbox snapshot rollback](devbox_snapshot_rollback.md) — Restore the snapshot named by rollback_target in devbox/snapshot.yml

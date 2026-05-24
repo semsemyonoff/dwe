@@ -11,7 +11,8 @@ devbox snapshot unpack <tar-path> [flags]
 ```
       --as string   name to install the unpacked snapshot as (default derived from the archive basename)
   -h, --help        help for unpack
-  -y, --yes         skip overwrite confirmation when the target dir already exists
+      --no-verify   skip post-extract artifact verification against manifest checksums
+  -y, --yes         skip overwrite and verification confirmations
 ```
 
 ### Options inherited from parent commands

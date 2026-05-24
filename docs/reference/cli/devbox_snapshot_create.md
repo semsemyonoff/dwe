@@ -11,6 +11,7 @@ devbox snapshot create <name> [flags]
 ```
   -d, --description string   human-readable description recorded in manifest.yml
   -h, --help                 help for create
+      --no-live              disable the per-step live UI; emit plain stdout
       --using string         select a create-workflow variant from snapshot.yml
   -y, --yes                  skip overwrite confirmation
 ```

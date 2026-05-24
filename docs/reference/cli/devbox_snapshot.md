@@ -27,7 +27,7 @@ and restore or roll back to it. Workflows live in devbox/snapshot.yml.
 * [devbox snapshot current](devbox_snapshot_current.md)	 - Show the snapshot currently restored into the project
 * [devbox snapshot inspect](devbox_snapshot_inspect.md)	 - Inspect a snapshot directory or a packed .tar.gz archive
 * [devbox snapshot list](devbox_snapshot_list.md)	 - List snapshots in ./snapshots/
-* [devbox snapshot pack](devbox_snapshot_pack.md)	 - Pack a snapshot into a .tar.gz archive with a .sha256 sidecar
+* [devbox snapshot pack](devbox_snapshot_pack.md)	 - Pack a snapshot into a .tar.gz archive
 * [devbox snapshot remove](devbox_snapshot_remove.md)	 - Delete a snapshot (runs remove: workflow if defined)
 * [devbox snapshot restore](devbox_snapshot_restore.md)	 - Restore a snapshot into the current project
 * [devbox snapshot rollback](devbox_snapshot_rollback.md)	 - Restore the snapshot named by rollback_target in devbox/snapshot.yml

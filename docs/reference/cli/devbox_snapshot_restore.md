@@ -9,8 +9,9 @@ devbox snapshot restore <name> [flags]
 ### Options
 
 ```
-  -h, --help   help for restore
-  -y, --yes    skip restore confirmation
+  -h, --help      help for restore
+      --no-live   disable the per-step live UI; emit plain stdout
+  -y, --yes       skip restore confirmation
 ```
 
 ### Options inherited from parent commands

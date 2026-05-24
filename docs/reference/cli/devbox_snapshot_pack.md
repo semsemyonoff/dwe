@@ -1,6 +1,6 @@
 ## devbox snapshot pack
 
-Pack a snapshot into a .tar.gz archive with a .sha256 sidecar
+Pack a snapshot into a .tar.gz archive
 
 ```
 devbox snapshot pack <name> [flags]

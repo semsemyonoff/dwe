@@ -9,8 +9,9 @@ devbox snapshot rollback [flags]
 ### Options
 
 ```
-  -h, --help   help for rollback
-  -y, --yes    skip rollback confirmation
+  -h, --help      help for rollback
+      --no-live   disable the per-step live UI; emit plain stdout
+  -y, --yes       skip rollback confirmation
 ```
 
 ### Options inherited from parent commands
