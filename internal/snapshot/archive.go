@@ -151,13 +151,15 @@ func globToRegexp(glob string) (*regexp.Regexp, error) {
 		switch c {
 		case '*':
 			if i+1 < len(glob) && glob[i+1] == '*' {
-				// `**/foo` → optional path prefix; `(?:.*/)?` prevents false
-				// matches like `barfoo` that `.*foo` would accept.
-				b.WriteString("(?:.*/)?")
 				i++
-				// consume optional trailing `/` so that `foo/**` matches `foo` too
 				if i+1 < len(glob) && glob[i+1] == '/' {
-					i++
+					// `**/foo` → optional path prefix; `(?:.*/)?` prevents false
+					// matches like `barfoo` that `.*foo` would accept.
+					b.WriteString("(?:.*/)?")
+					i++ // consume the trailing '/'
+				} else {
+					// `**` at end or `**<literal>` — match anything including separators.
+					b.WriteString(".*")
 				}
 				continue
 			}

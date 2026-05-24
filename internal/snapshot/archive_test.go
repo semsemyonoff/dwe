@@ -517,6 +517,13 @@ func TestGlobToRegexp(t *testing.T) {
 		{"**/dump.sql", "a/b/dump.sql", true},
 		{"**/dump.sql", "xdump.sql", false},
 		{"**/dump.sql", "a/xdump.sql", false},
+		// **<literal> without separator: matches any path ending with the suffix.
+		{"**.sql", "dump.sql", true},
+		{"**.sql", "backup/dump.sql", true},
+		{"**.sql", ".sql", true},
+		{"**.sql", "dump.txt", false},
+		{"**.gz", "archive.tar.gz", true},
+		{"**.gz", "a/b/archive.tar.gz", true},
 		// middle-position /**/: separator before suffix is required; "ab" must not match "a/**/b".
 		{"data/**/secret.key", "data/secret.key", true},
 		{"data/**/secret.key", "data/sub/secret.key", true},
