@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,12 @@ import (
 	"testing"
 	"time"
 )
+
+func TestNotificationIcon_PNGMagicBytes(t *testing.T) {
+	if !bytes.HasPrefix(notificationIcon, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatalf("embedded notificationIcon does not have PNG magic bytes; len=%d first=%x", len(notificationIcon), notificationIcon[:min(8, len(notificationIcon))])
+	}
+}
 
 // withBeeepNotify swaps beeepNotify for the duration of a subtest.
 func withBeeepNotify(t *testing.T, fn func(title, body, icon string) error) {

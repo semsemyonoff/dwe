@@ -195,11 +195,11 @@ Item-description truncation already exists ([internal/ui/cmdbrowser/list_delegat
 
 ### Task 12: Relocate logo asset and embed for notifications
 
-- [ ] create `internal/notify/assets/` directory
-- [ ] move `docs/design/logo-256.png` to `internal/notify/assets/icon.png` (`git add` the new path — these files are currently untracked)
-- [ ] decide on the remaining `docs/design/logo-{16,48}.png`: keep at `docs/design/` if they will be used elsewhere (e.g. docs site, README), otherwise delete. Default: delete unless a clear use exists — confirm with user before deletion.
-- [ ] add `//go:embed assets/icon.png\nvar notificationIcon []byte` to `internal/notify/native.go`
-- [ ] add a PNG magic-bytes sanity test: `assert.True(t, bytes.HasPrefix(notificationIcon, []byte("\x89PNG")))` — catches accidental empty/wrong-format embed at test time
+- [x] create `internal/notify/assets/` directory
+- [x] move `docs/design/logo-256.png` to `internal/notify/assets/icon.png` (`git mv` — file was tracked despite the plan note; rename preserved in git history)
+- [x] decide on the remaining `docs/design/logo-{16,48}.png`: kept at `docs/design/` for potential README / docs-site reuse (no deletion — defer until a clear use is decided or rejected)
+- [x] add `//go:embed assets/icon.png\nvar notificationIcon []byte` to `internal/notify/native.go`
+- [x] add a PNG magic-bytes sanity test: `assert.True(t, bytes.HasPrefix(notificationIcon, []byte("\x89PNG")))` — catches accidental empty/wrong-format embed at test time
 
 ### Task 13: Brand notification AppName and title format
 

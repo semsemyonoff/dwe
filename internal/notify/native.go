@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/gen2brain/beeep"
 )
+
+//go:embed assets/icon.png
+var notificationIcon []byte
 
 // beeepNotify is the seam for tests to intercept the OS notifier call.
 var beeepNotify = func(title, body, icon string) error {
