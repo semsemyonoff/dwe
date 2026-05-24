@@ -506,7 +506,8 @@ func extractTarGz(tarPath, targetRoot string) error {
 
 		// Regular file. Make parent dirs, then refuse to overwrite (O_EXCL).
 		// Pre-check declared size so we don't write the file at all if it would exceed the cap.
-		if totalBytes+hdr.Size > maxUnpackBytes {
+		// Use subtraction to avoid int64 overflow when hdr.Size is crafted near MaxInt64.
+		if hdr.Size < 0 || totalBytes > maxUnpackBytes-hdr.Size {
 			return fmt.Errorf("unpack: archive exceeds maximum size (%d bytes)", maxUnpackBytes)
 		}
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {

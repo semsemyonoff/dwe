@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"devbox-cli/internal/config"
@@ -283,11 +285,15 @@ func parsePortsField(s string) []int {
 // listenTCP attempts to bind a TCP listener on the wildcard interface for the
 // given port and closes it immediately. Used as the fallback check for ports
 // not bound by any docker container — if listen succeeds the port is free,
-// if it fails some non-docker process owns it (or the kernel disallows it).
+// if it fails with EADDRINUSE some non-docker process owns it. Any other error
+// (e.g. EACCES on a privileged port < 1024) means we cannot probe — treat as free.
 func listenTCP(port int) error {
 	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
-		return err
+		if errors.Is(err, syscall.EADDRINUSE) {
+			return err
+		}
+		return nil // cannot probe; assume free
 	}
 	return l.Close()
 }

@@ -217,6 +217,9 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		if runErr == nil && scanErr == nil {
 			return nil, fmt.Errorf("snapshot: write manifest: %w", err)
 		}
+		if p.Stderr != nil {
+			_, _ = fmt.Fprintf(p.Stderr, "warning: could not write snapshot manifest: %v\n", err)
+		}
 	}
 
 	res := &CreateResult{

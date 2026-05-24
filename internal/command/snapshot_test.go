@@ -239,7 +239,7 @@ func TestSnapshotInspect_FromTar(t *testing.T) {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gw)
-	if err := tw.WriteHeader(&tar.Header{Name: "from-tar/manifest.yml", Mode: 0o644, Size: int64(len(manifest)), Typeflag: tar.TypeReg}); err != nil {
+	if err := tw.WriteHeader(&tar.Header{Name: "manifest.yml", Mode: 0o644, Size: int64(len(manifest)), Typeflag: tar.TypeReg}); err != nil {
 		t.Fatalf("hdr: %v", err)
 	}
 	if _, err := tw.Write(manifest); err != nil {

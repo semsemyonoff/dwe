@@ -226,6 +226,9 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		if runErr == nil {
 			return nil, fmt.Errorf("snapshot %q: write manifest: %w", p.Name, err)
 		}
+		if p.Stderr != nil {
+			_, _ = fmt.Fprintf(p.Stderr, "warning: could not write snapshot manifest: %v\n", err)
+		}
 	}
 
 	res := &RestoreResult{

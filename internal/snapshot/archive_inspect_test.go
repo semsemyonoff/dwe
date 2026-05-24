@@ -60,9 +60,8 @@ func TestReadManifestFromTar(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		p := filepath.Join(dir, "ok.tar.gz")
 		writeTarGz(t, p, []tarEntry{
-			{name: "feature-x/", typeflag: tar.TypeDir},
-			{name: "feature-x/manifest.yml", typeflag: tar.TypeReg, body: manifest},
-			{name: "feature-x/db/main.sql.gz", typeflag: tar.TypeReg, body: []byte("payload")},
+			{name: "manifest.yml", typeflag: tar.TypeReg, body: manifest},
+			{name: "db/main.sql.gz", typeflag: tar.TypeReg, body: []byte("payload")},
 		})
 		m, err := ReadManifestFromTar(p)
 		if err != nil {
@@ -113,7 +112,7 @@ func TestReadManifestFromTar(t *testing.T) {
 		big := bytes.Repeat([]byte("a"), maxInspectManifestBytes+1)
 		p := filepath.Join(dir, "huge.tar.gz")
 		writeTarGz(t, p, []tarEntry{
-			{name: "feature-x/manifest.yml", typeflag: tar.TypeReg, body: big},
+			{name: "manifest.yml", typeflag: tar.TypeReg, body: big},
 		})
 		_, err := ReadManifestFromTar(p)
 		if err == nil || !strings.Contains(err.Error(), "exceeds") {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 
 	"gopkg.in/yaml.v3"
 )
@@ -55,7 +54,7 @@ func ReadManifestFromTar(tarPath string) (*Manifest, error) {
 		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
-		if path.Base(hdr.Name) != ManifestFileName {
+		if hdr.Name != ManifestFileName {
 			continue
 		}
 		data, err := io.ReadAll(io.LimitReader(tr, maxInspectManifestBytes+1))

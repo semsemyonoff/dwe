@@ -16,6 +16,7 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
@@ -57,9 +58,14 @@ func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes bo
 		return fmt.Errorf("snapshot remove: no devbox/snapshot.yml found at %s", config.SnapshotConfigPath(baseDir))
 	}
 
-	reg, err := loadCommandRegistry(flags.configPath)
-	if err != nil {
-		return fmt.Errorf("loading command registry: %w", err)
+	// Only load the registry when a remove: workflow is defined; the package
+	// guards on Registry != nil so nil is safe when no workflow runs.
+	var reg *registry.Registry
+	if snapCfg.Remove != nil {
+		reg, err = loadCommandRegistry(flags.configPath)
+		if err != nil {
+			return fmt.Errorf("loading command registry: %w", err)
+		}
 	}
 
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
