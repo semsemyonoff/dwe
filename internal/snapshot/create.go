@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -124,6 +125,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	}
 
 	snapDir := SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)
+	var backupDir string
 	if _, statErr := os.Stat(snapDir); statErr == nil {
 		// Directory already exists — confirm overwrite or refuse.
 		if !p.SkipConfirm {
@@ -135,8 +137,16 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 				return nil, &CreateCancelledError{}
 			}
 		}
-		if err := os.RemoveAll(snapDir); err != nil {
-			return nil, fmt.Errorf("snapshot: remove existing dir: %w", err)
+		// Rename rather than delete: if the workflow fails we can restore the
+		// previous snapshot so the user is not left with a failed state and no
+		// fallback.
+		var randB [8]byte
+		if _, rErr := rand.Read(randB[:]); rErr != nil {
+			return nil, fmt.Errorf("snapshot: generate backup name: %w", rErr)
+		}
+		backupDir = snapDir + fmt.Sprintf(".create-backup-%x", randB)
+		if err := os.Rename(snapDir, backupDir); err != nil {
+			return nil, fmt.Errorf("snapshot: backup existing snapshot: %w", err)
 		}
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, fmt.Errorf("snapshot: stat existing dir: %w", statErr)
@@ -236,14 +246,26 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	}
 
 	if status != StatusOk {
-		// Return the original workflow or scan error so the CLI sees the
-		// real failure cause; the manifest is already on disk.
+		// Restore the previous snapshot if we backed it up: remove the failed
+		// attempt and rename the backup back so the user retains a working state.
+		if backupDir != "" {
+			_ = os.RemoveAll(snapDir)
+			if renameErr := os.Rename(backupDir, snapDir); renameErr != nil && p.Stderr != nil {
+				_, _ = fmt.Fprintf(p.Stderr, "warning: could not restore previous snapshot backup %s: %v\n", backupDir, renameErr)
+			}
+		}
+		// Return the original workflow or scan error so the CLI sees the real failure cause.
 		if runErr != nil {
 			return res, runErr
 		}
 		if scanErr != nil {
 			return res, scanErr
 		}
+	}
+
+	// Success: remove the backup if we made one.
+	if backupDir != "" {
+		_ = os.RemoveAll(backupDir)
 	}
 
 	// Success: update the current pointer atomically.

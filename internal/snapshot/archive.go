@@ -141,6 +141,9 @@ func (e *UnpackVerifyDeclinedError) ExitCode() int { return 0 }
 //   - `?`  matches a single character except `/`.
 //   - All other characters are taken literally.
 func globToRegexp(glob string) (*regexp.Regexp, error) {
+	if strings.ContainsAny(glob, "{}") {
+		return nil, fmt.Errorf("brace expansion is not supported; use separate glob entries")
+	}
 	var b strings.Builder
 	b.WriteString("^")
 	for i := 0; i < len(glob); i++ {

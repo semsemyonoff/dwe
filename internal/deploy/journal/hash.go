@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"sort"
 
 	"devbox-cli/internal/condition"
@@ -182,6 +183,7 @@ func canonicalMap(m map[string]any) []byte {
 	// Use encoding/json.Marshal with a custom encoder to guarantee sorted keys
 	data, err := json.Marshal(sortedMap(m))
 	if err != nil {
+		slog.Error("journal: canonicalMap: json.Marshal failed; using empty fallback", "err", err)
 		return []byte("{}")
 	}
 	return data

@@ -338,7 +338,7 @@ func (v *perSnapshotValidator) Run(_ validate.Context) []validate.Diagnostic {
 			missing++
 		}
 	}
-	if missing == 0 {
+	if missing == 0 && len(v.entry.Manifest.Artifacts) > 0 {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityOK,
 			Domain:   "snapshot",
