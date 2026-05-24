@@ -164,24 +164,24 @@ func (v *templateScopeValidator) Run(_ validate.Context) []validate.Diagnostic {
 		if w == nil {
 			return
 		}
-		walkSteps(w.Steps, func(stepIdx int, where string, expr string) {
+		walkSteps(w.Steps, "", func(stepPath, where, expr string) {
 			if err := scopeCheck(expr, scope); err != nil {
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityError,
 					Domain:   "snapshot",
-					Target:   fmt.Sprintf("template_scope.%s.steps[%d].%s", kind, stepIdx, where),
+					Target:   fmt.Sprintf("template_scope.%s.%s.%s", kind, stepPath, where),
 					File:     diagFile,
 					Message:  err.Error(),
 				})
 			}
 		})
 		for vname, variant := range w.Variants {
-			walkSteps(variant.Steps, func(stepIdx int, where string, expr string) {
+			walkSteps(variant.Steps, "", func(stepPath, where, expr string) {
 				if err := scopeCheck(expr, scope); err != nil {
 					diags = append(diags, validate.Diagnostic{
 						Severity: validate.SeverityError,
 						Domain:   "snapshot",
-						Target:   fmt.Sprintf("template_scope.%s.variants[%s].steps[%d].%s", kind, vname, stepIdx, where),
+						Target:   fmt.Sprintf("template_scope.%s.variants[%s].%s.%s", kind, vname, stepPath, where),
 						File:     diagFile,
 						Message:  err.Error(),
 					})
@@ -195,22 +195,24 @@ func (v *templateScopeValidator) Run(_ validate.Context) []validate.Diagnostic {
 	return diags
 }
 
-// walkSteps invokes visit(stepIdx, where, expr) for every templated string in
+// walkSteps invokes visit(stepPath, where, expr) for every templated string in
 // each step: when:, confirm:, and each with: value. Parallel containers
-// recurse into their child steps.
-func walkSteps(steps []model.WorkflowStep, visit func(stepIdx int, where, expr string)) {
+// recurse into their child steps with a qualified path prefix so callers can
+// distinguish outer steps[0] from steps[1].parallel.steps[0].
+func walkSteps(steps []model.WorkflowStep, prefix string, visit func(stepPath, where, expr string)) {
 	for i, s := range steps {
+		p := fmt.Sprintf("%ssteps[%d]", prefix, i)
 		if s.When != "" {
-			visit(i, "when", s.When)
+			visit(p, "when", s.When)
 		}
 		if s.Confirm != "" {
-			visit(i, "confirm", s.Confirm)
+			visit(p, "confirm", s.Confirm)
 		}
 		for k, val := range s.With {
-			visit(i, "with."+k, val)
+			visit(p, "with."+k, val)
 		}
 		if s.Parallel != nil {
-			walkSteps(s.Parallel.Steps, visit)
+			walkSteps(s.Parallel.Steps, p+".parallel.", visit)
 		}
 	}
 }

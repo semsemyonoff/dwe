@@ -145,6 +145,13 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		}
 	}
 
+	// Validate the workflow selection before touching the filesystem so that a
+	// missing restore: block fails fast without overwriting devbox files.
+	wf, err := SelectWorkflow(p.SnapCfg, "restore", m.Variant)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot %q: %w", p.Name, err)
+	}
+
 	if !p.SkipConfirm {
 		ok, cErr := confirmRestore(p.ConfirmRestore, m, diverged)
 		if cErr != nil {
@@ -162,11 +169,6 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 
 	if err := restoreDevboxFiles(snapDir, p.BaseDir); err != nil {
 		return nil, fmt.Errorf("snapshot %q: restore devbox files: %w", p.Name, err)
-	}
-
-	wf, err := SelectWorkflow(p.SnapCfg, "restore", m.Variant)
-	if err != nil {
-		return nil, fmt.Errorf("snapshot %q: %w", p.Name, err)
 	}
 
 	absSnapDir, absErr := filepath.Abs(snapDir)
