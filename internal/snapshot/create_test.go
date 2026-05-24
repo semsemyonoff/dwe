@@ -348,6 +348,44 @@ func TestCreate_CapturesDevboxFiles(t *testing.T) {
 	}
 }
 
+func TestCreate_CapturesServicesSorted(t *testing.T) {
+	tmp := t.TempDir()
+	reg := newRegistryWith(t, "x", "true")
+	snapCfg := newSnapCfgWithCreate(model.WorkflowStep{Command: "x"})
+
+	cfg := testCfg()
+	cfg.Services = map[string]config.ServiceConfig{
+		"main": {Enabled: true},
+		"cdn":  {Enabled: false},
+		"db":   {Enabled: true},
+	}
+
+	res, err := Create(context.Background(), CreateParams{
+		Cfg: cfg, SnapCfg: snapCfg, Registry: reg, BaseDir: tmp, Name: "svc",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	m, err := LoadManifest(res.ManifestPath)
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	want := []ServiceSnapshot{
+		{Name: "cdn", Enabled: false},
+		{Name: "db", Enabled: true},
+		{Name: "main", Enabled: true},
+	}
+	if len(m.Project.Services) != len(want) {
+		t.Fatalf("services: got %+v want %+v", m.Project.Services, want)
+	}
+	for i, s := range m.Project.Services {
+		if s != want[i] {
+			t.Errorf("services[%d] = %+v want %+v", i, s, want[i])
+		}
+	}
+}
+
 func TestCreate_InvalidNameRejectedBeforeMutation(t *testing.T) {
 	tmp := t.TempDir()
 	_, err := Create(context.Background(), CreateParams{

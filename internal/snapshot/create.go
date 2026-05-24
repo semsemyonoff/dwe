@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"devbox-cli/internal/config"
@@ -199,6 +200,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	m.Project = ProjectInfo{
 		Name:       p.Cfg.Project.Name,
 		ConfigHash: ProjectConfigHash(p.BaseDir),
+		Services:   captureServiceSnapshots(p.Cfg.Services),
 	}
 	m.DevboxVersion = p.DevboxVersion
 	m.Variant = p.Variant
@@ -308,6 +310,20 @@ func copyFileIfExists(src, dst string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// captureServiceSnapshots renders the effective service map into a manifest
+// slice sorted by name for deterministic output. A nil/empty map yields nil.
+func captureServiceSnapshots(services map[string]config.ServiceConfig) []ServiceSnapshot {
+	if len(services) == 0 {
+		return nil
+	}
+	out := make([]ServiceSnapshot, 0, len(services))
+	for name, svc := range services {
+		out = append(out, ServiceSnapshot{Name: name, Enabled: svc.Enabled})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // ProjectConfigHash reads the deploy state file and returns the project-level

@@ -27,6 +27,17 @@ type ArtifactInfo struct {
 	Sha256 string `yaml:"sha256"`
 }
 
+// ServiceSnapshot records one service from the effective service set at
+// snapshot-capture time. Used by restore to detect divergence between the
+// captured project and the current project's services.
+type ServiceSnapshot struct {
+	// Name is the service key from cfg.Services.
+	Name string `yaml:"name"`
+	// Enabled mirrors ServiceConfig.Enabled at capture time (mandatory ||
+	// services.<name>.enabled).
+	Enabled bool `yaml:"enabled"`
+}
+
 // ProjectInfo records the project identity and config hash at capture time.
 // ConfigHash may be empty when no deploy has run yet — restore treats an
 // empty hash as a match against any current hash.
@@ -36,6 +47,10 @@ type ProjectInfo struct {
 	// ConfigHash mirrors deploy/journal ProjectLevelState.ConfigHash; empty
 	// when no deploy has populated state.yml yet.
 	ConfigHash string `yaml:"config_hash"`
+	// Services records the effective service set at capture time, sorted by
+	// Name for deterministic manifest output. Used by restore to detect
+	// service-set divergence between snapshot and current project.
+	Services []ServiceSnapshot `yaml:"services,omitempty"`
 }
 
 // DevboxFiles records which devbox files were captured into <snap>/devbox/.

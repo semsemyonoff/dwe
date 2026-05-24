@@ -3,6 +3,7 @@ package snapshot
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func TestManifestRoundTrip(t *testing.T) {
 	if got.Name != m.Name || got.Description != m.Description {
 		t.Errorf("name/description mismatch: %+v", got)
 	}
-	if got.Project != m.Project {
+	if !reflect.DeepEqual(got.Project, m.Project) {
 		t.Errorf("project mismatch: got %+v want %+v", got.Project, m.Project)
 	}
 	if got.Variant != "db-only" || got.DevboxVersion != "0.42.0" {
@@ -96,6 +97,41 @@ func TestSaveManifest_createsParent(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("stat: %v", err)
+	}
+}
+
+func TestManifestServiceSnapshotRoundTrip(t *testing.T) {
+	cases := []struct {
+		name string
+		svcs []ServiceSnapshot
+	}{
+		{name: "zero", svcs: nil},
+		{
+			name: "mixed-enabled",
+			svcs: []ServiceSnapshot{
+				{Name: "cdn", Enabled: false},
+				{Name: "db", Enabled: true},
+				{Name: "main", Enabled: true},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "manifest.yml")
+			m := NewManifest("snap", func() time.Time { return time.Unix(0, 0).UTC() })
+			m.Project = ProjectInfo{Name: "p", Services: tc.svcs}
+			if err := SaveManifest(path, m); err != nil {
+				t.Fatalf("save: %v", err)
+			}
+			got, err := LoadManifest(path)
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if !reflect.DeepEqual(got.Project.Services, tc.svcs) {
+				t.Fatalf("services: got %+v want %+v", got.Project.Services, tc.svcs)
+			}
+		})
 	}
 }
 
