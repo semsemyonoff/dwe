@@ -120,12 +120,12 @@ The package mixes v1 lipgloss (`internal/ui/`) and v2 lipgloss (`internal/ui/cmd
 
 ### Task 5: Update `docs/reference/config/styles.md`
 
-- [ ] rewrite the colors section: 7 tokens; describe the light/dark hex-pair defaults resolved once at startup via terminal background detection; user overrides apply to both modes; example YAML
-- [ ] add `header.tagline` description; remove `header.color`
-- [ ] remove the help colors section entirely; add a note that Fang help colors are derived
-- [ ] add migration table for old → new tokens (lifted from spec §1.3)
-- [ ] verify the doc builds / renders cleanly in the docs viewer
-- [ ] no tests needed for docs change, but run `make test` and `make lint` before proceeding
+- [x] rewrite the colors section: 7 tokens; describe the light/dark hex-pair defaults resolved once at startup via terminal background detection; user overrides apply to both modes; example YAML
+- [x] add `header.tagline` description; remove `header.color`
+- [x] remove the help colors section entirely; add a note that Fang help colors are derived
+- [x] add migration table for old → new tokens (lifted from spec §1.3)
+- [x] verify the doc builds / renders cleanly in the docs viewer (manual visual check — Markdown is well-formed, no fenced-block or table syntax errors)
+- [x] no tests needed for docs change, but run `make test` and `make lint` before proceeding
 
 ### Task 6: Simplify `internal/render/ascii.go`
 
