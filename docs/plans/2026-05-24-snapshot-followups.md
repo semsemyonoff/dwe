@@ -84,11 +84,11 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 3: Service-divergence comparator
 
-- [ ] add `internal/snapshot/services_diff.go` exposing `DiffServices(manifest []ServiceSnapshot, current map[string]config.ServiceConfig) ServicesDiff` returning typed groups: `OnlyInSnapshot []string`, `OnlyLocal []string`, `EnabledDiff []ServiceEnabledDiff{ Name string; ManifestEnabled, LocalEnabled bool }` — note `current` is the map shape used everywhere else in the codebase (`config.DevboxConfig.Services` at `internal/config/devbox.go:104`)
-- [ ] also expose `FormatServicesDiff(d ServicesDiff) string` (exported, not lowercase) — `internal/command/snapshot.go` (Task 5 inspect) and `internal/validate/snapshot/` (Task 5 validator) both consume it
-- [ ] the comparator is config-blind beyond service `Name` and `Enabled`; it normalizes the map into a sorted slice internally so it is deterministic
-- [ ] add `internal/snapshot/services_diff_test.go` covering: identical lists (empty diff), only-in-snapshot, only-local, enabled flipped, deterministic ordering of all three output slices
-- [ ] run `go test ./internal/snapshot/... && make lint` — must pass before task 4
+- [x] add `internal/snapshot/services_diff.go` exposing `DiffServices(manifest []ServiceSnapshot, current map[string]config.ServiceConfig) ServicesDiff` returning typed groups: `OnlyInSnapshot []string`, `OnlyLocal []string`, `EnabledDiff []ServiceEnabledDiff{ Name string; ManifestEnabled, LocalEnabled bool }` — note `current` is the map shape used everywhere else in the codebase (`config.DevboxConfig.Services` at `internal/config/devbox.go:104`)
+- [x] also expose `FormatServicesDiff(d ServicesDiff) string` (exported, not lowercase) — `internal/command/snapshot.go` (Task 5 inspect) and `internal/validate/snapshot/` (Task 5 validator) both consume it
+- [x] the comparator is config-blind beyond service `Name` and `Enabled`; it normalizes the map into a sorted slice internally so it is deterministic
+- [x] add `internal/snapshot/services_diff_test.go` covering: identical lists (empty diff), only-in-snapshot, only-local, enabled flipped, deterministic ordering of all three output slices
+- [x] run `go test ./internal/snapshot/... && make lint` — must pass before task 4
 
 ### Task 4: Wire divergence check into restore
 
