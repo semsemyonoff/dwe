@@ -123,26 +123,26 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 6: `local_yml.preserve_keys` schema and helper module
 
-- [ ] add `LocalYMLPolicy{ PreserveKeys []string \`yaml:"preserve_keys"\` }` and a `LocalYML LocalYMLPolicy \`yaml:"local_yml"\`` field to `SnapshotConfig`
-- [ ] create `internal/snapshot/devbox_files.go` by **moving** (not duplicating) `captureDevboxFiles` and `restoreDevboxFiles` out of `create.go` / `restore.go` into this new file. **Both signatures change to take `preserveKeys []string`** (the strip/merge helpers need it):
+- [x] add `LocalYMLPolicy{ PreserveKeys []string \`yaml:"preserve_keys"\` }` and a `LocalYML LocalYMLPolicy \`yaml:"local_yml"\`` field to `SnapshotConfig`
+- [x] create `internal/snapshot/devbox_files.go` by **moving** (not duplicating) `captureDevboxFiles` and `restoreDevboxFiles` out of `create.go` / `restore.go` into this new file. **Both signatures change to take `preserveKeys []string`** (the strip/merge helpers need it):
   - `captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (DevboxFiles, error)` — call site `internal/snapshot/create.go:145` updated to pass `p.SnapCfg.LocalYML.PreserveKeys`
   - `restoreDevboxFiles(snapDir, baseDir string, preserveKeys []string) error` — call site `internal/snapshot/restore.go:174` updated to pass `p.SnapCfg.LocalYML.PreserveKeys`
   - keep the `preserveKeys` parameter required and untyped (`[]string`) rather than fishing it out of a cfg pointer inside the helper — the helper stays config-blind and trivially testable
-- [ ] add `stripPreservedKeys(yamlBytes []byte, dotPaths []string) ([]byte, error)`:
+- [x] add `stripPreservedKeys(yamlBytes []byte, dotPaths []string) ([]byte, error)`:
   - **reject input larger than `localYMLMaxBytes` (1 MiB constant) before parsing** — guards against YAML bombs / alias-explosion since snapshot-embedded `local.yml` is untrusted input from the archive; 1 MiB is orders of magnitude above any realistic `local.yml`
   - parse with `yaml.Unmarshal` into a single `*yaml.Node` (document → mapping)
   - for each dot-path, walk the mapping nodes and remove the matching key (key + value pair removed from `Content` slice)
   - marshal back via `yaml.Marshal(node)`
   - typo/missing path is a silent no-op (per design note); only structural errors (non-mapping at an intermediate segment) surface as a wrapped error: `fmt.Errorf("preserve_keys %q: expected mapping at %q, got %s", path, segment, kind)`
-- [ ] add `mergePreservedKeys(snapshotBytes, currentBytes []byte, dotPaths []string) ([]byte, error)`:
+- [x] add `mergePreservedKeys(snapshotBytes, currentBytes []byte, dotPaths []string) ([]byte, error)`:
   - apply the same `localYMLMaxBytes` cap to both inputs
   - parse both into `*yaml.Node`
   - for each dot-path: if the path resolves in `current`, splice the node (value + comments) into the corresponding position in `snapshot`, creating intermediate mappings if missing
   - **type conflict policy**: if the path resolves to incompatible kinds between snapshot and current (e.g., snapshot is scalar at `services.main`, current is mapping at the same path), return a clear error rather than silently overwriting the snapshot's structure — `fmt.Errorf("preserve_keys %q: type conflict (snapshot=%s, current=%s)", path, snapKind, curKind)`
   - marshal the merged snapshot tree
-- [ ] both helpers operate on `*yaml.Node` (not `map[string]any`) to preserve key order and node-attached comments where `yaml.v3` retains them. Indentation/flow-style normalization on marshal is accepted — we are buying order + comments, not byte-exact formatting
-- [ ] table-driven tests for both helpers covering: nested paths, missing paths (no-op), creating missing intermediates on merge, round-trip key-order fidelity for a representative `local.yml` sample
-- [ ] run `go test ./internal/config/... ./internal/snapshot/... && make lint` — must pass before task 7
+- [x] both helpers operate on `*yaml.Node` (not `map[string]any`) to preserve key order and node-attached comments where `yaml.v3` retains them. Indentation/flow-style normalization on marshal is accepted — we are buying order + comments, not byte-exact formatting
+- [x] table-driven tests for both helpers covering: nested paths, missing paths (no-op), creating missing intermediates on merge, round-trip key-order fidelity for a representative `local.yml` sample
+- [x] run `go test ./internal/config/... ./internal/snapshot/... && make lint` — must pass before task 7
 
 ### Task 7: Wire `preserve_keys` into create and restore
 

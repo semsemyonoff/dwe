@@ -219,7 +219,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return nil, fmt.Errorf("snapshot %q: write pre-restore backup: %w", p.Name, err)
 	}
 
-	if err := restoreDevboxFiles(snapDir, p.BaseDir); err != nil {
+	if err := restoreDevboxFiles(snapDir, p.BaseDir, p.SnapCfg.LocalYML.PreserveKeys); err != nil {
 		if p.Stderr != nil {
 			_, _ = fmt.Fprintf(p.Stderr,
 				"hint: pre-restore devbox files backed up under %s\n", backupDir)
@@ -362,39 +362,4 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 		}
 	}
 	return backupDir, nil
-}
-
-// restoreDevboxFiles copies <snapDir>/devbox/local.yml and
-// <snapDir>/devbox/deploy-state.yml over the working-copy paths in baseDir.
-// Each destination write is atomic. When a source file is absent from the
-// snapshot (it did not exist at capture time), the corresponding working-copy
-// file is removed so that the restored state exactly matches the captured
-// state — leaving a stale file would diverge from what was snapshotted.
-func restoreDevboxFiles(snapDir, baseDir string) error {
-	type pair struct{ src, dst string }
-	pairs := []pair{
-		{filepath.Join(snapDir, DevboxSubdir, "local.yml"), filepath.Join(baseDir, "devbox", "local.yml")},
-		{filepath.Join(snapDir, DevboxSubdir, "deploy-state.yml"), filepath.Join(baseDir, journal.DefaultRelPath)},
-	}
-	for _, p := range pairs {
-		data, err := os.ReadFile(p.src)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				// Source absent in snapshot: remove the working-copy file so the
-				// restored state matches what was captured (file did not exist).
-				if rErr := os.Remove(p.dst); rErr != nil && !errors.Is(rErr, os.ErrNotExist) {
-					return fmt.Errorf("remove stale %s: %w", p.dst, rErr)
-				}
-				continue
-			}
-			return fmt.Errorf("read %s: %w", p.src, err)
-		}
-		if err := os.MkdirAll(filepath.Dir(p.dst), 0o755); err != nil {
-			return fmt.Errorf("mkdir %s: %w", filepath.Dir(p.dst), err)
-		}
-		if err := writeFileAtomic(p.dst, data, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", p.dst, err)
-		}
-	}
-	return nil
 }

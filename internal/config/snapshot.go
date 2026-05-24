@@ -84,6 +84,15 @@ type SnapshotWorkflow struct {
 	Variants map[string]SnapshotWorkflow `yaml:"variants"`
 }
 
+// LocalYMLPolicy is the YAML shape under snapshot.yml `local_yml`. PreserveKeys
+// holds dot-paths into devbox/local.yml that should survive a restore — the
+// captured snapshot strips them out at create time and the restore step splices
+// the current working-copy values back in.
+type LocalYMLPolicy struct {
+	// PreserveKeys is the list of dot-paths to preserve across restore.
+	PreserveKeys []string `yaml:"preserve_keys"`
+}
+
 // SnapshotConfig is the parsed shape of devbox/snapshot.yml.
 type SnapshotConfig struct {
 	// Dir is the directory where unpacked snapshots live, relative to baseDir.
@@ -99,6 +108,9 @@ type SnapshotConfig struct {
 	// ServicesMismatch controls restore behavior when the manifest's captured
 	// service list diverges from the current config (default: warn).
 	ServicesMismatch ServicesMismatchPolicy `yaml:"services_mismatch"`
+	// LocalYML controls how devbox/local.yml is handled across snapshot
+	// create/restore (e.g. preserve_keys for machine-specific overrides).
+	LocalYML LocalYMLPolicy `yaml:"local_yml"`
 
 	// Create is the workflow run by `devbox snapshot create`.
 	Create *SnapshotWorkflow `yaml:"create"`

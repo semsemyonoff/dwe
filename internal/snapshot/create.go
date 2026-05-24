@@ -143,7 +143,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		return nil, fmt.Errorf("snapshot: create snapshot dir: %w", err)
 	}
 
-	devboxFiles, err := captureDevboxFiles(p.BaseDir, snapDir)
+	devboxFiles, err := captureDevboxFiles(p.BaseDir, snapDir, p.SnapCfg.LocalYML.PreserveKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -257,59 +257,6 @@ func confirmOverwrite(fn func() (bool, error)) (bool, error) {
 		return false, nil
 	}
 	return fn()
-}
-
-// captureDevboxFiles copies devbox/local.yml and the deploy state file from
-// baseDir into <snapDir>/devbox/. Missing source files are skipped silently
-// — neither file is mandatory at create time.
-func captureDevboxFiles(baseDir, snapDir string) (DevboxFiles, error) {
-	var df DevboxFiles
-	targets := []struct {
-		src    string
-		dstRel string
-		field  *string
-	}{
-		{filepath.Join(baseDir, "devbox", "local.yml"), filepath.Join(DevboxSubdir, "local.yml"), &df.LocalYML},
-		{filepath.Join(baseDir, journal.DefaultRelPath), filepath.Join(DevboxSubdir, "deploy-state.yml"), &df.DeployState},
-	}
-	for _, t := range targets {
-		ok, err := copyFileIfExists(t.src, filepath.Join(snapDir, t.dstRel))
-		if err != nil {
-			return df, fmt.Errorf("snapshot: capture %s: %w", t.src, err)
-		}
-		if ok {
-			*t.field = filepath.ToSlash(t.dstRel)
-		}
-	}
-	return df, nil
-}
-
-// copyFileIfExists copies src to dst when src exists; returns (false, nil)
-// when src is missing.
-func copyFileIfExists(src, dst string) (bool, error) {
-	in, err := os.Open(src)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, err
-	}
-	defer func() { _ = in.Close() }()
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return false, err
-	}
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return false, err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		_ = out.Close()
-		return false, err
-	}
-	if err := out.Close(); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // captureServiceSnapshots renders the effective service map into a manifest
