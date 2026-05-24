@@ -295,5 +295,6 @@ func listenTCP(port int) error {
 		}
 		return nil // cannot probe; assume free
 	}
-	return l.Close()
+	_ = l.Close()
+	return nil
 }

@@ -186,6 +186,9 @@ func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes bool) error {
 	if snapCfg.RollbackTarget == "" {
 		return fmt.Errorf("snapshot rollback: rollback_target is not set in devbox/snapshot.yml")
 	}
+	if err := snapshot.ValidateName(snapCfg.RollbackTarget); err != nil {
+		return fmt.Errorf("snapshot rollback: rollback_target %q in devbox/snapshot.yml: %w", snapCfg.RollbackTarget, err)
+	}
 	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, "rollback", "snapshot:rollback")
 }
 
