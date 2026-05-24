@@ -63,43 +63,6 @@ var (
 	styleText    lipgloss.Style
 )
 
-// Legacy v1 style aliases — Task 3 migrates internal/ui consumers off these
-// and removes the aliases. Each alias is reassigned in rebuildSemanticStyles
-// alongside the canonical 7 tokens.
-var (
-	styleKey          lipgloss.Style
-	styleSectionTitle lipgloss.Style
-	styleSubheader    lipgloss.Style
-	styleInfoText     lipgloss.Style
-	styleValue        lipgloss.Style
-	styleEnabled      lipgloss.Style
-	styleDisabled     lipgloss.Style
-	styleMandatory    lipgloss.Style
-	stylePartial      lipgloss.Style
-	styleRunStopped   lipgloss.Style
-	styleWarn         lipgloss.Style
-	styleCatService   lipgloss.Style
-	styleCatTool      lipgloss.Style
-	styleCatInfra     lipgloss.Style
-	styleTableBorder  lipgloss.Style
-	styleTableHeader  lipgloss.Style
-)
-
-// Legacy palette color aliases — Task 3 migrates cmdbrowser/palette.go off
-// these and removes the aliases.
-var (
-	colorFocusBorder        string
-	colorDescription        string
-	colorTreeCount          string
-	colorTreeArrow          string
-	colorFilterMatch        string
-	colorPaginationActive   string
-	colorPaginationInactive string
-	colorKey                string
-	colorInfo               string
-	colorSuccess            string
-)
-
 // defSep is the delimiter used between a definition label and its value.
 var defSep = "—"
 
@@ -151,37 +114,6 @@ func rebuildSemanticStyles(c config.StylesColors) {
 	styleMuted = foreground(resolvedMuted)
 	styleBorder = foreground(resolvedBorder)
 	styleText = foreground(resolvedText)
-
-	// Legacy aliases — collapse old per-purpose styles onto the 7 semantic
-	// tokens. Task 3 removes these along with their consumers.
-	bold := styleAccent.Bold(true)
-	styleKey = bold
-	styleSectionTitle = bold
-	styleSubheader = bold
-	styleInfoText = styleAccent
-	styleValue = styleText
-	styleEnabled = styleSuccess
-	styleDisabled = styleMuted
-	styleMandatory = bold
-	stylePartial = styleWarning
-	styleRunStopped = styleDanger
-	styleWarn = styleWarning
-	styleCatService = styleAccent
-	styleCatTool = styleText
-	styleCatInfra = styleMuted
-	styleTableBorder = styleBorder
-	styleTableHeader = bold
-
-	colorFocusBorder = resolvedAccent
-	colorDescription = resolvedMuted
-	colorTreeCount = resolvedMuted
-	colorTreeArrow = resolvedAccent
-	colorFilterMatch = resolvedAccent
-	colorPaginationActive = resolvedAccent
-	colorPaginationInactive = resolvedMuted
-	colorKey = resolvedAccent
-	colorInfo = resolvedAccent
-	colorSuccess = resolvedSuccess
 }
 
 // ApplyStyles rebuilds package-level style vars from the provided StylesConfig.
@@ -423,19 +355,6 @@ func ColorBorder() string { return resolvedBorder }
 // when the user has not overridden the default, in which case callers must
 // treat it as lipgloss.NoColor{} (terminal default foreground).
 func ColorText() string { return resolvedText }
-
-// Legacy accessors — Task 3 migrates callers (cmdbrowser/palette.go,
-// cmd/devbox/main.go loadHelpColorScheme) onto the 7 semantic accessors and
-// removes these wrappers.
-func ColorFocusBorder() string        { return resolvedAccent }
-func ColorDescription() string        { return resolvedMuted }
-func ColorTreeCount() string          { return resolvedMuted }
-func ColorTreeArrow() string          { return resolvedAccent }
-func ColorFilterMatch() string        { return resolvedAccent }
-func ColorPaginationActive() string   { return resolvedAccent }
-func ColorPaginationInactive() string { return resolvedMuted }
-func ColorKey() string                { return resolvedAccent }
-func ColorInfo() string               { return resolvedAccent }
 
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.

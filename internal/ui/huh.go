@@ -86,7 +86,7 @@ func RunWithPromptHooks(fn func() error) error {
 var huhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 	s := huh.ThemeBase(isDark)
 	applyFormGlyphs(s)
-	applyMultiSelectStateStyles(s, colorSuccess, colorDescription)
+	applyMultiSelectStateStyles(s, resolvedSuccess, resolvedMuted)
 	return s
 })
 

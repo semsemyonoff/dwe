@@ -96,6 +96,9 @@ func loadHelpColorScheme(configPath string, explicit bool) fang.ColorSchemeFunc 
 		return nil
 	}
 	stylesPath := filepath.Join(resolved.Root, "devbox", "styles.yml")
+	if _, statErr := os.Stat(stylesPath); statErr != nil {
+		return nil
+	}
 	stylesCfg, err := config.LoadStylesConfig(stylesPath)
 	if err != nil || stylesCfg == nil {
 		return nil

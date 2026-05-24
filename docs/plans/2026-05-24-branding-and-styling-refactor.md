@@ -95,13 +95,13 @@ The package mixes v1 lipgloss (`internal/ui/`) and v2 lipgloss (`internal/ui/cmd
 
 ⚠️ Deviation: the old style vars (`styleKey`, `styleSectionTitle`, …) and the old `Color*()` accessors are kept as **thin aliases** that point to the new 7 semantic tokens (e.g. `styleKey = styleAccent.Bold(true)`, `ColorFocusBorder() => resolvedAccent`). The aliases live in `internal/ui/styles.go` alongside the canonical surface and exist solely to keep the wider tree compiling between Task 2 and Task 3. Task 3 migrates all consumers off the aliases and deletes them in the same PR — the externally-visible end state still matches the spec. Also: `cmd/devbox/main.go` loadHelpColorScheme and `internal/command/{root,info}.go` ASCII calls got minimal Task 2 patches (to compile after Task 1's field removals); Task 3 / Task 6 / Task 7 will properly rework them.
 
-- [ ] update `internal/ui/{table.go,diagnostics_table.go,topology.go,gitworkspace.go,huh.go,summary.go,info.go,confirm.go,selector.go,multiselect.go,paramform.go,interactive.go}` to use new style vars / accessors per spec §1.3 mapping table. Specifically: existing `styleValue` usages (e.g. definition values in [info.go:285](../../internal/ui/info.go#L285)) map to the new `styleText` — keep them rendering as default/configured body text, do not collapse into `styleMuted`
-- [ ] update `internal/ui/cmdbrowser/palette.go` and `internal/ui/cmdbrowser/styles.go` to use new accessors (focus border / table header / filter match / pagination active → `ColorAccent`; pagination inactive / description / tree glyphs → `ColorMuted`; etc.)
-- [ ] update `internal/stack/status.go` to use new style names
-- [ ] update affected files in `internal/command/` (any direct style references — `service.go`, `validate.go`, `info.go`, `root.go`, etc. — search `gocritic` style for callers)
-- [ ] update `cmd/devbox/main.go:109-134` `loadHelpColorScheme` to construct Fang `ColorScheme` from `ColorAccent` (title/command/flag/program) + `ColorMuted` (description/argument), no longer reading from `StylesHelpColors`
-- [ ] update / extend existing `internal/ui/styles_test.go` and consumer tests where coverage exists; add minimal smoke tests where missing
-- [ ] run `make test` and `make lint` — must be clean before next task
+- [x] update `internal/ui/{table.go,diagnostics_table.go,topology.go,gitworkspace.go,huh.go,summary.go,info.go,confirm.go,selector.go,multiselect.go,paramform.go,interactive.go}` to use new style vars / accessors per spec §1.3 mapping table. Specifically: existing `styleValue` usages (e.g. definition values in [info.go:285](../../internal/ui/info.go#L285)) map to the new `styleText` — keep them rendering as default/configured body text, do not collapse into `styleMuted`
+- [x] update `internal/ui/cmdbrowser/palette.go` and `internal/ui/cmdbrowser/styles.go` to use new accessors (focus border / table header / filter match / pagination active → `ColorAccent`; pagination inactive / description / tree glyphs → `ColorMuted`; etc.)
+- [x] update `internal/stack/status.go` to use new style names (no direct style refs there — verified)
+- [x] update affected files in `internal/command/` (no direct style refs — verified)
+- [x] update `cmd/devbox/main.go:109-134` `loadHelpColorScheme` to construct Fang `ColorScheme` from `ColorAccent` (title/command/flag/program) + `ColorMuted` (description/argument), no longer reading from `StylesHelpColors` (already done in Task 2; added os.Stat early-exit so no-styles.yml returns nil per existing test)
+- [x] update / extend existing `internal/ui/styles_test.go` and consumer tests where coverage exists; add minimal smoke tests where missing (rewrote cmdbrowser/palette_test.go and styles_apply_test.go for new schema)
+- [x] run `make test` and `make lint` — must be clean before next task
 
 ### Task 4: Update `config.styles` validator for the new surface
 

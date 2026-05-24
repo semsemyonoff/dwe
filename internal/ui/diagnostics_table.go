@@ -62,11 +62,11 @@ func RenderDiagnosticsTable(rows []DiagnosticRow) string {
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleTableBorder).
+		BorderStyle(styleBorder).
 		Headers("STATUS", "DOMAIN", "TARGET", "FILE", "MESSAGE", "HINT").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleTableHeader
+				return styleAccent.Bold(true)
 			}
 			if row < 0 || row >= len(cellStyles) {
 				return lipgloss.NewStyle()
@@ -104,13 +104,13 @@ func severityGlyph(s validate.Severity) string {
 func severityStyle(s validate.Severity) lipgloss.Style {
 	switch s {
 	case validate.SeverityOK:
-		return styleEnabled // green
+		return styleSuccess // green
 	case validate.SeverityInfo:
 		return styleMuted // dim gray
 	case validate.SeverityWarning:
-		return styleWarn // yellow
+		return styleWarning // yellow
 	case validate.SeverityError:
-		return styleRunStopped // red
+		return styleDanger // red
 	default:
 		return lipgloss.NewStyle()
 	}

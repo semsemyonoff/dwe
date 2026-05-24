@@ -373,7 +373,7 @@ func (m *Model) View() tea.View {
 	leftStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bh)
 	rightStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bh)
 
-	focusBorder := lipgloss.Color(ui.ColorFocusBorder())
+	focusBorder := lipgloss.Color(ui.ColorAccent())
 	switch m.focus {
 	case focusLeft:
 		leftStyle = leftStyle.BorderForeground(focusBorder)
@@ -413,7 +413,7 @@ func (m *Model) viewSinglePanel() tea.View {
 	border := lipgloss.NormalBorder()
 	style := lipgloss.NewStyle().Border(border).Width(singlePanelWidth(m.width)).Height(bh)
 	if m.focus == focusFilter || m.focus == focusInspect || m.focus == focusRight {
-		style = style.BorderForeground(lipgloss.Color(ui.ColorFocusBorder()))
+		style = style.BorderForeground(lipgloss.Color(ui.ColorAccent()))
 	}
 
 	var body string

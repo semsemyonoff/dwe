@@ -42,20 +42,20 @@ func RenderGitWorkspace(rows []statusview.GitWorkspaceRow) string {
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleTableBorder).
+		BorderStyle(styleBorder).
 		Headers("SERVICE", "DIR", "BRANCH", "SHA", "DIRTY", "AHEAD/BEHIND").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleTableHeader
+				return styleAccent.Bold(true)
 			}
 			if row < 0 || row >= len(dirtyStyles) {
 				return lipgloss.NewStyle()
 			}
 			if col == 4 { // DIRTY column
 				if dirtyStyles[row] {
-					return stylePartial
+					return styleWarning
 				}
-				return styleEnabled
+				return styleSuccess
 			}
 			return lipgloss.NewStyle()
 		})

@@ -52,7 +52,7 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 //   - hideOnEmpty: section.HideOnEmpty for sections, item.SubgroupHideOnEmpty() for subgroups
 //   - title: section.Title for sections, item.Title for subgroups (NOT item.Text)
 //     Subgroup title should be pre-rendered via tpl.Render before passing in.
-//   - asSection: true → renderSectionTitle(title); false → styleSubheader.Render(title)
+//   - asSection: true → renderSectionTitle(title); false → styleAccent.Bold(true).Render(title)
 //   - sectionID: section ID for error messages (e.g., "tools"); passed through recursion
 //   - itemPath: dot-separated path for nested items (e.g., "" → "items[0]" → "items[0].items[1]")
 //
@@ -145,7 +145,7 @@ func renderBlock(
 		if asSection {
 			head = renderSectionTitle(title)
 		} else {
-			head = styleSubheader.Render(title)
+			head = styleAccent.Bold(true).Render(title)
 		}
 		outSB.WriteString(head)
 		outSB.WriteByte('\n')
@@ -180,7 +180,7 @@ func RenderSectionTitle(text string) string {
 // RenderSubheader renders a bold yellow in-section subheader.
 // Used for grouping sections within a larger block (e.g. Steps, Params).
 func RenderSubheader(text string) string {
-	return styleSubheader.Render(text)
+	return styleAccent.Bold(true).Render(text)
 }
 
 // RenderDefinition renders a styled "key — value" definition line.
@@ -198,7 +198,7 @@ func renderSectionTitle(text string) string {
 	}
 
 	// Build: ── Title ──────...
-	label := styleSectionTitle.Render(" " + text + " ")
+	label := styleAccent.Bold(true).Render(" " + text + " ")
 	// Strip ANSI for width calculation.
 	labelVisible := " " + text + " "
 	labelWidth := utf8.RuneCountInString(labelVisible)
@@ -230,7 +230,7 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 		if err != nil {
 			return "", err
 		}
-		return styleWarn.Render(text), nil
+		return styleWarning.Render(text), nil
 
 	case "info":
 		text, err := tpl.Render(item.Text, cfg)
@@ -238,7 +238,7 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 			return "", err
 		}
 		prefix := strings.Repeat(" ", item.Indent.Value())
-		return styleInfoText.Render(prefix + text), nil
+		return styleAccent.Render(prefix + text), nil
 
 	case "separator":
 		return "", nil
@@ -278,15 +278,15 @@ func renderDefinition(name, value string, indent int, icon string) string {
 	var sb strings.Builder
 	sb.WriteString(prefix)
 	sb.WriteString(iconPrefix)
-	sb.WriteString(styleKey.Render(name))
+	sb.WriteString(styleAccent.Bold(true).Render(name))
 	sb.WriteString(" ")
 	sb.WriteString(styleMuted.Render(sep))
 	sb.WriteString(" ")
-	sb.WriteString(styleValue.Render(lines[0]))
+	sb.WriteString(styleText.Render(lines[0]))
 	for _, l := range lines[1:] {
 		sb.WriteByte('\n')
 		sb.WriteString(contPrefix)
-		sb.WriteString(styleValue.Render(l))
+		sb.WriteString(styleText.Render(l))
 	}
 
 	return sb.String()

@@ -10,19 +10,19 @@ import (
 )
 
 // RenderTable builds and returns a Lipgloss table string using the shared
-// styleTableBorder and styleTableHeader style vars. Headers and rows are
-// rendered with the package-level table styles (configurable via ApplyStyles).
+// border and accent style vars. Headers and rows are rendered with the
+// package-level table styles (configurable via ApplyStyles).
 //
 // headers contains the column names; rows contains the data rows, each a slice
 // of strings with the same length as headers.
 func RenderTable(headers []string, rows [][]string) string {
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleTableBorder).
+		BorderStyle(styleBorder).
 		Headers(headers...).
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleTableHeader
+				return styleAccent.Bold(true)
 			}
 			return lipgloss.NewStyle()
 		})
@@ -133,28 +133,28 @@ func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol 
 		case r.Mandatory:
 			stateStr = "mandatory"
 			cs.base = lipgloss.NewStyle()
-			cs.state = styleMandatory
+			cs.state = styleAccent.Bold(true)
 		case r.Enabled:
 			stateStr = "enabled"
 			cs.base = lipgloss.NewStyle()
 			cs.state = lipgloss.NewStyle()
 		default:
 			stateStr = "disabled"
-			cs.base = styleDisabled
-			cs.state = styleDisabled
+			cs.base = styleMuted
+			cs.state = styleMuted
 		}
 
 		if r.Mandatory || r.Enabled {
 			if r.Running {
 				runStr = "running"
-				cs.run = styleEnabled
+				cs.run = styleSuccess
 			} else {
 				runStr = "stopped"
-				cs.run = styleRunStopped
+				cs.run = styleDanger
 			}
 		} else {
 			runStr = "—"
-			cs.run = styleDisabled
+			cs.run = styleMuted
 		}
 
 		hostsStr := formatHostsCell(r.Hosts)
@@ -188,11 +188,11 @@ func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol 
 	}
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleTableBorder).
+		BorderStyle(styleBorder).
 		Headers(headers...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleTableHeader
+				return styleAccent.Bold(true)
 			}
 			if row < 0 || row >= len(cellStyles) {
 				return lipgloss.NewStyle()
@@ -248,11 +248,11 @@ func RenderDaemonTable(rows []DaemonTableRow) string {
 	}
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleTableBorder).
+		BorderStyle(styleBorder).
 		Headers("ID", "PARAMS", "CONTAINER", "UPTIME").
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleTableHeader
+				return styleAccent.Bold(true)
 			}
 			return lipgloss.NewStyle()
 		})
@@ -278,11 +278,11 @@ type DeployStatusRow struct {
 func statusStyleForDelta(delta string) lipgloss.Style {
 	switch delta {
 	case "ok":
-		return styleEnabled
+		return styleSuccess
 	case "changed":
-		return stylePartial
+		return styleWarning
 	case "missing":
-		return styleWarn
+		return styleWarning
 	default:
 		return lipgloss.NewStyle()
 	}
@@ -292,11 +292,11 @@ func statusStyleForDelta(delta string) lipgloss.Style {
 func statusStyleForStatus(status string) lipgloss.Style {
 	switch status {
 	case "deployed":
-		return styleEnabled
+		return styleSuccess
 	case "partial", "in_progress":
-		return stylePartial
+		return styleWarning
 	case "failed":
-		return styleRunStopped
+		return styleDanger
 	case "not_deployed", "skipped":
 		return styleMuted
 	default:
@@ -334,11 +334,11 @@ func RenderDeployStatus(rows []DeployStatusRow) string {
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleTableBorder).
+		BorderStyle(styleBorder).
 		Headers("SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleTableHeader
+				return styleAccent.Bold(true)
 			}
 			if row < 0 || row >= len(statusStyles) {
 				return lipgloss.NewStyle()

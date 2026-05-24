@@ -115,7 +115,7 @@ func RenderTopology(deps map[string][]string, status map[string]NodeStatus, cate
 		sort.Strings(roots)
 	}
 
-	root := tree.Root(styleSectionTitle.Render("⁜ Devbox"))
+	root := tree.Root(styleAccent.Bold(true).Render("⁜ Devbox"))
 	for _, name := range roots {
 		root.Child(buildTopoNode(name, deps, status, categories, nil))
 	}
@@ -150,11 +150,11 @@ func buildTopoNode(name string, deps map[string][]string, status map[string]Node
 func categoryStyle(cat NodeCategory) lipgloss.Style {
 	switch cat {
 	case CatService:
-		return styleCatService
+		return styleAccent
 	case CatTool:
-		return styleCatTool
+		return styleText
 	default:
-		return styleCatInfra
+		return styleMuted
 	}
 }
 
@@ -183,9 +183,9 @@ func topoNodeLabel(name string, status map[string]NodeStatus, categories map[str
 	// Check if the node is disabled — render everything in muted gray.
 	st, hasStatus := status[name]
 	if hasStatus && st == NodeDisabled {
-		return styleDisabled.Render(name) +
-			" " + styleDisabled.Render("["+categoryLabel(cat)+"]") +
-			" " + styleDisabled.Render("(disabled)")
+		return styleMuted.Render(name) +
+			" " + styleMuted.Render("["+categoryLabel(cat)+"]") +
+			" " + styleMuted.Render("(disabled)")
 	}
 
 	// Normal node: name in default color, category tag in its own color.
@@ -200,10 +200,10 @@ func topoNodeLabel(name string, status map[string]NodeStatus, categories map[str
 	switch st {
 	case NodeRunning:
 		label = "running"
-		style = styleEnabled
+		style = styleSuccess
 	case NodeStopped:
 		label = "stopped"
-		style = stylePartial
+		style = styleWarning
 	default:
 		return sb
 	}

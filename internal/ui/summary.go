@@ -19,7 +19,7 @@ func RenderSummary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySum
 	var parts []string
 
 	name := cfg.Project.FullName()
-	parts = append(parts, styleKey.Render("project")+" "+defSep+" "+name)
+	parts = append(parts, styleAccent.Bold(true).Render("project")+" "+defSep+" "+name)
 
 	if cfg.State != "" {
 		parts = append(parts, styleMuted.Render("state")+" "+defSep+" "+cfg.State)
