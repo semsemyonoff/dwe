@@ -112,14 +112,25 @@ func TestValidateServiceToggle_MandatoryService(t *testing.T) {
 	}
 }
 
-func TestValidateServiceToggle_InfraService(t *testing.T) {
+func TestValidateServiceToggle_MandatoryInfraService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"db": {Type: config.ServiceTypeInfra},
+			"db": {Type: config.ServiceTypeInfra, Mandatory: true},
 		},
 	}
 	if err := ValidateServiceToggle(cfg, "db"); err == nil {
-		t.Error("expected error for infra service, got nil")
+		t.Error("expected error for mandatory infra service, got nil")
+	}
+}
+
+func TestValidateServiceToggle_OptionalInfraService(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"varnish": {Type: config.ServiceTypeInfra, Mandatory: false},
+		},
+	}
+	if err := ValidateServiceToggle(cfg, "varnish"); err != nil {
+		t.Errorf("unexpected error for optional infra service: %v", err)
 	}
 }
 

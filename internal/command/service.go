@@ -23,11 +23,12 @@ var ErrInteractiveRequired = errors.New("interactive terminal required")
 func newServiceCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
-		Short: "Toggle app/tool services (interactive) or enable/disable individually",
-		Long: `Open an interactive multi-select form to enable or disable app/tool services.
-Infra services are config-managed and are intentionally not shown here.
+		Short: "Toggle optional services (interactive) or enable/disable individually",
+		Long: `Open an interactive multi-select form to enable or disable optional services.
+Mandatory services (including mandatory infra) are always active and shown
+pre-checked / locked. Optional infra services (mandatory: false) appear
+alongside apps and tools.
 
-Mandatory services are always active and shown pre-checked / locked.
 On submit, changes are written to devbox/local.yml and .env is regenerated.
 
 For a read-only view, run 'devbox status' or one of 'devbox status apps / tools / infra'.`,
@@ -245,9 +246,6 @@ disabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
-				if svc, ok := cfg.Services[name]; ok && !isServiceManageable(svc) {
-					return fmt.Errorf("cannot enable infra service %q; infra services are managed by config, not devbox services", name)
-				}
 				// Tightened semantics: mandatory enable is a no-op + warning.
 				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: service %q is already mandatory; nothing to do\n", name)
@@ -293,9 +291,6 @@ enabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
-				if svc, ok := cfg.Services[name]; ok && !isServiceManageable(svc) {
-					return fmt.Errorf("cannot disable infra service %q; infra services are managed by config, not devbox services", name)
-				}
 				// Tightened semantics: cannot disable mandatory.
 				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
 					return fmt.Errorf("cannot disable mandatory service %q", name)

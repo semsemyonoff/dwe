@@ -73,14 +73,15 @@ func TestBuildServiceRows_sortedByTypeThenName(t *testing.T) {
 		"main":    {Type: "app"},
 		"mailpit": {Type: "tool"},
 		"adminer": {Type: "tool"},
-		"db":      {Type: "infra"},
+		"varnish": {Type: "infra"},
+		"db":      {Type: "infra", Mandatory: true},
 	}, map[string]testTool{}, nil, nil)
 
 	rows := buildServiceRows(cfg)
-	if len(rows) != 5 {
-		t.Fatalf("expected 5 rows, got %d", len(rows))
+	if len(rows) != 6 {
+		t.Fatalf("expected 6 rows, got %d", len(rows))
 	}
-	want := []string{"api", "main", "adminer", "mailpit", "worker"}
+	want := []string{"api", "main", "adminer", "mailpit", "varnish", "worker"}
 	for i, w := range want {
 		if rows[i].Name != w {
 			t.Errorf("rows[%d].Name = %q, want %q", i, rows[i].Name, w)

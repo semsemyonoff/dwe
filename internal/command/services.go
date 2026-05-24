@@ -37,7 +37,7 @@ func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 }
 
 func isServiceManageable(svc config.ServiceConfig) bool {
-	return !svc.IsInfra()
+	return !svc.IsInfra() || !svc.Mandatory
 }
 
 // sortedServiceNames returns services ordered by type first, then by name.

@@ -47,6 +47,8 @@ Locked rules:
 - `ports:` is always `map[string]int` and `hosts:` is always `map[string]string`. There is no `port:` / `host:` scalar shorthand. A single-port entry writes `ports: { http: 8025 }`.
 - Type semantics also filter `devbox deploy` enumeration to `app` only and partition `docker compose` file emission to `tool → infra → app` order.
 
+`type: infra` services may be optional (`mandatory: false`) — they take a `compose:` overlay and are toggleable via `devbox services enable|disable <name>` like apps and tools. Mandatory infra (`mandatory: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
+
 ## Per-type field allowlist
 
 | Field             | `app` | `tool` | `infra` |
@@ -135,9 +137,18 @@ services:
   db:
     type: infra
     container: db
-    mandatory: true
+    mandatory: true                     # always-on backing service
     ports:
       mysql: 13306
+
+  # type: infra (optional) — toggleable via `devbox services enable varnish`
+  varnish:
+    type: infra
+    container: varnish
+    compose:
+      - compose/services/varnish/overlay.yml
+    ports:
+      http: 6081
 
   # type: tool — ephemeral utility container, never a depends_on target
   adminer:

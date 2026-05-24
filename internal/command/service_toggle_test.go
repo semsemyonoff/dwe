@@ -244,7 +244,8 @@ func TestFormatServiceToggleLabel_MandatoryLooksActive(t *testing.T) {
 }
 
 // TestServicesToggle_MixedTypes verifies the unified toggle iterates manageable
-// services (app + tool) and omits infra because infra is config-managed.
+// services (app + tool + optional infra) and omits mandatory infra because
+// mandatory services are always on.
 func TestServicesToggle_MixedTypes(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
@@ -266,6 +267,7 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
   db:
     type: infra
     container: db
+    mandatory: true
 `
 	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
@@ -332,7 +334,8 @@ func TestPickServiceToEnable_TypeSortedAndDecorated(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
 		"adminer": {Type: config.ServiceTypeTool, Container: "adminer", Enabled: false},
 		"api":     {Type: config.ServiceTypeApp, Container: "app-api", Enabled: false},
-		"db":      {Type: config.ServiceTypeInfra, Container: "db", Enabled: false},
+		"varnish": {Type: config.ServiceTypeInfra, Container: "varnish", Enabled: false},
+		"db":      {Type: config.ServiceTypeInfra, Container: "db", Mandatory: true, Enabled: false},
 	}, map[string]testTool{}, nil, nil)
 
 	var labels []string
@@ -352,15 +355,17 @@ func TestPickServiceToEnable_TypeSortedAndDecorated(t *testing.T) {
 	if name != "api" {
 		t.Errorf("expected first type-sorted candidate api, got %q", name)
 	}
-	if !slices.Equal(labels, []string{"api", "adminer"}) {
-		t.Errorf("selector labels = %v, want [api adminer]", labels)
+	if !slices.Equal(labels, []string{"api", "adminer", "varnish"}) {
+		t.Errorf("selector labels = %v, want [api adminer varnish]", labels)
 	}
-	if !strings.Contains(descriptions[0], "[app]") || !strings.Contains(descriptions[1], "[tool]") {
+	if !strings.Contains(descriptions[0], "[app]") ||
+		!strings.Contains(descriptions[1], "[tool]") ||
+		!strings.Contains(descriptions[2], "[infra]") {
 		t.Errorf("selector descriptions should include type badges, got %v", descriptions)
 	}
 }
 
-func TestServiceEnableCmd_InfraError(t *testing.T) {
+func TestServiceEnableCmd_MandatoryInfraWarn(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -372,6 +377,7 @@ func TestServiceEnableCmd_InfraError(t *testing.T) {
   db:
     type: infra
     container: db
+    mandatory: true
 `
 	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
 		t.Fatal(err)
@@ -379,12 +385,55 @@ func TestServiceEnableCmd_InfraError(t *testing.T) {
 
 	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newServiceEnableCmd(flags)
-	err := cmd.RunE(cmd, []string{"db"})
-	if err == nil {
-		t.Fatal("expected error enabling infra service, got nil")
+	var stderr strings.Builder
+	cmd.SetErr(&stderr)
+	if err := cmd.RunE(cmd, []string{"db"}); err != nil {
+		t.Fatalf("enable mandatory infra should be no-op + warning, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "infra") {
-		t.Errorf("error should mention infra, got %v", err)
+	if !strings.Contains(stderr.String(), "already mandatory") {
+		t.Errorf("expected 'already mandatory' warning, got: %q", stderr.String())
+	}
+}
+
+func TestServiceEnableCmd_OptionalInfraEnables(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	servicesYML := `services:
+  varnish:
+    type: infra
+    container: varnish
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	cmd := newServiceEnableCmd(flags)
+	if err := cmd.RunE(cmd, []string{"varnish"}); err != nil {
+		t.Fatalf("enabling optional infra service should succeed, got: %v", err)
+	}
+
+	localPath := filepath.Join(dir, "devbox", "local.yml")
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("local.yml not written: %v", err)
+	}
+	var local map[string]any
+	if err := yaml.Unmarshal(data, &local); err != nil {
+		t.Fatalf("unmarshal local.yml: %v", err)
+	}
+	svcMap, _ := local["services"].(map[string]any)
+	if svcMap == nil {
+		t.Fatal("local.yml missing services key")
+	}
+	varnishEntry, _ := svcMap["varnish"].(map[string]any)
+	if varnishEntry == nil || varnishEntry["enabled"] != true {
+		t.Errorf("varnish should be enabled=true, got %v", varnishEntry)
 	}
 }
 
