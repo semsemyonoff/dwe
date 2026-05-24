@@ -570,7 +570,9 @@ func Unpack(tarPath, snapshotsRoot, targetName string, opts UnpackOptions) (*Unp
 		if err := SaveManifest(filepath.Join(finalDir, ManifestFileName), m); err != nil {
 			_ = os.RemoveAll(finalDir)
 			if backupDir != "" {
-				_ = os.Rename(backupDir, finalDir)
+				if renameErr := os.Rename(backupDir, finalDir); renameErr != nil {
+					return nil, fmt.Errorf("unpack: normalize manifest name: %w (previous snapshot preserved at %s — manual rename required)", err, backupDir)
+				}
 			}
 			return nil, fmt.Errorf("unpack: normalize manifest name: %w", err)
 		}

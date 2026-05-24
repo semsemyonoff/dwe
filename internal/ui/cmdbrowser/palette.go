@@ -35,7 +35,7 @@ func paletteTreeCount() lipgloss.Style {
 // paletteTreeArrow returns the v2 lipgloss style used for tree disclosure
 // glyphs (▸/▾).
 func paletteTreeArrow() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorAccent()))
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorMuted()))
 }
 
 // paletteKey returns the v2 lipgloss style used for high-prominence labels

@@ -30,7 +30,7 @@ func TestPaletteConstructors_PickUpAppliedColors(t *testing.T) {
 		{"FocusBorder/Accent", paletteFocusBorder(), lipgloss.Color("#AABBCC")},
 		{"Description/Muted", paletteDescription(), lipgloss.Color("#445566")},
 		{"TreeCount/Muted", paletteTreeCount(), lipgloss.Color("#445566")},
-		{"TreeArrow/Accent", paletteTreeArrow(), lipgloss.Color("#AABBCC")},
+		{"TreeArrow/Muted", paletteTreeArrow(), lipgloss.Color("#445566")},
 		{"FilterMatch/Accent", paletteFilterMatch(), lipgloss.Color("#AABBCC")},
 		{"PaginationActive/Accent", palettePaginationActive(), lipgloss.Color("#AABBCC")},
 		{"PaginationInactive/Muted", palettePaginationInactive(), lipgloss.Color("#445566")},

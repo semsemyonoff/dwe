@@ -481,9 +481,8 @@ func (v *stylesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	stylesPath := filepath.Join(ctx.ProjectRoot, "devbox", "styles.yml")
 
-	stylesCfg, err := config.LoadStylesConfig(stylesPath)
-	if err != nil {
-		if errors.Is(err, errNotExist) {
+	if _, statErr := os.Stat(stylesPath); statErr != nil {
+		if errors.Is(statErr, os.ErrNotExist) {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityInfo,
 				Domain:   "config",
@@ -497,9 +496,21 @@ func (v *stylesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.styles",
 				File:     relPath(ctx.ProjectRoot, stylesPath),
-				Message:  err.Error(),
+				Message:  statErr.Error(),
 			})
 		}
+		return diags
+	}
+
+	stylesCfg, err := config.LoadStylesConfig(stylesPath)
+	if err != nil {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "config",
+			Target:   "config.styles",
+			File:     relPath(ctx.ProjectRoot, stylesPath),
+			Message:  err.Error(),
+		})
 		return diags
 	}
 

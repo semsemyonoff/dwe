@@ -268,8 +268,11 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		// Restore the previous snapshot if we backed it up: remove the failed
 		// attempt and rename the backup back so the user retains a working state.
 		if backupDir != "" {
-			_ = os.RemoveAll(snapDir)
-			if renameErr := os.Rename(backupDir, snapDir); renameErr != nil {
+			if rmErr := os.RemoveAll(snapDir); rmErr != nil {
+				if p.Stderr != nil {
+					_, _ = fmt.Fprintf(p.Stderr, "warning: could not remove failed snapshot dir %s: %v; backup preserved at %s\n", snapDir, rmErr, backupDir)
+				}
+			} else if renameErr := os.Rename(backupDir, snapDir); renameErr != nil {
 				if p.Stderr != nil {
 					_, _ = fmt.Fprintf(p.Stderr, "warning: could not restore previous snapshot backup %s: %v\n", backupDir, renameErr)
 				}
