@@ -245,15 +245,15 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 11: Documentation for items 1, 2, and 3
 
-- [ ] `docs/reference/config/snapshot.md`:
+- [x] `docs/reference/config/snapshot.md`:
   - add a `services_mismatch` section with the three policy values, what each diff group means, and the recommended default
   - add a `local_yml.preserve_keys` section with the dot-path syntax, a worked example (ports), and the four-row edge-case table from task 7
   - rewrite the `pack` and `unpack` sections: pack produces only `<name>.tar.gz`; unpack verifies against `manifest.yml` by default with warn+confirm semantics; document `--no-verify` and `-y` flags
   - remove every mention of `.sha256` sidecar from this file
-- [ ] `docs/reference/config/state.md`: note that `deploy-state.yml` is overwritten on restore (orphan entries are safe — deploy ignores them), so no merge is performed for it
-- [ ] `docs/internals/packages.md`: update the `internal/snapshot/` entry to mention the new `devbox_files.go` and `services_diff.go` files, the staging-rename + backup-rollback extract pattern in `archive.go`, and the manifest-driven artifact verification with path-safety gate
-- [ ] no test step — docs-only task
-- [ ] run `make lint` — must pass before task 12
+- [x] `docs/reference/config/state.md`: note that `deploy-state.yml` is overwritten on restore (orphan entries are safe — deploy ignores them), so no merge is performed for it
+- [x] `docs/internals/packages.md`: update the `internal/snapshot/` entry to mention the new `devbox_files.go` and `services_diff.go` files, the staging-rename + backup-rollback extract pattern in `archive.go`, and the manifest-driven artifact verification with path-safety gate
+- [x] no test step — docs-only task
+- [x] run `make lint` — must pass before task 12
 
 ### Task 12: Snapshot CLI live view — design and reusable observer
 

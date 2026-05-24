@@ -52,6 +52,8 @@ This mechanism ensures that:
 
 `.devbox/deploy/state.yml` — automatically created in the project root's `.devbox/deploy/` directory. Not checked into version control (add `.devbox/` to `.gitignore`).
 
+> **Interaction with `snapshot restore`** — `deploy-state.yml` is always **overwritten** from the snapshot on restore. No merge is performed (unlike `devbox/local.yml`, which honours [`local_yml.preserve_keys`](snapshot.md#local_ymlpreserve_keys)). Orphan entries for services that no longer exist locally are safe — the deploy pipeline ignores them on the next run. If you need to keep machine-specific deploy state across snapshots, use `local_yml.preserve_keys` for the values that drive that state rather than trying to preserve the journal itself.
+
 ## When to use
 
 You do not write this file manually. It is created and maintained by `devbox deploy run`. Inspect it with:

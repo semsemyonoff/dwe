@@ -10,7 +10,10 @@ Declarative snapshot workflows: capture the state of a devbox project (databases
 - [Top-level fields](#top-level-fields)
 - [Workflow blocks: `create` / `restore` / `remove`](#workflow-blocks-create--restore--remove)
 - [Variants](#variants)
+- [`services_mismatch`](#services_mismatch)
+- [`local_yml.preserve_keys`](#local_ymlpreserve_keys)
 - [`pack`](#pack)
+- [`unpack`](#unpack)
 - [Template namespace: `${snapshot.*}`](#template-namespace-snapshot)
 - [Manifest contents](#manifest-contents)
 - [Filesystem layout](#filesystem-layout)
@@ -75,6 +78,8 @@ devbox snapshot rollback                       # quick: restore the rollback_tar
 | `dir` | string | `./snapshots` | Where snapshot directories and tarballs live. Resolved relative to the project root. |
 | `rollback_target` | string | — | Name of the snapshot used by `devbox snapshot rollback`. Must point at an existing snapshot. |
 | `require_matching_config` | bool | `false` | When true, `restore` aborts (exit 1) if the snapshot's `project.config_hash` differs from the current deploy state. When the snapshot's `config_hash` is empty (no deploy has run yet), it is treated as matching — never blocked. |
+| `services_mismatch` | block | — | Policy for service-set divergence between manifest and current config (see [`services_mismatch`](#services_mismatch)). |
+| `local_yml` | block | — | Override policy for `devbox/local.yml` keys (see [`local_yml.preserve_keys`](#local_ymlpreserve_keys)). |
 | `pack` | block | — | Pack policy (see [`pack`](#pack)). |
 | `create` | workflow | — | Capture workflow (see [Workflow blocks](#workflow-blocks-create--restore--remove)). |
 | `restore` | workflow | — | Restore workflow. |
@@ -127,6 +132,61 @@ Selection:
 
 Variant names must match `[a-z0-9][a-z0-9._-]{0,30}`. The variant chosen on create is recorded in the manifest so restore picks the matching block automatically.
 
+## `services_mismatch`
+
+Controls what `restore` does when the snapshot's recorded service set diverges from the current project's effective service set. The snapshot manifest records every effective service (name + enabled flag, sorted by name) at create time; restore compares that against `cfg.Services` and applies the configured policy.
+
+```yaml
+services_mismatch:
+  policy: warn          # warn (default) | block | ignore
+```
+
+| Policy | Behavior |
+|---|---|
+| `warn` (default, also when the block is omitted) | Restore continues. Any non-empty diff is rendered in the confirmation prompt; with `-y` the warning is written to stderr and restore proceeds. |
+| `block` | Any non-empty diff aborts before any side effect on `devbox/local.yml` (exit 1, typed `ServicesMismatchError`). |
+| `ignore` | Diff is suppressed entirely; restore proceeds silently. |
+
+The diff is grouped into three buckets, each rendered with the same wording across the restore prompt, `snapshot inspect`, and the `snapshot.<name>.services_diff` validator:
+
+| Group | Meaning |
+|---|---|
+| `only in snapshot` | Service named in the manifest but absent from the current project (likely runtime failures during restore workflow steps that target it). |
+| `only local` | Service in the current project but absent from the manifest (deploy-state entries for it remain on disk after restore — harmless but easy to miss). |
+| `enabled differs` | Same name on both sides but the `enabled` flag flipped. |
+
+Unknown `policy` values are rejected at load time with a clear "unknown policy" error listing the allowed set.
+
+## `local_yml.preserve_keys`
+
+`devbox/local.yml` typically contains machine-specific overrides (ports, hostnames, paths) that should not travel with a snapshot. `preserve_keys` lists dot-paths whose **current** values survive restore even when the snapshot ships a `local.yml`.
+
+```yaml
+local_yml:
+  preserve_keys:
+    - services.main.ports
+    - services.db.ports
+    - host.shell
+```
+
+- Dot-paths address nested mapping keys; array-index segments (`services[0].ports`) are not supported — `local.yml` is maps-of-maps.
+- Paths that do not exist in either side are silent no-ops; structural conflicts (e.g. an intermediate segment that is not a mapping, or incompatible kinds at the path between snapshot and current) surface as clear errors.
+- The helpers operate on `*yaml.Node` to preserve key order and node-attached comments where `yaml.v3` retains them. `yaml.v3` normalises indentation and flow/block style on marshal, so byte-exact formatting is not preserved — only semantic content + key order + comments on untouched nodes.
+- A 1 MiB cap applies to the `local.yml` payload on both create and restore to defuse YAML alias-explosion in untrusted archive content.
+
+**Create**: `captureDevboxFiles` reads `devbox/local.yml`, calls `stripPreservedKeys` to remove the listed dot-paths, and writes the result into `<snap>/devbox/local.yml`. If every top-level key was preserved (resulting in an empty mapping), the file is still written so restore semantics are unambiguous.
+
+**Restore** edge cases:
+
+| Snapshot has `local.yml` | Current has `local.yml` | Behavior |
+|---|---|---|
+| yes | yes | merge: snapshot overlay + preserved keys spliced from current |
+| yes | no | write snapshot's `local.yml` as-is (preserve_keys no-op) |
+| no | yes (with preserved values) | write a minimal `local.yml` containing only the preserved keys extracted from current |
+| no | no | no-op |
+
+`deploy-state.yml` is always overwritten on restore — no merge is performed. Orphan entries for services that no longer exist locally are safe (deploy ignores them on the next run).
+
 ## `pack`
 
 ```yaml
@@ -138,7 +198,30 @@ pack:
 
 `pack.exclude` is a list of doublestar globs evaluated relative to the snapshot directory. The CLI `--exclude` flags **append** to this list (they do not replace it).
 
-`devbox snapshot pack <name>` produces `./snapshots/<name>.tar.gz` and a `./snapshots/<name>.tar.gz.sha256` sidecar. `unpack` verifies the sidecar when present; when absent it warns on stderr and proceeds.
+`devbox snapshot pack <name>` produces a single `./snapshots/<name>.tar.gz`. No `.sha256` sidecar is written — one file per snapshot. The in-memory sha256 of the archive is shown in the success message for ad-hoc reference but is not required by `unpack`. Transport bitflips are caught by gzip CRC32 and tar structural validity; in-archive tampering of individual artifacts is caught by `unpack`'s manifest-driven verification (see below).
+
+## `unpack`
+
+`devbox snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]` extracts an archive into `./snapshots/<final-name>/` using the existing distrust-safe extract contract (`filepath.IsLocal`, no symlinks, 50 GiB size cap, 100 000 entry cap) into a sibling `./snapshots/.unpack-<random>/` staging dir, then atomic-renames into place.
+
+After extraction (and before the rename into final position) the staging tree is verified against `manifest.yml`:
+
+| Group | Stderr line | Triggers confirm? |
+|---|---|---|
+| `Missing` (in manifest, not on disk) | `warning: artifact %q listed in manifest is missing from archive` | yes (grouped) |
+| `HashMismatch` (both present, sha256 differs) | `warning: artifact %q sha256 mismatch (manifest=%s, actual=%s)` | yes (grouped) |
+| `Extra` (on disk, not in manifest) | `info: archive contains %q not listed in manifest` | no |
+
+`Missing` and `HashMismatch` share a single grouped `continue? [y/N]` prompt at the end (default `no`). Declining triggers staging cleanup and returns `UnpackVerifyDeclinedError`; the final directory is untouched because verification fires before the rename-old-aside step. `Extra` is info-only.
+
+Flags:
+
+- `--no-verify` — skip artifact verification entirely. The bypass is announced on stderr (`warning: skipping artifact verification at user request (--no-verify)`) so it is visible in CI logs and post-mortems.
+- `-y` — auto-accept both the overwrite prompt (when the final directory already exists) and the verify prompt; warnings still print to stderr.
+
+The success summary line reads `(verified)`, `(verified with N warnings)`, or `(verification skipped)` driven by `UnpackResult.Verification`. The verifier validates each `manifest.yml` artifact path with `filepath.IsLocal` + `pathsafe.ContainedRel` against the staging root **before** opening any file, so a maliciously crafted manifest cannot make the verifier read paths outside the staging tree.
+
+> **Trust boundary**: manifest verification is integrity-of-record, not authenticity. It catches accidental mutation, partial truncation, and casual in-archive tampering. It does **not** catch an attacker who re-packs the archive with a self-consistent manifest (they can simply rewrite `manifest.yml` to match the new artifacts). This is an acceptable trade-off for a dev tool — no GPG, no signatures, no cryptographic provenance.
 
 ## Template namespace: `${snapshot.*}`
 
@@ -167,6 +250,10 @@ description: WIP feature X
 project:
   name: tbm-next
   config_hash: def67890          # empty if no deploy has run yet
+  services:                      # effective service set at create time, sorted by name
+    - { name: cdn,  enabled: false }
+    - { name: db,   enabled: true }
+    - { name: main, enabled: true }
 devbox_version: 0.42.0
 variant: ""
 artifacts:
@@ -200,7 +287,6 @@ The manifest carries no `schema_version` — devbox is in active pre-release dev
       devbox/{local.yml, deploy-state.yml}
       <user artifacts>
     <name>.tar.gz
-    <name>.tar.gz.sha256
   .devbox/snapshots/
     current
     snapshot.lock
@@ -245,7 +331,7 @@ The manifest carries no `schema_version` — devbox is in active pre-release dev
 - `os.RemoveAll(snapshotDir)`.
 - Clears the current pointer atomically when it pointed at this snapshot.
 
-**Pack / unpack** share the same lock contract as the mutating snapshot commands — pack reads the snapshot directory under the lock so a concurrent `remove` / `create` cannot truncate the archive; unpack writes under the lock so concurrent ops cannot race the staging-to-final rename. Unpack enforces a strict archive-safety contract: paths must satisfy `filepath.IsLocal` and `ContainedRel` against the staging root, only regular files and directories are accepted (no symlinks, hardlinks, devices, fifos, global headers), and the extractor caps total bytes (50 GiB) and entry count (100 000) to defuse zip bombs. Extraction stages into a sibling temp dir under `./snapshots/`, then atomic-renames to the final name on success; any failure removes the staging dir without touching the target.
+**Pack / unpack** share the same lock contract as the mutating snapshot commands — pack reads the snapshot directory under the lock so a concurrent `remove` / `create` cannot truncate the archive; unpack writes under the lock so concurrent ops cannot race the staging-to-final rename. Unpack enforces a strict archive-safety contract: paths must satisfy `filepath.IsLocal` and `ContainedRel` against the staging root, only regular files and directories are accepted (no symlinks, hardlinks, devices, fifos, global headers), and the extractor caps total bytes (50 GiB) and entry count (100 000) to defuse zip bombs. Extraction stages into a sibling temp dir under `./snapshots/`, then atomic-renames to the final name on success; any failure removes the staging dir without touching the target. If the final directory already exists, the existing tree is renamed aside as a backup; the staging tree is renamed into place; on success the backup is removed, and on second-rename failure the backup is restored. After extraction (and before the rename-into-place step) the staging tree is verified against `manifest.yml` — see [`unpack`](#unpack) for the warn + confirm behavior.
 
 ## Lock interaction
 
@@ -284,6 +370,7 @@ When either lock is already held by another live process, the operation exits 75
 | `snapshot.<name>.manifest_valid` | error | `manifest.yml` missing or unparseable. |
 | `snapshot.<name>.artifacts_exist` | error | Any manifest-listed artifact missing on disk. |
 | `snapshot.<name>.checksums` | warn | With `--verify`: any artifact's recomputed sha256 differs from the manifest. |
+| `snapshot.<name>.services_diff` | info | Manifest's recorded service set differs from the current project's effective service set. Hint quotes the formatted diff. |
 | `snapshot.<name>.last_create_failed` | info | `last_create.status ∈ {failed, interrupted}`. |
 | `snapshot.template_scope` | error | `${snapshot.created_at}` used in a `create:` block (it does not exist yet at create time). |
 
@@ -297,7 +384,7 @@ When either lock is already held by another live process, the operation exits 75
 - `devbox snapshot rollback [-y]`
 - `devbox snapshot remove <name> [-y]`
 - `devbox snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`
-- `devbox snapshot unpack <tar-path> [--as=<name>] [-y]`
+- `devbox snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]`
 - `devbox validate snapshot [<name>] [--verify]`
 
 See [commands.md](commands.md) for the `WorkflowStep` shape reused by snapshot workflows, and [state.md](state.md) for the deploy state journal that snapshots back up alongside `devbox/local.yml`.
