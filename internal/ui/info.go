@@ -185,7 +185,7 @@ func RenderBrandedSectionTitle(text string) string {
 	if text == "" {
 		return renderSectionTitle(text)
 	}
-	return renderSectionTitle(LogoMark() + " " + text)
+	return renderSectionTitle(LogoMarkPlain() + " " + text)
 }
 
 // RenderSubheader renders a bold yellow in-section subheader.
