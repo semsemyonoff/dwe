@@ -263,18 +263,18 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] all UC-1..UC-6 from spec §4 reproducible via integration tests or a documented manual transcript
-- [ ] lock interaction verified both directions (deploy held → snapshot fails with PID; snapshot held → deploy fails with PID)
-- [ ] template scope gate verified: `${snapshot.*}` in None scope rejected at compile; `${snapshot.created_at}` in Create scope rejected; both work in their valid scopes
-- [ ] **snapshot vars threading verified end-to-end**: integration test with a fake user command prints `${snapshot.name}` / `${snapshot.path}` and the test asserts on the captured stdout
-- [ ] archive-safety verified: every malicious-tar fixture is rejected; no filesystem mutation outside staging
-- [ ] `make test` (full suite) passes
-- [ ] `go test -race ./...` passes
-- [ ] `go vet ./...` clean
-- [ ] `make lint` clean
-- [ ] confirm no `schema_version` fields anywhere (loader, manifest, validate config)
-- [ ] confirm `prompt_baseline_on_first_restore` is absent (was dropped in Task 1)
-- [ ] confirm `internal/lock/lock.go` is unchanged (no `AcquireExclusive`, no PID-only conflict probes, lock files still left on disk after Release)
+- [x] all UC-1..UC-6 from spec §4 reproducible via integration tests or a documented manual transcript (integration tests under `internal/snapshot/` and `internal/command/snapshot_test.go` cover the round-trips; manual UC verification deferred to Post-Completion human checklist)
+- [x] lock interaction verified both directions (deploy held → snapshot fails with PID; snapshot held → deploy fails with PID) — covered by `internal/lock/project_test.go` and command-layer tests in tasks 7–9
+- [x] template scope gate verified: `${snapshot.*}` in None scope rejected at compile; `${snapshot.created_at}` in Create scope rejected; both work in their valid scopes — `internal/tpl` and `internal/validate/snapshot` tests
+- [x] snapshot vars threading verified end-to-end: integration test with a fake user command prints `${snapshot.name}` / `${snapshot.path}` and the test asserts on the captured stdout — `internal/snapshot/exec_test.go`
+- [x] archive-safety verified: every malicious-tar fixture is rejected; no filesystem mutation outside staging — `internal/snapshot/archive_test.go`
+- [x] `make test` (full suite) passes
+- [x] `go test -race ./...` passes
+- [x] `go vet ./...` clean
+- [x] `make lint` clean
+- [x] confirm no `schema_version` fields anywhere in snapshot loader / manifest / validate config (verified — only policy notes and unrelated devbox.yml / deploy state.yml fixtures reference the term)
+- [x] confirm `prompt_baseline_on_first_restore` is absent (was dropped in Task 1) — grep finds only the plan-doc reference
+- [x] confirm `internal/lock/lock.go` is unchanged (no `AcquireExclusive`, no PID-only conflict probes, lock files still left on disk after Release) — `git log` on the file shows no commits from this branch
 
 ## Technical Details
 
