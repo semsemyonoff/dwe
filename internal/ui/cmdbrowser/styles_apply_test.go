@@ -171,7 +171,7 @@ func TestNewModel_AppliesListAndHelpStyles(t *testing.T) {
 		t.Errorf("help.Styles.ShortKey: got %v, want %v", got, want)
 	}
 
-	footer := m.renderHelpFooter()
+	footer := m.renderHelpFooter(120)
 	wantKey := "\x1b[38;5;167m"
 	if !strings.Contains(footer, wantKey) {
 		t.Errorf("renderHelpFooter missing key color %q; got %q", wantKey, footer)

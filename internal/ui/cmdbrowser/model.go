@@ -348,6 +348,10 @@ func (m *Model) applyLayout() {
 	m.delegate.width = listW
 	m.delegate.showBadges = !nowSingle && showBadges(m.width) && m.opts.ShowTypeBadges
 	m.list.SetSize(listW, listHeight(m.height))
+	// Let bubbles/v2 help adapt its grouped-bindings layout to the panel width
+	// so FullHelpView wraps inside totalWidth rather than overflowing on the
+	// 60-col single-panel bucket.
+	m.help.SetWidth(m.width)
 	if m.inspect != nil {
 		// Resize the viewport in-place to preserve scroll position.
 		w := max(min(listW-2, 80), 20)
@@ -396,11 +400,13 @@ func (m *Model) View() tea.View {
 	rightPanel := rightStyle.Render(rightBody)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-	titleBar := paletteKey().Bold(true).Render(ui.LogoMarkPlain() + " " + m.title)
-	if m.skipConfirm && m.opts.Mode == ModeRun {
-		titleBar += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
-	}
-	footer := m.renderHelpFooter()
+	// leftWidth/rightWidth already return frame widths under v2 lipgloss
+	// (Task 10), so the joined body spans exactly lw+rw cells. Title bar and
+	// help footer must fill that same totalWidth so the brand line and key
+	// hints align with the panel edges.
+	totalWidth := lw + rw
+	titleBar := m.renderTitleBar(totalWidth)
+	footer := m.renderHelpFooter(totalWidth)
 
 	content := strings.Join([]string{titleBar, body, footer}, "\n")
 
@@ -438,11 +444,9 @@ func (m *Model) viewSinglePanel() tea.View {
 	}
 
 	panel := style.Render(body)
-	titleBar := paletteKey().Bold(true).Render(ui.LogoMarkPlain() + " " + m.title)
-	if m.skipConfirm && m.opts.Mode == ModeRun {
-		titleBar += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
-	}
-	footer := m.renderHelpFooter()
+	totalWidth := singlePanelWidth(m.width)
+	titleBar := m.renderTitleBar(totalWidth)
+	footer := m.renderHelpFooter(totalWidth)
 	content := strings.Join([]string{titleBar, panel, footer}, "\n")
 	v := tea.NewView(content)
 	v.AltScreen = true
@@ -474,11 +478,38 @@ func (m *Model) renderRight() string {
 	return m.breadcrumb() + "\n" + m.list.View()
 }
 
+// renderTitleBar renders the branded title bar — `{▪} <title>` in accent+bold,
+// optionally suffixed by a success-coloured `[--yes ON]` toggle — wrapped in a
+// v2 lipgloss envelope that pads the line out to totalWidth so it lines up
+// with the joined panel(s) below. The plain logomark is used because the
+// outer accent foreground colours the entire string uniformly; v1's
+// LogoMark() carries a reset escape that would clip the accent partway
+// through the title.
+func (m *Model) renderTitleBar(totalWidth int) string {
+	text := ui.LogoMarkPlain() + " " + m.title
+	if m.skipConfirm && m.opts.Mode == ModeRun {
+		// Pre-render the toggle with its own success-coloured envelope; the
+		// outer accent style below threads around the existing SGR escapes so
+		// the suffix keeps its distinct colour.
+		text += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
+	}
+	return lipgloss.NewStyle().
+		Width(totalWidth).
+		Padding(0, 1).
+		Foreground(lipgloss.Color(ui.ColorAccent())).
+		Bold(true).
+		Render(text)
+}
+
 // renderHelpFooter renders the full help footer (grouped key bindings) for
 // the current focus mode. The footer is always full-width; there is no
-// short/long toggle.
-func (m *Model) renderHelpFooter() string {
-	return m.help.FullHelpView(m.fullBindings())
+// short/long toggle. The lipgloss envelope right-pads each line to totalWidth
+// so the footer aligns with the panel frame.
+func (m *Model) renderHelpFooter(totalWidth int) string {
+	return lipgloss.NewStyle().
+		Width(totalWidth).
+		Padding(0, 1).
+		Render(m.help.FullHelpView(m.fullBindings()))
 }
 
 // fullBindings returns the grouped bindings for the long-help footer.

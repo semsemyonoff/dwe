@@ -7,24 +7,15 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// borderRune matches any cell that belongs to the bordered body block:
-// corners, horizontal and vertical strokes of lipgloss.NormalBorder().
-const borderRune = "│┌┐└┘─"
-
-// containsBorder reports whether s belongs to the bordered body region
-// (excludes the title bar and the help footer, which are intentionally not
-// full-width until Task 11 lands).
-func containsBorder(s string) bool { return strings.ContainsAny(s, borderRune) }
-
-// TestModel_BodyBorderFullWidth guards against the "torn right border" bug:
-// at every supported width the joined body region must render exactly w cells
-// wide on every bordered row, so the right border lines up with the terminal
-// edge. Prior to the v2-lipgloss frame-semantics fix the right edge fell short
-// by 4 cells (two-panel) or 2 cells (single-panel).
-//
-// TODO(Task 11): widen the assertion to cover title bar and help footer once
-// those are wrapped in a `lipgloss.NewStyle().Width(totalWidth)` envelope.
-func TestModel_BodyBorderFullWidth(t *testing.T) {
+// TestModel_FullFrameWidth guards against the "torn right border" bug
+// (originally body-only, widened in Task 11 to cover the full frame): at every
+// supported width the title bar, joined body region, and help footer must each
+// render exactly w cells wide on every non-empty row, so the right edge lines
+// up with the terminal edge. Prior to the v2-lipgloss frame-semantics fix
+// (Task 10) the body right edge fell short by 4 cells (two-panel) or 2 cells
+// (single-panel); prior to Task 11 the title bar and help footer were
+// rendered without a width envelope and stopped short of the panel edge.
+func TestModel_FullFrameWidth(t *testing.T) {
 	t.Parallel()
 	items := []Item{
 		{ID: "db.migrate", Description: "Apply pending migrations", Type: "shell"},
@@ -40,18 +31,18 @@ func TestModel_BodyBorderFullWidth(t *testing.T) {
 			t.Parallel()
 			m := newModel("pick a command", items, DefaultOptions(), w, 26)
 			out := m.View().Content
-			seenBorder := false
+			anyLine := false
 			for line := range strings.SplitSeq(out, "\n") {
-				if !containsBorder(line) {
+				if line == "" {
 					continue
 				}
-				seenBorder = true
+				anyLine = true
 				if got := lipgloss.Width(line); got != w {
-					t.Errorf("body line width=%d, want %d (terminal width); line=%q", got, w, line)
+					t.Errorf("line width=%d, want %d (terminal width); line=%q", got, w, line)
 				}
 			}
-			if !seenBorder {
-				t.Fatalf("no bordered body lines found in View().Content at w=%d:\n%s", w, out)
+			if !anyLine {
+				t.Fatalf("no non-empty lines in View().Content at w=%d:\n%s", w, out)
 			}
 		})
 	}

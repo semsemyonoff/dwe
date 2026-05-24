@@ -184,14 +184,14 @@ Item-description truncation already exists ([internal/ui/cmdbrowser/list_delegat
 
 ### Task 11: Full-width title bar and help footer
 
-- [ ] in `internal/ui/cmdbrowser/model.go` (`View` path around lines 395–476), compute `totalWidth := lw + rw + 4` (2 chars border per panel) and render title using v2 lipgloss with the string accessor and the **plain** logomark (v1's reset escape from `LogoMark()` would cancel the outer v2 foreground for the rest of the title — `LogoMarkPlain()` lets the surrounding v2 style color the entire string uniformly):
+- [x] in `internal/ui/cmdbrowser/model.go` (`View` path around lines 395–476), compute `totalWidth := lw + rw` (frame widths under v2 lipgloss after Task 10; deviates from the +4 figure in the original plan which assumed v1 inner-content semantics) and render title using v2 lipgloss with the string accessor and the **plain** logomark via the new `renderTitleBar(totalWidth)` helper:
   `lipgloss.NewStyle().Width(totalWidth).Padding(0, 1).Foreground(lipgloss.Color(ui.ColorAccent())).Bold(true).Render(ui.LogoMarkPlain() + " " + m.title)`
-- [ ] preserve existing `[--yes ON]` suffix in success color when `m.skipConfirm && Mode==ModeRun`
-- [ ] wrap `m.help.FullHelpView(m.fullBindings())` in `lipgloss.NewStyle().Width(totalWidth).Padding(0, 1).Render(...)` for both full and filter help footers
-- [ ] in `viewSinglePanel` (model.go:411-446), apply the same title/footer width wrapping
-- [ ] replace remaining `lipgloss.Color(ui.ColorFocusBorder())` / accent references in border styles to use the new `ColorAccent()` accessor, and base borders to use `ColorBorder()` — already partly done in Task 3, sanity-check here
-- [ ] extend the Task 10 body-region width-invariant test to cover the full frame: title bar and help footer now also fill `totalWidth`. Remove the Task 10 TODO that scoped the assertion to body lines
-- [ ] run `make test` and `make lint` — must be clean before next task
+- [x] preserve existing `[--yes ON]` suffix in success color when `m.skipConfirm && Mode==ModeRun` — pre-rendered with `paletteSuccess().Bold(true)` so its SGR escapes survive the outer accent envelope
+- [x] wrap `m.help.FullHelpView(m.fullBindings())` in `lipgloss.NewStyle().Width(totalWidth).Padding(0, 1).Render(...)` for both full and filter help footers (single shared `renderHelpFooter(totalWidth)` path); also call `m.help.SetWidth(m.width)` in `applyLayout` so bubbles/v2 help wraps inside the panel
+- [x] in `viewSinglePanel` (model.go:411-446), apply the same title/footer width wrapping (`totalWidth := singlePanelWidth(m.width)`)
+- [x] replace remaining `lipgloss.Color(ui.ColorFocusBorder())` / accent references in border styles to use the new `ColorAccent()` accessor, and base borders to use `ColorBorder()` — already done in Task 3, sanity-checked
+- [x] extend the Task 10 body-region width-invariant test to cover the full frame: title bar and help footer now also fill `totalWidth`. Renamed to `TestModel_FullFrameWidth`; asserts every non-empty line of `View().Content` is exactly `w` cells wide; Task 10 TODO removed
+- [x] run `make test` and `make lint` — both clean
 
 ### Task 12: Relocate logo asset and embed for notifications
 
