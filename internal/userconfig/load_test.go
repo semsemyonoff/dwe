@@ -16,38 +16,25 @@ func writeFile(t *testing.T, path, content string) {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 }
 
-// withUserConfigDir redirects os.UserConfigDir() at the env level. On
-// Linux it reads $XDG_CONFIG_HOME; on macOS it reads $HOME and appends
-// "Library/Application Support". We set both for portability across CI
-// runners.
+// withUserConfigDir points $HOME at a temp dir so Load reads its
+// global config from <tempdir>/.config/devbox/config. Returns the
+// <tempdir>/.config path so callers can write into the devbox/ subdir.
 func withUserConfigDir(t *testing.T) (string, func()) {
 	t.Helper()
 	dir := t.TempDir()
-	// Linux path.
-	xdgPrev, xdgWasSet := os.LookupEnv("XDG_CONFIG_HOME")
 	homePrev, homeWasSet := os.LookupEnv("HOME")
-	// macOS: os.UserConfigDir uses $HOME + "/Library/Application Support".
-	// To make HOME-based resolution land in dir, point HOME at a temp
-	// dir whose "Library/Application Support" subdir is what we use.
-	macHome := filepath.Join(dir, "machome")
-	macCfg := filepath.Join(macHome, "Library", "Application Support")
-	require.NoError(t, os.MkdirAll(macCfg, 0o755))
-	require.NoError(t, os.Setenv("HOME", macHome))
-	require.NoError(t, os.Setenv("XDG_CONFIG_HOME", macCfg))
+	require.NoError(t, os.Setenv("HOME", dir))
+	cfgDir := filepath.Join(dir, ".config")
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
 
 	cleanup := func() {
-		if xdgWasSet {
-			_ = os.Setenv("XDG_CONFIG_HOME", xdgPrev)
-		} else {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
-		}
 		if homeWasSet {
 			_ = os.Setenv("HOME", homePrev)
 		} else {
 			_ = os.Unsetenv("HOME")
 		}
 	}
-	return macCfg, cleanup
+	return cfgDir, cleanup
 }
 
 // clearNotifyEnv unsets every DEVBOX_NOTIFY_* env var so tests are

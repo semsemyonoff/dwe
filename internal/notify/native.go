@@ -7,17 +7,18 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-
-	"github.com/gen2brain/beeep"
 )
 
 //go:embed assets/icon.png
 var notificationIcon []byte
 
-// beeepNotify is the seam for tests to intercept the OS notifier call.
-// icon is `any` to mirror beeep.Notify, which accepts a path string or
-// raw []byte across darwin/linux/windows.
-var beeepNotify = beeep.Notify
+// osNotify is the seam for tests to intercept the OS notifier call.
+// Its concrete value is set in a platform-specific file: on darwin we
+// drive `terminal-notifier` directly so the icon actually renders on
+// modern macOS; on other platforms we delegate to beeep. icon is `any`
+// to mirror beeep.Notify (path string or raw []byte).
+//
+// See native_darwin.go and native_other.go for the platform bindings.
 
 // nativeBackendTimeout bounds how long Notify waits on the OS notifier
 // before logging and giving up. The goroutine running beeep continues
@@ -40,7 +41,6 @@ type nativeBackend struct {
 }
 
 func newNativeBackend() *nativeBackend {
-	beeep.AppName = "Devbox"
 	return &nativeBackend{sem: make(chan struct{}, 1)}
 }
 
@@ -57,9 +57,9 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 		return
 	}
 
-	// Snapshot the seam before spawning so tests that swap beeepNotify
-	// and then restore it on cleanup cannot race with the goroutine read.
-	beeepFn := beeepNotify
+	// Snapshot the seam before spawning so tests that swap osNotify and
+	// then restore it on cleanup cannot race with the goroutine read.
+	notifyFn := osNotify
 	done := make(chan error, 1)
 	go func() {
 		var result error
@@ -71,7 +71,7 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 			<-b.sem // always release before signalling so a concurrent notify() sees the slot as free
 			done <- result
 		}()
-		result = beeepFn(title, body, notificationIcon)
+		result = notifyFn(title, body, notificationIcon)
 	}()
 
 	timer := time.NewTimer(nativeBackendTimeout)

@@ -40,15 +40,7 @@ The validator emits an info-level diagnostic when it can statically detect a `no
 
 Two files are read in this precedence order (lower → higher):
 
-1. **Global user config** at `<os.UserConfigDir()>/devbox/config` — platform-native location:
-
-   | OS | Resolved path |
-   |---|---|
-   | Linux | `$XDG_CONFIG_HOME/devbox/config` (falls back to `$HOME/.config/devbox/config`) |
-   | macOS | `$HOME/Library/Application Support/devbox/config` |
-   | Windows | `%AppData%\devbox\config` (typically `C:\Users\<user>\AppData\Roaming\devbox\config`) |
-
-   Created with mode `0600` if Devbox writes it. Missing file is silently treated as empty.
+1. **Global user config** at `~/.config/devbox/config` on every OS (Linux, macOS, Windows). No platform-native location, no XDG fallback — one path everywhere. Missing file is silently treated as empty. If Devbox ever writes it, mode is `0600`.
 
 2. **Per-project override** at `<project>/.devbox/config`. The `.devbox/` directory is already gitignored by Devbox. Missing file is silently treated as empty.
 
@@ -117,6 +109,20 @@ This means CI runs, piped output, and scripted invocations never produce a deskt
 
 The native backend is bounded to **one in-flight notification at a time** per CLI process. If a previous notification's OS notifier daemon stalls (rare, but observed on some Linux setups), subsequent notifications within that operation are silently dropped and logged at debug level. The backend applies an internal 2-second timeout; the calling operation is never delayed waiting for the notifier.
 
+## Platform notes
+
+**macOS** uses [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) when it's on `PATH` (install via `brew install terminal-notifier`) and falls back to `osascript` otherwise. The Devbox logo is passed as `-contentImage` so it renders as a thumbnail inside the notification card — modern macOS pins the small app-icon slot to terminal-notifier's own bundle icon and silently ignores `-appIcon` overrides. The `osascript` fallback cannot carry a custom icon at all and shows Script Editor's icon instead.
+
+If notifications stop appearing as banners on macOS despite `terminal-notifier -list Devbox` showing them as delivered, the macOS Notification Center daemon is stuck. Fix with:
+
+```sh
+killall NotificationCenter
+```
+
+**Linux** uses libnotify via dbus (or `notify-send` as a fallback); the icon comes through as the PNG payload directly.
+
+**Windows** uses native toast notifications with the embedded PNG.
+
 ## Reserved keys (not yet wired)
 
 The parser accepts these keys without error so that adding the corresponding backend in a future release does not require a config migration. They are decoded but **not used** in MVP:
@@ -132,8 +138,7 @@ Setting `notify_channels = telegram` or `notify_channels = webhook` in MVP falls
 A common setup: notify on deploy and ad-hoc commands, but stay quiet for the inner-loop `devbox run` cycle.
 
 ```
-# ~/Library/Application Support/devbox/config  (macOS)
-# or ~/.config/devbox/config  (Linux)
+# ~/.config/devbox/config  (same on every OS)
 
 notify_enabled          = true
 notify_deploy_enabled   = true

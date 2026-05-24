@@ -17,12 +17,12 @@ func TestNotificationIcon_PNGMagicBytes(t *testing.T) {
 	}
 }
 
-// withBeeepNotify swaps beeepNotify for the duration of a subtest.
-func withBeeepNotify(t *testing.T, fn func(title, body string, icon any) error) {
+// withOSNotify swaps osNotify for the duration of a subtest.
+func withOSNotify(t *testing.T, fn func(title, body string, icon any) error) {
 	t.Helper()
-	prev := beeepNotify
-	beeepNotify = fn
-	t.Cleanup(func() { beeepNotify = prev })
+	prev := osNotify
+	osNotify = fn
+	t.Cleanup(func() { osNotify = prev })
 }
 
 func TestFormatEvent_Success(t *testing.T) {
@@ -156,7 +156,7 @@ func TestNativeBackend_NotifyCallsBeeep(t *testing.T) {
 	var gotTitle, gotBody string
 	var gotIcon any
 	done := make(chan struct{})
-	withBeeepNotify(t, func(title, body string, icon any) error {
+	withOSNotify(t, func(title, body string, icon any) error {
 		gotTitle, gotBody = title, body
 		gotIcon = icon
 		calls.Add(1)
@@ -168,7 +168,7 @@ func TestNativeBackend_NotifyCallsBeeep(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatalf("beeepNotify was not invoked")
+		t.Fatalf("osNotify was not invoked")
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("calls=%d want 1", calls.Load())
@@ -194,7 +194,7 @@ func TestNativeBackend_NotifyCallsBeeep(t *testing.T) {
 
 func TestNativeBackend_SwallowsBeeepError(t *testing.T) {
 	done := make(chan struct{})
-	withBeeepNotify(t, func(_, _ string, _ any) error {
+	withOSNotify(t, func(_, _ string, _ any) error {
 		defer close(done)
 		return fmt.Errorf("boom")
 	})
@@ -203,7 +203,7 @@ func TestNativeBackend_SwallowsBeeepError(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatalf("beeepNotify not called")
+		t.Fatalf("osNotify not called")
 	}
 	// No panic, no error returned — pass.
 }
@@ -211,7 +211,7 @@ func TestNativeBackend_SwallowsBeeepError(t *testing.T) {
 func TestNativeBackend_TimeoutDoesNotBlock(t *testing.T) {
 	block := make(chan struct{})
 	t.Cleanup(func() { close(block) })
-	withBeeepNotify(t, func(_, _ string, _ any) error {
+	withOSNotify(t, func(_, _ string, _ any) error {
 		<-block
 		return nil
 	})
@@ -232,7 +232,7 @@ func TestNativeBackend_TimeoutDoesNotBlock(t *testing.T) {
 func TestNativeBackend_CtxCancelReturnsImmediately(t *testing.T) {
 	block := make(chan struct{})
 	t.Cleanup(func() { close(block) })
-	withBeeepNotify(t, func(_, _ string, _ any) error {
+	withOSNotify(t, func(_, _ string, _ any) error {
 		<-block
 		return nil
 	})
@@ -251,7 +251,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{}, 1)
 	var firstCalls atomic.Int32
-	withBeeepNotify(t, func(_, _ string, _ any) error {
+	withOSNotify(t, func(_, _ string, _ any) error {
 		firstCalls.Add(1)
 		select {
 		case started <- struct{}{}:
@@ -264,7 +264,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 
 	// First call: cancelled ctx so the caller returns once the worker
 	// has been launched. Wait for the worker to actually be inside
-	// beeepNotify before we attempt the second call.
+	// osNotify before we attempt the second call.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	b.notify(ctx, Event{Operation: "deploy", Outcome: OutcomeSuccess})
@@ -275,7 +275,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	}
 
 	// Slot should still be occupied. Second call must drop without
-	// invoking beeepNotify again.
+	// invoking osNotify again.
 	b.notify(ctx, Event{Operation: "deploy", Outcome: OutcomeSuccess})
 	if got := firstCalls.Load(); got != 1 {
 		t.Fatalf("firstCalls=%d want 1 (second call should drop)", got)
@@ -299,7 +299,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	// inflate the third-call assertion.
 	var thirdCalls atomic.Int32
 	freshDone := make(chan struct{})
-	withBeeepNotify(t, func(_, _ string, _ any) error {
+	withOSNotify(t, func(_, _ string, _ any) error {
 		thirdCalls.Add(1)
 		close(freshDone)
 		return nil
@@ -308,7 +308,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	select {
 	case <-freshDone:
 	case <-time.After(2 * time.Second):
-		t.Fatalf("third call did not invoke beeepNotify")
+		t.Fatalf("third call did not invoke osNotify")
 	}
 	if got := thirdCalls.Load(); got != 1 {
 		t.Fatalf("thirdCalls=%d want 1", got)

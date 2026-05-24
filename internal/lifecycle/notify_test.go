@@ -30,15 +30,12 @@ func (r *recordingNotifier) snapshot() []notify.Event {
 	return out
 }
 
-// pointHomeAtTempDir isolates os.UserConfigDir resolution for the test
-// process so global userconfig reads can't accidentally pick up the
-// developer's real config.
+// pointHomeAtTempDir isolates the HOME-relative userconfig path for the
+// test process so global userconfig reads can't accidentally pick up
+// the developer's real ~/.config/devbox/config.
 func pointHomeAtTempDir(t *testing.T) {
 	t.Helper()
-	dir := t.TempDir()
-	t.Setenv("HOME", dir)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
-	t.Setenv("AppData", filepath.Join(dir, "AppData"))
+	t.Setenv("HOME", t.TempDir())
 }
 
 // installRecordingNotifier swaps the package-level newNotifier with a

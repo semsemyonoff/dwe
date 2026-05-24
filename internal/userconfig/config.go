@@ -1,7 +1,7 @@
 // Package userconfig loads user-level Devbox preferences from a flat
-// key=value file. It merges defaults, the platform-native global config
-// (resolved via os.UserConfigDir()), an optional per-project override at
-// .devbox/config, and environment variables.
+// key=value file. It merges defaults, a global config at
+// ~/.config/devbox/config (same path on every OS), an optional
+// per-project override at .devbox/config, and environment variables.
 package userconfig
 
 // Config holds user-level Devbox preferences. The MVP only covers the

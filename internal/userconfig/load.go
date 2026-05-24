@@ -21,20 +21,21 @@ const (
 
 // Load resolves the effective Config by applying:
 //  1. embedded defaults
-//  2. global file at <os.UserConfigDir()>/devbox/config (missing → skip)
+//  2. global file at ~/.config/devbox/config (missing → skip)
 //  3. project file at <projectRoot>/.devbox/config (missing → skip)
 //  4. environment variables (highest precedence)
 //
-// Missing files are silently skipped. Parse errors and os.UserConfigDir
-// resolution errors bubble up.
+// Missing files are silently skipped. Parse errors and home-dir
+// resolution errors bubble up. The global path is identical across
+// platforms — no platform-native location, no XDG fallback.
 func Load(projectRoot string) (*Config, error) {
 	cfg := Defaults()
 
-	globalDir, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("userconfig: resolve global config dir: %w", err)
+		return nil, fmt.Errorf("userconfig: resolve home dir: %w", err)
 	}
-	globalPath := filepath.Join(globalDir, "devbox", "config")
+	globalPath := filepath.Join(home, ".config", "devbox", "config")
 	if err := loadFile(globalPath, cfg); err != nil {
 		return nil, err
 	}

@@ -46,15 +46,13 @@ func swapNewNotifier(t *testing.T) *recordingNotifier {
 	return rec
 }
 
-// pointHomeAtTempDir isolates os.UserConfigDir resolution for the test
-// process so global userconfig reads can't accidentally pick up the
-// developer's real config.
+// pointHomeAtTempDir isolates the HOME-relative userconfig path for
+// the test process so global userconfig reads can't accidentally pick
+// up the developer's real ~/.config/devbox/config.
 func pointHomeAtTempDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
-	t.Setenv("AppData", filepath.Join(dir, "AppData"))
 	return dir
 }
 
@@ -110,12 +108,6 @@ func TestDeployRunCmd_MalformedUserConfigDoesNotBlockDeploy(t *testing.T) {
 	bad := filepath.Join(globalDir, "config")
 	if err := os.WriteFile(bad, []byte("notify.enabled = true\n"), 0o600); err != nil {
 		t.Fatal(err)
-	}
-	// On macOS os.UserConfigDir uses ~/Library/Application Support, so
-	// also write a malformed file there to cover both OS resolutions.
-	macDir := filepath.Join(home, "Library", "Application Support", "devbox")
-	if err := os.MkdirAll(macDir, 0o755); err == nil {
-		_ = os.WriteFile(filepath.Join(macDir, "config"), []byte("notify.enabled = true\n"), 0o600)
 	}
 
 	rec := swapNewNotifier(t)
