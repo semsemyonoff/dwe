@@ -249,17 +249,17 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
 
 ### Task 11: Documentation
 
-- [ ] add `docs/reference/config/snapshot.md` covering: file location, top-level keys, `create` / `restore` / `remove` workflow blocks (referring to the existing `model.WorkflowStep` doc for step syntax — do **not** duplicate), `variants`, `pack`, lifecycle, restore safety semantics, `${snapshot.*}` namespace and scope rules, manifest contents
-- [ ] add a worked example at the top showing UC-3 (the main switch-between-tasks flow)
-- [ ] regenerate the CLI reference via `devbox docs generate` once subcommands compile
-- [ ] update `docs/internals/packages.md` to add `internal/snapshot` and `internal/validate/snapshot` with their invariants:
+- [x] add `docs/reference/config/snapshot.md` covering: file location, top-level keys, `create` / `restore` / `remove` workflow blocks (referring to the existing `model.WorkflowStep` doc for step syntax — do **not** duplicate), `variants`, `pack`, lifecycle, restore safety semantics, `${snapshot.*}` namespace and scope rules, manifest contents
+- [x] add a worked example at the top showing UC-3 (the main switch-between-tasks flow)
+- [x] regenerate the CLI reference via `devbox docs generate` once subcommands compile
+- [x] update `docs/internals/packages.md` to add `internal/snapshot` and `internal/validate/snapshot` with their invariants:
   - atomic IO contract (write-temp + rename in same dir)
   - lock-acquisition order (`deploy.lock` → `snapshot.lock`)
   - render-context propagation point (`runner_workflow.go:202` + `build_context.go`)
   - archive-safety contract (path validation, type allowlist, resource caps)
   - manifest-without-schema_version policy
-- [ ] **document the deploy-side touch**: update the deploy/lifecycle section of `packages.md` to note that lifecycle commands now also acquire `snapshot.lock`
-- [ ] skim cross-references back to deploy/state docs; confirm accuracy
+- [x] **document the deploy-side touch**: update the deploy/lifecycle section of `packages.md` to note that lifecycle commands now also acquire `snapshot.lock` (covered in the `internal/lock/` entry — the canonical location since `AcquireProjectLocks` lives there)
+- [x] skim cross-references back to deploy/state docs; confirm accuracy
 
 ### Task 12: Verify acceptance criteria
 

@@ -1,19 +1,20 @@
-## devbox validate commands
+## devbox validate snapshot
 
-Validate command definitions
+Validate snapshot config and on-disk snapshot integrity
 
 ### Synopsis
 
-Check devbox/commands for syntax errors, missing references, and other issues.
+Validate devbox/snapshot.yml and (optionally with --verify) the on-disk integrity of every snapshot under ./snapshots/. Pass a name to scope checks to a single snapshot.
 
 ```
-devbox validate commands [flags]
+devbox validate snapshot [<name>] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for commands
+  -h, --help     help for snapshot
+      --verify   recompute artifact sha256 and compare against the manifest
 ```
 
 ### Options inherited from parent commands

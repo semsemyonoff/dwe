@@ -53,6 +53,16 @@ Generated reference for the `devbox` command tree.
   - [devbox services disable](devbox_services_disable.md) — Disable an optional service (writes to devbox/local.yml)
   - [devbox services enable](devbox_services_enable.md) — Enable an optional service (writes to devbox/local.yml)
 - [devbox shell](devbox_shell.md) — Open a shell in a service container
+- [devbox snapshot](devbox_snapshot.md) — Capture, restore, and manage project snapshots
+  - [devbox snapshot create](devbox_snapshot_create.md) — Capture the current environment into a named snapshot
+  - [devbox snapshot current](devbox_snapshot_current.md) — Show the snapshot currently restored into the project
+  - [devbox snapshot inspect](devbox_snapshot_inspect.md) — Inspect a snapshot directory or a packed .tar.gz archive
+  - [devbox snapshot list](devbox_snapshot_list.md) — List snapshots in ./snapshots/
+  - [devbox snapshot pack](devbox_snapshot_pack.md) — Pack a snapshot into a .tar.gz archive with a .sha256 sidecar
+  - [devbox snapshot remove](devbox_snapshot_remove.md) — Delete a snapshot (runs remove: workflow if defined)
+  - [devbox snapshot restore](devbox_snapshot_restore.md) — Restore a snapshot into the current project
+  - [devbox snapshot rollback](devbox_snapshot_rollback.md) — Restore the snapshot named by rollback_target in devbox/snapshot.yml
+  - [devbox snapshot unpack](devbox_snapshot_unpack.md) — Extract a packed snapshot archive into ./snapshots/
 - [devbox status](devbox_status.md) — Show stack health and per-section status (read-only)
   - [devbox status apps](devbox_status_apps.md) — Show only the apps section
   - [devbox status daemons](devbox_status_daemons.md) — Show only the daemons section
@@ -76,6 +86,7 @@ Generated reference for the `devbox` command tree.
     - [devbox validate config services](devbox_validate_config_services.md) — Validate devbox/services.yml
     - [devbox validate config styles](devbox_validate_config_styles.md) — Validate devbox/styles.yml
   - [devbox validate env](devbox_validate_env.md) — Validate environment readiness
+  - [devbox validate snapshot](devbox_validate_snapshot.md) — Validate snapshot config and on-disk snapshot integrity
   - [devbox validate templates](devbox_validate_templates.md) — Validate template packs
     - [devbox validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
     - [devbox validate templates git](devbox_validate_templates_git.md) — Validate git hooks template pack

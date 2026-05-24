@@ -28,6 +28,7 @@ Overview of all configuration files in the devbox system.
 | `devbox/info.yml` | yes | standalone | Info dashboard sections |
 | `devbox/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
 | `devbox/validate.yml` | yes | standalone | Project readiness checks (preflight + `devbox validate`) |
+| `devbox/snapshot.yml` | yes | standalone | Snapshot workflows: create / restore / remove (`devbox snapshot`) |
 
 ## Runtime artifacts
 
@@ -36,6 +37,9 @@ The `.devbox/` directory contains Devbox-managed artifacts and is **gitignored**
 - `.devbox/logs/` — pipeline logs (deploy, reset, lifecycle run/stop)
 - `.devbox/deploy/deploy.lock` — deployment lock file (Unix-only; prevents parallel deploys)
 - `.devbox/deploy/state.yml` — deployment state journal (tracks service deploy status and hashes)
+- `.devbox/snapshots/snapshot.lock` — snapshot lock file (Unix-only; serialises snapshot mutating commands and is co-acquired by deploy lifecycle commands)
+- `.devbox/snapshots/current` — current snapshot pointer (last created or restored snapshot)
+- `.devbox/snapshots/.pre-restore-backup/` — backup of `devbox/local.yml` + `.devbox/deploy/state.yml` taken before each restore; manual recovery target on restore failure
 
 Add `.devbox/` to your project's `.gitignore` if not already present.
 
@@ -92,6 +96,7 @@ flowchart LR
 - [info.yml](info.md) — info dashboard sections, template expressions
 - [commands/](commands.md) — declarative commands: types, params, context, files, workflows, templates
 - [validate.yml](validate.md) — project readiness checks: env probes, declarative checks, builtins, stages, preflight
+- [snapshot.yml](snapshot.md) — snapshot workflows: create/restore/remove blocks, variants, `${snapshot.*}` namespace, manifest, lock interaction, archive safety
 - [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
 - [UI](ui.md) — interactive command browser configuration: depth, collapse, badges, hotkeys, fallback ladder
 - [Templates](../templates.md) — Go templates, `${...}` shorthand, sprout helpers (shared across info, commands, pipelines, render packs)
