@@ -162,6 +162,9 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes b
 			return runErr
 		}
 		writeRestoreOutcome(stderr, operation, res)
+		if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
+			return &snapshotInterruptedError{wrapped: runErr}
+		}
 		return runErr
 	}
 

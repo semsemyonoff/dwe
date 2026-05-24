@@ -52,8 +52,7 @@ type LastCreate struct {
 	// At is the wall-clock timestamp the create attempt finished (or was
 	// interrupted at).
 	At time.Time `yaml:"at,omitempty"`
-	// Status is one of StatusOk / StatusPartial / StatusFailed /
-	// StatusInterrupted.
+	// Status is one of StatusOk / StatusFailed / StatusInterrupted.
 	Status string `yaml:"status,omitempty"`
 	// FailedStep is the workflow-step identifier that failed (when known).
 	FailedStep string `yaml:"failed_step,omitempty"`

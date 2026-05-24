@@ -150,9 +150,11 @@ func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, 
 			_, _ = fmt.Fprintln(stderr, "snapshot create cancelled")
 			return runErr
 		}
-		// Interrupt: exit 130 (handled by notifier outcome via err). Manifest
-		// already persisted with status=interrupted.
+		// Manifest already persisted with status=interrupted; exit 130 for SIGINT.
 		writeCreateOutcome(stderr, res)
+		if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
+			return &snapshotInterruptedError{wrapped: runErr}
+		}
 		return runErr
 	}
 

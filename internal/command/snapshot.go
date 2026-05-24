@@ -397,3 +397,11 @@ func defaultDash(s string) string {
 	}
 	return s
 }
+
+// snapshotInterruptedError wraps a context-cancellation error from a snapshot
+// workflow and exposes ExitCode() == 130 so main.go uses the SIGINT convention.
+type snapshotInterruptedError struct{ wrapped error }
+
+func (e *snapshotInterruptedError) Error() string { return e.wrapped.Error() }
+func (e *snapshotInterruptedError) Unwrap() error { return e.wrapped }
+func (e *snapshotInterruptedError) ExitCode() int { return 130 }

@@ -229,6 +229,12 @@ func TestGlobToRegexp(t *testing.T) {
 		{"**/dump.sql", "a/b/dump.sql", true},
 		{"**/dump.sql", "xdump.sql", false},
 		{"**/dump.sql", "a/xdump.sql", false},
+		// middle-position /**/: separator before suffix is required; "ab" must not match "a/**/b".
+		{"data/**/secret.key", "data/secret.key", true},
+		{"data/**/secret.key", "data/sub/secret.key", true},
+		{"data/**/secret.key", "data/sub/dir/secret.key", true},
+		{"data/**/secret.key", "datasecret.key", false},
+		{"data/**/secret.key", "data/subsecret.key", false},
 	}
 	for _, tc := range cases {
 		re, err := globToRegexp(tc.glob)
@@ -250,8 +256,7 @@ func assertRejected(t *testing.T, err error, marker string) {
 	if err == nil {
 		t.Fatalf("expected rejection, got nil")
 	}
-	var rej *rejectedTarEntryError
-	if errors.As(err, &rej) {
+	if rej, ok := errors.AsType[*rejectedTarEntryError](err); ok {
 		if !strings.Contains(strings.ToLower(rej.Reason), marker) {
 			t.Fatalf("expected reason mentioning %q, got: %s", marker, rej.Reason)
 		}

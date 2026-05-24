@@ -92,13 +92,19 @@ func globToRegexp(glob string) (*regexp.Regexp, error) {
 			}
 			b.WriteString("[^/]*")
 		case '/':
-			// `foo/**` → make the `/` (and the `**` it heads) optional so the
-			// bare `foo` segment matches the prefix too.
+			// `foo/**` → optional `/...` so bare `foo` matches too.
+			// `a/**/b` → required `/` then optional intermediates so `ab` (no separator) is rejected.
 			if i+2 < len(glob) && glob[i+1] == '*' && glob[i+2] == '*' {
-				b.WriteString("(?:/.*)?")
-				i += 2
+				i += 2 // skip both '*'
 				if i+1 < len(glob) && glob[i+1] == '/' {
-					i++
+					i++ // consume trailing '/'
+				}
+				if i+1 < len(glob) {
+					// Middle position: a segment follows — the slash separator is mandatory.
+					b.WriteString("/(?:.*/)?")
+				} else {
+					// Trailing position: nothing follows — the whole `/...` is optional.
+					b.WriteString("(?:/.*)?")
 				}
 				continue
 			}
@@ -499,6 +505,10 @@ func extractTarGz(tarPath, targetRoot string) error {
 		}
 
 		// Regular file. Make parent dirs, then refuse to overwrite (O_EXCL).
+		// Pre-check declared size so we don't write the file at all if it would exceed the cap.
+		if totalBytes+hdr.Size > maxUnpackBytes {
+			return fmt.Errorf("unpack: archive exceeds maximum size (%d bytes)", maxUnpackBytes)
+		}
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			return fmt.Errorf("unpack: mkdir for %q: %w", hdr.Name, err)
 		}

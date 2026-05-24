@@ -178,7 +178,7 @@ devbox_files:
   deploy_state: devbox/deploy-state.yml
 last_create:
   at: 2026-05-24T11:02:00Z
-  status: ok                     # ok | partial | failed | interrupted
+  status: ok                     # ok | failed | interrupted
   failed_step: ""
 last_restore:
   at: 2026-05-24T15:42:00Z
@@ -234,7 +234,7 @@ The manifest carries no `schema_version` — devbox is in active pre-release dev
 - Restores devbox files from `<snap>/devbox/` over the working copies.
 - Runs the selected restore workflow with `${snapshot.*}` available in `restore` scope (all keys including `created_at`).
 - On success: updates the current pointer atomically and writes `last_restore.status = "ok"` to the manifest.
-- On failure or SIGINT: leaves the current pointer untouched; writes `last_restore.status ∈ {failed, partial, interrupted}` with `failed_step`; emits a hint about `.pre-restore-backup/` for manual recovery; exits 1 (or 130 for SIGINT).
+- On failure or SIGINT: leaves the current pointer untouched; writes `last_restore.status ∈ {failed, interrupted}` with `failed_step`; emits a hint about `.pre-restore-backup/` for manual recovery; exits 1 (or 130 for SIGINT).
 
 **Rollback** dispatches the restore code path against `rollback_target`. Fails clearly if the target snapshot does not exist.
 
@@ -284,7 +284,7 @@ When either lock is already held by another live process, the operation exits 75
 | `snapshot.<name>.manifest_valid` | error | `manifest.yml` missing or unparseable. |
 | `snapshot.<name>.artifacts_exist` | error | Any manifest-listed artifact missing on disk. |
 | `snapshot.<name>.checksums` | warn | With `--verify`: any artifact's recomputed sha256 differs from the manifest. |
-| `snapshot.<name>.last_create_failed` | info | `last_create.status ∈ {partial, failed, interrupted}`. |
+| `snapshot.<name>.last_create_failed` | info | `last_create.status ∈ {failed, interrupted}`. |
 | `snapshot.template_scope` | error | `${snapshot.created_at}` used in a `create:` block (it does not exist yet at create time). |
 
 ## Related commands
