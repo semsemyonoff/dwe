@@ -118,11 +118,14 @@ func loadHelpColorScheme(configPath string, explicit bool) fang.ColorSchemeFunc 
 		cs.Command = lipglossv2.Color(accent)
 		cs.Flag = lipglossv2.Color(accent)
 		cs.Program = lipglossv2.Color(accent)
-		descCol := lipglossv2.Color(muted)
-		cs.Description = descCol
-		cs.Base = descCol
-		cs.Argument = descCol
-		cs.DimmedArgument = descCol
+		// Description and Base stay at fang's defaults (charmtone.Ash on dark,
+		// Charcoal on light) so command/flag descriptions read as primary text
+		// rather than dim. Argument placeholders ([command], [--flags]) and
+		// dimmed arguments are intentionally muted — they're secondary cues
+		// inside the usage line and shouldn't compete with command names.
+		mutedCol := lipglossv2.Color(muted)
+		cs.Argument = mutedCol
+		cs.DimmedArgument = mutedCol
 		return cs
 	}
 }

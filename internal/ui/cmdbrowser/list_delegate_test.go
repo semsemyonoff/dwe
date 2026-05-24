@@ -126,6 +126,56 @@ func TestCmdDelegate_SelectionMarker(t *testing.T) {
 	}
 }
 
+func TestCmdDelegate_TruncationIndicators(t *testing.T) {
+	t.Parallel()
+	t.Run("multiline_collapse_adds_ellipsis", func(t *testing.T) {
+		t.Parallel()
+		d := newCmdDelegate(80, true)
+		items := []list.Item{listItem{origIdx: 0, id: "db.dump", typ: "shell", desc: "First line is short\nSecond line carries more context"}}
+		out := stripANSI(renderDelegate(t, d, items, 1, 0)) // not selected
+		if !strings.Contains(out, "First line is short…") {
+			t.Errorf("expected ellipsis after collapsed first line; got %q", out)
+		}
+		if strings.Contains(out, "(i)") {
+			t.Errorf("unselected item must not show inspect hint; got %q", out)
+		}
+	})
+	t.Run("selected_truncated_shows_inspect_hint", func(t *testing.T) {
+		t.Parallel()
+		d := newCmdDelegate(80, true)
+		items := []list.Item{listItem{origIdx: 0, id: "db.dump", typ: "shell", desc: "First line\nSecond line"}}
+		out := stripANSI(renderDelegate(t, d, items, 0, 0)) // selected
+		if !strings.Contains(out, "First line…") {
+			t.Errorf("expected ellipsis on collapsed first line; got %q", out)
+		}
+		if !strings.Contains(out, "(i)") {
+			t.Errorf("selected truncated item must show inspect hint; got %q", out)
+		}
+	})
+	t.Run("selected_short_desc_no_hint", func(t *testing.T) {
+		t.Parallel()
+		d := newCmdDelegate(80, true)
+		items := []list.Item{listItem{origIdx: 0, id: "db.cli", typ: "shell", desc: "Short single line"}}
+		out := stripANSI(renderDelegate(t, d, items, 0, 0)) // selected
+		if strings.Contains(out, "(i)") {
+			t.Errorf("non-truncated selected item must not show inspect hint; got %q", out)
+		}
+		if strings.Contains(out, "Short single line…") {
+			t.Errorf("non-truncated desc must not be marked with ellipsis; got %q", out)
+		}
+	})
+	t.Run("width_truncation_keeps_ellipsis", func(t *testing.T) {
+		t.Parallel()
+		d := newCmdDelegate(40, true)
+		longDesc := "This description is intentionally very long so width truncation kicks in regardless of selection state"
+		items := []list.Item{listItem{origIdx: 0, id: "x.y", typ: "shell", desc: longDesc}}
+		out := stripANSI(renderDelegate(t, d, items, 1, 0)) // not selected
+		if !strings.Contains(out, "…") {
+			t.Errorf("width-truncated desc must end with ellipsis; got %q", out)
+		}
+	})
+}
+
 func TestTruncateBoundary(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

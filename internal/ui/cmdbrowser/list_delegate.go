@@ -122,16 +122,52 @@ func (d *cmdDelegate) Render(w io.Writer, m list.Model, index int, it list.Item)
 
 	line1 := cursor + idStyled + pad + paramBadge + gap + badge
 
+	// Collapse multi-line descriptions (YAML literal blocks carry `\n`) to
+	// their first line. Without this the item overflows Height()=2 and the
+	// right panel's frame stretches under JoinHorizontal — the "torn right
+	// border" symptom users see when long-description commands are listed.
 	desc := li.desc
-	if desc != "" {
-		descAvail := max(avail-cursorW, 8)
-		desc = truncate(desc, descAvail)
-		desc = paletteDescription().Render(desc)
-		line2 := strings.Repeat(" ", cursorW) + desc
-		_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
+	hadMore := false
+	if idx := strings.IndexByte(desc, '\n'); idx >= 0 {
+		desc = desc[:idx]
+		hadMore = true
+	}
+	if desc == "" {
+		_, _ = fmt.Fprintf(w, "%s\n%s", line1, strings.Repeat(" ", cursorW))
 		return
 	}
-	_, _ = fmt.Fprintf(w, "%s\n%s", line1, strings.Repeat(" ", cursorW))
+
+	// Pre-compute whether truncation would happen at the full descAvail. If so,
+	// the selected item earns an accent "(i)" affordance pointing at the
+	// inspect keybinding — the user otherwise has no way to discover that the
+	// full description is reachable.
+	descAvail := max(avail-cursorW, 8)
+	wouldTruncate := hadMore || lipgloss.Width(desc) > descAvail
+	inspectHint := ""
+	hintW := 0
+	if isSelected && wouldTruncate {
+		inspectHint = "  " + paletteKey().Bold(true).Render("(i)")
+		hintW = 4 // "  " + "(i)"
+	}
+
+	descAvail = max(descAvail-hintW, 8)
+	if wouldTruncate {
+		desc = truncate(desc, descAvail)
+		// truncate appends "…" when it actually clipped runes. When the first
+		// line happens to fit but content continued on subsequent lines, force
+		// the ellipsis so the user can still see that more is hidden.
+		if hadMore && !strings.HasSuffix(desc, "…") {
+			if lipgloss.Width(desc)+1 <= descAvail {
+				desc += "…"
+			} else {
+				desc = truncate(desc, descAvail-1) + "…"
+			}
+		}
+	}
+
+	desc = paletteDescription().Render(desc)
+	line2 := strings.Repeat(" ", cursorW) + desc + inspectHint
+	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 }
 
 // renderHeader emits the "── group ──" pseudo-header used in single-panel

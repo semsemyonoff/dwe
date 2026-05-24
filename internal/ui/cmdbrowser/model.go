@@ -501,25 +501,88 @@ func (m *Model) renderTitleBar(totalWidth int) string {
 		Render(text)
 }
 
-// renderHelpFooter renders the full help footer (grouped key bindings) for
-// the current focus mode. The footer is always full-width; there is no
-// short/long toggle. The lipgloss envelope right-pads each line to totalWidth
-// so the footer aligns with the panel frame.
+// helpEntry is one rendered cell in the footer: a key label and a short
+// description. Entries are kept separate from `keymap` so the footer can fuse
+// related bindings (Up+Down → ↑↓ nav) and drop conventional keys (home/end)
+// without affecting the actual key handling.
+type helpEntry struct {
+	key, desc string
+}
+
+// helpEntries returns the compact bindings shown in the footer. The full
+// keymap stays active — this only controls what the footer surfaces.
+//
+// Design choices:
+//   - Up/Down → "↑↓ nav" and Left/Right → "←→ tree" so footer fits in two
+//     rows even at the minimum two-panel width (60 cols).
+//   - Home/End/PgUp/PgDn are omitted as conventional keys most users assume.
+//   - "tab switch" drops "panel" — context makes the target obvious.
+func (m *Model) helpEntries() []helpEntry {
+	out := []helpEntry{
+		{"↑↓", "nav"},
+		{"←→", "tree"},
+		{"enter", "select"},
+		{"tab", "switch"},
+		{"/", "filter"},
+		{"i", "inspect"},
+		{"esc", "quit"},
+	}
+	if m.opts.Mode == ModeRun {
+		out = append(out, helpEntry{"e", "edit params"}, helpEntry{"y", "skip confirm"})
+	}
+	return out
+}
+
+// renderHelpFooter lays out compact help entries as a wrapped left-to-right
+// flow: items are joined with " · " separators and wrap to the next row when
+// the current row would exceed the inner width. The result is padded to
+// `footerRows` rows so the body height stays stable across terminal widths and
+// mode changes — without the reservation, narrower widths would push the body
+// up and wider widths would leave it stretched, jittering on every redraw.
 func (m *Model) renderHelpFooter(totalWidth int) string {
+	inner := totalWidth - 2 // Padding(0, 1) below
+	sep := paletteDescription().Render(" · ")
+	sepW := lipgloss.Width(sep)
+
+	var rows []string
+	var cur strings.Builder
+	var curW int
+
+	for _, e := range m.helpEntries() {
+		item := m.help.Styles.ShortKey.Inline(true).Render(e.key) + " " +
+			m.help.Styles.ShortDesc.Inline(true).Render(e.desc)
+		itemW := lipgloss.Width(item)
+
+		var prefix string
+		var prefixW int
+		if cur.Len() > 0 {
+			prefix = sep
+			prefixW = sepW
+		}
+		if curW+prefixW+itemW > inner && cur.Len() > 0 {
+			rows = append(rows, cur.String())
+			cur.Reset()
+			curW = 0
+			prefix = ""
+			prefixW = 0
+		}
+		cur.WriteString(prefix)
+		cur.WriteString(item)
+		curW += prefixW + itemW
+	}
+	if cur.Len() > 0 {
+		rows = append(rows, cur.String())
+	}
+	for len(rows) < footerRows {
+		rows = append(rows, "")
+	}
+	if len(rows) > footerRows {
+		rows = rows[:footerRows]
+	}
 	return lipgloss.NewStyle().
 		Width(totalWidth).
 		Padding(0, 1).
-		Render(m.help.FullHelpView(m.fullBindings()))
-}
-
-// fullBindings returns the grouped bindings for the long-help footer.
-func (m *Model) fullBindings() [][]key.Binding {
-	nav := []key.Binding{m.keys.Up, m.keys.Down, m.keys.Left, m.keys.Right, m.keys.Home, m.keys.End}
-	act := []key.Binding{m.keys.Enter, m.keys.Tab, m.keys.Filter, m.keys.Inspect, m.keys.Cancel}
-	if m.opts.Mode == ModeRun {
-		act = append(act, m.keys.EditParams, m.keys.SkipConfirm)
-	}
-	return [][]key.Binding{nav, act}
+		Render(strings.Join(rows, "\n"))
 }
 
 // breadcrumb formats the focused group's full path and item count for the
@@ -544,13 +607,13 @@ func (m *Model) breadcrumb() string {
 // Width bucket helpers — keep the layout rules in one place. The fallback
 // path ensures width is always at least minTwoPanelWidth.
 
-// footerRows is the fixed height of the full-help footer. The help model
-// renders nav and act binding groups side-by-side; in ModeRun act has 7
-// bindings (enter, tab, filter, inspect, cancel, edit-params, skip-confirm),
-// so the column max — and therefore the footer height — is 7. ModeInspect
-// uses fewer act bindings but keeps the same reservation to avoid layout
-// jitter between modes.
-const footerRows = 7
+// footerRows is the fixed height reserved for the flow-wrapped help footer.
+// The compact entries returned by `helpEntries` (7 non-ModeRun, 9 ModeRun)
+// wrap into at most 2 rows at the minimum two-panel/single-panel width of 60
+// cols. Wider widths use fewer rows — `renderHelpFooter` pads the unused row
+// with blanks so the body height stays stable across resizes and mode
+// switches.
+const footerRows = 2
 
 // bodyHeight returns the inner content height for the bordered panel(s).
 // The View composes title(1) + bordered-panel(bh+2) + footer(footerRows), so
@@ -558,12 +621,14 @@ const footerRows = 7
 // reservation the footer would be pushed off-screen.
 func bodyHeight(h int) int { return max(h-3-footerRows, 3) }
 
-// listHeight returns the inner height for the bubbles list. The right panel
-// renders breadcrumb + list (or filter-query + list), so the list must be one
-// row shorter than the panel body to avoid overflowing Height(bodyHeight).
-// Single-panel non-filter mode renders just the list, so an unused row at the
-// bottom is acceptable.
-func listHeight(h int) int { return max(bodyHeight(h)-1, 3) }
+// listHeight returns the inner height for the bubbles list. Under v2 lipgloss
+// frame semantics `Style.Height(bh)` makes the panel frame bh rows tall, so the
+// inner content area is `bh-2` (two border rows). The right panel renders
+// breadcrumb(1) + list, so the list must fit in `bh-3` rows or the right panel
+// frame stretches under JoinHorizontal and tears below the left panel.
+// Single-panel non-filter mode renders just the list, leaving one unused inner
+// row — an acceptable trade-off vs computing two list heights.
+func listHeight(h int) int { return max(bodyHeight(h)-3, 3) }
 
 // leftWidth returns the **total frame width** of the left panel, including the
 // 2 cells consumed by its left/right borders. In charm.land/lipgloss/v2,

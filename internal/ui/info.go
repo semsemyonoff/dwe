@@ -194,10 +194,20 @@ func RenderSubheader(text string) string {
 	return styleAccent.Bold(true).Render(text)
 }
 
-// RenderDefinition renders a styled "key — value" definition line.
-// Wraps the internal renderDefinition helper for use outside the ui package.
+// RenderDefinition renders a styled "key — value" definition line, word-wrapping
+// the value to TermWidth(). For callers that render into a fixed-width context
+// (e.g. an inspect viewport narrower than the terminal), use
+// [RenderDefinitionAt] with the explicit width instead — otherwise values are
+// wrapped to the terminal and silently truncated when the viewport renders.
 func RenderDefinition(name, value string, indent int, icon string) string {
-	return renderDefinition(name, value, indent, icon)
+	return renderDefinition(name, value, indent, icon, 0)
+}
+
+// RenderDefinitionAt is [RenderDefinition] with an explicit wrap width.
+// maxWidth == 0 falls back to TermWidth(); pass the viewport's content width
+// when rendering for a sub-region.
+func RenderDefinitionAt(name, value string, indent int, icon string, maxWidth int) string {
+	return renderDefinition(name, value, indent, icon, maxWidth)
 }
 
 // renderSectionTitle is the internal implementation of RenderSectionTitle.
@@ -234,7 +244,7 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 		if item.Indent.IsSet() {
 			indent = item.Indent.Value()
 		}
-		return renderDefinition(item.Name, value, indent, item.Icon), nil
+		return renderDefinition(item.Name, value, indent, item.Icon, 0), nil
 
 	case "warning":
 		text, err := tpl.Render(item.Text, cfg)
@@ -268,7 +278,7 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 //
 //	<indent>[icon ]<key> — first line of value
 //	                       continuation aligned here
-func renderDefinition(name, value string, indent int, icon string) string {
+func renderDefinition(name, value string, indent int, icon string, maxWidth int) string {
 	iconWidth := 0
 	iconPrefix := ""
 	if icon != "" {
@@ -279,7 +289,10 @@ func renderDefinition(name, value string, indent int, icon string) string {
 	sep := defSep
 	// Visible overhead: indent + icon + name + " " + sep + " "
 	overhead := indent + iconWidth + utf8.RuneCountInString(name) + 1 + utf8.RuneCountInString(sep) + 1
-	maxValue := max(TermWidth()-overhead, 20)
+	if maxWidth <= 0 {
+		maxWidth = TermWidth()
+	}
+	maxValue := max(maxWidth-overhead, 20)
 
 	lines := wordWrap(value, maxValue)
 

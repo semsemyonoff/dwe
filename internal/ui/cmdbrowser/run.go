@@ -53,7 +53,12 @@ type Item struct {
 	Type        string
 	Private     bool
 	ParamCount  int
-	Inspect     string
+	// Inspect builds the long-form description shown in the inspect viewport.
+	// It receives the viewport's content width and must wrap to it — viewports
+	// do not soft-wrap, so pre-rendering at a wider width clips the right edge
+	// when the viewport is narrower than the terminal. A nil Inspect (or one
+	// that returns "") renders a placeholder.
+	Inspect func(width int) string
 }
 
 // Options carries already-resolved configuration. Defaulting happens in the

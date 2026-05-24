@@ -141,9 +141,35 @@ func TestSkipConfirm_InspectModeIgnoresY(t *testing.T) {
 	}
 }
 
+func TestInspect_RendersAtViewportWidth(t *testing.T) {
+	// Inspect closure receives the viewport's *content width*, not the full
+	// terminal width. The viewport is sized to min(rightPanelWidth-4, 80) then
+	// shrunk again by 4 (header padding), so on a 120-col terminal we should
+	// see a width well under 120 — the previous bug pre-rendered inspect at
+	// TermWidth() and let the viewport silently clip the right edge.
+	var gotWidth int
+	items := []Item{{ID: "db.x", Type: "shell", Description: "short",
+		Inspect: func(w int) string { gotWidth = w; return "content" }}}
+	m := newModel("inspect", items, DefaultOptions(), 120, 26)
+	m.tree.focusedID = "db"
+	m.refreshList()
+	m.focus = focusRight
+	m.list.Select(0)
+	m.Update(syntheticKey("i"))
+	if gotWidth == 0 {
+		t.Fatal("Inspect closure was not called")
+	}
+	if gotWidth >= 120 {
+		t.Errorf("Inspect width %d must be < terminal width 120; viewport is narrower than the terminal", gotWidth)
+	}
+	if gotWidth > 80 {
+		t.Errorf("Inspect width %d exceeds the spec cap of 80", gotWidth)
+	}
+}
+
 func TestInspect_OpensAndCloses(t *testing.T) {
 	items := filterTestItems()
-	items[0].Inspect = "inspect details for db.migrate"
+	items[0].Inspect = func(int) string { return "inspect details for db.migrate" }
 	m := newModel("pick", items, DefaultOptions(), 120, 26)
 	m.tree.focusedID = "db"
 	m.refreshList()
@@ -168,7 +194,7 @@ func TestInspect_OpensAndCloses(t *testing.T) {
 
 func TestInspect_EnterReturnsInspectAction(t *testing.T) {
 	items := filterTestItems()
-	items[1].Inspect = "details"
+	items[1].Inspect = func(int) string { return "details" }
 	opts := DefaultOptions()
 	opts.Mode = ModeInspect
 	m := newModel("pick", items, opts, 120, 26)
@@ -209,14 +235,34 @@ func TestInspect_EmptyContentShowsPlaceholder(t *testing.T) {
 	}
 }
 
-func TestHelp_FullFooterIncludesNavAndActions(t *testing.T) {
+func TestHelp_FooterEntriesIncludeNavAndActions(t *testing.T) {
+	// DefaultOptions uses ModeRun, which includes the two extra entries
+	// (edit-params, skip-confirm) on top of the seven shared with ModeInspect.
 	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
-	groups := m.fullBindings()
-	if len(groups) != 2 {
-		t.Fatalf("fullBindings should return [nav, act] (2 groups), got %d", len(groups))
+	entries := m.helpEntries()
+	if len(entries) != 9 {
+		t.Fatalf("helpEntries should return 9 entries in ModeRun, got %d", len(entries))
 	}
-	if len(groups[0]) == 0 || len(groups[1]) == 0 {
-		t.Errorf("nav and act groups must be non-empty; got nav=%d act=%d", len(groups[0]), len(groups[1]))
+	wantKeys := map[string]bool{
+		"↑↓": false, "←→": false, "enter": false, "tab": false,
+		"/": false, "i": false, "esc": false, "e": false, "y": false,
+	}
+	for _, e := range entries {
+		if _, ok := wantKeys[e.key]; ok {
+			wantKeys[e.key] = true
+		}
+	}
+	for k, seen := range wantKeys {
+		if !seen {
+			t.Errorf("missing expected help entry key %q", k)
+		}
+	}
+
+	opts := DefaultOptions()
+	opts.Mode = ModeInspect
+	m = newModel("pick", filterTestItems(), opts, 120, 26)
+	if got := len(m.helpEntries()); got != 7 {
+		t.Errorf("helpEntries should return 7 entries in ModeInspect, got %d", got)
 	}
 }
 

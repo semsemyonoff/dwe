@@ -416,15 +416,17 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
-			var buf bytes.Buffer
-			printInspect(&buf, d, cfg)
 			items[i] = cmdbrowser.Item{
 				ID:          d.ID,
 				Description: d.Description,
 				Type:        string(d.Type),
 				Private:     d.Private,
 				ParamCount:  len(d.Params),
-				Inspect:     buf.String(),
+				Inspect: func(width int) string {
+					var buf bytes.Buffer
+					printInspectAt(&buf, d, cfg, width)
+					return buf.String()
+				},
 			}
 		}
 		opts := cmdbrowser.Options{
@@ -642,9 +644,20 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 // printInspect writes a detailed view of a command definition using Lipgloss styles.
 // cfg may be nil at call sites that exercise the renderer purely structurally
 // (tests); the resolved container-name block is then omitted.
+//
+// Word-wrap follows the terminal width. For renderings into a fixed sub-region
+// (e.g. an inspect viewport narrower than the terminal), use
+// [printInspectAt] with the explicit width — otherwise values wrap to the
+// terminal and get silently clipped when the viewport renders.
 func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig) {
+	printInspectAt(w, def, cfg, 0)
+}
+
+// printInspectAt is [printInspect] with an explicit wrap width. maxWidth == 0
+// falls back to the terminal width.
+func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, maxWidth int) {
 	def2 := func(name, value string, indent int) {
-		_, _ = fmt.Fprintln(w, ui.RenderDefinition(name, value, indent, ""))
+		_, _ = fmt.Fprintln(w, ui.RenderDefinitionAt(name, value, indent, "", maxWidth))
 	}
 	sub := func(title string) {
 		_, _ = fmt.Fprintln(w, ui.RenderSubheader("  "+title))

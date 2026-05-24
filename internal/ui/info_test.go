@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"devbox-cli/internal/config"
 )
@@ -250,6 +251,25 @@ func TestRenderDefinition_Basic(t *testing.T) {
 	out := RenderDefinition("key", "value", 0, "")
 	if !strings.Contains(out, "key") {
 		t.Errorf("expected key in definition output, got %q", out)
+	}
+}
+
+// TestRenderDefinitionAt_WrapsToExplicitWidth guards the inspect viewport
+// pathway: a value rendered for a sub-region (here 60 cells) must word-wrap
+// to that width regardless of the actual terminal width. Without this the
+// inspect viewport clipped long values on the right edge.
+func TestRenderDefinitionAt_WrapsToExplicitWidth(t *testing.T) {
+	resetStyles()
+	long := "Restore an OpenSearch snapshot archive: unpack into a temp dir, into the container's restore-repo location, register the repo, resolve the requested indices from the manifest, DROP the matching live indices, restore via the Snapshot Restore API."
+	out := RenderDefinitionAt("description", long, 2, "", 60)
+	maxW := 0
+	for line := range strings.SplitSeq(stripANSI(out), "\n") {
+		if w := utf8.RuneCountInString(line); w > maxW {
+			maxW = w
+		}
+	}
+	if maxW > 60 {
+		t.Errorf("max line width %d exceeds requested 60", maxW)
 	}
 }
 

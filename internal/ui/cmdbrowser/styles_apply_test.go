@@ -181,7 +181,7 @@ func TestNewModel_AppliesListAndHelpStyles(t *testing.T) {
 func TestNewInspectState_AppliesViewportStyles(t *testing.T) {
 	applyPaletteOverride(t)
 
-	st := newInspectState(80, 20, "some content", 0)
+	st := newInspectState(80, 20, func(int) string { return "some content" }, 0)
 	if got, want := st.vp.HighlightStyle.GetForeground(), lipgloss.Color("167"); got != want {
 		t.Errorf("HighlightStyle foreground: got %v, want %v", got, want)
 	}
