@@ -33,6 +33,42 @@ type SnapshotPackConfig struct {
 	Exclude []string `yaml:"exclude"`
 }
 
+// ServicesMismatchValue is the typed policy controlling restore behavior when
+// the manifest's captured service list diverges from the current config.
+type ServicesMismatchValue int
+
+const (
+	// ServicesMismatchWarn (default) emits a warning and asks for confirmation.
+	ServicesMismatchWarn ServicesMismatchValue = iota
+	// ServicesMismatchBlock aborts the restore with a typed error before any
+	// side effect on devbox/local.yml.
+	ServicesMismatchBlock
+	// ServicesMismatchIgnore proceeds silently regardless of any diff.
+	ServicesMismatchIgnore
+)
+
+// ServicesMismatchPolicy is the YAML shape under snapshot.yml `services_mismatch`.
+type ServicesMismatchPolicy struct {
+	// Policy is the raw policy string: "warn" (default), "block", or "ignore".
+	Policy string `yaml:"policy"`
+}
+
+// Effective resolves the raw Policy string into a typed ServicesMismatchValue.
+// An empty string resolves to ServicesMismatchWarn. The loader rejects unknown
+// values before reaching this point, so Effective never returns an error.
+func (p ServicesMismatchPolicy) Effective() ServicesMismatchValue {
+	switch p.Policy {
+	case "", "warn":
+		return ServicesMismatchWarn
+	case "block":
+		return ServicesMismatchBlock
+	case "ignore":
+		return ServicesMismatchIgnore
+	default:
+		return ServicesMismatchWarn
+	}
+}
+
 // SnapshotWorkflow is one of the create/restore/remove workflow blocks in
 // devbox/snapshot.yml. The Steps shape reuses model.WorkflowStep directly so
 // snapshot workflows are executed by the same runner as user `type: workflow`
@@ -60,6 +96,9 @@ type SnapshotConfig struct {
 	RequireMatchingConfig bool `yaml:"require_matching_config"`
 	// Pack holds optional pack subcommand settings.
 	Pack SnapshotPackConfig `yaml:"pack"`
+	// ServicesMismatch controls restore behavior when the manifest's captured
+	// service list diverges from the current config (default: warn).
+	ServicesMismatch ServicesMismatchPolicy `yaml:"services_mismatch"`
 
 	// Create is the workflow run by `devbox snapshot create`.
 	Create *SnapshotWorkflow `yaml:"create"`
@@ -92,6 +131,10 @@ func LoadSnapshotConfig(path string) (*SnapshotConfig, error) {
 		}
 	}
 
+	if err := validateServicesMismatchPolicy(cfg.ServicesMismatch.Policy); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
 	if err := validateSnapshotWorkflow("create", cfg.Create); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
@@ -103,6 +146,18 @@ func LoadSnapshotConfig(path string) (*SnapshotConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+// validateServicesMismatchPolicy rejects unknown policy values with a clear
+// error message naming the offending value and the allowed set. An empty
+// string is accepted and resolves to the default at use time.
+func validateServicesMismatchPolicy(policy string) error {
+	switch policy {
+	case "", "warn", "block", "ignore":
+		return nil
+	default:
+		return fmt.Errorf("services_mismatch.policy: unknown policy %q (allowed: warn, block, ignore)", policy)
+	}
 }
 
 // validateSnapshotWorkflow checks step shapes and variant naming for a single

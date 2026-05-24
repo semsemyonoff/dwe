@@ -76,11 +76,11 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 2: `services_mismatch` policy in config
 
-- [ ] add `ServicesMismatchPolicy{ Policy string \`yaml:"policy"\` }` and a `ServicesMismatch ServicesMismatchPolicy \`yaml:"services_mismatch"\`` field to `SnapshotConfig` in `internal/config/snapshot.go`
-- [ ] valid values: `warn` (default — empty string also resolves to warn), `block`, `ignore`; validate at load time with a clear "unknown policy" error including the offending value and the allowed set
-- [ ] expose a typed enum (`ServicesMismatchWarn` / `Block` / `Ignore`) plus a resolver `(ServicesMismatchPolicy).Effective() ServicesMismatchValue` so consumers don't compare raw strings
-- [ ] write tests for: default policy resolution, each explicit value, unknown value rejection, strict-decode unknown sub-field rejection
-- [ ] run `go test ./internal/config/... && make lint` — must pass before task 3
+- [x] add `ServicesMismatchPolicy{ Policy string \`yaml:"policy"\` }` and a `ServicesMismatch ServicesMismatchPolicy \`yaml:"services_mismatch"\`` field to `SnapshotConfig` in `internal/config/snapshot.go`
+- [x] valid values: `warn` (default — empty string also resolves to warn), `block`, `ignore`; validate at load time with a clear "unknown policy" error including the offending value and the allowed set
+- [x] expose a typed enum (`ServicesMismatchWarn` / `Block` / `Ignore`) plus a resolver `(ServicesMismatchPolicy).Effective() ServicesMismatchValue` so consumers don't compare raw strings
+- [x] write tests for: default policy resolution, each explicit value, unknown value rejection, strict-decode unknown sub-field rejection
+- [x] run `go test ./internal/config/... && make lint` — must pass before task 3
 
 ### Task 3: Service-divergence comparator
 

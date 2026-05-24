@@ -250,6 +250,78 @@ func TestLoadSnapshotConfig_emptyDocument(t *testing.T) {
 	}
 }
 
+func TestLoadSnapshotConfig_servicesMismatchPolicy(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		wantValue ServicesMismatchValue
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name:      "default-when-absent",
+			body:      "dir: ./snapshots\n",
+			wantValue: ServicesMismatchWarn,
+		},
+		{
+			name:      "default-when-empty",
+			body:      "services_mismatch:\n  policy: \"\"\n",
+			wantValue: ServicesMismatchWarn,
+		},
+		{
+			name:      "warn-explicit",
+			body:      "services_mismatch:\n  policy: warn\n",
+			wantValue: ServicesMismatchWarn,
+		},
+		{
+			name:      "block",
+			body:      "services_mismatch:\n  policy: block\n",
+			wantValue: ServicesMismatchBlock,
+		},
+		{
+			name:      "ignore",
+			body:      "services_mismatch:\n  policy: ignore\n",
+			wantValue: ServicesMismatchIgnore,
+		},
+		{
+			name:      "unknown-rejected",
+			body:      "services_mismatch:\n  policy: maybe\n",
+			wantErr:   true,
+			errSubstr: "\"maybe\"",
+		},
+		{
+			name:      "strict-decode-rejects-unknown-subfield",
+			body:      "services_mismatch:\n  policy: warn\n  bogus: 1\n",
+			wantErr:   true,
+			errSubstr: "bogus",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeSnapshotYAML(t, tc.body)
+			cfg, err := LoadSnapshotConfig(path)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				if tc.errSubstr != "" && !strings.Contains(err.Error(), tc.errSubstr) {
+					t.Errorf("error %q should contain %q", err.Error(), tc.errSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadSnapshotConfig: %v", err)
+			}
+			if cfg == nil {
+				t.Fatal("expected non-nil cfg")
+			}
+			if got := cfg.ServicesMismatch.Effective(); got != tc.wantValue {
+				t.Errorf("Effective: got %v want %v", got, tc.wantValue)
+			}
+		})
+	}
+}
+
 func TestSnapshotConfigPath(t *testing.T) {
 	got := SnapshotConfigPath("/proj")
 	want := filepath.Join("/proj", "devbox", "snapshot.yml")
