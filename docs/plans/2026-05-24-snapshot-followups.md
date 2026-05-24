@@ -115,11 +115,11 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 5: `snapshot inspect` and validator surfaces the diff
 
-- [ ] in `internal/command/snapshot.go` (the existing `inspect` subcommand), call `DiffServices` against the current config when displaying a manifest and render the diff via `FormatServicesDiff` in a `services` section. `inspect` requires a project (it is not in `allowedWithoutProject` at `internal/command/root.go:195`), so the config is always available — no "skip silently" branch. Adding `inspect` to the allowlist for tar-from-anywhere use is intentionally out of scope here.
-- [ ] add a `snapshot.<name>.services_diff` info-severity validator under `internal/validate/snapshot/`; runs once per snapshot, emits one info diagnostic per snapshot with a non-empty diff, hint quoting `FormatServicesDiff` (truncated to fit the diagnostic Hint width per the existing memory rule on hint formatting)
-- [ ] register the new validator via the existing `snapshot.All(...)` aggregator (consult `internal/command/validate.go:buildRegistry` to confirm registration site)
-- [ ] tests: `internal/command/snapshot_inspect_test.go` covers the rendered section for each diff shape; `internal/validate/snapshot/services_diff_test.go` covers the validator output
-- [ ] run `go test ./internal/snapshot/... ./internal/validate/... ./internal/command/... && make lint` — must pass before task 6
+- [x] in `internal/command/snapshot.go` (the existing `inspect` subcommand), call `DiffServices` against the current config when displaying a manifest and render the diff via `FormatServicesDiff` in a `services` section. `inspect` requires a project (it is not in `allowedWithoutProject` at `internal/command/root.go:195`), so the config is always available — no "skip silently" branch. Adding `inspect` to the allowlist for tar-from-anywhere use is intentionally out of scope here.
+- [x] add a `snapshot.<name>.services_diff` info-severity validator under `internal/validate/snapshot/`; runs once per snapshot, emits one info diagnostic per snapshot with a non-empty diff, hint quoting `FormatServicesDiff` (truncated to fit the diagnostic Hint width per the existing memory rule on hint formatting)
+- [x] register the new validator via the existing `snapshot.All(...)` aggregator (consult `internal/command/validate.go:buildRegistry` to confirm registration site)
+- [x] tests: `internal/command/snapshot_inspect_test.go` covers the rendered section for each diff shape; `internal/validate/snapshot/services_diff_test.go` covers the validator output
+- [x] run `go test ./internal/snapshot/... ./internal/validate/... ./internal/command/... && make lint` — must pass before task 6
 
 ### Task 6: `local_yml.preserve_keys` schema and helper module
 

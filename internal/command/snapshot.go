@@ -208,19 +208,34 @@ func runSnapshotInspect(flags *rootFlags, out io.Writer, arg string, jsonOut boo
 	currentHash := snapshot.ProjectConfigHash(baseDir)
 	diverged := m.Project.ConfigHash != "" && currentHash != "" && m.Project.ConfigHash != currentHash
 
+	// Diff captured services against the current project. Errors loading the
+	// current config (or a manifest with no services captured) leave servicesDiff
+	// nil so the section is omitted; the project-resolution invariant for
+	// `inspect` guarantees configPath is set when invoked normally, but tests may
+	// construct rootFlags without it.
+	var servicesDiff *snapshot.ServicesDiff
+	if len(m.Project.Services) > 0 && flags.configPath != "" {
+		if cfg, cfgErr := config.LoadConfig(flags.configPath); cfgErr == nil && cfg != nil {
+			d := snapshot.DiffServices(m.Project.Services, cfg.Services)
+			servicesDiff = &d
+		}
+	}
+
 	if jsonOut {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
 		return enc.Encode(struct {
-			Source             string             `json:"source"`
-			Manifest           *snapshot.Manifest `json:"manifest"`
-			CurrentConfigHash  string             `json:"current_config_hash"`
-			ConfigHashDiverged bool               `json:"config_hash_diverged"`
+			Source             string                 `json:"source"`
+			Manifest           *snapshot.Manifest     `json:"manifest"`
+			CurrentConfigHash  string                 `json:"current_config_hash"`
+			ConfigHashDiverged bool                   `json:"config_hash_diverged"`
+			ServicesDiff       *snapshot.ServicesDiff `json:"services_diff,omitempty"`
 		}{
 			Source:             source,
 			Manifest:           m,
 			CurrentConfigHash:  currentHash,
 			ConfigHashDiverged: diverged,
+			ServicesDiff:       servicesDiff,
 		})
 	}
 
@@ -251,6 +266,15 @@ func runSnapshotInspect(flags *rootFlags, out io.Writer, arg string, jsonOut boo
 		for _, a := range m.Artifacts {
 			fmt.Fprintf(&b, "  - %s  (%s, sha256=%s)\n", a.Path, formatSnapshotSize(a.Size), shortHash(a.Sha256))
 		}
+	}
+	if servicesDiff != nil {
+		if servicesDiff.IsEmpty() {
+			fmt.Fprintf(&b, "services:       in sync (%d captured)\n", len(m.Project.Services))
+		} else {
+			fmt.Fprintf(&b, "services:       %s\n", snapshot.FormatServicesDiff(*servicesDiff))
+		}
+	} else if len(m.Project.Services) > 0 {
+		fmt.Fprintf(&b, "services:       %d captured (current project not loaded)\n", len(m.Project.Services))
 	}
 	if m.LastCreate != nil {
 		fmt.Fprintf(&b, "last_create:    %s @ %s", m.LastCreate.Status, formatSnapshotTime(m.LastCreate.At))

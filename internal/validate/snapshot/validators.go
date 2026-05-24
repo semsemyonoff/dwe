@@ -209,6 +209,43 @@ func (v *templateScopeValidator) Run(_ validate.Context) []validate.Diagnostic {
 	return diags
 }
 
+// servicesDiffValidator emits a single info-severity diagnostic per snapshot
+// whose captured service set diverges from the current project's effective
+// service set. The check is silent when:
+//   - the manifest is missing or unparseable (perSnapshotValidator already errors),
+//   - the manifest captured no services (older format or unconfigured project),
+//   - the current cfg is nil (validate ran without a loadable devbox.yml),
+//   - or the diff is empty.
+//
+// The diagnostic shares the snapshot's ID so `devbox validate snapshot <name>`
+// filters this in alongside the other per-snapshot checks.
+type servicesDiffValidator struct {
+	name  string
+	entry coresnap.Entry
+	cfg   *config.DevboxConfig
+}
+
+func (v *servicesDiffValidator) ID() string     { return v.name }
+func (v *servicesDiffValidator) Domain() string { return "snapshot" }
+
+func (v *servicesDiffValidator) Run(_ validate.Context) []validate.Diagnostic {
+	if v.entry.Manifest == nil || len(v.entry.Manifest.Project.Services) == 0 || v.cfg == nil {
+		return nil
+	}
+	diff := coresnap.DiffServices(v.entry.Manifest.Project.Services, v.cfg.Services)
+	if diff.IsEmpty() {
+		return nil
+	}
+	return []validate.Diagnostic{{
+		Severity: validate.SeverityInfo,
+		Domain:   "snapshot",
+		Target:   fmt.Sprintf("%s.services_diff", v.name),
+		File:     filepath.Join(v.entry.Dir, coresnap.ManifestFileName),
+		Message:  "captured service set diverges from current project",
+		Hint:     coresnap.FormatServicesDiff(diff),
+	}}
+}
+
 // walkSteps invokes visit(stepPath, where, expr) for every templated string in
 // each step: when:, confirm:, and each with: value. Parallel containers
 // recurse into their child steps with a qualified path prefix so callers can
