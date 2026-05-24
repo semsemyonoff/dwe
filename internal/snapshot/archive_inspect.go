@@ -11,11 +11,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// maxInspectManifestBytes caps the in-archive manifest payload an inspector
-// will read. The manifest is plain YAML — 1 MiB is generous and protects
-// `devbox snapshot inspect <tar>` from a malicious tar that points to an
-// absurdly large "manifest.yml" entry.
-const maxInspectManifestBytes = 1 << 20
+const (
+	// maxInspectManifestBytes caps the in-archive manifest payload an inspector
+	// will read. The manifest is plain YAML — 1 MiB is generous and protects
+	// `devbox snapshot inspect <tar>` from a malicious tar that points to an
+	// absurdly large "manifest.yml" entry.
+	maxInspectManifestBytes = 1 << 20
+	// maxInspectEntries caps the number of tar entries scanned before
+	// manifest.yml is found. Matches the unpack entry cap.
+	maxInspectEntries = 100_000
+)
 
 // ReadManifestFromTar opens a .tar.gz archive at tarPath and decodes the
 // embedded manifest.yml without extracting any other entry.
@@ -38,7 +43,14 @@ func ReadManifestFromTar(tarPath string) (*Manifest, error) {
 	}
 	defer func() { _ = gz.Close() }()
 
-	tr := tar.NewReader(gz)
+	// Cap total bytes decompressed while scanning for manifest.yml. Without
+	// this, tr.Next() must decompress every unread entry body to advance past
+	// it; a crafted archive with huge entries before manifest.yml would force
+	// unbounded CPU/time. io.LimitReader wraps the decompressor so all reads
+	// — including internal discard reads inside tr.Next() — count toward the
+	// limit. Matches the unpack decompression cap.
+	tr := tar.NewReader(io.LimitReader(gz, maxUnpackBytes))
+	var entryCount int
 	for {
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -46,6 +58,10 @@ func ReadManifestFromTar(tarPath string) (*Manifest, error) {
 		}
 		if err != nil {
 			return nil, fmt.Errorf("read %s: tar: %w", tarPath, err)
+		}
+		entryCount++
+		if entryCount > maxInspectEntries {
+			return nil, fmt.Errorf("read %s: exceeded %d-entry scan limit without finding manifest.yml", tarPath, maxInspectEntries)
 		}
 		switch hdr.Typeflag {
 		case tar.TypeSymlink, tar.TypeLink, tar.TypeChar, tar.TypeBlock, tar.TypeFifo:

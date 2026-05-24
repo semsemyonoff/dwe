@@ -220,14 +220,14 @@ func extractPreservedKeys(src []byte, dotPaths []string) ([]byte, error) {
 		if len(segs) == 0 {
 			continue
 		}
-		valNode, found, err := lookupPath(curRoot, segs, p)
+		keyNode, valNode, found, err := lookupPath(curRoot, segs, p)
 		if err != nil {
 			return nil, err
 		}
 		if !found {
 			continue
 		}
-		if err := setPath(out, segs, valNode, p); err != nil {
+		if err := setPath(out, segs, valNode, keyNode, p); err != nil {
 			return nil, err
 		}
 		hits++
@@ -320,14 +320,14 @@ func mergePreservedKeys(snapshotBytes, currentBytes []byte, dotPaths []string) (
 		if len(segs) == 0 {
 			continue
 		}
-		valNode, found, err := lookupPath(curRoot, segs, p)
+		keyNode, valNode, found, err := lookupPath(curRoot, segs, p)
 		if err != nil {
 			return nil, err
 		}
 		if !found {
 			continue
 		}
-		if err := setPath(snapRoot, segs, valNode, p); err != nil {
+		if err := setPath(snapRoot, segs, valNode, keyNode, p); err != nil {
 			return nil, err
 		}
 	}
@@ -407,25 +407,28 @@ func removePath(mapping *yaml.Node, segs []string, fullPath string) error {
 	return nil
 }
 
-// lookupPath resolves segs in mapping and returns (node, true, nil) when the
-// leaf is present. A missing key returns (nil, false, nil). Structural errors
-// at intermediate segments are returned wrapped.
-func lookupPath(mapping *yaml.Node, segs []string, fullPath string) (*yaml.Node, bool, error) {
+// lookupPath resolves segs in mapping and returns (keyNode, valNode, true, nil)
+// when the leaf is present. A missing key returns (nil, nil, false, nil).
+// Structural errors at intermediate segments are returned wrapped. Returning
+// the key node alongside the value node lets callers carry comments attached
+// to the key into the merged document.
+func lookupPath(mapping *yaml.Node, segs []string, fullPath string) (*yaml.Node, *yaml.Node, bool, error) {
 	for i, seg := range segs {
 		if mapping.Kind != yaml.MappingNode {
-			return nil, false, fmt.Errorf("preserve_keys %q: expected mapping at %q, got %s", fullPath, seg, yamlKindName(mapping.Kind))
+			return nil, nil, false, fmt.Errorf("preserve_keys %q: expected mapping at %q, got %s", fullPath, seg, yamlKindName(mapping.Kind))
 		}
 		idx := findKey(mapping, seg)
 		if idx < 0 {
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
+		key := mapping.Content[idx]
 		val := mapping.Content[idx+1]
 		if i == len(segs)-1 {
-			return val, true, nil
+			return key, val, true, nil
 		}
 		mapping = val
 	}
-	return nil, false, nil
+	return nil, nil, false, nil
 }
 
 // setPath splices value into mapping at segs, creating intermediate mappings
@@ -433,7 +436,11 @@ func lookupPath(mapping *yaml.Node, segs []string, fullPath string) (*yaml.Node,
 // mapping, setPath returns a type-conflict error. When the leaf exists and
 // disagrees with value in kind, setPath also returns a type-conflict error
 // so we never silently overwrite differently-shaped state.
-func setPath(mapping *yaml.Node, segs []string, value *yaml.Node, fullPath string) error {
+//
+// leafKey, when non-nil, is used as the key node at the final segment. This
+// carries head/line comments from the source document into the target so
+// comments on preserved keys survive merge and extract operations.
+func setPath(mapping *yaml.Node, segs []string, value *yaml.Node, leafKey *yaml.Node, fullPath string) error {
 	if mapping.Kind != yaml.MappingNode {
 		return fmt.Errorf("preserve_keys %q: expected mapping at root, got %s", fullPath, yamlKindName(mapping.Kind))
 	}
@@ -441,13 +448,19 @@ func setPath(mapping *yaml.Node, segs []string, value *yaml.Node, fullPath strin
 		idx := findKey(mapping, seg)
 		if i == len(segs)-1 {
 			if idx < 0 {
-				keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: seg}
-				mapping.Content = append(mapping.Content, keyNode, value)
+				kn := leafKey
+				if kn == nil {
+					kn = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: seg}
+				}
+				mapping.Content = append(mapping.Content, kn, value)
 				return nil
 			}
 			existing := mapping.Content[idx+1]
 			if existing.Kind != value.Kind {
 				return fmt.Errorf("preserve_keys %q: type conflict (snapshot=%s, current=%s)", fullPath, yamlKindName(existing.Kind), yamlKindName(value.Kind))
+			}
+			if leafKey != nil {
+				mapping.Content[idx] = leafKey
 			}
 			mapping.Content[idx+1] = value
 			return nil
