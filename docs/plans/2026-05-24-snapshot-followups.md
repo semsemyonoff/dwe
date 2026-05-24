@@ -412,12 +412,12 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 15: Final verification
 
-- [ ] re-read `Overview` and confirm each of the four items is implemented end-to-end
-- [ ] confirm Task 12's observer is opt-in (nil → no change) and existing workflow tests still pass unchanged
-- [ ] run `make test` (full suite)
-- [ ] run `go test ./... -race`
-- [ ] run `make lint` — no warnings
-- [ ] manually grep for any leftover `TODO`/`FIXME` introduced in the diff and resolve
+- [x] re-read `Overview` and confirm each of the four items is implemented end-to-end
+- [x] confirm Task 12's observer is opt-in (nil → no change) and existing workflow tests still pass unchanged
+- [x] run `make test` (full suite)
+- [x] run `go test ./... -race`
+- [x] run `make lint` — no warnings
+- [x] manually grep for any leftover `TODO`/`FIXME` introduced in the diff and resolve
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`*
 
