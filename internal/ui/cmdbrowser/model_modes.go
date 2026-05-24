@@ -181,9 +181,12 @@ func (m *Model) openInspect() {
 	if strings.TrimSpace(content) == "" {
 		content = "(no inspect content available)"
 	}
-	rw := rightWidth(m.width)
+	// Pass the inspect viewport the **inner content width** (frame - 2 borders),
+	// matching the right panel's content area — newInspectState shrinks it
+	// further to fit the inspect header / padding.
+	rw := rightWidth(m.width) - 2
 	if singlePanel(m.width) {
-		rw = singlePanelWidth(m.width)
+		rw = singlePanelWidth(m.width) - 2
 	}
 	bh := max(m.height-3, 5)
 	m.inspect = newInspectState(rw, bh-2, content, idx)

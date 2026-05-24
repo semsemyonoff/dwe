@@ -68,9 +68,12 @@ var _ tea.Model = (*Model)(nil)
 
 func newModel(title string, items []Item, opts Options, w, h int) *Model {
 	tm := newTreeModel(items, opts.IncludePrivate, opts.DefaultExpandedDepth)
-	listW := rightWidth(w)
+	// listW is the **inner content width** the bubbles list / delegate renders
+	// into — frame minus the 2 border cells. See [leftWidth] for the v2
+	// frame-semantics rationale.
+	listW := rightWidth(w) - 2
 	if singlePanel(w) {
-		listW = singlePanelWidth(w)
+		listW = singlePanelWidth(w) - 2
 	}
 	dlg := newCmdDelegate(listW, !singlePanel(w) && showBadges(w) && opts.ShowTypeBadges)
 	l := list.New(nil, dlg, listW, listHeight(h))
@@ -336,9 +339,10 @@ func (m *Model) visibleListItems() []list.Item { return m.list.Items() }
 // pseudo-header rows appear (or disappear) accordingly.
 func (m *Model) applyLayout() {
 	nowSingle := singlePanel(m.width)
-	listW := rightWidth(m.width)
+	// Inner content width = frame - 2 (one border cell on each side).
+	listW := rightWidth(m.width) - 2
 	if nowSingle {
-		listW = singlePanelWidth(m.width)
+		listW = singlePanelWidth(m.width) - 2
 	}
 	bh := bodyHeight(m.height)
 	m.delegate.width = listW
@@ -346,7 +350,7 @@ func (m *Model) applyLayout() {
 	m.list.SetSize(listW, listHeight(m.height))
 	if m.inspect != nil {
 		// Resize the viewport in-place to preserve scroll position.
-		w := max(min(listW-4, 80), 20)
+		w := max(min(listW-2, 80), 20)
 		m.inspect.vp.SetWidth(w)
 		m.inspect.vp.SetHeight(max(bh-2, 5))
 	}
@@ -530,12 +534,21 @@ func bodyHeight(h int) int { return max(h-3-footerRows, 3) }
 // bottom is acceptable.
 func listHeight(h int) int { return max(bodyHeight(h)-1, 3) }
 
+// leftWidth returns the **total frame width** of the left panel, including the
+// 2 cells consumed by its left/right borders. In charm.land/lipgloss/v2,
+// `Style.Width(n)` sets the frame width (border-inclusive), not the inner
+// content width as it did in v1 — so callers can pass this value straight to
+// `Width(...)` and the rendered panel will span exactly this many cells.
 func leftWidth(w int) int {
-	return max(w/3, 20)
+	return max(w/3, 22)
 }
 
+// rightWidth returns the **total frame width** of the right panel so that the
+// two panels joined by `JoinHorizontal` fill exactly w cells. The previous
+// implementation subtracted 4 (both panels' borders) under v1 semantics, which
+// left a 4-cell gap on the right edge — the "torn right border" bug.
 func rightWidth(w int) int {
-	return max(w-leftWidth(w)-4, 10)
+	return max(w-leftWidth(w), 12)
 }
 
 // showBadges returns true for the full two-panel bucket (≥ 100 cols).
@@ -550,7 +563,8 @@ func showCounts(w int) bool { return w >= fullTwoPanelWidth }
 // huh fallback before the Model is ever constructed.
 func singlePanel(w int) bool { return w < reducedTwoPanelWidth }
 
-// singlePanelWidth returns the inner content width for single-panel mode.
-// The bordered panel reserves 2 cells (one per vertical border); the list and
-// the lipgloss style share the same expression so they stay in sync.
-func singlePanelWidth(w int) int { return max(w-2, 10) }
+// singlePanelWidth returns the **total frame width** of the single panel so it
+// fills the full terminal width. Inner content width is `singlePanelWidth(w) - 2`
+// (border on each side). See [leftWidth] for the v2 lipgloss frame-semantics
+// rationale.
+func singlePanelWidth(w int) int { return max(w, 12) }

@@ -176,16 +176,11 @@ Current call sites are **gated** by `len(stylesCfg.Header.Lines) > 0` ([root.go:
 
 Item-description truncation already exists ([internal/ui/cmdbrowser/list_delegate.go:127](../../internal/ui/cmdbrowser/list_delegate.go#L127)) with boundary tests ([list_delegate_test.go:130](../../internal/ui/cmdbrowser/list_delegate_test.go#L130)). The "torn right border" symptom is therefore caused elsewhere — most likely a width mismatch between the inner list/viewport width and the bordered panel's outer width, or a `JoinHorizontal` joining panels of unequal rendered height/width.
 
-- [ ] reproduce the bug first: open cmd-browser at 80 / 100 / 120 cols on a project with deeply nested groups and long IDs; capture the failing frame (use `tea.WithOutput` or `BUBBLETEA_LOG`)
-- [ ] suspect surfaces, in order:
-  - panel border-style width math: does `applyListStyles` / `applyViewportStyles` account for the 2 border + 2 padding chars consumed by the wrapping `lipgloss.Style.Border(...)`?
-  - `lipgloss.JoinHorizontal(lipgloss.Top, left, right)`: are `left` and `right` guaranteed to have equal rendered height? Unequal heights cause the right panel to "drift" if it has fewer trailing newlines
-  - `viewport` content width vs viewport `Width()`: the inspect viewport may render lines wider than its declared width when content contains ANSI escapes plus long URLs / paths
-- [ ] add line-width invariant assertion **scoped to the bordered body region only** — borders, list rows, viewport rows. **Exclude the title bar and help footer**: those are intentionally not full-width yet (Task 11 introduces the full-width title/footer envelope), so asserting on them here would fail on work that hasn't landed
-- [ ] fix the actual offender; only add new truncation code if a content source is found that bypasses the existing delegate path
-- [ ] write a regression test on `model.View()` at 60 / 80 / 100 / 120 cols asserting the body-region line-width invariant against a fixture with long IDs + long descriptions + deep groups
-- [ ] leave a TODO referencing Task 11 next to the body-only assertion so it's tightened to cover title/footer once Task 11 lands
-- [ ] run tests — must pass before next task
+- [x] reproduce the bug first: programmatic repro via `m.View().Content` at 60 / 80 / 100 / 120 cols showed bordered body lines at width `w-2` (single-panel) and `w-4` (two-panel) — right edge fell short of the terminal
+- [x] suspect surfaces investigated; **root cause** identified: in `charm.land/lipgloss/v2`, `Style.Width(n)` sets the **total frame width** (border-inclusive), not the inner content width as in v1. `rightWidth(w) = w - leftWidth(w) - 4` was subtracting 4 border cells assuming v1 semantics, leaving a 4-cell (two-panel) / 2-cell (single-panel) gap on the right edge
+- [x] fix in `internal/ui/cmdbrowser/model.go`: renamed `leftWidth`/`rightWidth`/`singlePanelWidth` to return **frame widths** (`rightWidth = w - leftWidth`, `singlePanelWidth = w`); call sites that consume the inner content width (list size, delegate width, inspect viewport seed) now subtract 2 explicitly. Comments at each site explain the seam
+- [x] add body-region line-width invariant test in `internal/ui/cmdbrowser/border_width_test.go`: every bordered row at 60/80/100/120 cols must have `lipgloss.Width(line) == w`. Excludes title bar and help footer (Task 11 wraps those next); TODO note left in-file
+- [x] run tests — `go test ./...` and `make lint` clean
 
 ### Task 11: Full-width title bar and help footer
 
