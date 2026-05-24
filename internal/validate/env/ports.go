@@ -62,7 +62,11 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 
 	ourProject := resolveComposeProject(vctx.ProjectRoot, v.cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), portsProbeTimeout)
+	parent := vctx.Ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, portsProbeTimeout)
 	defer cancel()
 	bindings, _ := queryDockerPortBindings(ctx, bin)
 

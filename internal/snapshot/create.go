@@ -81,6 +81,11 @@ type CreateResult struct {
 	// Status mirrors Manifest.LastCreate.Status — "ok" / "failed" /
 	// "interrupted".
 	Status string
+	// BackupRestored is true when an existing snapshot was backed up before
+	// the create attempt, the workflow failed, and the backup was successfully
+	// renamed back. The snapshot directory therefore contains the previous
+	// (pre-attempt) state, not a partial failed one.
+	BackupRestored bool
 }
 
 // Create runs the create workflow under p and writes the snapshot manifest.
@@ -96,10 +101,12 @@ type CreateResult struct {
 //  5. Scan artifacts, write the manifest atomically, update the current
 //     pointer atomically.
 //
-// On workflow failure: the snapshot directory is kept; the manifest is
-// written with last_create.status set to "failed" or "interrupted"; the
-// current pointer is NOT touched. Callers convert ctx.Err()==Canceled into
-// the interrupted exit code.
+// On workflow failure: if no previous snapshot existed, the partial directory
+// is kept; if an existing snapshot was backed up before the attempt, the
+// backup is restored so the user retains a working state. In both cases the
+// manifest is written with last_create.status set to "failed" or
+// "interrupted" and the current pointer is NOT touched. Callers convert
+// ctx.Err()==Canceled into the interrupted exit code.
 func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	if err := ValidateName(p.Name); err != nil {
 		return nil, err
@@ -153,11 +160,19 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	}
 
 	if err := os.MkdirAll(filepath.Join(snapDir, DevboxSubdir), 0o755); err != nil {
+		if backupDir != "" {
+			_ = os.RemoveAll(snapDir)
+			_ = os.Rename(backupDir, snapDir)
+		}
 		return nil, fmt.Errorf("snapshot: create snapshot dir: %w", err)
 	}
 
 	devboxFiles, err := captureDevboxFiles(p.BaseDir, snapDir, p.SnapCfg.LocalYML.PreserveKeys)
 	if err != nil {
+		if backupDir != "" {
+			_ = os.RemoveAll(snapDir)
+			_ = os.Rename(backupDir, snapDir)
+		}
 		return nil, err
 	}
 
@@ -250,8 +265,12 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		// attempt and rename the backup back so the user retains a working state.
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
-			if renameErr := os.Rename(backupDir, snapDir); renameErr != nil && p.Stderr != nil {
-				_, _ = fmt.Fprintf(p.Stderr, "warning: could not restore previous snapshot backup %s: %v\n", backupDir, renameErr)
+			if renameErr := os.Rename(backupDir, snapDir); renameErr != nil {
+				if p.Stderr != nil {
+					_, _ = fmt.Fprintf(p.Stderr, "warning: could not restore previous snapshot backup %s: %v\n", backupDir, renameErr)
+				}
+			} else {
+				res.BackupRestored = true
 			}
 		}
 		// Return the original workflow or scan error so the CLI sees the real failure cause.

@@ -48,13 +48,17 @@ type dockerDaemonValidator struct {
 func (v *dockerDaemonValidator) ID() string     { return "docker_daemon" }
 func (v *dockerDaemonValidator) Domain() string { return "env" }
 
-func (v *dockerDaemonValidator) Run(_ validate.Context) []validate.Diagnostic {
+func (v *dockerDaemonValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	bin := config.DockerBin(v.cfg)
 	if _, err := exec.LookPath(bin); err != nil {
 		// docker_bin will surface this; don't double-report.
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	parent := vctx.Ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, dockerProbeTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "version", "--format", "{{.Server.Version}}").CombinedOutput()
 	if err != nil {
@@ -74,12 +78,16 @@ type dockerComposeValidator struct {
 func (v *dockerComposeValidator) ID() string     { return "docker_compose" }
 func (v *dockerComposeValidator) Domain() string { return "env" }
 
-func (v *dockerComposeValidator) Run(_ validate.Context) []validate.Diagnostic {
+func (v *dockerComposeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	bin := config.DockerBin(v.cfg)
 	if _, err := exec.LookPath(bin); err != nil {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	parent := vctx.Ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, dockerProbeTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "compose", "version", "--short").CombinedOutput()
 	if err != nil {

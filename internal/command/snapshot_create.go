@@ -178,8 +178,16 @@ func writeCreateOutcome(w io.Writer, res *snapshot.CreateResult) {
 	case snapshot.StatusOk:
 		_, _ = fmt.Fprintf(w, "snapshot %q created at %s\n", res.Manifest.Name, res.SnapshotDir)
 	case snapshot.StatusInterrupted:
-		_, _ = fmt.Fprintf(w, "snapshot %q interrupted; partial directory kept at %s\n", res.Manifest.Name, res.SnapshotDir)
+		if res.BackupRestored {
+			_, _ = fmt.Fprintf(w, "snapshot %q interrupted; previous snapshot restored at %s\n", res.Manifest.Name, res.SnapshotDir)
+		} else {
+			_, _ = fmt.Fprintf(w, "snapshot %q interrupted; partial directory kept at %s\n", res.Manifest.Name, res.SnapshotDir)
+		}
 	default:
-		_, _ = fmt.Fprintf(w, "snapshot %q failed; partial directory kept at %s\n", res.Manifest.Name, res.SnapshotDir)
+		if res.BackupRestored {
+			_, _ = fmt.Fprintf(w, "snapshot %q failed; previous snapshot restored at %s\n", res.Manifest.Name, res.SnapshotDir)
+		} else {
+			_, _ = fmt.Fprintf(w, "snapshot %q failed; partial directory kept at %s\n", res.Manifest.Name, res.SnapshotDir)
+		}
 	}
 }
