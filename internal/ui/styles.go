@@ -129,7 +129,7 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	if cfg.Separator != "" {
 		defSep = cfg.Separator
 	}
-	apply := buildPaletteApplier(&cfg.Colors)
+	apply := buildPaletteApplier()
 	huhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeBase(isDark)
 		applyFormGlyphs(s)

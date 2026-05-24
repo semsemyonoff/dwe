@@ -114,14 +114,14 @@ func TestApplyStylesGroupTitlePaletteReflected(t *testing.T) {
 }
 
 func TestBuildPaletteApplierNilNoOp(t *testing.T) {
-	apply := buildPaletteApplier(nil)
+	apply := buildPaletteApplier()
 	s := huh.ThemeBase(false)
 	// Should not panic.
 	apply(s)
 }
 
 func TestBuildPaletteApplierEmptyColorsNoOp(t *testing.T) {
-	apply := buildPaletteApplier(&config.StylesColors{})
+	apply := buildPaletteApplier()
 	s := huh.ThemeBase(false)
 	// Calling apply with an empty config should not change any foreground colors
 	// on fields whose color comes from ThemeBase (they should stay as zero/default).
@@ -358,7 +358,7 @@ func TestBuildPaletteApplierAllFields(t *testing.T) {
 	}}
 	ApplyStyles(c)
 
-	apply := buildPaletteApplier(&c.Colors)
+	apply := buildPaletteApplier()
 	s := huh.ThemeBase(false)
 	apply(s)
 

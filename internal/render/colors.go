@@ -12,26 +12,3 @@ const (
 	Gray     = "\033[0;90m"    // dim/disabled
 	Reset    = "\033[0m"
 )
-
-// ColorNone is the explicit no-color sentinel for ASCII art.
-// It is the default when no color is specified in styles.yml.
-const ColorNone = "none"
-
-// ColorByName returns an ANSI escape code for a named color.
-// Returns Reset for unknown names.
-func ColorByName(name string) string {
-	switch name {
-	case "blue":
-		return Blue
-	case "green":
-		return Green
-	case "yellow":
-		return Yellow
-	case "red":
-		return Red
-	case "cyan":
-		return Cyan
-	default:
-		return Reset
-	}
-}

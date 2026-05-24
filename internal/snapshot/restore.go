@@ -227,7 +227,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	}
 
 	if err := restoreDevboxFiles(snapDir, p.BaseDir, p.SnapCfg.LocalYML.PreserveKeys); err != nil {
-		if p.Stderr != nil {
+		if p.Stderr != nil && backupDir != "" {
 			_, _ = fmt.Fprintf(p.Stderr,
 				"hint: pre-restore devbox files backed up under %s\n", backupDir)
 		}
@@ -297,7 +297,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	}
 
 	if status != StatusOk {
-		if p.Stderr != nil {
+		if p.Stderr != nil && backupDir != "" {
 			_, _ = fmt.Fprintf(p.Stderr,
 				"hint: pre-restore devbox files preserved under %s for manual recovery\n",
 				backupDir)

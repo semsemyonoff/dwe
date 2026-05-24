@@ -5,8 +5,6 @@ import (
 
 	huh "charm.land/huh/v2"
 	lipgloss "charm.land/lipgloss/v2"
-
-	"devbox-cli/internal/config"
 )
 
 // huhHooksMu guards huhBeforeHook and huhAfterHook. The two hooks are written
@@ -138,7 +136,7 @@ func Theme() huh.Theme {
 // passing nil or an empty StylesColors still produces a fully-themed *huh.Styles
 // — empty user overrides have already been resolved to the built-in defaults
 // by rebuildSemanticStyles.
-func buildPaletteApplier(_ *config.StylesColors) func(*huh.Styles) {
+func buildPaletteApplier() func(*huh.Styles) {
 	return func(s *huh.Styles) {
 		accent := lipgloss.Color(resolvedAccent)
 		muted := lipgloss.Color(resolvedMuted)
