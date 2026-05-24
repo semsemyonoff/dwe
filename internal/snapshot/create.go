@@ -162,7 +162,9 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	if err := os.MkdirAll(filepath.Join(snapDir, DevboxSubdir), 0o755); err != nil {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
-			_ = os.Rename(backupDir, snapDir)
+			if rErr := os.Rename(backupDir, snapDir); rErr != nil && p.Stderr != nil {
+				fmt.Fprintf(p.Stderr, "warning: could not restore snapshot backup %q: %v\n", backupDir, rErr)
+			}
 		}
 		return nil, fmt.Errorf("snapshot: create snapshot dir: %w", err)
 	}
@@ -171,7 +173,9 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	if err != nil {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
-			_ = os.Rename(backupDir, snapDir)
+			if rErr := os.Rename(backupDir, snapDir); rErr != nil && p.Stderr != nil {
+				fmt.Fprintf(p.Stderr, "warning: could not restore snapshot backup %q: %v\n", backupDir, rErr)
+			}
 		}
 		return nil, err
 	}
