@@ -184,7 +184,7 @@ func globToRegexp(glob string) (*regexp.Regexp, error) {
 			b.WriteByte('/')
 		case '?':
 			b.WriteString("[^/]")
-		case '.', '+', '(', ')', '|', '^', '$', '{', '}', '[', ']', '\\':
+		case '.', '+', '(', ')', '|', '^', '$', '[', ']', '\\':
 			b.WriteByte('\\')
 			b.WriteByte(c)
 		default:

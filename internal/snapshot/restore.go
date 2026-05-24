@@ -152,7 +152,11 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return nil, fmt.Errorf("snapshot %q: load manifest: %w", p.Name, err)
 	}
 
-	if m.Project.Name != "" && p.Cfg.Project.Name != "" && m.Project.Name != p.Cfg.Project.Name {
+	if m.Project.Name == "" && p.Cfg.Project.Name != "" {
+		if p.Stderr != nil {
+			_, _ = fmt.Fprintf(p.Stderr, "warning: snapshot %q has no recorded project name; skipping project name verification\n", p.Name)
+		}
+	} else if m.Project.Name != "" && p.Cfg.Project.Name != "" && m.Project.Name != p.Cfg.Project.Name {
 		return nil, fmt.Errorf("snapshot %q: project mismatch (manifest=%q, current=%q)",
 			p.Name, m.Project.Name, p.Cfg.Project.Name)
 	}
@@ -342,9 +346,6 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 	if err := os.RemoveAll(backupDir); err != nil {
 		return "", fmt.Errorf("remove previous backup: %w", err)
 	}
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		return "", fmt.Errorf("create backup dir: %w", err)
-	}
 
 	candidates := []struct {
 		src    string
@@ -353,6 +354,7 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 		{filepath.Join(baseDir, "devbox", "local.yml"), "local.yml"},
 		{filepath.Join(baseDir, journal.DefaultRelPath), "deploy-state.yml"},
 	}
+	written := 0
 	for _, c := range candidates {
 		data, err := os.ReadFile(c.src)
 		if err != nil {
@@ -361,9 +363,18 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 			}
 			return "", fmt.Errorf("read %s: %w", c.src, err)
 		}
+		if written == 0 {
+			if err := os.MkdirAll(backupDir, 0o755); err != nil {
+				return "", fmt.Errorf("create backup dir: %w", err)
+			}
+		}
 		if err := writeFileAtomic(filepath.Join(backupDir, c.dstRel), data, 0o644); err != nil {
 			return "", fmt.Errorf("write backup %s: %w", c.dstRel, err)
 		}
+		written++
+	}
+	if written == 0 {
+		return "", nil
 	}
 	return backupDir, nil
 }

@@ -354,6 +354,15 @@ func TestRestore_InterruptedKeepsBackupAndCurrent(t *testing.T) {
 		t.Fatalf("seed current: %v", err)
 	}
 
+	// Seed a local.yml so writePreRestoreBackup has something to capture.
+	localDir := filepath.Join(tmp, "devbox")
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		t.Fatalf("mkdir devbox: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "local.yml"), []byte("before: restore"), 0o644); err != nil {
+		t.Fatalf("seed local.yml: %v", err)
+	}
+
 	// A workflow step that blocks until ctx is cancelled.
 	reg := newRegistryWith(t, "fake.sleep",
 		`while true; do sleep 1; done`)
