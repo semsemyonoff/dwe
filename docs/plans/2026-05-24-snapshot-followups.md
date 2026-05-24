@@ -92,9 +92,9 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 4: Wire divergence check into restore
 
-- [ ] in `internal/snapshot/restore.go`, between `LoadManifest` (line 122) and `confirmRestore` (line 159), call `DiffServices(m.Project.Services, p.Cfg.Services)`
-- [ ] introduce a typed `ServicesMismatchError struct { Name string; Diff ServicesDiff }` with `Error() string` returning a lowercase, no-trailing-punct message; the formatted diff body lives on the struct as `Diff`, not as a pre-formatted string, so callers can `errors.As` and re-render in any context
-- [ ] **extend the restore confirmation callback to carry both signals as a typed struct** (the current `ConfirmRestore func(*Manifest, bool) (bool, error)` at `internal/snapshot/restore.go:36` can't carry the diff):
+- [x] in `internal/snapshot/restore.go`, between `LoadManifest` (line 122) and `confirmRestore` (line 159), call `DiffServices(m.Project.Services, p.Cfg.Services)`
+- [x] introduce a typed `ServicesMismatchError struct { Name string; Diff ServicesDiff }` with `Error() string` returning a lowercase, no-trailing-punct message; the formatted diff body lives on the struct as `Diff`, not as a pre-formatted string, so callers can `errors.As` and re-render in any context
+- [x] **extend the restore confirmation callback to carry both signals as a typed struct** (the current `ConfirmRestore func(*Manifest, bool) (bool, error)` at `internal/snapshot/restore.go:36` can't carry the diff):
   ```go
   type RestoreConfirmContext struct {
       Manifest      *Manifest
@@ -104,14 +104,14 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
   ConfirmRestore func(RestoreConfirmContext) (bool, error)
   ```
   Update the CLI builder at `internal/command/snapshot_restore.go:136` to read both fields and assemble one prompt line: `"Restore snapshot %q? (config_hash diverged; services diff: <summary>)"`. Single decision point, no double prompt.
-- [ ] policy dispatch (after callback extension above):
+- [x] policy dispatch (after callback extension above):
   - `block`: any non-empty diff → return `&ServicesMismatchError{...}`; exit before any side effect on `devbox/local.yml` and before `ConfirmRestore` is even invoked
   - `warn` (default): populate `RestoreConfirmContext.ServicesDiff`, let `ConfirmRestore` render the combined prompt; in `--yes`/`SkipConfirm` mode write the warning to stderr and skip the callback (existing behavior for `SkipConfirm`)
   - `ignore`: leave `RestoreConfirmContext.ServicesDiff` zero, restore proceeds
-- [ ] the diff is rendered through the exported helper `FormatServicesDiff` (from task 3) so `inspect`, the validator, and the restore prompt share identical wording
-- [ ] all warnings and prompt text route through the writers already threaded into `RestoreParams` (which the CLI populates from `cmd.ErrOrStderr()` / `cmd.OutOrStdout()`); never reference `os.Stderr` / `os.Stdout` directly — testability invariant
-- [ ] update `internal/snapshot/restore_test.go` with table-driven cases per policy × diff combination, asserting that no `restoreDevboxFiles` side effect occurs in the `block` and rejected-prompt cases; assert error chain via `errors.As(err, &sme)` not bare type assertion
-- [ ] run `go test ./internal/snapshot/... && make lint` — must pass before task 5
+- [x] the diff is rendered through the exported helper `FormatServicesDiff` (from task 3) so `inspect`, the validator, and the restore prompt share identical wording
+- [x] all warnings and prompt text route through the writers already threaded into `RestoreParams` (which the CLI populates from `cmd.ErrOrStderr()` / `cmd.OutOrStdout()`); never reference `os.Stderr` / `os.Stdout` directly — testability invariant
+- [x] update `internal/snapshot/restore_test.go` with table-driven cases per policy × diff combination, asserting that no `restoreDevboxFiles` side effect occurs in the `block` and rejected-prompt cases; assert error chain via `errors.As(err, &sme)` not bare type assertion
+- [x] run `go test ./internal/snapshot/... && make lint` — must pass before task 5
 
 ### Task 5: `snapshot inspect` and validator surfaces the diff
 

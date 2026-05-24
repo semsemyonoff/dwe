@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -133,14 +134,21 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes b
 		Stdout:         stdout,
 		Stderr:         stderr,
 		Operation:      operation,
-		ConfirmRestore: func(m *snapshot.Manifest, diverged bool) (bool, error) {
+		ConfirmRestore: func(rc snapshot.RestoreConfirmContext) (bool, error) {
 			if !ui.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "snapshot restore needs confirmation; pass --yes to proceed non-interactively")
 				return false, nil
 			}
-			prompt := fmt.Sprintf("Restore snapshot %q?", m.Name)
-			if diverged {
-				prompt += " (config_hash diverged from current project)"
+			prompt := fmt.Sprintf("Restore snapshot %q?", rc.Manifest.Name)
+			var notes []string
+			if rc.ConfigDiverged {
+				notes = append(notes, "config_hash diverged from current project")
+			}
+			if !rc.ServicesDiff.IsEmpty() {
+				notes = append(notes, "services diff: "+snapshot.FormatServicesDiff(rc.ServicesDiff))
+			}
+			if len(notes) > 0 {
+				prompt += " (" + strings.Join(notes, "; ") + ")"
 			}
 			return ui.RunConfirm(prompt, "Restore", "Cancel")
 		},

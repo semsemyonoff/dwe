@@ -33,10 +33,35 @@ type RestoreParams struct {
 	// passes. Returning (false, nil) is treated as a user cancellation. A nil
 	// callback is treated as a refusal so non-interactive callers cannot
 	// accidentally restore — pass SkipConfirm: true to bypass.
-	ConfirmRestore func(*Manifest, bool) (bool, error)
+	ConfirmRestore func(RestoreConfirmContext) (bool, error)
 	// Operation is the user-visible operation label ("restore" or "rollback")
 	// used in error messages. Defaults to "restore".
 	Operation string
+}
+
+// RestoreConfirmContext carries the signals the restore confirmation callback
+// renders into a single prompt: the loaded manifest, whether the manifest's
+// config_hash diverges from the current project, and the services diff (zero
+// value when the policy is ignore or the diff is empty).
+type RestoreConfirmContext struct {
+	Manifest       *Manifest
+	ConfigDiverged bool
+	ServicesDiff   ServicesDiff
+}
+
+// ServicesMismatchError is returned by Restore when the snapshot.yml
+// services_mismatch policy is "block" and the manifest's captured service set
+// diverges from the current project's effective service map. The typed Diff is
+// preserved on the struct so callers can errors.As and re-render in any
+// context.
+type ServicesMismatchError struct {
+	Name string
+	Diff ServicesDiff
+}
+
+func (e *ServicesMismatchError) Error() string {
+	return fmt.Sprintf("snapshot %q: services diverge from current project (%s); restore blocked by services_mismatch.policy=block",
+		e.Name, FormatServicesDiff(e.Diff))
 }
 
 // RestoreCancelledError is returned when the user declines the restore
@@ -156,14 +181,37 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return nil, fmt.Errorf("snapshot %q: restore workflow has no steps; add steps to restore: in devbox/snapshot.yml", p.Name)
 	}
 
+	// Compare captured services against the current effective set and dispatch
+	// per the snapshot.yml services_mismatch policy. This runs before any side
+	// effect on devbox/local.yml so a `block` policy aborts cleanly.
+	policy := p.SnapCfg.ServicesMismatch.Effective()
+	var svcDiff ServicesDiff
+	if policy != config.ServicesMismatchIgnore {
+		svcDiff = DiffServices(m.Project.Services, p.Cfg.Services)
+		if !svcDiff.IsEmpty() && policy == config.ServicesMismatchBlock {
+			return nil, &ServicesMismatchError{Name: p.Name, Diff: svcDiff}
+		}
+	}
+
 	if !p.SkipConfirm {
-		ok, cErr := confirmRestore(p.ConfirmRestore, m, diverged)
+		ctx := RestoreConfirmContext{
+			Manifest:       m,
+			ConfigDiverged: diverged,
+			ServicesDiff:   svcDiff,
+		}
+		ok, cErr := confirmRestore(p.ConfirmRestore, ctx)
 		if cErr != nil {
 			return nil, cErr
 		}
 		if !ok {
 			return nil, &RestoreCancelledError{}
 		}
+	} else if !svcDiff.IsEmpty() && p.Stderr != nil {
+		// In skip-confirm / non-interactive mode the prompt never fires, so
+		// surface the warn-policy divergence on stderr so the user still has a
+		// trail in the logs.
+		_, _ = fmt.Fprintf(p.Stderr, "warning: snapshot %q services diverge from current project (%s); restoring anyway\n",
+			p.Name, FormatServicesDiff(svcDiff))
 	}
 
 	backupDir, err := writePreRestoreBackup(p.BaseDir)
@@ -271,11 +319,11 @@ func Rollback(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	return Restore(ctx, p)
 }
 
-func confirmRestore(fn func(*Manifest, bool) (bool, error), m *Manifest, diverged bool) (bool, error) {
+func confirmRestore(fn func(RestoreConfirmContext) (bool, error), ctx RestoreConfirmContext) (bool, error) {
 	if fn == nil {
 		return false, nil
 	}
-	return fn(m, diverged)
+	return fn(ctx)
 }
 
 // writePreRestoreBackup snapshots the working-copy devbox/local.yml and

@@ -379,6 +379,196 @@ func TestRollback_DispatchesToRestoreTarget(t *testing.T) {
 	}
 }
 
+// patchManifestServices rewrites the manifest at snapshots/<name>/manifest.yml
+// to carry the given Services slice. Used by the services_mismatch tests
+// because testCfg() has no services, so created snapshots otherwise carry an
+// empty service set.
+func patchManifestServices(t *testing.T, baseDir, name string, svcs []ServiceSnapshot) {
+	t.Helper()
+	mp := filepath.Join(baseDir, "snapshots", name, ManifestFileName)
+	m, err := LoadManifest(mp)
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	m.Project.Services = svcs
+	if err := SaveManifest(mp, m); err != nil {
+		t.Fatalf("save manifest: %v", err)
+	}
+}
+
+func TestRestore_ServicesMismatchPolicies(t *testing.T) {
+	tests := []struct {
+		name          string
+		policy        string
+		manifestSvcs  []ServiceSnapshot
+		currentSvcs   map[string]config.ServiceConfig
+		skipConfirm   bool
+		wantBlocked   bool
+		wantWarn      bool // expect warning on stderr (skip-confirm + non-empty diff)
+		wantPromptCtx bool // expect ConfirmRestore to receive a non-empty diff
+	}{
+		{
+			name:         "block_with_divergence_aborts",
+			policy:       "block",
+			manifestSvcs: []ServiceSnapshot{{Name: "db", Enabled: true}, {Name: "old", Enabled: true}},
+			currentSvcs:  map[string]config.ServiceConfig{"db": {Enabled: true}, "new": {Enabled: true}},
+			skipConfirm:  true,
+			wantBlocked:  true,
+		},
+		{
+			name:         "block_no_divergence_proceeds",
+			policy:       "block",
+			manifestSvcs: []ServiceSnapshot{{Name: "db", Enabled: true}},
+			currentSvcs:  map[string]config.ServiceConfig{"db": {Enabled: true}},
+			skipConfirm:  true,
+		},
+		{
+			name:         "warn_skip_confirm_emits_warning",
+			policy:       "warn",
+			manifestSvcs: []ServiceSnapshot{{Name: "db", Enabled: true}},
+			currentSvcs:  map[string]config.ServiceConfig{"db": {Enabled: false}},
+			skipConfirm:  true,
+			wantWarn:     true,
+		},
+		{
+			name:          "warn_interactive_passes_diff_to_callback",
+			policy:        "warn",
+			manifestSvcs:  []ServiceSnapshot{{Name: "old", Enabled: true}},
+			currentSvcs:   map[string]config.ServiceConfig{"new": {Enabled: true}},
+			skipConfirm:   false,
+			wantPromptCtx: true,
+		},
+		{
+			name:         "ignore_skips_diff_entirely",
+			policy:       "ignore",
+			manifestSvcs: []ServiceSnapshot{{Name: "old", Enabled: true}},
+			currentSvcs:  map[string]config.ServiceConfig{"new": {Enabled: true}},
+			skipConfirm:  true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			createBaselineSnap(t, tmp, "s", "")
+			patchManifestServices(t, tmp, "s", tc.manifestSvcs)
+
+			// Seed a working-copy devbox/local.yml so we can detect any
+			// unintended side effect on the blocked path.
+			writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "untouched")
+
+			reg := newRegistryWith(t, "fake.marker", `true`)
+			snapCfg := newSnapCfgWithRestore(
+				[]model.WorkflowStep{{Command: "fake.marker"}},
+				nil,
+			)
+			snapCfg.ServicesMismatch.Policy = tc.policy
+
+			cfg := testCfg()
+			cfg.Services = tc.currentSvcs
+
+			var gotCtx RestoreConfirmContext
+			var callbackCalled bool
+
+			var errBuf bytes.Buffer
+			_, err := Restore(context.Background(), RestoreParams{
+				Cfg:         cfg,
+				SnapCfg:     snapCfg,
+				Registry:    reg,
+				BaseDir:     tmp,
+				Name:        "s",
+				SkipConfirm: tc.skipConfirm,
+				Stderr:      &errBuf,
+				ConfirmRestore: func(rc RestoreConfirmContext) (bool, error) {
+					callbackCalled = true
+					gotCtx = rc
+					return true, nil
+				},
+			})
+
+			if tc.wantBlocked {
+				var sme *ServicesMismatchError
+				if !errors.As(err, &sme) {
+					t.Fatalf("err = %v, want ServicesMismatchError", err)
+				}
+				// No side effect on devbox/local.yml.
+				body, _ := os.ReadFile(filepath.Join(tmp, "devbox", "local.yml"))
+				if string(body) != "untouched" {
+					t.Errorf("local.yml mutated despite block: %q", string(body))
+				}
+				// No pre-restore backup.
+				if _, err := os.Stat(PreRestoreBackup(tmp)); err == nil {
+					t.Errorf("backup dir created despite block")
+				}
+				// Callback must NOT be invoked when block fires.
+				if callbackCalled {
+					t.Errorf("ConfirmRestore invoked despite block")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Restore: %v (stderr=%s)", err, errBuf.String())
+			}
+			if tc.wantWarn {
+				if !strings.Contains(errBuf.String(), "services diverge") {
+					t.Errorf("expected services-diverge warning on stderr, got: %s", errBuf.String())
+				}
+			}
+			if tc.wantPromptCtx {
+				if !callbackCalled {
+					t.Fatalf("ConfirmRestore was not invoked")
+				}
+				if gotCtx.ServicesDiff.IsEmpty() {
+					t.Errorf("ConfirmRestore received empty ServicesDiff")
+				}
+			}
+			if tc.policy == "ignore" {
+				// ignore must produce no warning text even on a non-empty diff.
+				if strings.Contains(errBuf.String(), "services diverge") {
+					t.Errorf("ignore policy emitted warning: %s", errBuf.String())
+				}
+			}
+		})
+	}
+}
+
+func TestRestore_RejectedConfirmDoesNotTouchLocalYml(t *testing.T) {
+	tmp := t.TempDir()
+	createBaselineSnap(t, tmp, "s", "")
+	patchManifestServices(t, tmp, "s", []ServiceSnapshot{{Name: "db", Enabled: true}})
+
+	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "untouched")
+
+	snapCfg := newSnapCfgWithRestore(
+		[]model.WorkflowStep{{Command: "fake.marker"}},
+		nil,
+	)
+	snapCfg.ServicesMismatch.Policy = "warn"
+	reg := newRegistryWith(t, "fake.marker", `true`)
+
+	cfg := testCfg()
+	cfg.Services = map[string]config.ServiceConfig{"db": {Enabled: false}}
+
+	_, err := Restore(context.Background(), RestoreParams{
+		Cfg:      cfg,
+		SnapCfg:  snapCfg,
+		Registry: reg,
+		BaseDir:  tmp,
+		Name:     "s",
+		Stderr:   &bytes.Buffer{},
+		ConfirmRestore: func(RestoreConfirmContext) (bool, error) {
+			return false, nil
+		},
+	})
+	var cancelled *RestoreCancelledError
+	if !errors.As(err, &cancelled) {
+		t.Fatalf("err = %v, want RestoreCancelledError", err)
+	}
+	body, _ := os.ReadFile(filepath.Join(tmp, "devbox", "local.yml"))
+	if string(body) != "untouched" {
+		t.Errorf("local.yml mutated on cancelled restore: %q", string(body))
+	}
+}
+
 func TestRollback_NoTargetReturnsError(t *testing.T) {
 	tmp := t.TempDir()
 	snapCfg := newSnapCfgWithRestore(
