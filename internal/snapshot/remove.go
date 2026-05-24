@@ -89,42 +89,44 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 		}
 	}
 
-	// Run remove workflow if defined.
+	// Run remove workflow if defined and has steps.
 	if p.SnapCfg.Remove != nil && p.Registry != nil {
 		wf, err := SelectWorkflow(p.SnapCfg, "remove", manifestVariant(m))
 		if err != nil {
 			return nil, fmt.Errorf("snapshot %q: %w", p.Name, err)
 		}
-		absSnapDir, absErr := filepath.Abs(snapDir)
-		if absErr != nil {
-			absSnapDir = snapDir
-		}
-		var (
-			name      = p.Name
-			desc      string
-			variant   string
-			createdAt time.Time
-		)
-		if m != nil {
-			name = m.Name
-			desc = m.Description
-			variant = m.Variant
-			createdAt = m.CreatedAt
-		}
-		vars := BuildSnapshotVars(name, absSnapDir, desc, variant, createdAt)
-		if err := RunWorkflow(ctx, ExecParams{
-			Cfg:            p.Cfg,
-			Registry:       p.Registry,
-			BaseDir:        p.BaseDir,
-			Workflow:       wf,
-			Vars:           vars,
-			Scope:          tpl.SnapshotScopeRestoreOrRemove,
-			Stdout:         p.Stdout,
-			Stderr:         p.Stderr,
-			SkipConfirm:    p.SkipConfirm,
-			NonInteractive: p.NonInteractive,
-		}); err != nil {
-			return nil, fmt.Errorf("snapshot %q: remove workflow: %w", p.Name, err)
+		if len(wf.Steps) > 0 {
+			absSnapDir, absErr := filepath.Abs(snapDir)
+			if absErr != nil {
+				absSnapDir = snapDir
+			}
+			var (
+				name      = p.Name
+				desc      string
+				variant   string
+				createdAt time.Time
+			)
+			if m != nil {
+				name = m.Name
+				desc = m.Description
+				variant = m.Variant
+				createdAt = m.CreatedAt
+			}
+			vars := BuildSnapshotVars(name, absSnapDir, desc, variant, createdAt)
+			if err := RunWorkflow(ctx, ExecParams{
+				Cfg:            p.Cfg,
+				Registry:       p.Registry,
+				BaseDir:        p.BaseDir,
+				Workflow:       wf,
+				Vars:           vars,
+				Scope:          tpl.SnapshotScopeRestoreOrRemove,
+				Stdout:         p.Stdout,
+				Stderr:         p.Stderr,
+				SkipConfirm:    p.SkipConfirm,
+				NonInteractive: p.NonInteractive,
+			}); err != nil {
+				return nil, fmt.Errorf("snapshot %q: remove workflow: %w", p.Name, err)
+			}
 		}
 	}
 
