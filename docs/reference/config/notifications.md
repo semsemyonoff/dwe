@@ -14,6 +14,8 @@ Native desktop notifications fired when long-running Devbox operations complete 
 - [Drop-on-busy policy](#drop-on-busy-policy)
 - [Reserved keys (not yet wired)](#reserved-keys-not-yet-wired)
 - [Sample config](#sample-config)
+- [Title and body format](#title-and-body-format)
+- [macOS icon and app name](#macos-icon-and-app-name)
 
 ## When notifications fire
 
@@ -151,3 +153,43 @@ To mute just for one project (per-project override at `<project>/.devbox/config`
 ```
 notify_run_enabled = false
 ```
+
+## Title and body format
+
+The native backend renders a fixed, branded format. The project name (when known) appears in the title; the body carries the timing and, on failure, a one-line truncated error message.
+
+| Outcome | Title | Body |
+|---|---|---|
+| Success | `✓ Devbox · <project>: <op> succeeded` | `<duration>` |
+| Failure | `✗ Devbox · <project>: <op> failed` | `<duration>` + (on a new line) truncated error message |
+
+When the event has no associated project (rare — typically only synthetic test events), the `· <project>` segment is omitted and the title collapses to `✓ Devbox: <op> succeeded` / `✗ Devbox: <op> failed`.
+
+Examples:
+
+```
+✓ Devbox · acme-api: deploy succeeded
+1m 42s
+```
+
+```
+✗ Devbox · acme-api: run failed
+3.2s
+exit status 1: migration aborted: relation "users" does not exist
+```
+
+Error messages are clipped to the first line and truncated to 200 runes (a trailing `…` indicates truncation). Duration formatting buckets: `<1s` → `Xms`, `<60s` → `X.Xs`, `<1h` → `Xm Ys`, `≥1h` → `Xh Ym`.
+
+## macOS icon and app name
+
+On macOS, the Devbox icon and the `Devbox` app name in the notification banner require [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) to be installed:
+
+```
+brew install terminal-notifier
+```
+
+When `terminal-notifier` is present, beeep delegates to it and the embedded Devbox icon and `AppName = "Devbox"` are honored.
+
+Without it, beeep falls back to AppleScript (`osascript`), which on recent macOS releases shows the sender as **Script Editor** and ignores the icon. Functionality is unaffected — only the visual presentation degrades. The title text (which already carries the `Devbox · <project>` prefix) remains correct in either path.
+
+Linux (libnotify) and Windows (toast) honor the embedded icon and app name without any extra setup.

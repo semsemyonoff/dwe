@@ -224,9 +224,9 @@ Pinned beeep (v0.11.2) already takes `Notify(title, body string, icon any) error
 
 ### Task 14: Document notification setup
 
-- [ ] update `docs/reference/config/notifications.md`: new title format example; add macOS section explaining optional `brew install terminal-notifier` for icon + app name; note that without it, beeep falls back to AppleScript with sender = "Script Editor"
-- [ ] no code tests needed
-- [ ] run `make test` and `make lint` before final sweep
+- [x] update `docs/reference/config/notifications.md`: new title format example; add macOS section explaining optional `brew install terminal-notifier` for icon + app name; note that without it, beeep falls back to AppleScript with sender = "Script Editor"
+- [x] no code tests needed
+- [x] run `make test` and `make lint` before final sweep
 
 ### Task 15: [Final] Acceptance criteria sweep
 
