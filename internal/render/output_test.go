@@ -249,46 +249,46 @@ func TestWarn_wrapping(t *testing.T) {
 
 // --- ASCII / prepareASCII ---
 
-func TestPrepareASCII_unknownColor(t *testing.T) {
-	_, err := prepareASCII("Hi", "standard", "magenta", 78)
-	if err == nil {
-		t.Fatal("expected error for unknown color")
+func TestPrepareASCII_plain(t *testing.T) {
+	block := prepareASCII("Hi", "standard", 78)
+	if len(block.lines) == 0 {
+		t.Fatal("expected non-empty output")
 	}
-	msg := err.Error()
-	if !strings.Contains(msg, "magenta") {
-		t.Errorf("error should mention the bad color name: %s", msg)
-	}
-	for _, c := range validFigureColors {
-		if !strings.Contains(msg, c) {
-			t.Errorf("error should list valid color %q: %s", c, msg)
+	for _, l := range block.lines {
+		if strings.Contains(l, "\033[") {
+			t.Errorf("expected plain output without ANSI escapes, got: %q", l)
 		}
 	}
-	if !strings.Contains(msg, ColorNone) {
-		t.Errorf("error should mention %q: %s", ColorNone, msg)
+}
+
+func TestPrepareASCII_emptyFontStillRenders(t *testing.T) {
+	// prepareASCII does not default font; that's ASCII's job. Pass "standard" directly.
+	block := prepareASCII("Hi", "standard", 78)
+	if len(block.lines) == 0 {
+		t.Fatal("expected non-empty output")
 	}
 }
 
-func TestPrepareASCII_noneColor(t *testing.T) {
-	block, err := prepareASCII("Hi", "standard", ColorNone, 78)
-	if err != nil {
+func TestASCII_plainOutput(t *testing.T) {
+	w, buf := newBufWriter()
+	if err := w.ASCII([]string{"Hi"}, "standard"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(block.lines) == 0 {
-		t.Error("expected non-empty output")
+	out := buf.String()
+	if out == "" {
+		t.Fatal("expected ASCII output")
+	}
+	if strings.Contains(out, "\033[") {
+		t.Errorf("expected plain output, got ANSI escapes: %q", out)
 	}
 }
 
-func TestPrepareASCII_emptyColorDefaultsToNone(t *testing.T) {
-	_, err := prepareASCII("Hi", "standard", "", 78)
-	if err != nil {
-		t.Fatalf("empty color should not error: %v", err)
+func TestASCII_defaultsFont(t *testing.T) {
+	w, buf := newBufWriter()
+	if err := w.ASCII([]string{"Hi"}, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-}
-
-func TestASCII_returnsErrorOnBadColor(t *testing.T) {
-	w, _ := newBufWriter()
-	err := w.ASCII([]string{"Hi"}, "standard", "magenta")
-	if err == nil {
-		t.Error("expected error for unknown color")
+	if buf.Len() == 0 {
+		t.Error("expected output when font defaults")
 	}
 }

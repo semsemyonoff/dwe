@@ -129,11 +129,11 @@ The package mixes v1 lipgloss (`internal/ui/`) and v2 lipgloss (`internal/ui/cmd
 
 ### Task 6: Simplify `internal/render/ascii.go`
 
-- [ ] change `Writer.ASCII` signature from `(lines []string, font, colorName string) error` to `(lines []string, font string) error`
-- [ ] delete `validFigureColors`, `figureColorSet`, the `NewColorFigure` branch — keep only `figure.NewFigure(text, font, true).String()`
-- [ ] callers wrap output in lipgloss style externally (using `accent`); the writer emits plain figlet text
-- [ ] update `internal/render/ascii_test.go`: plain output assertion, no color path
-- [ ] run tests — must pass before next task
+- [x] change `Writer.ASCII` signature from `(lines []string, font, colorName string) error` to `(lines []string, font string) error`
+- [x] delete `validFigureColors`, `figureColorSet`, the `NewColorFigure` branch — keep only `figure.NewFigure(text, font, true).String()`
+- [x] callers wrap output in lipgloss style externally (using `accent`); the writer emits plain figlet text
+- [x] update `internal/render/ascii_test.go`: plain output assertion, no color path (tests live in `internal/render/output_test.go`; rewrote ASCII / prepareASCII cases for the plain path)
+- [x] run tests — must pass before next task
 
 ### Task 7: New branded header in `root.go` and `info.go`
 
