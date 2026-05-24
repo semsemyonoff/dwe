@@ -286,9 +286,12 @@ func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string
 			return fmt.Errorf("pack: open %q: %w", relSlash, err)
 		}
 		_, err = io.Copy(tw, f)
-		_ = f.Close()
+		closeErr := f.Close()
 		if err != nil {
 			return fmt.Errorf("pack: write %q: %w", relSlash, err)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("pack: close %q: %w", relSlash, closeErr)
 		}
 		return nil
 	})

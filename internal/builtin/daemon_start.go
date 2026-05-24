@@ -123,7 +123,11 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 		if v == nil {
 			return fmt.Errorf("docker_daemon_start: workdir_from %q: path not found in config", workdirFrom)
 		}
-		workdir = v.(string)
+		s, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("docker_daemon_start: workdir_from %q: resolved value is not a string", workdirFrom)
+		}
+		workdir = s
 	}
 
 	argv, err := getStringSlice(with, "argv")

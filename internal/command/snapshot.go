@@ -69,7 +69,10 @@ func runSnapshotList(flags *rootFlags, out, errW io.Writer, jsonOut bool) error 
 	if err != nil {
 		return err
 	}
-	current, _ := snapshot.ReadCurrent(baseDir)
+	current, readCurErr := snapshot.ReadCurrent(baseDir)
+	if readCurErr != nil {
+		_, _ = fmt.Fprintf(errW, "warning: could not read current snapshot pointer: %v\n", readCurErr)
+	}
 
 	if jsonOut {
 		return writeSnapshotListJSON(out, entries, current)

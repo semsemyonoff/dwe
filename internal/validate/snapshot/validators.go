@@ -76,6 +76,16 @@ func (v *restoreDefinedValidator) Run(_ validate.Context) []validate.Diagnostic 
 	if v.cfg.Restore != nil && len(v.cfg.Restore.Steps) > 0 {
 		return nil
 	}
+	// Explicitly present but empty steps block is a config error; absent block is advisory.
+	if v.cfg.Restore != nil && len(v.cfg.Restore.Steps) == 0 {
+		return []validate.Diagnostic{{
+			Severity: validate.SeverityError,
+			Domain:   "snapshot",
+			Target:   "restore_defined",
+			File:     diagFile,
+			Message:  "restore: block has no steps; `devbox snapshot restore` will refuse to run",
+		}}
+	}
 	return []validate.Diagnostic{{
 		Severity: validate.SeverityInfo,
 		Domain:   "snapshot",
