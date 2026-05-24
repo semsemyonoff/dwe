@@ -160,14 +160,14 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 8: Pack — drop `.sha256` sidecar
 
-- [ ] in `internal/snapshot/archive.go`:
+- [x] in `internal/snapshot/archive.go`:
   - remove the sidecar write at lines 331–334 (`checksumPath := outPath + ".sha256"` and the subsequent `os.WriteFile`)
   - remove the `ChecksumPath` field from `PackResult` (line 46) — call sites in `internal/command/snapshot_pack.go` must drop references in the same PR; this is intentional per project policy (no back-compat shims)
   - keep the in-memory `Sha256` field on `PackResult` (still useful for the success message and for tests); the running `hasher` (line 231) stays — it now only feeds `PackResult.Sha256`
   - update the `// Pack writes …` doc comment (line 175) to drop the "plus a `.sha256` sidecar" clause
-- [ ] in `internal/command/snapshot_pack.go`: remove sidecar-related text from `Short` (line 23); the success message at line 70 keeps the `sha256=` field (read from `PackResult.Sha256` in-memory)
-- [ ] update `internal/snapshot/archive_test.go` to assert **no `*.sha256` file exists** next to the produced `.tar.gz` after a successful pack
-- [ ] run `go test ./internal/snapshot/... ./internal/command/... && make lint` — must pass before task 9
+- [x] in `internal/command/snapshot_pack.go`: remove sidecar-related text from `Short` (line 23); the success message at line 70 keeps the `sha256=` field (read from `PackResult.Sha256` in-memory)
+- [x] update `internal/snapshot/archive_test.go` to assert **no `*.sha256` file exists** next to the produced `.tar.gz` after a successful pack
+- [x] run `go test ./internal/snapshot/... ./internal/command/... && make lint` — must pass before task 9
 
 ### Task 9: Unpack — manifest-driven verification with warn + confirm
 

@@ -20,7 +20,7 @@ func newSnapshotPackCmd(flags *rootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:               "pack <name>",
-		Short:             "Pack a snapshot into a .tar.gz archive with a .sha256 sidecar",
+		Short:             "Pack a snapshot into a .tar.gz archive",
 		Args:              cobra.ExactArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: snapshotNameCompletion(flags),

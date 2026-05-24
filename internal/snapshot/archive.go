@@ -43,8 +43,6 @@ func (e *rejectedTarEntryError) Error() string {
 type PackResult struct {
 	// OutPath is the absolute path of the written .tar.gz.
 	OutPath string
-	// ChecksumPath is the absolute path of the .sha256 sidecar.
-	ChecksumPath string
 	// Sha256 is the lowercase hex sha256 of the tar.gz file.
 	Sha256 string
 	// SizeBytes is the size of the .tar.gz file.
@@ -172,10 +170,10 @@ func resolveExistingAncestor(dir string) string {
 
 // pack ------------------------------------------------------------------------
 
-// Pack writes a .tar.gz archive of the snapshot directory plus a .sha256
-// sidecar. The caller is responsible for holding project locks across the
-// pack run (the snapshot directory must not be mutating concurrently —
-// otherwise the archive can be corrupt or truncated).
+// Pack writes a .tar.gz archive of the snapshot directory. The caller is
+// responsible for holding project locks across the pack run (the snapshot
+// directory must not be mutating concurrently — otherwise the archive can
+// be corrupt or truncated).
 func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string) (*PackResult, error) {
 	if err := ValidateName(name); err != nil {
 		return nil, err
@@ -328,11 +326,6 @@ func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string
 	}
 
 	sum := hex.EncodeToString(hasher.Sum(nil))
-	checksumPath := outPath + ".sha256"
-	checksumLine := sum + "  " + filepath.Base(outPath) + "\n"
-	if err := writeFileAtomic(checksumPath, []byte(checksumLine), 0o644); err != nil {
-		return nil, fmt.Errorf("snapshot pack: write checksum sidecar: %w", err)
-	}
 
 	st, err := os.Stat(outPath)
 	if err != nil {
@@ -341,7 +334,6 @@ func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string
 
 	return &PackResult{
 		OutPath:        outPath,
-		ChecksumPath:   checksumPath,
 		Sha256:         sum,
 		SizeBytes:      st.Size(),
 		SkippedEntries: skipped,

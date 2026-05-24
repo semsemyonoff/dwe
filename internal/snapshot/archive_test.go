@@ -65,16 +65,14 @@ func TestPackUnpack_Roundtrip(t *testing.T) {
 	if _, err := os.Stat(res.OutPath); err != nil {
 		t.Fatalf("out missing: %v", err)
 	}
-	if _, err := os.Stat(res.ChecksumPath); err != nil {
-		t.Fatalf("sidecar missing: %v", err)
+	if _, err := os.Stat(res.OutPath + ".sha256"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected no sidecar next to %s, got stat err %v", res.OutPath, err)
+	}
+	if res.Sha256 == "" {
+		t.Errorf("expected in-memory sha256 to be populated")
 	}
 	if len(res.SkippedEntries) == 0 {
 		t.Errorf("expected at least one skipped entry (b.tmp)")
-	}
-
-	present, ok, err := VerifyChecksumSidecar(res.OutPath)
-	if err != nil || !present || !ok {
-		t.Fatalf("sidecar verify present=%v ok=%v err=%v", present, ok, err)
 	}
 
 	dst := t.TempDir()
@@ -82,9 +80,7 @@ func TestPackUnpack_Roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unpack: %v", err)
 	}
-	if !ur.VerifiedChecksum {
-		t.Errorf("expected sidecar verified")
-	}
+	_ = ur
 	if _, err := os.Stat(filepath.Join(ur.SnapshotDir, "data", "a.txt")); err != nil {
 		t.Errorf("a.txt missing after unpack: %v", err)
 	}
