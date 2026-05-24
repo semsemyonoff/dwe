@@ -30,6 +30,9 @@ type RemoveParams struct {
 	// treated as a refusal so non-interactive callers cannot accidentally
 	// destroy a snapshot.
 	ConfirmRemove func(*Manifest) (bool, error)
+	// StepObserverFactory builds a per-workflow live-UI observer; see
+	// snapshot.StepObserverFactory for the contract. Nil disables.
+	StepObserverFactory StepObserverFactory
 }
 
 // RemoveCancelledError is returned when the user declines the remove
@@ -114,16 +117,17 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 			}
 			vars := BuildSnapshotVars(name, absSnapDir, desc, variant, createdAt)
 			if err := RunWorkflow(ctx, ExecParams{
-				Cfg:            p.Cfg,
-				Registry:       p.Registry,
-				BaseDir:        p.BaseDir,
-				Workflow:       wf,
-				Vars:           vars,
-				Scope:          tpl.SnapshotScopeRestoreOrRemove,
-				Stdout:         p.Stdout,
-				Stderr:         p.Stderr,
-				SkipConfirm:    p.SkipConfirm,
-				NonInteractive: p.NonInteractive,
+				Cfg:                 p.Cfg,
+				Registry:            p.Registry,
+				BaseDir:             p.BaseDir,
+				Workflow:            wf,
+				Vars:                vars,
+				Scope:               tpl.SnapshotScopeRestoreOrRemove,
+				Stdout:              p.Stdout,
+				Stderr:              p.Stderr,
+				SkipConfirm:         p.SkipConfirm,
+				NonInteractive:      p.NonInteractive,
+				StepObserverFactory: p.StepObserverFactory,
 			}); err != nil {
 				return nil, fmt.Errorf("snapshot %q: remove workflow: %w", p.Name, err)
 			}

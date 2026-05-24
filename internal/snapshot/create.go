@@ -53,6 +53,9 @@ type CreateParams struct {
 	// and the caller did not pass SkipConfirm. The default returns false
 	// (refuse) when nil — the CLI layer supplies a real prompt.
 	ConfirmOverwrite func() (bool, error)
+	// StepObserverFactory builds a per-workflow live-UI observer; see
+	// snapshot.StepObserverFactory for the contract. Nil disables.
+	StepObserverFactory StepObserverFactory
 }
 
 // CreateCancelledError is returned when the user declines the overwrite
@@ -157,16 +160,17 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 
 	// Run the workflow. On success or failure we still write a manifest.
 	runErr := RunWorkflow(ctx, ExecParams{
-		Cfg:            p.Cfg,
-		Registry:       p.Registry,
-		BaseDir:        p.BaseDir,
-		Workflow:       wf,
-		Vars:           vars,
-		Scope:          tpl.SnapshotScopeCreate,
-		Stdout:         p.Stdout,
-		Stderr:         p.Stderr,
-		SkipConfirm:    p.SkipConfirm,
-		NonInteractive: p.NonInteractive,
+		Cfg:                 p.Cfg,
+		Registry:            p.Registry,
+		BaseDir:             p.BaseDir,
+		Workflow:            wf,
+		Vars:                vars,
+		Scope:               tpl.SnapshotScopeCreate,
+		Stdout:              p.Stdout,
+		Stderr:              p.Stderr,
+		SkipConfirm:         p.SkipConfirm,
+		NonInteractive:      p.NonInteractive,
+		StepObserverFactory: p.StepObserverFactory,
 	})
 
 	status := StatusOk

@@ -37,6 +37,9 @@ type RestoreParams struct {
 	// Operation is the user-visible operation label ("restore" or "rollback")
 	// used in error messages. Defaults to "restore".
 	Operation string
+	// StepObserverFactory builds a per-workflow live-UI observer; see
+	// snapshot.StepObserverFactory for the contract. Nil disables.
+	StepObserverFactory StepObserverFactory
 }
 
 // RestoreConfirmContext carries the signals the restore confirmation callback
@@ -235,16 +238,17 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 
 	start := now()
 	runErr := RunWorkflow(ctx, ExecParams{
-		Cfg:            p.Cfg,
-		Registry:       p.Registry,
-		BaseDir:        p.BaseDir,
-		Workflow:       wf,
-		Vars:           vars,
-		Scope:          tpl.SnapshotScopeRestoreOrRemove,
-		Stdout:         p.Stdout,
-		Stderr:         p.Stderr,
-		SkipConfirm:    p.SkipConfirm,
-		NonInteractive: p.NonInteractive,
+		Cfg:                 p.Cfg,
+		Registry:            p.Registry,
+		BaseDir:             p.BaseDir,
+		Workflow:            wf,
+		Vars:                vars,
+		Scope:               tpl.SnapshotScopeRestoreOrRemove,
+		Stdout:              p.Stdout,
+		Stderr:              p.Stderr,
+		SkipConfirm:         p.SkipConfirm,
+		NonInteractive:      p.NonInteractive,
+		StepObserverFactory: p.StepObserverFactory,
 	})
 	finishedAt := now()
 	durationMs := finishedAt.Sub(start).Milliseconds()

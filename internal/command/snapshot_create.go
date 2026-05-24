@@ -17,6 +17,7 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/version"
 
@@ -29,6 +30,7 @@ func newSnapshotCreateCmd(flags *rootFlags) *cobra.Command {
 		description string
 		variant     string
 		yes         bool
+		noLive      bool
 	)
 	cmd := &cobra.Command{
 		Use:          "create <name>",
@@ -36,16 +38,17 @@ func newSnapshotCreateCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotCreate(cmd, flags, args[0], description, variant, yes)
+			return runSnapshotCreate(cmd, flags, args[0], description, variant, yes, noLive)
 		},
 	}
 	cmd.Flags().StringVarP(&description, "description", "d", "", "human-readable description recorded in manifest.yml")
 	cmd.Flags().StringVar(&variant, "using", "", "select a create-workflow variant from snapshot.yml")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip overwrite confirmation")
+	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
 	return cmd
 }
 
-func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, variant string, yes bool) (err error) {
+func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, variant string, yes, noLive bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
@@ -140,6 +143,9 @@ func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, 
 				"Overwrite",
 				"Cancel",
 			)
+		},
+		StepObserverFactory: func(steps []model.WorkflowStep) snapshot.StepObserverCloser {
+			return newSnapshotLiveObserver("snapshot create: "+name, noLive, steps)
 		},
 	}
 

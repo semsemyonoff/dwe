@@ -18,6 +18,7 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
@@ -25,7 +26,10 @@ import (
 
 // newSnapshotRestoreCmd: `devbox snapshot restore <name> [-y]`.
 func newSnapshotRestoreCmd(flags *rootFlags) *cobra.Command {
-	var yes bool
+	var (
+		yes    bool
+		noLive bool
+	)
 	cmd := &cobra.Command{
 		Use:               "restore <name>",
 		Short:             "Restore a snapshot into the current project",
@@ -33,30 +37,35 @@ func newSnapshotRestoreCmd(flags *rootFlags) *cobra.Command {
 		SilenceUsage:      true,
 		ValidArgsFunction: snapshotNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotRestore(cmd, flags, args[0], yes, "restore", "snapshot:restore")
+			return runSnapshotRestore(cmd, flags, args[0], yes, noLive, "restore", "snapshot:restore")
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip restore confirmation")
+	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
 	return cmd
 }
 
 // newSnapshotRollbackCmd: `devbox snapshot rollback [-y]`.
 func newSnapshotRollbackCmd(flags *rootFlags) *cobra.Command {
-	var yes bool
+	var (
+		yes    bool
+		noLive bool
+	)
 	cmd := &cobra.Command{
 		Use:          "rollback",
 		Short:        "Restore the snapshot named by rollback_target in devbox/snapshot.yml",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotRollback(cmd, flags, yes)
+			return runSnapshotRollback(cmd, flags, yes, noLive)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip rollback confirmation")
+	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
 	return cmd
 }
 
-func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes bool, operation, notifyOp string) (err error) {
+func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive bool, operation, notifyOp string) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
@@ -152,6 +161,9 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes b
 			}
 			return ui.RunConfirm(prompt, "Restore", "Cancel")
 		},
+		StepObserverFactory: func(steps []model.WorkflowStep) snapshot.StepObserverCloser {
+			return newSnapshotLiveObserver("snapshot "+operation+": "+name, noLive, steps)
+		},
 	}
 
 	var (
@@ -180,7 +192,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes b
 	return nil
 }
 
-func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes bool) error {
+func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes, noLive bool) error {
 	// rollback resolves the target name from snapshot.yml; pass an empty name
 	// to runSnapshotRestore and dispatch through snapshot.Rollback below.
 	baseDir := flags.ProjectRoot()
@@ -197,7 +209,7 @@ func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes bool) error {
 	if err := snapshot.ValidateName(snapCfg.RollbackTarget); err != nil {
 		return fmt.Errorf("snapshot rollback: rollback_target %q in devbox/snapshot.yml: %w", snapCfg.RollbackTarget, err)
 	}
-	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, "rollback", "snapshot:rollback")
+	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, noLive, "rollback", "snapshot:rollback")
 }
 
 func writeRestoreOutcome(w io.Writer, operation string, res *snapshot.RestoreResult) {

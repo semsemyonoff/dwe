@@ -16,6 +16,7 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/userconfig"
 
@@ -24,7 +25,10 @@ import (
 
 // newSnapshotRemoveCmd: `devbox snapshot remove <name> [-y]`.
 func newSnapshotRemoveCmd(flags *rootFlags) *cobra.Command {
-	var yes bool
+	var (
+		yes    bool
+		noLive bool
+	)
 	cmd := &cobra.Command{
 		Use:               "remove <name>",
 		Short:             "Delete a snapshot (runs remove: workflow if defined)",
@@ -32,14 +36,15 @@ func newSnapshotRemoveCmd(flags *rootFlags) *cobra.Command {
 		SilenceUsage:      true,
 		ValidArgsFunction: snapshotNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotRemove(cmd, flags, args[0], yes)
+			return runSnapshotRemove(cmd, flags, args[0], yes, noLive)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip remove confirmation")
+	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
 	return cmd
 }
 
-func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes bool) (err error) {
+func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
@@ -130,6 +135,9 @@ func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes bo
 				prompt = fmt.Sprintf("Remove snapshot %q (%s)?", name, m.Description)
 			}
 			return ui.RunConfirm(prompt, "Remove", "Cancel")
+		},
+		StepObserverFactory: func(steps []model.WorkflowStep) snapshot.StepObserverCloser {
+			return newSnapshotLiveObserver("snapshot remove: "+name, noLive, steps)
 		},
 	}
 

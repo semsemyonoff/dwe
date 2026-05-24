@@ -39,6 +39,12 @@ type ExecParams struct {
 	SkipConfirm bool
 	// NonInteractive forces non-interactive code paths even on a TTY.
 	NonInteractive bool
+	// StepObserverFactory, when non-nil, is invoked after the synthetic
+	// CommandDef is built so the per-workflow live UI can install itself
+	// before the runner sees the first step. A nil factory (or one that
+	// returns nil) leaves rc.StepObserver nil so the runner falls back to
+	// the existing plain-stdout output.
+	StepObserverFactory StepObserverFactory
 }
 
 // RunWorkflow executes p.Workflow under the snapshot variable scope.
@@ -70,6 +76,14 @@ func RunWorkflow(ctx context.Context, p ExecParams) error {
 		return fmt.Errorf("snapshot: synthetic workflow invalid: %w", err)
 	}
 
+	var obs StepObserverCloser
+	if p.StepObserverFactory != nil {
+		obs = p.StepObserverFactory(p.Workflow.Steps)
+		if obs != nil {
+			defer obs.Close()
+		}
+	}
+
 	rc := runtime.RunContext{
 		Cmd: cmd,
 		Render: &tpl.RenderContext{
@@ -89,6 +103,9 @@ func RunWorkflow(ctx context.Context, p ExecParams) error {
 		// subcommand layer owns end-of-run notifications, so suppress
 		// any per-leaf notification opt-ins.
 		SkipNotify: true,
+	}
+	if obs != nil {
+		rc.StepObserver = obs
 	}
 
 	return runtime.RunCommand(ctx, rc)
