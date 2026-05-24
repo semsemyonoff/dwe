@@ -126,59 +126,45 @@ func Theme() huh.Theme {
 // to a *huh.Styles in place. The returned function is safe to call multiple
 // times on different *huh.Styles values (no shared state).
 //
-// Palette mapping (StylesColors → *huh.Styles):
-//   - section_title → Focused.Title, Group.Title         (form/group title color)
-//   - subheader     → Focused.Description, Group.Description
-//   - label         → Focused.SelectSelector, Focused.MultiSelectSelector, Focused.Option
-//   - muted         → Blurred.Title, Blurred.Description, Focused.UnselectedOption,
-//     Focused.TextInput.Placeholder, Help styles
-//   - enabled       → Focused.SelectedOption, Focused.SelectedPrefix (multi-select checked)
-//   - warning       → Focused.ErrorIndicator, Focused.ErrorMessage
-//   - info          → Focused.TextInput.Prompt, Focused.NextIndicator, Focused.PrevIndicator
-func buildPaletteApplier(c *config.StylesColors) func(*huh.Styles) {
+// Palette mapping (7-token → *huh.Styles):
+//   - accent  → Focused.Title, Group.Title, SelectSelector, MultiSelectSelector,
+//     Option, TextInput.Prompt, NextIndicator, PrevIndicator
+//   - muted   → Focused.Description, Group.Description, Blurred.Title,
+//     Blurred.Description, UnselectedOption, TextInput.Placeholder
+//   - success → Focused.SelectedOption, Focused.SelectedPrefix (multi-select checked)
+//   - danger  → Focused.ErrorIndicator, Focused.ErrorMessage
+//
+// The applier reads from the resolved token values (resolvedAccent, etc.) so
+// passing nil or an empty StylesColors still produces a fully-themed *huh.Styles
+// — empty user overrides have already been resolved to the built-in defaults
+// by rebuildSemanticStyles.
+func buildPaletteApplier(_ *config.StylesColors) func(*huh.Styles) {
 	return func(s *huh.Styles) {
-		if c == nil {
-			return
-		}
-		selectedColor := colorSuccess
-		unselectedColor := colorDescription
-		if c.SectionTitle != "" {
-			col := lipgloss.Color(c.SectionTitle)
-			s.Focused.Title = s.Focused.Title.Foreground(col).Bold(true)
-			s.Group.Title = s.Group.Title.Foreground(col).Bold(true)
-		}
-		if c.SubHeader != "" {
-			col := lipgloss.Color(c.SubHeader)
-			s.Focused.Description = s.Focused.Description.Foreground(col)
-			s.Group.Description = s.Group.Description.Foreground(col)
-		}
-		if c.Label != "" {
-			col := lipgloss.Color(c.Label)
-			s.Focused.SelectSelector = s.Focused.SelectSelector.Foreground(col)
-			s.Focused.MultiSelectSelector = s.Focused.MultiSelectSelector.Foreground(col)
-			s.Focused.Option = s.Focused.Option.Foreground(col)
-		}
-		if c.Muted != "" {
-			col := lipgloss.Color(c.Muted)
-			unselectedColor = c.Muted
-			s.Blurred.Title = s.Blurred.Title.Foreground(col)
-			s.Blurred.Description = s.Blurred.Description.Foreground(col)
-			s.Focused.TextInput.Placeholder = s.Focused.TextInput.Placeholder.Foreground(col)
-		}
-		if c.Enabled != "" {
-			selectedColor = c.Enabled
-		}
-		if c.Warning != "" {
-			col := lipgloss.Color(c.Warning)
-			s.Focused.ErrorIndicator = s.Focused.ErrorIndicator.Foreground(col)
-			s.Focused.ErrorMessage = s.Focused.ErrorMessage.Foreground(col)
-		}
-		if c.Info != "" {
-			col := lipgloss.Color(c.Info)
-			s.Focused.TextInput.Prompt = s.Focused.TextInput.Prompt.Foreground(col)
-			s.Focused.NextIndicator = s.Focused.NextIndicator.Foreground(col)
-			s.Focused.PrevIndicator = s.Focused.PrevIndicator.Foreground(col)
-		}
-		applyMultiSelectStateStyles(s, selectedColor, unselectedColor)
+		accent := lipgloss.Color(resolvedAccent)
+		muted := lipgloss.Color(resolvedMuted)
+		danger := lipgloss.Color(resolvedDanger)
+
+		s.Focused.Title = s.Focused.Title.Foreground(accent).Bold(true)
+		s.Group.Title = s.Group.Title.Foreground(accent).Bold(true)
+
+		s.Focused.Description = s.Focused.Description.Foreground(muted)
+		s.Group.Description = s.Group.Description.Foreground(muted)
+
+		s.Focused.SelectSelector = s.Focused.SelectSelector.Foreground(accent)
+		s.Focused.MultiSelectSelector = s.Focused.MultiSelectSelector.Foreground(accent)
+		s.Focused.Option = s.Focused.Option.Foreground(accent)
+
+		s.Blurred.Title = s.Blurred.Title.Foreground(muted)
+		s.Blurred.Description = s.Blurred.Description.Foreground(muted)
+		s.Focused.TextInput.Placeholder = s.Focused.TextInput.Placeholder.Foreground(muted)
+
+		s.Focused.ErrorIndicator = s.Focused.ErrorIndicator.Foreground(danger)
+		s.Focused.ErrorMessage = s.Focused.ErrorMessage.Foreground(danger)
+
+		s.Focused.TextInput.Prompt = s.Focused.TextInput.Prompt.Foreground(accent)
+		s.Focused.NextIndicator = s.Focused.NextIndicator.Foreground(accent)
+		s.Focused.PrevIndicator = s.Focused.PrevIndicator.Foreground(accent)
+
+		applyMultiSelectStateStyles(s, resolvedSuccess, resolvedMuted)
 	}
 }

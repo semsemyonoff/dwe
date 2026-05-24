@@ -82,8 +82,8 @@ func TestRenderTable_UsesTableStyles(t *testing.T) {
 	// Apply a custom table header color and verify the table still renders without panic.
 	ApplyStyles(&config.StylesConfig{
 		Colors: config.StylesColors{
-			TableBorder: "203",
-			TableHeader: "209",
+			Border: "#CB0000",
+			Accent: "#D10000",
 		},
 	})
 	out := RenderTable([]string{"NAME"}, [][]string{{"foo"}})

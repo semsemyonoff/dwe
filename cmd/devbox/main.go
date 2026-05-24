@@ -15,6 +15,7 @@ import (
 	"devbox-cli/internal/command"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/project"
+	"devbox-cli/internal/ui"
 	"devbox-cli/internal/version"
 )
 
@@ -99,37 +100,26 @@ func loadHelpColorScheme(configPath string, explicit bool) fang.ColorSchemeFunc 
 	if err != nil || stylesCfg == nil {
 		return nil
 	}
+	// Side-effect: ensure the 7-token palette is resolved before we read
+	// ui.ColorAccent() / ui.ColorMuted() below. ApplyStyles is the canonical
+	// resolution point and is otherwise called from the cobra root PreRunE,
+	// which has not run yet at this point in startup.
+	ui.ApplyStyles(stylesCfg)
 
-	h := stylesCfg.Colors.Help
-	if h.Title == "" && h.Command == "" && h.Flag == "" &&
-		h.Program == "" && h.Description == "" && h.Argument == "" {
-		return nil
-	}
+	accent := ui.ColorAccent()
+	muted := ui.ColorMuted()
 
 	return func(ld lipglossv2.LightDarkFunc) fang.ColorScheme {
 		cs := fang.DefaultColorScheme(ld)
-		if h.Title != "" {
-			cs.Title = lipglossv2.Color(h.Title)
-		}
-		if h.Command != "" {
-			cs.Command = lipglossv2.Color(h.Command)
-		}
-		if h.Flag != "" {
-			cs.Flag = lipglossv2.Color(h.Flag)
-		}
-		if h.Program != "" {
-			cs.Program = lipglossv2.Color(h.Program)
-		}
-		if h.Description != "" {
-			c := lipglossv2.Color(h.Description)
-			cs.Description = c
-			cs.Base = c
-		}
-		if h.Argument != "" {
-			c := lipglossv2.Color(h.Argument)
-			cs.Argument = c
-			cs.DimmedArgument = c
-		}
+		cs.Title = lipglossv2.Color(accent)
+		cs.Command = lipglossv2.Color(accent)
+		cs.Flag = lipglossv2.Color(accent)
+		cs.Program = lipglossv2.Color(accent)
+		descCol := lipglossv2.Color(muted)
+		cs.Description = descCol
+		cs.Base = descCol
+		cs.Argument = descCol
+		cs.DimmedArgument = descCol
 		return cs
 	}
 }

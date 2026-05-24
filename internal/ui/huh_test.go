@@ -56,7 +56,7 @@ func TestDefaultThemeMultiSelectStateStyles(t *testing.T) {
 	huhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeBase(isDark)
 		applyFormGlyphs(s)
-		applyMultiSelectStateStyles(s, colorSuccess, colorDescription)
+		applyMultiSelectStateStyles(s, resolvedSuccess, resolvedMuted)
 		return s
 	})
 
@@ -81,20 +81,14 @@ func TestApplyStylesPaletteReflected(t *testing.T) {
 
 	cfg := &config.StylesConfig{
 		Colors: config.StylesColors{
-			// ANSI 256 color "6" (cyan) — used as section_title
-			SectionTitle: "6",
+			Accent: "#123456",
 		},
 	}
 	ApplyStyles(cfg)
 
-	th := Theme()
-	// Focused.Title foreground should reflect the section_title palette entry.
-	// Verified field: Focused.Title is a lipgloss.Style set by buildPaletteApplier
-	// via s.Focused.Title.Foreground(lipgloss.Color("6")).Bold(true).
-	styles := th.Theme(false)
+	styles := Theme().Theme(false)
 	got := styles.Focused.Title.GetForeground()
-
-	want := lipgloss.Color("6") // returns ansi.BasicColor(6)
+	want := lipgloss.Color("#123456")
 	if got != want {
 		t.Errorf("Focused.Title foreground = %v (%T), want %v (%T)", got, got, want, want)
 	}
@@ -106,14 +100,14 @@ func TestApplyStylesGroupTitlePaletteReflected(t *testing.T) {
 
 	cfg := &config.StylesConfig{
 		Colors: config.StylesColors{
-			SectionTitle: "6",
+			Accent: "#123456",
 		},
 	}
 	ApplyStyles(cfg)
 
 	styles := Theme().Theme(false)
 	got := styles.Group.Title.GetForeground()
-	want := lipgloss.Color("6")
+	want := lipgloss.Color("#123456")
 	if got != want {
 		t.Errorf("Group.Title foreground = %v (%T), want %v (%T)", got, got, want, want)
 	}
@@ -356,40 +350,44 @@ func TestRunWithPromptHooks_SurvivesMidClear(t *testing.T) {
 }
 
 func TestBuildPaletteApplierAllFields(t *testing.T) {
-	c := &config.StylesColors{
-		SectionTitle: "6",
-		SubHeader:    "3",
-		Label:        "12",
-		Muted:        "8",
-		Enabled:      "2",
-		Warning:      "1",
-		Info:         "14",
-	}
-	apply := buildPaletteApplier(c)
+	c := &config.StylesConfig{Colors: config.StylesColors{
+		Accent:  "#012345",
+		Success: "#011223",
+		Danger:  "#993311",
+		Muted:   "#445566",
+	}}
+	ApplyStyles(c)
+
+	apply := buildPaletteApplier(&c.Colors)
 	s := huh.ThemeBase(false)
 	apply(s)
+
+	accent := lipgloss.Color("#012345")
+	success := lipgloss.Color("#011223")
+	danger := lipgloss.Color("#993311")
+	muted := lipgloss.Color("#445566")
 
 	tests := []struct {
 		name string
 		got  color.Color
 		want color.Color
 	}{
-		{"Focused.Title", s.Focused.Title.GetForeground(), lipgloss.Color("6")},
-		{"Group.Title", s.Group.Title.GetForeground(), lipgloss.Color("6")},
-		{"Focused.Description", s.Focused.Description.GetForeground(), lipgloss.Color("3")},
-		{"Group.Description", s.Group.Description.GetForeground(), lipgloss.Color("3")},
-		{"Focused.SelectSelector", s.Focused.SelectSelector.GetForeground(), lipgloss.Color("12")},
-		{"Focused.MultiSelectSelector", s.Focused.MultiSelectSelector.GetForeground(), lipgloss.Color("12")},
-		{"Focused.Option", s.Focused.Option.GetForeground(), lipgloss.Color("12")},
-		{"Blurred.Title", s.Blurred.Title.GetForeground(), lipgloss.Color("8")},
-		{"Blurred.Description", s.Blurred.Description.GetForeground(), lipgloss.Color("8")},
-		{"Focused.UnselectedOption", s.Focused.UnselectedOption.GetForeground(), lipgloss.Color("8")},
-		{"Focused.SelectedOption", s.Focused.SelectedOption.GetForeground(), lipgloss.Color("2")},
-		{"Focused.SelectedPrefix", s.Focused.SelectedPrefix.GetForeground(), lipgloss.Color("2")},
-		{"Focused.ErrorIndicator", s.Focused.ErrorIndicator.GetForeground(), lipgloss.Color("1")},
-		{"Focused.ErrorMessage", s.Focused.ErrorMessage.GetForeground(), lipgloss.Color("1")},
-		{"Focused.NextIndicator", s.Focused.NextIndicator.GetForeground(), lipgloss.Color("14")},
-		{"Focused.PrevIndicator", s.Focused.PrevIndicator.GetForeground(), lipgloss.Color("14")},
+		{"Focused.Title", s.Focused.Title.GetForeground(), accent},
+		{"Group.Title", s.Group.Title.GetForeground(), accent},
+		{"Focused.Description", s.Focused.Description.GetForeground(), muted},
+		{"Group.Description", s.Group.Description.GetForeground(), muted},
+		{"Focused.SelectSelector", s.Focused.SelectSelector.GetForeground(), accent},
+		{"Focused.MultiSelectSelector", s.Focused.MultiSelectSelector.GetForeground(), accent},
+		{"Focused.Option", s.Focused.Option.GetForeground(), accent},
+		{"Blurred.Title", s.Blurred.Title.GetForeground(), muted},
+		{"Blurred.Description", s.Blurred.Description.GetForeground(), muted},
+		{"Focused.UnselectedOption", s.Focused.UnselectedOption.GetForeground(), muted},
+		{"Focused.SelectedOption", s.Focused.SelectedOption.GetForeground(), success},
+		{"Focused.SelectedPrefix", s.Focused.SelectedPrefix.GetForeground(), success},
+		{"Focused.ErrorIndicator", s.Focused.ErrorIndicator.GetForeground(), danger},
+		{"Focused.ErrorMessage", s.Focused.ErrorMessage.GetForeground(), danger},
+		{"Focused.NextIndicator", s.Focused.NextIndicator.GetForeground(), accent},
+		{"Focused.PrevIndicator", s.Focused.PrevIndicator.GetForeground(), accent},
 	}
 
 	for _, tt := range tests {

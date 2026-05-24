@@ -247,7 +247,7 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 		// Render ASCII art header from styles config if lines are set.
 		if stylesCfg != nil && len(stylesCfg.Header.Lines) > 0 {
 			r := render.NewWriter(cmd.OutOrStdout())
-			if asciiErr := r.ASCII(stylesCfg.Header.Lines, stylesCfg.Header.Font, stylesCfg.Header.Color); asciiErr == nil {
+			if asciiErr := r.ASCII(stylesCfg.Header.Lines, stylesCfg.Header.Font, ""); asciiErr == nil {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout())
 			}
 		}

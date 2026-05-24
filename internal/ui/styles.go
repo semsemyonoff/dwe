@@ -5,7 +5,7 @@ package ui
 
 import (
 	"os"
-	"strconv"
+	"strings"
 
 	huh "charm.land/huh/v2"
 	"github.com/charmbracelet/lipgloss"
@@ -14,142 +14,190 @@ import (
 	"devbox-cli/internal/config"
 )
 
-// Styles follow the Fang aesthetic: simple, high-contrast, terminal-friendly.
-// All styles use ANSI 256-color palette codes for broad terminal compatibility.
+// hexPair holds a light-mode and dark-mode hex string for a single semantic
+// token. ApplyStyles resolves the active mode once via
+// lipgloss.HasDarkBackground() and stores the chosen hex on the package-level
+// resolved* vars. A non-empty user override in StylesColors applies to both
+// modes (no separate light/dark override surface).
+type hexPair struct{ Light, Dark string }
+
+// Built-in light/dark defaults for the 7 semantic tokens. These are plain hex
+// strings (not lipgloss.AdaptiveColor) because the package-level Color*()
+// accessors must return raw hex — they bridge v1 lipgloss (this package), v2
+// lipgloss (internal/ui/cmdbrowser), and Fang's ColorScheme.
 var (
-	// styleKey renders definition labels: bold bright-blue.
-	styleKey = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	defaultAccent  = hexPair{Light: "#0EA5E9", Dark: "#2EC3EB"}
+	defaultSuccess = hexPair{Light: "#16A34A", Dark: "#22C55E"}
+	defaultWarning = hexPair{Light: "#D97706", Dark: "#F59E0B"}
+	defaultDanger  = hexPair{Light: "#DC2626", Dark: "#EF4444"}
+	defaultMuted   = hexPair{Light: "#64748B", Dark: "#9AA3BB"}
+	defaultBorder  = hexPair{Light: "#CBD5E1", Dark: "#334155"}
+	// defaultText is intentionally empty: text token falls back to
+	// lipgloss.NoColor{} so the terminal's default foreground is preserved
+	// unless the user explicitly sets `text:` in styles.yml.
+	defaultText = hexPair{Light: "", Dark: ""}
+)
 
-	// styleSectionTitle renders section headers: bold cyan.
-	styleSectionTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+// Resolved hex strings for the 7 semantic tokens. ApplyStyles writes these
+// once per call from the user config + light/dark defaults; Color*() accessors
+// read them.
+var (
+	resolvedAccent  string
+	resolvedSuccess string
+	resolvedWarning string
+	resolvedDanger  string
+	resolvedMuted   string
+	resolvedBorder  string
+	resolvedText    string
+)
 
-	// styleSubheader renders in-section subheaders: bold yellow.
-	styleSubheader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
+// v1 lipgloss styles for the 7 semantic tokens. Built once per ApplyStyles
+// call from the resolved hex values. Used directly by internal/ui consumers.
+var (
+	styleAccent  lipgloss.Style
+	styleSuccess lipgloss.Style
+	styleWarning lipgloss.Style
+	styleDanger  lipgloss.Style
+	styleMuted   lipgloss.Style
+	styleBorder  lipgloss.Style
+	styleText    lipgloss.Style
+)
 
-	// styleMuted renders secondary / count text: dim gray.
-	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+// Legacy v1 style aliases — Task 3 migrates internal/ui consumers off these
+// and removes the aliases. Each alias is reassigned in rebuildSemanticStyles
+// alongside the canonical 7 tokens.
+var (
+	styleKey          lipgloss.Style
+	styleSectionTitle lipgloss.Style
+	styleSubheader    lipgloss.Style
+	styleInfoText     lipgloss.Style
+	styleValue        lipgloss.Style
+	styleEnabled      lipgloss.Style
+	styleDisabled     lipgloss.Style
+	styleMandatory    lipgloss.Style
+	stylePartial      lipgloss.Style
+	styleRunStopped   lipgloss.Style
+	styleWarn         lipgloss.Style
+	styleCatService   lipgloss.Style
+	styleCatTool      lipgloss.Style
+	styleCatInfra     lipgloss.Style
+	styleTableBorder  lipgloss.Style
+	styleTableHeader  lipgloss.Style
+)
 
-	// styleWarn renders warning messages: yellow.
-	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-
-	// styleInfoText renders info messages: bright blue / cyan.
-	styleInfoText = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-
-	// styleValue renders definition values: no styling (inherits terminal default).
-	styleValue = lipgloss.NewStyle()
-
-	// Semantic status styles.
-	styleEnabled    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleDisabled   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleMandatory  = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	stylePartial    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleRunStopped = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-
-	// Topology category styles.
-	styleCatService = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleCatTool    = lipgloss.NewStyle().Foreground(lipgloss.Color("67"))
-	styleCatInfra   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-
-	// Table styles.
-	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-
-	// Command browser palette — stored as raw color strings so both lipgloss v1
-	// and charm.land/lipgloss/v2 callers can consume the same source of truth
-	// via the Color*() accessors. internal/ui/cmdbrowser/palette.go is the only
-	// sanctioned bridge that wraps these into v2 styles.
-	colorFocusBorder        = "12"
-	colorDescription        = "8"
-	colorTreeCount          = "8"
-	colorTreeArrow          = "6"
-	colorFilterMatch        = "12"
-	colorPaginationActive   = "12"
-	colorPaginationInactive = "8"
-
-	// Semantic palette mirrors of the v1 styleKey / styleInfoText / styleEnabled
-	// colors so cmdbrowser (v2 lipgloss) can pick them up through the shared
-	// string-typed Color*() accessors. Driven from the same YAML fields
-	// (Label / Info / Enabled) as the v1 styles so a single styles.yml update
-	// keeps both versions in sync.
-	colorKey     = "12"
-	colorInfo    = "12"
-	colorSuccess = "2"
+// Legacy palette color aliases — Task 3 migrates cmdbrowser/palette.go off
+// these and removes the aliases.
+var (
+	colorFocusBorder        string
+	colorDescription        string
+	colorTreeCount          string
+	colorTreeArrow          string
+	colorFilterMatch        string
+	colorPaginationActive   string
+	colorPaginationInactive string
+	colorKey                string
+	colorInfo               string
+	colorSuccess            string
 )
 
 // defSep is the delimiter used between a definition label and its value.
 var defSep = "—"
 
+func init() {
+	// Establish a sane initial palette before any ApplyStyles call so package
+	// consumers that read styles at init / first-use don't see zero values.
+	rebuildSemanticStyles(config.StylesColors{})
+}
+
+// resolveHex picks the light or dark default for a token, honouring a user
+// override that applies to both modes. dark indicates the resolved mode.
+func resolveHex(override string, def hexPair, dark bool) string {
+	if override != "" {
+		return override
+	}
+	if dark {
+		return def.Dark
+	}
+	return def.Light
+}
+
+// foreground builds a v1 lipgloss style with the given hex as foreground, or
+// with lipgloss.NoColor{} when hex is empty (preserves terminal default text
+// color). Used exclusively to construct semantic token styles.
+func foreground(hex string) lipgloss.Style {
+	if hex == "" {
+		return lipgloss.NewStyle().Foreground(lipgloss.NoColor{})
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(hex))
+}
+
+// rebuildSemanticStyles is the single source of truth for the 7 token styles
+// AND the legacy aliases. It resolves user/light/dark per token, then assigns
+// every package-level style var.
+func rebuildSemanticStyles(c config.StylesColors) {
+	dark := lipgloss.HasDarkBackground()
+	resolvedAccent = resolveHex(c.Accent, defaultAccent, dark)
+	resolvedSuccess = resolveHex(c.Success, defaultSuccess, dark)
+	resolvedWarning = resolveHex(c.Warning, defaultWarning, dark)
+	resolvedDanger = resolveHex(c.Danger, defaultDanger, dark)
+	resolvedMuted = resolveHex(c.Muted, defaultMuted, dark)
+	resolvedBorder = resolveHex(c.Border, defaultBorder, dark)
+	resolvedText = resolveHex(c.Text, defaultText, dark)
+
+	styleAccent = foreground(resolvedAccent)
+	styleSuccess = foreground(resolvedSuccess)
+	styleWarning = foreground(resolvedWarning)
+	styleDanger = foreground(resolvedDanger)
+	styleMuted = foreground(resolvedMuted)
+	styleBorder = foreground(resolvedBorder)
+	styleText = foreground(resolvedText)
+
+	// Legacy aliases — collapse old per-purpose styles onto the 7 semantic
+	// tokens. Task 3 removes these along with their consumers.
+	bold := styleAccent.Bold(true)
+	styleKey = bold
+	styleSectionTitle = bold
+	styleSubheader = bold
+	styleInfoText = styleAccent
+	styleValue = styleText
+	styleEnabled = styleSuccess
+	styleDisabled = styleMuted
+	styleMandatory = bold
+	stylePartial = styleWarning
+	styleRunStopped = styleDanger
+	styleWarn = styleWarning
+	styleCatService = styleAccent
+	styleCatTool = styleText
+	styleCatInfra = styleMuted
+	styleTableBorder = styleBorder
+	styleTableHeader = bold
+
+	colorFocusBorder = resolvedAccent
+	colorDescription = resolvedMuted
+	colorTreeCount = resolvedMuted
+	colorTreeArrow = resolvedAccent
+	colorFilterMatch = resolvedAccent
+	colorPaginationActive = resolvedAccent
+	colorPaginationInactive = resolvedMuted
+	colorKey = resolvedAccent
+	colorInfo = resolvedAccent
+	colorSuccess = resolvedSuccess
+}
+
 // ApplyStyles rebuilds package-level style vars from the provided StylesConfig.
-// Fields with empty color strings are skipped — the existing defaults are preserved.
+// User-provided non-empty hex strings override the built-in light/dark
+// defaults; missing/empty fields fall back to the default for the terminal's
+// resolved background mode.
 func ApplyStyles(cfg *config.StylesConfig) {
 	if cfg == nil {
+		rebuildSemanticStyles(config.StylesColors{})
 		return
 	}
-	c := cfg.Colors
-	if c.Label != "" {
-		styleKey = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Label)).Bold(true)
-		colorKey = c.Label
-	}
-	if c.SectionTitle != "" {
-		styleSectionTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.SectionTitle))
-	}
-	if c.SubHeader != "" {
-		styleSubheader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(c.SubHeader))
-	}
-	if c.Muted != "" {
-		styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Muted))
-	}
-	if c.Warning != "" {
-		styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Warning))
-	}
-	if c.Info != "" {
-		styleInfoText = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Info))
-		colorInfo = c.Info
-	}
-	if c.Enabled != "" {
-		styleEnabled = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Enabled))
-		colorSuccess = c.Enabled
-	}
-	if c.Disabled != "" {
-		styleDisabled = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Disabled))
-	}
-	if c.Mandatory != "" {
-		styleMandatory = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Mandatory)).Bold(true)
-	}
-	if c.Partial != "" {
-		stylePartial = lipgloss.NewStyle().Foreground(lipgloss.Color(c.Partial))
-	}
-	if c.TableBorder != "" {
-		styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color(c.TableBorder))
-	}
-	if c.TableHeader != "" {
-		styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color(c.TableHeader)).Bold(true)
-	}
-	if c.FocusBorder != "" {
-		colorFocusBorder = c.FocusBorder
-	}
-	if c.Description != "" {
-		colorDescription = c.Description
-	}
-	if c.TreeCount != "" {
-		colorTreeCount = c.TreeCount
-	}
-	if c.TreeArrow != "" {
-		colorTreeArrow = c.TreeArrow
-	}
-	if c.FilterMatch != "" {
-		colorFilterMatch = c.FilterMatch
-	}
-	if c.PaginationActive != "" {
-		colorPaginationActive = c.PaginationActive
-	}
-	if c.PaginationInactive != "" {
-		colorPaginationInactive = c.PaginationInactive
-	}
+	rebuildSemanticStyles(cfg.Colors)
 	if cfg.Separator != "" {
 		defSep = cfg.Separator
 	}
-	apply := buildPaletteApplier(&c)
+	apply := buildPaletteApplier(&cfg.Colors)
 	huhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeBase(isDark)
 		applyFormGlyphs(s)
@@ -159,46 +207,45 @@ func ApplyStyles(cfg *config.StylesConfig) {
 }
 
 // RenderEnabled applies the enabled/running style to s.
-func RenderEnabled(s string) string { return styleEnabled.Render(s) }
+func RenderEnabled(s string) string { return styleSuccess.Render(s) }
 
 // RenderPartial applies the partial style to s.
-func RenderPartial(s string) string { return stylePartial.Render(s) }
+func RenderPartial(s string) string { return styleWarning.Render(s) }
 
-// RenderStopped applies the mandatory/alert style to s.
-// Used for "stopped" stack state to draw attention (coral red, bold).
-func RenderStopped(s string) string { return styleMandatory.Render(s) }
+// RenderStopped applies the alert style to s. Used for "stopped" stack state
+// to draw attention.
+func RenderStopped(s string) string { return styleDanger.Render(s) }
 
-// StyleKey renders s with the key/label style (bright-blue, bold).
+// StyleKey renders s with the accent style, bold.
 // Used for definition labels, command names, and leaf nodes in tree views.
-func StyleKey(s string) string { return styleKey.Render(s) }
+func StyleKey(s string) string { return styleAccent.Bold(true).Render(s) }
 
-// StyleGroup renders s with the group/section-title style (cyan, bold).
-// Used for group headers in tree views.
-func StyleGroup(s string) string { return styleSectionTitle.Render(s) }
+// StyleGroup renders s with the accent style, bold. Used for group headers in
+// tree views.
+func StyleGroup(s string) string { return styleAccent.Bold(true).Render(s) }
 
-// StyleSectionTitle renders s with the section title style (cyan, bold).
-// Used for pipeline/dashboard top-level headers.
-func StyleSectionTitle(s string) string { return styleSectionTitle.Render(s) }
+// StyleSectionTitle renders s with the accent style, bold. Used for
+// pipeline/dashboard top-level headers.
+func StyleSectionTitle(s string) string { return styleAccent.Bold(true).Render(s) }
 
-// StyleSubheader renders s with the subheader style (yellow, bold).
-// Used for phase labels and in-section sub-headers.
-func StyleSubheader(s string) string { return styleSubheader.Render(s) }
+// StyleSubheader renders s with the accent style, bold. Used for phase labels
+// and in-section sub-headers.
+func StyleSubheader(s string) string { return styleAccent.Bold(true).Render(s) }
 
-// StyleMuted renders s with the muted/dim style.
+// StyleMuted renders s with the muted style.
 // Used for tags, separators, and secondary information.
 func StyleMuted(s string) string { return styleMuted.Render(s) }
 
-// StyleInfo renders s with the info style (bright blue/cyan).
-// Used for informational callouts.
-func StyleInfo(s string) string { return styleInfoText.Render(s) }
+// StyleInfo renders s with the accent style. Used for informational callouts.
+func StyleInfo(s string) string { return styleAccent.Render(s) }
 
-// StyleFailed renders s with the failed/error style (red).
-// Used for failure icons in step history.
-func StyleFailed(s string) string { return styleRunStopped.Render(s) }
+// StyleFailed renders s with the danger style. Used for failure icons in step
+// history.
+func StyleFailed(s string) string { return styleDanger.Render(s) }
 
-// StyleWarning renders s with the warning style (yellow).
-// Used for warning icons and cautionary prompts.
-func StyleWarning(s string) string { return styleWarn.Render(s) }
+// StyleWarning renders s with the warning style. Used for warning icons and
+// cautionary prompts.
+func StyleWarning(s string) string { return styleWarning.Render(s) }
 
 // StyleServiceName renders a service name with the color assigned to its type.
 // Inactive services are dimmed and intentionally not bold.
@@ -239,7 +286,7 @@ func StyleServiceOptionType(serviceType, s string) string {
 
 // StyleServiceOptionContainer renders container metadata for huh option text.
 func StyleServiceOptionContainer(s string) string {
-	return renderFGOnly(colorDescription, s)
+	return renderFGOnly(resolvedMuted, s)
 }
 
 func styleInactiveService(serviceType string) lipgloss.Style {
@@ -249,11 +296,11 @@ func styleInactiveService(serviceType string) lipgloss.Style {
 func serviceTypeStyle(serviceType string) lipgloss.Style {
 	switch serviceType {
 	case "app":
-		return styleCatService
+		return styleAccent
 	case "tool":
-		return styleCatTool
+		return styleSuccess
 	case "infra":
-		return styleCatInfra
+		return styleMuted
 	default:
 		return styleMuted
 	}
@@ -262,68 +309,133 @@ func serviceTypeStyle(serviceType string) lipgloss.Style {
 func serviceTypeColor(serviceType string) string {
 	switch serviceType {
 	case "app":
-		return "6"
+		return resolvedAccent
 	case "tool":
-		return "67"
+		return resolvedSuccess
 	case "infra":
-		return "8"
+		return resolvedMuted
 	default:
-		return colorDescription
+		return resolvedMuted
 	}
 }
 
+// renderFGOnly wraps s with a foreground-only ANSI escape so callers (huh
+// option rendering) can compose bold/faint around the same line without a
+// full reset cancelling the surrounding style. Supports both hex (#RRGGBB,
+// emitted as truecolor 38;2;R;G;B) and legacy 256-color numeric strings.
 func renderFGOnly(color, s string) string {
-	if s == "" {
-		return ""
-	}
-	if _, err := strconv.Atoi(color); err != nil {
+	if s == "" || color == "" {
 		return s
+	}
+	if strings.HasPrefix(color, "#") {
+		r, g, b, ok := parseHex(color)
+		if !ok {
+			return s
+		}
+		return ansiTruecolorFG(r, g, b) + s + "\x1b[39m"
+	}
+	// Numeric 256-color path (legacy ANSI index).
+	for _, c := range color {
+		if c < '0' || c > '9' {
+			return s
+		}
 	}
 	return "\x1b[38;5;" + color + "m" + s + "\x1b[39m"
 }
 
-// ColorFocusBorder returns the raw color string used by the command browser
-// for focused-panel borders. The value is consumable by both lipgloss v1 and
-// charm.land/lipgloss/v2 via their respective lipgloss.Color(s) constructors.
-func ColorFocusBorder() string { return colorFocusBorder }
+func parseHex(h string) (r, g, b int, ok bool) {
+	if len(h) != 7 || h[0] != '#' {
+		return 0, 0, 0, false
+	}
+	v, err := strconvParseHex(h[1:])
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	return (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff, true
+}
 
-// ColorDescription returns the raw color string for secondary description text
-// (item subtitles, faint tree captions).
-func ColorDescription() string { return colorDescription }
+func strconvParseHex(s string) (int, error) {
+	var v int
+	for _, c := range s {
+		v <<= 4
+		switch {
+		case c >= '0' && c <= '9':
+			v |= int(c - '0')
+		case c >= 'a' && c <= 'f':
+			v |= int(c-'a') + 10
+		case c >= 'A' && c <= 'F':
+			v |= int(c-'A') + 10
+		default:
+			return 0, os.ErrInvalid
+		}
+	}
+	return v, nil
+}
 
-// ColorTreeCount returns the raw color string for "(N)" counters in the left
-// tree of the command browser.
-func ColorTreeCount() string { return colorTreeCount }
+func ansiTruecolorFG(r, g, b int) string {
+	var sb strings.Builder
+	sb.WriteString("\x1b[38;2;")
+	writeInt(&sb, r)
+	sb.WriteByte(';')
+	writeInt(&sb, g)
+	sb.WriteByte(';')
+	writeInt(&sb, b)
+	sb.WriteByte('m')
+	return sb.String()
+}
 
-// ColorTreeArrow returns the raw color string for tree disclosure glyphs (▸/▾).
-func ColorTreeArrow() string { return colorTreeArrow }
+func writeInt(sb *strings.Builder, v int) {
+	if v == 0 {
+		sb.WriteByte('0')
+		return
+	}
+	var buf [4]byte
+	i := len(buf)
+	for v > 0 {
+		i--
+		buf[i] = byte('0' + v%10)
+		v /= 10
+	}
+	sb.Write(buf[i:])
+}
 
-// ColorFilterMatch returns the raw color string used to highlight characters
-// matched by the active filter inside the command list.
-func ColorFilterMatch() string { return colorFilterMatch }
+// ColorAccent returns the resolved hex string for the accent token. Consumed
+// by cmdbrowser (v2 lipgloss) via lipgloss.Color(ColorAccent()) and by Fang's
+// ColorScheme. Re-resolved on every ApplyStyles call.
+func ColorAccent() string { return resolvedAccent }
 
-// ColorPaginationActive returns the raw color string for the active pagination
-// dot in the bubbles list.
-func ColorPaginationActive() string { return colorPaginationActive }
+// ColorSuccess returns the resolved hex string for the success token.
+func ColorSuccess() string { return resolvedSuccess }
 
-// ColorPaginationInactive returns the raw color string for inactive pagination
-// dots.
-func ColorPaginationInactive() string { return colorPaginationInactive }
+// ColorWarning returns the resolved hex string for the warning token.
+func ColorWarning() string { return resolvedWarning }
 
-// ColorKey returns the raw color string for high-prominence labels (titles,
-// breadcrumbs, focused emphasis). Mirrors the v1 styleKey color and is driven
-// by the StylesColors.Label YAML field.
-func ColorKey() string { return colorKey }
+// ColorDanger returns the resolved hex string for the danger token.
+func ColorDanger() string { return resolvedDanger }
 
-// ColorInfo returns the raw color string for informational accents. Mirrors
-// the v1 styleInfoText color and is driven by the StylesColors.Info YAML
-// field.
-func ColorInfo() string { return colorInfo }
+// ColorMuted returns the resolved hex string for the muted token.
+func ColorMuted() string { return resolvedMuted }
 
-// ColorSuccess returns the raw color string for success / enabled accents
-// (e.g. the cmdbrowser "[--yes ON]" toggle). Mirrors the v1 styleEnabled color
-// and is driven by the StylesColors.Enabled YAML field.
-func ColorSuccess() string { return colorSuccess }
+// ColorBorder returns the resolved hex string for the border token.
+func ColorBorder() string { return resolvedBorder }
+
+// ColorText returns the resolved hex string for the text token. May be empty
+// when the user has not overridden the default, in which case callers must
+// treat it as lipgloss.NoColor{} (terminal default foreground).
+func ColorText() string { return resolvedText }
+
+// Legacy accessors — Task 3 migrates callers (cmdbrowser/palette.go,
+// cmd/devbox/main.go loadHelpColorScheme) onto the 7 semantic accessors and
+// removes these wrappers.
+func ColorFocusBorder() string        { return resolvedAccent }
+func ColorDescription() string        { return resolvedMuted }
+func ColorTreeCount() string          { return resolvedMuted }
+func ColorTreeArrow() string          { return resolvedAccent }
+func ColorFilterMatch() string        { return resolvedAccent }
+func ColorPaginationActive() string   { return resolvedAccent }
+func ColorPaginationInactive() string { return resolvedMuted }
+func ColorKey() string                { return resolvedAccent }
+func ColorInfo() string               { return resolvedAccent }
 
 // TermWidth returns the current terminal width, falling back to 80 when the
 // output is not a terminal or the size cannot be determined.

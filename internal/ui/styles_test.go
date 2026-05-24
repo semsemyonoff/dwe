@@ -5,127 +5,236 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"devbox-cli/internal/config"
 )
 
-// resetStyles restores all package-level style vars to their hardcoded defaults.
-// This prevents test state from bleeding between tests.
+// forceTruecolor pins the v1 lipgloss color profile to TrueColor for the
+// duration of the test. ANSI render-output assertions need a deterministic
+// profile because lipgloss otherwise downgrades to Ascii in a non-TTY harness
+// (which strips all escapes).
+func forceTruecolor(t *testing.T) {
+	t.Helper()
+	saved := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(saved) })
+}
+
+// snapshotPalette captures the current resolved palette + separator and
+// reinstalls it via t.Cleanup. Tests that drive ApplyStyles or
+// lipgloss.SetHasDarkBackground must wrap themselves in this helper so they
+// do not bleed state into sibling tests in the same package — none of these
+// tests use t.Parallel for the same reason.
+func snapshotPalette(t *testing.T) {
+	t.Helper()
+	savedAccent, savedSuccess, savedWarning := resolvedAccent, resolvedSuccess, resolvedWarning
+	savedDanger, savedMuted, savedBorder, savedText := resolvedDanger, resolvedMuted, resolvedBorder, resolvedText
+	savedSep := defSep
+	savedDark := lipgloss.HasDarkBackground()
+	t.Cleanup(func() {
+		lipgloss.SetHasDarkBackground(savedDark)
+		rebuildSemanticStyles(config.StylesColors{
+			Accent:  savedAccent,
+			Success: savedSuccess,
+			Warning: savedWarning,
+			Danger:  savedDanger,
+			Muted:   savedMuted,
+			Border:  savedBorder,
+			Text:    savedText,
+		})
+		defSep = savedSep
+	})
+}
+
+// resetStyles re-initialises the palette to the built-in defaults for the
+// current dark/light mode. Used by older sibling tests in this package that
+// pre-date snapshotPalette.
 func resetStyles() {
-	styleKey = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	styleSectionTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	styleSubheader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
-	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleInfoText = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-	styleValue = lipgloss.NewStyle()
-	styleEnabled = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleDisabled = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleMandatory = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	stylePartial = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleRunStopped = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	styleCatService = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleCatTool = lipgloss.NewStyle().Foreground(lipgloss.Color("67"))
-	styleCatInfra = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleTableBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleTableHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	colorFocusBorder = "12"
-	colorDescription = "8"
-	colorTreeCount = "8"
-	colorTreeArrow = "6"
-	colorFilterMatch = "12"
-	colorPaginationActive = "12"
-	colorPaginationInactive = "8"
-	colorKey = "12"
-	colorInfo = "12"
-	colorSuccess = "2"
+	rebuildSemanticStyles(config.StylesColors{})
 	defSep = "—"
 }
 
 func TestApplyStyles_Nil(t *testing.T) {
-	resetStyles()
+	snapshotPalette(t)
 	ApplyStyles(nil)
 	if defSep != "—" {
 		t.Errorf("nil cfg must not change defSep: got %q", defSep)
 	}
 }
 
-func TestApplyStyles_Empty(t *testing.T) {
-	resetStyles()
+func TestApplyStyles_Empty_ResolvesDefaultsForDarkBackground(t *testing.T) {
+	snapshotPalette(t)
+	lipgloss.SetHasDarkBackground(true)
 	ApplyStyles(&config.StylesConfig{})
-	if defSep != "—" {
-		t.Errorf("empty cfg must not change defSep: got %q", defSep)
+
+	cases := []struct {
+		name string
+		got  func() string
+		want string
+	}{
+		{"Accent", ColorAccent, defaultAccent.Dark},
+		{"Success", ColorSuccess, defaultSuccess.Dark},
+		{"Warning", ColorWarning, defaultWarning.Dark},
+		{"Danger", ColorDanger, defaultDanger.Dark},
+		{"Muted", ColorMuted, defaultMuted.Dark},
+		{"Border", ColorBorder, defaultBorder.Dark},
+		{"Text", ColorText, defaultText.Dark},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.got(); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestApplyStyles_Empty_ResolvesDefaultsForLightBackground(t *testing.T) {
+	snapshotPalette(t)
+	lipgloss.SetHasDarkBackground(false)
+	ApplyStyles(&config.StylesConfig{})
+
+	cases := []struct {
+		name string
+		got  func() string
+		want string
+	}{
+		{"Accent", ColorAccent, defaultAccent.Light},
+		{"Success", ColorSuccess, defaultSuccess.Light},
+		{"Warning", ColorWarning, defaultWarning.Light},
+		{"Danger", ColorDanger, defaultDanger.Light},
+		{"Muted", ColorMuted, defaultMuted.Light},
+		{"Border", ColorBorder, defaultBorder.Light},
+		{"Text", ColorText, defaultText.Light},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.got(); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestApplyStyles_UserOverride_AppliesRegardlessOfMode(t *testing.T) {
+	snapshotPalette(t)
+	cfg := &config.StylesConfig{Colors: config.StylesColors{
+		Accent:  "#FF0000",
+		Success: "#00FF00",
+		Warning: "#FFFF00",
+		Danger:  "#FF00FF",
+		Muted:   "#888888",
+		Border:  "#CCCCCC",
+		Text:    "#111111",
+	}}
+
+	for _, dark := range []bool{true, false} {
+		lipgloss.SetHasDarkBackground(dark)
+		ApplyStyles(cfg)
+		assertions := []struct {
+			name string
+			got  func() string
+			want string
+		}{
+			{"Accent", ColorAccent, "#FF0000"},
+			{"Success", ColorSuccess, "#00FF00"},
+			{"Warning", ColorWarning, "#FFFF00"},
+			{"Danger", ColorDanger, "#FF00FF"},
+			{"Muted", ColorMuted, "#888888"},
+			{"Border", ColorBorder, "#CCCCCC"},
+			{"Text", ColorText, "#111111"},
+		}
+		for _, tc := range assertions {
+			if got := tc.got(); got != tc.want {
+				t.Errorf("dark=%v %s: got %q want %q", dark, tc.name, got, tc.want)
+			}
+		}
+	}
+}
+
+func TestApplyStyles_PartialOverride_DefaultsFillRest(t *testing.T) {
+	snapshotPalette(t)
+	lipgloss.SetHasDarkBackground(true)
+	ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{Accent: "#ABCDEF"}})
+	if ColorAccent() != "#ABCDEF" {
+		t.Errorf("accent override not applied: %q", ColorAccent())
+	}
+	if ColorMuted() != defaultMuted.Dark {
+		t.Errorf("muted should fall back to dark default: got %q", ColorMuted())
+	}
+	if ColorSuccess() != defaultSuccess.Dark {
+		t.Errorf("success should fall back to dark default: got %q", ColorSuccess())
 	}
 }
 
 func TestApplyStyles_Separator(t *testing.T) {
-	resetStyles()
+	snapshotPalette(t)
 	ApplyStyles(&config.StylesConfig{Separator: ":"})
 	if defSep != ":" {
 		t.Errorf("expected defSep to be ':', got %q", defSep)
 	}
 }
 
-func TestApplyStyles_Colors_Applied(t *testing.T) {
-	resetStyles()
-	cfg := &config.StylesConfig{
-		Colors: config.StylesColors{
-			Label:        "203",
-			SectionTitle: "167",
-			SubHeader:    "209",
-			Muted:        "245",
-			Warning:      "214",
-			Info:         "210",
-			Enabled:      "2",
-			Disabled:     "245",
-			Mandatory:    "203",
-			Partial:      "214",
-			TableBorder:  "167",
-			TableHeader:  "203",
-		},
-	}
-	ApplyStyles(cfg)
-	if styleKey.GetForeground() != lipgloss.Color("203") {
-		t.Errorf("styleKey foreground: got %v, want 203", styleKey.GetForeground())
-	}
-	if styleSectionTitle.GetForeground() != lipgloss.Color("167") {
-		t.Errorf("styleSectionTitle foreground: got %v, want 167", styleSectionTitle.GetForeground())
-	}
-	if styleMuted.GetForeground() != lipgloss.Color("245") {
-		t.Errorf("styleMuted foreground: got %v, want 245", styleMuted.GetForeground())
+func TestStyleText_EmptyConfig_NoForegroundAnsi(t *testing.T) {
+	snapshotPalette(t)
+	forceTruecolor(t)
+	ApplyStyles(&config.StylesConfig{}) // text override stays empty
+	out := styleText.Render("plain")
+	// NoColor{} path must NOT emit a foreground SGR (\x1b[3X... or 38;5; / 38;2;).
+	if strings.Contains(out, "\x1b[38;") {
+		t.Errorf("styleText with empty text emitted a foreground escape: %q", out)
 	}
 }
 
-func TestApplyStyles_PartialColors_PreservesDefault(t *testing.T) {
-	resetStyles()
-	// Only set muted; separator must stay at default.
-	cfg := &config.StylesConfig{
-		Colors: config.StylesColors{
-			Muted: "245",
-		},
+func TestStyleText_UserOverride_EmitsForegroundAnsi(t *testing.T) {
+	snapshotPalette(t)
+	forceTruecolor(t)
+	ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{Text: "#FF8800"}})
+	out := styleText.Render("colored")
+	if !strings.Contains(out, "\x1b[") {
+		t.Errorf("styleText with explicit text= should emit ANSI: %q", out)
 	}
-	ApplyStyles(cfg)
-	if defSep != "—" {
-		t.Errorf("expected defSep to remain default '—', got %q", defSep)
+	if ColorText() != "#FF8800" {
+		t.Errorf("ColorText: got %q, want %q", ColorText(), "#FF8800")
 	}
 }
 
-func TestApplyStyles_ChangesAreVisible(t *testing.T) {
-	resetStyles()
-	cfg := &config.StylesConfig{
-		Separator: ">>",
-		Colors: config.StylesColors{
-			Muted: "245",
-		},
+func TestApplyStyles_AccessorReturnsConfiguredHex(t *testing.T) {
+	snapshotPalette(t)
+	ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{
+		Accent:  "#010203",
+		Success: "#040506",
+		Warning: "#070809",
+		Danger:  "#0A0B0C",
+		Muted:   "#0D0E0F",
+		Border:  "#101112",
+		Text:    "#131415",
+	}})
+	cases := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"Accent", ColorAccent(), "#010203"},
+		{"Success", ColorSuccess(), "#040506"},
+		{"Warning", ColorWarning(), "#070809"},
+		{"Danger", ColorDanger(), "#0A0B0C"},
+		{"Muted", ColorMuted(), "#0D0E0F"},
+		{"Border", ColorBorder(), "#101112"},
+		{"Text", ColorText(), "#131415"},
 	}
-	ApplyStyles(cfg)
-	if defSep != ">>" {
-		t.Errorf("expected defSep '>>', got %q", defSep)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("got %q, want %q", tc.got, tc.want)
+			}
+		})
 	}
 }
 
 func TestStyleHelpers_NonEmpty(t *testing.T) {
-	resetStyles()
+	snapshotPalette(t)
 	cases := []struct {
 		name string
 		fn   func(string) string
@@ -153,7 +262,7 @@ func TestStyleHelpers_NonEmpty(t *testing.T) {
 }
 
 func TestServiceInactiveStyle_DimmedAndNotBold(t *testing.T) {
-	resetStyles()
+	snapshotPalette(t)
 	st := styleInactiveService("app")
 	if !st.GetFaint() {
 		t.Error("inactive service style should be faint")
@@ -161,115 +270,23 @@ func TestServiceInactiveStyle_DimmedAndNotBold(t *testing.T) {
 	if st.GetBold() {
 		t.Error("inactive service style should not be bold")
 	}
-	if st.GetForeground() != styleCatService.GetForeground() {
-		t.Errorf("inactive service foreground = %v, want app foreground %v", st.GetForeground(), styleCatService.GetForeground())
-	}
-
-	tool := styleInactiveService("tool")
-	if tool.GetForeground() != styleCatTool.GetForeground() {
-		t.Errorf("inactive tool foreground = %v, want tool foreground %v", tool.GetForeground(), styleCatTool.GetForeground())
-	}
 }
 
-func TestServiceOptionStyles_UseForegroundOnlyReset(t *testing.T) {
-	resetStyles()
+func TestServiceOptionStyles_TruecolorForegroundOnly(t *testing.T) {
+	snapshotPalette(t)
+	ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{Accent: "#112233"}})
 	out := StyleServiceOptionName("app", "main")
 	if out == "main" {
 		t.Fatal("expected ANSI styling")
 	}
-	if !strings.Contains(out, "\x1b[38;5;6m") {
-		t.Errorf("expected app foreground color, got %q", out)
+	if !strings.Contains(out, "\x1b[38;2;17;34;51m") {
+		t.Errorf("expected truecolor accent fg, got %q", out)
 	}
 	if strings.Contains(out, "\x1b[0m") {
 		t.Errorf("option styles must not emit full reset, got %q", out)
 	}
 	if !strings.Contains(out, "\x1b[39m") {
 		t.Errorf("option styles should reset foreground only, got %q", out)
-	}
-
-	tool := StyleServiceOptionName("tool", "adminer")
-	if !strings.Contains(tool, "\x1b[38;5;67m") {
-		t.Errorf("expected neutral tool foreground color, got %q", tool)
-	}
-}
-
-func TestPaletteAccessors_Defaults(t *testing.T) {
-	resetStyles()
-	cases := []struct {
-		name string
-		got  func() string
-		want string
-	}{
-		{"FocusBorder", ColorFocusBorder, "12"},
-		{"Description", ColorDescription, "8"},
-		{"TreeCount", ColorTreeCount, "8"},
-		{"TreeArrow", ColorTreeArrow, "6"},
-		{"FilterMatch", ColorFilterMatch, "12"},
-		{"PaginationActive", ColorPaginationActive, "12"},
-		{"PaginationInactive", ColorPaginationInactive, "8"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.got(); got != tc.want {
-				t.Errorf("got %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestApplyStyles_CmdbrowserPalette_Applied(t *testing.T) {
-	resetStyles()
-	cfg := &config.StylesConfig{
-		Colors: config.StylesColors{
-			FocusBorder:        "203",
-			Description:        "245",
-			TreeCount:          "240",
-			TreeArrow:          "167",
-			FilterMatch:        "214",
-			PaginationActive:   "210",
-			PaginationInactive: "239",
-		},
-	}
-	ApplyStyles(cfg)
-	cases := []struct {
-		name string
-		got  func() string
-		want string
-	}{
-		{"FocusBorder", ColorFocusBorder, "203"},
-		{"Description", ColorDescription, "245"},
-		{"TreeCount", ColorTreeCount, "240"},
-		{"TreeArrow", ColorTreeArrow, "167"},
-		{"FilterMatch", ColorFilterMatch, "214"},
-		{"PaginationActive", ColorPaginationActive, "210"},
-		{"PaginationInactive", ColorPaginationInactive, "239"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.got(); got != tc.want {
-				t.Errorf("got %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestApplyStyles_CmdbrowserPalette_EmptyPreservesDefaults(t *testing.T) {
-	resetStyles()
-	cfg := &config.StylesConfig{
-		Colors: config.StylesColors{
-			FocusBorder: "203",
-			// Description, TreeCount, etc. intentionally empty.
-		},
-	}
-	ApplyStyles(cfg)
-	if ColorFocusBorder() != "203" {
-		t.Errorf("FocusBorder: got %q, want 203", ColorFocusBorder())
-	}
-	if ColorDescription() != "8" {
-		t.Errorf("Description should remain default '8', got %q", ColorDescription())
-	}
-	if ColorTreeArrow() != "6" {
-		t.Errorf("TreeArrow should remain default '6', got %q", ColorTreeArrow())
 	}
 }
 
