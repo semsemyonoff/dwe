@@ -22,8 +22,8 @@ const maxInspectManifestBytes = 1 << 20
 //
 // Safety: the function rejects archive entry types that could be used to
 // escape (symlink / hardlink / device / fifo), caps the manifest payload
-// at maxInspectManifestBytes, and treats the *first* entry whose basename
-// is "manifest.yml" as authoritative. Returns an error when no manifest
+// at maxInspectManifestBytes, and treats the first entry with the exact
+// path "manifest.yml" as authoritative. Returns an error when no manifest
 // entry is present.
 func ReadManifestFromTar(tarPath string) (*Manifest, error) {
 	f, err := os.Open(tarPath)

@@ -151,8 +151,10 @@ func (o *snapshotLiveObserver) pause() {
 }
 
 func (o *snapshotLiveObserver) resume() {
-	if o.pauseDepth.Add(-1) == 0 {
+	if v := o.pauseDepth.Add(-1); v == 0 {
 		o.live.Resume()
+	} else if v < 0 {
+		o.pauseDepth.Store(0)
 	}
 }
 

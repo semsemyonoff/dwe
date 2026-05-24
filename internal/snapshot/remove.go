@@ -93,7 +93,10 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 	}
 
 	// Run remove workflow if defined and has steps.
-	if p.SnapCfg.Remove != nil && p.Registry != nil {
+	if p.SnapCfg.Remove != nil && p.Registry == nil {
+		return nil, fmt.Errorf("snapshot %q: remove workflow requires a non-nil registry", p.Name)
+	}
+	if p.SnapCfg.Remove != nil {
 		wf, err := SelectWorkflow(p.SnapCfg, "remove", manifestVariant(m))
 		if err != nil {
 			return nil, fmt.Errorf("snapshot %q: %w", p.Name, err)

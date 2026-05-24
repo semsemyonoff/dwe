@@ -197,12 +197,12 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	}
 
 	if !p.SkipConfirm {
-		ctx := RestoreConfirmContext{
+		confirmCtx := RestoreConfirmContext{
 			Manifest:       m,
 			ConfigDiverged: diverged,
 			ServicesDiff:   svcDiff,
 		}
-		ok, cErr := confirmRestore(p.ConfirmRestore, ctx)
+		ok, cErr := confirmRestore(p.ConfirmRestore, confirmCtx)
 		if cErr != nil {
 			return nil, cErr
 		}

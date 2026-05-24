@@ -3,7 +3,6 @@ package snapshot
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,29 +76,20 @@ func captureLocalYML(src, dst string, preserveKeys []string) (bool, error) {
 	return true, nil
 }
 
-// copyFileIfExists copies src to dst when src exists; returns (false, nil)
-// when src is missing.
+// copyFileIfExists copies src to dst atomically when src exists; returns
+// (false, nil) when src is missing.
 func copyFileIfExists(src, dst string) (bool, error) {
-	in, err := os.Open(src)
+	data, err := os.ReadFile(src)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
 		return false, err
 	}
-	defer func() { _ = in.Close() }()
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return false, err
 	}
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return false, err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		_ = out.Close()
-		return false, err
-	}
-	if err := out.Close(); err != nil {
+	if err := writeFileAtomic(dst, data, 0o644); err != nil {
 		return false, err
 	}
 	return true, nil

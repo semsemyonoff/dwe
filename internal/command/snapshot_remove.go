@@ -147,6 +147,9 @@ func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, n
 			_, _ = fmt.Fprintln(stderr, "snapshot remove cancelled")
 			return runErr
 		}
+		if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
+			return &snapshotInterruptedError{wrapped: runErr}
+		}
 		return runErr
 	}
 	_, _ = fmt.Fprintf(stderr, "snapshot %q removed (dir=%s)\n", name, res.SnapshotDir)

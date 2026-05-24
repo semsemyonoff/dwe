@@ -91,12 +91,14 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 			ok, err := tpl.EvalCommandCondition(step.When, rc.Render, rc.ProjectRoot)
 			if err != nil {
 				wrapped := fmt.Errorf("workflow %q step[%d]: %w", rc.Cmd.ID, i, err)
+				fireOnStepStart(rc, i, total, step)
 				fireOnStepEnd(rc, i, step, StepResult{Status: StepStatusFailed, Err: wrapped})
 				return wrapped
 			}
 			if !ok {
 				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
 					rc.Cmd.ID, i, step.When)
+				fireOnStepStart(rc, i, total, step)
 				fireOnStepEnd(rc, i, step, StepResult{
 					Status:     StepStatusSkipped,
 					SkipReason: "when: " + step.When,
@@ -146,12 +148,14 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 			gateSkip, gateReason, gateErr := evalSubStepOverrideGate(rc, step)
 			if gateErr != nil {
 				wrapped := fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, i, step.Command, gateErr)
+				fireOnStepStart(rc, i, total, step)
 				fireOnStepEnd(rc, i, step, StepResult{Status: StepStatusFailed, Err: wrapped})
 				return wrapped
 			}
 			if gateSkip {
 				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d] %q: skipped (%s)\n",
 					rc.Cmd.ID, i, step.Command, gateReason)
+				fireOnStepStart(rc, i, total, step)
 				fireOnStepEnd(rc, i, step, StepResult{
 					Status:     StepStatusSkipped,
 					SkipReason: gateReason,

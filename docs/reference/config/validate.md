@@ -5,7 +5,7 @@ Project readiness checks.
 ## Contents
 
 - [Purpose](#purpose)
-- [Two validation domains](#two-validation-domains)
+- [Validation domains](#validation-domains)
 - [Structure](#structure)
 - [Top-level fields](#top-level-fields)
 - [Check entry fields](#check-entry-fields)
@@ -32,14 +32,15 @@ Project readiness checks.
 
 The goal is to surface user-actionable problems ("you're not logged into ghcr.io", "DATABASE_URL is empty in `.env`", "VPN is down") BEFORE deploy steps fail mid-way with cryptic errors.
 
-## Two validation domains
+## Validation domains
 
-The validate command runs two new domains in addition to the existing YAML-shape validators:
+The validate command runs three domains in addition to the existing YAML-shape validators:
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
 | `env.*` | Hardcoded in Go (`internal/validate/env/`) | No — seven fixed probes |
 | `checks.*` | `devbox/validate.yml` entries | Yes — declarative |
+| `snapshot.*` | On-disk snapshot directories + `devbox/snapshot.yml` | No — fixed validators per snapshot name |
 
 The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `devbox validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
 
