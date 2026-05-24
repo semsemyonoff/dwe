@@ -15,56 +15,25 @@ type StylesConfig struct {
 	Separator string       `yaml:"separator"`
 }
 
-// StylesHeader describes the ASCII art banner rendered at startup.
+// StylesHeader describes the branded header rendered at startup.
 type StylesHeader struct {
-	Lines []string `yaml:"lines"`
-	Font  string   `yaml:"font"`
-	Color string   `yaml:"color"`
+	Lines   []string `yaml:"lines"`
+	Font    string   `yaml:"font"`
+	Tagline string   `yaml:"tagline"`
 }
 
-// StylesColors holds ANSI 256-color codes (as strings) for all UI elements.
-// Empty string means "use default hardcoded value".
+// StylesColors holds the 7 semantic color tokens that drive every UI surface.
+// Values are raw hex strings (e.g. "#2EC3EB"). Empty string means "use the
+// built-in light/dark default for this token" — defaults are resolved once at
+// ApplyStyles time via lipgloss.HasDarkBackground().
 type StylesColors struct {
-	// Info dashboard
-	Label        string `yaml:"label"`
-	SectionTitle string `yaml:"section_title"`
-	SubHeader    string `yaml:"subheader"`
-	Muted        string `yaml:"muted"`
-	Warning      string `yaml:"warning"`
-	Info         string `yaml:"info"`
-
-	// Semantic status colors (used in tables/status)
-	Enabled   string `yaml:"enabled"`
-	Disabled  string `yaml:"disabled"`
-	Mandatory string `yaml:"mandatory"`
-	Partial   string `yaml:"partial"`
-
-	// Table colors (shared across all Lipgloss tables)
-	TableBorder string `yaml:"table_border"`
-	TableHeader string `yaml:"table_header"`
-
-	// Command browser (cmdbrowser TUI) — consumed via ui.Color*() string accessors.
-	FocusBorder        string `yaml:"focus_border"`
-	Description        string `yaml:"description"`
-	TreeCount          string `yaml:"tree_count"`
-	TreeArrow          string `yaml:"tree_arrow"`
-	FilterMatch        string `yaml:"filter_match"`
-	PaginationActive   string `yaml:"pagination_active"`
-	PaginationInactive string `yaml:"pagination_inactive"`
-
-	// Help/Fang color scheme (CLI help output)
-	Help StylesHelpColors `yaml:"help"`
-}
-
-// StylesHelpColors holds ANSI 256-color codes for CLI help output elements
-// rendered by Fang. Empty string means "use Fang default".
-type StylesHelpColors struct {
-	Title       string `yaml:"title"`       // section headers (USAGE, COMMANDS, etc.)
-	Command     string `yaml:"command"`     // command names
-	Flag        string `yaml:"flag"`        // flag names
-	Program     string `yaml:"program"`     // program name in usage line
-	Description string `yaml:"description"` // command/flag descriptions
-	Argument    string `yaml:"argument"`    // arguments like [command]
+	Accent  string `yaml:"accent"`
+	Success string `yaml:"success"`
+	Warning string `yaml:"warning"`
+	Danger  string `yaml:"danger"`
+	Muted   string `yaml:"muted"`
+	Border  string `yaml:"border"`
+	Text    string `yaml:"text"`
 }
 
 // LoadStylesConfig reads and parses a styles.yml file at the given path.

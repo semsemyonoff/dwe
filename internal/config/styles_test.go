@@ -12,28 +12,23 @@ header:
     - "Welcome to"
     - "Devbox Next"
   font: doom
-  color: red
+  tagline: "Local dev, batteries included"
 
 colors:
-  label: "203"
-  section_title: "167"
-  subheader: "209"
-  muted: "245"
-  warning: "214"
-  info: "210"
-  enabled: "2"
-  disabled: "245"
-  mandatory: "203"
-  partial: "214"
-  table_border: "167"
-  table_header: "203"
+  accent: "#2EC3EB"
+  success: "#22C55E"
+  warning: "#F59E0B"
+  danger: "#EF4444"
+  muted: "#9AA3BB"
+  border: "#334155"
+  text: "#E2E8F0"
 
 separator: "—"
 `
 
 const partialStylesYML = `
 colors:
-  label: "203"
+  accent: "#2EC3EB"
 `
 
 func TestLoadStylesConfig(t *testing.T) {
@@ -55,87 +50,33 @@ func TestLoadStylesConfig(t *testing.T) {
 	if cfg.Header.Font != "doom" {
 		t.Errorf("header.font = %q, want doom", cfg.Header.Font)
 	}
-	if cfg.Header.Color != "red" {
-		t.Errorf("header.color = %q, want red", cfg.Header.Color)
+	if cfg.Header.Tagline != "Local dev, batteries included" {
+		t.Errorf("header.tagline = %q", cfg.Header.Tagline)
 	}
 
-	if cfg.Colors.Label != "203" {
-		t.Errorf("colors.label = %q, want 203", cfg.Colors.Label)
-	}
-	if cfg.Colors.SectionTitle != "167" {
-		t.Errorf("colors.section_title = %q, want 167", cfg.Colors.SectionTitle)
-	}
-	if cfg.Colors.SubHeader != "209" {
-		t.Errorf("colors.subheader = %q, want 209", cfg.Colors.SubHeader)
-	}
-	if cfg.Colors.Muted != "245" {
-		t.Errorf("colors.muted = %q, want 245", cfg.Colors.Muted)
-	}
-	if cfg.Colors.Warning != "214" {
-		t.Errorf("colors.warning = %q, want 214", cfg.Colors.Warning)
-	}
-	if cfg.Colors.Info != "210" {
-		t.Errorf("colors.info = %q, want 210", cfg.Colors.Info)
-	}
-	if cfg.Colors.Enabled != "2" {
-		t.Errorf("colors.enabled = %q, want 2", cfg.Colors.Enabled)
-	}
-	if cfg.Colors.Disabled != "245" {
-		t.Errorf("colors.disabled = %q, want 245", cfg.Colors.Disabled)
-	}
-	if cfg.Colors.Mandatory != "203" {
-		t.Errorf("colors.mandatory = %q, want 203", cfg.Colors.Mandatory)
-	}
-	if cfg.Colors.Partial != "214" {
-		t.Errorf("colors.partial = %q, want 214", cfg.Colors.Partial)
-	}
-	if cfg.Colors.TableBorder != "167" {
-		t.Errorf("colors.table_border = %q, want 167", cfg.Colors.TableBorder)
-	}
-	if cfg.Colors.TableHeader != "203" {
-		t.Errorf("colors.table_header = %q, want 203", cfg.Colors.TableHeader)
-	}
-	if cfg.Separator != "—" {
-		t.Errorf("separator = %q, want —", cfg.Separator)
-	}
-}
-
-const cmdbrowserStylesYML = `
-colors:
-  focus_border: "203"
-  description: "245"
-  tree_count: "240"
-  tree_arrow: "167"
-  filter_match: "214"
-  pagination_active: "210"
-  pagination_inactive: "239"
-`
-
-func TestLoadStylesConfig_CmdbrowserPalette(t *testing.T) {
-	path := writeTempYML(t, cmdbrowserStylesYML)
-	cfg, err := LoadStylesConfig(path)
-	if err != nil {
-		t.Fatalf("LoadStylesConfig: %v", err)
-	}
 	cases := []struct {
 		name string
 		got  string
 		want string
 	}{
-		{"focus_border", cfg.Colors.FocusBorder, "203"},
-		{"description", cfg.Colors.Description, "245"},
-		{"tree_count", cfg.Colors.TreeCount, "240"},
-		{"tree_arrow", cfg.Colors.TreeArrow, "167"},
-		{"filter_match", cfg.Colors.FilterMatch, "214"},
-		{"pagination_active", cfg.Colors.PaginationActive, "210"},
-		{"pagination_inactive", cfg.Colors.PaginationInactive, "239"},
+		{"accent", cfg.Colors.Accent, "#2EC3EB"},
+		{"success", cfg.Colors.Success, "#22C55E"},
+		{"warning", cfg.Colors.Warning, "#F59E0B"},
+		{"danger", cfg.Colors.Danger, "#EF4444"},
+		{"muted", cfg.Colors.Muted, "#9AA3BB"},
+		{"border", cfg.Colors.Border, "#334155"},
+		{"text", cfg.Colors.Text, "#E2E8F0"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.got != tc.want {
-				t.Errorf("got %q, want %q", tc.got, tc.want)
+				t.Errorf("colors.%s = %q, want %q", tc.name, tc.got, tc.want)
 			}
 		})
+	}
+
+	if cfg.Separator != "—" {
+		t.Errorf("separator = %q, want —", cfg.Separator)
 	}
 }
 
@@ -147,9 +88,8 @@ func TestLoadStylesConfig_missingFile(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("expected non-nil config for missing file")
 	}
-	// All fields should be zero values
-	if cfg.Colors.Label != "" {
-		t.Errorf("expected empty label for missing file, got %q", cfg.Colors.Label)
+	if cfg.Colors.Accent != "" {
+		t.Errorf("expected empty accent for missing file, got %q", cfg.Colors.Accent)
 	}
 	if cfg.Separator != "" {
 		t.Errorf("expected empty separator for missing file, got %q", cfg.Separator)
@@ -163,16 +103,34 @@ func TestLoadStylesConfig_partialFields(t *testing.T) {
 		t.Fatalf("LoadStylesConfig: %v", err)
 	}
 
-	// Explicitly set field
-	if cfg.Colors.Label != "203" {
-		t.Errorf("colors.label = %q, want 203", cfg.Colors.Label)
+	if cfg.Colors.Accent != "#2EC3EB" {
+		t.Errorf("colors.accent = %q, want #2EC3EB", cfg.Colors.Accent)
 	}
-	// Omitted fields should be empty strings
-	if cfg.Colors.SectionTitle != "" {
-		t.Errorf("colors.section_title should be empty, got %q", cfg.Colors.SectionTitle)
+	// Every other token zero-values to empty string; ApplyStyles is responsible
+	// for resolving these to the light/dark hex defaults (covered in Task 2).
+	zeroCases := []struct {
+		name string
+		got  string
+	}{
+		{"success", cfg.Colors.Success},
+		{"warning", cfg.Colors.Warning},
+		{"danger", cfg.Colors.Danger},
+		{"muted", cfg.Colors.Muted},
+		{"border", cfg.Colors.Border},
+		{"text", cfg.Colors.Text},
+	}
+	for _, tc := range zeroCases {
+		t.Run(tc.name+"_empty", func(t *testing.T) {
+			if tc.got != "" {
+				t.Errorf("colors.%s should be empty, got %q", tc.name, tc.got)
+			}
+		})
 	}
 	if cfg.Header.Font != "" {
 		t.Errorf("header.font should be empty, got %q", cfg.Header.Font)
+	}
+	if cfg.Header.Tagline != "" {
+		t.Errorf("header.tagline should be empty, got %q", cfg.Header.Tagline)
 	}
 	if cfg.Separator != "" {
 		t.Errorf("separator should be empty, got %q", cfg.Separator)
