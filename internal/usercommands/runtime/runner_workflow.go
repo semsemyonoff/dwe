@@ -109,8 +109,23 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 		switch {
 		case step.Parallel != nil:
 			stepStart := time.Now()
-			fireOnStepStart(rc, i, total, step)
-			if err := r.runParallelGroup(ctx, rc, step.Parallel, i); err != nil {
+			// Iteration-scoped closure mirrors the default case: suspend the
+			// outer observer's LiveLine for the duration of the inner parallel
+			// group's LiveLine. Without this, two LiveLines write ANSI cursor
+			// sequences to os.Stdout concurrently (outer = snapshot observer
+			// ticker, inner = runParallelGroup ticker), causing visible flicker
+			// and interleaved frames on TTY. The deferred ResumeAfterExec pairs
+			// with this iteration's SuspendForExec regardless of error path.
+			err := func() error {
+				fireOnStepStart(rc, i, total, step)
+				suspender, hasSuspend := rc.StepObserver.(StepIOSuspender)
+				if hasSuspend {
+					suspender.SuspendForExec()
+					defer suspender.ResumeAfterExec()
+				}
+				return r.runParallelGroup(ctx, rc, step.Parallel, i)
+			}()
+			if err != nil {
 				fireOnStepEnd(rc, i, step, StepResult{
 					Status:   StepStatusFailed,
 					Duration: time.Since(stepStart),

@@ -5,10 +5,12 @@ import (
 	"io"
 	"os"
 	"sync/atomic"
+	"time"
 
 	"github.com/charmbracelet/x/term"
 
 	"devbox-cli/internal/liveui"
+	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands/model"
@@ -36,6 +38,10 @@ var newSnapshotObserverLiveLine = func(workflowLabel string) *liveui.LiveLine {
 	return live
 }
 
+// snapshotTimestampLayout matches pipeline/plain.go so the visual style of
+// snapshot output is identical to deploy/lifecycle pipeline output.
+const snapshotTimestampLayout = "06-01-02 15:04:05"
+
 // newSnapshotLiveObserver builds the live-UI observer for one snapshot
 // workflow. Returns nil (disabled) when the live UI cannot render — non-TTY
 // stdout or the caller opted out via --no-live. A nil result drives the
@@ -62,9 +68,10 @@ func newSnapshotLiveObserver(label string, disabled bool, steps []model.Workflow
 	o := &snapshotLiveObserver{
 		live:   live,
 		labels: labels,
+		total:  len(steps),
+		now:    time.Now,
 	}
 	live.Start()
-	live.StartBlock(len(steps))
 	// Pipe huh-prompt before/after hooks through the depth-counted bridge so
 	// any prompt that fires mid-workflow (whether from a confirm: step or from
 	// a command-level ConfirmCommand) composes with the StepIOSuspender pause
@@ -73,7 +80,7 @@ func newSnapshotLiveObserver(label string, disabled bool, steps []model.Workflow
 	return o
 }
 
-// snapshotStepLabel synthesises a one-line label for the live block row.
+// snapshotStepLabel synthesises a one-line label for the step's status line.
 func snapshotStepLabel(s model.WorkflowStep) string {
 	switch {
 	case s.Parallel != nil:
@@ -88,12 +95,15 @@ func snapshotStepLabel(s model.WorkflowStep) string {
 }
 
 // snapshotLiveObserver renders top-level sequential workflow step lifecycle
-// events as a block of rows above a live footer. Implements
-// runtime.WorkflowStepObserver, runtime.StepIOSuspender, and
-// snapshot.StepObserverCloser.
+// events as persistent log lines above a single-line live footer — matching
+// the PlainReporter sequential rendering used by `deploy run` / lifecycle
+// pipelines. Implements runtime.WorkflowStepObserver, runtime.StepIOSuspender,
+// and snapshot.StepObserverCloser.
 type snapshotLiveObserver struct {
 	live   *liveui.LiveLine
 	labels []string
+	total  int
+	now    func() time.Time
 	// pauseDepth counts active pause requests from any source (StepIOSuspender
 	// invocations, huh-prompt before/after hooks). Only the 0→1 transition
 	// invokes live.Pause(); only the 1→0 transition invokes live.Resume().
@@ -108,11 +118,25 @@ var (
 	_ snapshot.StepObserverCloser  = (*snapshotLiveObserver)(nil)
 )
 
+// timestampPrefix returns the gray "[YY-MM-DD HH:MM:SS] " prefix matching
+// PlainReporter.timestampPrefix.
+func (o *snapshotLiveObserver) timestampPrefix() string {
+	return fmt.Sprintf("%s[%s]%s ", render.Gray, o.now().Format(snapshotTimestampLayout), render.Reset)
+}
+
+// emit writes one persistent log line above the live footer using the same
+// color+timestamp shape as PlainReporter.emit.
+func (o *snapshotLiveObserver) emit(color, msg string) {
+	o.live.Println(fmt.Sprintf("%s%s%s%s", o.timestampPrefix(), color, msg, render.Reset))
+}
+
 func (o *snapshotLiveObserver) OnStepStart(idx, _ int, _ model.WorkflowStep) {
 	if idx < 0 || idx >= len(o.labels) {
 		return
 	}
-	o.live.SetBlockRowRunning(idx, o.labels[idx])
+	label := o.labels[idx]
+	o.emit(render.Blue, fmt.Sprintf("  %s [%d/%d] %s", liveui.IconRunning, idx+1, o.total, label))
+	o.live.SetText(fmt.Sprintf("[%d/%d] %s", idx+1, o.total, label))
 }
 
 func (o *snapshotLiveObserver) OnStepEnd(idx int, _ model.WorkflowStep, result runtime.StepResult) {
@@ -120,21 +144,21 @@ func (o *snapshotLiveObserver) OnStepEnd(idx int, _ model.WorkflowStep, result r
 		return
 	}
 	label := o.labels[idx]
+	elapsed := liveui.FormatElapsed(result.Duration)
 	switch result.Status {
 	case runtime.StepStatusDone:
-		o.live.SetBlockRowFinal(idx, liveui.BlockRowDone, label)
+		o.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s (%s)", liveui.IconDone, idx+1, o.total, label, elapsed))
 	case runtime.StepStatusFailed:
-		msg := label
+		o.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s (%s)", liveui.IconFailed, idx+1, o.total, label, elapsed))
 		if result.Err != nil {
-			msg = label + ": " + result.Err.Error()
+			o.emit(render.Red, "    "+result.Err.Error())
 		}
-		o.live.SetBlockRowFinal(idx, liveui.BlockRowFailed, msg)
 	case runtime.StepStatusSkipped:
-		msg := label
-		if result.SkipReason != "" {
-			msg = label + " — " + result.SkipReason
+		reason := result.SkipReason
+		if reason == "" {
+			reason = "skipped"
 		}
-		o.live.SetBlockRowFinal(idx, liveui.BlockRowSkipped, msg)
+		o.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", liveui.IconSkipped, idx+1, o.total, label, reason))
 	}
 }
 
@@ -160,9 +184,8 @@ func (o *snapshotLiveObserver) resume() {
 
 // Close releases the observer: clear huh hooks first (so any future prompt
 // elsewhere in the process does not call back into a stopped LiveLine), then
-// end the block, then stop the live ticker.
+// stop the live ticker.
 func (o *snapshotLiveObserver) Close() {
 	ui.ClearHuhHooks()
-	o.live.EndBlock()
 	o.live.Stop()
 }
