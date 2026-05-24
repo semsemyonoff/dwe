@@ -257,8 +257,8 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 12: Snapshot CLI live view — design and reusable observer
 
-- [ ] read `internal/usercommands/runtime/runner_workflow.go` end-to-end first; specifically check whether top-level sequential steps already emit any lifecycle signal (start / end / skip / fail) that the snapshot CLI can subscribe to. If yes, reuse it; if no, add the **minimal** hook needed.
-- [ ] introduce a **2-method** `runtime.WorkflowStepObserver` interface (collapses `end` and `skip` into a single `OnStepEnd` with a `StepResult` struct — easier to extend without breaking implementers, stays under the "small interface" threshold):
+- [x] read `internal/usercommands/runtime/runner_workflow.go` end-to-end first; specifically check whether top-level sequential steps already emit any lifecycle signal (start / end / skip / fail) that the snapshot CLI can subscribe to. If yes, reuse it; if no, add the **minimal** hook needed.
+- [x] introduce a **2-method** `runtime.WorkflowStepObserver` interface (collapses `end` and `skip` into a single `OnStepEnd` with a `StepResult` struct — easier to extend without breaking implementers, stays under the "small interface" threshold):
   ```go
   type WorkflowStepObserver interface {
       OnStepStart(idx, total int, step model.WorkflowStep)
@@ -277,8 +277,8 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
       SkipReason string // populated when Status==Skipped
   }
   ```
-- [ ] add an optional `StepObserver WorkflowStepObserver` field to `runtime.RunContext`. **Nil observer → current behavior unchanged.** No `noopObserver` type — the runner just skips the call when the field is nil.
-- [ ] **lifecycle is a distinct concern** — `WorkflowStepObserver` stays a pure event sink (no `Close`). Define a separate composable interface for callers that own a resource needing teardown:
+- [x] add an optional `StepObserver WorkflowStepObserver` field to `runtime.RunContext`. **Nil observer → current behavior unchanged.** No `noopObserver` type — the runner just skips the call when the field is nil.
+- [x] **lifecycle is a distinct concern** — `WorkflowStepObserver` stays a pure event sink (no `Close`). Define a separate composable interface for callers that own a resource needing teardown:
   ```go
   // in internal/snapshot (the only caller that defers Close); not in runtime
   type StepObserverCloser interface {
@@ -287,13 +287,13 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
   }
   ```
   The factory typed below returns `StepObserverCloser`; snapshot package owns the `defer obs.Close()`. The runner only ever sees the embedded `WorkflowStepObserver` slice of methods, keeping the runner's contract minimal.
-- [ ] **plumb the observer through the snapshot exec layer as a factory, not a constructed instance** — two reasons:
+- [x] **plumb the observer through the snapshot exec layer as a factory, not a constructed instance** — two reasons:
   1. `internal/snapshot/exec.go` constructs `runtime.RunContext` internally at line 73, so the command layer cannot set `runCtx.StepObserver` directly.
   2. Both `Restore` and `Remove` perform interactive `huh` prompts via `ui.RunConfirm` *before* the workflow runs (`internal/snapshot/restore.go:159`, `internal/snapshot/remove.go:82`). A live footer/block active during a huh prompt corrupts the TUI — pipeline solves this with `ui.SetHuhHooks(live.Pause, live.Resume)` at `internal/pipeline/plain.go:151`, but the cleanest fix here is to **defer observer construction until after all prompts**.
   3. `SelectWorkflow` lives inside `internal/snapshot/{restore,remove}.go` and depends on manifest data (restore at `restore.go:151`, remove at `remove.go:94` — and remove tolerates a corrupt manifest via `LoadManifest` ignored-error at `remove.go:80`). Pulling `SelectWorkflow` up to the command layer would duplicate semantics and risks changing the corrupt-manifest remove path.
-- [ ] add `StepObserverFactory func(steps []model.WorkflowStep) StepObserverCloser` to `ExecParams` — **unprefixed** because `ExecParams` lives in `internal/snapshot` itself; same for the re-exports on `CreateParams` / `RestoreParams` / `RemoveParams`. Command-layer call sites use the qualified `snapshot.StepObserverCloser` because they live in `internal/command`. The snapshot package invokes the factory **after** `SelectWorkflow` and **after** its pre-workflow confirmation prompts, immediately before calling into the runner. `exec.go` assigns the returned value into `rc.StepObserver` (Go's structural typing handles the upcast — `StepObserverCloser` embeds `runtime.WorkflowStepObserver`). A `nil` factory disables the observer (current behavior). The factory may itself return `nil` (e.g. when `--no-live` is set or stdout isn't a TTY) and the runner's nil-observer path takes over — snapshot guards the `defer obs.Close()` with a nil check.
-- [ ] wire the runner to call the observer at top-level sequential step boundaries only; parallel groups continue to render via their existing `*liveui.LiveLine` block-mode path in `runner_workflow.go` (the observer sees the group as a single step, with the parallel block rendered nested underneath as today). Do not duplicate per-row events for parallel sub-steps in the observer surface — keeps the API small.
-- [ ] **suspend the live footer around every sequential command step** — even with `OnStepStart`/`OnStepEnd` wired, the child process still writes to `rc.Stdout` / `rc.Stderr` at `runner_workflow.go:224` while the live block is active, which corrupts the rendered rows. Pipeline solves this with `SuspendForExec` / `ResumeAfterExec` around every sequential step body at `internal/pipeline/reporter.go:88-99` and `internal/pipeline/executor.go:718-723`. Mirror that here as an **optional capability**, not a method on `WorkflowStepObserver` (which stays at 2 methods):
+- [x] add `StepObserverFactory func(steps []model.WorkflowStep) StepObserverCloser` to `ExecParams` — **unprefixed** because `ExecParams` lives in `internal/snapshot` itself; same for the re-exports on `CreateParams` / `RestoreParams` / `RemoveParams`. Command-layer call sites use the qualified `snapshot.StepObserverCloser` because they live in `internal/command`. The snapshot package invokes the factory **after** `SelectWorkflow` and **after** its pre-workflow confirmation prompts, immediately before calling into the runner. `exec.go` assigns the returned value into `rc.StepObserver` (Go's structural typing handles the upcast — `StepObserverCloser` embeds `runtime.WorkflowStepObserver`). A `nil` factory disables the observer (current behavior). The factory may itself return `nil` (e.g. when `--no-live` is set or stdout isn't a TTY) and the runner's nil-observer path takes over — snapshot guards the `defer obs.Close()` with a nil check.
+- [x] wire the runner to call the observer at top-level sequential step boundaries only; parallel groups continue to render via their existing `*liveui.LiveLine` block-mode path in `runner_workflow.go` (the observer sees the group as a single step, with the parallel block rendered nested underneath as today). Do not duplicate per-row events for parallel sub-steps in the observer surface — keeps the API small.
+- [x] **suspend the live footer around every sequential command step** — even with `OnStepStart`/`OnStepEnd` wired, the child process still writes to `rc.Stdout` / `rc.Stderr` at `runner_workflow.go:224` while the live block is active, which corrupts the rendered rows. Pipeline solves this with `SuspendForExec` / `ResumeAfterExec` around every sequential step body at `internal/pipeline/reporter.go:88-99` and `internal/pipeline/executor.go:718-723`. Mirror that here as an **optional capability**, not a method on `WorkflowStepObserver` (which stays at 2 methods):
   ```go
   // in internal/usercommands/runtime — separate from WorkflowStepObserver
   type StepIOSuspender interface {
@@ -322,14 +322,14 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
   // appropriate StepResult derived from err and elapsed time.
   ```
   Wrap *only* the sequential `runCommandStep` path (default-branch at `runner_workflow.go:125`). Parallel groups (`step.Parallel != nil`) already manage their own output via the inner `LineTeePreserveANSI` at `runner_workflow.go:441` and must not be suspended. `confirm:` steps are also out of scope (they use huh, which already pause/resumes via the hooks installed in Task 13).
-- [ ] `snapshotLiveObserver` implements `StepIOSuspender` by delegating to **the observer's own depth-counted `pause()` / `resume()` helpers** (defined in Task 13), not directly to `live.Pause()` / `live.Resume()`. The depth counter is shared with the huh hook bridge so nested suspends from `ConfirmCommand` (`internal/usercommands/runtime/runner.go:207`) compose correctly. Compile-time assertion: `var _ runtime.StepIOSuspender = (*snapshotLiveObserver)(nil)`.
-- [ ] **every early-`continue` branch in the top-level step loop must emit `OnStepEnd` before continuing** — otherwise live rows stay in the spinner state forever. Concretely, in `internal/usercommands/runtime/runner_workflow.go`:
+- [x] `snapshotLiveObserver` implements `StepIOSuspender` by delegating to **the observer's own depth-counted `pause()` / `resume()` helpers** (defined in Task 13), not directly to `live.Pause()` / `live.Resume()`. The depth counter is shared with the huh hook bridge so nested suspends from `ConfirmCommand` (`internal/usercommands/runtime/runner.go:207`) compose correctly. Compile-time assertion: `var _ runtime.StepIOSuspender = (*snapshotLiveObserver)(nil)`.
+- [x] **every early-`continue` branch in the top-level step loop must emit `OnStepEnd` before continuing** — otherwise live rows stay in the spinner state forever. Concretely, in `internal/usercommands/runtime/runner_workflow.go`:
   - line ~94, `when:` evaluated false → fire `OnStepEnd(i, step, StepResult{Status: StepStatusSkipped, SkipReason: "when: " + step.When})` before the existing `continue`
   - line ~122, `files_gate` override gate returned skip → fire `OnStepEnd(i, step, StepResult{Status: StepStatusSkipped, SkipReason: gateReason})` before `continue`
   - line ~105 and ~128, parallel-group and command-step paths returning an error swallowed by `continue_on_error` → fire `OnStepEnd(i, step, StepResult{Status: StepStatusFailed, Err: err})` before `continue` (the row goes red even though the workflow keeps going — that's the correct UX signal)
   - the normal success path already fires `OnStepEnd(... Status: StepStatusDone, Duration: elapsed)` after `runCommandStep` returns nil; no change there
   - the hard-fail path (returning `err` to the caller) also fires `OnStepEnd(... Status: StepStatusFailed, Err: err)` before the `return err`, so the row freezes red before the function unwinds
-- [ ] write `internal/usercommands/runtime/runner_workflow_observer_test.go` with one table case per branch:
+- [x] write `internal/usercommands/runtime/runner_workflow_observer_test.go` with one table case per branch:
   - happy-path sequential → `OnStepStart` then `OnStepEnd{Done}` per step, ordered
   - `when:` false → `OnStepEnd{Skipped, SkipReason: "when: ..."}` and **no** `OnStepStart` (the step never started)
   - `files_gate` skip → same pattern with the gate's reason
@@ -350,7 +350,7 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
     4. `live.Resume()` fires exactly **once** (from `ResumeAfterExec`) at the end of the step
     Specifically: across the entire command step, `live.Pause()` is called once and `live.Resume()` is called once — proving the huh hooks did not break the suspend window. This is the load-bearing test for the depth-counting design.
   - nil observer → identical plain-stdout output and no panics (table-driven against the same fixtures)
-- [ ] run `go test ./internal/usercommands/runtime/... -race && make lint` — must pass before task 13
+- [x] run `go test ./internal/usercommands/runtime/... -race && make lint` — must pass before task 13
 
 ### Task 13: Snapshot live-view observer in CLI layer
 

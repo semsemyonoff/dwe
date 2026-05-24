@@ -91,6 +91,14 @@ type RunContext struct {
 	// (false), enabling notification when Cmd.Notify is true.
 	SkipNotify bool
 
+	// StepObserver, when non-nil, receives lifecycle events for top-level
+	// sequential workflow steps (start / end / skip / fail). Parallel
+	// sub-step events are not surfaced; the parallel block as a whole is one
+	// step from the observer's point of view. Implementations may also
+	// satisfy StepIOSuspender to have the runner pause their live UI while
+	// each sequential command step's child writes to the terminal.
+	StepObserver WorkflowStepObserver
+
 	// WorkflowSubStepOverrides carries pipeline-side per-sub-step directives
 	// (currently files_gate) for the workflow being invoked. Set by the
 	// pipeline executor when the originating DeployStep declares

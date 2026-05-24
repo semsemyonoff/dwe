@@ -85,22 +85,36 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 		}
 	}
 
+	total := len(rc.Cmd.Steps)
 	for i, step := range rc.Cmd.Steps {
 		if step.When != "" {
 			ok, err := tpl.EvalCommandCondition(step.When, rc.Render, rc.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("workflow %q step[%d]: %w", rc.Cmd.ID, i, err)
+				wrapped := fmt.Errorf("workflow %q step[%d]: %w", rc.Cmd.ID, i, err)
+				fireOnStepEnd(rc, i, step, StepResult{Status: StepStatusFailed, Err: wrapped})
+				return wrapped
 			}
 			if !ok {
 				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
 					rc.Cmd.ID, i, step.When)
+				fireOnStepEnd(rc, i, step, StepResult{
+					Status:     StepStatusSkipped,
+					SkipReason: "when: " + step.When,
+				})
 				continue
 			}
 		}
 
 		switch {
 		case step.Parallel != nil:
+			stepStart := time.Now()
+			fireOnStepStart(rc, i, total, step)
 			if err := r.runParallelGroup(ctx, rc, step.Parallel, i); err != nil {
+				fireOnStepEnd(rc, i, step, StepResult{
+					Status:   StepStatusFailed,
+					Duration: time.Since(stepStart),
+					Err:      err,
+				})
 				if step.ContinueOnError {
 					_, _ = fmt.Fprintf(stderr(rc), "  ⚠ workflow %q step[%d] parallel: continue_on_error: %v\n",
 						rc.Cmd.ID, i, err)
@@ -108,21 +122,64 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				}
 				return err
 			}
+			fireOnStepEnd(rc, i, step, StepResult{
+				Status:   StepStatusDone,
+				Duration: time.Since(stepStart),
+			})
 		case step.Confirm != "":
+			stepStart := time.Now()
+			fireOnStepStart(rc, i, total, step)
 			if err := r.runConfirmStep(rc, step.Confirm); err != nil {
-				return fmt.Errorf("workflow %q step[%d] confirm: %w", rc.Cmd.ID, i, err)
+				wrapped := fmt.Errorf("workflow %q step[%d] confirm: %w", rc.Cmd.ID, i, err)
+				fireOnStepEnd(rc, i, step, StepResult{
+					Status:   StepStatusFailed,
+					Duration: time.Since(stepStart),
+					Err:      wrapped,
+				})
+				return wrapped
 			}
+			fireOnStepEnd(rc, i, step, StepResult{
+				Status:   StepStatusDone,
+				Duration: time.Since(stepStart),
+			})
 		default:
 			gateSkip, gateReason, gateErr := evalSubStepOverrideGate(rc, step)
 			if gateErr != nil {
-				return fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, i, step.Command, gateErr)
+				wrapped := fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, i, step.Command, gateErr)
+				fireOnStepEnd(rc, i, step, StepResult{Status: StepStatusFailed, Err: wrapped})
+				return wrapped
 			}
 			if gateSkip {
 				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d] %q: skipped (%s)\n",
 					rc.Cmd.ID, i, step.Command, gateReason)
+				fireOnStepEnd(rc, i, step, StepResult{
+					Status:     StepStatusSkipped,
+					SkipReason: gateReason,
+				})
 				continue
 			}
-			if err := r.runCommandStep(ctx, rc, i, step); err != nil {
+
+			stepStart := time.Now()
+			// Iteration-scoped closure so the deferred ResumeAfterExec pairs
+			// with this iteration's SuspendForExec regardless of error or
+			// panic; using `defer` directly inside the loop would only fire
+			// at function return and leave the live UI suspended across the
+			// remaining steps.
+			err := func() error {
+				fireOnStepStart(rc, i, total, step)
+				suspender, hasSuspend := rc.StepObserver.(StepIOSuspender)
+				if hasSuspend {
+					suspender.SuspendForExec()
+					defer suspender.ResumeAfterExec()
+				}
+				return r.runCommandStep(ctx, rc, i, step)
+			}()
+			if err != nil {
+				fireOnStepEnd(rc, i, step, StepResult{
+					Status:   StepStatusFailed,
+					Duration: time.Since(stepStart),
+					Err:      err,
+				})
 				if step.ContinueOnError {
 					_, _ = fmt.Fprintf(stderr(rc), "  ⚠ workflow %q step[%d] %q: continue_on_error: %v\n",
 						rc.Cmd.ID, i, step.Command, err)
@@ -130,6 +187,10 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				}
 				return err
 			}
+			fireOnStepEnd(rc, i, step, StepResult{
+				Status:   StepStatusDone,
+				Duration: time.Since(stepStart),
+			})
 		}
 	}
 
