@@ -386,6 +386,33 @@ func TestCreate_CapturesServicesSorted(t *testing.T) {
 	}
 }
 
+func TestCreate_StripsPreserveKeysFromLocalYML(t *testing.T) {
+	tmp := t.TempDir()
+	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"),
+		"services:\n  main:\n    ports:\n      - 9090\n    enabled: true\n")
+
+	reg := newRegistryWith(t, "x", "true")
+	snapCfg := newSnapCfgWithCreate(model.WorkflowStep{Command: "x"})
+	snapCfg.LocalYML = config.LocalYMLPolicy{PreserveKeys: []string{"services.main.ports"}}
+
+	res, err := Create(context.Background(), CreateParams{
+		Cfg: testCfg(), SnapCfg: snapCfg, Registry: reg, BaseDir: tmp, Name: "strip",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(res.SnapshotDir, "devbox", "local.yml"))
+	if err != nil {
+		t.Fatalf("read snapshot local.yml: %v", err)
+	}
+	if strings.Contains(string(body), "ports") {
+		t.Fatalf("preserved key not stripped, body=%q", string(body))
+	}
+	if !strings.Contains(string(body), "enabled: true") {
+		t.Fatalf("non-preserved key dropped, body=%q", string(body))
+	}
+}
+
 func TestCreate_InvalidNameRejectedBeforeMutation(t *testing.T) {
 	tmp := t.TempDir()
 	_, err := Create(context.Background(), CreateParams{

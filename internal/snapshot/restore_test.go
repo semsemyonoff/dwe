@@ -165,6 +165,59 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	}
 }
 
+func TestRestore_PreservesLocalYMLPorts(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Seed working-copy local.yml with both a port (preserved) and an
+	// enabled flag (snapshotted).
+	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"),
+		"services:\n  main:\n    ports:\n      - 9090\n    enabled: true\n")
+
+	snapCfg := &config.SnapshotConfig{
+		Create:  &config.SnapshotWorkflow{Steps: []model.WorkflowStep{{Command: "noop"}}},
+		Restore: &config.SnapshotWorkflow{Steps: []model.WorkflowStep{{Command: "noop"}}},
+		LocalYML: config.LocalYMLPolicy{
+			PreserveKeys: []string{"services.main.ports"},
+		},
+	}
+	reg := newRegistryWith(t, "noop", "true")
+
+	if _, err := Create(context.Background(), CreateParams{
+		Cfg: testCfg(), SnapCfg: snapCfg, Registry: reg, BaseDir: tmp, Name: "preserved",
+	}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Mutate the working-copy local.yml: change the port (preserved) and
+	// the enabled flag (snapshotted).
+	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"),
+		"services:\n  main:\n    ports:\n      - 7777\n    enabled: false\n")
+
+	var errBuf bytes.Buffer
+	res, err := Restore(context.Background(), RestoreParams{
+		Cfg: testCfg(), SnapCfg: snapCfg, Registry: reg, BaseDir: tmp,
+		Name: "preserved", SkipConfirm: true, Stderr: &errBuf,
+	})
+	if err != nil {
+		t.Fatalf("Restore: %v (stderr=%s)", err, errBuf.String())
+	}
+	if res.Status != StatusOk {
+		t.Fatalf("status = %q", res.Status)
+	}
+
+	body, err := os.ReadFile(filepath.Join(tmp, "devbox", "local.yml"))
+	if err != nil {
+		t.Fatalf("read local.yml: %v", err)
+	}
+	got := string(body)
+	if !strings.Contains(got, "7777") {
+		t.Errorf("preserved port not spliced from working copy; body=%q", got)
+	}
+	if !strings.Contains(got, "enabled: true") {
+		t.Errorf("snapshot value not restored for enabled; body=%q", got)
+	}
+}
+
 func TestRestore_ConfigHashDivergedBlocksWhenRequired(t *testing.T) {
 	tmp := t.TempDir()
 	writeDeployState(t, tmp, "snap-hash")

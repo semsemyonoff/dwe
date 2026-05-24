@@ -21,31 +21,60 @@ const localYMLMaxBytes = 1 << 20
 
 // captureDevboxFiles copies devbox/local.yml and the deploy state file from
 // baseDir into <snapDir>/devbox/. Missing source files are skipped silently —
-// neither file is mandatory at create time. The preserveKeys parameter is the
-// list of dot-paths the caller wants stripped from the captured local.yml so
-// they can be re-spliced from the working copy on restore; Task 7 wires the
-// strip step into the local.yml copy path.
+// neither file is mandatory at create time. The preserveKeys parameter lists
+// dot-paths to strip from the captured local.yml so they can be re-spliced
+// from the working copy on restore.
 func captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (DevboxFiles, error) {
-	_ = preserveKeys // wired by Task 7
 	var df DevboxFiles
-	targets := []struct {
-		src    string
-		dstRel string
-		field  *string
-	}{
-		{filepath.Join(baseDir, "devbox", "local.yml"), filepath.Join(DevboxSubdir, "local.yml"), &df.LocalYML},
-		{filepath.Join(baseDir, journal.DefaultRelPath), filepath.Join(DevboxSubdir, "deploy-state.yml"), &df.DeployState},
+
+	srcLocal := filepath.Join(baseDir, "devbox", "local.yml")
+	dstLocalRel := filepath.Join(DevboxSubdir, "local.yml")
+	dstLocal := filepath.Join(snapDir, dstLocalRel)
+	wrote, err := captureLocalYML(srcLocal, dstLocal, preserveKeys)
+	if err != nil {
+		return df, fmt.Errorf("snapshot: capture %s: %w", srcLocal, err)
 	}
-	for _, t := range targets {
-		ok, err := copyFileIfExists(t.src, filepath.Join(snapDir, t.dstRel))
-		if err != nil {
-			return df, fmt.Errorf("snapshot: capture %s: %w", t.src, err)
-		}
-		if ok {
-			*t.field = filepath.ToSlash(t.dstRel)
-		}
+	if wrote {
+		df.LocalYML = filepath.ToSlash(dstLocalRel)
+	}
+
+	srcState := filepath.Join(baseDir, journal.DefaultRelPath)
+	dstStateRel := filepath.Join(DevboxSubdir, "deploy-state.yml")
+	dstState := filepath.Join(snapDir, dstStateRel)
+	ok, err := copyFileIfExists(srcState, dstState)
+	if err != nil {
+		return df, fmt.Errorf("snapshot: capture %s: %w", srcState, err)
+	}
+	if ok {
+		df.DeployState = filepath.ToSlash(dstStateRel)
 	}
 	return df, nil
+}
+
+// captureLocalYML reads the working-copy local.yml at src, strips any
+// preserveKeys from it, and writes the result to dst. Returns (false, nil) if
+// src is missing. When src exists, captureLocalYML always writes dst — even
+// when the strip leaves the document structurally empty — so restore can rely
+// on the snapshot's local.yml presence reflecting capture-time presence.
+func captureLocalYML(src, dst string, preserveKeys []string) (bool, error) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	stripped, err := stripPreservedKeys(data, preserveKeys)
+	if err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return false, err
+	}
+	if err := writeFileAtomic(dst, stripped, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // copyFileIfExists copies src to dst when src exists; returns (false, nil)
@@ -76,41 +105,147 @@ func copyFileIfExists(src, dst string) (bool, error) {
 	return true, nil
 }
 
-// restoreDevboxFiles copies <snapDir>/devbox/local.yml and
-// <snapDir>/devbox/deploy-state.yml over the working-copy paths in baseDir.
-// Each destination write is atomic. When a source file is absent from the
-// snapshot (it did not exist at capture time), the corresponding working-copy
-// file is removed so that the restored state exactly matches the captured
-// state — leaving a stale file would diverge from what was snapshotted. The
-// preserveKeys parameter is the list of dot-paths the caller wants spliced
-// from the current working-copy local.yml back into the restored local.yml;
-// Task 7 wires the merge step into the local.yml copy path.
+// restoreDevboxFiles writes the snapshot's local.yml and deploy-state.yml over
+// the working-copy paths in baseDir. Writes are atomic.
+//
+// local.yml restore follows a four-row edge case table driven by
+// preserveKeys (see docs/reference/config/snapshot.md):
+//
+//	snapshot/current
+//	yes/yes  → merge: snapshot overlay + preserved keys spliced from current
+//	yes/no   → write snapshot's local.yml as-is (preserve_keys no-op)
+//	no/yes   → write a minimal local.yml containing only preserved keys
+//	           extracted from current (when preserveKeys is empty the working
+//	           copy is removed instead)
+//	no/no    → no-op
+//
+// deploy-state.yml is a plain overwrite: when the snapshot has no copy the
+// working-copy file is removed so restored state matches captured state.
 func restoreDevboxFiles(snapDir, baseDir string, preserveKeys []string) error {
-	_ = preserveKeys // wired by Task 7
-	type pair struct{ src, dst string }
-	pairs := []pair{
-		{filepath.Join(snapDir, DevboxSubdir, "local.yml"), filepath.Join(baseDir, "devbox", "local.yml")},
-		{filepath.Join(snapDir, DevboxSubdir, "deploy-state.yml"), filepath.Join(baseDir, journal.DefaultRelPath)},
+	if err := restoreLocalYML(
+		filepath.Join(snapDir, DevboxSubdir, "local.yml"),
+		filepath.Join(baseDir, "devbox", "local.yml"),
+		preserveKeys,
+	); err != nil {
+		return err
 	}
-	for _, p := range pairs {
-		data, err := os.ReadFile(p.src)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				if rErr := os.Remove(p.dst); rErr != nil && !errors.Is(rErr, os.ErrNotExist) {
-					return fmt.Errorf("remove stale %s: %w", p.dst, rErr)
-				}
-				continue
+
+	stateSrc := filepath.Join(snapDir, DevboxSubdir, "deploy-state.yml")
+	stateDst := filepath.Join(baseDir, journal.DefaultRelPath)
+	data, err := os.ReadFile(stateSrc)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if rErr := os.Remove(stateDst); rErr != nil && !errors.Is(rErr, os.ErrNotExist) {
+				return fmt.Errorf("remove stale %s: %w", stateDst, rErr)
 			}
-			return fmt.Errorf("read %s: %w", p.src, err)
+			return nil
 		}
-		if err := os.MkdirAll(filepath.Dir(p.dst), 0o755); err != nil {
-			return fmt.Errorf("mkdir %s: %w", filepath.Dir(p.dst), err)
-		}
-		if err := writeFileAtomic(p.dst, data, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", p.dst, err)
-		}
+		return fmt.Errorf("read %s: %w", stateSrc, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(stateDst), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(stateDst), err)
+	}
+	if err := writeFileAtomic(stateDst, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", stateDst, err)
 	}
 	return nil
+}
+
+// restoreLocalYML implements the four-row edge case table documented on
+// restoreDevboxFiles.
+func restoreLocalYML(src, dst string, preserveKeys []string) error {
+	snapData, snapErr := os.ReadFile(src)
+	snapMissing := errors.Is(snapErr, os.ErrNotExist)
+	if snapErr != nil && !snapMissing {
+		return fmt.Errorf("read %s: %w", src, snapErr)
+	}
+
+	curData, curErr := os.ReadFile(dst)
+	curMissing := errors.Is(curErr, os.ErrNotExist)
+	if curErr != nil && !curMissing {
+		return fmt.Errorf("read %s: %w", dst, curErr)
+	}
+
+	switch {
+	case snapMissing && curMissing:
+		// no/no — nothing to do
+		return nil
+	case snapMissing && !curMissing:
+		// no/yes — write minimal local.yml containing only preserved keys.
+		minimal, err := extractPreservedKeys(curData, preserveKeys)
+		if err != nil {
+			return fmt.Errorf("extract preserved keys from %s: %w", dst, err)
+		}
+		if len(minimal) == 0 {
+			if rErr := os.Remove(dst); rErr != nil && !errors.Is(rErr, os.ErrNotExist) {
+				return fmt.Errorf("remove stale %s: %w", dst, rErr)
+			}
+			return nil
+		}
+		return writeLocalYML(dst, minimal)
+	case !snapMissing && curMissing:
+		// yes/no — write snapshot as-is.
+		return writeLocalYML(dst, snapData)
+	default:
+		// yes/yes — merge preserved keys from current into snapshot.
+		merged, err := mergePreservedKeys(snapData, curData, preserveKeys)
+		if err != nil {
+			return fmt.Errorf("merge preserved keys into %s: %w", dst, err)
+		}
+		return writeLocalYML(dst, merged)
+	}
+}
+
+func writeLocalYML(dst string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(dst), err)
+	}
+	if err := writeFileAtomic(dst, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", dst, err)
+	}
+	return nil
+}
+
+// extractPreservedKeys returns a minimal YAML document containing only the
+// given dot-paths from src. Paths missing in src are silently dropped; the
+// returned bytes are empty when no paths resolve.
+func extractPreservedKeys(src []byte, dotPaths []string) ([]byte, error) {
+	if len(src) > localYMLMaxBytes {
+		return nil, fmt.Errorf("local.yml exceeds %d bytes (got %d)", localYMLMaxBytes, len(src))
+	}
+	if len(dotPaths) == 0 {
+		return nil, nil
+	}
+	curRoot, err := parseYAMLDoc(src)
+	if err != nil {
+		return nil, err
+	}
+	if curRoot == nil {
+		return nil, nil
+	}
+	out := newMappingNode()
+	hits := 0
+	for _, p := range dotPaths {
+		segs := splitDotPath(p)
+		if len(segs) == 0 {
+			continue
+		}
+		valNode, found, err := lookupPath(curRoot, segs, p)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			continue
+		}
+		if err := setPath(out, segs, valNode, p); err != nil {
+			return nil, err
+		}
+		hits++
+	}
+	if hits == 0 {
+		return nil, nil
+	}
+	return marshalYAMLDoc(out)
 }
 
 // stripPreservedKeys parses yamlBytes as a YAML mapping document and removes

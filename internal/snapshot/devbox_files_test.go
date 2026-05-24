@@ -1,6 +1,8 @@
 package snapshot
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -259,6 +261,167 @@ func nestedMappingKeys(t *testing.T, b []byte, key string) []string {
 		}
 	}
 	return nil
+}
+
+func TestRestoreLocalYML_EdgeCases(t *testing.T) {
+	const preserved = "services.main.ports"
+
+	tests := []struct {
+		name         string
+		snap         string // "" means no snapshot/local.yml
+		current      string // "" means no working-copy local.yml
+		preserveKeys []string
+		// wantExists==false means dst must NOT exist after restore.
+		wantExists bool
+		wantBody   string
+	}{
+		{
+			name:         "yes/yes merges preserved keys from current into snapshot",
+			snap:         "services:\n  main:\n    enabled: true\n",
+			current:      "services:\n  main:\n    ports:\n      - 9090\n",
+			preserveKeys: []string{preserved},
+			wantExists:   true,
+			wantBody:     "services:\n    main:\n        enabled: true\n        ports:\n            - 9090\n",
+		},
+		{
+			name:         "yes/no writes snapshot as-is",
+			snap:         "host:\n  shell: zsh\n",
+			current:      "",
+			preserveKeys: []string{preserved},
+			wantExists:   true,
+			wantBody:     "host:\n  shell: zsh\n",
+		},
+		{
+			name:         "no/yes writes minimal local.yml containing only preserved keys",
+			snap:         "",
+			current:      "services:\n  main:\n    ports:\n      - 9090\n    enabled: true\nhost:\n  shell: zsh\n",
+			preserveKeys: []string{preserved},
+			wantExists:   true,
+			wantBody:     "services:\n    main:\n        ports:\n            - 9090\n",
+		},
+		{
+			name:         "no/yes with no preserve_keys removes the working-copy file",
+			snap:         "",
+			current:      "services:\n  main:\n    enabled: true\n",
+			preserveKeys: nil,
+			wantExists:   false,
+		},
+		{
+			name:         "no/no is a no-op",
+			snap:         "",
+			current:      "",
+			preserveKeys: []string{preserved},
+			wantExists:   false,
+		},
+		{
+			name:         "no/yes with preserve_keys not present in current removes the file",
+			snap:         "",
+			current:      "host:\n  shell: zsh\n",
+			preserveKeys: []string{preserved},
+			wantExists:   false,
+		},
+		{
+			name:         "yes/yes with no preserve_keys writes snapshot verbatim",
+			snap:         "host:\n  shell: bash\n",
+			current:      "host:\n  shell: zsh\n",
+			preserveKeys: nil,
+			wantExists:   true,
+			wantBody:     "host:\n  shell: bash\n",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			snapDir := filepath.Join(tmp, "snap")
+			baseDir := filepath.Join(tmp, "base")
+			if tc.snap != "" {
+				p := filepath.Join(snapDir, DevboxSubdir, "local.yml")
+				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+					t.Fatalf("mkdir snap: %v", err)
+				}
+				if err := os.WriteFile(p, []byte(tc.snap), 0o644); err != nil {
+					t.Fatalf("write snap local.yml: %v", err)
+				}
+			}
+			if tc.current != "" {
+				p := filepath.Join(baseDir, "devbox", "local.yml")
+				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+					t.Fatalf("mkdir base: %v", err)
+				}
+				if err := os.WriteFile(p, []byte(tc.current), 0o644); err != nil {
+					t.Fatalf("write current local.yml: %v", err)
+				}
+			}
+
+			err := restoreLocalYML(
+				filepath.Join(snapDir, DevboxSubdir, "local.yml"),
+				filepath.Join(baseDir, "devbox", "local.yml"),
+				tc.preserveKeys,
+			)
+			if err != nil {
+				t.Fatalf("restoreLocalYML: %v", err)
+			}
+
+			dst := filepath.Join(baseDir, "devbox", "local.yml")
+			body, statErr := os.ReadFile(dst)
+			if !tc.wantExists {
+				if statErr == nil {
+					t.Fatalf("dst %s should not exist, body=%q", dst, string(body))
+				}
+				if !os.IsNotExist(statErr) {
+					t.Fatalf("stat dst: %v", statErr)
+				}
+				return
+			}
+			if statErr != nil {
+				t.Fatalf("read dst: %v", statErr)
+			}
+			if string(body) != tc.wantBody {
+				t.Fatalf("dst body mismatch\nwant: %q\ngot:  %q", tc.wantBody, string(body))
+			}
+		})
+	}
+}
+
+func TestCaptureLocalYML_StripsPreservedKeys(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "local.yml")
+	dst := filepath.Join(tmp, "snap", "local.yml")
+	body := "services:\n  main:\n    ports:\n      - 9090\n    enabled: true\n"
+	if err := os.WriteFile(src, []byte(body), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	wrote, err := captureLocalYML(src, dst, []string{"services.main.ports"})
+	if err != nil {
+		t.Fatalf("captureLocalYML: %v", err)
+	}
+	if !wrote {
+		t.Fatal("wrote=false, want true")
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dst: %v", err)
+	}
+	want := "services:\n    main:\n        enabled: true\n"
+	if string(got) != want {
+		t.Fatalf("captured local.yml\nwant: %q\ngot:  %q", want, string(got))
+	}
+}
+
+func TestCaptureLocalYML_MissingSource(t *testing.T) {
+	tmp := t.TempDir()
+	wrote, err := captureLocalYML(
+		filepath.Join(tmp, "missing.yml"),
+		filepath.Join(tmp, "snap", "local.yml"),
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("captureLocalYML: %v", err)
+	}
+	if wrote {
+		t.Fatal("wrote=true for missing source")
+	}
 }
 
 func containsAll(s, want []string) bool {

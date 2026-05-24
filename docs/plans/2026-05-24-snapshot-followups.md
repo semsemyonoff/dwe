@@ -146,17 +146,17 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 7: Wire `preserve_keys` into create and restore
 
-- [ ] in `captureDevboxFiles` (now in `devbox_files.go`, takes `preserveKeys []string` per Task 6): after reading `devbox/local.yml`, call `stripPreservedKeys(data, preserveKeys)` before writing to `<snap>/devbox/local.yml`. If the result is structurally empty (zero remaining top-level keys), still write the empty file so restore semantics are unambiguous.
-- [ ] in `restoreDevboxFiles`: implement the edge-case table:
+- [x] in `captureDevboxFiles` (now in `devbox_files.go`, takes `preserveKeys []string` per Task 6): after reading `devbox/local.yml`, call `stripPreservedKeys(data, preserveKeys)` before writing to `<snap>/devbox/local.yml`. If the result is structurally empty (zero remaining top-level keys), still write the empty file so restore semantics are unambiguous.
+- [x] in `restoreDevboxFiles`: implement the edge-case table:
   | Snapshot has `local.yml` | Current has `local.yml` | Behavior |
   |---|---|---|
   | yes | yes | merge: snapshot overlay + preserved keys spliced from current |
   | yes | no | write snapshot's `local.yml` as-is (preserve_keys no-op) |
   | no | yes (with preserved values) | **new behavior**: write a minimal `local.yml` containing only the preserved keys extracted from current |
   | no | no | no-op (matches existing behavior) |
-- [ ] thread `cfg.LocalYML.PreserveKeys` through `RestoreParams` and `CreateParams` so the call sites at `create.go:145` and `restore.go:174` can pass it directly to the helpers — do not read from `SnapCfg` deep inside the helpers
-- [ ] tests in `internal/snapshot/devbox_files_test.go` (new) exercising every row of the edge-case table with a representative `local.yml` fixture in `internal/snapshot/testdata/local-yml/`; existing `create_test.go` / `restore_test.go` get one new case each asserting end-to-end preservation
-- [ ] run `go test ./internal/snapshot/... -race && make lint` — must pass before task 8
+- [x] thread `cfg.LocalYML.PreserveKeys` through `RestoreParams` and `CreateParams` so the call sites at `create.go:145` and `restore.go:174` can pass it directly to the helpers — do not read from `SnapCfg` deep inside the helpers
+- [x] tests in `internal/snapshot/devbox_files_test.go` (new) exercising every row of the edge-case table with a representative `local.yml` fixture in `internal/snapshot/testdata/local-yml/`; existing `create_test.go` / `restore_test.go` get one new case each asserting end-to-end preservation
+- [x] run `go test ./internal/snapshot/... -race && make lint` — must pass before task 8
 
 ### Task 8: Pack — drop `.sha256` sidecar
 
