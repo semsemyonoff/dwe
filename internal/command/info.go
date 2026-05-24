@@ -47,7 +47,7 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 		missingInfo = true
 	}
 
-	stylesCfg := applyStyles(flags.ProjectRoot(), cmd.ErrOrStderr())
+	stylesCfg := flags.stylesCfg
 
 	// Always render the branded identity line; the ASCII art block inside the
 	// helper is gated by header.lines.

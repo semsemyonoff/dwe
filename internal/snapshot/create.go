@@ -163,7 +163,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
 			if rErr := os.Rename(backupDir, snapDir); rErr != nil && p.Stderr != nil {
-				fmt.Fprintf(p.Stderr, "warning: could not restore snapshot backup %q: %v\n", backupDir, rErr)
+				_, _ = fmt.Fprintf(p.Stderr, "warning: could not restore snapshot backup %q: %v\n", backupDir, rErr)
 			}
 		}
 		return nil, fmt.Errorf("snapshot: create snapshot dir: %w", err)
@@ -174,7 +174,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
 			if rErr := os.Rename(backupDir, snapDir); rErr != nil && p.Stderr != nil {
-				fmt.Fprintf(p.Stderr, "warning: could not restore snapshot backup %q: %v\n", backupDir, rErr)
+				_, _ = fmt.Fprintf(p.Stderr, "warning: could not restore snapshot backup %q: %v\n", backupDir, rErr)
 			}
 		}
 		return nil, err
