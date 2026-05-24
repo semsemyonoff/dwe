@@ -264,8 +264,12 @@ func (l *LiveLine) Stop() {
 	})
 }
 
-// Pause erases the footer and leaves the cursor at column 0 of the now-empty
-// former-footer row. INTENTIONAL EXCEPTION to Invariant #9: huh prompts render
+// Pause erases the live-owned rows and leaves the cursor at the top of the
+// cleared area so child process output can flow from there.
+//
+// Single-line mode: erases the footer row only (cursor at col 0 of that row).
+// Block mode: erases all N block rows + footer (N+1 rows total); cursor at the
+// first block row. INTENTIONAL EXCEPTION to Invariant #9: huh prompts render
 // starting at the current cursor row, so leaving the cursor below would
 // produce a blank gap above the prompt. Resume restores the invariant.
 func (l *LiveLine) Pause() {
@@ -277,12 +281,28 @@ func (l *LiveLine) Pause() {
 	if !l.started || l.stopped || l.paused {
 		return
 	}
-	l.writeTerm("\x1b[1A\r\x1b[2K\x1b[?25h")
+	if l.blockRows > 0 {
+		// Erase all N block rows + footer; reposition cursor at first block row.
+		n := l.blockRows + 1
+		l.writeTerm(fmt.Sprintf("\x1b[%dA", n))
+		for range n {
+			l.writeTerm("\r\x1b[2K\n")
+		}
+		l.writeTerm(fmt.Sprintf("\x1b[%dA", n))
+	} else {
+		l.writeTerm("\x1b[1A\r\x1b[2K")
+	}
+	l.writeTerm("\x1b[?25h")
 	l.paused = true
 }
 
-// Resume repaints the footer at the current cursor row and advances the cursor
-// below it, restoring Invariant #9.
+// Resume repaints the live-owned rows starting at the current cursor position
+// (wherever child output left it) and advances the cursor below the footer,
+// restoring Invariant #9.
+//
+// Block mode: repaints all N block rows then the footer. After this call the
+// block rows are anchored at the cursor's pre-Resume position and redrawLocked
+// will track them correctly.
 func (l *LiveLine) Resume() {
 	if !l.enabled.Load() {
 		return
@@ -293,6 +313,11 @@ func (l *LiveLine) Resume() {
 		return
 	}
 	l.paused = false
+	if l.blockRows > 0 {
+		for i := range l.blockRows {
+			l.writeTerm("\r\x1b[2K" + l.renderBlockRowLocked(i) + "\n")
+		}
+	}
 	l.writeTerm("\x1b[?25l" + l.renderFooterLocked() + "\n")
 }
 
