@@ -129,7 +129,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 			p.Name, m.Project.Name, p.Cfg.Project.Name)
 	}
 
-	currentHash := currentProjectConfigHash(p.BaseDir)
+	currentHash := ProjectConfigHash(p.BaseDir)
 	diverged := m.Project.ConfigHash != "" && currentHash != "" && m.Project.ConfigHash != currentHash
 	if diverged {
 		if p.SnapCfg.RequireMatchingConfig {
@@ -160,7 +160,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return nil, fmt.Errorf("snapshot %q: write pre-restore backup: %w", p.Name, err)
 	}
 
-	if err := restoreDevboxFiles(snapDir, p.BaseDir, m.DevboxFiles); err != nil {
+	if err := restoreDevboxFiles(snapDir, p.BaseDir); err != nil {
 		return nil, fmt.Errorf("snapshot %q: restore devbox files: %w", p.Name, err)
 	}
 
@@ -310,13 +310,12 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 //
 // The manifest is consulted opportunistically (to pick the canonical relative
 // paths) but defaults to the standard layout when manifest fields are empty.
-func restoreDevboxFiles(snapDir, baseDir string, files DevboxFiles) error {
+func restoreDevboxFiles(snapDir, baseDir string) error {
 	type pair struct{ src, dst string }
 	pairs := []pair{
 		{filepath.Join(snapDir, DevboxSubdir, "local.yml"), filepath.Join(baseDir, "devbox", "local.yml")},
 		{filepath.Join(snapDir, DevboxSubdir, "deploy-state.yml"), filepath.Join(baseDir, journal.DefaultRelPath)},
 	}
-	_ = files // reserved for future per-snapshot path overrides
 	for _, p := range pairs {
 		data, err := os.ReadFile(p.src)
 		if err != nil {

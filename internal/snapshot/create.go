@@ -193,13 +193,12 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		artifacts = nil
 	}
 
-	c := NewManifestConstructor(now)
-	m := c.New(p.Name)
+	m := NewManifest(p.Name, now)
 	m.CreatedAt = createdAt
 	m.Description = p.Description
 	m.Project = ProjectInfo{
 		Name:       p.Cfg.Project.Name,
-		ConfigHash: currentProjectConfigHash(p.BaseDir),
+		ConfigHash: ProjectConfigHash(p.BaseDir),
 	}
 	m.DevboxVersion = p.DevboxVersion
 	m.Variant = p.Variant
@@ -308,9 +307,9 @@ func copyFileIfExists(src, dst string) (bool, error) {
 	return true, nil
 }
 
-// currentProjectConfigHash reads the deploy state file and returns the
-// project-level config_hash, or empty string if state is absent / unreadable.
-func currentProjectConfigHash(baseDir string) string {
+// ProjectConfigHash reads the deploy state file and returns the project-level
+// config_hash, or empty string if state is absent / unreadable.
+func ProjectConfigHash(baseDir string) string {
 	st, err := journal.Load(filepath.Join(baseDir, journal.DefaultRelPath))
 	if err != nil || st == nil || st.Project == nil {
 		return ""

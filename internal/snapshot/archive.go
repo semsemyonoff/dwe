@@ -136,7 +136,7 @@ func excludesMatch(excludes []string, relPath string) (bool, error) {
 // sidecar. The caller is responsible for holding project locks across the
 // pack run (the snapshot directory must not be mutating concurrently —
 // otherwise the archive can be corrupt or truncated).
-func Pack(baseDir string, snapshotsRoot, snapDir, name string, outPath string, excludes []string) (*PackResult, error) {
+func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string) (*PackResult, error) {
 	if err := ValidateName(name); err != nil {
 		return nil, err
 	}

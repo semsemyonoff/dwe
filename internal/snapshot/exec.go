@@ -91,10 +91,7 @@ func RunWorkflow(ctx context.Context, p ExecParams) error {
 		SkipNotify: true,
 	}
 
-	if err := runtime.RunCommand(ctx, rc); err != nil {
-		return err
-	}
-	return nil
+	return runtime.RunCommand(ctx, rc)
 }
 
 // SelectWorkflow picks the workflow body to run for a given subcommand.

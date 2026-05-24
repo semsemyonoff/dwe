@@ -8,10 +8,9 @@ import (
 	"time"
 )
 
-func TestManifestConstructor_New(t *testing.T) {
+func TestNewManifest(t *testing.T) {
 	fixed := time.Date(2026, 5, 24, 10, 0, 0, 0, time.UTC)
-	c := NewManifestConstructor(func() time.Time { return fixed })
-	m := c.New("snap")
+	m := NewManifest("snap", func() time.Time { return fixed })
 	if m.Name != "snap" {
 		t.Fatalf("name: %q", m.Name)
 	}
@@ -24,8 +23,7 @@ func TestManifestRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.yml")
 	fixed := time.Date(2026, 5, 24, 11, 2, 0, 0, time.UTC)
-	c := NewManifestConstructor(func() time.Time { return fixed })
-	m := c.New("feature-x")
+	m := NewManifest("feature-x", func() time.Time { return fixed })
 	m.Description = "WIP"
 	m.Project = ProjectInfo{Name: "tbm-next", ConfigHash: "abc123"}
 	m.DevboxVersion = "0.42.0"
@@ -66,8 +64,7 @@ func TestManifestRoundTrip(t *testing.T) {
 func TestSaveManifest_atomicNoLeftoverOnSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.yml")
-	c := NewManifestConstructor(func() time.Time { return time.Unix(0, 0).UTC() })
-	if err := SaveManifest(path, c.New("snap")); err != nil {
+	if err := SaveManifest(path, NewManifest("snap", func() time.Time { return time.Unix(0, 0).UTC() })); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 	entries, err := os.ReadDir(dir)
@@ -94,8 +91,7 @@ func TestSaveManifest_nil(t *testing.T) {
 func TestSaveManifest_createsParent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nested/sub/manifest.yml")
-	c := NewManifestConstructor(func() time.Time { return time.Unix(0, 0).UTC() })
-	if err := SaveManifest(path, c.New("snap")); err != nil {
+	if err := SaveManifest(path, NewManifest("snap", func() time.Time { return time.Unix(0, 0).UTC() })); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 	if _, err := os.Stat(path); err != nil {

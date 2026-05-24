@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
 
@@ -203,7 +202,7 @@ func runSnapshotInspect(flags *rootFlags, out io.Writer, arg string, jsonOut boo
 		return err
 	}
 
-	currentHash := currentProjectConfigHash(baseDir)
+	currentHash := snapshot.ProjectConfigHash(baseDir)
 	diverged := m.Project.ConfigHash != "" && currentHash != "" && m.Project.ConfigHash != currentHash
 
 	if jsonOut {
@@ -348,16 +347,6 @@ func loadSnapshotConfigOrNil(baseDir string) (*config.SnapshotConfig, error) {
 		return nil, fmt.Errorf("loading snapshot config: %w", err)
 	}
 	return cfg, nil
-}
-
-// currentProjectConfigHash reads the deploy state file and returns the
-// project-level config_hash, or empty string if state is absent / unreadable.
-func currentProjectConfigHash(baseDir string) string {
-	state, err := journal.Load(filepath.Join(baseDir, journal.DefaultRelPath))
-	if err != nil || state == nil || state.Project == nil {
-		return ""
-	}
-	return state.Project.ConfigHash
 }
 
 func formatSnapshotSummary(m *snapshot.Manifest) string {

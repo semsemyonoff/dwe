@@ -58,7 +58,7 @@ func TestPackUnpack_Roundtrip(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	res, err := Pack(tmp, filepath.Join(tmp, "snapshots"), snapDir, snapName, "", []string{"**/*.tmp"})
+	res, err := Pack(filepath.Join(tmp, "snapshots"), snapDir, snapName, "", []string{"**/*.tmp"})
 	if err != nil {
 		t.Fatalf("Pack: %v", err)
 	}

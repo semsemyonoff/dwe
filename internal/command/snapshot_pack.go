@@ -61,7 +61,7 @@ func runSnapshotPack(cmd *cobra.Command, flags *rootFlags, name, outPath string,
 
 	excludes := mergeExcludes(snapCfg, cliExcludes)
 
-	res, err := snapshot.Pack(baseDir, snapshotsRoot, snapDir, name, outPath, excludes)
+	res, err := snapshot.Pack(snapshotsRoot, snapDir, name, outPath, excludes)
 	if err != nil {
 		return err
 	}

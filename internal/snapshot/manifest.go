@@ -13,7 +13,6 @@ import (
 // CreateStatus / RestoreStatus enum values recorded in last_create / last_restore.
 const (
 	StatusOk          = "ok"
-	StatusPartial     = "partial"
 	StatusFailed      = "failed"
 	StatusInterrupted = "interrupted"
 )
@@ -101,27 +100,15 @@ type Manifest struct {
 	LastRestore *LastRestore `yaml:"last_restore,omitempty"`
 }
 
-// ManifestConstructor builds a fresh manifest, sourcing time from a caller-
-// supplied now func for testability. A nil now defaults to time.Now.
-type ManifestConstructor struct {
-	now func() time.Time
-}
-
-// NewManifestConstructor returns a constructor with the given clock; pass nil
-// for the real wall clock.
-func NewManifestConstructor(now func() time.Time) *ManifestConstructor {
+// NewManifest returns a Manifest pre-populated with the given name and a
+// clock-driven CreatedAt. Pass a nil now to use the real wall clock.
+func NewManifest(name string, now func() time.Time) *Manifest {
 	if now == nil {
 		now = time.Now
 	}
-	return &ManifestConstructor{now: now}
-}
-
-// New returns a Manifest pre-populated with the constructor's clock-driven
-// CreatedAt; remaining fields are caller-filled.
-func (c *ManifestConstructor) New(name string) *Manifest {
 	return &Manifest{
 		Name:      name,
-		CreatedAt: c.now().UTC(),
+		CreatedAt: now().UTC(),
 	}
 }
 

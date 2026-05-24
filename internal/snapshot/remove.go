@@ -24,7 +24,6 @@ type RemoveParams struct {
 	Name           string
 	SkipConfirm    bool
 	NonInteractive bool
-	Now            func() time.Time
 	Stdout         io.Writer
 	Stderr         io.Writer
 	// ConfirmRemove is invoked when SkipConfirm is false. A nil callback is
