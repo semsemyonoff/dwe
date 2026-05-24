@@ -189,16 +189,16 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
 
 ### Task 8: `restore` and `rollback` subcommands
 
-- [ ] implement `devbox snapshot restore <name> [-y]` with `Args: cobra.ExactArgs(1)`: acquire project locks; load + verify manifest (project name match; `config_hash` compare → warn always, block when `require_matching_config: true`; when manifest `config_hash` is empty (snapshot predates any deploy), treat as match — never block); confirm in TTY unless `-y`
-- [ ] backup current `devbox/local.yml` and `.devbox/deploy/state.yml` into `.devbox/snapshots/.pre-restore-backup/` atomically (write-temp + rename); overwrite the previous backup
-- [ ] restore devbox files from `<snap>/devbox/` over the working copies
-- [ ] select restore workflow: `SelectWorkflow(cfg, "restore", manifest.Variant)`; on missing variant block, fall back to default; run via `snapshot.RunWorkflow` with `Scope: SnapshotScopeRestoreOrRemove`
-- [ ] on success: update current pointer to `<name>` atomically; write `last_restore.status = "ok"` to manifest
-- [ ] on failure or SIGINT: leave current pointer untouched; write `last_restore.status` in `{"failed","partial","interrupted"}` with `failed_step`; emit a hint about `.pre-restore-backup/` for manual recovery; appropriate exit code (1 or 130)
-- [ ] implement `devbox snapshot rollback [-y]` with `Args: cobra.NoArgs`: reads `rollback_target` from config (fail if config absent or target field empty); dispatches to the restore code path; fails clearly if target snapshot doesn't exist
-- [ ] **notifications**: emit notify events on restore success/failure/interrupt via `notify.OpCommand` with operation labels `"snapshot:restore"` and `"snapshot:rollback"` (rollback dispatches restore internally but tags its own label for user visibility)
-- [ ] write integration tests: round-trip create → modify-file → restore → assert restored state; rollback path; `config_hash` divergence with `require_matching_config: true` blocks (exit 1, no filesystem change); empty `config_hash` is never blocked; missing variant on restore falls back to default; SIGINT mid-restore leaves `.pre-restore-backup/` populated and current pointer untouched
-- [ ] run `go test ./... && make lint` — must pass before task 9
+- [x] implement `devbox snapshot restore <name> [-y]` with `Args: cobra.ExactArgs(1)`: acquire project locks; load + verify manifest (project name match; `config_hash` compare → warn always, block when `require_matching_config: true`; when manifest `config_hash` is empty (snapshot predates any deploy), treat as match — never block); confirm in TTY unless `-y`
+- [x] backup current `devbox/local.yml` and `.devbox/deploy/state.yml` into `.devbox/snapshots/.pre-restore-backup/` atomically (write-temp + rename); overwrite the previous backup
+- [x] restore devbox files from `<snap>/devbox/` over the working copies
+- [x] select restore workflow: `SelectWorkflow(cfg, "restore", manifest.Variant)`; on missing variant block, fall back to default; run via `snapshot.RunWorkflow` with `Scope: SnapshotScopeRestoreOrRemove`
+- [x] on success: update current pointer to `<name>` atomically; write `last_restore.status = "ok"` to manifest
+- [x] on failure or SIGINT: leave current pointer untouched; write `last_restore.status` in `{"failed","partial","interrupted"}` with `failed_step`; emit a hint about `.pre-restore-backup/` for manual recovery; appropriate exit code (1 or 130)
+- [x] implement `devbox snapshot rollback [-y]` with `Args: cobra.NoArgs`: reads `rollback_target` from config (fail if config absent or target field empty); dispatches to the restore code path; fails clearly if target snapshot doesn't exist
+- [x] **notifications**: emit notify events on restore success/failure/interrupt via `notify.OpCommand` with operation labels `"snapshot:restore"` and `"snapshot:rollback"` (rollback dispatches restore internally but tags its own label for user visibility)
+- [x] write integration tests: round-trip create → modify-file → restore → assert restored state; rollback path; `config_hash` divergence with `require_matching_config: true` blocks (exit 1, no filesystem change); empty `config_hash` is never blocked; missing variant on restore falls back to default; SIGINT mid-restore leaves `.pre-restore-backup/` populated and current pointer untouched
+- [x] run `go test ./... && make lint` — must pass before task 9
 
 ### Task 9: `remove`, `pack`, `unpack` with archive safety
 

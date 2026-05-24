@@ -310,6 +310,10 @@ func TestSnapshotCmd_ArgsValidation(t *testing.T) {
 		{"current", []string{"current", "extra"}, false},
 		{"inspect missing arg", []string{"inspect"}, false},
 		{"inspect extra arg", []string{"inspect", "a", "b"}, false},
+		{"restore missing arg", []string{"restore"}, false},
+		{"restore extra arg", []string{"restore", "a", "b"}, false},
+		{"rollback extra arg", []string{"rollback", "a"}, false},
+		{"rollback no arg", []string{"rollback"}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
