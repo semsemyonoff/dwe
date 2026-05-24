@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 
+	"devbox-cli/internal/ui"
 	"devbox-cli/internal/version"
 
 	"github.com/spf13/cobra"
@@ -16,7 +17,8 @@ func newVersionCmd() *cobra.Command {
 		Example:      "  devbox version",
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), version.Info())
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s Devbox v%s (commit %s, built %s)\n",
+				ui.LogoMark(), version.Version, version.Commit, version.Date)
 		},
 	}
 }

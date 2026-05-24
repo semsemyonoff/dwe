@@ -75,7 +75,7 @@ func renderTypeSection(in StatusInput, t config.ServiceType, title string, withD
 		}
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderSectionTitle(title))
+	b.WriteString(ui.RenderBrandedSectionTitle(title))
 	b.WriteByte('\n')
 	b.WriteString(ui.RenderServicesTable(rows, extraCols, withDirCol))
 	b.WriteByte('\n')
@@ -94,7 +94,7 @@ func RenderTopology(in StatusInput) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderSectionTitle("Topology"))
+	b.WriteString(ui.RenderBrandedSectionTitle("Topology"))
 	b.WriteByte('\n')
 	b.WriteString(rendered)
 	b.WriteByte('\n')

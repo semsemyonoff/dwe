@@ -177,6 +177,17 @@ func RenderSectionTitle(text string) string {
 	return renderSectionTitle(text)
 }
 
+// RenderBrandedSectionTitle renders a section header prefixed with the Devbox
+// logomark. Used by the status command's section titles only — other callers
+// of RenderSectionTitle (inspect, pipeline phase headers) must NOT carry the
+// logomark per the exclusion list in logo.go.
+func RenderBrandedSectionTitle(text string) string {
+	if text == "" {
+		return renderSectionTitle(text)
+	}
+	return renderSectionTitle(LogoMark() + " " + text)
+}
+
 // RenderSubheader renders a bold yellow in-section subheader.
 // Used for grouping sections within a larger block (e.g. Steps, Params).
 func RenderSubheader(text string) string {

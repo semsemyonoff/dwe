@@ -39,7 +39,7 @@ func RenderDeployStatus(in StatusInput) string {
 		}
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderSectionTitle("Deploy Status"))
+	b.WriteString(ui.RenderBrandedSectionTitle("Deploy Status"))
 	b.WriteByte('\n')
 	b.WriteString(ui.RenderDeployStatus(uiRows))
 	b.WriteByte('\n')

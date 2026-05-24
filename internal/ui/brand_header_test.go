@@ -73,6 +73,13 @@ func TestRenderBrandHeader_AllSections(t *testing.T) {
 	}
 }
 
+func TestRenderBrandHeader_HasLogoMark(t *testing.T) {
+	out := RenderBrandHeader(BrandHeader{Project: "p", Version: "v"})
+	if !strings.Contains(out, "{") || !strings.Contains(out, "▪") || !strings.Contains(out, "}") {
+		t.Errorf("expected logomark '{▪}' in brand header, got:\n%s", out)
+	}
+}
+
 func TestRenderBrandHeader_EmptyProjectAndVersion(t *testing.T) {
 	// Edge case: helper must still emit the 'Devbox' word even with no
 	// project/version provided (caller hasn't loaded a config yet).

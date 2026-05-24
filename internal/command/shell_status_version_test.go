@@ -1040,6 +1040,10 @@ func TestVersionCmd_Output(t *testing.T) {
 	if buf.Len() == 0 {
 		t.Error("version command produced no output")
 	}
+	out := buf.String()
+	if !strings.Contains(out, "Devbox") || !strings.Contains(out, "▪") {
+		t.Errorf("expected branded version output with logomark + 'Devbox', got: %q", out)
+	}
 }
 
 // --- renames: services and commands ---

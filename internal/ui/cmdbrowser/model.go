@@ -392,7 +392,7 @@ func (m *Model) View() tea.View {
 	rightPanel := rightStyle.Render(rightBody)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-	titleBar := paletteKey().Bold(true).Render(m.title)
+	titleBar := paletteKey().Bold(true).Render(ui.LogoMarkPlain() + " " + m.title)
 	if m.skipConfirm && m.opts.Mode == ModeRun {
 		titleBar += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
 	}
@@ -434,7 +434,7 @@ func (m *Model) viewSinglePanel() tea.View {
 	}
 
 	panel := style.Render(body)
-	titleBar := paletteKey().Bold(true).Render(m.title)
+	titleBar := paletteKey().Bold(true).Render(ui.LogoMarkPlain() + " " + m.title)
 	if m.skipConfirm && m.opts.Mode == ModeRun {
 		titleBar += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
 	}

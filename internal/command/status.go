@@ -250,7 +250,7 @@ func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInpu
 		if len(rows) == 0 {
 			return nil
 		}
-		_, _ = fmt.Fprintln(out, ui.RenderSectionTitle("Git Workspace"))
+		_, _ = fmt.Fprintln(out, ui.RenderBrandedSectionTitle("Git Workspace"))
 		_, _ = fmt.Fprintln(out, ui.RenderGitWorkspace(rows))
 		failed := 0
 		for _, r := range rows {

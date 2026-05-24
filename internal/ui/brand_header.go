@@ -28,7 +28,7 @@ type BrandHeader struct {
 func RenderBrandHeader(h BrandHeader) string {
 	var sb strings.Builder
 
-	parts := []string{styleAccent.Bold(true).Render("Devbox")}
+	parts := []string{LogoMark() + " " + styleAccent.Bold(true).Render("Devbox")}
 	if h.Project != "" {
 		parts = append(parts, styleText.Render(h.Project))
 	}

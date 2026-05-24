@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 
 	cobradoc "github.com/spf13/cobra/doc"
@@ -135,7 +136,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 				return fmt.Errorf("generating cli index: %w", err)
 			}
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "CLI docs written to %s\n", cliDir)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s CLI docs written to %s\n", ui.LogoMark(), cliDir)
 	}
 
 	if scopes["commands"] {
@@ -151,7 +152,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		// list (e.g. --format all), inform the user that those formats are skipped
 		// rather than silently producing nothing.
 		if slices.Contains(formats, "yaml") || slices.Contains(formats, "man") {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "note: registry docs only support markdown; yaml/man formats skipped for commands scope\n")
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s note: registry docs only support markdown; yaml/man formats skipped for commands scope\n", ui.LogoMark())
 		}
 		for _, fmt_ := range formats {
 			if err := genRegistryDocs(reg, commandsDir, fmt_, df.includePrivate); err != nil {
@@ -161,7 +162,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		if err := genCommandsIndex(reg, commandsDir, df.includePrivate); err != nil {
 			return fmt.Errorf("generating commands index: %w", err)
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Command docs written to %s\n", commandsDir)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s Command docs written to %s\n", ui.LogoMark(), commandsDir)
 	}
 
 	// Top-level index.
