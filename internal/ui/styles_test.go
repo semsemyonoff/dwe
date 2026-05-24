@@ -32,6 +32,7 @@ func snapshotPalette(t *testing.T) {
 	savedDanger, savedMuted, savedBorder, savedText := resolvedDanger, resolvedMuted, resolvedBorder, resolvedText
 	savedSep := defSep
 	savedDark := lipgloss.HasDarkBackground()
+	savedTheme := huhTheme
 	t.Cleanup(func() {
 		lipgloss.SetHasDarkBackground(savedDark)
 		rebuildSemanticStyles(config.StylesColors{
@@ -44,6 +45,7 @@ func snapshotPalette(t *testing.T) {
 			Text:    savedText,
 		})
 		defSep = savedSep
+		huhTheme = savedTheme
 	})
 }
 

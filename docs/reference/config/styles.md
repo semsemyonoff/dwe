@@ -113,12 +113,12 @@ lipgloss (`internal/ui/`), v2 lipgloss (`internal/ui/cmdbrowser/`), and Fang's
 
 | Token | Light default | Dark default |
 |-------|---------------|--------------|
-| `accent`  | `#2EC3EB` | `#0EA5E9` |
-| `success` | `#22C55E` | `#16A34A` |
-| `warning` | `#F59E0B` | `#D97706` |
-| `danger`  | `#EF4444` | `#DC2626` |
-| `muted`   | `#9AA3BB` | `#64748B` |
-| `border`  | `#334155` | `#CBD5E1` |
+| `accent`  | `#0EA5E9` | `#2EC3EB` |
+| `success` | `#16A34A` | `#22C55E` |
+| `warning` | `#D97706` | `#F59E0B` |
+| `danger`  | `#DC2626` | `#EF4444` |
+| `muted`   | `#64748B` | `#9AA3BB` |
+| `border`  | `#CBD5E1` | `#334155` |
 | `text`    | _(empty — terminal default)_ | _(empty — terminal default)_ |
 
 A user-provided non-empty value overrides both modes — overrides are not
