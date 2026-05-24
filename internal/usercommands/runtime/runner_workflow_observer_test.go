@@ -186,11 +186,11 @@ func TestWorkflowObserver_WhenFalse_Skipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if got, want := summarize(fake.events), "start(0) end(0:skipped)"; got != want {
+	if got, want := summarize(fake.events), "end(0:skipped)"; got != want {
 		t.Errorf("sequence mismatch:\n got: %s\nwant: %s", got, want)
 	}
-	if fake.events[1].reason != "when: false" {
-		t.Errorf("skip reason: got %q want %q", fake.events[1].reason, "when: false")
+	if fake.events[0].reason != "when: false" {
+		t.Errorf("skip reason: got %q want %q", fake.events[0].reason, "when: false")
 	}
 }
 
@@ -238,11 +238,11 @@ func TestWorkflowObserver_FilesGateSkip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if got, want := summarize(fake.events), "start(0) end(0:skipped)"; got != want {
+	if got, want := summarize(fake.events), "end(0:skipped)"; got != want {
 		t.Errorf("sequence mismatch:\n got: %s\nwant: %s", got, want)
 	}
-	if !strings.HasPrefix(fake.events[1].reason, "files_gate:") {
-		t.Errorf("skip reason should start with files_gate:, got %q", fake.events[1].reason)
+	if !strings.HasPrefix(fake.events[0].reason, "files_gate:") {
+		t.Errorf("skip reason should start with files_gate:, got %q", fake.events[0].reason)
 	}
 }
 

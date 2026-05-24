@@ -264,24 +264,28 @@ func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string
 	// Reject output paths inside the snapshot directory: the temp file created
 	// in filepath.Dir(outPath) would be discovered by the walk and either
 	// produce a corrupt archive or trigger a disk-filling feedback loop.
-	absSnap, e1 := filepath.Abs(snapDir)
-	absOut, e2 := filepath.Abs(outPath)
-	if e1 == nil && e2 == nil {
-		// Resolve symlinks so a symlinked output directory that physically
-		// resolves inside snapDir is still caught by the containment check.
-		if resolved, err := filepath.EvalSymlinks(absSnap); err == nil {
-			absSnap = resolved
-		}
-		// Resolve the deepest existing ancestor of the output parent so that a
-		// path like --out /tmp/link→snapDir/new/archive.tar.gz is caught even
-		// when the "new/" component does not exist yet (EvalSymlinks would fail
-		// on a non-existent path, silently skipping the resolution).
-		resolvedParent := resolveExistingAncestor(filepath.Dir(absOut))
-		absOut = filepath.Join(resolvedParent, filepath.Base(absOut))
-		sep := string(filepath.Separator)
-		if absOut == absSnap || strings.HasPrefix(absOut, absSnap+sep) {
-			return nil, fmt.Errorf("snapshot pack: output path %s is inside the snapshot directory %s; use a path outside the snapshot", outPath, snapDir)
-		}
+	absSnap, err := filepath.Abs(snapDir)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot pack: resolve snapshot dir: %w", err)
+	}
+	absOut, err := filepath.Abs(outPath)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot pack: resolve output path: %w", err)
+	}
+	// Resolve symlinks so a symlinked output directory that physically
+	// resolves inside snapDir is still caught by the containment check.
+	if resolved, err := filepath.EvalSymlinks(absSnap); err == nil {
+		absSnap = resolved
+	}
+	// Resolve the deepest existing ancestor of the output parent so that a
+	// path like --out /tmp/link→snapDir/new/archive.tar.gz is caught even
+	// when the "new/" component does not exist yet (EvalSymlinks would fail
+	// on a non-existent path, silently skipping the resolution).
+	resolvedParent := resolveExistingAncestor(filepath.Dir(absOut))
+	absOut = filepath.Join(resolvedParent, filepath.Base(absOut))
+	sep := string(filepath.Separator)
+	if absOut == absSnap || strings.HasPrefix(absOut, absSnap+sep) {
+		return nil, fmt.Errorf("snapshot pack: output path %s is inside the snapshot directory %s; use a path outside the snapshot", outPath, snapDir)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {

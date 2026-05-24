@@ -98,7 +98,6 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 			if !ok {
 				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
 					rc.Cmd.ID, i, step.When)
-				fireOnStepStart(rc, i, total, step)
 				fireOnStepEnd(rc, i, step, StepResult{
 					Status:     StepStatusSkipped,
 					SkipReason: "when: " + step.When,
@@ -155,7 +154,6 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 			if gateSkip {
 				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d] %q: skipped (%s)\n",
 					rc.Cmd.ID, i, step.Command, gateReason)
-				fireOnStepStart(rc, i, total, step)
 				fireOnStepEnd(rc, i, step, StepResult{
 					Status:     StepStatusSkipped,
 					SkipReason: gateReason,

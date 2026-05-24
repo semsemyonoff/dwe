@@ -56,7 +56,9 @@ func openWorkflowSubStepLog(workDir, workflowID, subName string, enabled bool) (
 		}
 	}
 	if err != nil {
-		return nil, "", fmt.Errorf("creating sub-step log %s: %w", path, err)
+		// A log-file infrastructure failure is non-fatal: the sub-step runs
+		// without capturing output rather than aborting with a misleading error.
+		return nil, "", nil
 	}
 	return f, path, nil
 }
