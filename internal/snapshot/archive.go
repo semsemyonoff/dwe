@@ -138,6 +138,38 @@ func excludesMatch(excludes []string, relPath string) (bool, error) {
 	return false, nil
 }
 
+// resolveExistingAncestor resolves symlinks on the deepest existing ancestor of
+// dir and appends the non-existing tail so the result is a canonical physical
+// path even when part of the hierarchy does not yet exist. This is needed for
+// the containment check in Pack: if the user supplies --out /tmp/lnk/new/a.tar.gz
+// where /tmp/lnk is a symlink into the snapshot directory and /tmp/lnk/new does
+// not exist yet, EvalSymlinks on the full parent would fail and the check would
+// be silently skipped — letting MkdirAll create the missing component inside the
+// snapshot directory.
+func resolveExistingAncestor(dir string) string {
+	tail := ""
+	p := dir
+	for {
+		if resolved, err := filepath.EvalSymlinks(p); err == nil {
+			if tail == "" {
+				return resolved
+			}
+			return filepath.Join(resolved, tail)
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			// Reached filesystem root without resolving anything.
+			return dir
+		}
+		if tail == "" {
+			tail = filepath.Base(p)
+		} else {
+			tail = filepath.Join(filepath.Base(p), tail)
+		}
+		p = parent
+	}
+}
+
 // pack ------------------------------------------------------------------------
 
 // Pack writes a .tar.gz archive of the snapshot directory plus a .sha256
@@ -160,6 +192,30 @@ func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string
 	if outPath == "" {
 		outPath = filepath.Join(snapshotsRoot, name+".tar.gz")
 	}
+
+	// Reject output paths inside the snapshot directory: the temp file created
+	// in filepath.Dir(outPath) would be discovered by the walk and either
+	// produce a corrupt archive or trigger a disk-filling feedback loop.
+	absSnap, e1 := filepath.Abs(snapDir)
+	absOut, e2 := filepath.Abs(outPath)
+	if e1 == nil && e2 == nil {
+		// Resolve symlinks so a symlinked output directory that physically
+		// resolves inside snapDir is still caught by the containment check.
+		if resolved, err := filepath.EvalSymlinks(absSnap); err == nil {
+			absSnap = resolved
+		}
+		// Resolve the deepest existing ancestor of the output parent so that a
+		// path like --out /tmp/link→snapDir/new/archive.tar.gz is caught even
+		// when the "new/" component does not exist yet (EvalSymlinks would fail
+		// on a non-existent path, silently skipping the resolution).
+		resolvedParent := resolveExistingAncestor(filepath.Dir(absOut))
+		absOut = filepath.Join(resolvedParent, filepath.Base(absOut))
+		sep := string(filepath.Separator)
+		if absOut == absSnap || strings.HasPrefix(absOut, absSnap+sep) {
+			return nil, fmt.Errorf("snapshot pack: output path %s is inside the snapshot directory %s; use a path outside the snapshot", outPath, snapDir)
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return nil, fmt.Errorf("snapshot pack: create out dir: %w", err)
 	}
@@ -389,14 +445,60 @@ func Unpack(tarPath, snapshotsRoot, targetName string, skipConfirm bool, confirm
 		return nil, fmt.Errorf("unpack: read manifest: %w", err)
 	}
 
-	// Atomically install: remove the previous final dir (already confirmed) and rename.
-	if err := os.RemoveAll(finalDir); err != nil {
+	// Install atomically: if the target already exists, rename it to a
+	// temporary backup path first, then rename staging into place, then remove
+	// the backup. If the second rename fails we can restore the backup, so the
+	// previous snapshot is not lost. (RemoveAll-then-rename would lose the old
+	// snapshot on an OS error between the two operations.)
+	//
+	// backupDir is kept alive past the install renames so that a subsequent
+	// SaveManifest failure can still restore the previous snapshot.
+	var backupDir string
+	if _, statErr := os.Stat(finalDir); statErr == nil {
+		var randB [8]byte
+		if _, err := rand.Read(randB[:]); err != nil {
+			cleanupStaging()
+			return nil, fmt.Errorf("unpack: generate backup name: %w", err)
+		}
+		backupDir = filepath.Join(snapshotsRoot, ".unpack-old-"+hex.EncodeToString(randB[:]))
+		if err := os.Rename(finalDir, backupDir); err != nil {
+			cleanupStaging()
+			return nil, fmt.Errorf("unpack: backup existing dir: %w", err)
+		}
+		if err := os.Rename(stagingDir, finalDir); err != nil {
+			// Roll back: restore the backup so the previous snapshot is not lost.
+			_ = os.Rename(backupDir, finalDir)
+			cleanupStaging()
+			return nil, fmt.Errorf("unpack: install: %w", err)
+		}
+	} else if errors.Is(statErr, os.ErrNotExist) {
+		if err := os.Rename(stagingDir, finalDir); err != nil {
+			cleanupStaging()
+			return nil, fmt.Errorf("unpack: install: %w", err)
+		}
+	} else {
 		cleanupStaging()
-		return nil, fmt.Errorf("unpack: remove existing dir: %w", err)
+		return nil, fmt.Errorf("unpack: stat final dir before install: %w", statErr)
 	}
-	if err := os.Rename(stagingDir, finalDir); err != nil {
-		cleanupStaging()
-		return nil, fmt.Errorf("unpack: install: %w", err)
+
+	// Normalize the manifest name to match the installed directory name when
+	// unpacking with --as <different-name>. All downstream reads (list, inspect,
+	// restore vars) derive the name from the manifest, not the directory.
+	if m.Name != targetName {
+		m.Name = targetName
+		if err := SaveManifest(filepath.Join(finalDir, ManifestFileName), m); err != nil {
+			_ = os.RemoveAll(finalDir)
+			if backupDir != "" {
+				_ = os.Rename(backupDir, finalDir)
+			}
+			return nil, fmt.Errorf("unpack: normalize manifest name: %w", err)
+		}
+	}
+
+	// Normalization succeeded (or was not needed); the previous-snapshot backup
+	// is no longer needed.
+	if backupDir != "" {
+		_ = os.RemoveAll(backupDir)
 	}
 
 	return &UnpackResult{

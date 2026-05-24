@@ -318,11 +318,10 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 
 // restoreDevboxFiles copies <snapDir>/devbox/local.yml and
 // <snapDir>/devbox/deploy-state.yml over the working-copy paths in baseDir.
-// Each destination write is atomic. Source files missing from the snapshot
-// are skipped — the snapshot is not required to carry both files.
-//
-// The manifest is consulted opportunistically (to pick the canonical relative
-// paths) but defaults to the standard layout when manifest fields are empty.
+// Each destination write is atomic. When a source file is absent from the
+// snapshot (it did not exist at capture time), the corresponding working-copy
+// file is removed so that the restored state exactly matches the captured
+// state — leaving a stale file would diverge from what was snapshotted.
 func restoreDevboxFiles(snapDir, baseDir string) error {
 	type pair struct{ src, dst string }
 	pairs := []pair{
@@ -333,6 +332,11 @@ func restoreDevboxFiles(snapDir, baseDir string) error {
 		data, err := os.ReadFile(p.src)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
+				// Source absent in snapshot: remove the working-copy file so the
+				// restored state matches what was captured (file did not exist).
+				if rErr := os.Remove(p.dst); rErr != nil && !errors.Is(rErr, os.ErrNotExist) {
+					return fmt.Errorf("remove stale %s: %w", p.dst, rErr)
+				}
 				continue
 			}
 			return fmt.Errorf("read %s: %w", p.src, err)
