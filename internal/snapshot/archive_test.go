@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"archive/tar"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -19,21 +20,15 @@ func validManifestBytes() []byte {
 	return []byte("name: x\ncreated_at: 2026-05-24T00:00:00Z\nproject:\n  name: fixture\n  config_hash: \"\"\n")
 }
 
-func writeChecksumSidecar(t *testing.T, tarPath string) {
-	t.Helper()
-	f, err := os.Open(tarPath)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		t.Fatalf("hash: %v", err)
-	}
-	sum := hex.EncodeToString(h.Sum(nil))
-	line := sum + "  " + filepath.Base(tarPath) + "\n"
-	if err := os.WriteFile(tarPath+".sha256", []byte(line), 0o644); err != nil {
-		t.Fatalf("write sidecar: %v", err)
+// silentOpts builds UnpackOptions with a discarding Stderr writer and the two
+// confirmation callbacks defaulting to "yes" so tests focused on path-safety /
+// signature behavior don't have to wire prompts.
+func silentOpts() UnpackOptions {
+	return UnpackOptions{
+		AssumeYes:        true,
+		Stderr:           io.Discard,
+		ConfirmOverwrite: func() (bool, error) { return true, nil },
+		ConfirmVerify:    func(string) (bool, error) { return true, nil },
 	}
 }
 
@@ -76,37 +71,20 @@ func TestPackUnpack_Roundtrip(t *testing.T) {
 	}
 
 	dst := t.TempDir()
-	ur, err := Unpack(res.OutPath, filepath.Join(dst, "snapshots"), "rt", true, nil)
+	ur, err := Unpack(res.OutPath, filepath.Join(dst, "snapshots"), "rt", silentOpts())
 	if err != nil {
 		t.Fatalf("Unpack: %v", err)
 	}
-	_ = ur
 	if _, err := os.Stat(filepath.Join(ur.SnapshotDir, "data", "a.txt")); err != nil {
 		t.Errorf("a.txt missing after unpack: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(ur.SnapshotDir, "data", "b.tmp")); err == nil {
 		t.Errorf("b.tmp should have been excluded from archive")
 	}
-}
-
-func TestUnpack_RejectsSidecarMismatch(t *testing.T) {
-	tmp := t.TempDir()
-	tarPath := filepath.Join(tmp, "snap.tar.gz")
-	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: validManifestBytes()},
-	})
-	if err := os.WriteFile(tarPath+".sha256",
-		[]byte("0000000000000000000000000000000000000000000000000000000000000000  snap.tar.gz\n"),
-		0o644); err != nil {
-		t.Fatalf("write sidecar: %v", err)
-	}
-	root := filepath.Join(tmp, "snapshots")
-	_, err := Unpack(tarPath, root, "x", true, nil)
-	if err == nil || !strings.Contains(err.Error(), "sha256 mismatch") {
-		t.Fatalf("expected sha256 mismatch error, got %v", err)
-	}
-	if dents, _ := os.ReadDir(root); len(dents) != 0 {
-		t.Errorf("expected no files under %s, got %d entries", root, len(dents))
+	// Manifest in this fixture has no artifacts list, so data/a.txt shows up
+	// as Extra (info-only, no prompt). Verification still ran.
+	if ur.Verification != VerificationWarned {
+		t.Errorf("Verification = %v, want VerificationWarned (extras only)", ur.Verification)
 	}
 }
 
@@ -118,7 +96,7 @@ func TestUnpack_RejectsEscapePath(t *testing.T) {
 		{name: "../etc/passwd", typeflag: tar.TypeReg, body: []byte("x")},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
-	_, err := Unpack(tarPath, root, "x", true, nil)
+	_, err := Unpack(tarPath, root, "x", silentOpts())
 	assertRejected(t, err, "escape")
 	assertNoFinalDirContents(t, root)
 }
@@ -129,7 +107,7 @@ func TestUnpack_RejectsAbsolutePath(t *testing.T) {
 		{name: "/etc/passwd", typeflag: tar.TypeReg, body: []byte("x")},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
-	_, err := Unpack(tarPath, root, "x", true, nil)
+	_, err := Unpack(tarPath, root, "x", silentOpts())
 	assertRejected(t, err, "absolute")
 	assertNoFinalDirContents(t, root)
 }
@@ -140,7 +118,7 @@ func TestUnpack_RejectsSymlink(t *testing.T) {
 		{name: "link", typeflag: tar.TypeSymlink, linkname: "/tmp/whatever"},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
-	_, err := Unpack(tarPath, root, "x", true, nil)
+	_, err := Unpack(tarPath, root, "x", silentOpts())
 	assertRejected(t, err, "symlink")
 }
 
@@ -150,7 +128,7 @@ func TestUnpack_RejectsHardlink(t *testing.T) {
 		{name: "link", typeflag: tar.TypeLink, linkname: "x"},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
-	_, err := Unpack(tarPath, root, "x", true, nil)
+	_, err := Unpack(tarPath, root, "x", silentOpts())
 	assertRejected(t, err, "hardlink")
 }
 
@@ -160,7 +138,7 @@ func TestUnpack_RejectsDevice(t *testing.T) {
 		{name: "dev", typeflag: tar.TypeChar},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
-	_, err := Unpack(tarPath, root, "x", true, nil)
+	_, err := Unpack(tarPath, root, "x", silentOpts())
 	assertRejected(t, err, "device")
 }
 
@@ -177,7 +155,7 @@ func TestUnpack_RejectsFileCountOverflow(t *testing.T) {
 	}
 	writeTarGz(t, tarPath, entries)
 	root := filepath.Join(t.TempDir(), "snapshots")
-	_, err := Unpack(tarPath, root, "x", true, nil)
+	_, err := Unpack(tarPath, root, "x", silentOpts())
 	if err == nil || !strings.Contains(err.Error(), "file count") {
 		t.Fatalf("expected file-count error, got %v", err)
 	}
@@ -190,19 +168,333 @@ func TestUnpack_AcceptsTrustedArchive(t *testing.T) {
 		{name: "data/x.txt", typeflag: tar.TypeReg, body: []byte("trusted")},
 		{name: ManifestFileName, typeflag: tar.TypeReg, body: validManifestBytes()},
 	})
-	writeChecksumSidecar(t, tarPath)
 
 	root := filepath.Join(t.TempDir(), "snapshots")
-	ur, err := Unpack(tarPath, root, "good", true, nil)
+	ur, err := Unpack(tarPath, root, "good", silentOpts())
 	if err != nil {
 		t.Fatalf("Unpack: %v", err)
 	}
-	if !ur.VerifiedChecksum {
-		t.Errorf("expected VerifiedChecksum=true")
+	// Manifest has no artifacts list, but data/x.txt exists on disk — should
+	// show up as Extra and trigger VerificationWarned (no prompt since no
+	// Missing/HashMismatch).
+	if ur.Verification != VerificationWarned {
+		t.Errorf("Verification = %v, want VerificationWarned (extra-only)", ur.Verification)
+	}
+	if len(ur.VerifyReport.Extra) == 0 {
+		t.Errorf("expected Extra to include data/x.txt, got %+v", ur.VerifyReport)
 	}
 	body, err := os.ReadFile(filepath.Join(ur.SnapshotDir, "data", "x.txt"))
 	if err != nil || string(body) != "trusted" {
 		t.Errorf("body=%q err=%v", string(body), err)
+	}
+}
+
+// -- artifact verification ----------------------------------------------------
+
+// manifestWithArtifactsBytes builds a manifest yaml document declaring the
+// given artifacts (path, sha256, size taken from len(body)).
+func manifestWithArtifactsBytes(t *testing.T, artifacts []ArtifactInfo) []byte {
+	t.Helper()
+	m := &Manifest{
+		Name:      "v",
+		CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+		Artifacts: artifacts,
+	}
+	var buf bytes.Buffer
+	if err := writeManifestTo(&buf, m); err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// writeManifestTo round-trips through SaveManifest's marshaller via a tempdir.
+func writeManifestTo(w io.Writer, m *Manifest) error {
+	dir, err := os.MkdirTemp("", "manifest-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	path := filepath.Join(dir, "manifest.yml")
+	if err := SaveManifest(path, m); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+func computeSha256Hex(body []byte) string {
+	h := sha256.New()
+	_, _ = h.Write(body)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func TestUnpack_VerificationHappyPath(t *testing.T) {
+	body := []byte("payload")
+	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
+	})
+	tarPath := filepath.Join(t.TempDir(), "ok.tar.gz")
+	writeTarGz(t, tarPath, []tarEntry{
+		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
+	})
+	root := filepath.Join(t.TempDir(), "snapshots")
+	var stderr bytes.Buffer
+	opts := silentOpts()
+	opts.Stderr = &stderr
+	ur, err := Unpack(tarPath, root, "v", opts)
+	if err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if ur.Verification != VerificationClean {
+		t.Errorf("Verification = %v, want VerificationClean", ur.Verification)
+	}
+	if !ur.VerifyReport.Empty() {
+		t.Errorf("expected empty report, got %+v", ur.VerifyReport)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestUnpack_VerificationMissingDeclined(t *testing.T) {
+	body := []byte("payload")
+	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
+		{Path: "data/missing.txt", Size: 3, Sha256: computeSha256Hex([]byte("xyz"))},
+	})
+	tarPath := filepath.Join(t.TempDir(), "missing.tar.gz")
+	writeTarGz(t, tarPath, []tarEntry{
+		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
+	})
+	root := filepath.Join(t.TempDir(), "snapshots")
+	var stderr bytes.Buffer
+	opts := UnpackOptions{
+		AssumeYes:        false,
+		Stderr:           &stderr,
+		ConfirmOverwrite: func() (bool, error) { return true, nil },
+		ConfirmVerify:    func(string) (bool, error) { return false, nil },
+	}
+	_, err := Unpack(tarPath, root, "v", opts)
+	if err == nil {
+		t.Fatalf("expected verify-declined error")
+	}
+	var declined *UnpackVerifyDeclinedError
+	if !errors.As(err, &declined) {
+		t.Fatalf("expected *UnpackVerifyDeclinedError, got %T: %v", err, err)
+	}
+	if len(declined.Report.Missing) != 1 || declined.Report.Missing[0] != "data/missing.txt" {
+		t.Errorf("Missing = %+v", declined.Report.Missing)
+	}
+	if !strings.Contains(stderr.String(), `warning: artifact "data/missing.txt"`) {
+		t.Errorf("stderr missing expected warning, got %q", stderr.String())
+	}
+	// Final dir must not exist (staging cleaned up).
+	if _, statErr := os.Stat(filepath.Join(root, "v")); statErr == nil {
+		t.Errorf("final dir should not exist after declined verification")
+	}
+}
+
+func TestUnpack_VerificationMissingAccepted(t *testing.T) {
+	body := []byte("payload")
+	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
+		{Path: "data/missing.txt", Size: 3, Sha256: computeSha256Hex([]byte("xyz"))},
+	})
+	tarPath := filepath.Join(t.TempDir(), "missing-ok.tar.gz")
+	writeTarGz(t, tarPath, []tarEntry{
+		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
+	})
+	root := filepath.Join(t.TempDir(), "snapshots")
+	var stderr bytes.Buffer
+	opts := UnpackOptions{
+		AssumeYes:        false,
+		Stderr:           &stderr,
+		ConfirmOverwrite: func() (bool, error) { return true, nil },
+		ConfirmVerify:    func(string) (bool, error) { return true, nil },
+	}
+	ur, err := Unpack(tarPath, root, "v", opts)
+	if err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if ur.Verification != VerificationWarned {
+		t.Errorf("Verification = %v, want VerificationWarned", ur.Verification)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "v")); statErr != nil {
+		t.Errorf("final dir should exist after accepted verification: %v", statErr)
+	}
+}
+
+func TestUnpack_VerificationHashMismatch(t *testing.T) {
+	body := []byte("payload")
+	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex([]byte("different"))},
+	})
+	tarPath := filepath.Join(t.TempDir(), "hash.tar.gz")
+	writeTarGz(t, tarPath, []tarEntry{
+		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
+	})
+	root := filepath.Join(t.TempDir(), "snapshots")
+	var stderr bytes.Buffer
+	opts := UnpackOptions{
+		AssumeYes:        false,
+		Stderr:           &stderr,
+		ConfirmOverwrite: func() (bool, error) { return true, nil },
+		ConfirmVerify:    func(string) (bool, error) { return false, nil },
+	}
+	_, err := Unpack(tarPath, root, "v", opts)
+	var declined *UnpackVerifyDeclinedError
+	if !errors.As(err, &declined) {
+		t.Fatalf("expected *UnpackVerifyDeclinedError, got %v", err)
+	}
+	if len(declined.Report.HashMismatch) != 1 {
+		t.Errorf("HashMismatch len = %d", len(declined.Report.HashMismatch))
+	}
+	if !strings.Contains(stderr.String(), "sha256 mismatch") {
+		t.Errorf("stderr missing sha256 mismatch warning, got %q", stderr.String())
+	}
+}
+
+func TestUnpack_VerificationExtraOnly(t *testing.T) {
+	body := []byte("payload")
+	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
+	})
+	tarPath := filepath.Join(t.TempDir(), "extra.tar.gz")
+	writeTarGz(t, tarPath, []tarEntry{
+		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
+		{name: "data/stowaway.txt", typeflag: tar.TypeReg, body: []byte("uninvited")},
+	})
+	root := filepath.Join(t.TempDir(), "snapshots")
+	var stderr bytes.Buffer
+	// AssumeYes=false but ConfirmVerify will not be called for extras-only.
+	opts := UnpackOptions{
+		AssumeYes:        false,
+		Stderr:           &stderr,
+		ConfirmOverwrite: func() (bool, error) { return true, nil },
+		ConfirmVerify: func(string) (bool, error) {
+			t.Fatalf("ConfirmVerify must not be called for extras-only")
+			return false, nil
+		},
+	}
+	ur, err := Unpack(tarPath, root, "v", opts)
+	if err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if ur.Verification != VerificationWarned {
+		t.Errorf("Verification = %v, want VerificationWarned", ur.Verification)
+	}
+	if len(ur.VerifyReport.Extra) != 1 {
+		t.Errorf("Extra = %+v", ur.VerifyReport.Extra)
+	}
+	if !strings.Contains(stderr.String(), "info: archive contains") {
+		t.Errorf("stderr missing extras info, got %q", stderr.String())
+	}
+}
+
+func TestUnpack_NoVerifyBypass(t *testing.T) {
+	body := []byte("payload")
+	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex([]byte("different"))},
+	})
+	tarPath := filepath.Join(t.TempDir(), "noverify.tar.gz")
+	writeTarGz(t, tarPath, []tarEntry{
+		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
+	})
+	root := filepath.Join(t.TempDir(), "snapshots")
+	var stderr bytes.Buffer
+	opts := UnpackOptions{
+		NoVerify:         true,
+		AssumeYes:        true,
+		Stderr:           &stderr,
+		ConfirmOverwrite: func() (bool, error) { return true, nil },
+		ConfirmVerify:    func(string) (bool, error) { return false, nil },
+	}
+	ur, err := Unpack(tarPath, root, "v", opts)
+	if err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if ur.Verification != VerificationSkipped {
+		t.Errorf("Verification = %v, want VerificationSkipped", ur.Verification)
+	}
+	if !strings.Contains(stderr.String(), "skipping artifact verification") {
+		t.Errorf("expected skip-verification warning, got %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "sha256 mismatch") {
+		t.Errorf("expected no artifact-mismatch warnings with NoVerify, got %q", stderr.String())
+	}
+}
+
+func TestUnpack_AssumeYesAcceptsAll(t *testing.T) {
+	bodyA := []byte("payload")
+	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+		{Path: "data/a.txt", Size: int64(len(bodyA)), Sha256: computeSha256Hex([]byte("nope"))},
+		{Path: "data/missing.txt", Size: 1, Sha256: computeSha256Hex([]byte("x"))},
+	})
+	tarPath := filepath.Join(t.TempDir(), "yes.tar.gz")
+	writeTarGz(t, tarPath, []tarEntry{
+		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: "data/a.txt", typeflag: tar.TypeReg, body: bodyA},
+		{name: "data/stowaway.txt", typeflag: tar.TypeReg, body: []byte("uninvited")},
+	})
+	root := filepath.Join(t.TempDir(), "snapshots")
+	var stderr bytes.Buffer
+	opts := UnpackOptions{
+		AssumeYes:        true,
+		Stderr:           &stderr,
+		ConfirmOverwrite: func() (bool, error) { return true, nil },
+		ConfirmVerify: func(string) (bool, error) {
+			t.Fatalf("ConfirmVerify must not be called with AssumeYes")
+			return false, nil
+		},
+	}
+	ur, err := Unpack(tarPath, root, "v", opts)
+	if err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if ur.Verification != VerificationWarned {
+		t.Errorf("Verification = %v, want VerificationWarned", ur.Verification)
+	}
+	out := stderr.String()
+	if !strings.Contains(out, "missing from archive") || !strings.Contains(out, "sha256 mismatch") || !strings.Contains(out, "info: archive contains") {
+		t.Errorf("expected all three warning lines, got %q", out)
+	}
+}
+
+// -- VerifyExtractedArtifacts path-safety -----------------------------------
+
+func TestVerifyExtractedArtifacts_RejectsEscapePath(t *testing.T) {
+	staging := t.TempDir()
+	m := &Manifest{
+		Artifacts: []ArtifactInfo{
+			{Path: "../escape", Size: 1, Sha256: "x"},
+		},
+	}
+	_, err := VerifyExtractedArtifacts(staging, m)
+	if err == nil || !strings.Contains(err.Error(), "escapes staging") {
+		t.Fatalf("expected escape rejection, got %v", err)
+	}
+}
+
+func TestVerifyExtractedArtifacts_RejectsAbsolutePath(t *testing.T) {
+	staging := t.TempDir()
+	m := &Manifest{
+		Artifacts: []ArtifactInfo{
+			{Path: "/etc/passwd", Size: 1, Sha256: "x"},
+		},
+	}
+	_, err := VerifyExtractedArtifacts(staging, m)
+	if err == nil || !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("expected absolute-path rejection, got %v", err)
 	}
 }
 

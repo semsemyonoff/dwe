@@ -171,7 +171,7 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 9: Unpack — manifest-driven verification with warn + confirm
 
-- [ ] in `internal/snapshot/archive.go`:
+- [x] in `internal/snapshot/archive.go`:
   - delete `VerifyChecksumSidecar` (lines 353–390) and the sidecar-handling block in `Unpack` (lines 395–413)
   - delete the `VerifiedChecksum` field from the unpack result type (line 62) — replace with the structured outcome below so the CLI can summarize without re-verifying or parsing stderr
   - extend `UnpackResult` with:
@@ -188,17 +188,17 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
     ```
     `Verification` is the discriminator; `VerifyReport` carries the actual groups. The CLI summary in Task 10 reads both directly.
   - **do not** weaken any distrust-safe extract invariant (`filepath.IsLocal`, no-symlinks, 50 GiB size cap, 100k entry cap) — these stay verbatim
-- [ ] **preserve the existing overwrite-with-confirmation flow** at `archive.go:416`–`462`:
+- [x] **preserve the existing overwrite-with-confirmation flow** at `archive.go:416`–`462`:
   - existing behavior: if `finalDir` exists, prompt via `confirmUnpackOverwrite` (or skip on `SkipConfirm`); extract to `mkdirRandom(snapshotsRoot, ".unpack-")` staging; on success, rename `finalDir` → backup, rename staging → `finalDir`, then remove backup; on second-rename failure, restore the backup. This rollback path is load-bearing — do **not** simplify it away.
   - **reuse the existing `mkdirRandom` helper** at `archive.go:645`–`661` — it already uses `crypto/rand` for the suffix, blocking TOCTOU symlink pre-creation. No new `MkdirTemp` call needed.
   - the only structural change: insert `VerifyExtractedArtifacts` after `LoadManifest` and before the rename-into-place block. On declined verification, run the existing `cleanupStaging()` and return `&UnpackVerifyDeclinedError{...}` — `finalDir` is untouched because verification fires before the rename-old-aside step.
-- [ ] add post-extract verification helper `VerifyExtractedArtifacts(stagingDir string, m *Manifest) (ArtifactVerifyReport, error)`:
+- [x] add post-extract verification helper `VerifyExtractedArtifacts(stagingDir string, m *Manifest) (ArtifactVerifyReport, error)`:
   - **path-safety gate before opening any file**: `manifest.yml` is archive-controlled, so each `m.Artifacts[i].Path` must be validated *before* `os.Open`. Reject if `filepath.IsAbs(path)` or `!filepath.IsLocal(path)` (clean, no `..`, no absolute, no Windows drive). Then resolve the absolute child as `absChild := filepath.Join(absStagingDir, filepath.FromSlash(path))` — `FromSlash` because manifest paths are normalized to forward-slashes and `Join`/`ContainedRel` need OS-native separators on Windows. Call `pathsafe.ContainedRel(absStagingDir, absChild)` and treat a non-nil error as a fatal verification failure (`return ArtifactVerifyReport{}, fmt.Errorf("verify: manifest artifact path %q escapes staging: %w", path, err)`). This blocks an attacker-crafted manifest from making the verifier read `/etc/passwd` or sibling-snapshot files.
   - after the safety gate, re-hash each artifact by streaming `io.Copy(sha256.New(), f)` (never `io.ReadAll`) — same constraint as the prior plan's scanner
   - record three groups in `ArtifactVerifyReport`: `Missing []string` (in manifest, not on disk), `HashMismatch []ArtifactHashMismatch{Path, ExpectedSha256, ActualSha256}`, `Extra []string` (on disk, not in manifest — walked via the existing `ScanArtifacts` helper)
   - returns an error only on I/O failure during hashing **and on path-safety failure** (the latter is treated as a hard error, not a warn-and-continue, because it indicates a malicious or corrupt manifest)
   - tests must cover: manifest with `../escape`, manifest with absolute path `/etc/passwd`, manifest with a path that `filepath.Clean`s to escape via symlink staging interactions — all rejected as errors, not surfaced as `Missing`
-- [ ] introduce `UnpackOptions` that **preserves the existing overwrite-confirm contract** (`Unpack` today takes `skipConfirm bool` + `confirmOverwrite func() (bool, error)` at `archive.go:400`/`:416`) and adds the verify-confirm leg, with the two prompt callbacks kept distinct:
+- [x] introduce `UnpackOptions` that **preserves the existing overwrite-confirm contract** (`Unpack` today takes `skipConfirm bool` + `confirmOverwrite func() (bool, error)` at `archive.go:400`/`:416`) and adds the verify-confirm leg, with the two prompt callbacks kept distinct:
   ```go
   type UnpackOptions struct {
       NoVerify        bool                       // bypass artifact verification entirely
@@ -209,22 +209,22 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
   }
   ```
   Keeping the two callbacks separate matches `-y` semantics: `AssumeYes` collapses *both* prompts to "yes" without conflating them, and the CLI can plug different prompt wording / themes into each leg.
-- [ ] introduce `type UnpackVerifyDeclinedError struct { Report ArtifactVerifyReport }` with lowercase no-trailing-punct `Error() string`; carries the typed report (not a pre-formatted string) so callers can `errors.As` and re-render
-- [ ] decision policy in `Unpack`:
+- [x] introduce `type UnpackVerifyDeclinedError struct { Report ArtifactVerifyReport }` with lowercase no-trailing-punct `Error() string`; carries the typed report (not a pre-formatted string) so callers can `errors.As` and re-render
+- [x] decision policy in `Unpack`:
   - `NoVerify: true` → **always print `warning: skipping artifact verification at user request (--no-verify)` to Stderr** (security UX: the bypass is visible in CI logs and post-mortems), then skip `VerifyExtractedArtifacts` entirely, rename staging → final, return
   - otherwise call `VerifyExtractedArtifacts`; if all three groups empty, rename and return silently
   - for each non-empty group, write the warning to `Stderr` in the documented wording table; `Missing` and `HashMismatch` additionally trigger a single grouped confirmation prompt (`continue? [y/N]`); `Extra` is info-only, no prompt
   - `AssumeYes: true` → confirmation auto-accepts but warnings still print
   - prompt declined → `os.RemoveAll(stagingDir)`, return `&UnpackVerifyDeclinedError{Report: report}`
-- [ ] warnings are *stderr text*, not `slog.Warn` calls — preserves the single-handling rule (don't both log and return); `Unpack` returns errors only on I/O failures and declined prompts, never on diff content itself
-- [ ] tests in `internal/snapshot/archive_test.go`:
+- [x] warnings are *stderr text*, not `slog.Warn` calls — preserves the single-handling rule (don't both log and return); `Unpack` returns errors only on I/O failures and declined prompts, never on diff content itself
+- [x] tests in `internal/snapshot/archive_test.go`:
   - happy path: clean archive, no warnings, rename succeeds
   - missing artifact: prompt declined → staging cleaned up, no final dir; prompt accepted → final dir created, warning on stderr
   - hash mismatch: same matrix as missing
   - extra artifact in archive: warning printed, no prompt, rename succeeds
   - `NoVerify`: corrupted archive (real hash mismatch) extracts cleanly; test asserts **the explicit `warning: skipping artifact verification …` line is present and no artifact-mismatch warnings are emitted** (consistent with the policy block above)
   - `AssumeYes`: missing + mismatched + extra all present → both warnings print, rename succeeds
-- [ ] run `go test ./internal/snapshot/... -race && make lint` — must pass before task 10
+- [x] run `go test ./internal/snapshot/... -race && make lint` — must pass before task 10
 
 ### Task 10: Unpack CLI surface
 

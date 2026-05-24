@@ -57,9 +57,79 @@ type UnpackResult struct {
 	SnapshotDir string
 	// Manifest is the manifest read from the unpacked snapshot.
 	Manifest *Manifest
-	// VerifiedChecksum is true when a .sha256 sidecar was present and verified.
-	VerifiedChecksum bool
+	// Verification is the discriminator for the verification outcome.
+	Verification VerificationOutcome
+	// VerifyReport carries the per-group artifact verification result.
+	// Zero value when Verification == VerificationSkipped.
+	VerifyReport ArtifactVerifyReport
 }
+
+// VerificationOutcome discriminates the artifact verification result.
+type VerificationOutcome int
+
+const (
+	// VerificationSkipped indicates UnpackOptions.NoVerify=true bypassed the check.
+	VerificationSkipped VerificationOutcome = iota
+	// VerificationClean indicates verification ran and all three groups were empty.
+	VerificationClean
+	// VerificationWarned indicates verification ran, at least one group was non-empty,
+	// and the user (or AssumeYes) accepted continuing.
+	VerificationWarned
+)
+
+// ArtifactVerifyReport groups verification findings between manifest.yml and
+// the on-disk artifacts of an unpacked snapshot.
+type ArtifactVerifyReport struct {
+	// Missing lists snapshot-relative artifact paths declared in the manifest
+	// but not present in the extracted staging directory.
+	Missing []string
+	// HashMismatch lists artifacts present on disk whose sha256 differs from
+	// the manifest entry.
+	HashMismatch []ArtifactHashMismatch
+	// Extra lists snapshot-relative paths found on disk that have no
+	// corresponding entry in the manifest.
+	Extra []string
+}
+
+// ArtifactHashMismatch describes one artifact whose on-disk sha256 differs
+// from the manifest record.
+type ArtifactHashMismatch struct {
+	Path           string
+	ExpectedSha256 string
+	ActualSha256   string
+}
+
+// UnpackOptions configures Unpack behavior. The two confirmation callbacks are
+// intentionally separate: AssumeYes collapses both to "yes" without conflating
+// them, and the CLI can theme each prompt independently.
+type UnpackOptions struct {
+	// NoVerify bypasses artifact verification entirely (still emits the
+	// "skipping artifact verification" warning to Stderr).
+	NoVerify bool
+	// AssumeYes skips both the overwrite and verify confirmation prompts.
+	AssumeYes bool
+	// ConfirmOverwrite is invoked when the target directory already exists.
+	// Nil → treated as a refusal.
+	ConfirmOverwrite func() (bool, error)
+	// ConfirmVerify is invoked when verification finds Missing or HashMismatch
+	// groups non-empty. Nil → treated as a refusal.
+	ConfirmVerify func(prompt string) (bool, error)
+	// Stderr is the writer for warnings and verification notices. Required.
+	Stderr io.Writer
+}
+
+// UnpackVerifyDeclinedError is returned when the user declines to accept the
+// verification warnings. Carries the typed report so callers can re-render.
+type UnpackVerifyDeclinedError struct {
+	Report ArtifactVerifyReport
+}
+
+func (e *UnpackVerifyDeclinedError) Error() string {
+	return "snapshot unpack declined after verification warnings"
+}
+
+// ExitCode returns 0 so fang suppresses an error banner.
+func (e *UnpackVerifyDeclinedError) ExitCode() int { return 0 }
 
 // glob matching ---------------------------------------------------------------
 
@@ -342,73 +412,35 @@ func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string
 
 // unpack ----------------------------------------------------------------------
 
-// VerifyChecksumSidecar reads a .sha256 sidecar next to tarPath (or returns
-// (false, nil) when missing) and returns true on a match, false on mismatch.
-// The sidecar format is "<hex>  <basename>\n" — only the first whitespace-
-// separated token is used to compare.
-func VerifyChecksumSidecar(tarPath string) (present bool, ok bool, err error) {
-	sidecar := tarPath + ".sha256"
-	data, err := os.ReadFile(sidecar)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, false, nil
-		}
-		return false, false, fmt.Errorf("read sidecar %s: %w", sidecar, err)
-	}
-	want := strings.TrimSpace(string(data))
-	if i := strings.IndexAny(want, " \t"); i >= 0 {
-		want = want[:i]
-	}
-	want = strings.ToLower(want)
-	if want == "" {
-		return true, false, fmt.Errorf("sidecar %s: empty checksum", sidecar)
-	}
-
-	f, err := os.Open(tarPath)
-	if err != nil {
-		return true, false, err
-	}
-	defer func() { _ = f.Close() }()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return true, false, err
-	}
-	got := hex.EncodeToString(h.Sum(nil))
-	return true, got == want, nil
-}
-
 // Unpack extracts a .tar.gz archive into <snapshotsRoot>/<targetName>/ with
 // strict safety contract. The caller is responsible for holding project
-// locks. Extraction happens into a sibling temp dir; on any error the temp
-// dir is removed and no partial directory survives at the final path.
+// locks. Extraction happens into a sibling staging dir; on any error the
+// staging dir is removed and no partial directory survives at the final path.
 //
-// If a .sha256 sidecar exists next to tarPath, Unpack verifies it before
-// touching the filesystem. Mismatch → error and no extraction. Missing
-// sidecar → warning is the caller's responsibility (Unpack does not write
-// to stderr); the result's VerifiedChecksum field reports presence.
+// After extraction (and before renaming staging into the final position),
+// artifacts listed in manifest.yml are re-hashed and compared. Missing or
+// hash-mismatched artifacts trigger a single grouped confirmation via
+// opts.ConfirmVerify; declined → staging is removed and an
+// UnpackVerifyDeclinedError is returned. opts.NoVerify bypasses verification
+// entirely (warning is still printed).
 //
-// confirmOverwrite is invoked when the target directory already exists.
-// A nil callback is treated as a refusal.
-func Unpack(tarPath, snapshotsRoot, targetName string, skipConfirm bool, confirmOverwrite func() (bool, error)) (*UnpackResult, error) {
+// opts.ConfirmOverwrite is invoked when the target directory already exists
+// and AssumeYes is false. A nil callback is treated as a refusal.
+func Unpack(tarPath, snapshotsRoot, targetName string, opts UnpackOptions) (*UnpackResult, error) {
 	if err := ValidateName(targetName); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(tarPath); err != nil {
 		return nil, fmt.Errorf("unpack: %s: %w", tarPath, err)
 	}
-
-	present, ok, err := VerifyChecksumSidecar(tarPath)
-	if err != nil {
-		return nil, fmt.Errorf("unpack: checksum: %w", err)
-	}
-	if present && !ok {
-		return nil, fmt.Errorf("unpack: %s: sha256 mismatch with sidecar; refusing to extract", tarPath)
+	if opts.Stderr == nil {
+		return nil, errors.New("unpack: UnpackOptions.Stderr is required")
 	}
 
 	finalDir := filepath.Join(snapshotsRoot, targetName)
 	if _, err := os.Stat(finalDir); err == nil {
-		if !skipConfirm {
-			yes, cErr := confirmUnpackOverwrite(confirmOverwrite)
+		if !opts.AssumeYes {
+			yes, cErr := confirmUnpackOverwrite(opts.ConfirmOverwrite)
 			if cErr != nil {
 				return nil, cErr
 			}
@@ -438,6 +470,48 @@ func Unpack(tarPath, snapshotsRoot, targetName string, skipConfirm bool, confirm
 	if err != nil {
 		cleanupStaging()
 		return nil, fmt.Errorf("unpack: read manifest: %w", err)
+	}
+
+	// Artifact verification. Runs before the install renames so a declined
+	// verification leaves the previous finalDir untouched.
+	var (
+		outcome VerificationOutcome
+		report  ArtifactVerifyReport
+	)
+	if opts.NoVerify {
+		_, _ = fmt.Fprintln(opts.Stderr, "warning: skipping artifact verification at user request (--no-verify)")
+		outcome = VerificationSkipped
+	} else {
+		report, err = VerifyExtractedArtifacts(stagingDir, m)
+		if err != nil {
+			cleanupStaging()
+			return nil, err
+		}
+		if report.Empty() {
+			outcome = VerificationClean
+		} else {
+			printVerifyReport(opts.Stderr, report)
+			if len(report.Missing) > 0 || len(report.HashMismatch) > 0 {
+				yes := opts.AssumeYes
+				if !yes {
+					if opts.ConfirmVerify == nil {
+						cleanupStaging()
+						return nil, &UnpackVerifyDeclinedError{Report: report}
+					}
+					ok, cErr := opts.ConfirmVerify("Continue despite verification warnings?")
+					if cErr != nil {
+						cleanupStaging()
+						return nil, cErr
+					}
+					yes = ok
+				}
+				if !yes {
+					cleanupStaging()
+					return nil, &UnpackVerifyDeclinedError{Report: report}
+				}
+			}
+			outcome = VerificationWarned
+		}
 	}
 
 	// Install atomically: if the target already exists, rename it to a
@@ -500,10 +574,108 @@ func Unpack(tarPath, snapshotsRoot, targetName string, skipConfirm bool, confirm
 	}
 
 	return &UnpackResult{
-		SnapshotDir:      finalDir,
-		Manifest:         m,
-		VerifiedChecksum: present && ok,
+		SnapshotDir:  finalDir,
+		Manifest:     m,
+		Verification: outcome,
+		VerifyReport: report,
 	}, nil
+}
+
+// Empty reports whether all three verification groups are empty.
+func (r ArtifactVerifyReport) Empty() bool {
+	return len(r.Missing) == 0 && len(r.HashMismatch) == 0 && len(r.Extra) == 0
+}
+
+// VerifyExtractedArtifacts re-hashes every artifact recorded in the manifest
+// against the on-disk staging directory and compares the result. It also
+// walks the staging directory for files that are absent from the manifest
+// (the "Extra" group).
+//
+// Manifest-declared paths are validated for containment before being opened:
+// an attacker-crafted manifest cannot make the verifier read files outside
+// the staging directory.
+func VerifyExtractedArtifacts(stagingDir string, m *Manifest) (ArtifactVerifyReport, error) {
+	if m == nil {
+		return ArtifactVerifyReport{}, errors.New("verify: nil manifest")
+	}
+	absStaging, err := filepath.Abs(stagingDir)
+	if err != nil {
+		return ArtifactVerifyReport{}, fmt.Errorf("verify: abs staging: %w", err)
+	}
+
+	declared := make(map[string]ArtifactInfo, len(m.Artifacts))
+	var report ArtifactVerifyReport
+
+	for _, a := range m.Artifacts {
+		// Path safety gate: archive-controlled paths must be local and
+		// contained before any open. Reject before opening (not as "Missing").
+		if a.Path == "" || filepath.IsAbs(a.Path) || strings.HasPrefix(a.Path, "/") {
+			return ArtifactVerifyReport{}, fmt.Errorf("verify: manifest artifact path %q is absolute or empty", a.Path)
+		}
+		if !filepath.IsLocal(a.Path) {
+			return ArtifactVerifyReport{}, fmt.Errorf("verify: manifest artifact path %q escapes staging", a.Path)
+		}
+		absChild := filepath.Join(absStaging, filepath.FromSlash(a.Path))
+		if _, err := pathsafe.ContainedRel(absStaging, absChild); err != nil {
+			return ArtifactVerifyReport{}, fmt.Errorf("verify: manifest artifact path %q escapes staging: %w", a.Path, err)
+		}
+		declared[a.Path] = a
+
+		f, err := os.Open(absChild)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				report.Missing = append(report.Missing, a.Path)
+				continue
+			}
+			return ArtifactVerifyReport{}, fmt.Errorf("verify: open %q: %w", a.Path, err)
+		}
+		h := sha256.New()
+		_, copyErr := io.Copy(h, f)
+		closeErr := f.Close()
+		if copyErr != nil {
+			return ArtifactVerifyReport{}, fmt.Errorf("verify: read %q: %w", a.Path, copyErr)
+		}
+		if closeErr != nil {
+			return ArtifactVerifyReport{}, fmt.Errorf("verify: close %q: %w", a.Path, closeErr)
+		}
+		got := hex.EncodeToString(h.Sum(nil))
+		if !strings.EqualFold(got, a.Sha256) {
+			report.HashMismatch = append(report.HashMismatch, ArtifactHashMismatch{
+				Path:           a.Path,
+				ExpectedSha256: a.Sha256,
+				ActualSha256:   got,
+			})
+		}
+	}
+
+	// Extras: anything on disk under stagingDir that is not the manifest and
+	// not under DevboxSubdir, and not declared.
+	scanned, err := ScanArtifacts(stagingDir)
+	if err != nil {
+		return ArtifactVerifyReport{}, fmt.Errorf("verify: scan staging: %w", err)
+	}
+	for _, s := range scanned {
+		if _, ok := declared[s.Path]; !ok {
+			report.Extra = append(report.Extra, s.Path)
+		}
+	}
+	return report, nil
+}
+
+// printVerifyReport writes the per-line warnings to w in the documented
+// wording. Order: Missing → HashMismatch → Extra (Missing first because it
+// is the most likely to surface partial-archive corruption).
+func printVerifyReport(w io.Writer, r ArtifactVerifyReport) {
+	for _, p := range r.Missing {
+		_, _ = fmt.Fprintf(w, "warning: artifact %q listed in manifest is missing from archive\n", p)
+	}
+	for _, m := range r.HashMismatch {
+		_, _ = fmt.Fprintf(w, "warning: artifact %q sha256 mismatch (manifest=%s, actual=%s)\n",
+			m.Path, m.ExpectedSha256, m.ActualSha256)
+	}
+	for _, p := range r.Extra {
+		_, _ = fmt.Fprintf(w, "info: archive contains %q not listed in manifest\n", p)
+	}
 }
 
 // UnpackCancelledError is returned when the user declines to overwrite an

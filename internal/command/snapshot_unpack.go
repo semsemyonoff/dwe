@@ -67,21 +67,31 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName str
 
 	snapshotsRoot := snapshot.SnapshotsDir(baseDir, snapCfg)
 
-	// Warn if the sidecar is absent.
-	if present, _, _ := snapshot.VerifyChecksumSidecar(tarPath); !present {
-		_, _ = fmt.Fprintf(stderr, "warning: no .sha256 sidecar at %s.sha256 — integrity not verified\n", tarPath)
-	}
-
-	res, err := snapshot.Unpack(tarPath, snapshotsRoot, name, yes, func() (bool, error) {
-		if !ui.IsInteractiveFn(os.Stdin) {
-			_, _ = fmt.Fprintln(stderr, "target snapshot dir already exists; pass --yes to overwrite non-interactively")
-			return false, nil
-		}
-		return ui.RunConfirm(fmt.Sprintf("Overwrite existing snapshot %q?", name), "Overwrite", "Cancel")
+	res, err := snapshot.Unpack(tarPath, snapshotsRoot, name, snapshot.UnpackOptions{
+		AssumeYes: yes,
+		ConfirmOverwrite: func() (bool, error) {
+			if !ui.IsInteractiveFn(os.Stdin) {
+				_, _ = fmt.Fprintln(stderr, "target snapshot dir already exists; pass --yes to overwrite non-interactively")
+				return false, nil
+			}
+			return ui.RunConfirm(fmt.Sprintf("Overwrite existing snapshot %q?", name), "Overwrite", "Cancel")
+		},
+		ConfirmVerify: func(prompt string) (bool, error) {
+			if !ui.IsInteractiveFn(os.Stdin) {
+				_, _ = fmt.Fprintln(stderr, "verification warnings present; pass --yes to continue non-interactively")
+				return false, nil
+			}
+			return ui.RunConfirm(prompt, "Continue", "Cancel")
+		},
+		Stderr: stderr,
 	})
 	if err != nil {
 		if errors.As(err, new(*snapshot.UnpackCancelledError)) {
 			_, _ = fmt.Fprintln(stderr, "snapshot unpack cancelled")
+			return err
+		}
+		if errors.As(err, new(*snapshot.UnpackVerifyDeclinedError)) {
+			_, _ = fmt.Fprintln(stderr, "snapshot unpack declined after verification warnings")
 			return err
 		}
 		return err
@@ -95,8 +105,14 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName str
 	}
 
 	_, _ = fmt.Fprintf(stderr, "snapshot %q unpacked into %s", name, res.SnapshotDir)
-	if res.VerifiedChecksum {
-		_, _ = fmt.Fprint(stderr, " (sha256 verified)")
+	switch res.Verification {
+	case snapshot.VerificationSkipped:
+		_, _ = fmt.Fprint(stderr, " (verification skipped)")
+	case snapshot.VerificationClean:
+		_, _ = fmt.Fprint(stderr, " (verified)")
+	case snapshot.VerificationWarned:
+		n := len(res.VerifyReport.Missing) + len(res.VerifyReport.HashMismatch) + len(res.VerifyReport.Extra)
+		_, _ = fmt.Fprintf(stderr, " (verified with %d warnings)", n)
 	}
 	_, _ = fmt.Fprintln(stderr)
 	return nil
