@@ -228,7 +228,7 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 10: Unpack CLI surface
 
-- [ ] in `internal/command/snapshot_unpack.go`:
+- [x] in `internal/command/snapshot_unpack.go`:
   - remove the "no sidecar" warning block at lines 70–72 and the "sha256 verified" suffix at line 99
   - add `--no-verify` local flag wired into `UnpackOptions.NoVerify`
   - the existing `--yes` / `-y` flag (root or local, whichever already governs snapshot confirmations) maps to `UnpackOptions.AssumeYes`; verify the wiring exists, add it if missing
@@ -240,8 +240,8 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
     - `VerificationClean` → `(verified)`
     - `VerificationWarned` → `(verified with N warnings)` where `N = len(VerifyReport.Missing) + len(VerifyReport.HashMismatch) + len(VerifyReport.Extra)`
     - never re-run verification just to print the summary, and never parse stderr to reconstruct it — both fields are already on the result
-- [ ] tests in `internal/command/snapshot_unpack_test.go`: cover each flag combination against a fixture archive with intentional mismatches (use the helpers built in task 9); assert exit code, stderr content, and final-dir presence
-- [ ] run `go test ./internal/command/... && make lint` — must pass before task 11
+- [x] tests in `internal/command/snapshot_unpack_test.go`: cover each flag combination against a fixture archive with intentional mismatches (use the helpers built in task 9); assert exit code, stderr content, and final-dir presence
+- [x] run `go test ./internal/command/... && make lint` — must pass before task 11
 
 ### Task 11: Documentation for items 1, 2, and 3
 

@@ -19,8 +19,9 @@ import (
 // newSnapshotUnpackCmd: `devbox snapshot unpack <tar-path> [--as=<name>] [-y]`.
 func newSnapshotUnpackCmd(flags *rootFlags) *cobra.Command {
 	var (
-		asName string
-		yes    bool
+		asName   string
+		yes      bool
+		noVerify bool
 	)
 	cmd := &cobra.Command{
 		Use:          "unpack <tar-path>",
@@ -28,15 +29,16 @@ func newSnapshotUnpackCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotUnpack(cmd, flags, args[0], asName, yes)
+			return runSnapshotUnpack(cmd, flags, args[0], asName, yes, noVerify)
 		},
 	}
 	cmd.Flags().StringVar(&asName, "as", "", "name to install the unpacked snapshot as (default derived from the archive basename)")
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip overwrite confirmation when the target dir already exists")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip overwrite and verification confirmations")
+	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "skip post-extract artifact verification against manifest checksums")
 	return cmd
 }
 
-func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName string, yes bool) error {
+func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName string, yes, noVerify bool) error {
 	baseDir := flags.ProjectRoot()
 	stderr := cmd.ErrOrStderr()
 
@@ -69,6 +71,7 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName str
 
 	res, err := snapshot.Unpack(tarPath, snapshotsRoot, name, snapshot.UnpackOptions{
 		AssumeYes: yes,
+		NoVerify:  noVerify,
 		ConfirmOverwrite: func() (bool, error) {
 			if !ui.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "target snapshot dir already exists; pass --yes to overwrite non-interactively")
