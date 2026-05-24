@@ -154,11 +154,11 @@ Current call sites are **gated** by `len(stylesCfg.Header.Lines) > 0` ([root.go:
 
 ### Task 8: Add `internal/ui/logo.go` helper
 
-- [ ] create `internal/ui/logo.go` with two functions:
+- [x] create `internal/ui/logo.go` with two functions:
   - `LogoMark() string` returns `{▪}` with the inner square styled via v1 lipgloss `Foreground(lipgloss.Color(ColorAccent()))` — relies on lipgloss color profile for NO_COLOR / non-TTY downgrade
   - `LogoMarkPlain() string` returns `{▪}` with no styling (use in non-TTY paths, or in v2 contexts that need to compose their own coloring envelope without nested escapes)
-- [ ] write `internal/ui/logo_test.go`: `LogoMark` contains accent escape codes when profile is color; `LogoMarkPlain` never contains escape codes; both produce the same plain character when stripped
-- [ ] run tests — must pass before next task
+- [x] write `internal/ui/logo_test.go`: `LogoMark` contains accent escape codes when profile is color; `LogoMarkPlain` never contains escape codes; both produce the same plain character when stripped
+- [x] run tests — must pass before next task
 
 ### Task 9: Wire `LogoMark` into branded surfaces
 
