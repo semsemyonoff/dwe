@@ -512,6 +512,113 @@ func (v *stylesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	_ = stylesCfg // Unused; just checking that it loads cleanly
 
+	diags = append(diags, stylesRenameDiagnostics(ctx, stylesPath)...)
+
+	return diags
+}
+
+// stylesColorRenames maps old `colors:` keys to their new 7-token target.
+// Keys present in the new schema (accent/success/warning/danger/muted/border/text)
+// are not in this map and pass through silently.
+var stylesColorRenames = map[string]string{
+	"label":               "accent",
+	"section_title":       "accent",
+	"subheader":           "accent",
+	"info":                "accent",
+	"table_header":        "accent",
+	"focus_border":        "accent",
+	"filter_match":        "accent",
+	"pagination_active":   "accent",
+	"mandatory":           "accent",
+	"enabled":             "success",
+	"partial":             "warning",
+	"description":         "muted",
+	"tree_count":          "muted",
+	"tree_arrow":          "muted",
+	"pagination_inactive": "muted",
+	"disabled":            "muted",
+	"table_border":        "border",
+}
+
+func stylesRenameDiagnostics(ctx validate.Context, stylesPath string) []validate.Diagnostic {
+	raw, err := os.ReadFile(stylesPath)
+	if err != nil {
+		return nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil
+	}
+	root := &doc
+	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
+		root = root.Content[0]
+	}
+	if root.Kind != yaml.MappingNode {
+		return nil
+	}
+
+	var diags []validate.Diagnostic
+	file := relPath(ctx.ProjectRoot, stylesPath)
+
+	emit := func(target, message, hint string, line int) {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityWarning,
+			Domain:   "config",
+			Target:   target,
+			File:     file,
+			Line:     line,
+			Message:  message,
+			Hint:     hint,
+		})
+	}
+
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key := root.Content[i]
+		val := root.Content[i+1]
+		switch key.Value {
+		case "colors":
+			if val.Kind != yaml.MappingNode {
+				continue
+			}
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				ck := val.Content[j]
+				cv := val.Content[j+1]
+				if ck.Value == "help" {
+					emit(
+						"config.styles",
+						"colors.help is no longer supported",
+						"remove colors.help — Fang help colors are derived from accent + muted",
+						ck.Line,
+					)
+					continue
+				}
+				if target, ok := stylesColorRenames[ck.Value]; ok {
+					emit(
+						"config.styles",
+						fmt.Sprintf("colors.%s is no longer supported", ck.Value),
+						fmt.Sprintf("rename to colors.%s", target),
+						ck.Line,
+					)
+				}
+				_ = cv
+			}
+		case "header":
+			if val.Kind != yaml.MappingNode {
+				continue
+			}
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				hk := val.Content[j]
+				if hk.Value == "color" {
+					emit(
+						"config.styles",
+						"header.color is no longer supported",
+						"remove header.color — the brand line is always rendered in accent",
+						hk.Line,
+					)
+				}
+			}
+		}
+	}
 	return diags
 }
 

@@ -109,14 +109,14 @@ The package mixes v1 lipgloss (`internal/ui/`) and v2 lipgloss (`internal/ui/cmd
 
 **Scope contract**: old-key diagnostics are emitted **only via `devbox validate`** (the `config.styles` validator). Normal command startup (`devbox`, `devbox cmd`, `devbox run …`, etc.) loads styles silently — only actual parse / read errors from `LoadStylesConfig` may surface to stderr, never rename warnings. Do not hook this validator into root-command init or `PersistentPreRunE`.
 
-- [ ] keep `LoadStylesConfig` lenient (its job is to populate defaults, not to fail the run on unknown keys)
-- [ ] in `stylesValidator.Run`, after the existing `LoadStylesConfig` call, re-read the file as `map[string]any` (or `yaml.Node`) and walk two sub-trees:
+- [x] keep `LoadStylesConfig` lenient (its job is to populate defaults, not to fail the run on unknown keys)
+- [x] in `stylesValidator.Run`, after the existing `LoadStylesConfig` call, re-read the file as `map[string]any` (or `yaml.Node`) and walk two sub-trees:
   - `colors:` — emit a warning diagnostic per unknown key with a rename hint, per the old schema in [internal/config/styles.go:27-57](../../internal/config/styles.go#L27): `label` → `accent`, `section_title` → `accent`, `subheader` → `accent`, `info` → `accent`, `table_header` → `accent`, `focus_border` → `accent`, `filter_match` → `accent`, `pagination_active` → `accent`, `mandatory` → `accent`, `enabled` → `success`, `partial` → `warning`, `description` → `muted`, `tree_count` → `muted`, `tree_arrow` → `muted`, `pagination_inactive` → `muted`, `disabled` → `muted`, `table_border` → `border`. `warning` and `muted` are present in both old and new schemas — pass them through silently (no diagnostic). Also warn on nested `colors.help:` (the old Fang scheme sub-tree, see [styles.go:55-56](../../internal/config/styles.go#L55)) — the whole block is removed, Fang scheme is now derived from `accent` + `muted`
   - `header:` — warn on `color:` (dropped; color is always `accent` now)
   - note: `help:` was nested under `colors:` in the old schema, **not** a top-level key — do not walk a top-level `help:`
-- [ ] one diagnostic per unknown key (no aggregation); use `Diagnostic.Hint` for the rename target (concise; multi-line via `\n` if needed per [feedback_validate_diagnostic_hints])
-- [ ] write tests in `internal/validate/config/devbox_test.go` (or sibling): table-driven, one row per old key, asserting `(yaml input, expected diagnostic set)`; subcase names are the lowercase old key
-- [ ] run tests — must pass before next task
+- [x] one diagnostic per unknown key (no aggregation); use `Diagnostic.Hint` for the rename target (concise; multi-line via `\n` if needed per [feedback_validate_diagnostic_hints])
+- [x] write tests in `internal/validate/config/devbox_test.go` (or sibling): table-driven, one row per old key, asserting `(yaml input, expected diagnostic set)`; subcase names are the lowercase old key
+- [x] run tests — must pass before next task
 
 ### Task 5: Update `docs/reference/config/styles.md`
 

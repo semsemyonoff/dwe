@@ -388,3 +388,164 @@ func TestServicesValidator_InterfaceCompileCheck(t *testing.T) {
 	require.Equal(t, "services", v.ID())
 	require.Equal(t, "config", v.Domain())
 }
+
+func writeStylesFile(t *testing.T, body string) string {
+	t.Helper()
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox", "styles.yml"), []byte(body), 0o644))
+	return root
+}
+
+func TestStylesValidator_RenameWarnings(t *testing.T) {
+	type want struct {
+		msgContains  string
+		hintContains string
+	}
+	tests := []struct {
+		name string
+		yaml string
+		want []want
+	}{
+		{
+			name: "label",
+			yaml: "colors:\n  label: \"#fff\"\n",
+			want: []want{{"colors.label is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "section_title",
+			yaml: "colors:\n  section_title: \"#fff\"\n",
+			want: []want{{"colors.section_title is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "subheader",
+			yaml: "colors:\n  subheader: \"#fff\"\n",
+			want: []want{{"colors.subheader is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "info",
+			yaml: "colors:\n  info: \"#fff\"\n",
+			want: []want{{"colors.info is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "table_header",
+			yaml: "colors:\n  table_header: \"#fff\"\n",
+			want: []want{{"colors.table_header is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "focus_border",
+			yaml: "colors:\n  focus_border: \"#fff\"\n",
+			want: []want{{"colors.focus_border is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "filter_match",
+			yaml: "colors:\n  filter_match: \"#fff\"\n",
+			want: []want{{"colors.filter_match is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "pagination_active",
+			yaml: "colors:\n  pagination_active: \"#fff\"\n",
+			want: []want{{"colors.pagination_active is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "mandatory",
+			yaml: "colors:\n  mandatory: \"#fff\"\n",
+			want: []want{{"colors.mandatory is no longer supported", "rename to colors.accent"}},
+		},
+		{
+			name: "enabled",
+			yaml: "colors:\n  enabled: \"#fff\"\n",
+			want: []want{{"colors.enabled is no longer supported", "rename to colors.success"}},
+		},
+		{
+			name: "partial",
+			yaml: "colors:\n  partial: \"#fff\"\n",
+			want: []want{{"colors.partial is no longer supported", "rename to colors.warning"}},
+		},
+		{
+			name: "description",
+			yaml: "colors:\n  description: \"#fff\"\n",
+			want: []want{{"colors.description is no longer supported", "rename to colors.muted"}},
+		},
+		{
+			name: "tree_count",
+			yaml: "colors:\n  tree_count: \"#fff\"\n",
+			want: []want{{"colors.tree_count is no longer supported", "rename to colors.muted"}},
+		},
+		{
+			name: "tree_arrow",
+			yaml: "colors:\n  tree_arrow: \"#fff\"\n",
+			want: []want{{"colors.tree_arrow is no longer supported", "rename to colors.muted"}},
+		},
+		{
+			name: "pagination_inactive",
+			yaml: "colors:\n  pagination_inactive: \"#fff\"\n",
+			want: []want{{"colors.pagination_inactive is no longer supported", "rename to colors.muted"}},
+		},
+		{
+			name: "disabled",
+			yaml: "colors:\n  disabled: \"#fff\"\n",
+			want: []want{{"colors.disabled is no longer supported", "rename to colors.muted"}},
+		},
+		{
+			name: "table_border",
+			yaml: "colors:\n  table_border: \"#fff\"\n",
+			want: []want{{"colors.table_border is no longer supported", "rename to colors.border"}},
+		},
+		{
+			name: "help_block",
+			yaml: "colors:\n  help:\n    title: \"#fff\"\n",
+			want: []want{{"colors.help is no longer supported", "Fang help colors are derived"}},
+		},
+		{
+			name: "header_color",
+			yaml: "header:\n  color: \"cyan\"\n",
+			want: []want{{"header.color is no longer supported", "always rendered in accent"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeStylesFile(t, tt.yaml)
+			diags := (&stylesValidator{}).Run(validate.Context{ProjectRoot: root})
+			for _, w := range tt.want {
+				d := hasDiag(t, diags, validate.SeverityWarning, w.msgContains)
+				if w.hintContains != "" {
+					require.Contains(t, d.Hint, w.hintContains, "hint mismatch for %s", tt.name)
+				}
+			}
+		})
+	}
+}
+
+func TestStylesValidator_NewTokensSilent(t *testing.T) {
+	yamlBody := `colors:
+  accent: "#fff"
+  success: "#fff"
+  warning: "#fff"
+  danger: "#fff"
+  muted: "#fff"
+  border: "#fff"
+  text: "#fff"
+header:
+  lines:
+    - "hello"
+  font: "ANSI Shadow"
+  tagline: "dev box"
+`
+	root := writeStylesFile(t, yamlBody)
+	diags := (&stylesValidator{}).Run(validate.Context{ProjectRoot: root})
+	for _, d := range diags {
+		require.NotEqual(t, validate.SeverityWarning, d.Severity, "unexpected warning: %s", d.Message)
+	}
+}
+
+func TestStylesValidator_NoFile(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
+	diags := (&stylesValidator{}).Run(validate.Context{ProjectRoot: root})
+	// no styles.yml -> info diagnostic only, no warnings
+	for _, d := range diags {
+		require.NotEqual(t, validate.SeverityWarning, d.Severity)
+	}
+}
