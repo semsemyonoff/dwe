@@ -15,6 +15,7 @@ import (
 	valcmds "devbox-cli/internal/validate/commands"
 	valconfig "devbox-cli/internal/validate/config"
 	valenv "devbox-cli/internal/validate/env"
+	valsnap "devbox-cli/internal/validate/snapshot"
 	valtmpl "devbox-cli/internal/validate/templates"
 
 	"github.com/spf13/cobra"
@@ -40,6 +41,7 @@ func (e *validationFailedError) ExitCode() int {
 func newValidateCmd(flags *rootFlags) *cobra.Command {
 	var strict, quiet bool
 	var stage string
+	var verifyChecksums bool
 
 	cmd := &cobra.Command{
 		Use:   "validate",
@@ -69,11 +71,12 @@ Scope targets:
   devbox validate commands                     - commands validator
   devbox validate env                          - environment readiness probes
   devbox validate checks [id]                  - project checks from devbox/validate.yml
+  devbox validate snapshot [<name>]            - snapshot config + on-disk integrity
 `,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, nil)
+			return runValidate(cmd, flags, strict, quiet, stage, false, nil)
 		},
 	}
 
@@ -89,7 +92,7 @@ Scope targets:
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, []string{"config"})
+			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"config"})
 		},
 	}
 	configCmd.AddCommand(
@@ -113,7 +116,7 @@ Scope targets:
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, []string{"templates"})
+			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"templates"})
 		},
 	}
 	templatesCmd.AddCommand(
@@ -131,7 +134,7 @@ Scope targets:
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, []string{"commands"})
+			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"commands"})
 		},
 	})
 
@@ -143,7 +146,7 @@ Scope targets:
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, []string{"env"})
+			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"env"})
 		},
 	})
 
@@ -159,9 +162,27 @@ Scope targets:
 			if len(args) > 0 {
 				scope = append(scope, args[0])
 			}
-			return runValidate(cmd, flags, strict, quiet, stage, scope)
+			return runValidate(cmd, flags, strict, quiet, stage, false, scope)
 		},
 	})
+
+	// Snapshot validators (config + per-snapshot integrity).
+	snapshotCmd := &cobra.Command{
+		Use:          "snapshot [<name>]",
+		Short:        "Validate snapshot config and on-disk snapshot integrity",
+		Long:         `Validate devbox/snapshot.yml and (optionally with --verify) the on-disk integrity of every snapshot under ./snapshots/. Pass a name to scope checks to a single snapshot.`,
+		Args:         cobra.MaximumNArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scope := []string{"snapshot"}
+			if len(args) > 0 {
+				scope = append(scope, args[0])
+			}
+			return runValidate(cmd, flags, strict, quiet, stage, verifyChecksums, scope)
+		},
+	}
+	snapshotCmd.Flags().BoolVar(&verifyChecksums, "verify", false, "recompute artifact sha256 and compare against the manifest")
+	cmd.AddCommand(snapshotCmd)
 
 	return cmd
 }
@@ -174,7 +195,7 @@ func newValidateConfigSubCmd(flags *rootFlags, strict, quiet *bool, stage *strin
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, *strict, *quiet, *stage, []string{"config", id})
+			return runValidate(cmd, flags, *strict, *quiet, *stage, false, []string{"config", id})
 		},
 	}
 }
@@ -187,14 +208,14 @@ func newValidateTemplateSubCmd(flags *rootFlags, strict, quiet *bool, stage *str
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, *strict, *quiet, *stage, []string{"templates", id})
+			return runValidate(cmd, flags, *strict, *quiet, *stage, false, []string{"templates", id})
 		},
 	}
 }
 
 // runValidate executes validators matching the given scope and renders diagnostics.
 // scope may be nil (run all), or a list like ["config"], ["config", "deploy"], etc.
-func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage string, scope []string) error {
+func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage string, verifyChecksums bool, scope []string) error {
 	cfg, configPath, projectRoot, err := loadForValidate(flags)
 	// cfg may be nil if load failed, but that's OK — validators will report the error.
 	// Only abort for infrastructure errors (cwd unreadable, etc.)
@@ -242,9 +263,20 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 		ValidateCfgLoadErr:  validateLoadErr,
 	}
 
+	// Load snapshot.yml once, threading the result + any load error into
+	// buildRegistry so the snapshot validators can self-skip on parse failures
+	// without re-reading the file from disk.
+	var (
+		snapCfg    *config.SnapshotConfig
+		snapCfgErr error
+	)
+	if projectRoot != "" {
+		snapCfg, snapCfgErr = config.LoadSnapshotConfig(config.SnapshotConfigPath(projectRoot))
+	}
+
 	// Build the registry and run validators. Stage filtering happens at
 	// assembly time for checks; env probes always run (they have no stages).
-	registry := buildRegistry(cfg, validateCfg, validateLoadErr, projectRoot, cmdReg, stage, scope)
+	registry := buildRegistry(cfg, validateCfg, validateLoadErr, snapCfg, snapCfgErr, projectRoot, cmdReg, stage, verifyChecksums, scope)
 	diags := registry.Run(ctx, scope...)
 
 	// Compute summary first so the header can reflect overall severity.
@@ -353,6 +385,11 @@ func validateScopeLabel(scope []string) string {
 			return "project check " + scope[1]
 		}
 		return "your project checks (devbox/validate.yml)"
+	case "snapshot":
+		if len(scope) > 1 {
+			return "snapshot " + scope[1]
+		}
+		return "your snapshot configuration and on-disk snapshots"
 	}
 	return strings.Join(scope, " ")
 }
@@ -366,7 +403,7 @@ func validateScopeLabel(scope []string) string {
 // scope. When config.validate IS in scope it already surfaces the same parse
 // error, so passing the error to AllForStage as well would emit a duplicate
 // diagnostic and inflate the error count.
-func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string, cmdReg *usercommands.Registry, stage string, scope []string) *validate.Registry {
+func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)
@@ -388,6 +425,9 @@ func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig,
 		checksLoadErr = nil
 	}
 	for _, v := range valchecks.AllForStage(validateCfg, checksLoadErr, baseDir, cmdReg, stage) {
+		reg.Register(v)
+	}
+	for _, v := range valsnap.All(cfg, snapCfg, snapCfgErr, baseDir, cmdReg, verifyChecksums) {
 		reg.Register(v)
 	}
 	return reg

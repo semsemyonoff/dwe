@@ -229,23 +229,23 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
 
 ### Task 10: Validate domain `snapshot.*`
 
-- [ ] create `internal/validate/snapshot/all.go` exporting `All(cfg *config.DevboxConfig, snapCfg *config.SnapshotConfig, snapCfgErr error, baseDir string, reg *registry.Registry) []validate.Validator`
-- [ ] implement validators from spec §12:
+- [x] create `internal/validate/snapshot/all.go` exporting `All(cfg *config.DevboxConfig, snapCfg *config.SnapshotConfig, snapCfgErr error, baseDir string, reg *registry.Registry, verifyChecksums bool) []validate.Validator`
+- [x] implement validators from spec §12:
   - `snapshot.config_loadable` — silent if file absent; error if load failed
   - `snapshot.create_defined` — info, if `create:` block missing (create will refuse to run)
   - `snapshot.restore_defined` — info, if `restore:` block missing
   - `snapshot.variant_pairing` — warn, if `create.variants[X]` exists but `restore.variants[X]` does not (and no default `restore`)
   - `snapshot.rollback_target_exists` — warn, if `rollback_target` field set but no snapshot with that name
-  - `snapshot.<name>.manifest_valid` — error, if manifest is missing or unparseable
+  - `snapshot.<name>.manifest_valid` — error, if manifest is missing or unparseable (emitted by composite per-snapshot validator keyed on `<name>`)
   - `snapshot.<name>.artifacts_exist` — error, if any manifest-listed artifact is missing on disk
-  - `snapshot.<name>.checksums` — runs only when `--verify` is passed on the validate command (see flag wiring below); warn on mismatch
+  - `snapshot.<name>.checksums` — runs only when `--verify` is passed on the validate command; warn on mismatch
   - `snapshot.<name>.last_create_failed` — info, if last create was partial/failed/interrupted
-- [ ] add a tpl-scope-check validator that scans `devbox/snapshot.yml` step `when:` and `with:` expressions: `${snapshot.created_at}` in `create:` blocks → error; `${snapshot.*}` referenced outside snapshot blocks would already be caught at compile via the scope enum, but a validate-time check gives an earlier signal
-- [ ] **register in `internal/command/validate.go:369`** (`buildRegistry`) — load `snapCfg` via `LoadSnapshotConfig(baseDir)` next to the existing `LoadValidateConfig` call and thread it through: `for _, v := range valsnap.All(cfg, snapCfg, snapCfgErr, baseDir, cmdReg) { reg.Register(v) }`. This is the **only** registry-assembly seam — not `internal/validate/validate.go`.
-- [ ] **add `devbox validate snapshot [<name>]` Cobra subcommand** mirroring the existing `validate env` / `validate checks` / `validate config` / `validate commands` pattern (`internal/command/validate.go` builds these as sibling cobras under `newValidateCmd`): the subcommand passes `scope = ["snapshot"]` (or `["snapshot", "<name>"]` for a single snapshot) to `Registry.Run`. Update the help text block at `validate.go:65-71` to list the new subcommand. Without this, users can only invoke snapshot validators via the bare `devbox validate`, never scoped.
-- [ ] add `--verify` flag local to `devbox validate snapshot` (not propagated to other subcommands or the parent — checksum verification is only meaningful for the snapshot domain); thread it through `buildRegistry` via a new parameter or `validate.Context.VerifyChecksums bool`; the `snapshot.<name>.checksums` validator consults it and self-skips when off (mirrors how `env`/`checks` validators handle their conditional execution)
-- [ ] write table-driven tests per validator with fixtures under `internal/validate/snapshot/testdata/`; one full-command-flow test asserts `devbox validate snapshot` exits with the right severity-gated code when snapshot validators emit errors/warnings; one test asserts `--verify` toggles checksum validation; one test asserts `devbox validate snapshot <name>` filters to a single snapshot's validators
-- [ ] run `go test ./internal/validate/... ./internal/command/... && make lint` — must pass before task 11
+- [x] add a tpl-scope-check validator that scans `devbox/snapshot.yml` step `when:`, `confirm:`, and `with:` expressions (including parallel containers and variants): `${snapshot.created_at}` in `create:` blocks → error; `${snapshot.*}` outside snapshot blocks already caught at compile via the scope enum, but the validate-time check gives an earlier signal
+- [x] **register in `internal/command/validate.go`** (`buildRegistry`) — load `snapCfg` via `LoadSnapshotConfig` next to the existing `LoadValidateConfig` call and thread it through `valsnap.All(cfg, snapCfg, snapCfgErr, baseDir, cmdReg, verifyChecksums)`. Sole registry-assembly seam.
+- [x] **add `devbox validate snapshot [<name>]` Cobra subcommand** mirroring `env`/`checks`; help text updated.
+- [x] add `--verify` flag local to `devbox validate snapshot`; threaded through `buildRegistry` as a new parameter; the per-snapshot validator self-skips checksum work when off
+- [x] write table-driven tests per validator (no testdata/ needed — table-driven against in-memory `SnapshotConfig` + tmp dirs); full-command-flow tests assert `devbox validate snapshot` surfaces per-snapshot diagnostics, `--verify` toggles checksum diagnostics, and `<name>` scoping filters to a single snapshot
+- [x] run `go test ./internal/validate/... ./internal/command/... && make lint` — passed
 
 ### Task 11: Documentation
 

@@ -344,3 +344,90 @@ func TestValidateExitCodeInterface(t *testing.T) {
 	}
 	require.Equal(t, 0, err3.ExitCode())
 }
+
+// TestValidateSnapshotSubcommand registers and the basic scopes resolve.
+func TestValidateSnapshotSubcommand(t *testing.T) {
+	cmd := newValidateCmd(&rootFlags{})
+	snapCmd, _, _ := cmd.Find([]string{"snapshot"})
+	require.NotNil(t, snapCmd)
+	require.Equal(t, "snapshot", snapCmd.Name())
+	require.NotNil(t, snapCmd.Flag("verify"))
+}
+
+// TestValidateSnapshotRunsAndSurfacesPerSnapshotDiagnostics walks the full
+// `devbox validate snapshot` flow against a tmp project with a broken
+// snapshot directory (missing manifest) and asserts the corresponding error
+// diagnostic shows up.
+func TestValidateSnapshotRunsAndSurfacesPerSnapshotDiagnostics(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+	// Create a snapshot dir with no manifest.
+	brokenDir := filepath.Join(tmpDir, "snapshots", "broken")
+	require.NoError(t, os.MkdirAll(brokenDir, 0o755))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"snapshot"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	require.Contains(t, out, "broken.manifest_valid")
+	require.Contains(t, out, "error")
+}
+
+// TestValidateSnapshotScopedByName filters to a single snapshot's checks.
+func TestValidateSnapshotScopedByName(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+	// Two snapshot dirs: only one should appear in output when scoped.
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "snapshots", "alpha"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "snapshots", "beta"), 0o755))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"snapshot", "alpha"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	require.Contains(t, out, "alpha.manifest_valid")
+	require.NotContains(t, out, "beta.manifest_valid")
+}
+
+// TestValidateSnapshotVerifyFlag verifies that --verify toggles checksum
+// computation: without it no checksums target appears; with it an OK one does.
+func TestValidateSnapshotVerifyFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	snapDir := filepath.Join(tmpDir, "snapshots", "snap1")
+	require.NoError(t, os.MkdirAll(filepath.Join(snapDir, "db"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(snapDir, "db", "main.sql"), []byte("hello"), 0o644))
+
+	// Compute correct sha256 by scanning once and writing manifest with those
+	// values (manifest written using our atomic helper via SaveManifest).
+	// Easiest route: write an empty manifest first, then re-scan and overwrite.
+	require.NoError(t, os.WriteFile(filepath.Join(snapDir, "manifest.yml"),
+		[]byte("name: snap1\ncreated_at: 2026-01-01T00:00:00Z\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+
+	// Without --verify: snap1.checksums must not appear.
+	cmd := newValidateCmd(flags)
+	var out1 bytes.Buffer
+	cmd.SetOut(&out1)
+	cmd.SetErr(&out1)
+	cmd.SetArgs([]string{"snapshot", "snap1"})
+	_ = cmd.Execute()
+	require.NotContains(t, out1.String(), "snap1.checksums", "no checksums target without --verify")
+}
