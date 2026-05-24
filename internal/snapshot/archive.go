@@ -470,7 +470,10 @@ func Unpack(tarPath, snapshotsRoot, targetName string, skipConfirm bool, confirm
 		}
 		if err := os.Rename(stagingDir, finalDir); err != nil {
 			// Roll back: restore the backup so the previous snapshot is not lost.
-			_ = os.Rename(backupDir, finalDir)
+			if rErr := os.Rename(backupDir, finalDir); rErr != nil {
+				cleanupStaging()
+				return nil, fmt.Errorf("unpack: install: %w; also failed to restore previous snapshot from %s: %v", err, backupDir, rErr)
+			}
 			cleanupStaging()
 			return nil, fmt.Errorf("unpack: install: %w", err)
 		}

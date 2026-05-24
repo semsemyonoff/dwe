@@ -198,7 +198,11 @@ func writeRestoreOutcome(w io.Writer, operation string, res *snapshot.RestoreRes
 	}
 	switch res.Status {
 	case snapshot.StatusOk:
-		_, _ = fmt.Fprintf(w, "snapshot %q %sd in %dms\n", res.Manifest.Name, operation, res.DurationMs)
+		verb := operation + "d"
+		if operation == "rollback" {
+			verb = "rolled back"
+		}
+		_, _ = fmt.Fprintf(w, "snapshot %q %s in %dms\n", res.Manifest.Name, verb, res.DurationMs)
 	case snapshot.StatusInterrupted:
 		_, _ = fmt.Fprintf(w, "snapshot %s %q interrupted; pre-restore backup kept at %s\n", operation, res.Manifest.Name, res.BackupDir)
 	default:
