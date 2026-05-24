@@ -15,19 +15,13 @@ import (
 func RenderSummary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySummary) string {
 	var lines []string
 
-	// Line 1: project name and state.
-	var parts []string
-
-	name := cfg.Project.FullName()
-	parts = append(parts, styleAccent.Bold(true).Render("project")+" "+defSep+" "+name)
-
+	// Project identity now lives in the branded header (ui.RenderBrandHeader);
+	// the summary only carries state (when set) and counts.
 	if cfg.State != "" {
-		parts = append(parts, styleMuted.Render("state")+" "+defSep+" "+cfg.State)
+		lines = append(lines, styleMuted.Render("state")+" "+defSep+" "+cfg.State)
 	}
 
-	lines = append(lines, strings.Join(parts, "  "))
-
-	// Line 2: service and tool counts, plus deploy status if available.
+	// Service and tool counts, plus deploy status if available.
 	enabledSvcs, totalSvcs := countServices(cfg)
 	enabledTools := countTools(cfg)
 

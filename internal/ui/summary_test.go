@@ -9,13 +9,18 @@ import (
 	"devbox-cli/internal/deploy/journal"
 )
 
-func TestRenderSummary_ProjectName(t *testing.T) {
+func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {
+	// Project identity has moved to RenderBrandHeader. The summary itself must
+	// no longer contain the project name nor a "project —" label.
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
 	}
 	out := RenderSummary(cfg, nil)
-	if !strings.Contains(out, "devbox-laravel") {
-		t.Errorf("expected project full name in summary, got:\n%s", out)
+	if strings.Contains(out, "devbox-laravel") {
+		t.Errorf("did not expect project full name in summary, got:\n%s", out)
+	}
+	if strings.Contains(out, "project ") {
+		t.Errorf("did not expect 'project' label in summary, got:\n%s", out)
 	}
 }
 
@@ -102,14 +107,26 @@ func TestRenderSummary_ToolCounts(t *testing.T) {
 	}
 }
 
-func TestRenderSummary_TwoLines(t *testing.T) {
+func TestRenderSummary_OneLineWhenNoState(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	out := RenderSummary(cfg, nil)
 	lines := strings.Split(out, "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected exactly 1 line in summary (counts only), got %d:\n%s", len(lines), out)
+	}
+}
+
+func TestRenderSummary_TwoLinesWithState(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "myapp"},
+		State:   "running",
+	}
+	out := RenderSummary(cfg, nil)
+	lines := strings.Split(out, "\n")
 	if len(lines) != 2 {
-		t.Errorf("expected exactly 2 lines in summary, got %d:\n%s", len(lines), out)
+		t.Errorf("expected exactly 2 lines in summary (state + counts), got %d:\n%s", len(lines), out)
 	}
 }
 

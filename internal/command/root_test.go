@@ -177,6 +177,40 @@ project:
 	}
 }
 
+// TestRootCmdBrandHeaderAlwaysPresent verifies the branded identity line is
+// emitted on `devbox` even when no header.lines is configured.
+func TestRootCmdBrandHeaderAlwaysPresent(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgYAML := `schema_version: "2"
+project:
+  name: brandtest
+  prefix: devbox
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+	if err := root.Execute(); err != nil {
+		t.Errorf("root returned error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Devbox") {
+		t.Errorf("expected 'Devbox' brand line in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "devbox-brandtest") {
+		t.Errorf("expected project full name in brand line, got:\n%s", out)
+	}
+}
+
 // TestRootCmdInfoIsNotDuplicated verifies that `devbox info` is a separate code
 // path from root: the info command still exists as a subcommand.
 func TestRootCmdInfoIsNotDuplicated(t *testing.T) {

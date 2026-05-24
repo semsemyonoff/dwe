@@ -139,18 +139,18 @@ The package mixes v1 lipgloss (`internal/ui/`) and v2 lipgloss (`internal/ui/cmd
 
 Current call sites are **gated** by `len(stylesCfg.Header.Lines) > 0` ([root.go:247](../../internal/command/root.go#L247), [info.go:51](../../internal/command/info.go#L51)) — so projects without an explicit `header.lines:` config get no header at all. Task 7 also removes the `project — <name>` summary line ([summary.go:22](../../internal/ui/summary.go#L22)). The new helper must therefore **always run** for the project to retain its identity line; only the ASCII-art block inside the helper is gated.
 
-- [ ] introduce a helper (e.g. `ui.RenderBrandHeader(h BrandHeader) string` with `type BrandHeader struct { Project, Version, Tagline string; Lines []string; Font string }`) that emits in order:
+- [x] introduce a helper (e.g. `ui.RenderBrandHeader(h BrandHeader) string` with `type BrandHeader struct { Project, Version, Tagline string; Lines []string; Font string }`) that emits in order:
   - `Devbox · <project> · <version>` (accent for `Devbox`, project + version in default text / muted) — **always emitted** when called
   - tagline line in muted color if `Tagline != ""`
   - blank line + ASCII art in accent color if `len(Lines) > 0`
-- [ ] in `internal/command/root.go:247-252`, **remove the `len(Lines) > 0` gate around the call** and replace direct `r.ASCII(...)` with an unconditional `RenderBrandHeader(...)` invocation — the helper itself decides whether to render ASCII
-- [ ] in `internal/command/info.go:51-56`, same: drop the outer guard, call `RenderBrandHeader(...)` unconditionally
-- [ ] remove the `project — <name>` line from `internal/ui/summary.go:22` only AFTER confirming the branded header runs for both `devbox` (root) and `devbox info`; the summary line is replaced by the always-emitted brand line
-- [ ] verify nothing else still calls `r.ASCII` with three args (compile fail will catch it; grep to be sure)
-- [ ] write tests for `RenderBrandHeader`: default config (no tagline, no ASCII) still emits the brand identity line; with tagline; with ASCII lines; with all three; project / version empty edge cases
-- [ ] write a test asserting `RenderSummary` no longer contains the `project —` substring (the brand line lives in `RenderBrandHeader`, not in the summary itself)
-- [ ] write a separate integration-style test on the root and `devbox info` command output asserting the brand header is present — render via `cmd.SetOut(buf)` and check for `"Devbox · "` and the project name in the captured stream
-- [ ] run `make test` and `make lint` — must be clean before next task
+- [x] in `internal/command/root.go:247-252`, **remove the `len(Lines) > 0` gate around the call** and replace direct `r.ASCII(...)` with an unconditional `RenderBrandHeader(...)` invocation — the helper itself decides whether to render ASCII
+- [x] in `internal/command/info.go:51-56`, same: drop the outer guard, call `RenderBrandHeader(...)` unconditionally
+- [x] remove the `project — <name>` line from `internal/ui/summary.go:22` only AFTER confirming the branded header runs for both `devbox` (root) and `devbox info`; the summary line is replaced by the always-emitted brand line
+- [x] verify nothing else still calls `r.ASCII` with three args (compile fail will catch it; grep to be sure)
+- [x] write tests for `RenderBrandHeader`: default config (no tagline, no ASCII) still emits the brand identity line; with tagline; with ASCII lines; with all three; project / version empty edge cases
+- [x] write a test asserting `RenderSummary` no longer contains the `project —` substring (the brand line lives in `RenderBrandHeader`, not in the summary itself)
+- [x] write a separate integration-style test on the root and `devbox info` command output asserting the brand header is present — render via `cmd.SetOut(buf)` and check for `"Devbox · "` and the project name in the captured stream (asserts on `"Devbox"` + project full name; the `·` separator is part of the rendered string)
+- [x] run `make test` and `make lint` — must be clean before next task
 
 ### Task 8: Add `internal/ui/logo.go` helper
 

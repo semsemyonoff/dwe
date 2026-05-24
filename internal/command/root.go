@@ -17,6 +17,7 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/version"
 
 	"github.com/spf13/cobra"
 )
@@ -244,13 +245,19 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 	cfg, err := config.LoadConfig(flags.configPath)
 	switch {
 	case err == nil:
-		// Render ASCII art header from styles config if lines are set.
-		if stylesCfg != nil && len(stylesCfg.Header.Lines) > 0 {
-			r := render.NewWriter(cmd.OutOrStdout())
-			if asciiErr := r.ASCII(stylesCfg.Header.Lines, stylesCfg.Header.Font); asciiErr == nil {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout())
-			}
+		// Always render the branded identity line; the ASCII art block inside
+		// the helper is gated by header.lines.
+		header := ui.BrandHeader{
+			Project: cfg.Project.FullName(),
+			Version: version.Version,
 		}
+		if stylesCfg != nil {
+			header.Tagline = stylesCfg.Header.Tagline
+			header.Lines = stylesCfg.Header.Lines
+			header.Font = stylesCfg.Header.Font
+		}
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), ui.RenderBrandHeader(header))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 
 		// Load deploy state and build deploy summary.
 		var deploySummary *statusview.DeploySummary

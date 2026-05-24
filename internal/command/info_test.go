@@ -239,6 +239,39 @@ func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 	}
 }
 
+// TestInfoCmd_BrandHeaderAlwaysPresent verifies the branded identity line is
+// emitted on `devbox info` even when no styles.yml / header.lines is set.
+func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	writeMinimalInfoYML(t, dir, `sections:
+  - id: s1
+    items:
+      - type: definition
+        name: Name
+        value: "{{ .Project.Name }}"
+`)
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"info"})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+	if err := root.Execute(); err != nil {
+		t.Errorf("info command returned error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Devbox") {
+		t.Errorf("expected 'Devbox' brand line in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "devbox-infotest") {
+		t.Errorf("expected project full name in brand line, got:\n%s", out)
+	}
+}
+
 // TestInfoCmd_MissingConfig returns an error when devbox.yml is not found.
 func TestInfoCmd_MissingConfig(t *testing.T) {
 	root := NewRootCmd()
