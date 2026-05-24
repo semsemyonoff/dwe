@@ -202,9 +202,9 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
 
 ### Task 9: `remove`, `pack`, `unpack` with archive safety
 
-- [ ] implement `devbox snapshot remove <name> [-y]` with `Args: cobra.ExactArgs(1)`: acquire locks; confirm; if `remove:` workflow defined run it (Scope: `SnapshotScopeRestoreOrRemove`); `os.RemoveAll(snapshotDir)`; clear current pointer atomically if it pointed here
-- [ ] implement `devbox snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`: **acquire project locks** (`lock.AcquireProjectLocks` from Task 3) before reading the snapshot dir — pack must not race a concurrent `remove`/`create`/`restore`; write `./snapshots/<name>.tar.gz` and a `.sha256` sidecar; honor `pack.exclude` from config; CLI `--exclude` flags append to the config list (do not replace)
-- [ ] implement `devbox snapshot unpack <tar-path> [--as=<name>] [-y]`: **acquire project locks** before writing to `./snapshots/`; with the following **archive-safety contract** (in `internal/snapshot/archive.go`):
+- [x] implement `devbox snapshot remove <name> [-y]` with `Args: cobra.ExactArgs(1)`: acquire locks; confirm; if `remove:` workflow defined run it (Scope: `SnapshotScopeRestoreOrRemove`); `os.RemoveAll(snapshotDir)`; clear current pointer atomically if it pointed here
+- [x] implement `devbox snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`: **acquire project locks** (`lock.AcquireProjectLocks` from Task 3) before reading the snapshot dir — pack must not race a concurrent `remove`/`create`/`restore`; write `./snapshots/<name>.tar.gz` and a `.sha256` sidecar; honor `pack.exclude` from config; CLI `--exclude` flags append to the config list (do not replace)
+- [x] implement `devbox snapshot unpack <tar-path> [--as=<name>] [-y]`: **acquire project locks** before writing to `./snapshots/`; with the following **archive-safety contract** (in `internal/snapshot/archive.go`):
   1. **Path validation — pre-checks on raw header, then join, then `ContainedRel`** (do **not** rely on `filepath.Join` + `ContainedRel` alone; `Join` normalizes `..` away before `ContainedRel` ever sees the original header):
      - reject `filepath.IsAbs(header.Name)` — absolute paths
      - reject `header.Name == ""` or `header.Name == "." ` or `header.Name == ".."`
@@ -214,9 +214,9 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
   3. **Resource caps**: enforce package-level constants `maxUnpackBytes = 50 << 30` (50 GiB) and `maxUnpackFiles = 100_000`; abort with a clear error on overflow (zip-bomb defense). Use `io.LimitReader` wrapping the decompressor. Caps are constants for now — not surfaced in `SnapshotConfig`. If a real need for tuning shows up, promote to config in a follow-up.
   4. **No follow on existing dirs**: when creating a directory, use `os.MkdirAll` with 0o755; when writing a file, use `os.OpenFile(O_CREATE|O_WRONLY|O_EXCL, 0o644)` to refuse overwriting any pre-existing file inside the target.
   5. **Atomic target install**: extract into a sibling temp dir (`./snapshots/.unpack-<random>/`), then `os.Rename` to the final `<name>/`; on any error during extraction, `os.RemoveAll` the temp dir
-- [ ] verify `.sha256` sidecar if present (mismatch → exit 1 with no extraction attempted); when absent, warn on stderr "no checksum sidecar — integrity not verified" but proceed
-- [ ] after extraction, read the manifest; warn if `project.name` differs from the current project; confirm overwrite if target dir exists
-- [ ] write tests: remove deletes dir + clears pointer; pack roundtrip with checksum verification; unpack rejects sha256 mismatch without any filesystem mutation; **malicious tar fixtures** under `internal/snapshot/testdata/archives/`:
+- [x] verify `.sha256` sidecar if present (mismatch → exit 1 with no extraction attempted); when absent, warn on stderr "no checksum sidecar — integrity not verified" but proceed
+- [x] after extraction, read the manifest; warn if `project.name` differs from the current project; confirm overwrite if target dir exists
+- [x] write tests: remove deletes dir + clears pointer; pack roundtrip with checksum verification; unpack rejects sha256 mismatch without any filesystem mutation; **malicious tar fixtures** generated in-test (kept lean — `internal/snapshot/archive_test.go` builds them inline rather than checking binary blobs into `testdata/`):
   - `escape.tar.gz` with entry `../etc/passwd` → rejected
   - `absolute.tar.gz` with entry `/etc/passwd` → rejected
   - `symlink.tar.gz` with a symlink entry → rejected (TypeSymlink)
@@ -225,7 +225,7 @@ The architectural shift: a snapshot workflow IS a `type: workflow` user command,
   - `oversize.tar.gz` with declared total > cap → rejected with cap-exceeded message
   - `bomb.tar.gz` with 100 001 small files → rejected with file-count message
   - each malicious fixture: assert no files written outside the temp staging dir, temp dir is cleaned up
-- [ ] run `go test ./internal/snapshot/... ./... && make lint` — must pass before task 10
+- [x] run `go test ./internal/snapshot/... ./... && make lint` — must pass before task 10
 
 ### Task 10: Validate domain `snapshot.*`
 

@@ -1,0 +1,118 @@
+package command
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/lock"
+	"devbox-cli/internal/render"
+	"devbox-cli/internal/snapshot"
+	"devbox-cli/internal/ui"
+
+	"github.com/spf13/cobra"
+)
+
+// newSnapshotUnpackCmd: `devbox snapshot unpack <tar-path> [--as=<name>] [-y]`.
+func newSnapshotUnpackCmd(flags *rootFlags) *cobra.Command {
+	var (
+		asName string
+		yes    bool
+	)
+	cmd := &cobra.Command{
+		Use:          "unpack <tar-path>",
+		Short:        "Extract a packed snapshot archive into ./snapshots/",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSnapshotUnpack(cmd, flags, args[0], asName, yes)
+		},
+	}
+	cmd.Flags().StringVar(&asName, "as", "", "name to install the unpacked snapshot as (default derived from the archive basename)")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip overwrite confirmation when the target dir already exists")
+	return cmd
+}
+
+func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName string, yes bool) error {
+	baseDir := flags.ProjectRoot()
+	stderr := cmd.ErrOrStderr()
+
+	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
+	if err != nil {
+		return err
+	}
+
+	// Resolve target name: prefer --as, fall back to deriving from archive basename.
+	name := asName
+	if name == "" {
+		name = deriveNameFromTarPath(tarPath)
+	}
+	if err := snapshot.ValidateName(name); err != nil {
+		return fmt.Errorf("snapshot unpack: invalid target name %q: %w", name, err)
+	}
+
+	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
+	if err != nil {
+		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
+			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
+			render.Stdout().Error(lhe.Error())
+			return lhe
+		}
+		return fmt.Errorf("acquiring project locks: %w", err)
+	}
+	defer releaseLocks()
+
+	snapshotsRoot := snapshot.SnapshotsDir(baseDir, snapCfg)
+
+	// Warn if the sidecar is absent.
+	if present, _, _ := snapshot.VerifyChecksumSidecar(tarPath); !present {
+		_, _ = fmt.Fprintf(stderr, "warning: no .sha256 sidecar at %s.sha256 — integrity not verified\n", tarPath)
+	}
+
+	res, err := snapshot.Unpack(tarPath, snapshotsRoot, name, yes, func() (bool, error) {
+		if !ui.IsInteractiveFn(os.Stdin) {
+			_, _ = fmt.Fprintln(stderr, "target snapshot dir already exists; pass --yes to overwrite non-interactively")
+			return false, nil
+		}
+		return ui.RunConfirm(fmt.Sprintf("Overwrite existing snapshot %q?", name), "Overwrite", "Cancel")
+	})
+	if err != nil {
+		if errors.As(err, new(*snapshot.UnpackCancelledError)) {
+			_, _ = fmt.Fprintln(stderr, "snapshot unpack cancelled")
+			return err
+		}
+		return err
+	}
+
+	cfg, cfgErr := config.LoadConfig(flags.configPath)
+	if cfgErr == nil && res.Manifest != nil && res.Manifest.Project.Name != "" && cfg.Project.Name != "" && res.Manifest.Project.Name != cfg.Project.Name {
+		_, _ = fmt.Fprintf(stderr,
+			"warning: archive project name %q differs from current project %q\n",
+			res.Manifest.Project.Name, cfg.Project.Name)
+	}
+
+	_, _ = fmt.Fprintf(stderr, "snapshot %q unpacked into %s", name, res.SnapshotDir)
+	if res.VerifiedChecksum {
+		_, _ = fmt.Fprint(stderr, " (sha256 verified)")
+	}
+	_, _ = fmt.Fprintln(stderr)
+	return nil
+}
+
+// deriveNameFromTarPath returns the basename of tarPath with .tar.gz / .tgz
+// stripped. Validation of the resulting name is left to the caller.
+func deriveNameFromTarPath(tarPath string) string {
+	b := filepath.Base(tarPath)
+	low := strings.ToLower(b)
+	switch {
+	case strings.HasSuffix(low, ".tar.gz"):
+		return b[:len(b)-len(".tar.gz")]
+	case strings.HasSuffix(low, ".tgz"):
+		return b[:len(b)-len(".tgz")]
+	default:
+		return b
+	}
+}
