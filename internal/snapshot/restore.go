@@ -146,10 +146,14 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	}
 
 	// Validate the workflow selection before touching the filesystem so that a
-	// missing restore: block fails fast without overwriting devbox files.
+	// missing restore: block or empty steps list fails fast without overwriting
+	// devbox files.
 	wf, err := SelectWorkflow(p.SnapCfg, "restore", m.Variant)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot %q: %w", p.Name, err)
+	}
+	if len(wf.Steps) == 0 {
+		return nil, fmt.Errorf("snapshot %q: restore workflow has no steps; add steps to restore: in devbox/snapshot.yml", p.Name)
 	}
 
 	if !p.SkipConfirm {
@@ -168,6 +172,10 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	}
 
 	if err := restoreDevboxFiles(snapDir, p.BaseDir); err != nil {
+		if p.Stderr != nil {
+			_, _ = fmt.Fprintf(p.Stderr,
+				"hint: pre-restore devbox files backed up under %s\n", backupDir)
+		}
 		return nil, fmt.Errorf("snapshot %q: restore devbox files: %w", p.Name, err)
 	}
 

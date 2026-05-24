@@ -17,10 +17,14 @@ const diagFile = "devbox/snapshot.yml"
 
 // configLoadableValidator surfaces the outcome of LoadSnapshotConfig.
 // Silent when the file is absent; error when a real parse failure happened.
+// Implements DomainLevelValidator so it runs even when the user scopes to a
+// specific snapshot name — a broken snapshot.yml prevents any per-snapshot
+// validator from loading.
 type configLoadableValidator struct{ err error }
 
-func (v *configLoadableValidator) ID() string     { return "config_loadable" }
-func (v *configLoadableValidator) Domain() string { return "snapshot" }
+func (v *configLoadableValidator) ID() string          { return "config_loadable" }
+func (v *configLoadableValidator) Domain() string      { return "snapshot" }
+func (v *configLoadableValidator) IsDomainLevel() bool { return true }
 func (v *configLoadableValidator) Run(_ validate.Context) []validate.Diagnostic {
 	if v.err == nil {
 		return nil

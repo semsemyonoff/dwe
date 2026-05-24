@@ -223,6 +223,12 @@ func TestGlobToRegexp(t *testing.T) {
 		{".cache/**", "data/x", false},
 		{"foo.txt", "foo.txt", true},
 		{"foo.txt", "bar/foo.txt", false},
+		// **/name: must match the exact name segment, not files that merely end with the name.
+		{"**/dump.sql", "dump.sql", true},
+		{"**/dump.sql", "a/dump.sql", true},
+		{"**/dump.sql", "a/b/dump.sql", true},
+		{"**/dump.sql", "xdump.sql", false},
+		{"**/dump.sql", "a/xdump.sql", false},
 	}
 	for _, tc := range cases {
 		re, err := globToRegexp(tc.glob)
