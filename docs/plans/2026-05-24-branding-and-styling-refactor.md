@@ -205,22 +205,22 @@ Item-description truncation already exists ([internal/ui/cmdbrowser/list_delegat
 
 Pinned beeep (v0.11.2) already takes `Notify(title, body string, icon any) error` and accepts `[]byte` directly on Darwin / Linux / Windows ([notify_darwin.go:18](https://github.com/gen2brain/beeep/blob/v0.11.2/notify_darwin.go#L18), [notify_unix.go:32](https://github.com/gen2brain/beeep/blob/v0.11.2/notify_unix.go#L32), [notify_windows.go:38](https://github.com/gen2brain/beeep/blob/v0.11.2/notify_windows.go#L38)). No temp-file conversion is needed. The existing seam `beeepNotify` is `func(title, body, icon string) error` ([internal/notify/native.go:14](../../internal/notify/native.go#L14)) — widen it to match beeep's actual signature so embedded bytes flow through unchanged.
 
-- [ ] change the `beeepNotify` seam signature to `func(title, body string, icon any) error`
-- [ ] production impl: `return beeep.Notify(title, body, icon)` — pass the `any` through directly, no conversion
-- [ ] in `newNativeBackend()`, set `beeep.AppName = "Devbox"` before returning
-- [ ] refactor `formatEvent` to:
+- [x] change the `beeepNotify` seam signature to `func(title, body string, icon any) error`
+- [x] production impl: `return beeep.Notify(title, body, icon)` — pass the `any` through directly, no conversion (collapsed to `var beeepNotify = beeep.Notify` per gocritic unlambda)
+- [x] in `newNativeBackend()`, set `beeep.AppName = "Devbox"` before returning
+- [x] refactor `formatEvent` to:
   - build `prefix` = `"Devbox"` or `"Devbox · " + ev.Project` if `ev.Project` non-empty
   - title: `✗ <prefix>: <op> failed` / `✓ <prefix>: <op> succeeded`
   - body: `humaniseDuration(ev.Duration)` only, plus `"\n" + truncateErr(ev.Err.Error(), failBodyMaxErrLen)` on failure with non-empty error
   - drop project name from body (it's in title now)
-- [ ] update `nativeBackend.notify` to pass `notificationIcon` (the embedded `[]byte`) into `beeepNotify` — the seam now accepts `any`
-- [ ] update `internal/notify/native_test.go`:
+- [x] update `nativeBackend.notify` to pass `notificationIcon` (the embedded `[]byte`) into `beeepNotify` — the seam now accepts `any`
+- [x] update `internal/notify/native_test.go`:
   - widen mock signatures to `func(title, body string, icon any) error`
   - add cases for `Project == ""` vs `Project == "foo"`; assert title format
   - assert the captured `icon any` is non-nil `[]byte` with PNG magic bytes
   - assert truncation of long error messages still works
-- [ ] verify `TestMain` already uses `goleak.VerifyTestMain` (or add it) since `nativeBackend` spawns a goroutine per notify call
-- [ ] run tests — must pass before next task
+- [x] verify `TestMain` already uses `goleak.VerifyTestMain` (or add it) since `nativeBackend` spawns a goroutine per notify call (added `internal/notify/main_test.go`)
+- [x] run tests — must pass before next task
 
 ### Task 14: Document notification setup
 

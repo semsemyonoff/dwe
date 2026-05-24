@@ -15,9 +15,9 @@ import (
 var notificationIcon []byte
 
 // beeepNotify is the seam for tests to intercept the OS notifier call.
-var beeepNotify = func(title, body, icon string) error {
-	return beeep.Notify(title, body, icon)
-}
+// icon is `any` to mirror beeep.Notify, which accepts a path string or
+// raw []byte across darwin/linux/windows.
+var beeepNotify = beeep.Notify
 
 // nativeBackendTimeout bounds how long Notify waits on the OS notifier
 // before logging and giving up. The goroutine running beeep continues
@@ -40,6 +40,7 @@ type nativeBackend struct {
 }
 
 func newNativeBackend() *nativeBackend {
+	beeep.AppName = "Devbox"
 	return &nativeBackend{sem: make(chan struct{}, 1)}
 }
 
@@ -70,7 +71,7 @@ func (b *nativeBackend) notify(ctx context.Context, ev Event) {
 			<-b.sem // always release before signalling so a concurrent notify() sees the slot as free
 			done <- result
 		}()
-		result = beeepFn(title, body, "")
+		result = beeepFn(title, body, notificationIcon)
 	}()
 
 	timer := time.NewTimer(nativeBackendTimeout)
@@ -96,20 +97,20 @@ func formatEvent(ev Event) (title, body string) {
 		op = "operation"
 	}
 	dur := humaniseDuration(ev.Duration)
-	project := ev.Project
-	if project == "" {
-		project = "—"
+	prefix := "Devbox"
+	if ev.Project != "" {
+		prefix = "Devbox · " + ev.Project
 	}
 	switch ev.Outcome {
 	case OutcomeFailure:
-		title = fmt.Sprintf("✗ Devbox: %s failed", op)
-		body = fmt.Sprintf("%s · %s", project, dur)
+		title = fmt.Sprintf("✗ %s: %s failed", prefix, op)
+		body = dur
 		if ev.Err != nil && ev.Err.Error() != "" {
 			body += "\n" + truncateErr(ev.Err.Error(), failBodyMaxErrLen)
 		}
 	case OutcomeSuccess:
-		title = fmt.Sprintf("✓ Devbox: %s succeeded", op)
-		body = fmt.Sprintf("%s · %s", project, dur)
+		title = fmt.Sprintf("✓ %s: %s succeeded", prefix, op)
+		body = dur
 	default:
 		slog.Debug("notify: unexpected zero-value Outcome; dropping event", "kind", ev.Kind)
 		return "", ""

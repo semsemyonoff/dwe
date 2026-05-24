@@ -18,7 +18,7 @@ func TestNotificationIcon_PNGMagicBytes(t *testing.T) {
 }
 
 // withBeeepNotify swaps beeepNotify for the duration of a subtest.
-func withBeeepNotify(t *testing.T, fn func(title, body, icon string) error) {
+func withBeeepNotify(t *testing.T, fn func(title, body string, icon any) error) {
 	t.Helper()
 	prev := beeepNotify
 	beeepNotify = fn
@@ -33,10 +33,25 @@ func TestFormatEvent_Success(t *testing.T) {
 		Duration:  2500 * time.Millisecond,
 		Project:   "myproj",
 	})
+	if title != "✓ Devbox · myproj: deploy succeeded" {
+		t.Fatalf("title=%q", title)
+	}
+	if body != "2.5s" {
+		t.Fatalf("body=%q", body)
+	}
+}
+
+func TestFormatEvent_SuccessNoProject(t *testing.T) {
+	title, body := formatEvent(Event{
+		Kind:      OpDeploy,
+		Operation: "deploy",
+		Outcome:   OutcomeSuccess,
+		Duration:  2500 * time.Millisecond,
+	})
 	if title != "✓ Devbox: deploy succeeded" {
 		t.Fatalf("title=%q", title)
 	}
-	if body != "myproj · 2.5s" {
+	if body != "2.5s" {
 		t.Fatalf("body=%q", body)
 	}
 }
@@ -49,10 +64,10 @@ func TestFormatEvent_FailureWithErr(t *testing.T) {
 		Project:   "p",
 		Err:       errors.New("connection refused"),
 	})
-	if title != "✗ Devbox: run failed" {
+	if title != "✗ Devbox · p: run failed" {
 		t.Fatalf("title=%q", title)
 	}
-	if body != "p · 500ms\nconnection refused" {
+	if body != "500ms\nconnection refused" {
 		t.Fatalf("body=%q", body)
 	}
 }
@@ -139,9 +154,11 @@ func TestHumaniseDuration(t *testing.T) {
 func TestNativeBackend_NotifyCallsBeeep(t *testing.T) {
 	var calls atomic.Int32
 	var gotTitle, gotBody string
+	var gotIcon any
 	done := make(chan struct{})
-	withBeeepNotify(t, func(title, body, _ string) error {
+	withBeeepNotify(t, func(title, body string, icon any) error {
 		gotTitle, gotBody = title, body
+		gotIcon = icon
 		calls.Add(1)
 		close(done)
 		return nil
@@ -159,14 +176,25 @@ func TestNativeBackend_NotifyCallsBeeep(t *testing.T) {
 	if !strings.Contains(gotTitle, "succeeded") {
 		t.Fatalf("title=%q", gotTitle)
 	}
-	if !strings.Contains(gotBody, "p") {
-		t.Fatalf("body=%q", gotBody)
+	// Project name is now in the title, not the body.
+	if !strings.Contains(gotTitle, "p") {
+		t.Fatalf("title missing project: %q", gotTitle)
+	}
+	if strings.Contains(gotBody, "p") {
+		t.Fatalf("body should not contain project name: %q", gotBody)
+	}
+	iconBytes, ok := gotIcon.([]byte)
+	if !ok {
+		t.Fatalf("icon is %T, want []byte", gotIcon)
+	}
+	if !bytes.HasPrefix(iconBytes, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatalf("icon does not have PNG magic bytes; first=%x", iconBytes[:min(8, len(iconBytes))])
 	}
 }
 
 func TestNativeBackend_SwallowsBeeepError(t *testing.T) {
 	done := make(chan struct{})
-	withBeeepNotify(t, func(_, _, _ string) error {
+	withBeeepNotify(t, func(_, _ string, _ any) error {
 		defer close(done)
 		return fmt.Errorf("boom")
 	})
@@ -183,7 +211,7 @@ func TestNativeBackend_SwallowsBeeepError(t *testing.T) {
 func TestNativeBackend_TimeoutDoesNotBlock(t *testing.T) {
 	block := make(chan struct{})
 	t.Cleanup(func() { close(block) })
-	withBeeepNotify(t, func(_, _, _ string) error {
+	withBeeepNotify(t, func(_, _ string, _ any) error {
 		<-block
 		return nil
 	})
@@ -204,7 +232,7 @@ func TestNativeBackend_TimeoutDoesNotBlock(t *testing.T) {
 func TestNativeBackend_CtxCancelReturnsImmediately(t *testing.T) {
 	block := make(chan struct{})
 	t.Cleanup(func() { close(block) })
-	withBeeepNotify(t, func(_, _, _ string) error {
+	withBeeepNotify(t, func(_, _ string, _ any) error {
 		<-block
 		return nil
 	})
@@ -223,7 +251,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{}, 1)
 	var firstCalls atomic.Int32
-	withBeeepNotify(t, func(_, _, _ string) error {
+	withBeeepNotify(t, func(_, _ string, _ any) error {
 		firstCalls.Add(1)
 		select {
 		case started <- struct{}{}:
@@ -271,7 +299,7 @@ func TestNativeBackend_DropOnBusy(t *testing.T) {
 	// inflate the third-call assertion.
 	var thirdCalls atomic.Int32
 	freshDone := make(chan struct{})
-	withBeeepNotify(t, func(_, _, _ string) error {
+	withBeeepNotify(t, func(_, _ string, _ any) error {
 		thirdCalls.Add(1)
 		close(freshDone)
 		return nil
