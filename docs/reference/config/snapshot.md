@@ -331,6 +331,10 @@ The manifest carries no `schema_version` — devbox is in active pre-release dev
 - `os.RemoveAll(snapshotDir)`.
 - Clears the current pointer atomically when it pointed at this snapshot.
 
+**Live view**
+
+`snapshot create`, `restore`, and `remove` render per-step live status (spinner, ✓ / ✗ / skip icon, elapsed time) for the top-level sequential steps of the selected workflow, matching the `deploy run` styling. Parallel groups inside a workflow keep their existing per-row block rendering nested under the group's step row. The live view is enabled automatically when stdout is a TTY; it is disabled in non-TTY contexts and when `--no-live` is passed, in which case the workflow falls back to plain stdout output. Mid-workflow `confirm:` steps and command-level `confirmation:` prompts pause the live footer for the duration of the prompt and repaint afterwards.
+
 **Pack / unpack** share the same lock contract as the mutating snapshot commands — pack reads the snapshot directory under the lock so a concurrent `remove` / `create` cannot truncate the archive; unpack writes under the lock so concurrent ops cannot race the staging-to-final rename. Unpack enforces a strict archive-safety contract: paths must satisfy `filepath.IsLocal` and `ContainedRel` against the staging root, only regular files and directories are accepted (no symlinks, hardlinks, devices, fifos, global headers), and the extractor caps total bytes (50 GiB) and entry count (100 000) to defuse zip bombs. Extraction stages into a sibling temp dir under `./snapshots/`, then atomic-renames to the final name on success; any failure removes the staging dir without touching the target. If the final directory already exists, the existing tree is renamed aside as a backup; the staging tree is renamed into place; on success the backup is removed, and on second-rename failure the backup is restored. After extraction (and before the rename-into-place step) the staging tree is verified against `manifest.yml` — see [`unpack`](#unpack) for the warn + confirm behavior.
 
 ## Lock interaction
@@ -376,13 +380,13 @@ When either lock is already held by another live process, the operation exits 75
 
 ## Related commands
 
-- `devbox snapshot create <name> [-d <desc>] [--using=<variant>] [-y]`
+- `devbox snapshot create <name> [-d <desc>] [--using=<variant>] [-y] [--no-live]`
 - `devbox snapshot list [--json]`
 - `devbox snapshot current`
 - `devbox snapshot inspect <name|tar-path> [--json]`
-- `devbox snapshot restore <name> [-y]`
-- `devbox snapshot rollback [-y]`
-- `devbox snapshot remove <name> [-y]`
+- `devbox snapshot restore <name> [-y] [--no-live]`
+- `devbox snapshot rollback [-y] [--no-live]`
+- `devbox snapshot remove <name> [-y] [--no-live]`
 - `devbox snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`
 - `devbox snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]`
 - `devbox validate snapshot [<name>] [--verify]`

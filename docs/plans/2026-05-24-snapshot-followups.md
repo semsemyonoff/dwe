@@ -406,9 +406,9 @@ Items 1–3 are correctness/data-safety. Item 4 is UX polish.
 
 ### Task 14: Documentation for item 4
 
-- [ ] `docs/reference/config/snapshot.md`: add a brief note that `snapshot create/restore/remove` now render per-step live status; document the `--no-live` opt-out if it was added in task 13
-- [ ] `docs/internals/packages.md`: update the `internal/command/snapshot.go` and `internal/usercommands/runtime/` entries with one line about the observer surface
-- [ ] no test step — docs-only task
+- [x] `docs/reference/config/snapshot.md`: add a brief note that `snapshot create/restore/remove` now render per-step live status; document the `--no-live` opt-out if it was added in task 13
+- [x] `docs/internals/packages.md`: update the `internal/command/snapshot.go` and `internal/usercommands/runtime/` entries with one line about the observer surface
+- [x] no test step — docs-only task
 
 ### Task 15: Final verification
 
