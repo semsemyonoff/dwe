@@ -80,7 +80,7 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// Find ui.commands sub-node. Check for a non-mapping scalar before
 	// calling findMappingChild, which silently returns nil for non-mappings.
 	if raw := rawChild(&top.UI, "commands"); raw != nil && raw.Kind != yaml.MappingNode {
-		return []validate.Diagnostic{{
+		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "config",
 			Target:   "config.ui",
@@ -88,7 +88,8 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			Line:     raw.Line,
 			Message:  "ui.commands must be a YAML mapping",
 			Hint:     "Expected:\n  ui:\n    commands:\n      default_expanded_depth: 3",
-		}}
+		})
+		return diags
 	}
 	commands := findMappingChild(&top.UI, "commands")
 	if commands == nil {

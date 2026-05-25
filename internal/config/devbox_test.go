@@ -1345,12 +1345,12 @@ func TestLoadServiceDeployConfig_deployServicesPhase(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadServiceDeployConfig(path)
-	if err != nil {
-		t.Fatalf("LoadServiceDeployConfig: %v", err)
+	_, err := LoadServiceDeployConfig(path)
+	if err == nil {
+		t.Fatal("expected error: deploy_services is not allowed in per-service deploy.yml")
 	}
-	if !cfg.Phases[0].DeployServices {
-		t.Error("expected DeployServices=true")
+	if !strings.Contains(err.Error(), "deploy_services is not allowed") {
+		t.Errorf("error should mention 'deploy_services is not allowed', got: %v", err)
 	}
 }
 
@@ -1390,8 +1390,8 @@ func TestLoadServiceDeployConfig_deployServicesWithWhenError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for deploy_services phase with when, got nil")
 	}
-	if !strings.Contains(err.Error(), "does not support when") {
-		t.Errorf("error should mention 'does not support when', got: %v", err)
+	if !strings.Contains(err.Error(), "deploy_services is not allowed") {
+		t.Errorf("error should mention 'deploy_services is not allowed', got: %v", err)
 	}
 }
 

@@ -1746,7 +1746,7 @@ func LoadProjectDeployConfig(deployPath string) (*DeployConfig, error) {
 // File logging defaults to enabled (Log=true) when unset. Override with
 // `log: false` at the top of deploy.yml.
 func LoadServiceDeployConfig(deployPath string) (*DeployConfig, error) {
-	return loadDeployConfigDecode(deployPath, true, true)
+	return loadDeployConfigDecode(deployPath, false, true)
 }
 
 // LoadResetConfig loads the reset pipeline from a reset.yml file.
