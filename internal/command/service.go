@@ -186,8 +186,12 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
 	}
 
-	if len(plan.ApplySteps) == 0 {
+	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
 		return nil
+	}
+	if len(plan.ApplySteps) == 0 {
+		// Hooks exist but no apply step — execute immediately without prompting.
+		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
 	}
 
 	// We're always in TTY here (checked at the top), so prompt the user.

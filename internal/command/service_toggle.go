@@ -117,7 +117,11 @@ func restoreFileState(path string, captured []byte) error {
 func buildContributors(cfg *config.DevboxConfig, toggles []ToggleAction) []Contributor {
 	var contributors []Contributor
 	for _, t := range toggles {
-		svc := cfg.Services[t.Service]
+		svc, ok := cfg.Services[t.Service]
+		if !ok {
+			// Precondition: buildTogglePlan already validated all service names.
+			continue
+		}
 		var hooks *config.ServiceToggleHooks
 		if t.Direction == DirectionEnable {
 			hooks = svc.OnEnable
@@ -431,9 +435,13 @@ func runSingleServiceToggle(
 		return executeTogglePlan(ctx, deps, plan, execOpts)
 	}
 
-	if len(plan.ApplySteps) == 0 {
-		// No apply work needed; pending was not written (all RequiresNone).
+	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
+		// No apply work and no hooks; pending was not written (all RequiresNone).
 		return nil
+	}
+	if len(plan.ApplySteps) == 0 {
+		// Hooks exist but no apply step — execute immediately without prompting.
+		return executeTogglePlan(ctx, deps, plan, execOpts)
 	}
 
 	if ui.IsInteractiveFn(cmd.InOrStdin()) {

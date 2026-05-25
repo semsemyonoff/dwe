@@ -272,7 +272,7 @@ func runInstallDryRun(cmd *cobra.Command, shell, targetPath string) error {
 	}
 	out := cmd.OutOrStdout()
 	_, _ = fmt.Fprintf(out, "Would install %s completion to: %s\n\n", shell, targetPath)
-	lines := strings.SplitN(string(content), "\n", 12)
+	lines := strings.Split(string(content), "\n")
 	limit := min(10, len(lines))
 	for _, l := range lines[:limit] {
 		_, _ = fmt.Fprintln(out, l)

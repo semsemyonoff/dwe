@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,7 +110,7 @@ func validateHooks(
 	case isEnable && req == config.RequiresDeploy:
 		// on_enable.requires == deploy requires a deploy.yml for the service.
 		deployPath := filepath.Join(servicesDir, svcName, "deploy.yml")
-		if _, err := os.Stat(deployPath); os.IsNotExist(err) {
+		if _, err := os.Stat(deployPath); errors.Is(err, os.ErrNotExist) {
 			emit(validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Message:  fmt.Sprintf("service %q declares on_enable.requires: deploy but has no deploy.yml; either add deploy.yml or use requires: restart", svcName),

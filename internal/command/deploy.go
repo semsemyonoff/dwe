@@ -423,10 +423,12 @@ func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, 
 			switch svc.Status {
 			case journal.StatusFailed:
 				scopeStatus = journal.StatusFailed
+				allDeployed = false
 			case journal.StatusPartial:
 				if scopeStatus != journal.StatusFailed {
 					scopeStatus = journal.StatusPartial
 				}
+				allDeployed = false
 			case journal.StatusDeployed:
 				if scopeStatus == "" {
 					scopeStatus = journal.StatusDeployed
