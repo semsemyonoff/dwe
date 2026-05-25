@@ -62,6 +62,7 @@ func darwinNotify(title, body string, icon any) error {
 		return fmt.Errorf("notify: no terminal-notifier or osascript available: %w", err)
 	}
 	sanitize := func(s string) string {
+		s = strings.ReplaceAll(s, `\`, `\\`)
 		s = strings.ReplaceAll(s, `"`, `'`)
 		s = strings.ReplaceAll(s, "\n", " ")
 		s = strings.ReplaceAll(s, "\r", "")

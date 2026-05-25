@@ -8,8 +8,8 @@ const (
 	TypeConfirm     = "confirm"
 )
 
-// SetupConfig represents the parsed setup.yml configuration
-type SetupConfig struct {
+// Config represents the parsed setup.yml configuration
+type Config struct {
 	Questions []Question `yaml:"questions"`
 }
 

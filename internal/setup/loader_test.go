@@ -12,7 +12,7 @@ func TestLoadSetupYAML(t *testing.T) {
 	tests := []struct {
 		name    string
 		content string
-		want    *SetupConfig
+		want    *Config
 		wantErr bool
 	}{
 		{
@@ -24,7 +24,7 @@ func TestLoadSetupYAML(t *testing.T) {
 		{
 			name:    "empty file",
 			content: "",
-			want:    &SetupConfig{Questions: nil},
+			want:    &Config{Questions: nil},
 			wantErr: false,
 		},
 		{
@@ -36,7 +36,7 @@ func TestLoadSetupYAML(t *testing.T) {
     description: What is your app called?
     required: true
     writes: app.name`,
-			want: &SetupConfig{
+			want: &Config{
 				Questions: []Question{
 					{
 						ID:          "app_name",
@@ -62,7 +62,7 @@ func TestLoadSetupYAML(t *testing.T) {
         label: Development
       - value: prod
         label: Production`,
-			want: &SetupConfig{
+			want: &Config{
 				Questions: []Question{
 					{
 						ID:     "env",
@@ -90,7 +90,7 @@ func TestLoadSetupYAML(t *testing.T) {
         label: Authentication
       - value: api
         label: REST API`,
-			want: &SetupConfig{
+			want: &Config{
 				Questions: []Question{
 					{
 						ID:     "features",
@@ -113,7 +113,7 @@ func TestLoadSetupYAML(t *testing.T) {
     type: confirm
     title: Enable Caching?
     writes: app.use_cache`,
-			want: &SetupConfig{
+			want: &Config{
 				Questions: []Question{
 					{
 						ID:     "use_cache",
@@ -134,7 +134,7 @@ func TestLoadSetupYAML(t *testing.T) {
     writes: app.port
     validate:
       preset: port`,
-			want: &SetupConfig{
+			want: &Config{
 				Questions: []Question{
 					{
 						ID:     "port",
@@ -158,7 +158,7 @@ func TestLoadSetupYAML(t *testing.T) {
     writes: app.hostname
     validate:
       regex: '^[a-z][a-z0-9-]*[a-z0-9]$'`,
-			want: &SetupConfig{
+			want: &Config{
 				Questions: []Question{
 					{
 						ID:     "hostname",
@@ -186,7 +186,7 @@ func TestLoadSetupYAML(t *testing.T) {
     writes: app.port
     validate:
       preset: port`,
-			want: &SetupConfig{
+			want: &Config{
 				Questions: []Question{
 					{
 						ID:     "name",
@@ -226,9 +226,9 @@ unknown_field: value`,
 			wantErr: true,
 		},
 		{
-			name: "null questions field",
+			name:    "null questions field",
 			content: `questions:`,
-			want:    &SetupConfig{Questions: nil},
+			want:    &Config{Questions: nil},
 			wantErr: false,
 		},
 	}
@@ -271,7 +271,7 @@ func TestLoadSetupYAMLEmptyFile(t *testing.T) {
 
 	got, err := LoadSetupYAML(path)
 	require.NoError(t, err)
-	require.Equal(t, &SetupConfig{Questions: nil}, got)
+	require.Equal(t, &Config{Questions: nil}, got)
 }
 
 func TestLoadSetupYAMLValidContent(t *testing.T) {

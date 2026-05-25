@@ -11,6 +11,7 @@ import (
 
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/ui"
+
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +38,6 @@ func TestRunDeployMenu_NonTTY_PrintsHelpAndExits(t *testing.T) {
 	}
 }
 
-
 func TestRunDeployMenu_MenuDispatch_Run(t *testing.T) {
 	tmpdir := t.TempDir()
 
@@ -60,7 +60,7 @@ func TestRunDeployMenu_MenuDispatch_Run(t *testing.T) {
 
 	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
-	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply) (menuChoice, error) {
+	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
 		return menuRun, nil
 	}
 
@@ -100,7 +100,7 @@ func TestRunDeployMenu_MenuDispatch_Exit(t *testing.T) {
 
 	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
-	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply) (menuChoice, error) {
+	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
 		return menuExit, nil
 	}
 
@@ -115,12 +115,12 @@ func TestRunDeployMenu_MenuDispatch_Exit(t *testing.T) {
 func TestIsEmptyLocal(t *testing.T) {
 	cases := []struct {
 		name     string
-		input    map[string]interface{}
+		input    map[string]any
 		expected bool
 	}{
-		{"empty map", map[string]interface{}{}, true},
+		{"empty map", map[string]any{}, true},
 		{"nil map", nil, true},
-		{"single key", map[string]interface{}{"services": map[string]interface{}{}}, false},
+		{"single key", map[string]any{"services": map[string]any{}}, false},
 	}
 
 	for _, tc := range cases {

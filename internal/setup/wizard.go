@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"devbox-cli/internal/localconfig"
@@ -11,9 +12,9 @@ import (
 // WizardDeps contains all required collaborators for the wizard executor.
 // The caller loads questions and port conflicts externally and passes them in.
 type WizardDeps struct {
-	BaseDir string
-	LocalPath string
-	Questions []Question
+	BaseDir       string
+	LocalPath     string
+	Questions     []Question
 	PortConflicts []env.PortConflict
 	// AskQuestions is called to collect answers for all questions.
 	// Returns a map of question ID to answer (typed per question type).
@@ -243,5 +244,5 @@ func validateAnswerForQuestion(q Question, answer any) error {
 
 // isErrWizardCanceled checks if an error is ErrWizardCanceled.
 func isErrWizardCanceled(err error) bool {
-	return err != nil && err.Error() == ErrWizardCanceled.Error()
+	return errors.Is(err, ErrWizardCanceled)
 }

@@ -13,7 +13,7 @@ import (
 // A missing file is not an error and returns (nil, nil).
 // Unknown YAML fields cause a parse error.
 // Unknown Type values are permitted here (caught by validators).
-func LoadSetupYAML(path string) (*SetupConfig, error) {
+func LoadSetupYAML(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -24,10 +24,10 @@ func LoadSetupYAML(path string) (*SetupConfig, error) {
 
 	// Handle empty file case
 	if len(data) == 0 {
-		return &SetupConfig{}, nil
+		return &Config{}, nil
 	}
 
-	cfg := &SetupConfig{}
+	cfg := &Config{}
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 

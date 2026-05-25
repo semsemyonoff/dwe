@@ -133,7 +133,10 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	if parent == nil {
 		parent = context.Background()
 	}
-	conflicts, _ := CollectPortConflicts(parent, v.cfg, vctx.ProjectRoot)
+	conflicts, probeErr := CollectPortConflicts(parent, v.cfg, vctx.ProjectRoot)
+	if probeErr != nil {
+		return []validate.Diagnostic{warn("ports_free", "port conflict check could not complete: "+probeErr.Error(), "ensure docker is running and try again")}
+	}
 
 	var diags []validate.Diagnostic
 	for _, pc := range conflicts {

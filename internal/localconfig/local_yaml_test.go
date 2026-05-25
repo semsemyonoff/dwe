@@ -276,7 +276,7 @@ func TestWriteLocalYAML_Atomic_PreservesExistingOnWriteFailure(t *testing.T) {
 	if err := os.Chmod(dir, 0o444); err != nil {
 		t.Skipf("cannot chmod directory (may require root): %v", err)
 	}
-	defer os.Chmod(dir, 0o755) // Restore permissions for cleanup
+	defer func() { _ = os.Chmod(dir, 0o755) }() // Restore permissions for cleanup
 
 	// Try to write - should fail due to permissions
 	updated := map[string]any{"key": "updated"}

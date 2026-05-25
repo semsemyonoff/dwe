@@ -277,12 +277,12 @@ func TestBuildPortOverlay(t *testing.T) {
 
 func TestMergeIntoLocal(t *testing.T) {
 	tests := []struct {
-		name      string
-		existing  map[string]any
-		overlay   map[string]any
-		want      map[string]any
-		wantErr   bool
-		errMsg    string
+		name           string
+		existing       map[string]any
+		overlay        map[string]any
+		want           map[string]any
+		wantErr        bool
+		errMsg         string
 		checkUnchanged bool // if true, verify existing is unchanged after merge
 	}{
 		{
@@ -361,7 +361,7 @@ func TestMergeIntoLocal(t *testing.T) {
 			checkUnchanged: true,
 		},
 		{
-			name: "question and port overlay combined",
+			name:     "question and port overlay combined",
 			existing: map[string]any{},
 			overlay: map[string]any{
 				"app": map[string]any{

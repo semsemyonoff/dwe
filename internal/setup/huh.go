@@ -5,13 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 	"strings"
 
-	"charm.land/bubbles/v2/key"
-	huh "charm.land/huh/v2"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/validate/env"
+
+	"charm.land/bubbles/v2/key"
+	huh "charm.land/huh/v2"
 )
 
 // Form rendering tested manually; see plan Post-Completion.
@@ -164,9 +166,7 @@ func NewHuhAsker(out io.Writer) (
 		answers := make(map[string]any)
 
 		// Add coerced input answers.
-		for id, val := range coercedInputs {
-			answers[id] = val
-		}
+		maps.Copy(answers, coercedInputs)
 
 		// Add select/multiselect/confirm answers from huh bindings.
 		for _, b := range bindings {

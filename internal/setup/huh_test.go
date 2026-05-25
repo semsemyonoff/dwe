@@ -186,7 +186,7 @@ func TestCoerceInputAnswers(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "empty input questions returns empty map",
+			name:      "empty input questions returns empty map",
 			questions: []Question{},
 			raws:      map[string]string{},
 			want:      map[string]any{},
@@ -328,7 +328,7 @@ func TestCoercePortOverrides(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "empty port conflicts returns empty map",
+			name:      "empty port conflicts returns empty map",
 			conflicts: []env.PortConflict{},
 			raws:      map[string]string{},
 			want:      map[PortKey]int{},

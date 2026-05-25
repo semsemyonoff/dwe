@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// hostnameRegex matches RFC 1123 short hostnames: labels [a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])? separated by dots.
+var hostnameRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
+
 // Preset types for answer validation.
 const (
 	PresetPort     = "port"
@@ -71,9 +74,6 @@ func coerceHostname(raw string) (any, error) {
 		return nil, fmt.Errorf("hostname cannot be empty")
 	}
 
-	// RFC 1123 short hostname regex: labels [a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])? separated by dots
-	// Total length < 255, each label < 64.
-	hostnameRegex := regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 	if !hostnameRegex.MatchString(trimmed) {
 		return nil, fmt.Errorf("invalid hostname: %q", trimmed)
 	}

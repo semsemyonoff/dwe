@@ -148,10 +148,10 @@ func TestInspect_RendersAtViewportWidth(t *testing.T) {
 	// with the surrounding content. Narrow terminals get the full panel;
 	// wide ones are capped.
 	cases := []struct {
-		name        string
-		w, h        int
-		wantMin     int // viewport must be at least this wide
-		wantAtMost  int // and at most this wide (e.g. inspectMaxWidth on wide screens)
+		name       string
+		w, h       int
+		wantMin    int // viewport must be at least this wide
+		wantAtMost int // and at most this wide (e.g. inspectMaxWidth on wide screens)
 	}{
 		{"two_panel_120", 120, 26, 60, inspectMaxWidth},
 		{"two_panel_200", 200, 30, inspectMaxWidth, inspectMaxWidth}, // wide terminal caps at inspectMaxWidth

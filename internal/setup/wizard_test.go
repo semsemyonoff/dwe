@@ -26,9 +26,9 @@ func TestWizardRunHappyPath(t *testing.T) {
 	}
 
 	deps := WizardDeps{
-		BaseDir:   testDir,
-		LocalPath: localPath,
-		Questions: questions,
+		BaseDir:       testDir,
+		LocalPath:     localPath,
+		Questions:     questions,
 		PortConflicts: []env.PortConflict{},
 		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
 			return map[string]any{"app_name": "myapp"}, nil
@@ -224,7 +224,7 @@ func TestWizardRunRequiredQuestionMissing(t *testing.T) {
 		},
 		PortConflicts: []env.PortConflict{},
 		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
-			return map[string]any{}, nil  // Missing required_field
+			return map[string]any{}, nil // Missing required_field
 		},
 		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
 			return map[PortKey]int{}, nil
@@ -252,7 +252,7 @@ func TestWizardRunConfirmTypeMismatch(t *testing.T) {
 		},
 		PortConflicts: []env.PortConflict{},
 		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
-			return map[string]any{"agree": "true"}, nil  // Should be bool, not string
+			return map[string]any{"agree": "true"}, nil // Should be bool, not string
 		},
 		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
 			return map[PortKey]int{}, nil
@@ -323,7 +323,7 @@ func TestWizardRunPortOutOfRange(t *testing.T) {
 		},
 		PortConflicts: []env.PortConflict{},
 		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
-			return map[string]any{"port": 99999}, nil  // Out of range
+			return map[string]any{"port": 99999}, nil // Out of range
 		},
 		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
 			return map[PortKey]int{}, nil
@@ -357,7 +357,7 @@ func TestWizardRunPortOverrideOutOfRange(t *testing.T) {
 		},
 		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
 			return map[PortKey]int{
-				{Service: "web", PortName: "http"}: 99999,  // Out of range
+				{Service: "web", PortName: "http"}: 99999, // Out of range
 			}, nil
 		},
 	}
@@ -438,7 +438,7 @@ func TestWizardRunMultiselectInvalidType(t *testing.T) {
 		},
 		PortConflicts: []env.PortConflict{},
 		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
-			return map[string]any{"tags": "tag1"}, nil  // Should be []string, not string
+			return map[string]any{"tags": "tag1"}, nil // Should be []string, not string
 		},
 		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
 			return map[PortKey]int{}, nil
@@ -509,7 +509,7 @@ func TestWizardRunHostnameValidation(t *testing.T) {
 		},
 		PortConflicts: []env.PortConflict{},
 		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
-			return map[string]any{"hostname": "bad host!"}, nil  // Invalid hostname
+			return map[string]any{"hostname": "bad host!"}, nil // Invalid hostname
 		},
 		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
 			return map[PortKey]int{}, nil

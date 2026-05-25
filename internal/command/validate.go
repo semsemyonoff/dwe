@@ -310,7 +310,7 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 	// buildRegistry so the setup validators can self-skip on parse failures
 	// without re-reading the file from disk.
 	var (
-		setupCfg    *setup.SetupConfig
+		setupCfg    *setup.Config
 		setupCfgErr error
 		setupPath   string
 	)
@@ -453,7 +453,7 @@ func validateScopeLabel(scope []string) string {
 // scope. When config.validate IS in scope it already surfaces the same parse
 // error, so passing the error to AllForStage as well would emit a duplicate
 // diagnostic and inflate the error count.
-func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.SetupConfig, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string) *validate.Registry {
+func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.Config, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)

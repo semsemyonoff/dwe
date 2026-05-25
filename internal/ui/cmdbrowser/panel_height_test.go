@@ -77,7 +77,7 @@ func TestModel_TallTree_DoesNotPushFooterOffScreen(t *testing.T) {
 	// the tree — far more than the left panel can hold at any reasonable
 	// terminal size.
 	items := make([]Item, 0, 60)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		id := "g" + itoa(i) + ".cmd"
 		items = append(items, Item{ID: id, Description: "leaf " + itoa(i), Type: "shell"})
 	}
@@ -106,14 +106,14 @@ func TestModel_TallTree_DoesNotPushFooterOffScreen(t *testing.T) {
 func TestModel_TreeScrollsFocusIntoView(t *testing.T) {
 	t.Parallel()
 	items := make([]Item, 0, 50)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		items = append(items, Item{ID: "g" + itoa(i) + ".cmd", Type: "shell"})
 	}
 	m := newModel("pick", items, DefaultOptions(), 120, 20)
 	// Press Down enough times to land near the end. The viewport height
 	// at h=20 is bodyHeight(20)-2 = 20-3-2-2 = 13 rows; pressing Down 30
 	// times forces the focus past the initial window.
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		m.Update(syntheticKey("down"))
 	}
 	idx := m.tree.indexOfFocused()

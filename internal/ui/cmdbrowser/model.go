@@ -495,13 +495,7 @@ func (m *Model) clipTreeToViewport(full string) string {
 	if len(lines) <= h {
 		return full
 	}
-	top := m.treeTopIdx
-	if top < 0 {
-		top = 0
-	}
-	if top > len(lines)-h {
-		top = len(lines) - h
-	}
+	top := min(max(m.treeTopIdx, 0), len(lines)-h)
 	return strings.Join(lines[top:top+h], "\n")
 }
 

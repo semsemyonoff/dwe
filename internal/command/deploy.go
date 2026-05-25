@@ -824,4 +824,3 @@ func collectMissingDeps(services []string, svcDeploys map[string]*config.DeployC
 	sort.Strings(missing)
 	return missing
 }
-

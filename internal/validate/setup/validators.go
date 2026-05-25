@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -65,10 +66,10 @@ type parseValidator struct {
 	path string
 }
 
-func (v *parseValidator) ID() string        { return "parse" }
-func (v *parseValidator) Domain() string    { return "setup" }
+func (v *parseValidator) ID() string     { return "parse" }
+func (v *parseValidator) Domain() string { return "setup" }
 func (v *parseValidator) Run(ctx validate.Context) []validate.Diagnostic {
-	if v.err == nil || os.IsNotExist(v.err) {
+	if v.err == nil || errors.Is(v.err, os.ErrNotExist) {
 		return nil
 	}
 	return []validate.Diagnostic{
@@ -78,11 +79,11 @@ func (v *parseValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 // typeKnownValidator checks that question types are one of input/select/multiselect/confirm.
 type typeKnownValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *typeKnownValidator) ID() string        { return "type_known" }
-func (v *typeKnownValidator) Domain() string    { return "setup" }
+func (v *typeKnownValidator) ID() string     { return "type_known" }
+func (v *typeKnownValidator) Domain() string { return "setup" }
 func (v *typeKnownValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -105,11 +106,11 @@ func (v *typeKnownValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 // idRequiredValidator checks that every question has a non-empty ID.
 type idRequiredValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *idRequiredValidator) ID() string        { return "id_required" }
-func (v *idRequiredValidator) Domain() string    { return "setup" }
+func (v *idRequiredValidator) ID() string     { return "id_required" }
+func (v *idRequiredValidator) Domain() string { return "setup" }
 func (v *idRequiredValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -126,11 +127,11 @@ func (v *idRequiredValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 // idUniqueValidator checks that no two questions share the same ID.
 type idUniqueValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *idUniqueValidator) ID() string        { return "id_unique" }
-func (v *idUniqueValidator) Domain() string    { return "setup" }
+func (v *idUniqueValidator) ID() string     { return "id_unique" }
+func (v *idUniqueValidator) Domain() string { return "setup" }
 func (v *idUniqueValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -152,11 +153,11 @@ func (v *idUniqueValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 // writesRequiredValidator checks that every question has a non-empty writes path.
 type writesRequiredValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *writesRequiredValidator) ID() string        { return "writes_required" }
-func (v *writesRequiredValidator) Domain() string    { return "setup" }
+func (v *writesRequiredValidator) ID() string     { return "writes_required" }
+func (v *writesRequiredValidator) Domain() string { return "setup" }
 func (v *writesRequiredValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -173,11 +174,11 @@ func (v *writesRequiredValidator) Run(ctx validate.Context) []validate.Diagnosti
 
 // writesUniqueValidator checks that no two questions write to the same path.
 type writesUniqueValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *writesUniqueValidator) ID() string        { return "writes_unique" }
-func (v *writesUniqueValidator) Domain() string    { return "setup" }
+func (v *writesUniqueValidator) ID() string     { return "writes_unique" }
+func (v *writesUniqueValidator) Domain() string { return "setup" }
 func (v *writesUniqueValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -199,11 +200,11 @@ func (v *writesUniqueValidator) Run(ctx validate.Context) []validate.Diagnostic 
 
 // writesSyntaxValidator checks that writes paths are valid dot-paths.
 type writesSyntaxValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *writesSyntaxValidator) ID() string        { return "writes_syntax" }
-func (v *writesSyntaxValidator) Domain() string    { return "setup" }
+func (v *writesSyntaxValidator) ID() string     { return "writes_syntax" }
+func (v *writesSyntaxValidator) Domain() string { return "setup" }
 func (v *writesSyntaxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -240,11 +241,11 @@ func validateWritesPath(path string) error {
 
 // writesScopeValidator enforces allowed write targets and shape constraints.
 type writesScopeValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *writesScopeValidator) ID() string        { return "writes_scope" }
-func (v *writesScopeValidator) Domain() string    { return "setup" }
+func (v *writesScopeValidator) ID() string     { return "writes_scope" }
+func (v *writesScopeValidator) Domain() string { return "setup" }
 func (v *writesScopeValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -308,11 +309,11 @@ func validateServiceWritePath(path string) error {
 
 // optionsValidValidator checks that select/multiselect questions have valid options.
 type optionsValidValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *optionsValidValidator) ID() string        { return "options_valid" }
-func (v *optionsValidValidator) Domain() string    { return "setup" }
+func (v *optionsValidValidator) ID() string     { return "options_valid" }
+func (v *optionsValidValidator) Domain() string { return "setup" }
 func (v *optionsValidValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -345,11 +346,11 @@ func (v *optionsValidValidator) Run(ctx validate.Context) []validate.Diagnostic 
 
 // validateExclusiveValidator checks that preset and regex are not both set.
 type validateExclusiveValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *validateExclusiveValidator) ID() string        { return "validate_exclusive" }
-func (v *validateExclusiveValidator) Domain() string    { return "setup" }
+func (v *validateExclusiveValidator) ID() string     { return "validate_exclusive" }
+func (v *validateExclusiveValidator) Domain() string { return "setup" }
 func (v *validateExclusiveValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -366,11 +367,11 @@ func (v *validateExclusiveValidator) Run(ctx validate.Context) []validate.Diagno
 
 // validateOnlyOnInputValidator checks that preset and regex are only used on input types.
 type validateOnlyOnInputValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *validateOnlyOnInputValidator) ID() string        { return "validate_only_on_input" }
-func (v *validateOnlyOnInputValidator) Domain() string    { return "setup" }
+func (v *validateOnlyOnInputValidator) ID() string     { return "validate_only_on_input" }
+func (v *validateOnlyOnInputValidator) Domain() string { return "setup" }
 func (v *validateOnlyOnInputValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -396,11 +397,11 @@ func (v *validateOnlyOnInputValidator) Run(ctx validate.Context) []validate.Diag
 
 // validatePresetKnownValidator checks that preset values are recognized.
 type validatePresetKnownValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *validatePresetKnownValidator) ID() string        { return "validate_preset_known" }
-func (v *validatePresetKnownValidator) Domain() string    { return "setup" }
+func (v *validatePresetKnownValidator) ID() string     { return "validate_preset_known" }
+func (v *validatePresetKnownValidator) Domain() string { return "setup" }
 func (v *validatePresetKnownValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -424,11 +425,11 @@ func (v *validatePresetKnownValidator) Run(ctx validate.Context) []validate.Diag
 
 // validateRegexCompilesValidator checks that regex patterns compile.
 type validateRegexCompilesValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *validateRegexCompilesValidator) ID() string        { return "validate_regex_compiles" }
-func (v *validateRegexCompilesValidator) Domain() string    { return "setup" }
+func (v *validateRegexCompilesValidator) ID() string     { return "validate_regex_compiles" }
+func (v *validateRegexCompilesValidator) Domain() string { return "setup" }
 func (v *validateRegexCompilesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -447,11 +448,11 @@ func (v *validateRegexCompilesValidator) Run(ctx validate.Context) []validate.Di
 
 // typeWritesConsistentValidator checks that question type produces compatible values for the writes target.
 type typeWritesConsistentValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *typeWritesConsistentValidator) ID() string        { return "type_writes_consistent" }
-func (v *typeWritesConsistentValidator) Domain() string    { return "setup" }
+func (v *typeWritesConsistentValidator) ID() string     { return "type_writes_consistent" }
+func (v *typeWritesConsistentValidator) Domain() string { return "setup" }
 func (v *typeWritesConsistentValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil
@@ -484,7 +485,7 @@ func (v *typeWritesConsistentValidator) checkServiceWrites(q setup.Question) []v
 				fmt.Sprintf("question %q writes to services.*.enabled which requires type: confirm (found type: %s)", q.ID, q.Type)))
 		}
 	case "ports":
-		if !(q.Type == setup.TypeInput && q.Validate != nil && q.Validate.Preset == setup.PresetPort) {
+		if q.Type != setup.TypeInput || q.Validate == nil || q.Validate.Preset != setup.PresetPort {
 			diags = append(diags, makeError("type_writes_consistent",
 				fmt.Sprintf("question %q writes to services.*.ports.* which requires type: input with validate.preset: port (found type: %s)", q.ID, q.Type)))
 		}
@@ -499,11 +500,11 @@ func (v *typeWritesConsistentValidator) checkServiceWrites(q setup.Question) []v
 
 // requiredConsistentValidator checks that required is consistent with question type.
 type requiredConsistentValidator struct {
-	cfg *setup.SetupConfig
+	cfg *setup.Config
 }
 
-func (v *requiredConsistentValidator) ID() string        { return "required_consistent" }
-func (v *requiredConsistentValidator) Domain() string    { return "setup" }
+func (v *requiredConsistentValidator) ID() string     { return "required_consistent" }
+func (v *requiredConsistentValidator) Domain() string { return "setup" }
 func (v *requiredConsistentValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	if v.cfg == nil {
 		return nil

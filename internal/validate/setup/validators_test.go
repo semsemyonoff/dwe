@@ -9,27 +9,6 @@ import (
 	"devbox-cli/internal/validate"
 )
 
-// testValidator is a helper to run a validator and check diagnostics.
-type testValidator struct {
-	validator validate.Validator
-	ctx       validate.Context
-}
-
-func (t *testValidator) run() []validate.Diagnostic {
-	return t.validator.Run(t.ctx)
-}
-
-func (t *testValidator) expectErrors(count int) bool {
-	diags := t.run()
-	errorCount := 0
-	for _, d := range diags {
-		if d.Severity == validate.SeverityError {
-			errorCount++
-		}
-	}
-	return errorCount == count
-}
-
 func TestParseValidator(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -68,7 +47,7 @@ func TestParseValidator(t *testing.T) {
 func TestTypeKnownValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -78,7 +57,7 @@ func TestTypeKnownValidator(t *testing.T) {
 		},
 		{
 			name: "valid types",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput},
 					{ID: "q2", Type: setup.TypeSelect},
@@ -90,7 +69,7 @@ func TestTypeKnownValidator(t *testing.T) {
 		},
 		{
 			name: "invalid type",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: "invalid"},
 				},
@@ -99,7 +78,7 @@ func TestTypeKnownValidator(t *testing.T) {
 		},
 		{
 			name: "mixed valid and invalid",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput},
 					{ID: "q2", Type: "bad"},
@@ -124,7 +103,7 @@ func TestTypeKnownValidator(t *testing.T) {
 func TestIdRequiredValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -134,7 +113,7 @@ func TestIdRequiredValidator(t *testing.T) {
 		},
 		{
 			name: "all questions have ids",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput},
 					{ID: "q2", Type: setup.TypeSelect},
@@ -144,7 +123,7 @@ func TestIdRequiredValidator(t *testing.T) {
 		},
 		{
 			name: "empty id",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "", Type: setup.TypeInput},
 				},
@@ -153,7 +132,7 @@ func TestIdRequiredValidator(t *testing.T) {
 		},
 		{
 			name: "multiple missing ids",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput},
 					{ID: "", Type: setup.TypeSelect},
@@ -177,7 +156,7 @@ func TestIdRequiredValidator(t *testing.T) {
 func TestIdUniqueValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -187,7 +166,7 @@ func TestIdUniqueValidator(t *testing.T) {
 		},
 		{
 			name: "all unique ids",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput},
 					{ID: "q2", Type: setup.TypeSelect},
@@ -197,7 +176,7 @@ func TestIdUniqueValidator(t *testing.T) {
 		},
 		{
 			name: "duplicate ids",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput},
 					{ID: "q1", Type: setup.TypeSelect},
@@ -207,7 +186,7 @@ func TestIdUniqueValidator(t *testing.T) {
 		},
 		{
 			name: "multiple duplicates",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput},
 					{ID: "q2", Type: setup.TypeSelect},
@@ -232,7 +211,7 @@ func TestIdUniqueValidator(t *testing.T) {
 func TestWritesRequiredValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -242,7 +221,7 @@ func TestWritesRequiredValidator(t *testing.T) {
 		},
 		{
 			name: "all questions have writes",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "app.setting"},
 					{ID: "q2", Writes: "db.config"},
@@ -252,7 +231,7 @@ func TestWritesRequiredValidator(t *testing.T) {
 		},
 		{
 			name: "empty writes",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: ""},
 				},
@@ -274,7 +253,7 @@ func TestWritesRequiredValidator(t *testing.T) {
 func TestWritesUniqueValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -284,7 +263,7 @@ func TestWritesUniqueValidator(t *testing.T) {
 		},
 		{
 			name: "all unique writes",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "app.setting"},
 					{ID: "q2", Writes: "db.config"},
@@ -294,7 +273,7 @@ func TestWritesUniqueValidator(t *testing.T) {
 		},
 		{
 			name: "duplicate writes",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "app.setting"},
 					{ID: "q2", Writes: "app.setting"},
@@ -317,7 +296,7 @@ func TestWritesUniqueValidator(t *testing.T) {
 func TestWritesSyntaxValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -327,7 +306,7 @@ func TestWritesSyntaxValidator(t *testing.T) {
 		},
 		{
 			name: "valid paths",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "app"},
 					{ID: "q2", Writes: "app.setting"},
@@ -338,7 +317,7 @@ func TestWritesSyntaxValidator(t *testing.T) {
 		},
 		{
 			name: "leading dot",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: ".app"},
 				},
@@ -347,7 +326,7 @@ func TestWritesSyntaxValidator(t *testing.T) {
 		},
 		{
 			name: "trailing dot",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "app."},
 				},
@@ -356,7 +335,7 @@ func TestWritesSyntaxValidator(t *testing.T) {
 		},
 		{
 			name: "invalid segment",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "app.123invalid"},
 				},
@@ -378,7 +357,7 @@ func TestWritesSyntaxValidator(t *testing.T) {
 func TestWritesScopeValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -388,7 +367,7 @@ func TestWritesScopeValidator(t *testing.T) {
 		},
 		{
 			name: "valid custom paths",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "custom"},
 					{ID: "q2", Writes: "app.setting"},
@@ -398,7 +377,7 @@ func TestWritesScopeValidator(t *testing.T) {
 		},
 		{
 			name: "forbidden namespace",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "info.something"},
 				},
@@ -407,7 +386,7 @@ func TestWritesScopeValidator(t *testing.T) {
 		},
 		{
 			name: "invalid services path",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "services.web"},
 				},
@@ -416,7 +395,7 @@ func TestWritesScopeValidator(t *testing.T) {
 		},
 		{
 			name: "valid services.enabled",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "services.web.enabled"},
 				},
@@ -425,7 +404,7 @@ func TestWritesScopeValidator(t *testing.T) {
 		},
 		{
 			name: "valid services.ports.name",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Writes: "services.web.ports.http"},
 				},
@@ -447,7 +426,7 @@ func TestWritesScopeValidator(t *testing.T) {
 func TestOptionsValidValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -457,7 +436,7 @@ func TestOptionsValidValidator(t *testing.T) {
 		},
 		{
 			name: "select with valid options",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeSelect, Options: []setup.Option{
 						{Value: "a", Label: "A"},
@@ -469,7 +448,7 @@ func TestOptionsValidValidator(t *testing.T) {
 		},
 		{
 			name: "select without options",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeSelect, Options: []setup.Option{}},
 				},
@@ -478,7 +457,7 @@ func TestOptionsValidValidator(t *testing.T) {
 		},
 		{
 			name: "select with empty option value",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeSelect, Options: []setup.Option{
 						{Value: "", Label: "None"},
@@ -489,7 +468,7 @@ func TestOptionsValidValidator(t *testing.T) {
 		},
 		{
 			name: "select with duplicate option",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeSelect, Options: []setup.Option{
 						{Value: "a", Label: "A"},
@@ -514,7 +493,7 @@ func TestOptionsValidValidator(t *testing.T) {
 func TestValidateExclusiveValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -524,7 +503,7 @@ func TestValidateExclusiveValidator(t *testing.T) {
 		},
 		{
 			name: "no validation",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Validate: nil},
 				},
@@ -533,7 +512,7 @@ func TestValidateExclusiveValidator(t *testing.T) {
 		},
 		{
 			name: "preset only",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Validate: &setup.ValidateSpec{Preset: setup.PresetPort}},
 				},
@@ -542,7 +521,7 @@ func TestValidateExclusiveValidator(t *testing.T) {
 		},
 		{
 			name: "both preset and regex",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Validate: &setup.ValidateSpec{Preset: setup.PresetPort, Regex: ".*"}},
 				},
@@ -564,7 +543,7 @@ func TestValidateExclusiveValidator(t *testing.T) {
 func TestValidateOnlyOnInputValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -574,7 +553,7 @@ func TestValidateOnlyOnInputValidator(t *testing.T) {
 		},
 		{
 			name: "input with preset",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput, Validate: &setup.ValidateSpec{Preset: setup.PresetPort}},
 				},
@@ -583,7 +562,7 @@ func TestValidateOnlyOnInputValidator(t *testing.T) {
 		},
 		{
 			name: "select with preset",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeSelect, Validate: &setup.ValidateSpec{Preset: setup.PresetPort}},
 				},
@@ -592,7 +571,7 @@ func TestValidateOnlyOnInputValidator(t *testing.T) {
 		},
 		{
 			name: "confirm with regex",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeConfirm, Validate: &setup.ValidateSpec{Regex: ".*"}},
 				},
@@ -614,7 +593,7 @@ func TestValidateOnlyOnInputValidator(t *testing.T) {
 func TestValidatePresetKnownValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -624,7 +603,7 @@ func TestValidatePresetKnownValidator(t *testing.T) {
 		},
 		{
 			name: "known preset",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Validate: &setup.ValidateSpec{Preset: setup.PresetPort}},
 				},
@@ -633,7 +612,7 @@ func TestValidatePresetKnownValidator(t *testing.T) {
 		},
 		{
 			name: "unknown preset",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Validate: &setup.ValidateSpec{Preset: "unknown"}},
 				},
@@ -655,7 +634,7 @@ func TestValidatePresetKnownValidator(t *testing.T) {
 func TestValidateRegexCompilesValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -665,7 +644,7 @@ func TestValidateRegexCompilesValidator(t *testing.T) {
 		},
 		{
 			name: "valid regex",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Validate: &setup.ValidateSpec{Regex: "^[a-z]+$"}},
 				},
@@ -674,7 +653,7 @@ func TestValidateRegexCompilesValidator(t *testing.T) {
 		},
 		{
 			name: "invalid regex",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Validate: &setup.ValidateSpec{Regex: "[invalid("}},
 				},
@@ -696,7 +675,7 @@ func TestValidateRegexCompilesValidator(t *testing.T) {
 func TestTypeWritesConsistentValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -706,7 +685,7 @@ func TestTypeWritesConsistentValidator(t *testing.T) {
 		},
 		{
 			name: "services.enabled with confirm",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeConfirm, Writes: "services.web.enabled"},
 				},
@@ -715,7 +694,7 @@ func TestTypeWritesConsistentValidator(t *testing.T) {
 		},
 		{
 			name: "services.enabled with input",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput, Writes: "services.web.enabled"},
 				},
@@ -724,7 +703,7 @@ func TestTypeWritesConsistentValidator(t *testing.T) {
 		},
 		{
 			name: "services.ports with input+port preset",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput, Validate: &setup.ValidateSpec{Preset: setup.PresetPort}, Writes: "services.web.ports.http"},
 				},
@@ -733,7 +712,7 @@ func TestTypeWritesConsistentValidator(t *testing.T) {
 		},
 		{
 			name: "services.ports with select",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeSelect, Writes: "services.web.ports.http"},
 				},
@@ -742,7 +721,7 @@ func TestTypeWritesConsistentValidator(t *testing.T) {
 		},
 		{
 			name: "services.hosts with input",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput, Writes: "services.web.hosts.local"},
 				},
@@ -764,7 +743,7 @@ func TestTypeWritesConsistentValidator(t *testing.T) {
 func TestRequiredConsistentValidator(t *testing.T) {
 	tests := []struct {
 		name  string
-		cfg   *setup.SetupConfig
+		cfg   *setup.Config
 		count int
 	}{
 		{
@@ -774,7 +753,7 @@ func TestRequiredConsistentValidator(t *testing.T) {
 		},
 		{
 			name: "input with required",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeInput, Required: true},
 				},
@@ -783,7 +762,7 @@ func TestRequiredConsistentValidator(t *testing.T) {
 		},
 		{
 			name: "confirm with required",
-			cfg: &setup.SetupConfig{
+			cfg: &setup.Config{
 				Questions: []setup.Question{
 					{ID: "q1", Type: setup.TypeConfirm, Required: true},
 				},

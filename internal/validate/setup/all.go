@@ -12,7 +12,7 @@ import (
 // The setupErr is handled by the setup.parse validator, which is the SOLE
 // emitter of load-error diagnostics for this domain. This matches the pattern
 // in validate/snapshot and validate/checks.
-func All(setupCfg *setup.SetupConfig, setupErr error, setupPath string) []validate.Validator {
+func All(setupCfg *setup.Config, setupErr error, setupPath string) []validate.Validator {
 	return []validate.Validator{
 		&parseValidator{err: setupErr, path: setupPath},
 		&typeKnownValidator{cfg: setupCfg},

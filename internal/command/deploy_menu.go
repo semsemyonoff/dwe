@@ -12,11 +12,11 @@ import (
 	"devbox-cli/internal/setup"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/validate"
-	valsetup "devbox-cli/internal/validate/setup"
 	"devbox-cli/internal/validate/env"
+	valsetup "devbox-cli/internal/validate/setup"
 
-	"github.com/spf13/cobra"
 	huh "charm.land/huh/v2"
+	"github.com/spf13/cobra"
 )
 
 // Test seams (package-level vars that tests can override).
@@ -25,7 +25,7 @@ var (
 	loadSetupYAMLFn        = setup.LoadSetupYAML
 	newHuhAskerFn          = setup.NewHuhAsker
 	runWizardFn            = setup.Run
-	selectMenuItemFn       func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply) (menuChoice, error)
+	selectMenuItemFn       = selectMenuItemInteractive
 	runDeployRunFn         = runDeployRun
 	runDeployPlanFn        = runDeployPlan
 )
@@ -33,12 +33,12 @@ var (
 type menuChoice string
 
 const (
-	menuRun           menuChoice = "run"
-	menuRunService    menuChoice = "run_service"
-	menuPlan          menuChoice = "plan"
-	menuPlanService   menuChoice = "plan_service"
-	menuWizard        menuChoice = "wizard"
-	menuExit          menuChoice = "exit"
+	menuRun         menuChoice = "run"
+	menuRunService  menuChoice = "run_service"
+	menuPlan        menuChoice = "plan"
+	menuPlanService menuChoice = "plan_service"
+	menuWizard      menuChoice = "wizard"
+	menuExit        menuChoice = "exit"
 )
 
 // runDeployMenu is the entry point for `devbox deploy` without subcommands.
@@ -46,7 +46,7 @@ const (
 func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 	// Check TTY
 	if !ui.IsInteractiveFn(os.Stdin) {
-		cmd.Help()
+		_ = cmd.Help()
 		return usageError("devbox deploy: requires a subcommand or interactive TTY")
 	}
 
@@ -93,7 +93,7 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 	// Render diagnostics if any
 	if len(diags) > 0 {
 		rows := ui.FormatDiagnostics(diags, false)
-		ui.RenderDiagnosticsTable(rows)
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderDiagnosticsTable(rows))
 
 		// Check for errors
 		for _, diag := range diags {
@@ -117,14 +117,11 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 
 	// Render pending banner if any
 	if pending != nil {
-		fmt.Fprintln(cmd.OutOrStdout(), ui.RenderPendingBanner(pending))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderPendingBanner(pending))
 	}
 
 	// Get menu choice from the user (or stub in tests)
-	if selectMenuItemFn == nil {
-		selectMenuItemFn = selectMenuItemInteractive
-	}
-	choice, err := selectMenuItemFn(ctx, cmd, pending)
+	choice, err := selectMenuItemFn(ctx, cmd, pending, showWizard)
 	if err != nil {
 		if errors.Is(err, setup.ErrWizardCanceled) {
 			return nil
@@ -182,10 +179,6 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 		return runDeployPlanFn(ctx, cmd, flags, opts)
 
 	case menuWizard:
-		if !showWizard {
-			return errors.New("wizard not available")
-		}
-
 		// Assemble wizard dependencies
 		var questions []setup.Question
 		if setupCfg != nil {
@@ -226,7 +219,7 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 }
 
 // isEmptyLocal returns true if the local config is missing or empty.
-func isEmptyLocal(m map[string]interface{}) bool {
+func isEmptyLocal(m map[string]any) bool {
 	return len(m) == 0
 }
 
@@ -274,7 +267,7 @@ func selectService(ctx context.Context, cmd *cobra.Command, services []string) (
 }
 
 // selectMenuItemInteractive prompts the user to select a menu item.
-func selectMenuItemInteractive(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply) (menuChoice, error) {
+func selectMenuItemInteractive(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
 	var choice string
 
 	options := []huh.Option[string]{
@@ -282,8 +275,11 @@ func selectMenuItemInteractive(ctx context.Context, cmd *cobra.Command, pending 
 		huh.NewOption("Run service…", string(menuRunService)),
 		huh.NewOption("Plan (all)", string(menuPlan)),
 		huh.NewOption("Plan service…", string(menuPlanService)),
-		huh.NewOption("Wizard", string(menuWizard)),
 		huh.NewOption("Exit", string(menuExit)),
+	}
+	if showWizard {
+		// Insert Wizard before Exit
+		options = append(options[:4], append([]huh.Option[string]{huh.NewOption("Wizard", string(menuWizard))}, options[4:]...)...)
 	}
 
 	form := huh.NewForm(
