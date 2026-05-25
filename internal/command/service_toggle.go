@@ -41,10 +41,21 @@ func init() {
 	// Assigned in init to avoid an init-order cycle (runDeployHelper is defined
 	// in deploy.go, same package, but var init order is file-declaration order).
 	singleToggleRunDeploy = runDeployHelper
+	multiToggleRunDeploy = runDeployHelper
 }
 
 var singleToggleRunRestart = lifecycle.RunRestart
 var singleToggleRunUserCmd = runtime.RunCommand
+
+// multiToggleAddPendingOps is the seam for journal.AddPendingOps in the
+// multi-select toggle flow, so tests can inject write failures independently.
+var multiToggleAddPendingOps = journal.AddPendingOps
+
+// multiToggleRunDeploy, multiToggleRunRestart, multiToggleRunUserCmd are seams
+// for the multi-select toggle apply phase.
+var multiToggleRunDeploy func(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opts DeployOpts) error
+var multiToggleRunRestart = lifecycle.RunRestart
+var multiToggleRunUserCmd = runtime.RunCommand
 
 // singleToggleFlags holds the parsed flags for a single-service enable/disable command.
 type singleToggleFlags struct {
@@ -230,6 +241,109 @@ func mutateAndPlan(
 	svc := cfgNew.Services[name]
 	configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
 	if err := singleToggleAddPendingOps(statePath, ops, configHash); err != nil {
+		rollback()
+		return TogglePlan{}, nil, fmt.Errorf("writing pending state: %w", err)
+	}
+
+	return plan, contributors, nil
+}
+
+// batchServiceConfigHash computes a combined config hash covering all toggled services.
+// It concatenates the per-service hashes in sorted-name order, which is deterministic
+// and unique per configuration state.
+func batchServiceConfigHash(cfg *config.DevboxConfig, svcDeploys map[string]*config.DeployConfig, names ...string) string {
+	sorted := make([]string, len(names))
+	copy(sorted, names)
+	sort.Strings(sorted)
+	parts := make([]string, len(sorted))
+	for i, name := range sorted {
+		svc := cfg.Services[name]
+		parts[i] = journal.ServiceConfigHash(svc, svcDeploys[name])
+	}
+	return strings.Join(parts, ":")
+}
+
+// mutateAndPlanBatch performs the locked mutation flow for a multi-service toggle:
+// captures pre-state, writes local.yml, regenerates .env, builds the toggle plan
+// from all toEnable/toDisable actions, renders it to out, then atomically writes
+// pending ops. On any failure in steps 2-5, local.yml and .env are restored.
+func mutateAndPlanBatch(
+	out io.Writer,
+	baseDir, configPath, localPath, envPath, statePath string,
+	cfg *config.DevboxConfig,
+	reg *registry.Registry,
+	svcDeploys map[string]*config.DeployConfig,
+	toEnable, toDisable []string,
+) (TogglePlan, []Contributor, error) {
+	releaseLock, err := lock.AcquireProjectLocks(baseDir)
+	if err != nil {
+		return TogglePlan{}, nil, fmt.Errorf("acquiring project locks: %w", err)
+	}
+	defer releaseLock()
+
+	// Step 0: Capture pre-state before any mutation.
+	capturedLocal, err := captureFileState(localPath)
+	if err != nil {
+		return TogglePlan{}, nil, fmt.Errorf("capturing local.yml state: %w", err)
+	}
+	capturedEnv, err := captureFileState(envPath)
+	if err != nil {
+		return TogglePlan{}, nil, fmt.Errorf("capturing .env state: %w", err)
+	}
+
+	rollback := func() {
+		_ = restoreFileState(localPath, capturedLocal)
+		_ = restoreFileState(envPath, capturedEnv)
+	}
+
+	// Step 1: Write local.yml with all toggles applied in one pass.
+	local, err := localconfig.LoadLocalYAML(localPath)
+	if err != nil {
+		return TogglePlan{}, nil, err
+	}
+	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
+		return TogglePlan{}, nil, err
+	}
+	if err := localconfig.WriteLocalYAML(localPath, local); err != nil {
+		return TogglePlan{}, nil, err
+	}
+
+	// Step 2: Reload config (picks up the local.yml change) and regenerate .env.
+	cfgNew, err := config.LoadConfig(configPath)
+	if err != nil {
+		rollback()
+		return TogglePlan{}, nil, fmt.Errorf("reloading config after toggle: %w", err)
+	}
+	if err := envfile.Write(cfgNew, envPath); err != nil {
+		rollback()
+		return TogglePlan{}, nil, fmt.Errorf("regenerating .env: %w", err)
+	}
+
+	// Step 3: Build toggle plan (in-memory; guard failures trigger rollback).
+	var toggles []ToggleAction
+	for _, name := range toEnable {
+		toggles = append(toggles, ToggleAction{Service: name, Direction: DirectionEnable})
+	}
+	for _, name := range toDisable {
+		toggles = append(toggles, ToggleAction{Service: name, Direction: DirectionDisable})
+	}
+	plan, err := buildTogglePlan(cfgNew, reg, svcDeploys, toggles)
+	if err != nil {
+		rollback()
+		return TogglePlan{}, nil, err
+	}
+
+	// Step 4: Render plan to out.
+	renderTogglePlan(out, plan)
+
+	// Step 5: Write pending entries atomically via a single batch call.
+	contributors := buildContributors(cfgNew, toggles)
+	ops := buildPendingOpsFromContributors(contributors)
+	allNames := make([]string, 0, len(toEnable)+len(toDisable))
+	allNames = append(allNames, toEnable...)
+	allNames = append(allNames, toDisable...)
+	configHash := batchServiceConfigHash(cfgNew, svcDeploys, allNames...)
+	if err := multiToggleAddPendingOps(statePath, ops, configHash); err != nil {
 		rollback()
 		return TogglePlan{}, nil, fmt.Errorf("writing pending state: %w", err)
 	}

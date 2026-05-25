@@ -2,6 +2,7 @@ package command
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"devbox-cli/internal/lifecycle"
 	"devbox-cli/internal/ui"
 
+	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1043,6 +1045,486 @@ func TestBuildPendingOpsFromContributors(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// --- multi-toggle (devbox services) tests ---
+
+// writeMultiServiceProject creates a project with named services in the
+// per-folder layout. svcContents maps service name to service.yml content.
+// deployNames lists services that should also have a deploy.yml (phases: []).
+func writeMultiServiceProject(t *testing.T, svcContents map[string]string, deployNames []string) (configPath, baseDir string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"),
+		[]byte("project:\n  name: test\n  prefix: t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range svcContents {
+		svcDir := filepath.Join(dir, "devbox", "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range deployNames {
+		svcDir := filepath.Join(dir, "devbox", "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "deploy.yml"), []byte("phases: []\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return filepath.Join(dir, "devbox.yml"), dir
+}
+
+// injectMultiToggleSeams replaces the multi-toggle apply seams for the duration
+// of the test, recording calls. Returns (callLog, restore).
+type multiToggleCallLog struct {
+	deployOpts   []DeployOpts
+	restartCalls int
+}
+
+func injectMultiToggleSeams(t *testing.T, deployErr, restartErr error) *multiToggleCallLog {
+	t.Helper()
+	log := &multiToggleCallLog{}
+	oldDeploy := multiToggleRunDeploy
+	oldRestart := multiToggleRunRestart
+	t.Cleanup(func() {
+		multiToggleRunDeploy = oldDeploy
+		multiToggleRunRestart = oldRestart
+	})
+	multiToggleRunDeploy = func(_ context.Context, _ *cobra.Command, _ *rootFlags, opts DeployOpts) error {
+		log.deployOpts = append(log.deployOpts, opts)
+		return deployErr
+	}
+	multiToggleRunRestart = func(_ lifecycle.RunContext) error {
+		log.restartCalls++
+		return restartErr
+	}
+	return log
+}
+
+// TestMultiToggle_PrintPlan_NoMutation verifies that --print-plan makes no
+// filesystem changes and prints a plan.
+func TestMultiToggle_PrintPlan_NoMutation(t *testing.T) {
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"alpha": "type: app\ncontainer: a\n",
+			"beta":  "type: app\ncontainer: b\n",
+		}, nil)
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	envPath := filepath.Join(baseDir, ".env")
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"alpha"}, Locked: nil}, nil
+	}
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	cmd.SetArgs([]string{"--print-plan"})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
+		t.Error("local.yml must not be written by --print-plan")
+	}
+	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
+		t.Error(".env must not be written by --print-plan")
+	}
+	if _, err := os.Stat(statePath(baseDir)); !os.IsNotExist(err) {
+		t.Error("journal state must not be written by --print-plan")
+	}
+	outStr := out.String()
+	if !strings.Contains(outStr, "step") && !strings.Contains(outStr, "Plan") &&
+		!strings.Contains(outStr, "No steps") {
+		t.Errorf("expected plan output, got: %q", outStr)
+	}
+}
+
+// TestMultiToggle_AllNone_NoPending verifies that all-none services produce no
+// pending state and no apply work.
+func TestMultiToggle_AllNone_NoPending(t *testing.T) {
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"alpha": "type: app\ncontainer: a\non_enable:\n  requires: none\n",
+			"beta":  "type: app\ncontainer: b\non_enable:\n  requires: none\n",
+		}, nil)
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	// TUI keeps alpha+beta enabled (enabling both from disabled → all-enable).
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"alpha", "beta"}, Locked: nil}, nil
+	}
+
+	var addCalled bool
+	oldAdd := multiToggleAddPendingOps
+	t.Cleanup(func() { multiToggleAddPendingOps = oldAdd })
+	multiToggleAddPendingOps = func(path string, ops []journal.PendingOp, hash string) error {
+		addCalled = true
+		return journal.AddPendingOps(path, ops, hash)
+	}
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !addCalled {
+		t.Error("multiToggleAddPendingOps must be called even for all-none (empty-slice no-op)")
+	}
+	pending := readPending(t, baseDir)
+	if pending != nil {
+		t.Errorf("no pending should be created for all-RequiresNone, got %+v", pending)
+	}
+}
+
+// TestMultiToggle_MixedRestartDeploy_Apply verifies a mixed restart+deploy batch
+// with --apply: RunDeploy called once (with deploy contributor), then RunRestart.
+func TestMultiToggle_MixedRestartDeploy_Apply(t *testing.T) {
+	// "ada" requires deploy (has deploy.yml); "bob" requires restart (no deploy.yml).
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"ada": "type: app\ncontainer: ada\non_enable:\n  requires: deploy\n",
+			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
+		}, []string{"ada"})
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	}
+
+	callLog := injectMultiToggleSeams(t, nil, nil)
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	cmd.SetArgs([]string{"--apply"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Deploy must be called once with exactly ["ada"].
+	if len(callLog.deployOpts) != 1 {
+		t.Fatalf("expected 1 RunDeploy call, got %d", len(callLog.deployOpts))
+	}
+	if !slices.Equal(callLog.deployOpts[0].Services, []string{"ada"}) {
+		t.Errorf("RunDeploy called with services=%v, want [ada]", callLog.deployOpts[0].Services)
+	}
+
+	// Restart must be called once.
+	if callLog.restartCalls != 1 {
+		t.Errorf("expected 1 RunRestart call, got %d", callLog.restartCalls)
+	}
+
+	// Pending must be cleared on success.
+	pending := readPending(t, baseDir)
+	if pending != nil && (pending.Find(journal.PendingDeploy) != nil || pending.Find(journal.PendingRestart) != nil) {
+		t.Errorf("pending must be cleared after successful --apply, got %+v", pending)
+	}
+}
+
+// TestMultiToggle_MixedBatchPartialFailure verifies that when deploy succeeds
+// but restart fails, pending stays intact.
+func TestMultiToggle_MixedBatchPartialFailure(t *testing.T) {
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"ada": "type: app\ncontainer: ada\non_enable:\n  requires: deploy\n",
+			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
+		}, []string{"ada"})
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	}
+
+	restartErr := fmt.Errorf("restart failed: injected")
+	injectMultiToggleSeams(t, nil, restartErr)
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	cmd.SetArgs([]string{"--apply"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error from restart failure, got nil")
+	}
+
+	// Pending must remain intact after partial failure.
+	pending := readPending(t, baseDir)
+	if pending == nil {
+		t.Fatal("pending must remain after partial apply failure")
+	}
+	if pending.Find(journal.PendingDeploy) == nil {
+		t.Error("deploy op must remain in pending after partial failure")
+	}
+	if pending.Find(journal.PendingRestart) == nil {
+		t.Error("restart op must remain in pending after partial failure")
+	}
+}
+
+// TestMultiToggle_AllDeploy_Apply verifies that two deploy-requiring services
+// result in a single RunDeploy call with both service names.
+func TestMultiToggle_AllDeploy_Apply(t *testing.T) {
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"ada": "type: app\ncontainer: ada\non_enable:\n  requires: deploy\n",
+			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: deploy\n",
+		}, []string{"ada", "bob"})
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	}
+
+	callLog := injectMultiToggleSeams(t, nil, nil)
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	cmd.SetArgs([]string{"--apply"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(callLog.deployOpts) != 1 {
+		t.Fatalf("expected 1 RunDeploy call for all-deploy batch, got %d", len(callLog.deployOpts))
+	}
+	// Services must be sorted alphabetically.
+	got := callLog.deployOpts[0].Services
+	if !slices.Equal(got, []string{"ada", "bob"}) {
+		t.Errorf("RunDeploy services=%v, want [ada bob]", got)
+	}
+	if callLog.restartCalls != 0 {
+		t.Errorf("RunRestart should not be called for all-deploy batch, got %d calls", callLog.restartCalls)
+	}
+
+	// Pending cleared on success.
+	pending := readPending(t, baseDir)
+	if pending != nil && pending.Find(journal.PendingDeploy) != nil {
+		t.Errorf("pending deploy op must be cleared on success, got %+v", pending)
+	}
+}
+
+// TestMultiToggle_AtomicPendingWriteRegression verifies that an injected failure
+// in multiToggleAddPendingOps restores local.yml and .env.
+func TestMultiToggle_AtomicPendingWriteRegression(t *testing.T) {
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"ada": "type: app\ncontainer: ada\non_enable:\n  requires: deploy\n",
+			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
+		}, []string{"ada"})
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	envPath := filepath.Join(baseDir, ".env")
+
+	// Pre-create local.yml so rollback restores bytes rather than removes.
+	origLocal := []byte("services:\n  ada:\n    enabled: false\n  bob:\n    enabled: false\n")
+	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localPath, origLocal, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	injectedErr := fmt.Errorf("injected AddPendingOps failure")
+	oldAdd := multiToggleAddPendingOps
+	t.Cleanup(func() { multiToggleAddPendingOps = oldAdd })
+	multiToggleAddPendingOps = func(_ string, _ []journal.PendingOp, _ string) error {
+		return injectedErr
+	}
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	}
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error from AddPendingOps failure, got nil")
+	}
+
+	// local.yml must be restored to original bytes.
+	got, readErr := os.ReadFile(localPath)
+	if readErr != nil {
+		t.Fatalf("local.yml missing after rollback: %v", readErr)
+	}
+	if !bytes.Equal(got, origLocal) {
+		t.Errorf("local.yml not restored: got %q, want %q", got, origLocal)
+	}
+
+	// .env must not exist (was absent before).
+	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
+		t.Error(".env must not exist after rollback when it was absent before")
+	}
+
+	// Journal must be unchanged.
+	pending := readPending(t, baseDir)
+	if pending != nil {
+		t.Errorf("no pending should be written after rollback, got %+v", pending)
+	}
+}
+
+// TestMultiToggle_DeclineApply_PendingRecorded verifies that when the user
+// declines the apply prompt, mutation and pending are both persisted.
+func TestMultiToggle_DeclineApply_PendingRecorded(t *testing.T) {
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"ada": "type: app\ncontainer: ada\non_enable:\n  requires: deploy\n",
+			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
+		}, []string{"ada"})
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	}
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	// User types 'n' at the apply prompt.
+	cmd.SetIn(strings.NewReader("n\n"))
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// local.yml must be written.
+	if _, err := os.Stat(localPath); err != nil {
+		t.Fatalf("local.yml must be written even when user declines: %v", err)
+	}
+
+	// Both pending ops must be recorded.
+	pending := readPending(t, baseDir)
+	if pending == nil {
+		t.Fatal("expected pending state to be recorded when user declines apply")
+	}
+	if pending.Find(journal.PendingDeploy) == nil {
+		t.Error("expected PendingDeploy op when user declines")
+	}
+	if pending.Find(journal.PendingRestart) == nil {
+		t.Error("expected PendingRestart op when user declines")
+	}
+}
+
+// TestMultiToggle_RequiresNoneAndRestart verifies that a batch mixing none and
+// restart produces only a single restart apply step and a single restart pending op.
+func TestMultiToggle_RequiresNoneAndRestart(t *testing.T) {
+	configPath, baseDir := writeMultiServiceProject(t,
+		map[string]string{
+			"alpha": "type: app\ncontainer: a\non_enable:\n  requires: none\n",
+			"beta":  "type: app\ncontainer: b\non_enable:\n  requires: restart\n",
+		}, nil)
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		return ui.MultiSelectResult{Kept: []string{"alpha", "beta"}, Locked: nil}, nil
+	}
+
+	callLog := injectMultiToggleSeams(t, nil, nil)
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceCmd(flags)
+	cmd.SetArgs([]string{"--apply"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if callLog.restartCalls != 1 {
+		t.Errorf("expected 1 RunRestart call, got %d", callLog.restartCalls)
+	}
+	if len(callLog.deployOpts) != 0 {
+		t.Errorf("expected no RunDeploy calls, got %d", len(callLog.deployOpts))
+	}
+
+	// Pending cleared on success.
+	pending := readPending(t, baseDir)
+	if pending != nil && pending.Find(journal.PendingRestart) != nil {
+		t.Errorf("pending restart must be cleared after success, got %+v", pending)
+	}
+}
+
+// TestBatchServiceConfigHash verifies determinism regardless of name order.
+func TestBatchServiceConfigHash(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"a": {Type: config.ServiceTypeApp, Container: "ca"},
+			"b": {Type: config.ServiceTypeApp, Container: "cb"},
+		},
+	}
+	deploys := map[string]*config.DeployConfig{}
+
+	h1 := batchServiceConfigHash(cfg, deploys, "a", "b")
+	h2 := batchServiceConfigHash(cfg, deploys, "b", "a")
+	if h1 != h2 {
+		t.Errorf("batchServiceConfigHash must be order-independent: %q vs %q", h1, h2)
+	}
+
+	// Single service.
+	h3 := batchServiceConfigHash(cfg, deploys, "a")
+	h4 := batchServiceConfigHash(cfg, deploys, "a")
+	if h3 != h4 {
+		t.Errorf("batchServiceConfigHash must be stable: %q vs %q", h3, h4)
+	}
+
+	// Different services must produce different hashes.
+	if h3 == h1 {
+		t.Error("hash of [a] should differ from hash of [a,b]")
 	}
 }
 

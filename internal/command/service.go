@@ -1,13 +1,14 @@
 package command
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/envfile"
+	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
@@ -20,6 +21,7 @@ import (
 var ErrInteractiveRequired = errors.New("interactive terminal required")
 
 func newServiceCmd(flags *rootFlags) *cobra.Command {
+	var apply, printPlan, skipHooks bool
 	cmd := &cobra.Command{
 		Use:   "services",
 		Short: "Toggle optional services (interactive) or enable/disable individually",
@@ -30,16 +32,28 @@ alongside apps and tools.
 
 On submit, changes are written to devbox/local.yml and .env is regenerated.
 
+Use --print-plan to preview what lifecycle steps will run after the selection
+without making any changes (you will still use the interactive selector).
+Use --apply to execute the plan non-interactively after writing local.yml.
+
 For a read-only view, run 'devbox status' or one of 'devbox status apps / tools / infra'.`,
 		Example: `  devbox services
+  devbox services --print-plan
   devbox services enable adminer
   devbox services disable second`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runServicesToggle(cmd, flags)
+			return runServicesToggle(cmd, flags, singleToggleFlags{
+				apply:     apply,
+				printPlan: printPlan,
+				skipHooks: skipHooks,
+			})
 		},
 	}
+	cmd.Flags().BoolVar(&apply, "apply", false, "execute the plan non-interactively after writing local.yml")
+	cmd.Flags().BoolVar(&printPlan, "print-plan", false, "preview what would happen without making any changes")
+	cmd.Flags().BoolVar(&skipHooks, "skip-hooks", false, "skip before/after hook commands when applying")
 	cmd.AddCommand(newServiceEnableCmd(flags))
 	cmd.AddCommand(newServiceDisableCmd(flags))
 	return cmd
@@ -47,7 +61,7 @@ For a read-only view, run 'devbox status' or one of 'devbox status apps / tools 
 
 // runServicesToggle opens the interactive multi-select toggle form. Non-TTY
 // returns ErrInteractiveRequired with a hint. All-mandatory short-circuits.
-func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
+func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFlags) error {
 	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 		return fmt.Errorf("%w: services: interactive toggle requires a TTY; use 'devbox status' for read-only view", ErrInteractiveRequired)
 	}
@@ -105,24 +119,86 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags) error {
 		return nil
 	}
 
-	if err := applyServiceTogglesBatch(flags.configPath, cfg, toEnable, toDisable); err != nil {
-		return err
+	baseDir := flags.ProjectRoot()
+	reg, regErr := loadCommandRegistry(flags.configPath)
+	if regErr != nil {
+		reg = nil
 	}
 
-	var parts []string
-	if len(toEnable) > 0 {
-		parts = append(parts, "enabled: "+strings.Join(toEnable, ", "))
+	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, cfg.Services)
+	if err != nil {
+		return fmt.Errorf("loading service deploy configs: %w", err)
 	}
-	if len(toDisable) > 0 {
-		parts = append(parts, "disabled: "+strings.Join(toDisable, ", "))
-	}
-	render.NewWriter(cmd.OutOrStdout()).Success(strings.Join(parts, "; "))
 
-	envPath, err := envfile.Regenerate(flags.configPath)
+	// --print-plan: build plan in-memory from the current (pre-mutation) config,
+	// render to stdout, then return without any filesystem mutations.
+	if opts.printPlan {
+		var toggles []ToggleAction
+		for _, name := range toEnable {
+			toggles = append(toggles, ToggleAction{Service: name, Direction: DirectionEnable})
+		}
+		for _, name := range toDisable {
+			toggles = append(toggles, ToggleAction{Service: name, Direction: DirectionDisable})
+		}
+		plan, err := buildTogglePlan(cfg, reg, svcDeploys, toggles)
+		if err != nil {
+			return err
+		}
+		renderTogglePlan(cmd.OutOrStdout(), plan)
+		return nil
+	}
+
+	if regErr != nil {
+		return fmt.Errorf("loading command registry: %w", regErr)
+	}
+
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	envPath := filepath.Join(baseDir, ".env")
+	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
+
+	plan, contributors, err := mutateAndPlanBatch(
+		cmd.OutOrStdout(),
+		baseDir, flags.configPath, localPath, envPath, statePath,
+		cfg, reg, svcDeploys,
+		toEnable, toDisable,
+	)
 	if err != nil {
 		return err
 	}
-	render.NewWriter(cmd.OutOrStdout()).Info(fmt.Sprintf(".env regenerated → %s", envPath))
+
+	deps := ExecuteDeps{
+		Cmd:        cmd,
+		Flags:      flags,
+		BaseDir:    baseDir,
+		StatePath:  statePath,
+		Cfg:        cfg,
+		CmdReg:     reg,
+		RunDeploy:  multiToggleRunDeploy,
+		RunRestart: multiToggleRunRestart,
+		RunUserCmd: multiToggleRunUserCmd,
+	}
+	execOpts := ExecuteOptions{
+		SkipHooks:    opts.skipHooks,
+		Contributors: contributors,
+	}
+
+	if opts.apply {
+		execOpts.NonInteractive = true
+		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
+	}
+
+	if len(plan.ApplySteps) == 0 {
+		return nil
+	}
+
+	// We're always in TTY here (checked at the top), so prompt the user.
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Run them now? [y/N] ")
+	reader := bufio.NewReader(cmd.InOrStdin())
+	line, _ := reader.ReadString('\n')
+	line = strings.TrimSpace(strings.ToLower(line))
+	if line == "y" || line == "yes" {
+		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
+	}
 	return nil
 }
 
