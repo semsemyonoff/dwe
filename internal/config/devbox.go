@@ -853,9 +853,9 @@ type ExportRule struct {
 	Comment  string `yaml:"comment"`
 }
 
-// validIdentifierKey reports whether s matches the Go identifier regex:
+// ValidIdentifierKey reports whether s matches the Go identifier regex:
 // ^[A-Za-z_][A-Za-z0-9_]*$. These keys can be used safely with Go template dot syntax.
-func validIdentifierKey(s string) bool {
+func ValidIdentifierKey(s string) bool {
 	if len(s) == 0 {
 		return false
 	}
@@ -878,12 +878,12 @@ func validateConfigKeys(cfg *DevboxConfig) error {
 	for _, svcName := range slices.Sorted(maps.Keys(cfg.Services)) {
 		svc := cfg.Services[svcName]
 		for _, k := range slices.Sorted(maps.Keys(svc.Ports)) {
-			if !validIdentifierKey(k) {
+			if !ValidIdentifierKey(k) {
 				return fmt.Errorf("service %q: invalid ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", svcName, k)
 			}
 		}
 		for _, k := range slices.Sorted(maps.Keys(svc.Hosts)) {
-			if !validIdentifierKey(k) {
+			if !ValidIdentifierKey(k) {
 				return fmt.Errorf("service %q: invalid hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", svcName, k)
 			}
 		}
@@ -1078,7 +1078,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	return &cfg, nil
 }
 
-// overlayAllowedKeys is the closed set of per-developer overridable keys
+// OverlayAllowedKeys is the closed set of per-developer overridable keys
 // under a layer's services.<name> mapping. Structural fields (container,
 // dir, configs, compose, extends, etc.) belong in devbox/services/<name>/service.yml and
 // are rejected by validateServicesOverlay.
@@ -1088,7 +1088,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 // or switch the `*.local` hostname they use, without editing the shared
 // devbox/services.yml. Each is deep-merged by port-name / host-name on top
 // of the declared map so a partial override only touches the listed entries.
-var overlayAllowedKeys = map[string]bool{
+var OverlayAllowedKeys = map[string]bool{
 	"enabled": true,
 	"ports":   true,
 	"hosts":   true,
@@ -1121,7 +1121,7 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 			return fmt.Errorf("%s: services.%s: must be a mapping", layerPath, name)
 		}
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
-			if !overlayAllowedKeys[key] {
+			if !OverlayAllowedKeys[key] {
 				return fmt.Errorf("%s: services.%s.%s: service definitions belong in devbox/services/<name>/service.yml; overlays may only set %s",
 					layerPath, name, key, overlayAllowedKeysList())
 			}
@@ -1139,7 +1139,7 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 // overlayAllowedKeysList returns a sorted, human-friendly comma-separated
 // list of overlay-allowed keys for use in error hints.
 func overlayAllowedKeysList() string {
-	keys := slices.Sorted(maps.Keys(overlayAllowedKeys))
+	keys := slices.Sorted(maps.Keys(OverlayAllowedKeys))
 	return strings.Join(keys, ", ")
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/project"
+	"devbox-cli/internal/setup"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/validate"
@@ -16,6 +17,7 @@ import (
 	valconfig "devbox-cli/internal/validate/config"
 	valenv "devbox-cli/internal/validate/env"
 	vallinters "devbox-cli/internal/validate/linters"
+	valsetup "devbox-cli/internal/validate/setup"
 	valsnap "devbox-cli/internal/validate/snapshot"
 	valtmpl "devbox-cli/internal/validate/templates"
 
@@ -168,6 +170,18 @@ Scope targets:
 		},
 	})
 
+	// Setup validator.
+	cmd.AddCommand(&cobra.Command{
+		Use:          "setup",
+		Short:        "Validate devbox/setup.yml schema and writes: paths",
+		Long:         `Check devbox/setup.yml for valid question definitions, identifier rules, and target scope constraints.`,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"setup"})
+		},
+	})
+
 	// External linters (shellcheck, hadolint, generic).
 	cmd.AddCommand(&cobra.Command{
 		Use:          "linters [id]",
@@ -292,9 +306,22 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 		snapCfg, snapCfgErr = config.LoadSnapshotConfig(config.SnapshotConfigPath(projectRoot))
 	}
 
+	// Load setup.yml once, threading the result + any load error into
+	// buildRegistry so the setup validators can self-skip on parse failures
+	// without re-reading the file from disk.
+	var (
+		setupCfg    *setup.SetupConfig
+		setupCfgErr error
+		setupPath   string
+	)
+	if projectRoot != "" {
+		setupPath = filepath.Join(projectRoot, "devbox", "setup.yml")
+		setupCfg, setupCfgErr = setup.LoadSetupYAML(setupPath)
+	}
+
 	// Build the registry and run validators. Stage filtering happens at
 	// assembly time for checks; env probes always run (they have no stages).
-	registry := buildRegistry(cfg, validateCfg, validateLoadErr, snapCfg, snapCfgErr, projectRoot, cmdReg, stage, verifyChecksums, scope)
+	registry := buildRegistry(cfg, validateCfg, validateLoadErr, snapCfg, snapCfgErr, setupCfg, setupCfgErr, setupPath, projectRoot, cmdReg, stage, verifyChecksums, scope)
 	diags := registry.Run(ctx, scope...)
 
 	// Compute summary first so the header can reflect overall severity.
@@ -426,7 +453,7 @@ func validateScopeLabel(scope []string) string {
 // scope. When config.validate IS in scope it already surfaces the same parse
 // error, so passing the error to AllForStage as well would emit a duplicate
 // diagnostic and inflate the error count.
-func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string) *validate.Registry {
+func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.SetupConfig, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)
@@ -451,6 +478,9 @@ func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig,
 		reg.Register(v)
 	}
 	for _, v := range valsnap.All(cfg, snapCfg, snapCfgErr, baseDir, cmdReg, verifyChecksums) {
+		reg.Register(v)
+	}
+	for _, v := range valsetup.All(setupCfg, setupCfgErr, setupPath) {
 		reg.Register(v)
 	}
 	// Same deduplication as checksLoadErr: when config.validate is in scope it
