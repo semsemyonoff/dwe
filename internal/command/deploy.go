@@ -42,12 +42,57 @@ application services. Use 'devbox deploy plan' to preview before running.`,
   devbox deploy run
   devbox deploy step init/render-env`,
 		SilenceUsage: true,
+		Args:         cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDeployMenu(cmd, flags)
+		},
 	}
 	cmd.AddCommand(newDeployPlanCmd(flags))
 	cmd.AddCommand(newDeployRunCmd(flags))
 	cmd.AddCommand(newDeployStepCmd(flags))
 	cmd.AddCommand(newDeployStateCmd(flags))
 	return cmd
+}
+
+// deployPlanOpts holds the options for runDeployPlan.
+type deployPlanOpts struct {
+	ServiceName string
+	Format      string
+}
+
+// runDeployPlan is the common implementation for `devbox deploy plan` and menu dispatch.
+func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opts deployPlanOpts) error {
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	reg, err := loadCommandRegistry(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading command registry: %w", err)
+	}
+
+	var steps []pipeline.ResolvedStep
+	if opts.ServiceName != "" {
+		if _, ok := cfg.Services[opts.ServiceName]; !ok {
+			return fmt.Errorf("service %q not found in config", opts.ServiceName)
+		}
+		steps, err = deploy.ResolveServicePlan(cfg, reg, opts.ServiceName)
+	} else {
+		steps, err = deploy.ResolvePlan(cfg, reg)
+	}
+	if err != nil {
+		return fmt.Errorf("resolving deploy plan: %w", err)
+	}
+
+	devboxBin := config.DevboxBin(cfg)
+	switch opts.Format {
+	case "shell":
+		deploy.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
+	default:
+		pipeline.PrintPlanTable(steps, render.NewWriter(cmd.OutOrStdout()), devboxBin)
+	}
+	return nil
 }
 
 func newDeployPlanCmd(flags *rootFlags) *cobra.Command {
@@ -66,37 +111,11 @@ the plan to steps relevant to a specific service. Use --format shell for script-
   devbox deploy plan --format shell`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+			opts := deployPlanOpts{
+				ServiceName: serviceName,
+				Format:      format,
 			}
-
-			reg, err := loadCommandRegistry(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading command registry: %w", err)
-			}
-
-			var steps []pipeline.ResolvedStep
-			if serviceName != "" {
-				if _, ok := cfg.Services[serviceName]; !ok {
-					return fmt.Errorf("service %q not found in config", serviceName)
-				}
-				steps, err = deploy.ResolveServicePlan(cfg, reg, serviceName)
-			} else {
-				steps, err = deploy.ResolvePlan(cfg, reg)
-			}
-			if err != nil {
-				return fmt.Errorf("resolving deploy plan: %w", err)
-			}
-
-			devboxBin := config.DevboxBin(cfg)
-			switch format {
-			case "shell":
-				deploy.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
-			default:
-				pipeline.PrintPlanTable(steps, render.Stdout(), devboxBin)
-			}
-			return nil
+			return runDeployPlan(cmd.Context(), cmd, flags, opts)
 		},
 		SilenceUsage: true,
 	}
@@ -194,13 +213,33 @@ type DeployOpts struct {
 	SuppressPendingClear bool
 }
 
-func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool) error {
+// deployRunOpts holds the options for runDeployRun.
+type deployRunOpts struct {
+	ServiceName    string
+	Force          bool
+	Resume         bool
+	NonInteractive bool
+	SkipPreflight  bool
+}
+
+// runDeployRun is the common implementation for `devbox deploy run` and menu dispatch.
+func runDeployRun(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opts deployRunOpts) error {
 	var services []string
-	if serviceName != "" {
-		services = []string{serviceName}
+	if opts.ServiceName != "" {
+		services = []string{opts.ServiceName}
 	}
-	return runDeployHelper(cmd.Context(), cmd, flags, DeployOpts{
+	return runDeployHelper(ctx, cmd, flags, DeployOpts{
 		Services:       services,
+		Force:          opts.Force,
+		Resume:         opts.Resume,
+		NonInteractive: opts.NonInteractive,
+		SkipPreflight:  opts.SkipPreflight,
+	})
+}
+
+func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool) error {
+	return runDeployRun(cmd.Context(), cmd, flags, deployRunOpts{
+		ServiceName:    serviceName,
 		Force:          force,
 		Resume:         resume,
 		NonInteractive: nonInteractive,
