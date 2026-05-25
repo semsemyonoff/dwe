@@ -21,6 +21,7 @@ Project readiness checks.
 - [Worked examples](#worked-examples)
 - [CLI flags](#cli-flags)
 - [Diagnostic output](#diagnostic-output)
+- [External linters](#external-linters)
 - [Related commands](#related-commands)
 
 ## Purpose
@@ -40,6 +41,7 @@ The validate command runs three domains in addition to the existing YAML-shape v
 |--------|--------|---------------|
 | `env.*` | Hardcoded in Go (`internal/validate/env/`) | No — seven fixed probes |
 | `checks.*` | `devbox/validate.yml` entries | Yes — declarative |
+| `linters.*` | Built-in adapters (shellcheck, hadolint) + `devbox/validate.yml` `linters:` block | Yes — declarative |
 | `snapshot.*` | On-disk snapshot directories + `devbox/snapshot.yml` | No — fixed validators per snapshot name |
 
 The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `devbox validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
@@ -324,9 +326,103 @@ Diagnostics share the rendering and severity model used by the rest of `devbox v
 
 Preflight writes the same diagnostic table to stderr before failing with exit code 1. Use `\n` in hints to split long remediation text across lines — the Lipgloss table honors newlines.
 
+## External linters
+
+The `linters.*` domain runs well-known external linters (shellcheck, hadolint) and arbitrary `type: generic` adapters as part of `devbox validate`. Linters do **not** run in preflight — preflight answers "can we run?", not "is the code clean?".
+
+### Wire layout
+
+```yaml
+linters:
+  shellcheck:
+    enabled: true
+    bin: shellcheck
+    paths: [devbox/scripts, scripts]
+    extensions: [.sh, .bash]
+    flags: [--severity=warning]
+    severity: warning
+  hadolint:
+    paths: ["."]
+    filenames: [Dockerfile]
+    extensions: [.dockerfile]
+  yamllint:
+    type: generic
+    bin: yamllint
+    paths: ["."]
+    extensions: [.yml, .yaml]
+    flags: [-s]
+```
+
+The map key is the adapter ID. Unknown fields are rejected at load time (strict decoding).
+
+### Entry fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | no | `builtin` (default) or `generic`. |
+| `enabled` | bool | no | Omitted → autodetect (true if `bin` is on PATH). `false` → silent skip. |
+| `bin` | string | no | Defaults to the adapter's default (e.g. `shellcheck`). **Must be a bare command name** — no path separators. Absolute or relative paths are rejected at load time. |
+| `paths` | list of strings | no | Defaults to the adapter's default. Each entry must be relative, non-empty, and contain no `..`. `"."` is allowed (root-equality, used by hadolint). |
+| `extensions` | list of strings | no | Defaults to the adapter's default. Each entry must start with `.` (e.g. `.sh`, not `sh`). |
+| `filenames` | list of strings | no | Literal basenames matched alongside extensions (e.g. `Dockerfile`). No path separators allowed. |
+| `flags` | list of strings | no | Appended after the adapter's built-in flags. Built-in adapters reserve output-format flags (`--format`, `-f`) — passing them in any argv form (`--format=gcc`, `-f tty`, `-fgcc`) is rejected at load time. |
+| `severity` | string | no | One of `error`, `warning`, `info`. Caps adapter findings from above (e.g. `severity: warning` downgrades adapter `error` findings to `warning`). `ok` is **not** allowed — use `enabled: false` to disable. Operational diagnostics (timeout, truncation, parse failure, missing-path) are never clamped, so users cannot accidentally silence runtime failure signals. |
+
+### Built-in adapters
+
+| ID | Default bin | Default paths | Default extensions | Default filenames | Reserved flags |
+|----|-------------|---------------|--------------------|--------------------|----------------|
+| `shellcheck` | `shellcheck` | `devbox/scripts`, `scripts` | `.sh`, `.bash` | — | `--format`, `-f` |
+| `hadolint` | `hadolint` | `.` | `.dockerfile` | `Dockerfile` | `--format`, `-f` |
+
+### `type: generic`
+
+The generic adapter runs `bin <flags> <files...>` and converts a non-zero exit into a single error-severity diagnostic with the combined stdout+stderr as the message (truncated to ~2 KB to keep the table readable). It has no reserved flags — the user owns the entire flag surface — and no per-line parsing. Use it for linters whose output format we do not parse natively.
+
+### Autodetect rules
+
+1. For each known built-in adapter, if no entry exists in `linters:` → synthesize an entry with defaults (per-adapter, not all-or-nothing).
+2. Block present, `enabled` omitted → `true`.
+3. `enabled: false` → silent skip (no diagnostic).
+4. Default `bin:` missing on PATH → silent skip ("we tried autodetecting; nothing to do").
+5. Explicit `bin:` configured but missing on PATH → one Warning diagnostic (config problem, not code problem).
+6. Path expansion yields no files → silent skip.
+
+### Scope
+
+Run all linters or narrow to one with the `linters` subcommand:
+
+```
+devbox validate                       # all domains (including linters)
+devbox validate linters               # all linters
+devbox validate linters shellcheck    # only shellcheck
+```
+
+Unknown linter IDs produce an empty result (not a hard error — mirrors `checks` behaviour).
+
+### Per-linter bounds
+
+- **Timeout**: 5 minutes per linter (`DefaultLinterTimeout`). Exceeded → Error diagnostic; partial output is not parsed.
+- **Output cap**: 50 MB combined stdout+stderr per linter (`MaxLinterOutputBytes`). Excess is dropped and a Warning diagnostic is emitted; the parser still runs on the captured prefix.
+- **Concurrency**: linters run in parallel, capped at `runtime.NumCPU()` (`MaxLinterConcurrency`). One linter's failure (panic, timeout, parser error) never cancels siblings.
+
+### File walking
+
+- `paths:` entries are recursively walked under the project root.
+- Explicit file paths (entries that resolve to a regular file) bypass extension/filename filters.
+- A file matches if its extension is in `extensions:` OR its basename is in `filenames:`.
+- Symlinks are skipped (defense against escapes outside the project root).
+- `.git/` is always skipped. Adapter-specific noise (e.g. `node_modules`, `vendor`) is left to the user to narrow via `paths:`.
+- Missing **default** paths (e.g. shellcheck's `devbox/scripts` in a project that has none) are silently dropped. Missing **user-configured** paths (entries the user wrote explicitly) produce a Warning.
+
+### Trust model
+
+`bin:` is restricted to a bare command name resolved via `PATH` at runtime; absolute and relative paths are forbidden at load time. Rationale: `validate.yml` ships with the repo; a malicious config with `bin: ./scripts/evil.sh` should not silently execute arbitrary code on `devbox validate`. Users who genuinely need a custom binary path install it on `PATH` (or wrap it).
+
 ## Related commands
 
 - `devbox validate` — full validation run (all domains).
 - `devbox validate env` — env probes only.
 - `devbox validate checks [id]` — declarative checks (optional id narrows to one).
-- `devbox deploy run` / `run` / `stop` / `restart` — invoke preflight automatically (see `--skip-preflight`).
+- `devbox validate linters [id]` — external linters (optional id narrows to one).
+- `devbox deploy run` / `run` / `stop` / `restart` — invoke preflight automatically (see `--skip-preflight`). Linters do **not** run in preflight.

@@ -239,10 +239,10 @@ Implementation steps (Option A):
 - [x] run `go test ./internal/validate/...` (covers both the framework change and the group implementation).
 
 ### Task 9: Update reference + internals docs
-- [ ] add `linters:` section to `docs/reference/config/validate.md` — schema, autodetect rules, scope examples, severity clamp behavior, generic vs built-in, the `bin:` bare-name restriction from Open Questions §1.
-- [ ] update `docs/internals/packages.md` "Validation" grouping to mention `internal/validate/linters/` with one-line responsibility, and note the new `GroupValidator` interface in the framework description.
-- [ ] add a `Key Patterns` bullet in **`AGENTS.md`** (the canonical file — `CLAUDE.md` is a symlink to it per the repo guidelines): "Linters domain — autodetect built-ins when bin is on PATH; silent skip when bin missing or default paths absent; user-configured missing paths surface a Warning; only runs in `devbox validate`, never in preflight. `bin:` must be a bare command name (load-time enforced)."
-- [ ] no code tests required, but verify doc examples by hand against the parser (round-trip them through `LoadValidateConfig` in a small `examples_test.go` if cheap).
+- [x] add `linters:` section to `docs/reference/config/validate.md` — schema, autodetect rules, scope examples, severity clamp behavior, generic vs built-in, the `bin:` bare-name restriction from Open Questions §1.
+- [x] update `docs/internals/packages.md` "Validation" grouping to mention `internal/validate/linters/` with one-line responsibility, and note the new `GroupValidator` interface in the framework description.
+- [x] add a `Key Patterns` bullet in **`AGENTS.md`** (the canonical file — `CLAUDE.md` is a symlink to it per the repo guidelines): "Linters domain — autodetect built-ins when bin is on PATH; silent skip when bin missing or default paths absent; user-configured missing paths surface a Warning; only runs in `devbox validate`, never in preflight. `bin:` must be a bare command name (load-time enforced)."
+- [x] no code tests required, but verify doc examples by hand against the parser (round-trip them through `LoadValidateConfig` in a small `examples_test.go` if cheap).
 
 ### Task 10: Verify acceptance criteria
 - [ ] verify all spec requirements (configuration surface, autodetect rules, severity clamp, parallelism, generic adapter, shellcheck adapter, hadolint adapter) implemented.
