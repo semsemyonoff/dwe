@@ -233,6 +233,9 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 		if id == "" {
 			return nil, nil, fmt.Errorf("parse %s: linters: id (map key) must not be empty", path)
 		}
+		if strings.ContainsAny(id, `/\`) {
+			return nil, nil, fmt.Errorf("parse %s: linters: id %q must be a bare name (no path separators)", path, id)
+		}
 		lowerID := strings.ToLower(id)
 		if _, dup := seenLinterIDs[lowerID]; dup {
 			return nil, nil, fmt.Errorf("parse %s: linter %q: duplicate id (case-insensitive collision)", path, id)
