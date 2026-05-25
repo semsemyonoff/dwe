@@ -3,7 +3,6 @@ package command
 import (
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
 	"strings"
 
@@ -225,13 +224,17 @@ func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel,
 }
 
 func newServiceEnableCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	var apply, printPlan, skipHooks bool
+	cmd := &cobra.Command{
 		Use:   "enable [service]",
 		Short: "Enable an optional service (writes to devbox/local.yml)",
 		Long: `Enable an optional service by writing services.<name>.enabled = true to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox run' to start the newly enabled service.
+Lifecycle hooks defined in on_enable are planned and optionally executed.
+
+Use --print-plan to preview what will happen without making any changes.
+Use --apply to execute the plan non-interactively (useful in CI/scripts).
 
 When no service name is given, an interactive selector shows all currently
 disabled optional services.`,
@@ -246,7 +249,7 @@ disabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
-				// Tightened semantics: mandatory enable is a no-op + warning.
+				// Mandatory enable is a no-op + warning.
 				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: service %q is already mandatory; nothing to do\n", name)
 					return nil
@@ -263,20 +266,32 @@ disabled optional services.`,
 					return err
 				}
 			}
-			return setServiceEnabled(cmd.OutOrStdout(), flags.configPath, cfg, name, true)
+			return runSingleServiceToggle(cmd.Context(), cmd, flags, name, DirectionEnable, singleToggleFlags{
+				apply:     apply,
+				printPlan: printPlan,
+				skipHooks: skipHooks,
+			})
 		},
 		SilenceUsage: true,
 	}
+	cmd.Flags().BoolVar(&apply, "apply", false, "execute the plan non-interactively after writing local.yml")
+	cmd.Flags().BoolVar(&printPlan, "print-plan", false, "preview what would happen without making any changes")
+	cmd.Flags().BoolVar(&skipHooks, "skip-hooks", false, "skip before/after hook commands when applying")
+	return cmd
 }
 
 func newServiceDisableCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	var apply, printPlan, skipHooks bool
+	cmd := &cobra.Command{
 		Use:   "disable [service]",
 		Short: "Disable an optional service (writes to devbox/local.yml)",
 		Long: `Disable an optional service by writing services.<name>.enabled = false to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox stop' to stop the service.
+Lifecycle hooks defined in on_disable are planned and optionally executed.
+
+Use --print-plan to preview what will happen without making any changes.
+Use --apply to execute the plan non-interactively (useful in CI/scripts).
 
 When no service name is given, an interactive selector shows all currently
 enabled optional services.`,
@@ -291,7 +306,7 @@ enabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
-				// Tightened semantics: cannot disable mandatory.
+				// Cannot disable mandatory.
 				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
 					return fmt.Errorf("cannot disable mandatory service %q", name)
 				}
@@ -307,10 +322,18 @@ enabled optional services.`,
 					return err
 				}
 			}
-			return setServiceEnabled(cmd.OutOrStdout(), flags.configPath, cfg, name, false)
+			return runSingleServiceToggle(cmd.Context(), cmd, flags, name, DirectionDisable, singleToggleFlags{
+				apply:     apply,
+				printPlan: printPlan,
+				skipHooks: skipHooks,
+			})
 		},
 		SilenceUsage: true,
 	}
+	cmd.Flags().BoolVar(&apply, "apply", false, "execute the plan non-interactively after writing local.yml")
+	cmd.Flags().BoolVar(&printPlan, "print-plan", false, "preview what would happen without making any changes")
+	cmd.Flags().BoolVar(&skipHooks, "skip-hooks", false, "skip before/after hook commands when applying")
+	return cmd
 }
 
 // service completion filters.
@@ -371,37 +394,4 @@ func applyServiceTogglesBatch(configPath string, cfg *config.DevboxConfig, toEna
 	}
 
 	return localconfig.WriteLocalYAML(localPath, local)
-}
-
-// setServiceEnabled writes services.<name>.enabled = value to devbox/local.yml,
-// prints a confirmation, and regenerates .env.
-func setServiceEnabled(out io.Writer, configPath string, cfg *config.DevboxConfig, name string, enabled bool) error {
-	var toEnable, toDisable []string
-	if enabled {
-		toEnable = []string{name}
-	} else {
-		toDisable = []string{name}
-	}
-	if err := applyServiceTogglesBatch(configPath, cfg, toEnable, toDisable); err != nil {
-		return err
-	}
-
-	baseDir := filepath.Dir(configPath)
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
-	w := render.NewWriter(out)
-	typeLabel := ""
-	if svc, ok := cfg.Services[name]; ok && svc.Type != "" {
-		typeLabel = fmt.Sprintf(" [%s]", svc.Type)
-	}
-	if enabled {
-		w.Success(fmt.Sprintf("service %q%s enabled (written to %s)", name, typeLabel, localPath))
-	} else {
-		w.Success(fmt.Sprintf("service %q%s disabled (written to %s)", name, typeLabel, localPath))
-	}
-	envPath, err := envfile.Regenerate(configPath)
-	if err != nil {
-		return err
-	}
-	w.Info(fmt.Sprintf(".env regenerated → %s", envPath))
-	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -482,13 +481,6 @@ func TestRenderTogglePlan_NotesSectionOmittedWhenEmpty(t *testing.T) {
 }
 
 // ---- executeTogglePlan tests ----
-
-// makeTestCmd returns a throwaway cobra command with no-op I/O.
-func makeTestCmd() *cobra.Command {
-	cmd := &cobra.Command{}
-	cmd.SetOut(io.Discard)
-	return cmd
-}
 
 // makeExecuteDeps builds an ExecuteDeps suitable for unit tests. The caller
 // provides record-calls stubs for RunDeploy/RunRestart/RunUserCmd; the rest

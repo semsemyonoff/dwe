@@ -612,10 +612,10 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 13: Wire `services enable <name>` / `disable <name>` end-to-end
 
-- [ ] in `internal/command/service_toggle.go`, implement the single-service enable/disable flow if not yet implemented: helpers to write `local.yml` + regenerate `.env` (use existing helpers in `internal/localconfig` and `internal/envfile`). Keep these as discrete functions so `--print-plan` can build the plan WITHOUT calling them
-- [ ] add flags: `--apply` (execute plan without prompt), `--print-plan` (pure preview; NO mutation), `--skip-hooks`
-- [ ] **`--print-plan` is a pure dry-run**: build the hypothetical post-toggle service state in memory, call `buildTogglePlan`, render to stdout, exit 0. Do NOT write `local.yml`, do NOT regenerate `.env`, do NOT touch journal. Cobra long help and tests must call this out explicitly so the flag name is not surprising
-- [ ] **mutation flow (everything except `--print-plan`)**. Steps 1, 2, and 5 mutate project state and MUST run under `lock.AcquireProjectLocks(baseDir)`. **Pre-state capture (step 0) is the FIRST thing inside the lock** (twenty-first review — capturing before the lock would race with another process's valid concurrent write, and rollback would restore stale bytes over it). Lock is released BEFORE step 6 because the apply step delegates to `runDeployHelper` / `lifecycle.RunRestart` which acquire the lock themselves (non-reentrant — see Task 12):
+- [x] in `internal/command/service_toggle.go`, implement the single-service enable/disable flow if not yet implemented: helpers to write `local.yml` + regenerate `.env` (use existing helpers in `internal/localconfig` and `internal/envfile`). Keep these as discrete functions so `--print-plan` can build the plan WITHOUT calling them
+- [x] add flags: `--apply` (execute plan without prompt), `--print-plan` (pure preview; NO mutation), `--skip-hooks`
+- [x] **`--print-plan` is a pure dry-run**: build the hypothetical post-toggle service state in memory, call `buildTogglePlan`, render to stdout, exit 0. Do NOT write `local.yml`, do NOT regenerate `.env`, do NOT touch journal. Cobra long help and tests must call this out explicitly so the flag name is not surprising
+- [x] **mutation flow (everything except `--print-plan`)**. Steps 1, 2, and 5 mutate project state and MUST run under `lock.AcquireProjectLocks(baseDir)`. **Pre-state capture (step 0) is the FIRST thing inside the lock** (twenty-first review — capturing before the lock would race with another process's valid concurrent write, and rollback would restore stale bytes over it). Lock is released BEFORE step 6 because the apply step delegates to `runDeployHelper` / `lifecycle.RunRestart` which acquire the lock themselves (non-reentrant — see Task 12):
   ```
   acquire lock
     0. CAPTURE pre-state: read current bytes of local.yml and .env
@@ -642,17 +642,17 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
     - For step 5 failure: the journal stays in its pre-toggle state because `AddPendingOps` is atomic (Task 8 — either every op persists or none); no journal cleanup needed beyond what `AddPendingOps` already guarantees
   - **building the ops slice for step 5**: derive from `opts.Contributors` exactly once before calling `AddPendingOps`. Deploy contributors collapse into one `{Deploy, [c.Service for c with RequiresDeploy, sorted]}` op; restart contributors collapse into a single `{Restart}` op if any present. All-`RequiresNone` batches produce an empty slice; `AddPendingOps` handles empty as a no-op (no save, no error — Task 8), so the call is safe to make unconditionally. The per-kind merge happens once inside `AddPendingOps` instead of N round-trips through `AddPendingOp`. Preserves mixed-batch information (one deploy op + one restart op) so a later `devbox deploy run` doesn't silently drop the restart requirement (tenth review)
   - **lock-release timing for apply success/decline**: the apply path (step 6) is what may decline / fail / succeed. On apply success the executor acquires its own lock for the clear-pending call (see Task 12). Crucial: do NOT hold the toggle lock across step 6; that would deadlock against the deploy/restart paths
-- [ ] TTY detection: seamed package-level var `isTerminal = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }` (tests override). Read prompt response from `cmd.InOrStdin()` via `bufio.NewReader`
-- [ ] apply decision matrix (after steps 1-5 above; pending is already written when `len(plan.ApplySteps) > 0`):
+- [x] TTY detection: seamed package-level var `isTerminal = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }` (tests override). Read prompt response from `cmd.InOrStdin()` via `bufio.NewReader`
+- [x] apply decision matrix (after steps 1-5 above; pending is already written when `len(plan.ApplySteps) > 0`):
   | Flag / mode | Action |
   |---|---|
   | `--apply` | `executeTogglePlan(NonInteractive=true)`. On success the executor calls (per Task 12) ONE atomic `journal.ClearPendingOps(statePath, clears)` where `clears` is built from `opts.Contributors` (deploy contributors collapsed into one `PendingClear` entry + one `PendingClear{PendingRestart}` if any contributor was restart). NEVER a per-contributor loop; NEVER unconditional `ClearPending`. On failure: pending stays (already written in step 5); return wrapped error so the cobra root reports it |
   | TTY, no `--apply` | prompt `Run them now? [y/N] `; on `y`/`yes` → `executeTogglePlan` (same clear-on-success). On `n` / empty / anything else → leave pending in place, exit 0 |
   | non-TTY, no `--apply` | leave pending in place; print `to apply: rerun with --apply` to `cmd.OutOrStdout()`; exit 0 |
-- [ ] this matches the Pending state lifecycle diagram (Technical Details below). Writing pending BEFORE apply closes the gap where `local.yml` was mutated but a failed apply would have left no banner
-- [ ] `requires: none` for every toggled service → `len(plan.ApplySteps) == 0` so step 5 writes no pending; nothing to defer
-- [ ] mandatory service → existing reject path stays (toggle blocked before any of this runs)
-- [ ] write tests via cobra `SetArgs` (table-driven where natural):
+- [x] this matches the Pending state lifecycle diagram (Technical Details below). Writing pending BEFORE apply closes the gap where `local.yml` was mutated but a failed apply would have left no banner
+- [x] `requires: none` for every toggled service → `len(plan.ApplySteps) == 0` so step 5 writes no pending; nothing to defer
+- [x] mandatory service → existing reject path stays (toggle blocked before any of this runs)
+- [x] write tests via cobra `SetArgs` (table-driven where natural):
   - `--print-plan` writes nothing (local.yml unchanged, .env unchanged, no journal entry) and prints the plan
   - `--apply` success → executes, pending cleared (verify: pre-existing pending of matching kind disappears; no new pending recorded)
   - **`--apply` failure → mutation persisted, pending STILL recorded** (regression for the gap the second review flagged)
@@ -666,7 +666,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - `--skip-hooks` apply path executes only the apply step
   - `requires: none` writes no pending and produces an empty apply step
   - **all-`RequiresNone` batch**: ops slice is empty; `AddPendingOps` is invoked (the call is unconditional) and is a no-op (no save, no journal record created — twenty-sixth review regression for the empty-record-creation bug)
-- [ ] run `go test ./internal/command/...` - must pass before next task
+- [x] run `go test ./internal/command/...` - must pass before next task
 
 ### Task 14: Multi-select TUI toggle
 
