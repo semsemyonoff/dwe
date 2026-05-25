@@ -294,7 +294,7 @@ func TestLinterValidator_OutputTruncationWarning(t *testing.T) {
 	}
 }
 
-func TestLinterValidator_AdapterParseErrorBecomesWarning(t *testing.T) {
+func TestLinterValidator_AdapterParseErrorBecomesError(t *testing.T) {
 	withFakePath(t, "myfakelinter")
 	t.Setenv("FAKE_LINTER_MODE", "clean")
 
@@ -312,8 +312,33 @@ func TestLinterValidator_AdapterParseErrorBecomesWarning(t *testing.T) {
 		a, base,
 	)
 	diags := v.Run(validate.Context{})
-	if len(diags) != 1 || diags[0].Severity != validate.SeverityWarning {
-		t.Fatalf("want one Warning for parse error; got %#v", diags)
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
+		t.Fatalf("want one Error for parse error; got %#v", diags)
+	}
+}
+
+func TestLinterValidator_CrashNotSilencedByClamp(t *testing.T) {
+	// A crash (adapter returns an error) must not be downgraded by severity: info.
+	withFakePath(t, "myfakelinter")
+	t.Setenv("FAKE_LINTER_MODE", "clean")
+
+	base := t.TempDir()
+	writeScript(t, base, "a.sh")
+
+	clamp := diag.SeverityInfo
+	a := &fakeAdapter{
+		id: "fake", bin: "myfakelinter",
+		parseFn: func(_, _ []byte, _ int) ([]validate.Diagnostic, error) {
+			return nil, errors.New("crash: non-zero exit with no parsable output")
+		},
+	}
+	v := newLinterValidator(
+		config.LinterEntry{ID: "fake", Paths: []string{"."}, Severity: &clamp},
+		a, base,
+	)
+	diags := v.Run(validate.Context{})
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
+		t.Fatalf("severity clamp must not mute crash error; got %#v", diags)
 	}
 }
 

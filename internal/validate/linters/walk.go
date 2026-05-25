@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"devbox-cli/internal/pathsafe"
 )
@@ -46,6 +47,13 @@ func collectFiles(baseDir string, paths, exts, filenames []string, pathsAreDefau
 	seen := make(map[string]struct{})
 	for _, entry := range paths {
 		cleanEntry := filepath.Clean(entry)
+		// The walk loop skips .git when it appears during descent (p != target),
+		// but an explicit path like ".git" or ".git/hooks" bypasses that guard.
+		// Apply the same skip here so .git is never linted regardless of whether
+		// it was named explicitly or discovered via traversal.
+		if cleanEntry == ".git" || strings.HasPrefix(cleanEntry, ".git"+string(filepath.Separator)) {
+			continue
+		}
 		var target string
 		if cleanEntry == "." {
 			// Root-equality case: pathsafe.ContainedRel rejects "." by design,

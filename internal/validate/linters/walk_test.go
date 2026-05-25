@@ -214,6 +214,62 @@ func TestCollectFilesGitDirSkipped(t *testing.T) {
 	}
 }
 
+func TestCollectFilesExplicitGitPathSkipped(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".git", "hooks", "pre-commit.sh"), "#!/bin/sh\n")
+	writeFile(t, filepath.Join(root, "scripts", "real.sh"), "#!/bin/sh\n")
+
+	// Explicit "paths: [.git]" must be silently skipped — not walked, not reported missing.
+	files, missing, err := collectFiles(root, []string{".git"}, []string{".sh"}, nil, false)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("explicit .git path must be skipped, got files=%v", files)
+	}
+	if len(missing) != 0 {
+		t.Errorf("explicit .git path must not produce missing, got missing=%v", missing)
+	}
+}
+
+func TestCollectFilesExplicitGitSubpathSkipped(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".git", "hooks", "pre-commit.sh"), "#!/bin/sh\n")
+
+	// Explicit subpath ".git/hooks" must also be skipped.
+	files, missing, err := collectFiles(root, []string{filepath.Join(".git", "hooks")}, []string{".sh"}, nil, false)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("explicit .git/hooks path must be skipped, got files=%v", files)
+	}
+	if len(missing) != 0 {
+		t.Errorf("explicit .git subpath must not produce missing, got missing=%v", missing)
+	}
+}
+
+func TestCollectFilesExplicitGitFileSkipped(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".git", "hooks", "pre-commit.sh"), "#!/bin/sh\n")
+
+	// Explicit file path inside .git must also be skipped.
+	gitFile := filepath.Join(".git", "hooks", "pre-commit.sh")
+	files, missing, err := collectFiles(root, []string{gitFile}, []string{}, nil, false)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("explicit file inside .git must be skipped, got files=%v", files)
+	}
+	if len(missing) != 0 {
+		t.Errorf("explicit .git file must not produce missing, got missing=%v", missing)
+	}
+}
+
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

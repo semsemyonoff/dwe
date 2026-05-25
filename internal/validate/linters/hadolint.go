@@ -74,17 +74,13 @@ func (a *HadolintAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]va
 		if exitCode == 0 {
 			return nil, nil
 		}
-		return []validate.Diagnostic{
-			finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
-		}, nil
+		return nil, fmt.Errorf("%s", nonzeroExitMessage(a.ID(), stderr))
 	}
 
 	var items []hadolintFinding
 	if err := json.Unmarshal(trimmed, &items); err != nil {
 		if exitCode != 0 {
-			return []validate.Diagnostic{
-				finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
-			}, nil
+			return nil, fmt.Errorf("%s", nonzeroExitMessage(a.ID(), stderr))
 		}
 		return nil, fmt.Errorf("hadolint: decode JSON: %w", err)
 	}

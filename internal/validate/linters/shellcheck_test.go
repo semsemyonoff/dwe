@@ -115,42 +115,42 @@ func TestShellcheckParseOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("empty stdout + non-zero exit + stderr → internal failure", func(t *testing.T) {
+	t.Run("empty stdout + non-zero exit + stderr → internal failure error", func(t *testing.T) {
 		t.Parallel()
 		diags, err := a.ParseOutput(nil, []byte("shellcheck: failed to read file\n"), 2)
-		if err != nil {
-			t.Fatalf("unexpected err: %v", err)
+		if err == nil {
+			t.Fatalf("want error for crash, got nil (diags=%v)", diags)
 		}
-		if len(diags) != 1 {
-			t.Fatalf("want 1 diagnostic, got %d", len(diags))
+		if !contains(err.Error(), "failed to read file") {
+			t.Errorf("error should embed stderr: %q", err.Error())
 		}
-		if diags[0].Severity != validate.SeverityError {
-			t.Errorf("want Error, got %v", diags[0].Severity)
-		}
-		if !contains(diags[0].Message, "failed to read file") {
-			t.Errorf("message should embed stderr: %q", diags[0].Message)
+		if len(diags) != 0 {
+			t.Errorf("want 0 diagnostics on crash, got %d", len(diags))
 		}
 	})
 
-	t.Run("empty stdout + non-zero exit + empty stderr → placeholder", func(t *testing.T) {
+	t.Run("empty stdout + non-zero exit + empty stderr → placeholder error", func(t *testing.T) {
 		t.Parallel()
 		diags, err := a.ParseOutput(nil, nil, 2)
-		if err != nil {
-			t.Fatalf("unexpected err: %v", err)
+		if err == nil {
+			t.Fatalf("want error for crash, got nil (diags=%v)", diags)
 		}
-		if len(diags) != 1 || diags[0].Message == "" {
-			t.Fatalf("want one diag with placeholder, got %#v", diags)
+		if err.Error() == "" {
+			t.Errorf("want non-empty placeholder error message")
+		}
+		if len(diags) != 0 {
+			t.Errorf("want 0 diagnostics on crash, got %d", len(diags))
 		}
 	})
 
-	t.Run("invalid JSON + non-zero exit treated as internal failure", func(t *testing.T) {
+	t.Run("invalid JSON + non-zero exit treated as internal failure error", func(t *testing.T) {
 		t.Parallel()
 		diags, err := a.ParseOutput([]byte("not json"), []byte("boom"), 2)
-		if err != nil {
-			t.Fatalf("unexpected err: %v", err)
+		if err == nil {
+			t.Fatalf("want error for crash, got nil (diags=%v)", diags)
 		}
-		if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
-			t.Fatalf("want one Error diag, got %#v", diags)
+		if len(diags) != 0 {
+			t.Errorf("want 0 diagnostics on crash, got %d", len(diags))
 		}
 	})
 

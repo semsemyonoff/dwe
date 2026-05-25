@@ -63,7 +63,7 @@ type Adapter interface {
 
 	// ParseOutput turns the subprocess's stdout/stderr/exit code into a slice
 	// of diagnostics. A non-nil error is treated by the runtime as an
-	// operational parse failure (Warning), not a hard error — whatever
+	// operational parse failure (Error), not a hard error — whatever
 	// diagnostics were produced before the failure are still returned.
 	ParseOutput(stdout, stderr []byte, exitCode int) ([]validate.Diagnostic, error)
 }

@@ -72,17 +72,13 @@ func (a *ShellcheckAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]
 		if exitCode == 0 {
 			return nil, nil
 		}
-		return []validate.Diagnostic{
-			finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
-		}, nil
+		return nil, fmt.Errorf("%s", nonzeroExitMessage(a.ID(), stderr))
 	}
 
 	var comments []shellcheckComment
 	if err := json.Unmarshal(trimmed, &comments); err != nil {
 		if exitCode != 0 {
-			return []validate.Diagnostic{
-				finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
-			}, nil
+			return nil, fmt.Errorf("%s", nonzeroExitMessage(a.ID(), stderr))
 		}
 		return nil, fmt.Errorf("shellcheck: decode JSON: %w", err)
 	}
