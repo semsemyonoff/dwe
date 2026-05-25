@@ -152,7 +152,6 @@ func TestDiagnosticHelpers(t *testing.T) {
 		{"fail", fail("sc", "boom", "fix it"), validate.SeverityError},
 		{"warn", warn("sc", "soft", ""), validate.SeverityWarning},
 		{"info", info("sc", "note", ""), validate.SeverityInfo},
-		{"ok", ok("sc"), validate.SeverityOK},
 		{"finding", finding("sc", validate.SeverityWarning, "f.sh", 7, "msg", ""), validate.SeverityWarning},
 	}
 	for _, tc := range cases {

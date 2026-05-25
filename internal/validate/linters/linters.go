@@ -116,15 +116,6 @@ func info(target, msg, hint string) validate.Diagnostic {
 	}
 }
 
-// ok builds an OK-severity diagnostic stamped for the linter target.
-func ok(target string) validate.Diagnostic {
-	return validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   Domain,
-		Target:   target,
-	}
-}
-
 // severityFromLevel maps the level string common to shellcheck and hadolint
 // JSON output to a validate.Severity. Unknown levels fall back to Warning.
 func severityFromLevel(level string) validate.Severity {

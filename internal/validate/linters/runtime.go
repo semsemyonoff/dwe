@@ -177,7 +177,7 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 			return append(operationalDiags, fail(
 				v.ID(),
 				fmt.Sprintf("%s timed out after %s", v.ID(), DefaultLinterTimeout),
-				"narrow paths: or raise the timeout (DefaultLinterTimeout)",
+				"narrow paths: in devbox/validate.yml to reduce the number of files scanned",
 			))
 		}
 		// Parent context cancelled (e.g. Ctrl-C) — not a linter failure.
