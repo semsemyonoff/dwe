@@ -140,12 +140,12 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
 - [x] run tests.
 
 ### Task 4: hadolint built-in adapter
-- [ ] create `hadolint.go`: `DefaultBin = "hadolint"`, `DefaultPaths = ["."]`, `DefaultFilenames = ["Dockerfile"]`, `DefaultExtensions = [".dockerfile"]` (so both bare `Dockerfile` and `service.dockerfile`-style files are picked up — uses the `Filenames` field added in Task 2), `ReservedFlags = []string{"-f", "--format"}` (locked because hadolint's output format is parser-load-bearing).
-- [ ] `BuildArgs`: order is `[-f, json, userFlags..., --, files...]`. Forced format first; reserved-flag rejection at load time (Task 6) is the safety contract. `--` separator guards against filenames starting with `-`.
-- [ ] `ParseOutput`: decode JSON array; map each item to `Diagnostic{File, Line, Severity, Message: "<message> (<code>)", Target: "hadolint"}`. Severity map: `error→Error, warning→Warning, info|style→Info`. Non-zero exit + valid JSON is normal (hadolint exits non-zero whenever it finds something); non-zero exit + invalid JSON → one error diagnostic with stderr.
-- [ ] write `hadolint_test.go` with JSON fixtures in `testdata/hadolint/` (clean, multiple findings, parse-error stderr). **Also test reservation contract — every argv form**: `ReservedFlags()` contains `-f` and `--format`; reject `--format=gcc`, `["--format", "gcc"]`, `["-f", "tty"]`, **`-ftty` (short-attached)**, `-fjson`; benign flags like `--no-color`, `--ignore=DL3008` pass.
-- [ ] **real-binary smoke test** (`hadolint_real_test.go`, same `LookPath`+`testing.Short()` gate as shellcheck): exec real hadolint against a fixture Dockerfile, assert stdout parses as JSON. Catches future hadolint flag-precedence drift.
-- [ ] run tests.
+- [x] create `hadolint.go`: `DefaultBin = "hadolint"`, `DefaultPaths = ["."]`, `DefaultFilenames = ["Dockerfile"]`, `DefaultExtensions = [".dockerfile"]` (so both bare `Dockerfile` and `service.dockerfile`-style files are picked up — uses the `Filenames` field added in Task 2), `ReservedFlags = []string{"-f", "--format"}` (locked because hadolint's output format is parser-load-bearing).
+- [x] `BuildArgs`: order is `[-f, json, userFlags..., --, files...]`. Forced format first; reserved-flag rejection at load time (Task 6) is the safety contract. `--` separator guards against filenames starting with `-`.
+- [x] `ParseOutput`: decode JSON array; map each item to `Diagnostic{File, Line, Severity, Message: "<message> (<code>)", Target: "hadolint"}`. Severity map: `error→Error, warning→Warning, info|style→Info`. Non-zero exit + valid JSON is normal (hadolint exits non-zero whenever it finds something); non-zero exit + invalid JSON → one error diagnostic with stderr.
+- [x] write `hadolint_test.go` with JSON fixtures in `testdata/hadolint/` (clean, multiple findings, parse-error stderr). **Also test reservation contract — every argv form**: `ReservedFlags()` contains `-f` and `--format`; reject `--format=gcc`, `["--format", "gcc"]`, `["-f", "tty"]`, **`-ftty` (short-attached)**, `-fjson`; benign flags like `--no-color`, `--ignore=DL3008` pass.
+- [x] **real-binary smoke test** (`hadolint_real_test.go`, same `LookPath`+`testing.Short()` gate as shellcheck): exec real hadolint against a fixture Dockerfile, assert stdout parses as JSON. Catches future hadolint flag-precedence drift.
+- [x] run tests.
 
 ### Task 5: Runtime (per-linter validator) + autodetect + severity clamp + bounds
 - [ ] create `runtime.go`: `linterValidator` struct implementing `validate.Validator` — holds entry, adapter, baseDir.
