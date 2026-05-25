@@ -295,7 +295,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 	baseDir := filepath.Dir(flags.configPath)
 
 	// Load project-level deploy config (absent is valid — some projects only have per-service deploy files)
-	projectDeploy, err := config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
+	projectDeploy, err := config.LoadProjectDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("loading project deploy config: %w", err)
 	}

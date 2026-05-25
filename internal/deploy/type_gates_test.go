@@ -60,20 +60,6 @@ project:
 	return devboxPath
 }
 
-// TestLoadConfig_rejectsDeployFileForInfra confirms LoadConfig fails when a
-// deploy file exists for a non-app service. This is the loader gate; it
-// fires on every CLI entrypoint, not just `devbox validate`.
-func TestLoadConfig_rejectsDeployFileForInfra(t *testing.T) {
-	devboxPath := writeMixedTypeFixture(t, "db")
-	_, err := config.LoadConfig(devboxPath)
-	if err == nil {
-		t.Fatal("expected ErrDeployFileForNonApp")
-	}
-	if !errors.Is(err, config.ErrDeployFileForNonApp) {
-		t.Fatalf("err = %v, want wraps ErrDeployFileForNonApp", err)
-	}
-}
-
 // TestResolveServicePlan_rejectsNonApp confirms the --service single-target
 // path rejects an infra service with a typed sentinel.
 func TestResolveServicePlan_rejectsNonApp(t *testing.T) {

@@ -39,7 +39,7 @@ func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, servic
 	}
 	svcDeploy, ok := svcDeploys[serviceName]
 	if !ok {
-		return nil, fmt.Errorf("no deploy pipeline found for service %q (expected devbox/deploy/%s.yml)", serviceName, serviceName)
+		return nil, fmt.Errorf("no deploy pipeline found for service %q (expected devbox/services/%s/deploy.yml)", serviceName, serviceName)
 	}
 
 	for _, phase := range svcDeploy.Phases {

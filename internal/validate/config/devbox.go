@@ -734,7 +734,7 @@ func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	deployPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy.yml")
 
-	deployCfg, err := config.LoadDeployConfig(deployPath)
+	deployCfg, err := config.ParseDeployConfigForValidation(deployPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
 			diags = append(diags, validate.Diagnostic{

@@ -152,9 +152,9 @@ These cut across tasks; verify each task PR conforms before mark-complete.
 
 ### Task 4: Per-folder deploy loader path migration + `after:` ordering field
 
-- [ ] update `LoadServiceDeployConfigs` (`internal/config/devbox.go:1838`) to read `devbox/services/<name>/deploy.yml` instead of `devbox/deploy/<name>.yml`; presence-based gating logic preserved
-- [ ] enumerate sources from `LoadServices` result (not from a `devbox/deploy/` directory scan)
-- [ ] **new top-level `after:` field on `DeployConfig`** for deploy-time ordering between services (distinct from runtime `depends_on:`):
+- [x] update `LoadServiceDeployConfigs` (`internal/config/devbox.go:1838`) to read `devbox/services/<name>/deploy.yml` instead of `devbox/deploy/<name>.yml`; presence-based gating logic preserved
+- [x] enumerate sources from `LoadServices` result (not from a `devbox/deploy/` directory scan)
+- [x] **new top-level `after:` field on `DeployConfig`** for deploy-time ordering between services (distinct from runtime `depends_on:`):
   ```go
   type DeployConfig struct {
       After  []string      `yaml:"after,omitempty"`  // service names this service deploys after; default: []
@@ -163,7 +163,7 @@ These cut across tasks; verify each task PR conforms before mark-complete.
   }
   ```
   Semantics: omitted/empty = no deploy ordering constraint. Default is NOT auto-derived from `depends_on:` — they're different concepts (runtime container ordering vs deploy step ordering). If users want deploy ordering, they declare `after:` explicitly. Live monorepo projects will add `after:` declarations in their own follow-up PRs — out of scope for this CLI-only plan
-- [ ] **scope-limit at the LOAD path with context-specific loaders** (seventeenth review fix — the previous "make `LoadDeployConfig` reject `After`" approach broke service deploys because today `LoadServiceDeployConfigs` calls `LoadDeployConfig` internally at `internal/config/devbox.go:1844`, and `deploy.FindStep` calls it too at `internal/deploy/plan.go:90`. Same loader, two contexts, opposite rules — needs a split):
+- [x] **scope-limit at the LOAD path with context-specific loaders** (seventeenth review fix — the previous "make `LoadDeployConfig` reject `After`" approach broke service deploys because today `LoadServiceDeployConfigs` calls `LoadDeployConfig` internally at `internal/config/devbox.go:1844`, and `deploy.FindStep` calls it too at `internal/deploy/plan.go:90`. Same loader, two contexts, opposite rules — needs a split):
   - new sentinel `ErrAfterFieldNotAllowed` in `internal/config/`
   - **internal shared decode** `loadDeployConfigDecode(path string) (*DeployConfig, error)` — does the strict YAML decode + the existing shape validation that today's `LoadDeployConfig` does. Permits `After`; no context check. NOT exported
   - **`ParseDeployConfigForValidation(path string) (*DeployConfig, error)`** (exported, eighteenth review) — thin wrapper around `loadDeployConfigDecode` for the validator's use. Returns the parsed config regardless of which file scope it came from, so the Task 6 scope-limit validator can inspect `cfg.After != nil` and emit per-file diagnostics with proper file/key location info. The validator MUST use this function instead of the strict loaders (`LoadProjectDeployConfig`, `LoadResetConfig`, `LoadServiceResetConfig`) — those reject `after:` BEFORE returning a config, leaving the validator nothing to inspect. Naming with the `ForValidation` suffix makes the bypass intent obvious at the call site so reviewers can spot misuse
@@ -179,7 +179,7 @@ These cut across tasks; verify each task PR conforms before mark-complete.
     - `LoadProjectDeployConfig` with `after:` → `errors.Is(err, ErrAfterFieldNotAllowed)`; without `after:` → success
     - **`LoadServiceDeployConfig` with `after:` → success** (the regression case the seventeenth review identified — service deploys with `after:` must load cleanly)
     - `LoadResetConfig` / `LoadServiceResetConfig` with `after:` → `errors.Is(err, ErrAfterFieldNotAllowed)`
-- [ ] **new helper `deploy.TopoSortByAfter(deploys map[string]*config.DeployConfig, services map[string]config.ServiceConfig) ([]string, error)`** in `internal/deploy/` (distinct from existing `config.TopoSortServices` which sorts by `depends_on:`). The second parameter is the full services map (NOT just the deploy-having subset) so the helper can distinguish "unknown service" from "service exists but has no deploy.yml":
+- [x] **new helper `deploy.TopoSortByAfter(deploys map[string]*config.DeployConfig, services map[string]config.ServiceConfig) ([]string, error)`** in `internal/deploy/` (distinct from existing `config.TopoSortServices` which sorts by `depends_on:`). The second parameter is the full services map (NOT just the deploy-having subset) so the helper can distinguish "unknown service" from "service exists but has no deploy.yml":
   - returns service names in deploy-order (dependencies-first)
   - alphabetical tie-break for nodes at the same topo level (deterministic)
   - **runtime graph validation** (sixteenth review — validator-only enforcement is insufficient because lifecycle commands don't run `devbox validate`):
@@ -189,11 +189,11 @@ These cut across tasks; verify each task PR conforms before mark-complete.
     - **cycle**: returns sentinel `ErrDeployCycle` on cycle; error message includes the cycle path (`"deploy ordering cycle: main → postgres → redis → main"`)
   - These three sentinels (`ErrDeploySelfReference`, `ErrDeployUnknownAfterRef`, `ErrDeployCycle`) ensure `runDeployHelper` / `ResolveServicesPlan` / `ResolveServicesPlanSubset` cannot silently sort a malformed graph. The Task 6 validator still runs first when `devbox validate` is invoked; this runtime check is the second gate
   - tests asserting each sentinel fires when called directly on a malformed deploy-map (no validator in the test path)
-- [ ] **`deploy.FindStep` direct file load** (fourteenth review): the `devbox deploy step <service>/<phase>/<step>` command path goes through `deploy.FindStep` (`internal/deploy/plan.go:85-105`) which currently calls `config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy", serviceName+".yml"))` — a second site that hardcodes the old path. Two changes here:
+- [x] **`deploy.FindStep` direct file load** (fourteenth review): the `devbox deploy step <service>/<phase>/<step>` command path goes through `deploy.FindStep` (`internal/deploy/plan.go:85-105`) which currently calls `config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy", serviceName+".yml"))` — a second site that hardcodes the old path. Two changes here:
   1. update the `filepath.Join` to `filepath.Join(baseDir, "devbox", "services", serviceName, "deploy.yml")`
   2. switch the call from `LoadDeployConfig` to **`LoadServiceDeployConfig`** (per the loader split above) — otherwise `devbox deploy step` would reject service deploys that have `after:` declared
   Grep for any other `filepath.Join(... "devbox", "deploy" ...)` occurrences and fix them in this task too. Without this fix, `devbox deploy step` breaks after the folder migration AND rejects valid service deploys
-- [ ] write tests:
+- [x] write tests:
   - `LoadServiceDeployConfigs`: deploy file present → loaded, missing → nil (no error), strict decoder rejects unknown fields, only services with `deploy.yml` end up in the result map
   - **`deploy.FindStep` resolves a step from `devbox/services/<name>/deploy.yml`** (regression for the `devbox deploy step` path — assert against a fixture under the new layout)
   - **`DeployConfig.After` decode**: present → parsed as slice; absent → nil/empty; unknown nested fields rejected by strict decoder
@@ -203,7 +203,7 @@ These cut across tasks; verify each task PR conforms before mark-complete.
     - `deploys["a"].After = ["a"]` → `errors.Is(err, ErrDeploySelfReference)`
     - `deploys["a"].After = ["nonexistent"]` (not in `services` map) → `errors.Is(err, ErrDeployUnknownAfterRef)`
     - `deploys["a"].After = ["b"]` where `b` is in `services` but `deploys["b"] == nil` → no error, edge silently dropped (helper returns `[a]` only — Warning semantics, matches validator)
-- [ ] run `go test ./internal/config/... ./internal/deploy/...` - must pass before next task
+- [x] run `go test ./internal/config/... ./internal/deploy/...` - must pass before next task
 
 ### Task 5: Per-service reset loader (`LoadServiceResetConfig`)
 

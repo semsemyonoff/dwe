@@ -969,15 +969,15 @@ func writeDeployFixture(t *testing.T, deployYML string) string {
 	return devboxPath
 }
 
-func TestLoadDeployConfig_phasesPresent(t *testing.T) {
+func TestLoadServiceDeployConfig_phasesPresent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte(sampleDeployYML), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if len(cfg.Phases) != 2 {
 		t.Fatalf("Phases len = %d, want 2", len(cfg.Phases))
@@ -990,15 +990,15 @@ func TestLoadDeployConfig_phasesPresent(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepWithCmd(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithCmd(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte(sampleDeployYML), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
 	if step.Name != "create-dirs" {
@@ -1012,15 +1012,15 @@ func TestLoadDeployConfig_stepWithCmd(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepWithCommand(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithCommand(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte(sampleDeployYML), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[1].Steps[0]
 	if step.Name != "up" {
@@ -1034,15 +1034,15 @@ func TestLoadDeployConfig_stepWithCommand(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepWithWhen(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithWhen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte(sampleDeployYML), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[1]
 	if step.When == nil {
@@ -1056,7 +1056,7 @@ func TestLoadDeployConfig_stepWithWhen(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_strictDecodeStringWhen(t *testing.T) {
+func TestLoadServiceDeployConfig_strictDecodeStringWhen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	invalidYAML := `
@@ -1071,15 +1071,15 @@ phases:
 	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Errorf("LoadDeployConfig expected error for string-form when:, got nil")
+		t.Errorf("LoadServiceDeployConfig expected error for string-form when:, got nil")
 	} else if !strings.Contains(err.Error(), "when") {
 		t.Errorf("error should mention 'when' field: %v", err)
 	}
 }
 
-func TestLoadDeployConfig_invalidWhenType(t *testing.T) {
+func TestLoadServiceDeployConfig_invalidWhenType(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	invalidYAML := `
@@ -1096,15 +1096,15 @@ phases:
 	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Errorf("LoadDeployConfig expected error for invalid when type, got nil")
+		t.Errorf("LoadServiceDeployConfig expected error for invalid when type, got nil")
 	} else if !strings.Contains(err.Error(), "when") {
 		t.Errorf("error should mention 'when': %v", err)
 	}
 }
 
-func TestLoadDeployConfig_strictDecodeUnknownField(t *testing.T) {
+func TestLoadServiceDeployConfig_strictDecodeUnknownField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	invalidYAML := `
@@ -1119,28 +1119,28 @@ phases:
 	if err := os.WriteFile(path, []byte(invalidYAML), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Errorf("LoadDeployConfig expected error for unknown field, got nil")
+		t.Errorf("LoadServiceDeployConfig expected error for unknown field, got nil")
 	} else if !strings.Contains(err.Error(), "notafield") && !strings.Contains(err.Error(), "unknown") {
 		t.Errorf("error should mention 'notafield' or 'unknown': %v", err)
 	}
 }
 
-func TestLoadDeployConfig_notFound(t *testing.T) {
-	_, err := LoadDeployConfig(filepath.Join(t.TempDir(), "nonexistent.yml"))
+func TestLoadServiceDeployConfig_notFound(t *testing.T) {
+	_, err := LoadServiceDeployConfig(filepath.Join(t.TempDir(), "nonexistent.yml"))
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("expected os.ErrNotExist, got %v", err)
 	}
 }
 
-func TestLoadDeployConfig_invalidYAML(t *testing.T) {
+func TestLoadServiceDeployConfig_invalidYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte("{ invalid yaml ]["), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
 		t.Error("expected error for invalid YAML, got nil")
 	}
@@ -1172,23 +1172,23 @@ func TestLoadConfig_deployAbsent(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_emptyPhases(t *testing.T) {
+func TestLoadServiceDeployConfig_emptyPhases(t *testing.T) {
 	yml := "phases: []\n"
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deploy.yml")
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if len(cfg.Phases) != 0 {
 		t.Errorf("Phases len = %d, want 0", len(cfg.Phases))
 	}
 }
 
-func TestLoadDeployConfig_legacyRunAndCommandFieldsRejected(t *testing.T) {
+func TestLoadServiceDeployConfig_legacyRunAndCommandFieldsRejected(t *testing.T) {
 	yml := `phases:
   - name: setup
     steps:
@@ -1201,13 +1201,13 @@ func TestLoadDeployConfig_legacyRunAndCommandFieldsRejected(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Fatal("LoadDeployConfig: expected strict-decode error for removed legacy fields 'run' and 'command', got nil")
+		t.Fatal("LoadServiceDeployConfig: expected strict-decode error for removed legacy fields 'run' and 'command', got nil")
 	}
 }
 
-func TestLoadDeployConfig_checkBadTypeProducesWrappedError(t *testing.T) {
+func TestLoadServiceDeployConfig_checkBadTypeProducesWrappedError(t *testing.T) {
 	yml := `phases:
   - name: setup
     steps:
@@ -1223,9 +1223,9 @@ func TestLoadDeployConfig_checkBadTypeProducesWrappedError(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Fatal("LoadDeployConfig: expected validation error for bad check type, got nil")
+		t.Fatal("LoadServiceDeployConfig: expected validation error for bad check type, got nil")
 	}
 	msg := err.Error()
 	if !strings.Contains(msg, "my-step") {
@@ -1239,7 +1239,7 @@ func TestLoadDeployConfig_checkBadTypeProducesWrappedError(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepNeitherCmdNorCommand(t *testing.T) {
+func TestLoadServiceDeployConfig_stepNeitherCmdNorCommand(t *testing.T) {
 	yml := `phases:
   - name: setup
     steps:
@@ -1251,13 +1251,13 @@ func TestLoadDeployConfig_stepNeitherCmdNorCommand(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Fatal("LoadDeployConfig: expected error for step with neither cmd nor command, got nil")
+		t.Fatal("LoadServiceDeployConfig: expected error for step with neither cmd nor command, got nil")
 	}
 }
 
-func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 	yml := `phases:
   - name: setup
     steps:
@@ -1274,9 +1274,9 @@ func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
 	// Legacy service_configs_copy is converted to builtin at load time.
@@ -1296,7 +1296,7 @@ func TestLoadDeployConfig_stepWithServiceConfigsCopy(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_stepWithCommandAndWith(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithCommandAndWith(t *testing.T) {
 	yml := `phases:
   - name: init
     steps:
@@ -1313,9 +1313,9 @@ func TestLoadDeployConfig_stepWithCommandAndWith(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
 	if step.Type != "command" {
@@ -1334,7 +1334,7 @@ func TestLoadDeployConfig_stepWithCommandAndWith(t *testing.T) {
 
 // --- DeployServices marker validation ---
 
-func TestLoadDeployConfig_deployServicesPhase(t *testing.T) {
+func TestLoadServiceDeployConfig_deployServicesPhase(t *testing.T) {
 	yml := `phases:
   - name: services
     deploy_services: true
@@ -1345,16 +1345,16 @@ func TestLoadDeployConfig_deployServicesPhase(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if !cfg.Phases[0].DeployServices {
 		t.Error("expected DeployServices=true")
 	}
 }
 
-func TestLoadDeployConfig_deployServicesWithStepsError(t *testing.T) {
+func TestLoadServiceDeployConfig_deployServicesWithStepsError(t *testing.T) {
 	yml := `phases:
   - name: services
     deploy_services: true
@@ -1367,13 +1367,13 @@ func TestLoadDeployConfig_deployServicesWithStepsError(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
 		t.Fatal("expected error for deploy_services phase with steps")
 	}
 }
 
-func TestLoadDeployConfig_deployServicesWithWhenError(t *testing.T) {
+func TestLoadServiceDeployConfig_deployServicesWithWhenError(t *testing.T) {
 	yml := `phases:
   - name: services
     deploy_services: true
@@ -1386,7 +1386,7 @@ func TestLoadDeployConfig_deployServicesWithWhenError(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
 		t.Fatal("expected error for deploy_services phase with when, got nil")
 	}
@@ -1395,7 +1395,7 @@ func TestLoadDeployConfig_deployServicesWithWhenError(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_phaseUIFieldRejected(t *testing.T) {
+func TestLoadServiceDeployConfig_phaseUIFieldRejected(t *testing.T) {
 	// The ui: field was removed from DeployPhase. Strict decode rejects unknown fields.
 	yml := `phases:
   - name: setup
@@ -1412,16 +1412,16 @@ func TestLoadDeployConfig_phaseUIFieldRejected(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Fatalf("LoadDeployConfig expected error for unknown field ui, got nil")
+		t.Fatalf("LoadServiceDeployConfig expected error for unknown field ui, got nil")
 	}
 	if !strings.Contains(err.Error(), "ui") && !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("error should mention ui or unknown field: %v", err)
 	}
 }
 
-func TestLoadDeployConfig_phaseUntrackedDefaultFalseSimple(t *testing.T) {
+func TestLoadServiceDeployConfig_phaseUntrackedDefaultFalseSimple(t *testing.T) {
 	// Phases without untracked: default to false.
 	yml := `phases:
   - name: start
@@ -1437,16 +1437,16 @@ func TestLoadDeployConfig_phaseUntrackedDefaultFalseSimple(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if cfg.Phases[0].Untracked {
 		t.Error("Phases[0].Untracked = true, want false (default)")
 	}
 }
 
-func TestLoadDeployConfig_phaseUntrackedField(t *testing.T) {
+func TestLoadServiceDeployConfig_phaseUntrackedField(t *testing.T) {
 	yml := `phases:
   - name: setup
     description: Setup phase
@@ -1467,9 +1467,9 @@ func TestLoadDeployConfig_phaseUntrackedField(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if len(cfg.Phases) != 2 {
 		t.Fatalf("Phases len = %d, want 2", len(cfg.Phases))
@@ -1482,7 +1482,7 @@ func TestLoadDeployConfig_phaseUntrackedField(t *testing.T) {
 	}
 }
 
-func TestLoadDeployConfig_phaseUntrackedDefaultFalse(t *testing.T) {
+func TestLoadServiceDeployConfig_phaseUntrackedDefaultFalse(t *testing.T) {
 	yml := `phases:
   - name: start
     description: Start phase
@@ -1496,9 +1496,9 @@ func TestLoadDeployConfig_phaseUntrackedDefaultFalse(t *testing.T) {
 	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
 		t.Fatalf("write deploy.yml: %v", err)
 	}
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if cfg.Phases[0].Untracked {
 		t.Error("Phases[0].Untracked = true, want false (zero value default)")
@@ -1586,8 +1586,8 @@ func TestTopoSortServices_depNotInSetSkipped(t *testing.T) {
 
 func TestLoadServiceDeployConfigs_loadsExisting(t *testing.T) {
 	dir := t.TempDir()
-	deployDir := filepath.Join(dir, "devbox", "deploy")
-	if err := os.MkdirAll(deployDir, 0755); err != nil {
+	mainDeployDir := filepath.Join(dir, "devbox", "services", "main")
+	if err := os.MkdirAll(mainDeployDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 	mainDeploy := `phases:
@@ -1597,7 +1597,7 @@ func TestLoadServiceDeployConfigs_loadsExisting(t *testing.T) {
         type: shell
         cmd: mkdir -p services/main/src
 `
-	if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte(mainDeploy), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(mainDeployDir, "deploy.yml"), []byte(mainDeploy), 0644); err != nil {
 		t.Fatal(err)
 	}
 	services := map[string]ServiceConfig{
@@ -1613,6 +1613,182 @@ func TestLoadServiceDeployConfigs_loadsExisting(t *testing.T) {
 	}
 	if _, ok := result["other"]; ok {
 		t.Error("other should not be loaded (no deploy file)")
+	}
+}
+
+// --- Loader split: LoadProjectDeployConfig / LoadServiceDeployConfig ---
+
+func TestLoadProjectDeployConfig_rejectsAfterField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	yml := `after:
+  - somesvc
+phases:
+  - name: setup
+    steps:
+      - name: noop
+        type: shell
+        cmd: 'true'
+`
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadProjectDeployConfig(path)
+	if err == nil {
+		t.Fatal("expected error for after: in project deploy.yml, got nil")
+	}
+	if !errors.Is(err, ErrAfterFieldNotAllowed) {
+		t.Errorf("err = %v, want wraps ErrAfterFieldNotAllowed", err)
+	}
+}
+
+func TestLoadProjectDeployConfig_acceptsNoAfterField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(sampleDeployYML), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := LoadProjectDeployConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Phases) != 2 {
+		t.Errorf("Phases len = %d, want 2", len(cfg.Phases))
+	}
+}
+
+func TestLoadServiceDeployConfig_permitsAfterField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	yml := `after:
+  - othersvc
+phases:
+  - name: setup
+    steps:
+      - name: noop
+        type: shell
+        cmd: 'true'
+`
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := LoadServiceDeployConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.After) != 1 || cfg.After[0] != "othersvc" {
+		t.Errorf("After = %v, want [othersvc]", cfg.After)
+	}
+}
+
+func TestLoadResetConfig_rejectsAfterField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "reset.yml")
+	yml := `after:
+  - somesvc
+phases:
+  - name: setup
+    steps:
+      - name: noop
+        type: shell
+        cmd: 'true'
+`
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadResetConfig(path)
+	if err == nil {
+		t.Fatal("expected error for after: in reset.yml, got nil")
+	}
+	if !errors.Is(err, ErrAfterFieldNotAllowed) {
+		t.Errorf("err = %v, want wraps ErrAfterFieldNotAllowed", err)
+	}
+}
+
+func TestDeployConfigAfter_decodePresent(t *testing.T) {
+	yml := `after:
+  - svc-a
+  - svc-b
+phases: []
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := LoadServiceDeployConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.After) != 2 || cfg.After[0] != "svc-a" || cfg.After[1] != "svc-b" {
+		t.Errorf("After = %v, want [svc-a svc-b]", cfg.After)
+	}
+}
+
+func TestDeployConfigAfter_decodeAbsent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy.yml")
+	if err := os.WriteFile(path, []byte("phases: []\n"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := LoadServiceDeployConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.After) != 0 {
+		t.Errorf("After = %v, want empty", cfg.After)
+	}
+}
+
+// --- LoadServiceDeployConfigs new path ---
+
+func TestLoadServiceDeployConfigs_strictDecoderRejectsUnknownFields(t *testing.T) {
+	dir := t.TempDir()
+	svcDir := filepath.Join(dir, "devbox", "services", "main")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	badYML := `phases:
+  - name: setup
+    steps:
+      - name: noop
+        type: shell
+        cmd: 'true'
+        notafield: boom
+`
+	if err := os.WriteFile(filepath.Join(svcDir, "deploy.yml"), []byte(badYML), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadServiceDeployConfigs(dir, map[string]ServiceConfig{"main": {}})
+	if err == nil {
+		t.Fatal("expected strict-decode error for unknown field, got nil")
+	}
+}
+
+func TestLoadServiceDeployConfigs_onlyServicesWithDeployFile(t *testing.T) {
+	dir := t.TempDir()
+	mainDir := filepath.Join(dir, "devbox", "services", "main")
+	if err := os.MkdirAll(mainDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mainDir, "deploy.yml"), []byte("phases: []\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// "other" has no deploy.yml
+	otherDir := filepath.Join(dir, "devbox", "services", "other")
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	services := map[string]ServiceConfig{"main": {}, "other": {}}
+	result, err := LoadServiceDeployConfigs(dir, services)
+	if err != nil {
+		t.Fatalf("LoadServiceDeployConfigs: %v", err)
+	}
+	if _, ok := result["main"]; !ok {
+		t.Error("main should be loaded")
+	}
+	if _, ok := result["other"]; ok {
+		t.Error("other should not be loaded (no deploy.yml)")
 	}
 }
 
@@ -2314,25 +2490,25 @@ func writePipelineFixture(t *testing.T, name, content string) string {
 	return path
 }
 
-// TestLoadDeployConfig_logDefaultEnabled verifies that omitting `log:` in
+// TestLoadServiceDeployConfig_logDefaultEnabled verifies that omitting `log:` in
 // deploy.yml defaults to logging enabled.
-func TestLoadDeployConfig_logDefaultEnabled(t *testing.T) {
+func TestLoadServiceDeployConfig_logDefaultEnabled(t *testing.T) {
 	path := writePipelineFixture(t, "deploy", "phases: []\n")
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if !cfg.LogEnabled() {
 		t.Errorf("deploy log should default to enabled")
 	}
 }
 
-// TestLoadDeployConfig_logExplicitFalse verifies that `log: false` disables it.
-func TestLoadDeployConfig_logExplicitFalse(t *testing.T) {
+// TestLoadServiceDeployConfig_logExplicitFalse verifies that `log: false` disables it.
+func TestLoadServiceDeployConfig_logExplicitFalse(t *testing.T) {
 	path := writePipelineFixture(t, "deploy", "log: false\nphases: []\n")
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	if cfg.LogEnabled() {
 		t.Errorf("deploy log should be disabled when log: false")
@@ -2398,7 +2574,7 @@ stop:
 
 // --- FilesGate ---
 
-func TestLoadDeployConfig_stepWithFilesGateShortForm(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithFilesGateShortForm(t *testing.T) {
 	yml := `
 phases:
   - name: setup
@@ -2409,9 +2585,9 @@ phases:
         files_gate: readable
 `
 	path := writePipelineFixture(t, "deploy", yml)
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
 	if step.FilesGate == nil {
@@ -2425,7 +2601,7 @@ phases:
 	}
 }
 
-func TestLoadDeployConfig_stepWithFilesGateLongForm(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithFilesGateLongForm(t *testing.T) {
 	yml := `
 phases:
   - name: setup
@@ -2438,9 +2614,9 @@ phases:
           require: [dump]
 `
 	path := writePipelineFixture(t, "deploy", yml)
-	cfg, err := LoadDeployConfig(path)
+	cfg, err := LoadServiceDeployConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDeployConfig: %v", err)
+		t.Fatalf("LoadServiceDeployConfig: %v", err)
 	}
 	step := cfg.Phases[0].Steps[0]
 	if step.FilesGate == nil {
@@ -2451,7 +2627,7 @@ phases:
 	}
 }
 
-func TestLoadDeployConfig_stepWithFilesGateUnknownField(t *testing.T) {
+func TestLoadServiceDeployConfig_stepWithFilesGateUnknownField(t *testing.T) {
 	yml := `
 phases:
   - name: setup
@@ -2464,12 +2640,12 @@ phases:
           unknown_field: value
 `
 	path := writePipelineFixture(t, "deploy", yml)
-	_, err := LoadDeployConfig(path)
+	_, err := LoadServiceDeployConfig(path)
 	if err == nil {
-		t.Fatal("LoadDeployConfig: expected error for unknown field in files_gate")
+		t.Fatal("LoadServiceDeployConfig: expected error for unknown field in files_gate")
 	}
 	if !strings.Contains(err.Error(), "unknown field") {
-		t.Errorf("LoadDeployConfig error should mention unknown field, got: %v", err)
+		t.Errorf("LoadServiceDeployConfig error should mention unknown field, got: %v", err)
 	}
 }
 

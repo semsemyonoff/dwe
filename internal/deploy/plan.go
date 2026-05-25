@@ -58,7 +58,7 @@ func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.R
 // FindStep looks up a step by address in the deploy config.
 // Supports two forms:
 //   - "<phase>/<step>"           — orchestrator step
-//   - "<service>/<phase>/<step>" — per-service step (loaded from devbox/deploy/<service>.yml)
+//   - "<service>/<phase>/<step>" — per-service step (loaded from devbox/services/<service>/deploy.yml)
 func FindStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, config.DeployStep, error) {
 	parts := strings.Split(address, "/")
 	switch len(parts) {
@@ -87,7 +87,7 @@ func FindStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, con
 			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("internal: __configPath missing from config")
 		}
 		baseDir := filepath.Dir(cfgPath)
-		svcDeploy, err := config.LoadDeployConfig(filepath.Join(baseDir, "devbox", "deploy", serviceName+".yml"))
+		svcDeploy, err := config.LoadServiceDeployConfig(filepath.Join(baseDir, "devbox", "services", serviceName, "deploy.yml"))
 		if err != nil {
 			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("loading deploy config for service %q: %w", serviceName, err)
 		}

@@ -48,8 +48,8 @@ func LoadTrackedServices(cfg *config.DevboxConfig, reg *registry.Registry, baseD
 	// Load service deploy configs for tracked services only
 	svcDeploys := make(map[string]*config.DeployConfig)
 	for _, name := range tracked {
-		svcPath := filepath.Join(baseDir, "devbox", "deploy", name+".yml")
-		svcDeploy, err := config.LoadDeployConfig(svcPath)
+		svcPath := filepath.Join(baseDir, "devbox", "services", name, "deploy.yml")
+		svcDeploy, err := config.LoadServiceDeployConfig(svcPath)
 		if err != nil {
 			// Tracked services always have deploy files (discovered by ResolvePlan),
 			// so any error here is a real problem.

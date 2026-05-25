@@ -43,11 +43,7 @@ project:
 	}
 
 	if serviceDeployYML != "" {
-		deployDir := filepath.Join(devboxDir, "deploy")
-		if err := os.MkdirAll(deployDir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte(serviceDeployYML), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(svcDir, "deploy.yml"), []byte(serviceDeployYML), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
