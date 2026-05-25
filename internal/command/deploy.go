@@ -186,6 +186,12 @@ type DeployOpts struct {
 	Resume         bool
 	NonInteractive bool
 	SkipPreflight  bool
+	// SuppressPendingClear prevents runDeployHelper from clearing pending-deploy
+	// journal entries after a successful run. Set by the toggle executor, which
+	// owns the pending clear itself via a single atomic ClearPendingOps call
+	// after ALL apply steps succeed — so the inner clear must not fire on a
+	// per-step basis.
+	SuppressPendingClear bool
 }
 
 func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool) error {
@@ -708,11 +714,38 @@ func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, 
 		return fmt.Errorf("deploy completed but state could not be saved: %w", err)
 	}
 
-	// Clear pending deploy entries for this successful run.
-	// Full-project deploy clears the whole deploy kind; subset deploy clears only
-	// the targeted services (other pending deploy entries for other services survive).
+	clearDeployedPending(statePath, opts, steps)
+
+	if logEnabled {
+		w.Info("Deploy log saved to: " + logPath)
+	}
+	return nil
+}
+
+// clearDeployedPending clears pending deploy entries for the services actually
+// executed in this run. For full deploys (no opts.Services), only the service
+// names present in steps are cleared — full deploy only processes enabled
+// services, so disabled-service pending entries must not be discarded here.
+// For subset deploys, only the targeted services are cleared.
+// No-op when SuppressPendingClear is set (toggle executor owns the clear).
+func clearDeployedPending(statePath string, opts DeployOpts, steps []pipeline.ResolvedStep) {
+	if opts.SuppressPendingClear {
+		return
+	}
 	if len(opts.Services) == 0 {
-		if clearErr := journal.ClearPendingForKind(statePath, journal.PendingDeploy); clearErr != nil {
+		seen := make(map[string]bool)
+		var svcs []string
+		for _, rs := range steps {
+			if rs.Service != "" && !seen[rs.Service] {
+				seen[rs.Service] = true
+				svcs = append(svcs, rs.Service)
+			}
+		}
+		if len(svcs) == 0 {
+			return
+		}
+		sort.Strings(svcs)
+		if clearErr := journal.ClearPendingForServices(statePath, journal.PendingDeploy, svcs); clearErr != nil {
 			slog.Warn("clearing pending deploy state after success", "err", clearErr)
 		}
 	} else {
@@ -720,11 +753,6 @@ func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, 
 			slog.Warn("clearing pending deploy state after success", "err", clearErr)
 		}
 	}
-
-	if logEnabled {
-		w.Info("Deploy log saved to: " + logPath)
-	}
-	return nil
 }
 
 // collectMissingDeps returns sorted names of after: dependencies of the given

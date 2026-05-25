@@ -316,8 +316,9 @@ func executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, o
 		switch step.Kind {
 		case journal.PendingDeploy:
 			stepErr = deps.RunDeploy(ctx, deps.Cmd, deps.Flags, DeployOpts{
-				Services:       step.Services,
-				NonInteractive: true,
+				Services:             step.Services,
+				NonInteractive:       true,
+				SuppressPendingClear: true,
 			})
 		case journal.PendingRestart:
 			configPath := filepath.Join(deps.BaseDir, "devbox.yml")

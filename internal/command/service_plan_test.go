@@ -810,6 +810,92 @@ func TestExecuteTogglePlan_MixedBatchPartialFailure(t *testing.T) {
 	}
 }
 
+// TestExecuteTogglePlan_DeployOpts_SuppressPendingClear verifies that executeTogglePlan
+// always passes SuppressPendingClear:true to RunDeploy so the inner deploy helper does
+// not race-clear pending state that the outer toggle executor owns.
+func TestExecuteTogglePlan_DeployOpts_SuppressPendingClear(t *testing.T) {
+	var capturedOpts DeployOpts
+	deps, _ := makeExecuteDeps(t,
+		func(_ context.Context, _ *cobra.Command, _ *rootFlags, opts DeployOpts) error {
+			capturedOpts = opts
+			return nil
+		},
+		nil, nil,
+	)
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{{Kind: journal.PendingDeploy, Services: []string{"x"}}},
+	}
+	contributors := []Contributor{{Service: "x", Requires: config.RequiresDeploy}}
+	if err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !capturedOpts.SuppressPendingClear {
+		t.Error("RunDeploy must be called with SuppressPendingClear:true so the toggle executor owns the pending clear")
+	}
+}
+
+// TestExecuteTogglePlan_MixedBatchPartialFailure_SimulatedRealDeploy verifies that even
+// when RunDeploy would normally clear pending state (simulating real runDeployHelper
+// behaviour), pending stays fully intact when the subsequent restart step fails.
+func TestExecuteTogglePlan_MixedBatchPartialFailure_SimulatedRealDeploy(t *testing.T) {
+	// baseDir is set after makeExecuteDeps returns; the closure reads it via
+	// pointer so the assignment is visible when the stub is invoked.
+	var baseDir string
+	deps, dir := makeExecuteDeps(t,
+		func(_ context.Context, _ *cobra.Command, _ *rootFlags, opts DeployOpts) error {
+			// Simulate what runDeployHelper does when SuppressPendingClear is false:
+			// clear deploy pending.  This should NOT happen when the flag is set,
+			// but we still clear here to show the regression test catches it if the
+			// flag is ever accidentally dropped.
+			if !opts.SuppressPendingClear {
+				// Replicate the inner clear — this is the bug path.
+				_ = journal.ClearPendingForServices(
+					filepath.Join(baseDir, "state.yml"), journal.PendingDeploy, opts.Services,
+				)
+			}
+			return nil // deploy succeeds
+		},
+		func(_ lifecycle.RunContext) error { return fmt.Errorf("restart failed") },
+		nil,
+	)
+	baseDir = dir
+	statePath := filepath.Join(dir, "state.yml")
+	if err := journal.AddPendingOps(statePath, []journal.PendingOp{
+		{Kind: journal.PendingDeploy, Services: []string{"a"}},
+		{Kind: journal.PendingRestart},
+	}, "hash1"); err != nil {
+		t.Fatalf("pre-seed: %v", err)
+	}
+
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{
+			{Kind: journal.PendingDeploy, Services: []string{"a"}},
+			{Kind: journal.PendingRestart},
+		},
+	}
+	contributors := []Contributor{
+		{Service: "a", Requires: config.RequiresDeploy},
+		{Service: "b", Requires: config.RequiresRestart},
+	}
+	err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors})
+	if err == nil {
+		t.Fatal("expected error from restart failure")
+	}
+	state, loadErr := journal.Load(statePath)
+	if loadErr != nil {
+		t.Fatalf("load state: %v", loadErr)
+	}
+	if state.Pending == nil {
+		t.Fatal("pending should be intact on partial failure")
+	}
+	if state.Pending.Find(journal.PendingDeploy) == nil {
+		t.Error("deploy pending should remain: SuppressPendingClear must have been set on RunDeploy call")
+	}
+	if state.Pending.Find(journal.PendingRestart) == nil {
+		t.Error("restart pending should remain")
+	}
+}
+
 // TestExecuteTogglePlan_ContributorsRequiredError verifies the guard fires when
 // Contributors is empty but plan has apply steps.
 func TestExecuteTogglePlan_ContributorsRequiredError(t *testing.T) {

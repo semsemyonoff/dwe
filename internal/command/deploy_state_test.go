@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	pipeline "devbox-cli/internal/pipeline"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -200,5 +202,108 @@ func TestDeployStateRepair(t *testing.T) {
 		assert.Equal(t, journal.StatusOk, step.Status)
 		assert.Equal(t, "step-hash-123", step.ActionHash)
 		assert.Equal(t, int64(100), step.DurationMs)
+	})
+}
+
+// TestClearDeployedPending verifies that clearDeployedPending only removes
+// pending entries for services that actually appeared in the plan steps,
+// leaving disabled-service entries intact.
+func TestClearDeployedPending(t *testing.T) {
+	makeStep := func(service string) pipeline.ResolvedStep {
+		return pipeline.ResolvedStep{Step: config.DeployStep{}, Service: service}
+	}
+
+	t.Run("full deploy: disabled service pending survives", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state.yml")
+		// Pre-seed: {deploy, [postgres, web]} — postgres is disabled, web is enabled.
+		require.NoError(t, journal.AddPendingOp(statePath, journal.PendingOp{
+			Kind:     journal.PendingDeploy,
+			Services: []string{"postgres", "web"},
+		}, "hash1"))
+
+		// Plan only contains steps for web (postgres is disabled; full deploy skips it).
+		steps := []pipeline.ResolvedStep{
+			{Step: config.DeployStep{}, Service: ""}, // implicit env step (no service)
+			makeStep("web"),
+		}
+		clearDeployedPending(statePath, DeployOpts{}, steps)
+
+		state, err := journal.Load(statePath)
+		require.NoError(t, err)
+		require.NotNil(t, state.Pending, "pending should remain for postgres")
+		op := state.Pending.Find(journal.PendingDeploy)
+		require.NotNil(t, op)
+		assert.Equal(t, []string{"postgres"}, op.Services)
+	})
+
+	t.Run("full deploy: all services in plan clears pending entirely", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state.yml")
+		require.NoError(t, journal.AddPendingOp(statePath, journal.PendingOp{
+			Kind:     journal.PendingDeploy,
+			Services: []string{"alpha", "beta"},
+		}, "hash1"))
+
+		steps := []pipeline.ResolvedStep{makeStep("alpha"), makeStep("beta")}
+		clearDeployedPending(statePath, DeployOpts{}, steps)
+
+		state, err := journal.Load(statePath)
+		require.NoError(t, err)
+		assert.Nil(t, state.Pending, "all services deployed: pending should be nil")
+	})
+
+	t.Run("full deploy: env-only plan (no service steps) leaves pending intact", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state.yml")
+		require.NoError(t, journal.AddPendingOp(statePath, journal.PendingOp{
+			Kind:     journal.PendingDeploy,
+			Services: []string{"web"},
+		}, "hash1"))
+
+		// Only implicit env step, no per-service steps.
+		steps := []pipeline.ResolvedStep{{Step: config.DeployStep{}, Service: ""}}
+		clearDeployedPending(statePath, DeployOpts{}, steps)
+
+		state, err := journal.Load(statePath)
+		require.NoError(t, err)
+		require.NotNil(t, state.Pending)
+		op := state.Pending.Find(journal.PendingDeploy)
+		require.NotNil(t, op)
+		assert.Equal(t, []string{"web"}, op.Services)
+	})
+
+	t.Run("SuppressPendingClear: nothing is cleared", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state.yml")
+		require.NoError(t, journal.AddPendingOp(statePath, journal.PendingOp{
+			Kind:     journal.PendingDeploy,
+			Services: []string{"web"},
+		}, "hash1"))
+
+		steps := []pipeline.ResolvedStep{makeStep("web")}
+		clearDeployedPending(statePath, DeployOpts{SuppressPendingClear: true}, steps)
+
+		state, err := journal.Load(statePath)
+		require.NoError(t, err)
+		require.NotNil(t, state.Pending, "SuppressPendingClear: pending must not be touched")
+	})
+
+	t.Run("subset deploy: only targeted services cleared", func(t *testing.T) {
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state.yml")
+		require.NoError(t, journal.AddPendingOp(statePath, journal.PendingOp{
+			Kind:     journal.PendingDeploy,
+			Services: []string{"alpha", "beta", "gamma"},
+		}, "hash1"))
+
+		clearDeployedPending(statePath, DeployOpts{Services: []string{"alpha"}}, nil)
+
+		state, err := journal.Load(statePath)
+		require.NoError(t, err)
+		require.NotNil(t, state.Pending)
+		op := state.Pending.Find(journal.PendingDeploy)
+		require.NotNil(t, op)
+		assert.Equal(t, []string{"beta", "gamma"}, op.Services)
 	})
 }
