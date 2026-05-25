@@ -166,45 +166,45 @@ Pending-deploy hint from `journal.PendingApply` is surfaced at the top of the me
 
 ### Task 7: Wizard executor (pure half — answers → write)
 
-- [ ] declare `var ErrWizardCanceled = errors.New("wizard canceled")` in `internal/setup/errors.go` — used by the huh half and by tests to assert the no-write cancel path.
-- [ ] create `internal/setup/wizard.go` with `Run(ctx context.Context, deps WizardDeps) error` where `WizardDeps` is a plain struct (not functional options — these are required collaborators, not optional config):
+- [x] declare `var ErrWizardCanceled = errors.New("wizard canceled")` in `internal/setup/errors.go` — used by the huh half and by tests to assert the no-write cancel path.
+- [x] create `internal/setup/wizard.go` with `Run(ctx context.Context, deps WizardDeps) error` where `WizardDeps` is a plain struct (not functional options — these are required collaborators, not optional config):
   - `BaseDir string`, `LocalPath string`
   - `Questions []Question` (already loaded by caller; loader concern stays out of executor)
   - `PortConflicts []env.PortConflict` (gathered by caller via the exported `env.CollectPortConflicts` probe from Task 6, NOT via `preflight.Run` and NOT by parsing diagnostic messages)
   - `AskQuestions func(ctx, []Question) (answers map[string]any, err error)` — stubbed in tests, huh-driven in production
   - `AskPortOverrides func(ctx, []env.PortConflict) (overrides map[PortKey]int, err error)` — same shape
-- [ ] flow inside `Run`:
-  - if `len(PortConflicts) > 0`: call `AskPortOverrides`; on `errors.Is(err, ErrWizardCanceled)` return immediately without writing
-  - if `len(Questions) > 0`: call `AskQuestions`; same cancel behavior
-  - **Runtime answer normalization** (before any overlay is built): for every question, assert both the Go type AND the semantic constraint. `AskQuestions` returns `map[string]any`, so a buggy or stubbed asker can return `"true"` for a `confirm`, an unknown enum for a `select`, a `string` where `[]string` is expected for `multiselect`, OR — and this is the load-bearing case the type check alone misses — `int(99999)` for a `port`-preset input, `"bad host!"` for a `hostname` preset, or a string that fails a custom regex. The wizard runtime is the last line of defense before write — this is non-negotiable for safety.
-    - **Type assertions:**
-      - `confirm` → require `bool` (not `"true"` / `"false"` strings)
-      - `input` with `validate.preset: port` → require `int` (Task 4's `ValidateAndCoerce` returns `int` for this preset; the asker is expected to thread that typed value through)
-      - `input` with any other preset, with a regex, or with no preset/regex → require `string`
-      - `select` → require `string` AND the value must appear in `Question.Options[].Value` (membership check)
-      - `multiselect` → require `[]string` AND every element must appear in `Question.Options[].Value`
-    - **Semantic re-validation for `input` types** (after the type assertion passes):
-      - `port` preset → check range `1..65535` on the int value (catches `99999`, `0`, `-1`)
-      - `hostname` / `path` / `non-empty` presets → re-run `ValidateAndCoerce(q, value.(string))` and discard the typed result, propagating any error. (All identifiers in `internal/setup/` are referenced without the `setup.` prefix from inside the package — this and other helper names are unqualified throughout the implementation; tests and external callers use `setup.ValidateAndCoerce`.) This re-runs the same preset logic that `coerceInputAnswers` ran in the huh path; for non-huh askers (tests, future programmatic callers) it's the only enforcement.
-      - `validate.regex` set → compile (already validated at load time, but defensive: use `regexp.Compile`, not `MustCompile`) and `MatchString` against the value; non-match → wrapped error.
-    - Any mismatch returns a wrapped error citing the question `id` and the specific constraint that failed; no overlay is built and no file is written.
-  - **Runtime required-answer enforcement**: for every question with `Required: true` whose answer is missing from the asker's returned map, or whose answer is the zero value for its (now-asserted) type, return a wrapped error and write nothing. Zero values per type:
-    - `confirm` → `false` is a valid answer, **not** treated as "empty"; `Required` on a `confirm` is a no-op (the static validator `setup.required_consistent` already warns on this)
-    - `input` with `port` preset → `0` (out of valid port range, so this is unreachable via `ValidateAndCoerce` — defensive guard only)
-    - `input` (string) / `select` → `""`
-    - `multiselect` → `len == 0`
+- [x] flow inside `Run`:
+  - [x] if `len(PortConflicts) > 0`: call `AskPortOverrides`; on `errors.Is(err, ErrWizardCanceled)` return immediately without writing
+  - [x] if `len(Questions) > 0`: call `AskQuestions`; same cancel behavior
+  - [x] **Runtime answer normalization** (before any overlay is built): for every question, assert both the Go type AND the semantic constraint. `AskQuestions` returns `map[string]any`, so a buggy or stubbed asker can return `"true"` for a `confirm`, an unknown enum for a `select`, a `string` where `[]string` is expected for `multiselect`, OR — and this is the load-bearing case the type check alone misses — `int(99999)` for a `port`-preset input, `"bad host!"` for a `hostname` preset, or a string that fails a custom regex. The wizard runtime is the last line of defense before write — this is non-negotiable for safety.
+    - [x] **Type assertions:**
+      - [x] `confirm` → require `bool` (not `"true"` / `"false"` strings)
+      - [x] `input` with `validate.preset: port` → require `int` (Task 4's `ValidateAndCoerce` returns `int` for this preset; the asker is expected to thread that typed value through)
+      - [x] `input` with any other preset, with a regex, or with no preset/regex → require `string`
+      - [x] `select` → require `string` AND the value must appear in `Question.Options[].Value` (membership check)
+      - [x] `multiselect` → require `[]string` AND every element must appear in `Question.Options[].Value`
+    - [x] **Semantic re-validation for `input` types** (after the type assertion passes):
+      - [x] `port` preset → check range `1..65535` on the int value (catches `99999`, `0`, `-1`)
+      - [x] `hostname` / `path` / `non-empty` presets → re-run `ValidateAndCoerce(q, value.(string))` and discard the typed result, propagating any error. (All identifiers in `internal/setup/` are referenced without the `setup.` prefix from inside the package — this and other helper names are unqualified throughout the implementation; tests and external callers use `setup.ValidateAndCoerce`.) This re-runs the same preset logic that `coerceInputAnswers` ran in the huh path; for non-huh askers (tests, future programmatic callers) it's the only enforcement.
+      - [x] `validate.regex` set → compile (already validated at load time, but defensive: use `regexp.Compile`, not `MustCompile`) and `MatchString` against the value; non-match → wrapped error.
+    - [x] Any mismatch returns a wrapped error citing the question `id` and the specific constraint that failed; no overlay is built and no file is written.
+  - [x] **Runtime required-answer enforcement**: for every question with `Required: true` whose answer is missing from the asker's returned map, or whose answer is the zero value for its (now-asserted) type, return a wrapped error and write nothing. Zero values per type:
+    - [x] `confirm` → `false` is a valid answer, **not** treated as "empty"; `Required` on a `confirm` is a no-op (the static validator `setup.required_consistent` already warns on this)
+    - [x] `input` with `port` preset → `0` (out of valid port range, so this is unreachable via `ValidateAndCoerce` — defensive guard only)
+    - [x] `input` (string) / `select` → `""`
+    - [x] `multiselect` → `len == 0`
     The static validator can only check the YAML shape; this is the runtime guard that prevents a buggy asker from producing a half-filled `local.yml`.
-  - `qOverlay, err := BuildOverlay(Questions, answers)`
-  - `pOverlay, err := BuildPortOverlay(overrides)`
-  - `existing, err := LoadLocalYAML(LocalPath)` — **DO NOT discard this error.** Any read/parse failure must be returned wrapped (`fmt.Errorf("read existing local.yml: %w", err)`) so the wizard refuses to write rather than silently overwriting a malformed-but-present file. A missing file is already a non-error path inside `LoadLocalYAML` itself (returns empty map, nil).
-  - sequential merge (cannot nest, both return `(map, error)`):
-    - `merged, err := MergeIntoLocal(existing, qOverlay)` — return wrapped on error
-    - `merged, err = MergeIntoLocal(merged, pOverlay)` — return wrapped on error
-  - `WriteLocalYAML(LocalPath, merged)` (Task 1 made this atomic)
-  - return; caller is responsible for config reload + preflight + deploy
-- [ ] **Preflight is intentionally NOT run from `Run`** — `preflight.Run` aborts on any `env.ports_free` error diagnostic (`internal/preflight/preflight.go:123,147`), which would defeat the whole point of the wizard's port-fix step. Instead, the menu RunE (Task 9) probes port conflicts directly via `env.CollectPortConflicts` (Task 6), passes them into the wizard, and only runs full `preflight.Run` **after** local.yml has been written and config reloaded.
-- [ ] write tests with stub callbacks: full happy path; port-conflict path with port overlay merged into `services.<name>.ports.<port_name>`; cancel from `AskQuestions` returns `ErrWizardCanceled` and leaves `local.yml` untouched; write failure (simulated via read-only dir) returns a wrapped error; deep-merge preserves pre-existing local.yml keys not touched by questions; question overlay + port overlay both present produces a single nested map; **malformed existing `local.yml` returns wrapped error and leaves the file untouched** (asserts the no-silent-overwrite rule); **required-answer enforcement: asker omits a `Required: true` question → error before any write, asker returns `""` for a `Required` input → error**; **type-mismatch enforcement (per-type, file untouched on each): `confirm` answered with `"true"` string → error, `select` answered with a value not in `Options` → error, `multiselect` answered with a `string` instead of `[]string` → error, `multiselect` answered with `[]string{"unknown"}` not in `Options` → error**; **semantic-mismatch enforcement (file untouched on each): `port`-preset input answered with `int(99999)` → error, `hostname`-preset input answered with `"bad host!"` → error, regex-validated input answered with a non-matching string → error**; **`AskPortOverrides` returns `int(99999)` → wrapped error from `BuildPortOverlay`, no write**.
-- [ ] run `go test ./internal/setup/...` — must pass before next task
+  - [x] `qOverlay, err := BuildOverlay(Questions, answers)`
+  - [x] `pOverlay, err := BuildPortOverlay(overrides)`
+  - [x] `existing, err := LoadLocalYAML(LocalPath)` — **DO NOT discard this error.** Any read/parse failure must be returned wrapped (`fmt.Errorf("read existing local.yml: %w", err)`) so the wizard refuses to write rather than silently overwriting a malformed-but-present file. A missing file is already a non-error path inside `LoadLocalYAML` itself (returns empty map, nil).
+  - [x] sequential merge (cannot nest, both return `(map, error)`):
+    - [x] `merged, err := MergeIntoLocal(existing, qOverlay)` — return wrapped on error
+    - [x] `merged, err = MergeIntoLocal(merged, pOverlay)` — return wrapped on error
+  - [x] `WriteLocalYAML(LocalPath, merged)` (Task 1 made this atomic)
+  - [x] return; caller is responsible for config reload + preflight + deploy
+- [x] **Preflight is intentionally NOT run from `Run`** — `preflight.Run` aborts on any `env.ports_free` error diagnostic (`internal/preflight/preflight.go:123,147`), which would defeat the whole point of the wizard's port-fix step. Instead, the menu RunE (Task 9) probes port conflicts directly via `env.CollectPortConflicts` (Task 6), passes them into the wizard, and only runs full `preflight.Run` **after** local.yml has been written and config reloaded.
+- [x] write tests with stub callbacks: full happy path; port-conflict path with port overlay merged into `services.<name>.ports.<port_name>`; cancel from `AskQuestions` returns `ErrWizardCanceled` and leaves `local.yml` untouched; write failure (simulated via read-only dir) returns a wrapped error; deep-merge preserves pre-existing local.yml keys not touched by questions; question overlay + port overlay both present produces a single nested map; **malformed existing `local.yml` returns wrapped error and leaves the file untouched** (asserts the no-silent-overwrite rule); **required-answer enforcement: asker omits a `Required: true` question → error before any write, asker returns `""` for a `Required` input → error**; **type-mismatch enforcement (per-type, file untouched on each): `confirm` answered with `"true"` string → error, `select` answered with a value not in `Options` → error, `multiselect` answered with a `string` instead of `[]string` → error, `multiselect` answered with `[]string{"unknown"}` not in `Options` → error**; **semantic-mismatch enforcement (file untouched on each): `port`-preset input answered with `int(99999)` → error, `hostname`-preset input answered with `"bad host!"` → error, regex-validated input answered with a non-matching string → error**; **`AskPortOverrides` returns `int(99999)` → wrapped error from `BuildPortOverlay`, no write**.
+- [x] run `go test ./internal/setup/...` — must pass before next task
 
 ### Task 8: Wizard executor (huh half — actual TUI bindings)
 
