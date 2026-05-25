@@ -217,9 +217,9 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 6: Per-folder validators + deploy `after:` validation
 
-- [ ] in `internal/validate/config/`, add a `services_folder` validator that scans `devbox/services/*/`: missing `service.yml` → Error; files other than `service.yml`/`deploy.yml`/`reset.yml` → Warning ("unknown file in service folder")
-- [ ] update existing service-shape validators to consume the per-folder loader result
-- [ ] **add a `deploy_after` validator** in `internal/validate/config/` covering the new `after:` field (Task 4). It needs the full set of loaded `DeployConfig` + `ServiceConfig` maps to do cross-file checks:
+- [x] in `internal/validate/config/`, add a `services_folder` validator that scans `devbox/services/*/`: missing `service.yml` → Error; files other than `service.yml`/`deploy.yml`/`reset.yml` → Warning ("unknown file in service folder")
+- [x] update existing service-shape validators to consume the per-folder loader result
+- [x] **add a `deploy_after` validator** in `internal/validate/config/` covering the new `after:` field (Task 4). It needs the full set of loaded `DeployConfig` + `ServiceConfig` maps to do cross-file checks:
   | Rule | Severity | Message |
   |---|---|---|
   | `after:` contains the service's own name (self-reference) | Error | `service %q after: references itself` |
@@ -232,8 +232,8 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   | `after:` present in `devbox/services/<name>/reset.yml` (per-service reset) | Error | `"after" is only valid in devbox/services/<name>/deploy.yml; remove from %s/reset.yml` |
   - cycle detection: call `deploy.TopoSortByAfter(deploys, cfg.Services)` once (over the per-service-deploy map only, NOT project deploy or any reset configs); on `errors.Is(err, deploy.ErrDeployCycle)` emit ONE Error diagnostic with the cycle path embedded; on `errors.Is(err, deploy.ErrDeploySelfReference)` or `ErrDeployUnknownAfterRef`, emit corresponding diagnostics (these duplicate the per-rule checks above but provide a safety net if the rules are bypassed); on success no diagnostic. Don't emit per-service diagnostics for cycle participation — one is sufficient
   - the scope-limit rules above are enforced per-file by calling **`config.ParseDeployConfigForValidation(path)`** (Task 4's parse-only entry point) for each non-service-deploy file — NOT `LoadProjectDeployConfig` / `LoadResetConfig` / `LoadServiceResetConfig`, which reject `after:` at load and would deny the validator the chance to emit per-file diagnostics. Then check `cfg.After != nil && len(cfg.After) > 0` and emit the matching diagnostic. Using a separate parse-only function keeps the loader rejection (runtime gate) and the validator scope check (user-friendly gate) independent — bypassing one doesn't bypass the other
-- [ ] register the new validator in `internal/validate/config/all.go` `All()`
-- [ ] write tests:
+- [x] register the new validator in `internal/validate/config/all.go` `All()`
+- [x] write tests:
   - missing `service.yml` error diagnostic, stray file warning, well-formed folder produces no diagnostics
   - `after:` self-reference → Error
   - `after:` to unknown service → Error
@@ -244,7 +244,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - **`after:` in `devbox/deploy.yml` → Error** (fifteenth review scope-limit regression)
   - **`after:` in `devbox/reset.yml` → Error**
   - **`after:` in `devbox/services/<name>/reset.yml` → Error**
-- [ ] run `go test ./internal/validate/...` - must pass before next task
+- [x] run `go test ./internal/validate/...` - must pass before next task
 
 ### Task 7: Drop app-only deploy gate
 

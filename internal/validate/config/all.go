@@ -21,6 +21,8 @@ func All() []validate.Validator {
 		&resetValidator{},
 		&resetFilesGateValidator{},
 		&serviceDeployValidator{},
+		&servicesFolderValidator{},
+		&deployAfterValidator{},
 		&parallelGroupsValidator{},
 		&lifecycleParallelGroupsValidator{},
 		&resetParallelGroupsValidator{},
