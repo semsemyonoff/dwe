@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
@@ -52,8 +54,8 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 
 	ctx := cmd.Context()
 	baseDir := flags.ProjectRoot()
-	localPath := fmt.Sprintf("%s/devbox/local.yml", baseDir)
-	setupPath := fmt.Sprintf("%s/devbox/setup.yml", baseDir)
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	setupPath := filepath.Join(baseDir, "devbox", "setup.yml")
 
 	// Load config (already validated by root's PersistentPreRunE)
 	cfg, err := config.LoadConfig(flags.configPath)
@@ -108,7 +110,7 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 		((setupCfg != nil && len(setupCfg.Questions) > 0) || len(conflicts) > 0)
 
 	// Load journal for pending-deploy banner
-	statePath := fmt.Sprintf("%s/.devbox/deploy/state.yml", baseDir)
+	statePath := filepath.Join(baseDir, ".devbox", "deploy", "state.yml")
 	state, err := journal.Load(statePath)
 	var pending *journal.PendingApply
 	if err == nil && state != nil {
@@ -147,6 +149,9 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 		}
 		serviceName, err := selectService(ctx, cmd, enabledServices)
 		if err != nil {
+			if errors.Is(err, setup.ErrWizardCanceled) {
+				return nil
+			}
 			return err
 		}
 		opts := deployRunOpts{
@@ -170,6 +175,9 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 		}
 		serviceName, err := selectService(ctx, cmd, enabledServices)
 		if err != nil {
+			if errors.Is(err, setup.ErrWizardCanceled) {
+				return nil
+			}
 			return err
 		}
 		opts := deployPlanOpts{
@@ -223,7 +231,7 @@ func isEmptyLocal(m map[string]any) bool {
 	return len(m) == 0
 }
 
-// getEnabledServices returns the list of enabled service names.
+// getEnabledServices returns the sorted list of enabled service names.
 func getEnabledServices(cfg *config.DevboxConfig) []string {
 	var enabled []string
 	for name, svcCfg := range cfg.Services {
@@ -231,11 +239,12 @@ func getEnabledServices(cfg *config.DevboxConfig) []string {
 			enabled = append(enabled, name)
 		}
 	}
+	sort.Strings(enabled)
 	return enabled
 }
 
 // selectService prompts the user to choose a service from the list.
-func selectService(ctx context.Context, cmd *cobra.Command, services []string) (string, error) {
+func selectService(_ context.Context, cmd *cobra.Command, services []string) (string, error) {
 	var selected string
 	form := huh.NewForm(
 		huh.NewGroup(
