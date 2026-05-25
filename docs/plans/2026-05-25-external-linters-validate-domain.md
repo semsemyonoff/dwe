@@ -77,7 +77,7 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
 - [x] run `go test ./internal/config/...` and `make lint` — must pass before Task 2. (`make test` runs the full suite per the Makefile; for focused work invoke `go test` directly.)
 
 ### Task 2: Adapter interface + generic adapter + diagnostic helpers
-- [ ] create package `internal/validate/linters/` with `linters.go`:
+- [x] create package `internal/validate/linters/` with `linters.go`:
   - `Adapter` interface:
     - `ID() string`
     - `DefaultBin() string`
@@ -117,8 +117,8 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
     - `ParseOutput(stdout, stderr []byte, exitCode int) ([]validate.Diagnostic, error)`
   - helpers `fail/warn/info/ok(id, msg, hint)` that stamp `Domain: "linters"` (mirror `env.fail`).
   - helper `validateUserFlags(adapter Adapter, userFlags []string) error` — checks each user flag against the adapter's `ReservedFlags()` set. Called by `All()` (Task 6) when binding an entry to an adapter; on failure, `All()` synthesizes an error validator instead of registering the linter, so a bad config short-circuits before any subprocess runs.
-- [ ] create `generic.go`: generic adapter that runs `bin <flags> <files...>` and turns non-zero exit + stdout/stderr into one error-severity diagnostic (no per-line parsing). Used when `type: generic`. `DefaultFilenames` returns nil. `ReservedFlags` returns nil — the generic adapter doesn't parse output, so the user owns the entire flag surface.
-- [ ] create `walk.go`: helper `collectFiles(baseDir string, paths []string, exts []string, filenames []string, pathsAreDefaults bool) (files []string, missing []string, err error)`:
+- [x] create `generic.go`: generic adapter that runs `bin <flags> <files...>` and turns non-zero exit + stdout/stderr into one error-severity diagnostic (no per-line parsing). Used when `type: generic`. `DefaultFilenames` returns nil. `ReservedFlags` returns nil — the generic adapter doesn't parse output, so the user owns the entire flag surface.
+- [x] create `walk.go`: helper `collectFiles(baseDir string, paths []string, exts []string, filenames []string, pathsAreDefaults bool) (files []string, missing []string, err error)`:
   - recursive `filepath.WalkDir` rooted at each `paths` entry resolved under `baseDir`.
   - explicit file paths (entries that resolve to a regular file) bypass extension/filename filters.
   - **symlinks are explicitly skipped** — check `d.Type()&fs.ModeSymlink != 0` and `return nil` for files, `return filepath.SkipDir` for dirs. `WalkDir` does not follow symlinks but it does return them as entries; without this check a symlink pointing outside `baseDir` would slip past containment.
@@ -126,9 +126,9 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
   - file matches if extension is in `exts` OR basename is in `filenames`.
   - **path resolution + containment**: normalize each entry via `cleanEntry := filepath.Clean(entry)`. If `cleanEntry == "."`, treat as `baseDir` itself (root-equality case — `pathsafe.ContainedRel(baseDir, baseDir)` rejects `"."` by design at `pathsafe.go:63`, so we short-circuit before calling it). For all other entries, resolve to `filepath.Join(baseDir, cleanEntry)` and validate containment via `pathsafe.ContainedRel(baseDir, absEntry)` (defense in depth; loader already rejected `""`, `..`, and absolute paths in Task 1, but ContainedRel catches anything the loader missed and prevents drift if rules diverge). This matters because `hadolint`'s `DefaultPaths = ["."]` — without the root-equality case, hadolint would fail on every project. Empty-string entries cannot reach this code (loader rejects them); no need for `cleanEntry == ""` branch.
   - **missing-path semantics depend on `pathsAreDefaults`**: when paths came from adapter defaults (common case: `shellcheck` defaults to `["devbox/scripts", "scripts"]` but the project has neither), absent entries are silently dropped — no error, no diagnostic, just an empty result. When paths came from the user's explicit `paths:` config, absent entries are appended to `missing` so the runtime can emit a Warning ("`paths: nonexistent` does not exist"). Distinguishes "your defaults didn't match this project" from "you asked for X and X is gone."
-- [ ] write `linters_test.go`: generic adapter parse behavior (exit 0 → no diags; exit 1 → one error with combined output as Message).
-- [ ] write `walk_test.go`: table-driven — extension filter, filename filter, both together, explicit file bypass, **`paths: ["."]` walks baseDir without error (hadolint's default)**, **missing path with `pathsAreDefaults=true` returns empty silently**, **missing path with `pathsAreDefaults=false` returns it in the `missing` slice**, path traversal rejected, **symlink to file skipped**, **symlink to dir skipped**, **`.git` always skipped**. (Empty-string paths are not tested here — loader rejects them in Task 1, so they can't reach `collectFiles`.)
-- [ ] run `go test ./internal/validate/linters/...` — must pass before Task 3.
+- [x] write `linters_test.go`: generic adapter parse behavior (exit 0 → no diags; exit 1 → one error with combined output as Message).
+- [x] write `walk_test.go`: table-driven — extension filter, filename filter, both together, explicit file bypass, **`paths: ["."]` walks baseDir without error (hadolint's default)**, **missing path with `pathsAreDefaults=true` returns empty silently**, **missing path with `pathsAreDefaults=false` returns it in the `missing` slice**, path traversal rejected, **symlink to file skipped**, **symlink to dir skipped**, **`.git` always skipped**. (Empty-string paths are not tested here — loader rejects them in Task 1, so they can't reach `collectFiles`.)
+- [x] run `go test ./internal/validate/linters/...` — must pass before Task 3.
 
 ### Task 3: shellcheck built-in adapter
 - [ ] create `shellcheck.go`: implements `Adapter`. `DefaultBin = "shellcheck"`, `DefaultPaths = ["devbox/scripts", "scripts"]`, `DefaultExtensions = [".sh", ".bash"]`, `DefaultFilenames = nil`, `ReservedFlags = []string{"--format", "-f"}` (locked because output format is parser-load-bearing — we depend on JSON shape).
