@@ -28,18 +28,54 @@ func LoadLocalYAML(localPath string) (map[string]any, error) {
 	return local, nil
 }
 
-// WriteLocalYAML marshals and writes the local config map.
+// WriteLocalYAML marshals and writes the local config map atomically using write-temp + rename.
+// Ensures the parent directory exists with mode 0o755 and the file is written with mode 0o600.
 func WriteLocalYAML(localPath string, local map[string]any) error {
 	data, err := yaml.Marshal(local)
 	if err != nil {
 		return fmt.Errorf("marshal local config: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+
+	// Ensure parent directory exists
+	dir := filepath.Dir(localPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create directory for %s: %w", localPath, err)
 	}
-	if err := os.WriteFile(localPath, data, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", localPath, err)
+
+	// Write to temp file
+	tmpFile, err := os.CreateTemp(dir, ".local-*.yml")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
 	}
+	tmpPath := tmpFile.Name()
+	defer func() {
+		_ = os.Remove(tmpPath) // Clean up on error
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	// Set file permissions
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		return fmt.Errorf("set file permissions: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, localPath); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+
 	return nil
 }
 
