@@ -43,9 +43,9 @@ Locked rules:
 
 - `extends:` is **app-only**. A `tool` / `infra` entry with `extends:` is rejected at load.
 - `depends_on:` may not reference a `type: tool` entry. This is enforced at load (`ErrDependsOnTool`), not only at validate time.
-- `devbox/deploy/<name>.yml` is **app-only**. A deploy file whose stem matches a `tool` / `infra` entry (or no declared service at all) is rejected at load (`ErrDeployFileForNonApp`).
+- `devbox/services/<name>/deploy.yml` is supported for **any service type** (app, tool, infra). Full deploy (`devbox deploy run`) enumerates every **enabled** service that has a `deploy.yml`; `devbox deploy run --service <name>` works for any service type with a deploy file regardless of enabled state.
 - `ports:` is always `map[string]int` and `hosts:` is always `map[string]string`. There is no `port:` / `host:` scalar shorthand. A single-port entry writes `ports: { http: 8025 }`.
-- Type semantics also filter `devbox deploy` enumeration to `app` only and partition `docker compose` file emission to `tool → infra → app` order.
+- Type semantics partition `docker compose` file emission to `tool → infra → app` order.
 
 `type: infra` services may be optional (`mandatory: false`) — they take a `compose:` overlay and are toggleable via `devbox services enable|disable <name>` like apps and tools. Mandatory infra (`mandatory: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
 

@@ -502,8 +502,6 @@ var (
 	ErrServiceHostsShape       = errors.New("config: hosts must be a map of name to hostname")
 	ErrServicePortOutOfRange   = errors.New("config: port value out of range 1..65535")
 	ErrDependsOnTool           = errors.New("config: depends_on target must not be a tool service")
-	ErrDeployFileForNonApp     = errors.New("config: deploy file only permitted for type app")
-	ErrDeployTargetNotApp      = errors.New("config: deploy target must be type app")
 	ErrAfterFieldNotAllowed    = errors.New("config: after field is only valid in per-service deploy.yml")
 )
 
@@ -1821,44 +1819,6 @@ func validateDependsOnTypes(services map[string]ServiceConfig) error {
 			if target.IsTool() {
 				diags = append(diags, fmt.Errorf("%w: service %q depends_on %q (type tool)", ErrDependsOnTool, name, dep))
 			}
-		}
-	}
-	if len(diags) == 0 {
-		return nil
-	}
-	return errors.Join(diags...)
-}
-
-// ValidateServiceDeployFiles walks devbox/deploy/*.yml under baseDir and
-// returns an error if any deploy file belongs to a non-app service or to no
-// declared service at all. The check is independent of which subset later
-// callers pass to LoadServiceDeployConfigs; it is the authoritative gate.
-func ValidateServiceDeployFiles(baseDir string, allServices map[string]ServiceConfig) error {
-	deployDir := filepath.Join(baseDir, "devbox", "deploy")
-	entries, err := os.ReadDir(deployDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("read %s: %w", deployDir, err)
-	}
-	var diags []error
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if !strings.HasSuffix(name, ".yml") {
-			continue
-		}
-		stem := strings.TrimSuffix(name, ".yml")
-		svc, ok := allServices[stem]
-		if !ok {
-			diags = append(diags, fmt.Errorf("%w: deploy file %s names no declared service", ErrDeployFileForNonApp, filepath.Join("devbox", "deploy", name)))
-			continue
-		}
-		if !svc.IsApp() {
-			diags = append(diags, fmt.Errorf("%w: deploy file %s belongs to service %q (type %s)", ErrDeployFileForNonApp, filepath.Join("devbox", "deploy", name), stem, svc.Type))
 		}
 	}
 	if len(diags) == 0 {

@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -8,6 +9,10 @@ import (
 	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/usercommands/registry"
 )
+
+// ErrServiceNoDeployFile is returned by ResolveServicePlan when the named
+// service exists but has no deploy.yml in devbox/services/<name>/deploy.yml.
+var ErrServiceNoDeployFile = errors.New("deploy: service has no deploy pipeline")
 
 // ResolveServicePlan builds the step list for a single named service.
 // Used by --service flag to deploy only one service.
@@ -28,9 +33,6 @@ func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, servic
 	if !declared {
 		return nil, fmt.Errorf("service %q is not declared in devbox/services/<name>/service.yml", serviceName)
 	}
-	if !svc.IsApp() {
-		return nil, fmt.Errorf("%w: service %q has type %s", config.ErrDeployTargetNotApp, serviceName, svc.Type)
-	}
 	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
 		serviceName: svc,
 	})
@@ -39,7 +41,7 @@ func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, servic
 	}
 	svcDeploy, ok := svcDeploys[serviceName]
 	if !ok {
-		return nil, fmt.Errorf("no deploy pipeline found for service %q (expected devbox/services/%s/deploy.yml)", serviceName, serviceName)
+		return nil, fmt.Errorf("%w: %s", ErrServiceNoDeployFile, serviceName)
 	}
 
 	for _, phase := range svcDeploy.Phases {
@@ -62,11 +64,9 @@ func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pi
 	}
 	baseDir := filepath.Dir(cfgPath)
 
-	// Deploy enumeration is restricted to app-typed services: tool/infra
-	// services may be Enabled (and show up in compose) but never deployable.
 	enabled := make(map[string]config.ServiceConfig)
 	for name, svc := range cfg.Services {
-		if svc.Enabled && svc.IsApp() {
+		if svc.Enabled {
 			enabled[name] = svc
 		}
 	}

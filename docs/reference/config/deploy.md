@@ -38,23 +38,23 @@ Deploy and reset pipeline declarations.
 
 ## Purpose
 
-`devbox/deploy.yml` declares the orchestrator deploy pipeline. `devbox/reset.yml` declares the destructive reset pipeline. Per-service deploy pipelines live in `devbox/deploy/<service>.yml`.
+`devbox/deploy.yml` declares the orchestrator deploy pipeline. `devbox/reset.yml` declares the destructive reset pipeline. Per-service deploy pipelines live in `devbox/services/<service>/deploy.yml`.
 
-All three are loaded separately by `LoadDeployConfig()` and are not merged with the 3-layer config.
+All three are loaded separately and are not merged with the 3-layer config.
 
 ## File roles
 
 | File | Loader | Role |
 |------|--------|------|
-| `devbox/deploy.yml` | `LoadDeployConfig` | Top-level orchestrator: lists phases in order, references service pipelines |
-| `devbox/deploy/<svc>.yml` | `LoadServiceDeployConfigs` | Per-service phases and steps (inlined by orchestrator at `deploy_services: true`) |
+| `devbox/deploy.yml` | `LoadProjectDeployConfig` | Top-level orchestrator: lists phases in order, references service pipelines |
+| `devbox/services/<svc>/deploy.yml` | `LoadServiceDeployConfigs` | Per-service phases and steps (inlined by orchestrator at `deploy_services: true`). Any service type (app, tool, infra) may have a deploy pipeline. |
 | `devbox/reset.yml` | `LoadResetConfig` | Separate reset pipeline, executed via `devbox reset run`. `deploy_services` phases are rejected. |
 
 ```mermaid
 flowchart TB
   D[devbox/deploy.yml] -->|phase: deploy_services| INL{Inline enabled services}
 
-  subgraph svc["devbox/deploy/&lt;service&gt;.yml — one file per service"]
+  subgraph svc["devbox/services/&lt;service&gt;/deploy.yml — one file per service"]
     direction TB
     S1["mandatory service<br/>(always inlined)"]
     S2["optional service A<br/>(inlined when enabled)"]
@@ -69,7 +69,9 @@ flowchart TB
   R[devbox/reset.yml] --> RPLAN[Resolved plan] --> RUN2[(PlainReporter)]
 ```
 
-Every service declared in `services.yml` may contribute its own `devbox/deploy/<name>.yml`. At plan time the orchestrator filters that set down to enabled services (mandatory ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
+Any service type (app, tool, or infra) may have a `devbox/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (mandatory ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
+
+The `after:` field in `devbox/services/<name>/deploy.yml` declares deploy-time ordering between services (separate from runtime `depends_on:`). See [Top-level fields](#top-level-fields) for details.
 
 ## Structure
 
@@ -124,6 +126,7 @@ phases:
 |-------|------|---------|-------------|
 | `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee devbox status messages and child stdout/stderr to `.devbox/logs/<pipeline>.log` (ANSI codes stripped). |
 | `phases` | list | — | Ordered list of phases. |
+| `after` | list of strings | `[]` | **Per-service `deploy.yml` only.** Declares deploy-time ordering: this service deploys after the named services. Omitted or empty means no deploy-ordering constraint. Distinct from runtime `depends_on:` (which controls container startup order) — use `after:` when you want one service's deploy steps to complete before another's begin. Not valid in `devbox/deploy.yml`, `devbox/reset.yml`, or `devbox/services/<name>/reset.yml` (load-time error). Full deploy (`devbox deploy run`) topo-sorts services by `after:`; `devbox deploy run --service <name>` does NOT cascade to declared `after:` dependencies (explicit intent overrides ordering). |
 
 ## Phase fields
 
@@ -606,7 +609,7 @@ phases:
 ## Example: per-service pipeline
 
 ```yaml
-# devbox/deploy/main.yml
+# devbox/services/main/deploy.yml
 phases:
   - name: setup
     description: Create dirs and install
@@ -653,6 +656,27 @@ phases:
       - name: render-ide
         type: devbox
         cmd: "render ide main"
+```
+
+## Example: infra service pipeline with `after:`
+
+Any service type can have a deploy pipeline. An infra service like MinIO can declare initial bucket setup, and use `after:` to ensure it deploys after the app whose secrets it provisions:
+
+```yaml
+# devbox/services/minio/deploy.yml
+after:
+  - main  # deploy after the main app service
+
+phases:
+  - name: init
+    description: Create MinIO buckets
+    when:
+      type: shell
+      cmd: "mc alias ls local 2>/dev/null | grep -q local"
+    steps:
+      - name: create-bucket
+        type: shell
+        cmd: mc mb --ignore-existing local/uploads
 ```
 
 ## Parallel step groups

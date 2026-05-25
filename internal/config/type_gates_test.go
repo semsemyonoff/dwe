@@ -2,8 +2,6 @@ package config
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -46,77 +44,6 @@ func TestValidateDependsOnTypes_unknownTargetTolerated(t *testing.T) {
 	}
 	if err := validateDependsOnTypes(services); err != nil {
 		t.Fatalf("unknown depends_on target should be tolerated here, got %v", err)
-	}
-}
-
-// TestValidateServiceDeployFiles_rejectsNonApp verifies a deploy file owned by
-// a tool/infra service produces ErrDeployFileForNonApp.
-func TestValidateServiceDeployFiles_rejectsNonApp(t *testing.T) {
-	dir := t.TempDir()
-	deployDir := filepath.Join(dir, "devbox", "deploy")
-	if err := os.MkdirAll(deployDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(deployDir, "adminer.yml"), []byte("phases: []\n"), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-	services := map[string]ServiceConfig{
-		"adminer": {Type: ServiceTypeTool},
-	}
-	err := ValidateServiceDeployFiles(dir, services)
-	if err == nil {
-		t.Fatal("expected ErrDeployFileForNonApp")
-	}
-	if !errors.Is(err, ErrDeployFileForNonApp) {
-		t.Fatalf("err = %v, want wraps ErrDeployFileForNonApp", err)
-	}
-}
-
-// TestValidateServiceDeployFiles_rejectsUnknownStem verifies deploy files that
-// name no declared service are rejected (same sentinel — "silently wrong"
-// drift the pre-release policy forbids).
-func TestValidateServiceDeployFiles_rejectsUnknownStem(t *testing.T) {
-	dir := t.TempDir()
-	deployDir := filepath.Join(dir, "devbox", "deploy")
-	if err := os.MkdirAll(deployDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(deployDir, "ghost.yml"), []byte("phases: []\n"), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-	err := ValidateServiceDeployFiles(dir, map[string]ServiceConfig{})
-	if err == nil {
-		t.Fatal("expected ErrDeployFileForNonApp")
-	}
-	if !errors.Is(err, ErrDeployFileForNonApp) {
-		t.Fatalf("err = %v, want wraps ErrDeployFileForNonApp", err)
-	}
-}
-
-// TestValidateServiceDeployFiles_acceptsApp confirms a deploy file for an
-// app-typed service is the happy path.
-func TestValidateServiceDeployFiles_acceptsApp(t *testing.T) {
-	dir := t.TempDir()
-	deployDir := filepath.Join(dir, "devbox", "deploy")
-	if err := os.MkdirAll(deployDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(deployDir, "main.yml"), []byte("phases: []\n"), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-	services := map[string]ServiceConfig{
-		"main": {Type: ServiceTypeApp},
-	}
-	if err := ValidateServiceDeployFiles(dir, services); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-// TestValidateServiceDeployFiles_missingDirOK verifies the absence of the
-// deploy directory is silent (not every project has one).
-func TestValidateServiceDeployFiles_missingDirOK(t *testing.T) {
-	if err := ValidateServiceDeployFiles(t.TempDir(), map[string]ServiceConfig{}); err != nil {
-		t.Fatalf("missing deploy dir should be tolerated, got %v", err)
 	}
 }
 
