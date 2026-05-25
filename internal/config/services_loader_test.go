@@ -492,3 +492,187 @@ dir: ./not-allowed-for-tool
 		t.Errorf("err = %v, want errors.Is ErrServiceFieldNotAllowed", err)
 	}
 }
+
+// TestToggleRequires_IsKnown verifies all recognized values.
+func TestToggleRequires_IsKnown(t *testing.T) {
+	for _, r := range []ToggleRequires{RequiresUnspecified, RequiresNone, RequiresRestart, RequiresDeploy} {
+		if !r.IsKnown() {
+			t.Errorf("IsKnown(%q) = false, want true", r)
+		}
+	}
+	if ToggleRequires("rstart").IsKnown() {
+		t.Error("IsKnown(rstart) = true, want false")
+	}
+}
+
+// TestToggleRequires_OrDefault verifies unspecified resolves to restart.
+func TestToggleRequires_OrDefault(t *testing.T) {
+	if got := RequiresUnspecified.OrDefault(); got != RequiresRestart {
+		t.Errorf("OrDefault(unspecified) = %q, want restart", got)
+	}
+	if got := RequiresNone.OrDefault(); got != RequiresNone {
+		t.Errorf("OrDefault(none) = %q, want none", got)
+	}
+	if got := RequiresDeploy.OrDefault(); got != RequiresDeploy {
+		t.Errorf("OrDefault(deploy) = %q, want deploy", got)
+	}
+}
+
+// TestServiceToggleHooks_parseFullBlock verifies full hooks block parses for each toggleable type.
+func TestServiceToggleHooks_parseFullBlock(t *testing.T) {
+	for _, svcType := range []string{"app", "tool", "infra"} {
+		t.Run(svcType, func(t *testing.T) {
+			dir := t.TempDir()
+			var yaml string
+			switch svcType {
+			case "app":
+				yaml = `
+type: app
+container: ctr
+dir: ./svc
+on_enable:
+  requires: deploy
+  before:
+    - cmd-before
+  after:
+    - cmd-after
+on_disable:
+  requires: restart
+  before:
+    - cmd-disable-before
+notes:
+  enable: "Run migrations after enabling"
+  disable: "Data will be preserved"
+`
+			case "tool":
+				yaml = `
+type: tool
+container: ctr
+on_enable:
+  requires: restart
+on_disable:
+  requires: none
+notes:
+  enable: "Tool enable note"
+`
+			case "infra":
+				yaml = `
+type: infra
+container: ctr
+on_enable:
+  requires: deploy
+  after:
+    - post-infra-cmd
+on_disable:
+  requires: restart
+notes:
+  disable: "Infra disable note"
+`
+			}
+			writeServiceFolder(t, dir, "svc", yaml)
+			svc, err := LoadServiceFolder(dir, "svc")
+			if err != nil {
+				t.Fatalf("LoadServiceFolder(%s): %v", svcType, err)
+			}
+			if svc.OnEnable == nil {
+				t.Fatal("OnEnable is nil")
+			}
+			if svc.OnDisable == nil {
+				t.Fatal("OnDisable is nil")
+			}
+			if svc.Notes == nil {
+				t.Fatal("Notes is nil")
+			}
+		})
+	}
+}
+
+// TestServiceToggleHooks_parsePartialBlock verifies partial hooks block (requires only) parses.
+func TestServiceToggleHooks_parsePartialBlock(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "svc", `
+type: app
+container: ctr
+dir: ./svc
+on_enable:
+  requires: deploy
+`)
+	svc, err := LoadServiceFolder(dir, "svc")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if svc.OnEnable == nil {
+		t.Fatal("OnEnable is nil")
+	}
+	if svc.OnEnable.Requires != RequiresDeploy {
+		t.Errorf("OnEnable.Requires = %q, want deploy", svc.OnEnable.Requires)
+	}
+	if len(svc.OnEnable.Before) != 0 {
+		t.Errorf("OnEnable.Before = %v, want empty", svc.OnEnable.Before)
+	}
+	if svc.OnDisable != nil {
+		t.Errorf("OnDisable = %v, want nil", svc.OnDisable)
+	}
+}
+
+// TestServiceToggleHooks_parseAbsent verifies absent hooks produce nil pointers.
+func TestServiceToggleHooks_parseAbsent(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "svc", `
+type: app
+container: ctr
+dir: ./svc
+`)
+	svc, err := LoadServiceFolder(dir, "svc")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if svc.OnEnable != nil {
+		t.Errorf("OnEnable = %v, want nil", svc.OnEnable)
+	}
+	if svc.OnDisable != nil {
+		t.Errorf("OnDisable = %v, want nil", svc.OnDisable)
+	}
+	if svc.Notes != nil {
+		t.Errorf("Notes = %v, want nil", svc.Notes)
+	}
+}
+
+// TestServiceToggleHooks_allowlistRegression verifies on_enable is NOT rejected by the field allowlist.
+func TestServiceToggleHooks_allowlistRegression(t *testing.T) {
+	for _, svcType := range []string{"app", "tool", "infra"} {
+		t.Run(svcType, func(t *testing.T) {
+			dir := t.TempDir()
+			var content string
+			switch svcType {
+			case "app":
+				content = "type: app\ncontainer: ctr\ndir: ./svc\non_enable:\n  requires: restart\n"
+			case "tool":
+				content = "type: tool\ncontainer: ctr\non_enable:\n  requires: none\n"
+			case "infra":
+				content = "type: infra\ncontainer: ctr\non_enable:\n  requires: restart\n"
+			}
+			writeServiceFolder(t, dir, "svc", content)
+			_, err := LoadServiceFolder(dir, "svc")
+			if err != nil {
+				t.Errorf("LoadServiceFolder(%s) with on_enable: %v (expected ErrServiceFieldNotAllowed fix to let this through)", svcType, err)
+			}
+		})
+	}
+}
+
+// TestServiceToggleHooks_unknownFieldRejected verifies typo inside on_enable is rejected.
+func TestServiceToggleHooks_unknownFieldRejected(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "svc", `
+type: app
+container: ctr
+dir: ./svc
+on_enable:
+  requirss: restart
+`)
+	_, err := LoadServiceFolder(dir, "svc")
+	if err == nil {
+		t.Fatal("expected error for typo inside on_enable, got nil")
+	}
+}

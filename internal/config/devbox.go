@@ -537,6 +537,46 @@ func (t ServiceType) IsTool() bool { return t == ServiceTypeTool }
 // IsInfra reports whether t == ServiceTypeInfra.
 func (t ServiceType) IsInfra() bool { return t == ServiceTypeInfra }
 
+// ToggleRequires declares what must happen when a service is enabled or disabled.
+type ToggleRequires string
+
+const (
+	RequiresUnspecified ToggleRequires = ""        // zero value when field omitted in YAML
+	RequiresNone        ToggleRequires = "none"
+	RequiresRestart     ToggleRequires = "restart"
+	RequiresDeploy      ToggleRequires = "deploy"
+)
+
+// IsKnown reports whether r is a recognized ToggleRequires value (including the zero value).
+func (r ToggleRequires) IsKnown() bool {
+	switch r {
+	case RequiresUnspecified, RequiresNone, RequiresRestart, RequiresDeploy:
+		return true
+	}
+	return false
+}
+
+// OrDefault returns RequiresRestart when r is RequiresUnspecified; otherwise r.
+func (r ToggleRequires) OrDefault() ToggleRequires {
+	if r == RequiresUnspecified {
+		return RequiresRestart
+	}
+	return r
+}
+
+// ServiceToggleHooks holds hooks that fire when a service is enabled or disabled.
+type ServiceToggleHooks struct {
+	Requires ToggleRequires `yaml:"requires,omitempty"`
+	Before   []string       `yaml:"before,omitempty"`
+	After    []string       `yaml:"after,omitempty"`
+}
+
+// ServiceNotes holds human-readable notes shown during enable/disable.
+type ServiceNotes struct {
+	Enable  string `yaml:"enable,omitempty"`
+	Disable string `yaml:"disable,omitempty"`
+}
+
 // allowedFieldsFor returns the set of YAML field names permitted for entries
 // of the given service type. Used by validators and loader strict-decode error
 // messages as the single source of truth for per-type field allowlists.
@@ -546,6 +586,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	common := []string{
 		"type", "container", "mandatory", "compose",
 		"ports", "hosts", "status",
+		"on_enable", "on_disable", "notes",
 	}
 	switch t {
 	case ServiceTypeApp:
@@ -601,6 +642,9 @@ type ServiceConfig struct {
 	CLI             ServiceCLIConfig     `yaml:"cli"`
 	Render          ServiceRenderConfig  `yaml:"render"`
 	Status          []StatusColumn       `yaml:"status,omitempty"`
+	OnEnable        *ServiceToggleHooks  `yaml:"on_enable,omitempty"`
+	OnDisable       *ServiceToggleHooks  `yaml:"on_disable,omitempty"`
+	Notes           *ServiceNotes        `yaml:"notes,omitempty"`
 }
 
 // IsApp reports whether this service has type "app".

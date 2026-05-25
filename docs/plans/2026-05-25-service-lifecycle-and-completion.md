@@ -342,14 +342,14 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 9: `ServiceToggleHooks` schema + types in `service.yml`
 
-- [ ] in `internal/config/devbox.go` extend `ServiceConfig` with explicit YAML tags (yaml.v3 lowercases field names by default, but the project consistently uses explicit tags — match that):
+- [x] in `internal/config/devbox.go` extend `ServiceConfig` with explicit YAML tags (yaml.v3 lowercases field names by default, but the project consistently uses explicit tags — match that):
   ```go
   OnEnable  *ServiceToggleHooks `yaml:"on_enable,omitempty"`
   OnDisable *ServiceToggleHooks `yaml:"on_disable,omitempty"`
   Notes     *ServiceNotes       `yaml:"notes,omitempty"`
   ```
-- [ ] **update `allowedFieldsFor` (`internal/config/devbox.go:544`) to add `on_enable`, `on_disable`, `notes` to every service type that can be toggled** (app, tool, infra — i.e. everything except types where toggling is meaningless; check the existing per-type sets). Without this, the pre-strict allowlist check at `devbox.go:1185-1193` will reject valid hook config with `ErrServiceFieldNotAllowed` before strict decode even runs. This is the critical step the third review flagged
-- [ ] add `ServiceToggleHooks` with explicit nested tags:
+- [x] **update `allowedFieldsFor` (`internal/config/devbox.go:544`) to add `on_enable`, `on_disable`, `notes` to every service type that can be toggled** (app, tool, infra — i.e. everything except types where toggling is meaningless; check the existing per-type sets). Without this, the pre-strict allowlist check at `devbox.go:1185-1193` will reject valid hook config with `ErrServiceFieldNotAllowed` before strict decode even runs. This is the critical step the third review flagged
+- [x] add `ServiceToggleHooks` with explicit nested tags:
   ```go
   type ServiceToggleHooks struct {
       Requires ToggleRequires `yaml:"requires,omitempty"`
@@ -357,14 +357,14 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
       After    []string       `yaml:"after,omitempty"`
   }
   ```
-- [ ] add `ServiceNotes` with explicit nested tags:
+- [x] add `ServiceNotes` with explicit nested tags:
   ```go
   type ServiceNotes struct {
       Enable  string `yaml:"enable,omitempty"`
       Disable string `yaml:"disable,omitempty"`
   }
   ```
-- [ ] add `ToggleRequires` string enum with explicit zero-value sentinel:
+- [x] add `ToggleRequires` string enum with explicit zero-value sentinel:
   ```go
   const (
       RequiresUnspecified ToggleRequires = ""   // zero value when field omitted in YAML
@@ -374,14 +374,14 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   )
   ```
   Helper `(ToggleRequires).OrDefault() ToggleRequires` returns `RequiresRestart` only when `RequiresUnspecified`. Note: the validator rejects unknown values BEFORE runtime defaulting (so `requires: rstart` is a validate-time error, not silently `restart`); **and `buildTogglePlan` in Task 11 ALSO rejects unknown values at runtime** so the same protection holds for callers that didn't run `devbox validate` first
-- [ ] add `ToggleRequires.IsKnown() bool` returning true for `{RequiresUnspecified, RequiresNone, RequiresRestart, RequiresDeploy}` — used by both the validator and the runtime guard in Task 11
-- [ ] ensure strict-decode (folder loader from Task 3 already uses `KnownFields(true)`) rejects typos in hook field names — combined with the allowlist update above, the gate is: allowlist accepts `on_enable`/`on_disable`/`notes` keys → strict decode rejects typos within those blocks (`on_enable.requirss`)
-- [ ] write tests:
+- [x] add `ToggleRequires.IsKnown() bool` returning true for `{RequiresUnspecified, RequiresNone, RequiresRestart, RequiresDeploy}` — used by both the validator and the runtime guard in Task 11
+- [x] ensure strict-decode (folder loader from Task 3 already uses `KnownFields(true)`) rejects typos in hook field names — combined with the allowlist update above, the gate is: allowlist accepts `on_enable`/`on_disable`/`notes` keys → strict decode rejects typos within those blocks (`on_enable.requirss`)
+- [x] write tests:
   - parse `service.yml` with full hooks block for each service type that should accept hooks
   - parse with partial (`requires` only); parse with absent (zero values)
   - **`allowedFieldsFor` regression**: load a service.yml with `on_enable:` succeeds (would have failed with `ErrServiceFieldNotAllowed` before the allowlist update)
   - unknown YAML field inside `on_enable:` (e.g. `requirss:`) rejected by strict decode
-- [ ] run `go test ./internal/config/...` - must pass before next task
+- [x] run `go test ./internal/config/...` - must pass before next task
 
 ### Task 10: Lifecycle hooks validator
 
