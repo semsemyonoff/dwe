@@ -169,10 +169,12 @@ Run 'devbox info' for the full info dashboard.`,
 	addCmd(root, groupAdvanced, newComposeCmd(flags))
 	addCmd(root, groupAdvanced, newDocsCmd(flags))
 
-	// Add the built-in Cobra completion command to the Advanced group.
+	// Add the built-in Cobra completion command to the Advanced group,
+	// then attach install/uninstall subcommands.
 	root.InitDefaultCompletionCmd()
 	if completionCmd, _, err := root.Find([]string{"completion"}); err == nil && completionCmd != nil {
 		completionCmd.GroupID = groupAdvanced
+		completionCmd.AddCommand(newInstallCompletionCmd())
 	}
 
 	// Internal: hidden Make-compatibility command.
