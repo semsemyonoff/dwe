@@ -1887,6 +1887,63 @@ func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig)
 	return result, nil
 }
 
+// LoadServiceResetConfig loads the reset pipeline for a single named service
+// from devbox/services/<name>/reset.yml. Returns (nil, nil) when the file is
+// absent (the service simply has no reset pipeline). Returns a wrapped
+// ErrAfterFieldNotAllowed when the parsed config contains an after: field
+// (reset pipelines have no ordering peers).
+func LoadServiceResetConfig(baseDir, name string) (*DeployConfig, error) {
+	path := filepath.Join(baseDir, "devbox", "services", name, "reset.yml")
+	cfg, err := loadDeployConfigDecode(path, false, false)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("loading service %q reset: %w", name, err)
+	}
+	if len(cfg.After) > 0 {
+		return nil, fmt.Errorf("%w: found in %s", ErrAfterFieldNotAllowed, path)
+	}
+	return cfg, nil
+}
+
+// LoadServiceResetConfigs loads all per-service reset pipelines from
+// devbox/services/*/reset.yml. Services without a reset.yml are silently
+// omitted from the result (nil entry would not be useful to callers).
+// A missing devbox/services/ directory returns an empty map and nil error.
+// Per-folder decode failures are collected and returned via errors.Join.
+func LoadServiceResetConfigs(baseDir string) (map[string]*DeployConfig, error) {
+	servicesDir := filepath.Join(baseDir, "devbox", "services")
+	entries, err := os.ReadDir(servicesDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]*DeployConfig{}, nil
+		}
+		return nil, fmt.Errorf("loading service reset configs: %w", err)
+	}
+
+	result := make(map[string]*DeployConfig)
+	var loadErrs []error
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		cfg, err := LoadServiceResetConfig(baseDir, name)
+		if err != nil {
+			loadErrs = append(loadErrs, err)
+			continue
+		}
+		if cfg != nil {
+			result[name] = cfg
+		}
+	}
+	if len(loadErrs) > 0 {
+		return nil, fmt.Errorf("loading service reset configs: %w", errors.Join(loadErrs...))
+	}
+	return result, nil
+}
+
 // TopoSortServices returns service names in dependency order (dependencies first).
 // Only services present in the names slice are included. Returns an error on
 // cycles or references to unknown services.

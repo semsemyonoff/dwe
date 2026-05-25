@@ -209,11 +209,11 @@ These cut across tasks; verify each task PR conforms before mark-complete.
 
 Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset pipelines share the deploy config shape via the shared `loadPipelineConfig` helper. Match that.
 
-- [ ] add `LoadServiceResetConfig(baseDir, name) (*DeployConfig, error)` reading `devbox/services/<name>/reset.yml`; missing file → `(nil, nil)`; strict-decode same as project-level reset (call into the existing `loadPipelineConfig` to reuse all the strict/lenient policy)
-- [ ] add `LoadServiceResetConfigs(baseDir) (map[string]*DeployConfig, error)` enumerating folders the same way as `LoadServices`; expose on `DevboxConfig` if needed for validation
-- [ ] **`after:` rejection** (sixteenth review): after the existing decode, if `cfg.After != nil` → return wrapped `ErrAfterFieldNotAllowed` (defined in Task 4). Reset has no ordering peers; the field is invalid here. Matches the same load-path rejection added to `LoadDeployConfig` / `LoadResetConfig` in Task 4
-- [ ] write tests: present file → parsed, missing file → nil, unknown fields rejected, **`after:` field → `errors.Is(err, ErrAfterFieldNotAllowed)`**
-- [ ] run `go test ./internal/config/...` - must pass before next task
+- [x] add `LoadServiceResetConfig(baseDir, name) (*DeployConfig, error)` reading `devbox/services/<name>/reset.yml`; missing file → `(nil, nil)`; strict-decode same as project-level reset (call into the existing `loadPipelineConfig` to reuse all the strict/lenient policy)
+- [x] add `LoadServiceResetConfigs(baseDir) (map[string]*DeployConfig, error)` enumerating folders the same way as `LoadServices`; expose on `DevboxConfig` if needed for validation
+- [x] **`after:` rejection** (sixteenth review): after the existing decode, if `cfg.After != nil` → return wrapped `ErrAfterFieldNotAllowed` (defined in Task 4). Reset has no ordering peers; the field is invalid here. Matches the same load-path rejection added to `LoadDeployConfig` / `LoadResetConfig` in Task 4
+- [x] write tests: present file → parsed, missing file → nil, unknown fields rejected, **`after:` field → `errors.Is(err, ErrAfterFieldNotAllowed)`**
+- [x] run `go test ./internal/config/...` - must pass before next task
 
 ### Task 6: Per-folder validators + deploy `after:` validation
 

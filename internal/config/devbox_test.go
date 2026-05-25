@@ -1705,6 +1705,149 @@ phases:
 	}
 }
 
+// --- LoadServiceResetConfig / LoadServiceResetConfigs ---
+
+func TestLoadServiceResetConfig_presentFile(t *testing.T) {
+	dir := t.TempDir()
+	svcDir := filepath.Join(dir, "devbox", "services", "mydb")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	yml := `phases:
+  - name: wipe
+    steps:
+      - name: drop
+        type: shell
+        cmd: 'echo drop'
+`
+	if err := os.WriteFile(filepath.Join(svcDir, "reset.yml"), []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := LoadServiceResetConfig(dir, "mydb")
+	if err != nil {
+		t.Fatalf("LoadServiceResetConfig: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil config, got nil")
+	}
+	if len(cfg.Phases) != 1 || cfg.Phases[0].Name != "wipe" {
+		t.Errorf("phases = %v, want [{wipe ...}]", cfg.Phases)
+	}
+}
+
+func TestLoadServiceResetConfig_missingFile(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := LoadServiceResetConfig(dir, "ghost")
+	if err != nil {
+		t.Fatalf("expected nil error for missing file, got: %v", err)
+	}
+	if cfg != nil {
+		t.Fatalf("expected nil config for missing file, got: %+v", cfg)
+	}
+}
+
+func TestLoadServiceResetConfig_unknownFieldRejected(t *testing.T) {
+	dir := t.TempDir()
+	svcDir := filepath.Join(dir, "devbox", "services", "svc")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	yml := `phases: []
+bogus_field: true
+`
+	if err := os.WriteFile(filepath.Join(svcDir, "reset.yml"), []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadServiceResetConfig(dir, "svc")
+	if err == nil {
+		t.Fatal("expected strict-decode error for unknown field, got nil")
+	}
+}
+
+func TestLoadServiceResetConfig_rejectsAfterField(t *testing.T) {
+	dir := t.TempDir()
+	svcDir := filepath.Join(dir, "devbox", "services", "svc")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	yml := `after:
+  - other
+phases: []
+`
+	if err := os.WriteFile(filepath.Join(svcDir, "reset.yml"), []byte(yml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadServiceResetConfig(dir, "svc")
+	if err == nil {
+		t.Fatal("expected error for after: in service reset.yml, got nil")
+	}
+	if !errors.Is(err, ErrAfterFieldNotAllowed) {
+		t.Errorf("err = %v, want wraps ErrAfterFieldNotAllowed", err)
+	}
+}
+
+func TestLoadServiceResetConfigs_loadsPresent(t *testing.T) {
+	dir := t.TempDir()
+	for _, svc := range []string{"db", "cache"} {
+		d := filepath.Join(dir, "devbox", "services", svc)
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+		yml := "phases:\n  - name: wipe\n    steps:\n      - name: s\n        type: shell\n        cmd: 'true'\n"
+		if err := os.WriteFile(filepath.Join(d, "reset.yml"), []byte(yml), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	// third service without reset.yml — should be omitted silently
+	noReset := filepath.Join(dir, "devbox", "services", "noreset")
+	if err := os.MkdirAll(noReset, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := LoadServiceResetConfigs(dir)
+	if err != nil {
+		t.Fatalf("LoadServiceResetConfigs: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("want 2 entries (db, cache), got %d: %v", len(result), result)
+	}
+	for _, key := range []string{"db", "cache"} {
+		if result[key] == nil {
+			t.Errorf("expected non-nil entry for %q", key)
+		}
+	}
+	if result["noreset"] != nil {
+		t.Errorf("expected no entry for noreset, got %+v", result["noreset"])
+	}
+}
+
+func TestLoadServiceResetConfigs_missingServicesDir(t *testing.T) {
+	dir := t.TempDir()
+	result, err := LoadServiceResetConfigs(dir)
+	if err != nil {
+		t.Fatalf("expected nil error for absent services dir, got: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty map, got %v", result)
+	}
+}
+
+func TestLoadServiceResetConfigs_collectsErrors(t *testing.T) {
+	dir := t.TempDir()
+	// service with invalid reset.yml (unknown field)
+	svcDir := filepath.Join(dir, "devbox", "services", "bad")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDir, "reset.yml"), []byte("phases: []\nbad_key: x\n"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := LoadServiceResetConfigs(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid service reset.yml, got nil")
+	}
+}
+
 func TestDeployConfigAfter_decodePresent(t *testing.T) {
 	yml := `after:
   - svc-a
