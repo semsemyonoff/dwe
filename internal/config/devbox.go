@@ -540,8 +540,9 @@ func (t ServiceType) IsInfra() bool { return t == ServiceTypeInfra }
 // ToggleRequires declares what must happen when a service is enabled or disabled.
 type ToggleRequires string
 
+// ToggleRequires values.
 const (
-	RequiresUnspecified ToggleRequires = ""        // zero value when field omitted in YAML
+	RequiresUnspecified ToggleRequires = "" // zero value when field omitted in YAML
 	RequiresNone        ToggleRequires = "none"
 	RequiresRestart     ToggleRequires = "restart"
 	RequiresDeploy      ToggleRequires = "deploy"

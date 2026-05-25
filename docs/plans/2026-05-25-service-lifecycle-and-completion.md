@@ -385,18 +385,18 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 10: Lifecycle hooks validator
 
-- [ ] new validator file in `internal/validate/config/` (e.g. `service_hooks.go`) registering scope `config.services.hooks`
-- [ ] rules (all emitted with file/key location):
+- [x] new validator file in `internal/validate/config/` (e.g. `service_hooks.go`) registering scope `config.services.hooks`
+- [x] rules (all emitted with file/key location):
   - `on_disable.requires == "deploy"` → Error: `"deploy" is not allowed for on_disable; valid: none, restart`
   - `requires` unknown value → Error: `unknown requires value %q; valid: none, restart, deploy` (omit `deploy` from the list for `on_disable`)
   - **`on_enable.requires == "deploy"` on a service that has no `devbox/services/<name>/deploy.yml`** → Error: `service %q declares on_enable.requires: deploy but has no deploy.yml; either add deploy.yml or use requires: restart` (eleventh review — unifies `requires: deploy` semantics: it means "this service needs a deploy", which is only meaningful if the service can actually be deployed)
   - `before[i]`/`after[i]` referencing unknown user-command ID → Error: `references unknown command %q`
   - `before[i]`/`after[i]` referencing command whose `type` is not in `{shell, script}` → Error: `command %q has type %q; only shell/script commands can be used in hooks`
   - `mandatory: true` AND any hooks present → Warning: `hooks on mandatory service will never fire (mandatory services cannot be toggled)`
-- [ ] ref-resolution happens at validate-time using the loaded user-commands registry; YAML-load does NOT resolve refs
-- [ ] register in `internal/validate/config/all.go` `All()`
-- [ ] write tests as a single table-driven `TestServiceHooksValidator` with one row per rule (positive + negative); each row asserts the exact `Diagnostic.Code` / `Severity` / `Hint` shape, not just count
-- [ ] run `go test ./internal/validate/...` - must pass before next task
+- [x] ref-resolution happens at validate-time using the loaded user-commands registry; YAML-load does NOT resolve refs
+- [x] register in `internal/validate/config/all.go` `All()`
+- [x] write tests as a single table-driven `TestServiceHooksValidator` with one row per rule (positive + negative); each row asserts the exact `Diagnostic.Code` / `Severity` / `Hint` shape, not just count
+- [x] run `go test ./internal/validate/...` - must pass before next task
 
 ### Task 11: Toggle plan builder + renderer
 
