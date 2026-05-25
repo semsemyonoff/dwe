@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -161,18 +162,21 @@ func classifyPort(dp declaredPort, bindings map[int][]portOwner, ourProject stri
 	return ""
 }
 
-// resolveComposeProject returns the compose project name for the current
-// devbox project, or "" if it cannot be determined. A missing docker.yml is
-// silent (the config.docker validator surfaces real load errors).
+// resolveComposeProject returns the compose project name for the current devbox
+// project. It reads docker.yml first; if that is absent or has no project_name,
+// it falls back to the lowercased directory basename — the same default that
+// Docker Compose v2 applies when no project_name is configured. Without this
+// fallback, our own containers from a previous deploy would be misidentified as
+// foreign conflicts and block the next `devbox run` / `devbox deploy run`.
 func resolveComposeProject(baseDir string, cfg *config.DevboxConfig) string {
 	if baseDir == "" || cfg == nil {
 		return ""
 	}
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
-	if err != nil || dockerCfg == nil {
-		return ""
+	if err == nil && dockerCfg != nil && dockerCfg.ProjectName != "" {
+		return dockerCfg.ProjectName
 	}
-	return dockerCfg.ProjectName
+	return strings.ToLower(filepath.Base(baseDir))
 }
 
 // runDockerPS shells out to `docker ps --format=json --no-trunc` (no filter)

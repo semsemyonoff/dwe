@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -120,6 +121,15 @@ func TestCollectDeclaredPorts(t *testing.T) {
 func TestCollectDeclaredPorts_NilCfg(t *testing.T) {
 	if got := collectDeclaredPorts(nil); got != nil {
 		t.Errorf("nil cfg should produce nil slice, got %v", got)
+	}
+}
+
+func TestResolveComposeProject_NoDockerYml_FallsBackToBasename(t *testing.T) {
+	dir := t.TempDir()
+	got := resolveComposeProject(dir, &config.DevboxConfig{})
+	want := strings.ToLower(filepath.Base(dir))
+	if got != want {
+		t.Errorf("resolveComposeProject = %q, want %q (dir basename fallback)", got, want)
 	}
 }
 

@@ -35,7 +35,15 @@ func builtinAdapters() map[string]Adapter {
 // produce a synthetic error validator instead of registering the linter, so no
 // subprocess ever runs for that entry.
 func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator {
-	children := buildLinterChildren(validateCfg, validateLoadErr, baseDir)
+	if validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
+		// Return as a top-level DomainLevel+Global validator so that
+		// `devbox validate linters [id]` surfaces the error rather than silently
+		// producing zero diagnostics. buildRegistry suppresses this when
+		// config.validate is already in scope (to avoid a duplicate diagnostic).
+		return []validate.Validator{newLinterErrorValidator("_config", 0,
+			fmt.Sprintf("devbox/validate.yml: %v", validateLoadErr))}
+	}
+	children := buildLinterChildren(validateCfg, baseDir)
 	if len(children) == 0 {
 		return nil
 	}
@@ -45,16 +53,7 @@ func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir stri
 // buildLinterChildren assembles the per-linter validators that become the
 // group's children. Separated from All() so tests can inspect the child set
 // without unwrapping the group.
-func buildLinterChildren(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator {
-	if validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
-		// Surface the parse failure as a domain-level error so that
-		// `devbox validate linters` does not silently produce zero diagnostics.
-		// buildRegistry suppresses this error when config.validate is already
-		// in scope (to avoid a duplicate diagnostic).
-		return []validate.Validator{newLinterErrorValidator("_config", 0,
-			fmt.Sprintf("devbox/validate.yml: %v", validateLoadErr))}
-	}
-
+func buildLinterChildren(validateCfg *config.ValidateConfig, baseDir string) []validate.Validator {
 	adapters := builtinAdapters()
 
 	// Deterministic ordering for autodetected built-ins.
@@ -152,8 +151,10 @@ func newLinterErrorValidator(id string, line int, message string) *linterErrorVa
 	return &linterErrorValidator{id: id, line: line, message: message}
 }
 
-func (v *linterErrorValidator) ID() string     { return v.id }
-func (v *linterErrorValidator) Domain() string { return Domain }
+func (v *linterErrorValidator) ID() string          { return v.id }
+func (v *linterErrorValidator) Domain() string      { return Domain }
+func (v *linterErrorValidator) IsDomainLevel() bool { return v.id == "_config" }
+func (v *linterErrorValidator) IsGlobal() bool      { return v.id == "_config" }
 func (v *linterErrorValidator) Run(_ validate.Context) []validate.Diagnostic {
 	return []validate.Diagnostic{{
 		Severity: validate.SeverityError,

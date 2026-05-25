@@ -69,6 +69,33 @@ func TestAll_CorruptConfig_ReturnsErrorValidator(t *testing.T) {
 	}
 }
 
+func TestAll_CorruptConfig_TopLevelDomainLevelGlobal(t *testing.T) {
+	// Regression: _config error was previously a child of lintersGroup, so
+	// Registry.Run's DomainLevel/Global checks never reached it under scoped
+	// queries like `devbox validate linters shellcheck`.
+	got := All(nil, errors.New("yaml: bad token"), t.TempDir())
+	if len(got) != 1 {
+		t.Fatalf("expected 1 top-level validator, got %d", len(got))
+	}
+	if _, ok := got[0].(*lintersGroup); ok {
+		t.Fatal("_config error must not be wrapped in lintersGroup")
+	}
+	dl, ok := got[0].(validate.DomainLevelValidator)
+	if !ok {
+		t.Fatalf("_config error must implement DomainLevelValidator, got %T", got[0])
+	}
+	if !dl.IsDomainLevel() {
+		t.Fatal("IsDomainLevel must return true for _config error")
+	}
+	gv, ok := got[0].(validate.GlobalValidator)
+	if !ok {
+		t.Fatalf("_config error must implement GlobalValidator, got %T", got[0])
+	}
+	if !gv.IsGlobal() {
+		t.Fatal("IsGlobal must return true for _config error")
+	}
+}
+
 func TestAll_EmptyConfig_SynthesizesAllBuiltins(t *testing.T) {
 	cfg := &config.ValidateConfig{}
 	got := children(All(cfg, nil, t.TempDir()))
