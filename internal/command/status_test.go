@@ -35,27 +35,20 @@ project:
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Services are loaded from devbox/services.yml — not from inline devbox.yml.
+	// Services are loaded from per-folder devbox/services/<name>/ — not from inline devbox.yml.
 	// dir: services/main ensures CollectGitWorkspace returns a row (making --no-git non-vacuous).
-	servicesYML := `services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-    dir: services/main
-  worker:
-    type: app
-    container: app-worker
-  adminer:
-    type: tool
-    container: adminer
-    ports:
-      main: 8080
-    hosts:
-      main: adminer.localhost
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"main":    "type: app\ncontainer: app-main\nmandatory: true\ndir: services/main\n",
+		"worker":  "type: app\ncontainer: app-worker\n",
+		"adminer": "type: tool\ncontainer: adminer\nports:\n  main: 8080\nhosts:\n  main: adminer.localhost\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	// Create the service directory so fillGitRow can stat it (no .git → blank cells, no error).
 	if err := os.MkdirAll(filepath.Join(dir, "services", "main"), 0o755); err != nil {
@@ -81,19 +74,17 @@ project:
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-    dir: services/main
-  db:
-    type: infra
-    container: db
-    mandatory: true
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"main": "type: app\ncontainer: app-main\nmandatory: true\ndir: services/main\n",
+		"db":   "type: infra\ncontainer: db\nmandatory: true\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "services", "main"), 0o755); err != nil {
 		t.Fatal(err)

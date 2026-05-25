@@ -1,8 +1,0 @@
-services:
-  parent:
-    type: infra
-    container: parent
-  child:
-    type: infra
-    container: child
-    extends: parent

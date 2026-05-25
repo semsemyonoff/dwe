@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -119,34 +118,33 @@ runtime:
 state: ""
 `
 
-// mergeServicesYAML combines two yaml fragments, each shaped like
-// `services: { name: {...}, ... }`, into a single fragment. Empty inputs
-// are tolerated. Used by writeFullFixture so the services.yml file carries
-// both the test's declared apps and the standard tool services.
-func mergeServicesYAML(t *testing.T, a, b string) string {
+// writeServicesDir creates per-folder service files under <baseDir>/devbox/services/
+// from a YAML fragment shaped like `services: {name: {...}}`.
+func writeServicesDir(t *testing.T, baseDir, servicesYML string) {
 	t.Helper()
-	if a == "" && b == "" {
-		return ""
+	if servicesYML == "" {
+		return
 	}
 	type wrap struct {
 		Services map[string]any `yaml:"services"`
 	}
-	out := wrap{Services: map[string]any{}}
-	for _, frag := range []string{a, b} {
-		if frag == "" {
-			continue
-		}
-		var w wrap
-		if err := yaml.Unmarshal([]byte(frag), &w); err != nil {
-			t.Fatalf("mergeServicesYAML: parse fragment: %v\nfragment:\n%s", err, frag)
-		}
-		maps.Copy(out.Services, w.Services)
+	var w wrap
+	if err := yaml.Unmarshal([]byte(servicesYML), &w); err != nil {
+		t.Fatalf("writeServicesDir: parse: %v", err)
 	}
-	data, err := yaml.Marshal(out)
-	if err != nil {
-		t.Fatalf("mergeServicesYAML: marshal: %v", err)
+	for name, svc := range w.Services {
+		dir := filepath.Join(baseDir, "devbox", "services", name)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("writeServicesDir: mkdir %s: %v", dir, err)
+		}
+		data, err := yaml.Marshal(svc)
+		if err != nil {
+			t.Fatalf("writeServicesDir: marshal %s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "service.yml"), data, 0644); err != nil {
+			t.Fatalf("writeServicesDir: write %s: %v", name, err)
+		}
 	}
-	return string(data)
 }
 
 func writeTempYML(t *testing.T, content string) string {
@@ -184,10 +182,10 @@ func writeLayeredFixture(t *testing.T, devbox, defaults, user string) string {
 const noToolsYML = "<NONE>"
 
 // writeFullFixture creates the complete file layout used by LoadConfig,
-// including optional services.yml and tools.yml.
+// including optional per-folder services and tool services.
 //
-// Pass tools=noToolsYML to suppress creating devbox/tools.yml. Empty string
-// falls back to sampleToolsYML so existing layered tests stay terse.
+// Pass tools=noToolsYML to suppress creating tool service folders. Empty
+// string falls back to sampleToolsYML so existing layered tests stay terse.
 func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -200,7 +198,15 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 	devboxDir := filepath.Join(dir, "devbox")
 
 	writeTools := tools != noToolsYML
-	if defaults != "" || services != "" || user != "" || writeTools {
+	toolsContent := ""
+	if writeTools {
+		toolsContent = tools
+		if toolsContent == "" {
+			toolsContent = sampleToolsYML
+		}
+	}
+
+	if defaults != "" || user != "" {
 		if err := os.MkdirAll(devboxDir, 0755); err != nil {
 			t.Fatalf("mkdir devbox/: %v", err)
 		}
@@ -218,21 +224,9 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 		}
 	}
 
-	// Post-unification, tools and services live in a single services.yml.
-	// Merge both fragments (each is a `services:` mapping) into one file.
-	toolsContent := ""
-	if writeTools {
-		toolsContent = tools
-		if toolsContent == "" {
-			toolsContent = sampleToolsYML
-		}
-	}
-	combined := mergeServicesYAML(t, services, toolsContent)
-	if combined != "" {
-		if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(combined), 0644); err != nil {
-			t.Fatalf("write services.yml: %v", err)
-		}
-	}
+	// Write per-folder services (services and tools are independent fragments).
+	writeServicesDir(t, dir, services)
+	writeServicesDir(t, dir, toolsContent)
 
 	return devboxPath
 }
@@ -743,13 +737,10 @@ services:
 
 func TestLoadServicesConfig_basic(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	if len(services) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(services))
@@ -771,13 +762,10 @@ func TestLoadServicesConfig_basic(t *testing.T) {
 
 func TestLoadServicesConfig_extendsResolved(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	debug := services["main-debug"]
 	if debug.Container != "app-main-debug" {
@@ -817,13 +805,10 @@ services:
     extends: parent
 `
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, yml)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	// child with no container should inherit parent's container
 	if got := services["child-no-container"].Container; got != "parent-ctr" {
@@ -844,11 +829,8 @@ services:
     extends: nonexistent
 `
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	_, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, yml)
+	_, err := LoadServices(dir)
 	if err == nil {
 		t.Fatal("expected error for unknown extends parent")
 	}
@@ -1739,13 +1721,10 @@ services:
 
 func TestLoadServicesConfig_modeField(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithCLIYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	main := services["main"]
 	if main.CLI.Mode != "auto" {
@@ -1755,13 +1734,10 @@ func TestLoadServicesConfig_modeField(t *testing.T) {
 
 func TestLoadServicesConfig_envField(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithCLIYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	main := services["main"]
 	if len(main.CLI.Env) != 2 {
@@ -1777,13 +1753,10 @@ func TestLoadServicesConfig_envField(t *testing.T) {
 
 func TestLoadServicesConfig_extendsInheritsMode(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithCLIYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	// main-debug extends main and has no CLI block of its own — inherits mode from parent
 	debug := services["main-debug"]
@@ -1794,13 +1767,10 @@ func TestLoadServicesConfig_extendsInheritsMode(t *testing.T) {
 
 func TestLoadServicesConfig_extendsInheritsEnv(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithCLIYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	// main-debug extends main and has no CLI.Env of its own — inherits env from parent
 	debug := services["main-debug"]
@@ -1814,13 +1784,10 @@ func TestLoadServicesConfig_extendsInheritsEnv(t *testing.T) {
 
 func TestLoadServicesConfig_extendsOverridesMode(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithCLIYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithCLIYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	// main-run extends main but sets its own mode: run — should NOT inherit parent mode
 	run := services["main-run"]
@@ -1867,13 +1834,10 @@ services:
 
 func TestLoadServicesConfig_dirsField(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithDirsYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	base := services["base"]
 	want := []string{"logs", "home", "runtime"}
@@ -1889,13 +1853,10 @@ func TestLoadServicesConfig_dirsField(t *testing.T) {
 
 func TestLoadServicesConfig_dirsInheritedAndMerged(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithDirsYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	// child extends base (dirs: [logs, home, runtime]) and adds dirs: [extra]
 	// expected: parent first, then child additions
@@ -1913,13 +1874,10 @@ func TestLoadServicesConfig_dirsInheritedAndMerged(t *testing.T) {
 
 func TestLoadServicesConfig_dirsInheritedWhenChildEmpty(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithDirsYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	// child-nodir extends base and has no dirs of its own — should inherit parent dirs
 	child := services["child-nodir"]
@@ -1936,13 +1894,10 @@ func TestLoadServicesConfig_dirsInheritedWhenChildEmpty(t *testing.T) {
 
 func TestLoadServicesConfig_dirsDeduplicated(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(sampleServicesWithDirsYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, sampleServicesWithDirsYML)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	// child-overlap extends base (logs, home, runtime) and adds (logs, home, custom)
 	// duplicate logs and home must appear only once; parent order preserved
@@ -3332,13 +3287,10 @@ services:
         template: both-tmpl
 `
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, yml)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 
 	// Parent has explicit false and template
@@ -3526,13 +3478,10 @@ services:
     extends: child-inherit
 `
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, yml)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 
 	// Parent has explicit false and template
@@ -3729,13 +3678,10 @@ services:
     extends: child-inherit
 `
 	dir := t.TempDir()
-	path := filepath.Join(dir, "services.yml")
-	if err := os.WriteFile(path, []byte(yml), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
-	}
-	services, err := LoadServicesConfig(path)
+	writeServicesDir(t, dir, yml)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 
 	parent := services["parent"]

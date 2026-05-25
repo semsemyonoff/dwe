@@ -1,4 +1,0 @@
-services:
-  weird:
-    type: worker
-    container: weird

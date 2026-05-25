@@ -137,18 +137,18 @@ These cut across tasks; verify each task PR conforms before mark-complete.
 8. Post-toposort `extends:` symmetry — child.Type MUST equal parent.Type (line 1246-1258)
 9. Defensive field inheritance + merging: shallow-clone slices/maps; dedup env/dirs across parent/child; pointer copies for `Render.IDE/AI/Git` flags (line 1260-1336)
 
-- [ ] in `internal/config/devbox.go` add `LoadServiceFolder(baseDir, name) (*ServiceConfig, error)` that performs responsibilities 1-6 above against `devbox/services/<name>/service.yml`. Missing `service.yml` in an existing dir → load error wrapped: `fmt.Errorf("loading service %q definition: %w", name, err)`. The `extends:` resolution (7-9) is deferred to `LoadServices` because it's cross-service
-- [ ] file lifecycle: `LoadServiceFolder` opens + `defer file.Close()` per call. The `defer` is per-function (not per-loop iteration) because `LoadServices` invokes it as a function call per service — keeps file handles bounded (golang-safety "defer in loops" pattern)
-- [ ] add `LoadServices(baseDir) (map[string]ServiceConfig, error)` that:
+- [x] in `internal/config/devbox.go` add `LoadServiceFolder(baseDir, name) (*ServiceConfig, error)` that performs responsibilities 1-6 above against `devbox/services/<name>/service.yml`. Missing `service.yml` in an existing dir → load error wrapped: `fmt.Errorf("loading service %q definition: %w", name, err)`. The `extends:` resolution (7-9) is deferred to `LoadServices` because it's cross-service
+- [x] file lifecycle: `LoadServiceFolder` opens + `defer file.Close()` per call. The `defer` is per-function (not per-loop iteration) because `LoadServices` invokes it as a function call per service — keeps file handles bounded (golang-safety "defer in loops" pattern)
+- [x] add `LoadServices(baseDir) (map[string]ServiceConfig, error)` that:
   - enumerates `devbox/services/*/` (dir entries only)
   - **missing `devbox/services/` directory entirely → return an empty map and nil error** (preserves today's `LoadConfig` tolerance at `internal/config/devbox.go:903-910`, which treats absent services as an empty map rather than a hard failure). A project without services is still valid
   - calls `LoadServiceFolder` for each (responsibilities 1-6)
   - applies cross-service responsibilities 7-9 (toposort + symmetry + inheritance merge) over the assembled map
   - on per-folder decode/validation failure, collects into `errors.Join` so the caller sees every broken folder, not just the first
-- [ ] folder-name = map-key invariant: `LoadServices` uses the folder name as the key; no `name:` field inside `service.yml`
-- [ ] **fixture migration is part of THIS task**. Replace `LoadServicesConfig` call sites with `LoadServices`, delete `LoadServicesConfig`, AND convert every `testdata/` fixture under `internal/config/`, `internal/command/`, `internal/deploy/`, `internal/stack/`, `internal/validate/` to the new `services/<name>/service.yml` layout. (Otherwise the "tests must pass before next task" gate is impossible to satisfy.) Live monorepo project migration is out of scope for this plan — this PR touches only the CLI repository
-- [ ] write tests: happy path (3 services), missing `service.yml` error, unknown YAML field rejected, empty `services/` directory returns empty map, **absent `devbox/services/` directory returns empty map + nil error** (tolerance regression), non-dir entries ignored, `extends:` toposort with a 3-level chain, `extends:` cross-type rejected, `errors.Join` surfaces multiple broken folders
-- [ ] run `go test ./internal/config/...` - must pass before next task
+- [x] folder-name = map-key invariant: `LoadServices` uses the folder name as the key; no `name:` field inside `service.yml`
+- [x] **fixture migration is part of THIS task**. Replace `LoadServicesConfig` call sites with `LoadServices`, delete `LoadServicesConfig`, AND convert every `testdata/` fixture under `internal/config/`, `internal/command/`, `internal/deploy/`, `internal/stack/`, `internal/validate/` to the new `services/<name>/service.yml` layout. (Otherwise the "tests must pass before next task" gate is impossible to satisfy.) Live monorepo project migration is out of scope for this plan — this PR touches only the CLI repository
+- [x] write tests: happy path (3 services), missing `service.yml` error, unknown YAML field rejected, empty `services/` directory returns empty map, **absent `devbox/services/` directory returns empty map + nil error** (tolerance regression), non-dir entries ignored, `extends:` toposort with a 3-level chain, `extends:` cross-type rejected, `errors.Join` surfaces multiple broken folders
+- [x] run `go test ./internal/config/...` - must pass before next task
 
 ### Task 4: Per-folder deploy loader path migration + `after:` ordering field
 

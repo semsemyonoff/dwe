@@ -19,7 +19,7 @@ func TestResetRunCmd_projectWideCleanup(t *testing.T) {
 	stateDir := filepath.Join(tmpDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
-	// Create minimal devbox.yml + devbox/services.yml
+	// Create minimal devbox.yml + devbox/services/main/service.yml
 	if err := os.WriteFile(configPath, []byte(`
 schema_version: "2"
 project:
@@ -33,13 +33,11 @@ project:
 	if err := os.MkdirAll(resetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(resetDir, "services.yml"), []byte(`
-services:
-  main:
-    type: app
-    container: app-main
-    dir: ./services/main
-`), 0o644); err != nil {
+	svcDirA := filepath.Join(resetDir, "services", "main")
+	if err := os.MkdirAll(svcDirA, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDirA, "service.yml"), []byte("type: app\ncontainer: app-main\ndir: ./services/main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(resetDir, "reset.yml"), []byte(`
@@ -131,18 +129,16 @@ project:
 		t.Fatal(err)
 	}
 
-	// Create devbox/reset.yml + services.yml
+	// Create devbox/reset.yml + services/main/service.yml
 	resetDir := filepath.Join(tmpDir, "devbox")
 	if err := os.MkdirAll(resetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(resetDir, "services.yml"), []byte(`
-services:
-  main:
-    type: app
-    container: app-main
-    dir: ./services/main
-`), 0o644); err != nil {
+	svcDirB := filepath.Join(resetDir, "services", "main")
+	if err := os.MkdirAll(svcDirB, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDirB, "service.yml"), []byte("type: app\ncontainer: app-main\ndir: ./services/main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(resetDir, "reset.yml"), []byte(`

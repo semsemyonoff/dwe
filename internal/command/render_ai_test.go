@@ -8,18 +8,32 @@ import (
 
 	"devbox-cli/internal/config"
 	aipkg "devbox-cli/internal/templates/ai"
+
+	yamlPkg "gopkg.in/yaml.v3"
 )
 
-// setupServicesConfig writes a devbox/services.yml file with the given YAML content.
-func setupServicesConfig(t *testing.T, dir, yaml string) {
+// setupServicesConfig writes per-folder service files from a `services:` wrapped YAML fragment.
+func setupServicesConfig(t *testing.T, dir, servicesYML string) {
 	t.Helper()
-	servicesDir := filepath.Join(dir, "devbox")
-	if err := os.MkdirAll(servicesDir, 0o755); err != nil {
-		t.Fatalf("create devbox dir: %v", err)
+	type wrap struct {
+		Services map[string]any `yaml:"services"`
 	}
-	path := filepath.Join(servicesDir, "services.yml")
-	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
+	var w wrap
+	if err := yamlPkg.Unmarshal([]byte(servicesYML), &w); err != nil {
+		t.Fatalf("setupServicesConfig parse: %v", err)
+	}
+	for name, svc := range w.Services {
+		svcDir := filepath.Join(dir, "devbox", "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatalf("setupServicesConfig mkdir %s: %v", name, err)
+		}
+		data, err := yamlPkg.Marshal(svc)
+		if err != nil {
+			t.Fatalf("setupServicesConfig marshal %s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), data, 0o644); err != nil {
+			t.Fatalf("setupServicesConfig write %s: %v", name, err)
+		}
 	}
 }
 

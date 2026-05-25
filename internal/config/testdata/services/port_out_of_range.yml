@@ -1,6 +1,0 @@
-services:
-  app:
-    type: app
-    container: app
-    ports:
-      http: 70000

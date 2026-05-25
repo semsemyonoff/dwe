@@ -1,0 +1,4 @@
+type: tool
+container: redis
+ports:
+  bad-port: 6379

@@ -27,8 +27,6 @@ func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 	}
 	var defaults strings.Builder
 	defaults.WriteString("project:\n  name: testproj\n  prefix: testproj\n")
-	var svcs strings.Builder
-	svcs.WriteString("services:\n")
 	if len(services) > 0 {
 		defaults.WriteString("services:\n")
 		for name, enabled := range services {
@@ -40,17 +38,18 @@ func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 			} else {
 				defaults.WriteString("false\n")
 			}
-			svcs.WriteString("  ")
-			svcs.WriteString(name)
-			svcs.WriteString(":\n    type: app\n    container: app-")
-			svcs.WriteString(name)
-			svcs.WriteString("\n")
+			// Write per-folder service file.
+			svcDir := filepath.Join(devboxDir, "services", name)
+			if err := os.MkdirAll(svcDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			content := "type: app\ncontainer: app-" + name + "\n"
+			if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaults.String()), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(svcs.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "snapshots"), 0o755); err != nil {

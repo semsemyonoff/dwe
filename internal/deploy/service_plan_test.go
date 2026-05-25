@@ -28,14 +28,11 @@ project:
 		t.Fatal(err)
 	}
 
-	servicesYML := `services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-    dir: ./services/main
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
+	svcDir := filepath.Join(devboxDir, "services", "main")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

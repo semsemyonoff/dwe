@@ -204,20 +204,18 @@ runtime:
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-  api:
-    type: app
-    container: app-api
-  worker:
-    type: app
-    container: app-worker
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"main":   "type: app\ncontainer: app-main\nmandatory: true\n",
+		"api":    "type: app\ncontainer: app-api\n",
+		"worker": "type: app\ncontainer: app-worker\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	flags := &rootFlags{configPath: filepath.Join(tmpDir, "devbox.yml"), projectRoot: tmpDir}
 
@@ -260,24 +258,17 @@ services:
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  adminer:
-    type: tool
-    container: adminer
-    ports:
-      main: 8080
-    hosts:
-      main: adminer.localhost
-  elasticvue:
-    type: tool
-    container: elasticvue
-    ports:
-      main: 8044
-    hosts:
-      main: elasticvue.localhost
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"adminer":    "type: tool\ncontainer: adminer\nports:\n  main: 8080\nhosts:\n  main: adminer.localhost\n",
+		"elasticvue": "type: tool\ncontainer: elasticvue\nports:\n  main: 8044\nhosts:\n  main: elasticvue.localhost\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	flags := &rootFlags{configPath: filepath.Join(tmpDir, "devbox.yml"), projectRoot: tmpDir}
 
@@ -326,24 +317,17 @@ services:
 	}
 
 	// Write the tool definitions in devbox/services.yml.
-	servicesYML := `services:
-  adminer:
-    type: tool
-    container: adminer
-    ports:
-      main: 8080
-    hosts:
-      main: adminer.localhost
-  elasticvue:
-    type: tool
-    container: elasticvue
-    ports:
-      main: 8044
-    hosts:
-      main: elasticvue.localhost
-`
-	if err := os.WriteFile(devboxDir+"/services.yml", []byte(servicesYML), 0644); err != nil {
-		t.Fatalf("writing services.yml: %v", err)
+	for name, content := range map[string]string{
+		"adminer":    "type: tool\ncontainer: adminer\nports:\n  main: 8080\nhosts:\n  main: adminer.localhost\n",
+		"elasticvue": "type: tool\ncontainer: elasticvue\nports:\n  main: 8044\nhosts:\n  main: elasticvue.localhost\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0755); err != nil {
+			t.Fatalf("mkdir services/%s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0644); err != nil {
+			t.Fatalf("write services/%s/service.yml: %v", name, err)
+		}
 	}
 
 	// Write a minimal devbox.yml with schema_version.
@@ -636,16 +620,17 @@ project:
 	if err := os.WriteFile(filepath.Join(projectDir, "devbox.yml"), []byte(devboxYML), 0644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
-	servicesYML := `services:
-  main:
-    type: app
-    dir: services/main
-  worker:
-    type: app
-    dir: services/worker
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
+	for name, content := range map[string]string{
+		"main":   "type: app\ndir: services/main\n",
+		"worker": "type: app\ndir: services/worker\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0755); err != nil {
+			t.Fatalf("mkdir services/%s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0644); err != nil {
+			t.Fatalf("write services/%s/service.yml: %v", name, err)
+		}
 	}
 
 	// Write a malformed manifest.yml under an IDE pack — broken YAML.

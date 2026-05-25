@@ -167,12 +167,10 @@ project:
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  adminer:
-    type: tool
-    container: adminer
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(devboxDir, "services", "adminer"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(devboxDir, "services", "adminer", "service.yml"), []byte("type: tool\ncontainer: adminer\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	defaultsYML := `services:
@@ -210,26 +208,17 @@ project:
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  adminer:
-    type: tool
-    container: adminer
-    ports:
-      http: 8027
-    hosts:
-      web: admin.local
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-    dir: ./services/main
-    ports:
-      http: 80
-    hosts:
-      web: app.local
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"adminer": "type: tool\ncontainer: adminer\nports:\n  http: 8027\nhosts:\n  web: admin.local\n",
+		"main":    "type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\nports:\n  http: 80\nhosts:\n  web: app.local\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	localYML := `services:
   adminer:

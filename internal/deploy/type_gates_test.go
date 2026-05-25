@@ -29,19 +29,17 @@ project:
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-    dir: ./services/main
-  db:
-    type: infra
-    container: db
-    mandatory: true
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"main": "type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\n",
+		"db":   "type: infra\ncontainer: db\nmandatory: true\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if deployFor != "" {
 		deployDir := filepath.Join(devboxDir, "deploy")
@@ -127,19 +125,17 @@ project:
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-    dir: ./services/main
-    depends_on: [adminer]
-  adminer:
-    type: tool
-    container: adminer
-`
-	if err := os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"main":    "type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\ndepends_on:\n  - adminer\n",
+		"adminer": "type: tool\ncontainer: adminer\n",
+	} {
+		svcDir := filepath.Join(devboxDir, "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	_, err := config.LoadConfig(devboxPath)
 	if err == nil {

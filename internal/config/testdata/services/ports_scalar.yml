@@ -1,5 +1,0 @@
-services:
-  app:
-    type: app
-    container: app
-    ports: 8080

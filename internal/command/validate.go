@@ -99,7 +99,7 @@ Scope targets:
 	}
 	configCmd.AddCommand(
 		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "devbox", "Validate main devbox.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "services", "Validate devbox/services.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "services", "Validate devbox/services/<name>/service.yml"),
 		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "docker", "Validate devbox/docker.yml"),
 		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "info", "Validate devbox/info.yml"),
 		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "styles", "Validate devbox/styles.yml"),

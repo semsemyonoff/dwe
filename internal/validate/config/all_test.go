@@ -40,14 +40,10 @@ runtime:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYml), 0644))
 
-	// Create services.yml
-	servicesYml := `services:
-  app:
-    type: app
-    dir: /app
-    container: app
-`
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "services.yml"), []byte(servicesYml), 0644))
+	// Create per-folder service
+	svcDir := filepath.Join(devboxDir, "services", "app")
+	require.NoError(t, os.MkdirAll(svcDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ndir: /app\ncontainer: app\n"), 0644))
 
 	// Create docker.yml
 	dockerYml := `project_name: test-project

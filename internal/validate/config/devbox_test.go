@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	devconfig "devbox-cli/internal/config"
 	"devbox-cli/internal/validate"
@@ -95,13 +96,25 @@ func TestDevboxValidatorID(t *testing.T) {
 	require.Equal(t, "config", v.Domain())
 }
 
-// writeServicesFile sets up a project root with devbox/services.yml for
-// servicesValidator tests. Returns the project root path.
-func writeServicesFile(t *testing.T, body string) string {
+// writeServicesDir sets up a project root with per-folder services under devbox/services/
+// for servicesValidator tests. The body is a YAML fragment shaped like `services: {name: {...}}`.
+// Returns the project root path.
+func writeServicesDir(t *testing.T, body string) string {
 	t.Helper()
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox", "services.yml"), []byte(body), 0o644))
+	type wrap struct {
+		Services map[string]any `yaml:"services"`
+	}
+	var w wrap
+	require.NoError(t, yaml.Unmarshal([]byte(body), &w))
+	for name, svc := range w.Services {
+		dir := filepath.Join(root, "devbox", "services", name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		data, err := yaml.Marshal(svc)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), data, 0o644))
+	}
 	return root
 }
 
@@ -163,7 +176,7 @@ services:
     ports:
       web: 8080
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	v := &servicesValidator{}
 	diags := v.Run(validate.Context{ProjectRoot: root})
 	// Exactly one OK summary, no errors, no warnings.
@@ -180,7 +193,7 @@ services:
   app:
     container: app
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	d := hasDiag(t, diags, validate.SeverityError, "missing type")
 	require.Equal(t, "config.services:app", d.Target)
@@ -192,7 +205,7 @@ services:
   app:
     type: worker
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, "unknown service type")
 }
@@ -206,7 +219,7 @@ services:
     dir: adminer
     extends: foo
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, `field "dir" not allowed`)
 	// "extends" on a non-app emits the more specific cross-type error only.
@@ -221,7 +234,7 @@ services:
     container: pg
     extends: other
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, "extends only permitted for type app")
 }
@@ -233,7 +246,7 @@ services:
     type: app
     container: api
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	d := hasDiag(t, diags, validate.SeverityWarning, "no dir or dir_internal")
 	require.Equal(t, "config.services:api", d.Target)
@@ -252,7 +265,7 @@ services:
     container: app-main-debug
     extends: main
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	ctx := validate.Context{
 		ProjectRoot: root,
 		Cfg: &devconfig.DevboxConfig{
@@ -289,7 +302,7 @@ services:
     container: app-main-debug
     extends: main
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	for _, d := range diags {
@@ -313,7 +326,7 @@ services:
     type: tool
     container: adminer
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	d := hasDiag(t, diags, validate.SeverityError, `depends_on target "adminer" is type tool`)
 	require.Equal(t, "config.services:api", d.Target)
@@ -331,7 +344,7 @@ services:
     type: infra
     container: pg
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	for _, d := range diags {
 		require.NotEqual(t, validate.SeverityError, d.Severity, "unexpected error: %s", d.Message)
@@ -347,7 +360,7 @@ services:
     dir: api
     ports: 3000
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, "ports must be a map")
 }
@@ -362,7 +375,7 @@ services:
     ports:
       http: 99999
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, "out of range")
 }
@@ -376,7 +389,7 @@ services:
     dir: api
     hosts: somehost
 `
-	root := writeServicesFile(t, body)
+	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, "hosts must be a map")
 }

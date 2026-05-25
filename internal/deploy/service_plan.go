@@ -26,7 +26,7 @@ func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, servic
 	baseDir := filepath.Dir(cfgPath)
 	svc, declared := cfg.Services[serviceName]
 	if !declared {
-		return nil, fmt.Errorf("service %q is not declared in devbox/services.yml", serviceName)
+		return nil, fmt.Errorf("service %q is not declared in devbox/services/<name>/service.yml", serviceName)
 	}
 	if !svc.IsApp() {
 		return nil, fmt.Errorf("%w: service %q has type %s", config.ErrDeployTargetNotApp, serviceName, svc.Type)

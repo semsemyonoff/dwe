@@ -2,106 +2,288 @@ package config
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
 
-// TestLoadServicesConfig_happyPathByType confirms each canonical type loads
-// without error and that key per-type fields decode through cleanly.
-func TestLoadServicesConfig_happyPathByType(t *testing.T) {
-	tests := []struct {
-		name   string
-		file   string
-		assert func(t *testing.T, services map[string]ServiceConfig)
-	}{
-		{
-			name: "app",
-			file: "happy_app.yml",
-			assert: func(t *testing.T, s map[string]ServiceConfig) {
-				web := s["web"]
-				if !web.IsApp() {
-					t.Fatalf("web type = %s, want app", web.Type)
-				}
-				if web.Port("http") != 8080 || web.Port("grpc") != 9090 {
-					t.Fatalf("web ports = %v", web.Ports)
-				}
-				if web.Host("main") != "web.localhost" {
-					t.Fatalf("web hosts = %v", web.Hosts)
-				}
-			},
-		},
-		{
-			name: "tool",
-			file: "happy_tool.yml",
-			assert: func(t *testing.T, s map[string]ServiceConfig) {
-				adm := s["adminer"]
-				if !adm.IsTool() {
-					t.Fatalf("adminer type = %s, want tool", adm.Type)
-				}
-				if adm.Port("web") != 8080 {
-					t.Fatalf("adminer ports = %v", adm.Ports)
-				}
-			},
-		},
-		{
-			name: "infra",
-			file: "happy_infra.yml",
-			assert: func(t *testing.T, s map[string]ServiceConfig) {
-				db := s["db"]
-				cache := s["cache"]
-				if !db.IsInfra() || !cache.IsInfra() {
-					t.Fatalf("expected infra types: db=%s cache=%s", db.Type, cache.Type)
-				}
-				if len(cache.DependsOn) != 1 || cache.DependsOn[0] != "db" {
-					t.Fatalf("cache.DependsOn = %v", cache.DependsOn)
-				}
-			},
-		},
+// writeServiceFolder creates a single service folder at
+// <baseDir>/devbox/services/<name>/service.yml with the given content.
+func writeServiceFolder(t *testing.T, baseDir, name, content string) {
+	t.Helper()
+	dir := filepath.Join(baseDir, "devbox", "services", name)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("writeServiceFolder mkdir: %v", err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			services, err := LoadServicesConfig(filepath.Join("testdata", "services", tc.file))
-			if err != nil {
-				t.Fatalf("LoadServicesConfig: %v", err)
-			}
-			tc.assert(t, services)
-		})
+	if err := os.WriteFile(filepath.Join(dir, "service.yml"), []byte(content), 0644); err != nil {
+		t.Fatalf("writeServiceFolder write: %v", err)
 	}
 }
 
-// TestLoadServicesConfig_sentinelErrors covers each sentinel-error path with a
-// minimal fixture.
-func TestLoadServicesConfig_sentinelErrors(t *testing.T) {
-	tests := []struct {
-		name     string
-		file     string
-		sentinel error
-	}{
-		{"missing type", "missing_type.yml", ErrServiceTypeMissing},
-		{"unknown type", "unknown_type.yml", ErrServiceTypeUnknown},
-		{"tool with dir", "tool_with_dir.yml", ErrServiceFieldNotAllowed},
-		{"infra with extends", "infra_with_extends.yml", ErrServiceExtendsCrossType},
-		{"ports scalar", "ports_scalar.yml", ErrServicePortsShape},
-		{"hosts scalar", "hosts_scalar.yml", ErrServiceHostsShape},
-		{"port out of range", "port_out_of_range.yml", ErrServicePortOutOfRange},
+// TestLoadServices_happyPath verifies three services (app, tool, infra) load correctly.
+func TestLoadServices_happyPath(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+mandatory: true
+dir: ./services/web
+dir_internal: /workspace
+ports:
+  http: 8080
+  grpc: 9090
+hosts:
+  main: web.localhost
+`)
+	writeServiceFolder(t, dir, "adminer", `
+type: tool
+container: adminer
+ports:
+  web: 8080
+`)
+	writeServiceFolder(t, dir, "db", `
+type: infra
+container: postgres
+ports:
+  postgres: 5432
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := LoadServicesConfig(filepath.Join("testdata", "services", tc.file))
-			if err == nil {
-				t.Fatalf("expected error matching %v, got nil", tc.sentinel)
-			}
-			if !errors.Is(err, tc.sentinel) {
-				t.Fatalf("err = %v, want errors.Is %v", err, tc.sentinel)
-			}
-		})
+	if len(services) != 3 {
+		t.Fatalf("expected 3 services, got %d", len(services))
+	}
+	web := services["web"]
+	if !web.IsApp() {
+		t.Errorf("web type = %s, want app", web.Type)
+	}
+	if web.Port("http") != 8080 || web.Port("grpc") != 9090 {
+		t.Errorf("web ports = %v", web.Ports)
+	}
+	if web.Host("main") != "web.localhost" {
+		t.Errorf("web hosts = %v", web.Hosts)
+	}
+	adm := services["adminer"]
+	if !adm.IsTool() {
+		t.Errorf("adminer type = %s, want tool", adm.Type)
+	}
+	db := services["db"]
+	if !db.IsInfra() {
+		t.Errorf("db type = %s, want infra", db.Type)
 	}
 }
 
-// TestLoadServicesConfig_multiErrorAggregation confirms a single file with
-// multiple violations produces a joined error matching every sentinel.
-func TestLoadServicesConfig_multiErrorAggregation(t *testing.T) {
-	_, err := LoadServicesConfig(filepath.Join("testdata", "services", "multi_error.yml"))
+// TestLoadServices_missingDir verifies absent devbox/services/ returns empty map (not error).
+func TestLoadServices_missingDir(t *testing.T) {
+	dir := t.TempDir()
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("expected nil error for missing dir, got %v", err)
+	}
+	if len(services) != 0 {
+		t.Fatalf("expected empty map, got %v", services)
+	}
+}
+
+// TestLoadServices_emptyDir verifies devbox/services/ with no subdirs returns empty map.
+func TestLoadServices_emptyDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "devbox", "services"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("expected nil error for empty dir, got %v", err)
+	}
+	if len(services) != 0 {
+		t.Fatalf("expected empty map, got %v", services)
+	}
+}
+
+// TestLoadServices_nonDirEntriesIgnored verifies non-directory entries are skipped.
+func TestLoadServices_nonDirEntriesIgnored(t *testing.T) {
+	dir := t.TempDir()
+	svcDir := filepath.Join(dir, "devbox", "services")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Create a file (not a dir) in the services dir.
+	if err := os.WriteFile(filepath.Join(svcDir, "README.md"), []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "redis", `
+type: infra
+container: redis
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+	if len(services) != 1 {
+		t.Fatalf("expected 1 service (non-dir ignored), got %d: %v", len(services), services)
+	}
+}
+
+// TestLoadServices_unknownFieldRejected verifies unknown fields return an error.
+func TestLoadServices_unknownFieldRejected(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+unknown_field: bad
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for unknown field, got nil")
+	}
+}
+
+// TestLoadServices_missingType verifies missing type returns ErrServiceTypeMissing.
+func TestLoadServices_missingType(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+container: app-web
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for missing type, got nil")
+	}
+	if !errors.Is(err, ErrServiceTypeMissing) {
+		t.Errorf("err = %v, want errors.Is ErrServiceTypeMissing", err)
+	}
+}
+
+// TestLoadServices_unknownType verifies unknown type returns ErrServiceTypeUnknown.
+func TestLoadServices_unknownType(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: widget
+container: app-web
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for unknown type, got nil")
+	}
+	if !errors.Is(err, ErrServiceTypeUnknown) {
+		t.Errorf("err = %v, want errors.Is ErrServiceTypeUnknown", err)
+	}
+}
+
+// TestLoadServices_fieldNotAllowed verifies disallowed fields return ErrServiceFieldNotAllowed.
+func TestLoadServices_fieldNotAllowed(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "redis", `
+type: tool
+container: redis
+dir: ./not-allowed
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for disallowed field, got nil")
+	}
+	if !errors.Is(err, ErrServiceFieldNotAllowed) {
+		t.Errorf("err = %v, want errors.Is ErrServiceFieldNotAllowed", err)
+	}
+}
+
+// TestLoadServices_infraWithExtends verifies infra+extends returns ErrServiceExtendsCrossType.
+func TestLoadServices_infraWithExtends(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "db", `
+type: infra
+container: db
+extends: other
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for infra with extends, got nil")
+	}
+	if !errors.Is(err, ErrServiceExtendsCrossType) {
+		t.Errorf("err = %v, want errors.Is ErrServiceExtendsCrossType", err)
+	}
+}
+
+// TestLoadServices_portsScalar verifies scalar ports returns ErrServicePortsShape.
+func TestLoadServices_portsScalar(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+ports: 8080
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for scalar ports, got nil")
+	}
+	if !errors.Is(err, ErrServicePortsShape) {
+		t.Errorf("err = %v, want errors.Is ErrServicePortsShape", err)
+	}
+}
+
+// TestLoadServices_hostsScalar verifies scalar hosts returns ErrServiceHostsShape.
+func TestLoadServices_hostsScalar(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+hosts: web.localhost
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for scalar hosts, got nil")
+	}
+	if !errors.Is(err, ErrServiceHostsShape) {
+		t.Errorf("err = %v, want errors.Is ErrServiceHostsShape", err)
+	}
+}
+
+// TestLoadServices_portOutOfRange verifies out-of-range port returns ErrServicePortOutOfRange.
+func TestLoadServices_portOutOfRange(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+ports:
+  http: 70000
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for port out of range, got nil")
+	}
+	if !errors.Is(err, ErrServicePortOutOfRange) {
+		t.Errorf("err = %v, want errors.Is ErrServicePortOutOfRange", err)
+	}
+}
+
+// TestLoadServices_multiErrorAggregation verifies multiple broken folders aggregate errors.
+func TestLoadServices_multiErrorAggregation(t *testing.T) {
+	dir := t.TempDir()
+	// tool with dir → ErrServiceFieldNotAllowed
+	writeServiceFolder(t, dir, "one", `
+type: tool
+container: one
+dir: ./not-allowed-for-tool
+`)
+	// infra with extends → ErrServiceExtendsCrossType
+	writeServiceFolder(t, dir, "two", `
+type: infra
+container: two
+extends: one
+`)
+	// app with port out of range → ErrServicePortOutOfRange
+	writeServiceFolder(t, dir, "three", `
+type: app
+container: app-three
+dir: ./services/three
+ports:
+  bad: 70000
+`)
+	_, err := LoadServices(dir)
 	if err == nil {
 		t.Fatal("expected joined error, got nil")
 	}
@@ -116,12 +298,62 @@ func TestLoadServicesConfig_multiErrorAggregation(t *testing.T) {
 	}
 }
 
-// TestLoadServicesConfig_extendsInheritsNewFields proves Compose, Ports, Hosts,
-// and Configs inherit from parent when child leaves them empty.
-func TestLoadServicesConfig_extendsInheritsNewFields(t *testing.T) {
-	services, err := LoadServicesConfig(filepath.Join("testdata", "services", "app_extends.yml"))
+// TestLoadServices_extendsToposort verifies 3-level extends chain resolves in any dir order.
+func TestLoadServices_extendsToposort(t *testing.T) {
+	dir := t.TempDir()
+	// grandparent → parent → child
+	writeServiceFolder(t, dir, "grandparent", `
+type: app
+container: app-gp
+dir: ./services/gp
+`)
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: app-parent
+extends: grandparent
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: app-child
+extends: parent
+`)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
+	}
+	// child should inherit dir from grandparent
+	child := services["child"]
+	if child.Dir != "./services/gp" {
+		t.Errorf("child.Dir = %q, want ./services/gp (inherited from grandparent)", child.Dir)
+	}
+}
+
+// TestLoadServices_extendsInheritsFields verifies Compose, Ports, Hosts, Configs inherit.
+func TestLoadServices_extendsInheritsFields(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "base", `
+type: app
+container: app-base
+dir: ./services/base
+dir_internal: /workspace
+work_dir_internal: /workspace/src
+configs:
+  - .env
+compose:
+  - compose/services/base/base.yml
+ports:
+  http: 8080
+hosts:
+  main: base.localhost
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: app-child
+extends: base
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
 	}
 	child := services["child"]
 	if child.Dir != "./services/base" {
@@ -141,17 +373,34 @@ func TestLoadServicesConfig_extendsInheritsNewFields(t *testing.T) {
 	}
 }
 
-// TestLoadServicesConfig_extendsDefensiveCopy confirms mutating the child's
-// inherited slice/map does not corrupt the parent.
-func TestLoadServicesConfig_extendsDefensiveCopy(t *testing.T) {
-	services, err := LoadServicesConfig(filepath.Join("testdata", "services", "app_extends.yml"))
+// TestLoadServices_extendsDefensiveCopy verifies mutating child's slice/map doesn't corrupt parent.
+func TestLoadServices_extendsDefensiveCopy(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "base", `
+type: app
+container: app-base
+dir: ./services/base
+configs:
+  - .env
+compose:
+  - compose/services/base/base.yml
+ports:
+  http: 8080
+hosts:
+  main: base.localhost
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: app-child
+extends: base
+`)
+	services, err := LoadServices(dir)
 	if err != nil {
-		t.Fatalf("LoadServicesConfig: %v", err)
+		t.Fatalf("LoadServices: %v", err)
 	}
 	parent := services["base"]
 	child := services["child"]
 
-	// Slice mutation on child must not affect parent backing storage.
 	child.Configs[0].File = "MUTATED"
 	child.Compose[0] = "MUTATED.yml"
 	if parent.Configs[0].File != ".env" {
@@ -161,7 +410,6 @@ func TestLoadServicesConfig_extendsDefensiveCopy(t *testing.T) {
 		t.Errorf("parent.Compose corrupted: %v", parent.Compose)
 	}
 
-	// Map mutation on child must not affect parent.
 	child.Ports["http"] = 9999
 	child.Hosts["main"] = "mutated.localhost"
 	if parent.Port("http") != 8080 {
@@ -169,5 +417,78 @@ func TestLoadServicesConfig_extendsDefensiveCopy(t *testing.T) {
 	}
 	if parent.Host("main") != "base.localhost" {
 		t.Errorf("parent.Hosts corrupted: %v", parent.Hosts)
+	}
+}
+
+// TestLoadServices_extendsCrossType verifies app extends infra returns ErrServiceExtendsCrossType.
+func TestLoadServices_extendsCrossType(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "infrasvc", `
+type: infra
+container: infra-ctr
+`)
+	writeServiceFolder(t, dir, "appsvc", `
+type: app
+container: app-ctr
+dir: ./services/app
+extends: infrasvc
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected ErrServiceExtendsCrossType for app extends infra, got nil")
+	}
+	if !errors.Is(err, ErrServiceExtendsCrossType) {
+		t.Errorf("err = %v, want errors.Is ErrServiceExtendsCrossType", err)
+	}
+}
+
+// TestLoadServiceFolder_happyPath verifies loading a single service folder.
+func TestLoadServiceFolder_happyPath(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+ports:
+  http: 8080
+`)
+	svc, err := LoadServiceFolder(dir, "web")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if !svc.IsApp() {
+		t.Errorf("svc.Type = %s, want app", svc.Type)
+	}
+	if svc.Container != "app-web" {
+		t.Errorf("svc.Container = %q, want app-web", svc.Container)
+	}
+	if svc.Port("http") != 8080 {
+		t.Errorf("svc.Port(http) = %d, want 8080", svc.Port("http"))
+	}
+}
+
+// TestLoadServiceFolder_missingFile verifies file not found returns error.
+func TestLoadServiceFolder_missingFile(t *testing.T) {
+	dir := t.TempDir()
+	_, err := LoadServiceFolder(dir, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for missing service folder, got nil")
+	}
+}
+
+// TestLoadServiceFolder_preValidation verifies validation runs for LoadServiceFolder.
+func TestLoadServiceFolder_preValidation(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "redis", `
+type: tool
+container: redis
+dir: ./not-allowed-for-tool
+`)
+	_, err := LoadServiceFolder(dir, "redis")
+	if err == nil {
+		t.Fatal("expected error for disallowed field, got nil")
+	}
+	if !errors.Is(err, ErrServiceFieldNotAllowed) {
+		t.Errorf("err = %v, want errors.Is ErrServiceFieldNotAllowed", err)
 	}
 }

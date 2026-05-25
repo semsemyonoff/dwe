@@ -49,23 +49,25 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
-	var svcLines []string
-	svcLines = append(svcLines, "services:")
 	for name, spec := range services {
-		svcLines = append(svcLines, "  "+name+":")
-		svcLines = append(svcLines, "    type: app")
+		svcDir := filepath.Join(dir, "devbox", "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatalf("mkdir services/%s: %v", name, err)
+		}
 		container := spec.container
 		if container == "" {
 			container = "app-" + name
 		}
-		svcLines = append(svcLines, "    container: "+container)
+		var svcLines []string
+		svcLines = append(svcLines, "type: app")
+		svcLines = append(svcLines, "container: "+container)
 		if spec.mandatory {
-			svcLines = append(svcLines, "    mandatory: true")
+			svcLines = append(svcLines, "mandatory: true")
 		}
-	}
-	servicesYML := strings.Join(svcLines, "\n") + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatalf("write services.yml: %v", err)
+		content := strings.Join(svcLines, "\n") + "\n"
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatalf("write services/%s/service.yml: %v", name, err)
+		}
 	}
 
 	return filepath.Join(dir, "devbox.yml")
@@ -254,23 +256,18 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-  adminer:
-    type: tool
-    container: adminer
-    ports:
-      web: 8080
-  db:
-    type: infra
-    container: db
-    mandatory: true
-`
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		"main":    "type: app\ncontainer: app-main\nmandatory: true\n",
+		"adminer": "type: tool\ncontainer: adminer\nports:\n  web: 8080\n",
+		"db":      "type: infra\ncontainer: db\nmandatory: true\n",
+	} {
+		svcDir := filepath.Join(dir, "devbox", "services", name)
+		if err := os.MkdirAll(svcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	oldInteractive := ui.IsInteractiveFn
@@ -373,13 +370,11 @@ func TestServiceEnableCmd_MandatoryInfraWarn(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  db:
-    type: infra
-    container: db
-    mandatory: true
-`
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
+	svcDir1 := filepath.Join(dir, "devbox", "services", "db")
+	if err := os.MkdirAll(svcDir1, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDir1, "service.yml"), []byte("type: infra\ncontainer: db\nmandatory: true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -403,12 +398,11 @@ func TestServiceEnableCmd_OptionalInfraEnables(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	servicesYML := `services:
-  varnish:
-    type: infra
-    container: varnish
-`
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "services.yml"), []byte(servicesYML), 0o644); err != nil {
+	svcDir2 := filepath.Join(dir, "devbox", "services", "varnish")
+	if err := os.MkdirAll(svcDir2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDir2, "service.yml"), []byte("type: infra\ncontainer: varnish\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

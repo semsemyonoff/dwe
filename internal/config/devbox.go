@@ -99,7 +99,7 @@ type DevboxConfig struct {
 	UI            UIConfig       `yaml:"ui"`
 
 	// Services holds the fully resolved service definitions loaded from
-	// devbox/services.yml with Enabled populated from the 3-layer config merge.
+	// devbox/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
 	// Not unmarshalled from the merge — built by LoadConfig.
 	Services map[string]ServiceConfig `yaml:"-"`
 
@@ -480,7 +480,7 @@ type StatusColumn struct {
 	Value string `yaml:"value"`
 }
 
-// ServiceType is the type discriminator for entries in devbox/services.yml.
+// ServiceType is the type discriminator for entries in devbox/services/<name>/service.yml.
 // Decoded natively by gopkg.in/yaml.v3 since it's a named string type.
 type ServiceType string
 
@@ -579,7 +579,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	}
 }
 
-// ServiceConfig describes a single service entry in devbox/services.yml.
+// ServiceConfig describes a single service entry in devbox/services/<name>/service.yml.
 // The Type field discriminates the per-entry shape (app / tool / infra).
 // The Enabled flag is resolved from the 3-layer config merge (mandatory
 // services are always enabled).
@@ -859,7 +859,7 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 // The merged raw map is stored in DevboxConfig.Raw for dot-path resolution.
 //
 // Sequencing:
-//  1. Load devbox/services.yml (canonical service declarations).
+//  1. Load devbox/services/<name>/service.yml (canonical service declarations).
 //  2. Validate each overlay layer against the declared service set
 //     (only services.<name>.enabled permitted in overlays).
 //  3. Merge the raw YAML layers.
@@ -899,14 +899,10 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		return nil, fmt.Errorf("read %s: %w", localPath, err)
 	}
 
-	// Step 1: load devbox/services.yml — the canonical service declarations.
-	servicesPath := filepath.Join(baseDir, "devbox", "services.yml")
-	services, err := LoadServicesConfig(servicesPath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	// Step 1: load per-service folders — the canonical service declarations.
+	services, err := LoadServices(baseDir)
+	if err != nil {
 		return nil, err
-	}
-	if services == nil {
-		services = map[string]ServiceConfig{}
 	}
 
 	// Step 2: validate overlay shape against the declared services set
@@ -1023,7 +1019,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 
 // overlayAllowedKeys is the closed set of per-developer overridable keys
 // under a layer's services.<name> mapping. Structural fields (container,
-// dir, configs, compose, extends, etc.) belong in devbox/services.yml and
+// dir, configs, compose, extends, etc.) belong in devbox/services/<name>/service.yml and
 // are rejected by validateServicesOverlay.
 //
 // Ports and hosts are deliberately overridable: a developer commonly needs
@@ -1053,7 +1049,7 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 	}
 	for _, name := range slices.Sorted(maps.Keys(svcMap)) {
 		if _, declaredOK := declared[name]; !declaredOK {
-			return fmt.Errorf("%s: services.%s: unknown service (declared services live in devbox/services.yml)", layerPath, name)
+			return fmt.Errorf("%s: services.%s: unknown service (declared services live in devbox/services/<name>/service.yml)", layerPath, name)
 		}
 		entryRaw := svcMap[name]
 		if entryRaw == nil {
@@ -1065,7 +1061,7 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 		}
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
 			if !overlayAllowedKeys[key] {
-				return fmt.Errorf("%s: services.%s.%s: service definitions belong in devbox/services.yml; overlays may only set %s",
+				return fmt.Errorf("%s: services.%s.%s: service definitions belong in devbox/services/<name>/service.yml; overlays may only set %s",
 					layerPath, name, key, overlayAllowedKeysList())
 			}
 		}
@@ -1128,142 +1124,153 @@ func validateOverlayHosts(layerPath, svcName string, raw any) error {
 	return nil
 }
 
-// servicesFile is the top-level structure of devbox/services.yml.
-type servicesFile struct {
-	Services map[string]ServiceConfig `yaml:"services"`
-}
-
-// LoadServicesConfig loads service definitions from devbox/services.yml.
-//
-// The loader is strict: every entry must declare `type:` (app | tool | infra),
-// each entry is checked against the per-type field allowlist
-// (allowedFieldsFor), and `extends:` is only permitted between two app
-// services. `ports:` and `hosts:` must be maps of named entries (no scalar
-// shorthand); port values are validated to 1..65535. Per-file violations are
-// aggregated with errors.Join so a single parse pass surfaces every problem.
-// Extends inheritance uses defensive copies (slices.Clone / maps.Clone) so
-// child mutations cannot corrupt the parent.
-func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
-	data, err := os.ReadFile(path)
+// LoadServiceFolder loads a single service definition from
+// devbox/services/<name>/service.yml. The service fields are top-level (no
+// wrapper key). Returns an error wrapping the name if the file is missing or
+// invalid.
+func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
+	svcFile := filepath.Join(baseDir, "devbox", "services", name, "service.yml")
+	data, err := os.ReadFile(svcFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("loading service %q definition: %w", name, err)
 	}
 
-	// First pass: parse to a raw nested map so we can inspect the actual YAML
-	// keys per entry and reject disallowed-shape values before strict decode
-	// turns them into opaque type errors.
-	var rawFile struct {
-		Services map[string]map[string]any `yaml:"services"`
+	// First pass: parse to raw map to inspect actual YAML keys and reject
+	// disallowed-shape values before strict decode produces opaque errors.
+	var entry map[string]any
+	if err := yaml.Unmarshal(data, &entry); err != nil {
+		return nil, fmt.Errorf("loading service %q definition: parse: %w", name, err)
 	}
-	if err := yaml.Unmarshal(data, &rawFile); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	if entry == nil {
+		entry = map[string]any{}
 	}
 
 	var diags []error
-	for _, name := range slices.Sorted(maps.Keys(rawFile.Services)) {
-		entry := rawFile.Services[name]
-		// Type required.
-		typeRaw, hasType := entry["type"]
-		if !hasType {
-			diags = append(diags, fmt.Errorf("%w: service %q", ErrServiceTypeMissing, name))
-			continue
-		}
+
+	// Type required.
+	typeRaw, hasType := entry["type"]
+	if !hasType {
+		diags = append(diags, fmt.Errorf("%w: service %q", ErrServiceTypeMissing, name))
+	} else {
 		typeStr, _ := typeRaw.(string)
 		svcType := ServiceType(typeStr)
 		if err := svcType.Validate(); err != nil {
 			diags = append(diags, fmt.Errorf("service %q: %w", name, err))
-			continue
-		}
-		// Extends only permitted between app services. Check before the allowlist
-		// so we emit ErrServiceExtendsCrossType (more specific) rather than the
-		// generic ErrServiceFieldNotAllowed for the "extends" key.
-		if extRaw, ok := entry["extends"]; ok && extRaw != nil && !svcType.IsApp() {
-			diags = append(diags, fmt.Errorf("%w: service %q (type %s)", ErrServiceExtendsCrossType, name, svcType))
-		}
-		// Per-type field allowlist. Skip "extends" for non-app types — the
-		// cross-type check above already covers that case.
-		allowed := allowedFieldsFor(svcType)
-		for _, key := range slices.Sorted(maps.Keys(entry)) {
-			if key == "extends" && !svcType.IsApp() {
-				continue // already covered by ErrServiceExtendsCrossType above
+		} else {
+			// Extends only permitted between app services.
+			if extRaw, ok := entry["extends"]; ok && extRaw != nil && !svcType.IsApp() {
+				diags = append(diags, fmt.Errorf("%w: service %q (type %s)", ErrServiceExtendsCrossType, name, svcType))
 			}
-			if !allowed[key] {
-				diags = append(diags, fmt.Errorf("%w: service %q (type %s): field %q", ErrServiceFieldNotAllowed, name, svcType, key))
+			// Per-type field allowlist.
+			allowed := allowedFieldsFor(svcType)
+			for _, key := range slices.Sorted(maps.Keys(entry)) {
+				if key == "extends" && !svcType.IsApp() {
+					continue
+				}
+				if !allowed[key] {
+					diags = append(diags, fmt.Errorf("%w: service %q (type %s): field %q", ErrServiceFieldNotAllowed, name, svcType, key))
+				}
 			}
-		}
-		// Ports / hosts must be maps when present.
-		if v, ok := entry["ports"]; ok && v != nil {
-			if _, isMap := v.(map[string]any); !isMap {
-				diags = append(diags, fmt.Errorf("%w: service %q", ErrServicePortsShape, name))
-			} else {
-				for _, portName := range slices.Sorted(maps.Keys(v.(map[string]any))) {
-					portVal := v.(map[string]any)[portName]
-					n, ok := portVal.(int)
-					if !ok {
-						diags = append(diags, fmt.Errorf("%w: service %q port %q is not an integer", ErrServicePortsShape, name, portName))
-						continue
-					}
-					if n < 1 || n > 65535 {
-						diags = append(diags, fmt.Errorf("%w: service %q port %q = %d", ErrServicePortOutOfRange, name, portName, n))
+			// Ports shape + range.
+			if v, ok := entry["ports"]; ok && v != nil {
+				if m, isMap := v.(map[string]any); !isMap {
+					diags = append(diags, fmt.Errorf("%w: service %q", ErrServicePortsShape, name))
+				} else {
+					for _, portName := range slices.Sorted(maps.Keys(m)) {
+						n, ok := m[portName].(int)
+						if !ok {
+							diags = append(diags, fmt.Errorf("%w: service %q port %q is not an integer", ErrServicePortsShape, name, portName))
+							continue
+						}
+						if n < 1 || n > 65535 {
+							diags = append(diags, fmt.Errorf("%w: service %q port %q = %d", ErrServicePortOutOfRange, name, portName, n))
+						}
 					}
 				}
 			}
-		}
-		if v, ok := entry["hosts"]; ok && v != nil {
-			if _, isMap := v.(map[string]any); !isMap {
-				diags = append(diags, fmt.Errorf("%w: service %q", ErrServiceHostsShape, name))
+			// Hosts shape.
+			if v, ok := entry["hosts"]; ok && v != nil {
+				if _, isMap := v.(map[string]any); !isMap {
+					diags = append(diags, fmt.Errorf("%w: service %q", ErrServiceHostsShape, name))
+				}
 			}
 		}
 	}
 
-	// If any shape/allowlist diagnostics fired, bail before strict decode —
-	// otherwise yaml would surface a generic type error on top of ours.
 	if len(diags) > 0 {
-		return nil, fmt.Errorf("loading %s: %w", path, errors.Join(diags...))
+		return nil, fmt.Errorf("loading service %q definition: %w", name, errors.Join(diags...))
 	}
 
-	// Second pass: strict typed decode. Rejects unknown struct fields (typos
-	// like `containerr:`) and mistyped scalars after shape pre-validation.
-	var f servicesFile
+	// Second pass: strict typed decode.
+	var svc ServiceConfig
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&f); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	if err := dec.Decode(&svc); err != nil {
+		return nil, fmt.Errorf("loading service %q definition: parse: %w", name, err)
 	}
 
-	// Resolve extends in topological order so multi-level chains (C→B→A) are
-	// processed parent-first regardless of map iteration order.
-	order, err := topoSortServices(f.Services)
+	return &svc, nil
+}
+
+// LoadServices loads all service definitions from devbox/services/<name>/service.yml
+// per-folder files. Missing directory → empty map (not an error). Each folder
+// entry is loaded independently and errors are aggregated.
+func LoadServices(baseDir string) (map[string]ServiceConfig, error) {
+	servicesDir := filepath.Join(baseDir, "devbox", "services")
+	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
-		return nil, fmt.Errorf("loading %s: %w", path, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]ServiceConfig{}, nil
+		}
+		return nil, fmt.Errorf("loading services: %w", err)
 	}
 
-	// Cross-type extends: child.Type must equal parent.Type. Validated after
-	// topoSort guarantees parent exists. (The non-app guard already fired in
-	// the first pass; this catches app extends app of a different… well, all
-	// extends are app→app today, but check defensively for symmetry and to
-	// surface a clear sentinel if the policy ever loosens.)
+	services := make(map[string]ServiceConfig)
+	var loadErrs []error
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		svc, err := LoadServiceFolder(baseDir, name)
+		if err != nil {
+			loadErrs = append(loadErrs, err)
+			continue
+		}
+		services[name] = *svc
+	}
+	if len(loadErrs) > 0 {
+		return nil, fmt.Errorf("loading services: %w", errors.Join(loadErrs...))
+	}
+
+	// Resolve extends in topological order.
+	order, err := topoSortServices(services)
+	if err != nil {
+		return nil, fmt.Errorf("loading services: %w", err)
+	}
+
+	// Cross-type extends: child.Type must equal parent.Type.
 	var crossTypeDiags []error
-	for name, svc := range f.Services {
+	for name, svc := range services {
 		if svc.Extends == "" {
 			continue
 		}
-		parent := f.Services[svc.Extends]
+		parent := services[svc.Extends]
 		if parent.Type != svc.Type {
 			crossTypeDiags = append(crossTypeDiags, fmt.Errorf("%w: service %q (type %s) extends %q (type %s)", ErrServiceExtendsCrossType, name, svc.Type, svc.Extends, parent.Type))
 		}
 	}
 	if len(crossTypeDiags) > 0 {
-		return nil, fmt.Errorf("loading %s: %w", path, errors.Join(crossTypeDiags...))
+		return nil, fmt.Errorf("loading services: %w", errors.Join(crossTypeDiags...))
 	}
 
+	// Apply inheritance in topological order.
 	for _, name := range order {
-		svc := f.Services[name]
+		svc := services[name]
 		if svc.Extends == "" {
 			continue
 		}
-		// Parent is guaranteed to be fully resolved already.
-		parent := f.Services[svc.Extends]
+		parent := services[svc.Extends]
 		if svc.Container == "" {
 			svc.Container = parent.Container
 		}
@@ -1300,15 +1307,12 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		if svc.CLI.WorkDir == "" {
 			svc.CLI.WorkDir = parent.CLI.WorkDir
 		}
-		// Merge parent CLI env into child: parent provides defaults, child overrides.
 		if len(parent.CLI.Env) > 0 {
 			merged := maps.Clone(parent.CLI.Env)
-			maps.Copy(merged, svc.CLI.Env) // child wins on conflicts
+			maps.Copy(merged, svc.CLI.Env)
 			svc.CLI.Env = merged
 		}
-		// Merge dirs: parent dirs come first, child dirs appended (deduplicated).
 		svc.Dirs = mergeDeduplicatedStrings(parent.Dirs, svc.Dirs)
-		// IDE block inheritance: child inherits from parent if not explicitly set.
 		if svc.Render.IDE.Enabled == nil && parent.Render.IDE.Enabled != nil {
 			v := *parent.Render.IDE.Enabled
 			svc.Render.IDE.Enabled = &v
@@ -1316,7 +1320,6 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		if svc.Render.IDE.Template == "" {
 			svc.Render.IDE.Template = parent.Render.IDE.Template
 		}
-		// AI block inheritance.
 		if svc.Render.AI.Enabled == nil && parent.Render.AI.Enabled != nil {
 			v := *parent.Render.AI.Enabled
 			svc.Render.AI.Enabled = &v
@@ -1324,7 +1327,6 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		if svc.Render.AI.Template == "" {
 			svc.Render.AI.Template = parent.Render.AI.Template
 		}
-		// Git block inheritance.
 		if svc.Render.Git.Enabled == nil && parent.Render.Git.Enabled != nil {
 			v := *parent.Render.Git.Enabled
 			svc.Render.Git.Enabled = &v
@@ -1332,10 +1334,10 @@ func LoadServicesConfig(path string) (map[string]ServiceConfig, error) {
 		if svc.Render.Git.Template == "" {
 			svc.Render.Git.Template = parent.Render.Git.Template
 		}
-		f.Services[name] = svc
+		services[name] = svc
 	}
 
-	return f.Services, nil
+	return services, nil
 }
 
 // topoSortServices returns service names in topological order (parents before
