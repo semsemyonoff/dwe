@@ -86,6 +86,7 @@ Generated reference for the `devbox` command tree.
     - [devbox validate config services](devbox_validate_config_services.md) — Validate devbox/services.yml
     - [devbox validate config styles](devbox_validate_config_styles.md) — Validate devbox/styles.yml
   - [devbox validate env](devbox_validate_env.md) — Validate environment readiness
+  - [devbox validate linters](devbox_validate_linters.md) — Run external linters (shellcheck, hadolint, generic)
   - [devbox validate snapshot](devbox_validate_snapshot.md) — Validate snapshot config and on-disk snapshot integrity
   - [devbox validate templates](devbox_validate_templates.md) — Validate template packs
     - [devbox validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
