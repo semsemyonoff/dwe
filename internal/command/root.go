@@ -264,9 +264,11 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 
 		// Load deploy state and build deploy summary.
 		var deploySummary *statusview.DeploySummary
+		var pending *journal.PendingApply
 		statePath := filepath.Join(flags.projectRoot, journal.DefaultRelPath)
 		state, err := journal.Load(statePath)
 		if err == nil && state != nil {
+			pending = state.Pending
 			// Get tracked services to know the total.
 			// Tolerate registry load failures (e.g. command-file syntax errors)
 			// so that the root summary remains visible even when commands are broken.
@@ -290,8 +292,13 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 		}
 		// Silently skip deploy summary if state load fails — not critical for summary.
 
-		// Print compact project summary followed by a blank separator line.
+		// Print compact project summary; if pending work is recorded, surface
+		// the warning banner directly underneath so the user sees deferred work
+		// before scanning the help output.
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg, deploySummary))
+		if banner := ui.RenderPendingBanner(pending); banner != "" {
+			_, _ = fmt.Fprint(cmd.OutOrStdout(), banner)
+		}
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 	case errors.Is(err, os.ErrNotExist):
 		// Config file not found — not an error, just skip the summary.
