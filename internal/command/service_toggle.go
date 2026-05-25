@@ -173,21 +173,21 @@ func mutateAndPlan(
 	svcDeploys map[string]*config.DeployConfig,
 	name string,
 	direction ToggleDirection,
-) (TogglePlan, []Contributor, error) {
+) (TogglePlan, []Contributor, *config.DevboxConfig, error) {
 	releaseLock, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
-		return TogglePlan{}, nil, fmt.Errorf("acquiring project locks: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("acquiring project locks: %w", err)
 	}
 	defer releaseLock()
 
 	// Step 0: Capture pre-state before any mutation.
 	capturedLocal, err := captureFileState(localPath)
 	if err != nil {
-		return TogglePlan{}, nil, fmt.Errorf("capturing local.yml state: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("capturing local.yml state: %w", err)
 	}
 	capturedEnv, err := captureFileState(envPath)
 	if err != nil {
-		return TogglePlan{}, nil, fmt.Errorf("capturing .env state: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("capturing .env state: %w", err)
 	}
 
 	rollback := func() {
@@ -204,25 +204,25 @@ func mutateAndPlan(
 	}
 	local, err := localconfig.LoadLocalYAML(localPath)
 	if err != nil {
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 	if err := localconfig.WriteLocalYAML(localPath, local); err != nil {
 		rollback()
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 
 	// Step 2: Reload config (picks up the local.yml change) and regenerate .env.
 	cfgNew, err := config.LoadConfig(configPath)
 	if err != nil {
 		rollback()
-		return TogglePlan{}, nil, fmt.Errorf("reloading config after toggle: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("reloading config after toggle: %w", err)
 	}
 	if err := envfile.Write(cfgNew, envPath); err != nil {
 		rollback()
-		return TogglePlan{}, nil, fmt.Errorf("regenerating .env: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("regenerating .env: %w", err)
 	}
 
 	// Step 3: Build toggle plan (in-memory, guard failures trigger rollback).
@@ -230,7 +230,7 @@ func mutateAndPlan(
 	plan, err := buildTogglePlan(cfgNew, reg, svcDeploys, toggles)
 	if err != nil {
 		rollback()
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 
 	// Step 4: Render plan to stdout.
@@ -243,10 +243,10 @@ func mutateAndPlan(
 	configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
 	if err := singleToggleAddPendingOps(statePath, ops, configHash); err != nil {
 		rollback()
-		return TogglePlan{}, nil, fmt.Errorf("writing pending state: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("writing pending state: %w", err)
 	}
 
-	return plan, contributors, nil
+	return plan, contributors, cfgNew, nil
 }
 
 // batchServiceConfigHash computes a combined config hash covering all toggled services.
@@ -275,21 +275,21 @@ func mutateAndPlanBatch(
 	reg *registry.Registry,
 	svcDeploys map[string]*config.DeployConfig,
 	toEnable, toDisable []string,
-) (TogglePlan, []Contributor, error) {
+) (TogglePlan, []Contributor, *config.DevboxConfig, error) {
 	releaseLock, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
-		return TogglePlan{}, nil, fmt.Errorf("acquiring project locks: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("acquiring project locks: %w", err)
 	}
 	defer releaseLock()
 
 	// Step 0: Capture pre-state before any mutation.
 	capturedLocal, err := captureFileState(localPath)
 	if err != nil {
-		return TogglePlan{}, nil, fmt.Errorf("capturing local.yml state: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("capturing local.yml state: %w", err)
 	}
 	capturedEnv, err := captureFileState(envPath)
 	if err != nil {
-		return TogglePlan{}, nil, fmt.Errorf("capturing .env state: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("capturing .env state: %w", err)
 	}
 
 	rollback := func() {
@@ -300,25 +300,25 @@ func mutateAndPlanBatch(
 	// Step 1: Write local.yml with all toggles applied in one pass.
 	local, err := localconfig.LoadLocalYAML(localPath)
 	if err != nil {
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 	if err := localconfig.WriteLocalYAML(localPath, local); err != nil {
 		rollback()
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 
 	// Step 2: Reload config (picks up the local.yml change) and regenerate .env.
 	cfgNew, err := config.LoadConfig(configPath)
 	if err != nil {
 		rollback()
-		return TogglePlan{}, nil, fmt.Errorf("reloading config after toggle: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("reloading config after toggle: %w", err)
 	}
 	if err := envfile.Write(cfgNew, envPath); err != nil {
 		rollback()
-		return TogglePlan{}, nil, fmt.Errorf("regenerating .env: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("regenerating .env: %w", err)
 	}
 
 	// Step 3: Build toggle plan (in-memory; guard failures trigger rollback).
@@ -332,7 +332,7 @@ func mutateAndPlanBatch(
 	plan, err := buildTogglePlan(cfgNew, reg, svcDeploys, toggles)
 	if err != nil {
 		rollback()
-		return TogglePlan{}, nil, err
+		return TogglePlan{}, nil, nil, err
 	}
 
 	// Step 4: Render plan to out.
@@ -347,10 +347,10 @@ func mutateAndPlanBatch(
 	configHash := batchServiceConfigHash(cfgNew, svcDeploys, allNames...)
 	if err := multiToggleAddPendingOps(statePath, ops, configHash); err != nil {
 		rollback()
-		return TogglePlan{}, nil, fmt.Errorf("writing pending state: %w", err)
+		return TogglePlan{}, nil, nil, fmt.Errorf("writing pending state: %w", err)
 	}
 
-	return plan, contributors, nil
+	return plan, contributors, cfgNew, nil
 }
 
 // runSingleServiceToggle implements the full enable/disable mutation flow for a
@@ -400,7 +400,7 @@ func runSingleServiceToggle(
 	envPath := filepath.Join(baseDir, ".env")
 	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
 
-	plan, contributors, err := mutateAndPlan(
+	plan, contributors, cfgNew, err := mutateAndPlan(
 		cmd.OutOrStdout(),
 		baseDir, configPath, localPath, envPath, statePath,
 		cfg, reg, svcDeploys,
@@ -416,7 +416,7 @@ func runSingleServiceToggle(
 		Flags:      flags,
 		BaseDir:    baseDir,
 		StatePath:  statePath,
-		Cfg:        cfg,
+		Cfg:        cfgNew,
 		CmdReg:     reg,
 		RunDeploy:  singleToggleRunDeploy,
 		RunRestart: singleToggleRunRestart,
@@ -428,7 +428,6 @@ func runSingleServiceToggle(
 	}
 
 	if opts.apply {
-		execOpts.NonInteractive = true
 		return executeTogglePlan(ctx, deps, plan, execOpts)
 	}
 

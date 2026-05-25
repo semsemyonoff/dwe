@@ -156,7 +156,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 	envPath := filepath.Join(baseDir, ".env")
 	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
 
-	plan, contributors, err := mutateAndPlanBatch(
+	plan, contributors, cfgNew, err := mutateAndPlanBatch(
 		cmd.OutOrStdout(),
 		baseDir, flags.configPath, localPath, envPath, statePath,
 		cfg, reg, svcDeploys,
@@ -171,7 +171,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 		Flags:      flags,
 		BaseDir:    baseDir,
 		StatePath:  statePath,
-		Cfg:        cfg,
+		Cfg:        cfgNew,
 		CmdReg:     reg,
 		RunDeploy:  multiToggleRunDeploy,
 		RunRestart: multiToggleRunRestart,
@@ -183,7 +183,6 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 	}
 
 	if opts.apply {
-		execOpts.NonInteractive = true
 		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
 	}
 

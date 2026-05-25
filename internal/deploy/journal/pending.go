@@ -191,10 +191,11 @@ func ReplaceServiceWithPending(path string, serviceName string, op PendingOp, co
 // Ensures at most one op per kind; deduplicates and sorts service names for deploy.
 func applyPendingOp(state *ProjectState, op PendingOp, configHash string) {
 	if state.Pending == nil {
-		state.Pending = &PendingApply{}
+		state.Pending = &PendingApply{
+			CreatedAt:  time.Now().UTC(),
+			ConfigHash: configHash,
+		}
 	}
-	state.Pending.CreatedAt = time.Now().UTC()
-	state.Pending.ConfigHash = configHash
 
 	existing := state.Pending.Find(op.Kind)
 	if existing != nil {

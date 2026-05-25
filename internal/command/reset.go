@@ -16,7 +16,6 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/lock"
 	pipeline "devbox-cli/internal/pipeline"
-	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/reset"
 	"devbox-cli/internal/tpl"
@@ -261,7 +260,7 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 	}
 
 	// Preflight: stop-stage, before any hooks or locks.
-	if err := preflight.Run(ctx, cfg, reg, baseDir, "stop", skipPreflight, cmd.ErrOrStderr()); err != nil {
+	if err := preflightRun(ctx, cfg, reg, baseDir, "stop", skipPreflight, cmd.ErrOrStderr()); err != nil {
 		return err
 	}
 

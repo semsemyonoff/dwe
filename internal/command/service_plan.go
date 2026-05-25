@@ -265,8 +265,7 @@ type Contributor struct {
 
 // ExecuteOptions controls executor behaviour.
 type ExecuteOptions struct {
-	SkipHooks      bool
-	NonInteractive bool
+	SkipHooks bool
 	// Contributors is required for non-empty plans; used to build the
 	// pending-clear slice after all apply steps succeed.
 	Contributors []Contributor
