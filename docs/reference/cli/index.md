@@ -24,7 +24,6 @@ Generated reference for the `devbox` command tree.
     - [devbox deploy state clear](devbox_deploy_state_clear.md) — Clear the deploy state
     - [devbox deploy state repair](devbox_deploy_state_repair.md) — Repair the deploy state
     - [devbox deploy state show](devbox_deploy_state_show.md) — Show the current deploy state
-  - [devbox deploy step](devbox_deploy_step.md) — Run a single deploy step by <phase>/<step> address
 - [devbox docker](devbox_docker.md) — Docker Compose lifecycle commands
   - [devbox docker build](devbox_docker_build.md) — Build compose service images
   - [devbox docker down](devbox_docker_down.md) — Stop and remove compose services
@@ -89,6 +88,7 @@ Generated reference for the `devbox` command tree.
     - [devbox validate config styles](devbox_validate_config_styles.md) — Validate devbox/styles.yml
   - [devbox validate env](devbox_validate_env.md) — Validate environment readiness
   - [devbox validate linters](devbox_validate_linters.md) — Run external linters (shellcheck, hadolint, generic)
+  - [devbox validate setup](devbox_validate_setup.md) — Validate devbox/setup.yml schema and writes: paths
   - [devbox validate snapshot](devbox_validate_snapshot.md) — Validate snapshot config and on-disk snapshot integrity
   - [devbox validate templates](devbox_validate_templates.md) — Validate template packs
     - [devbox validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack

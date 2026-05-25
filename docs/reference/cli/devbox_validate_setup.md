@@ -1,19 +1,19 @@
-## devbox validate checks
+## devbox validate setup
 
-Validate project checks from devbox/validate.yml
+Validate devbox/setup.yml schema and writes: paths
 
 ### Synopsis
 
-Run project-defined checks from devbox/validate.yml. With an id, runs only that check.
+Check devbox/setup.yml for valid question definitions, identifier rules, and target scope constraints.
 
 ```
-devbox validate checks [id] [flags]
+devbox validate setup [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for checks
+  -h, --help   help for setup
 ```
 
 ### Options inherited from parent commands

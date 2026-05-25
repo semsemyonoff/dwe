@@ -15,8 +15,7 @@ import (
 // --- ExecStep / builtin validation tests ---
 
 // TestExecBuiltinStep_validatesBeforeRun verifies that ExecStep enforces
-// builtin validation before running, so devbox deploy step / reset step
-// cannot bypass it.
+// builtin validation before running, so devbox reset step cannot bypass it.
 func TestExecBuiltinStep_validatesBeforeRun(t *testing.T) {
 	cases := []struct {
 		name    string

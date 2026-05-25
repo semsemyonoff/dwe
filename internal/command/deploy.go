@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
@@ -23,7 +22,6 @@ import (
 	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/render"
-	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/userconfig"
 
@@ -39,8 +37,7 @@ func newDeployCmd(flags *rootFlags) *cobra.Command {
 The deploy pipeline consists of phases and steps that install, configure, and migrate
 application services. Use 'devbox deploy plan' to preview before running.`,
 		Example: `  devbox deploy plan
-  devbox deploy run
-  devbox deploy step init/render-env`,
+  devbox deploy run`,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -49,7 +46,6 @@ application services. Use 'devbox deploy plan' to preview before running.`,
 	}
 	cmd.AddCommand(newDeployPlanCmd(flags))
 	cmd.AddCommand(newDeployRunCmd(flags))
-	cmd.AddCommand(newDeployStepCmd(flags))
 	cmd.AddCommand(newDeployStateCmd(flags))
 	return cmd
 }
@@ -829,130 +825,3 @@ func collectMissingDeps(services []string, svcDeploys map[string]*config.DeployC
 	return missing
 }
 
-func newDeployStepCmd(flags *rootFlags) *cobra.Command {
-	var dryRun bool
-
-	cmd := &cobra.Command{
-		Use:   "step <phase>/<step>",
-		Short: "Run a single deploy step by <phase>/<step> address",
-		Long: `Execute a single step from the deploy pipeline by its address.
-
-The address format is '<phase>/<step>' (e.g. 'init/render-env') or '<service>/<phase>/<step>'.
-Use 'devbox deploy plan' to list available step addresses. Use --dry-run to preview without executing.`,
-		Example: `  devbox deploy step init/render-env
-  devbox deploy step main/setup/migrate
-  devbox deploy step init/render-env --dry-run`,
-		Args: cobra.ExactArgs(1),
-		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			if len(args) != 0 {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-			var completions []string
-			completions = cobra.AppendActiveHelp(completions, "Use 'devbox deploy plan' to see available phase/step addresses")
-			configPath, _, err := completionConfigPath(flags, cmd)
-			if err != nil {
-				return completions, cobra.ShellCompDirectiveNoFileComp
-			}
-			cfg, err := config.LoadConfig(configPath)
-			if err != nil {
-				return completions, cobra.ShellCompDirectiveNoFileComp
-			}
-			reg, err := loadCommandRegistry(configPath)
-			if err != nil {
-				return completions, cobra.ShellCompDirectiveNoFileComp
-			}
-			steps, err := deploy.ResolvePlan(cfg, reg)
-			if err != nil {
-				return completions, cobra.ShellCompDirectiveNoFileComp
-			}
-			for _, s := range steps {
-				if s.Parallel != nil {
-					// Parallel groups cannot be run individually; skip from completions.
-					continue
-				}
-				addr := s.StepAddress()
-				desc := s.Step.Description
-				if desc == "" {
-					desc = s.Step.Name
-				}
-				completions = append(completions, cobra.CompletionWithDesc(addr, desc))
-			}
-			return completions, cobra.ShellCompDirectiveNoFileComp
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-
-			address := args[0]
-			phase, step, err := deploy.FindStep(cfg, address)
-			if err != nil {
-				return err
-			}
-
-			if step.Parallel != nil {
-				return fmt.Errorf("step %q is a parallel group and cannot be run individually; use 'devbox deploy run' to execute the full pipeline", address)
-			}
-
-			// Evaluate when condition.
-			if step.When != nil {
-				var (
-					ok  bool
-					err error
-				)
-				if step.When.IsRuntime() {
-					ok, err = condition.EvalRuntimeTyped(step.When, flags.ProjectRoot())
-				} else if step.When.Type == condition.TypeTemplate {
-					ok, err = tpl.EvalCondition(step.When.Expr, cfg)
-				}
-				if err != nil {
-					return fmt.Errorf("evaluating when condition for %s: %w", address, err)
-				}
-				if !ok {
-					render.Stdout().Warning(fmt.Sprintf("skipping step %s/%s: when condition is false", phase.Name, step.Name))
-					return nil
-				}
-			}
-
-			if step.FilesGate != nil {
-				render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
-			}
-
-			resolved := pipeline.StepCommand(step, config.DevboxBin(cfg))
-			if dryRun {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
-				return nil
-			}
-
-			workDir := flags.ProjectRoot()
-			reg, err := loadCommandRegistry(flags.configPath)
-			if err != nil {
-				return fmt.Errorf("loading command registry: %w", err)
-			}
-			actx := pipeline.ActionContext{
-				WorkDir:     workDir,
-				Cfg:         cfg,
-				Reg:         reg,
-				LogWriter:   nil,
-				SkipConfirm: false,
-			}
-
-			if err := pipeline.ExecAction(cmd.Context(), step.Action(), actx); err != nil {
-				return err
-			}
-
-			if step.Check != nil {
-				if err := pipeline.ExecAction(cmd.Context(), *step.Check, actx); err != nil {
-					return fmt.Errorf("step %s: check failed: %w", address, err)
-				}
-			}
-
-			return nil
-		},
-		SilenceUsage: true,
-	}
-
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command without executing")
-	return cmd
-}
