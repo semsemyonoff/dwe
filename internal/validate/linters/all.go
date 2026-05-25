@@ -76,6 +76,14 @@ func buildLinterChildren(validateCfg *config.ValidateConfig, validateLoadErr err
 				out = append(out, newLinterErrorValidator(entry.ID, entry.SourceLine, err.Error()))
 				continue
 			}
+			// Generic adapters have no built-in default paths, so a generic
+			// entry without paths: will never match any files — surface this at
+			// assembly time instead of silently producing zero diagnostics.
+			if entry.Type == "generic" && len(entry.Paths) == 0 {
+				out = append(out, newLinterErrorValidator(entry.ID, entry.SourceLine,
+					fmt.Sprintf("generic linter %q requires at least one entry in paths: (generic adapters have no built-in defaults)", entry.ID)))
+				continue
+			}
 			out = append(out, newLinterValidator(entry, adapter, baseDir))
 		}
 	}

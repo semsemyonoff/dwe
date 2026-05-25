@@ -150,7 +150,7 @@ func TestAll_UnknownBuiltin_ProducesErrorValidator(t *testing.T) {
 
 func TestAll_GenericWithUnknownID_UsesGenericAdapter(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
-		{ID: "yamllint", Type: "generic", Bin: "yamllint"},
+		{ID: "yamllint", Type: "generic", Bin: "yamllint", Paths: []string{"."}},
 	}}
 	got := children(All(cfg, nil, t.TempDir()))
 	var lv *linterValidator
@@ -214,7 +214,7 @@ func TestAll_ReservedFlagHadolint_ProducesErrorValidator(t *testing.T) {
 
 func TestAll_ReservedFlagsAllowedForGeneric(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
-		{ID: "yamllint", Type: "generic", Bin: "yamllint", Flags: []string{"--format=parsable"}},
+		{ID: "yamllint", Type: "generic", Bin: "yamllint", Paths: []string{"."}, Flags: []string{"--format=parsable"}},
 	}}
 	got := children(All(cfg, nil, t.TempDir()))
 	for _, v := range got {
@@ -226,4 +226,20 @@ func TestAll_ReservedFlagsAllowedForGeneric(t *testing.T) {
 		}
 	}
 	t.Fatalf("yamllint validator not registered")
+}
+
+func TestAll_GenericWithNoPaths_ProducesErrorValidator(t *testing.T) {
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: "yamllint", Type: "generic", Bin: "yamllint", SourceLine: 5},
+	}}
+	got := children(All(cfg, nil, t.TempDir()))
+	for _, v := range got {
+		if v.ID() == "yamllint" {
+			if _, isErr := v.(*linterErrorValidator); !isErr {
+				t.Fatalf("expected error validator for generic linter with no paths, got %T", v)
+			}
+			return
+		}
+	}
+	t.Fatalf("yamllint validator not present")
 }
