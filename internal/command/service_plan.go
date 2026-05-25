@@ -341,10 +341,11 @@ func executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, o
 				errOut = deps.Cmd.ErrOrStderr()
 			}
 			stepErr = deps.RunRestart(lifecycle.RunContext{
-				Ctx:        ctx,
-				ConfigPath: configPath,
-				Yes:        true,
-				ErrOut:     errOut,
+				Ctx:              ctx,
+				ConfigPath:       configPath,
+				Yes:              true,
+				ErrOut:           errOut,
+				SkipClearPending: true,
 			})
 		}
 		if stepErr != nil {

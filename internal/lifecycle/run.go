@@ -56,6 +56,10 @@ type RunContext struct {
 	SkipPreflight bool
 	// ErrOut receives preflight diagnostic output. nil falls back to os.Stderr.
 	ErrOut io.Writer
+	// SkipClearPending suppresses the automatic ClearPendingForKind(PendingRestart)
+	// that RunRestart calls on success. Set true when RunRestart is called from
+	// executeTogglePlan so the executor owns the final atomic clear via ClearPendingOps.
+	SkipClearPending bool
 }
 
 // resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
@@ -290,13 +294,16 @@ func RunRestart(ctx RunContext) error {
 	if err := RunRun(ctx); err != nil {
 		return err
 	}
-	// On successful restart, clear the pending restart entry from the journal.
+	// On successful restart, clear the pending restart entry from the journal
+	// unless the caller (e.g. executeTogglePlan) owns the final clear itself.
 	// Restart-kind covers the whole stack; any pending deploy op for specific services
 	// is a separate op and must survive (the restart did not redeploy those services).
-	workDir := filepath.Dir(ctx.ConfigPath)
-	statePath := filepath.Join(workDir, journal.DefaultRelPath)
-	if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
-		slog.Warn("clearing pending restart state after success", "err", clearErr)
+	if !ctx.SkipClearPending {
+		workDir := filepath.Dir(ctx.ConfigPath)
+		statePath := filepath.Join(workDir, journal.DefaultRelPath)
+		if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
+			slog.Warn("clearing pending restart state after success", "err", clearErr)
+		}
 	}
 	return nil
 }

@@ -378,7 +378,7 @@ func runSingleServiceToggle(
 
 	reg, regErr := loadCommandRegistry(configPath)
 	if regErr != nil {
-		reg = nil
+		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
 	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, cfg.Services)
@@ -394,10 +394,6 @@ func runSingleServiceToggle(
 		}
 		renderTogglePlan(cmd.OutOrStdout(), plan)
 		return nil
-	}
-
-	if regErr != nil {
-		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")

@@ -122,7 +122,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 	baseDir := flags.ProjectRoot()
 	reg, regErr := loadCommandRegistry(flags.configPath)
 	if regErr != nil {
-		reg = nil
+		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
 	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, cfg.Services)
@@ -146,10 +146,6 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 		}
 		renderTogglePlan(cmd.OutOrStdout(), plan)
 		return nil
-	}
-
-	if regErr != nil {
-		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")

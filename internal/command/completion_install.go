@@ -236,10 +236,12 @@ func atomicWriteCompletion(targetPath string, content []byte) error {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpName := tmp.Name()
+	success := false
 	defer func() {
-		// Clean up on any failure path.
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
+		if !success {
+			_ = tmp.Close()
+			_ = os.Remove(tmpName)
+		}
 	}()
 
 	if _, err := tmp.Write(content); err != nil {
@@ -254,6 +256,7 @@ func atomicWriteCompletion(targetPath string, content []byte) error {
 	if err := os.Rename(tmpName, targetPath); err != nil {
 		return fmt.Errorf("installing completion file: %w", err)
 	}
+	success = true
 	return nil
 }
 
