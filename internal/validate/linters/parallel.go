@@ -55,6 +55,7 @@ func (g *lintersGroup) RunGroup(vctx validate.Context, children []validate.Valid
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(i int, child validate.Validator) {
+			id := child.ID()
 			defer wg.Done()
 			defer func() { <-sem }()
 			defer func() {
@@ -62,8 +63,8 @@ func (g *lintersGroup) RunGroup(vctx validate.Context, children []validate.Valid
 					results[i] = []validate.Diagnostic{{
 						Severity: validate.SeverityError,
 						Domain:   Domain,
-						Target:   child.ID(),
-						Message:  fmt.Sprintf("%s: panic: %v", child.ID(), r),
+						Target:   id,
+						Message:  fmt.Sprintf("%s: panic: %v", id, r),
 					}}
 				}
 			}()

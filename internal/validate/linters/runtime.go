@@ -169,15 +169,19 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 		}
 	}
 
-	// 5. deadline takes precedence — partial output is not worth parsing.
-	// Guard on runErr: if the process exits cleanly at the exact moment the
+	// 5. context errors take precedence — partial output is not worth parsing.
+	// Guard on runErr: if the process exits cleanly at the exact moment a
 	// deadline fires, runCtx.Err() can be non-nil even though the run succeeded.
-	if runErr != nil && errors.Is(runCtx.Err(), context.DeadlineExceeded) {
-		return append(operationalDiags, fail(
-			v.ID(),
-			fmt.Sprintf("%s timed out after %s", v.ID(), DefaultLinterTimeout),
-			"narrow paths: or raise the timeout (DefaultLinterTimeout)",
-		))
+	if runErr != nil && runCtx.Err() != nil {
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			return append(operationalDiags, fail(
+				v.ID(),
+				fmt.Sprintf("%s timed out after %s", v.ID(), DefaultLinterTimeout),
+				"narrow paths: or raise the timeout (DefaultLinterTimeout)",
+			))
+		}
+		// Parent context cancelled (e.g. Ctrl-C) — not a linter failure.
+		return operationalDiags
 	}
 
 	// 6. truncation Warning — emitted before parse so the user knows the
