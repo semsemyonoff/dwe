@@ -2,6 +2,32 @@
 
 Generated reference for the `devbox` command tree.
 
+## Shell completion quick start
+
+Use `devbox completion install` to write the completion script to the default
+location for your shell. The shell is detected from `$SHELL` automatically, or
+you can pass it explicitly:
+
+```shell
+devbox completion install          # auto-detect shell
+devbox completion install zsh      # explicit
+devbox completion install --dry-run  # preview target path + content, no write
+```
+
+To remove the installed file:
+
+```shell
+devbox completion uninstall
+devbox completion uninstall zsh --path ~/.config/completions
+```
+
+Neither command modifies dotfiles (`~/.zshrc`, PowerShell `$PROFILE`, etc.).
+Follow the hint printed to stderr after install to update your shell config.
+
+> **Homebrew tap users**: use `generate_completions_from_executable` in your
+> formula's `install` block instead of calling `devbox completion install`
+> manually — Homebrew manages the completion file lifecycle for you.
+
 ## Commands
 
 - [devbox commands](devbox_commands.md) — Run, inspect, and list devbox commands
@@ -9,7 +35,9 @@ Generated reference for the `devbox` command tree.
 - [devbox completion](devbox_completion.md) — Generate the autocompletion script for the specified shell
   - [devbox completion bash](devbox_completion_bash.md) — Generate the autocompletion script for bash
   - [devbox completion fish](devbox_completion_fish.md) — Generate the autocompletion script for fish
+  - [devbox completion install](devbox_completion_install.md) — Install shell completion for devbox
   - [devbox completion powershell](devbox_completion_powershell.md) — Generate the autocompletion script for powershell
+  - [devbox completion uninstall](devbox_completion_uninstall.md) — Uninstall shell completion for devbox
   - [devbox completion zsh](devbox_completion_zsh.md) — Generate the autocompletion script for zsh
 - [devbox compose](devbox_compose.md) — Low-level Docker Compose diagnostics
   - [devbox compose argv](devbox_compose_argv.md) — Show the full docker compose command that would be executed

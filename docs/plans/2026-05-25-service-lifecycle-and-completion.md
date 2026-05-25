@@ -112,16 +112,16 @@ These cut across tasks; verify each task PR conforms before mark-complete.
 
 ### Task 2: `devbox completion uninstall [shell]`
 
-- [ ] add `uninstallCompletionCmd` mirroring install: `Args: cobra.MaximumNArgs(1)`, same `ValidArgsFunction`, same `--path` override, no `--dry-run` (single file delete)
-- [ ] delete the file the matching `install` would have written; `os.Remove` with `errors.Is(err, fs.ErrNotExist)` → info message to `cmd.OutOrStdout()` + exit 0; any other error wrapped and returned
-- [ ] do NOT touch rc files (document in command long help)
-- [ ] write tests (table-driven, fresh command per test):
+- [x] add `uninstallCompletionCmd` mirroring install: `Args: cobra.MaximumNArgs(1)`, same `ValidArgsFunction`, same `--path` override, no `--dry-run` (single file delete)
+- [x] delete the file the matching `install` would have written; `os.Remove` with `errors.Is(err, fs.ErrNotExist)` → info message to `cmd.OutOrStdout()` + exit 0; any other error wrapped and returned
+- [x] do NOT touch rc files (document in command long help)
+- [x] write tests (table-driven, fresh command per test):
   - deletes installed file (verify absent after)
   - missing file is idempotent (no error, exit 0)
   - `--path` override
   - unsupported shell → `errors.Is(err, ErrUnsupportedShell)`
-- [ ] update `docs/reference/cli/index.md` how-to snippet referencing `install`/`uninstall`; note that Homebrew taps should use `generate_completions_from_executable` instead
-- [ ] run `go test ./internal/command/...` - must pass before next task
+- [x] update `docs/reference/cli/index.md` how-to snippet referencing `install`/`uninstall`; note that Homebrew taps should use `generate_completions_from_executable` instead
+- [x] run `go test ./internal/command/...` - must pass before next task
 
 ### Task 3: Per-folder service loader (`LoadServiceFolder` / `LoadServices`)
 

@@ -175,6 +175,7 @@ Run 'devbox info' for the full info dashboard.`,
 	if completionCmd, _, err := root.Find([]string{"completion"}); err == nil && completionCmd != nil {
 		completionCmd.GroupID = groupAdvanced
 		completionCmd.AddCommand(newInstallCompletionCmd())
+		completionCmd.AddCommand(newUninstallCompletionCmd())
 	}
 
 	// Internal: hidden Make-compatibility command.
