@@ -119,6 +119,214 @@ func TestValidateConfigPath(t *testing.T) {
 	}
 }
 
+func TestLoadValidateConfig_lintersHappy(t *testing.T) {
+	cfg, warnings, err := LoadValidateConfig("testdata/validate/linters_happy.yml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings: %+v", warnings)
+	}
+	if got, want := len(cfg.Linters), 4; got != want {
+		t.Fatalf("linters: got %d, want %d", got, want)
+	}
+
+	byID := map[string]LinterEntry{}
+	for _, l := range cfg.Linters {
+		byID[l.ID] = l
+	}
+
+	sc, ok := byID["shellcheck"]
+	if !ok {
+		t.Fatalf("shellcheck missing")
+	}
+	if sc.Type != "builtin" {
+		t.Errorf("shellcheck.Type = %q, want builtin", sc.Type)
+	}
+	if sc.Enabled == nil || !*sc.Enabled {
+		t.Errorf("shellcheck.Enabled = %v, want *true", sc.Enabled)
+	}
+	if sc.Bin != "shellcheck" {
+		t.Errorf("shellcheck.Bin = %q", sc.Bin)
+	}
+	if sc.Severity == nil || *sc.Severity != diag.SeverityWarning {
+		t.Errorf("shellcheck.Severity = %v, want *SeverityWarning", sc.Severity)
+	}
+	if sc.SourceLine == 0 {
+		t.Errorf("shellcheck.SourceLine = 0")
+	}
+
+	had := byID["hadolint"]
+	if had.Type != "builtin" {
+		t.Errorf("hadolint.Type = %q, want builtin (default)", had.Type)
+	}
+	if had.Enabled != nil {
+		t.Errorf("hadolint.Enabled = %v, want nil", had.Enabled)
+	}
+	if had.Severity != nil {
+		t.Errorf("hadolint.Severity = %v, want nil", had.Severity)
+	}
+	if len(had.Filenames) != 1 || had.Filenames[0] != "Dockerfile" {
+		t.Errorf("hadolint.Filenames = %v", had.Filenames)
+	}
+	if len(had.Paths) != 1 || had.Paths[0] != "." {
+		t.Errorf("hadolint.Paths = %v, want [.]", had.Paths)
+	}
+
+	gen := byID["yamllint"]
+	if gen.Type != "generic" {
+		t.Errorf("yamllint.Type = %q, want generic", gen.Type)
+	}
+
+	dis := byID["disabled-thing"]
+	if dis.Enabled == nil || *dis.Enabled {
+		t.Errorf("disabled-thing.Enabled = %v, want *false", dis.Enabled)
+	}
+}
+
+func TestLoadValidateConfig_lintersSeverityRoundTrip(t *testing.T) {
+	cases := []struct {
+		name    string
+		body    string
+		check   func(t *testing.T, e LinterEntry)
+		wantErr string
+	}{
+		{
+			name: "absent",
+			body: "linters:\n  l: {}\n",
+			check: func(t *testing.T, e LinterEntry) {
+				if e.Severity != nil {
+					t.Fatalf("Severity = %v, want nil", e.Severity)
+				}
+			},
+		},
+		{
+			name: "warning",
+			body: "linters:\n  l: { severity: warning }\n",
+			check: func(t *testing.T, e LinterEntry) {
+				if e.Severity == nil || *e.Severity != diag.SeverityWarning {
+					t.Fatalf("Severity = %v, want SeverityWarning", e.Severity)
+				}
+			},
+		},
+		{
+			name: "error",
+			body: "linters:\n  l: { severity: error }\n",
+			check: func(t *testing.T, e LinterEntry) {
+				if e.Severity == nil || *e.Severity != diag.SeverityError {
+					t.Fatalf("Severity = %v, want SeverityError", e.Severity)
+				}
+			},
+		},
+		{
+			name: "info",
+			body: "linters:\n  l: { severity: info }\n",
+			check: func(t *testing.T, e LinterEntry) {
+				if e.Severity == nil || *e.Severity != diag.SeverityInfo {
+					t.Fatalf("Severity = %v, want SeverityInfo", e.Severity)
+				}
+			},
+		},
+		{
+			name:    "empty",
+			body:    `{linters: {l: {severity: ""}}}` + "\n",
+			wantErr: "not empty",
+		},
+		{
+			name:    "ok rejected",
+			body:    "linters:\n  l: { severity: ok }\n",
+			wantErr: "not allowed",
+		},
+		{
+			name:    "bogus rejected",
+			body:    "linters:\n  l: { severity: bogus }\n",
+			wantErr: "unknown severity",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "validate.yml")
+			if err := os.WriteFile(path, []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cfg, _, err := LoadValidateConfig(path)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err = %v, want substring %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if len(cfg.Linters) != 1 {
+				t.Fatalf("linters: %d", len(cfg.Linters))
+			}
+			tc.check(t, cfg.Linters[0])
+		})
+	}
+}
+
+func TestLoadValidateConfig_lintersValidationErrors(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		substring string
+	}{
+		{"unknownType", "linters:\n  l: { type: bogus }\n", "unknown type"},
+		{"unknownField", "linters:\n  l: { wat: yes }\n", "field wat not found"},
+		{"binWithSlash", "linters:\n  l: { bin: /usr/bin/shellcheck }\n", "bare command name"},
+		{"binWithRelPath", "linters:\n  l: { bin: ./tool }\n", "bare command name"},
+		{"pathTraversal", "linters:\n  l: { paths: [../escape] }\n", "traverse outside"},
+		{"absolutePath", "linters:\n  l: { paths: [/etc] }\n", "must be relative"},
+		{"emptyPath", `{linters: {l: {paths: [""]}}}` + "\n", "must not be empty"},
+		{"extWithoutDot", "linters:\n  l: { extensions: [sh] }\n", "must start with"},
+		{"extWithSlash", "linters:\n  l: { extensions: [\".s/h\"] }\n", "path separators"},
+		{"filenameWithSlash", "linters:\n  l: { filenames: [dir/file] }\n", "path separators"},
+		{"emptyFilename", `{linters: {l: {filenames: [""]}}}` + "\n", "must not be empty"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "validate.yml")
+			if err := os.WriteFile(path, []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, _, err := LoadValidateConfig(path)
+			if err == nil || !strings.Contains(err.Error(), tc.substring) {
+				t.Fatalf("err = %v, want substring %q", err, tc.substring)
+			}
+		})
+	}
+}
+
+func TestLoadValidateConfig_lintersPathsDotAccepted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "validate.yml")
+	if err := os.WriteFile(path, []byte("linters:\n  hadolint:\n    paths: [\".\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := LoadValidateConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if cfg.Linters[0].Paths[0] != "." {
+		t.Fatalf("Paths = %v, want [.]", cfg.Linters[0].Paths)
+	}
+}
+
+func TestLoadValidateConfig_lintersMissingBinAllowed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "validate.yml")
+	if err := os.WriteFile(path, []byte("linters:\n  shellcheck: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := LoadValidateConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if cfg.Linters[0].Bin != "" {
+		t.Fatalf("Bin = %q, want empty (default takes over at runtime)", cfg.Linters[0].Bin)
+	}
+}
+
 func TestParseSeverity(t *testing.T) {
 	cases := []struct {
 		in      string

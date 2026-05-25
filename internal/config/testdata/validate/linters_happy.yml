@@ -1,0 +1,21 @@
+linters:
+  shellcheck:
+    enabled: true
+    bin: shellcheck
+    paths: [devbox/scripts, scripts]
+    extensions: [.sh, .bash]
+    flags: [--severity=warning]
+    severity: warning
+  hadolint:
+    paths: ["."]
+    filenames: [Dockerfile]
+    extensions: [.dockerfile]
+  yamllint:
+    type: generic
+    bin: yamllint
+    paths: ["."]
+    extensions: [.yml, .yaml]
+    flags: [-s]
+  disabled-thing:
+    type: generic
+    enabled: false

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -38,6 +39,12 @@ var allowedCheckTypes = map[string]struct{}{
 	"command": {},
 }
 
+// allowedLinterTypes is the set of legal "type:" values for a linter entry.
+var allowedLinterTypes = map[string]struct{}{
+	"builtin": {},
+	"generic": {},
+}
+
 // CheckEntry is a single entry from devbox/validate.yml. The struct stores the
 // parsed-and-validated form: severity is the diag.Severity enum (validate.yml
 // uses the string spelling on the wire; the loader converts and rejects
@@ -59,13 +66,41 @@ type CheckEntry struct {
 
 // ValidateConfig is the top-level shape of devbox/validate.yml.
 type ValidateConfig struct {
-	Checks []CheckEntry
+	Checks  []CheckEntry
+	Linters []LinterEntry
+}
+
+// LinterEntry is a single entry under the linters: map in validate.yml.
+// Pointer fields distinguish "absent in YAML" from "present and zero".
+type LinterEntry struct {
+	ID         string
+	Type       string   // "builtin" (default) | "generic"
+	Enabled    *bool    // nil → autodetect
+	Bin        string   // empty → adapter default; must be a bare command name
+	Paths      []string // empty → adapter default
+	Extensions []string // empty → adapter default; each must start with "."
+	Filenames  []string // empty → adapter default; no path separators
+	Flags      []string
+	Severity   *diag.Severity // nil → no clamp
+	SourceLine int
 }
 
 // rawValidateConfig is the wire-level shape, decoded with strict KnownFields.
 // Severity is a string on the wire and converted via parseSeverity.
 type rawValidateConfig struct {
-	Checks []rawCheckEntry `yaml:"checks"`
+	Checks  []rawCheckEntry           `yaml:"checks"`
+	Linters map[string]rawLinterEntry `yaml:"linters"`
+}
+
+type rawLinterEntry struct {
+	Type       string   `yaml:"type"`
+	Enabled    *bool    `yaml:"enabled"`
+	Bin        string   `yaml:"bin"`
+	Paths      []string `yaml:"paths"`
+	Extensions []string `yaml:"extensions"`
+	Filenames  []string `yaml:"filenames"`
+	Flags      []string `yaml:"flags"`
+	Severity   *string  `yaml:"severity"`
 }
 
 type rawCheckEntry struct {
@@ -180,6 +215,104 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 		cfg.Checks = append(cfg.Checks, entry)
 	}
 
+	// Linters: map → ordered slice with per-entry validation and source-line capture.
+	linterLines, err := linterEntryLines(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	linterIDs := make([]string, 0, len(raw.Linters))
+	for id := range raw.Linters {
+		linterIDs = append(linterIDs, id)
+	}
+	sort.Strings(linterIDs)
+	seenLinterIDs := make(map[string]struct{}, len(linterIDs))
+	for _, id := range linterIDs {
+		r := raw.Linters[id]
+		line := linterLines[id]
+
+		if id == "" {
+			return nil, nil, fmt.Errorf("parse %s: linters: id (map key) must not be empty", path)
+		}
+		lowerID := strings.ToLower(id)
+		if _, dup := seenLinterIDs[lowerID]; dup {
+			return nil, nil, fmt.Errorf("parse %s: linter %q: duplicate id (case-insensitive collision)", path, id)
+		}
+		seenLinterIDs[lowerID] = struct{}{}
+
+		ltype := r.Type
+		if ltype == "" {
+			ltype = "builtin"
+		}
+		if _, ok := allowedLinterTypes[ltype]; !ok {
+			return nil, nil, fmt.Errorf("parse %s: linter %q: unknown type %q (allowed: builtin, generic)", path, id, ltype)
+		}
+
+		if strings.ContainsAny(r.Bin, `/\`) {
+			return nil, nil, fmt.Errorf("parse %s: linter %q: bin %q must be a bare command name (no path separators); resolution happens via PATH", path, id, r.Bin)
+		}
+
+		paths := make([]string, 0, len(r.Paths))
+		for _, p := range r.Paths {
+			if p == "" {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: paths entry must not be empty", path, id)
+			}
+			if filepath.IsAbs(p) {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: paths entry %q must be relative to the project root", path, id, p)
+			}
+			if !filepath.IsLocal(p) && filepath.Clean(p) != "." {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: paths entry %q must not traverse outside the project root", path, id, p)
+			}
+			paths = append(paths, filepath.Clean(p))
+		}
+
+		exts := make([]string, 0, len(r.Extensions))
+		for _, e := range r.Extensions {
+			if e == "" {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: extensions entry must not be empty", path, id)
+			}
+			if !strings.HasPrefix(e, ".") {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: extensions entry %q must start with %q", path, id, e, ".")
+			}
+			if strings.ContainsAny(e, `/\`) {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: extensions entry %q must not contain path separators", path, id, e)
+			}
+			exts = append(exts, e)
+		}
+
+		filenames := make([]string, 0, len(r.Filenames))
+		for _, f := range r.Filenames {
+			if f == "" {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: filenames entry must not be empty", path, id)
+			}
+			if strings.ContainsAny(f, `/\`) {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: filenames entry %q must not contain path separators", path, id, f)
+			}
+			filenames = append(filenames, f)
+		}
+
+		var sevPtr *diag.Severity
+		if r.Severity != nil {
+			sev, err := parseLinterSeverity(*r.Severity)
+			if err != nil {
+				return nil, nil, fmt.Errorf("parse %s: linter %q: %w", path, id, err)
+			}
+			sevPtr = &sev
+		}
+
+		cfg.Linters = append(cfg.Linters, LinterEntry{
+			ID:         id,
+			Type:       ltype,
+			Enabled:    r.Enabled,
+			Bin:        r.Bin,
+			Paths:      paths,
+			Extensions: exts,
+			Filenames:  filenames,
+			Flags:      append([]string(nil), r.Flags...),
+			Severity:   sevPtr,
+			SourceLine: line,
+		})
+	}
+
 	// Sort warnings deterministically (line, then message).
 	sort.Slice(warnings, func(i, j int) bool {
 		if warnings[i].Line != warnings[j].Line {
@@ -189,6 +322,64 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 	})
 
 	return cfg, warnings, nil
+}
+
+// parseLinterSeverity is stricter than parseSeverity: empty string is rejected
+// (callers gate on r.Severity != nil) and "ok" is rejected since clamping
+// findings to OK would mute them in the table; users disable a linter with
+// enabled: false instead.
+func parseLinterSeverity(s string) (diag.Severity, error) {
+	switch s {
+	case "":
+		return 0, fmt.Errorf("severity must be one of error|warning|info, not empty")
+	case "error":
+		return diag.SeverityError, nil
+	case "warning":
+		return diag.SeverityWarning, nil
+	case "info":
+		return diag.SeverityInfo, nil
+	case "ok":
+		return 0, fmt.Errorf("severity %q is not allowed for linters (use `enabled: false` to silence)", s)
+	default:
+		return 0, fmt.Errorf("unknown severity %q (allowed: error, warning, info)", s)
+	}
+}
+
+// linterEntryLines walks the document and returns a map from linter ID
+// (map-key value under the top-level linters: mapping) to the line of that
+// key. Used for SourceLine capture in diagnostics.
+func linterEntryLines(data []byte) (map[string]int, error) {
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return nil, err
+	}
+	out := map[string]int{}
+	if root.Kind == 0 {
+		return out, nil
+	}
+	doc := &root
+	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+		doc = doc.Content[0]
+	}
+	if doc.Kind != yaml.MappingNode {
+		return out, nil
+	}
+	for i := 0; i < len(doc.Content)-1; i += 2 {
+		key := doc.Content[i]
+		if key.Value != "linters" {
+			continue
+		}
+		val := doc.Content[i+1]
+		if val.Kind != yaml.MappingNode {
+			return out, nil
+		}
+		for j := 0; j < len(val.Content)-1; j += 2 {
+			k := val.Content[j]
+			out[k.Value] = k.Line
+		}
+		return out, nil
+	}
+	return out, nil
 }
 
 // parseSeverity converts the YAML "severity" string to a diag.Severity. Empty
