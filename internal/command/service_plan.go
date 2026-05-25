@@ -191,8 +191,19 @@ func buildTogglePlan(
 		applySteps = append(applySteps, ApplyStep{Kind: journal.PendingRestart})
 	}
 
-	// Suppress nil slices to empty slices for consistency in callers.
-	_ = reg // registry is carried through for Task 12 executor; unused here
+	// Validate hook command IDs against the registry before any mutation.
+	if reg != nil {
+		for _, step := range beforeSteps {
+			if _, err := reg.Get(step.CommandID); err != nil {
+				return TogglePlan{}, fmt.Errorf("before hook command %q not found: %w", step.CommandID, err)
+			}
+		}
+		for _, step := range afterSteps {
+			if _, err := reg.Get(step.CommandID); err != nil {
+				return TogglePlan{}, fmt.Errorf("after hook command %q not found: %w", step.CommandID, err)
+			}
+		}
+	}
 
 	return TogglePlan{
 		BeforeSteps: beforeSteps,

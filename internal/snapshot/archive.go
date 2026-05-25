@@ -761,7 +761,7 @@ func extractTarGz(tarPath, targetRoot string) error {
 
 		// Type allowlist.
 		switch hdr.Typeflag {
-		case tar.TypeReg, tar.TypeDir:
+		case tar.TypeReg, '\x00', tar.TypeDir: // '\x00' is the deprecated TypeRegA emitted by old GNU tar
 			// fall through
 		case tar.TypeSymlink:
 			return &rejectedTarEntryError{Name: hdr.Name, Reason: "symlink entry"}

@@ -190,7 +190,11 @@ func TestBuildTogglePlan_BeforeAfterOrdering(t *testing.T) {
 			After:    []string{"bbb:post"},
 		}, nil, nil),
 	})
-	plan, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
+	reg := registry.NewEmptyRegistry()
+	for _, id := range []string{"aaa:pre1", "aaa:pre2", "aaa:post1", "bbb:pre", "bbb:post"} {
+		reg.AddCommandForTest(makeShellCmd(id))
+	}
+	plan, err := buildTogglePlan(cfg, reg, emptyDeployMap(), []ToggleAction{
 		{Service: "bbb", Direction: DirectionEnable}, // submitted out of alpha order
 		{Service: "aaa", Direction: DirectionEnable},
 	})
