@@ -11,12 +11,11 @@ import (
 )
 
 // builtinAdapters is the single source of truth for the built-in adapter set.
-// Each factory returns a fresh Adapter; adapters are stateless value types so
-// a single instance per call is sufficient.
-func builtinAdapters() map[string]func() Adapter {
-	return map[string]func() Adapter{
-		ShellcheckID: func() Adapter { return NewShellcheck() },
-		HadolintID:   func() Adapter { return NewHadolint() },
+// Adapters are stateless value types, so instances are created once and shared.
+func builtinAdapters() map[string]Adapter {
+	return map[string]Adapter{
+		ShellcheckID: NewShellcheck(),
+		HadolintID:   NewHadolint(),
 	}
 }
 
@@ -99,7 +98,7 @@ func buildLinterChildren(validateCfg *config.ValidateConfig, validateLoadErr err
 		if _, has := configured[id]; has {
 			continue
 		}
-		adapter := adapters[id]()
+		adapter := adapters[id]
 		entry := config.LinterEntry{ID: id, Type: "builtin"}
 		out = append(out, newLinterValidator(entry, adapter, baseDir))
 	}
@@ -111,7 +110,7 @@ func buildLinterChildren(validateCfg *config.ValidateConfig, validateLoadErr err
 // Returns either a non-nil adapter (success) or a non-nil synthetic error
 // validator (failure: unknown built-in id). Generic entries always succeed
 // because the generic adapter accepts any id.
-func resolveAdapter(entry config.LinterEntry, adapters map[string]func() Adapter) (Adapter, validate.Validator) {
+func resolveAdapter(entry config.LinterEntry, adapters map[string]Adapter) (Adapter, validate.Validator) {
 	switch entry.Type {
 	case "generic":
 		bin := entry.Bin
@@ -120,7 +119,7 @@ func resolveAdapter(entry config.LinterEntry, adapters map[string]func() Adapter
 		}
 		return NewGeneric(entry.ID, bin), nil
 	case "", "builtin":
-		factory, ok := adapters[entry.ID]
+		adapter, ok := adapters[entry.ID]
 		if !ok {
 			return nil, newLinterErrorValidator(
 				entry.ID,
@@ -128,7 +127,7 @@ func resolveAdapter(entry config.LinterEntry, adapters map[string]func() Adapter
 				fmt.Sprintf("unknown built-in linter %q (use type: generic for custom binaries)", entry.ID),
 			)
 		}
-		return factory(), nil
+		return adapter, nil
 	default:
 		// LoadValidateConfig already rejects unknown types; defensive fallback.
 		return nil, newLinterErrorValidator(

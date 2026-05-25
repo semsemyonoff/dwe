@@ -16,6 +16,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/lifecycle"
+	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -1528,9 +1529,9 @@ func TestBatchServiceConfigHash(t *testing.T) {
 	}
 }
 
-// TestApplyServiceTogglesBatch_AllOrNothing verifies that batch validation
-// rejects mandatory toggles without writing partial state.
-func TestApplyServiceTogglesBatch_AllOrNothing(t *testing.T) {
+// TestApplyServiceToggles_MandatoryRejected verifies that ApplyServiceTogglesToYAML
+// rejects an attempt to disable a mandatory service.
+func TestApplyServiceToggles_MandatoryRejected(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
 		mandatory bool
 		enabled   bool
@@ -1545,13 +1546,14 @@ func TestApplyServiceTogglesBatch_AllOrNothing(t *testing.T) {
 		t.Fatalf("load config: %v", err)
 	}
 
-	err = applyServiceTogglesBatch(configPath, cfg, []string{"second"}, []string{"main"})
-	if err == nil {
-		t.Fatal("expected error for mandatory toggle, got nil")
+	baseDir := filepath.Dir(configPath)
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	local, err := localconfig.LoadLocalYAML(localPath)
+	if err != nil {
+		t.Fatalf("load local.yml: %v", err)
 	}
 
-	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
-	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
-		t.Error("local.yml must not be written when batch validation fails")
+	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, []string{"second"}, []string{"main"}); err == nil {
+		t.Fatal("expected error for mandatory toggle, got nil")
 	}
 }

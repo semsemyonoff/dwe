@@ -697,6 +697,45 @@ render:
     enabled: true
 ```
 
+## Toggle lifecycle
+
+The `on_enable`, `on_disable`, and `notes` blocks control what happens when a service is toggled via `devbox services enable/disable`.
+
+### `on_enable` and `on_disable` schema
+
+```yaml
+on_enable:
+  requires: none | restart | deploy   # what to trigger after writing local.yml
+  before: [command-id]                # user commands run before the toggle is written
+  after: [command-id]                 # user commands run after the toggle is written
+on_disable:
+  requires: none | restart            # deploy is not allowed on disable
+  before: [command-id]
+  after: [command-id]
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `requires` | `restart` | What must happen for the change to take effect. `none` → write local.yml only; `restart` → trigger `devbox restart`; `deploy` → trigger `devbox deploy run --service <name>`. `deploy` is forbidden on `on_disable`. |
+| `before` | — | User command IDs (from `devbox/commands/`) to run before the toggle write. Each must be `type: shell` or `type: script`. |
+| `after` | — | User command IDs to run after the toggle write. Same type constraint applies. |
+
+Hook commands run with `--yes` (non-interactive), stdout discarded, stderr captured for error messages.
+
+### `notes` schema
+
+```yaml
+notes:
+  enable: "Run migrations after enabling this service."
+  disable: "Safe to disable while the stack is running."
+```
+
+Notes are shown in the plan output (`devbox services enable/disable --print-plan`) to guide the operator through manual follow-up steps.
+
+### Toggle plan and `--apply`
+
+`devbox services enable <name>` (without `--apply`) writes `local.yml` and records a pending op in the deploy state journal. The pending op is displayed by `devbox status` until cleared. `--apply` executes the plan immediately (runs hooks, triggers restart or deploy as declared by `requires`).
+
 ## Common pitfalls
 
 - **Editing `dir` in `extends` child** — a child that sets `dir` completely replaces the parent's `dir` (not merged). This is intentional for services that live in a different host directory.
@@ -713,4 +752,5 @@ render:
 - `devbox status apps` / `devbox status tools` / `devbox status infra` — per-type tables.
 - `devbox services` — interactive multi-select toggle for every optional service across all types.
 - `devbox services enable <name>` / `devbox services disable <name>` — toggle by name (type looked up internally).
-- `devbox deploy run` — runs the full deploy pipeline; enumerates `type: app` services only.
+- `devbox deploy run` — runs the full deploy pipeline; enumerates all enabled services that have a `devbox/services/<name>/deploy.yml` (any service type).
+- `devbox reset run --service <name>` — resets a single service: stops container, runs per-service `reset.yml`, marks service as requiring a subsequent deploy.

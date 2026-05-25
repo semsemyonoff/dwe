@@ -210,6 +210,7 @@ func mutateAndPlan(
 		return TogglePlan{}, nil, err
 	}
 	if err := localconfig.WriteLocalYAML(localPath, local); err != nil {
+		rollback()
 		return TogglePlan{}, nil, err
 	}
 
@@ -305,6 +306,7 @@ func mutateAndPlanBatch(
 		return TogglePlan{}, nil, err
 	}
 	if err := localconfig.WriteLocalYAML(localPath, local); err != nil {
+		rollback()
 		return TogglePlan{}, nil, err
 	}
 

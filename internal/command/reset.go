@@ -116,7 +116,7 @@ the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
 			if serviceName != "" {
 				return resetServiceRunCmd(cmd, flags, serviceName, yes, skipPreflight)
 			}
-			return resetRunCmd(flags, yes)
+			return resetRunCmd(cmd, flags, yes, skipPreflight)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -129,10 +129,31 @@ the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
 	return cmd
 }
 
-func resetRunCmd(flags *rootFlags, yes bool) error {
+func resetRunCmd(cmd *cobra.Command, flags *rootFlags, yes bool, skipPreflight bool) error {
+	ctx := cmd.Context()
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".devbox", "deploy")
-	statePath := filepath.Join(stateDir, "state.yml")
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
+
+	// Load cfg + registry BEFORE acquiring locks so preflight can reject
+	// without leaving a stale lock file.
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	reg, regErr := loadCommandRegistry(flags.configPath)
+	if regErr != nil {
+		reg = nil
+	}
+
+	// Preflight: run before any side effect on Docker, git, or the filesystem.
+	if err := preflightRun(ctx, cfg, reg, workDir, "stop", skipPreflight, cmd.ErrOrStderr()); err != nil {
+		return err
+	}
+
+	if regErr != nil {
+		return fmt.Errorf("loading command registry: %w", regErr)
+	}
 
 	// Acquire deploy + snapshot project locks to prevent parallel resets
 	// and to be mutually exclusive with snapshot mutating operations.
@@ -147,22 +168,12 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 	}
 	defer releaseLocks()
 
-	cfg, err := config.LoadConfig(flags.configPath)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
 	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("loading docker config: %w", err)
 		}
 		dockerCfg = &config.DockerConfig{}
-	}
-
-	reg, err := loadCommandRegistry(flags.configPath)
-	if err != nil {
-		return fmt.Errorf("loading command registry: %w", err)
 	}
 
 	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg, reg)

@@ -453,21 +453,3 @@ func serviceCompletion(flags *rootFlags, filter serviceFilter) func(*cobra.Comma
 		return names, cobra.ShellCompDirectiveNoFileComp
 	}
 }
-
-// applyServiceTogglesBatch loads devbox/local.yml once, validates and applies all
-// toggles in-memory, then writes the file once.
-func applyServiceTogglesBatch(configPath string, cfg *config.DevboxConfig, toEnable, toDisable []string) error {
-	baseDir := filepath.Dir(configPath)
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
-
-	local, err := localconfig.LoadLocalYAML(localPath)
-	if err != nil {
-		return err
-	}
-
-	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
-		return err
-	}
-
-	return localconfig.WriteLocalYAML(localPath, local)
-}

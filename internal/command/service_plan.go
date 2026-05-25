@@ -207,29 +207,26 @@ func buildTogglePlan(
 // Internal apply steps (multi-service deploy, restart) are prefixed with → to
 // distinguish them from commands the user can copy-paste.
 func renderTogglePlan(w io.Writer, plan TogglePlan) {
-	type entry struct{ label string }
-	var entries []entry
+	var entries []string
 
 	for _, s := range plan.BeforeSteps {
-		entries = append(entries, entry{fmt.Sprintf("devbox commands %s", s.CommandID)})
+		entries = append(entries, fmt.Sprintf("devbox commands %s", s.CommandID))
 	}
 	for _, s := range plan.ApplySteps {
 		switch s.Kind {
 		case journal.PendingDeploy:
 			if len(s.Services) == 1 {
-				entries = append(entries, entry{fmt.Sprintf("devbox deploy run --service %s", s.Services[0])})
+				entries = append(entries, fmt.Sprintf("devbox deploy run --service %s", s.Services[0]))
 			} else {
-				entries = append(entries, entry{
-					fmt.Sprintf("→ apply step: deploy services {%s} (dependency-ordered at execution)",
-						strings.Join(s.Services, ", ")),
-				})
+				entries = append(entries, fmt.Sprintf("→ apply step: deploy services {%s} (dependency-ordered at execution)",
+					strings.Join(s.Services, ", ")))
 			}
 		case journal.PendingRestart:
-			entries = append(entries, entry{"→ apply step: restart stack"})
+			entries = append(entries, "→ apply step: restart stack")
 		}
 	}
 	for _, s := range plan.AfterSteps {
-		entries = append(entries, entry{fmt.Sprintf("devbox commands %s", s.CommandID)})
+		entries = append(entries, fmt.Sprintf("devbox commands %s", s.CommandID))
 	}
 
 	if len(entries) == 0 && len(plan.Notes) == 0 {
@@ -244,7 +241,7 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 		}
 		_, _ = fmt.Fprintf(w, "Plan to apply (%d step%s):\n", len(entries), plural)
 		for i, e := range entries {
-			_, _ = fmt.Fprintf(w, "  %d. %s\n", i+1, e.label)
+			_, _ = fmt.Fprintf(w, "  %d. %s\n", i+1, e)
 		}
 	}
 
