@@ -123,11 +123,11 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 				ErrOut:        cmd.ErrOrStderr(),
 				SkipPreflight: skipPreflight,
 			}
-			if err := StopService(cmd.Context(), deps, name); err != nil {
-				return err
-			}
 			if regErr != nil {
 				return fmt.Errorf("loading command registry: %w", regErr)
+			}
+			if err := StopService(cmd.Context(), deps, name); err != nil {
+				return err
 			}
 			return nil
 		},

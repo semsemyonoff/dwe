@@ -274,6 +274,8 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 			if line != "y" && line != "yes" {
 				return nil
 			}
+		} else {
+			return fmt.Errorf("non-interactive terminal: use --yes to confirm per-service reset")
 		}
 	}
 
