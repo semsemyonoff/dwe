@@ -48,7 +48,12 @@ func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir stri
 // without unwrapping the group.
 func buildLinterChildren(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator {
 	if validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
-		return nil
+		// Surface the parse failure as a domain-level error so that
+		// `devbox validate linters` does not silently produce zero diagnostics.
+		// buildRegistry suppresses this error when config.validate is already
+		// in scope (to avoid a duplicate diagnostic).
+		return []validate.Validator{newLinterErrorValidator("_config", 0,
+			fmt.Sprintf("devbox/validate.yml: %v", validateLoadErr))}
 	}
 
 	adapters := builtinAdapters()

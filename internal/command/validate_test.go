@@ -455,6 +455,33 @@ func TestValidateLintersStrictUpgradesWarningToError(t *testing.T) {
 	require.Contains(t, out, "totally-fake-bin-xyz")
 }
 
+// TestValidateLintersScopedMalformedValidateYmlSurfacesDiagnostic: running
+// "devbox validate linters" with a malformed validate.yml must surface an error
+// diagnostic (not silently return zero diagnostics).
+func TestValidateLintersScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"linters"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	require.Contains(t, out, "validate.yml", "malformed validate.yml diagnostic should appear in scoped linters run")
+	require.Contains(t, out, "error", "summary must report an error")
+}
+
 // TestValidateSnapshotSubcommand registers and the basic scopes resolve.
 func TestValidateSnapshotSubcommand(t *testing.T) {
 	cmd := newValidateCmd(&rootFlags{})

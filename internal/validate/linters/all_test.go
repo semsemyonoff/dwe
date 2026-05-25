@@ -50,10 +50,22 @@ func TestAll_NilCfgErrNotExist_SynthesizesAllBuiltins(t *testing.T) {
 	}
 }
 
-func TestAll_CorruptConfig_ReturnsZeroValidators(t *testing.T) {
+func TestAll_CorruptConfig_ReturnsErrorValidator(t *testing.T) {
 	got := All(nil, errors.New("yaml: bad token"), t.TempDir())
-	if len(got) != 0 {
-		t.Fatalf("expected zero validators on corrupt config, got %d", len(got))
+	cs := children(got)
+	if len(cs) != 1 {
+		t.Fatalf("expected one error validator on corrupt config, got %d", len(cs))
+	}
+	ev, ok := cs[0].(*linterErrorValidator)
+	if !ok {
+		t.Fatalf("expected *linterErrorValidator, got %T", cs[0])
+	}
+	diags := ev.Run(validate.Context{})
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
+		t.Fatalf("expected one Error diagnostic, got %+v", diags)
+	}
+	if diags[0].Domain != Domain {
+		t.Fatalf("expected domain %q, got %q", Domain, diags[0].Domain)
 	}
 }
 

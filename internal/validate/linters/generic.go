@@ -84,7 +84,9 @@ func (g *GenericAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]val
 		msg = "linter exited non-zero with no output"
 	}
 	if len(msg) > genericMessageCap {
-		msg = msg[:genericMessageCap] + "\n…(truncated)"
+		// strings.ToValidUTF8 ensures the byte-boundary truncation never leaves
+		// a partial multi-byte rune in the message.
+		msg = strings.ToValidUTF8(msg[:genericMessageCap], "") + "\n…(truncated)"
 	}
 	return []validate.Diagnostic{
 		finding(g.id, validate.SeverityError, "", 0, msg, ""),

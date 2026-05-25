@@ -453,7 +453,14 @@ func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig,
 	for _, v := range valsnap.All(cfg, snapCfg, snapCfgErr, baseDir, cmdReg, verifyChecksums) {
 		reg.Register(v)
 	}
-	for _, v := range vallinters.All(validateCfg, validateLoadErr, baseDir) {
+	// Same deduplication as checksLoadErr: when config.validate is in scope it
+	// already surfaces the parse error, so suppress it from the linters domain
+	// to avoid a duplicate diagnostic in a full `devbox validate` run.
+	lintersLoadErr := validateLoadErr
+	if validate.MatchScope("config", "validate", scope) {
+		lintersLoadErr = nil
+	}
+	for _, v := range vallinters.All(validateCfg, lintersLoadErr, baseDir) {
 		reg.Register(v)
 	}
 	return reg
