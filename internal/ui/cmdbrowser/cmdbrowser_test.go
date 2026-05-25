@@ -45,8 +45,8 @@ func withSeams(t *testing.T, isTTY bool, width, height int, sizeErr error, runSe
 
 func TestDefaultOptions(t *testing.T) {
 	got := DefaultOptions()
-	if got.DefaultExpandedDepth != 3 || !got.AutoCollapseEmpty || !got.ShowTypeBadges || got.IncludePrivate || got.Mode != ModeRun {
-		t.Errorf("DefaultOptions=%+v, want depth=3, autocollapse=true, badges=true, mode=run", got)
+	if got.DefaultExpandedDepth != 1 || !got.AutoCollapseEmpty || !got.ShowTypeBadges || got.IncludePrivate || got.Mode != ModeRun {
+		t.Errorf("DefaultOptions=%+v, want depth=1, autocollapse=true, badges=true, mode=run", got)
 	}
 }
 
@@ -171,9 +171,6 @@ func TestModel_ViewRendersTwoPanels(t *testing.T) {
 	if !strings.Contains(v.Content, "pick") {
 		t.Errorf("view does not contain title; got:\n%s", v.Content)
 	}
-	if !strings.Contains(v.Content, "groups") {
-		t.Errorf("view missing left-panel label 'groups'; got:\n%s", v.Content)
-	}
 	if !strings.Contains(v.Content, "db") {
 		t.Errorf("view missing tree node 'db'; got:\n%s", v.Content)
 	}
@@ -240,7 +237,7 @@ func TestModel_EmptyLayoutSnapshot(t *testing.T) {
 	// Drive the model with a window-size msg as bubbletea would.
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 26})
 	out := m.View().Content
-	for _, want := range []string{"Select command", "groups", "command", "tab"} {
+	for _, want := range []string{"Select command", "command", "tab"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("snapshot missing %q\n---\n%s", want, out)
 		}

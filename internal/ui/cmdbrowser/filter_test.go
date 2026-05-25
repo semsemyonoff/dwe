@@ -142,28 +142,47 @@ func TestSkipConfirm_InspectModeIgnoresY(t *testing.T) {
 }
 
 func TestInspect_RendersAtViewportWidth(t *testing.T) {
-	// Inspect closure receives the viewport's *content width*, not the full
-	// terminal width. The viewport is sized to min(rightPanelWidth-4, 80) then
-	// shrunk again by 4 (header padding), so on a 120-col terminal we should
-	// see a width well under 120 — the previous bug pre-rendered inspect at
-	// TermWidth() and let the viewport silently clip the right edge.
-	var gotWidth int
-	items := []Item{{ID: "db.x", Type: "shell", Description: "short",
-		Inspect: func(w int) string { gotWidth = w; return "content" }}}
-	m := newModel("inspect", items, DefaultOptions(), 120, 26)
-	m.tree.focusedID = "db"
-	m.refreshList()
-	m.focus = focusRight
-	m.list.Select(0)
-	m.Update(syntheticKey("i"))
-	if gotWidth == 0 {
-		t.Fatal("Inspect closure was not called")
+	// Inspect closure receives the viewport's *content width* — the right
+	// panel's inner content area, capped at inspectMaxWidth so the section
+	// divider rendered by ui.RenderSectionTitle (also capped at 100) lines up
+	// with the surrounding content. Narrow terminals get the full panel;
+	// wide ones are capped.
+	cases := []struct {
+		name        string
+		w, h        int
+		wantMin     int // viewport must be at least this wide
+		wantAtMost  int // and at most this wide (e.g. inspectMaxWidth on wide screens)
+	}{
+		{"two_panel_120", 120, 26, 60, inspectMaxWidth},
+		{"two_panel_200", 200, 30, inspectMaxWidth, inspectMaxWidth}, // wide terminal caps at inspectMaxWidth
+		{"single_panel_70", 70, 20, 50, 70},                          // narrow terminal uses panel width, well under the cap
 	}
-	if gotWidth >= 120 {
-		t.Errorf("Inspect width %d must be < terminal width 120; viewport is narrower than the terminal", gotWidth)
-	}
-	if gotWidth > 80 {
-		t.Errorf("Inspect width %d exceeds the spec cap of 80", gotWidth)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotWidth int
+			items := []Item{{ID: "db.x", Type: "shell", Description: "short",
+				Inspect: func(w int) string { gotWidth = w; return "content" }}}
+			m := newModel("inspect", items, DefaultOptions(), tc.w, tc.h)
+			m.tree.focusedID = "db"
+			m.refreshList()
+			m.focus = focusRight
+			m.list.Select(0)
+			m.Update(syntheticKey("i"))
+			if gotWidth == 0 {
+				t.Fatal("Inspect closure was not called")
+			}
+			if gotWidth >= tc.w {
+				t.Errorf("Inspect width %d must be < terminal width %d", gotWidth, tc.w)
+			}
+			if gotWidth < tc.wantMin {
+				t.Errorf("Inspect width %d narrower than expected minimum %d at terminal %dx%d",
+					gotWidth, tc.wantMin, tc.w, tc.h)
+			}
+			if gotWidth > tc.wantAtMost {
+				t.Errorf("Inspect width %d exceeds expected cap %d at terminal %dx%d",
+					gotWidth, tc.wantAtMost, tc.w, tc.h)
+			}
+		})
 	}
 }
 

@@ -150,8 +150,13 @@ func TestApplyViewportStyles_PopulatesPaletteFields(t *testing.T) {
 	vp := viewport.New(viewport.WithWidth(40), viewport.WithHeight(10))
 	applyViewportStyles(&vp)
 
-	if got, want := vp.Style.GetForeground(), lipgloss.Color("245"); got != want {
-		t.Errorf("Style foreground: got %v, want %v", got, want)
+	// vp.Style intentionally has no foreground — see applyViewportStyles
+	// docstring. bubbles/viewport wraps every visible line with Style.Render,
+	// so any foreground here would bleed onto unstyled inspect-content
+	// segments (definition value bodies use lipgloss.NoColor to inherit the
+	// terminal default).
+	if got := vp.Style.GetForeground(); got != (lipgloss.NoColor{}) {
+		t.Errorf("Style foreground: got %v, want NoColor", got)
 	}
 	if got, want := vp.HighlightStyle.GetForeground(), lipgloss.Color("167"); got != want {
 		t.Errorf("HighlightStyle foreground: got %v, want %v", got, want)

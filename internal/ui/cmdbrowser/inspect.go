@@ -13,16 +13,15 @@ type inspectState struct {
 	inspectIdx int // index into Model.items
 }
 
-// newInspectState builds a viewport sized to fit inside the right panel.
-// Width is clamped to min(rightPanelWidth-4, 80) per the spec; height is the
-// right-panel body height. The render closure is called with the final
-// content width so the builder word-wraps to the actual viewport — passing a
-// pre-rendered string wrapped to the terminal would clip on the right edge.
-// A nil render (or one that returns "") falls back to a placeholder.
+// newInspectState builds a viewport at the given (width, height). The render
+// closure is called with the final content width so the builder word-wraps to
+// the actual viewport — passing a pre-rendered string wrapped to the terminal
+// would clip on the right edge. A nil render (or one that returns "") falls
+// back to a placeholder. The caller is responsible for sizing — see
+// Model.inspectViewportSize.
 func newInspectState(width, height int, render func(width int) string, idx int) *inspectState {
-	w := min(width-4, 80)
-	w = max(w, 20)
-	h := max(height, 5)
+	w := max(width, 10)
+	h := max(height, 3)
 	vp := viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
 	applyViewportStyles(&vp)
 	content := ""

@@ -11,9 +11,9 @@ func TestUICommandsDefaultDepth(t *testing.T) {
 		cfg  *DevboxConfig
 		want int
 	}{
-		{"nil cfg", nil, 3},
-		{"missing block", &DevboxConfig{}, 3},
-		{"nil field defaults to 3", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: nil}}}, 3},
+		{"nil cfg", nil, 1},
+		{"missing block", &DevboxConfig{}, 1},
+		{"nil field defaults to 1", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: nil}}}, 1},
 		{"explicit zero all-collapsed", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: intPtr(0)}}}, 0},
 		{"explicit positive", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: intPtr(5)}}}, 5},
 		{"negative clamps to 0", &DevboxConfig{UI: UIConfig{Commands: UICommandsConfig{DefaultExpandedDepth: intPtr(-2)}}}, 0},

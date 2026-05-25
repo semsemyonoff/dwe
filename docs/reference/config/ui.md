@@ -9,7 +9,7 @@ The block is loaded with the same lenient loader as the rest of `devbox.yml`: an
 ```yaml
 ui:
   commands:
-    default_expanded_depth: 3        # int, default 3
+    default_expanded_depth: 1        # int, default 1
     auto_collapse_empty: true        # bool, default true
     show_type_badges: true           # bool, default true
 ```
@@ -18,7 +18,7 @@ ui:
 
 Controls how many tree levels are expanded by default when the command browser opens. Negative values are clamped to `0` by the accessor and rejected as an error by the validator.
 
-Like `auto_collapse_empty` and `show_type_badges`, this field uses a `*int` pointer so the loader can distinguish an absent key (nil → use the spec default of `3`) from an explicit value. Setting `default_expanded_depth: 0` means all-collapsed (no groups open on entry); omitting the key restores the default of `3`. Use `1` to expand only the top-level groups; any positive integer expands to that depth.
+Like `auto_collapse_empty` and `show_type_badges`, this field uses a `*int` pointer so the loader can distinguish an absent key (nil → use the spec default of `1`) from an explicit value. Setting `default_expanded_depth: 0` means all-collapsed (no groups open on entry); omitting the key restores the default of `1` (only the top-level groups are expanded). Any positive integer expands to that depth.
 
 ### `ui.commands.auto_collapse_empty`
 
@@ -33,7 +33,7 @@ When `true` (default), the right-hand command list shows a colour-coded type bad
 All three fields (`default_expanded_depth`, `auto_collapse_empty`, `show_type_badges`) use pointer types (`*int` / `*bool`) so the loader can distinguish an absent key (nil → use the spec default) from an explicit value. Plain `int`/`bool` would conflate these two states because an absent key and an explicit `0`/`false` both deserialize to the zero value.
 
 Practical implications:
-- Setting `default_expanded_depth: 0` collapses all groups on entry; omitting the key gives the default of `3`.
+- Setting `default_expanded_depth: 0` collapses all groups on entry; omitting the key gives the default of `1`.
 - Setting `auto_collapse_empty: false` or `show_type_badges: false` is a deliberate opt-out; omitting either key restores its default of `true`.
 
 ## Example

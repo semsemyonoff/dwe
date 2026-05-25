@@ -121,11 +121,18 @@ func applyHelpStyles(s *help.Styles) {
 }
 
 // applyViewportStyles overwrites the palette-driven fields on a bubbles/v2
-// viewport.Model. The inspect overlay does not currently use SetHighlights, but
-// HighlightStyle is wired so a future "find in inspect" feature picks up the
-// palette without further changes.
+// viewport.Model. Foreground is intentionally left unset on vp.Style:
+// bubbles/viewport applies Style.Render around the entire visible content
+// (see viewport.View()), so any baseline foreground here bleeds onto every
+// unstyled segment — including the value bodies of inspect definitions,
+// which use `styleText` (NoColor → terminal default) so they read in the
+// natural foreground. Setting Muted here previously made value bodies and
+// word-wrap continuations look dimmer than their labels. The inspect overlay
+// does not currently use SetHighlights, but HighlightStyle is wired so a
+// future "find in inspect" feature picks up the palette without further
+// changes.
 func applyViewportStyles(vp *viewport.Model) {
-	vp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorMuted()))
+	vp.Style = lipgloss.NewStyle()
 	vp.HighlightStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color(ui.ColorAccent())).
 		Reverse(true)

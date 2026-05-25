@@ -175,16 +175,12 @@ func (m *Model) openInspect() {
 	if idx < 0 {
 		return
 	}
-	// Pass the inspect viewport the **inner content width** (frame - 2 borders),
-	// matching the right panel's content area — newInspectState shrinks it
-	// further to fit the inspect header / padding and then calls the builder
-	// with the final content width so word-wrap matches the viewport.
-	rw := rightWidth(m.width) - 2
-	if singlePanel(m.width) {
-		rw = singlePanelWidth(m.width) - 2
-	}
-	bh := max(m.height-3, 5)
-	m.inspect = newInspectState(rw, bh-2, m.items[idx].Inspect, idx)
+	// inspectViewportSize returns the full right-panel content area minus the
+	// header row. The Inspect closure is then called with that width so
+	// word-wrap matches what the user sees — pre-wrapping at the terminal
+	// width would clip the right edge.
+	w, h := m.inspectViewportSize()
+	m.inspect = newInspectState(w, h, m.items[idx].Inspect, idx)
 	m.priorFocus = m.focus
 	m.focus = focusInspect
 }
