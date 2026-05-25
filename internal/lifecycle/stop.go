@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
@@ -80,6 +82,16 @@ func RunStop(ctx StopContext) error {
 
 	if err := RunPhases(cfg, reg, workDir, stopCfg.Phases, "stop", "stop", ctx.Yes, stopCfg.LogEnabled()); err != nil {
 		return err
+	}
+
+	// Stopping the full stack moots any pending restart: the next `devbox run`
+	// brings everything up in its current local.yml shape, so the restart
+	// reminder is no longer actionable. Pending deploy ops are NOT cleared —
+	// deploy tracks artifact state and survives a stop/run cycle (the run gate
+	// would catch any undeployed tracked service anyway).
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
+	if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
+		slog.Warn("clearing pending restart state after stop", "err", clearErr)
 	}
 
 	render.Stdout().Success(stopCfg.FinalMessage)

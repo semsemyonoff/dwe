@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy/journal"
 )
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {
@@ -53,6 +54,41 @@ func TestRunStop_HappyPath(t *testing.T) {
 	ctx := StopContext{ConfigPath: cfgPath}
 	if err := RunStop(ctx); err != nil {
 		t.Errorf("unexpected error on happy path: %v", err)
+	}
+}
+
+func TestRunStop_ClearsPendingRestart_KeepsPendingDeploy(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+
+	statePath := filepath.Join(dir, journal.DefaultRelPath)
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	// Seed both kinds of pending so we can verify the kind-scoped clear.
+	if err := journal.AddPendingOps(statePath, []journal.PendingOp{
+		{Kind: journal.PendingRestart},
+		{Kind: journal.PendingDeploy, Services: []string{"web"}},
+	}, "stub"); err != nil {
+		t.Fatalf("seed pending: %v", err)
+	}
+
+	if err := RunStop(StopContext{ConfigPath: cfgPath}); err != nil {
+		t.Fatalf("RunStop: %v", err)
+	}
+
+	state, err := journal.Load(statePath)
+	if err != nil {
+		t.Fatalf("loading state after stop: %v", err)
+	}
+	if state.Pending == nil {
+		t.Fatal("pending must not be wiped; deploy op should survive stop")
+	}
+	if state.Pending.Find(journal.PendingRestart) != nil {
+		t.Errorf("pending restart must be cleared after full-stack stop, got %+v", state.Pending)
+	}
+	if state.Pending.Find(journal.PendingDeploy) == nil {
+		t.Errorf("pending deploy must survive stop (artifact state outlasts runtime), got %+v", state.Pending)
 	}
 }
 
