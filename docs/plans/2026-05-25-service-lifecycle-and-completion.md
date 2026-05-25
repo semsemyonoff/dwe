@@ -400,9 +400,9 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 11: Toggle plan builder + renderer
 
-- [ ] new file `internal/command/service_plan.go`: `buildTogglePlan(cfg *config.DevboxConfig, registry *registry.Registry, svcDeploys map[string]*config.DeployConfig, toggles []ToggleAction) (TogglePlan, error)` — returns an error so runtime guards have a clear exit path
-- [ ] **`svcDeploys` parameter** is what the runtime guard below (`ErrDeployRequiredNoDeployFile`) needs to check `deploy.yml` presence. `DevboxConfig` itself doesn't store the per-service deploy configs (see `internal/config/devbox.go:90`); the caller (Task 13 / Task 14) loads them once via `config.LoadServiceDeployConfigs(baseDir, cfg.Services)` and passes the map. This keeps `buildTogglePlan` pure (no filesystem access) and makes the dep explicit. `baseDir` is derivable from `cfg.Raw["__configPath"]` if needed elsewhere, but for the plan builder, the loaded map is sufficient
-- [ ] `ToggleDirection` string enum with explicit zero-value sentinel:
+- [x] new file `internal/command/service_plan.go`: `buildTogglePlan(cfg *config.DevboxConfig, registry *registry.Registry, svcDeploys map[string]*config.DeployConfig, toggles []ToggleAction) (TogglePlan, error)` — returns an error so runtime guards have a clear exit path
+- [x] **`svcDeploys` parameter** is what the runtime guard below (`ErrDeployRequiredNoDeployFile`) needs to check `deploy.yml` presence. `DevboxConfig` itself doesn't store the per-service deploy configs (see `internal/config/devbox.go:90`); the caller (Task 13 / Task 14) loads them once via `config.LoadServiceDeployConfigs(baseDir, cfg.Services)` and passes the map. This keeps `buildTogglePlan` pure (no filesystem access) and makes the dep explicit. `baseDir` is derivable from `cfg.Raw["__configPath"]` if needed elsewhere, but for the plan builder, the loaded map is sufficient
+- [x] `ToggleDirection` string enum with explicit zero-value sentinel:
   ```go
   const (
       DirectionUnspecified ToggleDirection = ""   // zero value; rejected by buildTogglePlan
@@ -411,8 +411,8 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   )
   ```
   `buildTogglePlan` returns an error (or panics in test build) when any `ToggleAction.Direction == DirectionUnspecified`
-- [ ] `ToggleAction{Service string, Direction ToggleDirection}`
-- [ ] `TogglePlan{BeforeSteps []PlanStep, ApplySteps []ApplyStep, AfterSteps []PlanStep, Notes []string}` — **`ApplySteps` is an ordered slice** (changed from single `*ApplyStep`) so mixed batches can express "deploy these, then restart the stack" as two operations:
+- [x] `ToggleAction{Service string, Direction ToggleDirection}`
+- [x] `TogglePlan{BeforeSteps []PlanStep, ApplySteps []ApplyStep, AfterSteps []PlanStep, Notes []string}` — **`ApplySteps` is an ordered slice** (changed from single `*ApplyStep`) so mixed batches can express "deploy these, then restart the stack" as two operations:
   ```go
   type ApplyStep struct {
       Kind     PendingKind  // PendingRestart or PendingDeploy
@@ -420,13 +420,13 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   }
   ```
   Empty `ApplySteps` (length 0) means no apply work; the apply phase is skipped
-- [ ] **coverage rule** (eleventh review — unified semantics: every deploy contributor has `deploy.yml`, enforced by Task 10 validator + Task 11 runtime guard `ErrDeployRequiredNoDeployFile`. With that invariant, per-service deploy works in every batch shape):
+- [x] **coverage rule** (eleventh review — unified semantics: every deploy contributor has `deploy.yml`, enforced by Task 10 validator + Task 11 runtime guard `ErrDeployRequiredNoDeployFile`. With that invariant, per-service deploy works in every batch shape):
   - **All-restart batch** → `ApplySteps = [{Kind: PendingRestart, Services: nil}]`. Restart is stack-wide; service list is empty
   - **All-deploy batch** → `ApplySteps = [{Kind: PendingDeploy, Services: sorted deploy-contributors}]`. `runDeployHelper(opts.Services = step.Services)` covers exactly the deploy contributors
   - **Mixed `restart + deploy` batch** → **two ops, in order**: `ApplySteps = [{Kind: PendingDeploy, Services: sorted deploy-contributors}, {Kind: PendingRestart, Services: nil}]`. The deploy step is per-service (NOT full-project) — targets exactly the deploy contributors. The restart step covers restart-only contributors (which may legitimately lack `deploy.yml`). Since the validator/runtime guard guarantees every deploy contributor has `deploy.yml`, the per-service deploy never fails on a missing file
   - **Key invariant from the unification**: a toggle-plan deploy step ALWAYS has `Services != nil`. The toggle layer never emits a "full project deploy" — that's reserved for the standalone `devbox deploy run` (no `--service`) command path. This makes the executor's per-contributor pending clear correct without special cases (Fix for the eleventh review's second finding: no "full deploy applies pre-existing pending but per-contributor clear misses it" mismatch, because the deploy step only applies the contributors)
-- [ ] **pending writes for mixed batches**: build a 2-element ops slice `[{PendingDeploy, [deploy-contributors]}, {PendingRestart}]` and write via ONE atomic `journal.AddPendingOps(statePath, ops, configHash)` call (Task 8 + twenty-first/twenty-second review — never split into two `AddPendingOp` calls, which can leave half-applied pending on partial I/O failure). Banner renders both lines: "deploy required for: ..." AND "restart required". Pending is cleared per-contributor by the executor (see Task 12)
-- [ ] **renderTogglePlan output** (twelfth review — every line must be either a runnable command or an unambiguous internal-step label, never invented CLI syntax). The CLI `devbox deploy run --service <name>` accepts only a single name (Task 12 keeps the surface unchanged for `devbox deploy run`); a multi-target deploy is an internal apply step, not a shell command. Render rules:
+- [x] **pending writes for mixed batches**: build a 2-element ops slice `[{PendingDeploy, [deploy-contributors]}, {PendingRestart}]` and write via ONE atomic `journal.AddPendingOps(statePath, ops, configHash)` call (Task 8 + twenty-first/twenty-second review — never split into two `AddPendingOp` calls, which can leave half-applied pending on partial I/O failure). Banner renders both lines: "deploy required for: ..." AND "restart required". Pending is cleared per-contributor by the executor (see Task 12)
+- [x] **renderTogglePlan output** (twelfth review — every line must be either a runnable command or an unambiguous internal-step label, never invented CLI syntax). The CLI `devbox deploy run --service <name>` accepts only a single name (Task 12 keeps the surface unchanged for `devbox deploy run`); a multi-target deploy is an internal apply step, not a shell command. Render rules:
   - lines that ARE runnable commands → printed as their exact shell form:
     ```
     1. devbox commands foo:prepare
@@ -447,20 +447,20 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
       4. devbox commands foo:smoke
     ```
   Both forms are clearly distinguishable so a user copy-pasting `devbox …` lines never invokes invalid syntax, and the executor narrates each `→ apply step` as it runs
-- [ ] **render-or-execute symmetry, with explicit ordering note**: `--print-plan` shows the exact same sequence of apply steps the executor will run, including the `→ apply step` lines for internal ops. Within a single multi-target deploy step, the rendered service set is alphabetical (stable display) while execution is topo-ordered via `deploy.TopoSortByAfter` (Task 4) — the parenthetical "(dependency-ordered at execution)" calls this out so users debugging a `b before a` dependency don't suspect a bug
-- [ ] **runtime validation of `requires` values** (closes the gap the fourth review flagged: `devbox validate` is not always run before `services enable/disable`). For every toggled service, when reading `OnEnable.Requires` / `OnDisable.Requires`:
+- [x] **render-or-execute symmetry, with explicit ordering note**: `--print-plan` shows the exact same sequence of apply steps the executor will run, including the `→ apply step` lines for internal ops. Within a single multi-target deploy step, the rendered service set is alphabetical (stable display) while execution is topo-ordered via `deploy.TopoSortByAfter` (Task 4) — the parenthetical "(dependency-ordered at execution)" calls this out so users debugging a `b before a` dependency don't suspect a bug
+- [x] **runtime validation of `requires` values** (closes the gap the fourth review flagged: `devbox validate` is not always run before `services enable/disable`). For every toggled service, when reading `OnEnable.Requires` / `OnDisable.Requires`:
   - if `!requires.IsKnown()` (the helper from Task 9) → return sentinel `ErrUnknownToggleRequires` wrapped with the offending value and service name: `fmt.Errorf("%w: service %q has requires=%q", ErrUnknownToggleRequires, svc, val)`. Callers (Task 13, Task 14, Task 16) propagate; cobra root reports
   - if `Direction == DirectionDisable` and `requires == RequiresDeploy` → return `ErrDisableDeployForbidden` similarly. (`on_disable.requires: deploy` is forbidden — validator catches it statically, runtime catches always)
   - if `requires == RequiresDeploy` and `svcDeploys[serviceName] == nil` (the deploy-configs map passed as the new third parameter to `buildTogglePlan`) → return sentinel `ErrDeployRequiredNoDeployFile` wrapped with the service name. This is the eleventh review's unified-semantics enforcement; the thirteenth review's first finding spelled out the missing parameter
   - this duplicates the validator's checks deliberately: validate catches early, runtime catches always. The repo policy "invalid config shape must be rejected, not interpreted" demands the runtime catch
-- [ ] **dedup / collapse rules across multiple toggled services** (matches the coverage rule above):
+- [x] **dedup / collapse rules across multiple toggled services** (matches the coverage rule above):
   - all `RequiresNone` → `ApplySteps = nil` (empty)
   - all `RequiresRestart` → `ApplySteps = [{Restart}]` (single step)
   - all `RequiresDeploy` → `ApplySteps = [{Deploy, sorted_contributors}]` (single step, services merged + deduped)
   - **mixed `restart + deploy` → `ApplySteps = [{Deploy, sorted_deploy_contributors}, {Restart}]` (two steps, per-service deploy first then stack-wide restart per the unified coverage rule)** — superseding the previous "one deploy" rule (eighth review bug) AND the intermediate "full-deploy nil services" rule (eleventh review bug). Deploy step always carries its target list
-- [ ] before/after ordering: stable sort by service name; all before-hooks precede the apply phase; all after-hooks follow it. Apply steps within the phase are ordered by the rules above (deploy before restart in mixed)
-- [ ] `renderTogglePlan(w io.Writer, plan TogglePlan)` — produces the numbered plan + Notes section; section omitted when empty
-- [ ] write tests:
+- [x] before/after ordering: stable sort by service name; all before-hooks precede the apply phase; all after-hooks follow it. Apply steps within the phase are ordered by the rules above (deploy before restart in mixed)
+- [x] `renderTogglePlan(w io.Writer, plan TogglePlan)` — produces the numbered plan + Notes section; section omitted when empty
+- [x] write tests:
   - single enable with restart-only hook → `ApplySteps = [{Restart}]`
   - single enable with deploy hook → `ApplySteps = [{Deploy, [svc]}]`
   - **two enables (one restart + one deploy, deploy contributor has deploy.yml) → `ApplySteps = [{Deploy, [deploy-contrib]}, {Restart}]`** (per-service deploy, NOT nil services — replaces the stale "Deploy nil" assertion from the eighth/ninth review passes)
@@ -469,7 +469,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - before/after ordering is deterministic
   - notes printed only when present
   - **runtime guards (regression for the fourth review)**: `requires: rstart` → `errors.Is(err, ErrUnknownToggleRequires)` without any prior `devbox validate` call; `on_disable.requires: deploy` → `errors.Is(err, ErrDisableDeployForbidden)`
-- [ ] run `go test ./internal/command/...` - must pass before next task
+- [x] run `go test ./internal/command/...` - must pass before next task
 
 ### Task 12: Toggle plan executor
 
