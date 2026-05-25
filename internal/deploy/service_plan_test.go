@@ -1,6 +1,7 @@
 package deploy_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -169,5 +170,146 @@ func TestFindStep_threePartAddress(t *testing.T) {
 	}
 	if step.Type != "command" || step.Cmd != "services.main.migrate" {
 		t.Errorf("step type/cmd = %q/%q, want command/services.main.migrate", step.Type, step.Cmd)
+	}
+}
+
+// helpers for ResolveServicesPlanSubset tests
+
+func makeSubsetCfg(services map[string]config.ServiceConfig) *config.DevboxConfig {
+	return &config.DevboxConfig{
+		Services: services,
+		Raw:      map[string]any{"__configPath": "/tmp/devbox.yml"},
+	}
+}
+
+func shellDeploy(phases ...config.DeployPhase) *config.DeployConfig {
+	return &config.DeployConfig{Phases: phases}
+}
+
+func shellDeployAfter(after []string, phases ...config.DeployPhase) *config.DeployConfig {
+	return &config.DeployConfig{After: after, Phases: phases}
+}
+
+func svcEntry(name string) config.ServiceConfig {
+	return config.ServiceConfig{Type: config.ServiceTypeApp, Container: name, Enabled: true}
+}
+
+func deployPhase(svcName, phaseName string) config.DeployPhase {
+	return config.DeployPhase{
+		Name: phaseName,
+		Steps: []config.DeployStep{
+			{Name: "step", Type: "shell", Cmd: "echo " + svcName},
+		},
+	}
+}
+
+// TestResolveServicesPlanSubset_OneEnvStep verifies exactly one ImplicitEnvStep is
+// prepended when resolving multiple services.
+func TestResolveServicesPlanSubset_OneEnvStep(t *testing.T) {
+	cfg := makeSubsetCfg(map[string]config.ServiceConfig{
+		"a": svcEntry("a"),
+		"b": svcEntry("b"),
+	})
+	deploys := map[string]*config.DeployConfig{
+		"a": shellDeploy(deployPhase("a", "setup")),
+		"b": shellDeploy(deployPhase("b", "setup")),
+	}
+	steps, err := deploy.ResolveServicesPlanSubset(cfg, usercommands.NewEmptyRegistry(), deploys, []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Expect: 1 env step + 1 step for a + 1 step for b = 3 total
+	if len(steps) != 3 {
+		t.Fatalf("want 3 steps, got %d", len(steps))
+	}
+	if steps[0].Phase.Name != "env" {
+		t.Errorf("steps[0] should be env phase, got %q", steps[0].Phase.Name)
+	}
+	// Verify only one env step
+	envCount := 0
+	for _, s := range steps {
+		if s.Phase.Name == "env" {
+			envCount++
+		}
+	}
+	if envCount != 1 {
+		t.Errorf("want exactly 1 env step, got %d", envCount)
+	}
+}
+
+// TestResolveServicesPlanSubset_AfterOrdering verifies that after: ordering is
+// respected within the subset.
+func TestResolveServicesPlanSubset_AfterOrdering(t *testing.T) {
+	cfg := makeSubsetCfg(map[string]config.ServiceConfig{
+		"a": svcEntry("a"),
+		"b": svcEntry("b"),
+	})
+	// b after [a] → a must come first
+	deploys := map[string]*config.DeployConfig{
+		"a": shellDeploy(deployPhase("a", "setup")),
+		"b": shellDeployAfter([]string{"a"}, deployPhase("b", "setup")),
+	}
+	// Pass names in reverse order to verify topo sort overrides input order.
+	steps, err := deploy.ResolveServicesPlanSubset(cfg, usercommands.NewEmptyRegistry(), deploys, []string{"b", "a"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Expect env + a/setup/step + b/setup/step = 3
+	if len(steps) != 3 {
+		t.Fatalf("want 3 steps, got %d: %v", len(steps), steps)
+	}
+	if steps[1].Service != "a" {
+		t.Errorf("steps[1].Service = %q, want a (a must precede b)", steps[1].Service)
+	}
+	if steps[2].Service != "b" {
+		t.Errorf("steps[2].Service = %q, want b", steps[2].Service)
+	}
+}
+
+// TestResolveServicesPlanSubset_IgnoresAfterOutsideSubset verifies that after:
+// references to services not in the subset are silently dropped (no cascade).
+func TestResolveServicesPlanSubset_IgnoresAfterOutsideSubset(t *testing.T) {
+	cfg := makeSubsetCfg(map[string]config.ServiceConfig{
+		"a":    svcEntry("a"),
+		"b":    svcEntry("b"),
+		"deps": svcEntry("deps"), // exists in services but not in the subset
+	})
+	deploys := map[string]*config.DeployConfig{
+		"a":    shellDeployAfter([]string{"deps"}, deployPhase("a", "setup")), // deps outside subset
+		"b":    shellDeploy(deployPhase("b", "setup")),
+		"deps": shellDeploy(deployPhase("deps", "setup")), // in deploys map but not requested
+	}
+	// Only request a and b — deps should not be auto-included
+	steps, err := deploy.ResolveServicesPlanSubset(cfg, usercommands.NewEmptyRegistry(), deploys, []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Env + a + b = 3 (deps not included)
+	if len(steps) != 3 {
+		t.Fatalf("want 3 steps (deps excluded), got %d", len(steps))
+	}
+	for _, s := range steps {
+		if s.Service == "deps" {
+			t.Errorf("deps service should not appear in subset result")
+		}
+	}
+}
+
+// TestResolveServicesPlanSubset_MissingDeployFile verifies ErrServiceNoDeployFile.
+func TestResolveServicesPlanSubset_MissingDeployFile(t *testing.T) {
+	cfg := makeSubsetCfg(map[string]config.ServiceConfig{
+		"a": svcEntry("a"),
+		"b": svcEntry("b"),
+	})
+	deploys := map[string]*config.DeployConfig{
+		"a": shellDeploy(deployPhase("a", "setup")),
+		// b intentionally missing
+	}
+	_, err := deploy.ResolveServicesPlanSubset(cfg, usercommands.NewEmptyRegistry(), deploys, []string{"a", "b"})
+	if err == nil {
+		t.Fatal("expected error for missing deploy.yml, got nil")
+	}
+	if !errors.Is(err, deploy.ErrServiceNoDeployFile) {
+		t.Errorf("want ErrServiceNoDeployFile, got: %v", err)
 	}
 }

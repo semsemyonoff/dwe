@@ -1,12 +1,16 @@
 package command
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"devbox-cli/internal/condition"
@@ -175,7 +179,30 @@ type deployCancelledError struct{}
 func (e *deployCancelledError) Error() string { return "deploy cancelled" }
 func (e *deployCancelledError) ExitCode() int { return 0 }
 
-func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool) (err error) {
+// DeployOpts holds the options for runDeployHelper.
+type DeployOpts struct {
+	Services       []string // nil/empty = full project; one = single service; many = batch
+	Force          bool
+	Resume         bool
+	NonInteractive bool
+	SkipPreflight  bool
+}
+
+func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool) error {
+	var services []string
+	if serviceName != "" {
+		services = []string{serviceName}
+	}
+	return runDeployHelper(cmd.Context(), cmd, flags, DeployOpts{
+		Services:       services,
+		Force:          force,
+		Resume:         resume,
+		NonInteractive: nonInteractive,
+		SkipPreflight:  skipPreflight,
+	})
+}
+
+func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opts DeployOpts) (err error) {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
@@ -224,7 +251,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		reg = nil
 	}
 
-	if err := preflightRun(cmd.Context(), cfg, reg, workDir, "deploy", skipPreflight, cmd.ErrOrStderr()); err != nil {
+	if err := preflightRun(ctx, cfg, reg, workDir, "deploy", opts.SkipPreflight, cmd.ErrOrStderr()); err != nil {
 		return err
 	}
 	if regErr != nil {
@@ -255,14 +282,70 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		return fmt.Errorf("ensuring volumes: %w", err)
 	}
 
-	var steps []pipeline.ResolvedStep
-	if serviceName != "" {
-		if _, ok := cfg.Services[serviceName]; !ok {
-			return fmt.Errorf("service %q not found in config", serviceName)
+	baseDir := filepath.Dir(flags.configPath)
+
+	// Load project-level deploy config (absent is valid — some projects only have per-service deploy files)
+	projectDeploy, err := config.LoadProjectDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("loading project deploy config: %w", err)
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		projectDeploy = nil
+	}
+
+	// Load tracked services and their deploy configs
+	trackedServices, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, baseDir)
+	if err != nil {
+		return fmt.Errorf("loading tracked services: %w", err)
+	}
+
+	// For subset deploys: also load deploy configs for requested services not in svcDeploys
+	if len(opts.Services) > 0 {
+		toLoad := make(map[string]config.ServiceConfig)
+		for _, name := range opts.Services {
+			svcCfg, ok := cfg.Services[name]
+			if !ok {
+				return fmt.Errorf("service %q not found in config", name)
+			}
+			if _, already := svcDeploys[name]; !already {
+				toLoad[name] = svcCfg
+			}
 		}
-		steps, err = deploy.ResolveServicePlan(cfg, reg, serviceName)
-	} else {
+		if len(toLoad) > 0 {
+			extra, err := config.LoadServiceDeployConfigs(baseDir, toLoad)
+			if err != nil {
+				return fmt.Errorf("loading deploy configs for requested services: %w", err)
+			}
+			maps.Copy(svcDeploys, extra)
+		}
+	}
+
+	// Precompute current hashes for all tracked services
+	serviceHashes := make(map[string]string)
+	for _, name := range trackedServices {
+		svcCfg := cfg.Services[name]
+		serviceHashes[name] = journal.ServiceConfigHash(svcCfg, svcDeploys[name])
+	}
+	// Also hash requested services not in the tracked set
+	for _, name := range opts.Services {
+		if _, ok := serviceHashes[name]; !ok {
+			serviceHashes[name] = journal.ServiceConfigHash(cfg.Services[name], svcDeploys[name])
+		}
+	}
+
+	// Resolve the deploy plan
+	var steps []pipeline.ResolvedStep
+	switch {
+	case len(opts.Services) == 0:
 		steps, err = deploy.ResolvePlan(cfg, reg)
+	case len(opts.Services) == 1:
+		steps, err = deploy.ResolveServicePlan(cfg, reg, opts.Services[0])
+	default:
+		subsetDeploys := make(map[string]*config.DeployConfig, len(opts.Services))
+		for _, name := range opts.Services {
+			subsetDeploys[name] = svcDeploys[name]
+		}
+		steps, err = deploy.ResolveServicesPlanSubset(cfg, reg, subsetDeploys, opts.Services)
 	}
 	if err != nil {
 		return fmt.Errorf("resolving deploy plan: %w", err)
@@ -292,84 +375,86 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		return fmt.Errorf("loading state: %w", err)
 	}
 
-	baseDir := filepath.Dir(flags.configPath)
-
-	// Load project-level deploy config (absent is valid — some projects only have per-service deploy files)
-	projectDeploy, err := config.LoadProjectDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("loading project deploy config: %w", err)
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		projectDeploy = nil
-	}
-
-	// Load tracked services and their deploy configs
-	trackedServices, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, baseDir)
-	if err != nil {
-		return fmt.Errorf("loading tracked services: %w", err)
-	}
-
-	// Precompute current hashes for all tracked services
-	serviceHashes := make(map[string]string)
-	for _, name := range trackedServices {
-		svcCfg := cfg.Services[name]
-		serviceHashes[name] = journal.ServiceConfigHash(svcCfg, svcDeploys[name])
-	}
-
-	// For a --service run, also hash the explicitly requested service even if it
-	// is not in the tracked set (e.g. it has a per-service deploy file but the
-	// top-level deploy.yml has no deploy_services: true phase). Without this,
-	// serviceHashes[serviceName] stays "" and the skip decider compares "" to the
-	// stored "" on every re-run, so service config changes never invalidate the
-	// journal and stale steps get skipped indefinitely.
-	if serviceName != "" {
-		if _, alreadyHashed := serviceHashes[serviceName]; !alreadyHashed {
-			extraDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
-				serviceName: cfg.Services[serviceName],
-			})
-			if err != nil {
-				return fmt.Errorf("loading deploy config for service %q: %w", serviceName, err)
-			}
-			serviceHashes[serviceName] = journal.ServiceConfigHash(cfg.Services[serviceName], extraDeploys[serviceName])
-		}
-	}
-
 	projectHash := journal.ProjectConfigHash(cfg, projectDeploy, svcDeploys, trackedServices)
 
 	// Check if we need to prompt before running
-	isInteractive := ui.IsInteractiveFn(os.Stdin) && !nonInteractive
+	isInteractive := ui.IsInteractiveFn(os.Stdin) && !opts.NonInteractive
 
 	// Set to true when the config-change dialog fires so the prevIncomplete gate
 	// doesn't show a second prompt for the same run.
 	configChangeHandled := false
 
-	// Compute scope-relevant state. For --service NAME, the gates below apply
-	// to that service only; otherwise they apply to the whole project.
-	// When --service targets a never-deployed service, all scope* vars stay
-	// zero so no gate fires and the deploy proceeds silently.
+	// Compute scope-relevant state. For single-service runs, the gates below apply
+	// to that service only; for multi-service, aggregated; otherwise whole project.
+	// When targeting a never-deployed service, all scope* vars stay zero so no gate
+	// fires and the deploy proceeds silently.
 	var (
 		scopeStatus        journal.Status
-		scopeConfigHash    string
-		scopeExpectedHash  string
+		scopeAllHashMatch  bool
 		scopeLastRunStatus journal.Status
 	)
-	if serviceName == "" {
+	switch {
+	case len(opts.Services) == 0:
 		scopeStatus = state.Project.Status
-		scopeConfigHash = state.Project.ConfigHash
-		scopeExpectedHash = projectHash
+		scopeAllHashMatch = state.Project.ConfigHash == projectHash
 		if state.Project.LastRun != nil {
 			scopeLastRunStatus = state.Project.LastRun.Status
 		}
-	} else if svc, ok := state.Services[serviceName]; ok {
-		scopeStatus = svc.Status
-		scopeConfigHash = svc.ConfigHash
-		scopeExpectedHash = serviceHashes[serviceName]
-		if svc.LastRun != nil {
-			scopeLastRunStatus = svc.LastRun.Status
+	case len(opts.Services) == 1:
+		name := opts.Services[0]
+		if svc, ok := state.Services[name]; ok {
+			scopeStatus = svc.Status
+			scopeAllHashMatch = svc.ConfigHash == serviceHashes[name]
+			if svc.LastRun != nil {
+				scopeLastRunStatus = svc.LastRun.Status
+			}
 		}
+	default:
+		// Multi-service: aggregate across all targeted services.
+		allDeployed := true
+		allHashMatch := true
+		for _, name := range opts.Services {
+			svc, ok := state.Services[name]
+			if !ok {
+				allDeployed = false
+				allHashMatch = false
+				continue
+			}
+			switch svc.Status {
+			case journal.StatusFailed:
+				scopeStatus = journal.StatusFailed
+			case journal.StatusPartial:
+				if scopeStatus != journal.StatusFailed {
+					scopeStatus = journal.StatusPartial
+				}
+			case journal.StatusDeployed:
+				if scopeStatus == "" {
+					scopeStatus = journal.StatusDeployed
+				}
+			default:
+				allDeployed = false
+			}
+			if svc.ConfigHash != serviceHashes[name] {
+				allHashMatch = false
+			}
+			if svc.LastRun != nil {
+				switch svc.LastRun.Status {
+				case journal.StatusFailed:
+					scopeLastRunStatus = journal.StatusFailed
+				case journal.StatusInProgress:
+					if scopeLastRunStatus != journal.StatusFailed {
+						scopeLastRunStatus = journal.StatusInProgress
+					}
+				}
+			}
+		}
+		if allDeployed {
+			scopeStatus = journal.StatusDeployed
+		}
+		scopeAllHashMatch = allHashMatch
 	}
 
-	if !force && scopeStatus == journal.StatusDeployed {
+	if !opts.Force && scopeStatus == journal.StatusDeployed {
 		// Check if all hashes match and there are no check: or files_gate: steps.
 		// Steps with files_gate must always re-evaluate the gate (journal-skip bypass),
 		// so an early return here would violate that policy.
@@ -401,10 +486,10 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		// and deployed with a matching hash. A prior --service run stamps
 		// project.status=deployed for only the services it ran, so without this
 		// check a subsequent full deploy would incorrectly skip services that
-		// were never deployed. The --service case implicitly checks the one
-		// targeted service via scopeConfigHash == scopeExpectedHash below.
+		// were never deployed. The --service/--services cases check only the
+		// targeted services via scopeAllHashMatch.
 		allTrackedDeployed := true
-		if serviceName == "" {
+		if len(opts.Services) == 0 {
 			for _, name := range trackedServices {
 				svc, ok := state.Services[name]
 				if !ok || svc.Status != journal.StatusDeployed || svc.ConfigHash != serviceHashes[name] {
@@ -415,7 +500,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		}
 
 		lastRunFailed := scopeLastRunStatus == journal.StatusFailed
-		if allTrackedDeployed && !hasCheckSteps && !hasFilesGateSteps && scopeConfigHash == scopeExpectedHash && !lastRunFailed {
+		if allTrackedDeployed && !hasCheckSteps && !hasFilesGateSteps && scopeAllHashMatch && !lastRunFailed {
 			// In-scope state matches and is clean — skip the pipeline.
 			isNoop = true
 			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
@@ -423,7 +508,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		}
 
 		// Config hash diverged but state is deployed
-		if scopeConfigHash != scopeExpectedHash {
+		if !scopeAllHashMatch {
 			if isInteractive {
 				// Prompt for action
 				w.Tip("Tip: 'when:' conditions are always re-evaluated. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
@@ -442,7 +527,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 					return &deployCancelledError{}
 				}
 				if choice == 1 {
-					force = true // Full re-deploy
+					opts.Force = true // Full re-deploy
 				}
 				// choice == 0: apply delta (default behavior, continue)
 				// Mark as handled so we don't show the prevIncomplete prompt too —
@@ -462,7 +547,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		scopeStatus == journal.StatusPartial ||
 		scopeLastRunStatus == journal.StatusInProgress ||
 		scopeLastRunStatus == journal.StatusFailed
-	if !force && prevIncomplete && !configChangeHandled {
+	if !opts.Force && prevIncomplete && !configChangeHandled {
 		if isInteractive {
 			w.Warning("Last deploy run failed or was incomplete.")
 			w.Tip("Tip: 'when:' conditions are always re-evaluated, so partially-installed services may stay skipped. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
@@ -481,18 +566,38 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 				return &deployCancelledError{}
 			}
 			if choice == 1 {
-				force = true // Re-run all steps (state ignored; when: still applies)
+				opts.Force = true // Re-run all steps (state ignored; when: still applies)
 			}
 			// choice == 0: resume (default)
-		} else if !resume {
+		} else if !opts.Resume {
 			// Non-interactive mode: error unless --resume or --force
 			return fmt.Errorf("last deploy failed or was incomplete; use --resume to continue, --force to re-run all steps (when: still applies), or run 'devbox reset run && devbox deploy run' for a fully clean install")
 		}
 	}
 
+	// Journal-check: warn if after: deps of requested services are not deployed.
+	if len(opts.Services) > 0 && !opts.Force {
+		if missing := collectMissingDeps(opts.Services, svcDeploys, state); len(missing) > 0 {
+			if isInteractive {
+				msg := fmt.Sprintf("declared after: deps not in this run; missing deploys: {%s} — proceed anyway? [y/N] ",
+					strings.Join(missing, ", "))
+				_, _ = fmt.Fprint(cmd.OutOrStdout(), msg)
+				reader := bufio.NewReader(cmd.InOrStdin())
+				line, _ := reader.ReadString('\n')
+				line = strings.TrimSpace(strings.ToLower(line))
+				if line != "y" && line != "yes" {
+					return &deployCancelledError{}
+				}
+			} else {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "info: services %v declare after: deps not in this run; missing deploys: %v\n",
+					opts.Services, missing)
+			}
+		}
+	}
+
 	// When forcing a full re-run, start with a clean state so the FileRecorder
 	// doesn't inherit stale entries from a previous run.
-	if force {
+	if opts.Force {
 		state = &journal.ProjectState{SchemaVersion: "1"}
 	}
 
@@ -502,7 +607,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 	// iterates all steps in the phase, so a renamed or removed step from the
 	// previous config (still present as StatusFailed) would cause the phase to
 	// report failed even when every current step succeeds.
-	if !force {
+	if !opts.Force {
 		if state.Project != nil && state.Project.ConfigHash != projectHash {
 			state.Project.Phases = make(map[string]*journal.PhaseState)
 		}
@@ -517,7 +622,7 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 
 	// Build the skip decider closure
 	skipDecider := func(addr string, rs pipeline.ResolvedStep, actionHash string) journal.Decision {
-		if force {
+		if opts.Force {
 			return journal.Run
 		}
 
@@ -559,12 +664,12 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 	}
 
 	// Construct the FileRecorder. Only stamp project hash for full deploys;
-	// a --service run includes the implicit env step (project-scoped) but must
-	// not advance the project hash since the actual project steps did not run.
-	recorder := pipeline.NewFileRecorder(statePath, state, serviceHashes, projectHash, serviceName == "")
+	// a --service/--services run includes the implicit env step (project-scoped)
+	// but must not advance the project hash since the actual project steps did not run.
+	recorder := pipeline.NewFileRecorder(statePath, state, serviceHashes, projectHash, len(opts.Services) == 0)
 
 	// Run the pipeline with state tracking
-	opts := pipeline.RunOptions{
+	runOpts := pipeline.RunOptions{
 		Steps:        steps,
 		Reporter:     rep,
 		Name:         "deploy",
@@ -573,13 +678,13 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		Registry:     reg,
 		WorkDir:      workDir,
 		LogWriter:    logWriter,
-		SkipConfirm:  nonInteractive,
+		SkipConfirm:  opts.NonInteractive,
 		PostStepHook: postStepHooks,
 		Recorder:     recorder,
 		SkipDecider:  recorder.WrapSkipDecider(skipDecider),
 	}
 
-	if pipeErr := pipeline.RunWithOptions(opts); pipeErr != nil {
+	if pipeErr := pipeline.RunWithOptions(runOpts); pipeErr != nil {
 		if errors.Is(pipeErr, ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}
@@ -605,6 +710,41 @@ func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, forc
 		w.Info("Deploy log saved to: " + logPath)
 	}
 	return nil
+}
+
+// collectMissingDeps returns sorted names of after: dependencies of the given
+// services that (a) are not being deployed in this run, (b) have a deploy.yml,
+// and (c) have not yet reached StatusDeployed in state.
+func collectMissingDeps(services []string, svcDeploys map[string]*config.DeployConfig, state *journal.ProjectState) []string {
+	inSet := make(map[string]bool, len(services))
+	for _, s := range services {
+		inSet[s] = true
+	}
+	seen := make(map[string]bool)
+	var missing []string
+	for _, name := range services {
+		dc := svcDeploys[name]
+		if dc == nil {
+			continue
+		}
+		for _, dep := range dc.After {
+			if inSet[dep] {
+				continue // being deployed in this run
+			}
+			if svcDeploys[dep] == nil {
+				continue // no deploy.yml, skip
+			}
+			if depState, ok := state.Services[dep]; ok && depState.Status == journal.StatusDeployed {
+				continue // already deployed
+			}
+			if !seen[dep] {
+				seen[dep] = true
+				missing = append(missing, dep)
+			}
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 func newDeployStepCmd(flags *rootFlags) *cobra.Command {

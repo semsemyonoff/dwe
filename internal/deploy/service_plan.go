@@ -55,7 +55,7 @@ func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, servic
 }
 
 // ResolveServicesPlan loads all per-service deploy pipelines, sorts them
-// by dependency order, and returns their steps inlined.
+// by deploy-ordering (after: field), and returns their steps inlined.
 // reg (registry) is used to validate files_gate directives.
 func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
@@ -79,19 +79,93 @@ func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pi
 		return nil, nil
 	}
 
-	var names []string
-	for name := range svcDeploys {
-		names = append(names, name)
-	}
-	sorted, err := config.TopoSortServices(names, cfg.Services)
+	// Use after:-based deploy ordering (not runtime depends_on: ordering).
+	sorted, err := TopoSortByAfter(svcDeploys, cfg.Services)
 	if err != nil {
 		return nil, err
 	}
 
 	var result []pipeline.ResolvedStep
 	for _, name := range sorted {
-		deploy := svcDeploys[name]
-		for _, phase := range deploy.Phases {
+		svcDeploy := svcDeploys[name]
+		for _, phase := range svcDeploy.Phases {
+			resolved, err := pipeline.ResolvePhaseSteps(cfg, reg, phase, name)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, resolved...)
+		}
+	}
+	return result, nil
+}
+
+// ResolveServicesPlanSubset resolves deploy steps for a named subset of services.
+// deploys must contain deploy configs for exactly the named services (keyed by name).
+// The result has exactly one ImplicitEnvStep at position 0, followed by
+// per-service phase steps in after:-dependency order within the subset.
+// References to services outside the subset are dropped from the sort graph
+// (no transitive closure — subset deploys are explicit-intent only).
+func ResolveServicesPlanSubset(
+	cfg *config.DevboxConfig,
+	reg *registry.Registry,
+	deploys map[string]*config.DeployConfig,
+	names []string,
+) ([]pipeline.ResolvedStep, error) {
+	// Validate all names have deploy.yml.
+	for _, name := range names {
+		if deploys[name] == nil {
+			return nil, fmt.Errorf("%w: %s", ErrServiceNoDeployFile, name)
+		}
+	}
+
+	// Build a filtered deploy map containing only the requested names,
+	// with after: references to services outside the subset dropped.
+	// This implements the "no transitive closure" rule for subset deploys.
+	inSubset := make(map[string]bool, len(names))
+	for _, name := range names {
+		inSubset[name] = true
+	}
+	filtered := make(map[string]*config.DeployConfig, len(names))
+	for _, name := range names {
+		orig := deploys[name]
+		if len(orig.After) == 0 {
+			filtered[name] = orig
+			continue
+		}
+		var subsetAfter []string
+		for _, dep := range orig.After {
+			if inSubset[dep] {
+				subsetAfter = append(subsetAfter, dep)
+			}
+		}
+		if len(subsetAfter) == len(orig.After) {
+			// No references dropped; reuse the original.
+			filtered[name] = orig
+		} else {
+			// Copy with filtered After list.
+			cp := *orig
+			cp.After = subsetAfter
+			filtered[name] = &cp
+		}
+	}
+
+	// Topo-sort the subset.
+	sorted, err := TopoSortByAfter(filtered, cfg.Services)
+	if err != nil {
+		return nil, err
+	}
+
+	// Prepend exactly one ImplicitEnvStep.
+	implicit := pipeline.ResolvedStep{
+		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
+		Step:  ImplicitEnvStep,
+	}
+	result := []pipeline.ResolvedStep{implicit}
+
+	// Resolve each service's phases in sorted order.
+	for _, name := range sorted {
+		svcDeploy := deploys[name]
+		for _, phase := range svcDeploy.Phases {
 			resolved, err := pipeline.ResolvePhaseSteps(cfg, reg, phase, name)
 			if err != nil {
 				return nil, err

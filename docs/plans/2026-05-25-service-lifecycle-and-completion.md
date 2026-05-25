@@ -473,8 +473,8 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 12: Toggle plan executor
 
-- [ ] add `executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, opts ExecuteOptions) error` in `internal/command/service_plan.go`
-- [ ] `ExecuteOptions` (tenth review — executor needs to know its contributors to clear pending correctly):
+- [x] add `executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, opts ExecuteOptions) error` in `internal/command/service_plan.go`
+- [x] `ExecuteOptions` (tenth review — executor needs to know its contributors to clear pending correctly):
   ```go
   type ExecuteOptions struct {
       SkipHooks      bool
@@ -487,7 +487,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   }
   ```
   `Contributors` is REQUIRED for non-empty plans — the executor uses it for the post-success pending clear (subset per kind). Empty `Contributors` is allowed only when `len(plan.ApplySteps) == 0` (nothing to clear). The executor validates this invariant at entry
-- [ ] explicit dependency struct (so tests can stub every seam without ad-hoc globals — the dependency boundary the sixth review asked for):
+- [x] explicit dependency struct (so tests can stub every seam without ad-hoc globals — the dependency boundary the sixth review asked for):
   ```go
   type ExecuteDeps struct {
       // Required for delegating to existing runtimes:
@@ -506,10 +506,10 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   }
   ```
   Production callers (Task 13 / Task 14) construct `ExecuteDeps` by assigning these fields directly to `runDeployHelper`, `lifecycle.RunRestart`, and `runtime.RunCommand` — no shim layer. Tests pass stubs with the same shape that record invocations.
-- [ ] **call-site construction**: `executeTogglePlan` builds the `lifecycle.RunContext` and `runtime.RunContext` values from `ExecuteDeps.Cfg` + `ExecuteDeps.BaseDir` + per-hook command ID immediately before each call. The shape of those context structs is fixed by the callees — read `internal/lifecycle/run.go:40` (`type RunContext struct`) and `internal/usercommands/runtime/runner.go:32` (`type RunContext struct`) to populate the right fields. Toggle executor is non-interactive (`NonInteractive: true`, `SkipConfirm: true`, `SkipNotify: true` on the user-command RunContext, matching the existing `type: command` check pattern in CLAUDE.md "preflight" bullet)
-- [ ] guard at top: `if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 { return nil }` (defensive — empty plan is a no-op, never an error)
-- [ ] orchestrate via existing runtimes: user-commands via `internal/usercommands/runtime.RunCommand`; restart via the existing `lifecycle.RunRestart(...)` entry point; deploy via a new same-package helper we extract from `deployRunCmd` (see next bullet)
-- [ ] **deploy-orchestrator extraction — stays in `internal/command/`, NOT moved to `internal/deploy/`**:
+- [x] **call-site construction**: `executeTogglePlan` builds the `lifecycle.RunContext` and `runtime.RunContext` values from `ExecuteDeps.Cfg` + `ExecuteDeps.BaseDir` + per-hook command ID immediately before each call. The shape of those context structs is fixed by the callees — read `internal/lifecycle/run.go:40` (`type RunContext struct`) and `internal/usercommands/runtime/runner.go:32` (`type RunContext struct`) to populate the right fields. Toggle executor is non-interactive (`NonInteractive: true`, `SkipConfirm: true`, `SkipNotify: true` on the user-command RunContext, matching the existing `type: command` check pattern in CLAUDE.md "preflight" bullet)
+- [x] guard at top: `if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 { return nil }` (defensive — empty plan is a no-op, never an error)
+- [x] orchestrate via existing runtimes: user-commands via `internal/usercommands/runtime.RunCommand`; restart via the existing `lifecycle.RunRestart(...)` entry point; deploy via a new same-package helper we extract from `deployRunCmd` (see next bullet)
+- [x] **deploy-orchestrator extraction — stays in `internal/command/`, NOT moved to `internal/deploy/`**:
   - Today `internal/command/deploy.go:178` `deployRunCmd` is deeply wired to command-layer concerns: `render.Stdout()` (line 93, 240, 691, 697), `newNotifier(ucfg)` (line 196), `ui.RunSelector` (line 430, 469), and the exit-code-bearing errors `lockHeldError` / `deployCancelledError` (lines 159-176). Moving the body to `internal/deploy/` would drag every one of those concerns across the package boundary or require inventing 4-5 injectable interfaces just for one caller — neither is justified by current need
   - Instead, refactor in place: extract the orchestration body of `deployRunCmd` (everything after flag parsing) into a same-package helper `runDeployHelper(ctx, cmd *cobra.Command, flags *rootFlags, opts DeployOpts) error` in `internal/command/deploy.go`. `DeployOpts{Services []string, Force, Resume, NonInteractive, SkipPreflight bool}` — **slice, not single string**, because multi-toggle batches (Task 14) can produce a deploy apply step covering N services
   - Semantics of `DeployOpts.Services`:
@@ -556,16 +556,16 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - The toggle executor (also in `internal/command/`) calls `runDeployHelper(ctx, cmd, flags, opts)` for each `ApplyStep` of `Kind == PendingDeploy` in `plan.ApplySteps`, with `NonInteractive: true` and `opts.Services` populated directly from `step.Services`. Per the unified coverage rule (Task 11), `step.Services` is ALWAYS non-empty for toggle-emitted deploy steps — toggle layer never triggers full-project deploys. `render.Stdout()`, `newNotifier`, `ui.RunSelector`, and the exit-code errors are all accessible without crossing package boundaries
   - Lock acquisition + preflight + notifier lifecycle stay INSIDE `runDeployHelper` — same ownership as today's cobra path. Toggle executor inherits all behavior unchanged
   - `lifecycle.RunRestart` is fine as-is in `internal/lifecycle/` (lighter dependency surface). The asymmetry is real and accepted: deploy is command-layer-shaped, restart is lifecycle-layer-shaped — forcing symmetry would invent abstractions YAGNI tells us to avoid
-- [ ] write tests for the extracted `runDeployHelper` (table-driven over `opts.Services` shapes: nil/empty → full project; one element → today's `--service`; two elements → batch — each must have `deploy.yml` or `errors.Is(err, ErrServiceNoDeployFile)`. Also vary `SkipPreflight` set/unset). Existing test patterns from `deploy_test.go` translate by calling `runDeployHelper` directly instead of `cmd.Execute()`. The thin cobra wrapper gets one smoke test
-- [ ] **lock ownership model** (twenty-sixth review — corrected):
+- [x] write tests for the extracted `runDeployHelper` (table-driven over `opts.Services` shapes: nil/empty → full project; one element → today's `--service`; two elements → batch — each must have `deploy.yml` or `errors.Is(err, ErrServiceNoDeployFile)`. Also vary `SkipPreflight` set/unset). Existing test patterns from `deploy_test.go` translate by calling `runDeployHelper` directly instead of `cmd.Execute()`. The thin cobra wrapper gets one smoke test
+- [x] **lock ownership model** (twenty-sixth review — corrected):
   - the toggle executor does NOT hold a lock across the apply steps. `lifecycle.RunRestart` and `runDeployHelper` each acquire the project locks themselves as the cobra command would — calling them with locks already held would deadlock (the file lock is non-reentrant)
   - before/after user-command hooks also run unlocked — they may take arbitrary time and shouldn't hold the lock against concurrent inspect commands
   - **BUT the executor DOES acquire its own short lock for its own journal mutation** on apply success: wrap the single `journal.ClearPendingOps(statePath, clears)` call (the success-path clear from Task 12) in a fresh `lock.AcquireProjectLocks(deps.BaseDir)` scope. This is a brief acquire-mutate-release, fully released before the function returns. Matches the CLAUDE.md "project-lock seam" — journal writes are project state and must run under the lock — and avoids deadlock because the apply steps have already returned (their locks released) before this acquisition
   - net pattern: lock-free for apply-step orchestration; short locked-and-released window for the journal clear on success
-- [ ] **preflight**: the underlying apply step (restart/deploy) runs its own preflight as it does today; the executor does NOT run a separate preflight around the whole plan
-- [ ] **no hidden "unlocked" variants here.** The toggle executor delegates to in-package helpers (`lifecycle.RunRestart` for restart, `runDeployHelper` for deploy). The only "locked vs unlocked" split in this plan is the per-service stop helper in Task 15, which is internal because reset (Task 16) needs to call it under an already-held lock
-- [ ] error wrapping: apply-step failure returned as `fmt.Errorf("applying %s (step %d/%d): %w", step.Kind, i+1, len(plan.ApplySteps), err)`; before/after hook failures wrapped with the command ID
-- [ ] **apply-phase semantics** (revised for the eighth review's mixed-batch fix):
+- [x] **preflight**: the underlying apply step (restart/deploy) runs its own preflight as it does today; the executor does NOT run a separate preflight around the whole plan
+- [x] **no hidden "unlocked" variants here.** The toggle executor delegates to in-package helpers (`lifecycle.RunRestart` for restart, `runDeployHelper` for deploy). The only "locked vs unlocked" split in this plan is the per-service stop helper in Task 15, which is internal because reset (Task 16) needs to call it under an already-held lock
+- [x] error wrapping: apply-step failure returned as `fmt.Errorf("applying %s (step %d/%d): %w", step.Kind, i+1, len(plan.ApplySteps), err)`; before/after hook failures wrapped with the command ID
+- [x] **apply-phase semantics** (revised for the eighth review's mixed-batch fix):
   - iterate `plan.ApplySteps` in order; for each step dispatch by `step.Kind`: `PendingRestart` → `deps.RunRestart(...)`; `PendingDeploy` → `deps.RunDeploy(... opts.Services = step.Services)`
   - if any step fails: stop iteration, do NOT run after-hooks, do NOT clear pending. Return wrapped error
   - if ALL steps succeed: clear pending via **one atomic `journal.ClearPendingOps` batch call** (twenty-fourth review — a per-contributor loop of `ClearPendingForServices` + a final `ClearPendingForKind` is non-atomic; a mid-loop I/O failure leaves the journal partially cleared, hiding only part of the completed batch). The single call MUST run under its own `lock.AcquireProjectLocks(deps.BaseDir)` scope (twentieth review — journal mutations are project state). The toggle's earlier lock from Task 13 was already released before the apply phase to avoid the non-reentrant deadlock; this is a fresh acquisition. Build the `clears` slice from `opts.Contributors`:
@@ -574,7 +574,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
     - `Requires == RequiresNone` → no entry (contributor wrote nothing to clear)
     - call `journal.ClearPendingOps(statePath, clears)` once
   - NEVER call `journal.ClearPending(statePath)` from the toggle executor — it would erase pending entries from other sessions that this toggle didn't apply
-- [ ] **pending-clear cheat sheet** (consolidated — service-aware clears everywhere):
+- [x] **pending-clear cheat sheet** (consolidated — service-aware clears everywhere):
   | Caller | Helper sequence | Rationale |
   |---|---|---|
   | Toggle executor (Task 12) on success | ONE `ClearPendingOps(path, clears)` with `clears` built from Contributors (deploy contributors collapsed into one `PendingClear` entry + one restart `PendingClear` if applicable) | Atomic — either all contributor-owned pending is cleared or none. Leaves unrelated entries (other sessions) intact |
@@ -583,7 +583,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   | `devbox restart` (no args) | `ClearPendingForKind(path, PendingRestart)` | Stack-wide restart covers every restart-kind contributor; no-op against any deploy op |
   | Project-wide `devbox reset run` | `ClearPending(path)` | Whole journal wiped; clearing everything is consistent with the reset semantic |
   | Per-service `devbox reset run --service <name>` (Task 16) | ONE `journal.ReplaceServiceWithPending(path, name, {PendingDeploy, [name]}, hash)` call — atomic: removes the service's deployed state AND writes the deploy pending op in one save | Reset re-adds deploy pending for that one service; user must run deploy to re-provision. The atomic helper replaces the previous two-call sequence (`RemoveService` + `AddPendingOp`) so a write failure can't leave deployed state cleared with no banner |
-- [ ] write tests with stubbed runtimes (table-driven over plan shapes):
+- [x] write tests with stubbed runtimes (table-driven over plan shapes):
   - full plan executes before → ApplySteps in order → after
   - `SkipHooks=true` runs only ApplySteps
   - empty `ApplySteps` runs only before + after (no lock acquired)
@@ -608,7 +608,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - **subset journal-check with all `after:` deps deployed → no warning, no prompt**
   - **full project deploy (empty `opts.Services`) → journal-check skipped entirely** (the full enabled deploy scope is in scope; disabled services are intentionally excluded by the enabled-filter and the validator already warned about `after:` references to disabled services at load time)
   - **runtime graph validation propagates to `runDeployHelper`** (sixteenth review — no `devbox validate` in the test path): with `a.deploy.yml: after: [a]` (self-reference) call `runDeployHelper(opts = {Services: nil})` directly → `errors.Is(err, ErrDeploySelfReference)`. Same for cycle and unknown-ref. Verifies the runtime gate fires without going through the validator
-- [ ] run `go test ./internal/command/...` - must pass before next task (both the extracted `runDeployHelper` and the toggle executor live here now)
+- [x] run `go test ./internal/command/...` - must pass before next task (both the extracted `runDeployHelper` and the toggle executor live here now)
 
 ### Task 13: Wire `services enable <name>` / `disable <name>` end-to-end
 

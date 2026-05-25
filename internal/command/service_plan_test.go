@@ -1,13 +1,23 @@
 package command
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/lifecycle"
+	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/usercommands/runtime"
+
+	"github.com/spf13/cobra"
 )
 
 // helpers
@@ -468,5 +478,407 @@ func TestRenderTogglePlan_NotesSectionOmittedWhenEmpty(t *testing.T) {
 	got := w.String()
 	if strings.Contains(got, "Notes:") {
 		t.Errorf("Notes section should be absent when empty, got: %q", got)
+	}
+}
+
+// ---- executeTogglePlan tests ----
+
+// makeTestCmd returns a throwaway cobra command with no-op I/O.
+func makeTestCmd() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.SetOut(io.Discard)
+	return cmd
+}
+
+// makeExecuteDeps builds an ExecuteDeps suitable for unit tests. The caller
+// provides record-calls stubs for RunDeploy/RunRestart/RunUserCmd; the rest
+// of the fields are wired to a temp directory + empty seams.
+func makeExecuteDeps(
+	t *testing.T,
+	runDeploy func(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opts DeployOpts) error,
+	runRestart func(rctx lifecycle.RunContext) error,
+	runUserCmd func(ctx context.Context, rc runtime.RunContext) error,
+) (ExecuteDeps, string) {
+	t.Helper()
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.yml")
+
+	if runDeploy == nil {
+		runDeploy = func(context.Context, *cobra.Command, *rootFlags, DeployOpts) error { return nil }
+	}
+	if runRestart == nil {
+		runRestart = func(lifecycle.RunContext) error { return nil }
+	}
+	if runUserCmd == nil {
+		runUserCmd = func(context.Context, runtime.RunContext) error { return nil }
+	}
+
+	cmd := &cobra.Command{}
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader(""))
+
+	return ExecuteDeps{
+		Cmd:        cmd,
+		BaseDir:    dir,
+		StatePath:  statePath,
+		RunDeploy:  runDeploy,
+		RunRestart: runRestart,
+		RunUserCmd: runUserCmd,
+	}, dir
+}
+
+// TestExecuteTogglePlan_EmptyPlanIsNoop verifies an empty plan returns nil immediately.
+func TestExecuteTogglePlan_EmptyPlanIsNoop(t *testing.T) {
+	deps, _ := makeExecuteDeps(t, nil, nil, nil)
+	err := executeTogglePlan(context.Background(), deps, TogglePlan{}, ExecuteOptions{})
+	if err != nil {
+		t.Errorf("empty plan: want nil, got %v", err)
+	}
+}
+
+// TestExecuteTogglePlan_FullPlanOrder verifies before → apply → after ordering.
+func TestExecuteTogglePlan_FullPlanOrder(t *testing.T) {
+	var order []string
+
+	deps, _ := makeExecuteDeps(t,
+		func(_ context.Context, _ *cobra.Command, _ *rootFlags, opts DeployOpts) error {
+			order = append(order, "deploy")
+			return nil
+		},
+		func(_ lifecycle.RunContext) error {
+			order = append(order, "restart")
+			return nil
+		},
+		func(_ context.Context, rc runtime.RunContext) error {
+			order = append(order, "hook:"+rc.Cmd.ID)
+			return nil
+		},
+	)
+
+	// We need a registry entry for the hook commands.
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(makeShellCmd("foo:pre"))
+	reg.AddCommandForTest(makeShellCmd("foo:post"))
+	deps.CmdReg = reg
+	deps.Cfg = &config.DevboxConfig{}
+
+	plan := TogglePlan{
+		BeforeSteps: []PlanStep{{CommandID: "foo:pre"}},
+		ApplySteps:  []ApplyStep{{Kind: journal.PendingRestart}},
+		AfterSteps:  []PlanStep{{CommandID: "foo:post"}},
+	}
+	contributors := []Contributor{{Service: "foo", Requires: config.RequiresRestart}}
+
+	err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"hook:foo:pre", "restart", "hook:foo:post"}
+	if len(order) != len(want) {
+		t.Fatalf("order: want %v, got %v", want, order)
+	}
+	for i, w := range want {
+		if order[i] != w {
+			t.Errorf("order[%d]: want %q, got %q", i, w, order[i])
+		}
+	}
+}
+
+// TestExecuteTogglePlan_SkipHooks runs only apply steps when SkipHooks is true.
+func TestExecuteTogglePlan_SkipHooks(t *testing.T) {
+	restartCalled := false
+	hookCalled := false
+	deps, _ := makeExecuteDeps(t,
+		nil,
+		func(_ lifecycle.RunContext) error { restartCalled = true; return nil },
+		func(_ context.Context, _ runtime.RunContext) error { hookCalled = true; return nil },
+	)
+	plan := TogglePlan{
+		BeforeSteps: []PlanStep{{CommandID: "foo:pre"}},
+		ApplySteps:  []ApplyStep{{Kind: journal.PendingRestart}},
+		AfterSteps:  []PlanStep{{CommandID: "foo:post"}},
+	}
+	contributors := []Contributor{{Service: "foo", Requires: config.RequiresRestart}}
+	err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{
+		SkipHooks:    true,
+		Contributors: contributors,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !restartCalled {
+		t.Error("restart should have been called")
+	}
+	if hookCalled {
+		t.Error("hooks should NOT have been called when SkipHooks=true")
+	}
+}
+
+// TestExecuteTogglePlan_ApplyFailureShortCircuits verifies that after-hooks are not
+// run and pending stays intact on apply-step failure.
+func TestExecuteTogglePlan_ApplyFailureShortCircuits(t *testing.T) {
+	afterHookCalled := false
+	deps, dir := makeExecuteDeps(t,
+		nil,
+		func(_ lifecycle.RunContext) error { return fmt.Errorf("restart failed") },
+		func(_ context.Context, _ runtime.RunContext) error { afterHookCalled = true; return nil },
+	)
+
+	// Pre-seed pending so we can verify it's not cleared.
+	statePath := filepath.Join(dir, "state.yml")
+	if err := journal.AddPendingOp(statePath, journal.PendingOp{Kind: journal.PendingRestart}, "hash1"); err != nil {
+		t.Fatalf("pre-seed pending: %v", err)
+	}
+
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{{Kind: journal.PendingRestart}},
+		AfterSteps: []PlanStep{{CommandID: "foo:post"}},
+	}
+	contributors := []Contributor{{Service: "foo", Requires: config.RequiresRestart}}
+	err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{
+		SkipHooks:    false,
+		Contributors: contributors,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if afterHookCalled {
+		t.Error("after-hook must NOT run on apply failure")
+	}
+
+	// Verify pending is still intact.
+	state, loadErr := journal.Load(statePath)
+	if loadErr != nil {
+		t.Fatalf("load state: %v", loadErr)
+	}
+	if state.Pending == nil {
+		t.Error("pending should remain intact on apply failure")
+	}
+}
+
+// TestExecuteTogglePlan_SuccessClearsPendingAtomically verifies that on success,
+// ONE ClearPendingOps call clears contributor-owned pending and leaves unrelated
+// entries intact.
+func TestExecuteTogglePlan_SuccessClearsPendingAtomically(t *testing.T) {
+	deps, dir := makeExecuteDeps(t, nil, nil, nil)
+	statePath := filepath.Join(dir, "state.yml")
+
+	// Pre-seed: [{Deploy, ["a", "x"]}, {Restart}] — "x" is from another session.
+	if err := journal.AddPendingOps(statePath, []journal.PendingOp{
+		{Kind: journal.PendingDeploy, Services: []string{"a", "x"}},
+		{Kind: journal.PendingRestart},
+	}, "hash1"); err != nil {
+		t.Fatalf("pre-seed: %v", err)
+	}
+
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{
+			{Kind: journal.PendingDeploy, Services: []string{"a"}},
+			{Kind: journal.PendingRestart},
+		},
+	}
+	// Contributors: "a" needs deploy, "b" needs restart.
+	contributors := []Contributor{
+		{Service: "a", Requires: config.RequiresDeploy},
+		{Service: "b", Requires: config.RequiresRestart},
+	}
+	if err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Reload and verify: "a" removed from deploy op (x remains), restart op cleared.
+	state, err := journal.Load(statePath)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.Pending == nil {
+		t.Fatal("pending should still exist (x is unrelated)")
+	}
+	deployOp := state.Pending.Find(journal.PendingDeploy)
+	if deployOp == nil {
+		t.Fatal("deploy op should remain (x is unrelated)")
+	}
+	if len(deployOp.Services) != 1 || deployOp.Services[0] != "x" {
+		t.Errorf("deploy op services: want [x], got %v", deployOp.Services)
+	}
+	if state.Pending.Find(journal.PendingRestart) != nil {
+		t.Error("restart op should have been cleared")
+	}
+}
+
+// TestExecuteTogglePlan_AllDeploySingleStep verifies that a deploy step calls
+// RunDeploy once with the full services list.
+func TestExecuteTogglePlan_AllDeploySingleStep(t *testing.T) {
+	var gotServices []string
+	deps, _ := makeExecuteDeps(t,
+		func(_ context.Context, _ *cobra.Command, _ *rootFlags, opts DeployOpts) error {
+			gotServices = opts.Services
+			return nil
+		},
+		nil, nil,
+	)
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{{Kind: journal.PendingDeploy, Services: []string{"a", "b"}}},
+	}
+	contributors := []Contributor{
+		{Service: "a", Requires: config.RequiresDeploy},
+		{Service: "b", Requires: config.RequiresDeploy},
+	}
+	if err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(gotServices) != 2 || gotServices[0] != "a" || gotServices[1] != "b" {
+		t.Errorf("RunDeploy services: want [a b], got %v", gotServices)
+	}
+}
+
+// TestExecuteTogglePlan_MixedBatchOrder verifies deploy runs before restart in a
+// mixed batch.
+func TestExecuteTogglePlan_MixedBatchOrder(t *testing.T) {
+	var order []string
+	deps, _ := makeExecuteDeps(t,
+		func(_ context.Context, _ *cobra.Command, _ *rootFlags, _ DeployOpts) error {
+			order = append(order, "deploy")
+			return nil
+		},
+		func(_ lifecycle.RunContext) error { order = append(order, "restart"); return nil },
+		nil,
+	)
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{
+			{Kind: journal.PendingDeploy, Services: []string{"a"}},
+			{Kind: journal.PendingRestart},
+		},
+	}
+	contributors := []Contributor{
+		{Service: "a", Requires: config.RequiresDeploy},
+		{Service: "b", Requires: config.RequiresRestart},
+	}
+	if err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(order) != 2 || order[0] != "deploy" || order[1] != "restart" {
+		t.Errorf("mixed batch order: want [deploy restart], got %v", order)
+	}
+}
+
+// TestExecuteTogglePlan_MixedBatchPartialFailure verifies pending stays intact when
+// deploy succeeds but restart fails.
+func TestExecuteTogglePlan_MixedBatchPartialFailure(t *testing.T) {
+	deployCalled := false
+	deps, dir := makeExecuteDeps(t,
+		func(_ context.Context, _ *cobra.Command, _ *rootFlags, _ DeployOpts) error {
+			deployCalled = true
+			return nil // deploy succeeds
+		},
+		func(_ lifecycle.RunContext) error { return fmt.Errorf("restart failed") },
+		nil,
+	)
+	statePath := filepath.Join(dir, "state.yml")
+	// Pre-seed both ops.
+	if err := journal.AddPendingOps(statePath, []journal.PendingOp{
+		{Kind: journal.PendingDeploy, Services: []string{"a"}},
+		{Kind: journal.PendingRestart},
+	}, "hash1"); err != nil {
+		t.Fatalf("pre-seed: %v", err)
+	}
+
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{
+			{Kind: journal.PendingDeploy, Services: []string{"a"}},
+			{Kind: journal.PendingRestart},
+		},
+	}
+	contributors := []Contributor{
+		{Service: "a", Requires: config.RequiresDeploy},
+		{Service: "b", Requires: config.RequiresRestart},
+	}
+	err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors})
+	if err == nil {
+		t.Fatal("expected error from restart failure")
+	}
+	if !deployCalled {
+		t.Error("deploy should have been called")
+	}
+	// Verify pending is intact — no partial clear.
+	state, loadErr := journal.Load(statePath)
+	if loadErr != nil {
+		t.Fatalf("load state: %v", loadErr)
+	}
+	if state.Pending == nil {
+		t.Fatal("pending should be intact on partial failure")
+	}
+	if state.Pending.Find(journal.PendingDeploy) == nil {
+		t.Error("deploy pending should remain")
+	}
+	if state.Pending.Find(journal.PendingRestart) == nil {
+		t.Error("restart pending should remain")
+	}
+}
+
+// TestExecuteTogglePlan_ContributorsRequiredError verifies the guard fires when
+// Contributors is empty but plan has apply steps.
+func TestExecuteTogglePlan_ContributorsRequiredError(t *testing.T) {
+	deps, _ := makeExecuteDeps(t, nil, nil, nil)
+	plan := TogglePlan{
+		ApplySteps: []ApplyStep{{Kind: journal.PendingRestart}},
+	}
+	err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{})
+	if err == nil {
+		t.Fatal("expected error for missing Contributors, got nil")
+	}
+}
+
+// TestExecuteTogglePlan_BeforeHookFailureShortCircuits verifies that a before-hook
+// failure stops execution before the apply phase.
+func TestExecuteTogglePlan_BeforeHookFailureShortCircuits(t *testing.T) {
+	restartCalled := false
+	deps, _ := makeExecuteDeps(t,
+		nil,
+		func(_ lifecycle.RunContext) error { restartCalled = true; return nil },
+		func(_ context.Context, rc runtime.RunContext) error {
+			return fmt.Errorf("hook failed: %s", rc.Cmd.ID)
+		},
+	)
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(makeShellCmd("foo:pre"))
+	deps.CmdReg = reg
+	deps.Cfg = &config.DevboxConfig{}
+
+	plan := TogglePlan{
+		BeforeSteps: []PlanStep{{CommandID: "foo:pre"}},
+		ApplySteps:  []ApplyStep{{Kind: journal.PendingRestart}},
+	}
+	contributors := []Contributor{{Service: "foo", Requires: config.RequiresRestart}}
+	err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{Contributors: contributors})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if restartCalled {
+		t.Error("restart should NOT run after before-hook failure")
+	}
+}
+
+// makeShellCmd is a test helper that returns a minimal shell CommandDef with the given ID.
+func makeShellCmd(id string) *model.CommandDef {
+	return &model.CommandDef{ID: id, Type: model.CommandTypeShell, Cmd: "echo ok"}
+}
+
+// TestExecuteTogglePlan_NoneContributorsNoLockAcquired verifies that a plan with
+// only RequiresNone contributors writes no pending and acquires no lock.
+func TestExecuteTogglePlan_NoneContributorsNoLockAcquired(t *testing.T) {
+	deps, dir := makeExecuteDeps(t, nil, nil, nil)
+	statePath := filepath.Join(dir, "state.yml")
+
+	// Empty apply steps (all RequiresNone)
+	plan := TogglePlan{}
+	if err := executeTogglePlan(context.Background(), deps, plan, ExecuteOptions{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// State file should not have been created (no lock, no write).
+	if _, err := os.Stat(statePath); !errors.Is(err, os.ErrNotExist) {
+		t.Error("state file should not exist for all-RequiresNone plan")
 	}
 }

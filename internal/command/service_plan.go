@@ -1,15 +1,22 @@
 package command
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/lifecycle"
+	"devbox-cli/internal/lock"
 	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/usercommands/runtime"
+
+	"github.com/spf13/cobra"
 )
 
 // Sentinel errors for toggle plan building.
@@ -250,4 +257,173 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 			_, _ = fmt.Fprintf(w, "  - %s\n", n)
 		}
 	}
+}
+
+// Contributor records the resolved requires for one toggled service so the
+// executor knows which pending ops to clear on apply success.
+type Contributor struct {
+	Service  string
+	Requires config.ToggleRequires // None / Restart / Deploy
+}
+
+// ExecuteOptions controls executor behaviour.
+type ExecuteOptions struct {
+	SkipHooks      bool
+	NonInteractive bool
+	// Contributors is required for non-empty plans; used to build the
+	// pending-clear slice after all apply steps succeed.
+	Contributors []Contributor
+}
+
+// ExecuteDeps carries all injectable dependencies for executeTogglePlan.
+// Production callers assign real implementations; tests inject stubs.
+type ExecuteDeps struct {
+	Cmd       *cobra.Command
+	Flags     *rootFlags
+	BaseDir   string
+	StatePath string
+	Cfg       *config.DevboxConfig
+	CmdReg    *registry.Registry
+
+	// Seams — signatures match real callees so no adapter is needed at the call site.
+	RunDeploy  func(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opts DeployOpts) error
+	RunRestart func(rctx lifecycle.RunContext) error
+	RunUserCmd func(ctx context.Context, rc runtime.RunContext) error
+}
+
+// executeTogglePlan runs all steps in plan using deps.
+// The apply phase is: run before-hooks → apply steps in order → (on success) clear pending → run after-hooks.
+// On any apply-step failure: stop, do NOT run after-hooks, do NOT clear pending.
+func executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, opts ExecuteOptions) error {
+	// Empty plan is a no-op.
+	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
+		return nil
+	}
+
+	// Contributors required when there are apply steps.
+	if len(plan.ApplySteps) > 0 && len(opts.Contributors) == 0 {
+		return fmt.Errorf("executeTogglePlan: Contributors required for non-empty apply plan")
+	}
+
+	// Before hooks.
+	if !opts.SkipHooks {
+		for _, step := range plan.BeforeSteps {
+			if err := runToggleHook(ctx, deps, step); err != nil {
+				return fmt.Errorf("before hook %q: %w", step.CommandID, err)
+			}
+		}
+	}
+
+	// Apply steps — stop on first failure; do NOT clear pending on failure.
+	for i, step := range plan.ApplySteps {
+		var stepErr error
+		switch step.Kind {
+		case journal.PendingDeploy:
+			stepErr = deps.RunDeploy(ctx, deps.Cmd, deps.Flags, DeployOpts{
+				Services:       step.Services,
+				NonInteractive: true,
+			})
+		case journal.PendingRestart:
+			configPath := filepath.Join(deps.BaseDir, "devbox.yml")
+			if deps.Flags != nil {
+				configPath = deps.Flags.configPath
+			}
+			var errOut io.Writer
+			if deps.Cmd != nil {
+				errOut = deps.Cmd.ErrOrStderr()
+			}
+			stepErr = deps.RunRestart(lifecycle.RunContext{
+				Ctx:        ctx,
+				ConfigPath: configPath,
+				Yes:        true,
+				ErrOut:     errOut,
+			})
+		}
+		if stepErr != nil {
+			return fmt.Errorf("applying %s (step %d/%d): %w", step.Kind, i+1, len(plan.ApplySteps), stepErr)
+		}
+	}
+
+	// All apply steps succeeded — clear pending atomically under a fresh lock.
+	if len(plan.ApplySteps) > 0 {
+		clears := buildPendingClears(opts.Contributors)
+		if len(clears) > 0 {
+			releaseLock, err := lock.AcquireProjectLocks(deps.BaseDir)
+			if err != nil {
+				return fmt.Errorf("acquiring locks for pending clear: %w", err)
+			}
+			clearErr := journal.ClearPendingOps(deps.StatePath, clears)
+			releaseLock()
+			if clearErr != nil {
+				return fmt.Errorf("clearing pending after apply: %w", clearErr)
+			}
+		}
+	}
+
+	// After hooks.
+	if !opts.SkipHooks {
+		for _, step := range plan.AfterSteps {
+			if err := runToggleHook(ctx, deps, step); err != nil {
+				return fmt.Errorf("after hook %q: %w", step.CommandID, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// buildPendingClears translates a Contributors slice into the minimal set of
+// PendingClear entries needed to remove exactly the contributor-owned pending ops.
+func buildPendingClears(contributors []Contributor) []journal.PendingClear {
+	var deployServices []string
+	hasRestart := false
+	for _, c := range contributors {
+		switch c.Requires {
+		case config.RequiresDeploy:
+			deployServices = append(deployServices, c.Service)
+		case config.RequiresRestart:
+			hasRestart = true
+		}
+	}
+
+	var clears []journal.PendingClear
+	if len(deployServices) > 0 {
+		sort.Strings(deployServices)
+		clears = append(clears, journal.PendingClear{Kind: journal.PendingDeploy, Services: deployServices})
+	}
+	if hasRestart {
+		clears = append(clears, journal.PendingClear{Kind: journal.PendingRestart})
+	}
+	return clears
+}
+
+// runToggleHook looks up a command by ID and runs it non-interactively.
+func runToggleHook(ctx context.Context, deps ExecuteDeps, step PlanStep) error {
+	if deps.CmdReg == nil {
+		return fmt.Errorf("command registry required for hook execution")
+	}
+	cmdDef, err := deps.CmdReg.Get(step.CommandID)
+	if err != nil {
+		return fmt.Errorf("looking up command %q: %w", step.CommandID, err)
+	}
+	var stdout, stderr io.Writer
+	var stdin io.Reader
+	if deps.Cmd != nil {
+		stdout = deps.Cmd.OutOrStdout()
+		stderr = deps.Cmd.ErrOrStderr()
+		stdin = deps.Cmd.InOrStdin()
+	}
+	rc := runtime.RunContext{
+		Cmd:            cmdDef,
+		Config:         deps.Cfg,
+		Registry:       deps.CmdReg,
+		ProjectRoot:    deps.BaseDir,
+		Stdout:         stdout,
+		Stderr:         stderr,
+		Stdin:          stdin,
+		SkipConfirm:    true,
+		NonInteractive: true,
+		SkipNotify:     true,
+	}
+	return deps.RunUserCmd(ctx, rc)
 }
