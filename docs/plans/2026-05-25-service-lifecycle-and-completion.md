@@ -760,24 +760,24 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 17: Pending banner in `devbox status`
 
-- [ ] put the renderer in `internal/ui/` alongside the existing string-returning renderers (`internal/ui/info.go:RenderInfo`, `internal/stack/deploystatus.go:RenderDeployStatus`) — NOT in `internal/command/statusview/` (that package owns view-model types and should not gain rendering/journal behavior). Signature: `func RenderPendingBanner(p *journal.PendingApply) string` — empty string when `p == nil` or `len(p.Operations) == 0`. Iterates `p.Operations` and renders ONE line per op:
+- [x] put the renderer in `internal/ui/` alongside the existing string-returning renderers (`internal/ui/info.go:RenderInfo`, `internal/stack/deploystatus.go:RenderDeployStatus`) — NOT in `internal/command/statusview/` (that package owns view-model types and should not gain rendering/journal behavior). Signature: `func RenderPendingBanner(p *journal.PendingApply) string` — empty string when `p == nil` or `len(p.Operations) == 0`. Iterates `p.Operations` and renders ONE line per op:
   - `PendingDeploy` with services → `"⚠ Pending: deploy required for: a, b\n  Run: devbox deploy run"` (uses defensive-copy `op.ServiceNames()`)
   - `PendingRestart` → `"⚠ Pending: restart required\n  Run: devbox restart"`
   - Mixed pending (both ops present) → both lines, one after the other. The list-of-ops model from Task 8 is what makes per-op rendering possible
-- [ ] command-layer composes the banner: `internal/command/status.go` (and each of its subcommands `apps`, `tools`, `infra`, `deploy`) call `ui.RenderPendingBanner(state.Pending)` and write the result to `cmd.OutOrStdout()` BEFORE the main table. Empty string → no-op (no blank line)
-- [ ] clear-pending hooks (verify integration points):
+- [x] command-layer composes the banner: `internal/command/status.go` (and each of its subcommands `apps`, `tools`, `infra`, `deploy`) call `ui.RenderPendingBanner(state.Pending)` and write the result to `cmd.OutOrStdout()` BEFORE the main table. Empty string → no-op (no blank line)
+- [x] clear-pending hooks (verify integration points):
   - successful `devbox restart` (no args) → `journal.ClearPendingForKind(statePath, journal.PendingRestart)` (no-op when kind is deploy)
   - successful **full-project** `devbox deploy run` (no `--service`) → `journal.ClearPendingForKind(statePath, journal.PendingDeploy)` (clears ONLY the deploy op; any pending restart op must survive because a full deploy does not perform a stack-wide restart of services it didn't touch — eleventh review fix, matches the cheat sheet at Task 12)
   - successful `devbox deploy run --service <name>` → `journal.ClearPendingForServices(statePath, journal.PendingDeploy, []string{name})` (subset clear — does NOT erase pending for other services. Ninth review's primary fix)
   - successful project-wide `devbox reset run` (no `--service`) → `journal.ClearPending(statePath)` (whole journal wiped)
-- [ ] write tests:
+- [x] write tests:
   - banner with restart-kind, banner with deploy-kind, no banner when `Pending == nil`
   - `devbox restart` success clears only restart-kind (deploy-kind survives)
   - full `devbox deploy run` success clears ONLY the deploy op; a pre-existing restart op survives (regression for the eleventh review's first finding — full deploy must not erase restart pending)
   - **`devbox deploy run --service a` with pending `{deploy, [a, b]}` → pending becomes `{deploy, [b]}`; banner still shown for `b`** (ninth review's primary regression)
   - **`devbox deploy run --service a` with pending `{deploy, [a]}` → pending becomes `nil`; banner removed** (auto-collapse path)
   - The clear-on-success integration tests for restart live with the restart code path, not the status renderer
-- [ ] run `go test ./internal/ui/... ./internal/command/... ./internal/lifecycle/... ./internal/deploy/journal/...` - must pass before next task (restart clearing is wired in `internal/lifecycle`, deploy clearing is wired in `runDeployHelper` in `internal/command`, banner renderer lives in `internal/ui`, journal helpers in `internal/deploy/journal`)
+- [x] run `go test ./internal/ui/... ./internal/command/... ./internal/lifecycle/... ./internal/deploy/journal/...` - must pass before next task (restart clearing is wired in `internal/lifecycle`, deploy clearing is wired in `runDeployHelper` in `internal/command`, banner renderer lives in `internal/ui`, journal helpers in `internal/deploy/journal`)
 
 ### Task 18: Docs sweep
 

@@ -287,7 +287,18 @@ func RunRestart(ctx RunContext) error {
 	// operation, not a user-invoked run. Spec: restart fires zero
 	// notifications.
 	ctx.SkipNotify = true
-	return RunRun(ctx)
+	if err := RunRun(ctx); err != nil {
+		return err
+	}
+	// On successful restart, clear the pending restart entry from the journal.
+	// Restart-kind covers the whole stack; any pending deploy op for specific services
+	// is a separate op and must survive (the restart did not redeploy those services).
+	workDir := filepath.Dir(ctx.ConfigPath)
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
+	if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
+		slog.Warn("clearing pending restart state after success", "err", clearErr)
+	}
+	return nil
 }
 
 // deploymentGateError is returned when the run gate detects an undeployed tracked service.

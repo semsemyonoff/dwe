@@ -203,6 +203,10 @@ func renderDefaultStatus(cmd *cobra.Command, sc *statusContext, no *noSectionFla
 	_, _ = fmt.Fprintln(out, stack.RenderHealth(in))
 	_, _ = fmt.Fprintln(out)
 
+	if sc.State != nil {
+		writeNonEmpty(out, ui.RenderPendingBanner(sc.State.Pending))
+	}
+
 	for _, s := range defaultSectionOrder {
 		if no.isSuppressed(s) {
 			continue
@@ -286,6 +290,9 @@ func newStatusAppsCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if sc.State != nil {
+				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
+			}
 			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionApps)
 		},
 	}
@@ -302,6 +309,9 @@ func newStatusToolsCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if sc.State != nil {
+				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
+			}
 			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionTools)
 		},
 	}
@@ -317,6 +327,9 @@ func newStatusInfraCmd(flags *rootFlags) *cobra.Command {
 			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
+			}
+			if sc.State != nil {
+				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
 			}
 			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionInfra)
 		},
@@ -369,6 +382,9 @@ With a service name, shows the per-phase/step deploy breakdown for that service.
 			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
 			if err != nil {
 				return err
+			}
+			if sc.State != nil {
+				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
 			}
 			if len(args) == 0 {
 				writeNonEmpty(cmd.OutOrStdout(), stack.RenderDeployStatus(sc.statusInput()))

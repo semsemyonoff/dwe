@@ -402,3 +402,99 @@ func TestStatusCmd_GitSubcommandRuns(t *testing.T) {
 		t.Errorf("git subcommand should NOT print health indicator: %s", buf.String())
 	}
 }
+
+// statusFixtureWithPending builds a fixture that includes a state file with
+// pending entries so the pending banner is rendered by status commands.
+func statusFixtureWithPending(t *testing.T) string {
+	t.Helper()
+	configPath := statusFixture(t)
+	dir := filepath.Dir(configPath)
+	statePath := filepath.Join(dir, journal.DefaultRelPath)
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state := &journal.ProjectState{
+		Services: map[string]*journal.ServiceState{},
+		Pending: &journal.PendingApply{
+			Operations: []journal.PendingOp{
+				{Kind: journal.PendingDeploy, Services: []string{"main"}},
+				{Kind: journal.PendingRestart},
+			},
+		},
+	}
+	if err := journal.Save(statePath, state); err != nil {
+		t.Fatal(err)
+	}
+	return configPath
+}
+
+func TestStatusCmd_ShowsPendingBanner_DefaultView(t *testing.T) {
+	configPath := statusFixtureWithPending(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Pending") {
+		t.Errorf("expected pending banner in default status output:\n%s", out)
+	}
+	if !strings.Contains(out, "deploy required for: main") {
+		t.Errorf("expected deploy pending for 'main' in output:\n%s", out)
+	}
+	if !strings.Contains(out, "restart required") {
+		t.Errorf("expected restart pending in output:\n%s", out)
+	}
+}
+
+func TestStatusCmd_ShowsPendingBanner_AppsSubcommand(t *testing.T) {
+	configPath := statusFixtureWithPending(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "apps"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Pending") {
+		t.Errorf("expected pending banner in 'status apps' output:\n%s", out)
+	}
+}
+
+func TestStatusCmd_ShowsPendingBanner_DeploySubcommand(t *testing.T) {
+	configPath := statusFixtureWithPending(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "deploy"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Pending") {
+		t.Errorf("expected pending banner in 'status deploy' output:\n%s", out)
+	}
+}
+
+func TestStatusCmd_NoBanner_WhenNoPending(t *testing.T) {
+	// statusFixture has no pending entries in the state file (no state file at all)
+	configPath := statusFixture(t)
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "Pending") {
+		t.Errorf("expected no pending banner when no pending state:\n%s", out)
+	}
+}

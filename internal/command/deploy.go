@@ -706,6 +706,19 @@ func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, 
 		return fmt.Errorf("deploy completed but state could not be saved: %w", err)
 	}
 
+	// Clear pending deploy entries for this successful run.
+	// Full-project deploy clears the whole deploy kind; subset deploy clears only
+	// the targeted services (other pending deploy entries for other services survive).
+	if len(opts.Services) == 0 {
+		if clearErr := journal.ClearPendingForKind(statePath, journal.PendingDeploy); clearErr != nil {
+			slog.Warn("clearing pending deploy state after success", "err", clearErr)
+		}
+	} else {
+		if clearErr := journal.ClearPendingForServices(statePath, journal.PendingDeploy, opts.Services); clearErr != nil {
+			slog.Warn("clearing pending deploy state after success", "err", clearErr)
+		}
+	}
+
 	if logEnabled {
 		w.Info("Deploy log saved to: " + logPath)
 	}
