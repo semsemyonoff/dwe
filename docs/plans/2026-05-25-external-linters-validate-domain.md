@@ -214,7 +214,7 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
 
 Implementation steps (Option A):
 
-- [ ] in `internal/validate/validate.go`, add:
+- [x] in `internal/validate/validate.go`, add:
   ```go
   // GroupValidator is a Validator that owns child validators sharing its Domain().
   // Registry.Run expands children during scope matching and delegates execution
@@ -225,18 +225,18 @@ Implementation steps (Option A):
       RunGroup(ctx Context, children []Validator) []Diagnostic
   }
   ```
-- [ ] in `Registry.Run`, before the existing per-validator loop, detect `GroupValidator` instances:
+- [x] in `Registry.Run`, before the existing per-validator loop, detect `GroupValidator` instances:
   - if no scope OR scope is `["<group.Domain>"]` OR scope is `["<group.Domain>", "<child.ID>"]`, collect the matching children subset and call `group.RunGroup(ctx, subset)`. Skip the children from the per-validator loop so they don't double-run.
   - non-group validators continue to use the existing `MatchScope` + `Run` path.
-- [ ] add `Registry.Run` test cases for groups: empty scope runs all children via RunGroup; `[domain]` runs all children; `[domain, child-id]` runs only the matching child; `[domain, unknown-id]` runs none (matches `checks` behavior).
-- [ ] in `internal/validate/linters/`, replace `All()`'s return shape:
+- [x] add `Registry.Run` test cases for groups: empty scope runs all children via RunGroup; `[domain]` runs all children; `[domain, child-id]` runs only the matching child; `[domain, unknown-id]` runs none (matches `checks` behavior).
+- [x] in `internal/validate/linters/`, replace `All()`'s return shape:
   - returns `[]validate.Validator` containing exactly one element: a `lintersGroup` that implements `GroupValidator`. Its `Children()` returns the per-linter validators built per Task 6. Its `Run` returns nil (unused). Its `RunGroup` does the parallel fan-out below.
-- [ ] **goroutine contract (CRITICAL)**: in `lintersGroup.RunGroup`, use plain `sync.WaitGroup`, NOT `errgroup.WithContext`. Each goroutine wraps its work in a deferred `recover()` (panic → one Error diagnostic from that linter, group continues) and always completes; one linter's failure must not cancel siblings. Per-linter cancellation already comes from the `context.WithTimeout` in Task 5.
-- [ ] **concurrency limit (test-seamed)**: package-level `var MaxLinterConcurrency = runtime.NumCPU()` (exported for test override, same pattern as `DefaultLinterTimeout` / `MaxLinterOutputBytes` in Task 5). Semaphore size = `min(len(children), MaxLinterConcurrency)`. Linters are subprocess-bound, but capping at NumCPU keeps the host responsive. Test seam matters: CI containers and 1-vCPU runners would otherwise force the semaphore to size 1, deadlocking any barrier-based concurrency test (Task 8 below) that needs two goroutines simultaneously in the section. Barrier test sets `MaxLinterConcurrency = 2` via the same `t.Cleanup`-restored swap helper.
-- [ ] **diagnostic aggregation (race-free)**: pre-allocate `results := make([][]validate.Diagnostic, len(children))`. Each goroutine writes only to its own `results[i]`. After `wg.Wait()`, concat in order. No shared slice, no mutex. Registry re-sorts deterministically downstream.
-- [ ] respect outer `ctx.Ctx` cancellation: pass it through unchanged to each child's `Run`. Do not derive a child context for the group itself (Task 5 already wraps with per-linter timeout from the original ctx).
-- [ ] write `parallel_test.go`: **barrier-based correctness** (not wall-clock timing). Two fake linters that (a) atomically increment a "started" counter, (b) wait on a `sync.WaitGroup`/channel barrier until both have started, (c) emit a known diagnostic. Assertion: both reach the barrier within a generous deadline — proves concurrent execution, never flaky under load. Plus a **panic-recovery test**: one linter panics in `Run`, the other still completes, both contribute diagnostics (panic surfaces as Error).
-- [ ] run `go test ./internal/validate/...` (covers both the framework change and the group implementation).
+- [x] **goroutine contract (CRITICAL)**: in `lintersGroup.RunGroup`, use plain `sync.WaitGroup`, NOT `errgroup.WithContext`. Each goroutine wraps its work in a deferred `recover()` (panic → one Error diagnostic from that linter, group continues) and always completes; one linter's failure must not cancel siblings. Per-linter cancellation already comes from the `context.WithTimeout` in Task 5.
+- [x] **concurrency limit (test-seamed)**: package-level `var MaxLinterConcurrency = runtime.NumCPU()` (exported for test override, same pattern as `DefaultLinterTimeout` / `MaxLinterOutputBytes` in Task 5). Semaphore size = `min(len(children), MaxLinterConcurrency)`. Linters are subprocess-bound, but capping at NumCPU keeps the host responsive. Test seam matters: CI containers and 1-vCPU runners would otherwise force the semaphore to size 1, deadlocking any barrier-based concurrency test (Task 8 below) that needs two goroutines simultaneously in the section. Barrier test sets `MaxLinterConcurrency = 2` via the same `t.Cleanup`-restored swap helper.
+- [x] **diagnostic aggregation (race-free)**: pre-allocate `results := make([][]validate.Diagnostic, len(children))`. Each goroutine writes only to its own `results[i]`. After `wg.Wait()`, concat in order. No shared slice, no mutex. Registry re-sorts deterministically downstream.
+- [x] respect outer `ctx.Ctx` cancellation: pass it through unchanged to each child's `Run`. Do not derive a child context for the group itself (Task 5 already wraps with per-linter timeout from the original ctx).
+- [x] write `parallel_test.go`: **barrier-based correctness** (not wall-clock timing). Two fake linters that (a) atomically increment a "started" counter, (b) wait on a `sync.WaitGroup`/channel barrier until both have started, (c) emit a known diagnostic. Assertion: both reach the barrier within a generous deadline — proves concurrent execution, never flaky under load. Plus a **panic-recovery test**: one linter panics in `Run`, the other still completes, both contribute diagnostics (panic surfaces as Error).
+- [x] run `go test ./internal/validate/...` (covers both the framework change and the group implementation).
 
 ### Task 9: Update reference + internals docs
 - [ ] add `linters:` section to `docs/reference/config/validate.md` — schema, autodetect rules, scope examples, severity clamp behavior, generic vs built-in, the `bin:` bare-name restriction from Open Questions §1.

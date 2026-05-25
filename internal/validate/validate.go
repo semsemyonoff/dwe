@@ -81,6 +81,20 @@ type GlobalValidator interface {
 	IsGlobal() bool
 }
 
+// GroupValidator is a Validator that owns child validators sharing its
+// Domain(). Registry.Run expands children during scope matching and delegates
+// execution to RunGroup so the group can choose its own scheduling (parallel,
+// ordered, etc.) without each child being individually registered.
+//
+// The group's own Run is unused — Registry never calls it. Domain()/ID() on
+// the group describe the wrapper itself for housekeeping; children carry the
+// scope-visible IDs.
+type GroupValidator interface {
+	Validator
+	Children() []Validator
+	RunGroup(ctx Context, children []Validator) []Diagnostic
+}
+
 // Registry manages and runs validators.
 type Registry struct {
 	validators []Validator
@@ -100,6 +114,18 @@ func (r *Registry) Register(v Validator) {
 func (r *Registry) Run(ctx Context, scope ...string) []Diagnostic {
 	var diags []Diagnostic
 	for _, v := range r.validators {
+		if gv, ok := v.(GroupValidator); ok {
+			var subset []Validator
+			for _, c := range gv.Children() {
+				if MatchScope(c.Domain(), c.ID(), scope) {
+					subset = append(subset, c)
+				}
+			}
+			if len(subset) > 0 {
+				diags = append(diags, gv.RunGroup(ctx, subset)...)
+			}
+			continue
+		}
 		matches := MatchScope(v.Domain(), v.ID(), scope)
 		if !matches {
 			if dl, ok := v.(DomainLevelValidator); ok && dl.IsDomainLevel() {

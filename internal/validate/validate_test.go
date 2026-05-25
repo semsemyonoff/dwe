@@ -357,6 +357,96 @@ func TestRegistryRun_GlobalValidator(t *testing.T) {
 	assert.Equal(t, 2, len(diags), "empty scope runs all validators including global")
 }
 
+type mockGroup struct {
+	id       string
+	domain   string
+	children []Validator
+	runCount int
+}
+
+func (g *mockGroup) ID() string     { return g.id }
+func (g *mockGroup) Domain() string { return g.domain }
+func (g *mockGroup) Run(_ Context) []Diagnostic {
+	return nil // never called for groups
+}
+func (g *mockGroup) Children() []Validator { return g.children }
+func (g *mockGroup) RunGroup(ctx Context, children []Validator) []Diagnostic {
+	g.runCount++
+	var out []Diagnostic
+	for _, c := range children {
+		out = append(out, c.Run(ctx)...)
+	}
+	return out
+}
+
+func TestRegistryRun_GroupValidator(t *testing.T) {
+	mkChild := func(id string) *mockValidator {
+		return &mockValidator{
+			domain: "linters",
+			id:     id,
+			diags:  []Diagnostic{{Severity: SeverityOK, Domain: "linters", Target: id}},
+		}
+	}
+	cases := []struct {
+		name      string
+		scope     []string
+		want      int
+		wantNames []string
+	}{
+		{"empty scope runs all children", nil, 2, []string{"shellcheck", "hadolint"}},
+		{"domain scope runs all children", []string{"linters"}, 2, []string{"shellcheck", "hadolint"}},
+		{"two-part scope runs only matching child", []string{"linters", "shellcheck"}, 1, []string{"shellcheck"}},
+		{"unknown child id runs none", []string{"linters", "nosuch"}, 0, nil},
+		{"unrelated scope runs none", []string{"env"}, 0, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			group := &mockGroup{
+				id:     "linters",
+				domain: "linters",
+				children: []Validator{
+					mkChild("shellcheck"),
+					mkChild("hadolint"),
+				},
+			}
+			r := NewRegistry()
+			r.Register(group)
+			diags := r.Run(Context{}, tc.scope...)
+			assert.Len(t, diags, tc.want)
+			got := make([]string, 0, len(diags))
+			for _, d := range diags {
+				got = append(got, d.Target)
+			}
+			// Order is sorted by sortDiagnostics; only compare sets.
+			for _, name := range tc.wantNames {
+				assert.Contains(t, got, name)
+			}
+		})
+	}
+}
+
+func TestRegistryRun_GroupValidator_DoesNotDoubleCallNonGroups(t *testing.T) {
+	// Mixed registry: a group plus a normal validator in a different domain.
+	// The normal validator must still run via the standard path.
+	group := &mockGroup{
+		id:     "linters",
+		domain: "linters",
+		children: []Validator{
+			&mockValidator{domain: "linters", id: "shellcheck", diags: []Diagnostic{{Severity: SeverityOK, Domain: "linters", Target: "shellcheck"}}},
+		},
+	}
+	normal := &mockValidator{
+		domain: "env",
+		id:     "docker_bin",
+		diags:  []Diagnostic{{Severity: SeverityOK, Domain: "env", Target: "docker_bin"}},
+	}
+	r := NewRegistry()
+	r.Register(group)
+	r.Register(normal)
+	diags := r.Run(Context{})
+	assert.Len(t, diags, 2)
+}
+
 func TestRegistryRun(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&mockValidator{

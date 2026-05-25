@@ -36,6 +36,17 @@ func builtinAdapters() map[string]func() Adapter {
 // produce a synthetic error validator instead of registering the linter, so no
 // subprocess ever runs for that entry.
 func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator {
+	children := buildLinterChildren(validateCfg, validateLoadErr, baseDir)
+	if len(children) == 0 {
+		return nil
+	}
+	return []validate.Validator{&lintersGroup{children: children}}
+}
+
+// buildLinterChildren assembles the per-linter validators that become the
+// group's children. Separated from All() so tests can inspect the child set
+// without unwrapping the group.
+func buildLinterChildren(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator {
 	if validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
 		return nil
 	}
