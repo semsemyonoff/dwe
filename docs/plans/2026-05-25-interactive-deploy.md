@@ -277,11 +277,11 @@ Pending-deploy hint from `journal.PendingApply` is surfaced at the top of the me
 
 ### Task 10: Remove `devbox deploy step`
 
-- [ ] delete `newDeployStepCmd` and its helpers in `internal/command/deploy.go` (lines 793–919 plus any private helpers used only by it)
-- [ ] remove its registration in `newDeployCmd`
-- [ ] remove or update any existing tests referencing `deploy step`
-- [ ] regenerate `docs/reference/cli/` (`devbox docs generate`); commit regenerated files
-- [ ] run `make build && go test ./...` — must pass before next task
+- [x] delete `newDeployStepCmd` and its helpers in `internal/command/deploy.go` (lines 793–919 plus any private helpers used only by it)
+- [x] remove its registration in `newDeployCmd`
+- [x] remove or update any existing tests referencing `deploy step`
+- [x] regenerate `docs/reference/cli/` (`devbox docs generate`); commit regenerated files
+- [x] run `make build && go test ./...` — must pass before next task
 
 ### Task 11: Documentation
 
