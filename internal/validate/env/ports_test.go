@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -291,4 +292,186 @@ func freeLocalPort(t *testing.T) int {
 	port := l.Addr().(*net.TCPAddr).Port
 	_ = l.Close()
 	return port
+}
+
+func TestCollectPortConflicts_DeclaredPortFree(t *testing.T) {
+	dir := t.TempDir()
+	writeStubBinary(t, dir, "docker", 0, "")
+	withIsolatedPath(t, dir)
+	origOut := dockerPSOutFn
+	origListen := portListenFn
+	t.Cleanup(func() {
+		dockerPSOutFn = origOut
+		portListenFn = origListen
+	})
+	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) { return nil, nil }
+	portListenFn = func(int) error { return nil }
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
+		},
+	}
+	conflicts, err := CollectPortConflicts(context.Background(), cfg, dir)
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if len(conflicts) != 0 {
+		t.Errorf("free port should produce zero conflicts, got %d", len(conflicts))
+	}
+}
+
+func TestCollectPortConflicts_ForeignContainerConflict(t *testing.T) {
+	dir := t.TempDir()
+	writeStubBinary(t, dir, "docker", 0, "")
+	withIsolatedPath(t, dir)
+	origOut := dockerPSOutFn
+	origListen := portListenFn
+	t.Cleanup(func() {
+		dockerPSOutFn = origOut
+		portListenFn = origListen
+	})
+	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(`{"Names":"rival-db-1","Ports":"0.0.0.0:5432->5432/tcp","Labels":{"com.docker.compose.project":"rival"}}` + "\n"), nil
+	}
+	portListenFn = func(int) error { return nil }
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"db": {Enabled: true, Ports: map[string]int{"sql": 5432}},
+		},
+	}
+	conflicts, err := CollectPortConflicts(context.Background(), cfg, dir)
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if len(conflicts) != 1 {
+		t.Fatalf("want 1 conflict, got %d", len(conflicts))
+	}
+	pc := conflicts[0]
+	if pc.Service != "db" || pc.PortName != "sql" || pc.RequestedPort != 5432 {
+		t.Errorf("conflict metadata: want db/sql/5432, got %s/%s/%d", pc.Service, pc.PortName, pc.RequestedPort)
+	}
+	if !strings.Contains(pc.OccupiedBy, "rival-db-1") {
+		t.Errorf("OccupiedBy must name the foreign container: %q", pc.OccupiedBy)
+	}
+}
+
+func TestCollectPortConflicts_OwnComposeContainerNotConflict(t *testing.T) {
+	// Create a docker.yml with project_name to ensure resolveComposeProject returns "ours".
+	dir := t.TempDir()
+	dockerCfgPath := filepath.Join(dir, "devbox", "docker.yml")
+	if err := os.MkdirAll(filepath.Dir(dockerCfgPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(dockerCfgPath, []byte("project_name: ours\n"), 0o644); err != nil {
+		t.Fatalf("write docker.yml: %v", err)
+	}
+
+	writeStubBinary(t, dir, "docker", 0, "")
+	withIsolatedPath(t, dir)
+	origOut := dockerPSOutFn
+	origListen := portListenFn
+	t.Cleanup(func() {
+		dockerPSOutFn = origOut
+		portListenFn = origListen
+	})
+	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(`{"Names":"ours-db-1","Ports":"0.0.0.0:5432->5432/tcp","Labels":{"com.docker.compose.project":"ours"}}` + "\n"), nil
+	}
+	portListenFn = func(int) error { return nil }
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"db": {Enabled: true, Ports: map[string]int{"sql": 5432}},
+		},
+	}
+	conflicts, err := CollectPortConflicts(context.Background(), cfg, dir)
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if len(conflicts) != 0 {
+		t.Errorf("own compose container should not be a conflict, got %d", len(conflicts))
+	}
+}
+
+func TestCollectPortConflicts_DockerMissingReturnsNil(t *testing.T) {
+	dir := t.TempDir()
+	withIsolatedPath(t, dir) // empty PATH — docker is not found
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
+		},
+	}
+	conflicts, err := CollectPortConflicts(context.Background(), cfg, dir)
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if conflicts != nil {
+		t.Errorf("missing docker bin should return nil conflicts, got %d", len(conflicts))
+	}
+}
+
+func TestCollectPortConflicts_DockerPSFailedFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeStubBinary(t, dir, "docker", 0, "")
+	withIsolatedPath(t, dir)
+	origOut := dockerPSOutFn
+	origListen := portListenFn
+	t.Cleanup(func() {
+		dockerPSOutFn = origOut
+		portListenFn = origListen
+	})
+	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) {
+		return nil, errors.New("docker daemon unreachable")
+	}
+	// Port is in use (non-docker process)
+	portListenFn = func(port int) error {
+		if port == 8080 {
+			return errors.New("listen tcp :8080: bind: address already in use")
+		}
+		return nil
+	}
+
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
+		},
+	}
+	conflicts, err := CollectPortConflicts(context.Background(), cfg, dir)
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if len(conflicts) != 1 {
+		t.Fatalf("want 1 conflict (from listen fallback), got %d", len(conflicts))
+	}
+	pc := conflicts[0]
+	if pc.OccupiedBy != "unknown (docker ps failed)" {
+		t.Errorf("fallback conflict should have sentinel OccupiedBy, got %q", pc.OccupiedBy)
+	}
+}
+
+func TestCollectPortConflicts_NilCfgReturnsNil(t *testing.T) {
+	conflicts, err := CollectPortConflicts(context.Background(), nil, "")
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if conflicts != nil {
+		t.Errorf("nil cfg should return nil conflicts, got %d", len(conflicts))
+	}
+}
+
+func TestCollectPortConflicts_NoDeclaratedPortsReturnsNil(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Enabled: false, Ports: map[string]int{"http": 8080}},
+		},
+	}
+	conflicts, err := CollectPortConflicts(context.Background(), cfg, "")
+	if err != nil {
+		t.Fatalf("CollectPortConflicts: %v", err)
+	}
+	if conflicts != nil {
+		t.Errorf("no declared ports should return nil conflicts, got %d", len(conflicts))
+	}
 }

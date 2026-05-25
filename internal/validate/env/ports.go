@@ -30,6 +30,16 @@ const portsProbeTimeout = 5 * time.Second
 // are expected to bind the declared ports) from foreign processes.
 const composeProjectLabel = "com.docker.compose.project"
 
+// PortConflict describes a host port that is in use by something other than
+// our own compose containers. It is returned by the exported CollectPortConflicts
+// probe for use by the wizard and other callers.
+type PortConflict struct {
+	Service       string // service name from devbox/services/<name>/
+	PortName      string // port key from service.yml
+	RequestedPort int    // the port number we want to use
+	OccupiedBy    string // human-readable description of who is using it
+}
+
 // dockerPSOutFn is the seam used by portsFreeValidator.Run to query Docker.
 // Tests override it to return canned NDJSON without spawning a process.
 var dockerPSOutFn = runDockerPS
@@ -39,9 +49,65 @@ var dockerPSOutFn = runDockerPS
 // real sockets.
 var portListenFn = listenTCP
 
+// CollectPortConflicts returns a list of host ports declared in cfg.Services
+// that are in use by something other than our own compose containers.
+//
+// Behavior on Docker unavailability:
+//   - If Docker binary is missing or unresolvable: returns (nil, nil). The
+//     wizard sees an empty list and skips its port-fix step; preflight will
+//     surface the missing-Docker problem separately when the user proceeds.
+//   - If docker ps invocation fails after Docker binary is found: falls back
+//     to net.Listen probes on the declared ports. Conflicts in this fallback
+//     set OccupiedBy to "unknown (docker ps failed)" so callers can render a
+//     meaningful label. Any other error during probing is returned wrapped.
+//
+// This exported function is the canonical port-conflict probe. Both the
+// validator (portsFreeValidator) and the setup wizard use it — there is no
+// second port enumeration path.
+func CollectPortConflicts(ctx context.Context, cfg *config.DevboxConfig, baseDir string) ([]PortConflict, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+	declared := collectDeclaredPorts(cfg)
+	if len(declared) == 0 {
+		return nil, nil
+	}
+	bin := config.DockerBin(cfg)
+	if _, err := exec.LookPath(bin); err != nil {
+		// docker_bin will surface this; do not double-report.
+		return nil, nil
+	}
+
+	ourProject := resolveComposeProject(baseDir, cfg)
+
+	parent := ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	probeCtx, cancel := context.WithTimeout(parent, portsProbeTimeout)
+	defer cancel()
+	bindings, psErr := queryDockerPortBindings(probeCtx, bin)
+
+	var conflicts []PortConflict
+	for _, dp := range declared {
+		owner := classifyPortForConflict(dp, bindings, ourProject, psErr != nil)
+		if owner != "" {
+			conflicts = append(conflicts, PortConflict{
+				Service:       dp.Service,
+				PortName:      dp.PortName,
+				RequestedPort: dp.HostPort,
+				OccupiedBy:    owner,
+			})
+		}
+	}
+	return conflicts, nil
+}
+
 type portsFreeValidator struct {
 	cfg *config.DevboxConfig
 }
+
+var _ validate.Validator = (*portsFreeValidator)(nil)
 
 func (v *portsFreeValidator) ID() string     { return "ports_free" }
 func (v *portsFreeValidator) Domain() string { return "env" }
@@ -51,35 +117,32 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	if vctx.Stage == "stop" {
 		return nil
 	}
+
 	declared := collectDeclaredPorts(v.cfg)
 	if len(declared) == 0 {
 		return nil
 	}
+
 	bin := config.DockerBin(v.cfg)
 	if _, err := exec.LookPath(bin); err != nil {
 		// docker_bin will surface this; do not double-report.
 		return nil
 	}
 
-	ourProject := resolveComposeProject(vctx.ProjectRoot, v.cfg)
-
 	parent := vctx.Ctx
 	if parent == nil {
 		parent = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(parent, portsProbeTimeout)
-	defer cancel()
-	bindings, _ := queryDockerPortBindings(ctx, bin)
+	conflicts, _ := CollectPortConflicts(parent, v.cfg, vctx.ProjectRoot)
 
 	var diags []validate.Diagnostic
-	for _, dp := range declared {
-		if conflict := classifyPort(dp, bindings, ourProject); conflict != "" {
-			diags = append(diags, fail(
-				"ports_free",
-				conflict,
-				"free the port (stop the conflicting process or container) and retry\nlsof -i :"+strconv.Itoa(dp.HostPort),
-			))
-		}
+	for _, pc := range conflicts {
+		diags = append(diags, fail(
+			"ports_free",
+			fmt.Sprintf("port %d (%s.%s) is bound by container %s",
+				pc.RequestedPort, pc.Service, pc.PortName, pc.OccupiedBy),
+			"free the port (stop the conflicting process or container) and retry\nlsof -i :"+strconv.Itoa(pc.RequestedPort),
+		))
 	}
 	if len(diags) == 0 {
 		return []validate.Diagnostic{ok("ports_free")}
@@ -135,9 +198,11 @@ type portOwner struct {
 	ComposeProject string
 }
 
-// classifyPort returns "" if the port is acceptable (free, or held by one of
-// our own compose containers), otherwise a user-facing reason string.
-func classifyPort(dp declaredPort, bindings map[int][]portOwner, ourProject string) string {
+// classifyPortOwner returns "" if the port is free or held by our own compose
+// containers, otherwise the name of the container holding it (possibly with
+// compose project info). This helper is used by both classifyPort (for
+// diagnostics) and classifyPortForConflict (for the exported probe).
+func classifyPortOwner(dp declaredPort, bindings map[int][]portOwner, ourProject string) string {
 	owners := bindings[dp.HostPort]
 	if len(owners) > 0 {
 		for _, o := range owners {
@@ -151,13 +216,50 @@ func classifyPort(dp declaredPort, bindings map[int][]portOwner, ourProject stri
 		if o.ComposeProject != "" && o.ComposeProject != ourProject {
 			who += " (compose project: " + o.ComposeProject + ")"
 		}
-		return fmt.Sprintf("port %d (%s.%s) is bound by container %s",
-			dp.HostPort, dp.Service, dp.PortName, who)
+		return who
 	}
 	// Not held by Docker — probe directly.
 	if err := portListenFn(dp.HostPort); err != nil {
-		return fmt.Sprintf("port %d (%s.%s) is in use: %s",
-			dp.HostPort, dp.Service, dp.PortName, firstLine(err.Error(), "address already in use"))
+		return firstLine(err.Error(), "address already in use")
+	}
+	return ""
+}
+
+// classifyPort returns "" if the port is acceptable (free, or held by one of
+// our own compose containers), otherwise a user-facing reason string.
+func classifyPort(dp declaredPort, bindings map[int][]portOwner, ourProject string) string {
+	owner := classifyPortOwner(dp, bindings, ourProject)
+	if owner == "" {
+		return ""
+	}
+	return fmt.Sprintf("port %d (%s.%s) is bound by container %s",
+		dp.HostPort, dp.Service, dp.PortName, owner)
+}
+
+// classifyPortForConflict is like classifyPortOwner but handles the docker ps
+// failure case by returning a sentinel in place of the owner name.
+func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourProject string, dockerPSFailed bool) string {
+	owners := bindings[dp.HostPort]
+	if len(owners) > 0 {
+		for _, o := range owners {
+			if ourProject != "" && o.ComposeProject == ourProject {
+				// Our own container holds it — compose will reuse on `up`.
+				return ""
+			}
+		}
+		o := owners[0]
+		who := o.Container
+		if o.ComposeProject != "" && o.ComposeProject != ourProject {
+			who += " (compose project: " + o.ComposeProject + ")"
+		}
+		return who
+	}
+	// Not held by Docker — probe directly.
+	if err := portListenFn(dp.HostPort); err != nil {
+		if dockerPSFailed {
+			return "unknown (docker ps failed)"
+		}
+		return firstLine(err.Error(), "address already in use")
 	}
 	return ""
 }

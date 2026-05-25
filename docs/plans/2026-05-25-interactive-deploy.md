@@ -152,17 +152,17 @@ Pending-deploy hint from `journal.PendingApply` is surfaced at the top of the me
 
 ### Task 6: Export a typed port-conflict probe from `internal/validate/env/`
 
-- [ ] the current `internal/validate/env/ports.go` keeps the validator (`portsFreeValidator`) and its useful typed innards (`declaredPort`, `collectDeclaredPorts`, `classifyPort`) unexported. The wizard needs a structured port-conflict list, not parsed `Diagnostic.Message` strings.
-- [ ] add an exported function `func CollectPortConflicts(ctx context.Context, cfg *config.DevboxConfig, baseDir string) ([]PortConflict, error)` plus an exported `type PortConflict struct { Service, PortName string; RequestedPort int; OccupiedBy string }`. Both wizard and validator must consume this — no duplication of port enumeration logic.
-- [ ] **Document the Docker-missing / `docker ps` failure semantics on the exported function**, preserving the current validator behavior verbatim:
+- [x] the current `internal/validate/env/ports.go` keeps the validator (`portsFreeValidator`) and its useful typed innards (`declaredPort`, `collectDeclaredPorts`, `classifyPort`) unexported. The wizard needs a structured port-conflict list, not parsed `Diagnostic.Message` strings.
+- [x] add an exported function `func CollectPortConflicts(ctx context.Context, cfg *config.DevboxConfig, baseDir string) ([]PortConflict, error)` plus an exported `type PortConflict struct { Service, PortName string; RequestedPort int; OccupiedBy string }`. Both wizard and validator must consume this — no duplication of port enumeration logic.
+- [x] **Document the Docker-missing / `docker ps` failure semantics on the exported function**, preserving the current validator behavior verbatim:
   - Docker binary missing or unresolvable → return `nil, nil` (no conflicts detected, no error). The wizard sees an empty list and skips its port-fix step; preflight will surface the missing-Docker problem separately when the user proceeds to `deploy run`.
   - `docker ps` invocation fails → fall back to listen-probe results for the declared ports (matching today's `ports_free` behavior). Conflicts produced from the fallback set `OccupiedBy` to a sentinel like `"unknown (docker ps failed)"` so the wizard's huh prompt can render a meaningful label.
   - Add a godoc comment on `CollectPortConflicts` stating these two contracts explicitly — they are load-bearing for the wizard's UX and for any future caller.
-- [ ] refactor `portsFreeValidator.Run` (the actual method name at `internal/validate/env/ports.go:49`, not `Validate`) to call `CollectPortConflicts` and convert the result to `[]validate.Diagnostic`. The validator's diagnostic shape is unchanged from the outside; this is a pure extraction.
-- [ ] export the relevant supporting types (`PortClass` or whatever `classifyPort` returns) only if `CollectPortConflicts` actually exposes them in `PortConflict` — keep the surface minimal.
-- [ ] update / extend existing `ports_test.go` to cover the new exported function directly with table-driven cases: declared port free, conflict with a foreign container, conflict with one of our compose containers (which is NOT a conflict), no declared ports.
-- [ ] add a compile-time assertion in `portsFreeValidator` file that the validator still implements `validate.Validator` (in case the refactor moves things).
-- [ ] run `go test ./internal/validate/env/...` — must pass before next task
+- [x] refactor `portsFreeValidator.Run` (the actual method name at `internal/validate/env/ports.go:49`, not `Validate`) to call `CollectPortConflicts` and convert the result to `[]validate.Diagnostic`. The validator's diagnostic shape is unchanged from the outside; this is a pure extraction.
+- [x] export the relevant supporting types (`PortClass` or whatever `classifyPort` returns) only if `CollectPortConflicts` actually exposes them in `PortConflict` — keep the surface minimal.
+- [x] update / extend existing `ports_test.go` to cover the new exported function directly with table-driven cases: declared port free, conflict with a foreign container, conflict with one of our compose containers (which is NOT a conflict), no declared ports.
+- [x] add a compile-time assertion in `portsFreeValidator` file that the validator still implements `validate.Validator` (in case the refactor moves things).
+- [x] run `go test ./internal/validate/env/...` — must pass before next task
 
 ### Task 7: Wizard executor (pure half — answers → write)
 
