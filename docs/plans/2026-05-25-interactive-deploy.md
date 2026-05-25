@@ -103,18 +103,18 @@ Pending-deploy hint from `journal.PendingApply` is surfaced at the top of the me
 
 ### Task 4: Validate + coerce answers (`port`, `hostname`, `path`, `non-empty`)
 
-- [ ] add `internal/setup/validate.go` exporting `ValidateAndCoerce(q Question, raw string) (any, error)`. The combined entry point is deliberate: every preset validates a raw string AND defines the typed value that lands in `local.yml`. Splitting them would invite drift between "what's allowed" and "what gets written".
-- [ ] presets and their typed return values:
+- [x] add `internal/setup/validate.go` exporting `ValidateAndCoerce(q Question, raw string) (any, error)`. The combined entry point is deliberate: every preset validates a raw string AND defines the typed value that lands in `local.yml`. Splitting them would invite drift between "what's allowed" and "what gets written".
+- [x] presets and their typed return values:
   - `port` → `int` (parse `1..65535`; reject anything else)
   - `hostname` → `string` (RFC 1123 short-name regex)
   - `path` → `string` (non-empty, no NUL byte)
   - `non-empty` → `string` (`strings.TrimSpace != ""`)
   - no preset, no regex → `string` (raw value unchanged; trim left to caller)
   - regex (when set) → `string` (matched value); use `regexp.Compile` and return a wrapped error on failure. Even though `setup.validate_regex_compiles` (Task 5) and the pre-wizard validator run (Task 9 dispatch sequence) catch bad patterns first, the runtime path stays defensive — `MustCompile` here would panic the whole CLI if any of the upstream gates ever regresses or is bypassed.
-- [ ] for non-input types: `select` → `string` (the chosen value), `multiselect` → `[]string`, `confirm` → `bool`. These bypass `ValidateAndCoerce` because huh already produces the typed value — the wizard wires them straight through.
-- [ ] **The wizard pipeline now is: huh-raw → `ValidateAndCoerce` → typed answer → `BuildOverlay`.** `BuildOverlay` writes the typed value verbatim into the overlay map; YAML marshaling preserves the Go type, so `services.web.ports.http: 8080` round-trips as an int (matching `config/devbox.go:1157-1160`) instead of `"8080"`.
-- [ ] write table-driven tests covering each preset's accept + reject cases, regex path (precompiled), and the typed return value for each (e.g. `port` returns `int(8080)`, not `"8080"`). One test asserts `local.yml` written by an end-to-end stub roundtrips through `yaml.Unmarshal` with the expected Go types per field.
-- [ ] run `go test ./internal/setup/...` — must pass before next task
+- [x] for non-input types: `select` → `string` (the chosen value), `multiselect` → `[]string`, `confirm` → `bool`. These bypass `ValidateAndCoerce` because huh already produces the typed value — the wizard wires them straight through.
+- [x] **The wizard pipeline now is: huh-raw → `ValidateAndCoerce` → typed answer → `BuildOverlay`.** `BuildOverlay` writes the typed value verbatim into the overlay map; YAML marshaling preserves the Go type, so `services.web.ports.http: 8080` round-trips as an int (matching `config/devbox.go:1157-1160`) instead of `"8080"`.
+- [x] write table-driven tests covering each preset's accept + reject cases, regex path (precompiled), and the typed return value for each (e.g. `port` returns `int(8080)`, not `"8080"`). One test asserts `local.yml` written by an end-to-end stub roundtrips through `yaml.Unmarshal` with the expected Go types per field.
+- [x] run `go test ./internal/setup/...` — must pass before next task
 
 ### Task 5: `internal/validate/setup/` — new validate domain
 
