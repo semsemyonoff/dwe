@@ -1,6 +1,7 @@
 package linters
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -69,7 +70,7 @@ func collectFiles(baseDir string, paths, exts, filenames []string, pathsAreDefau
 
 		info, statErr := os.Lstat(target)
 		if statErr != nil {
-			if os.IsNotExist(statErr) {
+			if errors.Is(statErr, os.ErrNotExist) {
 				if !pathsAreDefaults {
 					missing = append(missing, entry)
 				}

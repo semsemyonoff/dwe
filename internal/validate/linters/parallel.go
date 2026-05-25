@@ -52,8 +52,8 @@ func (g *lintersGroup) RunGroup(vctx validate.Context, children []validate.Valid
 	results := make([][]validate.Diagnostic, len(children))
 	var wg sync.WaitGroup
 	for i, child := range children {
-		wg.Add(1)
 		sem <- struct{}{}
+		wg.Add(1)
 		go func(i int, child validate.Validator) {
 			var id string
 			defer wg.Done()

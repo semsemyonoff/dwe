@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // osNotify on darwin bypasses beeep so we can hand terminal-notifier
@@ -60,7 +61,13 @@ func darwinNotify(title, body string, icon any) error {
 	if err != nil {
 		return fmt.Errorf("notify: no terminal-notifier or osascript available: %w", err)
 	}
-	script := fmt.Sprintf("display notification %q with title %q", body, title)
+	sanitize := func(s string) string {
+		s = strings.ReplaceAll(s, `"`, `'`)
+		s = strings.ReplaceAll(s, "\n", " ")
+		s = strings.ReplaceAll(s, "\r", "")
+		return s
+	}
+	script := fmt.Sprintf(`display notification "%s" with title "%s"`, sanitize(body), sanitize(title))
 	return exec.Command(osa, "-e", script).Run()
 }
 
