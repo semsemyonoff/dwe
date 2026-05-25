@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"devbox-cli/internal/validate"
 )
@@ -74,7 +73,7 @@ func (a *ShellcheckAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]
 			return nil, nil
 		}
 		return []validate.Diagnostic{
-			finding(a.ID(), validate.SeverityError, "", 0, shellcheckInternalMessage(stderr), ""),
+			finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
 		}, nil
 	}
 
@@ -82,7 +81,7 @@ func (a *ShellcheckAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]
 	if err := json.Unmarshal(trimmed, &comments); err != nil {
 		if exitCode != 0 {
 			return []validate.Diagnostic{
-				finding(a.ID(), validate.SeverityError, "", 0, shellcheckInternalMessage(stderr), ""),
+				finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
 			}, nil
 		}
 		return nil, fmt.Errorf("shellcheck: decode JSON: %w", err)
@@ -92,7 +91,7 @@ func (a *ShellcheckAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]
 	for _, c := range comments {
 		out = append(out, finding(
 			a.ID(),
-			shellcheckSeverity(c.Level),
+			severityFromLevel(c.Level),
 			c.File,
 			c.Line,
 			fmt.Sprintf("%s (SC%d)", c.Message, c.Code),
@@ -100,25 +99,4 @@ func (a *ShellcheckAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]
 		))
 	}
 	return out, nil
-}
-
-func shellcheckSeverity(level string) validate.Severity {
-	switch strings.ToLower(level) {
-	case "error":
-		return validate.SeverityError
-	case "warning":
-		return validate.SeverityWarning
-	case "info", "style":
-		return validate.SeverityInfo
-	default:
-		return validate.SeverityWarning
-	}
-}
-
-func shellcheckInternalMessage(stderr []byte) string {
-	msg := strings.TrimSpace(string(stderr))
-	if msg == "" {
-		msg = "shellcheck exited non-zero with no parsable output"
-	}
-	return msg
 }

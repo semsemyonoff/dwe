@@ -64,7 +64,7 @@ Exit code:
   1 - one or more errors, or warnings with --strict
 
 Scope targets:
-  devbox validate                              - all (config + templates + commands + env + checks)
+  devbox validate                              - all (config + templates + commands + env + checks + linters + snapshot)
   devbox validate config                       - all config validators
   devbox validate config <devbox|services|...> - specific config validator
   devbox validate templates                    - all template validators (ide, ai, git)
@@ -381,7 +381,7 @@ func validateHeader(scope []string, stage string) string {
 // validateScopeLabel produces a human label for the scope being validated.
 func validateScopeLabel(scope []string) string {
 	if len(scope) == 0 {
-		return "your project (config, templates, commands, environment, and project checks)"
+		return "your project (config, templates, commands, environment, project checks, linters, and snapshots)"
 	}
 	switch scope[0] {
 	case "config":

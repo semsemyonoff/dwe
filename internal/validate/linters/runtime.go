@@ -42,7 +42,10 @@ type linterValidator struct {
 // flags first so the runtime can distinguish "autodetect" from "user said so"
 // (e.g. for the missing-bin Warning vs silent-skip decision).
 func newLinterValidator(entry config.LinterEntry, adapter Adapter, baseDir string) *linterValidator {
-	binExplicit := entry.Bin != ""
+	// Generic entries without an explicit bin: still use an explicit binary
+	// (the entry ID), which the user chose by registering the entry — treat
+	// that as explicit so a missing binary emits a Warning, not a silent skip.
+	binExplicit := entry.Bin != "" || entry.Type == "generic"
 	pathsExplicit := len(entry.Paths) > 0
 	if entry.Bin == "" {
 		entry.Bin = adapter.DefaultBin()
@@ -167,7 +170,9 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	}
 
 	// 5. deadline takes precedence — partial output is not worth parsing.
-	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+	// Guard on runErr: if the process exits cleanly at the exact moment the
+	// deadline fires, runCtx.Err() can be non-nil even though the run succeeded.
+	if runErr != nil && errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		return append(operationalDiags, fail(
 			v.ID(),
 			fmt.Sprintf("%s timed out after %s", v.ID(), DefaultLinterTimeout),

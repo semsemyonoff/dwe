@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"devbox-cli/internal/validate"
 )
@@ -76,7 +75,7 @@ func (a *HadolintAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]va
 			return nil, nil
 		}
 		return []validate.Diagnostic{
-			finding(a.ID(), validate.SeverityError, "", 0, hadolintInternalMessage(stderr), ""),
+			finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
 		}, nil
 	}
 
@@ -84,7 +83,7 @@ func (a *HadolintAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]va
 	if err := json.Unmarshal(trimmed, &items); err != nil {
 		if exitCode != 0 {
 			return []validate.Diagnostic{
-				finding(a.ID(), validate.SeverityError, "", 0, hadolintInternalMessage(stderr), ""),
+				finding(a.ID(), validate.SeverityError, "", 0, nonzeroExitMessage(a.ID(), stderr), ""),
 			}, nil
 		}
 		return nil, fmt.Errorf("hadolint: decode JSON: %w", err)
@@ -94,7 +93,7 @@ func (a *HadolintAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]va
 	for _, it := range items {
 		out = append(out, finding(
 			a.ID(),
-			hadolintSeverity(it.Level),
+			severityFromLevel(it.Level),
 			it.File,
 			it.Line,
 			fmt.Sprintf("%s (%s)", it.Message, it.Code),
@@ -102,25 +101,4 @@ func (a *HadolintAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]va
 		))
 	}
 	return out, nil
-}
-
-func hadolintSeverity(level string) validate.Severity {
-	switch strings.ToLower(level) {
-	case "error":
-		return validate.SeverityError
-	case "warning":
-		return validate.SeverityWarning
-	case "info", "style":
-		return validate.SeverityInfo
-	default:
-		return validate.SeverityWarning
-	}
-}
-
-func hadolintInternalMessage(stderr []byte) string {
-	msg := strings.TrimSpace(string(stderr))
-	if msg == "" {
-		msg = "hadolint exited non-zero with no parsable output"
-	}
-	return msg
 }

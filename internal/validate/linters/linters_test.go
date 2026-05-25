@@ -67,12 +67,8 @@ func TestGenericAdapterParseOutput(t *testing.T) {
 		if len(diags) != 1 {
 			t.Fatalf("want one diag, got %d", len(diags))
 		}
-		if len(diags[0].Message) <= genericMessageCap {
-			// truncation suffix can push us past cap, but we should never
-			// embed the full 2x payload verbatim.
-			if len(diags[0].Message) == len(big) {
-				t.Errorf("message not truncated: %d bytes", len(diags[0].Message))
-			}
+		if len(diags[0].Message) >= len(big) {
+			t.Errorf("message not truncated: %d bytes (want < %d)", len(diags[0].Message), len(big))
 		}
 	})
 }

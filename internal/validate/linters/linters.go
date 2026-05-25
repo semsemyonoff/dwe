@@ -116,15 +116,39 @@ func info(target, msg, hint string) validate.Diagnostic {
 	}
 }
 
-// ok builds an OK-severity diagnostic stamped for the linter target. Used by
-// the runtime when a linter ran cleanly so the diagnostics table can show a
-// passing row instead of a silent gap.
+// ok builds an OK-severity diagnostic stamped for the linter target.
 func ok(target string) validate.Diagnostic {
 	return validate.Diagnostic{
 		Severity: validate.SeverityOK,
 		Domain:   Domain,
 		Target:   target,
 	}
+}
+
+// severityFromLevel maps the level string common to shellcheck and hadolint
+// JSON output to a validate.Severity. Unknown levels fall back to Warning.
+func severityFromLevel(level string) validate.Severity {
+	switch strings.ToLower(level) {
+	case "error":
+		return validate.SeverityError
+	case "warning":
+		return validate.SeverityWarning
+	case "info", "style":
+		return validate.SeverityInfo
+	default:
+		return validate.SeverityWarning
+	}
+}
+
+// nonzeroExitMessage formats the stderr payload from a failed linter run into
+// a human-readable message. When stderr is empty it generates a placeholder
+// using toolName so the diagnostic is never silently blank.
+func nonzeroExitMessage(toolName string, stderr []byte) string {
+	msg := strings.TrimSpace(string(stderr))
+	if msg == "" {
+		msg = toolName + " exited non-zero with no parsable output"
+	}
+	return msg
 }
 
 // validateUserFlags returns an error if any of userFlags matches one of the
