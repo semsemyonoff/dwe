@@ -91,7 +91,7 @@ func (a *ShellcheckAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]
 			c.File,
 			c.Line,
 			fmt.Sprintf("%s (SC%d)", c.Message, c.Code),
-			"",
+			fmt.Sprintf("https://www.shellcheck.net/wiki/SC%d", c.Code),
 		))
 	}
 	return out, nil
