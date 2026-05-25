@@ -148,12 +148,12 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
 - [x] run tests.
 
 ### Task 5: Runtime (per-linter validator) + autodetect + severity clamp + bounds
-- [ ] create `runtime.go`: `linterValidator` struct implementing `validate.Validator` — holds entry, adapter, baseDir.
-- [ ] **package-level vars** at the top of `runtime.go` (not `const` — tests need to override):
+- [x] create `runtime.go`: `linterValidator` struct implementing `validate.Validator` — holds entry, adapter, baseDir.
+- [x] **package-level vars** at the top of `runtime.go` (not `const` — tests need to override):
   - `var DefaultLinterTimeout = 5 * time.Minute` — per-linter execution cap. Tests override via a small `withTestTimeout(t, d)` helper that swaps the value and registers `t.Cleanup` to restore.
   - `var MaxLinterOutputBytes int64 = 50 << 20` (50 MB) — combined stdout+stderr cap. Same test-override pattern.
   - Both exported (capitalized) so test helpers in the same package can manipulate them without unsafe gymnastics; not part of the public API for users.
-- [ ] `Run(ctx)` flow — maintain two separate diagnostic buckets to keep severity clamp from muting operational signals:
+- [x] `Run(ctx)` flow — maintain two separate diagnostic buckets to keep severity clamp from muting operational signals:
   - `operationalDiags []Diagnostic` — runtime-emitted diagnostics about the linter invocation itself (missing bin, missing user-configured path, timeout, output truncation, parser failure, panic). Never clamped.
   - `findings []Diagnostic` — adapter-emitted diagnostics about the user's code. Clamped by `entry.Severity` if set.
   - return `append(operationalDiags, findings...)` at the end.
@@ -169,9 +169,9 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
   8. **adapter parse error → Warning (operational, not clamped)**: if `parseErr != nil`, append one Warning to `operationalDiags` (`"<id>: failed to parse output: <err>"`). Whatever findings the adapter produced before the failure are still kept in `findings`. Never propagate `parseErr` to the caller.
   9. **apply severity clamp to findings only**: `if entry.Severity != nil { for i := range findings { if findings[i].Severity > *entry.Severity { findings[i].Severity = *entry.Severity } } }`. Pointer check is unambiguous; no zero-value trap. Clamp does NOT touch `operationalDiags` — `severity: info` must not be able to silence a timeout Error or a panic.
   10. stamp `Target` and `Domain` defensively on both buckets (in case adapter omitted them).
-- [ ] write `runtime_test.go`: use a Go-based fake-binary helper (`go build` a tiny `cmd/fake-linter/main.go` into `t.TempDir()` in `TestMain`; control behavior via `FAKE_LINTER_MODE=clean|findings|crash|hang|huge-output` env). Cross-platform; avoids the `.sh` portability problem. Tests: success path, non-zero+findings, missing-bin silent skip, explicit-bin-missing warning, **timeout fires and emits Error** (test sets `DefaultLinterTimeout = 50*time.Millisecond` and fake sleeps 5s — deterministic, completes in ms), **output truncation emits Warning** (test sets `MaxLinterOutputBytes = 1024` and fake emits 10 KB), **adapter parse error becomes Warning**, **severity clamp downgrades adapter Error → Warning**, **severity clamp does NOT downgrade operational diagnostics** (e.g., `severity: info` set, but a forced timeout still emits Error), **user-configured missing path emits Warning**.
-- [ ] PATH manipulation: tests use `t.Setenv("PATH", tmpDir)` to control `exec.LookPath` resolution deterministically.
-- [ ] run `go test ./internal/validate/linters/...`.
+- [x] write `runtime_test.go`: use a Go-based fake-binary helper (`go build` a tiny `cmd/fake-linter/main.go` into `t.TempDir()` in `TestMain`; control behavior via `FAKE_LINTER_MODE=clean|findings|crash|hang|huge-output` env). Cross-platform; avoids the `.sh` portability problem. Tests: success path, non-zero+findings, missing-bin silent skip, explicit-bin-missing warning, **timeout fires and emits Error** (test sets `DefaultLinterTimeout = 50*time.Millisecond` and fake sleeps 5s — deterministic, completes in ms), **output truncation emits Warning** (test sets `MaxLinterOutputBytes = 1024` and fake emits 10 KB), **adapter parse error becomes Warning**, **severity clamp downgrades adapter Error → Warning**, **severity clamp does NOT downgrade operational diagnostics** (e.g., `severity: info` set, but a forced timeout still emits Error), **user-configured missing path emits Warning**.
+- [x] PATH manipulation: tests use `t.Setenv("PATH", tmpDir)` to control `exec.LookPath` resolution deterministically.
+- [x] run `go test ./internal/validate/linters/...`.
 
 ### Task 6: `All(...)` assembler + scope wiring
 - [ ] create `all.go`: `func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator`. For each `LinterEntry`: look up built-in `Adapter` by ID; if not found AND `type: generic` → use generic adapter; if not found AND `type: builtin` (or default) → return a synthetic error validator that emits "unknown built-in linter: <id>" (matches `checks` domain pattern for unknown types).
