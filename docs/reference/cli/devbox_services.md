@@ -11,6 +11,10 @@ alongside apps and tools.
 
 On submit, changes are written to devbox/local.yml and .env is regenerated.
 
+Use --print-plan to preview what lifecycle steps will run after the selection
+without making any changes (you will still use the interactive selector).
+Use --apply to execute the plan non-interactively after writing local.yml.
+
 For a read-only view, run 'devbox status' or one of 'devbox status apps / tools / infra'.
 
 ```
@@ -21,6 +25,7 @@ devbox services [flags]
 
 ```
   devbox services
+  devbox services --print-plan
   devbox services enable adminer
   devbox services disable second
 ```
@@ -28,7 +33,10 @@ devbox services [flags]
 ### Options
 
 ```
-  -h, --help   help for services
+      --apply        execute the plan non-interactively after writing local.yml
+  -h, --help         help for services
+      --print-plan   preview what would happen without making any changes
+      --skip-hooks   skip before/after hook commands when applying
 ```
 
 ### Options inherited from parent commands

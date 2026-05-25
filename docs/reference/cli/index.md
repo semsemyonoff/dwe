@@ -2,32 +2,6 @@
 
 Generated reference for the `devbox` command tree.
 
-## Shell completion quick start
-
-Use `devbox completion install` to write the completion script to the default
-location for your shell. The shell is detected from `$SHELL` automatically, or
-you can pass it explicitly:
-
-```shell
-devbox completion install          # auto-detect shell
-devbox completion install zsh      # explicit
-devbox completion install --dry-run  # preview target path + content, no write
-```
-
-To remove the installed file:
-
-```shell
-devbox completion uninstall
-devbox completion uninstall zsh --path ~/.config/completions
-```
-
-Neither command modifies dotfiles (`~/.zshrc`, PowerShell `$PROFILE`, etc.).
-Follow the hint printed to stderr after install to update your shell config.
-
-> **Homebrew tap users**: use `generate_completions_from_executable` in your
-> formula's `install` block instead of calling `devbox completion install`
-> manually — Homebrew manages the completion file lifecycle for you.
-
 ## Commands
 
 - [devbox commands](devbox_commands.md) — Run, inspect, and list devbox commands
@@ -111,7 +85,7 @@ Follow the hint printed to stderr after install to update your shell config.
     - [devbox validate config lifecycle](devbox_validate_config_lifecycle.md) — Validate devbox/lifecycle.yml
     - [devbox validate config reset](devbox_validate_config_reset.md) — Validate devbox/reset.yml (replaces 'devbox reset config check')
     - [devbox validate config service-deploy](devbox_validate_config_service-deploy.md) — Validate service deploy configs
-    - [devbox validate config services](devbox_validate_config_services.md) — Validate devbox/services.yml
+    - [devbox validate config services](devbox_validate_config_services.md) — Validate devbox/services/<name>/service.yml
     - [devbox validate config styles](devbox_validate_config_styles.md) — Validate devbox/styles.yml
   - [devbox validate env](devbox_validate_env.md) — Validate environment readiness
   - [devbox validate linters](devbox_validate_linters.md) — Run external linters (shellcheck, hadolint, generic)

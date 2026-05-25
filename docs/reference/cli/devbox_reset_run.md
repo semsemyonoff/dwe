@@ -6,6 +6,11 @@ Execute the reset pipeline
 
 Execute the reset pipeline from devbox/reset.yml.
 
+When --service <name> is given, resets only that service:
+runs on_disable.before hooks (if enabled), stops the container via 'docker stop',
+executes devbox/services/<name>/reset.yml (if present), then marks the service
+as requiring a subsequent deploy.
+
 File logging is disabled by default for reset. Enable it with 'log: true' at
 the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.
 
@@ -16,8 +21,10 @@ devbox reset run [flags]
 ### Options
 
 ```
-  -h, --help   help for run
-  -y, --yes    skip confirmation prompts
+  -h, --help             help for run
+      --service string   reset only this service
+      --skip-preflight   bypass environment probes and project checks before running
+  -y, --yes              skip confirmation prompts
 ```
 
 ### Options inherited from parent commands

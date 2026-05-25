@@ -83,6 +83,7 @@ devbox deploy state repair
 | `schema_version` | string | Always `"1"`; reserved for future format changes |
 | `project` | object | Project-level state (deployed_at, config_hash, status, etc.) |
 | `services` | map | Per-service state, keyed by service name from `services.yml` |
+| `pending` | object | Pending operations that need to be applied; present only when `devbox services enable/disable` was run without `--apply`. Written atomically by the toggle command; cleared by `devbox restart`, `devbox deploy run`, or `devbox reset run` |
 
 ### Project-level fields
 
@@ -212,6 +213,50 @@ Invalidation happens in **two layers**:
 2. **Project-scope validation** — before deciding whether a project-level step should skip, check: does the project's current `config_hash` match the persisted one? If not, treat the step's prior state as absent.
 
 This ensures that a changed `services.yml` cannot lead to skips, even when step bodies are unchanged.
+
+## Pending state
+
+When `devbox services enable` or `devbox services disable` is run without `--apply`, the toggle command writes the local.yml change immediately but defers the apply step. The `pending` field in the state file tracks what still needs to run.
+
+### pending field schema
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `operations` | list | Ordered list of pending operations |
+| `config_hash` | sha256 hex | Config hash at toggle time; used to detect stale pending entries |
+| `created_at` | ISO 8601 timestamp | When the pending entry was written |
+
+### pending operation schema
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kind` | string | `restart` (stack-wide) or `deploy` (per-service) |
+| `services` | list | For `deploy` kind: the service names that need deploying. Empty for `restart`. |
+
+### Pending state lifecycle
+
+| Event | Effect on `pending` |
+|-------|---------------------|
+| `devbox services enable/disable` (without `--apply`) | Writes `pending.operations`; adds/merges ops for restart or deploy contributors |
+| `devbox services enable/disable --apply` success | Clears contributor-owned pending ops via `ClearPendingOps` |
+| `devbox restart` success | Clears the `restart` op; deploy op (if any) survives |
+| `devbox deploy run` (full project) success | Clears the `deploy` op; restart op (if any) survives |
+| `devbox deploy run --service <name>` success | Removes `<name>` from the `deploy` op's service list; if empty, removes the op |
+| `devbox reset run` (project-wide) success | Clears all pending (full journal wipe) |
+| `devbox reset run --service <name>` success | Writes `{kind: deploy, services: [<name>]}` atomically alongside removing service deployed state |
+
+### Banner
+
+`devbox status` (and its subcommands `apps`, `tools`, `infra`, `deploy`) display a warning banner when `pending` is non-nil:
+
+```
+⚠ Pending: deploy required for: svc-a, svc-b
+  Run: devbox deploy run
+⚠ Pending: restart required
+  Run: devbox restart
+```
+
+The banner is rendered by `ui.RenderPendingBanner(p *journal.PendingApply)` in `internal/ui/`. It iterates `pending.operations` and renders one line per op. Empty string is returned (no banner) when `pending` is nil.
 
 ## Skip decision table
 
@@ -512,5 +557,6 @@ devbox deploy run --resume
 - `devbox deploy state clear` — reset state
 - `devbox deploy state repair` — rebuild status aggregates
 - `devbox reset run` — reset and clear deploy state
+- `devbox services enable/disable` — toggle services (writes `pending` when not using `--apply`)
 - See also [deploy.yml](deploy.md) — how to declare steps and phases
 - See also [lifecycle.yml](lifecycle.md) — how `devbox run` gates on mandatory service deployment

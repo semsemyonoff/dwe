@@ -7,7 +7,10 @@ Enable an optional service (writes to devbox/local.yml)
 Enable an optional service by writing services.<name>.enabled = true to devbox/local.yml.
 
 The .env file is regenerated automatically after the change.
-Use 'devbox run' to start the newly enabled service.
+Lifecycle hooks defined in on_enable are planned and optionally executed.
+
+Use --print-plan to preview what will happen without making any changes.
+Use --apply to execute the plan non-interactively (useful in CI/scripts).
 
 When no service name is given, an interactive selector shows all currently
 disabled optional services.
@@ -25,7 +28,10 @@ devbox services enable [service] [flags]
 ### Options
 
 ```
-  -h, --help   help for enable
+      --apply        execute the plan non-interactively after writing local.yml
+  -h, --help         help for enable
+      --print-plan   preview what would happen without making any changes
+      --skip-hooks   skip before/after hook commands when applying
 ```
 
 ### Options inherited from parent commands

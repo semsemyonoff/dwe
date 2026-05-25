@@ -21,8 +21,7 @@ devbox stop [service] [flags]
 ### Examples
 
 ```
-  devbox stop
-  devbox stop postgres
+  devbox stop\n  devbox stop postgres
 ```
 
 ### Options

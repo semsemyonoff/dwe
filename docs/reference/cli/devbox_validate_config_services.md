@@ -1,6 +1,6 @@
 ## devbox validate config services
 
-Validate devbox/services.yml
+Validate devbox/services/<name>/service.yml
 
 ```
 devbox validate config services [flags]

@@ -781,17 +781,17 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 18: Docs sweep
 
-- [ ] `docs/reference/cli/completion.md` — regenerate via `devbox docs generate` (covers install/uninstall)
-- [ ] `docs/reference/cli/stop.md` — regenerate via `devbox docs generate` (covers per-service stop)
-- [ ] `docs/reference/cli/index.md` (or README) — short how-to for `completion install`
-- [ ] `docs/reference/config/services.md` (or `devbox.md`) — document per-service folder layout; remove single-file `services.yml` references
-- [ ] `docs/reference/config/deploy.md` — already updated in Task 7; verify
-- [ ] `docs/reference/config/reset.md` — already updated in Task 16; verify project + per-service flow
-- [ ] `docs/reference/config/state.md` — document `Pending` field + lifecycle (write on toggle-without-apply, clear on restart/deploy/project-reset)
-- [ ] `docs/internals/packages.md` — update `internal/config` description (per-folder layout, new loaders), `internal/deploy/journal` (Pending), `internal/command/service_plan.go` (new file)
-- [ ] CLAUDE.md "Key Patterns" — add a bullet on per-service folder symmetry, one on the pending-state lifecycle, and one on the compose-bypass rationale for per-service stop
-- [ ] no tests for this task (pure docs)
-- [ ] run `make build` + `devbox docs generate` to ensure CLI reference matches
+- [x] `docs/reference/cli/completion.md` — regenerate via `devbox docs generate` (covers install/uninstall)
+- [x] `docs/reference/cli/stop.md` — regenerate via `devbox docs generate` (covers per-service stop)
+- [x] `docs/reference/cli/index.md` (or README) — short how-to for `completion install`
+- [x] `docs/reference/config/services.md` (or `devbox.md`) — document per-service folder layout; remove single-file `services.yml` references
+- [x] `docs/reference/config/deploy.md` — already updated in Task 7; verify
+- [x] `docs/reference/config/reset.md` — already updated in Task 16; verify project + per-service flow
+- [x] `docs/reference/config/state.md` — document `Pending` field + lifecycle (write on toggle-without-apply, clear on restart/deploy/project-reset)
+- [x] `docs/internals/packages.md` — update `internal/config` description (per-folder layout, new loaders), `internal/deploy/journal` (Pending), `internal/command/service_plan.go` (new file)
+- [x] CLAUDE.md "Key Patterns" — add a bullet on per-service folder symmetry, one on the pending-state lifecycle, and one on the compose-bypass rationale for per-service stop
+- [x] no tests for this task (pure docs)
+- [x] run `make build` + `devbox docs generate` to ensure CLI reference matches
 
 ### Task 19: Verify acceptance criteria
 
