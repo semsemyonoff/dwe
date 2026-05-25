@@ -294,7 +294,7 @@ func TestLinterValidator_OutputTruncationWarning(t *testing.T) {
 	}
 }
 
-func TestLinterValidator_AdapterParseErrorBecomesWarning(t *testing.T) {
+func TestLinterValidator_AdapterParseErrorBecomesError(t *testing.T) {
 	withFakePath(t, "myfakelinter")
 	t.Setenv("FAKE_LINTER_MODE", "clean")
 
@@ -312,8 +312,8 @@ func TestLinterValidator_AdapterParseErrorBecomesWarning(t *testing.T) {
 		a, base,
 	)
 	diags := v.Run(validate.Context{})
-	if len(diags) != 1 || diags[0].Severity != validate.SeverityWarning {
-		t.Fatalf("want one Warning for parse error; got %#v", diags)
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
+		t.Fatalf("want one Error for parse error; got %#v", diags)
 	}
 }
 
@@ -337,8 +337,8 @@ func TestLinterValidator_CrashNotSilencedByClamp(t *testing.T) {
 		a, base,
 	)
 	diags := v.Run(validate.Context{})
-	if len(diags) != 1 || diags[0].Severity != validate.SeverityWarning {
-		t.Fatalf("severity clamp must not mute parse error warning; got %#v", diags)
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
+		t.Fatalf("severity clamp must not mute parse error; got %#v", diags)
 	}
 }
 

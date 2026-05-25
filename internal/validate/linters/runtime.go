@@ -198,10 +198,10 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	parsed, parseErr := v.adapter.ParseOutput(stdoutBuf.Bytes(), stderrBuf.Bytes(), exitCode)
 	findings = append(findings, parsed...)
 	if parseErr != nil {
-		operationalDiags = append(operationalDiags, warn(
+		operationalDiags = append(operationalDiags, fail(
 			v.ID(),
 			fmt.Sprintf("%s: failed to parse output: %v", v.ID(), parseErr),
-			"",
+			"check that the linter binary produces valid output",
 		))
 	}
 

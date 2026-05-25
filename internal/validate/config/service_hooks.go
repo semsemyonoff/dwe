@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"
 )
@@ -136,7 +137,7 @@ func validateHooks(
 			})
 			continue
 		}
-		if cmd.Type != "shell" && cmd.Type != "script" {
+		if cmd.Type != model.CommandTypeShell && cmd.Type != model.CommandTypeScript {
 			emit(validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Message:  fmt.Sprintf("service %q %s: command %q has type %q; only shell/script commands can be used in hooks", svcName, hookName, ref, string(cmd.Type)),
