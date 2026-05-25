@@ -20,6 +20,15 @@ import (
 // supported values: bash, zsh, fish, powershell.
 var ErrUnsupportedShell = errors.New("unsupported shell")
 
+// completionExitError carries a fixed exit code for main.go's ExitCode() dispatch.
+type completionExitError struct {
+	msg  string
+	code int
+}
+
+func (e *completionExitError) Error() string { return e.msg }
+func (e *completionExitError) ExitCode() int { return e.code }
+
 // supportedShells is the canonical list accepted by install/uninstall.
 var supportedShells = []string{"bash", "zsh", "fish", "powershell"}
 
@@ -134,7 +143,7 @@ func resolveInstallPath(shell, customDir string) (string, error) {
 
 	home, err := completionHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("cannot resolve home directory; pass --path <dir> explicitly")
+		return "", &completionExitError{msg: "cannot resolve home directory; pass --path <dir> explicitly", code: 2}
 	}
 
 	switch shell {

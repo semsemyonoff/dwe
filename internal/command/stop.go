@@ -28,10 +28,11 @@ var stopContainerFn = docker.StopContainer
 
 // StopServiceDeps carries all state needed by StopService and stopServiceLocked.
 type StopServiceDeps struct {
-	Cfg         *config.DevboxConfig
-	CmdRegistry *registry.Registry // required for type: command preflight checks
-	BaseDir     string
-	ErrOut      io.Writer // preflight diagnostics writer
+	Cfg            *config.DevboxConfig
+	CmdRegistry    *registry.Registry // nil-tolerant; preflight surfaces unknown-command diagnostics
+	CmdRegistryErr error              // deferred registry-load error; checked after preflight succeeds
+	BaseDir        string
+	ErrOut         io.Writer // preflight diagnostics writer
 	// SkipPreflight honors the --skip-preflight flag (ignored by stopServiceLocked
 	// because the caller already ran preflight).
 	SkipPreflight bool
@@ -50,6 +51,9 @@ func StopService(ctx context.Context, deps StopServiceDeps, name string) error {
 	}
 	if err := preflight.Run(ctx, deps.Cfg, deps.CmdRegistry, deps.BaseDir, "stop", deps.SkipPreflight, errOut); err != nil {
 		return err
+	}
+	if deps.CmdRegistryErr != nil {
+		return fmt.Errorf("loading command registry: %w", deps.CmdRegistryErr)
 	}
 	releaseLocks, err := lock.AcquireProjectLocks(deps.BaseDir)
 	if err != nil {
@@ -117,14 +121,12 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 			}
 			baseDir := filepath.Dir(flags.configPath)
 			deps := StopServiceDeps{
-				Cfg:           cfg,
-				CmdRegistry:   reg,
-				BaseDir:       baseDir,
-				ErrOut:        cmd.ErrOrStderr(),
-				SkipPreflight: skipPreflight,
-			}
-			if regErr != nil {
-				return fmt.Errorf("loading command registry: %w", regErr)
+				Cfg:            cfg,
+				CmdRegistry:    reg,
+				CmdRegistryErr: regErr,
+				BaseDir:        baseDir,
+				ErrOut:         cmd.ErrOrStderr(),
+				SkipPreflight:  skipPreflight,
 			}
 			if err := StopService(cmd.Context(), deps, name); err != nil {
 				return err
