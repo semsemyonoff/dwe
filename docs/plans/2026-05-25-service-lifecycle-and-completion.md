@@ -258,8 +258,8 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 8: Journal `PendingApply` data model
 
-- [ ] in `internal/deploy/journal/state.go`, add `Pending *PendingApply` field to `ProjectState` with **YAML** tag `yaml:"pending,omitempty"` — the state file is encoded by `yaml.v3` and every existing field in this file uses `yaml:` tags (see `state.go:31-56`). A `json:` tag would be silently ignored by the encoder, breaking `omitempty` and leaving the field unwritten. Pointer nullity (`Pending == nil`) is the "no pending action" sentinel — zero-value safe by construction, no `PendingNone` enum value needed
-- [ ] add `PendingApply` as a **list of ops** (tenth review correctness fix — single `{Kind, Services}` collapses mixed batches and silently drops the required restart op when the deploy portion is later applied):
+- [x] in `internal/deploy/journal/state.go`, add `Pending *PendingApply` field to `ProjectState` with **YAML** tag `yaml:"pending,omitempty"` — the state file is encoded by `yaml.v3` and every existing field in this file uses `yaml:` tags (see `state.go:31-56`). A `json:` tag would be silently ignored by the encoder, breaking `omitempty` and leaving the field unwritten. Pointer nullity (`Pending == nil`) is the "no pending action" sentinel — zero-value safe by construction, no `PendingNone` enum value needed
+- [x] add `PendingApply` as a **list of ops** (tenth review correctness fix — single `{Kind, Services}` collapses mixed batches and silently drops the required restart op when the deploy portion is later applied):
   ```go
   type PendingApply struct {
       Operations []PendingOp `yaml:"operations"`
@@ -273,7 +273,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   }
   ```
   Invariants: `len(Operations) > 0` whenever `Pending != nil` (collapse to nil when last op removed); at most one op per `Kind` (deduped on insert — see `AddPendingOp`).
-- [ ] add `PendingKind` string enum with explicit zero-value sentinel:
+- [x] add `PendingKind` string enum with explicit zero-value sentinel:
   ```go
   const (
       PendingKindUnspecified PendingKind = ""   // zero value; never stored on a non-nil PendingApply
@@ -281,9 +281,9 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
       PendingDeploy          PendingKind = "deploy"
   )
   ```
-- [ ] `(*PendingApply).Find(kind PendingKind) *PendingOp` returns the op for that kind or nil (helper for banner renderer + clear helpers)
-- [ ] `(*PendingOp).ServiceNames() []string` returns `slices.Clone(op.Services)` so callers cannot mutate journal state
-- [ ] add **package-level helpers** matching the existing `journal.RemoveService(path, name)` pattern (`state.go:174`) — load + mutate + atomic save in one call:
+- [x] `(*PendingApply).Find(kind PendingKind) *PendingOp` returns the op for that kind or nil (helper for banner renderer + clear helpers)
+- [x] `(*PendingOp).ServiceNames() []string` returns `slices.Clone(op.Services)` so callers cannot mutate journal state
+- [x] add **package-level helpers** matching the existing `journal.RemoveService(path, name)` pattern (`state.go:174`) — load + mutate + atomic save in one call:
   ```go
   func AddPendingOp(path string, op PendingOp, configHash string) error
   func AddPendingOps(path string, ops []PendingOp, configHash string) error
@@ -312,8 +312,8 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - `ClearPendingForKind(path, kind)`: removes every op of that kind from `Operations`; if `Operations` becomes empty, sets `Pending = nil`. Used by standalone `devbox restart` (clears restart op without touching deploy op — mixed pending survives as `[{deploy,...}]`) and by `devbox deploy run` (no `--service`) for the deploy kind
   - `ClearPendingForServices(path, kind, services)`: locates the op of that kind; for `PendingDeploy` removes the named services from `op.Services`; if `op.Services` becomes empty, removes the op entirely; if `Operations` becomes empty, sets `Pending = nil`. For `PendingRestart` the services arg is ignored and the entire restart op is removed (restart is binary present/absent). Used by `devbox deploy run --service <name>`. The toggle executor uses the batch `ClearPendingOps` helper instead — never the single-call form
   - All seven: `Load(path)` → mutate → `Save(path)` (atomic temp+rename, same path as `RemoveService`). On missing state file, `AddPendingOp` / `AddPendingOps` create a fresh `ProjectState`; `Clear*` and `ClearPendingOps` are no-ops on missing file; `ReplaceServiceWithPending` on missing state file treats the remove as no-op and proceeds with the add
-- [ ] do NOT also expose mutation methods on `*ProjectState` — pick one API surface. Tests load state from disk via `Load(path)` to assert pending shape after each helper call
-- [ ] write tests (table-driven, each asserts state by reloading via `Load(path)` after the helper call so persistence is exercised):
+- [x] do NOT also expose mutation methods on `*ProjectState` — pick one API surface. Tests load state from disk via `Load(path)` to assert pending shape after each helper call
+- [x] write tests (table-driven, each asserts state by reloading via `Load(path)` after the helper call so persistence is exercised):
   - first `AddPendingOp({Restart})` creates `Operations: [{Restart}]`
   - `AddPendingOp({Deploy, ["a"]})` after a restart op → `Operations: [{Restart}, {Deploy,[a]}]` (two ops, both kinds preserved — tenth review mixed-batch regression)
   - `AddPendingOp({Deploy, ["b"]})` when a deploy op already holds `["a"]` → op merges to `{Deploy, ["a","b"]}` (sorted, deduped); still one deploy op
@@ -338,7 +338,7 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - **`ClearPendingOps` empty slice**: → no-op, no save, no error
   - `Clear*` on a missing state file is a no-op (no error)
   - `(*PendingOp).ServiceNames()` returns a copy (mutating the returned slice doesn't affect the journal)
-- [ ] run `go test ./internal/deploy/journal/...` - must pass before next task
+- [x] run `go test ./internal/deploy/journal/...` - must pass before next task
 
 ### Task 9: `ServiceToggleHooks` schema + types in `service.yml`
 

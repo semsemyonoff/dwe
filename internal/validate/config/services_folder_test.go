@@ -22,12 +22,12 @@ func makeServiceFolder(t *testing.T) string {
 
 func TestServicesFolderValidator(t *testing.T) {
 	tests := []struct {
-		name        string
-		setup       func(root string)
-		wantHasOK   bool
-		wantErrors  int
-		wantWarns   int
-		wantMsgHas  []string
+		name       string
+		setup      func(root string)
+		wantHasOK  bool
+		wantErrors int
+		wantWarns  int
+		wantMsgHas []string
 	}{
 		{
 			name: "no services directory",

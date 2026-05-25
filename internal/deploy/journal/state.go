@@ -61,6 +61,7 @@ type ProjectState struct {
 	SchemaVersion string                   `yaml:"schema_version"`
 	Project       *ProjectLevelState       `yaml:"project,omitempty"`
 	Services      map[string]*ServiceState `yaml:"services,omitempty"`
+	Pending       *PendingApply            `yaml:"pending,omitempty"`
 }
 
 // ProjectLevelState tracks the project-wide state including project-scope phases.
