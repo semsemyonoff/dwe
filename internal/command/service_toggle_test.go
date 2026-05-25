@@ -31,6 +31,13 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	container string
 }) string {
 	t.Helper()
+	// Same default as writeServiceProject — assume stack is running so the
+	// pending/apply branches fire. Override per-test for stopped/probe-error
+	// regressions.
+	oldDetect := detectStackRunning
+	t.Cleanup(func() { detectStackRunning = oldDetect })
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+
 	dir := t.TempDir()
 
 	var devboxLines []string
@@ -166,6 +173,11 @@ func TestServicesToggle_TTY_EnablesAndDisables(t *testing.T) {
 		return ui.MultiSelectResult{Kept: []string{"second"}, Locked: []string{"main"}}, nil
 	}
 
+	// Decline the apply prompt — this test only asserts local.yml mutation.
+	oldPrompt := confirmApplyPrompt
+	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
+	confirmApplyPrompt = func() (bool, error) { return false, nil }
+
 	flags := &rootFlags{configPath: configPath}
 	cmd := newServiceCmd(flags)
 	if err := cmd.RunE(cmd, nil); err != nil {
@@ -292,6 +304,15 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 		}
 		return ui.MultiSelectResult{Kept: []string{"adminer"}, Locked: []string{"main"}}, nil
 	}
+
+	// Stack-running override + decline apply prompt — this test asserts the
+	// multi-select item ordering, not the apply behavior.
+	oldDetect := detectStackRunning
+	t.Cleanup(func() { detectStackRunning = oldDetect })
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+	oldPrompt := confirmApplyPrompt
+	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
+	confirmApplyPrompt = func() (bool, error) { return false, nil }
 
 	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newServiceCmd(flags)
@@ -445,6 +466,13 @@ func TestServiceEnableCmd_OptionalInfraEnables(t *testing.T) {
 // Returns (configPath, baseDir).
 func writeServiceProject(t *testing.T, svcYAML string) (string, string) {
 	t.Helper()
+	// Default to "stack running" for toggle tests so the existing pending /
+	// hook assertions remain valid. Individual tests that exercise the
+	// stack-not-running path must override this seam themselves.
+	oldDetect := detectStackRunning
+	t.Cleanup(func() { detectStackRunning = oldDetect })
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"),
 		[]byte("project:\n  name: test\n  prefix: t\n"), 0o644); err != nil {
@@ -471,6 +499,146 @@ func readPending(t *testing.T, baseDir string) *journal.PendingApply {
 		t.Fatalf("load journal state: %v", err)
 	}
 	return state.Pending
+}
+
+// TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks verifies
+// that when the stack is not currently running AND the user did not pass
+// --apply, the toggle records pending (so devbox status reminds the user) and
+// does NOT auto-run hooks/restart. local.yml is updated.
+func TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
+
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return false, nil }
+
+	restartCalled := false
+	oldRunRestart := singleToggleRunRestart
+	t.Cleanup(func() { singleToggleRunRestart = oldRunRestart })
+	singleToggleRunRestart = func(_ lifecycle.RunContext) error {
+		restartCalled = true
+		return nil
+	}
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"svc"})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	if _, err := os.Stat(localPath); err != nil {
+		t.Fatalf("local.yml must be written: %v", err)
+	}
+	if p := readPending(t, baseDir); p == nil || p.Find(journal.PendingRestart) == nil {
+		t.Errorf("pending must be recorded so devbox status shows the deferred work, got %+v", p)
+	}
+	if restartCalled {
+		t.Error("RunRestart must NOT auto-run when stack is stopped and --apply was not passed")
+	}
+	if !strings.Contains(out.String(), "stack is not running") {
+		t.Errorf("expected info message about stack not running, got: %q", out.String())
+	}
+}
+
+// TestSingleToggle_StackNotRunning_Apply_StillExecutes verifies that an
+// explicit --apply is honored even when the stack probe reports stopped.
+// The apply step itself (deploy/restart) brings containers up.
+func TestSingleToggle_StackNotRunning_Apply_StillExecutes(t *testing.T) {
+	configPath, _ := writeServiceProject(t, "type: app\ncontainer: c\n")
+
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return false, nil }
+
+	restartCalled := false
+	oldRunRestart := singleToggleRunRestart
+	t.Cleanup(func() { singleToggleRunRestart = oldRunRestart })
+	singleToggleRunRestart = func(_ lifecycle.RunContext) error {
+		restartCalled = true
+		return nil
+	}
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"--apply", "svc"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !restartCalled {
+		t.Error("explicit --apply must execute the plan even when stack is stopped")
+	}
+}
+
+// TestSingleToggle_StackProbeError_ProceedsAsRunning verifies that a probe
+// failure (docker missing / daemon down) does NOT collapse to "stopped". The
+// toggle proceeds as if running: pending is recorded and --apply executes.
+func TestSingleToggle_StackProbeError_ProceedsAsRunning(t *testing.T) {
+	configPath, _ := writeServiceProject(t, "type: app\ncontainer: c\n")
+
+	// Override the helper's default (true) with a probe-error sentinel.
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) {
+		return false, fmt.Errorf("docker daemon unreachable")
+	}
+
+	restartCalled := false
+	oldRunRestart := singleToggleRunRestart
+	t.Cleanup(func() { singleToggleRunRestart = oldRunRestart })
+	singleToggleRunRestart = func(_ lifecycle.RunContext) error {
+		restartCalled = true
+		return nil
+	}
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"--apply", "svc"})
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !restartCalled {
+		t.Error("RunRestart must be invoked when probe fails (probe error must NOT silently skip apply)")
+	}
+
+	if !strings.Contains(stderr.String(), "could not probe stack state") {
+		t.Errorf("expected probe warning on stderr, got: %q", stderr.String())
+	}
+}
+
+// TestSingleToggle_StackProbeError_PendingStillRecorded verifies that when the
+// probe fails AND the user did not pass --apply, the deferred pending entry is
+// still written (probe failure must not silently drop the deferred work).
+func TestSingleToggle_StackProbeError_PendingStillRecorded(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
+
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) {
+		return false, fmt.Errorf("docker daemon unreachable")
+	}
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	flags := &rootFlags{configPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"svc"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pending := readPending(t, baseDir)
+	if pending == nil || pending.Find(journal.PendingRestart) == nil {
+		t.Errorf("expected PendingRestart to be recorded under probe error, got %+v", pending)
+	}
 }
 
 // TestSingleToggle_PrintPlan_NoMutation verifies --print-plan makes no filesystem changes.
@@ -597,10 +765,13 @@ func TestSingleToggle_TTY_No_PendingRecorded(t *testing.T) {
 	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
+	oldPrompt := confirmApplyPrompt
+	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
+	confirmApplyPrompt = func() (bool, error) { return false, nil }
+
 	flags := &rootFlags{configPath: configPath}
 	cmd := newServiceEnableCmd(flags)
 	cmd.SetArgs([]string{"svc"})
-	cmd.SetIn(strings.NewReader("n\n"))
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -687,10 +858,13 @@ func TestSingleToggle_TTY_Yes_ClearsPending(t *testing.T) {
 	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
+	oldPrompt := confirmApplyPrompt
+	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
+	confirmApplyPrompt = func() (bool, error) { return true, nil }
+
 	flags := &rootFlags{configPath: configPath}
 	cmd := newServiceEnableCmd(flags)
 	cmd.SetArgs([]string{"svc"})
-	cmd.SetIn(strings.NewReader("y\n"))
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -921,6 +1095,10 @@ func TestSingleToggle_DisableFlow(t *testing.T) {
 	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
+	oldDetect := detectStackRunning
+	t.Cleanup(func() { detectStackRunning = oldDetect })
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+
 	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newServiceDisableCmd(flags)
 	cmd.SetArgs([]string{"svc"})
@@ -950,6 +1128,59 @@ func TestSingleToggle_DisableFlow(t *testing.T) {
 	}
 }
 
+// TestBuildContributors_DeployOrRestart_ResolvedFromJournal verifies that
+// the deploy-or-restart resolution in buildContributors matches the one in
+// buildTogglePlan — otherwise the pending op recorded would not match the
+// apply step the user is told to run.
+func TestBuildContributors_DeployOrRestart_ResolvedFromJournal(t *testing.T) {
+	cfg := makeServicesCfg(map[string]config.ServiceConfig{
+		"never": {Type: config.ServiceTypeApp, Container: "n",
+			OnEnable: &config.ServiceToggleHooks{Requires: config.RequiresDeployOrRestart}},
+		"already": {Type: config.ServiceTypeApp, Container: "a",
+			OnEnable: &config.ServiceToggleHooks{Requires: config.RequiresDeployOrRestart}},
+	}, map[string]testTool{}, nil, nil)
+
+	toggles := []ToggleAction{
+		{Service: "never", Direction: DirectionEnable},
+		{Service: "already", Direction: DirectionEnable},
+	}
+
+	contributors := buildContributors(cfg, toggles, map[string]bool{"already": true})
+
+	got := make(map[string]config.ToggleRequires, len(contributors))
+	for _, c := range contributors {
+		got[c.Service] = c.Requires
+	}
+	if got["never"] != config.RequiresDeploy {
+		t.Errorf("deploy-or-restart on never-deployed must resolve to RequiresDeploy, got %q", got["never"])
+	}
+	if got["already"] != config.RequiresRestart {
+		t.Errorf("deploy-or-restart on already-deployed must resolve to RequiresRestart, got %q", got["already"])
+	}
+
+	// The pending ops slice must reflect the resolved kinds — never as deploy
+	// (the service has no journal record) and already as restart.
+	ops := buildPendingOpsFromContributors(contributors)
+	var sawDeploy, sawRestart bool
+	for _, op := range ops {
+		switch op.Kind {
+		case journal.PendingDeploy:
+			sawDeploy = true
+			if len(op.Services) != 1 || op.Services[0] != "never" {
+				t.Errorf("deploy op must target [never], got %v", op.Services)
+			}
+		case journal.PendingRestart:
+			sawRestart = true
+		}
+	}
+	if !sawDeploy {
+		t.Error("expected a PendingDeploy op for the never-deployed service")
+	}
+	if !sawRestart {
+		t.Error("expected a PendingRestart op for the already-deployed service")
+	}
+}
+
 // TestBuildContributors verifies contributor derivation from toggle actions.
 func TestBuildContributors(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
@@ -969,7 +1200,7 @@ func TestBuildContributors(t *testing.T) {
 		{Service: "d", Direction: DirectionEnable},
 	}
 
-	contributors := buildContributors(cfg, toggles)
+	contributors := buildContributors(cfg, toggles, nil)
 	if len(contributors) != 4 {
 		t.Fatalf("expected 4 contributors, got %d", len(contributors))
 	}
@@ -1056,6 +1287,12 @@ func TestBuildPendingOpsFromContributors(t *testing.T) {
 // deployNames lists services that should also have a deploy.yml (phases: []).
 func writeMultiServiceProject(t *testing.T, svcContents map[string]string, deployNames []string) (configPath, baseDir string) {
 	t.Helper()
+	// Same default as writeServiceProject: stack is "running" so the toggle
+	// pending/hook assertions still fire. Override in individual tests when needed.
+	oldDetect := detectStackRunning
+	t.Cleanup(func() { detectStackRunning = oldDetect })
+	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"),
 		[]byte("project:\n  name: test\n  prefix: t\n"), 0o644); err != nil {
@@ -1430,10 +1667,12 @@ func TestMultiToggle_DeclineApply_PendingRecorded(t *testing.T) {
 		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
 	}
 
+	oldPrompt := confirmApplyPrompt
+	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
+	confirmApplyPrompt = func() (bool, error) { return false, nil }
+
 	flags := &rootFlags{configPath: configPath}
 	cmd := newServiceCmd(flags)
-	// User types 'n' at the apply prompt.
-	cmd.SetIn(strings.NewReader("n\n"))
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)

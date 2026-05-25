@@ -518,6 +518,30 @@ func TestToggleRequires_OrDefault(t *testing.T) {
 	}
 }
 
+// TestToggleRequires_Resolve verifies the deploy-or-restart collapse rule and
+// that other values pass through unchanged.
+func TestToggleRequires_Resolve(t *testing.T) {
+	cases := []struct {
+		in       ToggleRequires
+		deployed bool
+		want     ToggleRequires
+	}{
+		{RequiresDeployOrRestart, false, RequiresDeploy},
+		{RequiresDeployOrRestart, true, RequiresRestart},
+		{RequiresRestart, false, RequiresRestart},
+		{RequiresRestart, true, RequiresRestart},
+		{RequiresDeploy, false, RequiresDeploy},
+		{RequiresDeploy, true, RequiresDeploy},
+		{RequiresNone, true, RequiresNone},
+		{RequiresUnspecified, true, RequiresUnspecified},
+	}
+	for _, c := range cases {
+		if got := c.in.Resolve(c.deployed); got != c.want {
+			t.Errorf("%q.Resolve(%v) = %q, want %q", c.in, c.deployed, got, c.want)
+		}
+	}
+}
+
 // TestServiceToggleHooks_parseFullBlock verifies full hooks block parses for each toggleable type.
 func TestServiceToggleHooks_parseFullBlock(t *testing.T) {
 	for _, svcType := range []string{"app", "tool", "infra"} {

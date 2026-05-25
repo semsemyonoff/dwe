@@ -113,6 +113,7 @@ var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 	config.ServiceTypeApp: {
 		"type": true, "container": true, "mandatory": true, "compose": true,
 		"ports": true, "hosts": true, "status": true,
+		"on_enable": true, "on_disable": true, "notes": true,
 		"depends_on": true,
 		"dir":        true, "dir_internal": true, "work_dir_internal": true,
 		"configs": true, "dirs": true, "extends": true, "cli": true, "render": true,
@@ -120,10 +121,12 @@ var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 	config.ServiceTypeInfra: {
 		"type": true, "container": true, "mandatory": true, "compose": true,
 		"ports": true, "hosts": true, "status": true, "depends_on": true,
+		"on_enable": true, "on_disable": true, "notes": true,
 	},
 	config.ServiceTypeTool: {
 		"type": true, "container": true, "mandatory": true, "compose": true,
 		"ports": true, "hosts": true, "status": true,
+		"on_enable": true, "on_disable": true, "notes": true,
 	},
 }
 

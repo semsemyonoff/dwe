@@ -95,7 +95,7 @@ func validateHooks(
 
 	switch {
 	case !req.IsKnown():
-		validList := "none, restart, deploy"
+		validList := "none, restart, deploy, deploy-or-restart"
 		if !isEnable {
 			validList = "none, restart"
 		}
@@ -108,13 +108,22 @@ func validateHooks(
 			Severity: validate.SeverityError,
 			Message:  fmt.Sprintf("service %q on_disable.requires: %q is not allowed for on_disable; valid: none, restart", svcName, "deploy"),
 		})
-	case isEnable && req == config.RequiresDeploy:
-		// on_enable.requires == deploy requires a deploy.yml for the service.
+	case !isEnable && req == config.RequiresDeployOrRestart:
+		// deploy-or-restart resolves to deploy when never deployed — not
+		// meaningful for a disable operation. Keep the on_disable surface
+		// to {none, restart}.
+		emit(validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Message:  fmt.Sprintf("service %q on_disable.requires: %q is not allowed for on_disable; valid: none, restart", svcName, string(req)),
+		})
+	case isEnable && (req == config.RequiresDeploy || req == config.RequiresDeployOrRestart):
+		// on_enable.requires == deploy (or deploy-or-restart which may resolve
+		// to deploy) requires a deploy.yml for the service.
 		deployPath := filepath.Join(servicesDir, svcName, "deploy.yml")
 		if _, err := os.Stat(deployPath); errors.Is(err, os.ErrNotExist) {
 			emit(validate.Diagnostic{
 				Severity: validate.SeverityError,
-				Message:  fmt.Sprintf("service %q declares on_enable.requires: deploy but has no deploy.yml; either add deploy.yml or use requires: restart", svcName),
+				Message:  fmt.Sprintf("service %q declares on_enable.requires: %s but has no deploy.yml; either add deploy.yml or use requires: restart", svcName, string(req)),
 			})
 		}
 	}

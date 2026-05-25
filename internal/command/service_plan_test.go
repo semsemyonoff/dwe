@@ -60,7 +60,7 @@ func TestBuildTogglePlan_SingleEnableRestart(t *testing.T) {
 	})
 	plan, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestBuildTogglePlan_ExplicitRestartRequires(t *testing.T) {
 	})
 	plan, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestBuildTogglePlan_SingleEnableDeploy(t *testing.T) {
 	})
 	plan, err := buildTogglePlan(cfg, emptyReg(), deployMapWith("web"), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -116,6 +116,42 @@ func TestBuildTogglePlan_SingleEnableDeploy(t *testing.T) {
 	}
 }
 
+// TestBuildTogglePlan_DeployOrRestart_NeverDeployed verifies that
+// requires: deploy-or-restart resolves to a Deploy step when the journal
+// has no record of the service being deployed.
+func TestBuildTogglePlan_DeployOrRestart_NeverDeployed(t *testing.T) {
+	cfg := makeToggleCfg(map[string]config.ServiceConfig{
+		"web": svcApp(&config.ServiceToggleHooks{Requires: config.RequiresDeployOrRestart}, nil, nil),
+	})
+	plan, err := buildTogglePlan(cfg, emptyReg(), deployMapWith("web"), []ToggleAction{
+		{Service: "web", Direction: DirectionEnable},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(plan.ApplySteps) != 1 || plan.ApplySteps[0].Kind != journal.PendingDeploy {
+		t.Fatalf("deploy-or-restart on never-deployed must produce Deploy step, got %+v", plan.ApplySteps)
+	}
+}
+
+// TestBuildTogglePlan_DeployOrRestart_AlreadyDeployed verifies that
+// requires: deploy-or-restart resolves to a Restart step when the service
+// is already in the deployed set.
+func TestBuildTogglePlan_DeployOrRestart_AlreadyDeployed(t *testing.T) {
+	cfg := makeToggleCfg(map[string]config.ServiceConfig{
+		"web": svcApp(&config.ServiceToggleHooks{Requires: config.RequiresDeployOrRestart}, nil, nil),
+	})
+	plan, err := buildTogglePlan(cfg, emptyReg(), deployMapWith("web"), []ToggleAction{
+		{Service: "web", Direction: DirectionEnable},
+	}, map[string]bool{"web": true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(plan.ApplySteps) != 1 || plan.ApplySteps[0].Kind != journal.PendingRestart {
+		t.Fatalf("deploy-or-restart on already-deployed must produce Restart step, got %+v", plan.ApplySteps)
+	}
+}
+
 // TestBuildTogglePlan_MixedDeployAndRestart verifies that two enables where one
 // needs deploy and one needs restart produces [{Deploy,[deploy-contrib]},{Restart}].
 func TestBuildTogglePlan_MixedDeployAndRestart(t *testing.T) {
@@ -126,7 +162,7 @@ func TestBuildTogglePlan_MixedDeployAndRestart(t *testing.T) {
 	plan, err := buildTogglePlan(cfg, emptyReg(), deployMapWith("alpha"), []ToggleAction{
 		{Service: "alpha", Direction: DirectionEnable},
 		{Service: "beta", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -151,7 +187,7 @@ func TestBuildTogglePlan_DeployContribWithoutDeployFile(t *testing.T) {
 	})
 	_, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -167,7 +203,7 @@ func TestBuildTogglePlan_AllNone(t *testing.T) {
 	})
 	plan, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -197,7 +233,7 @@ func TestBuildTogglePlan_BeforeAfterOrdering(t *testing.T) {
 	plan, err := buildTogglePlan(cfg, reg, emptyDeployMap(), []ToggleAction{
 		{Service: "bbb", Direction: DirectionEnable}, // submitted out of alpha order
 		{Service: "aaa", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -247,7 +283,7 @@ func TestBuildTogglePlan_NotesPresentAndAbsent(t *testing.T) {
 
 	planEnable, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -257,7 +293,7 @@ func TestBuildTogglePlan_NotesPresentAndAbsent(t *testing.T) {
 
 	planDisable, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionDisable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -271,12 +307,99 @@ func TestBuildTogglePlan_NotesPresentAndAbsent(t *testing.T) {
 	})
 	planNoNotes, err := buildTogglePlan(cfgNoNotes, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(planNoNotes.Notes) != 0 {
 		t.Errorf("want no notes, got %v", planNoNotes.Notes)
+	}
+}
+
+// TestBuildTogglePlan_NotesTemplate verifies that notes support Go template
+// expansion against the merged config (.name / .svc / .project / .raw).
+func TestBuildTogglePlan_NotesTemplate(t *testing.T) {
+	cfg := makeToggleCfg(map[string]config.ServiceConfig{
+		"web": {
+			Type:      config.ServiceTypeApp,
+			Container: "myapp",
+			Enabled:   true,
+			OnEnable:  &config.ServiceToggleHooks{Requires: config.RequiresNone},
+			Notes:     &config.ServiceNotes{Enable: "remember to run migrations on {{ .svc.Container }} (service: {{ .name }})"},
+		},
+	})
+
+	plan, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
+		{Service: "web", Direction: DirectionEnable},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(plan.Notes) != 1 {
+		t.Fatalf("want 1 note, got %d", len(plan.Notes))
+	}
+	want := "remember to run migrations on myapp (service: web)"
+	if plan.Notes[0] != want {
+		t.Errorf("note = %q, want %q", plan.Notes[0], want)
+	}
+}
+
+// TestBuildTogglePlan_NotesTemplateError verifies that a bad template surfaces
+// inline rather than disappearing silently.
+func TestBuildTogglePlan_NotesTemplateError(t *testing.T) {
+	cfg := makeToggleCfg(map[string]config.ServiceConfig{
+		"web": {
+			Type:      config.ServiceTypeApp,
+			Container: "myapp",
+			Enabled:   true,
+			OnEnable:  &config.ServiceToggleHooks{Requires: config.RequiresNone},
+			// Unterminated action — text/template will reject at parse time.
+			Notes: &config.ServiceNotes{Enable: "broken {{ .name"},
+		},
+	})
+
+	plan, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
+		{Service: "web", Direction: DirectionEnable},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(plan.Notes) != 1 || !strings.Contains(plan.Notes[0], "note template error") {
+		t.Errorf("expected inline template error marker, got %v", plan.Notes)
+	}
+}
+
+// TestBuildTogglePlan_DisableDeployOrRestart_RejectedOnDeployedService verifies
+// that on_disable.requires: deploy-or-restart is rejected even when the
+// service is currently deployed (where Resolve would otherwise collapse it to
+// restart). Runtime must mirror the static validator, which rejects this on
+// every disable regardless of journal state.
+func TestBuildTogglePlan_DisableDeployOrRestart_RejectedOnDeployedService(t *testing.T) {
+	cfg := makeToggleCfg(map[string]config.ServiceConfig{
+		"web": svcApp(nil, &config.ServiceToggleHooks{Requires: config.RequiresDeployOrRestart}, nil),
+	})
+	_, err := buildTogglePlan(cfg, emptyReg(), deployMapWith("web"), []ToggleAction{
+		{Service: "web", Direction: DirectionDisable},
+	}, map[string]bool{"web": true})
+	if !errors.Is(err, ErrDisableDeployForbidden) {
+		t.Errorf("want ErrDisableDeployForbidden, got %v", err)
+	}
+}
+
+// TestBuildTogglePlan_DeployOrRestart_RejectedWithoutDeployFile verifies that
+// requires: deploy-or-restart without a deploy.yml is rejected even when the
+// service is already deployed (where Resolve would collapse to restart). The
+// runtime guard mirrors the static validator's deploy.yml requirement on raw
+// `deploy-or-restart`.
+func TestBuildTogglePlan_DeployOrRestart_RejectedWithoutDeployFile(t *testing.T) {
+	cfg := makeToggleCfg(map[string]config.ServiceConfig{
+		"web": svcApp(&config.ServiceToggleHooks{Requires: config.RequiresDeployOrRestart}, nil, nil),
+	})
+	_, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
+		{Service: "web", Direction: DirectionEnable},
+	}, map[string]bool{"web": true})
+	if !errors.Is(err, ErrDeployRequiredNoDeployFile) {
+		t.Errorf("want ErrDeployRequiredNoDeployFile, got %v", err)
 	}
 }
 
@@ -288,7 +411,7 @@ func TestBuildTogglePlan_UnknownRequires(t *testing.T) {
 	})
 	_, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -304,7 +427,7 @@ func TestBuildTogglePlan_DisableDeployForbidden(t *testing.T) {
 	})
 	_, err := buildTogglePlan(cfg, emptyReg(), deployMapWith("web"), []ToggleAction{
 		{Service: "web", Direction: DirectionDisable},
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -320,7 +443,7 @@ func TestBuildTogglePlan_DirectionUnspecifiedError(t *testing.T) {
 	})
 	_, err := buildTogglePlan(cfg, emptyReg(), emptyDeployMap(), []ToggleAction{
 		{Service: "web", Direction: DirectionUnspecified},
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("expected error for unspecified direction, got nil")
 	}
@@ -338,7 +461,7 @@ func TestBuildTogglePlan_DeployContribsAlphabeticalOrder(t *testing.T) {
 		{Service: "zeta", Direction: DirectionEnable},
 		{Service: "alpha", Direction: DirectionEnable},
 		{Service: "mu", Direction: DirectionEnable},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

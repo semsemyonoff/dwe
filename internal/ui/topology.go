@@ -146,28 +146,26 @@ func buildTopoNode(name string, deps map[string][]string, status map[string]Node
 	return node
 }
 
-// categoryStyle returns the Lipgloss style for a node category tag.
-func categoryStyle(cat NodeCategory) lipgloss.Style {
-	switch cat {
-	case CatService:
-		return styleAccent
-	case CatTool:
-		return styleText
-	default:
-		return styleMuted
-	}
-}
-
-// categoryLabel returns the display string for a node category.
+// categoryLabel returns the display string for a node category. Labels match
+// the headings used by `devbox status apps/tools/infra` and feed into
+// serviceTypeStyle so the topology palette stays in sync with the rest of the
+// CLI.
 func categoryLabel(cat NodeCategory) string {
 	switch cat {
 	case CatService:
-		return "service"
+		return "app"
 	case CatTool:
 		return "tool"
 	default:
 		return "infra"
 	}
+}
+
+// categoryStyle returns the Lipgloss style for a node category tag, delegating
+// to the shared service-type palette so app/tool/infra colors are defined in
+// one place (styles.go).
+func categoryStyle(cat NodeCategory) lipgloss.Style {
+	return serviceTypeStyle(categoryLabel(cat))
 }
 
 // topoNodeLabel formats a service name with a category tag and status annotation.

@@ -1,7 +1,6 @@
 package command
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -130,6 +129,10 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 		return fmt.Errorf("loading service deploy configs: %w", err)
 	}
 
+	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
+	deployedServices, journalErr := loadDeployedServices(statePath)
+	warnDeployedServicesLoad(cmd.ErrOrStderr(), journalErr)
+
 	// --print-plan: build plan in-memory from the current (pre-mutation) config,
 	// render to stdout, then return without any filesystem mutations.
 	if opts.printPlan {
@@ -140,7 +143,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 		for _, name := range toDisable {
 			toggles = append(toggles, ToggleAction{Service: name, Direction: DirectionDisable})
 		}
-		plan, err := buildTogglePlan(cfg, reg, svcDeploys, toggles)
+		plan, err := buildTogglePlan(cfg, reg, svcDeploys, toggles, deployedServices)
 		if err != nil {
 			return err
 		}
@@ -150,12 +153,13 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
-	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
+
+	stackRunning := probeStackOrWarn(cmd.ErrOrStderr(), cfg, baseDir)
 
 	plan, contributors, cfgNew, err := mutateAndPlanBatch(
 		cmd.OutOrStdout(),
 		baseDir, flags.configPath, localPath, envPath, statePath,
-		cfg, reg, svcDeploys,
+		cfg, reg, svcDeploys, deployedServices,
 		toEnable, toDisable,
 	)
 	if err != nil {
@@ -178,6 +182,7 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 		Contributors: contributors,
 	}
 
+	// Explicit --apply always executes (even when stack probe reports stopped).
 	if opts.apply {
 		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
 	}
@@ -185,17 +190,27 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
 		return nil
 	}
+
+	// Stack not running and no --apply: pending already recorded; defer apply.
+	if !stackRunning {
+		warnStackStopped(cmd.OutOrStdout(), plan)
+		return nil
+	}
+
 	if len(plan.ApplySteps) == 0 {
 		// Hooks exist but no apply step — execute immediately without prompting.
 		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
 	}
 
 	// We're always in TTY here (checked at the top), so prompt the user.
-	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Run them now? [y/N] ")
-	reader := bufio.NewReader(cmd.InOrStdin())
-	line, _ := reader.ReadString('\n')
-	line = strings.TrimSpace(strings.ToLower(line))
-	if line == "y" || line == "yes" {
+	ok, err := confirmApplyPrompt()
+	if err != nil {
+		if errors.Is(err, ui.ErrCancelled) {
+			return nil
+		}
+		return err
+	}
+	if ok {
 		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
 	}
 	return nil

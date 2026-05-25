@@ -181,18 +181,28 @@ func RemoveHiddenNodes(topo map[string][]string, status map[string]ui.NodeStatus
 }
 
 // BuildNodeCategories maps compose service names to topology categories
-// based on the devbox config. app/infra containers → CatService, tool
-// containers → CatTool, everything else defaults to CatInfra.
+// based on the actual service Type in the devbox config:
+//
+//   - app   → CatService
+//   - tool  → CatTool
+//   - infra → CatInfra
+//
+// Services without a Container are skipped. Unknown types fall through to CatInfra.
 func BuildNodeCategories(cfg *config.DevboxConfig) map[string]ui.NodeCategory {
 	cats := make(map[string]ui.NodeCategory)
 	for _, svc := range cfg.Services {
 		if svc.Container == "" {
 			continue
 		}
-		if svc.IsTool() {
-			cats[svc.Container] = ui.CatTool
-		} else {
+		switch svc.Type {
+		case config.ServiceTypeApp:
 			cats[svc.Container] = ui.CatService
+		case config.ServiceTypeTool:
+			cats[svc.Container] = ui.CatTool
+		case config.ServiceTypeInfra:
+			cats[svc.Container] = ui.CatInfra
+		default:
+			cats[svc.Container] = ui.CatInfra
 		}
 	}
 	return cats

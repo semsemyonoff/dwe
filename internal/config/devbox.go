@@ -542,16 +542,17 @@ type ToggleRequires string
 
 // ToggleRequires values.
 const (
-	RequiresUnspecified ToggleRequires = "" // zero value when field omitted in YAML
-	RequiresNone        ToggleRequires = "none"
-	RequiresRestart     ToggleRequires = "restart"
-	RequiresDeploy      ToggleRequires = "deploy"
+	RequiresUnspecified     ToggleRequires = "" // zero value when field omitted in YAML
+	RequiresNone            ToggleRequires = "none"
+	RequiresRestart         ToggleRequires = "restart"
+	RequiresDeploy          ToggleRequires = "deploy"
+	RequiresDeployOrRestart ToggleRequires = "deploy-or-restart" // resolves to deploy if never deployed, else restart
 )
 
 // IsKnown reports whether r is a recognized ToggleRequires value (including the zero value).
 func (r ToggleRequires) IsKnown() bool {
 	switch r {
-	case RequiresUnspecified, RequiresNone, RequiresRestart, RequiresDeploy:
+	case RequiresUnspecified, RequiresNone, RequiresRestart, RequiresDeploy, RequiresDeployOrRestart:
 		return true
 	}
 	return false
@@ -561,6 +562,25 @@ func (r ToggleRequires) IsKnown() bool {
 func (r ToggleRequires) OrDefault() ToggleRequires {
 	if r == RequiresUnspecified {
 		return RequiresRestart
+	}
+	return r
+}
+
+// Resolve collapses a possibly-virtual ToggleRequires to a concrete one
+// understood by the apply executor and the pending-journal writer:
+//
+//   - RequiresDeployOrRestart → RequiresDeploy when the service has never
+//     been successfully deployed (deployed=false), else RequiresRestart.
+//   - Any other value is returned unchanged.
+//
+// Callers MUST funnel both the apply plan and the pending op through this
+// method so the two stay in sync.
+func (r ToggleRequires) Resolve(deployed bool) ToggleRequires {
+	if r == RequiresDeployOrRestart {
+		if deployed {
+			return RequiresRestart
+		}
+		return RequiresDeploy
 	}
 	return r
 }

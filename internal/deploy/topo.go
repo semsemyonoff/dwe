@@ -16,6 +16,10 @@ var (
 	ErrDeploySelfReference = errors.New("deploy: service references itself in after")
 	// ErrDeployUnknownAfterRef is returned when after: references a service that does not exist.
 	ErrDeployUnknownAfterRef = errors.New("deploy: after references unknown service")
+	// ErrMandatoryAfterOptional is returned when a mandatory service declares an
+	// after: edge that points to an optional service. Mandatory services must
+	// always deploy before optional services, so the constraint is invalid.
+	ErrMandatoryAfterOptional = errors.New("deploy: mandatory service cannot declare after an optional service")
 )
 
 // TopoSortByAfter returns service names in deploy-order (dependencies-first) based
@@ -32,12 +36,20 @@ var (
 func TopoSortByAfter(deploys map[string]*config.DeployConfig, services map[string]config.ServiceConfig) ([]string, error) {
 	// Validate all after: references before attempting the sort.
 	for name, dc := range deploys {
+		svc := services[name]
 		for _, dep := range dc.After {
 			if dep == name {
 				return nil, fmt.Errorf("%w: service %q", ErrDeploySelfReference, name)
 			}
-			if _, ok := services[dep]; !ok {
+			depSvc, ok := services[dep]
+			if !ok {
 				return nil, fmt.Errorf("%w: service %q after: references %q", ErrDeployUnknownAfterRef, name, dep)
+			}
+			// Mandatory services always deploy before optional ones. An
+			// after: edge from mandatory → optional would invert that order.
+			if svc.Mandatory && !depSvc.Mandatory {
+				return nil, fmt.Errorf("%w: mandatory service %q after: references optional service %q",
+					ErrMandatoryAfterOptional, name, dep)
 			}
 		}
 	}
@@ -105,5 +117,18 @@ func TopoSortByAfter(deploys map[string]*config.DeployConfig, services map[strin
 		}
 	}
 
-	return order, nil
+	// Mandatory services always come before optional ones. The topological
+	// order above respects after: within and across buckets; partition it now
+	// so the bucket invariant holds regardless of the after: graph. Within
+	// each bucket the relative after: order from the DFS is preserved.
+	mandatory := make([]string, 0, len(order))
+	optional := make([]string, 0, len(order))
+	for _, name := range order {
+		if services[name].Mandatory {
+			mandatory = append(mandatory, name)
+		} else {
+			optional = append(optional, name)
+		}
+	}
+	return append(mandatory, optional...), nil
 }

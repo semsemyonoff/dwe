@@ -163,6 +163,15 @@ func (v *deployAfterValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					Message:  fmt.Sprintf("service %q after: references %q which is disabled; the constraint will not trigger because %q will not deploy", name, ref, ref),
 				})
 			}
+
+			// Mandatory services always deploy before optional ones; an after:
+			// edge from mandatory → optional inverts that and is invalid.
+			if services[name].Mandatory && !refSvc.Mandatory {
+				emit(validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Message:  fmt.Sprintf("mandatory service %q after: references optional service %q; mandatory services always deploy before optional ones", name, ref),
+				})
+			}
 		}
 	}
 
@@ -187,6 +196,14 @@ func (v *deployAfterValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					Message:  err.Error(),
 				})
 			case errors.Is(err, deploy.ErrDeployUnknownAfterRef):
+				perDiags = append(perDiags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   "config.deploy-after",
+					Message:  err.Error(),
+				})
+			case errors.Is(err, deploy.ErrMandatoryAfterOptional):
+				// Per-rule check above already emits this; safety net only.
 				perDiags = append(perDiags, validate.Diagnostic{
 					Severity: validate.SeverityError,
 					Domain:   "config",

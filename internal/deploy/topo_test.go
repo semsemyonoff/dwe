@@ -143,6 +143,89 @@ func TestTopoSortByAfter_selfReference(t *testing.T) {
 	}
 }
 
+func makeMandatoryServicesMap(spec map[string]bool) map[string]config.ServiceConfig {
+	m := make(map[string]config.ServiceConfig, len(spec))
+	for name, mandatory := range spec {
+		m[name] = config.ServiceConfig{Mandatory: mandatory}
+	}
+	return m
+}
+
+func TestTopoSortByAfter_mandatoryBeforeOptional(t *testing.T) {
+	// "b" is mandatory; "a" and "c" are optional. Alphabetical tie-break would
+	// produce [a, b, c]; the mandatory partition must bubble b to the front
+	// regardless of after-graph (none declared here).
+	deploys := makeDeployMap(t, map[string][]string{
+		"a": nil,
+		"b": nil,
+		"c": nil,
+	})
+	services := makeMandatoryServicesMap(map[string]bool{
+		"a": false,
+		"b": true,
+		"c": false,
+	})
+	order, err := deploy.TopoSortByAfter(deploys, services)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"b", "a", "c"}
+	if len(order) != len(want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	for i, w := range want {
+		if order[i] != w {
+			t.Errorf("order[%d] = %q, want %q", i, order[i], w)
+		}
+	}
+}
+
+func TestTopoSortByAfter_mandatoryAfterOptionalRejected(t *testing.T) {
+	// "m" is mandatory and tries to deploy after optional "o" → error.
+	deploys := makeDeployMap(t, map[string][]string{
+		"m": {"o"},
+		"o": nil,
+	})
+	services := makeMandatoryServicesMap(map[string]bool{
+		"m": true,
+		"o": false,
+	})
+	_, err := deploy.TopoSortByAfter(deploys, services)
+	if err == nil {
+		t.Fatal("expected ErrMandatoryAfterOptional, got nil")
+	}
+	if !errors.Is(err, deploy.ErrMandatoryAfterOptional) {
+		t.Errorf("err = %v, want wraps ErrMandatoryAfterOptional", err)
+	}
+}
+
+func TestTopoSortByAfter_mandatoryAfterMandatoryAllowed(t *testing.T) {
+	// Mandatory after another mandatory is fine (within-bucket ordering).
+	deploys := makeDeployMap(t, map[string][]string{
+		"m1": nil,
+		"m2": {"m1"},
+		"o":  nil,
+	})
+	services := makeMandatoryServicesMap(map[string]bool{
+		"m1": true,
+		"m2": true,
+		"o":  false,
+	})
+	order, err := deploy.TopoSortByAfter(deploys, services)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"m1", "m2", "o"}
+	if len(order) != len(want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	for i, w := range want {
+		if order[i] != w {
+			t.Errorf("order[%d] = %q, want %q", i, order[i], w)
+		}
+	}
+}
+
 func TestTopoSortByAfter_unknownAfterRef(t *testing.T) {
 	deploys := makeDeployMap(t, map[string][]string{
 		"a": {"nonexistent"},

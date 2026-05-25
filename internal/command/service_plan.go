@@ -13,11 +13,43 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/lifecycle"
 	"devbox-cli/internal/lock"
+	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/usercommands/runtime"
 
 	"github.com/spf13/cobra"
 )
+
+// renderNote evaluates a `notes.enable` / `notes.disable` string as a Go
+// template against the toggled service's context. Available top-level keys:
+//
+//   - .name     — the service name being toggled
+//   - .svc      — the resolved config.ServiceConfig for that service
+//   - .services — the full cfg.Services map (resolved, enabled bits applied)
+//   - .project  — cfg.Project
+//
+// The raw merged-config map (cfg.Raw) is intentionally NOT exposed: that map
+// changes shape whenever the loader is refactored, and binding it to a
+// user-visible template surface would freeze the layout.
+//
+// Strings without any `{{` markers are returned unchanged.
+func renderNote(note string, cfg *config.DevboxConfig, name string) string {
+	if note == "" || cfg == nil {
+		return note
+	}
+	data := map[string]any{
+		"name":     name,
+		"svc":      cfg.Services[name],
+		"services": cfg.Services,
+		"project":  cfg.Project,
+	}
+	out, err := tpl.Render(note, data)
+	if err != nil {
+		return fmt.Sprintf("[note template error: %v] %s", err, note)
+	}
+	return out
+}
 
 // Sentinel errors for toggle plan building.
 var (
@@ -73,6 +105,9 @@ type TogglePlan struct {
 //
 // svcDeploys is the per-service deploy config map (from config.LoadServiceDeployConfigs).
 // reg is used to validate hook command references at build time.
+// deployedServices is the set of services currently in StatusDeployed (from the
+// journal); used to resolve `requires: deploy-or-restart`. Nil/empty means
+// "nothing currently deployed" — deploy-or-restart resolves to deploy.
 //
 // Coverage rule for ApplySteps:
 //   - all RequiresNone  → ApplySteps = nil
@@ -84,6 +119,7 @@ func buildTogglePlan(
 	reg *registry.Registry,
 	svcDeploys map[string]*config.DeployConfig,
 	toggles []ToggleAction,
+	deployedServices map[string]bool,
 ) (TogglePlan, error) {
 	// Validate all directions before doing any work.
 	for _, t := range toggles {
@@ -127,22 +163,31 @@ func buildTogglePlan(
 				ErrUnknownToggleRequires, t.Service, hooks.Requires)
 		}
 
-		// Resolve the effective requires (defaulting unspecified → restart).
+		// Runtime guards must mirror service_hooks validator and run against the
+		// RAW value (unspecified collapsed to its default) — never the post-Resolve
+		// value — so journal state cannot make a statically invalid config pass.
 		var rawRequires config.ToggleRequires
 		if hooks != nil {
 			rawRequires = hooks.Requires
 		}
-		requires := rawRequires.OrDefault()
+		raw := rawRequires.OrDefault()
 
-		// Runtime guard: on_disable.requires: deploy is forbidden.
-		if t.Direction == DirectionDisable && requires == config.RequiresDeploy {
+		// on_disable: deploy / deploy-or-restart are both forbidden (the latter
+		// resolves to deploy on never-deployed services).
+		if t.Direction == DirectionDisable &&
+			(raw == config.RequiresDeploy || raw == config.RequiresDeployOrRestart) {
 			return TogglePlan{}, fmt.Errorf("%w: service %q", ErrDisableDeployForbidden, t.Service)
 		}
 
-		// Runtime guard: requires: deploy needs a deploy.yml.
-		if requires == config.RequiresDeploy && svcDeploys[t.Service] == nil {
+		// deploy / deploy-or-restart need a deploy.yml at the time the toggle
+		// is declared, regardless of current journal state.
+		if (raw == config.RequiresDeploy || raw == config.RequiresDeployOrRestart) &&
+			svcDeploys[t.Service] == nil {
 			return TogglePlan{}, fmt.Errorf("%w: %s", ErrDeployRequiredNoDeployFile, t.Service)
 		}
+
+		// Now collapse deploy-or-restart against the journal for ApplyStep shaping.
+		requires := raw.Resolve(deployedServices[t.Service])
 
 		// Accumulate apply kinds.
 		switch requires {
@@ -163,7 +208,8 @@ func buildTogglePlan(
 			}
 		}
 
-		// Collect notes for this direction.
+		// Collect notes for this direction. Notes support Go templates against
+		// the merged config (see renderNote for available keys).
 		if svc.Notes != nil {
 			var note string
 			if t.Direction == DirectionEnable {
@@ -172,7 +218,7 @@ func buildTogglePlan(
 				note = svc.Notes.Disable
 			}
 			if note != "" {
-				notes = append(notes, note)
+				notes = append(notes, renderNote(note, cfg, t.Service))
 			}
 		}
 	}
@@ -213,35 +259,75 @@ func buildTogglePlan(
 	}, nil
 }
 
-// renderTogglePlan writes the numbered plan to w.
-// Lines that are runnable shell commands are printed in their exact shell form.
-// Internal apply steps (multi-service deploy, restart) are prefixed with → to
-// distinguish them from commands the user can copy-paste.
+// planEntry is the data for one rendered plan line. icon is the leading glyph
+// (already styled), body is the human-readable literal to display, and stylize
+// is a per-kind wrapper that applies the body's color/weight as a single span —
+// keeping body unbroken in the output so existing substring-based tests still
+// match.
+type planEntry struct {
+	icon    string
+	body    string
+	stylize func(string) string
+}
+
+// renderTogglePlan writes the numbered plan to w using the project's lipgloss
+// palette so the output reads at a glance.
+//
+// Style choices:
+//   - Before/after hook commands → accent "▶" icon, key style on the full command.
+//   - Single-service deploy command → success "↑" icon, accent on the full command.
+//   - Multi-service deploy apply step → success "↑" icon, accent body.
+//   - Restart apply step → warning "↻" icon, accent body.
+//   - Notes section → accent header, accent "•" bullets, body in default color.
+//
+// Each entry's body is rendered as a single styled span (no ANSI inside the
+// literal) so the apply-step text remains greppable for tests and for users.
 func renderTogglePlan(w io.Writer, plan TogglePlan) {
-	var entries []string
+	cmdEntry := func(commandID string) planEntry {
+		return planEntry{
+			icon:    ui.StyleInfo("▶"),
+			body:    fmt.Sprintf("devbox commands %s", commandID),
+			stylize: ui.StyleKey,
+		}
+	}
+
+	var entries []planEntry
 
 	for _, s := range plan.BeforeSteps {
-		entries = append(entries, fmt.Sprintf("devbox commands %s", s.CommandID))
+		entries = append(entries, cmdEntry(s.CommandID))
 	}
 	for _, s := range plan.ApplySteps {
 		switch s.Kind {
 		case journal.PendingDeploy:
 			if len(s.Services) == 1 {
-				entries = append(entries, fmt.Sprintf("devbox deploy run --service %s", s.Services[0]))
+				entries = append(entries, planEntry{
+					icon:    ui.RenderEnabled("↑"),
+					body:    fmt.Sprintf("devbox deploy run --service %s", s.Services[0]),
+					stylize: ui.StyleKey,
+				})
 			} else {
-				entries = append(entries, fmt.Sprintf("→ apply step: deploy services {%s} (dependency-ordered at execution)",
-					strings.Join(s.Services, ", ")))
+				body := fmt.Sprintf("→ apply step: deploy services {%s} (dependency-ordered at execution)",
+					strings.Join(s.Services, ", "))
+				entries = append(entries, planEntry{
+					icon:    ui.RenderEnabled("↑"),
+					body:    body,
+					stylize: ui.StyleInfo,
+				})
 			}
 		case journal.PendingRestart:
-			entries = append(entries, "→ apply step: restart stack")
+			entries = append(entries, planEntry{
+				icon:    ui.StyleWarning("↻"),
+				body:    "→ apply step: restart stack",
+				stylize: ui.StyleInfo,
+			})
 		}
 	}
 	for _, s := range plan.AfterSteps {
-		entries = append(entries, fmt.Sprintf("devbox commands %s", s.CommandID))
+		entries = append(entries, cmdEntry(s.CommandID))
 	}
 
 	if len(entries) == 0 && len(plan.Notes) == 0 {
-		_, _ = fmt.Fprintln(w, "No steps required.")
+		_, _ = fmt.Fprintln(w, ui.StyleMuted("No steps required."))
 		return
 	}
 
@@ -250,9 +336,22 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 		if len(entries) == 1 {
 			plural = ""
 		}
-		_, _ = fmt.Fprintf(w, "Plan to apply (%d step%s):\n", len(entries), plural)
+		header := fmt.Sprintf("Plan to apply (%d step%s):", len(entries), plural)
+		_, _ = fmt.Fprintln(w, ui.StyleSubheader(header))
+
+		// Width of the largest "N." index so dots align in multi-digit plans.
+		idxWidth := len(fmt.Sprintf("%d", len(entries)))
 		for i, e := range entries {
-			_, _ = fmt.Fprintf(w, "  %d. %s\n", i+1, e)
+			idx := fmt.Sprintf("%*d.", idxWidth, i+1)
+			body := e.body
+			if e.stylize != nil {
+				body = e.stylize(body)
+			}
+			_, _ = fmt.Fprintf(w, "  %s %s  %s\n",
+				ui.StyleMuted(idx),
+				e.icon,
+				body,
+			)
 		}
 	}
 
@@ -260,9 +359,10 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 		if len(entries) > 0 {
 			_, _ = fmt.Fprintln(w, "")
 		}
-		_, _ = fmt.Fprintln(w, "Notes:")
+		_, _ = fmt.Fprintln(w, ui.StyleSubheader("Notes:"))
+		bullet := ui.StyleInfo("•")
 		for _, n := range plan.Notes {
-			_, _ = fmt.Fprintf(w, "  - %s\n", n)
+			_, _ = fmt.Fprintf(w, "  %s %s\n", bullet, n)
 		}
 	}
 }
