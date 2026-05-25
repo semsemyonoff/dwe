@@ -1,0 +1,42 @@
+[
+  {
+    "file": "scripts/a.sh",
+    "line": 3,
+    "endLine": 3,
+    "column": 1,
+    "endColumn": 10,
+    "level": "warning",
+    "code": 2086,
+    "message": "Double quote to prevent globbing and word splitting."
+  },
+  {
+    "file": "scripts/a.sh",
+    "line": 7,
+    "endLine": 7,
+    "column": 5,
+    "endColumn": 12,
+    "level": "error",
+    "code": 1009,
+    "message": "The mentioned syntax error was in this simple command."
+  },
+  {
+    "file": "scripts/b.sh",
+    "line": 12,
+    "endLine": 12,
+    "column": 1,
+    "endColumn": 4,
+    "level": "info",
+    "code": 2034,
+    "message": "VAR appears unused. Verify it or export it."
+  },
+  {
+    "file": "scripts/b.sh",
+    "line": 14,
+    "endLine": 14,
+    "column": 1,
+    "endColumn": 4,
+    "level": "style",
+    "code": 2250,
+    "message": "Prefer ${var} braces around variable references."
+  }
+]
