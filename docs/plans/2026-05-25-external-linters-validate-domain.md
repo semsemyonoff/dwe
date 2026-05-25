@@ -174,27 +174,14 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
 - [x] run `go test ./internal/validate/linters/...`.
 
 ### Task 6: `All(...)` assembler + scope wiring
-- [ ] create `all.go`: `func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator`. For each `LinterEntry`: look up built-in `Adapter` by ID; if not found AND `type: generic` → use generic adapter; if not found AND `type: builtin` (or default) → return a synthetic error validator that emits "unknown built-in linter: <id>" (matches `checks` domain pattern for unknown types).
-- [ ] **`validateLoadErr` handling (CRITICAL — distinguishes "missing file" from "broken file")**: in the current command flow (`internal/command/validate.go:252`), `validateCfg` is nil in *both* cases — file missing AND file present but unparseable. The `config.validate` validator already emits the parse-error diagnostic separately, but the linters domain must not silently fall back to autodetect when the user clearly tried to configure something. Decision tree (evaluated top-to-bottom, first match wins; explicit nil-cfg guard prevents any nil deref):
-  - `validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist)` → return zero validators. Corrupt-config short-circuit; takes precedence over the nil-cfg fallback below. Rationale: a corrupt `validate.yml` makes user intent unknowable, and silently running autodetected linters could violate explicit `enabled: false` that the user thought was in effect. The `config.validate` validator surfaces the parse error to the user; that's the actionable signal.
-  - `validateCfg == nil` (covers both `os.ErrNotExist` and a defensive nil-cfg-with-nil-err case) → treat as `&ValidateConfig{Linters: nil}` → fall through to per-adapter autodetect below. **Never dereference `validateCfg` before this guard runs**.
-  - otherwise → use `validateCfg.Linters` (may be empty → per-adapter autodetect for adapters with no entry).
-- [ ] expose a small `builtinAdapters()` factory map (`shellcheck`, `hadolint`) so adapter registration is single-source.
-- [ ] **reserved-flag enforcement**: after binding an entry to an adapter (built-in or generic), call `validateUserFlags(adapter, entry.Flags)`. On failure → return a synthetic error validator emitting `"<id>: flag <flag> is reserved (locked to <adapter-specific reason>)"` instead of registering the linter. Short-circuits before any subprocess runs and gives the user actionable feedback in the normal diagnostics table.
-- [ ] **per-adapter autodetect** (not all-or-nothing): for *each* known built-in adapter, if the user's `linters:` map has no entry for that adapter ID, synthesize an entry with all-default fields. This means a config that only customizes `shellcheck` still autodetects `hadolint`. User can disable per-adapter via `<id>: { enabled: false }`.
-- [ ] write `all_test.go`:
-  - **nil cfg + nil err → all built-in entries synthesized** (defensive — shouldn't happen in practice but mustn't panic);
-  - **nil cfg + `os.ErrNotExist` → all built-in entries synthesized** (canonical missing-file case);
-  - **nil cfg + arbitrary parse error → zero validators returned** (corrupt-file safety);
-  - empty config → all built-in entries synthesized;
-  - **partial config (only shellcheck) → hadolint still synthesized**;
-  - explicit config → user entries take precedence;
-  - **explicit `enabled: false` → adapter not registered (or registered as silent-skip)**;
-  - unknown built-in → error validator;
-  - `type: generic` with unknown ID → generic adapter used.
-  - **reserved-flag rejection**: `linters: { shellcheck: { flags: [--format=gcc] } }` → error validator (linter NOT registered); same for hadolint `-f`. Reserved flags allowed for generic adapter.
-- [ ] update the Task 7 wiring call site to thread `validateLoadErr` in: `vallinters.All(validateCfg, validateLoadErr, projectRoot)`.
-- [ ] run `go test ./internal/validate/linters/...`.
+- [x] create `all.go`: `func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator`. For each `LinterEntry`: look up built-in `Adapter` by ID; if not found AND `type: generic` → use generic adapter; if not found AND `type: builtin` (or default) → return a synthetic error validator that emits "unknown built-in linter: <id>" (matches `checks` domain pattern for unknown types).
+- [x] **`validateLoadErr` handling (CRITICAL — distinguishes "missing file" from "broken file")**: corrupt-config short-circuit returns zero validators; `validateCfg == nil` (including `os.ErrNotExist`) falls through to per-adapter autodetect.
+- [x] expose a small `builtinAdapters()` factory map (`shellcheck`, `hadolint`) so adapter registration is single-source.
+- [x] **reserved-flag enforcement**: after binding an entry to an adapter, call `validateUserFlags(adapter, entry.Flags)`. On failure → return a synthetic error validator instead of registering the linter.
+- [x] **per-adapter autodetect** (not all-or-nothing): for each known built-in adapter without a user entry, synthesize an entry with defaults.
+- [x] write `all_test.go` covering: nil+nil, nil+ErrNotExist, nil+parse error, empty config, partial config, explicit config precedence, `enabled: false`, unknown built-in, generic with unknown ID, reserved-flag rejection across all argv forms, reserved flags allowed for generic.
+- [x] update the Task 7 wiring call site to thread `validateLoadErr` in: `vallinters.All(validateCfg, validateLoadErr, projectRoot)`. *(deferred to Task 7.)*
+- [x] run `go test ./internal/validate/linters/...`.
 
 ### Task 7: Wire into `buildRegistry` + add `linters [id]` subcommand
 - [ ] in `internal/command/validate.go` `buildRegistry` (currently line 406), add `for _, v := range vallinters.All(validateCfg, validateLoadErr, projectRoot) { reg.Register(v) }` after the snapshot block (ordering does not matter — sorting is deterministic). `validateLoadErr` is already in scope at `buildRegistry`'s call site (line 279); thread it through the signature, mirroring how `checksLoadErr` is already passed to `valchecks.AllForStage`.

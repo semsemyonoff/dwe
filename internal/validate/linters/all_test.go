@@ -1,0 +1,215 @@
+package linters
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"sort"
+	"testing"
+
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/validate"
+)
+
+func ids(vs []validate.Validator) []string {
+	out := make([]string, 0, len(vs))
+	for _, v := range vs {
+		out = append(out, v.ID())
+	}
+	sort.Strings(out)
+	return out
+}
+
+func TestAll_NilCfgNilErr_SynthesizesAllBuiltins(t *testing.T) {
+	got := All(nil, nil, t.TempDir())
+	want := []string{HadolintID, ShellcheckID}
+	if diff := fmt.Sprint(ids(got)); diff != fmt.Sprint(want) {
+		t.Fatalf("ids = %v, want %v", ids(got), want)
+	}
+}
+
+func TestAll_NilCfgErrNotExist_SynthesizesAllBuiltins(t *testing.T) {
+	got := All(nil, fs.ErrNotExist, t.TempDir())
+	want := []string{HadolintID, ShellcheckID}
+	if fmt.Sprint(ids(got)) != fmt.Sprint(want) {
+		t.Fatalf("ids = %v, want %v", ids(got), want)
+	}
+}
+
+func TestAll_CorruptConfig_ReturnsZeroValidators(t *testing.T) {
+	got := All(nil, errors.New("yaml: bad token"), t.TempDir())
+	if len(got) != 0 {
+		t.Fatalf("expected zero validators on corrupt config, got %d", len(got))
+	}
+}
+
+func TestAll_EmptyConfig_SynthesizesAllBuiltins(t *testing.T) {
+	cfg := &config.ValidateConfig{}
+	got := All(cfg, nil, t.TempDir())
+	want := []string{HadolintID, ShellcheckID}
+	if fmt.Sprint(ids(got)) != fmt.Sprint(want) {
+		t.Fatalf("ids = %v, want %v", ids(got), want)
+	}
+}
+
+func TestAll_PartialConfig_OtherBuiltinsStillAutodetected(t *testing.T) {
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: ShellcheckID, Type: "builtin", Flags: []string{"--severity=warning"}},
+	}}
+	got := All(cfg, nil, t.TempDir())
+	want := []string{HadolintID, ShellcheckID}
+	if fmt.Sprint(ids(got)) != fmt.Sprint(want) {
+		t.Fatalf("ids = %v, want %v", ids(got), want)
+	}
+}
+
+func TestAll_ExplicitEntryTakesPrecedence(t *testing.T) {
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: ShellcheckID, Type: "builtin", Paths: []string{"custom"}},
+	}}
+	got := All(cfg, nil, t.TempDir())
+	// First validator (insertion order) should be the user-configured shellcheck;
+	// hadolint is auto-detected and appended after.
+	if got[0].ID() != ShellcheckID {
+		t.Fatalf("expected user-configured shellcheck first, got %s", got[0].ID())
+	}
+	lv, ok := got[0].(*linterValidator)
+	if !ok {
+		t.Fatalf("expected *linterValidator, got %T", got[0])
+	}
+	if !lv.pathsExplicit {
+		t.Fatalf("expected pathsExplicit=true on user-configured entry")
+	}
+	if len(lv.entry.Paths) != 1 || lv.entry.Paths[0] != "custom" {
+		t.Fatalf("paths = %v, want [custom]", lv.entry.Paths)
+	}
+}
+
+func TestAll_EnabledFalse_StillRegisteredButRunsSilently(t *testing.T) {
+	disabled := false
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: ShellcheckID, Type: "builtin", Enabled: &disabled},
+	}}
+	got := All(cfg, nil, t.TempDir())
+	// Registered so that scoped runs like `validate linters shellcheck` still
+	// match by ID; runtime gates on enabled at Run() time.
+	want := []string{HadolintID, ShellcheckID}
+	if fmt.Sprint(ids(got)) != fmt.Sprint(want) {
+		t.Fatalf("ids = %v, want %v", ids(got), want)
+	}
+	// Verify the disabled shellcheck emits zero diagnostics at Run time.
+	for _, v := range got {
+		if v.ID() == ShellcheckID {
+			if d := v.Run(validate.Context{}); len(d) != 0 {
+				t.Fatalf("disabled shellcheck emitted diagnostics: %+v", d)
+			}
+		}
+	}
+}
+
+func TestAll_UnknownBuiltin_ProducesErrorValidator(t *testing.T) {
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: "nosuch", Type: "builtin", SourceLine: 42},
+	}}
+	got := All(cfg, nil, t.TempDir())
+	var found bool
+	for _, v := range got {
+		if v.ID() == "nosuch" {
+			ev, ok := v.(*linterErrorValidator)
+			if !ok {
+				t.Fatalf("expected *linterErrorValidator for unknown id, got %T", v)
+			}
+			diags := ev.Run(validate.Context{})
+			if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
+				t.Fatalf("expected one error diagnostic, got %+v", diags)
+			}
+			if diags[0].Line != 42 {
+				t.Fatalf("expected SourceLine 42 preserved, got %d", diags[0].Line)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("did not find validator for unknown id 'nosuch'")
+	}
+}
+
+func TestAll_GenericWithUnknownID_UsesGenericAdapter(t *testing.T) {
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: "yamllint", Type: "generic", Bin: "yamllint"},
+	}}
+	got := All(cfg, nil, t.TempDir())
+	var lv *linterValidator
+	for _, v := range got {
+		if v.ID() == "yamllint" {
+			lv, _ = v.(*linterValidator)
+		}
+	}
+	if lv == nil {
+		t.Fatalf("yamllint validator not registered")
+	}
+	if _, ok := lv.adapter.(*GenericAdapter); !ok {
+		t.Fatalf("expected *GenericAdapter, got %T", lv.adapter)
+	}
+}
+
+func TestAll_ReservedFlagShellcheck_ProducesErrorValidator(t *testing.T) {
+	cases := []struct {
+		name  string
+		flags []string
+	}{
+		{"long with =", []string{"--format=gcc"}},
+		{"long with space", []string{"--format", "gcc"}},
+		{"short attached", []string{"-fgcc"}},
+		{"short with space", []string{"-f", "tty"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+				{ID: ShellcheckID, Type: "builtin", Flags: tc.flags, SourceLine: 7},
+			}}
+			got := All(cfg, nil, t.TempDir())
+			var ev *linterErrorValidator
+			for _, v := range got {
+				if v.ID() == ShellcheckID {
+					ev, _ = v.(*linterErrorValidator)
+				}
+			}
+			if ev == nil {
+				t.Fatalf("expected reserved-flag error validator for shellcheck, got non-error validator")
+			}
+		})
+	}
+}
+
+func TestAll_ReservedFlagHadolint_ProducesErrorValidator(t *testing.T) {
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: HadolintID, Type: "builtin", Flags: []string{"-ftty"}},
+	}}
+	got := All(cfg, nil, t.TempDir())
+	var ev *linterErrorValidator
+	for _, v := range got {
+		if v.ID() == HadolintID {
+			ev, _ = v.(*linterErrorValidator)
+		}
+	}
+	if ev == nil {
+		t.Fatalf("expected reserved-flag error validator for hadolint")
+	}
+}
+
+func TestAll_ReservedFlagsAllowedForGeneric(t *testing.T) {
+	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
+		{ID: "yamllint", Type: "generic", Bin: "yamllint", Flags: []string{"--format=parsable"}},
+	}}
+	got := All(cfg, nil, t.TempDir())
+	for _, v := range got {
+		if v.ID() == "yamllint" {
+			if _, isErr := v.(*linterErrorValidator); isErr {
+				t.Fatalf("generic adapter should not reserve any flags")
+			}
+			return
+		}
+	}
+	t.Fatalf("yamllint validator not registered")
+}
