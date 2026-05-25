@@ -1,0 +1,43 @@
+package docker
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os/exec"
+	"strconv"
+	"strings"
+)
+
+// DefaultStopTimeoutSec is the default timeout passed to `docker stop -t`.
+// Both the per-service stop helper and the daemon_stop builtin use this value
+// so they share a single source of truth.
+const DefaultStopTimeoutSec = 10
+
+// StopContainer issues `docker stop -t <timeoutSec> <containerName>` directly,
+// bypassing docker compose. This allows stopping a container even after its
+// service has been disabled and removed from the rendered compose project.
+//
+// Idempotent: if the container does not exist, StopContainer returns nil.
+// Any other docker error is wrapped and returned.
+func StopContainer(ctx context.Context, dockerBin, containerName string, timeoutSec int) error {
+	if dockerBin == "" {
+		dockerBin = "docker"
+	}
+	args := []string{"stop", "-t", strconv.Itoa(timeoutSec), containerName}
+	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
+	cmd.Stdout = io.Discard
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errOut := stderr.String()
+		if strings.Contains(errOut, "No such container") {
+			return nil
+		}
+		if errOut != "" {
+			return fmt.Errorf("docker stop: %w: %s", err, strings.TrimSpace(errOut))
+		}
+		return fmt.Errorf("docker stop: %w", err)
+	}
+	return nil
+}

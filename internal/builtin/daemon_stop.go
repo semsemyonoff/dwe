@@ -14,7 +14,9 @@ import (
 	"devbox-cli/internal/docker"
 )
 
-const defaultStopTimeout = 10 * time.Second
+// defaultStopTimeout mirrors docker.DefaultStopTimeoutSec as a duration.
+// Converting here keeps stop_timeout parsing independent of the docker package.
+const defaultStopTimeout = docker.DefaultStopTimeoutSec * time.Second
 
 func parseDurationPositive(s string) (time.Duration, error) {
 	d, err := time.ParseDuration(s)

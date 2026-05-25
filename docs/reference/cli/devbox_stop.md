@@ -8,17 +8,21 @@ Stop the project driven by devbox/lifecycle.yml.
 
 Execution order: before-stop hooks → docker down → after-stop hooks → final message.
 
+When a service name is given, stops only that service's container directly via
+'docker stop', bypassing compose. This works even after the service has been disabled.
+
 Use 'devbox docker down' for a bare Docker Compose stop-and-remove without hooks.
 Use 'devbox docker stop' for the low-level compose stop (no container removal).
 
 ```
-devbox stop [flags]
+devbox stop [service] [flags]
 ```
 
 ### Examples
 
 ```
   devbox stop
+  devbox stop postgres
 ```
 
 ### Options

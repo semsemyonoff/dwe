@@ -690,16 +690,16 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 **Resolution**: stop the container directly via `docker stop <containerName>`, bypassing compose. This mirrors the pattern already in `internal/builtin/daemon_stop.go` (`docker stop -t <secs> <fullName>`, idempotent on missing container).
 
-- [ ] relax `internal/command/stop.go` from `cobra.NoArgs` to `cobra.MaximumNArgs(1)`
-- [ ] no-arg path: unchanged (full-stack `lifecycle.RunStop`)
-- [ ] one-arg path: validate `<name>` exists in `cfg.Services` regardless of enabled state (use the Task 3 `LoadServices` result via `composeFiles(true)`-style "include disabled" enumeration). If missing → sentinel `ErrUnknownService` wrapped with name; reuse from existing code if a sentinel already exists
-- [ ] resolve container name: render the service's container template via `daemon.ResolveContainerName(projectFullName, renderedTemplate)`; the template comes from `svc.Container` (with normal `${...}` rendering)
-- [ ] add a new helper in `internal/docker/` (e.g. `StopContainer(ctx, dockerBin, name string, timeoutSec int) error`) that issues `docker stop -t <timeoutSec> <containerName>` directly (no compose). Idempotent on missing container: parse stderr / check exit status the same way `daemon_stop.go` does and treat "No such container" as success
-- [ ] timeout: reuse the same default constant `daemonStopBuiltin` uses today (10s). If the daemon-stop value is hardcoded inline, extract it to an exported package constant (`docker.DefaultStopTimeoutSec`) so the two call sites share a single source. Do NOT invent a new `cfg.Docker.StopTimeout` config field — there isn't one today and the spec doesn't justify adding one
-- [ ] **preflight**: per-service stop runs `preflight.Run(ctx, cfg, cmdRegistry, baseDir, "stop", skip, errOut)` BEFORE acquiring locks, matching the CLAUDE.md "preflight + env/checks domains" invariant for lifecycle commands. The env `ports_free` probe self-skips on `Stage == "stop"`, so this is mostly a docker-bin / docker-daemon / git-bin check — cheap but it MUST run for consistency with the rest of stop/restart/run. `--skip-preflight` is honored the same way as on the other four lifecycle commands
-- [ ] project lock: acquire `lock.AcquireProjectLocks(baseDir)` after preflight for the one-arg path (it mutates Docker state); release after the stop call
-- [ ] `ValidArgsFunction` for tab-completion of the positional arg: return enabled+disabled service names + `cobra.ShellCompDirectiveNoFileComp`; guard via `completionConfigPath` per CLAUDE.md
-- [ ] **API exposed for Task 16 (the only place we accept a locked/unlocked split)** — explicit dependency struct so preflight has what it needs:
+- [x] relax `internal/command/stop.go` from `cobra.NoArgs` to `cobra.MaximumNArgs(1)`
+- [x] no-arg path: unchanged (full-stack `lifecycle.RunStop`)
+- [x] one-arg path: validate `<name>` exists in `cfg.Services` regardless of enabled state (use the Task 3 `LoadServices` result via `composeFiles(true)`-style "include disabled" enumeration). If missing → sentinel `ErrUnknownService` wrapped with name; reuse from existing code if a sentinel already exists
+- [x] resolve container name: render the service's container template via `daemon.ResolveContainerName(projectFullName, renderedTemplate)`; the template comes from `svc.Container` (with normal `${...}` rendering)
+- [x] add a new helper in `internal/docker/` (e.g. `StopContainer(ctx, dockerBin, name string, timeoutSec int) error`) that issues `docker stop -t <timeoutSec> <containerName>` directly (no compose). Idempotent on missing container: parse stderr / check exit status the same way `daemon_stop.go` does and treat "No such container" as success
+- [x] timeout: reuse the same default constant `daemonStopBuiltin` uses today (10s). If the daemon-stop value is hardcoded inline, extract it to an exported package constant (`docker.DefaultStopTimeoutSec`) so the two call sites share a single source. Do NOT invent a new `cfg.Docker.StopTimeout` config field — there isn't one today and the spec doesn't justify adding one
+- [x] **preflight**: per-service stop runs `preflight.Run(ctx, cfg, cmdRegistry, baseDir, "stop", skip, errOut)` BEFORE acquiring locks, matching the CLAUDE.md "preflight + env/checks domains" invariant for lifecycle commands. The env `ports_free` probe self-skips on `Stage == "stop"`, so this is mostly a docker-bin / docker-daemon / git-bin check — cheap but it MUST run for consistency with the rest of stop/restart/run. `--skip-preflight` is honored the same way as on the other four lifecycle commands
+- [x] project lock: acquire `lock.AcquireProjectLocks(baseDir)` after preflight for the one-arg path (it mutates Docker state); release after the stop call
+- [x] `ValidArgsFunction` for tab-completion of the positional arg: return enabled+disabled service names + `cobra.ShellCompDirectiveNoFileComp`; guard via `completionConfigPath` per CLAUDE.md
+- [x] **API exposed for Task 16 (the only place we accept a locked/unlocked split)** — explicit dependency struct so preflight has what it needs:
   ```go
   type StopServiceDeps struct {
       Cfg           *config.DevboxConfig
@@ -721,15 +721,15 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - `stopServiceLocked`: resolves container name, calls `docker.StopContainer(...)`, returns
   - The stop cobra command (`internal/command/stop.go`) loads cfg + registry the same way the other lifecycle commands do (CLAUDE.md "Grouped commands: no child `PersistentPreRunE`"), constructs `StopServiceDeps`, and calls `StopService`
   - This split is what the review asked for: callers either own the lifecycle (`StopService` for the standalone `devbox stop <name>` command) or own preflight + locks themselves and reach for the inner helper (`stopServiceLocked` for reset). No reentrant-lock magic, no caller flags
-- [ ] write tests (table-driven, fresh command per test):
+- [x] write tests (table-driven, fresh command per test):
   - no-arg path delegates to `lifecycle.RunStop` (stub)
   - one-arg with known enabled service → resolves container + calls `StopContainer` with the right name
   - one-arg with known **disabled** service → still resolves container + calls `StopContainer` (compose-bypassed path)
   - one-arg with unknown service → `errors.Is(err, ErrUnknownService)`
   - `StopContainer` returns nil when docker reports "No such container" (idempotent)
   - `StopContainer` returns wrapped error on any other docker failure
-- [ ] update `docs/reference/cli/stop.md` (or wherever the stop reference lives — regenerate via `devbox docs generate`)
-- [ ] run `go test ./internal/command/... ./internal/docker/...` - must pass before next task
+- [x] update `docs/reference/cli/stop.md` (or wherever the stop reference lives — regenerate via `devbox docs generate`)
+- [x] run `go test ./internal/command/... ./internal/docker/...` - must pass before next task
 
 ### Task 16: `reset run --service <name>`
 
