@@ -345,6 +345,116 @@ func TestValidateExitCodeInterface(t *testing.T) {
 	require.Equal(t, 0, err3.ExitCode())
 }
 
+// TestValidateLintersSubcommand verifies the `linters [id]` subcommand is wired
+// up and accepts an optional positional ID argument.
+func TestValidateLintersSubcommand(t *testing.T) {
+	cmd := newValidateCmd(&rootFlags{})
+	lintersCmd, _, _ := cmd.Find([]string{"linters"})
+	require.NotNil(t, lintersCmd)
+	require.Equal(t, "linters", lintersCmd.Name())
+	require.NotNil(t, lintersCmd.Args)
+	require.True(t, lintersCmd.SilenceUsage)
+}
+
+// TestValidateLintersRunsLintersDomainOnly: `devbox validate linters` scopes
+// execution to the linters domain — output must not contain rows from other
+// domains (config, env, checks, snapshot, templates, commands).
+func TestValidateLintersRunsLintersDomainOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"linters"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	// Header should reference external linters specifically.
+	require.Contains(t, out, "external linters")
+	// No rows from other domains.
+	require.NotContains(t, out, "config/")
+	require.NotContains(t, out, "templates/")
+	require.NotContains(t, out, "commands/")
+	require.NotContains(t, out, "checks/")
+	require.NotContains(t, out, "snapshot/")
+}
+
+// TestValidateLintersScopedByIDFiltersToOne: `devbox validate linters shellcheck`
+// must filter rows to just that linter — hadolint (the other autodetected
+// built-in) must not appear.
+func TestValidateLintersScopedByIDFiltersToOne(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"linters", "shellcheck"})
+	_ = cmd.Execute()
+
+	out := output.String()
+	require.Contains(t, out, "external linter shellcheck")
+	require.NotContains(t, out, "hadolint")
+}
+
+// TestValidateLintersUnknownIDIsNotHardError: an unknown linter id must result
+// in zero rows for the linters domain and a successful exit — matching the
+// `checks` domain behavior.
+func TestValidateLintersUnknownIDIsNotHardError(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"linters", "does-not-exist"})
+	err := cmd.Execute()
+	require.NoError(t, err)
+	out := output.String()
+	require.Contains(t, out, "external linter does-not-exist")
+}
+
+// TestValidateLintersStrictUpgradesWarningToError: when a user-configured
+// explicit `bin:` is missing on PATH, the linter runtime emits a Warning. With
+// --strict, that Warning must drive a non-zero exit code.
+func TestValidateLintersStrictUpgradesWarningToError(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	// Configure a generic linter pointing at a binary that won't be on PATH.
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	yml := "linters:\n  totally-fake-bin-xyz:\n    type: generic\n    bin: totally-fake-bin-xyz\n    paths: [\".\"]\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox", "validate.yml"), []byte(yml), 0o644))
+
+	flags := &rootFlags{configPath: devboxPath}
+	cmd := newValidateCmd(flags)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"--strict", "linters", "totally-fake-bin-xyz"})
+	err := cmd.Execute()
+
+	// --strict turns the warning into a non-zero exit.
+	require.Error(t, err)
+	var vfe *validationFailedError
+	require.ErrorAs(t, err, &vfe)
+	require.Equal(t, 1, vfe.ExitCode())
+
+	out := output.String()
+	require.Contains(t, out, "totally-fake-bin-xyz")
+}
+
 // TestValidateSnapshotSubcommand registers and the basic scopes resolve.
 func TestValidateSnapshotSubcommand(t *testing.T) {
 	cmd := newValidateCmd(&rootFlags{})

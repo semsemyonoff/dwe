@@ -15,6 +15,7 @@ import (
 	valcmds "devbox-cli/internal/validate/commands"
 	valconfig "devbox-cli/internal/validate/config"
 	valenv "devbox-cli/internal/validate/env"
+	vallinters "devbox-cli/internal/validate/linters"
 	valsnap "devbox-cli/internal/validate/snapshot"
 	valtmpl "devbox-cli/internal/validate/templates"
 
@@ -71,6 +72,7 @@ Scope targets:
   devbox validate commands                     - commands validator
   devbox validate env                          - environment readiness probes
   devbox validate checks [id]                  - project checks from devbox/validate.yml
+  devbox validate linters [id]                 - external linters from devbox/validate.yml + autodetected built-ins
   devbox validate snapshot [<name>]            - snapshot config + on-disk integrity
 `,
 		Args:         cobra.NoArgs,
@@ -159,6 +161,22 @@ Scope targets:
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			scope := []string{"checks"}
+			if len(args) > 0 {
+				scope = append(scope, args[0])
+			}
+			return runValidate(cmd, flags, strict, quiet, stage, false, scope)
+		},
+	})
+
+	// External linters (shellcheck, hadolint, generic).
+	cmd.AddCommand(&cobra.Command{
+		Use:          "linters [id]",
+		Short:        "Run external linters (shellcheck, hadolint, generic)",
+		Long:         `Run external linters configured in devbox/validate.yml and autodetected built-ins (shellcheck, hadolint). With an id, runs only that linter.`,
+		Args:         cobra.MaximumNArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scope := []string{"linters"}
 			if len(args) > 0 {
 				scope = append(scope, args[0])
 			}
@@ -385,6 +403,11 @@ func validateScopeLabel(scope []string) string {
 			return "project check " + scope[1]
 		}
 		return "your project checks (devbox/validate.yml)"
+	case "linters":
+		if len(scope) > 1 {
+			return "external linter " + scope[1]
+		}
+		return "your external linters"
 	case "snapshot":
 		if len(scope) > 1 {
 			return "snapshot " + scope[1]
@@ -428,6 +451,9 @@ func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig,
 		reg.Register(v)
 	}
 	for _, v := range valsnap.All(cfg, snapCfg, snapCfgErr, baseDir, cmdReg, verifyChecksums) {
+		reg.Register(v)
+	}
+	for _, v := range vallinters.All(validateCfg, validateLoadErr, baseDir) {
 		reg.Register(v)
 	}
 	return reg

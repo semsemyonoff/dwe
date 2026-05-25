@@ -184,9 +184,9 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
 - [x] run `go test ./internal/validate/linters/...`.
 
 ### Task 7: Wire into `buildRegistry` + add `linters [id]` subcommand
-- [ ] in `internal/command/validate.go` `buildRegistry` (currently line 406), add `for _, v := range vallinters.All(validateCfg, validateLoadErr, projectRoot) { reg.Register(v) }` after the snapshot block (ordering does not matter — sorting is deterministic). `validateLoadErr` is already in scope at `buildRegistry`'s call site (line 279); thread it through the signature, mirroring how `checksLoadErr` is already passed to `valchecks.AllForStage`.
-- [ ] add import alias `vallinters "devbox-cli/internal/validate/linters"`.
-- [ ] **add a `linters [id]` Cobra subcommand to `newValidateCmd`** alongside `checks [id]` (the existing closest analog at validate.go ~line 154). Without this, the root `validate` is `cobra.NoArgs` and `devbox validate linters` fails before reaching the registry — scope is conveyed via subcommand, not positional args at root. Pattern:
+- [x] in `internal/command/validate.go` `buildRegistry` (currently line 406), add `for _, v := range vallinters.All(validateCfg, validateLoadErr, projectRoot) { reg.Register(v) }` after the snapshot block (ordering does not matter — sorting is deterministic). `validateLoadErr` is already in scope at `buildRegistry`'s call site (line 279); thread it through the signature, mirroring how `checksLoadErr` is already passed to `valchecks.AllForStage`.
+- [x] add import alias `vallinters "devbox-cli/internal/validate/linters"`.
+- [x] **add a `linters [id]` Cobra subcommand to `newValidateCmd`** alongside `checks [id]` (the existing closest analog at validate.go ~line 154). Without this, the root `validate` is `cobra.NoArgs` and `devbox validate linters` fails before reaching the registry — scope is conveyed via subcommand, not positional args at root. Pattern:
   ```go
   cmd.AddCommand(&cobra.Command{
       Use:   "linters [id]",
@@ -200,10 +200,10 @@ Integrate well-known external linters (shellcheck, hadolint, plus a generic adap
       },
   })
   ```
-- [ ] update the root validate command's `Long` doc string ("Scope targets:" block, lines ~65-74) to add `devbox validate linters [id]   - external linters from devbox/validate.yml + autodetected built-ins`.
-- [ ] verify scope filtering for `["linters"]` and `["linters", "shellcheck"]` works once Task 8's `GroupValidator` expansion in `Registry.Run` lands — `MatchScope` itself is unchanged, but Registry must call into `GroupValidator.Children()` for the linters group so child IDs are visible. Do not assume the per-linter validators are individually registered; the linters domain registers a single group.
-- [ ] add `internal/command/validate_test.go` cases: `devbox validate linters` runs all linter validators only; `devbox validate linters shellcheck` filters to one; `--strict` upgrades a linters Warning to exit 1; unknown linter ID prints empty result (not a hard error — matches `checks` behavior).
-- [ ] run `go test ./internal/command/...`.
+- [x] update the root validate command's `Long` doc string ("Scope targets:" block, lines ~65-74) to add `devbox validate linters [id]   - external linters from devbox/validate.yml + autodetected built-ins`.
+- [x] verify scope filtering for `["linters"]` and `["linters", "shellcheck"]` works once Task 8's `GroupValidator` expansion in `Registry.Run` lands — `MatchScope` itself is unchanged, but Registry must call into `GroupValidator.Children()` for the linters group so child IDs are visible. Do not assume the per-linter validators are individually registered; the linters domain registers a single group. *(In Task 7, `All()` returns per-linter validators registered individually, so scope filtering already works through standard `MatchScope`. Task 8 will refactor to a GroupValidator while preserving the same external scope behavior.)*
+- [x] add `internal/command/validate_test.go` cases: `devbox validate linters` runs all linter validators only; `devbox validate linters shellcheck` filters to one; `--strict` upgrades a linters Warning to exit 1; unknown linter ID prints empty result (not a hard error — matches `checks` behavior).
+- [x] run `go test ./internal/command/...`.
 
 ### Task 8: Parallel execution across linters (via `GroupValidator` interface)
 
