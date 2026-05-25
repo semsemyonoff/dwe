@@ -733,21 +733,21 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
 
 ### Task 16: `reset run --service <name>`
 
-- [ ] add `--service <name>` local flag on the existing `reset run` command (`internal/command/reset.go`)
-- [ ] validation (twelfth review — order matters because step 4 writes a pending entry whose remediation must be runnable):
+- [x] add `--service <name>` local flag on the existing `reset run` command (`internal/command/reset.go`)
+- [x] validation (twelfth review — order matters because step 4 writes a pending entry whose remediation must be runnable):
   - service must exist in `devbox/services/<name>/` → otherwise sentinel `ErrUnknownService`
   - **service MUST have `devbox/services/<name>/deploy.yml`** → otherwise sentinel `ErrServiceNoDeployFile` (the same sentinel Task 7 uses) wrapped with the service name and a hint: `per-service reset clears deployed state and requires a subsequent deploy; service %q has no deploy.yml, so its deployed state cannot be re-provisioned. Use full 'devbox reset run' instead.` This prevents the per-service reset path from creating a `PendingDeploy` entry whose suggested remediation (`devbox deploy run --service <name>`) would itself fail
   - mandatory services are **allowed** (per the earlier spec; mandatory protects from disable, not from reset)
-- [ ] confirmation: in TTY without `--yes` prompt; for mandatory services append: `service is mandatory; reset will clear its deployed state and require a subsequent deploy. continue?`
-- [ ] execution (per-service path):
+- [x] confirmation: in TTY without `--yes` prompt; for mandatory services append: `service is mandatory; reset will clear its deployed state and require a subsequent deploy. continue?`
+- [x] execution (per-service path):
   1. if service is currently enabled AND `on_disable.before` exists → run those user-commands first (use `usercommands/runtime.RunCommand`)
   2. `stopServiceLocked(ctx, deps, name)` (unqualified — reset.go is already in package `command`, same as Task 15's helper). `deps` is the `StopServiceDeps` struct from Task 15 with `Cfg`, `CmdRegistry`, `BaseDir`, `ErrOut` already in scope. Works whether the service is currently enabled or disabled because it bypasses compose and goes through `docker stop <container>` directly. Reset acquires the project locks once (covering steps 2-4 below), so it MUST call the locked variant rather than `StopService` (which would try to re-acquire the lock and deadlock)
   3. if `devbox/services/<name>/reset.yml` exists → execute it (reuse the same phase/step runner as project-wide reset)
   4. **single atomic journal update** (twenty-third review — replaces the previous two-call `RemoveService` then `AddPendingOp` sequence which could leave deployed state cleared with no banner if step 5 failed): `journal.ReplaceServiceWithPending(statePath, name, journal.PendingOp{Kind: journal.PendingDeploy, Services: []string{name}}, currentConfigHash)` — package helper from Task 8 that loads ONCE, removes `state.Services[name]`, adds the deploy pending op, saves ONCE atomically. Either both mutations persist or neither. Safe to suggest `devbox deploy run --service <name>` because the validation above already enforced `deploy.yml` presence; banner says "deploy required for: <name>"
-- [ ] project-wide path (no `--service`) unchanged
-- [ ] **preflight**: reset runs stop-stage preflight once at the top (before on_disable hooks); the `stopServiceLocked` call in step 2 does NOT re-run it
-- [ ] **project lock**: acquired ONCE around steps 2-4 via `lock.AcquireProjectLocks(baseDir)` (step 4's `journal.ReplaceServiceWithPending` is a journal mutation and must run under the lock, same rule as the toggle executor's pending writes in Task 13). On_disable.before hooks (step 1) run outside the lock — they're user commands that may take arbitrary time and shouldn't hold the lock against concurrent inspect commands. Using `stopServiceLocked` (not `StopService`) inside the lock avoids double-acquiring the non-reentrant file lock
-- [ ] write tests:
+- [x] project-wide path (no `--service`) unchanged
+- [x] **preflight**: reset runs stop-stage preflight once at the top (before on_disable hooks); the `stopServiceLocked` call in step 2 does NOT re-run it
+- [x] **project lock**: acquired ONCE around steps 2-4 via `lock.AcquireProjectLocks(baseDir)` (step 4's `journal.ReplaceServiceWithPending` is a journal mutation and must run under the lock, same rule as the toggle executor's pending writes in Task 13). On_disable.before hooks (step 1) run outside the lock — they're user commands that may take arbitrary time and shouldn't hold the lock against concurrent inspect commands. Using `stopServiceLocked` (not `StopService`) inside the lock avoids double-acquiring the non-reentrant file lock
+- [x] write tests:
   - per-service reset with reset.yml present + absent
   - mandatory service confirmation path
   - enabled service runs hooks / disabled service skips hooks
@@ -755,8 +755,8 @@ Note: `LoadResetConfig` returns `*DeployConfig` (not `*ResetConfig`) — reset p
   - journal entry removed
   - pending entry written with kind=deploy
   - **service without `deploy.yml` → `errors.Is(err, ErrServiceNoDeployFile)` BEFORE any side effect; no container stop, no hook run, no journal mutation** (twelfth review regression — prevents writing impossible pending)
-- [ ] update `docs/reference/config/reset.md` with per-service reset section and the symmetry table from the spec
-- [ ] run `go test ./internal/command/... ./internal/deploy/journal/...` - must pass before next task
+- [x] update `docs/reference/config/reset.md` with per-service reset section and the symmetry table from the spec
+- [x] run `go test ./internal/command/... ./internal/deploy/journal/...` - must pass before next task
 
 ### Task 17: Pending banner in `devbox status`
 

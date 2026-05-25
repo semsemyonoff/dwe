@@ -1,22 +1,39 @@
 package command
 
 import (
+	"bufio"
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/lock"
 	pipeline "devbox-cli/internal/pipeline"
+	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/reset"
 	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/usercommands/runtime"
 
 	"github.com/spf13/cobra"
 )
+
+// resetServiceRunHook is the seam for running on_disable.before user commands
+// in per-service reset. Tests override this to avoid needing a real runtime.
+var resetServiceRunHook = runtime.RunCommand
+
+// resetRunHookFn is the seam for runResetHook itself. Tests can override this
+// to intercept hook calls before any registry lookup.
+var resetRunHookFn = runResetHook
 
 func newResetCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -70,29 +87,45 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 }
 
 // newResetRunCmd creates the `devbox reset run` command.
-// Executes the reset pipeline from devbox/reset.yml.
+// Executes the reset pipeline from devbox/reset.yml, or a per-service reset
+// pipeline from devbox/services/<name>/reset.yml when --service is given.
 // Use --yes to skip confirmation prompts.
 //
 // File logging is controlled by the top-level `log:` field in devbox/reset.yml
 // (default: disabled). Enable with `log: true` to write .devbox/logs/reset.log.
 func newResetRunCmd(flags *rootFlags) *cobra.Command {
 	var yes bool
+	var serviceName string
+	var skipPreflight bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Execute the reset pipeline",
 		Long: `Execute the reset pipeline from devbox/reset.yml.
 
+When --service <name> is given, resets only that service:
+runs on_disable.before hooks (if enabled), stops the container via 'docker stop',
+executes devbox/services/<name>/reset.yml (if present), then marks the service
+as requiring a subsequent deploy.
+
 File logging is disabled by default for reset. Enable it with 'log: true' at
 the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if serviceName != "" {
+				return resetServiceRunCmd(cmd, flags, serviceName, yes, skipPreflight)
+			}
 			return resetRunCmd(flags, yes)
+		},
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		},
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
+	cmd.Flags().StringVar(&serviceName, "service", "", "reset only this service")
+	addSkipPreflightFlag(cmd, &skipPreflight)
 	return cmd
 }
 
@@ -178,6 +211,201 @@ func resetRunCmd(flags *rootFlags, yes bool) error {
 		w.Info("Reset log saved to: " + logPath)
 	}
 	return nil
+}
+
+// resetServiceRunCmd implements `devbox reset run --service <name>`.
+// It validates the service, runs preflight, runs on_disable.before hooks
+// (outside the lock), then acquires the project lock and atomically stops
+// the container, executes the per-service reset.yml (if present), and
+// writes a PendingDeploy journal entry.
+func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes bool, skipPreflight bool) error {
+	ctx := cmd.Context()
+	workDir := flags.ProjectRoot()
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
+	baseDir := workDir
+
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Validation: service must exist.
+	svc, ok := cfg.Services[name]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrUnknownService, name)
+	}
+
+	// Validation: service must have a deploy.yml so the pending deploy is actionable.
+	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, cfg.Services)
+	if err != nil {
+		return fmt.Errorf("loading service deploy configs: %w", err)
+	}
+	if svcDeploys[name] == nil {
+		return fmt.Errorf("%w: %s — per-service reset clears deployed state and requires a subsequent deploy; service %q has no deploy.yml, so its deployed state cannot be re-provisioned. Use full 'devbox reset run' instead", deploy.ErrServiceNoDeployFile, name, name)
+	}
+
+	reg, regErr := loadCommandRegistry(flags.configPath)
+	if regErr != nil {
+		reg = nil
+	}
+
+	// Confirmation prompt (before preflight to give user a chance to bail).
+	if !yes {
+		promptMsg := fmt.Sprintf("Reset service %q? This will stop the container and clear its deployed state, requiring a subsequent 'devbox deploy run --service %s'. Continue?", name, name)
+		if svc.Mandatory {
+			promptMsg = fmt.Sprintf("Service %q is mandatory. Reset will clear its deployed state and require a subsequent deploy. Continue?", name)
+		}
+		if ui.IsInteractiveFn(cmd.InOrStdin()) {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s [y/N] ", promptMsg)
+			reader := bufio.NewReader(cmd.InOrStdin())
+			line, _ := reader.ReadString('\n')
+			line = strings.TrimSpace(strings.ToLower(line))
+			if line != "y" && line != "yes" {
+				return nil
+			}
+		}
+	}
+
+	// Preflight: stop-stage, before any hooks or locks.
+	if err := preflight.Run(ctx, cfg, reg, baseDir, "stop", skipPreflight, cmd.ErrOrStderr()); err != nil {
+		return err
+	}
+
+	if regErr != nil {
+		return fmt.Errorf("loading command registry: %w", regErr)
+	}
+
+	// Run on_disable.before hooks outside the lock (only when service is enabled).
+	if svc.Enabled && svc.OnDisable != nil && len(svc.OnDisable.Before) > 0 {
+		for _, cmdID := range svc.OnDisable.Before {
+			if err := resetRunHookFn(ctx, cmd, cfg, reg, baseDir, cmdID); err != nil {
+				return fmt.Errorf("on_disable.before hook %q: %w", cmdID, err)
+			}
+		}
+	}
+
+	// Acquire project locks around container stop, reset.yml, and journal update.
+	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
+	if err != nil {
+		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
+			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
+			render.Stdout().Error(lhe.Error())
+			return lhe
+		}
+		return fmt.Errorf("acquiring project locks: %w", err)
+	}
+	defer releaseLocks()
+
+	deps := StopServiceDeps{
+		Cfg:         cfg,
+		CmdRegistry: reg,
+		BaseDir:     baseDir,
+	}
+
+	// Step 2: Stop the container via compose-bypass (works whether enabled or disabled).
+	if err := stopServiceLocked(ctx, deps, name); err != nil {
+		return fmt.Errorf("stopping service %q: %w", name, err)
+	}
+
+	// Step 3: Execute per-service reset.yml if present.
+	svcResetCfg, err := config.LoadServiceResetConfig(baseDir, name)
+	if err != nil {
+		return fmt.Errorf("loading reset config for service %q: %w", name, err)
+	}
+	if svcResetCfg != nil && len(svcResetCfg.Phases) > 0 {
+		dockerCfg, loadErr := config.LoadDockerConfig(baseDir, cfg)
+		if loadErr != nil {
+			if !errors.Is(loadErr, os.ErrNotExist) {
+				return fmt.Errorf("loading docker config: %w", loadErr)
+			}
+			dockerCfg = &config.DockerConfig{}
+		}
+
+		logEnabled := svcResetCfg.LogEnabled()
+		w, logWriter, termOut, logPath, cleanup, openErr := pipeline.OpenPipelineLog(workDir, "reset-"+name, logEnabled)
+		if openErr != nil {
+			return openErr
+		}
+		defer cleanup()
+
+		rep := pipeline.NewPlainReporter(w, logWriter, termOut)
+		defer rep.Close()
+
+		var steps []pipeline.ResolvedStep
+		for _, phase := range svcResetCfg.Phases {
+			resolved, phaseErr := pipeline.ResolvePhaseSteps(cfg, reg, phase, name)
+			if phaseErr != nil {
+				return fmt.Errorf("resolving reset phase for service %q: %w", name, phaseErr)
+			}
+			steps = append(steps, resolved...)
+		}
+
+		runOpts := pipeline.RunOptions{
+			Steps:        steps,
+			Reporter:     rep,
+			Name:         "reset-" + name,
+			Config:       cfg,
+			DockerConfig: dockerCfg,
+			Registry:     reg,
+			WorkDir:      workDir,
+			LogWriter:    logWriter,
+			SkipConfirm:  yes,
+		}
+		if runErr := pipeline.RunWithOptions(runOpts); runErr != nil {
+			if errors.Is(runErr, ErrSilent) && logEnabled {
+				w.Warning("Full output saved to: " + logPath)
+			}
+			return runErr
+		}
+		if logEnabled {
+			w.Info("Reset log saved to: " + logPath)
+		}
+	}
+
+	// Step 4: Atomic journal update — remove service state and add PendingDeploy.
+	configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
+	pendingOp := journal.PendingOp{
+		Kind:     journal.PendingDeploy,
+		Services: []string{name},
+	}
+	if err := journal.ReplaceServiceWithPending(statePath, name, pendingOp, configHash); err != nil {
+		return fmt.Errorf("updating journal for service %q: %w", name, err)
+	}
+
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Service %q reset. Deploy required: run 'devbox deploy run --service %s'\n", name, name)
+	return nil
+}
+
+// runResetHook looks up a command by ID in the registry and runs it
+// non-interactively. Used for on_disable.before hooks in per-service reset.
+func runResetHook(ctx context.Context, cmd *cobra.Command, cfg *config.DevboxConfig, reg *registry.Registry, baseDir, cmdID string) error {
+	if reg == nil {
+		return fmt.Errorf("command registry required for hook %q", cmdID)
+	}
+	cmdDef, err := reg.Get(cmdID)
+	if err != nil {
+		return fmt.Errorf("looking up command %q: %w", cmdID, err)
+	}
+	var stdout, stderr io.Writer
+	var stdin io.Reader
+	if cmd != nil {
+		stdout = cmd.OutOrStdout()
+		stderr = cmd.ErrOrStderr()
+		stdin = cmd.InOrStdin()
+	}
+	rc := runtime.RunContext{
+		Cmd:            cmdDef,
+		Config:         cfg,
+		Registry:       reg,
+		ProjectRoot:    baseDir,
+		Stdout:         stdout,
+		Stderr:         stderr,
+		Stdin:          stdin,
+		SkipConfirm:    true,
+		NonInteractive: true,
+		SkipNotify:     true,
+	}
+	return resetServiceRunHook(ctx, rc)
 }
 
 // newResetStepCmd creates the `devbox reset step <phase>/<step>` command.
