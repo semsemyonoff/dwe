@@ -260,7 +260,16 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 		reg = nil
 	}
 
-	// Confirmation prompt (before preflight to give user a chance to bail).
+	// Preflight: stop-stage, before any hooks or locks.
+	if err := preflight.Run(ctx, cfg, reg, baseDir, "stop", skipPreflight, cmd.ErrOrStderr()); err != nil {
+		return err
+	}
+
+	if regErr != nil {
+		return fmt.Errorf("loading command registry: %w", regErr)
+	}
+
+	// Confirmation prompt (after preflight so fast-fail checks run first).
 	if !yes {
 		promptMsg := fmt.Sprintf("Reset service %q? This will stop the container and clear its deployed state, requiring a subsequent 'devbox deploy run --service %s'. Continue?", name, name)
 		if svc.Mandatory {
@@ -277,15 +286,6 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 		} else {
 			return fmt.Errorf("non-interactive terminal: use --yes to confirm per-service reset")
 		}
-	}
-
-	// Preflight: stop-stage, before any hooks or locks.
-	if err := preflight.Run(ctx, cfg, reg, baseDir, "stop", skipPreflight, cmd.ErrOrStderr()); err != nil {
-		return err
-	}
-
-	if regErr != nil {
-		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
 	// Run on_disable.before hooks outside the lock (only when service is enabled).

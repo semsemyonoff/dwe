@@ -330,6 +330,11 @@ disabled optional services.`,
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: service %q is already mandatory; nothing to do\n", name)
 					return nil
 				}
+				// Already-enabled optional service: no-op to avoid spurious pending ops.
+				if svc, ok := cfg.Services[name]; ok && !svc.Mandatory && svc.Enabled {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "service %q is already enabled\n", name)
+					return nil
+				}
 			} else {
 				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 					return fmt.Errorf("no service name given; pass a service name or run in an interactive terminal")
@@ -385,6 +390,11 @@ enabled optional services.`,
 				// Cannot disable mandatory.
 				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
 					return fmt.Errorf("cannot disable mandatory service %q", name)
+				}
+				// Already-disabled optional service: no-op to avoid spurious pending ops.
+				if svc, ok := cfg.Services[name]; ok && !svc.Mandatory && !svc.Enabled {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "service %q is already disabled\n", name)
+					return nil
 				}
 			} else {
 				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
