@@ -67,8 +67,8 @@ func TestRenderSummary_ServiceCounts(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Services: map[string]config.ServiceConfig{
-			"main":   {Enabled: true},
-			"second": {Enabled: false},
+			"main":   {Type: config.ServiceTypeApp, Enabled: true},
+			"second": {Type: config.ServiceTypeApp, Enabled: false},
 		},
 	}
 	out := RenderSummary(cfg, nil)
@@ -81,14 +81,37 @@ func TestRenderSummary_MandatoryCountsAsEnabled(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Services: map[string]config.ServiceConfig{
-			"main":   {Mandatory: true},
-			"second": {Enabled: true},
-			"third":  {Enabled: false},
+			"main":   {Type: config.ServiceTypeApp, Mandatory: true},
+			"second": {Type: config.ServiceTypeApp, Enabled: true},
+			"third":  {Type: config.ServiceTypeApp, Enabled: false},
 		},
 	}
 	out := RenderSummary(cfg, nil)
 	if !strings.Contains(out, "2/3") {
 		t.Errorf("expected '2/3' service count (mandatory counts as enabled), got:\n%s", out)
+	}
+}
+
+// TestRenderSummary_ServiceCountIsAppOnly verifies that tools and infra are
+// excluded from the "services N/M enabled" count — only apps are reported.
+func TestRenderSummary_ServiceCountIsAppOnly(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Project: config.ProjectConfig{Name: "myapp"},
+		Services: map[string]config.ServiceConfig{
+			"web":     {Type: config.ServiceTypeApp, Enabled: true},
+			"worker":  {Type: config.ServiceTypeApp, Enabled: false},
+			"db":      {Type: config.ServiceTypeInfra, Mandatory: true},
+			"redis":   {Type: config.ServiceTypeInfra, Mandatory: true},
+			"adminer": {Type: config.ServiceTypeTool, Enabled: true},
+		},
+	}
+	out := RenderSummary(cfg, nil)
+	if !strings.Contains(out, "services 1/2 enabled") {
+		t.Errorf("expected 'services 1/2 enabled' (apps only), got:\n%s", out)
+	}
+	// Infra services must not bleed into the apps counter.
+	if strings.Contains(out, "1/4") || strings.Contains(out, "3/5") {
+		t.Errorf("infra/tool services must not affect the app counter, got:\n%s", out)
 	}
 }
 

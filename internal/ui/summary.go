@@ -39,11 +39,18 @@ func RenderSummary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySum
 	return strings.Join(lines, "\n")
 }
 
-// countServices returns (enabled, total) service counts from the config.
+// countServices returns (enabled, total) counts for app-type services only.
+// Tools have their own counter; infra is excluded because it's mostly mandatory
+// stack plumbing (db, redis, …) that would skew the user-visible "enabled"
+// ratio without adding signal.
 func countServices(cfg *config.DevboxConfig) (int, int) {
-	total := len(cfg.Services)
+	total := 0
 	enabled := 0
 	for _, svc := range cfg.Services {
+		if !svc.IsApp() {
+			continue
+		}
+		total++
 		if svc.Enabled || svc.Mandatory {
 			enabled++
 		}
