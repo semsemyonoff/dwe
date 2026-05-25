@@ -85,11 +85,11 @@ Pending-deploy hint from `journal.PendingApply` is surfaced at the top of the me
 
 ### Task 2: `internal/setup/` package — model + loader
 
-- [ ] create `internal/setup/model.go` with `SetupConfig{Questions []Question}`, `Question{ID, Type, Title, Description string; Required bool; Writes string; Options []Option; Validate *ValidateSpec}`, `Option{Value, Label string}`, `ValidateSpec{Preset, Regex string}`. Question-type values are package constants: `TypeInput = "input"`, `TypeSelect = "select"`, `TypeMultiselect = "multiselect"`, `TypeConfirm = "confirm"`.
-- [ ] create `internal/setup/loader.go` with `LoadSetupYAML(path string) (*SetupConfig, error)` using `yaml.NewDecoder` + `dec.KnownFields(true)`; missing file returns `(nil, nil)` (not an error); other read/parse errors are wrapped `fmt.Errorf("load %s: %w", path, err)` — match the existing `LoadLocalYAML` style.
-- [ ] the loader is intentionally **syntax-strict but semantics-permissive**: unknown YAML fields fail here; unknown `Type` values / duplicate IDs / invalid `writes:` are caught by the `setup.*` validator domain (Task 5), not by the loader. This matches the repo's "strict for user-edited pipeline / command / manifest YAML" pattern.
-- [ ] write table-driven loader tests in `internal/setup/loader_test.go`: each question type parses; unknown top-level field → error; unknown field inside a question → error; empty file → empty `SetupConfig`; missing file → `(nil, nil)`.
-- [ ] run `go test ./internal/setup/...` — must pass before next task
+- [x] create `internal/setup/model.go` with `SetupConfig{Questions []Question}`, `Question{ID, Type, Title, Description string; Required bool; Writes string; Options []Option; Validate *ValidateSpec}`, `Option{Value, Label string}`, `ValidateSpec{Preset, Regex string}`. Question-type values are package constants: `TypeInput = "input"`, `TypeSelect = "select"`, `TypeMultiselect = "multiselect"`, `TypeConfirm = "confirm"`.
+- [x] create `internal/setup/loader.go` with `LoadSetupYAML(path string) (*SetupConfig, error)` using `yaml.NewDecoder` + `dec.KnownFields(true)`; missing file returns `(nil, nil)` (not an error); other read/parse errors are wrapped `fmt.Errorf("load %s: %w", path, err)` — match the existing `LoadLocalYAML` style.
+- [x] the loader is intentionally **syntax-strict but semantics-permissive**: unknown YAML fields fail here; unknown `Type` values / duplicate IDs / invalid `writes:` are caught by the `setup.*` validator domain (Task 5), not by the loader. This matches the repo's "strict for user-edited pipeline / command / manifest YAML" pattern.
+- [x] write table-driven loader tests in `internal/setup/loader_test.go`: each question type parses; unknown top-level field → error; unknown field inside a question → error; empty file → empty `SetupConfig`; missing file → `(nil, nil)`.
+- [x] run `go test ./internal/setup/...` — must pass before next task
 
 ### Task 3: `internal/setup/` — answer-to-overlay merge
 
