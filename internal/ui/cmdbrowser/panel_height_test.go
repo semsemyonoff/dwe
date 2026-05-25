@@ -64,3 +64,67 @@ func TestModel_PanelHeightsMatch_WithLongDescriptions(t *testing.T) {
 		})
 	}
 }
+
+// TestModel_TallTree_DoesNotPushFooterOffScreen guards the bug where a tree
+// with more visible group nodes than panel rows overflowed the bordered frame,
+// stretched the JoinHorizontal body, and pushed the help footer off the alt
+// screen. With viewport clipping the joined body stays at bodyHeight rows so
+// the footer always fits and the "enter" key label remains in View().Content.
+func TestModel_TallTree_DoesNotPushFooterOffScreen(t *testing.T) {
+	t.Parallel()
+	// Build 60 distinct top-level groups, each with one leaf. With any
+	// DefaultExpandedDepth ≥ 0 the 60 top-level group rows are visible in
+	// the tree — far more than the left panel can hold at any reasonable
+	// terminal size.
+	items := make([]Item, 0, 60)
+	for i := 0; i < 60; i++ {
+		id := "g" + itoa(i) + ".cmd"
+		items = append(items, Item{ID: id, Description: "leaf " + itoa(i), Type: "shell"})
+	}
+	for _, dim := range []struct{ w, h int }{{120, 26}, {120, 30}, {140, 40}, {90, 26}} {
+		t.Run("w_"+itoa(dim.w)+"_h_"+itoa(dim.h), func(t *testing.T) {
+			t.Parallel()
+			m := newModel("pick", items, DefaultOptions(), dim.w, dim.h)
+			out := m.View().Content
+			content := strings.TrimRight(out, "\n")
+			lines := strings.Count(content, "\n") + 1
+			if lines > dim.h {
+				t.Errorf("View().Content has %d lines, exceeds terminal height %d (footer will be clipped):\n%s",
+					lines, dim.h, out)
+			}
+			if !strings.Contains(out, "enter") {
+				t.Errorf("footer 'enter' label missing from View().Content — footer was clipped:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestModel_TreeScrollsFocusIntoView asserts that pressing Down past the
+// bottom of the left-panel viewport scrolls the tree so the focused node
+// remains visible. Without this the cursor would silently move onto nodes
+// hidden below the panel.
+func TestModel_TreeScrollsFocusIntoView(t *testing.T) {
+	t.Parallel()
+	items := make([]Item, 0, 50)
+	for i := 0; i < 50; i++ {
+		items = append(items, Item{ID: "g" + itoa(i) + ".cmd", Type: "shell"})
+	}
+	m := newModel("pick", items, DefaultOptions(), 120, 20)
+	// Press Down enough times to land near the end. The viewport height
+	// at h=20 is bodyHeight(20)-2 = 20-3-2-2 = 13 rows; pressing Down 30
+	// times forces the focus past the initial window.
+	for i := 0; i < 30; i++ {
+		m.Update(syntheticKey("down"))
+	}
+	idx := m.tree.indexOfFocused()
+	if idx < m.treeTopIdx || idx >= m.treeTopIdx+m.treeViewportHeight() {
+		t.Errorf("focus idx %d outside viewport [%d, %d)",
+			idx, m.treeTopIdx, m.treeTopIdx+m.treeViewportHeight())
+	}
+	// And the focused node must appear in the rendered output.
+	out := stripANSI(m.View().Content)
+	wantNode := m.tree.visible[idx].name
+	if !strings.Contains(out, wantNode) {
+		t.Errorf("focused node %q not visible in rendered output:\n%s", wantNode, out)
+	}
+}

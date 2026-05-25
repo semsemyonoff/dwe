@@ -102,7 +102,7 @@ type Result struct {
 // config.UICommands* accessors.
 func DefaultOptions() Options {
 	return Options{
-		DefaultExpandedDepth: 3,
+		DefaultExpandedDepth: 1,
 		AutoCollapseEmpty:    true,
 		ShowTypeBadges:       true,
 		IncludePrivate:       false,

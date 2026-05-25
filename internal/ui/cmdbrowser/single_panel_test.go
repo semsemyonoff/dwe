@@ -202,7 +202,9 @@ func TestSinglePanel_ResizeAcrossBoundaryRebuildsList(t *testing.T) {
 		t.Fatalf("resize back did not switch to two-panel mode")
 	}
 	out = m.View().Content
-	if !strings.Contains(out, "groups") {
-		t.Errorf("two-panel layout not restored:\n%s", out)
+	// Two-panel layout shows the tree on the left; assert a tree node is
+	// rendered rather than a header label.
+	if !strings.Contains(out, "db") {
+		t.Errorf("two-panel layout not restored — tree missing 'db':\n%s", out)
 	}
 }

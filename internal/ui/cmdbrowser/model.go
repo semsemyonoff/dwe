@@ -60,6 +60,12 @@ type Model struct {
 	// lastSinglePanel tracks the most recent layout bucket so applyLayout can
 	// repopulate the list when the user resizes across the 80-column boundary.
 	lastSinglePanel bool
+
+	// treeTopIdx is the index into tree.visible of the first row rendered in
+	// the left panel. Without this, an oversized tree (more group nodes than
+	// the panel can hold) overflows the bordered frame, stretches the joined
+	// body via JoinHorizontal, and pushes the help footer off the alt screen.
+	treeTopIdx int
 }
 
 // Compile-time guarantee that Model satisfies tea.Model. bubbletea/v2 is
@@ -264,6 +270,7 @@ func (m *Model) updateLeft(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.focus = focusRight
 		}
 	}
+	m.ensureTreeFocusVisible()
 	return m, nil
 }
 
@@ -344,7 +351,6 @@ func (m *Model) applyLayout() {
 	if nowSingle {
 		listW = singlePanelWidth(m.width) - 2
 	}
-	bh := bodyHeight(m.height)
 	m.delegate.width = listW
 	m.delegate.showBadges = !nowSingle && showBadges(m.width) && m.opts.ShowTypeBadges
 	m.list.SetSize(listW, listHeight(m.height))
@@ -353,10 +359,17 @@ func (m *Model) applyLayout() {
 	// 60-col single-panel bucket.
 	m.help.SetWidth(m.width)
 	if m.inspect != nil {
-		// Resize the viewport in-place to preserve scroll position.
-		w := max(min(listW-2, 80), 20)
+		// Resize the viewport in-place to preserve scroll position. Re-render
+		// content at the new width so word-wrap matches the visible area
+		// after a horizontal resize.
+		w, ih := m.inspectViewportSize()
 		m.inspect.vp.SetWidth(w)
-		m.inspect.vp.SetHeight(max(bh-2, 5))
+		m.inspect.vp.SetHeight(ih)
+		if render := m.items[m.inspect.inspectIdx].Inspect; render != nil {
+			if content := render(w); content != "" {
+				m.inspect.vp.SetContent(content)
+			}
+		}
 	}
 	if nowSingle != m.lastSinglePanel {
 		m.lastSinglePanel = nowSingle
@@ -365,6 +378,7 @@ func (m *Model) applyLayout() {
 		}
 		m.populateList()
 	}
+	m.ensureTreeFocusVisible()
 }
 
 // View implements tea.Model. AltScreen is set on the View so bubbletea hides
@@ -389,11 +403,11 @@ func (m *Model) View() tea.View {
 		rightStyle = rightStyle.BorderForeground(focusBorder)
 	}
 
-	leftBody := "groups\n" + m.renderTree()
+	leftBody := m.renderTree()
 	rightBody := m.renderRight()
 
 	if m.focus == focusInspect && m.inspect != nil {
-		rightBody = "inspect: " + m.items[m.inspect.inspectIdx].ID + "\n" + m.inspect.vp.View()
+		rightBody = m.inspect.vp.View()
 	}
 
 	leftPanel := leftStyle.Render(leftBody)
@@ -429,7 +443,7 @@ func (m *Model) viewSinglePanel() tea.View {
 	var body string
 	switch {
 	case m.focus == focusInspect && m.inspect != nil:
-		body = "inspect: " + m.items[m.inspect.inspectIdx].ID + "\n" + m.inspect.vp.View()
+		body = m.inspect.vp.View()
 	case m.filter != nil:
 		count := len(m.filter.matched)
 		noun := "matches"
@@ -454,12 +468,103 @@ func (m *Model) viewSinglePanel() tea.View {
 }
 
 // renderTree renders the left-panel tree, switching to filter-aware mode (M/N
-// counts, zero-match dimming) when a filter session is active.
+// counts, zero-match dimming) when a filter session is active. The output is
+// clipped to the left panel's inner height so an oversized tree (more visible
+// group nodes than rows) does not stretch the joined body past the bordered
+// frame and push the help footer off the alt screen.
 func (m *Model) renderTree() string {
+	var full string
 	if m.filter != nil {
-		return m.tree.renderFilter(m.focus == focusLeft, showCounts(m.width), m.filter)
+		full = m.tree.renderFilter(m.focus == focusLeft, showCounts(m.width), m.filter)
+	} else {
+		full = m.tree.renderOpt(m.focus == focusLeft, showCounts(m.width))
 	}
-	return m.tree.renderOpt(m.focus == focusLeft, showCounts(m.width))
+	return m.clipTreeToViewport(full)
+}
+
+// clipTreeToViewport slices the rendered tree to fit treeViewportHeight() rows
+// starting at treeTopIdx. The tree renderer emits exactly one line per visible
+// node (no wrapping), so line indices align with tree.visible indices —
+// strings.Split is safe to use as a window.
+func (m *Model) clipTreeToViewport(full string) string {
+	h := m.treeViewportHeight()
+	if h <= 0 {
+		return full
+	}
+	lines := strings.Split(full, "\n")
+	if len(lines) <= h {
+		return full
+	}
+	top := m.treeTopIdx
+	if top < 0 {
+		top = 0
+	}
+	if top > len(lines)-h {
+		top = len(lines) - h
+	}
+	return strings.Join(lines[top:top+h], "\n")
+}
+
+// treeViewportHeight is the number of tree rows that fit inside the left
+// panel. The panel frame is bodyHeight(m.height) rows tall, minus the two
+// border rows of the lipgloss frame — there is no in-panel header anymore.
+func (m *Model) treeViewportHeight() int {
+	return max(bodyHeight(m.height)-2, 1)
+}
+
+// inspectMaxWidth caps the inspect viewport on wide terminals so the content
+// lines up with the section divider rendered by `ui.RenderSectionTitle`
+// (which uses the same min(TermWidth, 100) cap). Without this, the inspect
+// area would stretch to the full right-panel width and the section dividers
+// would float in a sea of dead space at the right edge.
+const inspectMaxWidth = 100
+
+// inspectViewportSize returns the (width, height) for the inspect viewport
+// so it fills the right panel's content area. Width is the lesser of the
+// panel's inner content area and `inspectMaxWidth`: narrow terminals get the
+// full panel; wide ones are capped to match the section-title width so the
+// layout stays balanced. Single-panel mode reuses the same body area.
+// Defensive lower clamps protect against degenerate sizes from transient
+// WindowSizeMsg events.
+func (m *Model) inspectViewportSize() (int, int) {
+	var panelW int
+	if singlePanel(m.width) {
+		panelW = singlePanelWidth(m.width) - 2
+	} else {
+		panelW = rightWidth(m.width) - 2
+	}
+	w := max(min(panelW, inspectMaxWidth), 10)
+	h := max(bodyHeight(m.height)-2, 3) // -2 borders
+	return w, h
+}
+
+// ensureTreeFocusVisible adjusts treeTopIdx so the focused node is within
+// the current viewport. Called after every tree mutation (move / expand /
+// collapse) and on resize.
+func (m *Model) ensureTreeFocusVisible() {
+	h := m.treeViewportHeight()
+	n := len(m.tree.visible)
+	if n == 0 || h <= 0 {
+		m.treeTopIdx = 0
+		return
+	}
+	idx := m.tree.indexOfFocused()
+	if idx < 0 {
+		m.treeTopIdx = 0
+		return
+	}
+	if idx < m.treeTopIdx {
+		m.treeTopIdx = idx
+	} else if idx >= m.treeTopIdx+h {
+		m.treeTopIdx = idx - h + 1
+	}
+	maxTop := max(n-h, 0)
+	if m.treeTopIdx > maxTop {
+		m.treeTopIdx = maxTop
+	}
+	if m.treeTopIdx < 0 {
+		m.treeTopIdx = 0
+	}
 }
 
 // renderRight returns the right-panel body. While filter is active the header
@@ -608,18 +713,21 @@ func (m *Model) breadcrumb() string {
 // path ensures width is always at least minTwoPanelWidth.
 
 // footerRows is the fixed height reserved for the flow-wrapped help footer.
-// The compact entries returned by `helpEntries` (7 non-ModeRun, 9 ModeRun)
-// wrap into at most 2 rows at the minimum two-panel/single-panel width of 60
-// cols. Wider widths use fewer rows — `renderHelpFooter` pads the unused row
-// with blanks so the body height stays stable across resizes and mode
-// switches.
-const footerRows = 2
+// At ≥ 100 cols all compact entries fit on a single row; at narrower widths
+// the trailing entries that would overflow are dropped by the truncate step
+// in `renderHelpFooter` so the row stays exactly one tall. Trading the second
+// row buys an extra body row for the tree / list. `renderHelpFooter` still
+// pads when no entries are present so the body height stays stable across
+// resizes and mode switches.
+const footerRows = 1
 
-// bodyHeight returns the inner content height for the bordered panel(s).
-// The View composes title(1) + bordered-panel(bh+2) + footer(footerRows), so
-// at the declared terminal height: bh = h - 3 - footerRows. Without the
-// reservation the footer would be pushed off-screen.
-func bodyHeight(h int) int { return max(h-3-footerRows, 3) }
+// bodyHeight returns the bordered panel frame height. Under v2 lipgloss
+// `Style.Height(bh)` sets the frame (border-inclusive) height directly — the
+// `+2` for borders that v1 added is already baked into bh. The View composes
+// title(1) + panel-frame(bh) + footer(footerRows), so bh = h - 1 - footerRows
+// fills the terminal exactly. The earlier `h - 3 - footerRows` was a v1-era
+// formula and left two unused rows below the footer.
+func bodyHeight(h int) int { return max(h-1-footerRows, 3) }
 
 // listHeight returns the inner height for the bubbles list. Under v2 lipgloss
 // frame semantics `Style.Height(bh)` makes the panel frame bh rows tall, so the

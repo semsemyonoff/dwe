@@ -20,7 +20,7 @@ type UIConfig struct {
 type UICommandsConfig struct {
 	// DefaultExpandedDepth controls how many tree levels are expanded by
 	// default in the command browser. Negative values are clamped to 0;
-	// 0 means all-collapsed. Defaults to 3 when nil (key absent).
+	// 0 means all-collapsed. Defaults to 1 when nil (key absent).
 	DefaultExpandedDepth *int `yaml:"default_expanded_depth"`
 	// AutoCollapseEmpty controls whether zero-match subtrees collapse
 	// automatically during a fuzzy filter session. Defaults to true.
@@ -31,10 +31,10 @@ type UICommandsConfig struct {
 }
 
 // UICommandsDefaultDepth returns the resolved default-expanded-depth value
-// (nil → 3; negative values clamp to 0; explicit 0 = all-collapsed). Safe when cfg is nil.
+// (nil → 1; negative values clamp to 0; explicit 0 = all-collapsed). Safe when cfg is nil.
 func UICommandsDefaultDepth(cfg *DevboxConfig) int {
 	if cfg == nil || cfg.UI.Commands.DefaultExpandedDepth == nil {
-		return 3
+		return 1
 	}
 	d := *cfg.UI.Commands.DefaultExpandedDepth
 	if d < 0 {
