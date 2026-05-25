@@ -64,8 +64,11 @@ The three files share a single namespace — the same key in different layers is
 | Service port / host values | [`devbox/services.yml`](services.md) — project-level definitions; per-developer port / host overrides are not supported |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
+| Wizard-generated configuration | `local.yml` (written by `devbox deploy` when answering setup questions or port conflicts) |
 
 Service definitions themselves (apps, tools, infra — including their ports / hosts) live in [`devbox/services.yml`](services.md), which is loaded separately and not part of this merge. The 3-layer overlay only carries `services.<name>.enabled` toggles.
+
+The `devbox deploy` command includes an interactive wizard that runs on fresh projects (when `devbox/local.yml` is missing or empty). The wizard collects answers to questions declared in [`devbox/setup.yml`](setup.md) and prompts for port overrides when conflicts exist. All answers are deep-merged into `local.yml` and written atomically before deployment proceeds. See [`devbox/setup.yml`](setup.md) for schema details.
 
 ## Dot-path resolution
 

@@ -285,10 +285,10 @@ Pending-deploy hint from `journal.PendingApply` is surfaced at the top of the me
 
 ### Task 11: Documentation
 
-- [ ] create `docs/reference/config/setup.md` — schema for `setup.yml`, all question types, validate presets, write-scope rules (with the forbidden-prefix list verbatim)
-- [ ] update `docs/reference/config/devbox.md` — note that the wizard may write into `local.yml` for keys merged into `cfg.Raw`
-- [ ] update `docs/internals/packages.md` — add entries for `internal/setup/` and `internal/validate/setup/`, plus a one-line note on the deploy menu under "User commands / UI"
-- [ ] sanity-grep that no doc still references `devbox deploy step`
+- [x] create `docs/reference/config/setup.md` — schema for `setup.yml`, all question types, validate presets, write-scope rules (with the forbidden-prefix list verbatim)
+- [x] update `docs/reference/config/devbox.md` — note that the wizard may write into `local.yml` for keys merged into `cfg.Raw`
+- [x] update `docs/internals/packages.md` — add entries for `internal/setup/` and `internal/validate/setup/`, plus a one-line note on the deploy menu under "User commands / UI"
+- [x] sanity-grep that no doc still references `devbox deploy step`
 
 ### Task 12: Verify acceptance criteria
 

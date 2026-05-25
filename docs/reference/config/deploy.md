@@ -889,7 +889,6 @@ See [state.md](state.md) for full details on hashing, skip decisions, and recove
 
 - `devbox deploy plan` — show resolved pipeline (with inlined service phases)
 - `devbox deploy run` — execute deploy pipeline with state tracking
-- `devbox deploy step <phase> <step>` — run a single step (debugging)
 - `devbox deploy state show` — inspect deploy state journal
 - `devbox deploy state clear` — reset deploy state
 - `devbox deploy state repair` — rebuild state aggregates
