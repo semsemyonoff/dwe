@@ -440,10 +440,7 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
-			// Capture d and translator for the closure.
 			curDef := d
-			curTranslator := translator
-			curLocale := locale
 			items[i] = cmdbrowser.Item{
 				ID:          d.ID,
 				Description: translator.CommandDescription(locale, d.ID, d.Description),
@@ -452,7 +449,7 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 				ParamCount:  len(d.Params),
 				Inspect: func(width int) string {
 					var buf bytes.Buffer
-					printInspectAt(&buf, curDef, cfg, width, curTranslator, curLocale)
+					printInspectAt(&buf, curDef, cfg, width, translator, locale)
 					return buf.String()
 				},
 			}

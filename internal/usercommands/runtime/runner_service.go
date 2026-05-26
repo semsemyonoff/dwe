@@ -222,7 +222,11 @@ func resolveWorkdirFrom(dotPath string, ctx RunContext) (string, error) {
 	if v == nil {
 		return "", nil
 	}
-	return v.(string), nil
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("workdir_from %q: resolved value is not a string", dotPath)
+	}
+	return s, nil
 }
 
 // buildRenderedComposeArgs renders each compose_args entry via templates and returns the slice.
