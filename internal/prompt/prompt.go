@@ -251,6 +251,9 @@ func readStatus(root string) statusKind {
 	switch stub.Project.Status {
 	case "failed":
 		return statusFailed
+	case "in_progress":
+		// pipeline started but never completed (active deploy or crashed process)
+		return statusPending
 	case "partial":
 		return statusPartial
 	}
