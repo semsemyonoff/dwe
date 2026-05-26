@@ -37,13 +37,13 @@ func withUserConfigDir(t *testing.T) (string, func()) {
 	return cfgDir, cleanup
 }
 
-// clearNotifyEnv unsets every DEVBOX_NOTIFY_* env var so tests are
-// hermetic. Returns a restore func.
+// clearNotifyEnv unsets every DEVBOX_NOTIFY_* and DEVBOX_LANGUAGE env var
+// so tests are hermetic. Returns a restore func.
 func clearNotifyEnv(t *testing.T) func() {
 	t.Helper()
 	keys := []string{
 		envNotifyEnabled, envNotifyRunEnabled, envNotifyDeployEnabled,
-		envNotifyCommandsEnabled, envNotifyChannels,
+		envNotifyCommandsEnabled, envNotifyChannels, envLanguage,
 	}
 	prev := make(map[string]string)
 	wasSet := make(map[string]bool)
@@ -161,6 +161,62 @@ func TestLoad_EnvInvalidBoolean(t *testing.T) {
 	require.NoError(t, os.Setenv(envNotifyEnabled, "definitely"))
 	_, err := Load(t.TempDir())
 	require.Error(t, err)
+}
+
+func TestLoad_LanguageGlobalOnly(t *testing.T) {
+	defer clearNotifyEnv(t)()
+	cfgDir, cleanup := withUserConfigDir(t)
+	defer cleanup()
+	writeFile(t, filepath.Join(cfgDir, "devbox", "config"), "language = ru\n")
+	projectRoot := t.TempDir()
+	cfg, err := Load(projectRoot)
+	require.NoError(t, err)
+	assert.Equal(t, "ru", cfg.Language)
+}
+
+func TestLoad_LanguageProjectOnly(t *testing.T) {
+	defer clearNotifyEnv(t)()
+	_, cleanup := withUserConfigDir(t)
+	defer cleanup()
+	projectRoot := t.TempDir()
+	writeFile(t, filepath.Join(projectRoot, ".devbox", "config"), "language = de\n")
+	cfg, err := Load(projectRoot)
+	require.NoError(t, err)
+	assert.Equal(t, "de", cfg.Language)
+}
+
+func TestLoad_LanguageProjectOverridesGlobal(t *testing.T) {
+	defer clearNotifyEnv(t)()
+	cfgDir, cleanup := withUserConfigDir(t)
+	defer cleanup()
+	writeFile(t, filepath.Join(cfgDir, "devbox", "config"), "language = ru\n")
+	projectRoot := t.TempDir()
+	writeFile(t, filepath.Join(projectRoot, ".devbox", "config"), "language = de\n")
+	cfg, err := Load(projectRoot)
+	require.NoError(t, err)
+	assert.Equal(t, "de", cfg.Language)
+}
+
+func TestLoad_LanguageEnvOverridesAll(t *testing.T) {
+	defer clearNotifyEnv(t)()
+	cfgDir, cleanup := withUserConfigDir(t)
+	defer cleanup()
+	writeFile(t, filepath.Join(cfgDir, "devbox", "config"), "language = ru\n")
+	projectRoot := t.TempDir()
+	writeFile(t, filepath.Join(projectRoot, ".devbox", "config"), "language = de\n")
+	require.NoError(t, os.Setenv(envLanguage, "fr"))
+	cfg, err := Load(projectRoot)
+	require.NoError(t, err)
+	assert.Equal(t, "fr", cfg.Language)
+}
+
+func TestLoad_LanguageDefaultEmpty(t *testing.T) {
+	defer clearNotifyEnv(t)()
+	_, cleanup := withUserConfigDir(t)
+	defer cleanup()
+	cfg, err := Load(t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, "", cfg.Language)
 }
 
 func TestNotifyEnabledFor(t *testing.T) {

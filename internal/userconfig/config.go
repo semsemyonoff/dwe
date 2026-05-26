@@ -18,6 +18,10 @@ type Config struct {
 	notifyTelegramToken string
 	notifyTelegramChat  string
 	notifyWebhookURLs   []string
+
+	// Language holds the user's preferred language code. Empty string means
+	// unset; locale resolution will fall through to $LANG / "en".
+	Language string
 }
 
 // Defaults returns a Config initialised to the documented defaults.

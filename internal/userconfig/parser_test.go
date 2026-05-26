@@ -116,3 +116,25 @@ func TestParse_Empty(t *testing.T) {
 	assert.True(t, cfg.NotifyEnabled)
 	assert.Equal(t, []string{"native"}, cfg.NotifyChannels)
 }
+
+func TestParse_Language(t *testing.T) {
+	in := "language = ru\n"
+	cfg := Defaults()
+	require.NoError(t, parse(strings.NewReader(in), cfg))
+	assert.Equal(t, "ru", cfg.Language)
+}
+
+func TestParse_LanguageEmpty(t *testing.T) {
+	in := "language = \n"
+	cfg := Defaults()
+	require.NoError(t, parse(strings.NewReader(in), cfg))
+	assert.Equal(t, "", cfg.Language)
+}
+
+func TestParse_LanguageAnyValue(t *testing.T) {
+	// Language accepts any string value; validation happens in the resolver.
+	in := "language = ru_RU.UTF-8\n"
+	cfg := Defaults()
+	require.NoError(t, parse(strings.NewReader(in), cfg))
+	assert.Equal(t, "ru_RU.UTF-8", cfg.Language)
+}

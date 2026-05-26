@@ -83,6 +83,8 @@ func apply(cfg *Config, key, val string, line int) error {
 		cfg.notifyTelegramChat = val
 	case "notify_webhook_urls":
 		cfg.notifyWebhookURLs = parseList(val)
+	case "language":
+		cfg.Language = val
 	default:
 		// Unknown keys are warnings — forward-compat with future channel
 		// keys when an older MVP-only binary reads a richer config.

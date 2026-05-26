@@ -414,13 +414,13 @@ func ResolveLocale(flagLang, configLang, sysLang string) string {
 - Modify: `internal/userconfig/load_test.go`
 - Modify: `internal/userconfig/parser_test.go`
 
-- [ ] add `Language string` field to `Config` (unexported tags not needed; flat parser keys it by `language`)
-- [ ] leave `Defaults().Language` empty (resolver handles fallback)
-- [ ] add `case "language":` in `parser.apply()` that sets `cfg.Language = val` (no parse error — any string is accepted; locale validity is the resolver/store's concern)
-- [ ] add `envLanguage = "DEVBOX_LANGUAGE"` constant in `load.go` and handle it in `applyEnv()` (trim, set)
-- [ ] update `parser_test.go`: parsing `language=ru`, parsing empty value, malformed line still rejected
-- [ ] update `load_test.go`: global file sets language, project file overrides, env wins over both
-- [ ] run `go test ./internal/userconfig/...` — must pass before Task 5
+- [x] add `Language string` field to `Config` (unexported tags not needed; flat parser keys it by `language`)
+- [x] leave `Defaults().Language` empty (resolver handles fallback)
+- [x] add `case "language":` in `parser.apply()` that sets `cfg.Language = val` (no parse error — any string is accepted; locale validity is the resolver/store's concern)
+- [x] add `envLanguage = "DEVBOX_LANGUAGE"` constant in `load.go` and handle it in `applyEnv()` (trim, set)
+- [x] update `parser_test.go`: parsing `language=ru`, parsing empty value, malformed line still rejected
+- [x] update `load_test.go`: global file sets language, project file overrides, env wins over both
+- [x] run `go test ./internal/userconfig/...` — must pass before Task 5
 
 ### Task 5: Resolve locale once in root PersistentPreRunE, thread through rootFlags
 

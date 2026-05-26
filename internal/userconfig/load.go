@@ -17,6 +17,7 @@ const (
 	envNotifyDeployEnabled   = "DEVBOX_NOTIFY_DEPLOY_ENABLED"
 	envNotifyCommandsEnabled = "DEVBOX_NOTIFY_COMMANDS_ENABLED"
 	envNotifyChannels        = "DEVBOX_NOTIFY_CHANNELS"
+	envLanguage              = "DEVBOX_LANGUAGE"
 )
 
 // Load resolves the effective Config by applying:
@@ -92,6 +93,9 @@ func applyEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv(envNotifyChannels); ok {
 		cfg.NotifyChannels = parseList(v)
+	}
+	if v, ok := os.LookupEnv(envLanguage); ok {
+		cfg.Language = strings.TrimSpace(v)
 	}
 	return nil
 }
