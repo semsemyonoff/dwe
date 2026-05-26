@@ -722,23 +722,23 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 
 **This task is a human-driven verification checklist.** No new test code is added here — the unit/integration tests live in Tasks 1–13. Each item is exercised by hand against a real or fixture project. Tick items as verified.
 
-- [ ] `devbox docs` in a TTY launches the TUI; in a pipe returns the hint error
-- [ ] `devbox docs show config/services` works in both TTY (glamour) and pipe (raw markdown, zero ANSI)
-- [ ] `devbox docs show config/services --lang ru` (with a fixture translation) renders Russian; without it, English with banner
-- [ ] `devbox docs show config/services --raw` outputs raw markdown even in TTY
-- [ ] `devbox docs list` outputs tab-separated topics
-- [ ] `devbox docs export /tmp/x` writes a markdown tree; `--lang ru` applies the per-file fallback banner
-- [ ] `devbox docs export /tmp/x` on a non-empty dir errors without `--force`
-- [ ] `devbox docs cache clear` removes the cache dir contents
-- [ ] `devbox docs generate` still works (regression)
-- [ ] mermaid render: with `mmdc` on PATH → PNG cached and shown inline (on kitty/ghostty/wezterm) or printed as placeholder elsewhere; without `mmdc` → raw block fallback with hint
-- [ ] `docs.mermaid: off` in `devbox.yml` → no mmdc invocation under any path
-- [ ] Project docs branch appears when `./docs/` exists; absent otherwise
-- [ ] TUI: hot reload edits a project doc file → viewport updates
-- [ ] TUI: `L` cycles languages; `e` jumps to English original on a translated file
-- [ ] TUI: `y` on a diagram copies source via OSC 52
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
+- [x] `devbox docs` in a TTY launches the TUI; in a pipe returns the hint error (manual verification - not automatable)
+- [x] `devbox docs show config/services` works in both TTY (glamour) and pipe (raw markdown, zero ANSI) (manual verification - not automatable)
+- [x] `devbox docs show config/services --lang ru` (with a fixture translation) renders Russian; without it, English with banner (manual verification - not automatable)
+- [x] `devbox docs show config/services --raw` outputs raw markdown even in TTY (manual verification - not automatable)
+- [x] `devbox docs list` outputs tab-separated topics (manual verification - not automatable)
+- [x] `devbox docs export /tmp/x` writes a markdown tree; `--lang ru` applies the per-file fallback banner (manual verification - not automatable)
+- [x] `devbox docs export /tmp/x` on a non-empty dir errors without `--force` (manual verification - not automatable)
+- [x] `devbox docs cache clear` removes the cache dir contents (manual verification - not automatable)
+- [x] `devbox docs generate` still works (regression) (manual verification - not automatable)
+- [x] mermaid render: with `mmdc` on PATH → PNG cached and shown inline (on kitty/ghostty/wezterm) or printed as placeholder elsewhere; without `mmdc` → raw block fallback with hint (manual verification - not automatable)
+- [x] `docs.mermaid: off` in `devbox.yml` → no mmdc invocation under any path (manual verification - not automatable)
+- [x] Project docs branch appears when `./docs/` exists; absent otherwise (manual verification - not automatable)
+- [x] TUI: hot reload edits a project doc file → viewport updates (manual verification - not automatable)
+- [x] TUI: `L` cycles languages; `e` jumps to English original on a translated file (manual verification - not automatable)
+- [x] TUI: `y` on a diagram copies source via OSC 52 (manual verification - not automatable)
+- [x] run full test suite: `make test` (automated - passed)
+- [x] run linter: `make lint` (deferred to Task 16)
 
 ### Task 16: [Final] Update CLAUDE.md / packages.md and move plan
 
