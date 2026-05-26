@@ -366,20 +366,20 @@ func ResolveLocale(flagLang, configLang, sysLang string) string {
 - Create: `internal/i18n/store_test.go`
 - Create: `internal/i18n/loader_test.go`
 
-- [ ] define `Bundle`, `CommandStrings`, `ParamStrings`, `GroupStrings`, `Store`, `ProjectFile` types in `bundle.go` / `store.go`
-- [ ] implement `parseBundle(r io.Reader) (*Bundle, error)` using `yaml.Decoder` with `KnownFields(true)` (struct-level strictness — note that `Bundle.UI` is `map[string]string` and typo'd ui-key names are NOT caught here; key whitelisting lives in Task 8's validator)
-- [ ] implement `Load(projectRoot string) (*Store, error)`: read all built-in `translations/*.yml` from `embed.FS`, then overlay any `<projectRoot>/devbox/i18n/*.yml` (project-wins deep merge per locale). **A project parse error is NOT a fatal Load error** — the bad file is skipped, runtime UI degrades gracefully, and the validator surfaces the error via `LoadProjectBundles` instead
-- [ ] implement `LoadProjectBundles(projectRoot string) ([]ProjectFile, error)` per the error-handling contract in Technical Details: `(nil, nil)` if dir absent; directory-level OS error folded into a sentinel `ProjectFile{Path: dirPath, Locale: "", ParseErr: err}`; per-file strict-decode failures set `ProjectFile.ParseErr` without aborting; aggregate `error` only for programmer errors. Used only by the validator domain
-- [ ] implement the generic `Store.T(locale, uiKey, fallback string) string` — only for `ui.*` keys. Lookup chain locale → en → fallback → ""
-- [ ] implement typed helpers: `CommandDescription(locale, id, fallback)`, `CommandConfirmationText(locale, id, fallback)`, `ParamDescription(locale, id, paramName, fallback)`, `GroupTitle(locale, id, fallback)`, `GroupDescription(locale, id, fallback)` — same lookup chain; ID and field name are discrete arguments, no key parsing
-- [ ] implement `Store.AvailableLocales() []string` returning union of built-in + project, "en" always first
-- [ ] populate `translations/en.yml` with all `ui.docs.*` keys listed in Technical Details (section headers + property labels) — `commands.*` and `groups.*` stay absent here (canonical English lives in YAML command files; helper fallback handles missing keys)
-- [ ] write table-driven tests for `T()`: ui hit, ui miss → fallback, unknown locale → en, project overlay wins, fallback empty when locale "" and key absent everywhere
-- [ ] write table-driven tests for typed helpers: hit/miss, dotted IDs like `services.main.db.migrate` resolve correctly, param description with paramName containing underscore, groups variant
-- [ ] write tests for `parseBundle`: valid file, strict-decode rejects typo'd struct field (e.g. `descripton:`), empty file, invalid YAML
-- [ ] write tests for `Load`: built-in only, built-in + project overlay, missing project dir → built-in only, malformed project file → non-fatal (bad file skipped, others loaded)
-- [ ] write tests for `LoadProjectBundles`: enumerates all *.yml under devbox/i18n/, parses each with strict decode, captures ParseErr per file, returns `(nil, nil)` when dir absent, returns sentinel `ProjectFile{Locale: ""}` when dir unreadable
-- [ ] run `go test ./internal/i18n/...` — must pass before Task 2
+- [x] define `Bundle`, `CommandStrings`, `ParamStrings`, `GroupStrings`, `Store`, `ProjectFile` types in `bundle.go` / `store.go`
+- [x] implement `parseBundle(r io.Reader) (*Bundle, error)` using `yaml.Decoder` with `KnownFields(true)` (struct-level strictness — note that `Bundle.UI` is `map[string]string` and typo'd ui-key names are NOT caught here; key whitelisting lives in Task 8's validator)
+- [x] implement `Load(projectRoot string) (*Store, error)`: read all built-in `translations/*.yml` from `embed.FS`, then overlay any `<projectRoot>/devbox/i18n/*.yml` (project-wins deep merge per locale). **A project parse error is NOT a fatal Load error** — the bad file is skipped, runtime UI degrades gracefully, and the validator surfaces the error via `LoadProjectBundles` instead
+- [x] implement `LoadProjectBundles(projectRoot string) ([]ProjectFile, error)` per the error-handling contract in Technical Details: `(nil, nil)` if dir absent; directory-level OS error folded into a sentinel `ProjectFile{Path: dirPath, Locale: "", ParseErr: err}`; per-file strict-decode failures set `ProjectFile.ParseErr` without aborting; aggregate `error` only for programmer errors. Used only by the validator domain
+- [x] implement the generic `Store.T(locale, uiKey, fallback string) string` — only for `ui.*` keys. Lookup chain locale → en → fallback → ""
+- [x] implement typed helpers: `CommandDescription(locale, id, fallback)`, `CommandConfirmationText(locale, id, fallback)`, `ParamDescription(locale, id, paramName, fallback)`, `GroupTitle(locale, id, fallback)`, `GroupDescription(locale, id, fallback)` — same lookup chain; ID and field name are discrete arguments, no key parsing
+- [x] implement `Store.AvailableLocales() []string` returning union of built-in + project, "en" always first
+- [x] populate `translations/en.yml` with all `ui.docs.*` keys listed in Technical Details (section headers + property labels) — `commands.*` and `groups.*` stay absent here (canonical English lives in YAML command files; helper fallback handles missing keys)
+- [x] write table-driven tests for `T()`: ui hit, ui miss → fallback, unknown locale → en, project overlay wins, fallback empty when locale "" and key absent everywhere
+- [x] write table-driven tests for typed helpers: hit/miss, dotted IDs like `services.main.db.migrate` resolve correctly, param description with paramName containing underscore, groups variant
+- [x] write tests for `parseBundle`: valid file, strict-decode rejects typo'd struct field (e.g. `descripton:`), empty file, invalid YAML
+- [x] write tests for `Load`: built-in only, built-in + project overlay, missing project dir → built-in only, malformed project file → non-fatal (bad file skipped, others loaded)
+- [x] write tests for `LoadProjectBundles`: enumerates all *.yml under devbox/i18n/, parses each with strict decode, captures ParseErr per file, returns `(nil, nil)` when dir absent, returns sentinel `ProjectFile{Locale: ""}` when dir unreadable
+- [x] run `go test ./internal/i18n/...` — must pass before Task 2
 
 ### Task 2: Built-in coverage test for translation keys
 
