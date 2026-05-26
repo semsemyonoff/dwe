@@ -551,9 +551,9 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 - Modify: `AGENTS.md` (remember: `CLAUDE.md` is a symlink to `AGENTS.md`)
 - Move: this plan file to `docs/plans/completed/`
 
-- [ ] add a Key Patterns entry to `AGENTS.md`:
+- [x] add a Key Patterns entry to `AGENTS.md`:
   > **`info.yml` auto-blocks**: `type: auto-urls` and `type: auto-hosts` items expand at *render* time inside `renderInfoItem` (`internal/ui/info.go`), not at load time. The `InfoItem` carries a `Source*Spec` pointer per the daemon-style sugar pattern (yaml:"-", populated by `InfoItem.UnmarshalYAML` dispatching on `type:` and using a `type alias InfoItem` shadow to avoid infinite recursion on the flat-field decode pass). `LoadInfoConfig` stays config-blind; `RenderInfo` does NOT take a topology parameter — auto-block renderers call `stack.DeployOrder(cfg, types)` directly, which delegates to `config.TopoSortServices` (folder-key space; `ParseTopologyFromFiles` is intentionally unused because it returns compose-name space). When `devbox/info.yml` is missing, `LoadInfoConfig` returns `DefaultInfoConfig()` — a synthesized config with a urls section + hosts section, both with `Source*Spec` pointers populated directly (UnmarshalYAML does not run on Go-constructed configs). Service `icon`, `info.title`, `info.host_key`, `info.port_key`, and `info.paths` are display-only fields read by these renderers (and by status/cmdbrowser for `icon` in a planned follow-up). **Service iteration in renderers MUST go through `stack.DeployOrder(...)` — never `range cfg.Services` directly**, because Go map iteration is randomized and would produce flaky golden tests. **`renderBlock` in `internal/ui/info.go` was tightened to drop empty `renderInfoItem` output from `contentCount`** so `hide_on_empty` sections collapse correctly when their auto-block renders to `""`. **Adding new top-level fields to `service.yml` requires updating BOTH `allowedFieldsFor` in `internal/config/devbox.go:607` AND `servicesAllowedFields` in `internal/validate/config/devbox.go:112`** — service.yml uses `KnownFields(true)` strict decode.
-- [ ] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-info-auto-blocks.md docs/plans/completed/`
+- [x] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-info-auto-blocks.md docs/plans/completed/`
 
 ## Post-Completion
 
