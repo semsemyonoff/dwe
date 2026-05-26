@@ -252,8 +252,8 @@ func readStatus(root string) statusKind {
 	case "failed":
 		return statusFailed
 	case "in_progress":
-		// pipeline started but never completed (active deploy or crashed process)
-		return statusPending
+		// pipeline crashed before completing — journal semantics treat this as failure.
+		return statusFailed
 	case "partial":
 		return statusPartial
 	}
