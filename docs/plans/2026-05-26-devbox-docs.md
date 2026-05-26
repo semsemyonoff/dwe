@@ -564,20 +564,22 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/docs/tui/view.go`
 - Create: `internal/docs/tui/keys.go`
 - Create: `internal/docs/tui/tree_widget.go`
+- Create: `internal/docs/tui/viewport.go`
+- Create: `internal/docs/tui/statusbar.go`
 - Create: `internal/docs/tui/model_test.go`
 - Create: `internal/docs/tui/tree_widget_test.go`
 
-- [ ] `Model{ Tree, Viewport, Status, FocusZone, CurrentTopic, Roots []DocRoot, Locale, Lang, Renderer }` — bubbletea/v2 Model
-- [ ] `Init() tea.Cmd`, `Update(msg tea.Msg) (tea.Model, tea.Cmd)`, `View() string`
-- [ ] left pane: collapsible tree with two top-level branches (`Devbox`, `Project (./docs)` when present); `j/k` navigation, `h/l` collapse/expand, `Enter` open file
-- [ ] right pane: viewport with glamour-rendered content of the current file
-- [ ] bottom status bar: `<relPath>  📊 <rendered>/<total>  [<lang>]  ?:help  q:quit`
-- [ ] `Tab` switches focus between tree and viewport (viewport gains `j/k` scroll when focused)
-- [ ] `g`/`G` jump start/end; `q`/`Ctrl+C` quit
-- [ ] theme auto-detect via `lipgloss.HasDarkBackground()`
-- [ ] follow the nine `liveui` invariants (no `tea.NewProgram`, no `term.MakeRaw`, etc.)
-- [ ] tests: tree widget collapse/expand state machine; key handler dispatch; `View()` produces non-empty string for a known model; opening a topic populates the viewport
-- [ ] run `go test ./internal/docs/tui/...` — must pass
+- [x] `Model{ Tree, Viewport, Status, FocusZone, CurrentTopic, Roots []DocRoot, Locale, Lang, Renderer }` — bubbletea/v2 Model
+- [x] `Init() tea.Cmd`, `Update(msg tea.Msg) (tea.Model, tea.Cmd)`, `View() tea.View`
+- [x] left pane: collapsible tree with two top-level branches (`Devbox`, `Project (./docs)` when present); `j/k` navigation, `h/l` collapse/expand, `Enter` open file
+- [x] right pane: viewport with glamour-rendered content of the current file
+- [x] bottom status bar: `<relPath>  📊 <rendered>/<total>  [<lang>]  ?:help  q:quit`
+- [x] `Tab` switches focus between tree and viewport (viewport gains `j/k` scroll when focused)
+- [x] `g`/`G` jump start/end; `q`/`Ctrl+C` quit
+- [x] theme auto-detect via `lipgloss.HasDarkBackground()`
+- [x] follow the nine `liveui` invariants (no `tea.NewProgram`, no `term.MakeRaw`, etc.)
+- [x] tests: tree widget collapse/expand state machine; key handler dispatch; `View()` produces non-empty string for a known model; opening a topic populates the viewport
+- [x] run `go test ./internal/docs/tui/...` — must pass
 
 ### Task 10: TUI search (titles), diagram navigation, OSC 52 clipboard
 
