@@ -1,7 +1,6 @@
 package i18n
 
 import (
-	"slices"
 	"testing"
 )
 
@@ -472,7 +471,7 @@ func TestStoreAvailableLocales(t *testing.T) {
 					"de": {},
 				},
 			},
-			want: []string{"en", "ru", "de"},
+			want: []string{"en", "de", "ru"},
 		},
 	}
 
@@ -490,10 +489,10 @@ func TestStoreAvailableLocales(t *testing.T) {
 			if got[0] != "en" {
 				t.Errorf("AvailableLocales() first element = %q, want en", got[0])
 			}
-			// Check all expected locales are present
-			for _, wantLocale := range tt.want {
-				if !slices.Contains(got, wantLocale) {
-					t.Errorf("AvailableLocales() = %v, missing expected locale %q", got, wantLocale)
+			// Check exact order (en first, rest alphabetically sorted)
+			for i, wantLocale := range tt.want {
+				if got[i] != wantLocale {
+					t.Errorf("AvailableLocales()[%d] = %q, want %q (full: %v)", i, got[i], wantLocale, got)
 				}
 			}
 		})

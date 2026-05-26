@@ -609,7 +609,7 @@ func groupNodeToSingleNode(gn *usercommands.GroupNode, includePrivate bool, tran
 	}
 	desc := translator.GroupDescription(locale, gn.ID, gn.Meta.Description)
 	node := &render.TreeNode{
-		Label:    gn.Name,
+		Label:    translator.GroupTitle(locale, gn.ID, gn.Name),
 		Desc:     desc,
 		Children: children,
 	}

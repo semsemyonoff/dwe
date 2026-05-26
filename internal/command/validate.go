@@ -77,6 +77,7 @@ Scope targets:
   devbox validate env                          - environment readiness probes
   devbox validate checks [id]                  - project checks from devbox/validate.yml
   devbox validate linters [id]                 - external linters from devbox/validate.yml + autodetected built-ins
+  devbox validate translations                 - translation files in devbox/i18n/
   devbox validate snapshot [<name>]            - snapshot config + on-disk integrity
 `,
 		Args:         cobra.NoArgs,
@@ -181,6 +182,18 @@ Scope targets:
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"setup"})
+		},
+	})
+
+	// Translation file validators (i18n domain).
+	cmd.AddCommand(&cobra.Command{
+		Use:          "translations",
+		Short:        "Validate translation files in devbox/i18n/",
+		Long:         `Check devbox/i18n/*.yml files for parse errors, orphan command/group IDs, and unknown ui.* keys.`,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"i18n"})
 		},
 	})
 
