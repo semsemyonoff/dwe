@@ -2,28 +2,35 @@
 
 ## Overview
 
-Replace hand-authored `URLs` and `Hosts` subgroups in `devbox/info.yml` with two declarative item types that build themselves from service data: `type: auto-urls` and `type: auto-hosts`. Give each service two new fields — a top-level `icon:` (visual hint reused by info, status, and the command browser) and an `info:` block with `title:` override and an ordered `paths:` list (sub-URLs under the service's main URL). Remove the legacy "Devbox / Project — <name>" section from the rendered dashboard (project name already lives in the branded header). Define a built-in fallback `info.yml` so the auto-blocks render even with no `info.yml` on disk.
+Replace hand-authored `URLs` and `Hosts` subgroups in `devbox/info.yml` with two declarative item types that build themselves from service data: `type: auto-urls` and `type: auto-hosts`. Give each service two new fields — a top-level `icon:` (visual hint, **used by info-dashboard rendering only in this plan**; status table and `internal/ui/cmdbrowser` adoption is a follow-up, see Post-Completion) and an `info:` block with `title:` override and an ordered `paths:` list (sub-URLs under the service's main URL). Define a built-in default `InfoConfig` so the auto-blocks render even with no `info.yml` on disk.
 
-Net effect: the tbm fixture's `info.yml` shrinks from ~120 lines to ~15 lines, services document their own dashboard contribution next to their other config, and adding a new service no longer requires editing `info.yml`.
+Net effect: services document their own dashboard contribution next to their other config, and adding a new service no longer requires editing `info.yml`. The legacy "Devbox / Project — <name>" subgroup (which is per-project YAML in user `info.yml` files, not code) becomes unnecessary because project identity already lives in the branded header.
+
+**Out of scope**: updating any real project's `devbox/` files (service.yml or info.yml). Real-project migration happens separately, project-by-project, after this PR lands.
 
 ## Context (from discovery)
 
 Affected packages and files:
 
 - `internal/config/devbox.go` — `ServiceConfig` struct (~lines 648-669). Already has `Hosts map[string]string` and `Ports`. Add `Icon string` and `Info ServiceInfoBlock`. Loaders: `LoadServices(baseDir)` (~line 1279) and `LoadServiceFolder(baseDir, name)` (~line 1192).
-- `internal/config/info.go` — `InfoConfig`, `InfoSection`, `InfoItem` (lines 10-127). Currently valid `type:` values are `info`, `warning`, `definition`, `separator`, `subgroup` (lines 177-183). `LoadInfoConfig(path)` line 149; `ValidateInfoConfig(cfg)` line 164.
+- `internal/config/info.go` — `InfoConfig`, `InfoSection`, `InfoItem` (lines 10-127). **`InfoItem` already has `Icon string \`yaml:"icon"\``** at line 102 (used by the `definition` item type). The new `ServiceConfig.Icon` is a separate, non-conflicting field on a different type — but both exist; do not rename either. Currently valid `type:` values are `info`, `warning`, `definition`, `separator`, `subgroup` (lines 177-183). `LoadInfoConfig(path)` line 149; `ValidateInfoConfig(cfg)` line 164.
 - `internal/ui/info.go` — `RenderInfo(cfg, infoCfg)` line 22, `renderBlock(...)` line 64, `renderInfoItem(...)` line 236. Single writer of dashboard output.
-- `internal/ui/summary.go` — `RenderSummary(cfg, deploySummary)` line 15. Used as the fallback path when `info.yml` is missing (called from `internal/command/info.go:67`). Slated for replacement by the built-in fallback `InfoConfig`.
+- `internal/ui/summary.go` — `RenderSummary(cfg, deploySummary)` line 15. **Has TWO callers**: (a) `internal/command/info.go:67` (missing-`info.yml` fallback — this one is being removed) and (b) `internal/command/root.go:300` (root command's project banner when invoked with no subcommand — this stays). `RenderSummary` itself MUST NOT be deleted; only the `info.go` caller goes away.
 - `internal/validate/config/services_folder.go` — known-files allowlist (lines 13-17: `service.yml`, `deploy.yml`, `reset.yml`); no schema validation lives here. Per-service schema validation lives next to the config loader in `internal/validate/config/`.
-- `internal/stack/topology.go` — `FetchComposeTopology(...)` line 25 and `ParseTopologyFromFiles(...)` line 46 both return `map[string][]string` (svc → deps). Deploy order is derived from this graph.
-- Fixture project: `/Users/s/Projects/devbox/next/tbm/devbox/` — `info.yml` (legacy hand-authored URLs/Hosts subgroups), `services/<name>/service.yml` for each of `main`, `nginx`, `db`, `redis`, `opensearch`, `rabbitmq`, `catalog`, `sales`, `customer`, `minio`, `varnish`, `adminer`, `mailpit`, `elasticvue`, `redis_insight`, `opensearch_dashboards`. Must be rewritten alongside the CLI change (per CLAUDE.md "Live user projects ... are updated alongside CLI changes").
+- `internal/stack/topology.go` — `FetchComposeTopology(...)` line 25 and `ParseTopologyFromFiles(...)` line 46 both return `map[string][]string` (compose-svc → deps). **Not used by this plan**: their key space is compose service names (often equal to `container:`, e.g. folder `catalog` → compose name `app-catalog`), not folder keys. Auto-block ordering uses `config.TopoSortServices` at `internal/config/devbox.go:1975` instead, which sorts in folder-key space.
 - Docs: `docs/reference/config/info.md` (item types reference), `docs/reference/config/services.md` (service schema).
 
 Architectural decisions locked in:
 
-- **InfoItem extension form**: follow the daemon-style sub-spec pattern (CLAUDE.md "Single-block → multi-command sugar"). New `SourceAutoUrlsSpec *AutoUrlsSpec` and `SourceAutoHostsSpec *AutoHostsSpec` fields on `InfoItem` (yaml:"-" in the field tag; populated by a per-item custom decoder that dispatches on `type:`). Type-specific fields never bleed into the flat `InfoItem` surface.
+- **InfoItem extension form**: follow the daemon-style sub-spec pattern (CLAUDE.md "Single-block → multi-command sugar"). New `SourceAutoURLsSpec *AutoURLsSpec` and `SourceAutoHostsSpec *AutoHostsSpec` fields on `InfoItem` (yaml:"-" in the field tag — yaml.v3 skips them entirely; the custom decoder dispatches on `type:` and populates them). Type-specific fields never bleed into the flat `InfoItem` surface.
+- **Acronym casing** (Go naming convention): use `URL`/`URLs` not `Url`/`Urls` for all Go identifiers — `AutoURLsSpec`, `SourceAutoURLsSpec`, `renderAutoURLs`. YAML field values stay kebab-case (`auto-urls`, `auto-hosts`, `hide_paths`) — that is YAML convention, not Go.
 - **When auto-blocks expand**: at *render* time inside `renderInfoItem`, not load time. Expansion needs `cfg.Services` + topology, which is the same constraint daemon-derived commands have (config-blind registry load; runtime resolution). `LoadInfoConfig` stays config-blind.
 - **Fallback**: when `devbox/info.yml` is absent, `LoadInfoConfig` returns a built-in `InfoConfig` (urls + hosts auto-blocks). `RenderSummary` becomes dead code and is deleted; `internal/command/info.go:67` no longer special-cases missing-file.
+- **Field/method coexistence** (`Icon` + `DisplayIcon()`): the exported `Icon string` field is required by yaml.v3 (decoder needs exported targets); the `DisplayIcon()` method returns the resolved value with type-default fallback. Both must coexist — this is NOT a getter collision to clean up; it is the only correct shape when the raw and resolved values both need to be reachable.
+- **Map iteration determinism**: renderers MUST iterate services via the deploy-order helper (Task 5), never `range cfg.Services`. Go map iteration order is randomized, so any direct range would produce non-deterministic output and flaky golden tests.
+- **Service-set source of truth and ordering**: services come from `cfg.Services`, NOT from a compose topology map. Many tool/app services have no `compose:` block. **Ordering uses `config.TopoSortServices(names, services)` at `internal/config/devbox.go:1975`** — it sorts by `DependsOn` in service-key (folder name) space, which is what we need. The compose topology map (`ParseTopologyFromFiles` at `internal/stack/topology.go:46`) is the WRONG key space — it returns compose service names which often differ from folder keys (e.g., folder `catalog` → compose name `app-catalog`). Do not pass `topology map[string][]string` through the auto-block renderers; the deploy-order helper instead takes `cfg.Services` + the types filter and dispatches to `TopoSortServices` internally.
+- **`service.yml` is strict, not lenient** (corrects an earlier assumption): `LoadServiceFolder` at `internal/config/devbox.go:1199` runs a raw-map precheck against `allowedFieldsFor(type)` at `internal/config/devbox.go:607`, then strict-decodes with `yaml.Decoder.KnownFields(true)` at `internal/config/devbox.go:1265`. Adding `icon:` and `info:` requires updating BOTH allowlists in the same PR: (a) `allowedFieldsFor` in `internal/config/devbox.go` AND (b) `servicesAllowedFields` in `internal/validate/config/devbox.go:112`. Without those updates, any service.yml that uses `icon:` or `info:` fails loading with an opaque KnownFields error. This is enforced in Task 1 and Task 2 as explicit allowlist sub-bullets.
+- **Validate-framework integration**: the existing info validator is `infoValidator` in `internal/validate/config/devbox.go:464` (NOT a separate `info.go` file). New auto-block diagnostic rules (the ones that need warning severity, like "unknown hide key" or unparseable IP) are added alongside the existing rules in `devbox.go`, registered through the same `infoValidator.Run`. `ValidateInfoConfig` (`internal/config/info.go:164`) keeps returning `error` — it stays the load-time hard-failure gate for malformed structure; diagnostics with finer severity gradation live in the validator.
 - **Pre-release policy** (CLAUDE.md): no `schema_version` bump, no dual-loader path, no aliasing the old `subgroup`-style URL sections. Rename freely; rewrite the fixture in the same PR.
 
 ## Development Approach
@@ -43,8 +50,11 @@ Architectural decisions locked in:
 ## Testing Strategy
 
 - **Unit tests**: required for every task. Table-driven for config loading, validation, URL assembly, and rendering.
-- **Golden-output tests for renderers**: `renderAutoUrls` and `renderAutoHosts` are pure string returns (per CLAUDE.md "Section renderer signature contract") — easy to assert against expected output blocks.
-- **Fixture round-trip**: a test that loads the rewritten `tbm/devbox/info.yml` + all service.yml files through `LoadInfoConfig` / `LoadServices` and renders the dashboard, asserting headline lines match the spec's "Target rendered output" sample.
+- **Subtest discipline** (per `golang-testing` skill): every table-driven case has a `name` field; subtest names are lowercase descriptive phrases (`"main app with paths"`, not `"MainAppWithPaths"` or `"Main App With Paths"`).
+- **Parallel by default**: every subtest calls `t.Parallel()` unless it mutates process-wide state. Use `t.TempDir()` for filesystem fixtures, `t.Setenv` for env-var manipulation (both are parallel-test-safe in Go 1.17+). Renderers and validators are pure functions — they should always be parallel.
+- **Golden-output tests for renderers**: `renderAutoURLs` and `renderAutoHosts` are pure string returns (per CLAUDE.md "Section renderer signature contract") — easy to assert against expected output blocks.
+- **Synthetic fixtures**: tests build `ServiceConfig` maps in memory or write minimal YAML to `t.TempDir()`. No dependency on any real project tree.
+- **Compile-time interface checks**: place `var _ yaml.Unmarshaler = (*InfoItem)(nil)` next to the `UnmarshalYAML` method so the build fails if the method signature ever drifts off the gopkg.in/yaml.v3 interface.
 - **No e2e**: dashboard is a CLI surface; render output is asserted directly. Manual smoke happens in Post-Completion.
 
 ## Progress Tracking
@@ -55,7 +65,10 @@ Architectural decisions locked in:
 - Update plan if implementation deviates from original scope
 - Keep plan in sync with actual work done
 
-## Target Rendered Output (spec §2)
+## Target Rendered Output (illustrative — spec §2)
+
+Hostnames below (`pilot.*`) are illustrative placeholders, not a reference to any real project. Real projects produce the same shape with their own hostnames.
+
 
 ```
 {▪} Devbox · devbox-pilot-next · 02f6f20-dirty
@@ -112,6 +125,8 @@ hosts:
   web: pilot.local
 info:                             # display-only block
   title: "Main"                   # override; default = title-case(folder-name)
+  host_key: web                   # which hosts.<key> to surface; default "web"
+  port_key: http                  # which ports.<key> to surface; default "http"
   paths:                          # ordered list (preserves YAML order)
     - name: "API specification"
       path: /api/docs
@@ -121,6 +136,24 @@ info:                             # display-only block
     - name: SPX profiler
       path: /?SPX_KEY=dev
       icon: "⚡"
+```
+
+Example for a service with non-default host/port keys (e.g. an object-storage console with `hosts.console` and `ports.console`):
+
+```yaml
+type: infra
+container: minio
+icon: "⚙️"
+hosts:
+  s3: s3.local
+  console: minio.local
+ports:
+  api: 9010
+  console: 9011
+info:
+  title: "MinIO Console"
+  host_key: console
+  port_key: console
 ```
 
 ### `info.yml` — `auto-urls`
@@ -147,17 +180,20 @@ info:                             # display-only block
 
 ## URL Assembly Rules (auto-urls)
 
+Auto-urls surfaces ONE host key + ONE port key per service. The keys are configurable per-service via `info.host_key:` (default `"web"`) and `info.port_key:` (default `"http"`). This is needed because some services use non-default key names — e.g. an S3-compatible console exposing both `hosts.s3` and `hosts.console`. For services that don't need URL surfacing, leave `info` empty — they are skipped.
+
 | Service has | Main row output |
 |---|---|
-| `hosts.web` AND `ports.http` (direct binding, typically tool) | `<proxied URL> \| <direct URL>` |
-| only `hosts.web` (app behind proxy) | `<proxied URL>` |
-| only `ports.http` (no host) | `http://localhost:<port>` |
+| `hosts[host_key]` AND `ports[port_key]` (direct binding, typically tool/infra) | `<proxied URL> \| <direct URL>` |
+| only `hosts[host_key]` (app behind proxy, no direct port) | `<proxied URL>` |
+| only `ports[port_key]` (no host) | `http://localhost:<port>` |
 | neither | row silently omitted |
 
-- `<proxied URL>` = `http(s)://<hosts.web>[:<port_via.ports.http>]` (port omitted if `:80`/`:443`).
-- `<direct URL>` = `http(s)://localhost:<ports.http>`.
-- Scheme (`http`/`https`) sourced from existing `runtime.use_https` (same path used elsewhere).
-- `port_via` auto-detect: pick the single `type: infra` service with non-empty `ports.http`/`ports.https`. If 0 or >1 candidates, fall back to the service's own `ports.*`. If none, the main row is omitted but `paths:` may still render (chained to the direct URL when only direct is available).
+- `<proxied URL>` = `http(s)://<hosts[host_key]>[:<port>]` (port omitted if `:80`/`:443`).
+- `<direct URL>` = `http(s)://localhost:<ports[port_key]>`.
+- Scheme (`http`/`https`) sourced from existing `runtime.use_https` (same path used elsewhere). Applies to BOTH the proxied URL (via `port_via`) AND the direct URL — the selected `port_key` is `http` or `https` independent of the configured key name. **Note**: `port_key` is the literal map key into `service.ports` (so a value like `"console"` resolves to `ports.console`); it is not auto-translated to `http`/`https` based on scheme.
+- **Port selection on `port_via`** (the proxy): when `runtime.use_https` is true, prefer `port_via.ports.https`; otherwise `port_via.ports.http`. If the selected port is empty, the proxied URL is host-only (no `:port` suffix) — do NOT fall through to the other key.
+- **`port_via` auto-detect** (when `auto-urls.port_via:` is empty): pick the single enabled `type: infra` service whose `ports.http == 80` OR `ports.https == 443`. The port filter is what prevents false positives like opensearch (`type: infra`, `ports.http: 9200`) from being mistaken for a front proxy. If 0 or >1 candidates pass the filter, no `port_via` is detected — services with only `hosts[host_key]` render no proxied URL (fall back to direct URL or omit). Document this in `info.md`: users with non-standard proxy port should set `port_via:` explicitly in `info.yml`.
 - Path rows chain to the proxied URL if present; otherwise to the direct URL.
 
 ## Status Validation Rules
@@ -166,17 +202,17 @@ info:                             # display-only block
 
 | Field | Severity | Rule |
 |---|---|---|
-| `service.icon` | warning | length > ~4 runes (likely typo) |
 | `service.info.title` | error | contains control chars |
 | `service.info.paths[].name` | error | empty; duplicate within service |
 | `service.info.paths[].path` | error | empty |
 | `service.info.paths[].path` | warning | does not start with `/` |
-| `service.info.paths[].icon` | warning | length > ~4 runes |
 | `auto-urls.include` / `auto-hosts.include` | error | value not in `app\|tool\|infra` |
 | `auto-urls.port_via` | error | explicitly named service does not exist |
 | `auto-urls.hide` / `auto-hosts.hide` | warning | unknown service key |
 | `auto-urls.hide_paths.<svc>` | warning | unknown service key or unknown path name |
 | `auto-hosts.ip` | warning | not parseable as IPv4/IPv6 |
+
+`service.icon` and `service.info.paths[].icon` are intentionally not validated for length — ZWJ-joined emoji break any rune-count threshold. Treat icons as opaque user content.
 
 ## Go Structures
 
@@ -189,8 +225,10 @@ type ServiceConfig struct {
 }
 
 type ServiceInfoBlock struct {
-    Title string            `yaml:"title,omitempty"`
-    Paths []ServiceInfoPath `yaml:"paths,omitempty"`
+    Title   string            `yaml:"title,omitempty"`
+    HostKey string            `yaml:"host_key,omitempty"`  // default "web"
+    PortKey string            `yaml:"port_key,omitempty"`  // default "http"
+    Paths   []ServiceInfoPath `yaml:"paths,omitempty"`
 }
 
 type ServiceInfoPath struct {
@@ -199,7 +237,10 @@ type ServiceInfoPath struct {
     Icon string `yaml:"icon,omitempty"`
 }
 
-// Display accessors (nil-safe, applies defaults):
+// Display accessors — name signals "resolved with default", as opposed to the
+// raw exported field (yaml.v3 needs the field exported to populate it).
+// Receiver kind (value vs pointer) MUST match the existing receiver convention
+// on ServiceConfig — see Task 1 for the verification step.
 func (s ServiceConfig) DisplayIcon() string
 func (s ServiceConfig) DisplayTitle(folderKey string) string
 func (p ServiceInfoPath) DisplayIcon() string
@@ -207,7 +248,7 @@ func (p ServiceInfoPath) DisplayIcon() string
 
 ```go
 // internal/config/info.go
-type AutoUrlsSpec struct {
+type AutoURLsSpec struct {
     Include   []string            `yaml:"include,omitempty"`
     Hide      []string            `yaml:"hide,omitempty"`
     HidePaths map[string][]string `yaml:"hide_paths,omitempty"`
@@ -223,18 +264,46 @@ type AutoHostsSpec struct {
 type InfoItem struct {
     Type string `yaml:"type"`
     // ...existing fields...
-    SourceAutoUrlsSpec  *AutoUrlsSpec  `yaml:"-"`
+    SourceAutoURLsSpec  *AutoURLsSpec  `yaml:"-"`
     SourceAutoHostsSpec *AutoHostsSpec `yaml:"-"`
 }
 
-// Custom UnmarshalYAML on InfoItem dispatches on `type:` and populates
-// the matching SourceXxxSpec pointer.
+// Compile-time check — keeps the gopkg.in/yaml.v3 contract pinned.
+var _ yaml.Unmarshaler = (*InfoItem)(nil)
+
+// UnmarshalYAML decodes the flat fields via a type-alias shadow (to avoid
+// infinite recursion into this same method), then dispatches on i.Type to
+// decode the type-specific Source*Spec.
+func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
+    type alias InfoItem
+    var a alias
+    if err := value.Decode(&a); err != nil {
+        return err
+    }
+    *i = InfoItem(a)
+
+    switch i.Type {
+    case "auto-urls":
+        var spec AutoURLsSpec
+        if err := value.Decode(&spec); err != nil {
+            return err
+        }
+        i.SourceAutoURLsSpec = &spec
+    case "auto-hosts":
+        var spec AutoHostsSpec
+        if err := value.Decode(&spec); err != nil {
+            return err
+        }
+        i.SourceAutoHostsSpec = &spec
+    }
+    return nil
+}
 ```
 
 ## What Goes Where
 
 - **Implementation Steps** (`[ ]` checkboxes): all code, tests, fixture rewrite, docs — achievable in this repo
-- **Post-Completion** (no checkboxes): manual visual smoke (`devbox info` in the tbm fixture and any local user project)
+- **Post-Completion** (no checkboxes): real-project migration (updating `service.yml` and `info.yml` files in existing projects) and manual visual smoke against a real `devbox info`
 
 ## Implementation Steps
 
@@ -244,11 +313,15 @@ type InfoItem struct {
 - Modify: `internal/config/devbox.go`
 - Modify: `internal/config/devbox_test.go` (or nearest existing test file for `ServiceConfig`)
 
+- [ ] **first**: grep for existing methods on `ServiceConfig` and note their receiver kind (`func (s ServiceConfig)` vs `func (s *ServiceConfig)`). The new accessors MUST match — per `golang-structs-interfaces`, receiver type must be consistent across all methods of a type. If `ServiceConfig` has zero existing methods, prefer pointer receivers (the struct has maps and slices and is non-trivial in size).
 - [ ] add `Icon string \`yaml:"icon,omitempty"\`` to `ServiceConfig`
-- [ ] add `func (s ServiceConfig) DisplayIcon() string` — returns `s.Icon` if non-empty; otherwise type default: `app`→`📦`, `tool`→`⚙️`, `infra`→`🧱`, unknown→empty string
-- [ ] define the type-default map as a package-level `var` so tests can read it
-- [ ] write table-driven tests for `DisplayIcon` covering all three type defaults, explicit override, unknown type, and zero-value ServiceConfig
-- [ ] run `go test ./internal/config/...` — must pass before Task 2
+- [ ] **register `icon` in BOTH strict-decode allowlists** (required — service.yml uses `yaml.Decoder.KnownFields(true)` at `internal/config/devbox.go:1265`; unlisted fields fail loading):
+  - `allowedFieldsFor` at `internal/config/devbox.go:607` — add `"icon"` to the `common` slice (applies to all three service types)
+  - `servicesAllowedFields` at `internal/validate/config/devbox.go:112` — mirror the addition
+- [ ] add `DisplayIcon() string` method — returns `s.Icon` if non-empty; otherwise type default via a small `switch s.Type`: `app`→`📦`, `tool`→`⚙️`, `infra`→`🧱`, unknown→empty string. **No package-level icon map** — a switch inside the method is shorter, has no exported surface, and tests can read it through the method directly. Only extract to a `var` if a second consumer (status/cmdbrowser follow-up) actually appears.
+- [ ] write table-driven tests (each subtest calls `t.Parallel()`; subtest names are lowercase descriptive phrases like `"app type default"`, `"explicit override"`, `"unknown type returns empty"`) for `DisplayIcon` covering all three type defaults, explicit override, unknown type, and zero-value ServiceConfig
+- [ ] add a strict-decode test: a service.yml with `icon: "🔧"` loads cleanly via `LoadServiceFolder` (regression test against the allowlist update being forgotten)
+- [ ] run `go test ./internal/config/... ./internal/validate/...` — must pass before Task 2
 
 ### Task 2: Add `service.info` block (title, paths) with accessors
 
@@ -256,62 +329,86 @@ type InfoItem struct {
 - Modify: `internal/config/devbox.go`
 - Modify: `internal/config/devbox_test.go`
 
-- [ ] add `ServiceInfoBlock`, `ServiceInfoPath` structs as specified above
+- [ ] add `ServiceInfoBlock` (with `Title`, `HostKey`, `PortKey`, `Paths` fields), `ServiceInfoPath` structs as specified above
 - [ ] add `Info ServiceInfoBlock \`yaml:"info,omitempty"\`` field to `ServiceConfig`
+- [ ] **register `info` in BOTH strict-decode allowlists** (mirrors Task 1):
+  - `allowedFieldsFor` at `internal/config/devbox.go:607` — add `"info"` to the `common` slice
+  - `servicesAllowedFields` at `internal/validate/config/devbox.go:112` — mirror the addition
 - [ ] implement `func (s ServiceConfig) DisplayTitle(folderKey string) string` — returns `s.Info.Title` if non-empty; otherwise title-case the folder key, replacing `_`/`-` with spaces (`redis_insight` → `Redis Insight`)
 - [ ] implement `func (p ServiceInfoPath) DisplayIcon() string` — returns `p.Icon` if non-empty; otherwise `🔗`
-- [ ] confirm `LoadServiceFolder` / `LoadServices` round-trip the new fields without changes (lenient yaml.Unmarshal already permits unknown→present, but per CLAUDE.md `LoadServices` is lenient — verify and document)
-- [ ] write tests for `DisplayTitle` (override / title-case / hyphen / underscore / preserve internal capitalisation) and `DisplayIcon` (override / default)
-- [ ] write a loader round-trip test: write a service.yml with `icon:`, `info.title:`, `info.paths:` to `t.TempDir()`, load via `LoadServiceFolder`, assert fields parsed correctly and `paths` order preserved
-- [ ] run `go test ./internal/config/...` — must pass before Task 3
+- [ ] implement `func (s ServiceConfig) DisplayHostKey() string` (default `"web"`) and `func (s ServiceConfig) DisplayPortKey() string` (default `"http"`) — these resolve `s.Info.HostKey` and `s.Info.PortKey` for the renderer
+- [ ] **the inner `ServiceInfoBlock` is decoded under strict-mode** by virtue of being part of `ServiceConfig`. Confirm during impl that yaml.v3's `KnownFields(true)` propagates into nested structs (it does, by default) — a typo like `info.tilte` will fail loading. This is the desired behaviour; document in `services.md` (Task 12).
+- [ ] write tests for `DisplayTitle` (override / title-case / hyphen / underscore / preserve internal capitalisation), `DisplayIcon` (override / default), and `DisplayHostKey`/`DisplayPortKey` (override / default)
+- [ ] write a loader round-trip test: write a service.yml with `icon:`, `info.title:`, `info.host_key:`, `info.port_key:`, `info.paths:` to `t.TempDir()`, load via `LoadServiceFolder`, assert fields parsed correctly and `paths` order preserved
+- [ ] write a strict-decode failure test: a service.yml with `info.tilte:` (typo) fails loading with a clear KnownFields error
+- [ ] run `go test ./internal/config/... ./internal/validate/...` — must pass before Task 3
 
-### Task 3: Extend services-folder + service-schema validation
+### Task 3: Extend service-schema validation
 
 **Files:**
-- Modify: `internal/validate/config/services_folder.go` (only if it inspects file contents — confirm during impl; if it only checks file presence, schema rules go in `internal/validate/config/devbox.go` or a new sibling file)
-- Modify or create: `internal/validate/config/services_schema.go` (or extend the existing per-service-schema validator if one already exists — verify during implementation)
-- Modify: nearest existing `*_test.go` for the validator
+- Modify: `internal/validate/config/devbox.go` (the existing per-service-schema validator — `services_folder.go` only checks file presence and is NOT the right home for these rules)
+- Modify: the validator's test file
 
-- [ ] confirm where per-service-schema validation lives today (services_folder.go vs a separate devbox/services validator). Add new rules in whichever file already validates ServiceConfig fields. If no such file exists, create `services_schema.go` and register it via the package's `All()` function (no `init()` side effects per CLAUDE.md).
-- [ ] implement rule: `service.icon` rune-length > 4 → Warning, hint "icon should be 1–4 runes (emoji or short symbol)"
-- [ ] implement rule: `service.info.title` contains control chars → Error
+**Pre-decided**: rules go in `internal/validate/config/devbox.go` alongside other `ServiceConfig`-field rules. Do NOT create a new validator file unless `devbox.go` grows unwieldy.
+
+- [ ] implement rule: `service.info.title` contains control chars (anything matching `unicode.IsControl`) → Error
 - [ ] implement rule: `service.info.paths[].name` empty → Error
-- [ ] implement rule: duplicate `name` within a single service's `paths:` → Error (hint listing the duplicate)
+- [ ] implement rule: duplicate `name` within a single service's `paths:` → Error (hint listing the duplicate name)
 - [ ] implement rule: `service.info.paths[].path` empty → Error
 - [ ] implement rule: `service.info.paths[].path` does not start with `/` → Warning
-- [ ] implement rule: `service.info.paths[].icon` rune-length > 4 → Warning
-- [ ] write table-driven tests for each rule (Diagnostic.Severity, Diagnostic.Scope, Diagnostic.Hint formatting per [[feedback_validate_diagnostic_hints]])
+- [ ] **drop the icon rune-length checks** for both `service.icon` and `service.info.paths[].icon`. ZWJ-joined emoji (skin-tone modifiers, family glyphs, profession emoji like `🧑‍💻`) span multiple Go runes but render as one glyph — any sensible threshold either lets legitimate icons trigger warnings or lets typos through. The signal/noise is too low to be worth implementing. Treat `icon` as opaque user content.
+- [ ] write table-driven tests for each remaining rule (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases). Assert Diagnostic.Severity, Diagnostic.Scope, and Diagnostic.Hint formatting per [[feedback_validate_diagnostic_hints]]
 - [ ] run `go test ./internal/validate/...` — must pass before Task 4
 
-### Task 4: Define `AutoUrlsSpec` / `AutoHostsSpec` + custom InfoItem unmarshaller
+### Task 4: Define `AutoURLsSpec` / `AutoHostsSpec` + custom InfoItem unmarshaller
 
 **Files:**
 - Modify: `internal/config/info.go`
 - Modify: `internal/config/info_test.go`
 
-- [ ] add `AutoUrlsSpec` and `AutoHostsSpec` structs (fields per "Go Structures" section above)
-- [ ] add `SourceAutoUrlsSpec *AutoUrlsSpec` and `SourceAutoHostsSpec *AutoHostsSpec` fields to `InfoItem` (yaml:"-" so they do not double-decode)
-- [ ] register `auto-urls` and `auto-hosts` as valid values in the type allowlist (lines ~177-183)
-- [ ] implement `func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error` that first decodes into the existing flat fields, then dispatches on `i.Type`:
-  - `auto-urls` → decode the same node into a temporary `AutoUrlsSpec` and store as `i.SourceAutoUrlsSpec`
+- [ ] add `AutoURLsSpec` and `AutoHostsSpec` structs (fields per "Go Structures" section above). Per `golang-naming`, the acronym `URL` is all-caps in Go identifiers — `AutoURLsSpec`, not `AutoUrlsSpec`.
+- [ ] add `SourceAutoURLsSpec *AutoURLsSpec` and `SourceAutoHostsSpec *AutoHostsSpec` fields to `InfoItem`. Use `yaml:"-"` so yaml.v3 ignores them in the default decode pass (the custom `UnmarshalYAML` below populates them by dispatching on `type:`).
+- [ ] register `auto-urls` and `auto-hosts` as valid values in the type allowlist (lines ~177-183). YAML values stay kebab-case; only the Go identifiers use `URLs`.
+- [ ] add the compile-time interface check next to the method: `var _ yaml.Unmarshaler = (*InfoItem)(nil)` — guarantees the build fails if the method signature ever drifts off `gopkg.in/yaml.v3`.
+- [ ] implement `func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error`. **Critical**: use the type-alias shadow trick to avoid infinite recursion (calling `value.Decode(i)` directly would re-enter this same `UnmarshalYAML` and overflow the stack). Pattern:
+  ```go
+  type alias InfoItem
+  var a alias
+  if err := value.Decode(&a); err != nil { return err }
+  *i = InfoItem(a)
+  ```
+  Then dispatch on `i.Type`:
+  - `auto-urls` → `var spec AutoURLsSpec; value.Decode(&spec); i.SourceAutoURLsSpec = &spec`
   - `auto-hosts` → same with `AutoHostsSpec`
-  - other types → leave Source* pointers nil
+  - other types → leave both Source* pointers nil
 - [ ] preserve existing behaviour for all current type values (`info`, `warning`, `definition`, `separator`, `subgroup`) — round-trip them through the new unmarshaller unchanged
-- [ ] extend `ValidateInfoConfig` to require the appropriate `Source*Spec` pointer for the new types (defensive — should always be set by unmarshaller); reject `include[]` values not in {`app`,`tool`,`infra`}; reject `auto-hosts.ip` that does not parse via `net.ParseIP` (Warning per spec); validate `port_via` syntactically (non-empty service key — existence-check happens at render time when service list is available)
-- [ ] table-driven tests: unmarshal each existing item type unchanged; unmarshal `auto-urls` populates `SourceAutoUrlsSpec`; unmarshal `auto-hosts` populates `SourceAutoHostsSpec`; unknown type fails as before; validation rejects bad `include[]`, bad `ip`, malformed nested shape
+- [ ] extend `ValidateInfoConfig` at `internal/config/info.go:164` (load-time hard checks — returns `error`): require the appropriate `Source*Spec` pointer for the new types (defensive — should always be set by unmarshaller); reject `include[]` values not in {`app`,`tool`,`infra`}; validate `port_via` syntactically (non-empty service key when set — existence-check happens in the validator below since it needs `cfg.Services`)
+- [ ] add the diagnostics-level rules to `infoValidator` at `internal/validate/config/devbox.go:464` (the existing info validator — NOT a new file):
+  - `auto-hosts.ip` does not parse via `net.ParseIP` → Warning
+  - `auto-urls.port_via` references an unknown service key → Error (needs `ctx.Cfg`)
+  - `auto-urls.hide` / `auto-hosts.hide` references an unknown service key → Warning (needs `ctx.Cfg`)
+  - `auto-urls.hide_paths.<svc>` references an unknown service key or unknown path name → Warning (needs `ctx.Cfg`)
+- [ ] table-driven tests (every subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases): unmarshal each existing item type unchanged including the pre-existing `InfoItem.Icon` field (e.g. a `definition` item with `icon: "🔧"` round-trips intact — this guards against the alias-trick decode dropping fields); unmarshal `auto-urls` populates `SourceAutoURLsSpec`; unmarshal `auto-hosts` populates `SourceAutoHostsSpec`; deeply nested `hide_paths` map decodes correctly; unknown type fails as before; validation rejects bad `include[]`, bad `ip`, malformed nested shape
 - [ ] run `go test ./internal/config/...` — must pass before Task 5
 
 ### Task 5: Add deploy-order helper for info rendering
 
 **Files:**
-- Modify or create: `internal/stack/info_order.go` (or extend an existing topology helper if one already returns `[]string` deploy order)
+- Modify or create: `internal/stack/info_order.go` (helper lives in `internal/stack` for symmetry with other render-side stack helpers; the actual topological sort is delegated to `config.TopoSortServices`)
 - Modify: corresponding test file
 
-- [ ] verify whether a `func DeployOrder(...) []string` helper already exists in `internal/stack`. If yes, reuse it. If no, add a new helper that takes the topology map (already produced by `FetchComposeTopology` or `ParseTopologyFromFiles`) and a set of allowed types, and returns service folder keys in topological order filtered by type
-- [ ] the helper signature should be `func DeployOrderForTypes(cfg *config.DevboxConfig, topology map[string][]string, allowedTypes []string) []string` (or equivalent — match style of existing stack helpers)
-- [ ] honour the spec ordering rule: within the result, group by type in the order `app`, `tool`, `infra`, with each group internally in topological order. Caller of `auto-urls` / `auto-hosts` will insert blank-line separators between type groups.
-- [ ] disabled services (`enabled: false`) MUST be filtered out; users explicitly excluded via `hide:` are filtered by the renderer, not here
-- [ ] write tests with a synthetic topology + ServiceConfig map covering: disabled-skipped, type-grouping, intra-group topological order, missing-from-topology services appended at end (stable alphabetic) so a service without compose deps still renders
+**Approach correction**: do NOT use `ParseTopologyFromFiles` / `FetchComposeTopology` — those return a graph keyed by *compose service names* which often differ from folder keys (e.g., folder `catalog` → compose name `app-catalog` via `container:` field; see `internal/stack/topology.go:183` which maps via `svc.Container`, not folder key). For auto-block rendering we need ordering in folder-key space. **Use `config.TopoSortServices(names, services) ([]string, error)` at `internal/config/devbox.go:1975` instead** — it sorts by `DependsOn` in service-key space, which is exactly the right unit.
+
+- [ ] add `func DeployOrder(cfg *config.DevboxConfig, types []string) []string` in `internal/stack`. Signature does NOT take a topology map — internally calls `config.TopoSortServices` per type group.
+- [ ] for each type in `types` (callers pass `["app","tool","infra"]`):
+  1. collect enabled service folder keys with that type into a `[]string` (sorted alphabetically for stability before topo-sort)
+  2. call `config.TopoSortServices(names, cfg.Services)` — returns dependency order
+  3. on `TopoSortServices` error (cycle), fall back to the alphabetic list — log the error to stderr via the caller's writer (not from inside the helper; helper returns silently to honour the renderer-signature contract)
+  4. append to the result
+- [ ] disabled services (`enabled: false`) MUST be filtered out before sorting; users explicitly excluded via `hide:` are filtered by the renderer, not here
+- [ ] **determinism contract**: structural guarantee — alphabetic pre-sort feeds `TopoSortServices` so the result is deterministic even when the dependency graph has multiple valid topological orderings. Document this in the helper's doc comment.
+- [ ] no `topology` parameter anywhere downstream: `RenderInfo`, `renderAutoURLs`, `renderAutoHosts`, and `renderInfoItem` all stop receiving topology — they receive `cfg *config.DevboxConfig` and call `stack.DeployOrder(cfg, ...)` directly when they need ordering. This removes the topology-fetch step from `runInfo` entirely.
+- [ ] write tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases) covering: disabled-skipped, type-grouping in `types`-argument order, intra-group dependency order via `DependsOn`, services without `DependsOn` appear in alphabetic-of-input order, dependency cycle falls back to alphabetic without panicking, empty types argument returns empty slice, ServiceConfig map order does not affect result (insert in random order, assert sorted output)
 - [ ] run `go test ./internal/stack/...` — must pass before Task 6
 
 ### Task 6: Implement `auto-urls` renderer
@@ -320,11 +417,14 @@ type InfoItem struct {
 - Create: `internal/ui/info_auto_urls.go`
 - Create: `internal/ui/info_auto_urls_test.go`
 
-- [ ] implement `func renderAutoUrls(cfg *config.DevboxConfig, spec *config.AutoUrlsSpec, topology map[string][]string) string` — returns the rendered block as a single string per CLAUDE.md "Section renderer signature contract" (no `io.Writer` parameter)
+- [ ] implement `func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string` — returns the rendered block as a single string per CLAUDE.md "Section renderer signature contract" (no `io.Writer` parameter, no topology parameter — service order comes from `stack.DeployOrder(cfg, spec.Include)` called inside the function). Per `golang-naming`, the acronym is `URLs`, not `Urls`. Note: this function is unreachable from `runInfo` until Task 8 wires the dispatch in `renderInfoItem`; tests in this task call `renderAutoURLs` directly.
 - [ ] defaults: `spec.Include` empty → `[app, tool]`
-- [ ] `port_via` resolution: if explicit, look up that service in `cfg.Services` and use its `ports.http`/`ports.https`; if empty, auto-detect — exactly one `type: infra` service with non-empty `ports.http` OR `ports.https` is the front proxy; 0 or >1 candidates → no proxied URL (fall back to direct)
-- [ ] for each included service (deploy order from Task 5 helper, filtered by `spec.Hide`):
-  - assemble main URL row per "URL Assembly Rules" table
+- [ ] **service-level host/port key selection**: read `svc.Info.HostKey` (default `"web"`) and `svc.Info.PortKey` (default `"http"`) to determine which `hosts[<key>]` and `ports[<key>]` to surface. Services without an `info:` block use the defaults; services with non-default host/port keys (e.g. a console UI under `hosts.console` / `ports.console`) override via `info.host_key:` / `info.port_key:`.
+- [ ] `port_via` resolution: if explicit, look up that service in `cfg.Services` and use its `ports.http`/`ports.https` (NOT the service's own port_key — the proxy is by convention HTTP). If empty, auto-detect with the narrowed filter: exactly one enabled `type: infra` service with `ports.http == 80` OR `ports.https == 443`. If 0 or >1 candidates → no proxied URL (fall back to direct).
+- [ ] for each included service (deploy order from `stack.DeployOrder(cfg, spec.Include)`, filtered by `spec.Hide`):
+  - resolve `host_key` and `port_key` for this service
+  - skip the service silently if neither `hosts[host_key]` nor `ports[port_key]` is set AND `Info.Paths` is empty (nothing to render)
+  - assemble main URL row per "URL Assembly Rules" table using the resolved keys
   - emit subgroup header = `service.DisplayTitle(folderKey)` on its own line
   - emit main row: `  <DisplayIcon> <DisplayTitle>  — <url>` (column-aligned within this service's subgroup)
   - for each `service.Info.Paths` entry NOT in `spec.HidePaths[folderKey]`: emit `     <pathIcon> <path.name>  — <base><path.path>` aligned to the same value column as the main row
@@ -334,7 +434,9 @@ type InfoItem struct {
 - [ ] column alignment is *per-service-subgroup* (each service's own `—` column lines up), not global across the whole block — keep alignment math local
 - [ ] honour `spec.HidePaths`: skip paths whose `name` matches; unknown service keys / unknown path names in `HidePaths` are not errors here (validator warns; render is silent)
 - [ ] honour `runtime.use_https` for scheme; omit `:80` and `:443` from URLs
-- [ ] write golden-output tests covering:
+- [ ] **empty-output rule**: if the renderer produces zero subgroups (every included service got skipped), return `""` — the caller's `renderInfoItem` dispatch is responsible for not contributing this empty string to `contentCount` (see Task 8). Do NOT emit a "(no services)" placeholder.
+- [ ] **service iteration**: always via `stack.DeployOrder(cfg, spec.Include)`. Do NOT `range cfg.Services` directly — Go map iteration is randomized and will produce flaky golden tests.
+- [ ] write golden-output tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases like `"app behind proxy with multiple paths"`) covering:
   - app behind proxy with multiple paths (matches Target Rendered Output "Main" subgroup)
   - app with no paths (just the main row + subgroup header)
   - tool with both hosts.web and ports.http (`proxied | direct` form, matches "Adminer")
@@ -343,8 +445,11 @@ type InfoItem struct {
   - `hide:` excludes a service
   - `hide_paths:` excludes individual paths
   - explicit `port_via:` resolves correctly
-  - auto-detect `port_via:` resolves when exactly one infra-with-ports exists
-  - auto-detect `port_via:` declines when 0 or >1 candidates (falls back to direct or omits main row)
+  - auto-detect `port_via:` picks the single infra with `ports.http == 80` (typical reverse-proxy case)
+  - auto-detect `port_via:` declines when an extra infra with non-`:80` ports.http exists (e.g. an infra service binding `9200` — must NOT be selected; load-bearing regression case for the port-filter narrowing)
+  - auto-detect `port_via:` declines when 0 candidates pass the port filter
+  - service with `info.host_key: console` and `info.port_key: console` renders correctly — both `<proxied URL>` and `<direct URL>` use the `console` keys
+  - service with neither standard nor configured host/port keys is silently omitted
   - disabled service is skipped (delegates to Task 5's helper)
 - [ ] run `go test ./internal/ui/...` — must pass before Task 7
 
@@ -354,14 +459,14 @@ type InfoItem struct {
 - Create: `internal/ui/info_auto_hosts.go`
 - Create: `internal/ui/info_auto_hosts_test.go`
 
-- [ ] implement `func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec, topology map[string][]string) string`
+- [ ] implement `func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) string` — no topology parameter (uses `stack.DeployOrder(cfg, spec.Include)`)
 - [ ] defaults: `spec.Include` empty → `[app, tool, infra]`; `spec.IP` empty → `127.0.0.1`
-- [ ] iterate services in deploy order (Task 5 helper); for each, walk all `hosts.<key>` values
+- [ ] iterate services via `stack.DeployOrder(cfg, spec.Include)` (NEVER `range cfg.Services` directly — Go map iteration is randomized); for each, walk ALL `hosts.<key>` values regardless of which key — `hosts:` is the user's declared etc/hosts surface, every entry should be emitted. Iteration of the `Hosts` map per-service is also randomized, so collect entries into a slice first, then sort by host-key name within the service to keep output deterministic.
 - [ ] filter: drop empty strings, drop literal `localhost`, drop duplicates (preserve first-seen order)
 - [ ] honour `spec.Hide` — skip whole services
 - [ ] emit `  <ip>\t<hostname>` per line (two-space indent, tab separator — matches existing spec text)
 - [ ] sort: NOT alphabetical — preserve deploy order so URLs and Hosts blocks visually correspond (spec §4.2)
-- [ ] golden-output tests covering: dedup across services, `localhost` filtered, `hide:` works, deploy-order preserved, custom IP applied, empty result returns empty string
+- [ ] golden-output tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases) covering: dedup across services, `localhost` filtered, `hide:` works, deploy-order preserved, custom IP applied, empty result returns empty string
 - [ ] run `go test ./internal/ui/...` — must pass before Task 8
 
 ### Task 8: Wire auto-blocks into `renderInfoItem` dispatch
@@ -371,94 +476,43 @@ type InfoItem struct {
 - Modify: `internal/ui/info_test.go`
 
 - [ ] in `renderInfoItem`, add cases for `"auto-urls"` and `"auto-hosts"`. Each case:
-  - check that the matching `Source*Spec` pointer is non-nil (defensive — should be set by unmarshaller)
-  - thread the topology through. Source of topology: `RenderInfo` should accept a `map[string][]string` (call site in `internal/command/info.go` fetches it once via existing `stack` helpers and passes it down; do NOT call `FetchComposeTopology` from `renderInfoItem`)
-  - call `renderAutoUrls` / `renderAutoHosts` and append the returned string
-- [ ] update `RenderInfo` signature to accept topology. Update the single call site in `internal/command/info.go` (line ~67 region) to pre-fetch topology before calling RenderInfo. Topology fetch failure is non-fatal: pass an empty map and let renderers fall back to alphabetical service order (still better than nothing) — emit a warning to stderr via the existing `render.Writer`
+  - check that the matching `Source*Spec` pointer is non-nil (defensive — should be set by unmarshaller; `DefaultInfoConfig()` also sets it explicitly)
+  - call `renderAutoURLs(cfg, item.SourceAutoURLsSpec)` or `renderAutoHosts(cfg, item.SourceAutoHostsSpec)` and return the resulting string. The function signatures take `cfg` directly — no topology parameter; ordering is resolved inside the renderer via `stack.DeployOrder`.
+- [ ] **`RenderInfo` signature does NOT change** — auto-blocks are wired through `renderInfoItem` which already has `cfg` in scope. No topology fetch is added to `runInfo`. This is simpler than the earlier topology-threading plan and avoids the compose-name-vs-folder-key confusion entirely.
+- [ ] **`renderBlock` contentCount fix** at `internal/ui/info.go:123` — the existing flow appends `itemOut` to `survivors` and bumps `contentCount` for any non-decorative item, regardless of whether `itemOut == ""`. For auto-blocks that may legitimately render to `""` (no included services match, or all hidden), this would keep `hide_on_empty` sections visible with just the title/warning showing. **Fix**: in `renderBlock`'s non-subgroup branch (lines ~125-133), after calling `renderInfoItem`, check `if strings.TrimSpace(itemOut) == ""` — when empty, do NOT append to survivors and do NOT bump `contentCount`. This is a small, surgical change to the existing logic; it also benefits the existing item types whenever they happen to render empty (e.g., a `definition` item with empty `Value` and `Decorative: false`). Add a regression test asserting `hide_on_empty: true` sections vanish when their only content item is an auto-block that returned `""`.
 - [ ] update `renderBlock` and `renderInfoItem` `when:` evaluation: auto-block `when:` clauses run against the same template context as existing items (no new variables needed)
 - [ ] tests:
   - integration test through `RenderInfo` with a small synthetic `InfoConfig` containing one `auto-urls` and one `auto-hosts` item, asserting the output contains expected lines
   - `when:` on an auto-block hides it
-  - topology-fetch-failure path renders gracefully (empty topology → services in `cfg.Services` map order, possibly alphabetic — assert no panic + output contains expected hostnames)
+  - **`hide_on_empty: true` section with an auto-block that returns `""` collapses (the title + warning items inside are dropped along with the empty auto-block)** — load-bearing regression test for the renderBlock fix
+  - empty `cfg.Services` → renderers return `""` gracefully; no panic
 - [ ] run `go test ./internal/ui/... ./internal/command/...` — must pass before Task 9
 
-### Task 9: Replace legacy `Devbox/Project` section and `RenderSummary` fallback with built-in default `InfoConfig`
+### Task 9: Add built-in default `InfoConfig` and drop the missing-`info.yml` fallback branch
 
 **Files:**
-- Modify: `internal/config/info.go` (add `BuiltinDefaultInfoConfig()` helper)
-- Modify: `internal/command/info.go` (call site at ~line 67)
-- Delete or shrink: `internal/ui/summary.go` (if it has callers other than the missing-info.yml fallback, keep only those; otherwise delete entirely)
+- Modify: `internal/config/info.go` (add `DefaultInfoConfig()` helper)
+- Modify: `internal/command/info.go` (delete the `missingInfo` branch at lines ~66-71)
 - Modify: corresponding test files
 
-- [ ] add `func BuiltinDefaultInfoConfig() *InfoConfig` returning an InfoConfig equivalent to spec §5:
-  - section `urls` with title "URLs" containing one `auto-urls` item (defaults)
-  - section `hosts` with title "Hosts" containing one `warning` item ("Please, add these to your /etc/hosts:") followed by one `auto-hosts` item (defaults)
-- [ ] in `LoadInfoConfig`, when the file is missing (`errors.Is(err, os.ErrNotExist)`) return `BuiltinDefaultInfoConfig(), nil` instead of bubbling the error
-- [ ] in `internal/command/info.go` remove the `RenderSummary` fallback branch — `LoadInfoConfig` now always returns a config
-- [ ] delete `internal/ui/summary.go` and its tests IF no other caller exists. If `RenderSummary` is referenced elsewhere (deploy summary, status, etc. — verify with `grep -r RenderSummary`), keep only those reachable functions and remove the missing-info.yml branch
-- [ ] verify that the "Devbox / Project — <name>" subgroup is no longer rendered: search for any hardcoded "Project — " or "Devbox" subgroup emission in `internal/ui/` and remove. (The fixture's own `info.yml` may still declare it; that gets fixed in Task 11.)
+**Scope clarification**: `internal/ui/summary.go` (`RenderSummary`) is NOT deleted — it has a second, unrelated caller at `internal/command/root.go:300` for the root-command project banner. Only the `info.go` caller goes away. The "Devbox / Project — <name>" subgroup that exists in some user `info.yml` files is YAML, not Go code — there is nothing to remove on the CLI side; users drop that subgroup from their own `info.yml` during migration (Post-Completion).
+
+- [ ] add `func DefaultInfoConfig() *InfoConfig` returning an InfoConfig equivalent to spec §5:
+  - section `urls` with title "URLs" containing one `auto-urls` `InfoItem` (`Type: "auto-urls"`, `SourceAutoURLsSpec: &AutoURLsSpec{}` — zero-value spec triggers defaults at render time)
+  - section `hosts` with title "Hosts" containing one `warning` item ("Please, add these to your /etc/hosts:") followed by one `auto-hosts` `InfoItem` (`Type: "auto-hosts"`, `SourceAutoHostsSpec: &AutoHostsSpec{}`)
+  - **CRITICAL**: `Source*Spec` pointers MUST be populated here because `UnmarshalYAML` does not run on Go-constructed configs. A nil `SourceAutoURLsSpec` would hit the renderer's defensive nil guard and produce empty output.
+- [ ] in `LoadInfoConfig`, when the file is missing (`errors.Is(err, os.ErrNotExist)`) return `DefaultInfoConfig(), nil` instead of returning the missing-file error
+- [ ] in `internal/command/info.go` delete the `if missingInfo { ... return nil }` block at lines ~66-71. `LoadInfoConfig` now always returns a config; the warning is no longer accurate (an absent `info.yml` is a supported state with a sensible default rendering)
+- [ ] **update `infoValidator` at `internal/validate/config/devbox.go:464`**: the existing branch at line ~478 emits an `Info`-severity diagnostic `"no info.yml"` when `LoadInfoConfig` returns `errNotExist`. After this task, that branch becomes unreachable (LoadInfoConfig swallows ErrNotExist). Add an explicit `os.Stat(infoPath)` check BEFORE calling `LoadInfoConfig` — if the file does not exist, still emit the existing `"no info.yml"` Info diagnostic (preserves the current user-facing signal in `devbox validate config info` output), then proceed to validate the built-in default for completeness. This keeps the validator's behaviour observably identical for users running `devbox validate`.
+- [ ] **do NOT delete** `internal/ui/summary.go` or `internal/ui/summary_test.go` — `RenderSummary` is still used by `internal/command/root.go:300`. Confirm with `grep -rn RenderSummary --include='*.go'` before touching the file (expect 2 production callers reduced to 1).
+- [ ] do NOT add any `grep ... in internal/ui/` step for the "Devbox / Project — <name>" string — that text is fixture YAML, handled in Task 11.
 - [ ] tests:
-  - `LoadInfoConfig` on a directory without `info.yml` returns the built-in default (deep-equal check)
-  - `RenderInfo` with the built-in default + a minimal cfg renders the URLs and Hosts blocks
-  - confirm no "Project — " line appears in any rendered output for the synthetic cfg
+  - `LoadInfoConfig` on a directory without `info.yml` returns the built-in default (deep-equal check, including that both `Source*Spec` pointers are non-nil)
+  - `RenderInfo` with the default + a minimal cfg renders a non-empty URLs block AND a non-empty Hosts block (asserts the `Source*Spec`-populated path actually renders, catching the nil-guard regression directly)
+  - through `runInfo` (or its testable form): with no `info.yml` on disk in a `t.TempDir()` project, output contains the headers `── URLs ──` and `── Hosts ──`
 - [ ] run `go test ./internal/...` — must pass before Task 10
 
-### Task 10: Update `tbm` fixture services with `icon` and `info` blocks
-
-**Files:**
-- Modify: `/Users/s/Projects/devbox/next/tbm/devbox/services/*/service.yml` (every service folder)
-
-- [ ] for each service folder under `/Users/s/Projects/devbox/next/tbm/devbox/services/`, add an appropriate `icon:` (or omit and rely on type default) and `info:` block where the spec calls for a non-default `title:` or non-empty `paths:`. Specifically:
-  - `main` (app): `icon: "📦"` (or omit — default suffices), `info.title: "Main"`, `info.paths: [API specification (📖), Clockwork, SPX profiler (⚡)]`
-  - `catalog` (app): `info.title: "Catalog"`, `info.paths: [API specification (📖)]`
-  - `customer` (app): `info.title: "Customer"`
-  - `sales` (app): same pattern as catalog/customer per existing usage — verify which paths exist
-  - `nginx`, `varnish` (infra): no `info` block needed (they are the proxies, not surfaced)
-  - `db`, `redis`, `opensearch`, `rabbitmq`, `minio`, `mailpit` (infra or tool depending on current type): no `info` block unless they appear in spec §2 output
-  - `adminer`, `mailpit`, `elasticvue`, `redis_insight`, `minio` (tools): `info.title` matching spec output ("Adminer", "Mailpit", "Elasticvue", "Redis Insight", "MinIO Console"), no paths
-  - `opensearch_dashboards` (tool, if applicable): `info.title: "OpenSearch Dashboards"` if surfaced
-- [ ] verify the resulting set of services renders to exactly the spec §2 "Target Rendered Output" (run `devbox info` from inside the fixture after building the CLI)
-- [ ] do NOT add `info:` blocks to services that should not appear in the dashboard — let `hide:` in `info.yml` handle exceptions
-- [ ] no new tests in this task — the round-trip test from Task 11 covers fixture validity
-- [ ] manually inspect each modified file once before moving on (small diff; no automation needed)
-
-### Task 11: Rewrite `tbm/devbox/info.yml` and add fixture round-trip test
-
-**Files:**
-- Modify: `/Users/s/Projects/devbox/next/tbm/devbox/info.yml` (shrink from ~120 lines to ~15)
-- Create: `internal/ui/info_fixture_test.go` (or extend existing `info_test.go`)
-
-- [ ] rewrite `tbm/devbox/info.yml` to the auto-blocks form. Approximate target (adjust to match actual sections/credentials block already present):
-  ```yaml
-  sections:
-    - id: urls
-      title: URLs
-      items:
-        - type: auto-urls
-          hide: [varnish]   # only if varnish is currently surfaced and should be hidden
-
-    - id: hosts
-      title: Hosts
-      items:
-        - type: warning
-          text: "Please, add these to your /etc/hosts:"
-        - type: auto-hosts
-
-    - id: credentials
-      title: Credentials
-      items:
-        # existing manual credentials items preserved verbatim
-  ```
-- [ ] remove the legacy `id: devbox_info` subgroup that emits "Project — <name>" (handled in fixture; the renderer code path was already removed in Task 9)
-- [ ] add `internal/ui/info_fixture_test.go` (or extend an existing test) that:
-  - loads `/Users/s/Projects/devbox/next/tbm/devbox/info.yml` + `tbm/devbox/services/*/service.yml` via the real loaders
-  - asserts loaded `InfoConfig` validates cleanly (no error diagnostics)
-  - calls `RenderInfo` with a synthetic topology covering the fixture's services
-  - asserts headline lines from spec §2 appear in the output (e.g. `📦 Main                — http://`, `Please, add these to your /etc/hosts:`)
-- [ ] test uses fixture path under `../../../tbm/devbox/` relative to the test file — confirm the path is reachable from `go test`; if the test would break by adding a sibling-monorepo dependency, isolate the fixture inside `internal/ui/testdata/info_fixture/` as a smaller copy
-- [ ] run `go test ./internal/ui/...` — must pass before Task 12
-
-### Task 12: Update reference docs
+### Task 10: Update reference docs
 
 **Files:**
 - Modify: `docs/reference/config/info.md`
@@ -476,43 +530,52 @@ type InfoItem struct {
   - example with both fields populated, matching the schema sample in this plan
 - [ ] auto-generated CLI reference (`docs/reference/cli/`) does not need manual editing — `devbox docs generate` covers it (per CLAUDE.md). No need to run it as part of this task; release process handles regeneration.
 - [ ] no code tests for docs; run `make lint` to catch any doc-adjacent issues
-- [ ] run `make test` and `make lint` — final full pass before Task 13
+- [ ] run `make test` and `make lint` — final full pass before Task 11
 
-### Task 13: Verify acceptance criteria
+### Task 11: Verify acceptance criteria
 
 - [ ] verify all spec sections (§2–§9) are implemented (cross-reference each row of the validation table and the URL assembly table against the test files)
 - [ ] verify edge cases via tests: missing `info.yml` (fallback), missing `port_via`, disabled service, malformed `paths[].path`, malformed `ip`, `NO_COLOR`-style or other rendering env vars (if applicable — most output is plain text)
+- [ ] confirm no shell-completion functions need updating: `auto-urls`/`auto-hosts` are config item types in `info.yml`, not CLI flags; `service.icon`/`service.info` are not exposed via CLI surface. No `ValidArgsFunction` or `RegisterFlagCompletionFunc` calls require changes.
+- [ ] confirm `internal/setup` (the wizard that generates new service.yml files) is not updated: `icon:` and `info:` are documented as hand-added; the wizard intentionally produces a minimal service.yml. (Verify by reading the wizard's service.yml emission once.)
 - [ ] run `make test` — final full pass
 - [ ] run `make lint` — all issues must be fixed (per CLAUDE.md: `errcheck`, `govet`, `staticcheck`, `revive`, `gocritic`, `modernize`)
 - [ ] run `make build` — confirm the binary builds cleanly
-- [ ] run `./bin/devbox info` from inside `/Users/s/Projects/devbox/next/tbm/` and visually diff the output against spec §2 "Target Rendered Output" (allowing for hostname differences — the spec uses `pilot.*` placeholders, the fixture uses `tbm.*`)
+- [ ] manual smoke against a real project is **out of scope** for this PR — see Post-Completion for the real-project migration step
 
-### Task 14: Final documentation and plan move
+### Task 12: Final documentation and plan move
 
 **Files:**
 - Modify: `AGENTS.md` (remember: `CLAUDE.md` is a symlink to `AGENTS.md`)
 - Move: this plan file to `docs/plans/completed/`
 
 - [ ] add a Key Patterns entry to `AGENTS.md`:
-  > **`info.yml` auto-blocks**: `type: auto-urls` and `type: auto-hosts` items expand at *render* time inside `renderInfoItem` (`internal/ui/info.go`), not at load time. The `InfoItem` carries a `Source*Spec` pointer per the daemon-style sugar pattern (yaml:"-", populated by `InfoItem.UnmarshalYAML` dispatch on `type:`). `LoadInfoConfig` stays config-blind; `RenderInfo` takes topology as a parameter (fetched once by the caller). When `devbox/info.yml` is missing, `LoadInfoConfig` returns `BuiltinDefaultInfoConfig()` — a synthesized config with a urls section + hosts section. Service `icon` and `info.title` / `info.paths` are display-only fields read only by these renderers (and by status/cmdbrowser for `icon`).
-- [ ] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-info-auto-blocks.md docs/plans/completed/` (ralphex does this automatically on completion — manual fallback if needed)
+  > **`info.yml` auto-blocks**: `type: auto-urls` and `type: auto-hosts` items expand at *render* time inside `renderInfoItem` (`internal/ui/info.go`), not at load time. The `InfoItem` carries a `Source*Spec` pointer per the daemon-style sugar pattern (yaml:"-", populated by `InfoItem.UnmarshalYAML` dispatching on `type:` and using a `type alias InfoItem` shadow to avoid infinite recursion on the flat-field decode pass). `LoadInfoConfig` stays config-blind; `RenderInfo` does NOT take a topology parameter — auto-block renderers call `stack.DeployOrder(cfg, types)` directly, which delegates to `config.TopoSortServices` (folder-key space; `ParseTopologyFromFiles` is intentionally unused because it returns compose-name space). When `devbox/info.yml` is missing, `LoadInfoConfig` returns `DefaultInfoConfig()` — a synthesized config with a urls section + hosts section, both with `Source*Spec` pointers populated directly (UnmarshalYAML does not run on Go-constructed configs). Service `icon`, `info.title`, `info.host_key`, `info.port_key`, and `info.paths` are display-only fields read by these renderers (and by status/cmdbrowser for `icon` in a planned follow-up). **Service iteration in renderers MUST go through `stack.DeployOrder(...)` — never `range cfg.Services` directly**, because Go map iteration is randomized and would produce flaky golden tests. **`renderBlock` in `internal/ui/info.go` was tightened to drop empty `renderInfoItem` output from `contentCount`** so `hide_on_empty` sections collapse correctly when their auto-block renders to `""`. **Adding new top-level fields to `service.yml` requires updating BOTH `allowedFieldsFor` in `internal/config/devbox.go:607` AND `servicesAllowedFields` in `internal/validate/config/devbox.go:112`** — service.yml uses `KnownFields(true)` strict decode.
+- [ ] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-info-auto-blocks.md docs/plans/completed/`
 
 ## Post-Completion
 
 *Items requiring manual intervention — no checkboxes, informational only*
 
-**Manual visual verification** (separate from automated golden tests):
+**Real-project migration** (done separately per project, after this PR lands):
 
-- From `/Users/s/Projects/devbox/next/tbm/`, run `./../cli/bin/devbox info` and visually compare against the spec §2 layout. Look specifically for:
-  - exact ordering: all apps in deploy order, blank line, all tools in deploy order
+For each existing project that uses `devbox`:
+
+- Update each `devbox/services/<name>/service.yml`:
+  - add `icon:` (or rely on type default)
+  - add `info:` block with `title:`, `host_key:`/`port_key:` (if non-default), and `paths:` (if any) for services that should surface in the URLs block
+  - omit `info:` for services that should NOT surface in the dashboard (the renderer skips them silently)
+- Rewrite `devbox/info.yml` to use `auto-urls` and `auto-hosts` in place of hand-authored URL/Host subgroups. Drop the legacy "Devbox / Project — <name>" subgroup if present (project identity already lives in the branded header). Set `include: [app, tool, infra]` on auto-urls if any infra services need to surface.
+- Run `devbox info` and visually verify:
+  - exact ordering: all apps in deploy order, blank line, all tools in deploy order, blank line, infra (if included)
   - per-service subgroup header on its own line
   - main row uses the service icon; path rows use the path icon (defaulting to `🔗`)
   - column alignment is consistent *within* each service subgroup
   - URLs without `:80`/`:443` suffix
-  - "Devbox / Project — …" section is GONE
-  - `Credentials` section (still hand-authored in `info.yml`) renders unchanged
-- Test the fallback: temporarily rename `tbm/devbox/info.yml` to `info.yml.bak` and run `devbox info` again — should render the built-in default (urls + hosts only, no credentials)
-- Test with a synthetic project that has no front-proxy (no `type: infra` with ports): main URL rows should gracefully omit or fall back to direct URLs without crashing
+  - "Devbox / Project — …" subgroup is gone (if it was previously present)
+  - any hand-authored sections (e.g. `Credentials`) render unchanged
+- Test the fallback: temporarily rename `devbox/info.yml` to `info.yml.bak` and run `devbox info` again — should render the built-in default (urls + hosts only, no hand-authored sections)
+- Edge case to check: a project with no front-proxy (no `type: infra` with `ports.http: 80` or `ports.https: 443`) should render apps with their direct URLs or skip the main row gracefully without crashing
 
 **External system updates**:
 

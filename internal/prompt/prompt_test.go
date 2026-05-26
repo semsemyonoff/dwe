@@ -317,12 +317,12 @@ func TestRunFromDirColor(t *testing.T) {
 		{
 			name:       "pending_uses_warning_default",
 			state:      "pending: {}\n",
-			wantStdout: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p " + sgr(0xEA, 0xB3, 0x08, "⟳") + "\n",
+			wantStdout: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p " + sgr(0xF5, 0x9E, 0x0B, "⟳") + "\n",
 		},
 		{
 			name:       "partial_uses_warning_default",
 			state:      "project:\n  status: partial\n",
-			wantStdout: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p " + sgr(0xEA, 0xB3, 0x08, "⚠") + "\n",
+			wantStdout: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p " + sgr(0xF5, 0x9E, 0x0B, "⚠") + "\n",
 		},
 		{
 			name:       "failed_uses_danger_default",
@@ -520,6 +520,49 @@ func BenchmarkPromptRun(b *testing.B) {
 		if code := runFromDir(&buf, nil, root, true); code != 0 {
 			b.Fatalf("exit: %d", code)
 		}
+	}
+}
+
+func TestSanitizeName(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "my-project", want: "my-project"},
+		{in: "hello world", want: "hello world"},
+		{in: "tab\there", want: "tabhere"},
+		{in: "newline\nhere", want: "newlinehere"},
+		{in: "escape\x1b[31mred\x1b[0m", want: "escape[31mred[0m"},
+		{in: "del\x7fchar", want: "delchar"},
+		{in: "\x01\x02\x03", want: ""},
+		{in: "normal 日本語", want: "normal 日本語"},
+		{in: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			t.Parallel()
+			if got := sanitizeName(tt.in); got != tt.want {
+				t.Errorf("sanitizeName(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderStripControlCharsFromName(t *testing.T) {
+	t.Parallel()
+	// Verify render strips control characters from names so a crafted project.name
+	// (e.g. from a cloned repo) cannot inject ANSI sequences or newlines into the
+	// shell prompt. Call render directly to bypass YAML (which rejects bare control
+	// bytes anyway — this exercises the sanitization layer that matters at runtime).
+	pal := palette{accent: color{enabled: false}}
+	got := render("evil\x1b[31mred\nline", statusNone, pal, false)
+	want := "{▪} evil[31mredline\n"
+	if got != want {
+		t.Errorf("render with control chars: got %q, want %q", got, want)
+	}
+	if containsEsc(got) {
+		t.Errorf("output still contains ESC sequence: %q", got)
 	}
 }
 

@@ -21,7 +21,7 @@ const (
 
 	defaultAccent  = "#2EC3EB"
 	defaultSuccess = "#22C55E"
-	defaultWarning = "#EAB308"
+	defaultWarning = "#F59E0B"
 	defaultDanger  = "#EF4444"
 
 	sgrReset = "\x1b[39m"
@@ -129,13 +129,26 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 	return 0
 }
 
+// sanitizeName strips ASCII control characters (< 0x20 and 0x7F) from s so
+// that a crafted project.name cannot inject ANSI/OSC escape sequences or
+// newlines into the shell prompt. Starship runs devbox prompt automatically,
+// so this must be safe for untrusted devbox.yml files in cloned repos.
+func sanitizeName(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7F {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 func render(name string, status statusKind, pal palette, useColor bool) string {
 	var sb strings.Builder
 	sb.Grow(96)
 	sb.WriteByte('{')
 	writeGlyph(&sb, "▪", pal.accent, useColor)
 	sb.WriteString("} ")
-	sb.WriteString(name)
+	sb.WriteString(sanitizeName(name))
 	if icon := status.icon(); icon != "" {
 		sb.WriteByte(' ')
 		writeGlyph(&sb, icon, statusColor(status, pal), useColor)
