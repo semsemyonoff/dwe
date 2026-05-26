@@ -1047,7 +1047,10 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	}
 
 	// Step 1: load per-service folders — the canonical service declarations.
-	services, err := LoadServices(baseDir)
+	// Use the raw loader here (no extends inheritance yet) so per-service
+	// overlay merges in Step 4 can mutate parent values before children
+	// inherit them in Step 5.
+	services, err := loadServiceFolders(baseDir)
 	if err != nil {
 		return nil, err
 	}
@@ -1127,6 +1130,13 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		applyOverlayPorts(merged, name, &svc)
 		applyOverlayHosts(merged, name, &svc)
 		services[name] = svc
+	}
+
+	// Resolve `extends:` inheritance AFTER per-service overlay merges so children
+	// inherit the already-overlaid parent values (e.g. local.yml overrides on the
+	// parent's hosts/ports propagate into children that don't override themselves).
+	if err := ResolveServiceExtends(services); err != nil {
+		return nil, err
 	}
 	cfg.Services = services
 
@@ -1356,9 +1366,28 @@ func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
 }
 
 // LoadServices loads all service definitions from devbox/services/<name>/service.yml
-// per-folder files. Missing directory → empty map (not an error). Each folder
-// entry is loaded independently and errors are aggregated.
+// per-folder files and resolves `extends:` inheritance. Missing directory →
+// empty map (not an error). Each folder entry is loaded independently and
+// errors are aggregated. For callers that need to apply per-service overlays
+// (e.g. local.yml host/port overrides) BEFORE inheritance — so children
+// inherit overlaid parent values — use [loadServiceFolders] followed by
+// [ResolveServiceExtends].
 func LoadServices(baseDir string) (map[string]ServiceConfig, error) {
+	services, err := loadServiceFolders(baseDir)
+	if err != nil {
+		return nil, err
+	}
+	if err := ResolveServiceExtends(services); err != nil {
+		return nil, err
+	}
+	return services, nil
+}
+
+// loadServiceFolders is the bare per-folder file loader used by [LoadServices]
+// and by [LoadConfig] when overlays must be applied before extends inheritance.
+// It does NOT resolve `extends:` — callers must follow up with
+// [ResolveServiceExtends] when extends-aware data is needed.
+func loadServiceFolders(baseDir string) (map[string]ServiceConfig, error) {
 	servicesDir := filepath.Join(baseDir, "devbox", "services")
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
@@ -1386,13 +1415,20 @@ func LoadServices(baseDir string) (map[string]ServiceConfig, error) {
 		return nil, fmt.Errorf("loading services: %w", errors.Join(loadErrs...))
 	}
 
-	// Resolve extends in topological order.
+	return services, nil
+}
+
+// ResolveServiceExtends resolves `extends:` inheritance across the given
+// services map in place. Must be called AFTER per-service overlay merges
+// (applyOverlayPorts / applyOverlayHosts) so children inherit the
+// already-overlaid parent values rather than the pre-overlay defaults from
+// service.yml.
+func ResolveServiceExtends(services map[string]ServiceConfig) error {
 	order, err := topoSortServices(services)
 	if err != nil {
-		return nil, fmt.Errorf("loading services: %w", err)
+		return fmt.Errorf("loading services: %w", err)
 	}
 
-	// Cross-type extends: child.Type must equal parent.Type.
 	var crossTypeDiags []error
 	for name, svc := range services {
 		if svc.Extends == "" {
@@ -1404,10 +1440,9 @@ func LoadServices(baseDir string) (map[string]ServiceConfig, error) {
 		}
 	}
 	if len(crossTypeDiags) > 0 {
-		return nil, fmt.Errorf("loading services: %w", errors.Join(crossTypeDiags...))
+		return fmt.Errorf("loading services: %w", errors.Join(crossTypeDiags...))
 	}
 
-	// Apply inheritance in topological order.
 	for _, name := range order {
 		svc := services[name]
 		if svc.Extends == "" {
@@ -1480,7 +1515,7 @@ func LoadServices(baseDir string) (map[string]ServiceConfig, error) {
 		services[name] = svc
 	}
 
-	return services, nil
+	return nil
 }
 
 // topoSortServices returns service names in topological order (parents before

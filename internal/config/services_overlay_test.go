@@ -308,6 +308,211 @@ func TestInjectServicesIntoRaw_portsHostsRoundTrip(t *testing.T) {
 	}
 }
 
+// TestLoadConfig_extendsInheritsOverlaidParentHosts is a regression guard for
+// the bug where `auto-hosts` (and any consumer of cfg.Services[*].Hosts on a
+// child service) saw a parent's pre-overlay host because `extends:`
+// inheritance ran inside LoadServices BEFORE the per-service overlay loop in
+// LoadConfig got to apply local.yml overrides on the parent.
+//
+// Concrete scenario: `main-debug` extends `main`. `main` declares
+// `hosts.web: tbm.local` in service.yml; `local.yml` overrides it to
+// `tbm.localhost`. After LoadConfig, BOTH services must report
+// `hosts.web == "tbm.localhost"` — children inherit the OVERLAID parent.
+//
+// Loader contract this pins down: per-service overlay merges
+// (applyOverlayPorts / applyOverlayHosts) MUST run before
+// ResolveServiceExtends so children clone the post-overlay parent maps.
+func TestLoadConfig_extendsInheritsOverlaidParentHosts(t *testing.T) {
+	dir := t.TempDir()
+
+	devboxYML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: devbox
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatalf("mkdir devbox/: %v", err)
+	}
+
+	// local.yml overrides the parent's hosts.web only. main-debug has no
+	// entry — the regression was that it stayed at the pre-overlay default.
+	localYML := `
+services:
+  main:
+    hosts:
+      web: tbm.localhost
+  main-debug:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+
+	mainYML := `
+type: app
+container: app-main
+mandatory: true
+dir: ./services/main
+hosts:
+  web: tbm.local
+`
+	debugYML := `
+type: app
+container: app-main-debug
+mandatory: false
+extends: main
+`
+	writeServiceFolder(t, dir, "main", mainYML)
+	writeServiceFolder(t, dir, "main-debug", debugYML)
+
+	cfg, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	if got := cfg.Services["main"].Hosts["web"]; got != "tbm.localhost" {
+		t.Errorf("main.hosts.web = %q, want tbm.localhost (overlay)", got)
+	}
+	if got := cfg.Services["main-debug"].Hosts["web"]; got != "tbm.localhost" {
+		t.Errorf("main-debug.hosts.web = %q, want tbm.localhost — child must inherit overlaid parent host, not the pre-overlay service.yml default", got)
+	}
+}
+
+// TestLoadConfig_extendsInheritsOverlaidParentPorts is the ports counterpart
+// of [TestLoadConfig_extendsInheritsOverlaidParentHosts]. The same loader
+// ordering bug would let children pin a pre-overlay parent port.
+func TestLoadConfig_extendsInheritsOverlaidParentPorts(t *testing.T) {
+	dir := t.TempDir()
+
+	devboxYML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: devbox
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatalf("mkdir devbox/: %v", err)
+	}
+
+	localYML := `
+services:
+  parent:
+    ports:
+      http: 9090
+  child:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+
+	parentYML := `
+type: app
+container: app-parent
+mandatory: true
+dir: ./services/parent
+ports:
+  http: 8080
+`
+	childYML := `
+type: app
+container: app-child
+mandatory: false
+extends: parent
+`
+	writeServiceFolder(t, dir, "parent", parentYML)
+	writeServiceFolder(t, dir, "child", childYML)
+
+	cfg, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	if got := cfg.Services["parent"].Ports["http"]; got != 9090 {
+		t.Errorf("parent.ports.http = %d, want 9090 (overlay)", got)
+	}
+	if got := cfg.Services["child"].Ports["http"]; got != 9090 {
+		t.Errorf("child.ports.http = %d, want 9090 — child must inherit overlaid parent port, not the pre-overlay service.yml default", got)
+	}
+}
+
+// TestLoadConfig_extendsChildOwnHostBeatsParentOverlay verifies the
+// inheritance precedence wasn't reversed by the loader reorder: when the
+// child declares its OWN hosts.web in service.yml, it wins regardless of any
+// overlay on the parent.
+func TestLoadConfig_extendsChildOwnHostBeatsParentOverlay(t *testing.T) {
+	dir := t.TempDir()
+
+	devboxYML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: devbox
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+		t.Fatalf("write devbox.yml: %v", err)
+	}
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatalf("mkdir devbox/: %v", err)
+	}
+
+	localYML := `
+services:
+  parent:
+    hosts:
+      web: parent.localhost
+  child:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+
+	parentYML := `
+type: app
+container: app-parent
+mandatory: true
+dir: ./services/parent
+hosts:
+  web: parent.local
+`
+	childYML := `
+type: app
+container: app-child
+mandatory: false
+extends: parent
+hosts:
+  web: child.local
+`
+	writeServiceFolder(t, dir, "parent", parentYML)
+	writeServiceFolder(t, dir, "child", childYML)
+
+	cfg, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	if got := cfg.Services["parent"].Hosts["web"]; got != "parent.localhost" {
+		t.Errorf("parent.hosts.web = %q, want parent.localhost", got)
+	}
+	if got := cfg.Services["child"].Hosts["web"]; got != "child.local" {
+		t.Errorf("child.hosts.web = %q, want child.local — child's own hosts.web must win over parent inheritance", got)
+	}
+}
+
 // TestInjectServicesIntoRaw_dotPathResolution exercises ResolvePath against
 // the populated map — proves the new shape is reachable from tpl.Render.
 func TestInjectServicesIntoRaw_dotPathResolution(t *testing.T) {
