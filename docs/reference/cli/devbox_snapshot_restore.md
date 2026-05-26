@@ -11,6 +11,7 @@ devbox snapshot restore <name> [flags]
 ```
   -h, --help      help for restore
       --no-live   disable the per-step live UI; emit plain stdout
+      --silent    suppress the end-of-run desktop notification
   -y, --yes       skip restore confirmation
 ```
 

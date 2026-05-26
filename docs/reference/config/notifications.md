@@ -36,6 +36,12 @@ The rule: **the notification fires for the command you typed, not for any comman
 
 The validator emits an info-level diagnostic when it can statically detect a `notify: true` command placed as a direct sub-step inside a `parallel:` block — purely as an early warning. The runtime suppression is the actual enforcement and covers transitive cases the validator cannot see.
 
+### Per-invocation suppression with `--silent`
+
+Every command that can fire a notification accepts a `--silent` flag that suppresses the desktop notification for that single invocation. Useful for scripted / CI runs where the user is not at the desk to see the popup.
+
+The flag is available on: `devbox deploy run`, `devbox run`, `devbox snapshot create`, `devbox snapshot restore`, `devbox snapshot rollback`, `devbox snapshot remove`, and `devbox commands <id>`. It is a one-shot override — the user config and per-op gates are unchanged.
+
 ## File locations
 
 Two files are read in this precedence order (lower → higher):

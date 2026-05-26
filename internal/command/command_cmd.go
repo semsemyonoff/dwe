@@ -40,6 +40,7 @@ type runOpts struct {
 	Yes            bool // user-explicit --yes OR'd with TUI y-toggle at the call site
 	ForceParamForm bool // TUI-only: user picked the item via the edit-params key
 	SetValues      []string
+	Silent         bool // suppress end-of-command desktop notification
 }
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {
@@ -47,6 +48,7 @@ func newCommandCmd(flags *rootFlags) *cobra.Command {
 		setFlags    []string
 		skipConfirm bool
 		inspectFlag bool
+		silent      bool
 	)
 
 	cmd := &cobra.Command{
@@ -130,6 +132,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					Yes:            skipConfirm || skipConfirmFromTUI,
 					ForceParamForm: forceFormFromTUI,
 					SetValues:      setFlags,
+					Silent:         silent,
 				},
 			)
 		},
@@ -138,8 +141,10 @@ Without an id, an interactive selector lists public commands. With a group prefi
 	_ = cmd.RegisterFlagCompletionFunc("set", daemonSetCompletion(flags))
 	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompts; intended for non-interactive use such as scripts and nested command runs")
 	cmd.Flags().BoolVarP(&inspectFlag, "inspect", "i", false, "Show the full definition of the given command id instead of running it")
+	addSilentFlag(cmd, &silent)
 	cmd.MarkFlagsMutuallyExclusive("inspect", "set")
 	cmd.MarkFlagsMutuallyExclusive("inspect", "yes")
+	cmd.MarkFlagsMutuallyExclusive("inspect", "silent")
 
 	cmd.AddCommand(newCommandListCmd(flags))
 	return cmd
@@ -236,6 +241,7 @@ func runCommandByID(
 	rctx.Stdin = stdin
 	rctx.Stdout = stdout
 	rctx.Stderr = stderr
+	rctx.SkipNotify = opts.Silent
 
 	if def.Confirmation && canPromptHuh {
 		title := def.EffectiveConfirmationText()

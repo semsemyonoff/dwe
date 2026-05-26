@@ -39,6 +39,7 @@ devbox deploy run [flags]
   -y, --non-interactive   suppress interactive prompts
       --resume            continue from the last failed step
       --service string    deploy a single service only
+      --silent            suppress the end-of-run desktop notification
       --skip-preflight    bypass environment probes and project checks before running
 ```
 

@@ -31,6 +31,7 @@ func newSnapshotCreateCmd(flags *rootFlags) *cobra.Command {
 		variant     string
 		yes         bool
 		noLive      bool
+		silent      bool
 	)
 	cmd := &cobra.Command{
 		Use:          "create <name>",
@@ -38,17 +39,18 @@ func newSnapshotCreateCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotCreate(cmd, flags, args[0], description, variant, yes, noLive)
+			return runSnapshotCreate(cmd, flags, args[0], description, variant, yes, noLive, silent)
 		},
 	}
 	cmd.Flags().StringVarP(&description, "description", "d", "", "human-readable description recorded in manifest.yml")
 	cmd.Flags().StringVar(&variant, "using", "", "select a create-workflow variant from snapshot.yml")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip overwrite confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
+	addSilentFlag(cmd, &silent)
 	return cmd
 }
 
-func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, variant string, yes, noLive bool) (err error) {
+func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, variant string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
@@ -87,26 +89,28 @@ func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, 
 	// Install notifier defer for end-of-run desktop notification. Suppress
 	// the notification on user cancellation (overwrite refused) — it is
 	// intentional, not a failure.
-	start := time.Now()
-	ucfg, ucfgErr := userconfig.Load(baseDir)
-	if ucfgErr != nil {
-		slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
-		ucfg = nil
-	}
-	n := newNotifier(ucfg)
-	defer func() {
-		if errors.As(err, new(*snapshot.CreateCancelledError)) {
-			return
+	if !silent {
+		start := time.Now()
+		ucfg, ucfgErr := userconfig.Load(baseDir)
+		if ucfgErr != nil {
+			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
+			ucfg = nil
 		}
-		n.Notify(context.Background(), notify.Event{
-			Kind:      notify.OpCommand,
-			Operation: "snapshot:create",
-			Outcome:   notify.OutcomeFromErr(err),
-			Duration:  time.Since(start),
-			Err:       err,
-			Project:   cfg.Project.Name,
-		})
-	}()
+		n := newNotifier(ucfg)
+		defer func() {
+			if errors.As(err, new(*snapshot.CreateCancelledError)) {
+				return
+			}
+			n.Notify(context.Background(), notify.Event{
+				Kind:      notify.OpCommand,
+				Operation: "snapshot:create",
+				Outcome:   notify.OutcomeFromErr(err),
+				Duration:  time.Since(start),
+				Err:       err,
+				Project:   cfg.Project.Name,
+			})
+		}()
+	}
 
 	// Install SIGINT/SIGTERM-aware context so the workflow can be cancelled
 	// and we still write the manifest with status=interrupted in the defer.

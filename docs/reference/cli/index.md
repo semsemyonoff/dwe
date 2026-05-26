@@ -39,6 +39,7 @@ Generated reference for the `devbox` command tree.
 - [devbox docs](devbox_docs.md) — Generate documentation for devbox commands
   - [devbox docs generate](devbox_docs_generate.md) — Generate reference documentation
 - [devbox info](devbox_info.md) — Display project info dashboard (URLs, hosts, services, tools)
+- [devbox prompt](devbox_prompt.md) — Print a compact shell-prompt segment for the current project
 - [devbox render](devbox_render.md) — Render derived artifacts from the merged devbox config
   - [devbox render ai](devbox_render_ai.md) — Generate hub-level agents docs from template packs
   - [devbox render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --output <file>)

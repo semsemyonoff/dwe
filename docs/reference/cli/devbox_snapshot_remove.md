@@ -11,6 +11,7 @@ devbox snapshot remove <name> [flags]
 ```
   -h, --help      help for remove
       --no-live   disable the per-step live UI; emit plain stdout
+      --silent    suppress the end-of-run desktop notification
   -y, --yes       skip remove confirmation
 ```
 

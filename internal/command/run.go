@@ -11,6 +11,7 @@ func newRunCmd(flags *rootFlags) *cobra.Command {
 	var updateMode string
 	var yes bool
 	var skipPreflight bool
+	var silent bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -35,6 +36,7 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 				Yes:           yes,
 				ShowInfo:      func() error { return runInfo(cmd, flags) },
 				SkipPreflight: skipPreflight,
+				SkipNotify:    silent,
 				ErrOut:        cmd.ErrOrStderr(),
 			})
 		},
@@ -44,5 +46,6 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 	cmd.Flags().StringVar(&updateMode, "update", "", "override update probe mode (prompt|auto|check|off)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
 	addSkipPreflightFlag(cmd, &skipPreflight)
+	addSilentFlag(cmd, &silent)
 	return cmd
 }

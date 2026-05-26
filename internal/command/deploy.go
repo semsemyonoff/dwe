@@ -145,6 +145,7 @@ func newDeployRunCmd(flags *rootFlags) *cobra.Command {
 	var resume bool
 	var nonInteractive bool
 	var skipPreflight bool
+	var silent bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -169,7 +170,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return deployRunCmd(cmd, flags, serviceName, force, resume, nonInteractive, skipPreflight)
+			return deployRunCmd(cmd, flags, serviceName, force, resume, nonInteractive, skipPreflight, silent)
 		},
 	}
 
@@ -178,6 +179,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 	cmd.Flags().BoolVar(&resume, "resume", false, "continue from the last failed step")
 	cmd.Flags().BoolVarP(&nonInteractive, "non-interactive", "y", false, "suppress interactive prompts")
 	addSkipPreflightFlag(cmd, &skipPreflight)
+	addSilentFlag(cmd, &silent)
 	return cmd
 }
 
@@ -211,6 +213,8 @@ type DeployOpts struct {
 	Resume         bool
 	NonInteractive bool
 	SkipPreflight  bool
+	// Silent suppresses the end-of-run desktop notification.
+	Silent bool
 	// SuppressPendingClear prevents runDeployHelper from clearing pending-deploy
 	// journal entries after a successful run. Set by the toggle executor, which
 	// owns the pending clear itself via a single atomic ClearPendingOps call
@@ -226,6 +230,7 @@ type deployRunOpts struct {
 	Resume         bool
 	NonInteractive bool
 	SkipPreflight  bool
+	Silent         bool
 }
 
 // runDeployRun is the common implementation for `devbox deploy run` and menu dispatch.
@@ -240,16 +245,18 @@ func runDeployRun(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opt
 		Resume:         opts.Resume,
 		NonInteractive: opts.NonInteractive,
 		SkipPreflight:  opts.SkipPreflight,
+		Silent:         opts.Silent,
 	})
 }
 
-func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool) error {
+func deployRunCmd(cmd *cobra.Command, flags *rootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool, silent bool) error {
 	return runDeployRun(cmd.Context(), cmd, flags, deployRunOpts{
 		ServiceName:    serviceName,
 		Force:          force,
 		Resume:         resume,
 		NonInteractive: nonInteractive,
 		SkipPreflight:  skipPreflight,
+		Silent:         silent,
 	})
 }
 
@@ -266,27 +273,29 @@ func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, 
 	start := time.Now()
 	var projectName string
 	var isNoop bool
-	ucfg, ucfgErr := userconfig.Load(workDir)
-	if ucfgErr != nil {
-		slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
-		ucfg = nil
-	}
-	n := newNotifier(ucfg)
-	defer func() {
-		// Lock-held, preflight-blocked, user-cancelled, or already-up-to-date
-		// — none is a deploy *run* failure; suppress the notification.
-		if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*preflight.Error)) || errors.As(err, new(*deployCancelledError)) || isNoop {
-			return
+	if !opts.Silent {
+		ucfg, ucfgErr := userconfig.Load(workDir)
+		if ucfgErr != nil {
+			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
+			ucfg = nil
 		}
-		n.Notify(context.Background(), notify.Event{
-			Kind:      notify.OpDeploy,
-			Operation: "deploy",
-			Outcome:   notify.OutcomeFromErr(err),
-			Duration:  time.Since(start),
-			Err:       err,
-			Project:   projectName,
-		})
-	}()
+		n := newNotifier(ucfg)
+		defer func() {
+			// Lock-held, preflight-blocked, user-cancelled, or already-up-to-date
+			// — none is a deploy *run* failure; suppress the notification.
+			if errors.As(err, new(*lockHeldError)) || errors.As(err, new(*preflight.Error)) || errors.As(err, new(*deployCancelledError)) || isNoop {
+				return
+			}
+			n.Notify(context.Background(), notify.Event{
+				Kind:      notify.OpDeploy,
+				Operation: "deploy",
+				Outcome:   notify.OutcomeFromErr(err),
+				Duration:  time.Since(start),
+				Err:       err,
+				Project:   projectName,
+			})
+		}()
+	}
 
 	// Load cfg + registry BEFORE acquiring the deploy lock so preflight can
 	// reject without leaving a stale lock file in .devbox/deploy/.

@@ -11,6 +11,7 @@ devbox snapshot rollback [flags]
 ```
   -h, --help      help for rollback
       --no-live   disable the per-step live UI; emit plain stdout
+      --silent    suppress the end-of-run desktop notification
   -y, --yes       skip rollback confirmation
 ```
 

@@ -34,7 +34,7 @@ func TestDeployRunCmd_SnapshotLockHeldBlocksDeploy(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
 	flags := &rootFlags{configPath: cfgPath}
-	err = deployRunCmd(cmd, flags, "", false, false, true, false)
+	err = deployRunCmd(cmd, flags, "", false, false, true, false, false)
 	if err == nil {
 		t.Fatal("expected deploy to fail when snapshot lock is held")
 	}
@@ -70,7 +70,7 @@ func TestDeployRunCmd_DeployLockHeldBlocksDeploy(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
 	flags := &rootFlags{configPath: cfgPath}
-	err = deployRunCmd(cmd, flags, "", false, false, true, false)
+	err = deployRunCmd(cmd, flags, "", false, false, true, false, false)
 	if err == nil {
 		t.Fatal("expected deploy to fail when deploy lock is held")
 	}

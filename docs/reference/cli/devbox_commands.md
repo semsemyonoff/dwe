@@ -34,6 +34,7 @@ devbox commands [id] [flags]
   -h, --help              help for commands
   -i, --inspect           Show the full definition of the given command id instead of running it
       --set stringArray   Set a param value (key=value)
+      --silent            suppress the end-of-run desktop notification
   -y, --yes               Skip confirmation prompts; intended for non-interactive use such as scripts and nested command runs
 ```
 

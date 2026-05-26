@@ -28,6 +28,7 @@ func newSnapshotRemoveCmd(flags *rootFlags) *cobra.Command {
 	var (
 		yes    bool
 		noLive bool
+		silent bool
 	)
 	cmd := &cobra.Command{
 		Use:               "remove <name>",
@@ -36,15 +37,16 @@ func newSnapshotRemoveCmd(flags *rootFlags) *cobra.Command {
 		SilenceUsage:      true,
 		ValidArgsFunction: snapshotNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotRemove(cmd, flags, args[0], yes, noLive)
+			return runSnapshotRemove(cmd, flags, args[0], yes, noLive, silent)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip remove confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
+	addSilentFlag(cmd, &silent)
 	return cmd
 }
 
-func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive bool) (err error) {
+func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
@@ -84,26 +86,28 @@ func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, n
 	}
 	defer releaseLocks()
 
-	start := time.Now()
-	ucfg, ucfgErr := userconfig.Load(baseDir)
-	if ucfgErr != nil {
-		slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
-		ucfg = nil
-	}
-	n := newNotifier(ucfg)
-	defer func() {
-		if errors.As(err, new(*snapshot.RemoveCancelledError)) {
-			return
+	if !silent {
+		start := time.Now()
+		ucfg, ucfgErr := userconfig.Load(baseDir)
+		if ucfgErr != nil {
+			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
+			ucfg = nil
 		}
-		n.Notify(context.Background(), notify.Event{
-			Kind:      notify.OpCommand,
-			Operation: "snapshot:remove",
-			Outcome:   notify.OutcomeFromErr(err),
-			Duration:  time.Since(start),
-			Err:       err,
-			Project:   cfg.Project.Name,
-		})
-	}()
+		n := newNotifier(ucfg)
+		defer func() {
+			if errors.As(err, new(*snapshot.RemoveCancelledError)) {
+				return
+			}
+			n.Notify(context.Background(), notify.Event{
+				Kind:      notify.OpCommand,
+				Operation: "snapshot:remove",
+				Outcome:   notify.OutcomeFromErr(err),
+				Duration:  time.Since(start),
+				Err:       err,
+				Project:   cfg.Project.Name,
+			})
+		}()
+	}
 
 	parentCtx := cmd.Context()
 	if parentCtx == nil {

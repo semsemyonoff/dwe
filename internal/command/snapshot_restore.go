@@ -29,6 +29,7 @@ func newSnapshotRestoreCmd(flags *rootFlags) *cobra.Command {
 	var (
 		yes    bool
 		noLive bool
+		silent bool
 	)
 	cmd := &cobra.Command{
 		Use:               "restore <name>",
@@ -37,11 +38,12 @@ func newSnapshotRestoreCmd(flags *rootFlags) *cobra.Command {
 		SilenceUsage:      true,
 		ValidArgsFunction: snapshotNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotRestore(cmd, flags, args[0], yes, noLive, "restore", "snapshot:restore")
+			return runSnapshotRestore(cmd, flags, args[0], yes, noLive, silent, "restore", "snapshot:restore")
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip restore confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
+	addSilentFlag(cmd, &silent)
 	return cmd
 }
 
@@ -50,6 +52,7 @@ func newSnapshotRollbackCmd(flags *rootFlags) *cobra.Command {
 	var (
 		yes    bool
 		noLive bool
+		silent bool
 	)
 	cmd := &cobra.Command{
 		Use:          "rollback",
@@ -57,15 +60,16 @@ func newSnapshotRollbackCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotRollback(cmd, flags, yes, noLive)
+			return runSnapshotRollback(cmd, flags, yes, noLive, silent)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip rollback confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
+	addSilentFlag(cmd, &silent)
 	return cmd
 }
 
-func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive bool, operation, notifyOp string) (err error) {
+func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive, silent bool, operation, notifyOp string) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
@@ -101,26 +105,28 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, 
 	}
 	defer releaseLocks()
 
-	start := time.Now()
-	ucfg, ucfgErr := userconfig.Load(baseDir)
-	if ucfgErr != nil {
-		slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
-		ucfg = nil
-	}
-	n := newNotifier(ucfg)
-	defer func() {
-		if errors.As(err, new(*snapshot.RestoreCancelledError)) {
-			return
+	if !silent {
+		start := time.Now()
+		ucfg, ucfgErr := userconfig.Load(baseDir)
+		if ucfgErr != nil {
+			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
+			ucfg = nil
 		}
-		n.Notify(context.Background(), notify.Event{
-			Kind:      notify.OpCommand,
-			Operation: notifyOp,
-			Outcome:   notify.OutcomeFromErr(err),
-			Duration:  time.Since(start),
-			Err:       err,
-			Project:   cfg.Project.Name,
-		})
-	}()
+		n := newNotifier(ucfg)
+		defer func() {
+			if errors.As(err, new(*snapshot.RestoreCancelledError)) {
+				return
+			}
+			n.Notify(context.Background(), notify.Event{
+				Kind:      notify.OpCommand,
+				Operation: notifyOp,
+				Outcome:   notify.OutcomeFromErr(err),
+				Duration:  time.Since(start),
+				Err:       err,
+				Project:   cfg.Project.Name,
+			})
+		}()
+	}
 
 	parentCtx := cmd.Context()
 	if parentCtx == nil {
@@ -192,7 +198,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, 
 	return nil
 }
 
-func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes, noLive bool) error {
+func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes, noLive, silent bool) error {
 	// rollback resolves the target name from snapshot.yml; pass an empty name
 	// to runSnapshotRestore and dispatch through snapshot.Rollback below.
 	baseDir := flags.ProjectRoot()
@@ -209,7 +215,7 @@ func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes, noLive bool)
 	if err := snapshot.ValidateName(snapCfg.RollbackTarget); err != nil {
 		return fmt.Errorf("snapshot rollback: rollback_target %q in devbox/snapshot.yml: %w", snapCfg.RollbackTarget, err)
 	}
-	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, noLive, "rollback", "snapshot:rollback")
+	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, noLive, silent, "rollback", "snapshot:rollback")
 }
 
 func writeRestoreOutcome(w io.Writer, operation string, res *snapshot.RestoreResult) {
