@@ -8,8 +8,8 @@ import (
 
 // makeProject creates a minimal temp project tree at the given root with:
 //   - devbox.yml with schema_version (v2 by default, v1 if legacy=true)
-//   - devbox/styles.yml with a non-empty help.title color so loadHelpColorScheme
-//     returns a non-nil ColorSchemeFunc when styles are successfully loaded.
+//   - devbox/styles.yml so loadHelpColorScheme finds a styles file and returns
+//     a non-nil ColorSchemeFunc (file presence triggers the non-nil path).
 func makeProject(t *testing.T, root string, legacy bool) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(root, "devbox"), 0o755); err != nil {
@@ -22,7 +22,7 @@ func makeProject(t *testing.T, root string, legacy bool) {
 	if err := os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(schema+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	styles := "colors:\n  help:\n    title: \"#ff0000\"\n"
+	styles := "colors:\n  accent: \"#ff0000\"\n"
 	if err := os.WriteFile(filepath.Join(root, "devbox", "styles.yml"), []byte(styles), 0o644); err != nil {
 		t.Fatal(err)
 	}

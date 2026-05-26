@@ -126,7 +126,7 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 						File:     file,
 						Line:     valNode.Line,
 						Message:  "ui.commands.default_expanded_depth must be >= 0, got " + valNode.Value,
-						Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
+						Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 1.",
 					})
 				}
 			} else {
@@ -137,7 +137,7 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					File:     file,
 					Line:     valNode.Line,
 					Message:  "ui.commands.default_expanded_depth must be an integer",
-					Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 3.",
+					Hint:     "Use 0 for all-collapsed or a positive integer to expand to that depth (e.g. 1 expands only top-level groups). Omit the key to use the default depth of 1.",
 				})
 			}
 		case "auto_collapse_empty", "show_type_badges":
