@@ -126,6 +126,14 @@ func renderBlock(
 			if err != nil {
 				return "", false, fmt.Errorf("section %q %s (%s): %w", sectionID, currentPath, item.Type, err)
 			}
+			// For auto-blocks, skip adding to survivors if output is empty after trimming.
+			// Auto-blocks (auto-urls, auto-hosts) may legitimately render to "" when no services match.
+			// Other items (including separators) are always added.
+			if item.Type == "auto-urls" || item.Type == "auto-hosts" {
+				if strings.TrimSpace(itemOut) == "" {
+					continue
+				}
+			}
 			survivors = append(survivors, itemOut)
 			if !item.IsDecorative() {
 				contentCount++
@@ -263,6 +271,18 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 
 	case "separator":
 		return "", nil
+
+	case "auto-urls":
+		if item.SourceAutoURLsSpec == nil {
+			return "", nil
+		}
+		return renderAutoURLs(cfg, item.SourceAutoURLsSpec), nil
+
+	case "auto-hosts":
+		if item.SourceAutoHostsSpec == nil {
+			return "", nil
+		}
+		return renderAutoHosts(cfg, item.SourceAutoHostsSpec), nil
 
 	case "subgroup":
 		return "", fmt.Errorf("subgroup must be handled in renderBlock, not renderInfoItem")

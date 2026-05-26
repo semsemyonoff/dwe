@@ -279,8 +279,8 @@ func TestRenderAutoHosts(t *testing.T) {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
 						Hosts: map[string]string{
-							"web":  "pilot.local",
-							"alt":  "pilot-alt.local",
+							"web": "pilot.local",
+							"alt": "pilot-alt.local",
 						},
 					},
 					"catalog": {
@@ -314,7 +314,7 @@ func TestRenderAutoHosts(t *testing.T) {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
 						Hosts: map[string]string{
-							"web":  "pilot.local",
+							"web":   "pilot.local",
 							"empty": "",
 						},
 					},

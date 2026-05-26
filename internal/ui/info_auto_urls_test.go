@@ -426,9 +426,9 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: "",
 		},
 		{
-			name: "nil cfg returns empty string",
-			cfg:  nil,
-			spec: &config.AutoURLsSpec{},
+			name:    "nil cfg returns empty string",
+			cfg:     nil,
+			spec:    &config.AutoURLsSpec{},
 			wantOut: "",
 		},
 		{
@@ -450,7 +450,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		{
 			name: "empty cfg.Services returns empty string",
 			cfg: &config.DevboxConfig{
-				Runtime: config.RuntimeConfig{UseHTTPS: false},
+				Runtime:  config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{},
 			},
 			spec: &config.AutoURLsSpec{

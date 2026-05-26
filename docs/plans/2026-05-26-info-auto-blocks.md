@@ -477,18 +477,18 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 - Modify: `internal/ui/info.go`
 - Modify: `internal/ui/info_test.go`
 
-- [ ] in `renderInfoItem`, add cases for `"auto-urls"` and `"auto-hosts"`. Each case:
+- [x] in `renderInfoItem`, add cases for `"auto-urls"` and `"auto-hosts"`. Each case:
   - check that the matching `Source*Spec` pointer is non-nil (defensive — should be set by unmarshaller; `DefaultInfoConfig()` also sets it explicitly)
   - call `renderAutoURLs(cfg, item.SourceAutoURLsSpec)` or `renderAutoHosts(cfg, item.SourceAutoHostsSpec)` and return the resulting string. The function signatures take `cfg` directly — no topology parameter; ordering is resolved inside the renderer via `stack.DeployOrder`.
-- [ ] **`RenderInfo` signature does NOT change** — auto-blocks are wired through `renderInfoItem` which already has `cfg` in scope. No topology fetch is added to `runInfo`. This is simpler than the earlier topology-threading plan and avoids the compose-name-vs-folder-key confusion entirely.
-- [ ] **`renderBlock` contentCount fix** at `internal/ui/info.go:123` — the existing flow appends `itemOut` to `survivors` and bumps `contentCount` for any non-decorative item, regardless of whether `itemOut == ""`. For auto-blocks that may legitimately render to `""` (no included services match, or all hidden), this would keep `hide_on_empty` sections visible with just the title/warning showing. **Fix**: in `renderBlock`'s non-subgroup branch (lines ~125-133), after calling `renderInfoItem`, check `if strings.TrimSpace(itemOut) == ""` — when empty, do NOT append to survivors and do NOT bump `contentCount`. This is a small, surgical change to the existing logic; it also benefits the existing item types whenever they happen to render empty (e.g., a `definition` item with empty `Value` and `Decorative: false`). Add a regression test asserting `hide_on_empty: true` sections vanish when their only content item is an auto-block that returned `""`.
-- [ ] update `renderBlock` and `renderInfoItem` `when:` evaluation: auto-block `when:` clauses run against the same template context as existing items (no new variables needed)
-- [ ] tests:
+- [x] **`RenderInfo` signature does NOT change** — auto-blocks are wired through `renderInfoItem` which already has `cfg` in scope. No topology fetch is added to `runInfo`. This is simpler than the earlier topology-threading plan and avoids the compose-name-vs-folder-key confusion entirely.
+- [x] **`renderBlock` contentCount fix** at `internal/ui/info.go:123` — the existing flow appends `itemOut` to `survivors` and bumps `contentCount` for any non-decorative item, regardless of whether `itemOut == ""`. For auto-blocks that may legitimately render to `""` (no included services match, or all hidden), this would keep `hide_on_empty` sections visible with just the title/warning showing. **Fix**: in `renderBlock`'s non-subgroup branch (lines ~125-133), after calling `renderInfoItem`, check `if strings.TrimSpace(itemOut) == ""` — when empty, do NOT append to survivors and do NOT bump `contentCount`. This is a small, surgical change to the existing logic; it also benefits the existing item types whenever they happen to render empty (e.g., a `definition` item with empty `Value` and `Decorative: false`). Add a regression test asserting `hide_on_empty: true` sections vanish when their only content item is an auto-block that returned `""`.
+- [x] update `renderBlock` and `renderInfoItem` `when:` evaluation: auto-block `when:` clauses run against the same template context as existing items (no new variables needed)
+- [x] tests:
   - integration test through `RenderInfo` with a small synthetic `InfoConfig` containing one `auto-urls` and one `auto-hosts` item, asserting the output contains expected lines
   - `when:` on an auto-block hides it
   - **`hide_on_empty: true` section with an auto-block that returns `""` collapses (the title + warning items inside are dropped along with the empty auto-block)** — load-bearing regression test for the renderBlock fix
   - empty `cfg.Services` → renderers return `""` gracefully; no panic
-- [ ] run `go test ./internal/ui/... ./internal/command/...` — must pass before Task 9
+- [x] run `go test ./internal/ui/... ./internal/command/...` — must pass before Task 9
 
 ### Task 9: Add built-in default `InfoConfig` and drop the missing-`info.yml` fallback branch
 

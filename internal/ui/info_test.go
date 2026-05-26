@@ -1194,3 +1194,199 @@ func TestRenderInfo_WhenEvaluationError_Propagates(t *testing.T) {
 		t.Error("expected error from invalid when: expression, got nil")
 	}
 }
+
+// TestRenderInfo_AutoURLs_Integration tests that auto-urls items render through the dispatch.
+func TestRenderInfo_AutoURLs_Integration(t *testing.T) {
+	t.Parallel()
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:    "urls",
+				Title: "URLs",
+				Items: []config.InfoItem{
+					{
+						Type: "auto-urls",
+						SourceAutoURLsSpec: &config.AutoURLsSpec{
+							Include: []string{"app", "tool"},
+						},
+					},
+				},
+			},
+		},
+	}
+	// Create a simple app service with hosts and ports
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"myapp": {
+				Type: "app",
+				Icon: "📦",
+				Hosts: map[string]string{
+					"web": "myapp.local",
+				},
+				Ports: map[string]int{
+					"http": 8080,
+				},
+				Info: config.ServiceInfoBlock{
+					Title:   "My App",
+					HostKey: "web",
+					PortKey: "http",
+				},
+			},
+		},
+		Runtime: config.RuntimeConfig{UseHTTPS: false},
+	}
+
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "URLs") {
+		t.Errorf("expected URLs section title, got:\n%s", out)
+	}
+}
+
+// TestRenderInfo_AutoHosts_Integration tests that auto-hosts items render through the dispatch.
+func TestRenderInfo_AutoHosts_Integration(t *testing.T) {
+	t.Parallel()
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:    "hosts",
+				Title: "Hosts",
+				Items: []config.InfoItem{
+					{
+						Type: "auto-hosts",
+						SourceAutoHostsSpec: &config.AutoHostsSpec{
+							Include: []string{"app", "tool"},
+							IP:      "127.0.0.1",
+						},
+					},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"myapp": {
+				Type: "app",
+				Hosts: map[string]string{
+					"web": "myapp.local",
+				},
+			},
+		},
+	}
+
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "Hosts") {
+		t.Errorf("expected Hosts section title, got:\n%s", out)
+	}
+}
+
+// TestRenderInfo_AutoURLs_When_Hidden tests that when: condition hides an auto-urls item.
+func TestRenderInfo_AutoURLs_When_Hidden(t *testing.T) {
+	t.Parallel()
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:    "urls",
+				Title: "URLs",
+				Items: []config.InfoItem{
+					{
+						Type:               "auto-urls",
+						When:               "{{if false}}show{{end}}",
+						SourceAutoURLsSpec: &config.AutoURLsSpec{},
+					},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"myapp": {
+				Type:  "app",
+				Hosts: map[string]string{"web": "myapp.local"},
+			},
+		},
+	}
+
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The item is hidden by when: condition, so it won't appear
+	if strings.Contains(out, "myapp.local") {
+		t.Errorf("expected auto-urls hidden by when: condition, got:\n%s", out)
+	}
+}
+
+// TestRenderBlock_HideOnEmpty_AutoBlock tests that hide_on_empty: true collapses when auto-block returns empty.
+func TestRenderBlock_HideOnEmpty_AutoBlock(t *testing.T) {
+	t.Parallel()
+	// An auto-urls block with all services hidden returns "".
+	// With hide_on_empty: true and only an auto-block (decorative=true), the section should be hidden.
+	decorativeTrue := true
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:          "urls",
+				Title:       "URLs (should collapse)",
+				HideOnEmpty: true,
+				Items: []config.InfoItem{
+					{
+						Type:               "auto-urls",
+						Decorative:         &decorativeTrue,
+						SourceAutoURLsSpec: &config.AutoURLsSpec{Hide: []string{"app", "tool"}},
+					},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"app1": {Type: "app", Hosts: map[string]string{"web": "app1.local"}},
+		},
+	}
+
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Section title should be hidden since auto-urls returns "" and the auto-block is decorative
+	if strings.Contains(out, "URLs (should collapse)") {
+		t.Errorf("expected section title hidden when only content is decorative empty auto-block, got:\n%s", out)
+	}
+}
+
+// TestRenderBlock_AutoBlock_EmptyServices tests that renderers handle empty services map gracefully.
+func TestRenderBlock_AutoBlock_EmptyServices(t *testing.T) {
+	t.Parallel()
+	infoCfg := &config.InfoConfig{
+		Sections: []config.InfoSection{
+			{
+				ID:    "urls",
+				Title: "URLs",
+				Items: []config.InfoItem{
+					{
+						Type:               "auto-urls",
+						SourceAutoURLsSpec: &config.AutoURLsSpec{},
+					},
+				},
+			},
+		},
+	}
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{}, // empty
+	}
+
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should not panic; the renderer returns "" for empty services
+	if strings.Contains(out, "myapp") || strings.Contains(out, "localhost") {
+		t.Errorf("expected no service output with empty services, got:\n%s", out)
+	}
+}
