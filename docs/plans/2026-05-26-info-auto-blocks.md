@@ -351,14 +351,14 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 
 **Pre-decided**: rules go in `internal/validate/config/devbox.go` alongside other `ServiceConfig`-field rules. Do NOT create a new validator file unless `devbox.go` grows unwieldy.
 
-- [ ] implement rule: `service.info.title` contains control chars (anything matching `unicode.IsControl`) → Error
-- [ ] implement rule: `service.info.paths[].name` empty → Error
-- [ ] implement rule: duplicate `name` within a single service's `paths:` → Error (hint listing the duplicate name)
-- [ ] implement rule: `service.info.paths[].path` empty → Error
-- [ ] implement rule: `service.info.paths[].path` does not start with `/` → Warning
-- [ ] **drop the icon rune-length checks** for both `service.icon` and `service.info.paths[].icon`. ZWJ-joined emoji (skin-tone modifiers, family glyphs, profession emoji like `🧑‍💻`) span multiple Go runes but render as one glyph — any sensible threshold either lets legitimate icons trigger warnings or lets typos through. The signal/noise is too low to be worth implementing. Treat `icon` as opaque user content.
-- [ ] write table-driven tests for each remaining rule (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases). Assert Diagnostic.Severity, Diagnostic.Scope, and Diagnostic.Hint formatting per [[feedback_validate_diagnostic_hints]]
-- [ ] run `go test ./internal/validate/...` — must pass before Task 4
+- [x] implement rule: `service.info.title` contains control chars (anything matching `unicode.IsControl`) → Error
+- [x] implement rule: `service.info.paths[].name` empty → Error
+- [x] implement rule: duplicate `name` within a single service's `paths:` → Error (hint listing the duplicate name)
+- [x] implement rule: `service.info.paths[].path` empty → Error
+- [x] implement rule: `service.info.paths[].path` does not start with `/` → Warning
+- [x] **drop the icon rune-length checks** for both `service.icon` and `service.info.paths[].icon`. ZWJ-joined emoji (skin-tone modifiers, family glyphs, profession emoji like `🧑‍💻`) span multiple Go runes but render as one glyph — any sensible threshold either lets legitimate icons trigger warnings or lets typos through. The signal/noise is too low to be worth implementing. Treat `icon` as opaque user content.
+- [x] write table-driven tests for each remaining rule (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases). Assert Diagnostic.Severity, Diagnostic.Scope, and Diagnostic.Hint formatting per [[feedback_validate_diagnostic_hints]]
+- [x] run `go test ./internal/validate/...` — must pass before Task 4
 
 ### Task 4: Define `AutoURLsSpec` / `AutoHostsSpec` + custom InfoItem unmarshaller
 

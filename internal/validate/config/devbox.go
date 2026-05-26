@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -295,6 +296,138 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					Target:   target,
 					Message:  fmt.Sprintf("service %q: hosts must be a map of name to hostname", name),
 				})
+			}
+		}
+
+		// service.info validation.
+		if infoRaw, ok := rawEntry["info"]; ok && infoRaw != nil {
+			info, isMap := infoRaw.(map[string]any)
+			if !isMap {
+				emit(validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Target:   target,
+					Message:  fmt.Sprintf("service %q: info must be a map", name),
+				})
+			} else {
+				// Validate title: check for control characters.
+				if titleRaw, ok := info["title"]; ok && titleRaw != nil {
+					title, isStr := titleRaw.(string)
+					if !isStr {
+						emit(validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Target:   target,
+							Message:  fmt.Sprintf("service %q: info.title must be a string", name),
+						})
+					} else {
+						for _, r := range title {
+							if unicode.IsControl(r) {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.title contains control characters", name),
+								})
+								break
+							}
+						}
+					}
+				}
+
+				// Validate paths.
+				if pathsRaw, ok := info["paths"]; ok && pathsRaw != nil {
+					paths, isList := pathsRaw.([]any)
+					if !isList {
+						emit(validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Target:   target,
+							Message:  fmt.Sprintf("service %q: info.paths must be a list", name),
+						})
+					} else {
+						seenNames := make(map[string]bool)
+						for i, pathItem := range paths {
+							pathMap, isMap := pathItem.(map[string]any)
+							if !isMap {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d] must be a map", name, i),
+								})
+								continue
+							}
+
+							// Validate path name.
+							nameRaw, hasName := pathMap["name"]
+							if !hasName {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d]: name is required", name, i),
+								})
+								continue
+							}
+							pathName, isStr := nameRaw.(string)
+							if !isStr {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d]: name must be a string", name, i),
+								})
+								continue
+							}
+							if pathName == "" {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d]: name is empty", name, i),
+								})
+								continue
+							}
+
+							// Check for duplicate names.
+							if seenNames[pathName] {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths: duplicate name %q", name, pathName),
+									Hint:     fmt.Sprintf("remove or rename the duplicate %q", pathName),
+								})
+							}
+							seenNames[pathName] = true
+
+							// Validate path field.
+							pathRaw, hasPath := pathMap["path"]
+							if !hasPath {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d] (%q): path is required", name, i, pathName),
+								})
+								continue
+							}
+							pathStr, isStr := pathRaw.(string)
+							if !isStr {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d] (%q): path must be a string", name, i, pathName),
+								})
+								continue
+							}
+							if pathStr == "" {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d] (%q): path is empty", name, i, pathName),
+								})
+							} else if pathStr[0] != '/' {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityWarning,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q: info.paths[%d] (%q): path %q does not start with /", name, i, pathName, pathStr),
+								})
+							}
+						}
+					}
+				}
 			}
 		}
 

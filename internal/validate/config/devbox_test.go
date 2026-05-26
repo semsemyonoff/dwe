@@ -562,3 +562,177 @@ func TestStylesValidator_NoFile(t *testing.T) {
 		require.NotEqual(t, validate.SeverityWarning, d.Severity)
 	}
 }
+
+func TestServicesValidator_InfoTitleWithControlChars(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      title: "Bad\x00Title"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityError, "info.title contains control characters")
+}
+
+func TestServicesValidator_InfoPathsEmpty(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      paths:
+        - name: ""
+          path: "/api"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityError, "name is empty")
+}
+
+func TestServicesValidator_InfoPathPathEmpty(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      paths:
+        - name: "docs"
+          path: ""
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityError, "path is empty")
+}
+
+func TestServicesValidator_InfoPathDuplicateNames(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      paths:
+        - name: "docs"
+          path: "/api/docs"
+        - name: "docs"
+          path: "/api/reference"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	diag := hasDiag(t, diags, validate.SeverityError, "duplicate name")
+	require.Contains(t, diag.Message, "docs")
+	require.Contains(t, diag.Hint, "docs")
+}
+
+func TestServicesValidator_InfoPathMissingLeadingSlash(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      paths:
+        - name: "docs"
+          path: "api/docs"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	diag := hasDiag(t, diags, validate.SeverityWarning, "does not start with /")
+	require.Contains(t, diag.Message, "api/docs")
+}
+
+func TestServicesValidator_InfoPathValid(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      title: "Main API"
+      paths:
+        - name: "docs"
+          path: "/api/docs"
+        - name: "playground"
+          path: "/graphql"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	// Should have one OK diagnostic for services
+	hasDiag(t, diags, validate.SeverityOK, "")
+	// Should not have any error diagnostics
+	for _, d := range diags {
+		require.NotEqual(t, validate.SeverityError, d.Severity, "unexpected error: %s", d.Message)
+	}
+}
+
+func TestServicesValidator_InfoPathsMissingName(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      paths:
+        - path: "/api/docs"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityError, "name is required")
+}
+
+func TestServicesValidator_InfoPathsMissingPath(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      paths:
+        - name: "docs"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityError, "path is required")
+}
+
+func TestServicesValidator_InfoNotAMap(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info: "invalid"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityError, "info must be a map")
+}
+
+func TestServicesValidator_InfoPathsNotAList(t *testing.T) {
+	t.Parallel()
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    info:
+      paths: "invalid"
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	hasDiag(t, diags, validate.SeverityError, "info.paths must be a list")
+}
