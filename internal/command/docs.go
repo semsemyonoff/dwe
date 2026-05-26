@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 
@@ -20,6 +21,7 @@ type docsFlags struct {
 	output         string
 	format         string
 	scope          string
+	lang           string
 	includeHidden  bool
 	includePrivate bool
 }
@@ -61,6 +63,7 @@ Supported scopes:  all, cli, commands`,
 	cmd.Flags().StringVarP(&df.output, "output", "o", "docs/reference", "Output directory for generated docs")
 	cmd.Flags().StringVar(&df.format, "format", "markdown", "Output format: markdown, yaml, man, all")
 	cmd.Flags().StringVar(&df.scope, "scope", "all", "Scope: all, cli, commands")
+	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from userconfig / $LANG)")
 	cmd.Flags().BoolVar(&df.includeHidden, "include-hidden", false, "Include hidden CLI commands")
 	cmd.Flags().BoolVar(&df.includePrivate, "include-private", false, "Include private registry commands")
 
@@ -144,7 +147,16 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 		if err != nil {
 			return err
 		}
-		commandsDir := filepath.Join(outDir, "commands")
+
+		// Resolve locale: explicit --lang flag takes precedence, then fall back to rflags.Locale (which is already resolved in root PersistentPreRunE)
+		resolvedLocale := rflags.Locale
+		if df.lang != "" {
+			resolvedLocale = i18n.ResolveLocale(df.lang, "", "")
+		}
+
+		// commandsDir now includes the language: commands/<lang>
+		langDir := filepath.Join("commands", resolvedLocale)
+		commandsDir := filepath.Join(outDir, langDir)
 		if err := os.MkdirAll(commandsDir, 0o755); err != nil {
 			return fmt.Errorf("creating commands output dir: %w", err)
 		}
@@ -155,11 +167,11 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s note: registry docs only support markdown; yaml/man formats skipped for commands scope\n", ui.LogoMark())
 		}
 		for _, fmt_ := range formats {
-			if err := genRegistryDocs(reg, commandsDir, fmt_, df.includePrivate); err != nil {
+			if err := genRegistryDocs(reg, commandsDir, fmt_, df.includePrivate, rflags.I18n, resolvedLocale); err != nil {
 				return fmt.Errorf("generating commands docs (%s): %w", fmt_, err)
 			}
 		}
-		if err := genCommandsIndex(reg, commandsDir, df.includePrivate); err != nil {
+		if err := genCommandsIndex(reg, commandsDir, df.includePrivate, rflags.I18n, resolvedLocale); err != nil {
 			return fmt.Errorf("generating commands index: %w", err)
 		}
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s Command docs written to %s\n", ui.LogoMark(), commandsDir)
@@ -342,18 +354,18 @@ func writeCLIIndexEntries(sb *strings.Builder, cmd *cobra.Command, includeHidden
 }
 
 // genRegistryDocs generates documentation for each registry command.
-func genRegistryDocs(reg *usercommands.Registry, dir, format string, includePrivate bool) error {
+func genRegistryDocs(reg *usercommands.Registry, dir, format string, includePrivate bool, store *i18n.Store, locale string) error {
 	// We always use markdown for the registry; yaml/man are CLI-specific.
 	// For non-markdown formats we skip (registry has no cobra representation).
 	if format != "markdown" {
 		return nil
 	}
-	return genRegistryMarkdown(reg, dir, includePrivate)
+	return genRegistryMarkdown(reg, dir, includePrivate, store, locale)
 }
 
 // genRegistryMarkdown writes one markdown file per command group and one file
 // per command. Private commands are only written when includePrivate is true.
-func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate bool) error {
+func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate bool, store *i18n.Store, locale string) error {
 	var all []*usercommands.CommandDef
 	if includePrivate {
 		all = reg.ListAll("")
@@ -383,7 +395,7 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 			return fmt.Errorf("creating group dir %s: %w", groupDir, err)
 		}
 		for _, def := range defs {
-			if err := writeCommandMarkdown(def, groupDir); err != nil {
+			if err := writeCommandMarkdown(def, groupDir, store, locale); err != nil {
 				return err
 			}
 		}
@@ -392,59 +404,74 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 }
 
 // writeCommandMarkdown writes a single command's documentation to a markdown file.
-func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
+func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.Store, locale string) error {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "# %s\n\n", def.ID)
 
-	if def.Description != "" {
-		sb.WriteString(def.Description + "\n\n")
+	// Use i18n lookup for description
+	description := store.CommandDescription(locale, def.ID, def.Description)
+	if description != "" {
+		sb.WriteString(description + "\n\n")
 	}
 
-	sb.WriteString("## Properties\n\n")
+	propertiesHeader := store.T(locale, "ui.docs.section.properties", "Properties")
+	sb.WriteString("## " + propertiesHeader + "\n\n")
 	sb.WriteString("| Property | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| **ID** | `%s` |\n", def.ID)
-	fmt.Fprintf(&sb, "| **Type** | `%s` |\n", def.Type)
-	fmt.Fprintf(&sb, "| **Group** | `%s` |\n", def.Group)
+	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "ui.docs.property.id", "ID"), def.ID)
+	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "ui.docs.property.type", "Type"), def.Type)
+	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "ui.docs.property.group", "Group"), def.Group)
 	if def.Private {
-		sb.WriteString("| **Private** | yes |\n")
+		sb.WriteString("| **" + store.T(locale, "ui.docs.property.private", "Private") + "** | yes |\n")
 	}
 	if def.Confirmation {
-		sb.WriteString("| **Confirmation** | yes |\n")
-		fmt.Fprintf(&sb, "| **Confirmation text** | %s |\n", def.EffectiveConfirmationText())
+		sb.WriteString("| **" + store.T(locale, "ui.docs.property.confirmation", "Confirmation") + "** | yes |\n")
+		confirmationText := store.CommandConfirmationText(locale, def.ID, def.EffectiveConfirmationText())
+		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "ui.docs.property.confirmation_text", "Confirmation text"), confirmationText)
 	}
 	if def.Messages.Success != "" {
-		fmt.Fprintf(&sb, "| **Success message** | %s |\n", def.Messages.Success)
+		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "ui.docs.property.success_message", "Success message"), def.Messages.Success)
 	}
 	if def.Messages.Error != "" {
-		fmt.Fprintf(&sb, "| **Error message** | %s |\n", def.Messages.Error)
+		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "ui.docs.property.error_message", "Error message"), def.Messages.Error)
 	}
 	sb.WriteString("\n")
+
+	commandHeader := store.T(locale, "ui.docs.section.command", "Command")
+	argvHeader := store.T(locale, "ui.docs.section.argv", "Argv")
+	scriptHeader := store.T(locale, "ui.docs.section.script", "Script")
+	withHeader := store.T(locale, "ui.docs.section.with", "With")
+	workdirLabel := store.T(locale, "ui.docs.property.workdir", "Working directory")
+	serviceLabel := store.T(locale, "ui.docs.property.service", "Service")
+	shellLabel := store.T(locale, "ui.docs.property.shell", "Shell")
+	composeArgsLabel := store.T(locale, "ui.docs.property.compose_args", "Compose args")
+	scriptLabel := store.T(locale, "ui.docs.property.script", "Script")
+	builtinLabel := store.T(locale, "ui.docs.property.builtin", "Builtin")
 
 	// Type-specific details.
 	switch def.Type {
 	case usercommands.CommandTypeShell, usercommands.CommandTypeDevbox:
 		if def.Cmd != "" {
-			sb.WriteString("## Command\n\n```sh\n" + def.Cmd + "\n```\n\n")
+			fmt.Fprintf(&sb, "## %s\n\n```sh\n%s\n```\n\n", commandHeader, def.Cmd)
 		}
 		if len(def.Argv) > 0 {
-			sb.WriteString("## Argv\n\n```\n" + strings.Join(def.Argv, " ") + "\n```\n\n")
+			fmt.Fprintf(&sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
 		}
 		if def.Workdir != "" {
-			fmt.Fprintf(&sb, "**Working directory:** `%s`\n\n", def.Workdir)
+			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
 		}
 	case usercommands.CommandTypeServiceExec, usercommands.CommandTypeServiceRun:
 		if def.Service != "" {
-			fmt.Fprintf(&sb, "**Service:** `%s`\n\n", def.Service)
+			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", serviceLabel, def.Service)
 		}
 		if def.Cmd != "" {
-			sb.WriteString("## Command\n\n```sh\n" + def.Cmd + "\n```\n\n")
+			fmt.Fprintf(&sb, "## %s\n\n```sh\n%s\n```\n\n", commandHeader, def.Cmd)
 		}
 		if len(def.Argv) > 0 {
-			sb.WriteString("## Argv\n\n```\n" + strings.Join(def.Argv, " ") + "\n```\n\n")
+			fmt.Fprintf(&sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
 		}
 		if len(def.ComposeArgs) > 0 {
-			fmt.Fprintf(&sb, "**Compose args:** `%s`\n\n", strings.Join(def.ComposeArgs, " "))
+			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", composeArgsLabel, strings.Join(def.ComposeArgs, " "))
 		}
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {
@@ -452,23 +479,23 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 			if shell == "" {
 				shell = "sh"
 			}
-			fmt.Fprintf(&sb, "**Shell:** `%s`\n\n", shell)
+			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", shellLabel, shell)
 			if def.Script.Path != "" {
-				fmt.Fprintf(&sb, "**Script:** `%s`\n\n", def.Script.Path)
+				fmt.Fprintf(&sb, "**%s:** `%s`\n\n", scriptLabel, def.Script.Path)
 			}
 			if def.Script.Run != "" {
-				sb.WriteString("## Script\n\n```sh\n" + def.Script.Run + "\n```\n\n")
+				fmt.Fprintf(&sb, "## %s\n\n```sh\n%s\n```\n\n", scriptHeader, def.Script.Run)
 			}
 		}
 		if def.Workdir != "" {
-			fmt.Fprintf(&sb, "**Workdir:** `%s`\n\n", def.Workdir)
+			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
 		}
 	case usercommands.CommandTypeBuiltin:
 		if def.Cmd != "" {
-			fmt.Fprintf(&sb, "**Builtin:** `%s`\n\n", def.Cmd)
+			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", builtinLabel, def.Cmd)
 		}
 		if len(def.With) > 0 {
-			sb.WriteString("## With\n\n")
+			fmt.Fprintf(&sb, "## %s\n\n", withHeader)
 			var keys []string
 			for k := range def.With {
 				keys = append(keys, k)
@@ -509,7 +536,8 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 	}
 
 	if len(def.Params) > 0 {
-		sb.WriteString("## Parameters\n\n")
+		parametersHeader := store.T(locale, "ui.docs.section.parameters", "Parameters")
+		sb.WriteString("## " + parametersHeader + "\n\n")
 		sb.WriteString("| Name | Type | Required | Default | Description |\n|---|---|---|---|---|\n")
 		var names []string
 		for name := range def.Params {
@@ -526,14 +554,16 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 			if defVal == "" && p.DefaultFrom != "" {
 				defVal = fmt.Sprintf("from `%s`", p.DefaultFrom)
 			}
+			paramDesc := store.ParamDescription(locale, def.ID, name, p.Description)
 			fmt.Fprintf(&sb, "| `%s` | `%s` | %s | %s | %s |\n",
-				name, p.Type, required, defVal, p.Description)
+				name, p.Type, required, defVal, paramDesc)
 		}
 		sb.WriteString("\n")
 	}
 
 	if len(def.Context) > 0 {
-		sb.WriteString("## Context\n\n")
+		contextHeader := store.T(locale, "ui.docs.section.context", "Context")
+		sb.WriteString("## " + contextHeader + "\n\n")
 		sb.WriteString("| Name | From | Required | Env |\n|---|---|---|---|\n")
 		var names []string
 		for name := range def.Context {
@@ -552,7 +582,8 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 	}
 
 	if len(def.Files) > 0 {
-		sb.WriteString("## Files\n\n")
+		filesHeader := store.T(locale, "ui.docs.section.files", "Files")
+		sb.WriteString("## " + filesHeader + "\n\n")
 		var fileIDs []string
 		for id := range def.Files {
 			fileIDs = append(fileIDs, id)
@@ -614,7 +645,7 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string) error {
 }
 
 // genCommandsIndex writes the commands reference index.
-func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate bool) error {
+func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate bool, store *i18n.Store, locale string) error {
 	var defs []*usercommands.CommandDef
 	if includePrivate {
 		defs = reg.ListAll("")
@@ -646,6 +677,10 @@ func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate boo
 			if groupLabel == "" {
 				groupLabel = "(root)"
 			}
+			// Use group title from i18n if available
+			if group != "" {
+				groupLabel = store.GroupTitle(locale, group, group)
+			}
 			fmt.Fprintf(&sb, "## %s\n\n", groupLabel)
 			for _, def := range byGroup[group] {
 				relPath := def.LocalName + ".md"
@@ -656,7 +691,8 @@ func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate boo
 				if def.Private {
 					private = " *(private)*"
 				}
-				desc := def.Description
+				// Use i18n lookup for description
+				desc := store.CommandDescription(locale, def.ID, def.Description)
 				if desc == "" {
 					desc = string(def.Type)
 				}
@@ -680,7 +716,21 @@ func genTopLevelIndex(outDir string, scopes map[string]bool) error {
 		sb.WriteString("- [CLI Reference](cli/index.md) — `devbox` command tree\n")
 	}
 	if scopes["commands"] {
-		sb.WriteString("- [Commands Reference](commands/index.md) — declarative command registry\n")
+		// List language subdirectories under commands/
+		commandsDir := filepath.Join(outDir, "commands")
+		entries, err := os.ReadDir(commandsDir)
+		if err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					lang := entry.Name()
+					sb.WriteString(fmt.Sprintf("- [Commands Reference (lang=%s)](commands/%s/index.md) — declarative command registry\n", lang, lang))
+				}
+			}
+		}
+		// Fallback if commands dir doesn't exist yet (shouldn't happen in normal flow)
+		if err != nil || len(entries) == 0 {
+			sb.WriteString("- [Commands Reference](commands/index.md) — declarative command registry\n")
+		}
 	}
 	sb.WriteString("\n")
 

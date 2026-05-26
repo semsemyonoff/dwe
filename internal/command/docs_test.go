@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/usercommands"
 )
 
@@ -102,8 +103,14 @@ func TestResolveScopes(t *testing.T) {
 func TestGenRegistryMarkdown(t *testing.T) {
 	reg := buildTestRegistryForDocs(t)
 
+	// Load the embedded i18n store for testing
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("failed to load i18n store: %v", err)
+	}
+
 	dir := t.TempDir()
-	if err := genRegistryMarkdown(reg, dir, false); err != nil {
+	if err := genRegistryMarkdown(reg, dir, false, store, "en"); err != nil {
 		t.Fatalf("genRegistryMarkdown: %v", err)
 	}
 
@@ -129,7 +136,13 @@ func TestGenCommandsIndex(t *testing.T) {
 	reg := buildTestRegistryForDocs(t)
 	dir := t.TempDir()
 
-	if err := genCommandsIndex(reg, dir, false); err != nil {
+	// Load the embedded i18n store for testing
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("failed to load i18n store: %v", err)
+	}
+
+	if err := genCommandsIndex(reg, dir, false, store, "en"); err != nil {
 		t.Fatalf("genCommandsIndex: %v", err)
 	}
 
@@ -157,7 +170,13 @@ func TestGenCommandsIndexIncludePrivate(t *testing.T) {
 	reg := buildTestRegistryForDocs(t)
 	dir := t.TempDir()
 
-	if err := genCommandsIndex(reg, dir, true); err != nil {
+	// Load the embedded i18n store for testing
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("failed to load i18n store: %v", err)
+	}
+
+	if err := genCommandsIndex(reg, dir, true, store, "en"); err != nil {
 		t.Fatalf("genCommandsIndex: %v", err)
 	}
 
@@ -229,8 +248,14 @@ func TestWriteCommandMarkdown_Workflow(t *testing.T) {
 		},
 	}
 
+	// Load the embedded i18n store for testing
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("failed to load i18n store: %v", err)
+	}
+
 	dir := t.TempDir()
-	if err := writeCommandMarkdown(def, dir); err != nil {
+	if err := writeCommandMarkdown(def, dir, store, "en"); err != nil {
 		t.Fatalf("writeCommandMarkdown: %v", err)
 	}
 
@@ -265,8 +290,14 @@ func TestWriteCommandMarkdown_Params(t *testing.T) {
 		},
 	}
 
+	// Load the embedded i18n store for testing
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("failed to load i18n store: %v", err)
+	}
+
 	dir := t.TempDir()
-	if err := writeCommandMarkdown(def, dir); err != nil {
+	if err := writeCommandMarkdown(def, dir, store, "en"); err != nil {
 		t.Fatalf("writeCommandMarkdown: %v", err)
 	}
 
