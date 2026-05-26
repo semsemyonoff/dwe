@@ -510,18 +510,18 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/command/docs_show_test.go`
 - Create: `internal/command/docs_list_test.go`
 
-- [ ] `devbox docs show <topic>` — `Args: cobra.ExactArgs(1)` (no inline `len(args)` checks in `RunE`). Flags: `--lang <code>`, `--raw`, `--source devbox|project|all` (default **`all`** — agents and humans both usually want the full set; reduces surprise)
-- [ ] `ValidArgsFunction` on `show`: dynamic completion of topic names via `docs.AllTopics(...)`. Per the CLAUDE.md completion-path-safety pattern, wrap any i18n calls with `i18n.TranslatorOrNop(rflags.I18n)` because `__complete` bypasses `PersistentPreRunE`. On any error → return `(nil, cobra.ShellCompDirectiveNoFileComp)` silently
-- [ ] use `cmd.OutOrStdout()` / `cmd.ErrOrStderr()` for ALL output — never write to `os.Stdout` / `os.Stderr` directly. Tests rely on this to redirect to `bytes.Buffer`
-- [ ] resolution flow: **always call `i18n.ResolveLocale(df.lang, cfg.Language, os.Getenv("LANG"))` directly** — do NOT use `rflags.Locale` because it is clamped to the YAML translation store (which is a different namespace from long-form markdown). `Sources(projectRoot)` → filter by `--source`; `docs.Resolve(roots, topic, locale)` → `ResolveContent` → render. Per-file fallback inside `ResolveContent` handles missing markdown translations
-- [ ] if `!isInteractive(stdout) || df.raw` → write raw bytes (preserve the optional banner for missing/stale translations as plain markdown blockquote). **No ANSI escapes in this path.** No glamour invocation at all
-- [ ] if TTY and not `--raw` → `render.Render(content, RenderOpts{Theme: themeFromBg(), Width: termWidthOr(100), MermaidRenderer: mermaid.Chain(cache, mmdc), CanInline: term.CanInline()})`. `termWidthOr` returns 100 when width cannot be detected
-- [ ] `devbox docs list` — `Args: cobra.NoArgs`. Flags: `--lang <code>`, `--source devbox|project|all` (default `all`)
+- [x] `devbox docs show <topic>` — `Args: cobra.ExactArgs(1)` (no inline `len(args)` checks in `RunE`). Flags: `--lang <code>`, `--raw`, `--source devbox|project|all` (default **`all`** — agents and humans both usually want the full set; reduces surprise)
+- [x] `ValidArgsFunction` on `show`: dynamic completion of topic names via `docs.AllTopics(...)`. Per the CLAUDE.md completion-path-safety pattern, wrap any i18n calls with `i18n.TranslatorOrNop(rflags.I18n)` because `__complete` bypasses `PersistentPreRunE`. On any error → return `(nil, cobra.ShellCompDirectiveNoFileComp)` silently
+- [x] use `cmd.OutOrStdout()` / `cmd.ErrOrStderr()` for ALL output — never write to `os.Stdout` / `os.Stderr` directly. Tests rely on this to redirect to `bytes.Buffer`
+- [x] resolution flow: **always call `i18n.ResolveLocale(df.lang, cfg.Language, os.Getenv("LANG"))` directly** — do NOT use `rflags.Locale` because it is clamped to the YAML translation store (which is a different namespace from long-form markdown). `Sources(projectRoot)` → filter by `--source`; `docs.Resolve(roots, topic, locale)` → `ResolveContent` → render. Per-file fallback inside `ResolveContent` handles missing markdown translations
+- [x] if `!isInteractive(stdout) || df.raw` → write raw bytes (preserve the optional banner for missing/stale translations as plain markdown blockquote). **No ANSI escapes in this path.** No glamour invocation at all
+- [x] if TTY and not `--raw` → `render.Render(content, RenderOpts{Theme: themeFromBg(), Width: termWidthOr(100), MermaidRenderer: mermaid.Chain(cache, mmdc), CanInline: term.CanInline()})`. `termWidthOr` returns 100 when width cannot be detected
+- [x] `devbox docs list` — `Args: cobra.NoArgs`. Flags: `--lang <code>`, `--source devbox|project|all` (default `all`)
   - emits one line per topic to `cmd.OutOrStdout()`: `<source>\t<path>\t<lang>` (tab-separated, agent-friendly)
-- [ ] resolution errors map to user-friendly messages: `NotFoundError` → "topic 'X' not found" + suggestions; `MultipleMatchesError` → "ambiguous; candidates: ..." to stderr, exit 1
-- [ ] all user-visible strings go through `i18n.TranslatorOrNop(rflags.I18n)` for `ui.docs.*` keys (add to `en.yml` + `KnownUIKeys` in this task)
-- [ ] tests: fixture project with built-in + project doc + ru translation; show exact / fuzzy / missing; list devbox-only / project-only / all; raw vs TTY (using a `bytes.Buffer` as stdout — non-TTY path)
-- [ ] run `go test ./internal/command/... ./internal/docs/...` — must pass
+- [x] resolution errors map to user-friendly messages: `NotFoundError` → "topic 'X' not found" + suggestions; `MultipleMatchesError` → "ambiguous; candidates: ..." to stderr, exit 1
+- [x] all user-visible strings go through `i18n.TranslatorOrNop(rflags.I18n)` for `ui.docs.*` keys (add to `en.yml` + `KnownUIKeys` in this task)
+- [x] tests: fixture project with built-in + project doc + ru translation; show exact / fuzzy / missing; list devbox-only / project-only / all; raw vs TTY (using a `bytes.Buffer` as stdout — non-TTY path)
+- [x] run `go test ./internal/command/... ./internal/docs/...` — must pass
 
 ### Task 7: `devbox docs cache clear`
 
