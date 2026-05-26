@@ -100,7 +100,7 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 		// Check for errors
 		for _, diag := range diags {
 			if diag.Severity >= validate.SeverityError {
-				return errors.New("setup.yml has errors; fix them before deploying")
+				return &deployValidationError{"setup.yml has errors; fix them before deploying"}
 			}
 		}
 	}
@@ -317,3 +317,11 @@ type usageError string
 
 func (u usageError) Error() string { return string(u) }
 func (u usageError) ExitCode() int { return 2 }
+
+// deployValidationError is returned when setup.yml validation blocks the deploy
+// menu. It carries ExitCode() so fang's errHandler suppresses the double-print
+// (diagnostics table is already written to stderr by the caller).
+type deployValidationError struct{ msg string }
+
+func (e *deployValidationError) Error() string { return e.msg }
+func (e *deployValidationError) ExitCode() int { return 1 }

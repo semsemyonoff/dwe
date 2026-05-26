@@ -57,8 +57,6 @@ func preflightActionLabel(stage string) string {
 		return "start the project"
 	case "stop":
 		return "stop the project"
-	case "restart":
-		return "restart the project"
 	case "command":
 		return "run this command"
 	case "":

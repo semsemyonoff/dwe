@@ -9,8 +9,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/setup"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/validate/env"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -110,6 +113,138 @@ func TestRunDeployMenu_MenuDispatch_Exit(t *testing.T) {
 
 	err := runDeployMenu(cmd, flags)
 	require.NoError(t, err)
+}
+
+func TestRunDeployMenu_SetupYMLErrors_BlocksMenu(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	devboxDir := filepath.Join(tmpdir, "devbox")
+	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "devbox.yml"), []byte("project:\n  name: test"), 0o644))
+
+	flags := &rootFlags{configPath: filepath.Join(devboxDir, "devbox.yml")}
+
+	oldIsInteractive := ui.IsInteractiveFn
+	oldSelectFn := selectMenuItemFn
+	oldLoadSetupFn := loadSetupYAMLFn
+	defer func() {
+		ui.IsInteractiveFn = oldIsInteractive
+		selectMenuItemFn = oldSelectFn
+		loadSetupYAMLFn = oldLoadSetupFn
+	}()
+
+	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+
+	// Stub loader to return a parse error (unknown field) without requiring a real file.
+	loadSetupYAMLFn = func(path string) (*setup.Config, error) {
+		return nil, errors.New("yaml: unmarshal errors: field unknownfield not found in type setup.Question")
+	}
+
+	selectCalled := false
+	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
+		selectCalled = true
+		return menuExit, nil
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(bytes.NewBuffer(nil))
+	errBuf := bytes.NewBuffer(nil)
+	cmd.SetErr(errBuf)
+
+	err := runDeployMenu(cmd, flags)
+	require.Error(t, err)
+
+	// Must be a deployValidationError (exit code 1), not a plain error, so fang
+	// suppresses the double-print (diagnostics table already written to stderr).
+	var dve *deployValidationError
+	require.ErrorAs(t, err, &dve, "expected deployValidationError so fang suppresses double-print")
+	assert.Equal(t, 1, dve.ExitCode())
+
+	// Menu must not have been shown.
+	assert.False(t, selectCalled, "menu selector must not be called when setup.yml has errors")
+
+	// Diagnostics table must have been written to stderr.
+	assert.NotEmpty(t, errBuf.String(), "diagnostics must be printed to stderr")
+}
+
+func TestRunDeployMenu_MenuDispatch_Plan(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	devboxDir := filepath.Join(tmpdir, "devbox")
+	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "devbox.yml"), []byte("project:\n  name: test"), 0o644))
+
+	flags := &rootFlags{configPath: filepath.Join(devboxDir, "devbox.yml")}
+
+	oldIsInteractive := ui.IsInteractiveFn
+	oldSelectFn := selectMenuItemFn
+	oldRunDeployPlanFn := runDeployPlanFn
+	defer func() {
+		ui.IsInteractiveFn = oldIsInteractive
+		selectMenuItemFn = oldSelectFn
+		runDeployPlanFn = oldRunDeployPlanFn
+	}()
+
+	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+
+	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
+		return menuPlan, nil
+	}
+
+	planCalled := false
+	runDeployPlanFn = func(ctx context.Context, cmd *cobra.Command, flags *rootFlags, opts deployPlanOpts) error {
+		planCalled = true
+		assert.Equal(t, "", opts.ServiceName)
+		return nil
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(bytes.NewBuffer(nil))
+	cmd.SetErr(bytes.NewBuffer(nil))
+
+	err := runDeployMenu(cmd, flags)
+	require.NoError(t, err)
+	require.True(t, planCalled, "runDeployPlan should have been called")
+}
+
+func TestRunDeployMenu_WizardShownWhenConflictsAndEmptyLocal(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	devboxDir := filepath.Join(tmpdir, "devbox")
+	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "devbox.yml"), []byte("project:\n  name: test"), 0o644))
+	// No setup.yml — port-conflicts-only path.
+
+	flags := &rootFlags{configPath: filepath.Join(devboxDir, "devbox.yml")}
+
+	oldIsInteractive := ui.IsInteractiveFn
+	oldSelectFn := selectMenuItemFn
+	oldCollectFn := collectPortConflictsFn
+	defer func() {
+		ui.IsInteractiveFn = oldIsInteractive
+		selectMenuItemFn = oldSelectFn
+		collectPortConflictsFn = oldCollectFn
+	}()
+
+	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+
+	// Inject a fake port conflict so showWizard becomes true even without setup.yml.
+	collectPortConflictsFn = func(ctx context.Context, cfg *config.DevboxConfig, baseDir string) ([]env.PortConflict, error) {
+		return []env.PortConflict{{Service: "web", PortName: "http", RequestedPort: 8080, OccupiedBy: "other"}}, nil
+	}
+
+	var capturedShowWizard bool
+	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
+		capturedShowWizard = showWizard
+		return menuExit, nil
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(bytes.NewBuffer(nil))
+	cmd.SetErr(bytes.NewBuffer(nil))
+
+	require.NoError(t, runDeployMenu(cmd, flags))
+	assert.True(t, capturedShowWizard, "wizard should be shown when port conflicts exist and local.yml is empty")
 }
 
 func TestIsEmptyLocal(t *testing.T) {

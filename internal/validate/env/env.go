@@ -32,14 +32,3 @@ func ok(id string) validate.Diagnostic {
 		Target:   id,
 	}
 }
-
-// warn builds a warning-severity env diagnostic.
-func warn(id, msg, hint string) validate.Diagnostic {
-	return validate.Diagnostic{
-		Severity: validate.SeverityWarning,
-		Domain:   "env",
-		Target:   id,
-		Message:  msg,
-		Hint:     hint,
-	}
-}

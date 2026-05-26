@@ -133,10 +133,9 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	if parent == nil {
 		parent = context.Background()
 	}
-	conflicts, probeErr := CollectPortConflicts(parent, v.cfg, vctx.ProjectRoot)
-	if probeErr != nil {
-		return []validate.Diagnostic{warn("ports_free", "port conflict check could not complete: "+probeErr.Error(), "ensure docker is running and try again")}
-	}
+	// CollectPortConflicts never returns a non-nil error; docker ps failures are
+	// encoded in the conflict result as "unknown (docker ps failed)" instead.
+	conflicts, _ := CollectPortConflicts(parent, v.cfg, vctx.ProjectRoot)
 
 	var diags []validate.Diagnostic
 	for _, pc := range conflicts {
@@ -203,8 +202,8 @@ type portOwner struct {
 
 // classifyPortOwner returns "" if the port is free or held by our own compose
 // containers, otherwise the name of the container holding it (possibly with
-// compose project info). This helper is used by both classifyPort (for
-// diagnostics) and classifyPortForConflict (for the exported probe).
+// compose project info). Called only by classifyPort; production code uses
+// classifyPortForConflict which handles the docker ps failure case.
 func classifyPortOwner(dp declaredPort, bindings map[int][]portOwner, ourProject string) string {
 	owners := bindings[dp.HostPort]
 	if len(owners) > 0 {
