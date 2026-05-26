@@ -313,15 +313,15 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 - Modify: `internal/config/devbox.go`
 - Modify: `internal/config/devbox_test.go` (or nearest existing test file for `ServiceConfig`)
 
-- [ ] **first**: grep for existing methods on `ServiceConfig` and note their receiver kind (`func (s ServiceConfig)` vs `func (s *ServiceConfig)`). The new accessors MUST match — per `golang-structs-interfaces`, receiver type must be consistent across all methods of a type. If `ServiceConfig` has zero existing methods, prefer pointer receivers (the struct has maps and slices and is non-trivial in size).
-- [ ] add `Icon string \`yaml:"icon,omitempty"\`` to `ServiceConfig`
-- [ ] **register `icon` in BOTH strict-decode allowlists** (required — service.yml uses `yaml.Decoder.KnownFields(true)` at `internal/config/devbox.go:1265`; unlisted fields fail loading):
+- [x] **first**: grep for existing methods on `ServiceConfig` and note their receiver kind (`func (s ServiceConfig)` vs `func (s *ServiceConfig)`). The new accessors MUST match — per `golang-structs-interfaces`, receiver type must be consistent across all methods of a type. If `ServiceConfig` has zero existing methods, prefer pointer receivers (the struct has maps and slices and is non-trivial in size).
+- [x] add `Icon string \`yaml:"icon,omitempty"\`` to `ServiceConfig`
+- [x] **register `icon` in BOTH strict-decode allowlists** (required — service.yml uses `yaml.Decoder.KnownFields(true)` at `internal/config/devbox.go:1265`; unlisted fields fail loading):
   - `allowedFieldsFor` at `internal/config/devbox.go:607` — add `"icon"` to the `common` slice (applies to all three service types)
   - `servicesAllowedFields` at `internal/validate/config/devbox.go:112` — mirror the addition
-- [ ] add `DisplayIcon() string` method — returns `s.Icon` if non-empty; otherwise type default via a small `switch s.Type`: `app`→`📦`, `tool`→`⚙️`, `infra`→`🧱`, unknown→empty string. **No package-level icon map** — a switch inside the method is shorter, has no exported surface, and tests can read it through the method directly. Only extract to a `var` if a second consumer (status/cmdbrowser follow-up) actually appears.
-- [ ] write table-driven tests (each subtest calls `t.Parallel()`; subtest names are lowercase descriptive phrases like `"app type default"`, `"explicit override"`, `"unknown type returns empty"`) for `DisplayIcon` covering all three type defaults, explicit override, unknown type, and zero-value ServiceConfig
-- [ ] add a strict-decode test: a service.yml with `icon: "🔧"` loads cleanly via `LoadServiceFolder` (regression test against the allowlist update being forgotten)
-- [ ] run `go test ./internal/config/... ./internal/validate/...` — must pass before Task 2
+- [x] add `DisplayIcon() string` method — returns `s.Icon` if non-empty; otherwise type default via a small `switch s.Type`: `app`→`📦`, `tool`→`⚙️`, `infra`→`🧱`, unknown→empty string. **No package-level icon map** — a switch inside the method is shorter, has no exported surface, and tests can read it through the method directly. Only extract to a `var` if a second consumer (status/cmdbrowser follow-up) actually appears.
+- [x] write table-driven tests (each subtest calls `t.Parallel()`; subtest names are lowercase descriptive phrases like `"app type default"`, `"explicit override"`, `"unknown type returns empty"`) for `DisplayIcon` covering all three type defaults, explicit override, unknown type, and zero-value ServiceConfig
+- [x] add a strict-decode test: a service.yml with `icon: "🔧"` loads cleanly via `LoadServiceFolder` (regression test against the allowlist update being forgotten)
+- [x] run `go test ./internal/config/... ./internal/validate/...` — must pass before Task 2
 
 ### Task 2: Add `service.info` block (title, paths) with accessors
 

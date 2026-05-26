@@ -700,3 +700,94 @@ on_enable:
 		t.Fatal("expected error for typo inside on_enable, got nil")
 	}
 }
+
+// TestDisplayIcon_appDefault verifies app type returns default icon.
+func TestDisplayIcon_appDefault(t *testing.T) {
+	t.Parallel()
+	s := ServiceConfig{Type: ServiceTypeApp}
+	if got := s.DisplayIcon(); got != "📦" {
+		t.Errorf("got %q, want %q", got, "📦")
+	}
+}
+
+// TestDisplayIcon_toolDefault verifies tool type returns default icon.
+func TestDisplayIcon_toolDefault(t *testing.T) {
+	t.Parallel()
+	s := ServiceConfig{Type: ServiceTypeTool}
+	if got := s.DisplayIcon(); got != "⚙️" {
+		t.Errorf("got %q, want %q", got, "⚙️")
+	}
+}
+
+// TestDisplayIcon_infraDefault verifies infra type returns default icon.
+func TestDisplayIcon_infraDefault(t *testing.T) {
+	t.Parallel()
+	s := ServiceConfig{Type: ServiceTypeInfra}
+	if got := s.DisplayIcon(); got != "🧱" {
+		t.Errorf("got %q, want %q", got, "🧱")
+	}
+}
+
+// TestDisplayIcon_explicitOverride verifies explicit icon overrides type default.
+func TestDisplayIcon_explicitOverride(t *testing.T) {
+	t.Parallel()
+	s := ServiceConfig{Type: ServiceTypeApp, Icon: "🔧"}
+	if got := s.DisplayIcon(); got != "🔧" {
+		t.Errorf("got %q, want %q", got, "🔧")
+	}
+}
+
+// TestDisplayIcon_unknownType verifies unknown type returns empty string.
+func TestDisplayIcon_unknownType(t *testing.T) {
+	t.Parallel()
+	s := ServiceConfig{Type: ServiceType("unknown")}
+	if got := s.DisplayIcon(); got != "" {
+		t.Errorf("got %q, want %q", got, "")
+	}
+}
+
+// TestDisplayIcon_zeroValue verifies zero-value ServiceConfig returns empty string.
+func TestDisplayIcon_zeroValue(t *testing.T) {
+	t.Parallel()
+	s := ServiceConfig{}
+	if got := s.DisplayIcon(); got != "" {
+		t.Errorf("got %q, want %q", got, "")
+	}
+}
+
+// TestLoadServiceFolder_iconField verifies icon field loads cleanly via LoadServiceFolder.
+func TestLoadServiceFolder_iconField(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+icon: "🔧"
+`)
+	svc, err := LoadServiceFolder(dir, "web")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if svc.Icon != "🔧" {
+		t.Errorf("Icon = %q, want %q", svc.Icon, "🔧")
+	}
+}
+
+// TestLoadServiceFolder_iconMissingAllowed verifies icon is optional and defaults to empty.
+func TestLoadServiceFolder_iconMissingAllowed(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+`)
+	svc, err := LoadServiceFolder(dir, "web")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if svc.Icon != "" {
+		t.Errorf("Icon = %q, want empty", svc.Icon)
+	}
+}

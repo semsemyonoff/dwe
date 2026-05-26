@@ -606,7 +606,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	// Fields permitted for every service type.
 	common := []string{
 		"type", "container", "mandatory", "compose",
-		"ports", "hosts", "status",
+		"ports", "hosts", "icon", "status",
 		"on_enable", "on_disable", "notes",
 	}
 	switch t {
@@ -652,6 +652,7 @@ type ServiceConfig struct {
 	Enabled         bool                 `yaml:"-"` // computed: mandatory || services.<name>.enabled
 	Ports           map[string]int       `yaml:"ports,omitempty"`
 	Hosts           map[string]string    `yaml:"hosts,omitempty"`
+	Icon            string               `yaml:"icon,omitempty"`
 	Dir             string               `yaml:"dir"`
 	DirInternal     string               `yaml:"dir_internal"`
 	WorkDirInternal string               `yaml:"work_dir_internal"`
@@ -732,6 +733,25 @@ func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) 
 func (s ServiceConfig) GitRenderEnabled() bool {
 	enabled, _ := s.GitRenderEnabledExplicit()
 	return enabled
+}
+
+// DisplayIcon returns the resolved icon for this service.
+// If Icon is non-empty, returns it; otherwise returns the type-default icon.
+// app -> "📦", tool -> "⚙️", infra -> "🧱", unknown -> "".
+func (s ServiceConfig) DisplayIcon() string {
+	if s.Icon != "" {
+		return s.Icon
+	}
+	switch s.Type {
+	case ServiceTypeApp:
+		return "📦"
+	case ServiceTypeTool:
+		return "⚙️"
+	case ServiceTypeInfra:
+		return "🧱"
+	default:
+		return ""
+	}
 }
 
 // ServiceCLIConfig holds defaults for the `services cli` command.
