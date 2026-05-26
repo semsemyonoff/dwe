@@ -99,12 +99,12 @@ func TestStoreT(t *testing.T) {
 
 func TestStoreCommandDescription(t *testing.T) {
 	tests := []struct {
-		name       string
-		store      *Store
-		locale     string
-		commandID  string
-		fallback   string
-		want       string
+		name      string
+		store     *Store
+		locale    string
+		commandID string
+		fallback  string
+		want      string
 	}{
 		{
 			name: "hit in requested locale",
@@ -186,12 +186,12 @@ func TestStoreCommandDescription(t *testing.T) {
 
 func TestStoreCommandConfirmationText(t *testing.T) {
 	tests := []struct {
-		name       string
-		store      *Store
-		locale     string
-		commandID  string
-		fallback   string
-		want       string
+		name      string
+		store     *Store
+		locale    string
+		commandID string
+		fallback  string
+		want      string
 	}{
 		{
 			name: "hit in requested locale",

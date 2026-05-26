@@ -37,13 +37,13 @@ var (
 
 // runOpts carries the per-invocation options for runCommandByID.
 type runOpts struct {
-	Inspect     bool
-	Yes         bool // user-explicit --yes OR'd with TUI y-toggle at the call site
+	Inspect        bool
+	Yes            bool // user-explicit --yes OR'd with TUI y-toggle at the call site
 	ForceParamForm bool // TUI-only: user picked the item via the edit-params key
-	SetValues   []string
-	Silent      bool // suppress end-of-command desktop notification
-	Translator  i18n.Translator // for localized string lookups; nil-safe via TranslatorOrNop
-	Locale      string          // active locale code (e.g. "ru", "en")
+	SetValues      []string
+	Silent         bool            // suppress end-of-command desktop notification
+	Translator     i18n.Translator // for localized string lookups; nil-safe via TranslatorOrNop
+	Locale         string          // active locale code (e.g. "ru", "en")
 }
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {

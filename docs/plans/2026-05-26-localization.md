@@ -568,11 +568,11 @@ A `Translator` interface (`{ CommandDescription(...), ParamDescription(...), ...
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] verify all Overview items are implemented: command/param/confirmation translation in list / browser / inspect / docs, `ui.*` keys in docs generator, `--lang` flag, two-layer file load, validator domain
-- [ ] verify edge cases: missing translation file (silent), unknown locale via `$LANG` (silent fallback to en), invalid `--lang` value (e.g. unknown-code or empty after normalization), userconfig load failure (silent warning, locale resolves to $LANG/en)
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
-- [ ] manually generate docs against a fixture project: `bin/devbox docs generate --scope commands --lang ru` and inspect output
+- [x] verify all Overview items are implemented: command/param/confirmation translation in list / browser / inspect / docs, `ui.*` keys in docs generator, `--lang` flag, two-layer file load, validator domain
+- [x] verify edge cases: missing translation file (silent), unknown locale via `$LANG` (silent fallback to en), invalid `--lang` value (e.g. unknown-code or empty after normalization), userconfig load failure (silent warning, locale resolves to $LANG/en)
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint`
+- [x] manually generate docs against a fixture project: `bin/devbox docs generate --scope commands --lang ru` and inspect output
 
 ### Task 11: [Final] Update CLAUDE.md / packages.md and move plan
 

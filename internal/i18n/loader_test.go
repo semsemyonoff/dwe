@@ -3,6 +3,7 @@ package i18n
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -207,14 +208,7 @@ groups: {}
 			}
 			if tt.wantEn {
 				locales := got.AvailableLocales()
-				enFound := false
-				for _, loc := range locales {
-					if loc == "en" {
-						enFound = true
-						break
-					}
-				}
-				if !enFound {
+				if !slices.Contains(locales, "en") {
 					t.Errorf("Load() missing 'en' locale")
 				}
 			}
@@ -224,12 +218,12 @@ groups: {}
 
 func TestLoadProjectBundles(t *testing.T) {
 	tests := []struct {
-		name          string
-		setupFunc     func(t *testing.T) string // returns projectRoot
-		wantNil       bool
-		wantLen       int
-		wantParseErr  bool
-		wantDirError  bool
+		name         string
+		setupFunc    func(t *testing.T) string // returns projectRoot
+		wantNil      bool
+		wantLen      int
+		wantParseErr bool
+		wantDirError bool
 	}{
 		{
 			name: "absent directory returns nil",
@@ -411,7 +405,9 @@ func TestLoadProjectBundlesDirectoryErrors(t *testing.T) {
 		if err := os.Chmod(i18nDir, 0000); err != nil {
 			t.Fatalf("chmod: %v", err)
 		}
-		defer os.Chmod(i18nDir, 0755)
+		defer func() {
+			_ = os.Chmod(i18nDir, 0755)
+		}()
 
 		got, err := LoadProjectBundles(dir)
 		if err != nil {
@@ -563,14 +559,7 @@ func TestLoadBuiltinFallback(t *testing.T) {
 
 	// Should have en locale
 	locales := store.AvailableLocales()
-	found := false
-	for _, loc := range locales {
-		if loc == "en" {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(locales, "en") {
 		t.Errorf("Load(\"\") missing 'en' locale")
 	}
 

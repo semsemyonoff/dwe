@@ -723,7 +723,7 @@ func genTopLevelIndex(outDir string, scopes map[string]bool) error {
 			for _, entry := range entries {
 				if entry.IsDir() {
 					lang := entry.Name()
-					sb.WriteString(fmt.Sprintf("- [Commands Reference (lang=%s)](commands/%s/index.md) — declarative command registry\n", lang, lang))
+					fmt.Fprintf(&sb, "- [Commands Reference (lang=%s)](commands/%s/index.md) — declarative command registry\n", lang, lang)
 				}
 			}
 		}

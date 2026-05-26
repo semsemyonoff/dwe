@@ -110,15 +110,15 @@ func buildRunContext(
 	// Translator defaults to NopTranslator; callers wire in the real translator
 	// and locale after construction if needed.
 	return RunContext{
-		Cmd:        def,
-		Params:     params,
-		Context:    ctx,
-		Render:     rctx,
-		Config:     cfg,
+		Cmd:          def,
+		Params:       params,
+		Context:      ctx,
+		Render:       rctx,
+		Config:       cfg,
 		DockerConfig: dockerCfg,
-		Registry:   reg,
-		ProjectRoot: workDir,
-		Translator: i18n.NopTranslator{},
-		Locale:     "",
+		Registry:     reg,
+		ProjectRoot:  workDir,
+		Translator:   i18n.NopTranslator{},
+		Locale:       "",
 	}, nil
 }

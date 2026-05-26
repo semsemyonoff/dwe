@@ -2,15 +2,15 @@ package i18n
 
 // Bundle is the parsed contents of one translation file.
 type Bundle struct {
-	UI       map[string]string `yaml:"ui"`
+	UI       map[string]string         `yaml:"ui"`
 	Commands map[string]CommandStrings `yaml:"commands"`
-	Groups   map[string]GroupStrings `yaml:"groups"`
+	Groups   map[string]GroupStrings   `yaml:"groups"`
 }
 
 // CommandStrings contains translations for a command's user-facing text.
 type CommandStrings struct {
-	Description      string                 `yaml:"description"`
-	ConfirmationText string                 `yaml:"confirmation_text"`
+	Description      string                  `yaml:"description"`
+	ConfirmationText string                  `yaml:"confirmation_text"`
 	Params           map[string]ParamStrings `yaml:"params"`
 }
 
