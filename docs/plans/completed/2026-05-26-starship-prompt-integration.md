@@ -353,8 +353,8 @@ Note: end-to-end timing and real-project starship integration verification are d
 - Modify: `CLAUDE.md` / `AGENTS.md` — add a Key Patterns entry about the prompt bypass (it's a non-obvious architectural choice future contributors will want to know about)
 - Move: this plan file to `docs/plans/completed/`
 
-- [ ] add Key Patterns entry to `AGENTS.md` (remember: edit `AGENTS.md`, `CLAUDE.md` is a symlink): "**Prompt hot path**: `devbox prompt` and `devbox prompt --check` bypass cobra entirely via an early dispatch in `cmd/devbox/main.go` to keep per-shell-prompt cost minimal. The `internal/prompt` package duplicates the accent-color resolution from `internal/ui/styles.go` deliberately — it cannot use lipgloss because lipgloss auto-downgrades to no-color when stdout is piped (which it is, when starship invokes `devbox prompt`). A cobra `prompt` command exists in `internal/command/prompt.go` for `--help` discoverability only — its RunE is unreachable in normal startup."
-- [ ] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-starship-prompt-integration.md docs/plans/completed/`
+- [x] add Key Patterns entry to `AGENTS.md` (remember: edit `AGENTS.md`, `CLAUDE.md` is a symlink): "**Prompt hot path**: `devbox prompt` and `devbox prompt --check` bypass cobra entirely via an early dispatch in `cmd/devbox/main.go` to keep per-shell-prompt cost minimal. The `internal/prompt` package duplicates the accent-color resolution from `internal/ui/styles.go` deliberately — it cannot use lipgloss because lipgloss auto-downgrades to no-color when stdout is piped (which it is, when starship invokes `devbox prompt`). A cobra `prompt` command exists in `internal/command/prompt.go` for `--help` discoverability only — its RunE is unreachable in normal startup."
+- [x] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-starship-prompt-integration.md docs/plans/completed/`
 
 ## Post-Completion
 
