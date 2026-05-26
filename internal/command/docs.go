@@ -38,6 +38,7 @@ Generate reference documentation for the CLI and command registry.`,
 	}
 	cmd.AddCommand(newDocsShowCmd(flags))
 	cmd.AddCommand(newDocsListCmd(flags))
+	cmd.AddCommand(newDocsCacheCmd(flags))
 	cmd.AddCommand(newDocsGenerateCmd(flags))
 	return cmd
 }

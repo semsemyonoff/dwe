@@ -529,13 +529,13 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/command/docs_cache.go`
 - Create: `internal/command/docs_cache_test.go`
 
-- [ ] `devbox docs cache` parent (`Args: cobra.NoArgs`, RunE prints help via `cmd.Help()`) + `clear` child subcommand (`Args: cobra.NoArgs`)
-- [ ] `clear`: resolves cache dir via `mermaid.CacheDir()` (XDG-aware), `os.RemoveAll`, then recreate the dir with `0o700`
-- [ ] reports count of removed entries via `cmd.OutOrStdout()`: "removed N cached diagrams"
-- [ ] gracefully reports "no cache to clear" when the dir does not exist
-- [ ] **no `PersistentPreRunE` on the `docs cache` parent** — relies on the root's, which is sufficient. Adding one would silently replace the root's project resolution per the CLAUDE.md "Cobra does NOT chain `PersistentPreRunE`" note
-- [ ] tests: clearing a populated tempdir leaves it empty; clearing a missing dir reports the no-op message; permission error surfaces cleanly
-- [ ] run `go test ./internal/command/...` — must pass
+- [x] `devbox docs cache` parent (`Args: cobra.NoArgs`, RunE prints help via `cmd.Help()`) + `clear` child subcommand (`Args: cobra.NoArgs`)
+- [x] `clear`: resolves cache dir via `mermaid.CacheDir()` (XDG-aware), `os.RemoveAll`, then recreate the dir with `0o700`
+- [x] reports count of removed entries via `cmd.OutOrStdout()`: "removed N cached diagrams"
+- [x] gracefully reports "no cache to clear" when the dir does not exist
+- [x] **no `PersistentPreRunE` on the `docs cache` parent** — relies on the root's, which is sufficient. Adding one would silently replace the root's project resolution per the CLAUDE.md "Cobra does NOT chain `PersistentPreRunE`" note
+- [x] tests: clearing a populated tempdir leaves it empty; clearing a missing dir reports the no-op message; permission error surfaces cleanly
+- [x] run `go test ./internal/command/...` — must pass
 
 ### Task 8: `devbox docs export`
 
