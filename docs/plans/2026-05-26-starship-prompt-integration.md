@@ -206,14 +206,14 @@ func isPromptInvocation(argv []string) bool {
 - Create: `internal/prompt/prompt.go`
 - Create: `internal/prompt/prompt_test.go`
 
-- [ ] create package `prompt` with:
+- [x] create package `prompt` with:
   - `Run(stdout io.Writer, args []string) int` — thin wrapper that calls `os.Getwd()` then dispatches to `runFromDir`. On `os.Getwd` error, return 1 silently
   - `runFromDir(stdout io.Writer, args []string, cwd string) int` — internal testable form; takes an explicit cwd so tests can run with `t.Parallel()`
-- [ ] implement `--check` flag handling (manual parse, no `flag` package): empty args → render, `["--check"]` → check-only, anything else → silent exit 1
-- [ ] implement walk-up: open-coded mini version that takes a starting dir (parameter), walks to root looking for `devbox.yml` — duplicating `project.locateDiscover` logic since it relies on `os.Getwd`. Skip `EvalSymlinks` cost; the prompt does not care about canonical paths
-- [ ] add `devboxStub` parser; fallback name = `filepath.Base(root)` when `project.name` is empty
-- [ ] for now: render `{▪} <name>\n` plain (no color, no status) — color and status added in Tasks 2–3
-- [ ] write table-driven tests, every subtest calls `t.Parallel()` and uses its own `t.TempDir()`:
+- [x] implement `--check` flag handling (manual parse, no `flag` package): empty args → render, `["--check"]` → check-only, anything else → silent exit 1
+- [x] implement walk-up: open-coded mini version that takes a starting dir (parameter), walks to root looking for `devbox.yml` — duplicating `project.locateDiscover` logic since it relies on `os.Getwd`. Skip `EvalSymlinks` cost; the prompt does not care about canonical paths
+- [x] add `devboxStub` parser; fallback name = `filepath.Base(root)` when `project.name` is empty
+- [x] for now: render `{▪} <name>\n` plain (no color, no status) — color and status added in Tasks 2–3
+- [x] write table-driven tests, every subtest calls `t.Parallel()` and uses its own `t.TempDir()`:
   - in-project (name from config)
   - in-subdirectory (walk-up works)
   - name fallback to dir basename when `project.name` is empty
@@ -222,7 +222,7 @@ func isPromptInvocation(argv []string) bool {
   - `--check` outside any project (exit 1, no output)
   - unknown arg `["foo"]` (exit 1, no output)
   - corrupted `devbox.yml` (silent exit 1)
-- [ ] run `go test ./internal/prompt/...` — must pass before Task 2
+- [x] run `go test ./internal/prompt/...` — must pass before Task 2
 
 ### Task 2: Add deploy status detection from journal state
 
