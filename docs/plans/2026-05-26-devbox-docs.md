@@ -593,14 +593,14 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Modify: `internal/docs/tui/model.go` (wire new components)
 - Modify: `internal/docs/tui/keys.go` (register new bindings)
 
-- [ ] search index over markdown headings (`^#+\s+`) across the visible roots; built lazily on TUI start; `/` opens prompt, `n`/`N` cycle matches
-- [ ] diagram tracking: per-file list of mermaid block positions; `]d`/`[d` cycles; current diagram is highlighted (invert colors on the placeholder line)
-- [ ] `Enter` on a focused diagram → if `term.CanInline()` show popup overlay (a transient bubbletea overlay rendering the PNG via rasterm), else `term.OpenSystem(path)`
-- [ ] `o` always `OpenSystem`
-- [ ] `y` always OSC 52 copy of the diagram source: `fmt.Fprintf(out, "\x1b]52;c;%s\x07", base64.StdEncoding.EncodeToString([]byte(src)))`
-- [ ] tmux hint: if `$TMUX != ""` and the user hits `y` for the first time in the session, print a one-time hint to the status bar reminding to enable `set -g set-clipboard on` in `.tmux.conf` for OSC 52 to work. **Do not shell out to `tmux show-option`** — blocking calls in the bubbletea update loop violate the liveui invariants. Show the hint unconditionally under tmux; users with the option already enabled will dismiss it once
-- [ ] tests: search index extraction, n/N cycling; diagram navigation order; OSC 52 byte sequence (capture via `bytes.Buffer`); tmux-hint logic (env-driven)
-- [ ] run `go test ./internal/docs/tui/...` — must pass
+- [x] search index over markdown headings (`^#+\s+`) across the visible roots; built lazily on TUI start; `/` opens prompt, `n`/`N` cycle matches
+- [x] diagram tracking: per-file list of mermaid block positions; `]d`/`[d` cycles; current diagram is highlighted (invert colors on the placeholder line)
+- [x] `Enter` on a focused diagram → if `term.CanInline()` show popup overlay (a transient bubbletea overlay rendering the PNG via rasterm), else `term.OpenSystem(path)`
+- [x] `o` always `OpenSystem`
+- [x] `y` always OSC 52 copy of the diagram source: `fmt.Fprintf(out, "\x1b]52;c;%s\x07", base64.StdEncoding.EncodeToString([]byte(src)))`
+- [x] tmux hint: if `$TMUX != ""` and the user hits `y` for the first time in the session, print a one-time hint to the status bar reminding to enable `set -g set-clipboard on` in `.tmux.conf` for OSC 52 to work. **Do not shell out to `tmux show-option`** — blocking calls in the bubbletea update loop violate the liveui invariants. Show the hint unconditionally under tmux; users with the option already enabled will dismiss it once
+- [x] tests: search index extraction, n/N cycling; diagram navigation order; OSC 52 byte sequence (capture via `bytes.Buffer`); tmux-hint logic (env-driven)
+- [x] run `go test ./internal/docs/tui/...` — must pass
 
 ### Task 11: TUI fsnotify hot reload + language cycling + outdated translation banner
 
