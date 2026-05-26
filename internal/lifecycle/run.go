@@ -13,6 +13,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/envfile"
 	"devbox-cli/internal/git"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/lock"
@@ -124,6 +125,13 @@ func RunRun(ctx RunContext) (err error) {
 	}
 	projectName = cfg.Project.Name
 
+	// Render .env before any other action so preflight checks
+	// (type: command), lifecycle phases, and user commands see fresh values.
+	// Mirrors the implicit render-env step at the head of the deploy pipeline.
+	if err := renderAndSourceDotEnv(cfg, workDir); err != nil {
+		return err
+	}
+
 	// Hoist registry load ahead of preflight so type: command checks can
 	// dispatch. nil-tolerant: load failure does not abort — preflight will
 	// surface unknown-command diagnostics for any checks that referenced it.
@@ -228,6 +236,11 @@ func RunRun(ctx RunContext) (err error) {
 			return fmt.Errorf("reloading config after pull: %w", err)
 		}
 		projectName = cfg.Project.Name
+		// Re-render .env against the post-pull config so phases below see
+		// any changes that came in with the update.
+		if err := renderAndSourceDotEnv(cfg, workDir); err != nil {
+			return err
+		}
 		lifecycleCfg, err = config.LoadLifecycleConfig(lifecyclePath)
 		if err != nil {
 			return fmt.Errorf("reloading lifecycle config after pull: %w", err)
@@ -309,6 +322,21 @@ func RunRestart(ctx RunContext) error {
 		if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
 			slog.Warn("clearing pending restart state after success", "err", clearErr)
 		}
+	}
+	return nil
+}
+
+// renderAndSourceDotEnv regenerates devbox/.env from the current config and
+// loads its key=value pairs into the process environment, so commands run by
+// preflight checks and lifecycle phases observe the freshly-rendered values.
+// Mirrors the implicit render-env step at the head of the deploy pipeline.
+func renderAndSourceDotEnv(cfg *config.DevboxConfig, workDir string) error {
+	envPath := filepath.Join(workDir, ".env")
+	if err := envfile.Write(cfg, envPath); err != nil {
+		return fmt.Errorf("rendering .env: %w", err)
+	}
+	if err := deploy.SourceDotEnv(envPath); err != nil {
+		return fmt.Errorf("sourcing .env: %w", err)
 	}
 	return nil
 }

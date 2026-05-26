@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/git"
@@ -367,6 +368,101 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 	err := RunRun(ctx)
 	if err != nil {
 		t.Errorf("expected command to continue after pull error (warn path), got: %v", err)
+	}
+}
+
+// --- .env render-and-source tests ---
+
+// TestRunRun_RendersDotEnvBeforePhases is a regression guard: `devbox run`
+// must regenerate devbox/.env from the current config BEFORE preflight, lock
+// acquisition, git probe, and lifecycle phases, mirroring the implicit
+// render-env step at the head of the deploy pipeline. Lifecycle phases (and
+// preflight type: command checks) read this file via deploy.SourceDotEnv —
+// if it isn't materialized first, those steps observe stale or missing vars.
+func TestRunRun_RendersDotEnvBeforePhases(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	writeLifecycleYML(t, devboxDir, "done")
+
+	envPath := filepath.Join(dir, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		t.Fatalf("pre-condition: .env should not exist before RunRun")
+	}
+
+	ctx := RunContext{ConfigPath: cfgPath}
+	if err := RunRun(ctx); err != nil {
+		t.Fatalf("RunRun: %v", err)
+	}
+
+	info, err := os.Stat(envPath)
+	if err != nil {
+		t.Fatalf(".env should be written by RunRun: %v", err)
+	}
+	if info.Mode().IsRegular() != true {
+		t.Errorf(".env should be a regular file, got mode %v", info.Mode())
+	}
+}
+
+// TestRunRun_ReRendersDotEnvAfterPull verifies that when the pre-phase git
+// pull moves HEAD and the config is reloaded, .env is re-rendered against
+// the post-pull config — otherwise phases below would see a stale .env from
+// before the pull.
+func TestRunRun_ReRendersDotEnvAfterPull(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	writeLifecycleYML(t, devboxDir, "before-reload")
+
+	origProbe := GitProbeFunc
+	origPull := GitPullFFOnlyFunc
+	t.Cleanup(func() {
+		GitProbeFunc = origProbe
+		GitPullFFOnlyFunc = origPull
+	})
+
+	GitProbeFunc = func(_, _ string, _ bool) (git.Status, error) {
+		return git.Status{
+			IsRepo:      true,
+			HasUpstream: true,
+			Branch:      "main",
+			Upstream:    "origin/main",
+			FetchOK:     true,
+			Behind:      1,
+		}, nil
+	}
+
+	var pullCalledAt time.Time
+	GitPullFFOnlyFunc = func(_, _ string) (bool, error) {
+		pullCalledAt = time.Now()
+		// Simulate the pull bringing in an updated lifecycle.yml.
+		writeLifecycleYML(t, devboxDir, "after-reload")
+		// Sleep a touch so the post-pull write of .env is observably newer
+		// than the pre-pull one even on coarse-grained mtime filesystems.
+		time.Sleep(20 * time.Millisecond)
+		return true, nil
+	}
+
+	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "auto"}
+	if err := RunRun(ctx); err != nil {
+		t.Fatalf("RunRun: %v", err)
+	}
+
+	envPath := filepath.Join(dir, ".env")
+	info, err := os.Stat(envPath)
+	if err != nil {
+		t.Fatalf(".env should exist after RunRun: %v", err)
+	}
+	// The second render runs after the simulated pull, so .env's mtime must
+	// be at-or-after the moment the pull stub fired.
+	if info.ModTime().Before(pullCalledAt) {
+		t.Errorf(".env mtime %v is before pull at %v — re-render did not run", info.ModTime(), pullCalledAt)
 	}
 }
 
