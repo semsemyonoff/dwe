@@ -581,10 +581,10 @@ A `Translator` interface (`{ CommandDescription(...), ParamDescription(...), ...
 - Modify: `AGENTS.md` (CLAUDE.md is a symlink) — add to Key Patterns if any non-obvious invariant emerged (probably one: "always look up display strings through `rflags.I18n.T(locale, key, def.Field)` — never read `def.Description` directly in display code")
 - Move: `docs/plans/2026-05-26-localization.md` → `docs/plans/completed/2026-05-26-localization.md`
 
-- [ ] update `docs/internals/packages.md` with the new packages and their cross-package contracts
-- [ ] add a Key Patterns entry to `AGENTS.md` if a load-bearing invariant exists (display-string lookup convention)
-- [ ] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-localization.md docs/plans/completed/`
-- [ ] final commit message: `feat(i18n): localization for user commands and generated docs`
+- [x] update `docs/internals/packages.md` with the new packages and their cross-package contracts
+- [x] add a Key Patterns entry to `AGENTS.md` if a load-bearing invariant exists (display-string lookup convention)
+- [x] `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-26-localization.md docs/plans/completed/`
+- [x] final commit message: `feat(i18n): localization for user commands and generated docs`
 
 ## Post-Completion
 
