@@ -1,5 +1,7 @@
 package i18n
 
+import "sort"
+
 // Store holds merged bundles per locale.
 type Store struct {
 	locales map[string]*Bundle // key: 2-letter code; "en" always present
@@ -18,6 +20,7 @@ func (s *Store) AvailableLocales() []string {
 			locales = append(locales, k)
 		}
 	}
+	sort.Strings(locales[1:])
 	return locales
 }
 

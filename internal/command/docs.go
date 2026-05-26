@@ -508,7 +508,8 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.
 		}
 	case usercommands.CommandTypeWorkflow:
 		if len(def.Steps) > 0 {
-			sb.WriteString("## Steps\n\n")
+			stepsHeader := store.T(locale, "docs.section.steps", "Steps")
+			sb.WriteString("## " + stepsHeader + "\n\n")
 			for i, step := range def.Steps {
 				if step.Confirm != "" {
 					fmt.Fprintf(&sb, "%d. **confirm:** %s\n", i+1, step.Confirm)
@@ -627,7 +628,8 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.
 	}
 
 	if len(def.Env) > 0 {
-		sb.WriteString("## Environment Variables\n\n")
+		envHeader := store.T(locale, "docs.section.environment", "Environment Variables")
+		sb.WriteString("## " + envHeader + "\n\n")
 		sb.WriteString("| Name | Value |\n|---|---|\n")
 		var keys []string
 		for k := range def.Env {

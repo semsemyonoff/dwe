@@ -28,10 +28,23 @@ func (v *orphanValidator) Run(_ validate.Context) []validate.Diagnostic {
 		return nil
 	}
 
+	// Build set of daemon base IDs from expanded virtual commands.
+	// Daemon base commands are consumed during expansion and not present in
+	// reg.Get(), so we must treat them as valid translation targets separately.
+	daemonBases := make(map[string]struct{})
+	for _, cmd := range v.reg.ListAll("") {
+		if cmd.DerivedFromDaemon != "" {
+			daemonBases[cmd.DerivedFromDaemon] = struct{}{}
+		}
+	}
+
 	var diags []validate.Diagnostic
 
 	// Check orphaned commands
 	for cmdID := range v.pf.Bundle.Commands {
+		if _, isDaemon := daemonBases[cmdID]; isDaemon {
+			continue
+		}
 		if _, err := v.reg.Get(cmdID); err != nil {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityWarning,

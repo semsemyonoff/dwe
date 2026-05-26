@@ -148,7 +148,11 @@ func LoadProjectBundles(projectRoot string) ([]ProjectFile, error) {
 			continue
 		}
 
-		locale := strings.TrimSuffix(name, ".yml")
+		rawLocale := strings.TrimSuffix(name, ".yml")
+		locale := Normalize(rawLocale)
+		if locale == "" {
+			continue
+		}
 		path := filepath.Join(dir, name)
 
 		data, err := os.ReadFile(path)

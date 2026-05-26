@@ -9,6 +9,7 @@ var KnownUIKeys = []string{
 	"docs.section.parameters",
 	"docs.section.context",
 	"docs.section.environment",
+	"docs.section.steps",
 	"docs.section.with",
 	"docs.section.script",
 	"docs.section.argv",
