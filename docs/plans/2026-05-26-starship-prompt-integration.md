@@ -313,7 +313,7 @@ Safety notes for this task:
 - Create: `docs/reference/cli/starship.md`
 - Modify: `docs/reference/cli/` index file if one exists (verify during implementation)
 
-- [ ] write `docs/reference/cli/starship.md` with sections:
+- [x] write `docs/reference/cli/starship.md` with sections:
   - overview — what the integration does
   - installation — paste the `[custom.devbox]` block into `~/.config/starship.toml`
   - the snippet itself (from Technical Details)
@@ -321,9 +321,9 @@ Safety notes for this task:
   - behavior in non-color terminals — `NO_COLOR` strips all ANSI
   - status icons table — `✓` deployed, `⟳` pending, `⚠` partial, `✗` failed (with the precedence rule explained briefly)
   - known limitations — (a) no light/dark auto-detect; defaults to dark variant; (b) `devbox prompt` always walks up from `$PWD` and does not honour `-c` (intentional — prompt is per-shell-cwd); (c) shell-specific quoting notes for `command =` (sh/bash/zsh take it as-is; fish users may need different quoting)
-- [ ] include a before/after example showing the rendered prompt
-- [ ] mention performance: prompt invocation is < 50 ms cold start
-- [ ] no code tests for docs; verify the snippet manually in Post-Completion
+- [x] include a before/after example showing the rendered prompt
+- [x] mention performance: prompt invocation is < 50 ms cold start
+- [x] no code tests for docs; verify the snippet manually in Post-Completion
 
 ### Task 7: Add benchmark and run full test suite
 
