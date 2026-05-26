@@ -386,11 +386,11 @@ func ResolveLocale(flagLang, configLang, sysLang string) string {
 **Files:**
 - Create: `internal/i18n/coverage_test.go`
 
-- [ ] walk `embed.FS`, parse each `<lang>.yml`, ensure every `ui.*` key in `en.yml` exists in every other built-in locale
-- [ ] fail test with a clear message listing the missing keys per locale
-- [ ] allow extra keys in non-`en` bundles (forward-compat: future-only keys are fine)
-- [ ] since only `en.yml` exists for now, test passes trivially — but locks the contract for when `ru.yml` etc. are added
-- [ ] run `go test ./internal/i18n/...` — must pass before Task 3
+- [x] walk `embed.FS`, parse each `<lang>.yml`, ensure every `ui.*` key in `en.yml` exists in every other built-in locale
+- [x] fail test with a clear message listing the missing keys per locale
+- [x] allow extra keys in non-`en` bundles (forward-compat: future-only keys are fine)
+- [x] since only `en.yml` exists for now, test passes trivially — but locks the contract for when `ru.yml` etc. are added
+- [x] run `go test ./internal/i18n/...` — must pass before Task 3
 
 ### Task 3: Locale resolver
 
