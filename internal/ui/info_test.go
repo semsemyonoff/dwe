@@ -1401,11 +1401,11 @@ func TestRenderBlock_AutoBlock_EmptyServices(t *testing.T) {
 
 func TestRenderInfo_DefaultConfig(t *testing.T) {
 	t.Parallel()
-	// Test that the default config (when info.yml is absent) renders without error.
-	// The default includes URLs and Hosts sections with auto-blocks.
+	// Default config has hide_on_empty: true on both sections.
+	// With no services, auto-blocks render "" → sections collapse.
 	infoCfg := config.DefaultInfoConfig()
 	cfg := &config.DevboxConfig{
-		Services: map[string]config.ServiceConfig{}, // no services, so auto-blocks render empty
+		Services: map[string]config.ServiceConfig{},
 	}
 
 	out, err := RenderInfo(cfg, infoCfg)
@@ -1413,21 +1413,46 @@ func TestRenderInfo_DefaultConfig(t *testing.T) {
 		t.Fatalf("RenderInfo with default config returned error: %v", err)
 	}
 
-	// Default config should have non-empty output with section headers
-	if strings.TrimSpace(out) == "" {
-		t.Error("expected non-empty output from default config")
+	// With no services, both sections collapse — output should be empty (or just whitespace).
+	if strings.Contains(out, "URLs") {
+		t.Errorf("URLs section should be hidden with no services, got:\n%s", out)
+	}
+	if strings.Contains(out, "Hosts") {
+		t.Errorf("Hosts section should be hidden with no services, got:\n%s", out)
+	}
+	if strings.Contains(out, "Please, add these to your /etc/hosts:") {
+		t.Errorf("warning text should be hidden with no services, got:\n%s", out)
+	}
+}
+
+func TestRenderInfo_DefaultConfig_WithServices(t *testing.T) {
+	t.Parallel()
+	// With a service that has info.title and hosts, sections should render.
+	infoCfg := config.DefaultInfoConfig()
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {
+				Type:    config.ServiceTypeApp,
+				Enabled: true,
+				Hosts:   map[string]string{"http": "web.local"},
+				Ports:   map[string]int{"http": 8080},
+				Info:    config.ServiceInfoBlock{Title: "Web"},
+			},
+		},
 	}
 
-	// Section headers should be present
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("RenderInfo with service returned error: %v", err)
+	}
+
 	if !strings.Contains(out, "URLs") {
-		t.Errorf("expected URLs section header in default config, got:\n%s", out)
+		t.Errorf("expected URLs section header, got:\n%s", out)
 	}
 	if !strings.Contains(out, "Hosts") {
-		t.Errorf("expected Hosts section header in default config, got:\n%s", out)
+		t.Errorf("expected Hosts section header, got:\n%s", out)
 	}
-
-	// Warning text should be present
 	if !strings.Contains(out, "Please, add these to your /etc/hosts:") {
-		t.Errorf("expected warning text in default config, got:\n%s", out)
+		t.Errorf("expected warning text in Hosts section, got:\n%s", out)
 	}
 }

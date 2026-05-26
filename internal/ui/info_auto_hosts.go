@@ -38,8 +38,7 @@ func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) strin
 		hideSet[h] = true
 	}
 
-	// Get ordered services
-	ordered := getServicesInDeployOrder(cfg, include)
+	ordered := config.DeployOrder(cfg, include)
 	if len(ordered) == 0 {
 		return ""
 	}
@@ -54,9 +53,6 @@ func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) strin
 		}
 
 		svc := cfg.Services[svcName]
-		if !svc.Enabled {
-			continue
-		}
 
 		// Collect all hosts.<key> values from this service's hosts map
 		// We need deterministic iteration, so sort the keys first

@@ -610,7 +610,9 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	infoPath := filepath.Join(ctx.ProjectRoot, "devbox", "info.yml")
 
 	// Check if file exists
+	fileExists := true
 	if _, statErr := os.Stat(infoPath); statErr != nil {
+		fileExists = false
 		if errors.Is(statErr, os.ErrNotExist) {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityInfo,
@@ -628,7 +630,6 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Message:  statErr.Error(),
 			})
 		}
-		// Even if no file, we still validate the default config
 	}
 
 	infoCfg, err := config.LoadInfoConfig(infoPath)
@@ -643,12 +644,15 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	diags = append(diags, validate.Diagnostic{
-		Severity: validate.SeverityOK,
-		Domain:   "config",
-		Target:   "config.info",
-		File:     relPath(ctx.ProjectRoot, infoPath),
-	})
+	// Only emit OK when the file actually exists (missing file already emitted Info above)
+	if fileExists {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityOK,
+			Domain:   "config",
+			Target:   "config.info",
+			File:     relPath(ctx.ProjectRoot, infoPath),
+		})
+	}
 
 	// Validate auto-block rules that need cfg.Services
 	if ctx.Cfg != nil {

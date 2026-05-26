@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -218,12 +219,14 @@ func (i InfoItem) SubgroupHideOnEmpty() bool {
 // Both auto-blocks have their SourceAutoURLsSpec/SourceAutoHostsSpec pointers populated
 // directly (since UnmarshalYAML does not run on Go-constructed configs).
 func DefaultInfoConfig() *InfoConfig {
+	decorativeTrue := true
 	return &InfoConfig{
 		Settings: InfoSettings{LineWidth: 0},
 		Sections: []InfoSection{
 			{
-				ID:    "urls",
-				Title: "URLs",
+				ID:          "urls",
+				Title:       "URLs",
+				HideOnEmpty: true,
 				Items: []InfoItem{
 					{
 						Type:               "auto-urls",
@@ -232,12 +235,14 @@ func DefaultInfoConfig() *InfoConfig {
 				},
 			},
 			{
-				ID:    "hosts",
-				Title: "Hosts",
+				ID:          "hosts",
+				Title:       "Hosts",
+				HideOnEmpty: true,
 				Items: []InfoItem{
 					{
-						Type: "warning",
-						Text: "Please, add these to your /etc/hosts:",
+						Type:       "warning",
+						Text:       "Please, add these to your /etc/hosts:",
+						Decorative: &decorativeTrue,
 					},
 					{
 						Type:                "auto-hosts",
@@ -255,7 +260,7 @@ func DefaultInfoConfig() *InfoConfig {
 func LoadInfoConfig(path string) (*InfoConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return DefaultInfoConfig(), nil
 		}
 		return nil, fmt.Errorf("read %s: %w", path, err)

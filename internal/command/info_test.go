@@ -210,8 +210,8 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 }
 
 // TestInfoCmd_MissingInfoYMLIsGraceful verifies that `devbox info` does not
-// error when devbox/info.yml is absent. It should render the default config
-// (with URLs and Hosts sections from the built-in default).
+// error when devbox/info.yml is absent. With no services, the default config's
+// hide_on_empty sections collapse — output is the brand header only.
 func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeMinimalDevboxYML(t, dir)
@@ -234,15 +234,12 @@ func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 	if !strings.Contains(output, "infotest") {
 		t.Errorf("expected project name in output, got:\n%s", output)
 	}
-	// Default config includes URLs and Hosts sections
-	if !strings.Contains(output, "URLs") {
-		t.Errorf("expected URLs section header in default config, got:\n%s", output)
+	// With no services, both sections have hide_on_empty: true → collapse.
+	if strings.Contains(output, "URLs") {
+		t.Errorf("URLs section should be hidden when no services, got:\n%s", output)
 	}
-	if !strings.Contains(output, "Hosts") {
-		t.Errorf("expected Hosts section header in default config, got:\n%s", output)
-	}
-	if !strings.Contains(output, "Please, add these to your /etc/hosts:") {
-		t.Errorf("expected hosts warning text in default config, got:\n%s", output)
+	if strings.Contains(output, "Hosts") {
+		t.Errorf("Hosts section should be hidden when no services, got:\n%s", output)
 	}
 }
 

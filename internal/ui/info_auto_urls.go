@@ -2,8 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
-	"slices"
 	"strings"
 
 	"devbox-cli/internal/config"
@@ -45,8 +43,7 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		portViaService, portViaPort = autoDetectPortVia(cfg)
 	}
 
-	// Get ordered services (inline deploy-order logic to avoid import cycle with stack)
-	ordered := getServicesInDeployOrder(cfg, include)
+	ordered := config.DeployOrder(cfg, include)
 	if len(ordered) == 0 {
 		return ""
 	}
@@ -65,9 +62,6 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		}
 
 		svc := cfg.Services[svcName]
-		if !svc.Enabled {
-			continue
-		}
 
 		hostKey := svc.DisplayHostKey()
 		portKey := svc.DisplayPortKey()
@@ -136,46 +130,6 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 	}
 
 	return strings.Join(subgroups, "\n")
-}
-
-// getServicesInDeployOrder returns service names ordered by deployment dependencies, grouped by type.
-// This inlines the logic from stack.DeployOrder to avoid import cycle with internal/stack.
-// For each type in types (e.g., ["app", "tool", "infra"]):
-//   - Filters enabled services of that type
-//   - Sorts them by DependsOn relationships (topologically)
-//   - Appends to result in order
-func getServicesInDeployOrder(cfg *config.DevboxConfig, types []string) []string {
-	if cfg == nil || cfg.Services == nil {
-		return nil
-	}
-
-	var result []string
-
-	for _, svcType := range types {
-		// Collect enabled services of this type.
-		var names []string
-		for name, svc := range cfg.Services {
-			if svc.Enabled && string(svc.Type) == svcType {
-				names = append(names, name)
-			}
-		}
-
-		// Alphabetically pre-sort for determinism before topological sort.
-		slices.Sort(names)
-
-		// Topologically sort by DependsOn.
-		ordered, err := config.TopoSortServices(names, cfg.Services)
-		if err != nil {
-			// Cycle or missing dependency. Fall back to alphabetic silently
-			// and log to stderr so debuggable but doesn't interrupt rendering.
-			fmt.Fprintf(os.Stderr, "warning: service ordering for type %q: %v; using alphabetic fallback\n", svcType, err)
-			ordered = names
-		}
-
-		result = append(result, ordered...)
-	}
-
-	return result
 }
 
 // autoDetectPortVia finds the single infra service with ports.http == 80 or ports.https == 443.
