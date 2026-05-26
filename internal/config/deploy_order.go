@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-	"os"
 	"slices"
 )
 
@@ -12,8 +10,7 @@ import (
 //   - Sorts them by DependsOn relationships (topologically)
 //   - Appends to result in order
 //
-// On dependency cycle for a type group, falls back silently to alphabetic order and
-// logs the error to stderr (respecting the renderer-signature contract of silent fallback).
+// On dependency cycle for a type group, falls back silently to alphabetic order.
 //
 // Disabled services are skipped entirely. Service order within each type group is
 // deterministic: services without dependencies appear alphabetically, those with
@@ -40,9 +37,7 @@ func DeployOrder(cfg *DevboxConfig, types []string) []string {
 		// Topologically sort by DependsOn.
 		ordered, err := TopoSortServices(names, cfg.Services)
 		if err != nil {
-			// Cycle or missing dependency. Fall back to alphabetic silently
-			// and log to stderr so debuggable but doesn't interrupt rendering.
-			fmt.Fprintf(os.Stderr, "warning: service ordering for type %q: %v; using alphabetic fallback\n", svcType, err)
+			// Cycle or missing dependency — fall back to alphabetic silently.
 			ordered = names
 		}
 

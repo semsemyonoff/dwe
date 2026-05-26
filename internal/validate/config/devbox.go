@@ -629,6 +629,7 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				File:     relPath(ctx.ProjectRoot, infoPath),
 				Message:  statErr.Error(),
 			})
+			return diags
 		}
 	}
 
