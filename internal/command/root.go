@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,10 +14,12 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/version"
 
 	"github.com/spf13/cobra"
@@ -36,7 +39,15 @@ type rootFlags struct {
 	configPath  string
 	projectRoot string
 	stylesCfg   *config.StylesConfig // populated by PersistentPreRunE before any command runs
+	Locale      string               // 2-letter language code (always set; defaults to "en")
+	I18n        *i18n.Store          // translations store (never nil after PersistentPreRunE)
 }
+
+// Callers needing localized strings read rflags.I18n and rflags.Locale to look up
+// display text. Both are guaranteed non-nil after PersistentPreRunE completes
+// (Load failures degrade gracefully to empty store and default locale, not fatal errors).
+// Completion paths (__complete) bypass PersistentPreRunE, so I18n may be nil there —
+// completion handlers must check before use.
 
 // ProjectRoot returns the resolved project root directory. Falls back to
 // filepath.Dir(configPath) so tests that construct rootFlags directly without
@@ -92,6 +103,26 @@ Run 'devbox info' for the full info dashboard.`,
 					flags.configPath = loc.ConfigPath
 					flags.projectRoot = loc.Root
 					flags.stylesCfg = applyStyles(flags.projectRoot, cmd.ErrOrStderr())
+
+					// Load userconfig and i18n for validate command.
+					var cfgLang string
+					ucfg, err := userconfig.Load(flags.projectRoot)
+					if err != nil {
+						slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)
+					} else if ucfg != nil {
+						cfgLang = ucfg.Language
+					}
+
+					store, err := i18n.Load(flags.projectRoot)
+					if err != nil {
+						slog.Warn("i18n load failed; UI strings will use English fallbacks", "err", err)
+						store = &i18n.Store{}
+					}
+					if store == nil {
+						store = &i18n.Store{}
+					}
+					flags.I18n = store
+					flags.Locale = i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
 					return nil
 				}
 				// Locate miss — validate always requires a project.
@@ -105,6 +136,11 @@ Run 'devbox info' for the full info dashboard.`,
 					// Discovery miss — only allowlisted commands proceed without a project.
 					if allowedWithoutProject(cmd) {
 						flags.stylesCfg = applyStyles("", cmd.ErrOrStderr())
+						flags.I18n, _ = i18n.Load("")
+						if flags.I18n == nil {
+							flags.I18n = &i18n.Store{}
+						}
+						flags.Locale = "en"
 						return nil
 					}
 					return err
@@ -116,6 +152,29 @@ Run 'devbox info' for the full info dashboard.`,
 			flags.configPath = resolved.ConfigPath
 			flags.projectRoot = resolved.Root
 			flags.stylesCfg = applyStyles(flags.projectRoot, cmd.ErrOrStderr())
+
+			// Load userconfig — on error, degrade gracefully.
+			var cfgLang string
+			ucfg, err := userconfig.Load(flags.projectRoot)
+			if err != nil {
+				slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)
+			} else if ucfg != nil {
+				cfgLang = ucfg.Language
+			}
+
+			// Load i18n store — on error, use empty store (graceful fallback).
+			store, err := i18n.Load(flags.projectRoot)
+			if err != nil {
+				slog.Warn("i18n load failed; UI strings will use English fallbacks", "err", err)
+				store = &i18n.Store{}
+			}
+			if store == nil {
+				store = &i18n.Store{}
+			}
+			flags.I18n = store
+
+			// Resolve and store the active locale.
+			flags.Locale = i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
 			return nil
 		},
 		// Running 'devbox' with no subcommand shows project summary + help.

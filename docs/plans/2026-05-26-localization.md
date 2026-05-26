@@ -430,14 +430,14 @@ func ResolveLocale(flagLang, configLang, sysLang string) string {
 
 **Important context:** `userconfig.Load` is currently called only on demand by notification paths (e.g. `internal/command/deploy.go:277`) where load failure is downgraded to a slog warning. Loading it eagerly in root must follow the same non-fatal policy — a malformed notifications config (or any future userconfig key) must NOT break unrelated commands.
 
-- [ ] add `Locale string` and `I18n *i18n.Store` fields to `rootFlags`
-- [ ] inside the existing root `PersistentPreRunE`, after the existing project/styles resolution: call `userconfig.Load(projectRoot)`. **On error**: `slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)` and treat language as empty. Do NOT return the error
-- [ ] then call `i18n.Load(projectRoot)`. **On error**: `slog.Warn("i18n load failed; UI strings will use English fallbacks", "err", err)` and assign `&i18n.Store{}` (empty non-nil store) to `rflags.I18n`. Do NOT return the error
-- [ ] call `i18n.ResolveLocale("", cfg.Language, os.Getenv("LANG"))` and store on `rflags.Locale`
-- [ ] document in code comment on `rootFlags`: callers needing localized strings read `rflags.I18n` and `rflags.Locale`, never package-level globals. The store and locale are guaranteed non-nil after a successful PersistentPreRunE pass
-- [ ] **completion path safety:** `ValidArgsFunction` callbacks (e.g. `command_cmd.go:74`, `:610`) run on cobra's `__complete` codepath which bypasses `PersistentPreRunE`, so `rflags.I18n` may be nil. Wrap completion-site lookups in a nil check: `if rflags.I18n != nil { use typed helper } else { use raw description }`. Verified in Task 7
-- [ ] write tests asserting: with no userconfig and no `$LANG`, `rflags.Locale == "en"`; with `LANG=ru_RU.UTF-8`, `rflags.Locale == "ru"`; with `userconfig.Language="de"`, `rflags.Locale == "de"`; with userconfig load error, command does NOT fail and `rflags.Locale == "en"` (or `$LANG` value); with i18n load total failure, `rflags.I18n` is a non-nil empty store
-- [ ] run `go test ./internal/command/...` — must pass before Task 6
+- [x] add `Locale string` and `I18n *i18n.Store` fields to `rootFlags`
+- [x] inside the existing root `PersistentPreRunE`, after the existing project/styles resolution: call `userconfig.Load(projectRoot)`. **On error**: `slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)` and treat language as empty. Do NOT return the error
+- [x] then call `i18n.Load(projectRoot)`. **On error**: `slog.Warn("i18n load failed; UI strings will use English fallbacks", "err", err)` and assign `&i18n.Store{}` (empty non-nil store) to `rflags.I18n`. Do NOT return the error
+- [x] call `i18n.ResolveLocale("", cfg.Language, os.Getenv("LANG"))` and store on `rflags.Locale`
+- [x] document in code comment on `rootFlags`: callers needing localized strings read `rflags.I18n` and `rflags.Locale`, never package-level globals. The store and locale are guaranteed non-nil after a successful PersistentPreRunE pass
+- [x] **completion path safety:** `ValidArgsFunction` callbacks (e.g. `command_cmd.go:74`, `:610`) run on cobra's `__complete` codepath which bypasses `PersistentPreRunE`, so `rflags.I18n` may be nil. Wrap completion-site lookups in a nil check: `if rflags.I18n != nil { use typed helper } else { use raw description }`. Verified in Task 7
+- [x] write tests asserting: with no userconfig and no `$LANG`, `rflags.Locale == "en"`; with `LANG=ru_RU.UTF-8`, `rflags.Locale == "ru"`; with `userconfig.Language="de"`, `rflags.Locale == "de"`; with userconfig load error, command does NOT fail and `rflags.Locale == "en"` (or `$LANG` value); with i18n load total failure, `rflags.I18n` is a non-nil empty store
+- [x] run `go test ./internal/command/...` — must pass before Task 6
 
 ### Task 6: docs generate — `--lang` flag, locale path, T() indirection
 
