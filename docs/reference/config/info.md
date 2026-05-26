@@ -12,6 +12,8 @@ Info dashboard configuration.
   - [`definition`](#definition)
   - [`info`](#info)
   - [`warning`](#warning)
+  - [`auto-urls`](#auto-urls)
+  - [`auto-hosts`](#auto-hosts)
   - [`subgroup`](#subgroup)
   - [`separator`](#separator)
 - [Decorative items](#decorative-items)
@@ -20,6 +22,7 @@ Info dashboard configuration.
   - [Template functions](#template-functions)
   - [`when` conditions](#when-conditions)
 - [`footer`](#footer)
+- [Fallback when info.yml is absent](#fallback-when-infoyml-is-absent)
 - [Example: full info.yml](#example-full-infoyml)
 - [Common pitfalls](#common-pitfalls)
 - [Related commands](#related-commands)
@@ -68,6 +71,8 @@ footer: true
 | `definition` | `Label — Value` row, with optional icon | `name`, `value` |
 | `info` | Info-coloured text line | `text` |
 | `warning` | Warning-coloured text line | `text` |
+| `auto-urls` | Dynamically generated URLs organized by service | — |
+| `auto-hosts` | Dynamically generated hostnames from services | — |
 | `subgroup` | Container with optional title and nested items | `items` |
 | `separator` | Blank line spacer | — |
 
@@ -124,6 +129,65 @@ A warning text line (rendered in warning color).
 |-------|-------------|
 | `text` | Warning text (plain string or template expression) |
 | `when` | Condition; item hidden if falsy |
+
+### `auto-urls`
+
+Dynamically generates a list of service URLs from the project's configured services. Services declare their hosts and ports in `devbox/services/<name>/service.yml`; `auto-urls` renders them with optional filtering and customization.
+
+```yaml
+- type: auto-urls
+  include: [app, tool]
+  hide: [varnish]
+  hide_paths:
+    main: ["SPX profiler"]
+  port_via: nginx
+  when: "{{ .Services }}"
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `include` | list | `[app, tool]` | Service types to include: any combination of `app`, `tool`, `infra`. |
+| `hide` | list | — | Service folder keys to exclude entirely. Unknown keys are silently ignored. |
+| `hide_paths` | map | — | Exclude individual sub-paths by service key and path name (e.g. `main: ["SPX profiler"]` hides the path named "SPX profiler" under the service "main"). |
+| `port_via` | string | auto-detected | Override which service to use as the front proxy for generating main URLs. When empty, auto-detection looks for a single enabled `type: infra` service with `ports.http: 80` or `ports.https: 443`. Explicitly named services are required to exist; missing services produce an error. |
+| `when` | string | — | Condition; item hidden if falsy. |
+
+Services contribute to `auto-urls` via their `info:` block in `service.yml` (see [services.md](services.md) for the schema). Each service may declare:
+- `title` — override the service header (defaults to title-cased folder name)
+- `host_key` — which `hosts` entry to surface as the main URL (default: `web`)
+- `port_key` — which `ports` entry to surface (default: `http`)
+- `paths` — ordered list of sub-paths under the main URL
+
+Services without an `info` block are included in the `include` types but render only their main URL if hosts and ports exist.
+
+**URL assembly rules:**
+- `hosts[host_key]` **and** `ports[port_key]` (direct binding) → `<proxied URL> | <direct URL>`
+- only `hosts[host_key]` → `<proxied URL>` (if `port_via` available)
+- only `ports[port_key]` → `http://localhost:<port>`
+- neither → row silently omitted
+
+`<proxied URL>` uses the `port_via` service's ports for scheme/port selection; `<direct URL>` uses the service's own port. Ports `:80` and `:443` are omitted from output.
+
+### `auto-hosts`
+
+Dynamically generates a list of all hostnames from services for `/etc/hosts` configuration.
+
+```yaml
+- type: auto-hosts
+  include: [app, tool, infra]
+  ip: 127.0.0.1
+  hide: [varnish]
+  when: "{{ .Services }}"
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `include` | list | `[app, tool, infra]` | Service types to include: any combination of `app`, `tool`, `infra`. |
+| `ip` | string | `127.0.0.1` | IP address to associate with all hostnames. Values are not validated for IP format here; `devbox validate` emits a warning if parsing fails. |
+| `hide` | list | — | Service folder keys to exclude entirely. Unknown keys are silently ignored. |
+| `when` | string | — | Condition; item hidden if falsy. |
+
+Renders every `hosts` entry from included services in a two-column table (`IP  Hostname`), preserving deploy order, deduplicating hostnames, and filtering out `localhost`.
 
 ### `subgroup`
 
@@ -241,6 +305,17 @@ footer: true
 
 When true, a footer line is rendered below all sections (typically shows help hint).
 
+## Fallback when info.yml is absent
+
+When `devbox/info.yml` does not exist, a built-in default configuration is used. It renders two sections:
+
+1. **URLs** section with an `auto-urls` item (default `include: [app, tool]`; no filtering)
+2. **Hosts** section with a warning and an `auto-hosts` item (default `include: [app, tool, infra]`)
+
+This allows projects without an `info.yml` to immediately see a sensible dashboard showing all services' connectivity, constructed entirely from the service definitions in `devbox/services/*/service.yml`. Services contribute details via their `info:` blocks (title, paths, host/port keys). No `info.yml` editing is required to get started.
+
+To customize the dashboard, create a `devbox/info.yml` with your own `sections` and `items`. The built-in default is not used if the file exists, even if it contains no `auto-urls` or `auto-hosts` items.
+
 ## Example: full info.yml
 
 ```yaml
@@ -262,31 +337,39 @@ sections:
   - id: urls
     title: URLs
     items:
+      # Automatically render all app and tool services with their hosts/ports
+      - type: auto-urls
+        include: [app, tool]
+        hide: [varnish]
+        hide_paths:
+          main: ["SPX profiler"]
+        port_via: nginx
+
+  - id: credentials
+    title: Credentials
+    items:
       - type: subgroup
-        title: Main
-        hide_on_empty: false
-        items:
-          - type: definition
-            name: URL
-            icon: "🔗"
-            value: '{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}'
-      - type: subgroup
-        title: Tools
+        title: Database
         hide_on_empty: true
         items:
           - type: definition
-            name: Adminer
-            icon: "🛢"
-            value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}'
-            when: '{{ (index .Services "adminer").Enabled }}'
+            name: User
+            value: "{{ .Project.Name }}_user"
+      - type: subgroup
+        title: API Key
+        hide_on_empty: true
+        items:
+          - type: warning
+            text: "Check .env for sensitive credentials"
 
   - id: hosts
     title: Hosts
     items:
       - type: warning
-        text: "Add this to your /etc/hosts:"
-      - type: info
-        text: '127.0.0.1	{{ (index .Services "main").Host "web" }}'
+        text: "Add these to your /etc/hosts:"
+      # Automatically render all service hostnames
+      - type: auto-hosts
+        include: [app, tool, infra]
 
 footer: true
 ```

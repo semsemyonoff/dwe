@@ -59,6 +59,8 @@ Locked rules:
 | `compose`         |   ✓   |   ✓    |    ✓    |
 | `ports`           |   ✓   |   ✓    |    ✓    |
 | `hosts`           |   ✓   |   ✓    |    ✓    |
+| `icon`            |   ✓   |   ✓    |    ✓    |
+| `info`            |   ✓   |   ✓    |    ✓    |
 | `depends_on`      |   ✓   |   —    |    ✓    |
 | `status`          |   ✓   |   ✓    |    ✓    |
 | `dir`             |   ✓   |   —    |    —    |
@@ -128,10 +130,19 @@ dir_internal: /workspace
 work_dir_internal: /workspace/src
 extends: <parent-app-key>           # app-only
 depends_on: [db, redis]             # may target app or infra (never tool)
-ports:
-  http: 80
+icon: "📦"
 hosts:
   web: app.localhost
+ports:
+  http: 80
+info:
+  title: "Main Application"
+  host_key: web
+  port_key: http
+  paths:
+    - name: "API Documentation"
+      path: /api/docs
+      icon: "📖"
 compose:
   - compose/services/main/overlay.yml
 configs:
@@ -177,12 +188,15 @@ ports:
 # type: tool — ephemeral utility container, never a depends_on target
 type: tool
 container: adminer
+icon: "⚙️"
 compose:
   - compose/tools/adminer.yml
 ports:
   http: 8027
 hosts:
   web: db.localhost
+info:
+  title: Adminer
 ```
 
 ## Field reference
@@ -197,6 +211,8 @@ hosts:
 | `compose` | list | no | all | Additional compose overlay files activated when the service is enabled. |
 | `ports` | `map[string]int` | no | all | Named container ports. See [`ports` field](#ports-field). |
 | `hosts` | `map[string]string` | no | all | Named hostnames. See [`hosts` field](#hosts-field). |
+| `icon` | string | no | all | Visual indicator emoji or symbol used in the `devbox info` dashboard. If omitted, a type default is used: `type: app` → 📦, `type: tool` → ⚙️, `type: infra` → 🧱. See [`icon` field](#icon-field). |
+| `info` | block | no | all | Display metadata for the info dashboard — title override, host/port key selection, and sub-paths. See [`info` block](#info-block). |
 | `depends_on` | list | no | app / infra | Ordered dependency on other services (affects deploy order). A `type: tool` target is rejected at load. |
 | `status` | list | no | all | Custom columns for the per-type `devbox status apps` / `tools` / `infra` table — see [`status` block](#status-block). |
 | `on_enable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is enabled. See toggle lifecycle. |
@@ -238,6 +254,74 @@ hosts:
 ```
 
 Host values are defined in `devbox/services/<name>/service.yml`; `devbox/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](#load-behavior).
+
+### `icon` field
+
+An optional emoji or Unicode symbol displayed next to the service name in the `devbox info` dashboard when rendering `auto-urls` blocks.
+
+```yaml
+# devbox/services/main/service.yml
+type: app
+icon: "📦"
+```
+
+If omitted, a type-based default is used:
+
+| `type` | Default icon |
+|--------|--------------|
+| `app` | 📦 |
+| `tool` | ⚙️ |
+| `infra` | 🧱 |
+
+Icons are treated as opaque user content — ZWJ-joined emoji (family glyphs, profession modifiers, skin-tone variations) are supported but not validated for length. The icon appears only in the `devbox info` output; it is not used elsewhere.
+
+### `info` block
+
+Optional metadata for rendering this service in the `devbox info` dashboard.
+
+```yaml
+# devbox/services/main/service.yml
+type: app
+info:
+  title: "Main Application"
+  host_key: web
+  port_key: http
+  paths:
+    - name: "API Documentation"
+      path: /api/docs
+      icon: "📖"
+    - name: "Profiler"
+      path: /?SPX_KEY=dev
+      icon: "⚡"
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | string | title-case(folder-name) | Display name for this service in the dashboard (e.g., `"Main Application"`). Replaces the folder-name-derived default. |
+| `host_key` | string | `web` | Which key from `hosts` to surface in the main URL row (e.g., `console` for a multi-host service). |
+| `port_key` | string | `http` | Which key from `ports` to surface in the main URL row (e.g., `console` for a multi-port service). |
+| `paths` | list | — | Ordered list of sub-paths under the main URL. See [`info.paths` entries](#infopaths-entries) below. |
+
+#### `info.paths` entries
+
+Each entry in the `paths` list declares a named sub-path relative to the service's main URL.
+
+```yaml
+paths:
+  - name: "API Documentation"
+    path: /api/docs
+    icon: "📖"
+  - name: "Profiler"
+    path: /?SPX_KEY=dev
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Display name for the path (e.g., `"API Documentation"`). Must be non-empty and unique within the service's `paths` list. |
+| `path` | string | yes | URL path relative to the service's main host (must start with `/`). Example: `/api/docs`, `/admin`, `/?SPX_KEY=dev`. |
+| `icon` | string | no | Optional emoji or symbol prepended to the path name. Defaults to `🔗` if omitted. |
+
+Services without an `info` block are still included in `auto-urls` dashboard blocks (if their `include` types match) and render their main URL; they simply do not contribute custom title or sub-paths.
 
 ### `configs` field
 
@@ -679,6 +763,17 @@ mandatory: true
 dir: ./services/main
 dir_internal: /workspace
 work_dir_internal: /workspace/src
+icon: "📦"
+info:
+  title: "Main Application"
+  paths:
+    - name: "API Documentation"
+      path: /api/docs
+      icon: "📖"
+ports:
+  http: 80
+hosts:
+  web: app.localhost
 configs:
   - .env
 dirs:

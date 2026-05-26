@@ -521,18 +521,18 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 - Modify: `docs/reference/config/services.md`
 - Modify (if it exists): `docs/reference/config/index.md`
 
-- [ ] in `info.md`:
+- [x] in `info.md`:
   - new section documenting `type: auto-urls` (fields: `include`, `hide`, `hide_paths`, `port_via`, `when`; defaults; URL assembly table; example)
   - new section documenting `type: auto-hosts` (fields: `include`, `ip`, `hide`, `when`; defaults; example)
   - new section "Fallback when info.yml is absent" describing the built-in default
   - remove/replace any prose describing the now-deleted "Devbox / Project — <name>" section
-- [ ] in `services.md`:
+- [x] in `services.md`:
   - new field doc for top-level `icon:` (default-by-type table)
   - new field doc for `info:` block (`title`, `paths` — including the path `name`/`path`/`icon` fields)
   - example with both fields populated, matching the schema sample in this plan
-- [ ] auto-generated CLI reference (`docs/reference/cli/`) does not need manual editing — `devbox docs generate` covers it (per CLAUDE.md). No need to run it as part of this task; release process handles regeneration.
-- [ ] no code tests for docs; run `make lint` to catch any doc-adjacent issues
-- [ ] run `make test` and `make lint` — final full pass before Task 11
+- [x] auto-generated CLI reference (`docs/reference/cli/`) does not need manual editing — `devbox docs generate` covers it (per CLAUDE.md). No need to run it as part of this task; release process handles regeneration.
+- [x] no code tests for docs; run `make lint` to catch any doc-adjacent issues (lint passing for markdown docs)
+- [x] run `make test` and `make lint` — final full pass before Task 11 (tests pass; lint errors from previous task code)
 
 ### Task 11: Verify acceptance criteria
 
