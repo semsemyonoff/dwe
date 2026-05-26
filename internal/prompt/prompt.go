@@ -96,7 +96,8 @@ func Run(stdout io.Writer, args []string) int {
 		return 1
 	}
 	_, noColor := os.LookupEnv("NO_COLOR")
-	return runFromDir(stdout, args, cwd, !noColor)
+	termDumb := os.Getenv("TERM") == "dumb"
+	return runFromDir(stdout, args, cwd, !noColor && !termDumb)
 }
 
 func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int {
@@ -129,15 +130,19 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 	return 0
 }
 
-// sanitizeName strips ASCII and C1 control characters from s so that a
-// crafted project.name cannot inject ANSI/OSC escape sequences or newlines
-// into the shell prompt. Strips ASCII controls (< 0x20, 0x7F) and C1 controls
-// (0x80–0x9F) which are functional escape introducers in 8-bit terminal emulators.
+// sanitizeName strips control and Bidi-override characters from s so that a
+// crafted project.name cannot inject ANSI/OSC escape sequences, newlines, or
+// Unicode Bidi overrides into the shell prompt. Strips ASCII controls (< 0x20,
+// 0x7F), C1 controls (0x80–0x9F), LTR/RTL marks (U+200E–U+200F), Bidi
+// embeddings and overrides (U+202A–U+202E), and Bidi isolates (U+2066–U+2069).
 // Starship runs devbox prompt automatically, so this must be safe for untrusted
 // devbox.yml files in cloned repos.
 func sanitizeName(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7F || (r >= 0x80 && r <= 0x9F) {
+		if r < 0x20 || r == 0x7F || (r >= 0x80 && r <= 0x9F) ||
+			r == 0x200E || r == 0x200F ||
+			(r >= 0x202A && r <= 0x202E) ||
+			(r >= 0x2066 && r <= 0x2069) {
 			return -1
 		}
 		return r
