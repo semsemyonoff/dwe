@@ -1,0 +1,31 @@
+package render
+
+// RenderOpts specifies rendering options for markdown content.
+type RenderOpts struct {
+	// Theme is the glamour style (e.g., "dark", "light", "auto").
+	Theme string
+	// Width is the terminal width in characters. Defaults to 100 if <= 0.
+	Width int
+	// MermaidRenderer is used to render mermaid diagrams. May be nil.
+	MermaidRenderer any
+	// CanInline indicates whether the terminal supports inline image display.
+	CanInline bool
+}
+
+// DiagramRef is a reference to a mermaid diagram in the rendered output.
+type DiagramRef struct {
+	// LineInRendered is the line number in the rendered output where the placeholder appears.
+	LineInRendered int
+	// Source is the original mermaid source code.
+	Source string
+	// Index is the diagram's order among all diagrams in this render (0-indexed).
+	Index int
+}
+
+// RenderResult is the output of a render operation.
+type RenderResult struct {
+	// Output is the rendered markdown (as bytes, potentially with ANSI codes).
+	Output []byte
+	// Diagrams is a list of mermaid diagrams found and preprocessed.
+	Diagrams []DiagramRef
+}
