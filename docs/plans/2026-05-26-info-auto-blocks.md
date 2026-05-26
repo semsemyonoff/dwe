@@ -329,19 +329,19 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 - Modify: `internal/config/devbox.go`
 - Modify: `internal/config/devbox_test.go`
 
-- [ ] add `ServiceInfoBlock` (with `Title`, `HostKey`, `PortKey`, `Paths` fields), `ServiceInfoPath` structs as specified above
-- [ ] add `Info ServiceInfoBlock \`yaml:"info,omitempty"\`` field to `ServiceConfig`
-- [ ] **register `info` in BOTH strict-decode allowlists** (mirrors Task 1):
+- [x] add `ServiceInfoBlock` (with `Title`, `HostKey`, `PortKey`, `Paths` fields), `ServiceInfoPath` structs as specified above
+- [x] add `Info ServiceInfoBlock \`yaml:"info,omitempty"\`` field to `ServiceConfig`
+- [x] **register `info` in BOTH strict-decode allowlists** (mirrors Task 1):
   - `allowedFieldsFor` at `internal/config/devbox.go:607` — add `"info"` to the `common` slice
   - `servicesAllowedFields` at `internal/validate/config/devbox.go:112` — mirror the addition
-- [ ] implement `func (s ServiceConfig) DisplayTitle(folderKey string) string` — returns `s.Info.Title` if non-empty; otherwise title-case the folder key, replacing `_`/`-` with spaces (`redis_insight` → `Redis Insight`)
-- [ ] implement `func (p ServiceInfoPath) DisplayIcon() string` — returns `p.Icon` if non-empty; otherwise `🔗`
-- [ ] implement `func (s ServiceConfig) DisplayHostKey() string` (default `"web"`) and `func (s ServiceConfig) DisplayPortKey() string` (default `"http"`) — these resolve `s.Info.HostKey` and `s.Info.PortKey` for the renderer
-- [ ] **the inner `ServiceInfoBlock` is decoded under strict-mode** by virtue of being part of `ServiceConfig`. Confirm during impl that yaml.v3's `KnownFields(true)` propagates into nested structs (it does, by default) — a typo like `info.tilte` will fail loading. This is the desired behaviour; document in `services.md` (Task 12).
-- [ ] write tests for `DisplayTitle` (override / title-case / hyphen / underscore / preserve internal capitalisation), `DisplayIcon` (override / default), and `DisplayHostKey`/`DisplayPortKey` (override / default)
-- [ ] write a loader round-trip test: write a service.yml with `icon:`, `info.title:`, `info.host_key:`, `info.port_key:`, `info.paths:` to `t.TempDir()`, load via `LoadServiceFolder`, assert fields parsed correctly and `paths` order preserved
-- [ ] write a strict-decode failure test: a service.yml with `info.tilte:` (typo) fails loading with a clear KnownFields error
-- [ ] run `go test ./internal/config/... ./internal/validate/...` — must pass before Task 3
+- [x] implement `func (s ServiceConfig) DisplayTitle(folderKey string) string` — returns `s.Info.Title` if non-empty; otherwise title-case the folder key, replacing `_`/`-` with spaces (`redis_insight` → `Redis Insight`)
+- [x] implement `func (p ServiceInfoPath) DisplayIcon() string` — returns `p.Icon` if non-empty; otherwise `🔗`
+- [x] implement `func (s ServiceConfig) DisplayHostKey() string` (default `"web"`) and `func (s ServiceConfig) DisplayPortKey() string` (default `"http"`) — these resolve `s.Info.HostKey` and `s.Info.PortKey` for the renderer
+- [x] **the inner `ServiceInfoBlock` is decoded under strict-mode** by virtue of being part of `ServiceConfig`. Confirmed that yaml.v3's `KnownFields(true)` propagates into nested structs (test verifies typo like `info.tilte` fails loading)
+- [x] write tests for `DisplayTitle` (override / title-case / hyphen / underscore / preserve internal capitalisation), `DisplayIcon` (override / default), and `DisplayHostKey`/`DisplayPortKey` (override / default)
+- [x] write a loader round-trip test: write a service.yml with `icon:`, `info.title:`, `info.host_key:`, `info.port_key:`, `info.paths:` to `t.TempDir()`, load via `LoadServiceFolder`, assert fields parsed correctly and `paths` order preserved
+- [x] write a strict-decode failure test: a service.yml with `info.tilte:` (typo) fails loading with a clear KnownFields error
+- [x] run `go test ./internal/config/... ./internal/validate/...` — must pass before Task 3
 
 ### Task 3: Extend service-schema validation
 

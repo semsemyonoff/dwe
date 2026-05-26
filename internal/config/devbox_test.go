@@ -147,6 +147,18 @@ func writeServicesDir(t *testing.T, baseDir, servicesYML string) {
 	}
 }
 
+// writeServiceYAML writes a service.yml file at <baseDir>/devbox/services/<name>/
+func writeServiceYAML(t *testing.T, baseDir, name, content string) {
+	t.Helper()
+	dir := filepath.Join(baseDir, "devbox", "services", name)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("writeServiceYAML: mkdir %s: %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "service.yml"), []byte(content), 0644); err != nil {
+		t.Fatalf("writeServiceYAML: write %s: %v", name, err)
+	}
+}
+
 func writeTempYML(t *testing.T, content string) string {
 	t.Helper()
 	f, err := os.CreateTemp(t.TempDir(), "devbox-*.yml")
@@ -2228,6 +2240,204 @@ func TestLoadServicesConfig_dirsDeduplicated(t *testing.T) {
 	for i, d := range want {
 		if child.Dirs[i] != d {
 			t.Errorf("child-overlap.Dirs[%d] = %q, want %q", i, child.Dirs[i], d)
+		}
+	}
+}
+
+// --- ServiceConfig display accessors ---
+
+func TestServiceConfig_DisplayTitle(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		title    string
+		folderKey string
+		want     string
+	}{
+		{name: "override", title: "Custom Title", folderKey: "redis_insight", want: "Custom Title"},
+		{name: "title-case", title: "", folderKey: "redis_insight", want: "Redis Insight"},
+		{name: "hyphen", title: "", folderKey: "app-main", want: "App Main"},
+		{name: "simple", title: "", folderKey: "catalog", want: "Catalog"},
+		{name: "preserve internal caps", title: "", folderKey: "myAPI", want: "MyAPI"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := ServiceConfig{Info: ServiceInfoBlock{Title: tt.title}}
+			got := s.DisplayTitle(tt.folderKey)
+			if got != tt.want {
+				t.Errorf("DisplayTitle(%q) = %q, want %q", tt.folderKey, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceInfoPath_DisplayIcon(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		icon string
+		want string
+	}{
+		{name: "override", icon: "📖", want: "📖"},
+		{name: "default", icon: "", want: "🔗"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			p := ServiceInfoPath{Icon: tt.icon}
+			got := p.DisplayIcon()
+			if got != tt.want {
+				t.Errorf("DisplayIcon() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceConfig_DisplayHostKey(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		hostKey string
+		want string
+	}{
+		{name: "override", hostKey: "console", want: "console"},
+		{name: "default", hostKey: "", want: "web"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := ServiceConfig{Info: ServiceInfoBlock{HostKey: tt.hostKey}}
+			got := s.DisplayHostKey()
+			if got != tt.want {
+				t.Errorf("DisplayHostKey() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceConfig_DisplayPortKey(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		portKey string
+		want string
+	}{
+		{name: "override", portKey: "console", want: "console"},
+		{name: "default", portKey: "", want: "http"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := ServiceConfig{Info: ServiceInfoBlock{PortKey: tt.portKey}}
+			got := s.DisplayPortKey()
+			if got != tt.want {
+				t.Errorf("DisplayPortKey() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadServiceFolder_withInfoBlock(t *testing.T) {
+	dir := t.TempDir()
+	serviceYAML := `
+type: app
+container: app-main
+icon: "📦"
+info:
+  title: "Main App"
+  host_key: web
+  port_key: http
+  paths:
+    - name: "API Docs"
+      path: /api/docs
+      icon: "📖"
+    - name: "Clockwork"
+      path: /__clockwork
+`
+	writeServiceYAML(t, dir, "main", serviceYAML)
+	svc, err := LoadServiceFolder(dir, "main")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if svc.Icon != "📦" {
+		t.Errorf("Icon = %q, want 📦", svc.Icon)
+	}
+	if svc.Info.Title != "Main App" {
+		t.Errorf("Info.Title = %q, want Main App", svc.Info.Title)
+	}
+	if svc.Info.HostKey != "web" {
+		t.Errorf("Info.HostKey = %q, want web", svc.Info.HostKey)
+	}
+	if svc.Info.PortKey != "http" {
+		t.Errorf("Info.PortKey = %q, want http", svc.Info.PortKey)
+	}
+	if len(svc.Info.Paths) != 2 {
+		t.Errorf("len(Info.Paths) = %d, want 2", len(svc.Info.Paths))
+	}
+	if svc.Info.Paths[0].Name != "API Docs" {
+		t.Errorf("Paths[0].Name = %q, want API Docs", svc.Info.Paths[0].Name)
+	}
+	if svc.Info.Paths[0].Path != "/api/docs" {
+		t.Errorf("Paths[0].Path = %q, want /api/docs", svc.Info.Paths[0].Path)
+	}
+	if svc.Info.Paths[0].Icon != "📖" {
+		t.Errorf("Paths[0].Icon = %q, want 📖", svc.Info.Paths[0].Icon)
+	}
+	// Paths[1] has no icon, verify it loaded
+	if svc.Info.Paths[1].Name != "Clockwork" {
+		t.Errorf("Paths[1].Name = %q, want Clockwork", svc.Info.Paths[1].Name)
+	}
+	if svc.Info.Paths[1].Icon != "" {
+		t.Errorf("Paths[1].Icon = %q, want empty", svc.Info.Paths[1].Icon)
+	}
+}
+
+func TestLoadServiceFolder_strictDecode_infotypo(t *testing.T) {
+	dir := t.TempDir()
+	serviceYAML := `
+type: tool
+container: redis
+info:
+  tilte: "Redis"
+`
+	writeServiceYAML(t, dir, "redis", serviceYAML)
+	_, err := LoadServiceFolder(dir, "redis")
+	if err == nil {
+		t.Fatal("expected error for typo in info field")
+	}
+	// Verify it's a KnownFields error
+	if !strings.Contains(err.Error(), "unknown field") && !strings.Contains(err.Error(), "tilte") {
+		t.Errorf("error message should mention unknown field: %v", err)
+	}
+}
+
+func TestLoadServiceFolder_pathsOrderPreserved(t *testing.T) {
+	dir := t.TempDir()
+	serviceYAML := `
+type: app
+container: app-main
+info:
+  paths:
+    - name: "First"
+      path: /first
+    - name: "Second"
+      path: /second
+    - name: "Third"
+      path: /third
+`
+	writeServiceYAML(t, dir, "main", serviceYAML)
+	svc, err := LoadServiceFolder(dir, "main")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if len(svc.Info.Paths) != 3 {
+		t.Fatalf("len(Paths) = %d, want 3", len(svc.Info.Paths))
+	}
+	want := []string{"First", "Second", "Third"}
+	for i, name := range want {
+		if svc.Info.Paths[i].Name != name {
+			t.Errorf("Paths[%d].Name = %q, want %q", i, svc.Info.Paths[i].Name, name)
 		}
 	}
 }

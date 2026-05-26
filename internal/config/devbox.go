@@ -598,6 +598,21 @@ type ServiceNotes struct {
 	Disable string `yaml:"disable,omitempty"`
 }
 
+// ServiceInfoBlock holds display metadata for a service's dashboard entry.
+type ServiceInfoBlock struct {
+	Title   string            `yaml:"title,omitempty"`
+	HostKey string            `yaml:"host_key,omitempty"`
+	PortKey string            `yaml:"port_key,omitempty"`
+	Paths   []ServiceInfoPath `yaml:"paths,omitempty"`
+}
+
+// ServiceInfoPath describes a sub-URL under a service's main URL.
+type ServiceInfoPath struct {
+	Name string `yaml:"name"`
+	Path string `yaml:"path"`
+	Icon string `yaml:"icon,omitempty"`
+}
+
 // allowedFieldsFor returns the set of YAML field names permitted for entries
 // of the given service type. Used by validators and loader strict-decode error
 // messages as the single source of truth for per-type field allowlists.
@@ -606,7 +621,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	// Fields permitted for every service type.
 	common := []string{
 		"type", "container", "mandatory", "compose",
-		"ports", "hosts", "icon", "status",
+		"ports", "hosts", "icon", "info", "status",
 		"on_enable", "on_disable", "notes",
 	}
 	switch t {
@@ -653,6 +668,7 @@ type ServiceConfig struct {
 	Ports           map[string]int       `yaml:"ports,omitempty"`
 	Hosts           map[string]string    `yaml:"hosts,omitempty"`
 	Icon            string               `yaml:"icon,omitempty"`
+	Info            ServiceInfoBlock     `yaml:"info,omitempty"`
 	Dir             string               `yaml:"dir"`
 	DirInternal     string               `yaml:"dir_internal"`
 	WorkDirInternal string               `yaml:"work_dir_internal"`
@@ -752,6 +768,52 @@ func (s ServiceConfig) DisplayIcon() string {
 	default:
 		return ""
 	}
+}
+
+// DisplayTitle returns the resolved display title for this service.
+// If Info.Title is non-empty, returns it; otherwise returns the folder key
+// title-cased with underscores and hyphens replaced by spaces.
+func (s ServiceConfig) DisplayTitle(folderKey string) string {
+	if s.Info.Title != "" {
+		return s.Info.Title
+	}
+	// Title-case the folder key, replacing underscores and hyphens with spaces.
+	title := strings.NewReplacer("_", " ", "-", " ").Replace(folderKey)
+	// Capitalize each word.
+	words := strings.Fields(title)
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + word[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// DisplayHostKey returns the resolved host key for this service.
+// If Info.HostKey is non-empty, returns it; otherwise returns "web".
+func (s ServiceConfig) DisplayHostKey() string {
+	if s.Info.HostKey != "" {
+		return s.Info.HostKey
+	}
+	return "web"
+}
+
+// DisplayPortKey returns the resolved port key for this service.
+// If Info.PortKey is non-empty, returns it; otherwise returns "http".
+func (s ServiceConfig) DisplayPortKey() string {
+	if s.Info.PortKey != "" {
+		return s.Info.PortKey
+	}
+	return "http"
+}
+
+// DisplayIcon returns the resolved icon for this path.
+// If Icon is non-empty, returns it; otherwise returns "🔗".
+func (p ServiceInfoPath) DisplayIcon() string {
+	if p.Icon != "" {
+		return p.Icon
+	}
+	return "🔗"
 }
 
 // ServiceCLIConfig holds defaults for the `services cli` command.
