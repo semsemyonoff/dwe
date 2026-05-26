@@ -1,13 +1,10 @@
 package command
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/version"
 
@@ -39,12 +36,8 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 
 	infoPath := filepath.Join(flags.ProjectRoot(), "devbox", "info.yml")
 	infoCfg, err := config.LoadInfoConfig(infoPath)
-	missingInfo := false
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("loading devbox/info.yml: %w", err)
-		}
-		missingInfo = true
+		return fmt.Errorf("loading devbox/info.yml: %w", err)
 	}
 
 	stylesCfg := flags.stylesCfg
@@ -62,13 +55,6 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 	}
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), ui.RenderBrandHeader(header))
 	_, _ = fmt.Fprintln(cmd.OutOrStdout())
-
-	if missingInfo {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg, nil))
-		_, _ = fmt.Fprintln(cmd.OutOrStdout())
-		render.NewWriter(cmd.ErrOrStderr()).Warning("devbox/info.yml not found — showing minimal summary. Run `devbox validate config info` for details.")
-		return nil
-	}
 
 	out, err := ui.RenderInfo(cfg, infoCfg)
 	if err != nil {

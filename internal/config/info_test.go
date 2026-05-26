@@ -105,9 +105,51 @@ func TestLoadInfoConfig(t *testing.T) {
 }
 
 func TestLoadInfoConfig_notFound(t *testing.T) {
-	_, err := LoadInfoConfig("/tmp/devbox-nonexistent-info.yml")
-	if err == nil {
-		t.Error("expected error for missing file")
+	t.Parallel()
+	cfg, err := LoadInfoConfig("/tmp/devbox-nonexistent-info-12345.yml")
+	if err != nil {
+		t.Errorf("LoadInfoConfig should return default on missing file, got error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected default InfoConfig, got nil")
+	}
+
+	// Verify it's the default: two sections (urls and hosts)
+	if len(cfg.Sections) != 2 {
+		t.Fatalf("default config should have 2 sections, got %d", len(cfg.Sections))
+	}
+
+	// Verify URLs section
+	urlsSec := cfg.Sections[0]
+	if urlsSec.ID != "urls" || urlsSec.Title != "URLs" {
+		t.Errorf("expected urls section, got id=%q title=%q", urlsSec.ID, urlsSec.Title)
+	}
+	if len(urlsSec.Items) != 1 {
+		t.Fatalf("urls section should have 1 item, got %d", len(urlsSec.Items))
+	}
+	if urlsSec.Items[0].Type != "auto-urls" {
+		t.Errorf("urls item type = %q, want auto-urls", urlsSec.Items[0].Type)
+	}
+	if urlsSec.Items[0].SourceAutoURLsSpec == nil {
+		t.Error("urls auto-urls item should have SourceAutoURLsSpec populated")
+	}
+
+	// Verify Hosts section
+	hostsSec := cfg.Sections[1]
+	if hostsSec.ID != "hosts" || hostsSec.Title != "Hosts" {
+		t.Errorf("expected hosts section, got id=%q title=%q", hostsSec.ID, hostsSec.Title)
+	}
+	if len(hostsSec.Items) != 2 {
+		t.Fatalf("hosts section should have 2 items, got %d", len(hostsSec.Items))
+	}
+	if hostsSec.Items[0].Type != "warning" {
+		t.Errorf("hosts first item type = %q, want warning", hostsSec.Items[0].Type)
+	}
+	if hostsSec.Items[1].Type != "auto-hosts" {
+		t.Errorf("hosts second item type = %q, want auto-hosts", hostsSec.Items[1].Type)
+	}
+	if hostsSec.Items[1].SourceAutoHostsSpec == nil {
+		t.Error("hosts auto-hosts item should have SourceAutoHostsSpec populated")
 	}
 }
 
@@ -809,5 +851,77 @@ sections:
 	}
 	if !strings.Contains(err.Error(), "not in {app, tool, infra}") {
 		t.Errorf("error should mention valid types: %v", err)
+	}
+}
+
+func TestDefaultInfoConfig(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultInfoConfig()
+
+	if cfg == nil {
+		t.Fatal("DefaultInfoConfig returned nil")
+	}
+
+	// Should have two sections: urls and hosts
+	if len(cfg.Sections) != 2 {
+		t.Fatalf("expected 2 sections, got %d", len(cfg.Sections))
+	}
+
+	// Section 1: URLs
+	urls := cfg.Sections[0]
+	if urls.ID != "urls" {
+		t.Errorf("urls section id = %q, want urls", urls.ID)
+	}
+	if urls.Title != "URLs" {
+		t.Errorf("urls section title = %q, want URLs", urls.Title)
+	}
+	if len(urls.Items) != 1 {
+		t.Fatalf("urls section should have 1 item, got %d", len(urls.Items))
+	}
+
+	urlsItem := urls.Items[0]
+	if urlsItem.Type != "auto-urls" {
+		t.Errorf("urls item type = %q, want auto-urls", urlsItem.Type)
+	}
+	// CRITICAL: Source*Spec must be populated for Go-constructed configs
+	// (UnmarshalYAML does not run on them)
+	if urlsItem.SourceAutoURLsSpec == nil {
+		t.Error("urls item SourceAutoURLsSpec must be non-nil (Go-constructed config)")
+	}
+
+	// Section 2: Hosts
+	hosts := cfg.Sections[1]
+	if hosts.ID != "hosts" {
+		t.Errorf("hosts section id = %q, want hosts", hosts.ID)
+	}
+	if hosts.Title != "Hosts" {
+		t.Errorf("hosts section title = %q, want Hosts", hosts.Title)
+	}
+	if len(hosts.Items) != 2 {
+		t.Fatalf("hosts section should have 2 items, got %d", len(hosts.Items))
+	}
+
+	// Warning item
+	warningItem := hosts.Items[0]
+	if warningItem.Type != "warning" {
+		t.Errorf("hosts item[0] type = %q, want warning", warningItem.Type)
+	}
+	if warningItem.Text != "Please, add these to your /etc/hosts:" {
+		t.Errorf("warning text = %q", warningItem.Text)
+	}
+
+	// Auto-hosts item
+	autoHostsItem := hosts.Items[1]
+	if autoHostsItem.Type != "auto-hosts" {
+		t.Errorf("hosts item[1] type = %q, want auto-hosts", autoHostsItem.Type)
+	}
+	// CRITICAL: Source*Spec must be populated for Go-constructed configs
+	if autoHostsItem.SourceAutoHostsSpec == nil {
+		t.Error("hosts item SourceAutoHostsSpec must be non-nil (Go-constructed config)")
+	}
+
+	// Verify footer is set
+	if !cfg.Footer {
+		t.Error("Footer should be true")
 	}
 }

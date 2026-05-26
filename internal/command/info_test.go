@@ -210,8 +210,8 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 }
 
 // TestInfoCmd_MissingInfoYMLIsGraceful verifies that `devbox info` does not
-// error when devbox/info.yml is absent. It should render a minimal summary
-// (project name) on stdout and a warning on stderr.
+// error when devbox/info.yml is absent. It should render the default config
+// (with URLs and Hosts sections from the built-in default).
 func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeMinimalDevboxYML(t, dir)
@@ -219,9 +219,8 @@ func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 
 	root := NewRootCmd()
 	var out bytes.Buffer
-	var errBuf bytes.Buffer
 	root.SetOut(&out)
-	root.SetErr(&errBuf)
+	root.SetErr(&out)
 	root.SetArgs([]string{"info"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
@@ -231,11 +230,19 @@ func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 		t.Errorf("info command returned error without info.yml: %v", err)
 	}
 
-	if !strings.Contains(out.String(), "infotest") {
-		t.Errorf("expected project name in minimal summary, got stdout:\n%s", out.String())
+	output := out.String()
+	if !strings.Contains(output, "infotest") {
+		t.Errorf("expected project name in output, got:\n%s", output)
 	}
-	if !strings.Contains(errBuf.String(), "info.yml") {
-		t.Errorf("expected warning about missing info.yml on stderr, got:\n%s", errBuf.String())
+	// Default config includes URLs and Hosts sections
+	if !strings.Contains(output, "URLs") {
+		t.Errorf("expected URLs section header in default config, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Hosts") {
+		t.Errorf("expected Hosts section header in default config, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Please, add these to your /etc/hosts:") {
+		t.Errorf("expected hosts warning text in default config, got:\n%s", output)
 	}
 }
 

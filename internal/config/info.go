@@ -213,10 +213,51 @@ func (i InfoItem) SubgroupHideOnEmpty() bool {
 	return true
 }
 
+// DefaultInfoConfig returns a synthesized InfoConfig with built-in URLs and Hosts sections.
+// This is used as a fallback when devbox/info.yml is not present.
+// Both auto-blocks have their SourceAutoURLsSpec/SourceAutoHostsSpec pointers populated
+// directly (since UnmarshalYAML does not run on Go-constructed configs).
+func DefaultInfoConfig() *InfoConfig {
+	return &InfoConfig{
+		Settings: InfoSettings{LineWidth: 0},
+		Sections: []InfoSection{
+			{
+				ID:    "urls",
+				Title: "URLs",
+				Items: []InfoItem{
+					{
+						Type:               "auto-urls",
+						SourceAutoURLsSpec: &AutoURLsSpec{},
+					},
+				},
+			},
+			{
+				ID:    "hosts",
+				Title: "Hosts",
+				Items: []InfoItem{
+					{
+						Type: "warning",
+						Text: "Please, add these to your /etc/hosts:",
+					},
+					{
+						Type:                "auto-hosts",
+						SourceAutoHostsSpec: &AutoHostsSpec{},
+					},
+				},
+			},
+		},
+		Footer: true,
+	}
+}
+
 // LoadInfoConfig reads and parses an info.yml file at the given path.
+// If the file does not exist, returns the built-in default InfoConfig.
 func LoadInfoConfig(path string) (*InfoConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return DefaultInfoConfig(), nil
+		}
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	var cfg InfoConfig

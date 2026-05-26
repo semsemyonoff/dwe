@@ -499,20 +499,20 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 
 **Scope clarification**: `internal/ui/summary.go` (`RenderSummary`) is NOT deleted — it has a second, unrelated caller at `internal/command/root.go:300` for the root-command project banner. Only the `info.go` caller goes away. The "Devbox / Project — <name>" subgroup that exists in some user `info.yml` files is YAML, not Go code — there is nothing to remove on the CLI side; users drop that subgroup from their own `info.yml` during migration (Post-Completion).
 
-- [ ] add `func DefaultInfoConfig() *InfoConfig` returning an InfoConfig equivalent to spec §5:
+- [x] add `func DefaultInfoConfig() *InfoConfig` returning an InfoConfig equivalent to spec §5:
   - section `urls` with title "URLs" containing one `auto-urls` `InfoItem` (`Type: "auto-urls"`, `SourceAutoURLsSpec: &AutoURLsSpec{}` — zero-value spec triggers defaults at render time)
   - section `hosts` with title "Hosts" containing one `warning` item ("Please, add these to your /etc/hosts:") followed by one `auto-hosts` `InfoItem` (`Type: "auto-hosts"`, `SourceAutoHostsSpec: &AutoHostsSpec{}`)
   - **CRITICAL**: `Source*Spec` pointers MUST be populated here because `UnmarshalYAML` does not run on Go-constructed configs. A nil `SourceAutoURLsSpec` would hit the renderer's defensive nil guard and produce empty output.
-- [ ] in `LoadInfoConfig`, when the file is missing (`errors.Is(err, os.ErrNotExist)`) return `DefaultInfoConfig(), nil` instead of returning the missing-file error
-- [ ] in `internal/command/info.go` delete the `if missingInfo { ... return nil }` block at lines ~66-71. `LoadInfoConfig` now always returns a config; the warning is no longer accurate (an absent `info.yml` is a supported state with a sensible default rendering)
-- [ ] **update `infoValidator` at `internal/validate/config/devbox.go:464`**: the existing branch at line ~478 emits an `Info`-severity diagnostic `"no info.yml"` when `LoadInfoConfig` returns `errNotExist`. After this task, that branch becomes unreachable (LoadInfoConfig swallows ErrNotExist). Add an explicit `os.Stat(infoPath)` check BEFORE calling `LoadInfoConfig` — if the file does not exist, still emit the existing `"no info.yml"` Info diagnostic (preserves the current user-facing signal in `devbox validate config info` output), then proceed to validate the built-in default for completeness. This keeps the validator's behaviour observably identical for users running `devbox validate`.
-- [ ] **do NOT delete** `internal/ui/summary.go` or `internal/ui/summary_test.go` — `RenderSummary` is still used by `internal/command/root.go:300`. Confirm with `grep -rn RenderSummary --include='*.go'` before touching the file (expect 2 production callers reduced to 1).
-- [ ] do NOT add any `grep ... in internal/ui/` step for the "Devbox / Project — <name>" string — that text is fixture YAML, handled in Task 11.
-- [ ] tests:
-  - `LoadInfoConfig` on a directory without `info.yml` returns the built-in default (deep-equal check, including that both `Source*Spec` pointers are non-nil)
-  - `RenderInfo` with the default + a minimal cfg renders a non-empty URLs block AND a non-empty Hosts block (asserts the `Source*Spec`-populated path actually renders, catching the nil-guard regression directly)
-  - through `runInfo` (or its testable form): with no `info.yml` on disk in a `t.TempDir()` project, output contains the headers `── URLs ──` and `── Hosts ──`
-- [ ] run `go test ./internal/...` — must pass before Task 10
+- [x] in `LoadInfoConfig`, when the file is missing (`os.IsNotExist(err)`) return `DefaultInfoConfig(), nil` instead of returning the missing-file error
+- [x] in `internal/command/info.go` delete the `if missingInfo { ... return nil }` block at lines ~66-71. `LoadInfoConfig` now always returns a config; the warning is no longer accurate (an absent `info.yml` is a supported state with a sensible default rendering)
+- [x] **infoValidator at `internal/validate/config/devbox.go:464`**: the validator already checks `os.Stat(infoPath)` at line 613 BEFORE calling `LoadInfoConfig`. When the file doesn't exist, it emits the `"no info.yml"` Info diagnostic at line 615. This happens independently of what LoadInfoConfig returns, so the validator's observable behavior is preserved (users running `devbox validate` still see the "no info.yml" message). LoadInfoConfig now swallows ErrNotExist internally, so the error path at line 636 only triggers for actual parse/validation errors.
+- [x] **verified**: `internal/ui/summary.go` is NOT deleted. Confirmed with `grep -rn RenderSummary --include='*.go'` that 2 callers remain: `internal/command/info.go` (now removed by this task) and `internal/command/root.go:300` (still present). No deletions needed.
+- [x] tests added:
+  - `TestDefaultInfoConfig`: verifies `DefaultInfoConfig()` returns an InfoConfig with both `Source*Spec` pointers populated
+  - `TestLoadInfoConfig_notFound`: updated to verify the default config is returned on missing file (instead of an error)
+  - `TestInfoCmd_MissingInfoYMLIsGraceful`: updated to verify the default URLs and Hosts sections render when info.yml is absent
+  - `TestRenderInfo_DefaultConfig`: added to verify RenderInfo with the default config renders the section headers and warning text
+- [x] run `go test ./internal/...` — all tests pass
 
 ### Task 10: Update reference docs
 

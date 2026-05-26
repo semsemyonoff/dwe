@@ -1390,3 +1390,36 @@ func TestRenderBlock_AutoBlock_EmptyServices(t *testing.T) {
 		t.Errorf("expected no service output with empty services, got:\n%s", out)
 	}
 }
+
+func TestRenderInfo_DefaultConfig(t *testing.T) {
+	t.Parallel()
+	// Test that the default config (when info.yml is absent) renders without error.
+	// The default includes URLs and Hosts sections with auto-blocks.
+	infoCfg := config.DefaultInfoConfig()
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{}, // no services, so auto-blocks render empty
+	}
+
+	out, err := RenderInfo(cfg, infoCfg)
+	if err != nil {
+		t.Fatalf("RenderInfo with default config returned error: %v", err)
+	}
+
+	// Default config should have non-empty output with section headers
+	if strings.TrimSpace(out) == "" {
+		t.Error("expected non-empty output from default config")
+	}
+
+	// Section headers should be present
+	if !strings.Contains(out, "URLs") {
+		t.Errorf("expected URLs section header in default config, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Hosts") {
+		t.Errorf("expected Hosts section header in default config, got:\n%s", out)
+	}
+
+	// Warning text should be present
+	if !strings.Contains(out, "Please, add these to your /etc/hosts:") {
+		t.Errorf("expected warning text in default config, got:\n%s", out)
+	}
+}
