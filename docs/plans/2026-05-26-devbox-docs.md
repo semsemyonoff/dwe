@@ -545,17 +545,17 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/docs/export/export_test.go`
 - Create: `internal/command/docs_export_test.go`
 
-- [ ] `ExportOpts { Lang string; IncludeProject, IncludeInternals, Force bool }`
-- [ ] `ExportTree(dst string, roots []DocRoot, opts ExportOpts) error`:
+- [x] `ExportOpts { Lang string; IncludeProject, IncludeInternals, Force bool }` (renamed to `Opts` per revive)
+- [x] `ExportTree(dst string, roots []DocRoot, opts ExportOpts) error` (renamed to `Tree` per revive):
   - if `dst` exists and is non-empty and `!Force` → error
   - mkdir -p `dst`
   - walk roots; for each markdown file: `ResolveContent(root, relPath, opts.Lang)` → write to `<dst>/<root.Name>/<relPath>` (or `<dst>/reference/...`, `<dst>/internals/...`, `<dst>/project/...` per Overview)
   - mermaid blocks left as ` ```mermaid `
   - when fallback to en happened, prepend `> **Note:** This file is not translated to '<lang>'. Original English version below.\n\n` to the file content
-- [ ] cobra wiring: `devbox docs export <dir>` — `Args: cobra.ExactArgs(1)`. Flags: `--lang <code>`, `--include-project`, `--include-internals`, `--force`. Output via `cmd.OutOrStdout()` / `cmd.ErrOrStderr()`
-- [ ] without flags: only `reference/` exported; internals excluded by default; project excluded by default
-- [ ] tests: empty dir → ok; non-empty dir without `--force` → error; with `--force` → overwrites; project source toggled; internals toggled; missing-translation banner appears
-- [ ] run `go test ./internal/docs/export/... ./internal/command/...` — must pass
+- [x] cobra wiring: `devbox docs export <dir>` — `Args: cobra.ExactArgs(1)`. Flags: `--lang <code>`, `--include-project`, `--include-internals`, `--force`. Output via `cmd.OutOrStdout()` / `cmd.ErrOrStderr()`
+- [x] without flags: only `reference/` exported; internals excluded by default; project excluded by default
+- [x] tests: empty dir → ok; non-empty dir without `--force` → error; with `--force` → overwrites; project source toggled; internals toggled; missing-translation banner appears
+- [x] run `go test ./internal/docs/export/... ./internal/command/...` — must pass
 
 ### Task 9: TUI model + tree widget + viewport + status bar (no diagrams, no search yet)
 
