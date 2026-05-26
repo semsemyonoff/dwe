@@ -458,18 +458,18 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 ### Task 7: Implement `auto-hosts` renderer
 
 **Files:**
-- Create: `internal/ui/info_auto_hosts.go`
-- Create: `internal/ui/info_auto_hosts_test.go`
+- Create: `internal/ui/info_auto_hosts.go` ✓
+- Create: `internal/ui/info_auto_hosts_test.go` ✓
 
-- [ ] implement `func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) string` — no topology parameter (uses `stack.DeployOrder(cfg, spec.Include)`)
-- [ ] defaults: `spec.Include` empty → `[app, tool, infra]`; `spec.IP` empty → `127.0.0.1`
-- [ ] iterate services via `stack.DeployOrder(cfg, spec.Include)` (NEVER `range cfg.Services` directly — Go map iteration is randomized); for each, walk ALL `hosts.<key>` values regardless of which key — `hosts:` is the user's declared etc/hosts surface, every entry should be emitted. Iteration of the `Hosts` map per-service is also randomized, so collect entries into a slice first, then sort by host-key name within the service to keep output deterministic.
-- [ ] filter: drop empty strings, drop literal `localhost`, drop duplicates (preserve first-seen order)
-- [ ] honour `spec.Hide` — skip whole services
-- [ ] emit `  <ip>\t<hostname>` per line (two-space indent, tab separator — matches existing spec text)
-- [ ] sort: NOT alphabetical — preserve deploy order so URLs and Hosts blocks visually correspond (spec §4.2)
-- [ ] golden-output tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases) covering: dedup across services, `localhost` filtered, `hide:` works, deploy-order preserved, custom IP applied, empty result returns empty string
-- [ ] run `go test ./internal/ui/...` — must pass before Task 8
+- [x] implement `func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) string` — no topology parameter (uses `stack.DeployOrder(cfg, spec.Include)`)
+- [x] defaults: `spec.Include` empty → `[app, tool, infra]`; `spec.IP` empty → `127.0.0.1`
+- [x] iterate services via `stack.DeployOrder(cfg, spec.Include)` (NEVER `range cfg.Services` directly — Go map iteration is randomized); for each, walk ALL `hosts.<key>` values regardless of which key — `hosts:` is the user's declared etc/hosts surface, every entry should be emitted. Iteration of the `Hosts` map per-service is also randomized, so collect entries into a slice first, then sort by host-key name within the service to keep output deterministic.
+- [x] filter: drop empty strings, drop literal `localhost`, drop duplicates (preserve first-seen order)
+- [x] honour `spec.Hide` — skip whole services
+- [x] emit `  <ip>\t<hostname>` per line (two-space indent, tab separator — matches existing spec text)
+- [x] sort: NOT alphabetical — preserve deploy order so URLs and Hosts blocks visually correspond (spec §4.2)
+- [x] golden-output tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases) covering: dedup across services, `localhost` filtered, `hide:` works, deploy-order preserved, custom IP applied, empty result returns empty string
+- [x] run `go test ./internal/ui/...` — must pass before Task 8
 
 ### Task 8: Wire auto-blocks into `renderInfoItem` dispatch
 
