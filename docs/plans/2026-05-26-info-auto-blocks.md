@@ -401,17 +401,17 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 
 **Approach correction**: do NOT use `ParseTopologyFromFiles` / `FetchComposeTopology` — those return a graph keyed by *compose service names* which often differ from folder keys (e.g., folder `catalog` → compose name `app-catalog` via `container:` field; see `internal/stack/topology.go:183` which maps via `svc.Container`, not folder key). For auto-block rendering we need ordering in folder-key space. **Use `config.TopoSortServices(names, services) ([]string, error)` at `internal/config/devbox.go:1975` instead** — it sorts by `DependsOn` in service-key space, which is exactly the right unit.
 
-- [ ] add `func DeployOrder(cfg *config.DevboxConfig, types []string) []string` in `internal/stack`. Signature does NOT take a topology map — internally calls `config.TopoSortServices` per type group.
-- [ ] for each type in `types` (callers pass `["app","tool","infra"]`):
+- [x] add `func DeployOrder(cfg *config.DevboxConfig, types []string) []string` in `internal/stack`. Signature does NOT take a topology map — internally calls `config.TopoSortServices` per type group.
+- [x] for each type in `types` (callers pass `["app","tool","infra"]`):
   1. collect enabled service folder keys with that type into a `[]string` (sorted alphabetically for stability before topo-sort)
   2. call `config.TopoSortServices(names, cfg.Services)` — returns dependency order
   3. on `TopoSortServices` error (cycle), fall back to the alphabetic list — log the error to stderr via the caller's writer (not from inside the helper; helper returns silently to honour the renderer-signature contract)
   4. append to the result
-- [ ] disabled services (`enabled: false`) MUST be filtered out before sorting; users explicitly excluded via `hide:` are filtered by the renderer, not here
-- [ ] **determinism contract**: structural guarantee — alphabetic pre-sort feeds `TopoSortServices` so the result is deterministic even when the dependency graph has multiple valid topological orderings. Document this in the helper's doc comment.
-- [ ] no `topology` parameter anywhere downstream: `RenderInfo`, `renderAutoURLs`, `renderAutoHosts`, and `renderInfoItem` all stop receiving topology — they receive `cfg *config.DevboxConfig` and call `stack.DeployOrder(cfg, ...)` directly when they need ordering. This removes the topology-fetch step from `runInfo` entirely.
-- [ ] write tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases) covering: disabled-skipped, type-grouping in `types`-argument order, intra-group dependency order via `DependsOn`, services without `DependsOn` appear in alphabetic-of-input order, dependency cycle falls back to alphabetic without panicking, empty types argument returns empty slice, ServiceConfig map order does not affect result (insert in random order, assert sorted output)
-- [ ] run `go test ./internal/stack/...` — must pass before Task 6
+- [x] disabled services (`enabled: false`) MUST be filtered out before sorting; users explicitly excluded via `hide:` are filtered by the renderer, not here
+- [x] **determinism contract**: structural guarantee — alphabetic pre-sort feeds `TopoSortServices` so the result is deterministic even when the dependency graph has multiple valid topological orderings. Document this in the helper's doc comment.
+- [x] no `topology` parameter anywhere downstream: `RenderInfo`, `renderAutoURLs`, `renderAutoHosts`, and `renderInfoItem` all stop receiving topology — they receive `cfg *config.DevboxConfig` and call `stack.DeployOrder(cfg, ...)` directly when they need ordering. This removes the topology-fetch step from `runInfo` entirely.
+- [x] write tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases) covering: disabled-skipped, type-grouping in `types`-argument order, intra-group dependency order via `DependsOn`, services without `DependsOn` appear in alphabetic-of-input order, dependency cycle falls back to alphabetic without panicking, empty types argument returns empty slice, ServiceConfig map order does not affect result (insert in random order, assert sorted output)
+- [x] run `go test ./internal/stack/...` — must pass before Task 6
 
 ### Task 6: Implement `auto-urls` renderer
 
