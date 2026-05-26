@@ -48,6 +48,11 @@ func walkFS(fsys fs.FS, dir string, relPath string, parent *Node) error {
 		entryRelPathForward := filepath.ToSlash(entryRelPath)
 
 		if entry.IsDir() {
+			// Skip the i18n directory (translations are handled separately at content resolution time).
+			if name == "i18n" {
+				continue
+			}
+
 			// Create a directory node.
 			dirNode := &Node{
 				Name:     name,
