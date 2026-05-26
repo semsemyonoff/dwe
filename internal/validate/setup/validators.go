@@ -194,6 +194,20 @@ func (v *writesUniqueValidator) Run(ctx validate.Context) []validate.Diagnostic 
 				fmt.Sprintf("writes path %q is duplicated (first at index %d, again at index %d)", q.Writes, prev, i)))
 		}
 		seen[q.Writes] = i
+		// Reject prefix collisions: a shorter path that is a prefix of (or is prefixed by) an
+		// existing path causes setAtPath to silently overwrite an already-built sub-map with a scalar.
+		for existing, j := range seen {
+			if existing == q.Writes {
+				continue // exact duplicate already caught above
+			}
+			if strings.HasPrefix(q.Writes, existing+".") {
+				diags = append(diags, makeError("writes_unique",
+					fmt.Sprintf("writes path %q (index %d) is a sub-path of %q (index %d); this would overwrite a nested map with a scalar", existing, j, q.Writes, i)))
+			} else if strings.HasPrefix(existing, q.Writes+".") {
+				diags = append(diags, makeError("writes_unique",
+					fmt.Sprintf("writes path %q (index %d) is a sub-path of %q (index %d); this would overwrite a nested map with a scalar", q.Writes, i, existing, j)))
+			}
+		}
 	}
 	return diags
 }
@@ -251,25 +265,45 @@ func (v *writesScopeValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return nil
 	}
 	var diags []validate.Diagnostic
-	forbiddenPrefixes := []string{"info.", "styles.", "docker.", "binaries."}
+	// forbiddenRoots are top-level keys that must not be written by the wizard.
+	forbiddenRoots := []string{"info", "styles", "docker", "binaries"}
 
 	for _, q := range v.cfg.Questions {
 		if q.Writes == "" {
 			continue
 		}
 
-		for _, prefix := range forbiddenPrefixes {
-			if strings.HasPrefix(q.Writes, prefix) {
+		root := strings.SplitN(q.Writes, ".", 2)[0]
+		for _, forbidden := range forbiddenRoots {
+			if root == forbidden {
 				diags = append(diags, makeError("writes_scope",
-					fmt.Sprintf("question %q writes to forbidden namespace %q", q.ID, prefix)))
+					fmt.Sprintf("question %q writes to forbidden namespace %q", q.ID, forbidden)))
 				break
 			}
+		}
+
+		if q.Writes == "services" {
+			diags = append(diags, makeError("writes_scope",
+				fmt.Sprintf("question %q writes to forbidden namespace %q", q.ID, "services")))
+			continue
 		}
 
 		if strings.HasPrefix(q.Writes, "services.") {
 			if err := validateServiceWritePath(q.Writes); err != nil {
 				diags = append(diags, makeError("writes_scope",
 					fmt.Sprintf("question %q: %v", q.ID, err)))
+				continue
+			}
+			// Validate that the service name exists in the loaded config.
+			if ctx.Cfg != nil {
+				parts := strings.SplitN(q.Writes, ".", 3)
+				if len(parts) >= 2 {
+					svcName := parts[1]
+					if _, ok := ctx.Cfg.Services[svcName]; !ok {
+						diags = append(diags, makeError("writes_scope",
+							fmt.Sprintf("question %q: service %q does not exist", q.ID, svcName)))
+					}
+				}
 			}
 		}
 	}

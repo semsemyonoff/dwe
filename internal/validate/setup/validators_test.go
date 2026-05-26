@@ -385,6 +385,15 @@ func TestWritesScopeValidator(t *testing.T) {
 			count: 1,
 		},
 		{
+			name: "exact services root forbidden",
+			cfg: &setup.Config{
+				Questions: []setup.Question{
+					{ID: "q1", Writes: "services"},
+				},
+			},
+			count: 1,
+		},
+		{
 			name: "invalid services path",
 			cfg: &setup.Config{
 				Questions: []setup.Question{

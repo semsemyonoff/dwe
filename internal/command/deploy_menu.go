@@ -95,7 +95,7 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 	// Render diagnostics if any
 	if len(diags) > 0 {
 		rows := ui.FormatDiagnostics(diags, false)
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderDiagnosticsTable(rows))
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), ui.RenderDiagnosticsTable(rows))
 
 		// Check for errors
 		for _, diag := range diags {

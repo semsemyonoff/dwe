@@ -68,6 +68,13 @@ func setAtPath(m map[string]any, path string, value any) error {
 			return fmt.Errorf("empty path segment")
 		}
 		if i == len(parts)-1 {
+			// Refuse to replace an existing map node with a scalar — this would silently
+			// discard all values written under that prefix by earlier questions.
+			if ev, exists := m[part]; exists {
+				if _, isMap := ev.(map[string]any); isMap {
+					return fmt.Errorf("path segment %q already holds a map; cannot replace with a scalar value", part)
+				}
+			}
 			m[part] = value
 			return nil
 		}

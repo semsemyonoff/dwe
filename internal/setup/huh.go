@@ -324,6 +324,13 @@ func coerceInputAnswers(questions []Question, raws map[string]string) (map[strin
 			raw = ""
 		}
 
+		// Optional questions with a blank answer are omitted from the result so that
+		// validateAnswers skips them (missing optional → no-op) and BuildOverlay
+		// writes nothing to the overlay (preserving any existing local.yml value).
+		if !q.Required && strings.TrimSpace(raw) == "" {
+			continue
+		}
+
 		// Use ValidateAndCoerce to get the typed value.
 		typed, err := ValidateAndCoerce(q, raw)
 		if err != nil {

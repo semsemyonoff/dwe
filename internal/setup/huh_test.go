@@ -191,6 +191,51 @@ func TestCoerceInputAnswers(t *testing.T) {
 			raws:      map[string]string{},
 			want:      map[string]any{},
 		},
+		{
+			name: "optional port preset with blank answer is omitted",
+			questions: []Question{
+				{
+					ID:       "port_input",
+					Type:     TypeInput,
+					Required: false,
+					Validate: &ValidateSpec{Preset: PresetPort},
+				},
+			},
+			raws: map[string]string{
+				"port_input": "",
+			},
+			want: map[string]any{}, // blank optional → not stored
+		},
+		{
+			name: "optional hostname preset with blank answer is omitted",
+			questions: []Question{
+				{
+					ID:       "hostname_input",
+					Type:     TypeInput,
+					Required: false,
+					Validate: &ValidateSpec{Preset: PresetHostname},
+				},
+			},
+			raws: map[string]string{
+				"hostname_input": "   ",
+			},
+			want: map[string]any{}, // whitespace-only optional → not stored
+		},
+		{
+			name: "optional regex input with blank answer is omitted",
+			questions: []Question{
+				{
+					ID:       "regex_input",
+					Type:     TypeInput,
+					Required: false,
+					Validate: &ValidateSpec{Regex: "^[a-z]+$"},
+				},
+			},
+			raws: map[string]string{
+				"regex_input": "",
+			},
+			want: map[string]any{}, // blank optional → not stored
+		},
 	}
 
 	for _, tt := range tests {

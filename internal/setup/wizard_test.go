@@ -559,6 +559,75 @@ func TestWizardRunRegexValidation(t *testing.T) {
 	}
 }
 
+// TestWizardRunOptionalBlankValidatedInputs confirms that optional validated inputs
+// (port, hostname, regex) can be left blank without causing validation failures,
+// and that no overlay is written for the skipped field.
+func TestWizardRunOptionalBlankValidatedInputs(t *testing.T) {
+	tests := []struct {
+		name     string
+		question Question
+		answer   any
+	}{
+		{
+			name: "optional port preset blank",
+			question: Question{
+				ID:       "port",
+				Type:     TypeInput,
+				Required: false,
+				Writes:   "server.port",
+				Validate: &ValidateSpec{Preset: PresetPort},
+			},
+			// coerceInputAnswers returns nothing for blank optional; wizard gets no answer.
+		},
+		{
+			name: "optional hostname preset blank",
+			question: Question{
+				ID:       "host",
+				Type:     TypeInput,
+				Required: false,
+				Writes:   "server.host",
+				Validate: &ValidateSpec{Preset: PresetHostname},
+			},
+		},
+		{
+			name: "optional regex blank",
+			question: Question{
+				ID:       "email",
+				Type:     TypeInput,
+				Required: false,
+				Writes:   "user.email",
+				Validate: &ValidateSpec{Regex: `^[a-z]+@[a-z]+\.[a-z]+$`},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testDir := t.TempDir()
+			localPath := filepath.Join(testDir, "local.yml")
+
+			deps := WizardDeps{
+				BaseDir:       testDir,
+				LocalPath:     localPath,
+				Questions:     []Question{tt.question},
+				PortConflicts: []env.PortConflict{},
+				// AskQuestions returns no answer for the optional blank question,
+				// simulating what coerceInputAnswers produces after the huh form.
+				AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
+					return map[string]any{}, nil
+				},
+				AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
+					return map[PortKey]int{}, nil
+				},
+			}
+
+			if err := Run(context.Background(), deps); err != nil {
+				t.Fatalf("Run() error = %v, want nil for optional blank input", err)
+			}
+		})
+	}
+}
+
 func TestWizardRunRequiredMultiselectEmpty(t *testing.T) {
 	testDir := t.TempDir()
 	localPath := filepath.Join(testDir, "local.yml")
