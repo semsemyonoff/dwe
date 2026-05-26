@@ -14,22 +14,22 @@ import (
 
 // FakeRenderer tracks calls and allows injection of delays.
 type FakeRenderer struct {
-	mu               sync.Mutex
-	calls            int
-	maxConcurrent    int32
-	currentConcurrent int32
-	delay            time.Duration
-	failAfter        int // Fail after N calls (-1 to never fail)
+	mu                sync.Mutex
+	calls             int
+	maxConcurrent     atomic.Int32
+	currentConcurrent atomic.Int32
+	delay             time.Duration
+	failAfter         int // Fail after N calls (-1 to never fail)
 }
 
 func (fr *FakeRenderer) Render(ctx context.Context, src string, theme mermaid.Theme, width int) ([]byte, error) {
-	current := atomic.AddInt32(&fr.currentConcurrent, 1)
-	defer atomic.AddInt32(&fr.currentConcurrent, -1)
+	current := fr.currentConcurrent.Add(1)
+	defer fr.currentConcurrent.Add(-1)
 
 	// Track max concurrent
 	for {
-		oldMax := atomic.LoadInt32(&fr.maxConcurrent)
-		if current <= oldMax || atomic.CompareAndSwapInt32(&fr.maxConcurrent, oldMax, current) {
+		oldMax := fr.maxConcurrent.Load()
+		if current <= oldMax || fr.maxConcurrent.CompareAndSwap(oldMax, current) {
 			break
 		}
 	}
@@ -87,11 +87,8 @@ func TestPrefetchBoundedConcurrency(t *testing.T) {
 	}
 done:
 
-	// Give workers a moment to finish
 	time.Sleep(100 * time.Millisecond)
-
-	// Verify bounded concurrency (max 2 at a time)
-	require.LessOrEqual(t, renderer.maxConcurrent, int32(MaxPrefetchWorkers), "max concurrent workers exceeded")
+	require.LessOrEqual(t, renderer.maxConcurrent.Load(), int32(MaxPrefetchWorkers), "max concurrent workers exceeded")
 	require.Equal(t, 5, renderer.calls, "expected all 5 diagrams rendered")
 }
 
@@ -113,7 +110,6 @@ func TestPrefetchProgressReporting(t *testing.T) {
 
 	prefetch.Queue(items)
 
-	// Collect progress messages
 	var msgs []ProgressMsg
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
@@ -131,7 +127,6 @@ func TestPrefetchProgressReporting(t *testing.T) {
 	}
 done:
 
-	// Verify progress messages
 	require.Greater(t, len(msgs), 0, "expected progress messages")
 	lastMsg := msgs[len(msgs)-1]
 	require.Equal(t, len(items), lastMsg.Rendered, "expected final rendered count to equal total")
@@ -154,16 +149,11 @@ func TestPrefetchCleanExitOnCancel(t *testing.T) {
 	}
 
 	prefetch.Queue(items)
-
-	// Give it a moment to start rendering
 	time.Sleep(50 * time.Millisecond)
 
-	// Cancel and close
 	cancel()
-	prefetch.Close() // Should exit cleanly without hanging
+	prefetch.Close()
 
-	// Verify that cancellation was effective (we started rendering but not all items completed)
-	// The exact number depends on timing, but with 100ms delay and 50ms wait, we should render fewer items
 	require.LessOrEqual(t, renderer.calls, len(items), "rendering should have been stopped by cancellation")
 }
 
@@ -172,7 +162,7 @@ func TestPrefetchErrorSwallowing(t *testing.T) {
 	defer cancel()
 
 	progress := make(chan ProgressMsg, 100)
-	renderer := &FakeRenderer{delay: 5 * time.Millisecond, failAfter: 1} // Fail after first call
+	renderer := &FakeRenderer{delay: 5 * time.Millisecond, failAfter: 1}
 
 	prefetch := NewPrefetch(ctx, renderer, progress)
 	defer prefetch.Close()
@@ -185,7 +175,6 @@ func TestPrefetchErrorSwallowing(t *testing.T) {
 
 	prefetch.Queue(items)
 
-	// Wait for all renders (including failures)
 	for {
 		select {
 		case msg := <-progress:
@@ -198,12 +187,10 @@ func TestPrefetchErrorSwallowing(t *testing.T) {
 	}
 done:
 
-	// Despite the failure, all items should have been processed
 	require.Equal(t, len(items), renderer.calls, "expected all items to be attempted despite errors")
 }
 
 func TestPrefetchItemQueueing(t *testing.T) {
-	// Test that items are queued and processed successfully
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -222,7 +209,6 @@ func TestPrefetchItemQueueing(t *testing.T) {
 
 	prefetch.Queue(items)
 
-	// Wait for completion
 	for {
 		select {
 		case msg := <-progress:
@@ -235,13 +221,10 @@ func TestPrefetchItemQueueing(t *testing.T) {
 	}
 done:
 
-	// Verify all items were processed
 	require.Equal(t, len(items), renderer.calls, "expected all items to be rendered")
 }
 
 func TestPrefetchClosureChainCleanExit(t *testing.T) {
-	// This test verifies that Close() properly cancels the context and
-	// the workers exit cleanly without goroutine leaks (verified by goleak.VerifyTestMain)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -256,16 +239,10 @@ func TestPrefetchClosureChainCleanExit(t *testing.T) {
 	}
 
 	prefetch.Queue(items)
-
-	// Close should wait for workers to finish
 	prefetch.Close()
-
-	// Verify no hanging goroutines (goleak will catch this if we fail)
-	// No explicit assertion needed; goleak.VerifyTestMain will fail if there are leaks
 }
 
 func TestPrefetchMultipleQueues(t *testing.T) {
-	// Test that we can queue multiple batches of items
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -275,7 +252,6 @@ func TestPrefetchMultipleQueues(t *testing.T) {
 	prefetch := NewPrefetch(ctx, renderer, progress)
 	defer prefetch.Close()
 
-	// First batch
 	batch1 := []WorkItem{
 		{Source: "batch1_a", Theme: mermaid.ThemeDark, Width: 100, Index: 0},
 		{Source: "batch1_b", Theme: mermaid.ThemeDark, Width: 100, Index: 1},
@@ -283,7 +259,6 @@ func TestPrefetchMultipleQueues(t *testing.T) {
 
 	prefetch.Queue(batch1)
 
-	// Wait for batch 1 to complete
 	for {
 		select {
 		case msg := <-progress:
@@ -296,7 +271,6 @@ func TestPrefetchMultipleQueues(t *testing.T) {
 	}
 
 batch2:
-	// Second batch
 	batch2 := []WorkItem{
 		{Source: "batch2_a", Theme: mermaid.ThemeDark, Width: 100, Index: 0},
 		{Source: "batch2_b", Theme: mermaid.ThemeDark, Width: 100, Index: 1},
@@ -305,7 +279,6 @@ batch2:
 
 	prefetch.Queue(batch2)
 
-	// Wait for batch 2 to complete
 	for {
 		select {
 		case msg := <-progress:
@@ -318,6 +291,5 @@ batch2:
 	}
 done:
 
-	// Verify all items were rendered
 	require.Equal(t, len(batch1)+len(batch2), renderer.calls, "all items should have been rendered")
 }

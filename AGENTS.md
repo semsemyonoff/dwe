@@ -50,7 +50,7 @@ Update these when changing schemas, commands, service toggles, deploys, or hooks
 
 ## Build, Test, and Development Commands
 
-- `make build` runs `go mod tidy`, builds `./cmd/devbox`, and writes `bin/devbox`.
+- `make build` runs `go mod tidy`, syncs `docs/` into `internal/docs/embedded/` (via `scripts/sync-embedded-docs.sh`), regenerates `internal/docs/content_hashes_gen.go` (via `scripts/gen-docs-content-hashes.sh`), builds `./cmd/devbox`, and writes `bin/devbox`. Run `make build` (not `go build`) after editing docs under `docs/reference/`, `docs/internals/`, or `docs/i18n/` — otherwise the embedded docs in the binary will be stale.
 - `make test` runs the full test suite with `go test ./...`.
 - `make test-v` runs tests with verbose output.
 - `make lint` installs `golangci-lint` if missing, then runs checks.

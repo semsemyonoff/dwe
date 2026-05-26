@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	"charm.land/bubbles/v2/viewport"
 )
 
@@ -18,10 +16,9 @@ func NewViewportWidget(width, height int) *ViewportWidget {
 	v := viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
 	v.SetContent("")
 	return &ViewportWidget{
-		v:       v,
-		width:   width,
-		height:  height,
-		yOffset: 0,
+		v:      v,
+		width:  width,
+		height: height,
 	}
 }
 
@@ -34,32 +31,24 @@ func (w *ViewportWidget) SetContent(content string) {
 func (w *ViewportWidget) SetDimensions(width, height int) {
 	w.width = width
 	w.height = height
-	// Viewport model dimensions are set via constructor/methods
-	// This is a simple wrapper; full integration deferred to later tasks
+	w.v.SetWidth(width)
+	w.v.SetHeight(height)
 }
 
 func (w *ViewportWidget) ScrollUp() {
-	if w.yOffset > 0 {
-		w.yOffset--
-	}
+	w.v.ScrollUp(1)
 }
 
 func (w *ViewportWidget) ScrollDown() {
-	lines := strings.Count(w.content, "\n")
-	if w.yOffset < lines-w.height {
-		w.yOffset++
-	}
+	w.v.ScrollDown(1)
 }
 
 func (w *ViewportWidget) ScrollStart() {
-	w.yOffset = 0
+	w.v.GotoTop()
 }
 
 func (w *ViewportWidget) ScrollEnd() {
-	lines := strings.Count(w.content, "\n")
-	if lines > w.height {
-		w.yOffset = lines - w.height
-	}
+	w.v.GotoBottom()
 }
 
 func (w *ViewportWidget) View() string {

@@ -16,10 +16,10 @@ func TestDisabled(t *testing.T) {
 
 func TestChain(t *testing.T) {
 	tests := []struct {
-		name           string
-		renderers      []Renderer
-		expectErr      error
-		expectPNG      bool
+		name      string
+		renderers []Renderer
+		expectErr error
+		expectPNG bool
 	}{
 		{
 			name:      "empty chain",
@@ -75,4 +75,3 @@ func TestChain(t *testing.T) {
 		})
 	}
 }
-

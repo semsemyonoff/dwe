@@ -8,12 +8,12 @@ import (
 
 func TestParseTopic(t *testing.T) {
 	tests := []struct {
-		name          string
-		input         string
-		expectedPath  string
+		name           string
+		input          string
+		expectedPath   string
 		expectedAnchor string
-		expectError   bool
-		errorMsg      string
+		expectError    bool
+		errorMsg       string
 	}{
 		{
 			name:         "simple topic",
@@ -33,9 +33,9 @@ func TestParseTopic(t *testing.T) {
 			expectedAnchor: "anchor",
 		},
 		{
-			name:          "topic with .md",
-			input:         "config/services.md",
-			expectedPath:  "config/services",
+			name:         "topic with .md",
+			input:        "config/services.md",
+			expectedPath: "config/services",
 		},
 		{
 			name:        "empty input",

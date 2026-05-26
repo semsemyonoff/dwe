@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"time"
-	"math/rand"
 
 	"golang.org/x/sync/singleflight"
 )
@@ -54,7 +54,7 @@ func (fc *FileCache) Render(ctx context.Context, src string, theme Theme, width 
 	}
 
 	// Cache miss or error reading. Deduplicate concurrent same-key misses.
-	result, err, _ := fc.sf.Do(key, func() (interface{}, error) {
+	result, err, _ := fc.sf.Do(key, func() (any, error) {
 		// Render via the underlying renderer.
 		png, err := fc.underlying.Render(ctx, src, theme, width)
 		if err != nil {
@@ -97,7 +97,7 @@ func (fc *FileCache) writeCached(keyPath string, png []byte) error {
 		return err
 	}
 	if err := os.Rename(tmpFile, keyPath); err != nil {
-		os.Remove(tmpFile)
+		_ = os.Remove(tmpFile)
 		return err
 	}
 	return nil
@@ -153,14 +153,14 @@ func (fc *FileCache) evictIfNeeded() {
 		if totalSize <= fc.CapBytes {
 			break
 		}
-		os.Remove(f.path)
+		_ = os.Remove(f.path)
 		totalSize -= f.size
 	}
 }
 
 func (fc *FileCache) cacheKey(src string, theme Theme, width int) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s|%s|%d|%s", src, theme, width, fc.Version())
+	_, _ = fmt.Fprintf(h, "%s|%s|%d|%s", src, theme, width, fc.Version())
 	return fmt.Sprintf("%x", h.Sum(nil))[:32]
 }
 

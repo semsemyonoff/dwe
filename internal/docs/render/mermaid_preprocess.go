@@ -6,6 +6,7 @@ import (
 )
 
 var fenceStartRE = regexp.MustCompile("^```(\\w*)")
+var fenceCloseRE = regexp.MustCompile("^```\\s*$")
 
 // MermaidPlaceholder defines a mermaid block placeholder and the error it represents.
 type MermaidPlaceholder struct {
@@ -44,10 +45,10 @@ func PreprocessMermaid(input []byte, placeholderFunc PlaceholderFunc) (output []
 				startIdx := i + 1
 				closingIdx := -1
 
-				// Find the closing ``` fence
+				// Find the closing ``` fence (bare backticks only, no language tag).
+				// A fence opener like ```go does NOT close a mermaid block.
 				for j := startIdx; j < len(lines); j++ {
-					if fenceStartRE.Match(lines[j]) {
-						// Found a closing fence (any language)
+					if fenceCloseRE.Match(lines[j]) {
 						closingIdx = j
 						break
 					}

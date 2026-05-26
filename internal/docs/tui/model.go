@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -33,20 +34,20 @@ type Model struct {
 	CanInlineImages bool
 
 	// Current state
-	CurrentTopic       *TreeNode
-	FocusZone          FocusZone
-	ContentWidth       int
-	ContentHeight      int
-	TermWidth          int
-	TermHeight         int
-	SearchState        *SearchState
-	DiagramState       *DiagramState
-	SearchIndex        *SearchIndex
-	TmuxHintShown      bool
-	AvailableLocales   []string // Available languages for the current file
-	CurrentSourceLang  string   // The actual source language (en if fallback, otherwise requested)
-	Watcher            *Watcher // File change watcher (project docs only)
-	ProjectRoot        string   // Path to the project root
+	CurrentTopic      *TreeNode
+	FocusZone         FocusZone
+	ContentWidth      int
+	ContentHeight     int
+	TermWidth         int
+	TermHeight        int
+	SearchState       *SearchState
+	DiagramState      *DiagramState
+	SearchIndex       *SearchIndex
+	TmuxHintShown     bool
+	AvailableLocales  []string // Available languages for the current file
+	CurrentSourceLang string   // The actual source language (en if fallback, otherwise requested)
+	Watcher           *Watcher // File change watcher (project docs only)
+	ProjectRoot       string   // Path to the project root
 
 	// Background rendering
 	Prefetch         *Prefetch
@@ -77,36 +78,36 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 	}
 
 	m := &Model{
-		Roots:              roots,
-		Tree:               treeWidget,
-		Locale:             locale,
-		Translator:         translator,
-		MermaidRenderer:    renderer,
-		CanInlineImages:    mermaid.CanInline(),
-		Keys:               DefaultKeyMap(),
-		Theme:              theme,
-		FocusZone:          FocusTree,
-		TermWidth:          termWidth,
-		TermHeight:         termHeight,
-		ContentWidth:       termWidth - 40,
-		ContentHeight:      termHeight - 4,
-		Viewport:           NewViewportWidget(termWidth - 40, termHeight - 4),
-		StatusBar:          NewStatusBarWidget(),
-		SearchState:        NewSearchState(),
-		DiagramState:       NewDiagramState(nil),
-		SearchIndex:        BuildSearchIndex(nil, ""),
-		TmuxHintShown:      false,
-		AvailableLocales:   []string{},
-		CurrentSourceLang:  "en",
-		ProjectRoot:        projectRoot,
-		Prefetch:           nil, // Lazily created when needed
-		PrefetchProgress:   ProgressMsg{},
-		quitting:           false,
+		Roots:             roots,
+		Tree:              treeWidget,
+		Locale:            locale,
+		Translator:        translator,
+		MermaidRenderer:   renderer,
+		CanInlineImages:   mermaid.CanInline(),
+		Keys:              DefaultKeyMap(),
+		Theme:             theme,
+		FocusZone:         FocusTree,
+		TermWidth:         termWidth,
+		TermHeight:        termHeight,
+		ContentWidth:      termWidth - 40,
+		ContentHeight:     termHeight - 4,
+		Viewport:          NewViewportWidget(termWidth-40, termHeight-4),
+		StatusBar:         NewStatusBarWidget(),
+		SearchState:       NewSearchState(),
+		DiagramState:      NewDiagramState(nil),
+		SearchIndex:       BuildSearchIndex(nil, ""),
+		TmuxHintShown:     false,
+		AvailableLocales:  []string{},
+		CurrentSourceLang: "en",
+		ProjectRoot:       projectRoot,
+		Prefetch:          nil, // Lazily created when needed
+		PrefetchProgress:  ProgressMsg{},
+		quitting:          false,
 	}
 
 	// Create watcher for project docs if project path is provided
 	if projectRoot != "" {
-		projectDocsPath := projectRoot + "/docs"
+		projectDocsPath := filepath.Join(projectRoot, "docs")
 		_, err := os.Stat(projectDocsPath)
 		if err == nil {
 			// Project docs exist; create a watcher
@@ -119,9 +120,7 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 
 	if m.Tree.Cursor() != nil {
 		m.CurrentTopic = m.Tree.Cursor()
-		if err := m.loadTopic(m.CurrentTopic); err != nil {
-			// Continue even if loading fails
-		}
+		_ = m.loadTopic(m.CurrentTopic)
 	}
 
 	return m, nil
@@ -179,11 +178,11 @@ func (m *Model) loadTopic(node *TreeNode) error {
 		}
 	}
 
-	opts := render.RenderOpts{
-		Theme:             m.Theme,
-		Width:             m.ContentWidth,
-		MermaidRenderer:   m.MermaidRenderer,
-		CanInline:         m.CanInlineImages,
+	opts := render.Opts{
+		Theme:           m.Theme,
+		Width:           m.ContentWidth,
+		MermaidRenderer: m.MermaidRenderer,
+		CanInline:       m.CanInlineImages,
 	}
 
 	result, err := render.Render(content, opts, placeholderFunc)
@@ -286,7 +285,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.Prefetch.Close()
 		}
 		if m.Watcher != nil {
-			m.Watcher.Close()
+			_ = m.Watcher.Close()
 		}
 		return m, tea.Quit
 	}
@@ -432,13 +431,5 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) renderView() tea.View {
-	// Placeholder implementation for now
-	content := "docs TUI\n"
-	if m.CurrentTopic != nil && m.CurrentTopic.Node != nil {
-		content = m.CurrentTopic.Node.Path + "\n"
-	}
-	content += m.Viewport.View()
-
-	v := tea.NewView(content)
-	return v
+	return m.renderTwoPanel()
 }

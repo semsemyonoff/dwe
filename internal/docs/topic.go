@@ -9,9 +9,9 @@ import (
 
 // ResolvedTopic represents a successfully resolved documentation topic.
 type ResolvedTopic struct {
-	Path      string // Relative path (e.g., "config/services")
-	Anchor    string // Optional anchor (e.g., "anchor" from "config/services#anchor")
-	Source    string // Source root name ("devbox" or "project")
+	Path        string // Relative path (e.g., "config/services")
+	Anchor      string // Optional anchor (e.g., "anchor" from "config/services#anchor")
+	Source      string // Source root name ("devbox" or "project")
 	DisplayName string // Display name for the topic
 }
 

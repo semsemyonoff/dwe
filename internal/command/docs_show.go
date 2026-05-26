@@ -173,7 +173,7 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 	// Determine if we can inline images
 	canInline := mermaid.CanInline()
 
-	result, err := render.Render(contentWithBanners, render.RenderOpts{
+	result, err := render.Render(contentWithBanners, render.Opts{
 		Theme:           theme,
 		Width:           termWidth,
 		MermaidRenderer: mermaidRenderer,

@@ -66,12 +66,12 @@ func runDocsCacheClear(cmd *cobra.Command) error {
 		return fmt.Errorf("recreating cache directory: %w", err)
 	}
 
-	// Report the count of removed entries
-	if count == 0 {
+	switch count {
+	case 0:
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Cache directory was empty\n")
-	} else if count == 1 {
+	case 1:
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Removed 1 cached diagram\n")
-	} else {
+	default:
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Removed %d cached diagrams\n", count)
 	}
 

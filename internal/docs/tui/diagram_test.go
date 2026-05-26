@@ -73,7 +73,7 @@ func TestDiagramStateNavigation(t *testing.T) {
 	// Test CurrentDiagram
 	diagram := ds.CurrentDiagram()
 	if diagram == nil {
-		t.Errorf("expected CurrentDiagram to not be nil")
+		t.Fatalf("expected CurrentDiagram to not be nil")
 	}
 	if diagram.Source != "2" {
 		t.Errorf("expected source '2', got '%s'", diagram.Source)

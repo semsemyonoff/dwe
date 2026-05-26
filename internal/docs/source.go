@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -63,11 +64,5 @@ func RelPath(root DocRoot, path string) (string, error) {
 }
 
 func containsTraversal(path string) bool {
-	parts := filepath.SplitList(path)
-	for _, part := range parts {
-		if part == ".." || strings.Contains(part, "..") {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(strings.Split(path, string(filepath.Separator)), "..")
 }

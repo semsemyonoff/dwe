@@ -38,17 +38,20 @@ func NewMmdc(bin string, strict bool) *MmdcRenderer {
 
 // Render invokes mmdc to render mermaid source to PNG.
 func (m *MmdcRenderer) Render(ctx context.Context, src string, theme Theme, width int) ([]byte, error) {
-	// Create temp files for input and output.
-	tmpDir := os.TempDir()
-	inputFile := filepath.Join(tmpDir, "mermaid_input.mmd")
-	outputFile := filepath.Join(tmpDir, "mermaid_output.png")
+	// Use a unique temp dir per invocation to avoid races when multiple goroutines render concurrently.
+	tmpDir, err := os.MkdirTemp("", "mermaid-*")
+	if err != nil {
+		return nil, fmt.Errorf("create mermaid temp dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	inputFile := filepath.Join(tmpDir, "input.mmd")
+	outputFile := filepath.Join(tmpDir, "output.png")
 
 	// Write input mermaid source.
 	if err := os.WriteFile(inputFile, []byte(src), 0o600); err != nil {
 		return nil, fmt.Errorf("write mermaid input: %w", err)
 	}
-	defer os.Remove(inputFile)
-	defer os.Remove(outputFile)
 
 	// Invoke mmdc with timeout.
 	ctx, cancel := context.WithTimeout(ctx, mmdcTimeout)

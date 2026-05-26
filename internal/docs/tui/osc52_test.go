@@ -18,12 +18,10 @@ func TestCopyViaOSC52(t *testing.T) {
 	}
 
 	output := buf.String()
-	// OSC 52 format: \x1b]52;c;<base64>\x07
 	expected := base64.StdEncoding.EncodeToString([]byte(text))
 	if !strings.Contains(output, expected) {
 		t.Errorf("expected output to contain '%s', got '%s'", expected, output)
 	}
-
 	if !strings.HasPrefix(output, "\x1b]52;c;") {
 		t.Errorf("expected output to start with OSC 52 prefix")
 	}
@@ -33,7 +31,6 @@ func TestCopyViaOSC52(t *testing.T) {
 }
 
 func TestCopyViaOSC52Encoding(t *testing.T) {
-	// Test with special characters
 	text := "Line 1\nLine 2\t\t\rSpecial: é"
 	buf := &bytes.Buffer{}
 
@@ -44,31 +41,32 @@ func TestCopyViaOSC52Encoding(t *testing.T) {
 
 	output := buf.String()
 	expected := base64.StdEncoding.EncodeToString([]byte(text))
-
 	if !strings.Contains(output, expected) {
 		t.Errorf("expected output to contain base64-encoded text")
 	}
 }
 
 func TestClipboardTmuxHint(t *testing.T) {
-	// Save original env
-	originalTmux := os.Getenv("TMUX")
-	defer func() {
-		if originalTmux != "" {
-			os.Setenv("TMUX", originalTmux)
+	// Use t.Setenv to restore automatically; manually unset between sub-checks.
+	old := os.Getenv("TMUX")
+	t.Cleanup(func() {
+		if old != "" {
+			_ = os.Setenv("TMUX", old)
 		} else {
-			os.Unsetenv("TMUX")
+			_ = os.Unsetenv("TMUX")
 		}
-	}()
+	})
 
-	// Test with TMUX set
-	os.Setenv("TMUX", "/tmp/tmux-1000/default")
+	if err := os.Setenv("TMUX", "/tmp/tmux-1000/default"); err != nil {
+		t.Fatalf("setenv TMUX: %v", err)
+	}
 	if !ClipboardTmuxHint() {
 		t.Errorf("expected ClipboardTmuxHint to return true when TMUX is set")
 	}
 
-	// Test without TMUX set
-	os.Unsetenv("TMUX")
+	if err := os.Unsetenv("TMUX"); err != nil {
+		t.Fatalf("unsetenv TMUX: %v", err)
+	}
 	if ClipboardTmuxHint() {
 		t.Errorf("expected ClipboardTmuxHint to return false when TMUX is unset")
 	}

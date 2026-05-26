@@ -6,32 +6,21 @@ import (
 )
 
 func TestCanInlineNoTmux(t *testing.T) {
-	// Clear TMUX env if set.
-	oldTmux := os.Getenv("TMUX")
-	os.Unsetenv("TMUX")
-	defer func() {
-		if oldTmux != "" {
-			os.Setenv("TMUX", oldTmux)
+	old := os.Getenv("TMUX")
+	if err := os.Unsetenv("TMUX"); err != nil {
+		t.Fatalf("unsetenv TMUX: %v", err)
+	}
+	t.Cleanup(func() {
+		if old != "" {
+			_ = os.Setenv("TMUX", old)
 		}
-	}()
-
-	// CanInline should work (may be true or false depending on terminal capabilities).
+	})
 	_ = CanInline()
 }
 
 func TestCanInlineWithTmux(t *testing.T) {
-	// Set TMUX env.
-	oldTmux := os.Getenv("TMUX")
-	os.Setenv("TMUX", "/tmp/tmux-1000/default,123,0")
-	defer func() {
-		if oldTmux != "" {
-			os.Setenv("TMUX", oldTmux)
-		} else {
-			os.Unsetenv("TMUX")
-		}
-	}()
+	t.Setenv("TMUX", "/tmp/tmux-1000/default,123,0")
 
-	// CanInline should return false under tmux.
 	if CanInline() {
 		t.Errorf("CanInline should return false under tmux")
 	}

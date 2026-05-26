@@ -61,12 +61,12 @@ The three files share a single namespace — the same key in different layers is
 | IDE config defaults | `defaults.yml` |
 | `db` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
-| Service port / host values | [`devbox/services.yml`](services.md) — project-level definitions; per-developer port / host overrides are not supported |
+| Service port / host values | [`devbox/services.yml`](services.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
 | Wizard-generated configuration | `local.yml` (written by `devbox deploy` when answering setup questions or port conflicts) |
 
-Service definitions themselves (apps, tools, infra — including their ports / hosts) live in [`devbox/services.yml`](services.md), which is loaded separately and not part of this merge. The 3-layer overlay only carries `services.<name>.enabled` toggles.
+Service definitions themselves (apps, tools, infra — including their ports / hosts) live in [`devbox/services.yml`](services.md), which is loaded separately and not part of this merge. The 3-layer overlay carries `services.<name>.enabled`, `services.<name>.ports`, and `services.<name>.hosts`. Port and host maps are deep-merged by entry name so a partial override only touches the listed keys.
 
 The `devbox deploy` command includes an interactive wizard that runs on fresh projects (when `devbox/local.yml` is missing or empty). The wizard collects answers to questions declared in [`devbox/setup.yml`](setup.md) and prompts for port overrides when conflicts exist. All answers are deep-merged into `local.yml` and written atomically before deployment proceeds. See [`devbox/setup.yml`](setup.md) for schema details.
 
@@ -198,7 +198,7 @@ services:
     enabled: true
 ```
 
-`enabled:` is the **only** field allowed under `services.<name>` in any overlay layer. Adding `container:`, `ports:`, `compose:`, etc. here is a layer-aware overlay error — those fields live in `services.yml`. Mandatory services are always active and have no toggle.
+Allowed fields under `services.<name>` in any overlay layer are `enabled`, `ports`, and `hosts`. Adding structural fields like `container:`, `compose:`, `extends:`, etc. is a layer-aware overlay error — those fields live in `devbox/services/<name>/service.yml`. Port and host maps are deep-merged by entry name. Mandatory services are always active and have no toggle.
 
 ### `debug`
 
@@ -346,7 +346,7 @@ debug:
   idekey: VSCODE
 ```
 
-> Per-developer port / host overrides are not supported — the 3-layer overlay carries only `services.<name>.enabled`. Port and host values are project-level definitions in `devbox/services.yml` and are shared by the whole team.
+> Per-developer port / host overrides are supported via `local.yml`. Use `services.<name>.ports` or `services.<name>.hosts` to override specific entries; the values are deep-merged by key on top of the project-level declarations in `devbox/services/<name>/service.yml`.
 
 If `local.yml` does not exist, layer 3 is silently skipped.
 

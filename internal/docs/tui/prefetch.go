@@ -27,15 +27,15 @@ type ProgressMsg struct {
 
 // Prefetch manages background mermaid rendering with a bounded worker pool.
 type Prefetch struct {
-	ctx        context.Context
-	cancel     context.CancelFunc
-	renderer   mermaid.Renderer
-	progress   chan<- ProgressMsg
-	workQueue  chan WorkItem
-	wg         sync.WaitGroup
-	mu         sync.Mutex
-	rendered   int
-	total      int
+	ctx       context.Context
+	cancel    context.CancelFunc
+	renderer  mermaid.Renderer
+	progress  chan<- ProgressMsg
+	workQueue chan WorkItem
+	wg        sync.WaitGroup
+	mu        sync.Mutex
+	rendered  int
+	total     int
 }
 
 const MaxPrefetchWorkers = 2
@@ -66,13 +66,12 @@ func NewPrefetch(ctx context.Context, renderer mermaid.Renderer, progress chan<-
 		})
 	}
 
-	// Spawn a goroutine that waits for all workers to finish and closes the queue.
-	p.wg.Add(1)
-	go func() {
-		defer p.wg.Done()
+	// Wait for all workers to finish in the background so Close() can join them.
+	// Do NOT close p.workQueue: Queue() guards sends with p.ctx.Done(), and
+	// closing a channel while Queue() is concurrently selecting would panic.
+	p.wg.Go(func() {
 		_ = g.Wait()
-		close(p.workQueue)
-	}()
+	})
 
 	return p
 }

@@ -20,7 +20,7 @@ func ThemeFromBackground() string {
 // Render renders markdown to formatted text using glamour.
 // Mermaid blocks are preprocessed and replaced with placeholders.
 // The placeholderFunc determines the text/error for each diagram.
-func Render(input []byte, opts RenderOpts, placeholderFunc PlaceholderFunc) (RenderResult, error) {
+func Render(input []byte, opts Opts, placeholderFunc PlaceholderFunc) (Result, error) {
 	if opts.Width <= 0 {
 		opts.Width = 100
 	}
@@ -28,7 +28,7 @@ func Render(input []byte, opts RenderOpts, placeholderFunc PlaceholderFunc) (Ren
 	// Preprocess mermaid blocks
 	preprocessed, diagrams, err := PreprocessMermaid(input, placeholderFunc)
 	if err != nil {
-		return RenderResult{}, err
+		return Result{}, err
 	}
 
 	// Render with glamour
@@ -45,10 +45,10 @@ func Render(input []byte, opts RenderOpts, placeholderFunc PlaceholderFunc) (Ren
 
 	output, err := renderer.Render(string(preprocessed))
 	if err != nil {
-		return RenderResult{}, err
+		return Result{}, err
 	}
 
-	return RenderResult{
+	return Result{
 		Output:   []byte(output),
 		Diagrams: diagrams,
 	}, nil
@@ -56,8 +56,8 @@ func Render(input []byte, opts RenderOpts, placeholderFunc PlaceholderFunc) (Ren
 
 // RawMarkdown returns the input as-is without rendering.
 // Useful for non-TTY output or when --raw flag is set.
-func RawMarkdown(input []byte) RenderResult {
-	return RenderResult{
+func RawMarkdown(input []byte) Result {
+	return Result{
 		Output:   input,
 		Diagrams: []DiagramRef{},
 	}

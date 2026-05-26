@@ -144,7 +144,7 @@ func TestSearchState(t *testing.T) {
 	// Test CurrentResult
 	result := ss.CurrentResult()
 	if result == nil {
-		t.Errorf("expected CurrentResult to not be nil")
+		t.Fatalf("expected CurrentResult to not be nil")
 	}
 	if result.Text != "Two" {
 		t.Errorf("expected text 'Two', got '%s'", result.Text)

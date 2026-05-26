@@ -4,20 +4,20 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
-func TestMmdcRenderer(t *testing.T) {
-	// Use the fake-mmdc.sh script for testing.
-	testdataDir := filepath.Join("testdata")
-	fakeMMDC := filepath.Join(testdataDir, "fake-mmdc.sh")
+const testdataDir = "testdata"
 
-	// Make sure fake-mmdc.sh exists and is executable.
+func TestMmdcRenderer(t *testing.T) {
+	fakeMMDC := testdataDir + "/fake-mmdc.sh"
+
 	if _, err := os.Stat(fakeMMDC); err != nil {
 		t.Skipf("fake-mmdc.sh not found at %s: %v", fakeMMDC, err)
 	}
-	os.Chmod(fakeMMDC, 0o755)
+	if err := os.Chmod(fakeMMDC, 0o755); err != nil {
+		t.Fatalf("chmod fake-mmdc.sh: %v", err)
+	}
 
 	renderer := NewMmdc(fakeMMDC, false)
 
@@ -27,7 +27,6 @@ func TestMmdcRenderer(t *testing.T) {
 		t.Fatalf("render failed: %v", err)
 	}
 
-	// Verify we got PNG bytes (should be a valid PNG header).
 	if len(png) < 8 {
 		t.Errorf("PNG too short: %d bytes", len(png))
 	}
@@ -37,13 +36,14 @@ func TestMmdcRenderer(t *testing.T) {
 }
 
 func TestMmdcVersionProbe(t *testing.T) {
-	testdataDir := filepath.Join("testdata")
-	fakeMMDC := filepath.Join(testdataDir, "fake-mmdc.sh")
+	fakeMMDC := testdataDir + "/fake-mmdc.sh"
 
 	if _, err := os.Stat(fakeMMDC); err != nil {
 		t.Skipf("fake-mmdc.sh not found: %v", err)
 	}
-	os.Chmod(fakeMMDC, 0o755)
+	if err := os.Chmod(fakeMMDC, 0o755); err != nil {
+		t.Fatalf("chmod fake-mmdc.sh: %v", err)
+	}
 
 	version := probeMmdcVersion(fakeMMDC)
 	if version == "" {
@@ -78,7 +78,6 @@ func isPNGSignature(data []byte) bool {
 	if len(data) < 8 {
 		return false
 	}
-	// PNG signature: 89 50 4E 47 0D 0A 1A 0A
 	return data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
 		data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A
 }

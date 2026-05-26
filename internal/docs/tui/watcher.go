@@ -30,11 +30,10 @@ func NewWatcher(ctx context.Context, root string) (*Watcher, error) {
 		return nil, err
 	}
 
-	// Add the root directory to the watch list recursively
-	// We walk the tree and add all directories to fsnotify's watch list
-	err = addRecursive(watcher, root)
+	// Add the root directory to the watch list recursively.
+	err = walkAndWatch(watcher, root)
 	if err != nil {
-		watcher.Close()
+		_ = watcher.Close()
 		return nil, err
 	}
 
@@ -56,11 +55,10 @@ func NewWatcher(ctx context.Context, root string) (*Watcher, error) {
 	return w, nil
 }
 
-// eventPump reads from the watcher and delivers file-changed events.
+// eventPump reads from the watcher and logs file-changed events.
 // This runs in its own goroutine and exits when w.ctx is cancelled.
+// Close() owns the watcher lifetime — do not close here.
 func (w *Watcher) eventPump() {
-	defer w.watcher.Close()
-
 	for {
 		select {
 		case event, ok := <-w.watcher.Events:
@@ -90,12 +88,6 @@ func (w *Watcher) eventPump() {
 func (w *Watcher) Close() error {
 	w.cancel()
 	return w.watcher.Close()
-}
-
-// addRecursive walks the directory tree and adds all directories to the watcher.
-func addRecursive(watcher *fsnotify.Watcher, root string) error {
-	// Walk the tree and add each directory
-	return walkAndWatch(watcher, root)
 }
 
 // walkAndWatch recursively walks a directory and adds it (and all subdirs) to the watcher.

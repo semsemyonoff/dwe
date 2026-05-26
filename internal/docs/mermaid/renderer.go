@@ -5,15 +5,18 @@ import (
 	"errors"
 )
 
+// Sentinel errors returned by mermaid renderers.
 var (
-	ErrRenderingDisabled   = errors.New("mermaid rendering disabled")
-	ErrMmdcNotAvailable    = errors.New("mmdc not available on PATH")
-	ErrMmdcRequired        = errors.New("mmdc required but not available")
-	ErrMmdcVersionProbe    = errors.New("could not determine mmdc version")
+	ErrRenderingDisabled = errors.New("mermaid rendering disabled")
+	ErrMmdcNotAvailable  = errors.New("mmdc not available on PATH")
+	ErrMmdcRequired      = errors.New("mmdc required but not available")
+	ErrMmdcVersionProbe  = errors.New("could not determine mmdc version")
 )
 
+// Theme controls the color theme passed to mmdc.
 type Theme string
 
+// Theme constants for the two supported rendering modes.
 const (
 	ThemeDark  Theme = "dark"
 	ThemeLight Theme = "light"
@@ -29,7 +32,8 @@ type Renderer interface {
 // Disabled always returns ErrRenderingDisabled.
 type Disabled struct{}
 
-func (d Disabled) Render(ctx context.Context, src string, theme Theme, width int) ([]byte, error) {
+// Render implements Renderer and always returns ErrRenderingDisabled.
+func (d Disabled) Render(_ context.Context, _ string, _ Theme, _ int) ([]byte, error) {
 	return nil, ErrRenderingDisabled
 }
 

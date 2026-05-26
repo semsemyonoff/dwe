@@ -9,19 +9,19 @@ func TestPreprocessMermaid(t *testing.T) {
 	tests := []struct {
 		name          string
 		input         []byte
-		expectedDiags  int
+		expectedDiags int
 		expectedLines int
 		checkOutput   func(t *testing.T, output []byte, diagrams []DiagramRef)
 	}{
 		{
-			name: "no mermaid blocks",
-			input: []byte("# Heading\n\nSome text\n\nMore text"),
+			name:          "no mermaid blocks",
+			input:         []byte("# Heading\n\nSome text\n\nMore text"),
 			expectedDiags: 0,
 			expectedLines: 5,
 		},
 		{
-			name: "single mermaid block",
-			input: []byte("# Heading\n\n```mermaid\ngraph TD\n  A --> B\n```\n\nText after"),
+			name:          "single mermaid block",
+			input:         []byte("# Heading\n\n```mermaid\ngraph TD\n  A --> B\n```\n\nText after"),
 			expectedDiags: 1,
 			checkOutput: func(t *testing.T, output []byte, diagrams []DiagramRef) {
 				if len(diagrams) != 1 {
@@ -39,8 +39,8 @@ func TestPreprocessMermaid(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple mermaid blocks",
-			input: []byte("```mermaid\nA\n```\nText\n```mermaid\nB\n```"),
+			name:          "multiple mermaid blocks",
+			input:         []byte("```mermaid\nA\n```\nText\n```mermaid\nB\n```"),
 			expectedDiags: 2,
 			checkOutput: func(t *testing.T, output []byte, diagrams []DiagramRef) {
 				if len(diagrams) != 2 {
@@ -52,8 +52,8 @@ func TestPreprocessMermaid(t *testing.T) {
 			},
 		},
 		{
-			name: "mermaid block without closing fence",
-			input: []byte("Text\n```mermaid\nUnclosed diagram"),
+			name:          "mermaid block without closing fence",
+			input:         []byte("Text\n```mermaid\nUnclosed diagram"),
 			expectedDiags: 1,
 			checkOutput: func(t *testing.T, output []byte, diagrams []DiagramRef) {
 				if len(diagrams) != 1 {
@@ -65,8 +65,8 @@ func TestPreprocessMermaid(t *testing.T) {
 			},
 		},
 		{
-			name: "non-mermaid code block preserved",
-			input: []byte("```python\nprint('hello')\n```\n\nText"),
+			name:          "non-mermaid code block preserved",
+			input:         []byte("```python\nprint('hello')\n```\n\nText"),
 			expectedDiags: 0,
 			checkOutput: func(t *testing.T, output []byte, diagrams []DiagramRef) {
 				if !bytes.Contains(output, []byte("python")) {
@@ -108,23 +108,23 @@ func TestMermaidPlaceholder(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name: "disabled placeholder",
-			ph:   PlaceholderForDisabled(0),
+			name:      "disabled placeholder",
+			ph:        PlaceholderForDisabled(0),
 			expectErr: false,
 		},
 		{
-			name: "unavailable placeholder",
-			ph:   PlaceholderForUnavailable(0),
+			name:      "unavailable placeholder",
+			ph:        PlaceholderForUnavailable(0),
 			expectErr: false,
 		},
 		{
-			name: "rendering placeholder",
-			ph:   PlaceholderForRendering(0),
+			name:      "rendering placeholder",
+			ph:        PlaceholderForRendering(0),
 			expectErr: false,
 		},
 		{
-			name: "failed placeholder",
-			ph:   PlaceholderForFailed(0),
+			name:      "failed placeholder",
+			ph:        PlaceholderForFailed(0),
 			expectErr: false,
 		},
 	}

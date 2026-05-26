@@ -5,18 +5,18 @@ import (
 )
 
 type StatusBarWidget struct {
-	path      string
-	language  string
-	rendered  int
-	total     int
+	path     string
+	language string
+	rendered int
+	total    int
 }
 
 func NewStatusBarWidget() *StatusBarWidget {
 	return &StatusBarWidget{
-		path:      "",
-		language:  "en",
-		rendered:  0,
-		total:     0,
+		path:     "",
+		language: "en",
+		rendered: 0,
+		total:    0,
 	}
 }
 

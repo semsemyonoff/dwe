@@ -96,6 +96,6 @@ type testDirEntry struct {
 }
 
 func (e *testDirEntry) Name() string               { return e.name }
-func (e *testDirEntry) IsDir() bool               { return false }
-func (e *testDirEntry) Type() fs.FileMode         { return 0 }
+func (e *testDirEntry) IsDir() bool                { return false }
+func (e *testDirEntry) Type() fs.FileMode          { return 0 }
 func (e *testDirEntry) Info() (fs.FileInfo, error) { return nil, nil }

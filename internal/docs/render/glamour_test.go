@@ -11,7 +11,7 @@ func TestRender(t *testing.T) {
 		input           string
 		width           int
 		expectedDefault int
-		checkOutput     func(t *testing.T, result RenderResult)
+		checkOutput     func(t *testing.T, result Result)
 	}{
 		{
 			name:            "width defaults to 100 when zero",
@@ -28,7 +28,7 @@ func TestRender(t *testing.T) {
 			name:  "simple markdown renders",
 			input: "# Heading\n\nParagraph text",
 			width: 80,
-			checkOutput: func(t *testing.T, result RenderResult) {
+			checkOutput: func(t *testing.T, result Result) {
 				if len(result.Output) == 0 {
 					t.Errorf("expected non-empty output")
 				}
@@ -42,7 +42,7 @@ func TestRender(t *testing.T) {
 			name:  "code blocks preserved",
 			input: "```go\nfunc main() {}\n```",
 			width: 80,
-			checkOutput: func(t *testing.T, result RenderResult) {
+			checkOutput: func(t *testing.T, result Result) {
 				if !bytes.Contains(result.Output, []byte("main")) {
 					t.Errorf("expected 'main' in output")
 				}
@@ -54,9 +54,9 @@ func TestRender(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := RenderOpts{
-				Theme:  "dark",
-				Width:  tt.width,
+			opts := Opts{
+				Theme:     "dark",
+				Width:     tt.width,
 				CanInline: true,
 			}
 
@@ -80,14 +80,14 @@ func TestRenderWithMermaid(t *testing.T) {
 	input := "# Diagram\n\n```mermaid\ngraph TD\n  A --> B\n```\n\nDone"
 
 	tests := []struct {
-		name       string
+		name        string
 		placeholder MermaidPlaceholder
-		check      func(t *testing.T, result RenderResult)
+		check       func(t *testing.T, result Result)
 	}{
 		{
 			name:        "disabled",
 			placeholder: MermaidPlaceholder{Text: "<📊 [disabled]>"},
-			check: func(t *testing.T, result RenderResult) {
+			check: func(t *testing.T, result Result) {
 				if !bytes.Contains(result.Output, []byte("disabled")) {
 					t.Errorf("expected 'disabled' in output")
 				}
@@ -96,7 +96,7 @@ func TestRenderWithMermaid(t *testing.T) {
 		{
 			name:        "unavailable",
 			placeholder: MermaidPlaceholder{Text: "<📊 [unavailable]>"},
-			check: func(t *testing.T, result RenderResult) {
+			check: func(t *testing.T, result Result) {
 				if !bytes.Contains(result.Output, []byte("unavailable")) {
 					t.Errorf("expected 'unavailable' in output")
 				}
@@ -110,7 +110,7 @@ func TestRenderWithMermaid(t *testing.T) {
 				return tt.placeholder
 			}
 
-			opts := RenderOpts{
+			opts := Opts{
 				Theme: "dark",
 				Width: 80,
 			}

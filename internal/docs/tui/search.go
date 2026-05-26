@@ -67,7 +67,7 @@ func (si *SearchIndex) SearchResults(query string) []SearchEntry {
 type SearchState struct {
 	Query   string
 	Results []SearchEntry
-	Current int  // Index into Results; -1 if none or closed
+	Current int // Index into Results; -1 if none or closed
 	IsOpen  bool
 }
 
