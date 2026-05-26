@@ -142,8 +142,9 @@ func autoDetectPortVia(cfg *config.DevboxConfig) (*config.ServiceConfig, int) {
 
 	var candidates []*config.ServiceConfig
 
-	for _, svc := range cfg.Services {
-		if svc.Type != config.ServiceTypeInfra || !svc.Enabled {
+	for _, name := range config.DeployOrder(cfg, []string{"infra"}) {
+		svc := cfg.Services[name]
+		if !svc.Enabled {
 			continue
 		}
 		if svc.Ports["http"] == 80 || svc.Ports["https"] == 443 {
