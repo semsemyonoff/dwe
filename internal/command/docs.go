@@ -29,13 +29,15 @@ type docsFlags struct {
 func newDocsCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
-		Short: "Generate documentation for devbox commands",
-		Long: `Generate reference documentation for the devbox CLI and declarative command registry.
+		Short: "Browse and manage documentation",
+		Long: `Browse and manage devbox documentation.
 
-Documentation is written to the output directory (default: docs/reference).
-Use --scope to limit output to CLI commands, registry commands, or both.`,
+View documentation interactively with a TUI browser or display specific topics.
+Generate reference documentation for the CLI and command registry.`,
 		SilenceUsage: true,
 	}
+	cmd.AddCommand(newDocsShowCmd(flags))
+	cmd.AddCommand(newDocsListCmd(flags))
 	cmd.AddCommand(newDocsGenerateCmd(flags))
 	return cmd
 }
