@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sort"
 	"sync"
@@ -101,7 +102,7 @@ func (p *Prefetch) renderOne(ctx context.Context, work WorkItem) {
 	// Render the diagram
 	if p.renderer != nil {
 		_, err := p.renderer.Render(ctx, work.Source, work.Theme, work.Width)
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			slog.Debug("prefetch: diagram render failed", "index", work.Index, "error", err)
 		}
 	}

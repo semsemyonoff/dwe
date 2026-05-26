@@ -141,6 +141,9 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 		return e
 	})
 	if runErr != nil {
+		if errors.Is(runErr, tea.ErrProgramPanic) {
+			return Result{}, runErr
+		}
 		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
 			return Result{}, ui.ErrCancelled
 		}

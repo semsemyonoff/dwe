@@ -44,6 +44,7 @@ func (m *Model) renderTwoPanel() tea.View {
 
 	content := strings.Join([]string{body, statusContent}, "\n")
 	v := tea.NewView(content)
+	v.AltScreen = true
 	return v
 }
 

@@ -840,6 +840,9 @@ func runDocsTUI(_ *cobra.Command, flags *rootFlags, termWidth, termHeight int) e
 	})
 
 	if runErr != nil {
+		if errors.Is(runErr, tea.ErrProgramPanic) {
+			return runErr
+		}
 		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
 			return ui.ErrCancelled
 		}

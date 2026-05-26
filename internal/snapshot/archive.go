@@ -796,7 +796,7 @@ func extractTarGz(tarPath, targetRoot string) error {
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			return fmt.Errorf("unpack: mkdir for %q: %w", hdr.Name, err)
 		}
-		out, err := os.OpenFile(full, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
+		out, err := os.OpenFile(full, os.O_CREATE|os.O_WRONLY|os.O_EXCL, hdr.FileInfo().Mode()&0o777)
 		if err != nil {
 			return fmt.Errorf("unpack: create %q: %w", hdr.Name, err)
 		}

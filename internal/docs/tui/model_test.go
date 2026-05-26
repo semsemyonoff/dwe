@@ -75,6 +75,9 @@ func TestModelView(t *testing.T) {
 	if view.Content == "" {
 		t.Error("View.Content should not be empty")
 	}
+	if !view.AltScreen {
+		t.Error("View must request AltScreen")
+	}
 }
 
 type testRenderer struct{}
