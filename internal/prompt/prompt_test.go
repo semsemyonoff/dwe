@@ -398,7 +398,7 @@ func TestRunFromDirNoColorSuppression(t *testing.T) {
 	if got != want {
 		t.Errorf("stdout: got %q, want %q", got, want)
 	}
-	if got != "" && (containsEsc(got)) {
+	if containsEsc(got) {
 		t.Errorf("expected no ANSI escapes, got %q", got)
 	}
 }
@@ -429,7 +429,13 @@ func TestRunNoColorEnv(t *testing.T) {
 			if tt.set {
 				t.Setenv("NO_COLOR", tt.value)
 			} else {
+				orig, existed := os.LookupEnv("NO_COLOR")
 				_ = os.Unsetenv("NO_COLOR")
+				t.Cleanup(func() {
+					if existed {
+						_ = os.Setenv("NO_COLOR", orig)
+					}
+				})
 			}
 			root := t.TempDir()
 			writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
@@ -526,6 +532,10 @@ func TestParseHex(t *testing.T) {
 	}{
 		{in: "#2EC3EB", wantR: 0x2E, wantG: 0xC3, wantB: 0xEB, wantOK: true},
 		{in: "2EC3EB", wantR: 0x2E, wantG: 0xC3, wantB: 0xEB, wantOK: true},
+		{in: "#2ec3eb", wantR: 0x2E, wantG: 0xC3, wantB: 0xEB, wantOK: true},
+		{in: "2ec3eb", wantR: 0x2E, wantG: 0xC3, wantB: 0xEB, wantOK: true},
+		{in: "#000000", wantR: 0x00, wantG: 0x00, wantB: 0x00, wantOK: true},
+		{in: "#ffffff", wantR: 0xFF, wantG: 0xFF, wantB: 0xFF, wantOK: true},
 		{in: "", wantOK: false},
 		{in: "#XYZ", wantOK: false},
 		{in: "#12345", wantOK: false},

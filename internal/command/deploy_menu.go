@@ -30,16 +30,16 @@ import (
 
 // Test seams (package-level vars that tests can override).
 var (
-	collectPortConflictsFn = valenv.CollectPortConflicts
-	loadSetupYAMLFn        = setup.LoadSetupYAML
-	newHuhAskerFn          = setup.NewHuhAsker
-	runWizardFn            = setup.Run
-	selectMenuItemFn       = selectMenuItemInteractive
-	selectDeployServiceFn    = selectDeployServiceInteractive
-	buildDeployItemsFn       = buildDeployServiceItems
-	runPreWizardPreflightFn  = runPreWizardPreflight
-	runDeployRunFn           = runDeployRun
-	runDeployPlanFn          = runDeployPlan
+	collectPortConflictsFn  = valenv.CollectPortConflicts
+	loadSetupYAMLFn         = setup.LoadSetupYAML
+	newHuhAskerFn           = setup.NewHuhAsker
+	runWizardFn             = setup.Run
+	selectMenuItemFn        = selectMenuItemInteractive
+	selectDeployServiceFn   = selectDeployServiceInteractive
+	buildDeployItemsFn      = buildDeployServiceItems
+	runPreWizardPreflightFn = runPreWizardPreflight
+	runDeployRunFn          = runDeployRun
+	runDeployPlanFn         = runDeployPlan
 )
 
 type menuChoice string
@@ -55,13 +55,13 @@ const (
 
 // deployServiceItem describes one service entry in the deploy-service submenu.
 type deployServiceItem struct {
-	Name        string
-	Type        string
-	Mandatory   bool
-	Deployed    bool
-	DeployedAt  time.Time
-	Locked      bool // true when a mandatory service is not yet deployed and this is optional
-	LockedHint  string
+	Name       string
+	Type       string
+	Mandatory  bool
+	Deployed   bool
+	DeployedAt time.Time
+	Locked     bool // true when a mandatory service is not yet deployed and this is optional
+	LockedHint string
 }
 
 // runDeployMenu is the entry point for `devbox deploy` without subcommands.
@@ -148,7 +148,7 @@ func runDeployMenu(cmd *cobra.Command, flags *rootFlags) error {
 		// On every iteration except the first, scrub the previous frame so
 		// the new banner + menu replace the old submenu rather than piling up.
 		if !firstIteration {
-			fmt.Fprint(cmd.OutOrStdout(), "\x1b[2J\x1b[H")
+			_, _ = fmt.Fprint(cmd.OutOrStdout(), "\x1b[2J\x1b[H")
 		}
 		firstIteration = false
 

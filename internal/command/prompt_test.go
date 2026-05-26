@@ -126,12 +126,8 @@ func TestPromptCmd_RunOutsideProject(t *testing.T) {
 		}
 		return
 	}
-	var ec interface{ ExitCode() int }
-	if !errors.As(err, &ec) {
-		t.Fatalf("expected ExitCode error, got %T: %v", err, err)
-	}
-	if ec.ExitCode() != 1 {
-		t.Errorf("ExitCode = %d, want 1", ec.ExitCode())
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("expected ErrSilent, got %T: %v", err, err)
 	}
 	if out.Len() != 0 {
 		t.Errorf("expected no stdout, got %q", out.String())
@@ -167,13 +163,24 @@ func TestPromptCmd_RejectsPositionalArgs(t *testing.T) {
 	}
 }
 
-func TestPromptExitError_ImplementsExitCode(t *testing.T) {
-	var e error = &promptExitError{code: 1}
-	var ec interface{ ExitCode() int }
-	if !errors.As(e, &ec) {
-		t.Fatal("promptExitError does not implement ExitCode()")
+func TestPromptCmd_OutsideProjectReturnsSilent(t *testing.T) {
+	// Verify that the cobra path returns ErrSilent when outside a project,
+	// so main.go's error handler suppresses output and os.Exit(1) fires.
+	tmp := t.TempDir()
+	deep := filepath.Join(tmp, "no", "devbox", "project")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
 	}
-	if ec.ExitCode() != 1 {
-		t.Errorf("ExitCode = %d, want 1", ec.ExitCode())
+	withTempCwd(t, deep)
+	cmd := newPromptCmd(&rootFlags{})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+	if err == nil {
+		t.Skip("may be running inside a parent devbox project")
+	}
+	if !errors.Is(err, ErrSilent) {
+		t.Errorf("expected ErrSilent, got %T: %v", err, err)
 	}
 }

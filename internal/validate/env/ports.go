@@ -394,7 +394,6 @@ func parsePortsField(s string) []int {
 	return out
 }
 
-// listenTCP attempts to bind a TCP listener on the wildcard interface for the
 // IsPortAvailable reports whether port can be bound on localhost right now.
 // Returns true when no process holds it (free), false when EADDRINUSE.
 // Any other error (e.g. EACCES on a privileged port < 1024) is treated as

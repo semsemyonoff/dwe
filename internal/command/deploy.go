@@ -85,9 +85,9 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *rootFlags, op
 	switch opts.Format {
 	case "shell":
 		if opts.ServiceName != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "# Deploy plan for service %s\n", opts.ServiceName)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "# Deploy plan for service %s\n", opts.ServiceName)
 		} else {
-			fmt.Fprintln(cmd.OutOrStdout(), "# Deploy plan")
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "# Deploy plan")
 		}
 		deploy.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
 	default:
@@ -95,7 +95,7 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *rootFlags, op
 		if opts.ServiceName != "" {
 			title = fmt.Sprintf("Deploy plan for service %s", opts.ServiceName)
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSectionTitle(title))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSectionTitle(title))
 		pipeline.PrintPlanTable(steps, render.NewWriter(cmd.OutOrStdout()), devboxBin)
 	}
 	return nil

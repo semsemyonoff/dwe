@@ -6,15 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// promptExitError carries a fixed exit code so main.go's ExitCode() dispatch
-// propagates the prompt's silent-failure semantics through cobra.
-type promptExitError struct {
-	code int
-}
-
-func (e *promptExitError) Error() string { return "" }
-func (e *promptExitError) ExitCode() int { return e.code }
-
 func newPromptCmd(_ *rootFlags) *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
@@ -40,9 +31,8 @@ inside a devbox project and 1 outside (or on any silent failure).`,
 			if check {
 				passthrough = []string{"--check"}
 			}
-			code := prompt.Run(cmd.OutOrStdout(), passthrough)
-			if code != 0 {
-				return &promptExitError{code: code}
+			if prompt.Run(cmd.OutOrStdout(), passthrough) != 0 {
+				return ErrSilent
 			}
 			return nil
 		},

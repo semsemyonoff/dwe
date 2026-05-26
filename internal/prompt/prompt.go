@@ -209,19 +209,11 @@ func parseHex(hex string) (r, g, b uint8, ok bool) {
 	if len(s) != 6 {
 		return 0, 0, 0, false
 	}
-	rv, err := strconv.ParseUint(s[0:2], 16, 8)
+	v, err := strconv.ParseUint(s, 16, 32)
 	if err != nil {
 		return 0, 0, 0, false
 	}
-	gv, err := strconv.ParseUint(s[2:4], 16, 8)
-	if err != nil {
-		return 0, 0, 0, false
-	}
-	bv, err := strconv.ParseUint(s[4:6], 16, 8)
-	if err != nil {
-		return 0, 0, 0, false
-	}
-	return uint8(rv), uint8(gv), uint8(bv), true
+	return uint8(v >> 16), uint8(v >> 8), uint8(v), true
 }
 
 // readStatus reads the deploy journal state file and maps it to a statusKind
