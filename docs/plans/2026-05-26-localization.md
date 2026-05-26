@@ -398,12 +398,12 @@ func ResolveLocale(flagLang, configLang, sysLang string) string {
 - Create: `internal/i18n/locale.go`
 - Create: `internal/i18n/locale_test.go`
 
-- [ ] implement `ResolveLocale(flagLang, configLang, sysLang string) string` per the documented precedence
-- [ ] implement `normalize(s string) string`: trim, lowercase, drop region (`ru-ru` / `ru_RU` → `ru`), drop encoding (`ru_RU.UTF-8` → `ru`)
-- [ ] implement `parseSystemLang(s string) string`: handles `ru_RU.UTF-8`, `en_US`, `POSIX` (→ ""), `C` (→ ""), empty → ""
-- [ ] table-driven test for `ResolveLocale`: flag wins, config wins when no flag, sys-lang when config empty, "en" when all empty, "en" when sys is "POSIX"/"C"
-- [ ] table-driven test for `parseSystemLang` covering all known shapes
-- [ ] run `go test ./internal/i18n/...` — must pass before Task 4
+- [x] implement `ResolveLocale(flagLang, configLang, sysLang string) string` per the documented precedence
+- [x] implement `normalize(s string) string`: trim, lowercase, drop region (`ru-ru` / `ru_RU` → `ru`), drop encoding (`ru_RU.UTF-8` → `ru`)
+- [x] implement `parseSystemLang(s string) string`: handles `ru_RU.UTF-8`, `en_US`, `POSIX` (→ ""), `C` (→ ""), empty → ""
+- [x] table-driven test for `ResolveLocale`: flag wins, config wins when no flag, sys-lang when config empty, "en" when all empty, "en" when sys is "POSIX"/"C"
+- [x] table-driven test for `parseSystemLang` covering all known shapes
+- [x] run `go test ./internal/i18n/...` — must pass before Task 4
 
 ### Task 4: userconfig — add `Language` field
 
