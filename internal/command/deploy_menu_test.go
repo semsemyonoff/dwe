@@ -247,6 +247,54 @@ func TestRunDeployMenu_WizardShownWhenConflictsAndEmptyLocal(t *testing.T) {
 	assert.True(t, capturedShowWizard, "wizard should be shown when port conflicts exist and local.yml is empty")
 }
 
+func TestRunDeployMenu_WizardPreflightBlocks(t *testing.T) {
+	tmpdir := t.TempDir()
+	devboxDir := filepath.Join(tmpdir, "devbox")
+	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "devbox.yml"), []byte("project:\n  name: test"), 0o644))
+
+	flags := &rootFlags{configPath: filepath.Join(devboxDir, "devbox.yml")}
+
+	oldIsInteractive := ui.IsInteractiveFn
+	oldSelectFn := selectMenuItemFn
+	oldPreflightFn := runPreWizardPreflightFn
+	oldRunWizardFn := runWizardFn
+	t.Cleanup(func() {
+		ui.IsInteractiveFn = oldIsInteractive
+		selectMenuItemFn = oldSelectFn
+		runPreWizardPreflightFn = oldPreflightFn
+		runWizardFn = oldRunWizardFn
+	})
+
+	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
+		return menuWizard, nil
+	}
+
+	preflightCalled := false
+	runPreWizardPreflightFn = func(ctx context.Context, cfg *config.DevboxConfig, baseDir string, errOut io.Writer) error {
+		preflightCalled = true
+		return &deployValidationError{"docker daemon not reachable"}
+	}
+
+	wizardCalled := false
+	runWizardFn = func(ctx context.Context, deps setup.WizardDeps) error {
+		wizardCalled = true
+		return nil
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(bytes.NewBuffer(nil))
+	cmd.SetErr(bytes.NewBuffer(nil))
+
+	err := runDeployMenu(cmd, flags)
+	require.Error(t, err)
+	var dve *deployValidationError
+	assert.ErrorAs(t, err, &dve, "must return deployValidationError")
+	assert.True(t, preflightCalled, "pre-wizard preflight must run")
+	assert.False(t, wizardCalled, "wizard must NOT run when preflight blocks")
+}
+
 func TestIsEmptyLocal(t *testing.T) {
 	cases := []struct {
 		name     string

@@ -26,6 +26,7 @@ import (
 func NewHuhAsker(out io.Writer) (
 	askQuestions func(ctx context.Context, questions []Question) (map[string]any, error),
 	askPortOverrides func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error),
+	askServiceToggles func(ctx context.Context, toggles []ServiceToggle) (map[string]bool, error),
 ) {
 	askQuestions = func(ctx context.Context, questions []Question) (map[string]any, error) {
 		if len(questions) == 0 {
@@ -57,7 +58,11 @@ func NewHuhAsker(out io.Writer) (
 					Title(q.Title).
 					Description(q.Description).
 					Value(ptr).
-					Validate(buildInputValidator(q))
+					Validate(buildInputValidator(q)).
+					// Enable ShowSuggestions so the AcceptSuggestion binding
+					// surfaces in KeyBinds() — we hijack its help slot to
+					// show "esc cancel" in the bottom help line.
+					SuggestionsFunc(func() []string { return []string{" "} }, nil)
 
 				bindings = append(bindings, answerBinding{
 					id:        q.ID,
@@ -130,9 +135,16 @@ func NewHuhAsker(out io.Writer) (
 		}
 
 		keymap := huh.NewDefaultKeyMap()
-		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
+		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "cancel"))
+		// Hijack help-slots per field type so the bottom help line carries an
+		// "esc cancel" hint regardless of which field type is focused.
+		keymap.Input.AcceptSuggestion = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
+		keymap.Select.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
+		keymap.MultiSelect.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
 
-		form := huh.NewForm(huh.NewGroup(huhFields...)).
+		form := huh.NewForm(
+			huh.NewGroup(huhFields...).Title("Setup"),
+		).
 			WithTheme(ui.Theme()).
 			WithKeyMap(keymap).
 			WithShowHelp(true).
@@ -210,15 +222,27 @@ func NewHuhAsker(out io.Writer) (
 			field := huh.NewInput().
 				Title(title).
 				Value(ptr).
-				Validate(buildPortValidator())
+				Validate(buildPortValidator()).
+				// Enable ShowSuggestions so huh.Input.KeyBinds() exposes the
+				// AcceptSuggestion binding, which we hijack below to show
+				// "esc cancel" in the help line. The func returns nil so no
+				// actual suggestions are presented to the user.
+				SuggestionsFunc(func() []string { return []string{" "} }, nil)
 
 			huhFields = append(huhFields, field)
 		}
 
 		keymap := huh.NewDefaultKeyMap()
-		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
+		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "cancel"))
+		// Hijack AcceptSuggestion's help slot to surface ESC in the bottom
+		// help line. The actual key press is caught by the form-level Quit
+		// handler before the field sees it.
+		keymap.Input.AcceptSuggestion = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
 
-		form := huh.NewForm(huh.NewGroup(huhFields...).Title("Port Overrides")).
+		form := huh.NewForm(
+			huh.NewGroup(huhFields...).
+				Title("Port Overrides"),
+		).
 			WithTheme(ui.Theme()).
 			WithKeyMap(keymap).
 			WithShowHelp(true).
@@ -252,7 +276,121 @@ func NewHuhAsker(out io.Writer) (
 		return coercedPorts, nil
 	}
 
-	return askQuestions, askPortOverrides
+	askServiceToggles = func(ctx context.Context, toggles []ServiceToggle) (map[string]bool, error) {
+		if len(toggles) == 0 {
+			return map[string]bool{}, nil
+		}
+
+		// Build a huh multi-select. Mandatory rows are shown but locked: huh
+		// has no native "disabled option" concept, so we leave them out of
+		// the form and surface them above the prompt as an "Always on" line.
+		// The returned map includes BOTH the user's optional picks AND every
+		// mandatory service, so the caller can write a complete picture.
+		var optionLines []huh.Option[string]
+		var initial []string
+		var mandatoryLabels []string
+		nameToToggle := make(map[string]ServiceToggle, len(toggles))
+		for _, t := range toggles {
+			nameToToggle[t.Name] = t
+			if t.Mandatory {
+				mandatoryLabels = append(mandatoryLabels, formatServiceToggleRow(t))
+				continue
+			}
+			optionLines = append(optionLines, huh.NewOption(formatServiceToggleRow(t), t.Name))
+			if t.Enabled {
+				initial = append(initial, t.Name)
+			}
+		}
+
+		if len(optionLines) == 0 {
+			// All mandatory — nothing to select. Still report mandatory as kept.
+			result := make(map[string]bool, len(toggles))
+			for _, t := range toggles {
+				if t.Mandatory {
+					result[t.Name] = true
+				}
+			}
+			return result, nil
+		}
+
+		if len(mandatoryLabels) > 0 {
+			_, _ = fmt.Fprintln(out, ui.StyleSubheader("Always on: ")+ui.StyleMuted(strings.Join(mandatoryLabels, ", ")))
+		}
+
+		picked := initial
+		field := huh.NewMultiSelect[string]().
+			Title("Services").
+			Options(applyMultiSelectInitial(optionLines, initial)...).
+			Value(&picked).
+			Filterable(false)
+
+		keymap := huh.NewDefaultKeyMap()
+		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "cancel"))
+		keymap.MultiSelect.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
+
+		form := huh.NewForm(huh.NewGroup(field).Title("Services")).
+			WithTheme(ui.Theme()).
+			WithKeyMap(keymap).
+			WithShowHelp(true).
+			WithOutput(out)
+
+		err := ui.RunWithPromptHooks(func() error { return form.Run() })
+		if err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				return nil, ErrWizardCanceled
+			}
+			return nil, fmt.Errorf("wizard: %w", err)
+		}
+
+		result := make(map[string]bool, len(toggles))
+		for _, name := range picked {
+			result[name] = true
+		}
+		// Mandatory services are always kept.
+		for _, t := range toggles {
+			if t.Mandatory {
+				result[t.Name] = true
+			}
+		}
+		return result, nil
+	}
+
+	return askQuestions, askPortOverrides, askServiceToggles
+}
+
+// formatServiceToggleRow renders a single line for the wizard's service
+// multi-select: name colored by type, type badge, container in muted color —
+// mirroring the look of `devbox services`.
+func formatServiceToggleRow(t ServiceToggle) string {
+	typeText := t.Type
+	if typeText == "" {
+		typeText = "-"
+	}
+	container := t.Container
+	if container == "" {
+		container = "-"
+	}
+	return ui.StyleServiceOptionName(t.Type, t.Name) + "  " +
+		ui.StyleServiceOptionType(t.Type, "["+typeText+"]") + " " +
+		ui.StyleServiceOptionContainer(container)
+}
+
+// applyMultiSelectInitial marks the given option values as pre-selected so the
+// huh.MultiSelect form opens with them already checked.
+func applyMultiSelectInitial(opts []huh.Option[string], initial []string) []huh.Option[string] {
+	if len(initial) == 0 {
+		return opts
+	}
+	set := make(map[string]bool, len(initial))
+	for _, k := range initial {
+		set[k] = true
+	}
+	for i, o := range opts {
+		if set[o.Value] {
+			opts[i] = o.Selected(true)
+		}
+	}
+	return opts
 }
 
 // buildInputValidator returns a validator function for input fields that applies the question's validation.
@@ -288,7 +426,10 @@ func buildInputValidator(q Question) func(string) error {
 	}
 }
 
-// buildPortValidator returns a validator for port override inputs.
+// buildPortValidator returns a validator for port override inputs. The
+// validator parses + range-checks the value, then probes whether the chosen
+// port is currently free on localhost. A still-occupied port is rejected
+// inline so the user has to pick a different one before the form submits.
 func buildPortValidator() func(string) error {
 	return func(s string) error {
 		if strings.TrimSpace(s) == "" {
@@ -302,6 +443,10 @@ func buildPortValidator() func(string) error {
 
 		if port < 1 || port > 65535 {
 			return fmt.Errorf("port out of range (1..65535)")
+		}
+
+		if !env.IsPortAvailable(port) {
+			return fmt.Errorf("port %d is still in use; pick another", port)
 		}
 
 		return nil

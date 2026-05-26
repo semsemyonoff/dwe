@@ -59,6 +59,82 @@ func TestWizardRunHappyPath(t *testing.T) {
 	}
 }
 
+func TestBuildServiceTogglesOverlay(t *testing.T) {
+	toggles := []ServiceToggle{
+		{Name: "main", Type: "app", Mandatory: true, Enabled: true},
+		{Name: "adminer", Type: "tool", Mandatory: false, Enabled: false},
+		{Name: "worker", Type: "app", Mandatory: false, Enabled: true},
+		{Name: "extra", Type: "app", Mandatory: false, Enabled: false},
+	}
+	t.Run("emits only diffs from in-config defaults", func(t *testing.T) {
+		kept := map[string]bool{
+			"main":    true, // mandatory, ignored
+			"adminer": true, // was off, now on → emit
+			"worker":  true, // was on, stays on → skip
+			// "extra" absent (was off, stays off → skip)
+		}
+		got := BuildServiceTogglesOverlay(toggles, kept)
+		services, _ := got["services"].(map[string]any)
+		if services == nil {
+			t.Fatalf("expected services map, got %T", got["services"])
+		}
+		if len(services) != 1 {
+			t.Errorf("expected 1 service entry, got %d: %v", len(services), services)
+		}
+		adminer, _ := services["adminer"].(map[string]any)
+		if adminer == nil || adminer["enabled"] != true {
+			t.Errorf("expected services.adminer.enabled=true, got %v", services["adminer"])
+		}
+	})
+	t.Run("nothing to write returns nil", func(t *testing.T) {
+		kept := map[string]bool{"worker": true} // matches in-config Enabled=true
+		got := BuildServiceTogglesOverlay(toggles, kept)
+		if got != nil {
+			t.Errorf("expected nil overlay when no diffs, got %v", got)
+		}
+	})
+	t.Run("disabling previously enabled emits false", func(t *testing.T) {
+		kept := map[string]bool{} // user unchecked everything
+		got := BuildServiceTogglesOverlay(toggles, kept)
+		services, _ := got["services"].(map[string]any)
+		// worker was enabled, now off → emit. main is mandatory → skip.
+		worker, _ := services["worker"].(map[string]any)
+		if worker == nil || worker["enabled"] != false {
+			t.Errorf("expected services.worker.enabled=false, got %v", services["worker"])
+		}
+	})
+}
+
+func TestWizardRunNoData_DoesNotCreateLocal(t *testing.T) {
+	testDir := t.TempDir()
+	localPath := filepath.Join(testDir, "local.yml")
+
+	// No questions, no port conflicts — wizard should be a no-op and must NOT
+	// create an empty `{}` local.yml.
+	deps := WizardDeps{
+		BaseDir:       testDir,
+		LocalPath:     localPath,
+		Questions:     nil,
+		PortConflicts: nil,
+		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
+			t.Fatal("AskQuestions must not be called when there are no questions")
+			return nil, nil
+		},
+		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
+			t.Fatal("AskPortOverrides must not be called when there are no conflicts")
+			return nil, nil
+		},
+	}
+
+	if err := Run(context.Background(), deps); err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+
+	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
+		t.Errorf("expected local.yml to NOT exist when wizard collected nothing, but Stat err = %v", err)
+	}
+}
+
 func TestWizardRunPortConflict(t *testing.T) {
 	testDir := t.TempDir()
 	localPath := filepath.Join(testDir, "local.yml")

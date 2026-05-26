@@ -9,13 +9,30 @@ import (
 	"devbox-cli/internal/validate/env"
 )
 
+// ServiceToggle describes a service candidate for the wizard's enable/disable
+// multi-select step. Mandatory services are shown but locked (always on).
+type ServiceToggle struct {
+	Name      string
+	Type      string
+	Container string
+	Mandatory bool
+	Enabled   bool // current state (from existing config)
+}
+
 // WizardDeps contains all required collaborators for the wizard executor.
-// The caller loads questions and port conflicts externally and passes them in.
+// The caller loads questions, port conflicts, and service toggles externally
+// and passes them in.
 type WizardDeps struct {
-	BaseDir       string
-	LocalPath     string
-	Questions     []Question
-	PortConflicts []env.PortConflict
+	BaseDir        string
+	LocalPath      string
+	Questions      []Question
+	PortConflicts  []env.PortConflict
+	ServiceToggles []ServiceToggle
+	// AskServiceToggles is called to let the user pick which optional services
+	// to enable. Returns the set of service names that should be enabled
+	// (mandatory services are not included — they're always on). If the user
+	// cancels, returns ErrWizardCanceled.
+	AskServiceToggles func(ctx context.Context, toggles []ServiceToggle) (kept map[string]bool, err error)
 	// AskQuestions is called to collect answers for all questions.
 	// Returns a map of question ID to answer (typed per question type).
 	// If the user cancels, returns ErrWizardCanceled.
@@ -33,8 +50,27 @@ type WizardDeps struct {
 func Run(ctx context.Context, deps WizardDeps) error {
 	var portOverrides map[PortKey]int
 	var answers map[string]any
+	var keptServices map[string]bool
+	servicesStepRan := false
 
-	// If there are port conflicts, ask the user to override them.
+	// Step 1: service toggles. Show the multi-select first so the user
+	// establishes scope ("which services are part of this project?") before
+	// being asked about port overrides or setup details for them. Mandatory
+	// services are surfaced as locked-on rows; only optional toggleables
+	// produce a meaningful selection.
+	if hasToggleableService(deps.ServiceToggles) && deps.AskServiceToggles != nil {
+		var err error
+		keptServices, err = deps.AskServiceToggles(ctx, deps.ServiceToggles)
+		if err != nil {
+			if isErrWizardCanceled(err) {
+				return ErrWizardCanceled
+			}
+			return fmt.Errorf("ask service toggles: %w", err)
+		}
+		servicesStepRan = true
+	}
+
+	// Step 2: port overrides for unresolved conflicts.
 	if len(deps.PortConflicts) > 0 {
 		var err error
 		portOverrides, err = deps.AskPortOverrides(ctx, deps.PortConflicts)
@@ -46,7 +82,7 @@ func Run(ctx context.Context, deps WizardDeps) error {
 		}
 	}
 
-	// If there are questions, ask the user to answer them.
+	// Step 3: setup questions from setup.yml.
 	if len(deps.Questions) > 0 {
 		var err error
 		answers, err = deps.AskQuestions(ctx, deps.Questions)
@@ -63,7 +99,7 @@ func Run(ctx context.Context, deps WizardDeps) error {
 		return fmt.Errorf("validate answers: %w", err)
 	}
 
-	// Build overlays from answers and port overrides.
+	// Build overlays from answers, port overrides, and service toggles.
 	qOverlay, err := BuildOverlay(deps.Questions, answers)
 	if err != nil {
 		return fmt.Errorf("build question overlay: %w", err)
@@ -72,6 +108,18 @@ func Run(ctx context.Context, deps WizardDeps) error {
 	pOverlay, err := BuildPortOverlay(portOverrides)
 	if err != nil {
 		return fmt.Errorf("build port overlay: %w", err)
+	}
+
+	var sOverlay map[string]any
+	if servicesStepRan {
+		sOverlay = BuildServiceTogglesOverlay(deps.ServiceToggles, keptServices)
+	}
+
+	// No data collected — skip the file write entirely. An empty `{}`
+	// local.yml on a fresh project would hide the Wizard menu item next time
+	// without actually configuring anything.
+	if len(qOverlay) == 0 && len(pOverlay) == 0 && len(sOverlay) == 0 {
+		return nil
 	}
 
 	// Load existing local.yml (if any).
@@ -89,6 +137,19 @@ func Run(ctx context.Context, deps WizardDeps) error {
 	merged, err = MergeIntoLocal(merged, pOverlay)
 	if err != nil {
 		return fmt.Errorf("merge port overlay: %w", err)
+	}
+
+	if len(sOverlay) > 0 {
+		merged, err = MergeIntoLocal(merged, sOverlay)
+		if err != nil {
+			return fmt.Errorf("merge service-toggles overlay: %w", err)
+		}
+	}
+
+	// Defensive: if the merged map happens to be empty (e.g. existing
+	// local.yml was empty and both overlays were empty), don't write either.
+	if len(merged) == 0 {
+		return nil
 	}
 
 	// Write atomically.
@@ -245,4 +306,46 @@ func validateAnswerForQuestion(q Question, answer any) error {
 // isErrWizardCanceled checks if an error is ErrWizardCanceled.
 func isErrWizardCanceled(err error) bool {
 	return errors.Is(err, ErrWizardCanceled)
+}
+
+// hasToggleableService reports whether any service in toggles is optional
+// (mandatory=false). Mandatory-only sets are not worth presenting as a
+// multi-select — there is nothing for the user to choose.
+func hasToggleableService(toggles []ServiceToggle) bool {
+	for _, t := range toggles {
+		if !t.Mandatory {
+			return true
+		}
+	}
+	return false
+}
+
+// BuildServiceTogglesOverlay produces a partial local.yml overlay encoding the
+// user's enable/disable decisions for OPTIONAL services. Mandatory services
+// are skipped (they're always-on and overlay entries would be no-ops). Only
+// services whose effective state differs from the in-config default are
+// emitted, so the overlay stays minimal and round-trippable.
+//
+// kept maps service-name → keep-enabled. A service absent from kept is
+// treated as "user unchecked it" (disabled), to match the multi-select
+// semantics: kept holds exactly the names the user left checked.
+func BuildServiceTogglesOverlay(toggles []ServiceToggle, kept map[string]bool) map[string]any {
+	overlay := map[string]any{}
+	services := map[string]any{}
+	for _, t := range toggles {
+		if t.Mandatory {
+			continue
+		}
+		want := kept[t.Name]
+		if want == t.Enabled {
+			// No change from the in-config default — don't emit a row.
+			continue
+		}
+		services[t.Name] = map[string]any{"enabled": want}
+	}
+	if len(services) == 0 {
+		return nil
+	}
+	overlay["services"] = services
+	return overlay
 }

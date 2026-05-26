@@ -221,6 +221,22 @@ func StyleServiceOptionContainer(s string) string {
 	return renderFGOnly(resolvedMuted, s)
 }
 
+// StyleOptionSuccess renders s in the success color, FG-only (composable with
+// huh's bold/faint wrappers without a full ANSI reset).
+func StyleOptionSuccess(s string) string {
+	return renderFGOnly(resolvedSuccess, s)
+}
+
+// StyleOptionMuted renders s in the muted color, FG-only.
+func StyleOptionMuted(s string) string {
+	return renderFGOnly(resolvedMuted, s)
+}
+
+// StyleOptionWarning renders s in the warning color, FG-only.
+func StyleOptionWarning(s string) string {
+	return renderFGOnly(resolvedWarning, s)
+}
+
 func styleInactiveService(serviceType string) lipgloss.Style {
 	return serviceTypeStyle(serviceType).Bold(false).Faint(true)
 }

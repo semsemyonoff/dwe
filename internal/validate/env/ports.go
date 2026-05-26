@@ -395,6 +395,18 @@ func parsePortsField(s string) []int {
 }
 
 // listenTCP attempts to bind a TCP listener on the wildcard interface for the
+// IsPortAvailable reports whether port can be bound on localhost right now.
+// Returns true when no process holds it (free), false when EADDRINUSE.
+// Any other error (e.g. EACCES on a privileged port < 1024) is treated as
+// available because we cannot prove otherwise.
+//
+// This is a fast, foreground probe meant for interactive validators (e.g. the
+// setup wizard's port-override form). For full conflict classification —
+// including "occupied by one of our own containers" — use CollectPortConflicts.
+func IsPortAvailable(port int) bool {
+	return portListenFn(port) == nil
+}
+
 // given port and closes it immediately. Used as the fallback check for ports
 // not bound by any docker container — if listen succeeds the port is free,
 // if it fails with EADDRINUSE some non-docker process owns it. Any other error

@@ -84,8 +84,18 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *rootFlags, op
 	devboxBin := config.DevboxBin(cfg)
 	switch opts.Format {
 	case "shell":
+		if opts.ServiceName != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "# Deploy plan for service %s\n", opts.ServiceName)
+		} else {
+			fmt.Fprintln(cmd.OutOrStdout(), "# Deploy plan")
+		}
 		deploy.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
 	default:
+		title := "Deploy plan"
+		if opts.ServiceName != "" {
+			title = fmt.Sprintf("Deploy plan for service %s", opts.ServiceName)
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSectionTitle(title))
 		pipeline.PrintPlanTable(steps, render.NewWriter(cmd.OutOrStdout()), devboxBin)
 	}
 	return nil

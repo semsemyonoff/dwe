@@ -618,6 +618,11 @@ func TestDeployPlanCmd_RunE_EmptyPlan(t *testing.T) {
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	// Title rendering exists (RenderSectionTitle returns ANSI-styled text but
+	// always contains the plain text payload).
+	if !strings.Contains(buf.String(), "Deploy plan") {
+		t.Errorf("expected plan output to contain 'Deploy plan', got: %q", buf.String())
+	}
 }
 
 func TestDeployPlanCmd_RunE_ShellFormat(t *testing.T) {
