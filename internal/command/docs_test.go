@@ -337,7 +337,15 @@ services:
 
 	outputDir := filepath.Join(tmpDir, "docs", "reference")
 
-	flags := &rootFlags{configPath: filepath.Join(tmpDir, "devbox.yml")}
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	flags := &rootFlags{
+		configPath: filepath.Join(tmpDir, "devbox.yml"),
+		I18n:       store,
+		Locale:     "en",
+	}
 	df := &docsFlags{
 		output:         outputDir,
 		format:         "markdown",
@@ -350,8 +358,8 @@ services:
 	_ = root // ensure root is built (registers docs subcommand).
 
 	// Find the docs generate subcommand.
-	docsCmd, _, err := root.Find([]string{"docs", "generate"})
-	if err != nil || docsCmd == nil {
+	docsCmd, _, err2 := root.Find([]string{"docs", "generate"})
+	if err2 != nil || docsCmd == nil {
 		t.Fatal("docs generate command not found in root")
 	}
 
@@ -365,10 +373,10 @@ services:
 		t.Errorf("top-level index.md not written: %v", err)
 	}
 
-	// Commands index should be written (even empty registry).
-	commandsIndex := filepath.Join(outputDir, "commands", "index.md")
+	// Commands index should be written under the locale subdir (commands/en/).
+	commandsIndex := filepath.Join(outputDir, "commands", "en", "index.md")
 	if _, err := os.Stat(commandsIndex); err != nil {
-		t.Errorf("commands/index.md not written: %v", err)
+		t.Errorf("commands/en/index.md not written: %v", err)
 	}
 }
 

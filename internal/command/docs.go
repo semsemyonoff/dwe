@@ -202,6 +202,10 @@ func validateDocsFlags(df *docsFlags) error {
 	if df.scope == "commands" && df.format != "markdown" && df.format != "all" {
 		return fmt.Errorf("--format %q is not supported for --scope commands; registry docs only support markdown (use --format markdown or --format all)", df.format)
 	}
+	// --lang all is reserved for future multi-locale generation; reject it now.
+	if df.lang == "all" {
+		return fmt.Errorf("--lang all is not supported; specify a single locale (e.g. --lang en)")
+	}
 	return nil
 }
 

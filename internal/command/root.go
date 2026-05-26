@@ -122,7 +122,7 @@ Run 'devbox info' for the full info dashboard.`,
 						store = &i18n.Store{}
 					}
 					flags.I18n = store
-					flags.Locale = i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
+					flags.Locale = store.ClampLocale(i18n.ResolveLocale("", cfgLang, os.Getenv("LANG")))
 					return nil
 				}
 				// Locate miss — validate always requires a project.
