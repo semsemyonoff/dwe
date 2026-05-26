@@ -543,3 +543,271 @@ sections:
 		t.Errorf("expected services template for arbitrary tool, got: %q", item.When)
 	}
 }
+
+func TestInfoItem_UnmarshalYAML_autoUrls(t *testing.T) {
+	tests := []struct {
+		name      string
+		yaml      string
+		wantType  string
+		checkSpec func(t *testing.T, spec *AutoURLsSpec)
+	}{
+		{
+			name: "auto-urls minimal",
+			yaml: `type: auto-urls`,
+			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
+				if spec == nil {
+					t.Error("SourceAutoURLsSpec should be non-nil")
+				}
+				if len(spec.Include) != 0 {
+					t.Errorf("Include should be empty by default, got %v", spec.Include)
+				}
+			},
+		},
+		{
+			name: "auto-urls with include",
+			yaml: `type: auto-urls
+include: [app, tool, infra]`,
+			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
+				if spec == nil {
+					t.Error("SourceAutoURLsSpec should be non-nil")
+				}
+				if len(spec.Include) != 3 {
+					t.Errorf("Include should have 3 elements, got %d", len(spec.Include))
+				}
+			},
+		},
+		{
+			name: "auto-urls with hide and port_via",
+			yaml: `type: auto-urls
+include: [app, tool]
+hide: [varnish]
+port_via: nginx`,
+			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
+				if spec == nil {
+					t.Error("SourceAutoURLsSpec should be non-nil")
+				}
+				if len(spec.Hide) != 1 || spec.Hide[0] != "varnish" {
+					t.Errorf("Hide not parsed correctly: %v", spec.Hide)
+				}
+				if spec.PortVia != "nginx" {
+					t.Errorf("PortVia = %q, want nginx", spec.PortVia)
+				}
+			},
+		},
+		{
+			name: "auto-urls with hide_paths",
+			yaml: `type: auto-urls
+hide_paths:
+  main: ["SPX profiler"]
+  catalog: ["API docs"]`,
+			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
+				if spec == nil {
+					t.Error("SourceAutoURLsSpec should be non-nil")
+				}
+				if len(spec.HidePaths) != 2 {
+					t.Errorf("HidePaths should have 2 services, got %d", len(spec.HidePaths))
+				}
+				if len(spec.HidePaths["main"]) != 1 || spec.HidePaths["main"][0] != "SPX profiler" {
+					t.Errorf("HidePaths[main] not parsed correctly: %v", spec.HidePaths["main"])
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			item := parseInfoItem(t, tt.yaml)
+			if item.Type != "auto-urls" {
+				t.Errorf("Type = %q, want auto-urls", item.Type)
+			}
+			if item.SourceAutoURLsSpec == nil {
+				t.Fatal("SourceAutoURLsSpec should be populated by UnmarshalYAML")
+			}
+			tt.checkSpec(t, item.SourceAutoURLsSpec)
+		})
+	}
+}
+
+func TestInfoItem_UnmarshalYAML_autoHosts(t *testing.T) {
+	tests := []struct {
+		name      string
+		yaml      string
+		checkSpec func(t *testing.T, spec *AutoHostsSpec)
+	}{
+		{
+			name: "auto-hosts minimal",
+			yaml: `type: auto-hosts`,
+			checkSpec: func(t *testing.T, spec *AutoHostsSpec) {
+				if spec == nil {
+					t.Error("SourceAutoHostsSpec should be non-nil")
+				}
+			},
+		},
+		{
+			name: "auto-hosts with ip",
+			yaml: `type: auto-hosts
+ip: 127.0.0.1`,
+			checkSpec: func(t *testing.T, spec *AutoHostsSpec) {
+				if spec == nil {
+					t.Error("SourceAutoHostsSpec should be non-nil")
+				}
+				if spec.IP != "127.0.0.1" {
+					t.Errorf("IP = %q, want 127.0.0.1", spec.IP)
+				}
+			},
+		},
+		{
+			name: "auto-hosts with include and hide",
+			yaml: `type: auto-hosts
+include: [app, tool, infra]
+hide: [varnish]`,
+			checkSpec: func(t *testing.T, spec *AutoHostsSpec) {
+				if len(spec.Include) != 3 {
+					t.Errorf("Include should have 3 elements, got %d", len(spec.Include))
+				}
+				if len(spec.Hide) != 1 {
+					t.Errorf("Hide should have 1 element, got %d", len(spec.Hide))
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			item := parseInfoItem(t, tt.yaml)
+			if item.Type != "auto-hosts" {
+				t.Errorf("Type = %q, want auto-hosts", item.Type)
+			}
+			if item.SourceAutoHostsSpec == nil {
+				t.Fatal("SourceAutoHostsSpec should be populated by UnmarshalYAML")
+			}
+			tt.checkSpec(t, item.SourceAutoHostsSpec)
+		})
+	}
+}
+
+func TestInfoItem_UnmarshalYAML_preservesExistingTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "definition with icon",
+			yaml: `type: definition
+name: Service
+value: running
+icon: "🔧"`,
+		},
+		{
+			name: "info type",
+			yaml: `type: info
+text: "Some info"`,
+		},
+		{
+			name: "warning type",
+			yaml: `type: warning
+text: "Warning message"`,
+		},
+		{
+			name: "separator type",
+			yaml: `type: separator`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			item := parseInfoItem(t, tt.yaml)
+			// Verify no Source* pointers are set for non-auto types
+			if item.SourceAutoURLsSpec != nil {
+				t.Error("SourceAutoURLsSpec should be nil for non-auto-urls type")
+			}
+			if item.SourceAutoHostsSpec != nil {
+				t.Error("SourceAutoHostsSpec should be nil for non-auto-hosts type")
+			}
+		})
+	}
+}
+
+func TestLoadInfoConfig_autoUrlsItem(t *testing.T) {
+	yml := `
+sections:
+  - id: urls
+    title: URLs
+    items:
+      - type: auto-urls
+        include: [app, tool]
+        hide: [varnish]
+        when: '{{ .Services }}'
+`
+	path := writeTempYML(t, yml)
+	cfg, err := LoadInfoConfig(path)
+	if err != nil {
+		t.Fatalf("LoadInfoConfig with auto-urls: %v", err)
+	}
+
+	if len(cfg.Sections) != 1 {
+		t.Fatalf("expected 1 section, got %d", len(cfg.Sections))
+	}
+
+	section := cfg.Sections[0]
+	if section.Title != "URLs" {
+		t.Errorf("section title = %q, want URLs", section.Title)
+	}
+
+	if len(section.Items) != 1 {
+		t.Fatalf("expected 1 item in section, got %d", len(section.Items))
+	}
+
+	item := section.Items[0]
+	if item.Type != "auto-urls" {
+		t.Errorf("item type = %q, want auto-urls", item.Type)
+	}
+	if item.SourceAutoURLsSpec == nil {
+		t.Fatal("SourceAutoURLsSpec should be populated")
+	}
+	if len(item.SourceAutoURLsSpec.Include) != 2 {
+		t.Errorf("Include should have 2 elements, got %d", len(item.SourceAutoURLsSpec.Include))
+	}
+	if item.When != "{{ .Services }}" {
+		t.Errorf("when = %q, want {{ .Services }}", item.When)
+	}
+}
+
+func TestValidateAutoURLsSpec_unknownInclude(t *testing.T) {
+	yml := `
+sections:
+  - id: urls
+    items:
+      - type: auto-urls
+        include: [app, invalid_type]
+`
+	path := writeTempYML(t, yml)
+	_, err := LoadInfoConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid include value")
+	}
+	if !strings.Contains(err.Error(), "not in {app, tool, infra}") {
+		t.Errorf("error should mention valid types: %v", err)
+	}
+}
+
+func TestValidateAutoHostsSpec_unknownInclude(t *testing.T) {
+	yml := `
+sections:
+  - id: hosts
+    items:
+      - type: auto-hosts
+        include: [tool, bad]
+`
+	path := writeTempYML(t, yml)
+	_, err := LoadInfoConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid include value")
+	}
+	if !strings.Contains(err.Error(), "not in {app, tool, infra}") {
+		t.Errorf("error should mention valid types: %v", err)
+	}
+}

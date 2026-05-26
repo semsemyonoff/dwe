@@ -365,12 +365,14 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 **Files:**
 - Modify: `internal/config/info.go`
 - Modify: `internal/config/info_test.go`
+- Modify: `internal/validate/config/devbox.go`
+- Modify: `internal/validate/config/devbox_test.go`
 
-- [ ] add `AutoURLsSpec` and `AutoHostsSpec` structs (fields per "Go Structures" section above). Per `golang-naming`, the acronym `URL` is all-caps in Go identifiers — `AutoURLsSpec`, not `AutoUrlsSpec`.
-- [ ] add `SourceAutoURLsSpec *AutoURLsSpec` and `SourceAutoHostsSpec *AutoHostsSpec` fields to `InfoItem`. Use `yaml:"-"` so yaml.v3 ignores them in the default decode pass (the custom `UnmarshalYAML` below populates them by dispatching on `type:`).
-- [ ] register `auto-urls` and `auto-hosts` as valid values in the type allowlist (lines ~177-183). YAML values stay kebab-case; only the Go identifiers use `URLs`.
-- [ ] add the compile-time interface check next to the method: `var _ yaml.Unmarshaler = (*InfoItem)(nil)` — guarantees the build fails if the method signature ever drifts off `gopkg.in/yaml.v3`.
-- [ ] implement `func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error`. **Critical**: use the type-alias shadow trick to avoid infinite recursion (calling `value.Decode(i)` directly would re-enter this same `UnmarshalYAML` and overflow the stack). Pattern:
+- [x] add `AutoURLsSpec` and `AutoHostsSpec` structs (fields per "Go Structures" section above). Per `golang-naming`, the acronym `URL` is all-caps in Go identifiers — `AutoURLsSpec`, not `AutoUrlsSpec`.
+- [x] add `SourceAutoURLsSpec *AutoURLsSpec` and `SourceAutoHostsSpec *AutoHostsSpec` fields to `InfoItem`. Use `yaml:"-"` so yaml.v3 ignores them in the default decode pass (the custom `UnmarshalYAML` below populates them by dispatching on `type:`).
+- [x] register `auto-urls` and `auto-hosts` as valid values in the type allowlist (lines ~177-183). YAML values stay kebab-case; only the Go identifiers use `URLs`.
+- [x] add the compile-time interface check next to the method: `var _ yaml.Unmarshaler = (*InfoItem)(nil)` — guarantees the build fails if the method signature ever drifts off `gopkg.in/yaml.v3`.
+- [x] implement `func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error`. **Critical**: use the type-alias shadow trick to avoid infinite recursion (calling `value.Decode(i)` directly would re-enter this same `UnmarshalYAML` and overflow the stack). Pattern:
   ```go
   type alias InfoItem
   var a alias
@@ -381,15 +383,15 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
   - `auto-urls` → `var spec AutoURLsSpec; value.Decode(&spec); i.SourceAutoURLsSpec = &spec`
   - `auto-hosts` → same with `AutoHostsSpec`
   - other types → leave both Source* pointers nil
-- [ ] preserve existing behaviour for all current type values (`info`, `warning`, `definition`, `separator`, `subgroup`) — round-trip them through the new unmarshaller unchanged
-- [ ] extend `ValidateInfoConfig` at `internal/config/info.go:164` (load-time hard checks — returns `error`): require the appropriate `Source*Spec` pointer for the new types (defensive — should always be set by unmarshaller); reject `include[]` values not in {`app`,`tool`,`infra`}; validate `port_via` syntactically (non-empty service key when set — existence-check happens in the validator below since it needs `cfg.Services`)
-- [ ] add the diagnostics-level rules to `infoValidator` at `internal/validate/config/devbox.go:464` (the existing info validator — NOT a new file):
+- [x] preserve existing behaviour for all current type values (`info`, `warning`, `definition`, `separator`, `subgroup`) — round-trip them through the new unmarshaller unchanged
+- [x] extend `ValidateInfoConfig` at `internal/config/info.go:164` (load-time hard checks — returns `error`): require the appropriate `Source*Spec` pointer for the new types (defensive — should always be set by unmarshaller); reject `include[]` values not in {`app`,`tool`,`infra`}; validate `port_via` syntactically (non-empty service key when set — existence-check happens in the validator below since it needs `cfg.Services`)
+- [x] add the diagnostics-level rules to `infoValidator` at `internal/validate/config/devbox.go:464` (the existing info validator — NOT a new file):
   - `auto-hosts.ip` does not parse via `net.ParseIP` → Warning
   - `auto-urls.port_via` references an unknown service key → Error (needs `ctx.Cfg`)
   - `auto-urls.hide` / `auto-hosts.hide` references an unknown service key → Warning (needs `ctx.Cfg`)
   - `auto-urls.hide_paths.<svc>` references an unknown service key or unknown path name → Warning (needs `ctx.Cfg`)
-- [ ] table-driven tests (every subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases): unmarshal each existing item type unchanged including the pre-existing `InfoItem.Icon` field (e.g. a `definition` item with `icon: "🔧"` round-trips intact — this guards against the alias-trick decode dropping fields); unmarshal `auto-urls` populates `SourceAutoURLsSpec`; unmarshal `auto-hosts` populates `SourceAutoHostsSpec`; deeply nested `hide_paths` map decodes correctly; unknown type fails as before; validation rejects bad `include[]`, bad `ip`, malformed nested shape
-- [ ] run `go test ./internal/config/...` — must pass before Task 5
+- [x] table-driven tests (every subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases): unmarshal each existing item type unchanged including the pre-existing `InfoItem.Icon` field (e.g. a `definition` item with `icon: "🔧"` round-trips intact — this guards against the alias-trick decode dropping fields); unmarshal `auto-urls` populates `SourceAutoURLsSpec`; unmarshal `auto-hosts` populates `SourceAutoHostsSpec`; deeply nested `hide_paths` map decodes correctly; unknown type fails as before; validation rejects bad `include[]`, bad `ip`, malformed nested shape
+- [x] run `go test ./internal/config/... ./internal/validate/config/...` — passed
 
 ### Task 5: Add deploy-order helper for info rendering
 

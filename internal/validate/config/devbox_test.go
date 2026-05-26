@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -735,4 +736,135 @@ services:
 	root := writeServicesDir(t, body)
 	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
 	hasDiag(t, diags, validate.SeverityError, "info.paths must be a list")
+}
+
+func TestInfoValidator_autoUrlsPortViaUnknownService(t *testing.T) {
+	t.Parallel()
+	body := `
+sections:
+  - id: urls
+    items:
+      - type: auto-urls
+        port_via: nonexistent_service
+`
+	root := writeInfoYML(t, body)
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	diags := (&infoValidator{}).Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+	diag := hasDiag(t, diags, validate.SeverityError, "port_via references unknown service")
+	require.Contains(t, diag.Message, "nonexistent_service")
+}
+
+func TestInfoValidator_autoUrlsHideUnknownService(t *testing.T) {
+	t.Parallel()
+	body := `
+sections:
+  - id: urls
+    items:
+      - type: auto-urls
+        hide: [unknown_service]
+`
+	root := writeInfoYML(t, body)
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	diags := (&infoValidator{}).Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+	diag := hasDiag(t, diags, validate.SeverityWarning, "hide references unknown service")
+	require.Contains(t, diag.Message, "unknown_service")
+}
+
+func TestInfoValidator_autoHostsIPInvalid(t *testing.T) {
+	t.Parallel()
+	body := `
+sections:
+  - id: hosts
+    items:
+      - type: auto-hosts
+        ip: "not-an-ip"
+`
+	root := writeInfoYML(t, body)
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	diags := (&infoValidator{}).Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+	diag := hasDiag(t, diags, validate.SeverityWarning, "ip")
+	require.Contains(t, diag.Message, "does not parse")
+}
+
+func TestInfoValidator_autoHostsIPValid(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		ip   string
+	}{
+		{name: "ipv4 loopback", ip: "127.0.0.1"},
+		{name: "ipv6 loopback", ip: "::1"},
+		{name: "ipv4 broadcast", ip: "0.0.0.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			body := fmt.Sprintf(`
+sections:
+  - id: hosts
+    items:
+      - type: auto-hosts
+        ip: %q
+`, tt.ip)
+			root := writeInfoYML(t, body)
+			cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+			diags := (&infoValidator{}).Run(validate.Context{
+				ProjectRoot: root,
+				Cfg:         cfg,
+			})
+			// Should not have warning about IP
+			for _, d := range diags {
+				if d.Severity == validate.SeverityWarning {
+					require.NotContains(t, d.Message, "does not parse")
+				}
+			}
+		})
+	}
+}
+
+func TestInfoValidator_autoUrlsValid(t *testing.T) {
+	t.Parallel()
+	body := `
+sections:
+  - id: urls
+    items:
+      - type: auto-urls
+        include: [app, tool]
+        hide: []
+`
+	root := writeInfoYML(t, body)
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	diags := (&infoValidator{}).Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+	// Should have OK diagnostic
+	hasDiag(t, diags, validate.SeverityOK, "")
+}
+
+func writeInfoYML(t *testing.T, content string) string {
+	t.Helper()
+	root := t.TempDir()
+	devboxDir := filepath.Join(root, "devbox")
+	os.MkdirAll(devboxDir, 0o755)
+
+	// Write minimal devbox.yml
+	devboxYML := filepath.Join(root, "devbox.yml")
+	os.WriteFile(devboxYML, []byte("schema_version: \"2\"\n"), 0o644)
+
+	// Write info.yml
+	infoYML := filepath.Join(devboxDir, "info.yml")
+	os.WriteFile(infoYML, []byte(content), 0o644)
+
+	return root
 }

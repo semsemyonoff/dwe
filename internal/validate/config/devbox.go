@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -608,9 +609,9 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	infoPath := filepath.Join(ctx.ProjectRoot, "devbox", "info.yml")
 
-	infoCfg, err := config.LoadInfoConfig(infoPath)
-	if err != nil {
-		if errors.Is(err, errNotExist) {
+	// Check if file exists
+	if _, statErr := os.Stat(infoPath); statErr != nil {
+		if errors.Is(statErr, os.ErrNotExist) {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityInfo,
 				Domain:   "config",
@@ -624,9 +625,21 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.info",
 				File:     relPath(ctx.ProjectRoot, infoPath),
-				Message:  err.Error(),
+				Message:  statErr.Error(),
 			})
 		}
+		// Even if no file, we still validate the default config
+	}
+
+	infoCfg, err := config.LoadInfoConfig(infoPath)
+	if err != nil {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "config",
+			Target:   "config.info",
+			File:     relPath(ctx.ProjectRoot, infoPath),
+			Message:  err.Error(),
+		})
 		return diags
 	}
 
@@ -637,9 +650,118 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		File:     relPath(ctx.ProjectRoot, infoPath),
 	})
 
-	_ = infoCfg // Unused; just checking that it loads cleanly
+	// Validate auto-block rules that need cfg.Services
+	if ctx.Cfg != nil {
+		diags = append(diags, validateInfoAutoBlocks(ctx, infoCfg, infoPath)...)
+	}
 
 	return diags
+}
+
+func validateInfoAutoBlocks(ctx validate.Context, infoCfg *config.InfoConfig, infoPath string) []validate.Diagnostic {
+	var diags []validate.Diagnostic
+	file := relPath(ctx.ProjectRoot, infoPath)
+
+	// Build service key set for cross-reference validation
+	serviceKeys := make(map[string]bool)
+	for name := range ctx.Cfg.Services {
+		serviceKeys[name] = true
+	}
+
+	// Recursively validate items in sections
+	for _, section := range infoCfg.Sections {
+		validateInfoItemsAutoBlocks(&diags, section.Items, serviceKeys, file)
+	}
+
+	return diags
+}
+
+func validateInfoItemsAutoBlocks(diags *[]validate.Diagnostic, items []config.InfoItem, serviceKeys map[string]bool, file string) {
+	for _, item := range items {
+		target := "config.info"
+
+		// Validate auto-urls
+		if item.Type == "auto-urls" && item.SourceAutoURLsSpec != nil {
+			spec := item.SourceAutoURLsSpec
+
+			// Validate port_via exists
+			if spec.PortVia != "" && !serviceKeys[spec.PortVia] {
+				*diags = append(*diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   target,
+					File:     file,
+					Message:  fmt.Sprintf("auto-urls: port_via references unknown service %q", spec.PortVia),
+				})
+			}
+
+			// Validate hide service keys
+			for _, hideKey := range spec.Hide {
+				if !serviceKeys[hideKey] {
+					*diags = append(*diags, validate.Diagnostic{
+						Severity: validate.SeverityWarning,
+						Domain:   "config",
+						Target:   target,
+						File:     file,
+						Message:  fmt.Sprintf("auto-urls: hide references unknown service key %q", hideKey),
+					})
+				}
+			}
+
+			// Validate hide_paths service keys and path names
+			if spec.HidePaths != nil {
+				for svcKey, pathNames := range spec.HidePaths {
+					if !serviceKeys[svcKey] {
+						*diags = append(*diags, validate.Diagnostic{
+							Severity: validate.SeverityWarning,
+							Domain:   "config",
+							Target:   target,
+							File:     file,
+							Message:  fmt.Sprintf("auto-urls: hide_paths.%s references unknown service key", svcKey),
+						})
+					}
+					// Path name validation at render time (needs to know service.info.paths)
+					_ = pathNames
+				}
+			}
+		}
+
+		// Validate auto-hosts
+		if item.Type == "auto-hosts" && item.SourceAutoHostsSpec != nil {
+			spec := item.SourceAutoHostsSpec
+
+			// Validate IP field
+			if spec.IP != "" {
+				if net.ParseIP(spec.IP) == nil {
+					*diags = append(*diags, validate.Diagnostic{
+						Severity: validate.SeverityWarning,
+						Domain:   "config",
+						Target:   target,
+						File:     file,
+						Message:  fmt.Sprintf("auto-hosts: ip %q does not parse as valid IPv4/IPv6", spec.IP),
+					})
+				}
+			}
+
+			// Validate hide service keys
+			for _, hideKey := range spec.Hide {
+				if !serviceKeys[hideKey] {
+					*diags = append(*diags, validate.Diagnostic{
+						Severity: validate.SeverityWarning,
+						Domain:   "config",
+						Target:   target,
+						File:     file,
+						Message:  fmt.Sprintf("auto-hosts: hide references unknown service key %q", hideKey),
+					})
+				}
+			}
+		}
+
+		// Recurse into subgroup items
+		if item.Type == "subgroup" && len(item.Items) > 0 {
+			validateInfoItemsAutoBlocks(diags, item.Items, serviceKeys, file)
+		}
+	}
 }
 
 type stylesValidator struct{}

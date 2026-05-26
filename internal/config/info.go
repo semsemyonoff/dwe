@@ -67,14 +67,42 @@ func (h *InfoIndent) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+// AutoURLsSpec holds configuration for auto-urls block type.
+type AutoURLsSpec struct {
+	// Include specifies which service types to include (app, tool, infra).
+	// Default: [app, tool].
+	Include []string `yaml:"include,omitempty"`
+	// Hide specifies service folder keys to exclude entirely.
+	Hide []string `yaml:"hide,omitempty"`
+	// HidePaths maps service folder keys to lists of path names to exclude.
+	HidePaths map[string][]string `yaml:"hide_paths,omitempty"`
+	// PortVia specifies the front proxy service name for URL assembly.
+	// When empty, auto-detected as the single infra service with ports.http==80 or ports.https==443.
+	PortVia string `yaml:"port_via,omitempty"`
+}
+
+// AutoHostsSpec holds configuration for auto-hosts block type.
+type AutoHostsSpec struct {
+	// Include specifies which service types to include (app, tool, infra).
+	// Default: [app, tool, infra].
+	Include []string `yaml:"include,omitempty"`
+	// IP specifies the IP address for the hosts list.
+	// Default: 127.0.0.1.
+	IP string `yaml:"ip,omitempty"`
+	// Hide specifies service folder keys to exclude entirely.
+	Hide []string `yaml:"hide,omitempty"`
+}
+
 // InfoItem is a single renderable element within a section.
-// Five types are valid: info, warning, definition, separator, subgroup.
+// Types are valid: info, warning, definition, separator, subgroup, auto-urls, auto-hosts.
 // Type-specific fields:
 //   - info: Text (message body), Indent, When.
 //   - warning: Text (message body), When.
 //   - definition: Name, Value, Indent, Icon, When.
 //   - separator: When.
 //   - subgroup: Title (header text), Items (children), When, HideOnEmpty, Decorative.
+//   - auto-urls: SourceAutoURLsSpec (via UnmarshalYAML), When.
+//   - auto-hosts: SourceAutoHostsSpec (via UnmarshalYAML), When.
 //
 // The Title field (for subgroups) is distinct from Text (for info/warning).
 // All types support the Decorative flag to override the type's default visibility.
@@ -124,6 +152,46 @@ type InfoItem struct {
 	// hide_on_empty check. When nil, defaults are: separator → true, all others → false.
 	// An explicit override applies to any type.
 	Decorative *bool `yaml:"decorative,omitempty"`
+
+	// SourceAutoURLsSpec is populated by UnmarshalYAML when Type == "auto-urls".
+	// Not decoded from YAML directly (yaml:"-"); the custom unmarshaller sets it.
+	SourceAutoURLsSpec *AutoURLsSpec `yaml:"-"`
+
+	// SourceAutoHostsSpec is populated by UnmarshalYAML when Type == "auto-hosts".
+	// Not decoded from YAML directly (yaml:"-"); the custom unmarshaller sets it.
+	SourceAutoHostsSpec *AutoHostsSpec `yaml:"-"`
+}
+
+// Compile-time interface check.
+var _ yaml.Unmarshaler = (*InfoItem)(nil)
+
+// UnmarshalYAML decodes an InfoItem from YAML, handling dispatch to type-specific specs.
+// Uses a type-alias shadow to avoid infinite recursion when decoding flat fields.
+func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
+	// Use type alias to decode flat fields without re-entering this method.
+	type alias InfoItem
+	var a alias
+	if err := value.Decode(&a); err != nil {
+		return err
+	}
+	*i = InfoItem(a)
+
+	// Dispatch on type to populate type-specific Source* pointers.
+	switch i.Type {
+	case "auto-urls":
+		var spec AutoURLsSpec
+		if err := value.Decode(&spec); err != nil {
+			return err
+		}
+		i.SourceAutoURLsSpec = &spec
+	case "auto-hosts":
+		var spec AutoHostsSpec
+		if err := value.Decode(&spec); err != nil {
+			return err
+		}
+		i.SourceAutoHostsSpec = &spec
+	}
+	return nil
 }
 
 // IsDecorative returns whether this item is decorative (does not count as content).
@@ -180,6 +248,8 @@ var validInfoTypes = map[string]bool{
 	"definition": true,
 	"separator":  true,
 	"subgroup":   true,
+	"auto-urls":  true,
+	"auto-hosts": true,
 }
 
 func validateItems(items []InfoItem, pathPrefix string) error {
@@ -188,7 +258,7 @@ func validateItems(items []InfoItem, pathPrefix string) error {
 
 		// Validate type is known
 		if !validInfoTypes[item.Type] {
-			return fmt.Errorf("info: %s: unknown type %q; valid types: info, warning, definition, separator, subgroup", itemPath, item.Type)
+			return fmt.Errorf("info: %s: unknown type %q; valid types: info, warning, definition, separator, subgroup, auto-urls, auto-hosts", itemPath, item.Type)
 		}
 
 		// Subgroup-specific validation
@@ -201,7 +271,52 @@ func validateItems(items []InfoItem, pathPrefix string) error {
 				return err
 			}
 		}
+
+		// auto-urls validation
+		if item.Type == "auto-urls" {
+			if item.SourceAutoURLsSpec == nil {
+				return fmt.Errorf("info: %s: auto-urls must have spec populated by unmarshaller", itemPath)
+			}
+			if err := validateAutoURLsSpec(item.SourceAutoURLsSpec, itemPath); err != nil {
+				return err
+			}
+		}
+
+		// auto-hosts validation
+		if item.Type == "auto-hosts" {
+			if item.SourceAutoHostsSpec == nil {
+				return fmt.Errorf("info: %s: auto-hosts must have spec populated by unmarshaller", itemPath)
+			}
+			if err := validateAutoHostsSpec(item.SourceAutoHostsSpec, itemPath); err != nil {
+				return err
+			}
+		}
 	}
+	return nil
+}
+
+func validateAutoURLsSpec(spec *AutoURLsSpec, itemPath string) error {
+	// Validate include[] values
+	for _, inc := range spec.Include {
+		if inc != "app" && inc != "tool" && inc != "infra" {
+			return fmt.Errorf("info: %s: include value %q not in {app, tool, infra}", itemPath, inc)
+		}
+	}
+	// Validate port_via is non-empty when set (existence check happens in validator with cfg.Services)
+	if spec.PortVia != "" && spec.PortVia == "" {
+		return fmt.Errorf("info: %s: port_via cannot be empty", itemPath)
+	}
+	return nil
+}
+
+func validateAutoHostsSpec(spec *AutoHostsSpec, itemPath string) error {
+	// Validate include[] values
+	for _, inc := range spec.Include {
+		if inc != "app" && inc != "tool" && inc != "infra" {
+			return fmt.Errorf("info: %s: include value %q not in {app, tool, infra}", itemPath, inc)
+		}
+	}
+	// IP validation happens in validator with net.ParseIP (happens only when non-empty)
 	return nil
 }
 
