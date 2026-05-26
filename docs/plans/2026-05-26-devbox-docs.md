@@ -474,32 +474,32 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/docs/mermaid/testdata/fake-mmdc.sh`
 - Modify: `go.mod` (add rasterm)
 
-- [ ] `Renderer` interface: `Render(ctx context.Context, src string, theme Theme, width int) ([]byte, error)`. **Width is a first-class parameter** because it's part of the cache key — without it in the signature, callers could not vary width per render and the cache would either over-cache or alias keys. Theme is its own enum (`Dark`/`Light`)
-- [ ] `Chain(...Renderer)`; `Disabled{}` returning `ErrRenderingDisabled`
-- [ ] `FileCache{ Dir string; CapBytes int64; Version func() string; sf singleflight.Group; mu sync.Mutex }` with `Render(ctx, src, theme, width)`:
+- [x] `Renderer` interface: `Render(ctx context.Context, src string, theme Theme, width int) ([]byte, error)`. **Width is a first-class parameter** because it's part of the cache key — without it in the signature, callers could not vary width per render and the cache would either over-cache or alias keys. Theme is its own enum (`Dark`/`Light`)
+- [x] `Chain(...Renderer)`; `Disabled{}` returning `ErrRenderingDisabled`
+- [x] `FileCache{ Dir string; CapBytes int64; Version func() string; sf singleflight.Group; mu sync.Mutex }` with `Render(ctx, src, theme, width)`:
   - compute `key = sha256(src + "|" + string(theme) + "|" + strconv.Itoa(width) + "|" + cache.Version())[:32]` where `Version` is wrapped in `sync.OnceValue` (Go 1.21+) at construction time so it runs at most once per `FileCache` instance and is race-safe by construction
   - if `<Dir>/<key>.png` exists → read and return; on read, `os.Chtimes(path, now, now)` to refresh mtime (the LRU eviction key — atime is too unreliable across filesystems)
   - else use `sf.Do(key, func() (any, error) { ... })` (from `golang.org/x/sync/singleflight`) so concurrent same-key misses share one render — eliminates duplicate mmdc invocations and Windows-unfriendly `os.Rename` races on already-existing destinations
   - inside the singleflight closure: delegate to wrapped renderer; on success atomically write (`tmp.<rand>.png` → `os.Rename`)
   - LRU eviction guarded by `mu`: even with singleflight, two DIFFERENT keys can write concurrently and both trigger eviction. The eviction critical section is: walk dir, sum sizes, if over cap → sort by mtime, delete oldest until under cap. Hold `mu` only across the eviction walk+delete (not across the upstream render or the cache hit read)
-- [ ] `MmdcRenderer{ Bin string; Version func() string }` — `Version` defaults to `sync.OnceValue(func() string { return probeMmdcVersion(bin) })` (returns `"unknown"` on error). Tests inject a deterministic `Version` to control cache keys
-- [ ] `mermaid.New(bin string, cacheDir string, capBytes int64) Renderer` helper: constructs `MmdcRenderer{Bin: bin}`, then `FileCache{Dir: cacheDir, CapBytes: capBytes, Version: mmdc.Version}` wrapping it via `Chain`. Single entry point used by the command layer
-- [ ] invocation per Technical Details: `exec.CommandContext(ctx, bin, args...)`. **Setpgid + process-group kill is Unix-only** — `syscall.SysProcAttr{Setpgid: true}` and `syscall.Kill(-pgid, SIGKILL)` don't exist on Windows. Split into build-tagged files:
+- [x] `MmdcRenderer{ Bin string; Version func() string }` — `Version` defaults to `sync.OnceValue(func() string { return probeMmdcVersion(bin) })` (returns `"unknown"` on error). Tests inject a deterministic `Version` to control cache keys
+- [x] `mermaid.New(bin string, cacheDir string, capBytes int64) Renderer` helper: constructs `MmdcRenderer{Bin: bin}`, then `FileCache{Dir: cacheDir, CapBytes: capBytes, Version: mmdc.Version}` wrapping it via `Chain`. Single entry point used by the command layer
+- [x] invocation per Technical Details: `exec.CommandContext(ctx, bin, args...)`. **Setpgid + process-group kill is Unix-only** — `syscall.SysProcAttr{Setpgid: true}` and `syscall.Kill(-pgid, SIGKILL)` don't exist on Windows. Split into build-tagged files:
   - `mmdc_unix.go` (`//go:build unix`): sets `Setpgid: true` before `cmd.Start()`; on `ctx.Err() != nil` calls `syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)` to reap mmdc's chrome child
   - `mmdc_windows.go` (`//go:build windows`): no `Setpgid`; relies on `exec.CommandContext`'s default kill behavior. Windows users get a (rare) leftover chrome process on timeout — acceptable trade-off; documented in package comment
   - After `cmd.Wait()` returns, the goroutine exits — no leak on either platform
-- [ ] on `errors.Is(err, exec.ErrNotFound)` → return `ErrMmdcNotAvailable`
-- [ ] `term.CanInline() bool` — false when `os.Getenv("TMUX") != ""`; true when `rasterm.IsKittyCapable()`; else false. **Treat this as a best-effort hint, not a guarantee** — env-based detection can produce false positives (wezterm reports kitty-compat but image sizes may render imperfectly) and false negatives (newer terminals). If a render fails or looks wrong, the user falls back to `o` (system viewer). Document the limitation in package comment
-- [ ] `term.OpenSystem(path string) error`:
+- [x] on `errors.Is(err, exec.ErrNotFound)` → return `ErrMmdcNotAvailable`
+- [x] `term.CanInline() bool` — false when `os.Getenv("TMUX") != ""`; true when `rasterm.IsKittyCapable()`; else false. **Treat this as a best-effort hint, not a guarantee** — env-based detection can produce false positives (wezterm reports kitty-compat but image sizes may render imperfectly) and false negatives (newer terminals). If a render fails or looks wrong, the user falls back to `o` (system viewer). Document the limitation in package comment
+- [x] `term.OpenSystem(path string) error`:
   - darwin → `exec.Command("open", path)`
   - linux/bsd → `exec.Command("xdg-open", path)`
   - windows → `exec.Command("cmd", "/c", "start", "", path)` — the empty title argument `""` is **mandatory** to handle paths with spaces correctly; do NOT omit it
   - quote-safety: `exec.Command` already quotes args; no manual quoting
-- [ ] `mermaid.CacheDir()` resolves `$XDG_CACHE_HOME/devbox/mermaid/` else `os.UserCacheDir() + /devbox/mermaid/` else `os.TempDir() + /devbox-mermaid/`
-- [ ] tests using a fixture `fake-mmdc.sh` (committed under `internal/docs/mermaid/testdata/`) that copies a fixed PNG to the output path (no real mmdc dependency): cache miss → invokes fake → caches; cache hit → no second invocation (assert via call counter on injected `Version`); LRU eviction with `os.Chtimes` to fake mtime; mmdc timeout simulated via fake script sleeping past 10s with a small test-only timeout override
-- [ ] tests for `OpenSystem` use a test seam: inject the `exec.Command` constructor so the test asserts the argv shape (`cmd /c start "" <path>` on windows) without actually shelling out
-- [ ] tests for `CanInline` are env-driven (set/unset `TMUX`, set/unset `KITTY_WINDOW_ID`)
-- [ ] run `go test -race ./internal/docs/mermaid/...` — must pass (`-race` catches `sync.Once` regressions)
+- [x] `mermaid.CacheDir()` resolves `$XDG_CACHE_HOME/devbox/mermaid/` else `os.UserCacheDir() + /devbox/mermaid/` else `os.TempDir() + /devbox-mermaid/`
+- [x] tests using a fixture `fake-mmdc.sh` (committed under `internal/docs/mermaid/testdata/`) that copies a fixed PNG to the output path (no real mmdc dependency): cache miss → invokes fake → caches; cache hit → no second invocation (assert via call counter on injected `Version`); LRU eviction with `os.Chtimes` to fake mtime; mmdc timeout simulated via fake script sleeping past 10s with a small test-only timeout override
+- [x] tests for `OpenSystem` use a test seam: inject the `exec.Command` constructor so the test asserts the argv shape (`cmd /c start "" <path>` on windows) without actually shelling out
+- [x] tests for `CanInline` are env-driven (set/unset `TMUX`, set/unset `KITTY_WINDOW_ID`)
+- [x] run `go test -race ./internal/docs/mermaid/...` — must pass (`-race` catches `sync.Once` regressions)
 
 ### Task 6: `devbox docs show` and `devbox docs list`
 
