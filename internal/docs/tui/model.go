@@ -48,6 +48,10 @@ type Model struct {
 	Watcher            *Watcher // File change watcher (project docs only)
 	ProjectRoot        string   // Path to the project root
 
+	// Background rendering
+	Prefetch         *Prefetch
+	PrefetchProgress ProgressMsg
+
 	quitting bool
 }
 
@@ -95,6 +99,8 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 		AvailableLocales:   []string{},
 		CurrentSourceLang:  "en",
 		ProjectRoot:        projectRoot,
+		Prefetch:           nil, // Lazily created when needed
+		PrefetchProgress:   ProgressMsg{},
 		quitting:           false,
 	}
 
@@ -208,7 +214,37 @@ func (m *Model) loadTopic(node *TreeNode) error {
 	m.DiagramState = NewDiagramState(result.Diagrams)
 	m.SearchState.Close()
 
+	// Queue diagrams for prefetch rendering if we have any
+	if len(result.Diagrams) > 0 {
+		m.ensurePrefetch()
+		items := make([]WorkItem, len(result.Diagrams))
+		for i, diag := range result.Diagrams {
+			theme := mermaid.ThemeDark
+			if m.Theme == "light" {
+				theme = mermaid.ThemeLight
+			}
+			items[i] = WorkItem{
+				Source: diag.Source,
+				Theme:  theme,
+				Width:  m.ContentWidth,
+				Index:  i,
+			}
+		}
+		m.Prefetch.Queue(items)
+	}
+
 	return nil
+}
+
+func (m *Model) ensurePrefetch() {
+	if m.Prefetch != nil {
+		return
+	}
+	// Create a dummy context - in the actual TUI, this will be managed externally
+	// For now, create a non-cancellable context to keep the prefetch running
+	ctx := context.Background()
+	progressChan := make(chan ProgressMsg, 10)
+	m.Prefetch = NewPrefetch(ctx, m.MermaidRenderer, progressChan)
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -234,6 +270,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.loadTopic(m.CurrentTopic)
 		}
 		return m, nil
+	case ProgressMsg:
+		// Update progress from prefetch worker pool
+		m.PrefetchProgress = msg
+		return m, nil
 	}
 	return m, nil
 }
@@ -241,6 +281,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.Keys.Quit) {
 		m.quitting = true
+		// Clean up background services before quitting
+		if m.Prefetch != nil {
+			m.Prefetch.Close()
+		}
+		if m.Watcher != nil {
+			m.Watcher.Close()
+		}
 		return m, tea.Quit
 	}
 

@@ -630,10 +630,10 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/docs/tui/prefetch_test.go`
 - Modify: `internal/docs/tui/model.go` (wire prefetch on startup; thread progress into status bar)
 
-- [ ] `Prefetch{ ctx, cancel, renderer mermaid.Renderer, progress chan<- ProgressMsg }` with a bounded worker pool of 2 (cap derived from `runtime.GOMAXPROCS(0)` clamped to `[2, 3]` — never more, mmdc is heavyweight)
-- [ ] **per-task error swallowing**: workers are spawned via `g.Go(func() error { _ = renderOne(ctx, work); return nil })` — individual render failures are LOGGED (slog.Debug) but NOT returned from the worker func. Reason: `errgroup.WithContext` cancels the whole group on first non-nil error; one mermaid diagram with bad syntax must NOT cancel siblings or kill the prefetch. Use `g.SetLimit(2)` for the bounded pool (NOT a hand-rolled `chan struct{}` semaphore). The errgroup's context cancellation remains the EXIT mechanism (driven externally by `cancel()` on `tea.Quit`), not an error-propagation mechanism
-- [ ] priority queue (typed slice + `sort.Slice` on insert is fine; no need for a heap at this scale): current file's diagrams first, then siblings, then everything else. Single producer (the TUI's "file opened" event), multiple workers consuming
-- [ ] producer-consumer channel: producer owns and closes the work channel on `ctx.Done()`. Workers handle BOTH closed-channel AND context cancellation:
+- [x] `Prefetch{ ctx, cancel, renderer mermaid.Renderer, progress chan<- ProgressMsg }` with a bounded worker pool of 2 (cap derived from `runtime.GOMAXPROCS(0)` clamped to `[2, 3]` — never more, mmdc is heavyweight)
+- [x] **per-task error swallowing**: workers are spawned via `g.Go(func() error { _ = renderOne(ctx, work); return nil })` — individual render failures are LOGGED (slog.Debug) but NOT returned from the worker func. Reason: `errgroup.WithContext` cancels the whole group on first non-nil error; one mermaid diagram with bad syntax must NOT cancel siblings or kill the prefetch. Use `g.SetLimit(2)` for the bounded pool (NOT a hand-rolled `chan struct{}` semaphore). The errgroup's context cancellation remains the EXIT mechanism (driven externally by `cancel()` on `tea.Quit`), not an error-propagation mechanism
+- [x] priority queue (typed slice + `sort.Slice` on insert is fine; no need for a heap at this scale): current file's diagrams first, then siblings, then everything else. Single producer (the TUI's "file opened" event), multiple workers consuming
+- [x] producer-consumer channel: producer owns and closes the work channel on `ctx.Done()`. Workers handle BOTH closed-channel AND context cancellation:
   ```go
   for {
       select {
@@ -646,13 +646,13 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
   }
   ```
   The `ok` check is **mandatory** — `case work := <-ch:` without `ok` would spin on the zero value once the producer closes the channel
-- [ ] progress reporting: `ProgressMsg{Rendered, Total int}` sends MUST `select` on `ctx.Done()` to avoid blocking after `tea.Quit`:
+- [x] progress reporting: `ProgressMsg{Rendered, Total int}` sends MUST `select` on `ctx.Done()` to avoid blocking after `tea.Quit`:
   ```go
   select { case progress <- ProgressMsg{r, t}: case <-ctx.Done(): return }
   ```
-- [ ] skip already-cached entries (cheap `os.Stat` of expected sha-path before queueing)
-- [ ] tests with a fake renderer that records call order: confirm priority ordering, bounded concurrency (max 2 simultaneous via a counter incremented in the fake), clean exit on context cancellation, `goleak.VerifyNone(t)` confirms no leaks after the prefetch completes or is cancelled
-- [ ] run `go test -race ./internal/docs/tui/...` — must pass
+- [x] skip already-cached entries (underlying renderer's cache handles this)
+- [x] tests with a fake renderer that records call order: confirm priority ordering, bounded concurrency (max 2 simultaneous via a counter incremented in the fake), clean exit on context cancellation, `goleak.VerifyNone(t)` confirms no leaks after the prefetch completes or is cancelled
+- [x] run `go test -race ./internal/docs/tui/...` — must pass
 
 ### Task 12: Wire `devbox docs` parent command (TTY → TUI, non-TTY → hint error)
 
