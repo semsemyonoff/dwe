@@ -392,6 +392,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			},
 			spec: &config.AutoURLsSpec{
 				Include: []string{"infra"},
+				Hide:    []string{"nginx"},
 			},
 			wantOut: strings.Join([]string{
 				"",
@@ -424,6 +425,114 @@ func TestRenderAutoURLs(t *testing.T) {
 				Include: []string{"app"},
 			},
 			wantOut: "",
+		},
+		{
+			name: "host-only with paths and no portVia - paths suppressed, service omitted",
+			cfg: &config.DevboxConfig{
+				Runtime: config.RuntimeConfig{UseHTTPS: false},
+				Services: map[string]config.ServiceConfig{
+					"main": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Hosts:   map[string]string{"web": "pilot.local"},
+						Ports:   map[string]int{},
+						Info: config.ServiceInfoBlock{
+							Title: "Main",
+							Paths: []config.ServiceInfoPath{
+								{Name: "Docs", Path: "/docs"},
+							},
+						},
+					},
+				},
+			},
+			spec:    &config.AutoURLsSpec{Include: []string{"app"}},
+			wantOut: "",
+		},
+		{
+			name: "auto-detect portVia with use_https true and proxy has only ports.http - host-only https URL",
+			cfg: &config.DevboxConfig{
+				Runtime: config.RuntimeConfig{UseHTTPS: true},
+				Services: map[string]config.ServiceConfig{
+					"nginx": {
+						Type:    config.ServiceTypeInfra,
+						Enabled: true,
+						Ports:   map[string]int{"http": 80},
+					},
+					"main": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Hosts:   map[string]string{"web": "pilot.local"},
+						Ports:   map[string]int{},
+						Info: config.ServiceInfoBlock{
+							Title: "Main",
+						},
+					},
+				},
+			},
+			spec: &config.AutoURLsSpec{Include: []string{"app"}},
+			// use_https=true but proxy only has ports.http; re-selecting ports.https → 0 → host-only
+			wantOut: strings.Join([]string{
+				"",
+				"Main",
+				"  📦 Main  — https://pilot.local",
+			}, "\n"),
+		},
+		{
+			name: "auto-detect portVia with use_https false and proxy has only ports.https - host-only http URL",
+			cfg: &config.DevboxConfig{
+				Runtime: config.RuntimeConfig{UseHTTPS: false},
+				Services: map[string]config.ServiceConfig{
+					"nginx": {
+						Type:    config.ServiceTypeInfra,
+						Enabled: true,
+						Ports:   map[string]int{"https": 443},
+					},
+					"main": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Hosts:   map[string]string{"web": "pilot.local"},
+						Ports:   map[string]int{},
+						Info: config.ServiceInfoBlock{
+							Title: "Main",
+						},
+					},
+				},
+			},
+			spec: &config.AutoURLsSpec{Include: []string{"app"}},
+			// use_https=false but proxy only has ports.https; re-selecting ports.http → 0 → host-only
+			wantOut: strings.Join([]string{
+				"",
+				"Main",
+				"  📦 Main  — http://pilot.local",
+			}, "\n"),
+		},
+		{
+			name: "service without info block renders main URL using defaults",
+			cfg: &config.DevboxConfig{
+				Runtime: config.RuntimeConfig{UseHTTPS: false},
+				Services: map[string]config.ServiceConfig{
+					"nginx": {
+						Type:    config.ServiceTypeInfra,
+						Enabled: true,
+						Ports:   map[string]int{"http": 80},
+					},
+					"myapp": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Ports:   map[string]int{},
+						Hosts:   map[string]string{"web": "myapp.local"},
+						// No Info block at all
+					},
+				},
+			},
+			spec: &config.AutoURLsSpec{
+				Include: []string{"app"},
+			},
+			wantOut: strings.Join([]string{
+				"",
+				"Myapp",
+				"  📦 Myapp  — http://myapp.local",
+			}, "\n"),
 		},
 		{
 			name:    "nil cfg returns empty string",

@@ -69,11 +69,6 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		host := svc.Hosts[hostKey]
 		port := svc.Ports[portKey]
 
-		// Skip if service has no info block (not opted in to dashboard surface)
-		if svc.Info.Title == "" && len(svc.Info.Paths) == 0 {
-			continue
-		}
-
 		// Skip if neither host nor port, and no paths
 		if host == "" && port == 0 && len(svc.Info.Paths) == 0 {
 			continue
@@ -85,44 +80,39 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 			mainRow = buildMainURLRow(cfg, svc, svcName, host, port, portViaService, portViaPort)
 		}
 
-		// Skip if we have no main row and no paths
-		if mainRow == "" && len(svc.Info.Paths) == 0 {
-			continue
-		}
-
-		// Build subgroup
-		var subgroupLines []string
-
-		// Subgroup title
-		title := svc.DisplayTitle(svcName)
-		subgroupLines = append(subgroupLines, "")
-		subgroupLines = append(subgroupLines, title)
-
-		// Main URL row
-		if mainRow != "" {
-			subgroupLines = append(subgroupLines, mainRow)
-		}
-
-		// Paths
+		// Build path rows before deciding whether to emit the subgroup at all.
 		hidePaths := spec.HidePaths[svcName]
 		hidePathsSet := make(map[string]bool)
 		for _, p := range hidePaths {
 			hidePathsSet[p] = true
 		}
 
+		var pathRows []string
 		for _, pathItem := range svc.Info.Paths {
 			if hidePathsSet[pathItem.Name] {
 				continue
 			}
 			pathRow := buildPathRow(cfg, pathItem, host, port, portViaService, portViaPort)
 			if pathRow != "" {
-				subgroupLines = append(subgroupLines, pathRow)
+				pathRows = append(pathRows, pathRow)
 			}
 		}
 
-		if len(subgroupLines) > 0 {
-			subgroups = append(subgroups, strings.Join(subgroupLines, "\n"))
+		// Skip if we have no renderable content at all.
+		if mainRow == "" && len(pathRows) == 0 {
+			continue
 		}
+
+		// Build subgroup
+		title := svc.DisplayTitle(svcName)
+		subgroupLines := []string{"", title}
+
+		if mainRow != "" {
+			subgroupLines = append(subgroupLines, mainRow)
+		}
+		subgroupLines = append(subgroupLines, pathRows...)
+
+		subgroups = append(subgroups, strings.Join(subgroupLines, "\n"))
 	}
 
 	if len(subgroups) == 0 {
@@ -140,23 +130,27 @@ func autoDetectPortVia(cfg *config.DevboxConfig) (*config.ServiceConfig, int) {
 	}
 
 	var candidates []*config.ServiceConfig
-	var candidatePorts []int
 
 	for _, svc := range cfg.Services {
 		if svc.Type != config.ServiceTypeInfra || !svc.Enabled {
 			continue
 		}
-		if svc.Ports["http"] == 80 {
+		if svc.Ports["http"] == 80 || svc.Ports["https"] == 443 {
 			candidates = append(candidates, &svc)
-			candidatePorts = append(candidatePorts, 80)
-		} else if svc.Ports["https"] == 443 {
-			candidates = append(candidates, &svc)
-			candidatePorts = append(candidatePorts, 443)
 		}
 	}
 
 	if len(candidates) == 1 {
-		return candidates[0], candidatePorts[0]
+		// Re-select port based on use_https — detection uses http==80 or https==443
+		// as a proxy filter, but the actual port for URL construction must match
+		// the scheme. Do NOT fall through to the other key (per plan spec).
+		var port int
+		if cfg.Runtime.UseHTTPS {
+			port = candidates[0].Ports["https"]
+		} else {
+			port = candidates[0].Ports["http"]
+		}
+		return candidates[0], port
 	}
 
 	return nil, 0
@@ -242,8 +236,9 @@ func buildPathRow(cfg *config.DevboxConfig, path config.ServiceInfoPath,
 		// Fall back to direct URL
 		baseURL = fmt.Sprintf("%s://localhost:%d", scheme, port)
 	case hasHost:
-		// Host-only (no port)
-		baseURL = fmt.Sprintf("%s://%s", scheme, host)
+		// Host-only without portVia and without a direct port: skip silently.
+		// buildMainURLRow also suppresses this case; path rows must be consistent.
+		return ""
 	}
 
 	if baseURL == "" {
