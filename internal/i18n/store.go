@@ -1,6 +1,9 @@
 package i18n
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 // Store holds merged bundles per locale.
 type Store struct {
@@ -24,9 +27,19 @@ func (s *Store) AvailableLocales() []string {
 	return locales
 }
 
+// ClampLocale returns locale if it is present in the store, otherwise "en".
+// Use this when a locale resolved from $LANG or config should only take effect
+// if the project actually ships that translation.
+func (s *Store) ClampLocale(locale string) string {
+	if slices.Contains(s.AvailableLocales(), locale) {
+		return locale
+	}
+	return "en"
+}
+
 // T resolves a ui.* key for the given locale.
+// uiKey is the bare key name under the "ui:" YAML block — no "ui." prefix (e.g. "docs.section.properties").
 // Lookup chain: locale → "en" → fallback → ""
-// Only valid for keys with "ui." prefix.
 func (s *Store) T(locale, uiKey, fallback string) string {
 	if s == nil || s.locales == nil {
 		return fallback

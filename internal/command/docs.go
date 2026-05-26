@@ -148,10 +148,13 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 			return err
 		}
 
-		// Resolve locale: explicit --lang flag takes precedence, then fall back to rflags.Locale (which is already resolved in root PersistentPreRunE)
+		// Resolve locale: explicit --lang flag takes precedence, then fall back to rflags.Locale
+		// (which is already clamped to available locales in root PersistentPreRunE).
+		// Clamp explicit --lang too so an unavailable locale doesn't produce English content
+		// under a foreign-language path (e.g. commands/ru/ when no ru.yml exists).
 		resolvedLocale := rflags.Locale
 		if df.lang != "" {
-			resolvedLocale = i18n.ResolveLocale(df.lang, "", "")
+			resolvedLocale = rflags.I18n.ClampLocale(i18n.ResolveLocale(df.lang, "", ""))
 		}
 
 		// commandsDir now includes the language: commands/<lang>

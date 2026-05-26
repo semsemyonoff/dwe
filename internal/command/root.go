@@ -173,8 +173,10 @@ Run 'devbox info' for the full info dashboard.`,
 			}
 			flags.I18n = store
 
-			// Resolve and store the active locale.
-			flags.Locale = i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
+			// Resolve and store the active locale, clamped to locales the store
+			// actually has so that an unsupported $LANG doesn't silently produce
+			// English content filed under a foreign-language path.
+			flags.Locale = store.ClampLocale(i18n.ResolveLocale("", cfgLang, os.Getenv("LANG")))
 			return nil
 		},
 		// Running 'devbox' with no subcommand shows project summary + help.
