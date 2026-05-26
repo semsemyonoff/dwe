@@ -215,6 +215,14 @@ func autoDetectPortVia(cfg *config.DevboxConfig) (*config.ServiceConfig, int) {
 	return nil, 0
 }
 
+// getScheme returns "https" if useHTTPS is true, "http" otherwise.
+func getScheme(useHTTPS bool) string {
+	if useHTTPS {
+		return "https"
+	}
+	return "http"
+}
+
 // buildMainURLRow assembles the main URL row for a service.
 // Returns the formatted row or "" if no URL can be assembled.
 // URL assembly rules:
@@ -225,24 +233,17 @@ func autoDetectPortVia(cfg *config.DevboxConfig) (*config.ServiceConfig, int) {
 func buildMainURLRow(cfg *config.DevboxConfig, svc config.ServiceConfig, svcName, host string, port int,
 	portVia *config.ServiceConfig, portViaPort int) string {
 
+	scheme := getScheme(cfg.Runtime.UseHTTPS)
 	var urls []string
 
 	// Proxied URL (if host and port_via available)
 	if host != "" && portVia != nil {
-		scheme := "http"
-		if cfg.Runtime.UseHTTPS {
-			scheme = "https"
-		}
 		portViaURL := buildProxiedURL(scheme, host, portViaPort)
 		urls = append(urls, portViaURL)
 	}
 
 	// Direct URL (if port available)
 	if port > 0 {
-		scheme := "http"
-		if cfg.Runtime.UseHTTPS {
-			scheme = "https"
-		}
 		directURL := fmt.Sprintf("%s://localhost:%d", scheme, port)
 		urls = append(urls, directURL)
 	}
@@ -279,28 +280,22 @@ func buildPathRow(cfg *config.DevboxConfig, path config.ServiceInfoPath,
 	}
 
 	// Determine base URL
+	scheme := getScheme(cfg.Runtime.UseHTTPS)
 	var baseURL string
 
-	// Try proxied URL first
-	if host != "" && portVia != nil {
-		scheme := "http"
-		if cfg.Runtime.UseHTTPS {
-			scheme = "https"
-		}
+	// Discriminate on available URL components
+	hasHost := host != ""
+	hasPort := port > 0
+	hasPortVia := portVia != nil
+
+	switch {
+	case hasHost && hasPortVia:
 		baseURL = buildProxiedURL(scheme, host, portViaPort)
-	} else if port > 0 {
+	case hasPort:
 		// Fall back to direct URL
-		scheme := "http"
-		if cfg.Runtime.UseHTTPS {
-			scheme = "https"
-		}
 		baseURL = fmt.Sprintf("%s://localhost:%d", scheme, port)
-	} else if host != "" {
+	case hasHost:
 		// Host-only (no port)
-		scheme := "http"
-		if cfg.Runtime.UseHTTPS {
-			scheme = "https"
-		}
 		baseURL = fmt.Sprintf("%s://%s", scheme, host)
 	}
 

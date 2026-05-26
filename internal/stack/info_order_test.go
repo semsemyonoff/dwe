@@ -10,10 +10,10 @@ import (
 func TestDeployOrder_Empty(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name string
-		cfg  *config.DevboxConfig
+		name  string
+		cfg   *config.DevboxConfig
 		types []string
-		want []string
+		want  []string
 	}{
 		{
 			name:  "nil config",

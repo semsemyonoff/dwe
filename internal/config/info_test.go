@@ -598,7 +598,7 @@ func TestInfoItem_UnmarshalYAML_autoUrls(t *testing.T) {
 			yaml: `type: auto-urls`,
 			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
 				if spec == nil {
-					t.Error("SourceAutoURLsSpec should be non-nil")
+					t.Fatal("SourceAutoURLsSpec should be non-nil")
 				}
 				if len(spec.Include) != 0 {
 					t.Errorf("Include should be empty by default, got %v", spec.Include)
@@ -611,7 +611,7 @@ func TestInfoItem_UnmarshalYAML_autoUrls(t *testing.T) {
 include: [app, tool, infra]`,
 			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
 				if spec == nil {
-					t.Error("SourceAutoURLsSpec should be non-nil")
+					t.Fatal("SourceAutoURLsSpec should be non-nil")
 				}
 				if len(spec.Include) != 3 {
 					t.Errorf("Include should have 3 elements, got %d", len(spec.Include))
@@ -626,7 +626,7 @@ hide: [varnish]
 port_via: nginx`,
 			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
 				if spec == nil {
-					t.Error("SourceAutoURLsSpec should be non-nil")
+					t.Fatal("SourceAutoURLsSpec should be non-nil")
 				}
 				if len(spec.Hide) != 1 || spec.Hide[0] != "varnish" {
 					t.Errorf("Hide not parsed correctly: %v", spec.Hide)
@@ -644,7 +644,7 @@ hide_paths:
   catalog: ["API docs"]`,
 			checkSpec: func(t *testing.T, spec *AutoURLsSpec) {
 				if spec == nil {
-					t.Error("SourceAutoURLsSpec should be non-nil")
+					t.Fatal("SourceAutoURLsSpec should be non-nil")
 				}
 				if len(spec.HidePaths) != 2 {
 					t.Errorf("HidePaths should have 2 services, got %d", len(spec.HidePaths))
@@ -682,7 +682,7 @@ func TestInfoItem_UnmarshalYAML_autoHosts(t *testing.T) {
 			yaml: `type: auto-hosts`,
 			checkSpec: func(t *testing.T, spec *AutoHostsSpec) {
 				if spec == nil {
-					t.Error("SourceAutoHostsSpec should be non-nil")
+					t.Fatal("SourceAutoHostsSpec should be non-nil")
 				}
 			},
 		},
@@ -692,7 +692,7 @@ func TestInfoItem_UnmarshalYAML_autoHosts(t *testing.T) {
 ip: 127.0.0.1`,
 			checkSpec: func(t *testing.T, spec *AutoHostsSpec) {
 				if spec == nil {
-					t.Error("SourceAutoHostsSpec should be non-nil")
+					t.Fatal("SourceAutoHostsSpec should be non-nil")
 				}
 				if spec.IP != "127.0.0.1" {
 					t.Errorf("IP = %q, want 127.0.0.1", spec.IP)

@@ -2249,10 +2249,10 @@ func TestLoadServicesConfig_dirsDeduplicated(t *testing.T) {
 func TestServiceConfig_DisplayTitle(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name     string
-		title    string
+		name      string
+		title     string
 		folderKey string
-		want     string
+		want      string
 	}{
 		{name: "override", title: "Custom Title", folderKey: "redis_insight", want: "Custom Title"},
 		{name: "title-case", title: "", folderKey: "redis_insight", want: "Redis Insight"},
@@ -2297,9 +2297,9 @@ func TestServiceInfoPath_DisplayIcon(t *testing.T) {
 func TestServiceConfig_DisplayHostKey(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name string
+		name    string
 		hostKey string
-		want string
+		want    string
 	}{
 		{name: "override", hostKey: "console", want: "console"},
 		{name: "default", hostKey: "", want: "web"},
@@ -2319,9 +2319,9 @@ func TestServiceConfig_DisplayHostKey(t *testing.T) {
 func TestServiceConfig_DisplayPortKey(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name string
+		name    string
 		portKey string
-		want string
+		want    string
 	}{
 		{name: "override", portKey: "console", want: "console"},
 		{name: "default", portKey: "", want: "http"},

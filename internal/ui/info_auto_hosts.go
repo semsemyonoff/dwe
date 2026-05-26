@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"net"
 	"slices"
 	"strings"
 
@@ -31,10 +30,7 @@ func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) strin
 	}
 
 	// Validate IP (warn-level — validation framework handles this, render is silent)
-	if net.ParseIP(ip) == nil {
-		// Invalid IP, but render silently anyway (validator warned)
-		// Proceed with the invalid IP string for now; output will be malformed but won't crash
-	}
+	// Invalid IP proceeds silently; output will be malformed but won't crash
 
 	// Build hide set for fast lookup
 	hideSet := make(map[string]bool)

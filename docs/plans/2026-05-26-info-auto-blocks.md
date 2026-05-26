@@ -536,14 +536,14 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] verify all spec sections (§2–§9) are implemented (cross-reference each row of the validation table and the URL assembly table against the test files)
-- [ ] verify edge cases via tests: missing `info.yml` (fallback), missing `port_via`, disabled service, malformed `paths[].path`, malformed `ip`, `NO_COLOR`-style or other rendering env vars (if applicable — most output is plain text)
-- [ ] confirm no shell-completion functions need updating: `auto-urls`/`auto-hosts` are config item types in `info.yml`, not CLI flags; `service.icon`/`service.info` are not exposed via CLI surface. No `ValidArgsFunction` or `RegisterFlagCompletionFunc` calls require changes.
-- [ ] confirm `internal/setup` (the wizard that generates new service.yml files) is not updated: `icon:` and `info:` are documented as hand-added; the wizard intentionally produces a minimal service.yml. (Verify by reading the wizard's service.yml emission once.)
-- [ ] run `make test` — final full pass
-- [ ] run `make lint` — all issues must be fixed (per CLAUDE.md: `errcheck`, `govet`, `staticcheck`, `revive`, `gocritic`, `modernize`)
-- [ ] run `make build` — confirm the binary builds cleanly
-- [ ] manual smoke against a real project is **out of scope** for this PR — see Post-Completion for the real-project migration step
+- [x] verify all spec sections (§2–§9) are implemented (cross-reference each row of the validation table and the URL assembly table against the test files)
+- [x] verify edge cases via tests: missing `info.yml` (fallback), missing `port_via`, disabled service, malformed `paths[].path`, malformed `ip`, `NO_COLOR`-style or other rendering env vars (if applicable — most output is plain text)
+- [x] confirm no shell-completion functions need updating: `auto-urls`/`auto-hosts` are config item types in `info.yml`, not CLI flags; `service.icon`/`service.info` are not exposed via CLI surface. No `ValidArgsFunction` or `RegisterFlagCompletionFunc` calls require changes.
+- [x] confirm `internal/setup` (the wizard that generates new service.yml files) is not updated: `icon:` and `info:` are documented as hand-added; the wizard intentionally produces a minimal service.yml. (Verify by reading the wizard's service.yml emission once.)
+- [x] run `make test` — final full pass
+- [x] run `make lint` — all issues must be fixed (per CLAUDE.md: `errcheck`, `govet`, `staticcheck`, `revive`, `gocritic`, `modernize`)
+- [x] run `make build` — confirm the binary builds cleanly
+- [x] manual smoke against a real project is **out of scope** for this PR — see Post-Completion for the real-project migration step
 
 ### Task 12: Final documentation and plan move
 

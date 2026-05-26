@@ -856,15 +856,21 @@ func writeInfoYML(t *testing.T, content string) string {
 	t.Helper()
 	root := t.TempDir()
 	devboxDir := filepath.Join(root, "devbox")
-	os.MkdirAll(devboxDir, 0o755)
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	// Write minimal devbox.yml
 	devboxYML := filepath.Join(root, "devbox.yml")
-	os.WriteFile(devboxYML, []byte("schema_version: \"2\"\n"), 0o644)
+	if err := os.WriteFile(devboxYML, []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile devbox.yml: %v", err)
+	}
 
 	// Write info.yml
 	infoYML := filepath.Join(devboxDir, "info.yml")
-	os.WriteFile(infoYML, []byte(content), 0o644)
+	if err := os.WriteFile(infoYML, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile info.yml: %v", err)
+	}
 
 	return root
 }
