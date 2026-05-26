@@ -10,9 +10,12 @@ LDFLAGS  := -X devbox-cli/internal/version.Version=$(VERSION) \
             -X devbox-cli/internal/version.Date=$(DATE) \
             -X devbox-cli/internal/version.BuiltBy=make
 
-.PHONY: build test test-v test-race clean tidy lint
+.PHONY: build test test-v test-race clean tidy lint embedded-docs
 
-build: tidy
+embedded-docs:
+	@./scripts/sync-embedded-docs.sh
+
+build: tidy embedded-docs
 	@mkdir -p $(BIN_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/devbox
 	@echo "Built: $(BIN_DIR)/$(BINARY_NAME)"

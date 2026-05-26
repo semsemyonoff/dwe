@@ -399,18 +399,18 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `scripts/sync-embedded-docs.sh` (called from `make embedded-docs` and `go generate`; idempotent rsync-equivalent)
 - Modify: `Makefile` (add `embedded-docs` target; `build` depends on it)
 
-- [ ] `scripts/sync-embedded-docs.sh`: mirrors `docs/reference docs/internals docs/i18n` → `internal/docs/embedded/{reference,internals,i18n}`. Uses `rsync -a --delete` if available else `rm -rf` of subdirs + `cp -R`. Idempotent.
-- [ ] Makefile target `embedded-docs` runs the script; `build` target depends on it
-- [ ] **`internal/docs/embed.go` carries a `//go:generate` directive** that runs the same sync script, so `go generate ./internal/docs/...` works as an alternative to `make build` (covers IDE workflows, `go install`, third-party tooling). Document this in `docs/internals/packages.md` (Task 16)
-- [ ] **the synced tree is committed.** Fresh-checkout gets a real (non-empty) embed and `go build ./cmd/devbox` / `go install` / IDE builds / release tarballs all ship the docs. Trade-off: the repo carries a duplicated tree at `docs/` and `internal/docs/embedded/`, and PRs touching docs must include both. Idempotent sync makes the duplication automatic; CI rejects PRs where `make embedded-docs` produces a diff (catches forgotten regeneration)
-- [ ] CI guard: a new step `make embedded-docs && git diff --exit-code internal/docs/embedded/` runs after the test suite. Non-zero exit = author forgot to regenerate. Surface as a clear "run `make embedded-docs` and commit" message
-- [ ] `internal/docs/embed.go`: `//go:embed embedded` exposing `BuiltinFS fs.FS` (package-level var); strips the `embedded/` prefix via `fs.Sub` so callers see `reference/...`, `internals/...`, `i18n/...` at the root
-- [ ] startup-time sanity: if `BuiltinFS` is effectively empty (no `reference/` entry), `Sources()` logs a debug-level slog with the hint `"embedded docs are empty — run 'make embedded-docs' (or 'make build') to populate"`. Should never happen for a properly-built binary, but catches misconfiguration in tests/dev
-- [ ] define `DocRoot { Name string; FS fs.FS; ProjectPath string }`; `Sources(projectRoot string) []DocRoot` returns devbox root always + project root if `<projectRoot>/docs/` exists and is readable
-- [ ] define `Node { Name, Path string; Children []*Node; IsDir bool }` and `BuildTree(root DocRoot) (*Node, error)` walking `root.FS`
-- [ ] tree omits files with non-`.md` extension; sorts children stably (directories before files, alphabetical)
-- [ ] tests use a small `testdata/embedded_fixture/` tree for shape/sort/filter assertions independent of the real docs (so updates to actual reference docs don't break unit tests). A separate smoke test verifies `BuiltinFS` contains at least `reference/config/devbox.md` — this passes on a fresh checkout because the embed tree is committed
-- [ ] run `make build && go test ./internal/docs/...` — must pass
+- [x] `scripts/sync-embedded-docs.sh`: mirrors `docs/reference docs/internals docs/i18n` → `internal/docs/embedded/{reference,internals,i18n}`. Uses `rsync -a --delete` if available else `rm -rf` of subdirs + `cp -R`. Idempotent.
+- [x] Makefile target `embedded-docs` runs the script; `build` target depends on it
+- [x] **`internal/docs/embed.go` carries a `//go:generate` directive** that runs the same sync script, so `go generate ./internal/docs/...` works as an alternative to `make build` (covers IDE workflows, `go install`, third-party tooling). Document this in `docs/internals/packages.md` (Task 16)
+- [x] **the synced tree is committed.** Fresh-checkout gets a real (non-empty) embed and `go build ./cmd/devbox` / `go install` / IDE builds / release tarballs all ship the docs. Trade-off: the repo carries a duplicated tree at `docs/` and `internal/docs/embedded/`, and PRs touching docs must include both. Idempotent sync makes the duplication automatic; CI rejects PRs where `make embedded-docs` produces a diff (catches forgotten regeneration)
+- [x] CI guard: a new step `make embedded-docs && git diff --exit-code internal/docs/embedded/` runs after the test suite. Non-zero exit = author forgot to regenerate. Surface as a clear "run `make embedded-docs` and commit" message
+- [x] `internal/docs/embed.go`: `//go:embed embedded` exposing `BuiltinFS fs.FS` (package-level var); strips the `embedded/` prefix via `fs.Sub` so callers see `reference/...`, `internals/...`, `i18n/...` at the root
+- [x] startup-time sanity: if `BuiltinFS` is effectively empty (no `reference/` entry), `Sources()` logs a debug-level slog with the hint `"embedded docs are empty — run 'make embedded-docs' (or 'make build') to populate"`. Should never happen for a properly-built binary, but catches misconfiguration in tests/dev
+- [x] define `DocRoot { Name string; FS fs.FS; ProjectPath string }`; `Sources(projectRoot string) []DocRoot` returns devbox root always + project root if `<projectRoot>/docs/` exists and is readable
+- [x] define `Node { Name, Path string; Children []*Node; IsDir bool }` and `BuildTree(root DocRoot) (*Node, error)` walking `root.FS`
+- [x] tree omits files with non-`.md` extension; sorts children stably (directories before files, alphabetical)
+- [x] tests use a small `testdata/embedded_fixture/` tree for shape/sort/filter assertions independent of the real docs (so updates to actual reference docs don't break unit tests). A separate smoke test verifies `BuiltinFS` contains at least `reference/config/devbox.md` — this passes on a fresh checkout because the embed tree is committed
+- [x] run `make build && go test ./internal/docs/...` — must pass
 
 ### Task 3a: Topic parsing and resolution
 
