@@ -3200,6 +3200,94 @@ func TestBinariesAccessors(t *testing.T) {
 	}
 }
 
+func TestMmdcBinAccessor(t *testing.T) {
+	// MmdcBin(nil) == "mmdc"
+	if got := MmdcBin(nil); got != "mmdc" {
+		t.Errorf("MmdcBin(nil) = %q, want mmdc", got)
+	}
+	// MmdcBin(&DevboxConfig{}) == "mmdc"
+	if got := MmdcBin(&DevboxConfig{}); got != "mmdc" {
+		t.Errorf("MmdcBin(&DevboxConfig{}) = %q, want mmdc", got)
+	}
+	// MmdcBin with explicit value
+	cfg := &DevboxConfig{Binaries: BinariesConfig{Mmdc: "mermaid"}}
+	if got := MmdcBin(cfg); got != "mermaid" {
+		t.Errorf("MmdcBin(cfg) = %q, want mermaid", got)
+	}
+}
+
+func TestLoadConfig_docsDefaults(t *testing.T) {
+	// Test that docs config defaults to empty string and 0, which resolve to "auto" and 100 MB
+	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	// Empty mermaid field defaults to "auto" via MermaidMode accessor
+	if got := MermaidMode(cfg); got != "auto" {
+		t.Errorf("MermaidMode(cfg) = %q, want auto", got)
+	}
+
+	// Zero cache size defaults to 100 MB via MermaidCacheSizeMB accessor
+	if got := MermaidCacheSizeMB(cfg); got != 100 {
+		t.Errorf("MermaidCacheSizeMB(cfg) = %d, want 100", got)
+	}
+}
+
+func TestLoadConfig_docsConfigured(t *testing.T) {
+	devboxYML := sampleDevboxYML
+	defaultsYML := sampleDefaultsYML + `
+docs:
+  mermaid: mmdc
+  cache_size_mb: 50
+`
+	path := writeLayeredFixture(t, devboxYML, defaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	if got := cfg.Docs.Mermaid; got != "mmdc" {
+		t.Errorf("Docs.Mermaid = %q, want mmdc", got)
+	}
+	if got := cfg.Docs.CacheSizeMB; got != 50 {
+		t.Errorf("Docs.CacheSizeMB = %d, want 50", got)
+	}
+
+	// Accessors should return the configured values
+	if got := MermaidMode(cfg); got != "mmdc" {
+		t.Errorf("MermaidMode(cfg) = %q, want mmdc", got)
+	}
+	if got := MermaidCacheSizeMB(cfg); got != 50 {
+		t.Errorf("MermaidCacheSizeMB(cfg) = %d, want 50", got)
+	}
+}
+
+func TestLoadConfig_docsCacheSizeClamp(t *testing.T) {
+	// Test that negative cache size is clamped to 100 by the accessor
+	devboxYML := sampleDevboxYML
+	defaultsYML := sampleDefaultsYML + `
+docs:
+  cache_size_mb: -1
+`
+	path := writeLayeredFixture(t, devboxYML, defaultsYML, "")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	// Raw config contains the negative value
+	if got := cfg.Docs.CacheSizeMB; got != -1 {
+		t.Errorf("Docs.CacheSizeMB = %d, want -1 (raw)", got)
+	}
+
+	// But the accessor clamps it to 100
+	if got := MermaidCacheSizeMB(cfg); got != 100 {
+		t.Errorf("MermaidCacheSizeMB(cfg) = %d, want 100 (clamped)", got)
+	}
+}
+
 // TestLoadConfig_noTopLevelIDEField verifies that the top-level IDE config
 // has been removed from DevboxConfig. The IDE field is no longer part of the
 // typed configuration and cfg.IDE does not exist.

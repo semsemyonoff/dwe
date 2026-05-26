@@ -376,15 +376,15 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Modify: `internal/config/devbox_test.go`
 - Modify: `internal/validate/config/devbox_test.go`
 
-- [ ] add `Mmdc string \`yaml:"mmdc"\`` to `BinariesConfig` (line 26)
-- [ ] add `MmdcBin(cfg *DevboxConfig) string` accessor returning `"mmdc"` when nil/empty
-- [ ] add top-level `Docs DocsConfig \`yaml:"docs"\`` field on `DevboxConfig`; define `DocsConfig { Mermaid string; CacheSizeMB int \`yaml:"cache_size_mb"\` }`
-- [ ] apply defaults at load time: `Mermaid == "" → "auto"`, `CacheSizeMB == 0 → 100`
-- [ ] in `allowedFieldsFor` (devbox.go:607) add `docs` to the top-level allowed set; add `mmdc` to the `binaries` allowed nested set
-- [ ] in `internal/validate/config/devbox.go` add `docs` to the strict allowed-keys list; validate `docs.mermaid ∈ {"auto","mmdc","off"}` and `docs.cache_size_mb >= 0`
-- [ ] update `docs/reference/config/devbox.md` with the new `docs:` block and `binaries.mmdc` entry
-- [ ] write tests: parses both fields; defaults applied; rejects `mermaid: bogus`; rejects negative cache size
-- [ ] run `go test ./internal/config/... ./internal/validate/config/...` — must pass
+- [x] add `Mmdc string \`yaml:"mmdc"\`` to `BinariesConfig` (line 26)
+- [x] add `MmdcBin(cfg *DevboxConfig) string` accessor returning `"mmdc"` when nil/empty
+- [x] add top-level `Docs DocsConfig \`yaml:"docs"\`` field on `DevboxConfig`; define `DocsConfig { Mermaid string; CacheSizeMB int \`yaml:"cache_size_mb"\` }`
+- [x] apply defaults at load time: `Mermaid == "" → "auto"`, `CacheSizeMB == 0 → 100`
+- [x] in `allowedFieldsFor` (devbox.go:607) add `docs` to the top-level allowed set; add `mmdc` to the `binaries` allowed nested set (lenient loader, no explicit validation needed; validated in devboxValidator instead)
+- [x] in `internal/validate/config/devbox.go` add `docs` to the strict allowed-keys list; validate `docs.mermaid ∈ {"auto","mmdc","off"}` and `docs.cache_size_mb >= 0`
+- [x] update `docs/reference/config/devbox.md` with the new `docs:` block and `binaries.mmdc` entry
+- [x] write tests: parses both fields; defaults applied; rejects `mermaid: bogus`; rejects negative cache size
+- [x] run `go test ./internal/config/... ./internal/validate/config/...` — must pass
 
 ### Task 2: `internal/docs` skeleton — embed wiring, source, tree
 

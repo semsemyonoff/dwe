@@ -68,7 +68,7 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	// Check 2: Config loading and validation
-	_, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
@@ -84,6 +84,26 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			Target:   "config.devbox",
 			File:     relPath(ctx.ProjectRoot, configPath),
 		})
+
+		// Validate docs configuration
+		if cfg.Docs.Mermaid != "" && cfg.Docs.Mermaid != "auto" && cfg.Docs.Mermaid != "mmdc" && cfg.Docs.Mermaid != "off" {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   "config.devbox.docs.mermaid",
+				File:     relPath(ctx.ProjectRoot, configPath),
+				Message:  fmt.Sprintf("docs.mermaid: %q is invalid; must be one of auto, mmdc, off", cfg.Docs.Mermaid),
+			})
+		}
+		if cfg.Docs.CacheSizeMB < 0 {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   "config.devbox.docs.cache_size_mb",
+				File:     relPath(ctx.ProjectRoot, configPath),
+				Message:  fmt.Sprintf("docs.cache_size_mb: %d is invalid; must be non-negative", cfg.Docs.CacheSizeMB),
+			})
+		}
 	}
 
 	// If LoadConfig failed, we still checked what we could. Don't emit "cross-ref" info

@@ -97,6 +97,90 @@ func TestDevboxValidatorID(t *testing.T) {
 	require.Equal(t, "config", v.Domain())
 }
 
+func TestDevboxValidator_DocsValidation_InvalidMermaidMode(t *testing.T) {
+	// Write a devbox project with invalid mermaid mode
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+
+	devboxYML := `
+schema_version: "2"
+project:
+  name: test
+  prefix: test
+docs:
+  mermaid: invalid_mode
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "devbox.yml"),
+	}
+
+	v := &devboxValidator{}
+	diags := v.Run(ctx)
+
+	// Should have validation error for invalid mermaid mode
+	hasDiag(t, diags, validate.SeverityError, "invalid")
+}
+
+func TestDevboxValidator_DocsValidation_NegativeCacheSize(t *testing.T) {
+	// Write a devbox project with negative cache size
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+
+	devboxYML := `
+schema_version: "2"
+project:
+  name: test
+  prefix: test
+docs:
+  cache_size_mb: -10
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "devbox.yml"),
+	}
+
+	v := &devboxValidator{}
+	diags := v.Run(ctx)
+
+	// Should have validation error for negative cache size
+	hasDiag(t, diags, validate.SeverityError, "non-negative")
+}
+
+func TestDevboxValidator_DocsValidation_ValidConfig(t *testing.T) {
+	// Write a devbox project with valid docs config
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+
+	devboxYML := `
+schema_version: "2"
+project:
+  name: test
+  prefix: test
+docs:
+  mermaid: auto
+  cache_size_mb: 100
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "devbox.yml"),
+	}
+
+	v := &devboxValidator{}
+	diags := v.Run(ctx)
+
+	// Should have no validation errors (OK for both schema and devbox checks)
+	require.True(t, len(diags) > 1, "expected at least 2 diagnostics (schema and devbox)")
+	require.Equal(t, validate.SeverityOK, diags[0].Severity) // schema
+	require.Equal(t, validate.SeverityOK, diags[1].Severity) // devbox
+}
+
 // writeServicesDir sets up a project root with per-folder services under devbox/services/
 // for servicesValidator tests. The body is a YAML fragment shaped like `services: {name: {...}}`.
 // Returns the project root path.

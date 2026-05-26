@@ -143,6 +143,35 @@ The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}
 
 > **Engine policy, not user state.** The `binaries:` block controls which executables the CLI itself invokes — it is part of the project's engine contract, not per-user configuration. Commit it in `devbox.yml`; do not put it in `local.yml`.
 
+### `binaries.mmdc`
+
+Override the path or name of the `mmdc` (mermaid-cli) binary used to render mermaid diagrams in `devbox docs`. Defaults to `mmdc` (searches `$PATH`).
+
+```yaml
+binaries:
+  mmdc: mermaid  # or /path/to/mmdc
+```
+
+The `mmdc` binary is optional; when unavailable, diagram rendering degrades gracefully (see `docs.mermaid` below).
+
+### `docs`
+
+Configure documentation rendering and caching behavior for `devbox docs` commands.
+
+```yaml
+docs:
+  mermaid: auto        # auto | mmdc | off (default: auto)
+  cache_size_mb: 100   # cache size in MB (default: 100)
+```
+
+**`docs.mermaid`**: Controls how mermaid diagrams in documentation are rendered.
+
+- `auto` (default): Use `mmdc` (mermaid-cli) if found on `$PATH`, otherwise show diagrams as code blocks.
+- `mmdc`: Require `mmdc` to be available; if missing, emit an error placeholder but continue.
+- `off`: Never render diagrams; always show code blocks.
+
+**`docs.cache_size_mb`**: Maximum size in MB for the mermaid diagram cache (PNG files stored in `$XDG_CACHE_HOME/devbox/mermaid/`). Cache uses LRU eviction when over the limit. Default is 100 MB. Must be non-negative; zero defaults to 100.
+
 ---
 
 ## devbox/defaults.yml

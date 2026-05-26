@@ -22,12 +22,13 @@ import (
 //
 // Fields are read from the top-level devbox.yml only — not layered with
 // defaults.yml or local.yml. Empty fields fall back to built-in defaults
-// (devbox, docker, sh, git). Use DevboxBin/DockerBin/ShellBin/GitBin accessors to read.
+// (devbox, docker, sh, git, mmdc). Use DevboxBin/DockerBin/ShellBin/GitBin/MmdcBin accessors to read.
 type BinariesConfig struct {
 	Devbox string `yaml:"devbox"`
 	Docker string `yaml:"docker"`
 	Shell  string `yaml:"shell"`
 	Git    string `yaml:"git"`
+	Mmdc   string `yaml:"mmdc"`
 }
 
 // DevboxBin returns the configured devbox binary name (default: "devbox").
@@ -66,6 +67,15 @@ func GitBin(cfg *DevboxConfig) string {
 	return cfg.Binaries.Git
 }
 
+// MmdcBin returns the configured mmdc binary name (default: "mmdc").
+// Safe when cfg is nil.
+func MmdcBin(cfg *DevboxConfig) string {
+	if cfg == nil || cfg.Binaries.Mmdc == "" {
+		return "mmdc"
+	}
+	return cfg.Binaries.Mmdc
+}
+
 // applyBinariesDefaults fills empty BinariesConfig fields with built-in defaults.
 func applyBinariesDefaults(b *BinariesConfig) {
 	if b.Devbox == "" {
@@ -97,6 +107,7 @@ type DevboxConfig struct {
 	Deploy        DeployConfig   `yaml:"-"`
 	Binaries      BinariesConfig `yaml:"binaries"`
 	UI            UIConfig       `yaml:"ui"`
+	Docs          DocsConfig     `yaml:"docs"`
 
 	// Services holds the fully resolved service definitions loaded from
 	// devbox/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
