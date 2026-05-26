@@ -265,7 +265,7 @@ Safety notes for this task:
 - [x] honor `NO_COLOR` env var (per https://no-color.org/): use `os.LookupEnv("NO_COLOR")` and suppress ANSI when `found == true`, **regardless of the value** (including empty string). Test both `NO_COLOR=""` (set, empty) and `NO_COLOR=1` (set, non-empty) cases — both must suppress
 - [x] update render to use `strings.Builder` with `Grow(96)` (typical output ~80 bytes + safety margin); wrap only the colored glyphs (`▪` and the status icon) in SGR pairs; braces, space, and name stay uncolored so starship's `format` can re-style them
 - [x] terminate every colored glyph's SGR pair with `\x1b[39m` (default foreground only) — NOT `\x1b[0m` which resets ALL attributes and would fight any outer styling from starship's `format`/`style`
-- [ ] write tests with `t.Parallel()` (use `t.Setenv("NO_COLOR", ...)` — `Setenv` is parallel-test-safe in Go 1.17+):
+- [x] write tests with `t.Parallel()` (use `t.Setenv("NO_COLOR", ...)` — `Setenv` is parallel-test-safe in Go 1.17+):
   - all 4 colors from styles.yml are applied (separate cases for each token)
   - missing styles.yml → all 4 defaults applied
   - empty individual token in styles.yml → that token's default applied
