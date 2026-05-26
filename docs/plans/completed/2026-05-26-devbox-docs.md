@@ -749,14 +749,14 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Modify: `AGENTS.md` (CLAUDE.md is a symlink) — add a Key Patterns entry: docs subsystem invariants (no project lock, no preflight, embed scope, SHA-manifest fallback policy, mermaid chain composition)
 - Move: `docs/plans/2026-05-26-devbox-docs.md` → `docs/plans/completed/2026-05-26-devbox-docs.md`
 
-- [ ] update `docs/internals/packages.md` per-package responsibilities for the new packages
-- [ ] add Key Patterns entries to `AGENTS.md`:
+- [x] update `docs/internals/packages.md` per-package responsibilities for the new packages
+- [x] add Key Patterns entries to `AGENTS.md`:
   - "Docs subsystem read-only" — never call `lock.AcquireProjectLocks`; never run preflight; works without `devbox.yml`
   - "Two i18n namespaces" — `devbox/i18n/<lang>.yml` (command/UI strings, YAML) vs `docs/i18n/<lang>/reference/...` (long-form markdown). Different loaders, different validators, do not merge.
   - "Mermaid chain composition" — `mermaid.Chain(FileCache, MmdcRenderer)`; `cfg.Docs.Mermaid == "off"` short-circuits to `Disabled{}`
   - "Content-hash manifest fallback" — staleness check returns `false` when the generated map is empty or the entry is absent; manifest values are `sha256(file bytes)[:12]`, NOT git commit SHAs; never call `git` at runtime
-- [ ] `git mv docs/plans/2026-05-26-devbox-docs.md docs/plans/completed/`
-- [ ] final commit message: `feat(docs): embedded documentation with TUI, mermaid rendering, and translation fallback`
+- [x] `git mv docs/plans/2026-05-26-devbox-docs.md docs/plans/completed/`
+- [x] final commit message: `feat(docs): embedded documentation with TUI, mermaid rendering, and translation fallback`
 
 ## Post-Completion
 
