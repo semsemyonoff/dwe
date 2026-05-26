@@ -95,4 +95,5 @@ Generated reference for the `devbox` command tree.
     - [devbox validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
     - [devbox validate templates git](devbox_validate_templates_git.md) — Validate git hooks template pack
     - [devbox validate templates ide](devbox_validate_templates_ide.md) — Validate IDE template pack
+  - [devbox validate translations](devbox_validate_translations.md) — Validate translation files in devbox/i18n/
 - [devbox version](devbox_version.md) — Print version information

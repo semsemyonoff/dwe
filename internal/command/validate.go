@@ -450,6 +450,8 @@ func validateScopeLabel(scope []string) string {
 			return "external linter " + scope[1]
 		}
 		return "your external linters"
+	case "i18n":
+		return "your translation files (devbox/i18n/)"
 	case "setup":
 		return "devbox/setup.yml"
 	case "snapshot":
