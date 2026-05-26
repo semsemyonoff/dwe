@@ -647,7 +647,7 @@ func buildWizardServiceToggles(cfg *config.DevboxConfig) []setup.ServiceToggle {
 // errOut and returns a deployValidationError so fang's err handler suppresses
 // the double-print.
 func runPreWizardPreflight(ctx context.Context, cfg *config.DevboxConfig, baseDir string, errOut io.Writer) error {
-	cmdRegistry, _ := loadCommandRegistry(filepath.Join(baseDir, "devbox", "devbox.yml"))
+	cmdRegistry, _ := loadCommandRegistry(filepath.Join(baseDir, "devbox.yml"))
 	validateCfg, warnings, loadErr := config.LoadValidateConfig(config.ValidateConfigPath(baseDir))
 
 	vctx := validate.Context{
