@@ -44,6 +44,12 @@ func (shellBuiltin) Run(ctx context.Context, with map[string]any, _ ExecContext)
 	// Hardcoded sh -c matches deploy/condition `when:` convention (see CLAUDE.md).
 	c := exec.CommandContext(runCtx, "sh", "-c", cmdStr)
 	c.Stderr = &stderr
+	// On timeout, exec.CommandContext SIGKILLs only the direct `sh`. Orphan
+	// descendants (e.g. `sh -c "sleep 5"` leaves `sleep` running) keep
+	// stderr's read end alive and Wait() blocks until they exit. WaitDelay
+	// caps that wait — after the grace period Go closes the pipes itself
+	// and Wait returns.
+	c.WaitDelay = 100 * time.Millisecond
 
 	err = c.Run()
 	if runCtx.Err() == context.DeadlineExceeded {
