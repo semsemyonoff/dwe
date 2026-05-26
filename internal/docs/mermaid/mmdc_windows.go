@@ -12,3 +12,6 @@ import (
 func configureCommand(cmd *exec.Cmd) {
 	// Nothing to do.
 }
+
+// killCommandGroup is a no-op on Windows; child process cleanup is best-effort.
+func killCommandGroup(_ *exec.Cmd) {}

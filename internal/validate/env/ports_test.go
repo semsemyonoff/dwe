@@ -138,7 +138,7 @@ func TestClassifyPort_OursReused(t *testing.T) {
 	bindings := map[int][]portOwner{
 		5432: {{Container: "ours-db-1", ComposeProject: "ours"}},
 	}
-	got := classifyPort(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours")
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false)
 	if got != "" {
 		t.Errorf("our own container should not be a conflict, got: %q", got)
 	}
@@ -148,7 +148,7 @@ func TestClassifyPort_ForeignCompose(t *testing.T) {
 	bindings := map[int][]portOwner{
 		5432: {{Container: "rival-db-1", ComposeProject: "rival-proj"}},
 	}
-	got := classifyPort(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours")
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false)
 	if !strings.Contains(got, "rival-db-1") || !strings.Contains(got, "rival-proj") {
 		t.Errorf("foreign container message missing details: %q", got)
 	}
@@ -158,7 +158,7 @@ func TestClassifyPort_ForeignNoLabel(t *testing.T) {
 	bindings := map[int][]portOwner{
 		5432: {{Container: "raw-container", ComposeProject: ""}},
 	}
-	got := classifyPort(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours")
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false)
 	if !strings.Contains(got, "raw-container") {
 		t.Errorf("expected container name in message: %q", got)
 	}
@@ -171,7 +171,7 @@ func TestClassifyPort_FreeViaListen(t *testing.T) {
 	orig := portListenFn
 	t.Cleanup(func() { portListenFn = orig })
 	portListenFn = func(port int) error { return nil } // pretend free
-	got := classifyPort(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours")
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours", false)
 	if got != "" {
 		t.Errorf("free port should produce no conflict, got %q", got)
 	}
@@ -181,7 +181,7 @@ func TestClassifyPort_BusyNonDocker(t *testing.T) {
 	orig := portListenFn
 	t.Cleanup(func() { portListenFn = orig })
 	portListenFn = func(port int) error { return errors.New("listen tcp :5432: bind: address already in use") }
-	got := classifyPort(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours")
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours", false)
 	if !strings.Contains(got, "in use") {
 		t.Errorf("expected 'in use' in non-docker conflict, got %q", got)
 	}

@@ -200,44 +200,6 @@ type portOwner struct {
 	ComposeProject string
 }
 
-// classifyPortOwner returns "" if the port is free or held by our own compose
-// containers, otherwise the name of the container holding it (possibly with
-// compose project info). Called only by classifyPort; production code uses
-// classifyPortForConflict which handles the docker ps failure case.
-func classifyPortOwner(dp declaredPort, bindings map[int][]portOwner, ourProject string) string {
-	owners := bindings[dp.HostPort]
-	if len(owners) > 0 {
-		for _, o := range owners {
-			if ourProject != "" && o.ComposeProject == ourProject {
-				// Our own container holds it — compose will reuse on `up`.
-				return ""
-			}
-		}
-		o := owners[0]
-		who := o.Container
-		if o.ComposeProject != "" && o.ComposeProject != ourProject {
-			who += " (compose project: " + o.ComposeProject + ")"
-		}
-		return who
-	}
-	// Not held by Docker — probe directly.
-	if err := portListenFn(dp.HostPort); err != nil {
-		return firstLine(err.Error(), "address already in use")
-	}
-	return ""
-}
-
-// classifyPort returns "" if the port is acceptable (free, or held by one of
-// our own compose containers), otherwise a user-facing reason string.
-func classifyPort(dp declaredPort, bindings map[int][]portOwner, ourProject string) string {
-	owner := classifyPortOwner(dp, bindings, ourProject)
-	if owner == "" {
-		return ""
-	}
-	return fmt.Sprintf("port %d (%s.%s) is bound by container %s",
-		dp.HostPort, dp.Service, dp.PortName, owner)
-}
-
 // classifyPortForConflict is like classifyPortOwner but handles the docker ps
 // failure case by returning a sentinel in place of the owner name.
 func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourProject string, dockerPSFailed bool) string {

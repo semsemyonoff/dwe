@@ -82,8 +82,9 @@ func (m *MmdcRenderer) Render(ctx context.Context, src string, theme Theme, widt
 			return nil, ErrMmdcNotAvailable
 		}
 
-		// Timeout or other execution error.
-		if ctx.Err() == context.DeadlineExceeded {
+		// Timeout: kill the entire process group to reap Chrome/Puppeteer children.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			killCommandGroup(cmd)
 			return nil, context.DeadlineExceeded
 		}
 

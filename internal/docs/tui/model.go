@@ -144,7 +144,9 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 	// Get available locales for this file
 	m.AvailableLocales = docs.AvailableLocalesFor(m.Roots, path)
 
-	resolved, err := docs.Resolve(m.Roots, path, m.Locale)
+	// Resolve expects paths without .md extension; ResolveContent expects paths with .md.
+	topicPath := strings.TrimSuffix(path, ".md")
+	resolved, err := docs.Resolve(m.Roots, topicPath, m.Locale)
 	if err != nil {
 		m.Viewport.SetContent("Error: " + err.Error())
 		return nil, err
@@ -313,6 +315,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ProgressMsg:
 		// Update progress from prefetch worker pool; re-subscribe for the next tick.
 		m.PrefetchProgress = msg
+		m.StatusBar.SetProgress(msg.Rendered, msg.Total)
 		if m.prefetchChan != nil {
 			return m, waitForProgress(m.prefetchChan)
 		}

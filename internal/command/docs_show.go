@@ -138,7 +138,7 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 		contentWithBanners = append(append(contentWithBanners, []byte(banner)...), content...)
 	case isStale:
 		// Stale translation banner
-		banner := "> **⚠ Warning:** This translation is outdated. Press `e` to view the English version.\n\n"
+		banner := "> **⚠ Warning:** This translation is outdated. Use `--lang en` to view the English version.\n\n"
 		contentWithBanners = append(append(contentWithBanners, []byte(banner)...), content...)
 	default:
 		contentWithBanners = content
