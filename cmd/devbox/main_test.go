@@ -28,6 +28,33 @@ func makeProject(t *testing.T, root string, legacy bool) {
 	}
 }
 
+func TestIsPromptInvocation(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		argv []string
+		want bool
+	}{
+		{"bare prompt", []string{"devbox", "prompt"}, true},
+		{"prompt --check", []string{"devbox", "prompt", "--check"}, true},
+		{"prompt --help", []string{"devbox", "prompt", "--help"}, false},
+		{"prompt -h", []string{"devbox", "prompt", "-h"}, false},
+		{"prompt foo", []string{"devbox", "prompt", "foo"}, false},
+		{"prompt --check extra", []string{"devbox", "prompt", "--check", "x"}, false},
+		{"only program", []string{"devbox"}, false},
+		{"empty", nil, false},
+		{"other subcommand", []string{"devbox", "status"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isPromptInvocation(tc.argv); got != tc.want {
+				t.Errorf("isPromptInvocation(%v) = %v, want %v", tc.argv, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestConfigPathFromArgs(t *testing.T) {
 	t.Run("no flag returns empty and not explicit", func(t *testing.T) {
 		origArgs := os.Args

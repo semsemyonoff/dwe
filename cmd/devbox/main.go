@@ -15,11 +15,16 @@ import (
 	"devbox-cli/internal/command"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/project"
+	"devbox-cli/internal/prompt"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/version"
 )
 
 func main() {
+	if isPromptInvocation(os.Args) {
+		os.Exit(prompt.Run(os.Stdout, os.Args[2:]))
+	}
+
 	root := command.NewRootCmd()
 
 	// Custom error handler: suppress output for ErrSilent (command already
@@ -62,6 +67,20 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+// isPromptInvocation returns true only for `devbox prompt` and `devbox prompt --check`.
+// Any other shape (e.g. `prompt --help`, `prompt foo`) returns false so cobra handles
+// help and unknown-arg errors normally.
+func isPromptInvocation(argv []string) bool {
+	if len(argv) < 2 || argv[1] != "prompt" {
+		return false
+	}
+	rest := argv[2:]
+	if len(rest) == 0 {
+		return true
+	}
+	return len(rest) == 1 && rest[0] == "--check"
 }
 
 // configPathFromArgs extracts the --config / -c flag value from os.Args before

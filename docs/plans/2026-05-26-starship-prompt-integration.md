@@ -284,11 +284,11 @@ Safety notes for this task:
 - Modify: `cmd/devbox/main.go`
 - Modify: `cmd/devbox/main_test.go`
 
-- [ ] add `isPromptInvocation(argv []string) bool` helper at package level
-- [ ] add early `if isPromptInvocation(os.Args) { os.Exit(prompt.Run(os.Stdout, os.Args[2:])) }` as the first statement in `main()` — before `command.NewRootCmd` and `loadHelpColorScheme`
-- [ ] add import for `devbox-cli/internal/prompt`
-- [ ] write tests for `isPromptInvocation`: matches `["devbox","prompt"]`, matches `["devbox","prompt","--check"]`, rejects `["devbox","prompt","--help"]`, rejects `["devbox","prompt","-h"]`, rejects `["devbox","prompt","foo"]`, rejects `["devbox"]`, rejects `["devbox","status"]`
-- [ ] run `go test ./cmd/devbox/...` — must pass before Task 5
+- [x] add `isPromptInvocation(argv []string) bool` helper at package level
+- [x] add early `if isPromptInvocation(os.Args) { os.Exit(prompt.Run(os.Stdout, os.Args[2:])) }` as the first statement in `main()` — before `command.NewRootCmd` and `loadHelpColorScheme`
+- [x] add import for `devbox-cli/internal/prompt`
+- [x] write tests for `isPromptInvocation`: matches `["devbox","prompt"]`, matches `["devbox","prompt","--check"]`, rejects `["devbox","prompt","--help"]`, rejects `["devbox","prompt","-h"]`, rejects `["devbox","prompt","foo"]`, rejects `["devbox"]`, rejects `["devbox","status"]`
+- [x] run `go test ./cmd/devbox/...` — must pass before Task 5
 
 ### Task 5: Add cobra `prompt` command for discoverability
 
