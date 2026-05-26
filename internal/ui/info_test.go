@@ -1218,8 +1218,9 @@ func TestRenderInfo_AutoURLs_Integration(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
 			"myapp": {
-				Type: "app",
-				Icon: "📦",
+				Type:    "app",
+				Enabled: true,
+				Icon:    "📦",
 				Hosts: map[string]string{
 					"web": "myapp.local",
 				},
@@ -1242,6 +1243,9 @@ func TestRenderInfo_AutoURLs_Integration(t *testing.T) {
 	}
 	if !strings.Contains(out, "URLs") {
 		t.Errorf("expected URLs section title, got:\n%s", out)
+	}
+	if !strings.Contains(out, "localhost:8080") {
+		t.Errorf("expected direct URL in output, got:\n%s", out)
 	}
 }
 
@@ -1268,7 +1272,8 @@ func TestRenderInfo_AutoHosts_Integration(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
 			"myapp": {
-				Type: "app",
+				Type:    "app",
+				Enabled: true,
 				Hosts: map[string]string{
 					"web": "myapp.local",
 				},
@@ -1282,6 +1287,9 @@ func TestRenderInfo_AutoHosts_Integration(t *testing.T) {
 	}
 	if !strings.Contains(out, "Hosts") {
 		t.Errorf("expected Hosts section title, got:\n%s", out)
+	}
+	if !strings.Contains(out, "myapp.local") {
+		t.Errorf("expected hostname in output, got:\n%s", out)
 	}
 }
 

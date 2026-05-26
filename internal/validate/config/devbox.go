@@ -670,13 +670,13 @@ func validateInfoAutoBlocks(ctx validate.Context, infoCfg *config.InfoConfig, in
 
 	// Recursively validate items in sections
 	for _, section := range infoCfg.Sections {
-		validateInfoItemsAutoBlocks(&diags, section.Items, serviceKeys, file)
+		validateInfoItemsAutoBlocks(&diags, section.Items, serviceKeys, ctx.Cfg.Services, file)
 	}
 
 	return diags
 }
 
-func validateInfoItemsAutoBlocks(diags *[]validate.Diagnostic, items []config.InfoItem, serviceKeys map[string]bool, file string) {
+func validateInfoItemsAutoBlocks(diags *[]validate.Diagnostic, items []config.InfoItem, serviceKeys map[string]bool, services map[string]config.ServiceConfig, file string) {
 	for _, item := range items {
 		target := "config.info"
 
@@ -720,8 +720,24 @@ func validateInfoItemsAutoBlocks(diags *[]validate.Diagnostic, items []config.In
 							Message:  fmt.Sprintf("auto-urls: hide_paths.%s references unknown service key", svcKey),
 						})
 					}
-					// Path name validation at render time (needs to know service.info.paths)
-					_ = pathNames
+					// Validate path names for known services
+					if svc, ok := services[svcKey]; ok {
+						knownPaths := make(map[string]bool)
+						for _, p := range svc.Info.Paths {
+							knownPaths[p.Name] = true
+						}
+						for _, pathName := range pathNames {
+							if !knownPaths[pathName] {
+								*diags = append(*diags, validate.Diagnostic{
+									Severity: validate.SeverityWarning,
+									Domain:   "config",
+									Target:   target,
+									File:     file,
+									Message:  fmt.Sprintf("auto-urls: hide_paths.%s references unknown path name %q", svcKey, pathName),
+								})
+							}
+						}
+					}
 				}
 			}
 		}
@@ -759,7 +775,7 @@ func validateInfoItemsAutoBlocks(diags *[]validate.Diagnostic, items []config.In
 
 		// Recurse into subgroup items
 		if item.Type == "subgroup" && len(item.Items) > 0 {
-			validateInfoItemsAutoBlocks(diags, item.Items, serviceKeys, file)
+			validateInfoItemsAutoBlocks(diags, item.Items, serviceKeys, services, file)
 		}
 	}
 }

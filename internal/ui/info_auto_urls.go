@@ -36,14 +36,8 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 			// Use the HTTP or HTTPS port from the explicit port_via service
 			if cfg.Runtime.UseHTTPS {
 				portViaPort = svc.Ports["https"]
-				if portViaPort == 0 {
-					portViaPort = svc.Ports["http"]
-				}
 			} else {
 				portViaPort = svc.Ports["http"]
-				if portViaPort == 0 {
-					portViaPort = svc.Ports["https"]
-				}
 			}
 		}
 	} else {
@@ -81,8 +75,7 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		host := svc.Hosts[hostKey]
 		port := svc.Ports[portKey]
 
-		// Skip if service has no title and no paths (not intended for surface)
-		// Services without an info block don't surface in the dashboard
+		// Skip if service has no info block (not opted in to dashboard surface)
 		if svc.Info.Title == "" && len(svc.Info.Paths) == 0 {
 			continue
 		}

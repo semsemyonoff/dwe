@@ -343,10 +343,6 @@ func validateAutoURLsSpec(spec *AutoURLsSpec, itemPath string) error {
 			return fmt.Errorf("info: %s: include value %q not in {app, tool, infra}", itemPath, inc)
 		}
 	}
-	// Validate port_via is non-empty when set (existence check happens in validator with cfg.Services)
-	if spec.PortVia != "" && spec.PortVia == "" {
-		return fmt.Errorf("info: %s: port_via cannot be empty", itemPath)
-	}
 	return nil
 }
 
