@@ -418,11 +418,11 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/docs/topic.go`
 - Create: `internal/docs/topic_test.go`
 
-- [ ] `ParseTopic(input string) (path, anchor string, err error)` — splits `<path>#<anchor>`; trims `.md` if user wrote it; rejects empty path
-- [ ] `Resolve(roots []DocRoot, topic string, locale string) (*ResolvedTopic, error)` — exact match first across roots in declared order; on miss collect case-insensitive substring matches across all topics; if exactly one → return it; if multiple → return `MultipleMatchesError` with the list; if none → return `NotFoundError` with the same substring candidates (no second algorithm — substring-only, per YAGNI)
-- [ ] `AllTopics(roots []DocRoot, locale string) []TopicEntry` — flat list with `{Path, DisplayName, Lang, Source}` per file
-- [ ] tests: `ParseTopic` covers `config/services`, `config/services#anchor`, `config/services.md#anchor`, empty input, trailing slashes; `Resolve` covers exact, fuzzy-single, fuzzy-multi (returns sorted candidates), fuzzy-none; `AllTopics` walks both built-in and project roots; deterministic order
-- [ ] run `go test ./internal/docs/...` — must pass before Task 3b
+- [x] `ParseTopic(input string) (path, anchor string, err error)` — splits `<path>#<anchor>`; trims `.md` if user wrote it; rejects empty path
+- [x] `Resolve(roots []DocRoot, topic string, locale string) (*ResolvedTopic, error)` — exact match first across roots in declared order; on miss collect case-insensitive substring matches across all topics; if exactly one → return it; if multiple → return `MultipleMatchesError` with the list; if none → return `NotFoundError` with the same substring candidates (no second algorithm — substring-only, per YAGNI)
+- [x] `AllTopics(roots []DocRoot, locale string) []TopicEntry` — flat list with `{Path, DisplayName, Lang, Source}` per file
+- [x] tests: `ParseTopic` covers `config/services`, `config/services#anchor`, `config/services.md#anchor`, empty input, trailing slashes; `Resolve` covers exact, fuzzy-single, fuzzy-multi (returns sorted candidates), fuzzy-none; `AllTopics` walks both built-in and project roots; deterministic order
+- [x] run `go test ./internal/docs/...` — must pass before Task 3b
 
 ### Task 3b: Language fallback + content-hash manifest loader
 
