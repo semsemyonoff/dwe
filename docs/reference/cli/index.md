@@ -36,8 +36,13 @@ Generated reference for the `devbox` command tree.
   - [devbox docker run](devbox_docker_run.md) — Run a one-off command in a compose service
   - [devbox docker stop](devbox_docker_stop.md) — Stop compose services
   - [devbox docker up](devbox_docker_up.md) — Start compose services
-- [devbox docs](devbox_docs.md) — Generate documentation for devbox commands
+- [devbox docs](devbox_docs.md) — Browse and manage documentation
+  - [devbox docs cache](devbox_docs_cache.md) — Manage mermaid diagram cache
+    - [devbox docs cache clear](devbox_docs_cache_clear.md) — Clear the mermaid diagram cache
+  - [devbox docs export](devbox_docs_export.md) — Export documentation to a directory
   - [devbox docs generate](devbox_docs_generate.md) — Generate reference documentation
+  - [devbox docs list](devbox_docs_list.md) — List all available documentation topics
+  - [devbox docs show](devbox_docs_show.md) — Show documentation for a topic
 - [devbox info](devbox_info.md) — Display project info dashboard (URLs, hosts, services, tools)
 - [devbox prompt](devbox_prompt.md) — Print a compact shell-prompt segment for the current project
 - [devbox render](devbox_render.md) — Render derived artifacts from the merged devbox config

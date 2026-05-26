@@ -706,17 +706,17 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Modify: `docs/reference/config/devbox.md` (already touched in Task 1; cross-link)
 - Modify: `docs/reference/config/i18n.md` (cross-link to long-form docs translation namespace and clarify that `devbox/i18n/<lang>.yml` and `docs/i18n/<lang>/...` are different namespaces)
 
-- [ ] write `docs/reference/docs/index.md` covering: commands (TUI, show, list, export, cache), language behavior (link to `i18n.md`), mermaid behavior (auto/mmdc/off, cache, system viewer vs inline), project docs (./docs), translation file layout with content-hash header example
-- [ ] **expand `docs/reference/config/i18n.md` substantially** (not just cross-link). Add a dedicated top-level section "Long-form documentation translations" covering:
+- [x] write `docs/reference/docs/index.md` covering: commands (TUI, show, list, export, cache), language behavior (link to `i18n.md`), mermaid behavior (auto/mmdc/off, cache, system viewer vs inline), project docs (./docs), translation file layout with content-hash header example
+- [x] **expand `docs/reference/config/i18n.md` substantially** (not just cross-link). Add a dedicated top-level section "Long-form documentation translations" covering:
   - the two namespaces explicitly: `devbox/i18n/<lang>.yml` (YAML, command/UI strings — existing) vs `docs/i18n/<lang>/<source-tree>/...` (markdown, long-form — new). Different loaders, different validators, different lifecycles.
   - directory layout (mirror of `docs/reference/` and `docs/internals/`)
   - content-hash header format: exact regex, hash derivation (`sha256` of the en-file bytes, first 12 hex chars), how the staleness check works against the embedded manifest, why content-hash and not git-sha
   - how `--lang` flows from the CLI through `i18n.ResolveLocale` into per-file fallback
   - example translated file with header
   - explicit non-overlap: `devbox validate`'s `i18n.*` domain does NOT touch the markdown translations in v1 (planned for follow-up `docs.*` domain)
-- [ ] regenerate CLI reference: `make build && bin/devbox docs generate --scope cli` to pick up the new subcommands and flags
-- [ ] no automated test; manual diff of generated CLI ref
-- [ ] run `make build` — must succeed
+- [x] regenerate CLI reference: `make build && bin/devbox docs generate --scope cli` to pick up the new subcommands and flags
+- [x] no automated test; manual diff of generated CLI ref
+- [x] run `make build` — must succeed
 
 ### Task 15: Verify acceptance criteria (manual verification gate)
 
