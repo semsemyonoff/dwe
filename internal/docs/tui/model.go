@@ -52,6 +52,7 @@ type Model struct {
 	// Background rendering
 	Prefetch         *Prefetch
 	PrefetchProgress ProgressMsg
+	prefetchChan     chan ProgressMsg
 
 	quitting bool
 }
@@ -120,18 +121,20 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 
 	if m.Tree.Cursor() != nil {
 		m.CurrentTopic = m.Tree.Cursor()
-		_ = m.loadTopic(m.CurrentTopic)
+		_, _ = m.loadTopic(m.CurrentTopic)
 	}
 
 	return m, nil
 }
 
-func (m *Model) loadTopic(node *TreeNode) error {
+// loadTopic loads and renders content for the given tree node.
+// It returns a tea.Cmd that starts listening for prefetch progress if diagrams were queued.
+func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 	if node == nil || node.Node == nil || node.Node.IsDir {
 		m.Viewport.SetContent("")
 		m.AvailableLocales = []string{}
 		m.CurrentSourceLang = "en"
-		return nil
+		return nil, nil
 	}
 
 	path := node.Node.Path
@@ -142,7 +145,7 @@ func (m *Model) loadTopic(node *TreeNode) error {
 	resolved, err := docs.Resolve(m.Roots, path, m.Locale)
 	if err != nil {
 		m.Viewport.SetContent("Error: " + err.Error())
-		return err
+		return nil, err
 	}
 
 	// Find the DocRoot that matches the resolved source
@@ -157,7 +160,7 @@ func (m *Model) loadTopic(node *TreeNode) error {
 	content, sourceLang, stale, err := docs.ResolveContent(sourceRoot, path, m.Locale)
 	if err != nil {
 		m.Viewport.SetContent("Error: " + err.Error())
-		return err
+		return nil, err
 	}
 
 	m.CurrentSourceLang = sourceLang
@@ -188,7 +191,7 @@ func (m *Model) loadTopic(node *TreeNode) error {
 	result, err := render.Render(content, opts, placeholderFunc)
 	if err != nil {
 		m.Viewport.SetContent("Error rendering: " + err.Error())
-		return err
+		return nil, err
 	}
 
 	var output string
@@ -213,7 +216,8 @@ func (m *Model) loadTopic(node *TreeNode) error {
 	m.DiagramState = NewDiagramState(result.Diagrams)
 	m.SearchState.Close()
 
-	// Queue diagrams for prefetch rendering if we have any
+	// Queue diagrams for prefetch rendering if we have any; return a Cmd to start
+	// listening for progress so the status bar updates as diagrams are rendered.
 	if len(result.Diagrams) > 0 {
 		m.ensurePrefetch()
 		items := make([]WorkItem, len(result.Diagrams))
@@ -230,23 +234,47 @@ func (m *Model) loadTopic(node *TreeNode) error {
 			}
 		}
 		m.Prefetch.Queue(items)
+		return waitForProgress(m.prefetchChan), nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (m *Model) ensurePrefetch() {
 	if m.Prefetch != nil {
 		return
 	}
-	// Create a dummy context - in the actual TUI, this will be managed externally
-	// For now, create a non-cancellable context to keep the prefetch running
 	ctx := context.Background()
-	progressChan := make(chan ProgressMsg, 10)
-	m.Prefetch = NewPrefetch(ctx, m.MermaidRenderer, progressChan)
+	m.prefetchChan = make(chan ProgressMsg, 10)
+	m.Prefetch = NewPrefetch(ctx, m.MermaidRenderer, m.prefetchChan)
+}
+
+// waitForFileChange returns a Cmd that blocks until the next file-change event.
+func waitForFileChange(events <-chan FileChangedMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-events
+		if !ok {
+			return nil
+		}
+		return msg
+	}
+}
+
+// waitForProgress returns a Cmd that blocks until the next prefetch progress event.
+func waitForProgress(ch <-chan ProgressMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return msg
+	}
 }
 
 func (m *Model) Init() tea.Cmd {
+	if m.Watcher != nil {
+		return waitForFileChange(m.Watcher.Events())
+	}
 	return nil
 }
 
@@ -264,14 +292,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case FileChangedMsg:
-		// File changed on disk; reload the current topic if it matches
+		// File changed on disk; reload the current topic if it matches.
+		var topicCmd tea.Cmd
 		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && m.CurrentTopic.Node.Path == msg.Path {
-			_ = m.loadTopic(m.CurrentTopic)
+			topicCmd, _ = m.loadTopic(m.CurrentTopic)
 		}
-		return m, nil
+		// Re-subscribe so the next event is delivered.
+		if m.Watcher != nil {
+			return m, tea.Batch(topicCmd, waitForFileChange(m.Watcher.Events()))
+		}
+		return m, topicCmd
 	case ProgressMsg:
-		// Update progress from prefetch worker pool
+		// Update progress from prefetch worker pool; re-subscribe for the next tick.
 		m.PrefetchProgress = msg
+		if m.prefetchChan != nil {
+			return m, waitForProgress(m.prefetchChan)
+		}
 		return m, nil
 	}
 	return m, nil
@@ -328,7 +364,6 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Handle language cycling
 	if key.Matches(msg, m.Keys.LanguageCycle) {
 		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && len(m.AvailableLocales) > 0 {
-			// Find the current locale in the available list
 			currentIdx := -1
 			for i, l := range m.AvailableLocales {
 				if l == m.Locale {
@@ -336,10 +371,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					break
 				}
 			}
-			// Move to the next locale (wrap around)
 			nextIdx := (currentIdx + 1) % len(m.AvailableLocales)
 			m.Locale = m.AvailableLocales[nextIdx]
-			_ = m.loadTopic(m.CurrentTopic)
+			cmd, _ := m.loadTopic(m.CurrentTopic)
+			return m, cmd
 		}
 		return m, nil
 	}
@@ -348,7 +383,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.Keys.ShowEnglish) {
 		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && m.CurrentSourceLang != "en" {
 			m.Locale = "en"
-			_ = m.loadTopic(m.CurrentTopic)
+			cmd, _ := m.loadTopic(m.CurrentTopic)
+			return m, cmd
 		}
 		return m, nil
 	}
@@ -356,18 +392,20 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Handle reload
 	if key.Matches(msg, m.Keys.Reload) {
 		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil {
-			_ = m.loadTopic(m.CurrentTopic)
+			cmd, _ := m.loadTopic(m.CurrentTopic)
+			return m, cmd
 		}
 		return m, nil
 	}
 
+	var cmd tea.Cmd
 	switch {
 	case key.Matches(msg, m.Keys.Up):
 		if m.FocusZone == FocusTree {
 			m.Tree.MoveUp()
 			if m.Tree.Cursor() != nil {
 				m.CurrentTopic = m.Tree.Cursor()
-				_ = m.loadTopic(m.CurrentTopic)
+				cmd, _ = m.loadTopic(m.CurrentTopic)
 			}
 		} else {
 			m.Viewport.ScrollUp()
@@ -377,7 +415,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.Tree.MoveDown()
 			if m.Tree.Cursor() != nil {
 				m.CurrentTopic = m.Tree.Cursor()
-				_ = m.loadTopic(m.CurrentTopic)
+				cmd, _ = m.loadTopic(m.CurrentTopic)
 			}
 		} else {
 			m.Viewport.ScrollDown()
@@ -395,7 +433,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.Tree.MoveStart()
 			if m.Tree.Cursor() != nil {
 				m.CurrentTopic = m.Tree.Cursor()
-				_ = m.loadTopic(m.CurrentTopic)
+				cmd, _ = m.loadTopic(m.CurrentTopic)
 			}
 		} else {
 			m.Viewport.ScrollStart()
@@ -405,7 +443,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.Tree.MoveEnd()
 			if m.Tree.Cursor() != nil {
 				m.CurrentTopic = m.Tree.Cursor()
-				_ = m.loadTopic(m.CurrentTopic)
+				cmd, _ = m.loadTopic(m.CurrentTopic)
 			}
 		} else {
 			m.Viewport.ScrollEnd()
@@ -419,11 +457,11 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.Keys.Enter):
 		if m.FocusZone == FocusTree && m.Tree.Cursor() != nil && !m.Tree.IsDir(m.Tree.Cursor()) {
 			m.CurrentTopic = m.Tree.Cursor()
-			_ = m.loadTopic(m.CurrentTopic)
+			cmd, _ = m.loadTopic(m.CurrentTopic)
 		}
 	}
 
-	return m, nil
+	return m, cmd
 }
 
 func (m *Model) View() tea.View {

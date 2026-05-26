@@ -50,6 +50,7 @@ func (fc *FileCache) Render(ctx context.Context, src string, theme Theme, width 
 	if data, err := os.ReadFile(keyPath); err == nil {
 		// Refresh mtime to mark as recently used (for LRU eviction).
 		_ = os.Chtimes(keyPath, now(), now())
+		fc.evictIfNeeded()
 		return data, nil
 	}
 

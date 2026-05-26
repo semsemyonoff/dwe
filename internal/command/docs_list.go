@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/config"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/userconfig"
@@ -68,7 +67,6 @@ func runDocsList(cmd *cobra.Command, rflags *rootFlags, df *docsListFlags) error
 
 	// Resolve the locale
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
-	_ = config.DevboxConfig{} // Use config import
 
 	// Get all topics
 	topics := docs.AllTopics(roots, locale)

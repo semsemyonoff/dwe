@@ -19,6 +19,7 @@ type Watcher struct {
 	root    string
 	ctx     context.Context
 	cancel  context.CancelFunc
+	events  chan FileChangedMsg
 }
 
 // NewWatcher creates a new Watcher for the given root directory.
@@ -45,39 +46,48 @@ func NewWatcher(ctx context.Context, root string) (*Watcher, error) {
 		root:    root,
 		ctx:     ctx,
 		cancel:  cancel,
+		events:  make(chan FileChangedMsg, 16),
 	}
 
 	// Start the event pump goroutine
-	// This goroutine reads from the watcher's Events and Errors channels
-	// and exits when ctx is cancelled
 	go w.eventPump()
 
 	return w, nil
 }
 
-// eventPump reads from the watcher and logs file-changed events.
+// Events returns a channel that receives file-change notifications.
+// The channel is closed when the Watcher is closed.
+func (w *Watcher) Events() <-chan FileChangedMsg {
+	return w.events
+}
+
+// eventPump reads from the watcher and forwards file-changed events.
 // This runs in its own goroutine and exits when w.ctx is cancelled.
 // Close() owns the watcher lifetime — do not close here.
 func (w *Watcher) eventPump() {
+	defer close(w.events)
 	for {
 		select {
 		case event, ok := <-w.watcher.Events:
 			if !ok {
-				// Channel closed
 				return
 			}
-			// Log the event at debug level; the TUI will handle the notification
 			slog.Debug("watcher event", "op", event.Op, "name", event.Name)
+			select {
+			case w.events <- FileChangedMsg{Path: event.Name}:
+			case <-w.ctx.Done():
+				return
+			default:
+				// Drop the event if the consumer is behind; avoid blocking the pump.
+			}
 
 		case err, ok := <-w.watcher.Errors:
 			if !ok {
-				// Channel closed
 				return
 			}
 			slog.Debug("watcher error", "err", err)
 
 		case <-w.ctx.Done():
-			// Context cancelled; exit the pump
 			return
 		}
 	}
@@ -92,12 +102,10 @@ func (w *Watcher) Close() error {
 
 // walkAndWatch recursively walks a directory and adds it (and all subdirs) to the watcher.
 func walkAndWatch(watcher *fsnotify.Watcher, path string) error {
-	// Add the current directory
 	if err := watcher.Add(path); err != nil {
 		return err
 	}
 
-	// List entries to find subdirectories
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return err
@@ -107,7 +115,6 @@ func walkAndWatch(watcher *fsnotify.Watcher, path string) error {
 		if entry.IsDir() {
 			fullPath := path + "/" + entry.Name()
 			if err := walkAndWatch(watcher, fullPath); err != nil {
-				// Continue on error; some dirs may be inaccessible
 				slog.Debug("failed to add directory to watcher", "path", fullPath, "err", err)
 			}
 		}
