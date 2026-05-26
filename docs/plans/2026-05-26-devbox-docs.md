@@ -660,27 +660,27 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Modify: `internal/command/docs.go`
 - Create: `internal/command/docs_root_test.go`
 
-- [ ] define `runDocsTUI(cmd *cobra.Command, rflags *rootFlags) error` that constructs the bubbletea model and runs it via the project's existing in-process pattern (mirrors `cmdbrowser/run.go`)
-- [ ] set `RunE` on the docs parent (`Args: cobra.NoArgs`): non-TTY → return error "devbox docs without arguments requires a TTY; use 'devbox docs show <topic>' or 'devbox docs list' for non-interactive use"; TTY → `runDocsTUI`. Determine TTY via `term.IsTerminal(int(os.Stdout.Fd()))` (the actual fd, not `cmd.OutOrStdout()` which may be a buffer in tests — but the **output writing** still goes through `cmd.OutOrStdout()`)
-- [ ] **no `PersistentPreRunE` added to the docs parent or any child** — relies on the root's existing hook for project resolution + i18n setup. Cobra does not chain hooks; adding one here would silently replace the root's (per CLAUDE.md)
-- [ ] keep the existing `docs generate` subcommand untouched
-- [ ] thread `rflags.Locale`, `rflags.I18n`, `cfg` (loaded by root), `projectRoot`
-- [ ] wire the prefetch worker pool from Task 11.5 — pass it the mermaid chain and a buffered progress channel
-- [ ] **shutdown ordering on `tea.Quit`**: BEFORE returning `tea.Quit` from the model, call `prefetch.cancel()` AND `watcher.Close()`. This ensures in-flight goroutines see `ctx.Done()` and exit cleanly before bubbletea tears down its event loop. Bubbletea will otherwise drop messages from already-running cmds, which is fine for our progress msgs but matters for the leak detector. Pattern:
+- [x] define `runDocsTUI(cmd *cobra.Command, rflags *rootFlags) error` that constructs the bubbletea model and runs it via the project's existing in-process pattern (mirrors `cmdbrowser/run.go`)
+- [x] set `RunE` on the docs parent (`Args: cobra.NoArgs`): non-TTY → return error "devbox docs without arguments requires a TTY; use 'devbox docs show <topic>' or 'devbox docs list' for non-interactive use"; TTY → `runDocsTUI`. Determine TTY via `term.IsTerminal(int(os.Stdout.Fd()))` (the actual fd, not `cmd.OutOrStdout()` which may be a buffer in tests — but the **output writing** still goes through `cmd.OutOrStdout()`)
+- [x] **no `PersistentPreRunE` added to the docs parent or any child** — relies on the root's existing hook for project resolution + i18n setup. Cobra does not chain hooks; adding one here would silently replace the root's (per CLAUDE.md)
+- [x] keep the existing `docs generate` subcommand untouched
+- [x] thread `rflags.Locale`, `rflags.I18n`, `cfg` (loaded by root), `projectRoot`
+- [x] wire the prefetch worker pool from Task 11.5 — pass it the mermaid chain and a buffered progress channel
+- [x] **shutdown ordering on `tea.Quit`**: BEFORE returning `tea.Quit` from the model, call `prefetch.cancel()` AND `watcher.Close()`. This ensures in-flight goroutines see `ctx.Done()` and exit cleanly before bubbletea tears down its event loop. Bubbletea will otherwise drop messages from already-running cmds, which is fine for our progress msgs but matters for the leak detector. Pattern:
   ```go
   case quitMsg:
       m.prefetch.cancel()
       m.watcher.Close()
       return m, tea.Quit
   ```
-- [ ] watcher/progress channels are consumed via reissued `tea.Cmd`s (the canonical bubbletea pattern for async sources): each delivered message returns a new `tea.Cmd` that re-reads from the channel. Source goroutines never block sending because the cmds are always pending
-- [ ] mermaid chain assembly per `cfg.Docs.Mermaid` value:
+- [x] watcher/progress channels are consumed via reissued `tea.Cmd`s (the canonical bubbletea pattern for async sources): each delivered message returns a new `tea.Cmd` that re-reads from the channel. Source goroutines never block sending because the cmds are always pending
+- [x] mermaid chain assembly per `cfg.Docs.Mermaid` value:
   - `"off"` → `mermaid.Disabled{}` (placeholder `<📊 [diagrams disabled]>`)
   - `"auto"` (default) → `mermaid.Chain(mermaid.NewFileCache(...), mermaid.NewMmdc(config.MmdcBin(cfg)))` where `NewMmdc` returns `ErrMmdcNotAvailable` silently on `exec.ErrNotFound` (placeholder becomes `<📊 [mmdc not installed — Y to copy]>`, no log noise)
   - `"mmdc"` → same chain as `auto`, BUT `NewMmdc` in "strict" mode: on `exec.ErrNotFound` returns `ErrMmdcRequired` (placeholder `<📊 [mmdc required but not found]>`, plus one slog.Warn at process start so CI surfaces the misconfiguration)
-- [ ] verify `auto` vs `mmdc` divergence has a dedicated test in Task 5 (add a row to the `MmdcRenderer` table-driven test if missing)
-- [ ] tests: with a `bytes.Buffer` stdout (non-TTY), `RunE` returns the hint error; TTY path is exercised by the TUI tests in tasks 9–11 (no e2e harness)
-- [ ] run `go test ./internal/command/...` — must pass
+- [x] verify `auto` vs `mmdc` divergence has a dedicated test in Task 5 (add a row to the `MmdcRenderer` table-driven test if missing)
+- [x] tests: with a `bytes.Buffer` stdout (non-TTY), `RunE` returns the hint error; TTY path is exercised by the TUI tests in tasks 9–11 (no e2e harness)
+- [x] run `go test ./internal/command/...` — must pass
 
 ### Task 13: Content-hash manifest generator wired into `make build`
 

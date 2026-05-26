@@ -1,6 +1,8 @@
 package command
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,11 +10,19 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/config"
+	"devbox-cli/internal/docs"
+	"devbox-cli/internal/docs/mermaid"
+	"devbox-cli/internal/docs/tui"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/userconfig"
 
 	cobradoc "github.com/spf13/cobra/doc"
+
+	tea "charm.land/bubbletea/v2"
+	"golang.org/x/term"
 
 	"github.com/spf13/cobra"
 )
@@ -34,7 +44,22 @@ func newDocsCmd(flags *rootFlags) *cobra.Command {
 
 View documentation interactively with a TUI browser or display specific topics.
 Generate reference documentation for the CLI and command registry.`,
+		Args:         cobra.NoArgs,
 		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Check if we're in a TTY
+			if !term.IsTerminal(int(os.Stdout.Fd())) {
+				return errors.New("devbox docs without arguments requires a TTY; use 'devbox docs show <topic>' or 'devbox docs list' for non-interactive use")
+			}
+
+			// Get terminal dimensions
+			width, height, err := term.GetSize(int(os.Stdout.Fd()))
+			if err != nil {
+				return fmt.Errorf("failed to get terminal size: %w", err)
+			}
+
+			return runDocsTUI(cmd, flags, width, height)
+		},
 	}
 	cmd.AddCommand(newDocsShowCmd(flags))
 	cmd.AddCommand(newDocsListCmd(flags))
@@ -751,4 +776,75 @@ func genTopLevelIndex(outDir string, scopes map[string]bool) error {
 
 	indexPath := filepath.Join(outDir, "index.md")
 	return os.WriteFile(indexPath, []byte(sb.String()), 0o644)
+}
+
+func runDocsTUI(_ *cobra.Command, flags *rootFlags, termWidth, termHeight int) error {
+	// Load configuration for doc settings (mermaid config, etc.)
+	cfg, err := config.LoadConfig(flags.configPath)
+	if err != nil {
+		// If config fails to load, use defaults (docs still work without full config)
+		cfg = &config.DevboxConfig{}
+	}
+
+	// Get project root and user config language
+	projectRoot := flags.ProjectRoot()
+	var cfgLang string
+	if projectRoot != "" {
+		ucfg, err := userconfig.Load(projectRoot)
+		if err == nil && ucfg != nil {
+			cfgLang = ucfg.Language
+		}
+	}
+
+	// Resolve locale (use provided --lang flag, then config, then environment)
+	locale := i18n.ResolveLocale(flags.Locale, cfgLang, os.Getenv("LANG"))
+
+	// Build mermaid renderer chain based on config
+	var renderer mermaid.Renderer
+	cacheDir, err := mermaid.CacheDir()
+	if err != nil {
+		cacheDir = ""
+	}
+
+	cacheCapBytes := int64(config.MermaidCacheSizeMB(cfg) * 1024 * 1024)
+	mermaidMode := config.MermaidMode(cfg)
+
+	switch mermaidMode {
+	case "off":
+		renderer = mermaid.Disabled{}
+	case "mmdc":
+		// Strict mode: mmdc is required
+		renderer = mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, true)
+	default: // "auto"
+		renderer = mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, false)
+	}
+
+	// Get sources (devbox + project docs)
+	sources := docs.Sources(projectRoot)
+
+	// Create translator for TUI strings
+	translator := i18n.TranslatorOrNop(flags.I18n)
+
+	// Create the model
+	ctx := context.Background()
+	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot)
+	if err != nil {
+		return fmt.Errorf("failed to create TUI model: %w", err)
+	}
+
+	// Run via ui.RunWithPromptHooks for proper signal handling
+	runErr := ui.RunWithPromptHooks(func() error {
+		prog := tea.NewProgram(model)
+		_, e := prog.Run()
+		return e
+	})
+
+	if runErr != nil {
+		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
+			return ui.ErrCancelled
+		}
+		return runErr
+	}
+
+	return nil
 }
