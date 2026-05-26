@@ -12,12 +12,46 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const configFilename = "devbox.yml"
+const (
+	configFilename = "devbox.yml"
+	stateRelPath   = ".devbox/deploy/state.yml"
+)
 
 type devboxStub struct {
 	Project struct {
 		Name string `yaml:"name"`
 	} `yaml:"project"`
+}
+
+type stateStub struct {
+	Project struct {
+		Status string `yaml:"status"`
+	} `yaml:"project"`
+	Pending *struct{} `yaml:"pending"`
+}
+
+type statusKind int
+
+const (
+	statusNone statusKind = iota
+	statusDeployed
+	statusPending
+	statusPartial
+	statusFailed
+)
+
+func (s statusKind) icon() string {
+	switch s {
+	case statusDeployed:
+		return "✓"
+	case statusPending:
+		return "⟳"
+	case statusPartial:
+		return "⚠"
+	case statusFailed:
+		return "✗"
+	}
+	return ""
 }
 
 // Run resolves the current working directory and dispatches to runFromDir.
@@ -50,10 +84,43 @@ func runFromDir(stdout io.Writer, args []string, cwd string) int {
 		return 0
 	}
 
-	if _, err := io.WriteString(stdout, "{▪} "+name+"\n"); err != nil {
+	status := readStatus(root)
+	out := "{▪} " + name
+	if icon := status.icon(); icon != "" {
+		out += " " + icon
+	}
+	out += "\n"
+	if _, err := io.WriteString(stdout, out); err != nil {
 		return 1
 	}
 	return 0
+}
+
+// readStatus reads the deploy journal state file and maps it to a statusKind
+// using the precedence: failed > partial > pending > deployed > none.
+// Any IO or YAML parse error returns statusNone silently.
+func readStatus(root string) statusKind {
+	data, err := os.ReadFile(filepath.Join(root, stateRelPath))
+	if err != nil {
+		return statusNone
+	}
+	var stub stateStub
+	if err := yaml.Unmarshal(data, &stub); err != nil {
+		return statusNone
+	}
+	switch stub.Project.Status {
+	case "failed":
+		return statusFailed
+	case "partial":
+		return statusPartial
+	}
+	if stub.Pending != nil {
+		return statusPending
+	}
+	if stub.Project.Status == "deployed" {
+		return statusDeployed
+	}
+	return statusNone
 }
 
 // parseArgs returns (checkMode, ok). ok=false means args are malformed and the

@@ -108,6 +108,137 @@ func TestRunFromDir(t *testing.T) {
 			wantStdout: "",
 		},
 		{
+			name: "status_state_file_absent",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p\n",
+		},
+		{
+			name: "status_pending_only",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "pending: {}\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ⟳\n",
+		},
+		{
+			name: "status_deployed",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ✓\n",
+		},
+		{
+			name: "status_partial",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: partial\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ⚠\n",
+		},
+		{
+			name: "status_failed",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: failed\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ✗\n",
+		},
+		{
+			name: "status_deployed_plus_pending_pending_wins",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\npending: {}\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ⟳\n",
+		},
+		{
+			name: "status_partial_plus_pending_partial_wins",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: partial\npending: {}\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ⚠\n",
+		},
+		{
+			name: "status_failed_plus_pending_failed_wins",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: failed\npending: {}\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ✗\n",
+		},
+		{
+			name: "status_not_deployed_no_icon",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: not_deployed\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p\n",
+		},
+		{
+			name: "status_corrupted_state_yml_no_icon",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project: [this is: not valid\n  - bad\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p\n",
+		},
+		{
+			name: "status_state_yml_with_unknown_fields_ignored",
+			setup: func(t *testing.T) string {
+				root := t.TempDir()
+				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n  extra: stuff\nservices:\n  db:\n    status: deployed\nunknown_top_level: 42\n")
+				return root
+			},
+			args:       nil,
+			wantCode:   0,
+			wantStdout: "{▪} p ✓\n",
+		},
+		{
 			name: "corrupted_devbox_yml",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()

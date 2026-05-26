@@ -230,11 +230,11 @@ func isPromptInvocation(argv []string) bool {
 - Modify: `internal/prompt/prompt.go`
 - Modify: `internal/prompt/prompt_test.go`
 
-- [ ] add `stateStub` (value-type fields: `Project struct{ Status string }`, `Pending *struct{}`) — value types are nil-safe; `Project.Status` zero-value is the empty string which maps to `statusNone`
-- [ ] add `readStatus(root string) statusKind` helper; any IO or yaml parse error returns `statusNone` silently (no logging, no panics — see safety notes below)
-- [ ] map outcomes to one of `statusNone`, `statusDeployed`, `statusPending`, `statusPartial`, `statusFailed` per the precedence table in Solution Overview
-- [ ] update render to append plain-rune icon (`✓`/`⟳`/`⚠`/`✗`/none) after name — colors come in Task 3
-- [ ] write tests, each with `t.Parallel()` and its own `t.TempDir()`, covering every row of the precedence table plus combinations:
+- [x] add `stateStub` (value-type fields: `Project struct{ Status string }`, `Pending *struct{}`) — value types are nil-safe; `Project.Status` zero-value is the empty string which maps to `statusNone`
+- [x] add `readStatus(root string) statusKind` helper; any IO or yaml parse error returns `statusNone` silently (no logging, no panics — see safety notes below)
+- [x] map outcomes to one of `statusNone`, `statusDeployed`, `statusPending`, `statusPartial`, `statusFailed` per the precedence table in Solution Overview
+- [x] update render to append plain-rune icon (`✓`/`⟳`/`⚠`/`✗`/none) after name — colors come in Task 3
+- [x] write tests, each with `t.Parallel()` and its own `t.TempDir()`, covering every row of the precedence table plus combinations:
   - state file absent → no icon
   - `pending` set, no project status → ⟳
   - `Status: deployed` → ✓
@@ -251,7 +251,7 @@ Safety notes for this task:
 - `gopkg.in/yaml.v3` `Unmarshal` allocates structures via reflection. Failure mode for our stub is malformed YAML (returns error → we treat as `statusNone`) — no nil-pointer panic possible because all stub fields are value types or explicitly-nil-checked pointers
 - `os.ReadFile` on a file mid-rename is impossible: journal uses atomic write-temp + rename per CLAUDE.md, so the inode swap is atomic at the VFS layer
 
-- [ ] run `go test ./internal/prompt/... -race` — must pass before Task 3
+- [x] run `go test ./internal/prompt/... -race` — must pass before Task 3
 
 ### Task 3: Add color resolution from styles.yml and ANSI rendering
 
