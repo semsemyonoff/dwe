@@ -12,6 +12,10 @@ import (
 	"devbox-cli/internal/filesgate"
 )
 
+// Hashes are computed from raw, untranslated fields; do not introduce locale-dependent
+// inputs (e.g., i18n.Translator lookups) into any hash function. Changing the active
+// locale must not invalidate cached steps or phases.
+
 // ActionHash computes a stable hash for a config.Action based on type, cmd, and with parameters.
 // The hash is order-independent for the with map and invariant to YAML whitespace/comments.
 // Returns the full sha256 hex digest (64 characters).

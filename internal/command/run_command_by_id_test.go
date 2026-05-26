@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
@@ -704,7 +705,7 @@ func TestParamFieldsFromDef_DeterministicOrder(t *testing.T) {
 		},
 	}
 	pre := map[string]string{"alpha": "xy", "beta": "3"}
-	fields := paramFieldsFromDef(def, pre, nil)
+	fields := paramFieldsFromDef(def, pre, nil, i18n.NopTranslator{}, "")
 	if len(fields) != 3 {
 		t.Fatalf("expected 3 fields; got %d", len(fields))
 	}

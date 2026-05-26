@@ -308,7 +308,9 @@ func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, step
 		// Transitive invocation: workflow sub-steps are never the
 		// user's top-level command, so suppress notifications even if
 		// the referenced CommandDef opted in via notify: true.
-		SkipNotify: true,
+		SkipNotify:  true,
+		Translator:  rc.Translator,
+		Locale:      rc.Locale,
 	}
 
 	if err := RunCommand(ctx, subCtx); err != nil {

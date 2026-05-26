@@ -502,20 +502,20 @@ A `Translator` interface (`{ CommandDescription(...), ParamDescription(...), ...
 
 **Hash safety** — no source change. The hash code at `internal/deploy/journal/hash.go:336,368` has NO locale input and reads `phase.Description` / `step.Description` directly from the typed structs — it cannot become locale-dependent unless someone wires a translator into it. The earlier plan's "build a step, hash it, switch locale" regression test is meaningless (the hash function literally cannot see a locale). Replace with: a one-line code-level invariant comment at the top of `hash.go` (`// Hashes are computed from raw, untranslated fields; do not introduce locale-dependent inputs here.`) plus a code-review checklist note. No new test.
 
-- [ ] design `Translator` interface in `internal/i18n` (the five typed helpers as methods). `*i18n.Store` satisfies it. Add `NopTranslator struct{}` with methods that just `return fallback`. Add `TranslatorOrNop(s *i18n.Store) Translator` helper
-- [ ] thread `Translator` through signatures: `printRunHeader`, `paramFieldsFromDef`, `makeBrowserSelector`, tree builders. Nil is forbidden — callers pass `i18n.TranslatorOrNop(rflags.I18n)`
-- [ ] add `Translator Translator` and `Locale string` fields to `RunContext`. `BuildRunContext` defaults them to `i18n.NopTranslator{}` and `""`
-- [ ] **plumb `runCommandByID` signature**: add `Translator i18n.Translator` and `Locale string` to `runOpts` (`command_cmd.go:37`). The two call sites at `:93` and `:127` already have `rflags` in scope — they pass `Translator: i18n.TranslatorOrNop(rflags.I18n)` and `Locale: rflags.Locale` into `runOpts`. Inside `runCommandByID` (after the existing `BuildRunContext`), assign `ctx.Translator = opts.Translator` and `ctx.Locale = opts.Locale` before any rendering or confirmation
-- [ ] **workflow manual sub-context** (`runner_workflow.go:293`): this site constructs `RunContext{}` field-by-field (NOT a struct copy), so Translator/Locale will be the zero values unless explicitly propagated. Add explicit `Translator: rc.Translator` and `Locale: rc.Locale` to the manual construction
-- [ ] **belt-and-suspenders normalization** in `ConfirmCommand` (`confirmation.go:26`): on entry, if `ctx.Translator == nil`, set it to `i18n.NopTranslator{}`. Defends against any future manual-construction sites that forget to propagate
-- [ ] update each enumerated site at `:247`, `:292`, `:317`, `:427`, `:590`, `:606`, `:677-678`, `:685`, `:911-912` to use the typed helpers
-- [ ] update runtime confirmation at `confirmation.go:39` to use `ctx.Translator.CommandConfirmationText(...)` — covers workflow re-entry too
-- [ ] at `:641-642` (completion): wrap via `i18n.TranslatorOrNop(rflags.I18n)` before calling the typed helpers — handles the nil-store case in `__complete` paths uniformly
-- [ ] add the one-line invariant comment to `internal/deploy/journal/hash.go` documenting "no locale inputs here"
-- [ ] write tests: fixture store with translations for one command + one group; `command list`, inspect, browser tree, and completion descriptions show translated strings; with no translation present, raw values are shown
-- [ ] write workflow confirmation test: workflow step references a translated command, the confirmation prompt rendered inside the workflow uses the translated text (covers the `runner_workflow.go:300` copied-RunContext path)
-- [ ] write completion-path test asserting nil `rflags.I18n` does not panic and returns raw descriptions
-- [ ] run `go test ./internal/command/... ./internal/usercommands/...` — must pass before Task 8
+- [x] design `Translator` interface in `internal/i18n` (the five typed helpers as methods). `*i18n.Store` satisfies it. Add `NopTranslator struct{}` with methods that just `return fallback`. Add `TranslatorOrNop(s *i18n.Store) Translator` helper
+- [x] thread `Translator` through signatures: `printRunHeader`, `paramFieldsFromDef`, `makeBrowserSelector`, tree builders. Nil is forbidden — callers pass `i18n.TranslatorOrNop(rflags.I18n)`
+- [x] add `Translator Translator` and `Locale string` fields to `RunContext`. `BuildRunContext` defaults them to `i18n.NopTranslator{}` and `""`
+- [x] **plumb `runCommandByID` signature**: add `Translator i18n.Translator` and `Locale string` to `runOpts` (`command_cmd.go:37`). The two call sites at `:93` and `:127` already have `rflags` in scope — they pass `Translator: i18n.TranslatorOrNop(rflags.I18n)` and `Locale: rflags.Locale` into `runOpts`. Inside `runCommandByID` (after the existing `BuildRunContext`), assign `ctx.Translator = opts.Translator` and `ctx.Locale = opts.Locale` before any rendering or confirmation
+- [x] **workflow manual sub-context** (`runner_workflow.go:293`): this site constructs `RunContext{}` field-by-field (NOT a struct copy), so Translator/Locale will be the zero values unless explicitly propagated. Add explicit `Translator: rc.Translator` and `Locale: rc.Locale` to the manual construction
+- [x] **belt-and-suspenders normalization** in `ConfirmCommand` (`confirmation.go:26`): on entry, if `ctx.Translator == nil`, set it to `i18n.NopTranslator{}`. Defends against any future manual-construction sites that forget to propagate
+- [x] update each enumerated site at `:247`, `:292`, `:317`, `:427`, `:590`, `:606`, `:677-678`, `:685`, `:911-912` to use the typed helpers
+- [x] update runtime confirmation at `confirmation.go:39` to use `ctx.Translator.CommandConfirmationText(...)` — covers workflow re-entry too
+- [x] at `:641-642` (completion): wrap via `i18n.TranslatorOrNop(rflags.I18n)` before calling the typed helpers — handles the nil-store case in `__complete` paths uniformly
+- [x] add the one-line invariant comment to `internal/deploy/journal/hash.go` documenting "no locale inputs here"
+- [x] write tests: fixture store with translations for one command + one group; `command list`, inspect, browser tree, and completion descriptions show translated strings; with no translation present, raw values are shown
+- [x] write workflow confirmation test: workflow step references a translated command, the confirmation prompt rendered inside the workflow uses the translated text (covers the `runner_workflow.go:300` copied-RunContext path)
+- [x] write completion-path test asserting nil `rflags.I18n` does not panic and returns raw descriptions
+- [x] run `go test ./internal/command/... ./internal/usercommands/...` — must pass before Task 8
 
 ### Task 8: Validator — `internal/validate/i18n` domain
 

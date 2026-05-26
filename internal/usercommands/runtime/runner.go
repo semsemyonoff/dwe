@@ -106,6 +106,25 @@ type RunContext struct {
 	// runner consumes it inside both sequential and parallel dispatch paths.
 	// Keys are sub-step names (StepName()); values are the matching override.
 	WorkflowSubStepOverrides map[string]config.SubStepOverride
+
+	// Translator provides localized string lookups. When set, display strings
+	// (descriptions, confirmation text, param descriptions) are looked up
+	// via this Translator. Set by the command layer (e.g., runCommandByID);
+	// not populated by BuildRunContext (callers wire it in after construction).
+	// Completion paths and other contexts that bypass locale resolution set
+	// a NopTranslator to avoid nil checks downstream.
+	Translator interface {
+		CommandDescription(locale, commandID, fallback string) string
+		CommandConfirmationText(locale, commandID, fallback string) string
+		ParamDescription(locale, commandID, paramName, fallback string) string
+		GroupTitle(locale, groupID, fallback string) string
+		GroupDescription(locale, groupID, fallback string) string
+		T(locale, uiKey, fallback string) string
+	}
+
+	// Locale is the active locale code (e.g. "ru", "en"). Used alongside
+	// Translator to look up localized strings. Set by the command layer.
+	Locale string
 }
 
 // stdinOrOS returns ctx.Stdin if set, otherwise os.Stdin.

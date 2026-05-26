@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
 
@@ -180,7 +181,7 @@ func TestPrintCommandInspect_BasicCommand(t *testing.T) {
 		Cmd:         "docker compose up db",
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	for _, want := range []string{"db.up", "shell", "Start the database", "docker compose up db"} {
 		if !strings.Contains(out, want) {
@@ -197,7 +198,7 @@ func TestPrintCommandInspect_PrivateCommand(t *testing.T) {
 		Cmd:     "mysql -e 'CREATE DATABASE'",
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !strings.Contains(out, "true") {
 		t.Errorf("expected private=true in output:\n%s", out)
@@ -212,7 +213,7 @@ func TestPrintCommandInspect_ServiceExec(t *testing.T) {
 		Cmd:     "php artisan migrate",
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	for _, want := range []string{"service_exec", "app-main", "php artisan migrate"} {
 		if !strings.Contains(out, want) {
@@ -232,7 +233,7 @@ func TestPrintCommandInspect_WorkflowWithSteps(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !strings.Contains(out, "workflow") {
 		t.Errorf("expected workflow type in output:\n%s", out)
@@ -260,7 +261,7 @@ func TestPrintCommandInspect_WithParams(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !strings.Contains(out, "Params") {
 		t.Errorf("expected Params section:\n%s", out)
@@ -283,7 +284,7 @@ func TestPrintCommandInspect_WithContext(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !strings.Contains(out, "Context") {
 		t.Errorf("expected Context section:\n%s", out)
@@ -301,7 +302,7 @@ func TestPrintCommandInspect_WithEnv(t *testing.T) {
 		Env:  map[string]string{"APP_ENV": "local", "DEBUG": "true"},
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !strings.Contains(out, "Env") {
 		t.Errorf("expected Env section:\n%s", out)
@@ -323,7 +324,7 @@ func TestPrintCommandInspect_Script(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !strings.Contains(out, "bash") {
 		t.Errorf("expected script shell:\n%s", out)
@@ -340,7 +341,7 @@ func TestPrintCommandInspect_ScriptNilShellDefaultsSh(t *testing.T) {
 		Script: &usercommands.ScriptDef{Run: "make build"},
 	}
 	var buf bytes.Buffer
-	printInspect(&buf, def, nil)
+	printInspect(&buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !strings.Contains(out, "sh") {
 		t.Errorf("expected default shell 'sh':\n%s", out)

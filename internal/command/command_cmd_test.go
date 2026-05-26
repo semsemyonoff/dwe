@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
@@ -86,7 +87,7 @@ func TestParseSetFlags_emptyKey(t *testing.T) {
 func TestBuildTreeNodes_emptyRegistry(t *testing.T) {
 	// An empty root GroupNode should produce no nodes.
 	root := &usercommands.GroupNode{}
-	nodes := buildTreeNodes(root, "", false)
+	nodes := buildTreeNodes(root, "", false, i18n.NopTranslator{}, "")
 	if len(nodes) != 0 {
 		t.Errorf("expected empty nodes, got %d", len(nodes))
 	}
@@ -99,7 +100,7 @@ func TestBuildTreeNodes_publicCommandsOnly(t *testing.T) {
 			{ID: "services.main.secret", LocalName: "secret", Type: usercommands.CommandTypeShell, Private: true},
 		},
 	}
-	nodes := buildTreeNodes(root, "", false)
+	nodes := buildTreeNodes(root, "", false, i18n.NopTranslator{}, "")
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node (public only), got %d", len(nodes))
 	}
@@ -115,7 +116,7 @@ func TestBuildTreeNodes_includePrivate(t *testing.T) {
 			{LocalName: "secret", Type: usercommands.CommandTypeShell, Private: true},
 		},
 	}
-	nodes := buildTreeNodes(root, "", true)
+	nodes := buildTreeNodes(root, "", true, i18n.NopTranslator{}, "")
 	if len(nodes) != 2 {
 		t.Fatalf("expected 2 nodes (including private), got %d", len(nodes))
 	}
@@ -136,7 +137,7 @@ func TestBuildTreeNodes_nestedGroups(t *testing.T) {
 	}
 	root := &usercommands.GroupNode{Children: []*usercommands.GroupNode{services}}
 
-	nodes := buildTreeNodes(root, "", false)
+	nodes := buildTreeNodes(root, "", false, i18n.NopTranslator{}, "")
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 top-level node, got %d", len(nodes))
 	}
@@ -165,7 +166,7 @@ func TestBuildTreeNodes_groupFilterMissing(t *testing.T) {
 			{LocalName: "migrate", Type: usercommands.CommandTypeServiceExec},
 		},
 	}
-	nodes := buildTreeNodes(root, "nonexistent", false)
+	nodes := buildTreeNodes(root, "nonexistent", false, i18n.NopTranslator{}, "")
 	if len(nodes) != 0 {
 		t.Errorf("expected 0 nodes for missing group, got %d", len(nodes))
 	}
@@ -187,7 +188,7 @@ func TestBuildTreeNodes_groupFilter(t *testing.T) {
 	root := &usercommands.GroupNode{Children: []*usercommands.GroupNode{services}}
 
 	// Filter to "services.main" — should return migrate directly.
-	nodes := buildTreeNodes(root, "services.main", false)
+	nodes := buildTreeNodes(root, "services.main", false, i18n.NopTranslator{}, "")
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node for services.main filter, got %d", len(nodes))
 	}
@@ -206,7 +207,7 @@ func TestBuildTreeNodes_privateGroupHiddenWhenAllPrivate(t *testing.T) {
 		},
 	}
 	root := &usercommands.GroupNode{Children: []*usercommands.GroupNode{inner}}
-	nodes := buildTreeNodes(root, "", false)
+	nodes := buildTreeNodes(root, "", false, i18n.NopTranslator{}, "")
 	if len(nodes) != 0 {
 		t.Errorf("expected 0 nodes (private-only group should be hidden), got %d", len(nodes))
 	}
@@ -222,7 +223,7 @@ func TestCommandDefToTreeNode_public(t *testing.T) {
 		Description: "Run migrations",
 		Private:     false,
 	}
-	node := commandDefToTreeNode(def)
+	node := commandDefToTreeNode(def, i18n.NopTranslator{}, "")
 	if node.Label != "services.main.migrate" {
 		t.Errorf("label: want %q, got %q", "services.main.migrate", node.Label)
 	}
@@ -241,7 +242,7 @@ func TestCommandDefToTreeNode_private(t *testing.T) {
 		Type:      usercommands.CommandTypeServiceExec,
 		Private:   true,
 	}
-	node := commandDefToTreeNode(def)
+	node := commandDefToTreeNode(def, i18n.NopTranslator{}, "")
 	if len(node.Tags) != 2 {
 		t.Fatalf("expected 2 tags (private + type), got %v", node.Tags)
 	}
@@ -266,7 +267,7 @@ func TestPrintCommandInspect_workflow(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil)
+	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "services.main.bootstrap") {
 		t.Errorf("output should contain command ID")
@@ -291,7 +292,7 @@ func TestPrintCommandInspect_serviceExec(t *testing.T) {
 		Cmd:     "php artisan migrate",
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil)
+	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "service_exec") {
 		t.Errorf("output should contain type: %s", out)
@@ -314,7 +315,7 @@ func TestPrintCommandInspect_withParams(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil)
+	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "Params") {
 		t.Errorf("output should contain Params section: %s", out)
@@ -336,7 +337,7 @@ func TestPrintCommandInspect_withConfirmation(t *testing.T) {
 		ConfirmationText: "Drop database?",
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil)
+	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "confirmation") {
 		t.Errorf("output should contain confirmation flag: %s", out)
@@ -357,7 +358,7 @@ func TestPrintCommandInspect_withMessages(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil)
+	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "Messages") {
 		t.Errorf("output should contain Messages section: %s", out)
@@ -395,7 +396,7 @@ func TestPrintCommandInspect_daemonStart_derivedFromLine(t *testing.T) {
 
 	// Without cfg: derived-from line + Daemon subsection, no Container subsection.
 	buf := &testBuf{}
-	printInspect(buf, def, nil)
+	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "derived from") || !contains(out, "daemon services.main.queue") {
 		t.Errorf("expected 'derived from: daemon services.main.queue' line, got:\n%s", out)
@@ -422,7 +423,7 @@ func TestPrintCommandInspect_daemonStart_derivedFromLine(t *testing.T) {
 		Raw:     map[string]any{},
 	}
 	buf2 := &testBuf{}
-	printInspect(buf2, def, cfg)
+	printInspect(buf2, def, cfg, i18n.NopTranslator{}, "")
 	out2 := buf2.String()
 	if !contains(out2, "Container") {
 		t.Errorf("expected Container subsection when cfg is non-nil, got:\n%s", out2)
@@ -643,7 +644,7 @@ func TestPrintRunHeader(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var buf bytes.Buffer
-			printRunHeader(&buf, tc.def)
+			printRunHeader(&buf, tc.def, i18n.NopTranslator{}, "")
 			got := buf.String()
 			for _, w := range tc.want {
 				if !strings.Contains(got, w) {

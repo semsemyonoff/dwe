@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
@@ -36,7 +37,12 @@ func ConfirmCommand(ctx RunContext) error {
 		return fmt.Errorf("%w: command %q requires confirmation", ErrConfirmInsideParallel, ctx.Cmd.ID)
 	}
 
-	message := ctx.Cmd.EffectiveConfirmationText()
+	// Ensure Translator is never nil for downstream use.
+	if ctx.Translator == nil {
+		ctx.Translator = i18n.NopTranslator{}
+	}
+
+	message := ctx.Translator.CommandConfirmationText(ctx.Locale, ctx.Cmd.ID, ctx.Cmd.EffectiveConfirmationText())
 	if ctx.Render != nil {
 		rendered, err := tpl.RenderCommand(message, ctx.Render)
 		if err != nil {

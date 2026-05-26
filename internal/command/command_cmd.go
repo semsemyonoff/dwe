@@ -14,6 +14,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/daemon"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
@@ -36,11 +37,13 @@ var (
 
 // runOpts carries the per-invocation options for runCommandByID.
 type runOpts struct {
-	Inspect        bool
-	Yes            bool // user-explicit --yes OR'd with TUI y-toggle at the call site
+	Inspect     bool
+	Yes         bool // user-explicit --yes OR'd with TUI y-toggle at the call site
 	ForceParamForm bool // TUI-only: user picked the item via the edit-params key
-	SetValues      []string
-	Silent         bool // suppress end-of-command desktop notification
+	SetValues   []string
+	Silent      bool // suppress end-of-command desktop notification
+	Translator  i18n.Translator // for localized string lookups; nil-safe via TranslatorOrNop
+	Locale      string          // active locale code (e.g. "ru", "en")
 }
 
 func newCommandCmd(flags *rootFlags) *cobra.Command {
@@ -94,7 +97,11 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					cmd.Context(),
 					cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
 					cfg, reg, flags.ProjectRoot(), args[0],
-					runOpts{Inspect: true},
+					runOpts{
+						Inspect:    true,
+						Translator: i18n.TranslatorOrNop(flags.I18n),
+						Locale:     flags.Locale,
+					},
 				)
 			}
 
@@ -111,7 +118,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				skipConfirmFromTUI bool
 				forceFormFromTUI   bool
 			)
-			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI)
+			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
@@ -133,6 +140,8 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					ForceParamForm: forceFormFromTUI,
 					SetValues:      setFlags,
 					Silent:         silent,
+					Translator:     i18n.TranslatorOrNop(flags.I18n),
+					Locale:         flags.Locale,
 				},
 			)
 		},
@@ -169,9 +178,14 @@ func runCommandByID(
 		return err
 	}
 
+	// Normalize Translator to never be nil; tests or edge cases might not set it.
+	if opts.Translator == nil {
+		opts.Translator = i18n.NopTranslator{}
+	}
+
 	// Inspect route — write the formatted definition and stop.
 	if opts.Inspect {
-		printInspect(stdout, def, cfg)
+		printInspect(stdout, def, cfg, opts.Translator, opts.Locale)
 		return nil
 	}
 
@@ -201,7 +215,7 @@ func runCommandByID(
 	// Build the form values: either via huh form (canPromptHuh) or from prefilled.
 	values := prefilled
 	if showForm {
-		fields := paramFieldsFromDef(def, prefilled, provided)
+		fields := paramFieldsFromDef(def, prefilled, provided, opts.Translator, opts.Locale)
 		v, ferr := runParamForm("devbox commands › "+def.ID, fields)
 		if ferr != nil {
 			if errors.Is(ferr, ui.ErrCancelled) {
@@ -242,9 +256,11 @@ func runCommandByID(
 	rctx.Stdout = stdout
 	rctx.Stderr = stderr
 	rctx.SkipNotify = opts.Silent
+	rctx.Translator = opts.Translator
+	rctx.Locale = opts.Locale
 
 	if def.Confirmation && canPromptHuh {
-		title := def.EffectiveConfirmationText()
+		title := opts.Translator.CommandConfirmationText(opts.Locale, def.ID, def.EffectiveConfirmationText())
 		if rctx.Render != nil {
 			rendered, rerr := tpl.RenderCommand(title, rctx.Render)
 			if rerr != nil {
@@ -272,7 +288,7 @@ func runCommandByID(
 		rctx.NonInteractive = skipPrompts
 	}
 
-	printRunHeader(stdout, def)
+	printRunHeader(stdout, def, opts.Translator, opts.Locale)
 
 	if err := runUserCommand(ctx, rctx); err != nil {
 		return fmt.Errorf("running command %q: %w", id, err)
@@ -284,13 +300,14 @@ func runCommandByID(
 // execute so the user has context for the runner output that follows.
 // Format: `▶ <id>  [<type>]  <description>`. Type and description are omitted
 // when empty.
-func printRunHeader(w io.Writer, def *usercommands.CommandDef) {
+func printRunHeader(w io.Writer, def *usercommands.CommandDef, translator i18n.Translator, locale string) {
 	parts := []string{"▶ " + ui.StyleKey(def.ID)}
 	if def.Type != "" {
 		parts = append(parts, ui.StyleMuted("["+string(def.Type)+"]"))
 	}
-	if def.Description != "" {
-		parts = append(parts, ui.StyleMuted(def.Description))
+	desc := translator.CommandDescription(locale, def.ID, def.Description)
+	if desc != "" {
+		parts = append(parts, ui.StyleMuted(desc))
 	}
 	_, _ = fmt.Fprintln(w, strings.Join(parts, "  "))
 }
@@ -302,7 +319,7 @@ func printRunHeader(w io.Writer, def *usercommands.CommandDef) {
 // IsDefault marks fields whose prefilled value comes from a declared Default
 // or DefaultFrom — anything the user provided via --set is treated as
 // user-explicit and stays unmarked.
-func paramFieldsFromDef(def *usercommands.CommandDef, prefilled, provided map[string]string) []ui.ParamField {
+func paramFieldsFromDef(def *usercommands.CommandDef, prefilled, provided map[string]string, translator i18n.Translator, locale string) []ui.ParamField {
 	names := make([]string, 0, len(def.Params))
 	for name := range def.Params {
 		names = append(names, name)
@@ -311,10 +328,11 @@ func paramFieldsFromDef(def *usercommands.CommandDef, prefilled, provided map[st
 	fields := make([]ui.ParamField, 0, len(names))
 	for _, name := range names {
 		p := def.Params[name]
+		paramDesc := translator.ParamDescription(locale, def.ID, name, p.Description)
 		fields = append(fields, ui.ParamField{
 			Name:        name,
 			Type:        paramFieldType(p.Type),
-			Description: p.Description,
+			Description: paramDesc,
 			Default:     prefilled[name],
 			IsDefault:   prefilled[name] != "" && provided[name] == "",
 			Required:    p.Required,
@@ -386,7 +404,7 @@ Use --all to include private commands.`,
 				return err
 			}
 			root := reg.Groups()
-			nodes := buildTreeNodes(root, groupFilter, showAll)
+			nodes := buildTreeNodes(root, groupFilter, showAll, i18n.TranslatorOrNop(flags.I18n), flags.Locale)
 			if len(nodes) == 0 {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No commands found.")
 				return nil
@@ -418,19 +436,23 @@ type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string
 //
 // For ModeInspect the skipConfirmOut / forceFormOut pointers are unused
 // (their key bindings are disabled in inspect mode); pass nil.
-func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool) selectCommandFn {
+func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool, translator i18n.Translator, locale string) selectCommandFn {
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
+			// Capture d and translator for the closure.
+			curDef := d
+			curTranslator := translator
+			curLocale := locale
 			items[i] = cmdbrowser.Item{
 				ID:          d.ID,
-				Description: d.Description,
+				Description: translator.CommandDescription(locale, d.ID, d.Description),
 				Type:        string(d.Type),
 				Private:     d.Private,
 				ParamCount:  len(d.Params),
 				Inspect: func(width int) string {
 					var buf bytes.Buffer
-					printInspectAt(&buf, d, cfg, width)
+					printInspectAt(&buf, curDef, cfg, width, curTranslator, curLocale)
 					return buf.String()
 				},
 			}
@@ -534,15 +556,15 @@ func parseSetFlags(flags []string) (map[string]string, error) {
 // buildTreeNodes converts a GroupNode tree to render.TreeNode slices.
 // When groupFilter is non-empty, only the matching sub-tree is rendered.
 // Private commands are excluded when includePrivate is false.
-func buildTreeNodes(root *usercommands.GroupNode, groupFilter string, includePrivate bool) []*render.TreeNode {
+func buildTreeNodes(root *usercommands.GroupNode, groupFilter string, includePrivate bool, translator i18n.Translator, locale string) []*render.TreeNode {
 	if groupFilter != "" {
 		target := findGroupNode(root, groupFilter)
 		if target == nil {
 			return nil
 		}
-		return groupNodeToChildren(target, includePrivate)
+		return groupNodeToChildren(target, includePrivate, translator, locale)
 	}
-	return groupNodeToChildren(root, includePrivate)
+	return groupNodeToChildren(root, includePrivate, translator, locale)
 }
 
 // findGroupNode searches the tree for a node with the given dot-separated ID.
@@ -561,10 +583,10 @@ func findGroupNode(node *usercommands.GroupNode, id string) *usercommands.GroupN
 // groupNodeToChildren converts a GroupNode's contents into render.TreeNode slices,
 // adding sub-groups and commands as children. Sub-groups without visible content
 // are omitted when includePrivate is false.
-func groupNodeToChildren(gn *usercommands.GroupNode, includePrivate bool) []*render.TreeNode {
+func groupNodeToChildren(gn *usercommands.GroupNode, includePrivate bool, translator i18n.Translator, locale string) []*render.TreeNode {
 	var nodes []*render.TreeNode
 	for _, child := range gn.Children {
-		childNode := groupNodeToSingleNode(child, includePrivate)
+		childNode := groupNodeToSingleNode(child, includePrivate, translator, locale)
 		if childNode != nil {
 			nodes = append(nodes, childNode)
 		}
@@ -573,37 +595,39 @@ func groupNodeToChildren(gn *usercommands.GroupNode, includePrivate bool) []*ren
 		if !includePrivate && cmd.Private {
 			continue
 		}
-		nodes = append(nodes, commandDefToTreeNode(cmd))
+		nodes = append(nodes, commandDefToTreeNode(cmd, translator, locale))
 	}
 	return nodes
 }
 
 // groupNodeToSingleNode converts a GroupNode into a single render.TreeNode.
 // Returns nil when the group has no visible content (after private filtering).
-func groupNodeToSingleNode(gn *usercommands.GroupNode, includePrivate bool) *render.TreeNode {
-	children := groupNodeToChildren(gn, includePrivate)
+func groupNodeToSingleNode(gn *usercommands.GroupNode, includePrivate bool, translator i18n.Translator, locale string) *render.TreeNode {
+	children := groupNodeToChildren(gn, includePrivate, translator, locale)
 	if !includePrivate && len(children) == 0 {
 		return nil
 	}
+	desc := translator.GroupDescription(locale, gn.ID, gn.Meta.Description)
 	node := &render.TreeNode{
 		Label:    gn.Name,
-		Desc:     gn.Meta.Description,
+		Desc:     desc,
 		Children: children,
 	}
 	return node
 }
 
 // commandDefToTreeNode converts a CommandDef into a leaf render.TreeNode.
-func commandDefToTreeNode(cmd *usercommands.CommandDef) *render.TreeNode {
+func commandDefToTreeNode(cmd *usercommands.CommandDef, translator i18n.Translator, locale string) *render.TreeNode {
 	var tags []string
 	if cmd.Private {
 		tags = append(tags, "private")
 	}
 	tags = append(tags, string(cmd.Type))
+	desc := translator.CommandDescription(locale, cmd.ID, cmd.Description)
 	return &render.TreeNode{
 		Label: cmd.ID,
 		Tags:  tags,
-		Desc:  cmd.Description,
+		Desc:  desc,
 	}
 }
 
@@ -636,10 +660,12 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 			// Active Help: hint for run subcommand.
 			completions = cobra.AppendActiveHelp(completions, "Use 'devbox commands --inspect <id>' to see command details")
 		}
+		translator := i18n.TranslatorOrNop(flags.I18n)
 		for _, d := range defs {
 			entry := d.ID
-			if d.Description != "" {
-				entry = cobra.CompletionWithDesc(d.ID, d.Description)
+			desc := translator.CommandDescription(flags.Locale, d.ID, d.Description)
+			if desc != "" {
+				entry = cobra.CompletionWithDesc(d.ID, desc)
 			}
 			completions = append(completions, entry)
 		}
@@ -655,13 +681,13 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 // (e.g. an inspect viewport narrower than the terminal), use
 // [printInspectAt] with the explicit width — otherwise values wrap to the
 // terminal and get silently clipped when the viewport renders.
-func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig) {
-	printInspectAt(w, def, cfg, 0)
+func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, translator i18n.Translator, locale string) {
+	printInspectAt(w, def, cfg, 0, translator, locale)
 }
 
 // printInspectAt is [printInspect] with an explicit wrap width. maxWidth == 0
 // falls back to the terminal width.
-func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, maxWidth int) {
+func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, maxWidth int, translator i18n.Translator, locale string) {
 	def2 := func(name, value string, indent int) {
 		_, _ = fmt.Fprintln(w, ui.RenderDefinitionAt(name, value, indent, "", maxWidth))
 	}
@@ -674,15 +700,17 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.Devbo
 	if def.DerivedFromDaemon != "" {
 		def2("derived from", "daemon "+def.DerivedFromDaemon, 2)
 	}
-	if def.Description != "" {
-		def2("description", def.Description, 2)
+	desc := translator.CommandDescription(locale, def.ID, def.Description)
+	if desc != "" {
+		def2("description", desc, 2)
 	}
 	if def.Private {
 		def2("private", "true", 2)
 	}
 	if def.Confirmation {
 		def2("confirmation", "true", 2)
-		def2("confirmation_text", def.EffectiveConfirmationText(), 2)
+		confirmText := translator.CommandConfirmationText(locale, def.ID, def.EffectiveConfirmationText())
+		def2("confirmation_text", confirmText, 2)
 	}
 	if def.Messages.Success != "" || def.Messages.Error != "" {
 		sub("Messages")
@@ -908,8 +936,9 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.Devbo
 		for _, name := range names {
 			p := def.Params[name]
 			desc := string(p.Type)
-			if p.Description != "" {
-				desc = p.Description + " (" + string(p.Type) + ")"
+			paramDesc := translator.ParamDescription(locale, def.ID, name, p.Description)
+			if paramDesc != "" {
+				desc = paramDesc + " (" + string(p.Type) + ")"
 			}
 			if p.Required {
 				desc += " [required]"

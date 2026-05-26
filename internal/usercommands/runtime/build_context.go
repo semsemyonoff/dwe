@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
@@ -106,14 +107,18 @@ func buildRunContext(
 	}
 
 	// Return the populated context without IO fields.
+	// Translator defaults to NopTranslator; callers wire in the real translator
+	// and locale after construction if needed.
 	return RunContext{
-		Cmd:          def,
-		Params:       params,
-		Context:      ctx,
-		Render:       rctx,
-		Config:       cfg,
+		Cmd:        def,
+		Params:     params,
+		Context:    ctx,
+		Render:     rctx,
+		Config:     cfg,
 		DockerConfig: dockerCfg,
-		Registry:     reg,
-		ProjectRoot:  workDir,
+		Registry:   reg,
+		ProjectRoot: workDir,
+		Translator: i18n.NopTranslator{},
+		Locale:     "",
 	}, nil
 }
