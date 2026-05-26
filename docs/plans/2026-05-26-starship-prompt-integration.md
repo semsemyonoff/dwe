@@ -330,12 +330,12 @@ Safety notes for this task:
 **Files:**
 - Modify: `internal/prompt/prompt_test.go`
 
-- [ ] add `BenchmarkPromptRun` covering the deployed-status case (most common); use `b.TempDir()` to construct a fixture project with `devbox.yml`, `devbox/styles.yml`, and `.devbox/deploy/state.yml`. NOTE: this microbench measures `runFromDir` body only — it does NOT validate the end-to-end 50 ms cold-start budget (that is verified in Task 8 manual smoke).
-- [ ] use Go 1.24+ `for b.Loop() { … }` form (not legacy `b.N`)
-- [ ] call `b.ReportAllocs()` — allocation count is the strongest regression signal for hot paths; baseline allocations should be < ~30/op (3 file reads × yaml unmarshal allocs + builder)
-- [ ] document baseline result (ns/op + B/op + allocs/op) in a comment so regressions are visible in diffs
-- [ ] run `make test` — full suite must pass
-- [ ] run `make lint` — must pass (this CLI uses `errcheck`, `govet`, `staticcheck`, `revive`, `gocritic`, `modernize` per CLAUDE.md)
+- [x] add `BenchmarkPromptRun` covering the deployed-status case (most common); use `b.TempDir()` to construct a fixture project with `devbox.yml`, `devbox/styles.yml`, and `.devbox/deploy/state.yml`. NOTE: this microbench measures `runFromDir` body only — it does NOT validate the end-to-end 50 ms cold-start budget (that is verified in Task 8 manual smoke).
+- [x] use Go 1.24+ `for b.Loop() { … }` form (not legacy `b.N`)
+- [x] call `b.ReportAllocs()` — allocation count is the strongest regression signal for hot paths. Actual baseline ~190 allocs/op (yaml.Unmarshal reflection on 3 files dominates); plan's <30 estimate was optimistic. Documented in comment so future regressions are visible.
+- [x] document baseline result (ns/op + B/op + allocs/op) in a comment so regressions are visible in diffs
+- [x] run `make test` — full suite must pass
+- [x] run `make lint` — prompt package lints clean (0 issues). 7 pre-existing failures in unrelated files (deploy.go, deploy_menu.go, ports.go) are out of this task's scope.
 
 ### Task 8: Verify acceptance criteria
 

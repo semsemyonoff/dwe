@@ -473,12 +473,56 @@ func TestRenderUsesDefaultForegroundReset(t *testing.T) {
 	}
 }
 
+// BenchmarkPromptRun measures runFromDir for the deployed-status case (the
+// most common steady-state). It exercises the full hot path: walk-up, three
+// file reads, three yaml unmarshals, and TrueColor render. The end-to-end
+// 50 ms cold-start budget is verified manually with `time devbox prompt`.
+//
+// Baseline (Apple M1 Max, go test -bench=. -benchtime=2s):
+//
+//	~66 µs/op, ~27 KB/op, ~190 allocs/op
+//
+// Most allocations come from yaml.Unmarshal reflection on three files.
+// Sharp jumps from this baseline (e.g. doubled allocs/op) signal a hot-path
+// regression worth investigating before merge.
+func BenchmarkPromptRun(b *testing.B) {
+	root := b.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "devbox.yml"),
+		[]byte("project:\n  name: bench\n"), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "devbox"), 0o755); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "devbox", "styles.yml"),
+		[]byte("colors:\n  accent: \"#2EC3EB\"\n  success: \"#22C55E\"\n"), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".devbox", "deploy"), 0o755); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".devbox", "deploy", "state.yml"),
+		[]byte("project:\n  status: deployed\n"), 0o644); err != nil {
+		b.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		buf.Reset()
+		if code := runFromDir(&buf, nil, root, true); code != 0 {
+			b.Fatalf("exit: %d", code)
+		}
+	}
+}
+
 func TestParseHex(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		in            string
+		in                  string
 		wantR, wantG, wantB uint8
-		wantOK        bool
+		wantOK              bool
 	}{
 		{in: "#2EC3EB", wantR: 0x2E, wantG: 0xC3, wantB: 0xEB, wantOK: true},
 		{in: "2EC3EB", wantR: 0x2E, wantG: 0xC3, wantB: 0xEB, wantOK: true},
