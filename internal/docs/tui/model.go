@@ -54,6 +54,7 @@ type Model struct {
 	PrefetchProgress ProgressMsg
 	prefetchChan     chan ProgressMsg
 
+	initCmd  tea.Cmd // cmd to run on first Init() call
 	quitting bool
 }
 
@@ -121,7 +122,8 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 
 	if m.Tree.Cursor() != nil {
 		m.CurrentTopic = m.Tree.Cursor()
-		_, _ = m.loadTopic(m.CurrentTopic)
+		cmd, _ := m.loadTopic(m.CurrentTopic)
+		m.initCmd = cmd
 	}
 
 	return m, nil
@@ -182,10 +184,8 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 	}
 
 	opts := render.Opts{
-		Theme:           m.Theme,
-		Width:           m.ContentWidth,
-		MermaidRenderer: m.MermaidRenderer,
-		CanInline:       m.CanInlineImages,
+		Theme: m.Theme,
+		Width: m.ContentWidth,
 	}
 
 	result, err := render.Render(content, opts, placeholderFunc)
@@ -272,10 +272,18 @@ func waitForProgress(ch <-chan ProgressMsg) tea.Cmd {
 }
 
 func (m *Model) Init() tea.Cmd {
-	if m.Watcher != nil {
-		return waitForFileChange(m.Watcher.Events())
+	var cmds []tea.Cmd
+	if m.initCmd != nil {
+		cmds = append(cmds, m.initCmd)
+		m.initCmd = nil
 	}
-	return nil
+	if m.Watcher != nil {
+		cmds = append(cmds, waitForFileChange(m.Watcher.Events()))
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

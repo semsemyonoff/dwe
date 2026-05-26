@@ -6,10 +6,6 @@ type Opts struct {
 	Theme string
 	// Width is the terminal width in characters. Defaults to 100 if <= 0.
 	Width int
-	// MermaidRenderer is used to render mermaid diagrams. May be nil.
-	MermaidRenderer any
-	// CanInline indicates whether the terminal supports inline image display.
-	CanInline bool
 }
 
 // DiagramRef is a reference to a mermaid diagram in the rendered output.

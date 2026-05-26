@@ -65,10 +65,11 @@ func PreprocessMermaid(input []byte, placeholderFunc PlaceholderFunc) (output []
 				// Get placeholder text
 				placeholder := placeholderFunc(diagramIndex)
 
-				// Add diagram reference (line number will be set later after flattening)
+				// Record position now (len(result) is the index the placeholder will occupy).
 				foundDiagrams = append(foundDiagrams, DiagramRef{
-					Source: source,
-					Index:  diagramIndex,
+					Source:         source,
+					Index:          diagramIndex,
+					LineInRendered: len(result),
 				})
 
 				// Add the placeholder as a single line
@@ -88,27 +89,6 @@ func PreprocessMermaid(input []byte, placeholderFunc PlaceholderFunc) (output []
 		// Not a mermaid block; keep the line as-is
 		result = append(result, line)
 		i++
-	}
-
-	// Now populate LineInRendered in the diagrams
-	for diagIdx := range foundDiagrams {
-		// Find the line where this diagram's placeholder appears
-		// Count through result to find the diagram's occurrence
-		diagramsSeen := 0
-		for lineIdx, resultLine := range result {
-			placeholder := placeholderFunc(diagIdx)
-			if diagramsSeen == diagIdx && bytes.Contains(resultLine, []byte(placeholder.Text)) {
-				foundDiagrams[diagIdx].LineInRendered = lineIdx
-				break
-			}
-			// Count placeholders we've seen
-			for _, innerDiag := range foundDiagrams[:diagIdx] {
-				innerPlaceholder := placeholderFunc(innerDiag.Index)
-				if bytes.Contains(resultLine, []byte(innerPlaceholder.Text)) {
-					diagramsSeen++
-				}
-			}
-		}
 	}
 
 	output = bytes.Join(result, []byte("\n"))

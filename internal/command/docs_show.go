@@ -5,9 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"devbox-cli/internal/config"
 	"devbox-cli/internal/docs"
-	"devbox-cli/internal/docs/mermaid"
 	"devbox-cli/internal/docs/render"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/userconfig"
@@ -69,13 +67,6 @@ Examples:
 }
 
 func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic string) error {
-	// Load configuration for doc settings (mermaid config, etc.)
-	cfg, err := config.LoadConfig(rflags.configPath)
-	if err != nil {
-		// If config fails to load, use defaults (docs still work without full config)
-		cfg = &config.DevboxConfig{}
-	}
-
 	// Load user config to get the configured language
 	var cfgLang string
 	projectRoot := rflags.ProjectRoot()
@@ -167,18 +158,10 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 	theme := render.ThemeFromBackground()
 	termWidth := getTermWidth()
 
-	// Build mermaid renderer chain based on config
-	mermaidRenderer := buildMermaidRenderer(cfg)
-
-	// Determine if we can inline images
-	canInline := mermaid.CanInline()
-
 	result, err := render.Render(contentWithBanners, render.Opts{
-		Theme:           theme,
-		Width:           termWidth,
-		MermaidRenderer: mermaidRenderer,
-		CanInline:       canInline,
-	}, render.PlaceholderForRendering)
+		Theme: theme,
+		Width: termWidth,
+	}, render.PlaceholderForDisabled)
 	if err != nil {
 		return fmt.Errorf("failed to render: %w", err)
 	}
@@ -220,30 +203,4 @@ func getTermWidth() int {
 		return 100
 	}
 	return w
-}
-
-// buildMermaidRenderer constructs the mermaid renderer chain based on config.
-func buildMermaidRenderer(cfg *config.DevboxConfig) mermaid.Renderer {
-	if cfg == nil || cfg.Docs.Mermaid == "off" {
-		return &mermaid.Disabled{}
-	}
-
-	// Determine cache directory and size
-	cacheDir, err := mermaid.CacheDir()
-	if err != nil || cacheDir == "" {
-		// Fall back to disabled if cache dir cannot be determined
-		return &mermaid.Disabled{}
-	}
-
-	capBytes := int64(cfg.Docs.CacheSizeMB) * 1024 * 1024
-	if capBytes <= 0 {
-		capBytes = 100 * 1024 * 1024 // Default 100 MB
-	}
-
-	bin := config.MmdcBin(cfg)
-
-	// Use the New() helper to construct the full renderer chain with cache
-	// isStrict is true when Mermaid is explicitly set to "mmdc" (require it)
-	isStrict := cfg.Docs.Mermaid == "mmdc"
-	return mermaid.New(bin, cacheDir, capBytes, isStrict)
 }

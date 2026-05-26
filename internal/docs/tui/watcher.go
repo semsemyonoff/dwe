@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -113,7 +114,7 @@ func walkAndWatch(watcher *fsnotify.Watcher, path string) error {
 
 	for _, entry := range entries {
 		if entry.IsDir() {
-			fullPath := path + "/" + entry.Name()
+			fullPath := filepath.Join(path, entry.Name())
 			if err := walkAndWatch(watcher, fullPath); err != nil {
 				slog.Debug("failed to add directory to watcher", "path", fullPath, "err", err)
 			}

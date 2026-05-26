@@ -55,9 +55,8 @@ func TestRender(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			opts := Opts{
-				Theme:     "dark",
-				Width:     tt.width,
-				CanInline: true,
+				Theme: "dark",
+				Width: tt.width,
 			}
 
 			result, err := Render([]byte(tt.input), opts, placeholderFunc)
