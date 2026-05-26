@@ -110,13 +110,13 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 		return 1
 	}
 
+	if check {
+		return 0
+	}
+
 	name, ok := readProjectName(root)
 	if !ok {
 		return 1
-	}
-
-	if check {
-		return 0
 	}
 
 	status := readStatus(root)
@@ -129,13 +129,15 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 	return 0
 }
 
-// sanitizeName strips ASCII control characters (< 0x20 and 0x7F) from s so
-// that a crafted project.name cannot inject ANSI/OSC escape sequences or
-// newlines into the shell prompt. Starship runs devbox prompt automatically,
-// so this must be safe for untrusted devbox.yml files in cloned repos.
+// sanitizeName strips ASCII and C1 control characters from s so that a
+// crafted project.name cannot inject ANSI/OSC escape sequences or newlines
+// into the shell prompt. Strips ASCII controls (< 0x20, 0x7F) and C1 controls
+// (0x80–0x9F) which are functional escape introducers in 8-bit terminal emulators.
+// Starship runs devbox prompt automatically, so this must be safe for untrusted
+// devbox.yml files in cloned repos.
 func sanitizeName(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7F {
+		if r < 0x20 || r == 0x7F || (r >= 0x80 && r <= 0x9F) {
 			return -1
 		}
 		return r

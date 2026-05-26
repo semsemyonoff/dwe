@@ -538,6 +538,12 @@ func TestSanitizeName(t *testing.T) {
 		{in: "\x01\x02\x03", want: ""},
 		{in: "normal 日本語", want: "normal 日本語"},
 		{in: "", want: ""},
+		// C1 controls (U+0080–U+009F): functional escape introducers in 8-bit terminals.
+		// A crafted project.name could use e.g. U+009B (CSI) to inject terminal sequences.
+		{in: "a\xc2\x80b", want: "ab"}, // U+0080
+		{in: "a\xc2\x9bb", want: "ab"}, // U+009B CSI
+		{in: "a\xc2\x9db", want: "ab"}, // U+009D OSC
+		{in: "a\xc2\x9fb", want: "ab"}, // U+009F
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
