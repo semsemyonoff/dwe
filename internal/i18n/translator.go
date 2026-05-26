@@ -23,8 +23,10 @@ type Translator interface {
 	// Returns the fallback if no translation is found.
 	GroupDescription(locale, groupID, fallback string) string
 
-	// T looks up a ui.* key for the given locale.
-	// Only valid for keys with "ui." prefix.
+	// T looks up a UI string by key for the given locale.
+	// Keys correspond to entries under the ui: block in translation YAML files,
+	// stored without the "ui." prefix (e.g., "docs.section.properties" not
+	// "ui.docs.section.properties").
 	// Returns the fallback if no translation is found.
 	T(locale, uiKey, fallback string) string
 }

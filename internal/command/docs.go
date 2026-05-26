@@ -721,16 +721,18 @@ func genTopLevelIndex(outDir string, scopes map[string]bool) error {
 		// List language subdirectories under commands/
 		commandsDir := filepath.Join(outDir, "commands")
 		entries, err := os.ReadDir(commandsDir)
+		wroteDir := false
 		if err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() {
 					lang := entry.Name()
 					fmt.Fprintf(&sb, "- [Commands Reference (lang=%s)](commands/%s/index.md) — declarative command registry\n", lang, lang)
+					wroteDir = true
 				}
 			}
 		}
 		// Fallback if commands dir doesn't exist yet (shouldn't happen in normal flow)
-		if err != nil || len(entries) == 0 {
+		if !wroteDir {
 			sb.WriteString("- [Commands Reference](commands/index.md) — declarative command registry\n")
 		}
 	}
