@@ -370,7 +370,7 @@ func formatServiceToggleRow(t ServiceToggle) string {
 	if container == "" {
 		container = "-"
 	}
-	return ui.StyleServiceOptionName(t.Type, t.Name) + "  " +
+	return ui.IconPrefix(t.Icon) + ui.StyleServiceOptionName(t.Type, t.Name) + "  " +
 		ui.StyleServiceOptionType(t.Type, "["+typeText+"]") + " " +
 		ui.StyleServiceOptionContainer(container)
 }

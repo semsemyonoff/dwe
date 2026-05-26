@@ -36,7 +36,10 @@ func RenderTable(headers []string, rows [][]string) string {
 
 // ServiceTableRow holds data for one row in the services Lipgloss table.
 type ServiceTableRow struct {
-	Name      string
+	Name string
+	// Icon is the resolved service icon (already type-defaulted). Prepended to
+	// the NAME cell when non-empty.
+	Icon      string
 	Dir       string
 	Container string
 	// Hosts / Ports are the resolved per-developer values (declared in
@@ -160,15 +163,17 @@ func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol 
 		hostsStr := formatHostsCell(r.Hosts)
 		portsStr := formatPortsCell(r.Ports)
 
+		nameCell := IconPrefix(r.Icon) + r.Name
+
 		var row []string
 		if withDirCol {
 			dir := r.Dir
 			if dir == "" {
 				dir = "—"
 			}
-			row = []string{r.Name, dir, r.Container, hostsStr, portsStr, stateStr, runStr}
+			row = []string{nameCell, dir, r.Container, hostsStr, portsStr, stateStr, runStr}
 		} else {
-			row = []string{r.Name, r.Container, hostsStr, portsStr, stateStr, runStr}
+			row = []string{nameCell, r.Container, hostsStr, portsStr, stateStr, runStr}
 		}
 		for _, col := range extraCols {
 			row = append(row, extraCell(r.Extras, col))

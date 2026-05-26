@@ -137,6 +137,7 @@ func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, pro
 		}
 		rows = append(rows, ui.ServiceTableRow{
 			Name:      name,
+			Icon:      svc.DisplayIcon(),
 			Dir:       svc.Dir,
 			Container: svc.Container,
 			Hosts:     svc.Hosts,

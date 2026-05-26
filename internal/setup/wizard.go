@@ -14,6 +14,7 @@ import (
 type ServiceToggle struct {
 	Name      string
 	Type      string
+	Icon      string
 	Container string
 	Mandatory bool
 	Enabled   bool // current state (from existing config)

@@ -52,10 +52,10 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local",
-				"     📖 API specification  — http://pilot.local/api/docs",
-				"     🔗 Clockwork  — http://pilot.local/__clockwork",
-				"     ⚡ SPX profiler  — http://pilot.local/?SPX_KEY=dev",
+				"  📦 Main                 — http://pilot.local",
+				"     📖 API specification — http://pilot.local/api/docs",
+				"     🔗 Clockwork         — http://pilot.local/__clockwork",
+				"     ⚡ SPX profiler      — http://pilot.local/?SPX_KEY=dev",
 			}, "\n"),
 		},
 		{
@@ -85,7 +85,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Catalog",
-				"  📦 Catalog  — http://pilot.catalog.local",
+				"  📦 Catalog — http://pilot.catalog.local",
 			}, "\n"),
 		},
 		{
@@ -116,7 +116,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Adminer",
-				"  ⚙️ Adminer  — http://pilot.db.local | http://localhost:8027",
+				"  ⚙️ Adminer — http://pilot.db.local | http://localhost:8027",
 			}, "\n"),
 		},
 		{
@@ -142,7 +142,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Redis",
-				"  ⚙️ Redis  — http://localhost:6379",
+				"  ⚙️ Redis — http://localhost:6379",
 			}, "\n"),
 		},
 		{
@@ -200,7 +200,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local",
+				"  📦 Main — http://pilot.local",
 			}, "\n"),
 		},
 		{
@@ -237,8 +237,8 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local",
-				"     🔗 API specification  — http://pilot.local/api/docs",
+				"  📦 Main                 — http://pilot.local",
+				"     🔗 API specification — http://pilot.local/api/docs",
 			}, "\n"),
 		},
 		{
@@ -269,7 +269,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local:8080",
+				"  📦 Main — http://pilot.local:8080",
 			}, "\n"),
 		},
 		{
@@ -300,7 +300,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local",
+				"  📦 Main — http://pilot.local",
 			}, "\n"),
 		},
 		{
@@ -336,7 +336,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local",
+				"  📦 Main — http://pilot.local",
 			}, "\n"),
 		},
 		{
@@ -397,7 +397,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"MinIO Console",
-				"  ⚙️ MinIO Console  — http://minio.local | http://localhost:9011",
+				"  ⚙️ MinIO Console — http://minio.local | http://localhost:9011",
 			}, "\n"),
 		},
 		{
@@ -474,7 +474,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — https://pilot.local",
+				"  📦 Main — https://pilot.local",
 			}, "\n"),
 		},
 		{
@@ -503,7 +503,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local",
+				"  📦 Main — http://pilot.local",
 			}, "\n"),
 		},
 		{
@@ -531,7 +531,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Myapp",
-				"  📦 Myapp  — http://myapp.local",
+				"  📦 Myapp — http://myapp.local",
 			}, "\n"),
 		},
 		{
@@ -612,10 +612,10 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — http://pilot.local",
+				"  📦 Main — http://pilot.local",
 				"",
 				"Tool1",
-				"  ⚙️ Tool1  — http://localhost:9000",
+				"  ⚙️ Tool1 — http://localhost:9000",
 			}, "\n"),
 		},
 		{
@@ -645,7 +645,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Main",
-				"  📦 Main  — https://pilot.local",
+				"  📦 Main — https://pilot.local",
 			}, "\n"),
 		},
 	}

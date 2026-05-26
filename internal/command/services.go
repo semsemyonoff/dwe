@@ -10,6 +10,7 @@ import (
 type serviceRow struct {
 	Name      string
 	Type      string
+	Icon      string
 	Dir       string
 	Container string
 	Mandatory bool
@@ -27,6 +28,7 @@ func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 		rows = append(rows, serviceRow{
 			Name:      name,
 			Type:      string(svc.Type),
+			Icon:      svc.DisplayIcon(),
 			Dir:       svc.Dir,
 			Container: svc.Container,
 			Mandatory: svc.Mandatory,

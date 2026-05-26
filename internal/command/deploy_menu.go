@@ -57,6 +57,7 @@ const (
 type deployServiceItem struct {
 	Name       string
 	Type       string
+	Icon       string
 	Mandatory  bool
 	Deployed   bool
 	DeployedAt time.Time
@@ -330,6 +331,7 @@ func buildDeployServiceItems(baseDir string, cfg *config.DevboxConfig, state *jo
 		item := deployServiceItem{
 			Name:      name,
 			Type:      string(svc.Type),
+			Icon:      svc.DisplayIcon(),
 			Mandatory: svc.Mandatory,
 		}
 		if state != nil {
@@ -574,7 +576,7 @@ func formatDeployServiceLabel(it deployServiceItem, nameWidth int) string {
 		meta = "  " + ui.StyleServiceOptionContainer(meta)
 	}
 
-	return statusIcon + " " + coloredName + " " + typeBadge + meta
+	return statusIcon + " " + ui.IconPrefix(it.Icon) + coloredName + " " + typeBadge + meta
 }
 
 // formatServiceMeta builds the secondary text shown after the type badge:
@@ -629,6 +631,7 @@ func buildWizardServiceToggles(cfg *config.DevboxConfig) []setup.ServiceToggle {
 		out = append(out, setup.ServiceToggle{
 			Name:      r.Name,
 			Type:      r.Type,
+			Icon:      r.Icon,
 			Container: r.Container,
 			Mandatory: r.Mandatory,
 			Enabled:   r.Enabled,

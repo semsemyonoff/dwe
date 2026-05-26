@@ -217,11 +217,11 @@ func runServicesToggle(cmd *cobra.Command, flags *rootFlags, opts singleToggleFl
 }
 
 func formatServiceToggleLabel(row serviceRow) string {
-	return ui.StyleServiceName(row.Type, row.Name, rowActive(row))
+	return ui.IconPrefix(row.Icon) + ui.StyleServiceName(row.Type, row.Name, rowActive(row))
 }
 
 func formatServiceToggleOptionLabel(row serviceRow) string {
-	return ui.StyleServiceOptionName(row.Type, row.Name)
+	return ui.IconPrefix(row.Icon) + ui.StyleServiceOptionName(row.Type, row.Name)
 }
 
 func formatServiceToggleDescription(row serviceRow) string {
@@ -293,6 +293,7 @@ func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel,
 		row := serviceRow{
 			Name:      name,
 			Type:      string(svc.Type),
+			Icon:      svc.DisplayIcon(),
 			Container: svc.Container,
 			Mandatory: svc.Mandatory,
 			Enabled:   svc.Enabled,

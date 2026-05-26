@@ -65,8 +65,10 @@ func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) strin
 		for _, key := range hostKeys {
 			hostname := svc.Hosts[key]
 
-			// Filter: drop empty, drop localhost, drop duplicates
-			if hostname == "" || hostname == "localhost" {
+			// Filter: drop empty, drop localhost, drop any *.localhost
+			// (browsers and most resolvers route .localhost to 127.0.0.1 without
+			// an /etc/hosts entry), drop duplicates.
+			if hostname == "" || hostname == "localhost" || strings.HasSuffix(hostname, ".localhost") {
 				continue
 			}
 
@@ -81,11 +83,11 @@ func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) strin
 		return ""
 	}
 
-	// Build output: each hostname on its own line as "  IP\thostname"
+	// Build output: each hostname on its own line as "IP\thostname".
+	// No leading indent — users copy-paste these straight into /etc/hosts.
 	var lines []string
 	for _, hostname := range hostnames {
-		line := "  " + ip + "\t" + hostname
-		lines = append(lines, line)
+		lines = append(lines, ip+"\t"+hostname)
 	}
 
 	return strings.Join(lines, "\n")

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"devbox-cli/internal/config"
 )
 
@@ -18,20 +20,17 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		return ""
 	}
 
-	// Apply defaults
 	include := spec.Include
 	if len(include) == 0 {
 		include = []string{"app", "tool"}
 	}
 
-	// Resolve port_via service and port
+	// Resolve port_via service and port.
 	var portViaService *config.ServiceConfig
 	var portViaPort int
 	if spec.PortVia != "" {
-		// Explicit port_via: look up the service and use its http/https port
 		if svc, ok := cfg.Services[spec.PortVia]; ok {
 			portViaService = &svc
-			// Use the HTTP or HTTPS port from the explicit port_via service
 			if cfg.Runtime.UseHTTPS {
 				portViaPort = svc.Ports["https"]
 			} else {
@@ -39,7 +38,6 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 			}
 		}
 	} else {
-		// Auto-detect: single infra service with ports.http == 80 or ports.https == 443
 		portViaService, portViaPort = autoDetectPortVia(cfg)
 	}
 
@@ -48,7 +46,6 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		return ""
 	}
 
-	// Build hide sets for fast lookup
 	hideSet := make(map[string]bool)
 	for _, h := range spec.Hide {
 		hideSet[h] = true
@@ -69,50 +66,64 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		host := svc.Hosts[hostKey]
 		port := svc.Ports[portKey]
 
-		// Skip if neither host nor port, and no paths
 		if host == "" && port == 0 && len(svc.Info.Paths) == 0 {
 			continue
 		}
 
-		// Build main URL row first (if we have host or port)
-		var mainRow string
+		var mainURL string
 		if host != "" || port != 0 {
-			mainRow = buildMainURLRow(cfg, svc, svcName, host, port, portViaService, portViaPort)
+			mainURL = buildMainURL(cfg, host, port, portViaService, portViaPort)
 		}
 
-		// Build path rows before deciding whether to emit the subgroup at all.
-		hidePaths := spec.HidePaths[svcName]
 		hidePathsSet := make(map[string]bool)
-		for _, p := range hidePaths {
+		for _, p := range spec.HidePaths[svcName] {
 			hidePathsSet[p] = true
 		}
 
-		var pathRows []string
-		for _, pathItem := range svc.Info.Paths {
-			if hidePathsSet[pathItem.Name] {
-				continue
-			}
-			pathRow := buildPathRow(cfg, pathItem, host, port, portViaService, portViaPort)
-			if pathRow != "" {
-				pathRows = append(pathRows, pathRow)
-			}
+		// Collect aligned rows (main + paths).
+		type row struct {
+			prefix string
+			url    string
+		}
+		var rows []row
+
+		if mainURL != "" {
+			prefix := fmt.Sprintf("  %s%s", IconPrefix(svc.DisplayIcon()), svc.DisplayTitle(svcName))
+			rows = append(rows, row{prefix, mainURL})
 		}
 
-		// Skip if we have no renderable content at all.
-		if mainRow == "" && len(pathRows) == 0 {
+		for _, p := range svc.Info.Paths {
+			if hidePathsSet[p.Name] {
+				continue
+			}
+			pathURL := buildPathURL(cfg, p, host, port, portViaService, portViaPort)
+			if pathURL == "" {
+				continue
+			}
+			prefix := fmt.Sprintf("     %s%s", IconPrefix(p.DisplayIcon()), p.Name)
+			rows = append(rows, row{prefix, pathURL})
+		}
+
+		if len(rows) == 0 {
 			continue
 		}
 
-		// Build subgroup
-		title := svc.DisplayTitle(svcName)
-		subgroupLines := []string{"", title}
-
-		if mainRow != "" {
-			subgroupLines = append(subgroupLines, mainRow)
+		// Column-align ' — ' across rows in this subgroup.
+		maxW := 0
+		for _, r := range rows {
+			if w := lipgloss.Width(r.prefix); w > maxW {
+				maxW = w
+			}
 		}
-		subgroupLines = append(subgroupLines, pathRows...)
 
-		subgroups = append(subgroups, strings.Join(subgroupLines, "\n"))
+		title := styleAccent.Bold(true).Render(svc.DisplayTitle(svcName))
+		lines := []string{"", title}
+		for _, r := range rows {
+			pad := strings.Repeat(" ", maxW-lipgloss.Width(r.prefix))
+			lines = append(lines, r.prefix+pad+" — "+r.url)
+		}
+
+		subgroups = append(subgroups, strings.Join(lines, "\n"))
 	}
 
 	if len(subgroups) == 0 {
@@ -156,7 +167,6 @@ func autoDetectPortVia(cfg *config.DevboxConfig) (*config.ServiceConfig, int) {
 	return nil, 0
 }
 
-// getScheme returns "https" if useHTTPS is true, "http" otherwise.
 func getScheme(useHTTPS bool) string {
 	if useHTTPS {
 		return "https"
@@ -164,42 +174,30 @@ func getScheme(useHTTPS bool) string {
 	return "http"
 }
 
-// buildMainURLRow assembles the main URL row for a service.
-// Returns the formatted row or "" if no URL can be assembled.
-// URL assembly rules:
-// - hosts AND ports → proxied | direct
-// - only hosts (app behind proxy) → proxied (requires port_via)
-// - only ports → localhost:port
-// - neither → skip silently
-func buildMainURLRow(cfg *config.DevboxConfig, svc config.ServiceConfig, svcName, host string, port int,
+// buildMainURL returns the URL portion (without the row prefix) for a service.
+// Rules:
+//   - hosts AND ports → "<proxied> | <direct>"
+//   - only hosts (app behind proxy) → "<proxied>" (requires port_via)
+//   - only ports → "http(s)://localhost:<port>"
+//   - neither → ""
+func buildMainURL(cfg *config.DevboxConfig, host string, port int,
 	portVia *config.ServiceConfig, portViaPort int) string {
 
 	scheme := getScheme(cfg.Runtime.UseHTTPS)
 	var urls []string
 
-	// Proxied URL (if host and port_via available)
 	if host != "" && portVia != nil {
-		portViaURL := buildProxiedURL(scheme, host, portViaPort)
-		urls = append(urls, portViaURL)
+		urls = append(urls, buildProxiedURL(scheme, host, portViaPort))
 	}
 
-	// Direct URL (if port available)
 	if port > 0 {
-		directURL := fmt.Sprintf("%s://localhost:%d", scheme, port)
-		urls = append(urls, directURL)
+		urls = append(urls, fmt.Sprintf("%s://localhost:%d", scheme, port))
 	}
-
-	// If we have host but no port and no port_via, skip silently
-	// (the service is intended for proxy-only rendering, but proxy not available)
 
 	if len(urls) == 0 {
 		return ""
 	}
-
-	urlStr := strings.Join(urls, " | ")
-	icon := svc.DisplayIcon()
-	row := fmt.Sprintf("  %s %s  — %s", icon, svc.DisplayTitle(svcName), urlStr)
-	return row
+	return strings.Join(urls, " | ")
 }
 
 // buildProxiedURL constructs a proxied URL with the given scheme and hostname.
@@ -211,42 +209,33 @@ func buildProxiedURL(scheme, host string, port int) string {
 	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 }
 
-// buildPathRow assembles a sub-path row for a service.
-// Returns the formatted row or "" if it cannot be assembled.
-func buildPathRow(cfg *config.DevboxConfig, path config.ServiceInfoPath,
+// buildPathURL returns the full URL for a sub-path row, or "" if it cannot be
+// assembled (e.g. host-only without portVia and no direct port).
+func buildPathURL(cfg *config.DevboxConfig, path config.ServiceInfoPath,
 	host string, port int, portVia *config.ServiceConfig, portViaPort int) string {
 
 	if path.Path == "" {
 		return ""
 	}
 
-	// Determine base URL
 	scheme := getScheme(cfg.Runtime.UseHTTPS)
-	var baseURL string
-
-	// Discriminate on available URL components
 	hasHost := host != ""
 	hasPort := port > 0
 	hasPortVia := portVia != nil
 
+	var baseURL string
 	switch {
 	case hasHost && hasPortVia:
 		baseURL = buildProxiedURL(scheme, host, portViaPort)
 	case hasPort:
-		// Fall back to direct URL
 		baseURL = fmt.Sprintf("%s://localhost:%d", scheme, port)
 	case hasHost:
-		// Host-only without portVia and without a direct port: skip silently.
-		// buildMainURLRow also suppresses this case; path rows must be consistent.
+		// Host-only without portVia: skip silently (matches main-row behavior).
 		return ""
 	}
 
 	if baseURL == "" {
 		return ""
 	}
-
-	fullURL := baseURL + path.Path
-	icon := path.DisplayIcon()
-	row := fmt.Sprintf("     %s %s  — %s", icon, path.Name, fullURL)
-	return row
+	return baseURL + path.Path
 }

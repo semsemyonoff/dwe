@@ -380,8 +380,8 @@ func TestPickServiceToEnable_TypeSortedAndDecorated(t *testing.T) {
 	if name != "api" {
 		t.Errorf("expected first type-sorted candidate api, got %q", name)
 	}
-	if !slices.Equal(labels, []string{"api", "adminer", "varnish"}) {
-		t.Errorf("selector labels = %v, want [api adminer varnish]", labels)
+	if !slices.Equal(labels, []string{"📦 api", "⚙️ adminer", "🧱 varnish"}) {
+		t.Errorf("selector labels = %v, want [📦 api ⚙️ adminer 🧱 varnish]", labels)
 	}
 	if !strings.Contains(descriptions[0], "[app]") ||
 		!strings.Contains(descriptions[1], "[tool]") ||

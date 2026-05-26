@@ -42,9 +42,30 @@ func TestRenderAutoHosts(t *testing.T) {
 			},
 			// Services are sorted alphabetically: catalog < main
 			wantOut: strings.Join([]string{
-				"  127.0.0.1\tpilot.catalog.local",
-				"  127.0.0.1\tpilot.local",
+				"127.0.0.1\tpilot.catalog.local",
+				"127.0.0.1\tpilot.local",
 			}, "\n"),
+		},
+		{
+			name: ".localhost suffix filtered",
+			cfg: &config.DevboxConfig{
+				Services: map[string]config.ServiceConfig{
+					"main": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Hosts: map[string]string{
+							"dev": "app.localhost",
+							"web": "pilot.local",
+						},
+					},
+				},
+			},
+			spec: &config.AutoHostsSpec{
+				Include: []string{"app"},
+				IP:      "127.0.0.1",
+			},
+			// app.localhost is auto-resolved by browsers/resolvers; no /etc/hosts entry needed.
+			wantOut: "127.0.0.1\tpilot.local",
 		},
 		{
 			name: "localhost filtered",
@@ -64,7 +85,7 @@ func TestRenderAutoHosts(t *testing.T) {
 				Include: []string{"app"},
 				IP:      "127.0.0.1",
 			},
-			wantOut: "  127.0.0.1\tpilot.local",
+			wantOut: "127.0.0.1\tpilot.local",
 		},
 		{
 			name: "hide works",
@@ -91,7 +112,7 @@ func TestRenderAutoHosts(t *testing.T) {
 				IP:      "127.0.0.1",
 				Hide:    []string{"catalog"},
 			},
-			wantOut: "  127.0.0.1\tpilot.local",
+			wantOut: "127.0.0.1\tpilot.local",
 		},
 		{
 			name: "deploy order preserved",
@@ -120,8 +141,8 @@ func TestRenderAutoHosts(t *testing.T) {
 			},
 			// catalog should come first in deployment order
 			wantOut: strings.Join([]string{
-				"  127.0.0.1\tpilot.catalog.local",
-				"  127.0.0.1\tpilot.local",
+				"127.0.0.1\tpilot.catalog.local",
+				"127.0.0.1\tpilot.local",
 			}, "\n"),
 		},
 		{
@@ -141,7 +162,7 @@ func TestRenderAutoHosts(t *testing.T) {
 				Include: []string{"app"},
 				IP:      "192.168.1.100",
 			},
-			wantOut: "  192.168.1.100\tpilot.local",
+			wantOut: "192.168.1.100\tpilot.local",
 		},
 		{
 			name: "empty result returns empty string",
@@ -211,9 +232,9 @@ func TestRenderAutoHosts(t *testing.T) {
 				IP: "127.0.0.1",
 			},
 			wantOut: strings.Join([]string{
-				"  127.0.0.1\tapp1.local",
-				"  127.0.0.1\ttool1.local",
-				"  127.0.0.1\tinfra1.local",
+				"127.0.0.1\tapp1.local",
+				"127.0.0.1\ttool1.local",
+				"127.0.0.1\tinfra1.local",
 			}, "\n"),
 		},
 		{
@@ -233,7 +254,7 @@ func TestRenderAutoHosts(t *testing.T) {
 				Include: []string{"app"},
 				// IP empty, should default to 127.0.0.1
 			},
-			wantOut: "  127.0.0.1\tpilot.local",
+			wantOut: "127.0.0.1\tpilot.local",
 		},
 		{
 			name: "nil cfg returns empty string",
@@ -301,9 +322,9 @@ func TestRenderAutoHosts(t *testing.T) {
 			// catalog hosts: pilot.catalog.local, pilot-alt.local (dup)
 			// main hosts: pilot-alt.local (already seen), pilot.local
 			wantOut: strings.Join([]string{
-				"  127.0.0.1\tpilot-alt.local",
-				"  127.0.0.1\tpilot.catalog.local",
-				"  127.0.0.1\tpilot.local",
+				"127.0.0.1\tpilot-alt.local",
+				"127.0.0.1\tpilot.catalog.local",
+				"127.0.0.1\tpilot.local",
 			}, "\n"),
 		},
 		{
@@ -324,7 +345,7 @@ func TestRenderAutoHosts(t *testing.T) {
 				Include: []string{"app"},
 				IP:      "127.0.0.1",
 			},
-			wantOut: "  127.0.0.1\tpilot.local",
+			wantOut: "127.0.0.1\tpilot.local",
 		},
 	}
 
