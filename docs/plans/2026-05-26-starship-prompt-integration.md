@@ -259,12 +259,12 @@ Safety notes for this task:
 - Modify: `internal/prompt/prompt.go`
 - Modify: `internal/prompt/prompt_test.go`
 
-- [ ] add `stylesStub` parser at `<root>/devbox/styles.yml` reading 4 tokens (accent/success/warning/danger); each missing/empty token uses its built-in default (accent `#2EC3EB`, success `#22C55E`, warning `#EAB308`, danger `#EF4444`)
-- [ ] add `parseHex(hex string) (r, g, b uint8, ok bool)` helper using `strconv.ParseUint(hex, 16, 8)` — tolerate `#` prefix optional, return `ok=false` on any parse failure (degrades that glyph to plain, no panic)
-- [ ] add `writeSGR(sb *strings.Builder, r, g, b uint8)` helper that writes `\x1b[38;2;R;G;Bm` using `strconv.AppendUint` — explicitly avoid `fmt.Sprintf` to keep allocations zero in render path
-- [ ] honor `NO_COLOR` env var (per https://no-color.org/): use `os.LookupEnv("NO_COLOR")` and suppress ANSI when `found == true`, **regardless of the value** (including empty string). Test both `NO_COLOR=""` (set, empty) and `NO_COLOR=1` (set, non-empty) cases — both must suppress
-- [ ] update render to use `strings.Builder` with `Grow(96)` (typical output ~80 bytes + safety margin); wrap only the colored glyphs (`▪` and the status icon) in SGR pairs; braces, space, and name stay uncolored so starship's `format` can re-style them
-- [ ] terminate every colored glyph's SGR pair with `\x1b[39m` (default foreground only) — NOT `\x1b[0m` which resets ALL attributes and would fight any outer styling from starship's `format`/`style`
+- [x] add `stylesStub` parser at `<root>/devbox/styles.yml` reading 4 tokens (accent/success/warning/danger); each missing/empty token uses its built-in default (accent `#2EC3EB`, success `#22C55E`, warning `#EAB308`, danger `#EF4444`)
+- [x] add `parseHex(hex string) (r, g, b uint8, ok bool)` helper using `strconv.ParseUint(hex, 16, 8)` — tolerate `#` prefix optional, return `ok=false` on any parse failure (degrades that glyph to plain, no panic)
+- [x] add `writeSGR(sb *strings.Builder, r, g, b uint8)` helper that writes `\x1b[38;2;R;G;Bm` using `strconv.AppendUint` — explicitly avoid `fmt.Sprintf` to keep allocations zero in render path
+- [x] honor `NO_COLOR` env var (per https://no-color.org/): use `os.LookupEnv("NO_COLOR")` and suppress ANSI when `found == true`, **regardless of the value** (including empty string). Test both `NO_COLOR=""` (set, empty) and `NO_COLOR=1` (set, non-empty) cases — both must suppress
+- [x] update render to use `strings.Builder` with `Grow(96)` (typical output ~80 bytes + safety margin); wrap only the colored glyphs (`▪` and the status icon) in SGR pairs; braces, space, and name stay uncolored so starship's `format` can re-style them
+- [x] terminate every colored glyph's SGR pair with `\x1b[39m` (default foreground only) — NOT `\x1b[0m` which resets ALL attributes and would fight any outer styling from starship's `format`/`style`
 - [ ] write tests with `t.Parallel()` (use `t.Setenv("NO_COLOR", ...)` — `Setenv` is parallel-test-safe in Go 1.17+):
   - all 4 colors from styles.yml are applied (separate cases for each token)
   - missing styles.yml → all 4 defaults applied
@@ -276,7 +276,7 @@ Safety notes for this task:
   - malformed accent hex (e.g. `"not-a-color"` or `"#XYZ"`) degrades that glyph to plain, no panic
   - SGR pairs use `\x1b[39m` (default foreground) NOT `\x1b[0m` (full reset)
   - output ends with `\n`
-- [ ] run `go test ./internal/prompt/... -race` — must pass before Task 4
+- [x] run `go test ./internal/prompt/... -race` — must pass before Task 4
 
 ### Task 4: Wire hot-path bypass in `cmd/devbox/main.go`
 
