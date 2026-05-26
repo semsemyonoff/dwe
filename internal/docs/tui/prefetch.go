@@ -7,8 +7,6 @@ import (
 	"sort"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
-
 	"devbox-cli/internal/docs/mermaid"
 )
 
@@ -56,41 +54,42 @@ func NewPrefetch(ctx context.Context, renderer mermaid.Renderer, progress chan<-
 		total:     0,
 	}
 
-	// Start the worker pool
-	g, groupCtx := errgroup.WithContext(pctx)
-	g.SetLimit(MaxPrefetchWorkers)
-
-	// Spawn workers
+	// Start the worker pool using WaitGroup + semaphore (NOT errgroup.WithContext:
+	// one worker failure must not cancel siblings — per CLAUDE.md linters pattern).
+	sem := make(chan struct{}, MaxPrefetchWorkers)
+	var workerWG sync.WaitGroup
 	for range MaxPrefetchWorkers {
-		g.Go(func() error {
-			return p.worker(groupCtx)
-		})
+		sem <- struct{}{}
+		workerWG.Add(1)
+		go func() {
+			defer func() { <-sem }()
+			defer workerWG.Done()
+			p.worker(pctx)
+		}()
 	}
 
 	// Wait for all workers to finish in the background so Close() can join them.
 	// Do NOT close p.workQueue: Queue() guards sends with p.ctx.Done(), and
 	// closing a channel while Queue() is concurrently selecting would panic.
 	p.wg.Go(func() {
-		_ = g.Wait()
+		workerWG.Wait()
 	})
 
 	return p
 }
 
 // worker is the main loop for a prefetch worker.
-// It processes work items from the queue until the channel is closed or context is cancelled.
-func (p *Prefetch) worker(ctx context.Context) error {
+// It processes work items from the queue until the context is cancelled.
+func (p *Prefetch) worker(ctx context.Context) {
 	for {
 		select {
 		case work, ok := <-p.workQueue:
 			if !ok {
-				// Channel closed by producer
-				return nil
+				return
 			}
 			p.renderOne(ctx, work)
 		case <-ctx.Done():
-			// Context cancelled
-			return nil
+			return
 		}
 	}
 }

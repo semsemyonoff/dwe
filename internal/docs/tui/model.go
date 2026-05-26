@@ -169,14 +169,18 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 
 	m.CurrentSourceLang = sourceLang
 
-	var banners []string
-	// Missing translation: different source language than requested
-	if sourceLang != m.Locale {
-		banners = append(banners, "> **ℹ Translation not available for `"+m.Locale+"`. Showing English version.**")
-	}
-	// Stale translation: content hash mismatch
-	if stale {
-		banners = append(banners, "> **⚠ This translation is outdated (last synced at previous version, current is newer). Press `e` to view the English version.**")
+	// Prepend translation banners to raw markdown before rendering so glamour
+	// renders them as blockquotes rather than outputting raw markdown syntax.
+	var contentToRender []byte
+	switch {
+	case sourceLang != m.Locale:
+		banner := "> **ℹ Translation not available for `" + m.Locale + "`. Showing English version.**\n\n"
+		contentToRender = append([]byte(banner), content...)
+	case stale:
+		banner := "> **⚠ This translation is outdated (last synced at previous version, current is newer). Press `e` to view the English version.**\n\n"
+		contentToRender = append([]byte(banner), content...)
+	default:
+		contentToRender = content
 	}
 
 	placeholderFunc := func(index int) render.MermaidPlaceholder {
@@ -190,24 +194,13 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 		Width: m.ContentWidth,
 	}
 
-	result, err := render.Render(content, opts, placeholderFunc)
+	result, err := render.Render(contentToRender, opts, placeholderFunc)
 	if err != nil {
 		m.Viewport.SetContent("Error rendering: " + err.Error())
 		return nil, err
 	}
 
-	var output string
-	if len(banners) > 0 {
-		var sb strings.Builder
-		for _, banner := range banners {
-			sb.WriteString(banner)
-			sb.WriteString("\n\n")
-		}
-		sb.Write(result.Output)
-		output = sb.String()
-	} else {
-		output = string(result.Output)
-	}
+	output := string(result.Output)
 
 	m.Viewport.SetContent(output)
 	m.StatusBar.SetPath(path)
