@@ -611,17 +611,17 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Modify: `internal/docs/tui/keys.go` (`L`, `e`, `r`)
 - Modify: `go.mod` (add fsnotify)
 
-- [ ] `Watcher` wrapping `fsnotify.Watcher`; watches the project DocRoot tree only (embed is static and ignored); emits `FileChangedMsg` into the bubbletea event loop via a `chan<-` returned to the model
-- [ ] **explicit lifecycle**: `NewWatcher(ctx context.Context, root string) (*Watcher, error)`. The internal event-pump goroutine selects on `fsnotify.Watcher.Events`, `fsnotify.Watcher.Errors`, AND `ctx.Done()`. On context cancellation the goroutine returns; the model calls `cancel()` on `tea.Quit` (the cancel func is stored on the model). No fire-and-forget — every goroutine has a clear exit
-- [ ] `Watcher.Close()` is a wrapper around `cancel()` + `fsnotify.Watcher.Close()`; idempotent
-- [ ] on `FileChangedMsg` for the current file → re-read and re-render
-- [ ] `L` cycles through available locales for the current file (computed via `topic.AvailableLocalesFor(roots, relPath)`); persists choice for the session only (no userconfig write)
-- [ ] `e` shows English original when the current file is a translation (`sourceLang != "en"`)
-- [ ] `r` manual reload of the current file
-- [ ] outdated translation banner: when `ResolveContent` reports `stale=true`, prepend a banner line to the rendered viewport: "⚠ This translation is outdated (last synced at X, current is Y). Press `e` to view the English version."
-- [ ] missing translation banner: when `sourceLang != requestedLocale`, prepend "ℹ Translation not available for `<lang>`. Showing English version."
-- [ ] tests: file write in tempdir triggers reload; language cycle visits each available locale; banner text matches for stale and missing cases; **`goleak.VerifyNone(t)` in a `TestMain`** confirms the watcher goroutine exits when its context is cancelled (catches the most likely leak in this task)
-- [ ] run `go test ./internal/docs/tui/...` — must pass
+- [x] `Watcher` wrapping `fsnotify.Watcher`; watches the project DocRoot tree only (embed is static and ignored); emits `FileChangedMsg` into the bubbletea event loop via a `chan<-` returned to the model
+- [x] **explicit lifecycle**: `NewWatcher(ctx context.Context, root string) (*Watcher, error)`. The internal event-pump goroutine selects on `fsnotify.Watcher.Events`, `fsnotify.Watcher.Errors`, AND `ctx.Done()`. On context cancellation the goroutine returns; the model calls `cancel()` on `tea.Quit` (the cancel func is stored on the model). No fire-and-forget — every goroutine has a clear exit
+- [x] `Watcher.Close()` is a wrapper around `cancel()` + `fsnotify.Watcher.Close()`; idempotent
+- [x] on `FileChangedMsg` for the current file → re-read and re-render
+- [x] `L` cycles through available locales for the current file (computed via `topic.AvailableLocalesFor(roots, relPath)`); persists choice for the session only (no userconfig write)
+- [x] `e` shows English original when the current file is a translation (`sourceLang != "en"`)
+- [x] `r` manual reload of the current file
+- [x] outdated translation banner: when `ResolveContent` reports `stale=true`, prepend a banner line to the rendered viewport: "⚠ This translation is outdated (last synced at X, current is Y). Press `e` to view the English version."
+- [x] missing translation banner: when `sourceLang != requestedLocale`, prepend "ℹ Translation not available for `<lang>`. Showing English version."
+- [x] tests: file write in tempdir triggers reload; language cycle visits each available locale; banner text matches for stale and missing cases; **`goleak.VerifyNone(t)` in a `TestMain`** confirms the watcher goroutine exits when its context is cancelled (catches the most likely leak in this task)
+- [x] run `go test ./internal/docs/tui/...` — must pass
 
 ### Task 11.5: TUI mermaid prefetch worker pool
 

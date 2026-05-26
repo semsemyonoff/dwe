@@ -27,7 +27,7 @@ func TestNewModel(t *testing.T) {
 	// Use a no-op renderer for now
 	renderer := &testRenderer{}
 
-	m, err := NewModel(roots, "en", translator, renderer, 120, 30)
+	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 120, 30, "")
 	if err != nil {
 		t.Fatalf("NewModel failed: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestModelView(t *testing.T) {
 	translator := i18n.NopTranslator{}
 	renderer := &testRenderer{}
 
-	m, err := NewModel(roots, "en", translator, renderer, 80, 24)
+	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "")
 	if err != nil {
 		t.Fatalf("NewModel failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestFocusSwitching(t *testing.T) {
 	translator := i18n.NopTranslator{}
 	renderer := &testRenderer{}
 
-	m, err := NewModel(roots, "en", translator, renderer, 80, 24)
+	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "")
 	if err != nil {
 		t.Fatalf("NewModel failed: %v", err)
 	}

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"strings"
 
@@ -32,16 +33,20 @@ type Model struct {
 	CanInlineImages bool
 
 	// Current state
-	CurrentTopic     *TreeNode
-	FocusZone        FocusZone
-	ContentWidth     int
-	ContentHeight    int
-	TermWidth        int
-	TermHeight       int
-	SearchState      *SearchState
-	DiagramState     *DiagramState
-	SearchIndex      *SearchIndex
-	TmuxHintShown    bool
+	CurrentTopic       *TreeNode
+	FocusZone          FocusZone
+	ContentWidth       int
+	ContentHeight      int
+	TermWidth          int
+	TermHeight         int
+	SearchState        *SearchState
+	DiagramState       *DiagramState
+	SearchIndex        *SearchIndex
+	TmuxHintShown      bool
+	AvailableLocales   []string // Available languages for the current file
+	CurrentSourceLang  string   // The actual source language (en if fallback, otherwise requested)
+	Watcher            *Watcher // File change watcher (project docs only)
+	ProjectRoot        string   // Path to the project root
 
 	quitting bool
 }
@@ -55,7 +60,7 @@ const (
 
 var _ tea.Model = (*Model)(nil)
 
-func NewModel(roots []docs.DocRoot, locale string, translator i18n.Translator, renderer mermaid.Renderer, termWidth, termHeight int) (*Model, error) {
+func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translator i18n.Translator, renderer mermaid.Renderer, termWidth, termHeight int, projectRoot string) (*Model, error) {
 	treeWidget, err := NewTreeWidget(roots)
 	if err != nil {
 		return nil, err
@@ -87,7 +92,23 @@ func NewModel(roots []docs.DocRoot, locale string, translator i18n.Translator, r
 		DiagramState:       NewDiagramState(nil),
 		SearchIndex:        BuildSearchIndex(nil, ""),
 		TmuxHintShown:      false,
+		AvailableLocales:   []string{},
+		CurrentSourceLang:  "en",
+		ProjectRoot:        projectRoot,
 		quitting:           false,
+	}
+
+	// Create watcher for project docs if project path is provided
+	if projectRoot != "" {
+		projectDocsPath := projectRoot + "/docs"
+		_, err := os.Stat(projectDocsPath)
+		if err == nil {
+			// Project docs exist; create a watcher
+			watcher, err := NewWatcher(ctx, projectDocsPath)
+			if err == nil {
+				m.Watcher = watcher
+			}
+		}
 	}
 
 	if m.Tree.Cursor() != nil {
@@ -103,10 +124,15 @@ func NewModel(roots []docs.DocRoot, locale string, translator i18n.Translator, r
 func (m *Model) loadTopic(node *TreeNode) error {
 	if node == nil || node.Node == nil || node.Node.IsDir {
 		m.Viewport.SetContent("")
+		m.AvailableLocales = []string{}
+		m.CurrentSourceLang = "en"
 		return nil
 	}
 
 	path := node.Node.Path
+
+	// Get available locales for this file
+	m.AvailableLocales = docs.AvailableLocalesFor(m.Roots, path)
 
 	resolved, err := docs.Resolve(m.Roots, path, m.Locale)
 	if err != nil {
@@ -129,12 +155,16 @@ func (m *Model) loadTopic(node *TreeNode) error {
 		return err
 	}
 
+	m.CurrentSourceLang = sourceLang
+
 	var banners []string
-	if sourceLang != m.Locale && m.Locale != "en" {
-		banners = append(banners, "> **Note:** This file is not translated to '"+m.Locale+"'. Showing English version.")
+	// Missing translation: different source language than requested
+	if sourceLang != m.Locale {
+		banners = append(banners, "> **ℹ Translation not available for `"+m.Locale+"`. Showing English version.**")
 	}
+	// Stale translation: content hash mismatch
 	if stale {
-		banners = append(banners, "> **Note:** This translation is outdated.")
+		banners = append(banners, "> **⚠ This translation is outdated (last synced at previous version, current is newer). Press `e` to view the English version.**")
 	}
 
 	placeholderFunc := func(index int) render.MermaidPlaceholder {
@@ -198,6 +228,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Viewport.SetDimensions(m.ContentWidth, m.ContentHeight)
 		}
 		return m, nil
+	case FileChangedMsg:
+		// File changed on disk; reload the current topic if it matches
+		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && m.CurrentTopic.Node.Path == msg.Path {
+			_ = m.loadTopic(m.CurrentTopic)
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -239,6 +275,42 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				// In a real implementation, we'd update the status bar with the hint
 				// For now, just mark it as shown
 			}
+		}
+		return m, nil
+	}
+
+	// Handle language cycling
+	if key.Matches(msg, m.Keys.LanguageCycle) {
+		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && len(m.AvailableLocales) > 0 {
+			// Find the current locale in the available list
+			currentIdx := -1
+			for i, l := range m.AvailableLocales {
+				if l == m.Locale {
+					currentIdx = i
+					break
+				}
+			}
+			// Move to the next locale (wrap around)
+			nextIdx := (currentIdx + 1) % len(m.AvailableLocales)
+			m.Locale = m.AvailableLocales[nextIdx]
+			_ = m.loadTopic(m.CurrentTopic)
+		}
+		return m, nil
+	}
+
+	// Handle show English (only if current file is translated)
+	if key.Matches(msg, m.Keys.ShowEnglish) {
+		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && m.CurrentSourceLang != "en" {
+			m.Locale = "en"
+			_ = m.loadTopic(m.CurrentTopic)
+		}
+		return m, nil
+	}
+
+	// Handle reload
+	if key.Matches(msg, m.Keys.Reload) {
+		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil {
+			_ = m.loadTopic(m.CurrentTopic)
 		}
 		return m, nil
 	}
