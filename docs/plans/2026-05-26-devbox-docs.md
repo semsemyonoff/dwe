@@ -433,12 +433,12 @@ Docs commands are read-only. They do NOT call `lock.AcquireProjectLocks` and do 
 - Create: `internal/docs/lang_test.go`
 - Create: `internal/docs/content_hashes_test.go`
 
-- [ ] `content_hashes.go` provides `ContentHashFor(relPath string) string` returning `ContentHashes[relPath]` or `""` when absent. Document that `""` means "manifest empty or file missing → staleness check disabled for this file"
-- [ ] `content_hashes_gen.go` initial commit: `var ContentHashes = map[string]string{}` (empty map). Generator script (Task 13) overwrites this file in place; the file is committed so fresh checkouts compile
-- [ ] `ResolveContent(root DocRoot, relPath, locale string) (content []byte, sourceLang string, stale bool, err error)` per the algorithm in Technical Details. On `locale != "en"`: read `i18n/<locale>/` + relPath; if present, parse the content-hash header (first line matching `^>\s*Translated from:\s*\S+\s*@\s*([0-9a-f]{12,64})\s*$`); compare with `ContentHashFor(relPath)`. If manifest entry is `""` → `stale = false` (no banner)
-- [ ] `ContentHashFor(relPath string) string` returns `ContentHashes[relPath]` (12-char `sha256` prefix) or `""` when absent. **Hash is content-based, NOT git-based** — see Technical Details "Hash choice" for rationale
-- [ ] tests: `ResolveContent` covers locale=en, locale=ru with translation matching content-hash, locale=ru with translation mismatching content-hash (stale=true), locale=ru without translation (en fallback, sourceLang="en"), locale=ru with translation but empty manifest entry (stale=false), malformed content-hash header (treated as missing → stale=false)
-- [ ] run `go test ./internal/docs/...` — must pass before Task 4
+- [x] `content_hashes.go` provides `ContentHashFor(relPath string) string` returning `ContentHashes[relPath]` or `""` when absent. Document that `""` means "manifest empty or file missing → staleness check disabled for this file"
+- [x] `content_hashes_gen.go` initial commit: `var ContentHashes = map[string]string{}` (empty map). Generator script (Task 13) overwrites this file in place; the file is committed so fresh checkouts compile
+- [x] `ResolveContent(root DocRoot, relPath, locale string) (content []byte, sourceLang string, stale bool, err error)` per the algorithm in Technical Details. On `locale != "en"`: read `i18n/<locale>/` + relPath; if present, parse the content-hash header (first line matching `^>\s*Translated from:\s*\S+\s*@\s*([0-9a-f]{12,64})\s*$`); compare with `ContentHashFor(relPath)`. If manifest entry is `""` → `stale = false` (no banner)
+- [x] `ContentHashFor(relPath string) string` returns `ContentHashes[relPath]` (12-char `sha256` prefix) or `""` when absent. **Hash is content-based, NOT git-based** — see Technical Details "Hash choice" for rationale
+- [x] tests: `ResolveContent` covers locale=en, locale=ru with translation matching content-hash, locale=ru with translation mismatching content-hash (stale=true), locale=ru without translation (en fallback, sourceLang="en"), locale=ru with translation but empty manifest entry (stale=false), malformed content-hash header (treated as missing → stale=false)
+- [x] run `go test ./internal/docs/...` — must pass before Task 4
 
 ### Task 4: Glamour render + mermaid text-level preprocess
 
