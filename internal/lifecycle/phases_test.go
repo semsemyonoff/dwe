@@ -24,7 +24,7 @@ func TestRunPhases_HappyPath(t *testing.T) {
 		},
 	}
 
-	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, true)
+	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, true, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestRunPhases_AbortingStepFails(t *testing.T) {
 		},
 	}
 
-	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, true)
+	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, true, nil, "")
 	if !errors.Is(err, pipeline.ErrSilent) {
 		t.Fatalf("want pipeline.ErrSilent, got %v", err)
 	}
@@ -80,7 +80,7 @@ func TestRunPhases_ContinueOnError(t *testing.T) {
 		},
 	}
 
-	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, true)
+	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, true, nil, "")
 	if err != nil {
 		t.Fatalf("want nil (continue_on_error), got %v", err)
 	}
@@ -94,7 +94,7 @@ func TestRunPhases_LogFileNameUsed(t *testing.T) {
 		{Name: "stop", Steps: []config.DeployStep{{Name: "noop", Type: "shell", Cmd: "true"}}},
 	}
 
-	err := RunPhases(cfg, nil, workDir, phases, "stop", "stop", false, true)
+	err := RunPhases(cfg, nil, workDir, phases, "stop", "stop", false, true, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRunPhases_EmptyPhases(t *testing.T) {
 	workDir := t.TempDir()
 	cfg := &config.DevboxConfig{Raw: map[string]any{}}
 
-	err := RunPhases(cfg, nil, workDir, nil, "run", "run", false, true)
+	err := RunPhases(cfg, nil, workDir, nil, "run", "run", false, true, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error with empty phases: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestRunPhases_LogDisabled(t *testing.T) {
 		{Name: "start", Steps: []config.DeployStep{{Name: "noop", Type: "shell", Cmd: "true"}}},
 	}
 
-	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, false)
+	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, false, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestRunPhases_LogDisabledFailingStep(t *testing.T) {
 		{Name: "start", Steps: []config.DeployStep{{Name: "fail", Type: "shell", Cmd: "exit 1"}}},
 	}
 
-	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, false)
+	err := RunPhases(cfg, nil, workDir, phases, "run", "run", false, false, nil, "")
 	if !errors.Is(err, pipeline.ErrSilent) {
 		t.Fatalf("want pipeline.ErrSilent, got %v", err)
 	}

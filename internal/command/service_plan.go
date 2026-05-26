@@ -440,13 +440,18 @@ func executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, o
 			if deps.Cmd != nil {
 				errOut = deps.Cmd.ErrOrStderr()
 			}
-			stepErr = deps.RunRestart(lifecycle.RunContext{
+			rctx := lifecycle.RunContext{
 				Ctx:              ctx,
 				ConfigPath:       configPath,
 				Yes:              true,
 				ErrOut:           errOut,
 				SkipClearPending: true,
-			})
+			}
+			if deps.Flags != nil {
+				rctx.Translator = deps.Flags.I18n
+				rctx.Locale = deps.Flags.Locale
+			}
+			stepErr = deps.RunRestart(rctx)
 		}
 		if stepErr != nil {
 			return fmt.Errorf("applying %s (step %d/%d): %w", step.Kind, i+1, len(plan.ApplySteps), stepErr)

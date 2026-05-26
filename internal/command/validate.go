@@ -487,8 +487,8 @@ func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig,
 		reg.Register(v)
 	}
 	// Load i18n translation files for validation.
-	i18nProjectFiles, i18nLoadErr := i18n.LoadProjectBundles(baseDir)
-	for _, v := range vali18n.All(i18nProjectFiles, i18nLoadErr, cmdReg) {
+	i18nProjectFiles, _ := i18n.LoadProjectBundles(baseDir)
+	for _, v := range vali18n.All(i18nProjectFiles, cmdReg) {
 		reg.Register(v)
 	}
 	// Only propagate the load error into the checks domain when config.validate

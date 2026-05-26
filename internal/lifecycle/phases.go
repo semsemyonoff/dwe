@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/usercommands"
 )
@@ -29,6 +30,8 @@ func RunPhases(
 	logFileName string,
 	skipConfirm bool,
 	logEnabled bool,
+	translator i18n.Translator,
+	locale string,
 ) error {
 	var steps []pipeline.ResolvedStep
 	for _, phase := range phases {
@@ -66,6 +69,8 @@ func RunPhases(
 		WorkDir:      workDir,
 		LogWriter:    logWriter,
 		SkipConfirm:  skipConfirm,
+		Translator:   translator,
+		Locale:       locale,
 	}); err != nil {
 		if errors.Is(err, pipeline.ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)

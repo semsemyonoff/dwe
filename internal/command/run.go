@@ -38,6 +38,8 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 				SkipPreflight: skipPreflight,
 				SkipNotify:    silent,
 				ErrOut:        cmd.ErrOrStderr(),
+				Translator:    flags.I18n,
+				Locale:        flags.Locale,
 			})
 		},
 	}

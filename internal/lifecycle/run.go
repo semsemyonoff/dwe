@@ -14,6 +14,7 @@ import (
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/git"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/preflight"
@@ -60,6 +61,10 @@ type RunContext struct {
 	// that RunRestart calls on success. Set true when RunRestart is called from
 	// executeTogglePlan so the executor owns the final atomic clear via ClearPendingOps.
 	SkipClearPending bool
+	// Translator and Locale provide i18n lookups for user commands invoked as
+	// pipeline steps. When nil, NopTranslator is used (English fallback).
+	Translator i18n.Translator
+	Locale     string
 }
 
 // resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
@@ -259,7 +264,7 @@ func RunRun(ctx RunContext) (err error) {
 		}
 	}
 
-	if err := RunPhases(cfg, reg, workDir, lifecycleCfg.Run.Phases, "run", "run", ctx.Yes, lifecycleCfg.Run.LogEnabled()); err != nil {
+	if err := RunPhases(cfg, reg, workDir, lifecycleCfg.Run.Phases, "run", "run", ctx.Yes, lifecycleCfg.Run.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err
 	}
 

@@ -23,6 +23,7 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/filesgate/spec"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/liveui"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
@@ -117,6 +118,10 @@ type ActionContext struct {
 	// and via the tee inside StepWriter.
 	LogWriter   io.Writer
 	SkipConfirm bool
+	// Translator and Locale provide i18n lookups for user commands invoked as
+	// pipeline steps. When nil, NopTranslator is used (English fallback).
+	Translator i18n.Translator
+	Locale     string
 	// Parallel indicates the action is running as a sub-step of a parallel
 	// group. In that mode all child output is routed through StepWriter
 	// (never directly to os.Stdout / os.Stderr), no PTY is allocated, and
@@ -274,6 +279,10 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	rctx.SkipConfirm = actx.SkipConfirm
 	rctx.NonInteractive = actx.SkipConfirm
 	rctx.UnderParallel = actx.Parallel
+	if actx.Translator != nil {
+		rctx.Translator = actx.Translator
+		rctx.Locale = actx.Locale
+	}
 	// Pipeline-invoked commands are never the user's top-level command —
 	// suppress notifications regardless of the referenced CommandDef's
 	// notify: field. Only the operation (deploy / run) notifies.
@@ -327,6 +336,10 @@ type RunOptions struct {
 	WorkDir      string
 	LogWriter    io.Writer
 	SkipConfirm  bool
+	// Translator and Locale provide i18n lookups for user commands invoked as
+	// pipeline steps. When nil, NopTranslator is used (English fallback).
+	Translator   i18n.Translator
+	Locale       string
 	PostStepHook map[string]func() error
 
 	// State tracking (optional): when non-nil, the executor records step
@@ -742,6 +755,8 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		StepWriter:       stepWriter,
 		LogWriter:        opts.LogWriter,
 		SkipConfirm:      skipConfirm,
+		Translator:       opts.Translator,
+		Locale:           opts.Locale,
 		Parallel:         opts.Parallel,
 		SubStepOverrides: rs.Step.SubStepOverrides,
 	}
@@ -786,6 +801,8 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			StepWriter:  stepWriter,
 			LogWriter:   opts.LogWriter,
 			SkipConfirm: skipConfirm,
+			Translator:  opts.Translator,
+			Locale:      opts.Locale,
 			Parallel:    opts.Parallel,
 		}
 		checkErr := ExecAction(ctx, *rs.Step.Check, actx)

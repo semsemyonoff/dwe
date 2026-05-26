@@ -744,6 +744,8 @@ func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, 
 		PostStepHook: postStepHooks,
 		Recorder:     recorder,
 		SkipDecider:  recorder.WrapSkipDecider(skipDecider),
+		Translator:   flags.I18n,
+		Locale:       flags.Locale,
 	}
 
 	if pipeErr := pipeline.RunWithOptions(runOpts); pipeErr != nil {

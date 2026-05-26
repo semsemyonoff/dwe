@@ -200,6 +200,8 @@ func resetRunCmd(cmd *cobra.Command, flags *rootFlags, yes bool, skipPreflight b
 		WorkDir:      workDir,
 		LogWriter:    logWriter,
 		SkipConfirm:  yes,
+		Translator:   flags.I18n,
+		Locale:       flags.Locale,
 	}
 
 	if err := pipeline.RunWithOptions(opts); err != nil {
@@ -362,6 +364,8 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 			WorkDir:      workDir,
 			LogWriter:    logWriter,
 			SkipConfirm:  yes,
+			Translator:   flags.I18n,
+			Locale:       flags.Locale,
 		}
 		if runErr := pipeline.RunWithOptions(runOpts); runErr != nil {
 			if errors.Is(runErr, ErrSilent) && logEnabled {

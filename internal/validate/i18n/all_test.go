@@ -20,7 +20,7 @@ func TestParseError(t *testing.T) {
 		ParseErr: errors.New("unknown field: description"),
 	}
 
-	validators := All([]i18n.ProjectFile{pf}, nil, nil)
+	validators := All([]i18n.ProjectFile{pf}, nil)
 	if len(validators) != 1 {
 		t.Fatalf("expected 1 validator, got %d", len(validators))
 	}
@@ -42,29 +42,6 @@ func TestParseError(t *testing.T) {
 	}
 	if !strings.Contains(d.Message, "unknown field") {
 		t.Errorf("expected message to mention parse error, got %q", d.Message)
-	}
-}
-
-func TestLoadError(t *testing.T) {
-	// Aggregate load error (e.g., permission denied on devbox/i18n/)
-	loadErr := errors.New("permission denied")
-
-	validators := All(nil, loadErr, nil)
-	if len(validators) != 1 {
-		t.Fatalf("expected 1 validator, got %d", len(validators))
-	}
-
-	diags := validators[0].Run(validate.Context{})
-	if len(diags) != 1 {
-		t.Fatalf("expected 1 diagnostic, got %d", len(diags))
-	}
-
-	d := diags[0]
-	if d.Severity != validate.SeverityError {
-		t.Errorf("expected SeverityError, got %v", d.Severity)
-	}
-	if !strings.Contains(d.Message, "permission denied") {
-		t.Errorf("expected error message to mention permission, got %q", d.Message)
 	}
 }
 
@@ -90,7 +67,7 @@ func TestOrphanCommand(t *testing.T) {
 		},
 	}
 
-	validators := All([]i18n.ProjectFile{pf}, nil, reg)
+	validators := All([]i18n.ProjectFile{pf}, reg)
 
 	// Find the orphan validator
 	var orphanVal validate.Validator
@@ -141,7 +118,7 @@ func TestOrphanGroup(t *testing.T) {
 		},
 	}
 
-	validators := All([]i18n.ProjectFile{pf}, nil, reg)
+	validators := All([]i18n.ProjectFile{pf}, reg)
 
 	var orphanVal validate.Validator
 	for _, v := range validators {
@@ -185,7 +162,7 @@ func TestUnknownUIKey(t *testing.T) {
 		},
 	}
 
-	validators := All([]i18n.ProjectFile{pf}, nil, nil)
+	validators := All([]i18n.ProjectFile{pf}, nil)
 
 	var unknownVal validate.Validator
 	for _, v := range validators {
@@ -213,7 +190,7 @@ func TestUnknownUIKey(t *testing.T) {
 
 func TestEmptyProject(t *testing.T) {
 	// No translation files -> no validators
-	validators := All(nil, nil, nil)
+	validators := All(nil, nil)
 	if len(validators) != 0 {
 		t.Fatalf("expected 0 validators for empty project, got %d", len(validators))
 	}
@@ -243,7 +220,7 @@ func TestValidTranslation(t *testing.T) {
 		},
 	}
 
-	validators := All([]i18n.ProjectFile{pf}, nil, reg)
+	validators := All([]i18n.ProjectFile{pf}, reg)
 
 	// Should have validators for orphan and unknown ui key checks, but no diagnostics
 	var orphanVal, unknownVal validate.Validator
@@ -279,7 +256,7 @@ func TestDirectoryLevelLoadError(t *testing.T) {
 		ParseErr: os.ErrPermission,
 	}
 
-	validators := All([]i18n.ProjectFile{pf}, nil, nil)
+	validators := All([]i18n.ProjectFile{pf}, nil)
 
 	// Find the parse error validator
 	var parseErrVal validate.Validator
@@ -318,7 +295,7 @@ func TestParseErrorLocaleField(t *testing.T) {
 		ParseErr: errors.New("unknown field: bad_key"),
 	}
 
-	validators := All([]i18n.ProjectFile{pf}, nil, nil)
+	validators := All([]i18n.ProjectFile{pf}, nil)
 	pev := validators[0].(*parseErrorValidator)
 
 	if pev.pf.Locale != "ru" {

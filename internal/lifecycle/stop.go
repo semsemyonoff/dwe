@@ -11,6 +11,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
@@ -26,6 +27,10 @@ type StopContext struct {
 	SkipPreflight bool
 	// ErrOut receives preflight diagnostic output. nil falls back to os.Stderr.
 	ErrOut io.Writer
+	// Translator and Locale provide i18n lookups for user commands invoked as
+	// pipeline steps. When nil, NopTranslator is used (English fallback).
+	Translator i18n.Translator
+	Locale     string
 }
 
 // RunStop executes the full stop lifecycle.
@@ -80,7 +85,7 @@ func RunStop(ctx StopContext) error {
 
 	stopCfg := EnsureStopConfig(lifecycleCfg)
 
-	if err := RunPhases(cfg, reg, workDir, stopCfg.Phases, "stop", "stop", ctx.Yes, stopCfg.LogEnabled()); err != nil {
+	if err := RunPhases(cfg, reg, workDir, stopCfg.Phases, "stop", "stop", ctx.Yes, stopCfg.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err
 	}
 

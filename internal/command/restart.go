@@ -29,6 +29,8 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 				ShowInfo:      func() error { return runInfo(cmd, flags) },
 				SkipPreflight: skipPreflight,
 				ErrOut:        cmd.ErrOrStderr(),
+				Translator:    flags.I18n,
+				Locale:        flags.Locale,
 			})
 		},
 	}

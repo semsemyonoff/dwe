@@ -74,3 +74,5 @@ func TranslatorOrNop(s *Store) Translator {
 	}
 	return s
 }
+
+var _ Translator = (*Store)(nil)

@@ -49,24 +49,4 @@ func (v *parseErrorValidator) Run(_ validate.Context) []validate.Diagnostic {
 	}}
 }
 
-// loadErrValidator surfaces a non-nil aggregate error from LoadProjectBundles.
-type loadErrValidator struct {
-	err error
-}
-
-func (v *loadErrValidator) ID() string          { return "_load_error" }
-func (v *loadErrValidator) Domain() string      { return "i18n" }
-func (v *loadErrValidator) IsDomainLevel() bool { return true }
-func (v *loadErrValidator) IsGlobal() bool      { return true }
-
-func (v *loadErrValidator) Run(_ validate.Context) []validate.Diagnostic {
-	return []validate.Diagnostic{{
-		Severity: validate.SeverityError,
-		Domain:   "i18n",
-		Target:   "_load_error",
-		Message:  v.err.Error(),
-	}}
-}
-
 var _ validate.DomainLevelValidator = (*parseErrorValidator)(nil)
-var _ validate.GlobalValidator = (*loadErrValidator)(nil)

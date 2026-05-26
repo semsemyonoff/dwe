@@ -107,6 +107,8 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 					Yes:           yes,
 					SkipPreflight: skipPreflight,
 					ErrOut:        cmd.ErrOrStderr(),
+					Translator:    flags.I18n,
+					Locale:        flags.Locale,
 				})
 			}
 			// Per-service stop.
