@@ -416,14 +416,14 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
 ### Task 6: Implement `auto-urls` renderer
 
 **Files:**
-- Create: `internal/ui/info_auto_urls.go`
-- Create: `internal/ui/info_auto_urls_test.go`
+- Create: `internal/ui/info_auto_urls.go` ✓
+- Create: `internal/ui/info_auto_urls_test.go` ✓
 
-- [ ] implement `func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string` — returns the rendered block as a single string per CLAUDE.md "Section renderer signature contract" (no `io.Writer` parameter, no topology parameter — service order comes from `stack.DeployOrder(cfg, spec.Include)` called inside the function). Per `golang-naming`, the acronym is `URLs`, not `Urls`. Note: this function is unreachable from `runInfo` until Task 8 wires the dispatch in `renderInfoItem`; tests in this task call `renderAutoURLs` directly.
-- [ ] defaults: `spec.Include` empty → `[app, tool]`
-- [ ] **service-level host/port key selection**: read `svc.Info.HostKey` (default `"web"`) and `svc.Info.PortKey` (default `"http"`) to determine which `hosts[<key>]` and `ports[<key>]` to surface. Services without an `info:` block use the defaults; services with non-default host/port keys (e.g. a console UI under `hosts.console` / `ports.console`) override via `info.host_key:` / `info.port_key:`.
-- [ ] `port_via` resolution: if explicit, look up that service in `cfg.Services` and use its `ports.http`/`ports.https` (NOT the service's own port_key — the proxy is by convention HTTP). If empty, auto-detect with the narrowed filter: exactly one enabled `type: infra` service with `ports.http == 80` OR `ports.https == 443`. If 0 or >1 candidates → no proxied URL (fall back to direct).
-- [ ] for each included service (deploy order from `stack.DeployOrder(cfg, spec.Include)`, filtered by `spec.Hide`):
+- [x] implement `func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string` — returns the rendered block as a single string per CLAUDE.md "Section renderer signature contract" (no `io.Writer` parameter, no topology parameter — service order comes from `stack.DeployOrder(cfg, spec.Include)` called inside the function). Per `golang-naming`, the acronym is `URLs`, not `Urls`. Note: this function is unreachable from `runInfo` until Task 8 wires the dispatch in `renderInfoItem`; tests in this task call `renderAutoURLs` directly.
+- [x] defaults: `spec.Include` empty → `[app, tool]`
+- [x] **service-level host/port key selection**: read `svc.Info.HostKey` (default `"web"`) and `svc.Info.PortKey` (default `"http"`) to determine which `hosts[<key>]` and `ports[<key>]` to surface. Services without an `info:` block use the defaults; services with non-default host/port keys (e.g. a console UI under `hosts.console` / `ports.console`) override via `info.host_key:` / `info.port_key:`.
+- [x] `port_via` resolution: if explicit, look up that service in `cfg.Services` and use its `ports.http`/`ports.https` (NOT the service's own port_key — the proxy is by convention HTTP). If empty, auto-detect with the narrowed filter: exactly one enabled `type: infra` service with `ports.http == 80` OR `ports.https == 443`. If 0 or >1 candidates → no proxied URL (fall back to direct).
+- [x] for each included service (deploy order from `stack.DeployOrder(cfg, spec.Include)`, filtered by `spec.Hide`):
   - resolve `host_key` and `port_key` for this service
   - skip the service silently if neither `hosts[host_key]` nor `ports[port_key]` is set AND `Info.Paths` is empty (nothing to render)
   - assemble main URL row per "URL Assembly Rules" table using the resolved keys
@@ -432,13 +432,13 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
   - for each `service.Info.Paths` entry NOT in `spec.HidePaths[folderKey]`: emit `     <pathIcon> <path.name>  — <base><path.path>` aligned to the same value column as the main row
   - if 0 paths, still emit the subgroup header + main row
   - if main row is omitted but paths exist with only direct URL available, chain paths to direct URL
-- [ ] insert one blank line between subgroups within the same type; insert one blank line between type groups (consistent with spec §2)
-- [ ] column alignment is *per-service-subgroup* (each service's own `—` column lines up), not global across the whole block — keep alignment math local
-- [ ] honour `spec.HidePaths`: skip paths whose `name` matches; unknown service keys / unknown path names in `HidePaths` are not errors here (validator warns; render is silent)
-- [ ] honour `runtime.use_https` for scheme; omit `:80` and `:443` from URLs
-- [ ] **empty-output rule**: if the renderer produces zero subgroups (every included service got skipped), return `""` — the caller's `renderInfoItem` dispatch is responsible for not contributing this empty string to `contentCount` (see Task 8). Do NOT emit a "(no services)" placeholder.
-- [ ] **service iteration**: always via `stack.DeployOrder(cfg, spec.Include)`. Do NOT `range cfg.Services` directly — Go map iteration is randomized and will produce flaky golden tests.
-- [ ] write golden-output tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases like `"app behind proxy with multiple paths"`) covering:
+- [x] insert one blank line between subgroups within the same type; insert one blank line between type groups (consistent with spec §2)
+- [x] column alignment is *per-service-subgroup* (each service's own `—` column lines up), not global across the whole block — keep alignment math local
+- [x] honour `spec.HidePaths`: skip paths whose `name` matches; unknown service keys / unknown path names in `HidePaths` are not errors here (validator warns; render is silent)
+- [x] honour `runtime.use_https` for scheme; omit `:80` and `:443` from URLs
+- [x] **empty-output rule**: if the renderer produces zero subgroups (every included service got skipped), return `""` — the caller's `renderInfoItem` dispatch is responsible for not contributing this empty string to `contentCount` (see Task 8). Do NOT emit a "(no services)" placeholder.
+- [x] **service iteration**: always via `stack.DeployOrder(cfg, spec.Include)`. Do NOT `range cfg.Services` directly — Go map iteration is randomized and will produce flaky golden tests.
+- [x] write golden-output tests (each subtest calls `t.Parallel()`; subtest names lowercase descriptive phrases like `"app behind proxy with multiple paths"`) covering:
   - app behind proxy with multiple paths (matches Target Rendered Output "Main" subgroup)
   - app with no paths (just the main row + subgroup header)
   - tool with both hosts.web and ports.http (`proxied | direct` form, matches "Adminer")
@@ -453,7 +453,7 @@ func (i *InfoItem) UnmarshalYAML(value *yaml.Node) error {
   - service with `info.host_key: console` and `info.port_key: console` renders correctly — both `<proxied URL>` and `<direct URL>` use the `console` keys
   - service with neither standard nor configured host/port keys is silently omitted
   - disabled service is skipped (delegates to Task 5's helper)
-- [ ] run `go test ./internal/ui/...` — must pass before Task 7
+- [x] run `go test ./internal/ui/...` — must pass before Task 7
 
 ### Task 7: Implement `auto-hosts` renderer
 
