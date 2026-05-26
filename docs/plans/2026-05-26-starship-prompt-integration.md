@@ -339,10 +339,10 @@ Safety notes for this task:
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify all items from Overview are implemented (covered by automated tests from Tasks 1–5)
-- [ ] verify edge cases via tests: outside project, corrupted yaml files, missing journal, `NO_COLOR`, `--check`, subdirectory walk-up, missing `project.name`
-- [ ] run `make test` — final full pass
-- [ ] run `make build` — confirm the binary builds cleanly
+- [x] verify all items from Overview are implemented (covered by automated tests from Tasks 1–5)
+- [x] verify edge cases via tests: outside project, corrupted yaml files, missing journal, `NO_COLOR`, `--check`, subdirectory walk-up, missing `project.name`
+- [x] run `make test` — final full pass
+- [x] run `make build` — confirm the binary builds cleanly
 
 Note: end-to-end timing and real-project starship integration verification are deliberately out of scope for this plan — they happen in a separate follow-up.
 
