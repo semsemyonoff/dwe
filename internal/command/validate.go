@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/setup"
 	"devbox-cli/internal/ui"
@@ -16,6 +17,7 @@ import (
 	valcmds "devbox-cli/internal/validate/commands"
 	valconfig "devbox-cli/internal/validate/config"
 	valenv "devbox-cli/internal/validate/env"
+	vali18n "devbox-cli/internal/validate/i18n"
 	vallinters "devbox-cli/internal/validate/linters"
 	valsetup "devbox-cli/internal/validate/setup"
 	valsnap "devbox-cli/internal/validate/snapshot"
@@ -467,6 +469,11 @@ func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig,
 		reg.Register(v)
 	}
 	for _, v := range valenv.All(cfg) {
+		reg.Register(v)
+	}
+	// Load i18n translation files for validation.
+	i18nProjectFiles, i18nLoadErr := i18n.LoadProjectBundles(baseDir)
+	for _, v := range vali18n.All(i18nProjectFiles, i18nLoadErr, cmdReg) {
 		reg.Register(v)
 	}
 	// Only propagate the load error into the checks domain when config.validate

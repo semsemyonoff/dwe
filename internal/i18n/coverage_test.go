@@ -102,4 +102,24 @@ func TestBuiltinCoverage(t *testing.T) {
 		}
 		t.Error(msg.String())
 	}
+
+	// Also check that KnownUIKeys is in sync with en.yml
+	knownKeySet := make(map[string]bool)
+	for _, key := range KnownUIKeys {
+		knownKeySet[key] = true
+	}
+
+	// Check that all keys in en.yml are in KnownUIKeys
+	for key := range enUIKeys {
+		if !knownKeySet[key] {
+			t.Errorf("KnownUIKeys missing key from en.yml: %s", key)
+		}
+	}
+
+	// Check that all keys in KnownUIKeys are in en.yml
+	for key := range knownKeySet {
+		if !enUIKeys[key] {
+			t.Errorf("KnownUIKeys has extra key not in en.yml: %s", key)
+		}
+	}
 }

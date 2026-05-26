@@ -33,26 +33,32 @@ type Translator interface {
 // Used when i18n is unavailable (e.g., nil Store or completion path).
 type NopTranslator struct{}
 
+// CommandDescription implements Translator.
 func (NopTranslator) CommandDescription(_, _, fallback string) string {
 	return fallback
 }
 
+// CommandConfirmationText implements Translator.
 func (NopTranslator) CommandConfirmationText(_, _, fallback string) string {
 	return fallback
 }
 
+// ParamDescription implements Translator.
 func (NopTranslator) ParamDescription(_, _, _, fallback string) string {
 	return fallback
 }
 
+// GroupTitle implements Translator.
 func (NopTranslator) GroupTitle(_, _, fallback string) string {
 	return fallback
 }
 
+// GroupDescription implements Translator.
 func (NopTranslator) GroupDescription(_, _, fallback string) string {
 	return fallback
 }
 
+// T implements Translator.
 func (NopTranslator) T(_, _, fallback string) string {
 	return fallback
 }

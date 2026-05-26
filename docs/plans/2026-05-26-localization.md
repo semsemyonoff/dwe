@@ -539,18 +539,18 @@ A `Translator` interface (`{ CommandDescription(...), ParamDescription(...), ...
 
 3. **unknown_ui_key.go** — `Bundle.UI` is `map[string]string`, so `KnownFields(true)` does NOT catch typo'd keys like `ui.docs.section.properies`. Maintain an authoritative whitelist of `ui.*` keys (the same set built-in `en.yml` populates — defined as a package-level slice in `internal/i18n` so the validator and `en.yml` stay in sync). For each project `ProjectFile` UI key not in the whitelist → `Diagnostic{Severity: Warning, Scope: "i18n.unknown_ui_key", File: pf.Path, ...}`. Hint: "unknown ui key; if intentional, file a request to add it to the canonical set"
 
-- [ ] implement `All(projectFiles []i18n.ProjectFile, loadErr error, reg *usercommands.Registry) []validate.Validator` aggregating the three validators; when `loadErr != nil` the parse-error validator emits a single `i18n.load_error` diagnostic in addition to any per-file diagnostics
-- [ ] implement the three validators in their dedicated files
-- [ ] in `internal/i18n` add a package-level `KnownUIKeys` slice (or set) — both `en.yml` ingest and the `unknown_ui_key` validator use this as the source of truth. Add a `coverage_test.go` (or extend Task 2's) asserting every key in `en.yml` is in `KnownUIKeys` and vice versa
-- [ ] in `runValidate`: call `projectFiles, loadErr := i18n.LoadProjectBundles(baseDir)` once, then `i18n.All(projectFiles, loadErr, cmdReg)` alongside existing `valchecks` / `valenv` registrations
-- [ ] do NOT register at `init()` — same convention as other domains
-- [ ] tests:
+- [x] implement `All(projectFiles []i18n.ProjectFile, loadErr error, reg *usercommands.Registry) []validate.Validator` aggregating the three validators; when `loadErr != nil` the parse-error validator emits a single `i18n.load_error` diagnostic in addition to any per-file diagnostics
+- [x] implement the three validators in their dedicated files
+- [x] in `internal/i18n` add a package-level `KnownUIKeys` slice (or set) — both `en.yml` ingest and the `unknown_ui_key` validator use this as the source of truth. Add a `coverage_test.go` (or extend Task 2's) asserting every key in `en.yml` is in `KnownUIKeys` and vice versa
+- [x] in `runValidate`: call `projectFiles, loadErr := i18n.LoadProjectBundles(baseDir)` once, then `i18n.All(projectFiles, loadErr, cmdReg)` alongside existing `valchecks` / `valenv` registrations
+- [x] do NOT register at `init()` — same convention as other domains
+- [x] tests:
   - parse error (per-file): malformed project file → one `i18n.parse_error` Error diagnostic with `File` set
   - load error (dir-level): unreadable `devbox/i18n/` directory → one `i18n.load_error` Error diagnostic
   - orphan: project translation references unknown command/group ID → Warning, suppressed for known IDs, per-locale disambiguation via `ID` field
   - unknown_ui_key: typo'd ui key in project file → Warning; key in whitelist → no diagnostic
   - empty project: no `devbox/i18n/` dir → zero diagnostics
-- [ ] run `go test ./internal/validate/... ./internal/i18n/...` — must pass before Task 9
+- [x] run `go test ./internal/validate/... ./internal/i18n/...` — must pass before Task 9
 
 ### Task 9: Reference documentation
 
