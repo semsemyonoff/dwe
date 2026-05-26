@@ -152,6 +152,7 @@ Run 'devbox info' for the full info dashboard.`,
 	addCmd(root, groupEnvironment, newRestartCmd(flags))
 	addCmd(root, groupEnvironment, newShellCmd(flags))
 	addCmd(root, groupEnvironment, newStatusCmd(flags))
+	addCmd(root, groupEnvironment, newPromptCmd(flags))
 
 	// Configuration group: services, tools, rendering, validation.
 	addCmd(root, groupConfiguration, newServiceCmd(flags))
@@ -200,6 +201,7 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 	path := cmd.CommandPath()
 	return path == "devbox" ||
 		path == "devbox version" ||
+		path == "devbox prompt" ||
 		strings.HasPrefix(path, "devbox completion") ||
 		strings.HasPrefix(path, "devbox print") ||
 		strings.HasPrefix(path, "devbox docs")

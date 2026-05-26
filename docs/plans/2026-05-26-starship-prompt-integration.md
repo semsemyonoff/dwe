@@ -297,15 +297,15 @@ Safety notes for this task:
 - Modify: `internal/command/root.go`
 - Create: `internal/command/prompt_test.go`
 
-- [ ] create `newPromptCmd(flags *rootFlags) *cobra.Command` following the existing pattern (compare `newStatusCmd(flags)` at `internal/command/root.go:154`) with `Use: "prompt"`, short/long descriptions explaining it is for shell prompt integration, and `--check` as a local bool flag
-- [ ] set `SilenceUsage: true` and `SilenceErrors: true` on the command — prompt invocation errors must never print cobra usage banners (would corrupt the shell prompt output if the cobra path is ever reached)
-- [ ] set `Args: cobra.NoArgs` — `prompt` takes no positional arguments
-- [ ] `RunE` reconstructs args from the parsed `--check` flag and calls `prompt.Run(cmd.OutOrStdout(), reconstructedArgs)`. Return the resulting int via a small `exitError` wrapper if non-zero, OR use `os.Exit(code)` if cobra's RunE-to-exit-code path is awkward — verify the existing root command pattern (`internal/command/root.go`) for how exit codes are propagated (the codebase already uses an `interface{ ExitCode() int }` pattern per `cmd/devbox/main.go` lines 28-37)
-- [ ] do NOT set a `PersistentPreRunE` and do NOT depend on `cfg` resolution — completion path and `--help` rendering must not require a project to be present
-- [ ] use `cmd.OutOrStdout()` (NOT `os.Stdout`) so tests can capture output via `cmd.SetOut(buf)`
-- [ ] register on the root in `NewRootCmd` via the existing `addCmd(root, group, newPromptCmd(flags))` helper; pick or add an appropriate group (likely the same group as `status`, since this is informational)
-- [ ] write tests: `devbox --help` lists `prompt`, `devbox prompt --help` works without a project resolved, RunE through cobra produces same output as direct `prompt.Run` invocation
-- [ ] run `go test ./internal/command/... ./internal/prompt/... ./cmd/devbox/...` — must pass before Task 6
+- [x] create `newPromptCmd(flags *rootFlags) *cobra.Command` following the existing pattern (compare `newStatusCmd(flags)` at `internal/command/root.go:154`) with `Use: "prompt"`, short/long descriptions explaining it is for shell prompt integration, and `--check` as a local bool flag
+- [x] set `SilenceUsage: true` and `SilenceErrors: true` on the command — prompt invocation errors must never print cobra usage banners (would corrupt the shell prompt output if the cobra path is ever reached)
+- [x] set `Args: cobra.NoArgs` — `prompt` takes no positional arguments
+- [x] `RunE` reconstructs args from the parsed `--check` flag and calls `prompt.Run(cmd.OutOrStdout(), reconstructedArgs)`. Return the resulting int via a small `exitError` wrapper if non-zero, OR use `os.Exit(code)` if cobra's RunE-to-exit-code path is awkward — verify the existing root command pattern (`internal/command/root.go`) for how exit codes are propagated (the codebase already uses an `interface{ ExitCode() int }` pattern per `cmd/devbox/main.go` lines 28-37)
+- [x] do NOT set a `PersistentPreRunE` and do NOT depend on `cfg` resolution — completion path and `--help` rendering must not require a project to be present
+- [x] use `cmd.OutOrStdout()` (NOT `os.Stdout`) so tests can capture output via `cmd.SetOut(buf)`
+- [x] register on the root in `NewRootCmd` via the existing `addCmd(root, group, newPromptCmd(flags))` helper; pick or add an appropriate group (likely the same group as `status`, since this is informational)
+- [x] write tests: `devbox --help` lists `prompt`, `devbox prompt --help` works without a project resolved, RunE through cobra produces same output as direct `prompt.Run` invocation
+- [x] run `go test ./internal/command/... ./internal/prompt/... ./cmd/devbox/...` — must pass before Task 6
 
 ### Task 6: Add starship integration documentation
 
