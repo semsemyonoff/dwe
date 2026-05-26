@@ -29,6 +29,7 @@ devbox docs generate [flags]
   -h, --help              help for generate
       --include-hidden    Include hidden CLI commands
       --include-private   Include private registry commands
+      --lang string       Language code (default: from userconfig / $LANG)
   -o, --output string     Output directory for generated docs (default "docs/reference")
       --scope string      Scope: all, cli, commands (default "all")
 ```

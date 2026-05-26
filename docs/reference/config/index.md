@@ -29,6 +29,7 @@ Overview of all configuration files in the devbox system.
 | `devbox/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
 | `devbox/validate.yml` | yes | standalone | Project readiness checks (preflight + `devbox validate`) |
 | `devbox/snapshot.yml` | yes | standalone | Snapshot workflows: create / restore / remove (`devbox snapshot`) |
+| `devbox/i18n/*.yml` | no (ignored) | standalone | User command and UI string translations (optional; one file per language) |
 
 ## Runtime artifacts
 
@@ -97,6 +98,7 @@ flowchart LR
 - [commands/](commands.md) — declarative commands: types, params, context, files, workflows, templates
 - [validate.yml](validate.md) — project readiness checks: env probes, declarative checks, builtins, stages, preflight
 - [snapshot.yml](snapshot.md) — snapshot workflows: create/restore/remove blocks, variants, `${snapshot.*}` namespace, manifest, lock interaction, archive safety
+- [Localization (i18n)](i18n.md) — user command and UI string translations: locale resolution, file format, key reference, validation
 - [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
 - [UI](ui.md) — interactive command browser configuration: depth, collapse, badges, hotkeys, fallback ladder
 - [Templates](../templates.md) — Go templates, `${...}` shorthand, sprout helpers (shared across info, commands, pipelines, render packs)

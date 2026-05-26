@@ -559,12 +559,12 @@ A `Translator` interface (`{ CommandDescription(...), ParamDescription(...), ...
 - Modify: `docs/reference/config/notifications.md` (cross-reference `language` if helpful; keep notifications scope clean — main doc lives in `i18n.md`)
 - Modify: `docs/reference/cli/` regenerated section for `docs generate` — handled by running `make build && bin/devbox docs generate --scope cli`
 
-- [ ] write `docs/reference/config/i18n.md` covering: precedence, file format with full key reference (`ui.*`, `commands.<id>.*`, `groups.<id>.*`), project file location, examples of `en.yml` and `ru.yml`, behavior on missing locale, how `docs generate --lang` works (always emits `commands/<lang>/...`, no `--lang all` in v1)
-- [ ] include section "Validation" linking to validator behavior (orphan warnings; unknown-field is a hard load-time error via strict YAML)
-- [ ] mention the `DEVBOX_LANGUAGE` env var and the `language` key in userconfig
-- [ ] regenerate CLI reference: `make build && bin/devbox docs generate --scope cli` to pick up the new `--lang` flag
-- [ ] no tests required for docs task itself, but verify the regenerated CLI markdown reflects the new flag
-- [ ] commit only the docs changes; do not move plan yet
+- [x] write `docs/reference/config/i18n.md` covering: precedence, file format with full key reference (`ui.*`, `commands.<id>.*`, `groups.<id>.*`), project file location, examples of `en.yml` and `ru.yml`, behavior on missing locale, how `docs generate --lang` works (always emits `commands/<lang>/...`, no `--lang all` in v1)
+- [x] include section "Validation" linking to validator behavior (orphan warnings; unknown-field is a hard load-time error via strict YAML)
+- [x] mention the `DEVBOX_LANGUAGE` env var and the `language` key in userconfig
+- [x] regenerate CLI reference: `make build && bin/devbox docs generate --scope cli` to pick up the new `--lang` flag
+- [x] no tests required for docs task itself, but verify the regenerated CLI markdown reflects the new flag
+- [x] commit only the docs changes; do not move plan yet
 
 ### Task 10: Verify acceptance criteria
 

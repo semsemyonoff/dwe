@@ -2,6 +2,8 @@
 
 Native desktop notifications fired when long-running Devbox operations complete (success or failure). Notifications are a **user-level** concern — preferences live in a user config file outside the project (with an optional per-project override), not in `devbox.yml`.
 
+See also: [Localization (i18n)](i18n.md) for translating user command descriptions and UI strings.
+
 ## Contents
 
 - [When notifications fire](#when-notifications-fire)
