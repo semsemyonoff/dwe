@@ -415,38 +415,38 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.
 		sb.WriteString(description + "\n\n")
 	}
 
-	propertiesHeader := store.T(locale, "ui.docs.section.properties", "Properties")
+	propertiesHeader := store.T(locale, "docs.section.properties", "Properties")
 	sb.WriteString("## " + propertiesHeader + "\n\n")
 	sb.WriteString("| Property | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "ui.docs.property.id", "ID"), def.ID)
-	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "ui.docs.property.type", "Type"), def.Type)
-	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "ui.docs.property.group", "Group"), def.Group)
+	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "docs.property.id", "ID"), def.ID)
+	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "docs.property.type", "Type"), def.Type)
+	fmt.Fprintf(&sb, "| **%s** | `%s` |\n", store.T(locale, "docs.property.group", "Group"), def.Group)
 	if def.Private {
-		sb.WriteString("| **" + store.T(locale, "ui.docs.property.private", "Private") + "** | yes |\n")
+		sb.WriteString("| **" + store.T(locale, "docs.property.private", "Private") + "** | yes |\n")
 	}
 	if def.Confirmation {
-		sb.WriteString("| **" + store.T(locale, "ui.docs.property.confirmation", "Confirmation") + "** | yes |\n")
+		sb.WriteString("| **" + store.T(locale, "docs.property.confirmation", "Confirmation") + "** | yes |\n")
 		confirmationText := store.CommandConfirmationText(locale, def.ID, def.EffectiveConfirmationText())
-		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "ui.docs.property.confirmation_text", "Confirmation text"), confirmationText)
+		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "docs.property.confirmation_text", "Confirmation text"), confirmationText)
 	}
 	if def.Messages.Success != "" {
-		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "ui.docs.property.success_message", "Success message"), def.Messages.Success)
+		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "docs.property.success_message", "Success message"), def.Messages.Success)
 	}
 	if def.Messages.Error != "" {
-		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "ui.docs.property.error_message", "Error message"), def.Messages.Error)
+		fmt.Fprintf(&sb, "| **%s** | %s |\n", store.T(locale, "docs.property.error_message", "Error message"), def.Messages.Error)
 	}
 	sb.WriteString("\n")
 
-	commandHeader := store.T(locale, "ui.docs.section.command", "Command")
-	argvHeader := store.T(locale, "ui.docs.section.argv", "Argv")
-	scriptHeader := store.T(locale, "ui.docs.section.script", "Script")
-	withHeader := store.T(locale, "ui.docs.section.with", "With")
-	workdirLabel := store.T(locale, "ui.docs.property.workdir", "Working directory")
-	serviceLabel := store.T(locale, "ui.docs.property.service", "Service")
-	shellLabel := store.T(locale, "ui.docs.property.shell", "Shell")
-	composeArgsLabel := store.T(locale, "ui.docs.property.compose_args", "Compose args")
-	scriptLabel := store.T(locale, "ui.docs.property.script", "Script")
-	builtinLabel := store.T(locale, "ui.docs.property.builtin", "Builtin")
+	commandHeader := store.T(locale, "docs.section.command", "Command")
+	argvHeader := store.T(locale, "docs.section.argv", "Argv")
+	scriptHeader := store.T(locale, "docs.section.script", "Script")
+	withHeader := store.T(locale, "docs.section.with", "With")
+	workdirLabel := store.T(locale, "docs.property.workdir", "Working directory")
+	serviceLabel := store.T(locale, "docs.property.service", "Service")
+	shellLabel := store.T(locale, "docs.property.shell", "Shell")
+	composeArgsLabel := store.T(locale, "docs.property.compose_args", "Compose args")
+	scriptLabel := store.T(locale, "docs.property.script", "Script")
+	builtinLabel := store.T(locale, "docs.property.builtin", "Builtin")
 
 	// Type-specific details.
 	switch def.Type {
@@ -536,7 +536,7 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.
 	}
 
 	if len(def.Params) > 0 {
-		parametersHeader := store.T(locale, "ui.docs.section.parameters", "Parameters")
+		parametersHeader := store.T(locale, "docs.section.parameters", "Parameters")
 		sb.WriteString("## " + parametersHeader + "\n\n")
 		sb.WriteString("| Name | Type | Required | Default | Description |\n|---|---|---|---|---|\n")
 		var names []string
@@ -562,7 +562,7 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.
 	}
 
 	if len(def.Context) > 0 {
-		contextHeader := store.T(locale, "ui.docs.section.context", "Context")
+		contextHeader := store.T(locale, "docs.section.context", "Context")
 		sb.WriteString("## " + contextHeader + "\n\n")
 		sb.WriteString("| Name | From | Required | Env |\n|---|---|---|---|\n")
 		var names []string
@@ -582,7 +582,7 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.
 	}
 
 	if len(def.Files) > 0 {
-		filesHeader := store.T(locale, "ui.docs.section.files", "Files")
+		filesHeader := store.T(locale, "docs.section.files", "Files")
 		sb.WriteString("## " + filesHeader + "\n\n")
 		var fileIDs []string
 		for id := range def.Files {

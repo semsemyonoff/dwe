@@ -13,6 +13,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
@@ -113,14 +114,7 @@ type RunContext struct {
 	// not populated by BuildRunContext (callers wire it in after construction).
 	// Completion paths and other contexts that bypass locale resolution set
 	// a NopTranslator to avoid nil checks downstream.
-	Translator interface {
-		CommandDescription(locale, commandID, fallback string) string
-		CommandConfirmationText(locale, commandID, fallback string) string
-		ParamDescription(locale, commandID, paramName, fallback string) string
-		GroupTitle(locale, groupID, fallback string) string
-		GroupDescription(locale, groupID, fallback string) string
-		T(locale, uiKey, fallback string) string
-	}
+	Translator i18n.Translator
 
 	// Locale is the active locale code (e.g. "ru", "en"). Used alongside
 	// Translator to look up localized strings. Set by the command layer.

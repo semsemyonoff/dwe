@@ -103,6 +103,7 @@ func TestLoad(t *testing.T) {
 		setupFunc func(t *testing.T) string // returns projectRoot
 		wantErr   bool
 		wantEn    bool
+		check     func(t *testing.T, s *Store) // optional per-case assertions
 	}{
 		{
 			name: "built-in only, no project dir",
@@ -156,6 +157,12 @@ ui:
 			},
 			wantErr: false,
 			wantEn:  true,
+			check: func(t *testing.T, s *Store) {
+				got := s.T("en", "docs.section.properties", "fallback")
+				if got != "Свойства" {
+					t.Errorf("project overlay not applied: T(\"en\", \"docs.section.properties\") = %q, want \"Свойства\"", got)
+				}
+			},
 		},
 		{
 			name: "malformed project file is non-fatal",
@@ -188,6 +195,16 @@ groups: {}
 			},
 			wantErr: false,
 			wantEn:  true,
+			check: func(t *testing.T, s *Store) {
+				locales := s.AvailableLocales()
+				if !slices.Contains(locales, "ru") {
+					t.Errorf("good file not loaded: locales = %v, want \"ru\" present", locales)
+				}
+				got := s.T("ru", "test", "")
+				if got != "OK" {
+					t.Errorf("good file content not accessible: T(\"ru\", \"test\") = %q, want \"OK\"", got)
+				}
+			},
 		},
 	}
 
@@ -211,6 +228,9 @@ groups: {}
 				if !slices.Contains(locales, "en") {
 					t.Errorf("Load() missing 'en' locale")
 				}
+			}
+			if tt.check != nil {
+				tt.check(t, got)
 			}
 		})
 	}
@@ -534,13 +554,34 @@ func TestMergeBundle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mergeBundle(tt.dst, tt.src)
-			// Compare relevant fields
+			// Compare UI fields
 			if len(tt.dst.UI) != len(tt.want.UI) {
 				t.Errorf("mergeBundle() UI len = %d, want %d", len(tt.dst.UI), len(tt.want.UI))
 			}
 			for k, v := range tt.want.UI {
 				if tt.dst.UI[k] != v {
 					t.Errorf("mergeBundle() UI[%q] = %q, want %q", k, tt.dst.UI[k], v)
+				}
+			}
+			// Compare Commands fields
+			for cmdID, wantCS := range tt.want.Commands {
+				gotCS, ok := tt.dst.Commands[cmdID]
+				if !ok {
+					t.Errorf("mergeBundle() Commands[%q] missing", cmdID)
+					continue
+				}
+				if gotCS.Description != wantCS.Description {
+					t.Errorf("mergeBundle() Commands[%q].Description = %q, want %q", cmdID, gotCS.Description, wantCS.Description)
+				}
+				for paramName, wantPS := range wantCS.Params {
+					gotPS, ok := gotCS.Params[paramName]
+					if !ok {
+						t.Errorf("mergeBundle() Commands[%q].Params[%q] missing", cmdID, paramName)
+						continue
+					}
+					if gotPS.Description != wantPS.Description {
+						t.Errorf("mergeBundle() Commands[%q].Params[%q].Description = %q, want %q", cmdID, paramName, gotPS.Description, wantPS.Description)
+					}
 				}
 			}
 		})

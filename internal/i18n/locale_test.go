@@ -116,6 +116,23 @@ func TestResolveLocale(t *testing.T) {
 			expected:    "ja",
 			description: "Japanese system locale",
 		},
+		// flag/config that normalizes to empty falls through to next layer
+		{
+			name:        "flag_c_falls_through",
+			flagLang:    "C",
+			configLang:  "ru",
+			sysLang:     "",
+			expected:    "ru",
+			description: "--lang C normalizes to empty, config wins",
+		},
+		{
+			name:        "flag_posix_falls_through_to_default",
+			flagLang:    "POSIX",
+			configLang:  "",
+			sysLang:     "",
+			expected:    "en",
+			description: "--lang POSIX normalizes to empty, falls through to en",
+		},
 	}
 
 	for _, tt := range tests {
@@ -234,108 +251,6 @@ func TestNormalize(t *testing.T) {
 			got := Normalize(tt.input)
 			if got != tt.expected {
 				t.Errorf("Normalize(%q) = %q, want %q\n%s",
-					tt.input, got, tt.expected, tt.description)
-			}
-		})
-	}
-}
-
-func TestParseSystemLang(t *testing.T) {
-	tests := []struct {
-		name        string
-		input       string
-		expected    string
-		description string
-	}{
-		// Common system locales
-		{
-			name:        "ru_ru_utf8",
-			input:       "ru_RU.UTF-8",
-			expected:    "ru",
-			description: "Russian system locale",
-		},
-		{
-			name:        "en_us",
-			input:       "en_US",
-			expected:    "en",
-			description: "US English system locale",
-		},
-		{
-			name:        "de_de",
-			input:       "de_DE",
-			expected:    "de",
-			description: "German system locale",
-		},
-		{
-			name:        "ja_jp_utf8",
-			input:       "ja_JP.UTF-8",
-			expected:    "ja",
-			description: "Japanese system locale",
-		},
-		// Special non-localizable cases
-		{
-			name:        "posix_uppercase",
-			input:       "POSIX",
-			expected:    "",
-			description: "POSIX returns empty",
-		},
-		{
-			name:        "posix_lowercase",
-			input:       "posix",
-			expected:    "",
-			description: "posix (lowercase) returns empty",
-		},
-		{
-			name:        "c_locale",
-			input:       "C",
-			expected:    "",
-			description: "C locale returns empty",
-		},
-		{
-			name:        "c_lowercase",
-			input:       "c",
-			expected:    "",
-			description: "c (lowercase) returns empty",
-		},
-		// Whitespace
-		{
-			name:        "leading_whitespace",
-			input:       "  ru_RU.UTF-8",
-			expected:    "ru",
-			description: "leading whitespace trimmed",
-		},
-		{
-			name:        "trailing_whitespace",
-			input:       "en_US  ",
-			expected:    "en",
-			description: "trailing whitespace trimmed",
-		},
-		// Edge cases
-		{
-			name:        "empty_string",
-			input:       "",
-			expected:    "",
-			description: "empty input returns empty",
-		},
-		{
-			name:        "only_whitespace",
-			input:       "   ",
-			expected:    "",
-			description: "only whitespace returns empty",
-		},
-		{
-			name:        "single_letter",
-			input:       "fr",
-			expected:    "fr",
-			description: "single letter code",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ParseSystemLang(tt.input)
-			if got != tt.expected {
-				t.Errorf("ParseSystemLang(%q) = %q, want %q\n%s",
 					tt.input, got, tt.expected, tt.description)
 			}
 		})
