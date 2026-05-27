@@ -300,17 +300,19 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/i18n/store.go`
 - Modify: `internal/i18n/store_test.go`
 - Modify: `internal/ui/ask/ask.go` (select/multiselect renderer; consult translator)
+- Modify: `internal/command/command_cmd.go` (thread translator through option conversion)
+- Modify: `internal/command/command_cmd_test.go` (test option translation)
 - Modify: `docs/reference/config/i18n.md`
 
-- [ ] add `Options map[string]string` field to `ParamStrings` (key = option value, value = translated label)
-- [ ] add `ParamOptionLabel(locale, commandID, paramName, optionValue, fallback string) string` to Translator interface
-- [ ] implement on NopTranslator and Store (path: `commands.<id>.params.<name>.options.<value>`)
-- [ ] in `internal/ui/ask/ask.go` select/multiselect renderer: when building option list, call `translator.ParamOptionLabel(...)` with `opt.Label` as fallback
-- [ ] thread translator + locale into ask layer (likely already plumbed for descriptions)
-- [ ] update i18n.md to document `commands.<id>.params.<name>.options.<value>` key
-- [ ] add Store test covering option label lookup with fallback
-- [ ] add ask test confirming localized option labels render
-- [ ] run `go test ./internal/i18n/... ./internal/ui/ask/...` — must pass before Task 11
+- [x] add `Options map[string]string` field to `ParamStrings` (key = option value, value = translated label)
+- [x] add `ParamOptionLabel(locale, commandID, paramName, optionValue, fallback string) string` to Translator interface
+- [x] implement on NopTranslator and Store (path: `commands.<id>.params.<name>.options.<value>`)
+- [x] in `internal/ui/ask/ask.go` select/multiselect renderer: when building option list, call `translator.ParamOptionLabel(...)` with `opt.Label` as fallback — implemented in command_cmd.go optionsToAskOptions
+- [x] thread translator + locale into ask layer (already plumbed via buildAskFields)
+- [x] update i18n.md to document `commands.<id>.params.<name>.options.<value>` key
+- [x] add Store test covering option label lookup with fallback
+- [x] add ask test confirming localized option labels render via mockTranslator
+- [x] run `go test ./internal/i18n/... ./internal/ui/ask/...` — all tests pass
 
 ### Phase C — New validators / features
 

@@ -23,7 +23,8 @@ type CommandStrings struct {
 
 // ParamStrings contains translations for a parameter.
 type ParamStrings struct {
-	Description string `yaml:"description"`
+	Description string            `yaml:"description"`
+	Options     map[string]string `yaml:"options"` // key = option value, value = translated label
 }
 
 // GroupStrings contains translations for a command group.

@@ -244,3 +244,36 @@ func (s *Store) CommandErrorMessage(locale, commandID, fallback string) string {
 	}
 	return ""
 }
+
+// ParamOptionLabel looks up a parameter option's localized label.
+// Lookup chain: locale → "en" → fallback → ""
+func (s *Store) ParamOptionLabel(locale, commandID, paramName, optionValue, fallback string) string {
+	if s == nil || s.locales == nil {
+		return fallback
+	}
+
+	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
+		if cs, ok := bundle.Commands[commandID]; ok && cs.Params != nil {
+			if ps, ok := cs.Params[paramName]; ok && ps.Options != nil {
+				if label, ok := ps.Options[optionValue]; ok && label != "" {
+					return label
+				}
+			}
+		}
+	}
+
+	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
+		if cs, ok := bundle.Commands[commandID]; ok && cs.Params != nil {
+			if ps, ok := cs.Params[paramName]; ok && ps.Options != nil {
+				if label, ok := ps.Options[optionValue]; ok && label != "" {
+					return label
+				}
+			}
+		}
+	}
+
+	if fallback != "" {
+		return fallback
+	}
+	return ""
+}

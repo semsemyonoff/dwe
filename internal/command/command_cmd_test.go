@@ -1182,6 +1182,84 @@ func TestBuildAskFields_SetEscapeHatch_SkipsField(t *testing.T) {
 	}
 }
 
+type mockTranslator struct {
+	optionLabels map[string]string // key format: "commandID:paramName:optionValue"
+}
+
+func (m *mockTranslator) CommandDescription(_, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) CommandConfirmationText(_, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) ParamDescription(_, _, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) GroupTitle(_, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) GroupDescription(_, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) T(_, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) CommandSuccessMessage(_, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) CommandErrorMessage(_, _, fallback string) string {
+	return fallback
+}
+
+func (m *mockTranslator) ParamOptionLabel(_, commandID, paramName, optionValue, fallback string) string {
+	key := commandID + ":" + paramName + ":" + optionValue
+	if translated, ok := m.optionLabels[key]; ok {
+		return translated
+	}
+	return fallback
+}
+
+func TestBuildAskFields_OptionLabelTranslation(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"env": {
+			Type:    model.ParamTypeString,
+			Widget:  model.WidgetSelect,
+			Options: &model.ParamOptions{Static: []model.OptionItem{{Value: "prod", Label: "Production"}}},
+		},
+	})
+	opts := map[string][]model.OptionItem{
+		"env": {{Value: "prod", Label: "Production"}},
+	}
+
+	translator := &mockTranslator{
+		optionLabels: map[string]string{
+			"test.cmd:env:prod": "Продакшн",
+		},
+	}
+
+	fields, err := buildAskFields(def, map[string]string{}, map[string]string{}, translator, "en", opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(fields))
+	}
+	if len(fields[0].Options) != 1 {
+		t.Errorf("expected 1 option, got %d", len(fields[0].Options))
+	}
+	// The label should be translated to the value from the mockTranslator
+	if fields[0].Options[0].Label != "Продакшн" {
+		t.Errorf("expected translated label 'Продакшн', got %q", fields[0].Options[0].Label)
+	}
+}
+
 // --- mergeAnswers -----------------------------------------------------------
 
 func TestMergeAnswers_InputSelect_Passthrough(t *testing.T) {

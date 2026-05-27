@@ -37,6 +37,10 @@ type Translator interface {
 	// CommandErrorMessage looks up a command's localized error message.
 	// Returns the fallback if no translation is found.
 	CommandErrorMessage(locale, commandID, fallback string) string
+
+	// ParamOptionLabel looks up a parameter option's localized label.
+	// Returns the fallback if no translation is found.
+	ParamOptionLabel(locale, commandID, paramName, optionValue, fallback string) string
 }
 
 // NopTranslator is a no-op Translator that always returns the fallback.
@@ -80,6 +84,11 @@ func (NopTranslator) CommandSuccessMessage(_, _, fallback string) string {
 
 // CommandErrorMessage implements Translator.
 func (NopTranslator) CommandErrorMessage(_, _, fallback string) string {
+	return fallback
+}
+
+// ParamOptionLabel implements Translator.
+func (NopTranslator) ParamOptionLabel(_, _, _, _, fallback string) string {
 	return fallback
 }
 

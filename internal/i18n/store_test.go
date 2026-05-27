@@ -581,6 +581,103 @@ func TestStoreCommandErrorMessage(t *testing.T) {
 	}
 }
 
+func TestStoreParamOptionLabel(t *testing.T) {
+	tests := []struct {
+		name        string
+		store       *Store
+		locale      string
+		commandID   string
+		paramName   string
+		optionValue string
+		fallback    string
+		want        string
+	}{
+		{
+			name: "hit in requested locale",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{
+						"deploy": {Params: map[string]ParamStrings{
+							"env": {Options: map[string]string{
+								"prod":  "Production",
+								"stage": "Staging",
+							}},
+						}},
+					}},
+					"ru": {Commands: map[string]CommandStrings{
+						"deploy": {Params: map[string]ParamStrings{
+							"env": {Options: map[string]string{
+								"prod":  "Продакшн",
+								"stage": "Стейджинг",
+							}},
+						}},
+					}},
+				},
+			},
+			locale:      "ru",
+			commandID:   "deploy",
+			paramName:   "env",
+			optionValue: "prod",
+			fallback:    "fallback",
+			want:        "Продакшн",
+		},
+		{
+			name: "miss in locale, hit in en",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{
+						"deploy": {Params: map[string]ParamStrings{
+							"env": {Options: map[string]string{
+								"prod": "Production",
+							}},
+						}},
+					}},
+					"ru": {Commands: map[string]CommandStrings{}},
+				},
+			},
+			locale:      "ru",
+			commandID:   "deploy",
+			paramName:   "env",
+			optionValue: "prod",
+			fallback:    "fallback",
+			want:        "Production",
+		},
+		{
+			name: "miss everywhere, use fallback",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{}},
+				},
+			},
+			locale:      "en",
+			commandID:   "deploy",
+			paramName:   "env",
+			optionValue: "prod",
+			fallback:    "fallback label",
+			want:        "fallback label",
+		},
+		{
+			name:        "nil store returns fallback",
+			store:       nil,
+			locale:      "ru",
+			commandID:   "deploy",
+			paramName:   "env",
+			optionValue: "prod",
+			fallback:    "fallback",
+			want:        "fallback",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.store.ParamOptionLabel(tt.locale, tt.commandID, tt.paramName, tt.optionValue, tt.fallback)
+			if got != tt.want {
+				t.Errorf("ParamOptionLabel(%q, %q, %q, %q, %q) = %q, want %q", tt.locale, tt.commandID, tt.paramName, tt.optionValue, tt.fallback, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStoreAvailableLocales(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -448,7 +448,7 @@ func buildAskFields(def *usercommands.CommandDef, prefilled, provided map[string
 
 		case model.WidgetSelect:
 			field.Default = prefilled[name]
-			field.Options = optionsToAskOptions(resolvedOpts[name])
+			field.Options = optionsToAskOptions(resolvedOpts[name], translator, locale, def.ID, name)
 
 		case model.WidgetMultiselect:
 			// Split Default by separator to get initial selections.
@@ -460,7 +460,7 @@ func buildAskFields(def *usercommands.CommandDef, prefilled, provided map[string
 				field.Defaults = strings.Split(prefilled[name], sep)
 			}
 			field.Default = prefilled[name] // for display/info
-			field.Options = optionsToAskOptions(resolvedOpts[name])
+			field.Options = optionsToAskOptions(resolvedOpts[name], translator, locale, def.ID, name)
 		}
 
 		fields = append(fields, field)
@@ -485,13 +485,14 @@ func widgetToFieldKind(w model.ParamWidget) ask.FieldKind {
 	}
 }
 
-// optionsToAskOptions converts model.OptionItem to ask.Option.
-func optionsToAskOptions(items []model.OptionItem) []ask.Option {
+// optionsToAskOptions converts model.OptionItem to ask.Option with optional translation.
+func optionsToAskOptions(items []model.OptionItem, translator i18n.Translator, locale, commandID, paramName string) []ask.Option {
 	opts := make([]ask.Option, len(items))
 	for i, item := range items {
+		label := translator.ParamOptionLabel(locale, commandID, paramName, item.Value, item.Label)
 		opts[i] = ask.Option{
 			Value: item.Value,
-			Label: item.Label,
+			Label: label,
 		}
 	}
 	return opts
