@@ -324,7 +324,7 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
 - Modify: `internal/usercommands/model/types.go` (extend existing `Validate` method)
 - Modify: `internal/usercommands/model/types_test.go`
 
-- [ ] in the existing param-validation loop, add `validateParamDef(name, def)` checks:
+- [x] in the existing param-validation loop, add `validateParamDef(name, def)` checks:
   - `Widget`, if set, must be one of the four enum values
   - `Widget` is `select` or `multiselect` → `Options` must be non-empty (Static or From)
   - `Widget` is `input` or `confirm` → `Options` must be empty
@@ -332,8 +332,8 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
   - `Separator` set when `Widget != multiselect` → error (warning is awkward without a warning channel in model.Validate; promote to error)
   - `Static` options: duplicate `Value` → error
   - `Default` literal value is in `Static` (skip if `From` — dynamic deferred to runtime)
-- [ ] write table-driven tests for each invariant — one positive case + one failing case each
-- [ ] run `make test ./internal/usercommands/model/...` — must pass before Task 5
+- [x] write table-driven tests for each invariant — one positive case + one failing case each
+- [x] run `make test ./internal/usercommands/model/...` — must pass before Task 5
 
 ### Task 5: Per-command-file validator coverage
 
