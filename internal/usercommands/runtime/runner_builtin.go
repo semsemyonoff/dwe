@@ -43,7 +43,14 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		}
 	}
 
-	if err := builtin.Validate(name, with); err != nil {
+	// Daemon-generated virtual commands (.start, .logs, .stop) invoke KindInternal
+	// builtins and are NOT user-authored YAML — they are expanded from type: daemon.
+	callerCtx := builtin.CtxUserYAML
+	if rc.Cmd.DerivedFromDaemon != "" && rc.Cmd.SourceDaemon != nil {
+		callerCtx = builtin.CtxInternal
+	}
+
+	if err := builtin.Validate(name, with, callerCtx); err != nil {
 		return fmt.Errorf("builtin %q: %w", name, err)
 	}
 
@@ -60,7 +67,7 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		Stdin:        stdin,
 		SkipConfirm:  rc.SkipConfirm || rc.NonInteractive || isNonInteractive(),
 	}
-	return builtin.Run(ctx, name, with, execCtx)
+	return builtin.Run(ctx, name, with, execCtx, callerCtx)
 }
 
 // renderBuiltinWith walks the with map and renders any string values via the

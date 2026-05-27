@@ -1927,6 +1927,12 @@ func LoadResetConfig(resetPath string) (*DeployConfig, error) {
 func validatePhaseSteps(phases []DeployPhase, allowDeployServices bool) error {
 	for pi := range phases {
 		phase := &phases[pi]
+		// Phase names starting with "_" are reserved for engine-synthetic phases
+		// (e.g. _auto_reap_daemons injected by lifecycle.EnsureStopConfig after load).
+		// User-authored YAML must not use underscore-prefixed phase names.
+		if strings.HasPrefix(phase.Name, "_") {
+			return fmt.Errorf("phase %q: phase names starting with \"_\" are reserved for engine-synthetic phases", phase.Name)
+		}
 		if phase.DeployServices {
 			if !allowDeployServices {
 				return fmt.Errorf("phase %q: deploy_services is not allowed in this pipeline type", phase.Name)

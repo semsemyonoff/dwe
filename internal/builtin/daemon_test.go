@@ -164,7 +164,7 @@ func TestDaemonBuiltins_Validate(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := Validate(tc.builtin, tc.with)
+			err := Validate(tc.builtin, tc.with, CtxInternal)
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -180,7 +180,7 @@ func TestDaemonBuiltins_Validate(t *testing.T) {
 
 func TestDaemonBuiltins_Registered(t *testing.T) {
 	for _, name := range []string{"docker_daemon_start", "docker_daemon_logs", "docker_daemon_stop"} {
-		if _, ok := Get(name); !ok {
+		if _, ok := Get(name, CtxInternal); !ok {
 			t.Errorf("builtin %q not registered", name)
 		}
 	}

@@ -383,7 +383,7 @@ func TestServiceDirsEnsureRun_PathTraversalInDirs(t *testing.T) {
 // ---- Registry ------------------------------------------------------------
 
 func TestServiceDirsEnsureRegistered(t *testing.T) {
-	_, ok := Get("service_dirs_ensure")
+	_, ok := Get("service_dirs_ensure", CtxUserYAML)
 	if !ok {
 		t.Error("service_dirs_ensure not found in builtin registry")
 	}

@@ -110,7 +110,7 @@ var ContentHashes = map[string]string{
 	"reference/cli/starship.md":                              "2b9f7b50923a",
 	"reference/config/commands.md":                           "bd73bf9c306d",
 	"reference/config/conditions.md":                         "52d01b2dea79",
-	"reference/config/deploy.md":                             "a4f59419d042",
+	"reference/config/deploy.md":                             "65ba17b0a07a",
 	"reference/config/devbox.md":                             "8cccd9e0f2f7",
 	"reference/config/docker.md":                             "c0a93fa77170",
 	"reference/config/i18n.md":                               "e564057e84d8",

@@ -456,6 +456,19 @@ Removes paths from the filesystem.
 |-----------|------|-------------|
 | `paths` | list of strings | Project-relative paths to remove. Each must be relative and must not escape the project root; absolute paths and `..` traversal are rejected at validate time. |
 
+### Internal engine builtins (not callable from user YAML)
+
+The following four builtins are reserved for the engine. They cannot appear in user-authored `deploy.yml`, `reset.yml`, or `lifecycle.yml` files — attempting to use them produces a load-time error.
+
+| Builtin | Description |
+|---------|-------------|
+| `docker_daemon_start` | Start a named daemon container via `docker compose run -d`. Invoked by the `.start` virtual command generated from `type: daemon` commands. |
+| `docker_daemon_logs` | Tail daemon container logs in the foreground. Invoked by the `.logs` virtual command generated from `type: daemon` commands. |
+| `docker_daemon_stop` | Stop a named daemon container (idempotent). Invoked by the `.stop` virtual command generated from `type: daemon` commands. |
+| `daemons_reap` | Stop all project daemon containers. Auto-injected by the engine as the `_auto_reap_daemons` phase at the start of every `stop` lifecycle pipeline. |
+
+**Naming convention:** `docker_*` builtins are Docker-specific; `service_*` builtins operate on per-service folders; unprefixed names are generic. The internal builtins follow the same `docker_*` / unprefixed pattern.
+
 ## Conditions and checks
 
 ### `when:` (pre-condition)

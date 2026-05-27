@@ -134,6 +134,10 @@ type ActionContext struct {
 	// apply per-sub-step files_gate (or future overrides). Empty for steps
 	// that do not target a workflow.
 	SubStepOverrides map[string]config.SubStepOverride
+	// CallerCtx controls which builtin kinds are permitted for this action.
+	// CtxUserYAML (zero) for user-authored step bodies, CtxPredicate for
+	// check: positions, CtxInternal for engine-synthetic phases (e.g. _auto_reap_daemons).
+	CallerCtx builtin.CallerContext
 }
 
 // buildDevboxCmd constructs an exec.Cmd for a devbox: pipeline step.
@@ -229,7 +233,7 @@ func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) 
 // lineTee → live-block routing. When nil (ad-hoc external callers),
 // output falls back to os.Stdout directly.
 func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext) error {
-	if err := builtin.Validate(a.Cmd, a.With); err != nil {
+	if err := builtin.Validate(a.Cmd, a.With, actx.CallerCtx); err != nil {
 		return fmt.Errorf("invalid builtin %q: %w", a.Cmd, err)
 	}
 	out := actx.StepWriter
@@ -248,7 +252,7 @@ func execBuiltinAction(ctx context.Context, a config.Action, actx ActionContext)
 		Stdin:        stdinForBuiltin,
 		SkipConfirm:  actx.SkipConfirm,
 	}
-	return builtin.Run(ctx, a.Cmd, a.With, ectx)
+	return builtin.Run(ctx, a.Cmd, a.With, ectx, actx.CallerCtx)
 }
 
 // execCommandAction executes a registered user command.
@@ -780,6 +784,13 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		defer closeStep()
 	}
 
+	// Engine-synthetic phases (underscore-prefixed, e.g. _auto_reap_daemons) may
+	// invoke KindInternal builtins. User-authored phase names cannot start with "_"
+	// (rejected at loader time), so this check is safe.
+	bodyCallerCtx := builtin.CtxUserYAML
+	if strings.HasPrefix(rs.Phase.Name, "_") {
+		bodyCallerCtx = builtin.CtxInternal
+	}
 	bodyActx := ActionContext{
 		WorkDir:          opts.WorkDir,
 		Cfg:              opts.Config,
@@ -792,6 +803,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		Locale:           opts.Locale,
 		Parallel:         opts.Parallel,
 		SubStepOverrides: rs.Step.SubStepOverrides,
+		CallerCtx:        bodyCallerCtx,
 	}
 	startTime := time.Now()
 	stepErr := ExecAction(ctx, rs.Step.Action(), bodyActx)
@@ -837,6 +849,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			Translator:  opts.Translator,
 			Locale:      opts.Locale,
 			Parallel:    opts.Parallel,
+			CallerCtx:   builtin.CtxPredicate,
 		}
 		checkErr := ExecAction(ctx, *rs.Step.Check, actx)
 		if flushTee != nil {

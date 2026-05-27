@@ -131,8 +131,19 @@ func resolveLeafStep(cfg *config.DevboxConfig, reg *registry.Registry, phase con
 		}
 	}
 	if step.Type == "builtin" {
-		if err := builtin.Validate(step.Cmd, step.With); err != nil {
+		// Engine-synthetic phases (underscore-prefixed) may use KindInternal builtins.
+		// User-authored phase names cannot start with "_" (rejected at loader time).
+		bodyCtx := builtin.CtxUserYAML
+		if strings.HasPrefix(phase.Name, "_") {
+			bodyCtx = builtin.CtxInternal
+		}
+		if err := builtin.Validate(step.Cmd, step.With, bodyCtx); err != nil {
 			return ResolvedStep{}, false, fmt.Errorf("step %s: invalid builtin: %w", stepPrefix(phase, service, step.Name), err)
+		}
+	}
+	if step.Check != nil && step.Check.Type == "builtin" {
+		if err := builtin.Validate(step.Check.Cmd, step.Check.With, builtin.CtxPredicate); err != nil {
+			return ResolvedStep{}, false, fmt.Errorf("step %s check: invalid builtin: %w", stepPrefix(phase, service, step.Name), err)
 		}
 	}
 	if step.FilesGate != nil && reg != nil {

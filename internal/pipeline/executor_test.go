@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
@@ -2393,6 +2394,147 @@ func TestFormatRequireSpec(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// --- BuiltinKind / CallerContext enforcement ---
+
+// TestExecAction_PredicateBuiltin_RejectedInBody verifies that a KindPredicate builtin
+// (containers_running) is rejected when called from a user-authored step body.
+func TestExecAction_PredicateBuiltin_RejectedInBody(t *testing.T) {
+	a := config.Action{Type: "builtin", Cmd: "containers_running", With: map[string]any{"services": []any{"app"}}}
+	actx := ActionContext{
+		WorkDir:   t.TempDir(),
+		Cfg:       &config.DevboxConfig{Raw: map[string]any{}},
+		CallerCtx: builtin.CtxUserYAML, // body position
+	}
+	err := ExecAction(context.Background(), a, actx)
+	if err == nil {
+		t.Fatal("expected error for predicate builtin in body position")
+	}
+	if !strings.Contains(err.Error(), "predicate") {
+		t.Errorf("error should mention 'predicate', got: %v", err)
+	}
+}
+
+// TestExecAction_PredicateBuiltin_AllowedInCheckPosition verifies that the kind gate
+// does not block containers_running in check: position. The builtin will fail due to
+// docker not being available, but NOT with a "predicate" kind error.
+func TestExecAction_PredicateBuiltin_AllowedInCheckPosition(t *testing.T) {
+	a := config.Action{Type: "builtin", Cmd: "containers_running", With: map[string]any{"services": []any{"app"}}}
+	actx := ActionContext{
+		WorkDir:   t.TempDir(),
+		Cfg:       &config.DevboxConfig{Raw: map[string]any{}},
+		CallerCtx: builtin.CtxPredicate, // check: position
+	}
+	err := ExecAction(context.Background(), a, actx)
+	// The kind gate passed — error (if any) is from docker not being available, not "predicate"
+	if err != nil && strings.Contains(err.Error(), "predicate") {
+		t.Errorf("predicate builtin must not be rejected in check: position, got: %v", err)
+	}
+}
+
+// TestExecAction_InternalBuiltin_RejectedInUserYAML verifies that a KindInternal builtin
+// (daemons_reap) is rejected when called from user-authored YAML (step body, CtxUserYAML).
+func TestExecAction_InternalBuiltin_RejectedInUserYAML(t *testing.T) {
+	a := config.Action{Type: "builtin", Cmd: "daemons_reap"}
+	actx := ActionContext{
+		WorkDir:   t.TempDir(),
+		Cfg:       &config.DevboxConfig{Raw: map[string]any{}},
+		CallerCtx: builtin.CtxUserYAML, // user-authored step
+	}
+	err := ExecAction(context.Background(), a, actx)
+	if err == nil {
+		t.Fatal("expected error for internal builtin called from user YAML")
+	}
+	if !strings.Contains(err.Error(), "engine-internal") {
+		t.Errorf("error should mention 'engine-internal', got: %v", err)
+	}
+}
+
+// TestResolvePhaseSteps_UnderscorePhaseAllowsInternalBuiltin verifies that
+// engine-synthetic phases (underscore-prefixed) can use KindInternal builtins.
+func TestResolvePhaseSteps_UnderscorePhaseAllowsInternalBuiltin(t *testing.T) {
+	phase := config.DeployPhase{
+		Name: "_auto_reap_daemons",
+		Steps: []config.DeployStep{
+			{Name: "reap", Type: "builtin", Cmd: "daemons_reap"},
+		},
+	}
+	steps, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: unexpected error for engine-synthetic phase: %v", err)
+	}
+	if len(steps) != 1 {
+		t.Errorf("expected 1 resolved step, got %d", len(steps))
+	}
+}
+
+// TestResolvePhaseSteps_UserPhaseRejectsInternalBuiltin verifies that user-authored
+// phases (no underscore prefix) cannot use KindInternal builtins.
+func TestResolvePhaseSteps_UserPhaseRejectsInternalBuiltin(t *testing.T) {
+	phase := config.DeployPhase{
+		Name: "stop-services",
+		Steps: []config.DeployStep{
+			{Name: "reap", Type: "builtin", Cmd: "daemons_reap"},
+		},
+	}
+	_, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	if err == nil {
+		t.Fatal("expected error for internal builtin in user-authored phase")
+	}
+	if !strings.Contains(err.Error(), "engine-internal") {
+		t.Errorf("error should mention 'engine-internal', got: %v", err)
+	}
+}
+
+// TestResolvePhaseSteps_CheckWithPredicateBuiltin verifies that a step's check: action
+// with a KindPredicate builtin (containers_running) is accepted at plan time.
+func TestResolvePhaseSteps_CheckWithPredicateBuiltin(t *testing.T) {
+	phase := config.DeployPhase{
+		Name: "deploy",
+		Steps: []config.DeployStep{
+			{
+				Name: "stack-up",
+				Type: "shell",
+				Cmd:  "true",
+				Check: &config.Action{
+					Type: "builtin",
+					Cmd:  "containers_running",
+					With: map[string]any{"services": []any{"app"}},
+				},
+			},
+		},
+	}
+	steps, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: unexpected error for predicate in check: position: %v", err)
+	}
+	if len(steps) != 1 {
+		t.Errorf("expected 1 resolved step, got %d", len(steps))
+	}
+}
+
+// TestResolvePhaseSteps_BodyWithPredicateBuiltin verifies that a step body using
+// a KindPredicate builtin (containers_running) is rejected at plan time.
+func TestResolvePhaseSteps_BodyWithPredicateBuiltin(t *testing.T) {
+	phase := config.DeployPhase{
+		Name: "deploy",
+		Steps: []config.DeployStep{
+			{
+				Name: "check-running",
+				Type: "builtin",
+				Cmd:  "containers_running",
+				With: map[string]any{"services": []any{"app"}},
+			},
+		},
+	}
+	_, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	if err == nil {
+		t.Fatal("expected error for predicate builtin in step body")
+	}
+	if !strings.Contains(err.Error(), "predicate") {
+		t.Errorf("error should mention 'predicate', got: %v", err)
 	}
 }
 

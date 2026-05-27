@@ -121,7 +121,7 @@ func TestMessageRun_PlainTextNoTemplate(t *testing.T) {
 // ---- Registry ---------------------------------------------------------------
 
 func TestMessageRegistered(t *testing.T) {
-	_, ok := Get("message")
+	_, ok := Get("message", CtxUserYAML)
 	if !ok {
 		t.Error("message not found in builtin registry")
 	}

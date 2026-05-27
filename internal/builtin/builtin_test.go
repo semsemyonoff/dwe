@@ -60,7 +60,7 @@ func TestKnownNames_AllRegistered(t *testing.T) {
 // --- Validate dispatcher ---
 
 func TestValidate_UnknownBuiltin(t *testing.T) {
-	err := Validate("nonexistent_builtin", nil)
+	err := Validate("nonexistent_builtin", nil, CtxUserYAML)
 	if err == nil {
 		t.Fatal("expected error for unknown builtin")
 	}
@@ -71,7 +71,7 @@ func TestValidate_UnknownBuiltin(t *testing.T) {
 
 func TestValidate_KnownBuiltin_NoParams(t *testing.T) {
 	// confirm builtin has no required params.
-	err := Validate("confirm", nil)
+	err := Validate("confirm", nil, CtxUserYAML)
 	if err != nil {
 		t.Errorf("unexpected error for confirm with nil params: %v", err)
 	}
@@ -101,13 +101,128 @@ func TestRun_UnknownBuiltin(t *testing.T) {
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
-	err := Run(context.Background(), "nonexistent_builtin", nil, ctx)
+	err := Run(context.Background(), "nonexistent_builtin", nil, ctx, CtxUserYAML)
 	if err == nil {
 		t.Fatal("expected error for unknown builtin")
 	}
 	if !strings.Contains(err.Error(), "nonexistent_builtin") {
 		t.Errorf("error should mention the unknown name, got: %v", err)
 	}
+}
+
+// --- Kind categorization and CallerContext gating ---
+
+// TestKindCategorization verifies that every registered builtin
+// has the expected kind, and that kind/context gating works as intended.
+// This is the single source of truth for the 18-entry registry categorization.
+func TestKindCategorization(t *testing.T) {
+	type kindCase struct {
+		name        string
+		kind        Kind
+		userYAMLOK  bool // CtxUserYAML allowed?
+		predicateOK bool // CtxPredicate allowed?
+		internalOK  bool // CtxInternal allowed?
+	}
+	cases := []kindCase{
+		// KindAction: allowed in body (CtxUserYAML) and check: (CtxPredicate)
+		{"confirm", KindAction, true, true, false},
+		{"message", KindAction, true, true, false},
+		{"service_configs_copy", KindAction, true, true, false},
+		{"service_configs_check", KindAction, true, true, false},
+		{"service_dirs_ensure", KindAction, true, true, false},
+		{"docker_remove_project_volumes", KindAction, true, true, false},
+		{"docker_wait_healthy", KindAction, true, true, false},
+		{"remove_paths", KindAction, true, true, false},
+		// KindPredicate: only in check: (CtxPredicate) — NEVER in step body
+		{"containers_running", KindPredicate, false, true, false},
+		{"shell", KindPredicate, false, true, false},
+		{"file_exists", KindPredicate, false, true, false},
+		{"executable_in_path", KindPredicate, false, true, false},
+		{"env_keys_present", KindPredicate, false, true, false},
+		{"tcp_reachable", KindPredicate, false, true, false},
+		// KindInternal: only engine-synthetic contexts (CtxInternal)
+		{"docker_daemon_start", KindInternal, false, false, true},
+		{"docker_daemon_logs", KindInternal, false, false, true},
+		{"docker_daemon_stop", KindInternal, false, false, true},
+		{"daemons_reap", KindInternal, false, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			entry, ok := registry[tc.name]
+			if !ok {
+				t.Fatalf("builtin %q not in registry", tc.name)
+			}
+			if entry.kind != tc.kind {
+				t.Errorf("kind = %v, want %v", entry.kind, tc.kind)
+			}
+			// Verify each context combination
+			_, gotUserYAML := Get(tc.name, CtxUserYAML)
+			if gotUserYAML != tc.userYAMLOK {
+				t.Errorf("Get(%q, CtxUserYAML) = %v, want %v", tc.name, gotUserYAML, tc.userYAMLOK)
+			}
+			_, gotPredicate := Get(tc.name, CtxPredicate)
+			if gotPredicate != tc.predicateOK {
+				t.Errorf("Get(%q, CtxPredicate) = %v, want %v", tc.name, gotPredicate, tc.predicateOK)
+			}
+			_, gotInternal := Get(tc.name, CtxInternal)
+			if gotInternal != tc.internalOK {
+				t.Errorf("Get(%q, CtxInternal) = %v, want %v", tc.name, gotInternal, tc.internalOK)
+			}
+		})
+	}
+}
+
+// TestGetKindMismatch verifies that kind-incompatible Get calls return (nil, false)
+// and that Validate returns descriptive errors for context mismatches.
+func TestGetKindMismatch(t *testing.T) {
+	t.Run("internal builtin rejected from user YAML", func(t *testing.T) {
+		b, ok := Get("docker_daemon_start", CtxUserYAML)
+		if ok || b != nil {
+			t.Error("docker_daemon_start must not be callable from CtxUserYAML")
+		}
+		err := Validate("docker_daemon_start", nil, CtxUserYAML)
+		if err == nil {
+			t.Fatal("expected error for internal builtin in user YAML context")
+		}
+		if !strings.Contains(err.Error(), "engine-internal") {
+			t.Errorf("error should mention engine-internal, got: %v", err)
+		}
+	})
+
+	t.Run("predicate builtin rejected from step body", func(t *testing.T) {
+		b, ok := Get("containers_running", CtxUserYAML)
+		if ok || b != nil {
+			t.Error("containers_running must not be callable from CtxUserYAML (body position)")
+		}
+		err := Validate("containers_running", nil, CtxUserYAML)
+		if err == nil {
+			t.Fatal("expected error for predicate builtin in body context")
+		}
+		if !strings.Contains(err.Error(), "predicate") {
+			t.Errorf("error should mention predicate, got: %v", err)
+		}
+	})
+
+	t.Run("predicate builtin allowed in check position", func(t *testing.T) {
+		b, ok := Get("containers_running", CtxPredicate)
+		if !ok || b == nil {
+			t.Error("containers_running must be callable from CtxPredicate (check: position)")
+		}
+	})
+
+	t.Run("internal builtin rejected from check position", func(t *testing.T) {
+		b, ok := Get("daemons_reap", CtxPredicate)
+		if ok || b != nil {
+			t.Error("daemons_reap must not be callable from CtxPredicate")
+		}
+	})
+
+	t.Run("internal builtin allowed in internal context", func(t *testing.T) {
+		b, ok := Get("daemons_reap", CtxInternal)
+		if !ok || b == nil {
+			t.Error("daemons_reap must be callable from CtxInternal")
+		}
+	})
 }
 
 // --- getStringSlice ---

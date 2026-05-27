@@ -3002,6 +3002,52 @@ phases:
 	}
 }
 
+// --- Phase name validation ---
+
+func TestLoadServiceDeployConfig_rejectsUnderscorePhaseName(t *testing.T) {
+	// Phase names starting with "_" are reserved for engine-synthetic phases and
+	// must be rejected at loader time so users cannot craft user-authored pipelines
+	// that masquerade as engine phases.
+	yml := `
+phases:
+  - name: _evil_phase
+    steps:
+      - name: do-thing
+        type: shell
+        cmd: echo hi
+`
+	path := writePipelineFixture(t, "deploy", yml)
+	_, err := LoadServiceDeployConfig(path)
+	if err == nil {
+		t.Fatal("expected error for underscore-prefixed phase name")
+	}
+	if !strings.Contains(err.Error(), "_evil_phase") {
+		t.Errorf("error should mention the phase name, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("error should mention reserved, got: %v", err)
+	}
+}
+
+func TestLoadServiceDeployConfig_regularPhaseNameOK(t *testing.T) {
+	yml := `
+phases:
+  - name: setup
+    steps:
+      - name: init
+        type: shell
+        cmd: echo ok
+`
+	path := writePipelineFixture(t, "deploy", yml)
+	cfg, err := LoadServiceDeployConfig(path)
+	if err != nil {
+		t.Fatalf("LoadServiceDeployConfig: unexpected error: %v", err)
+	}
+	if len(cfg.Phases) != 1 || cfg.Phases[0].Name != "setup" {
+		t.Errorf("unexpected phases: %+v", cfg.Phases)
+	}
+}
+
 // --- BinariesConfig ---
 
 func TestLoadConfig_binariesAllDefaulted(t *testing.T) {

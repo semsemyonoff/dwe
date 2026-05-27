@@ -77,23 +77,23 @@ func TestParseDaemonsPSOutput_NameFallback(t *testing.T) {
 }
 
 func TestDaemonsReap_Registered(t *testing.T) {
-	if _, ok := Get("daemons_reap"); !ok {
+	if _, ok := Get("daemons_reap", CtxInternal); !ok {
 		t.Fatal("daemons_reap builtin not registered")
 	}
 }
 
 func TestDaemonsReap_Validate_RejectsUnknownKeys(t *testing.T) {
-	err := Validate("daemons_reap", map[string]any{"foo": "bar"})
+	err := Validate("daemons_reap", map[string]any{"foo": "bar"}, CtxInternal)
 	if err == nil || !strings.Contains(err.Error(), "unknown key") {
 		t.Fatalf("expected unknown key error, got: %v", err)
 	}
 }
 
 func TestDaemonsReap_Validate_EmptyOK(t *testing.T) {
-	if err := Validate("daemons_reap", nil); err != nil {
+	if err := Validate("daemons_reap", nil, CtxInternal); err != nil {
 		t.Fatalf("nil with: should validate, got: %v", err)
 	}
-	if err := Validate("daemons_reap", map[string]any{}); err != nil {
+	if err := Validate("daemons_reap", map[string]any{}, CtxInternal); err != nil {
 		t.Fatalf("empty with: should validate, got: %v", err)
 	}
 }

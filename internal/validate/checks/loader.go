@@ -81,14 +81,18 @@ func AllForStage(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdR
 func buildValidator(entry config.CheckEntry, baseDir string, cmdRegistry *registry.Registry) validate.Validator {
 	switch entry.Type {
 	case "builtin":
-		if _, ok := builtin.Get(entry.Cmd); !ok {
+		if _, ok := builtin.Get(entry.Cmd, builtin.CtxPredicate); !ok {
+			// Distinguish unknown from kind-mismatch for a clearer error
+			if err := builtin.Validate(entry.Cmd, entry.With, builtin.CtxPredicate); err != nil {
+				return cached(entry, err.Error())
+			}
 			return cached(entry, fmt.Sprintf("unknown builtin: %s", entry.Cmd))
 		}
 		if _, ok := allowedBuiltinCmds[entry.Cmd]; !ok {
 			return cached(entry, fmt.Sprintf(
 				"checks may only use builtins: shell, file_exists, executable_in_path, env_keys_present, tcp_reachable (got: %s)", entry.Cmd))
 		}
-		if err := builtin.Validate(entry.Cmd, entry.With); err != nil {
+		if err := builtin.Validate(entry.Cmd, entry.With, builtin.CtxPredicate); err != nil {
 			return cached(entry, err.Error())
 		}
 		return &builtinRunner{entry: entry, baseDir: baseDir}
@@ -154,7 +158,7 @@ func (v *builtinRunner) Run(ctx validate.Context) []validate.Diagnostic {
 	if runCtx == nil {
 		runCtx = context.Background()
 	}
-	if err := builtin.Run(runCtx, v.entry.Cmd, v.entry.With, ectx); err != nil {
+	if err := builtin.Run(runCtx, v.entry.Cmd, v.entry.With, ectx, builtin.CtxPredicate); err != nil {
 		return []validate.Diagnostic{toDiagnostic(v.entry, err.Error())}
 	}
 	return []validate.Diagnostic{okDiagnostic(v.entry)}

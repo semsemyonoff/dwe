@@ -110,8 +110,8 @@ func TestBuildValidator_UnknownBuiltin(t *testing.T) {
 		t.Fatalf("want 1 diag, got %d", len(diags))
 	}
 	d := diags[0]
-	if !strings.Contains(d.Message, "unknown builtin: no_such_builtin") {
-		t.Errorf("message: %q", d.Message)
+	if !strings.Contains(d.Message, "no_such_builtin") {
+		t.Errorf("message should mention unknown name: %q", d.Message)
 	}
 	if d.Severity != diag.SeverityError || d.Domain != "checks" || d.Target != "x" {
 		t.Errorf("wrong header: %+v", d)
@@ -155,15 +155,29 @@ func TestBuildValidator_InvalidWithRejected(t *testing.T) {
 }
 
 func TestBuildValidator_DisallowedBuiltin(t *testing.T) {
-	for _, cmd := range []string{"daemons_reap", "docker_remove_project_volumes", "docker_daemon_start", "docker_daemon_stop", "confirm", "docker_daemon_logs"} {
-		t.Run(cmd, func(t *testing.T) {
+	// Internal builtins are rejected via the kind system (engine-internal message).
+	// Action builtins are rejected by the explicit allowlist (may only use builtins: message)
+	// since actions are allowed in CtxPredicate but restricted further by the allowlist in validate.yml.
+	tests := []struct {
+		cmd         string
+		wantContain string
+	}{
+		{"daemons_reap", "engine-internal"},
+		{"docker_daemon_start", "engine-internal"},
+		{"docker_daemon_stop", "engine-internal"},
+		{"docker_daemon_logs", "engine-internal"},
+		{"docker_remove_project_volumes", "may only use builtins:"},
+		{"confirm", "may only use builtins:"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.cmd, func(t *testing.T) {
 			entry := config.CheckEntry{
-				ID: "x", Type: "builtin", Cmd: cmd, Severity: diag.SeverityError,
+				ID: "x", Type: "builtin", Cmd: tc.cmd, Severity: diag.SeverityError,
 			}
 			v := buildValidator(entry, "", nil)
 			diags := runOne(t, v)
-			if len(diags) != 1 || !strings.Contains(diags[0].Message, "may only use builtins:") {
-				t.Fatalf("expected allowlist rejection for %q, got %+v", cmd, diags)
+			if len(diags) != 1 || !strings.Contains(diags[0].Message, tc.wantContain) {
+				t.Fatalf("expected rejection for %q (want %q in message), got %+v", tc.cmd, tc.wantContain, diags)
 			}
 		})
 	}

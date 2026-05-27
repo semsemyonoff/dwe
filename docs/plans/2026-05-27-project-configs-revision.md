@@ -176,21 +176,21 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 
 **Design (per `golang-structs-interfaces` skill):** Kind lives on a registry-entry struct, NOT as an interface method. Categorization is registration metadata, not behavior — no need to add boilerplate to 18 builtin implementations. The `Builtin` interface stays at its current 3-method size (Validate / Describe / Run).
 
-- [ ] **discovery**: grep `builtin\.\(Get\|Run\|Validate\|Describe\)\|registry\[` across `internal/` — enumerate every call site. Likely list (verify): `internal/pipeline/resolve.go`, `internal/validate/checks/loader.go`, `internal/validate/linters/runtime.go` (for `type: generic`?), `internal/usercommands/runtime/` (builtin command type), `internal/condition/` (when: predicates), package-level wrappers in `builtin.go` itself.
-- [ ] add `BuiltinKind` type with constants `KindAction`, `KindPredicate`, `KindInternal` to `builtin.go`
-- [ ] add `CallerContext` type (e.g. `CtxUserYAML`, `CtxPredicate`, `CtxInternal`)
-- [ ] introduce private `registryEntry` struct `{ Impl Builtin; Kind BuiltinKind }`
-- [ ] change registry from `var registry = map[string]Builtin{...}` to `var registry = map[string]registryEntry{...}` — categorize all 18 at the registration site (single source of truth)
-- [ ] categorization at registration — **all 18 builtins** (verify exhaustively against `internal/builtin/builtin.go` registry; do NOT trust this list — re-enumerate):
+- [x] **discovery**: grep `builtin\.\(Get\|Run\|Validate\|Describe\)\|registry\[` across `internal/` — enumerate every call site. Likely list (verify): `internal/pipeline/resolve.go`, `internal/validate/checks/loader.go`, `internal/validate/linters/runtime.go` (for `type: generic`?), `internal/usercommands/runtime/` (builtin command type), `internal/condition/` (when: predicates), package-level wrappers in `builtin.go` itself.
+- [x] add `BuiltinKind` type with constants `KindAction`, `KindPredicate`, `KindInternal` to `builtin.go`
+- [x] add `CallerContext` type (e.g. `CtxUserYAML`, `CtxPredicate`, `CtxInternal`)
+- [x] introduce private `registryEntry` struct `{ Impl Builtin; Kind BuiltinKind }`
+- [x] change registry from `var registry = map[string]Builtin{...}` to `var registry = map[string]registryEntry{...}` — categorize all 18 at the registration site (single source of truth)
+- [x] categorization at registration — **all 18 builtins** (verify exhaustively against `internal/builtin/builtin.go` registry; do NOT trust this list — re-enumerate):
   - Action: `message`, `confirm`, `service_configs_copy`, `service_configs_check`, `service_dirs_ensure`, `docker_remove_project_volumes`, `docker_wait_healthy`, `remove_paths`
   - Predicate: `file_exists`, `executable_in_path`, `env_keys_present`, `tcp_reachable`, `containers_running` (per `internal/builtin/containers_running.go:13-18` — check/precondition builtin), `shell` (used by validate.yml `cmd: shell` checks — exit-code-as-predicate semantics)
   - Internal: `docker_daemon_start`, `docker_daemon_logs`, `docker_daemon_stop`, `daemons_reap`
-- [ ] change `Get(name string, ctx CallerContext) (Builtin, bool)` to: lookup entry → if entry.Kind ↮ caller ctx, return false with diagnostic; else return entry.Impl
-- [ ] change package-level wrappers `Validate(name, with, ctx)`, `Run(ctx, name, with, ectx, callerCtx)`, `Describe(name, with, ctx)` to accept `CallerContext` and route through the new `Get`. (Or delete the wrappers entirely if cleaner — review during impl.)
-- [ ] update every callsite identified in discovery to pass the appropriate `CallerContext`
-- [ ] **CRITICAL — `BuiltinRunner` daemon-vs-user disambiguation**: `internal/usercommands/runtime/runner_builtin.go` dispatches all `type: builtin` commands through `builtin.Validate/Run`. After Task 20, daemon expansion (`expand_daemon.go:61-82`) generates virtual `CommandDef{Type=builtin, Cmd=docker_daemon_start, DerivedFromDaemon=<base>, SourceDaemon=<spec>}`. Without source disambiguation, the runner either breaks daemon commands (CtxUserYAML rejects internal builtins) OR defeats the gate (CtxInternal allows users to invoke `cmd: docker_daemon_start` directly).
+- [x] change `Get(name string, ctx CallerContext) (Builtin, bool)` to: lookup entry → if entry.Kind ↮ caller ctx, return false with diagnostic; else return entry.Impl
+- [x] change package-level wrappers `Validate(name, with, ctx)`, `Run(ctx, name, with, ectx, callerCtx)`, `Describe(name, with, ctx)` to accept `CallerContext` and route through the new `Get`. (Or delete the wrappers entirely if cleaner — review during impl.)
+- [x] update every callsite identified in discovery to pass the appropriate `CallerContext`
+- [x] **CRITICAL — `BuiltinRunner` daemon-vs-user disambiguation**: `internal/usercommands/runtime/runner_builtin.go` dispatches all `type: builtin` commands through `builtin.Validate/Run`. After Task 20, daemon expansion (`expand_daemon.go:61-82`) generates virtual `CommandDef{Type=builtin, Cmd=docker_daemon_start, DerivedFromDaemon=<base>, SourceDaemon=<spec>}`. Without source disambiguation, the runner either breaks daemon commands (CtxUserYAML rejects internal builtins) OR defeats the gate (CtxInternal allows users to invoke `cmd: docker_daemon_start` directly).
   → **Rule**: `BuiltinRunner` selects `CtxInternal` when `cmd.DerivedFromDaemon != "" && cmd.SourceDaemon != nil`; otherwise `CtxUserYAML`.
-- [ ] **CRITICAL — Pipeline executor: structural internal-step marking + body/check position distinction**: two related issues, one fix:
+- [x] **CRITICAL — Pipeline executor: structural internal-step marking + body/check position distinction**: two related issues, one fix:
 
   **Issue A (synthetic injection)**: `lifecycle/autoreap.go:16-25` injects `DeployStep{Type: "builtin", Cmd: "daemons_reap"}` inside a phase. The pipeline executor (`internal/pipeline/executor.go:~231,790-808`, `resolve.go:133`) dispatches builtin steps via `builtin.Run/Validate` with no source metadata.
 
@@ -201,17 +201,17 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
     2. **Carry structural metadata**, not name-derived inference: extend `ResolvedStep` (`internal/pipeline/step.go`) with `Internal bool` field set true by the autoreap injection path, OR derive at dispatch time from `phase.Name == AutoReapPhaseName` (constant check, not prefix scan).
     3. **Pipeline dispatch passes `CallerContext` based on position**: step body → `CtxUserYAML` (or `CtxInternal` if the step's resolved-phase is engine-synthetic per step 2); step `check:` → `CtxPredicate` (Predicate builtins allowed here).
     4. **Same body/check distinction in `internal/usercommands/runtime/runner_builtin.go`** — `type: builtin` commands have `cmd:` at body position only (no check via this path), but Workflow steps with `check:` may exist; verify.
-- [ ] add positive test: a daemon-generated `.start/.logs/.stop` command (via runtime) resolves and runs its internal builtin successfully
-- [ ] add negative test: a user-authored `type: builtin, cmd: docker_daemon_start` command is rejected at validation/dispatch with a clear "internal builtin not callable from YAML" message
-- [ ] add positive test: `devbox stop` lifecycle pipeline (containing auto-injected `_auto_reap_daemons` phase) runs `daemons_reap` successfully
-- [ ] **CRITICAL negative test (loader-side)**: a user-authored `deploy.yml` with phase named `_evil_phase` is **rejected at loader time** with "phase names starting with underscore are reserved" — proves the convention is engine-enforced, not user-controllable
-- [ ] add negative test: user-authored `deploy.yml` phase (non-underscore name) containing `cmd: daemons_reap` is rejected at validation/dispatch time
-- [ ] **positive test (body/check distinction)**: pipeline step with `check: {type: builtin, cmd: containers_running}` runs successfully (Predicate allowed in check position per `deploy.md:392-396`)
-- [ ] negative test: pipeline step body `{type: builtin, cmd: containers_running}` is rejected (Predicate not allowed in action body position)
-- [ ] add deploy.md subsection "Internal engine builtins (not callable from YAML)" listing the **4 internal builtins** (`docker_daemon_start`, `docker_daemon_logs`, `docker_daemon_stop`, `daemons_reap`) with brief description
-- [ ] **naming consistency review (4.3)**: enumerate all 18 builtin names; document the convention `service_*` (per-service) / `docker_*` (docker-specific) / unprefixed (generic). Propose renames if any are inconsistent — or accept current names with a one-line rationale in the doc.
-- [ ] add unit tests covering: (a) each builtin's Kind matches expected category — table-driven across all 18, (b) `Get(internal-name, CtxUserYAML)` returns false with correct hint, (c) `Get(predicate-name, CtxUserYAML)` for `cmd:` action position returns false, (d) `Get(action-name, CtxPredicate)` returns false. Target **~54 cases (18 × 3 contexts)** via a single table-driven test.
-- [ ] run `go test ./internal/builtin/... ./internal/pipeline/... ./internal/validate/... ./internal/usercommands/runtime/...` — must pass before Task 6
+- [x] add positive test: a daemon-generated `.start/.logs/.stop` command (via runtime) resolves and runs its internal builtin successfully
+- [x] add negative test: a user-authored `type: builtin, cmd: docker_daemon_start` command is rejected at validation/dispatch with a clear "internal builtin not callable from YAML" message
+- [x] add positive test: `devbox stop` lifecycle pipeline (containing auto-injected `_auto_reap_daemons` phase) runs `daemons_reap` successfully
+- [x] **CRITICAL negative test (loader-side)**: a user-authored `deploy.yml` with phase named `_evil_phase` is **rejected at loader time** with "phase names starting with underscore are reserved" — proves the convention is engine-enforced, not user-controllable
+- [x] add negative test: user-authored `deploy.yml` phase (non-underscore name) containing `cmd: daemons_reap` is rejected at validation/dispatch time
+- [x] **positive test (body/check distinction)**: pipeline step with `check: {type: builtin, cmd: containers_running}` runs successfully (Predicate allowed in check position per `deploy.md:392-396`)
+- [x] negative test: pipeline step body `{type: builtin, cmd: containers_running}` is rejected (Predicate not allowed in action body position)
+- [x] add deploy.md subsection "Internal engine builtins (not callable from YAML)" listing the **4 internal builtins** (`docker_daemon_start`, `docker_daemon_logs`, `docker_daemon_stop`, `daemons_reap`) with brief description
+- [x] **naming consistency review (4.3)**: enumerate all 18 builtin names; document the convention `service_*` (per-service) / `docker_*` (docker-specific) / unprefixed (generic). Propose renames if any are inconsistent — or accept current names with a one-line rationale in the doc.
+- [x] add unit tests covering: (a) each builtin's Kind matches expected category — table-driven across all 18, (b) `Get(internal-name, CtxUserYAML)` returns false with correct hint, (c) `Get(predicate-name, CtxUserYAML)` for `cmd:` action position returns false, (d) `Get(action-name, CtxPredicate)` returns false. Target **~54 cases (18 × 3 contexts)** via a single table-driven test.
+- [x] run `go test ./internal/builtin/... ./internal/pipeline/... ./internal/validate/... ./internal/usercommands/runtime/...` — must pass before Task 6
 
 ### Task 6: Split DeployConfig → ProjectDeployConfig + ServiceDeployConfig
 

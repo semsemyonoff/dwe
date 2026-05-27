@@ -184,7 +184,7 @@ func TestDockerWaitHealthyIntegration(t *testing.T) {
 	// Test via the public registry API to ensure wiring is correct.
 	// This confirms the builtin is registered and callable.
 	t.Run("builtin is registered", func(t *testing.T) {
-		b, ok := Get("docker_wait_healthy")
+		b, ok := Get("docker_wait_healthy", CtxUserYAML)
 		require.True(t, ok, "docker_wait_healthy must be registered")
 		require.NotNil(t, b)
 	})
@@ -192,14 +192,14 @@ func TestDockerWaitHealthyIntegration(t *testing.T) {
 	t.Run("Validate via registry", func(t *testing.T) {
 		err := Validate("docker_wait_healthy", map[string]any{
 			"timeout": "60s",
-		})
+		}, CtxUserYAML)
 		require.NoError(t, err)
 	})
 
 	t.Run("Validate rejects bad params via registry", func(t *testing.T) {
 		err := Validate("docker_wait_healthy", map[string]any{
 			"timeout": "-10s",
-		})
+		}, CtxUserYAML)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "positive")
 	})
