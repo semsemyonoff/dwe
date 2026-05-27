@@ -273,7 +273,7 @@ func mutateAndPlan(
 	baseDir, configPath, localPath, envPath, statePath string,
 	cfg *config.DevboxConfig,
 	reg *registry.Registry,
-	svcDeploys map[string]*config.DeployConfig,
+	svcDeploys map[string]*config.ServiceDeployConfig,
 	deployedServices map[string]bool,
 	name string,
 	direction ToggleDirection,
@@ -359,7 +359,7 @@ func mutateAndPlan(
 // batchServiceConfigHash computes a combined config hash covering all toggled services.
 // It concatenates the per-service hashes in sorted-name order, which is deterministic
 // and unique per configuration state.
-func batchServiceConfigHash(cfg *config.DevboxConfig, svcDeploys map[string]*config.DeployConfig, names ...string) string {
+func batchServiceConfigHash(cfg *config.DevboxConfig, svcDeploys map[string]*config.ServiceDeployConfig, names ...string) string {
 	sorted := make([]string, len(names))
 	copy(sorted, names)
 	sort.Strings(sorted)
@@ -381,7 +381,7 @@ func mutateAndPlanBatch(
 	baseDir, configPath, localPath, envPath, statePath string,
 	cfg *config.DevboxConfig,
 	reg *registry.Registry,
-	svcDeploys map[string]*config.DeployConfig,
+	svcDeploys map[string]*config.ServiceDeployConfig,
 	deployedServices map[string]bool,
 	toEnable, toDisable []string,
 ) (TogglePlan, []Contributor, *config.DevboxConfig, error) {

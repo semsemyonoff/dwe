@@ -116,12 +116,12 @@ func ShortHash(fullHash string) string {
 // ServiceConfigHash computes a stable hash for a service's configuration.
 // It combines the service config block and the parsed deploy config (if present).
 // The hash is invariant to key ordering and YAML formatting.
-func ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg *config.DeployConfig) string {
+func ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg *config.ServiceDeployConfig) string {
 	h := sha256.New()
 	h.Write(canonicalMap(serviceConfigToMap(svcCfg)))
 	h.Write([]byte{0})
 	if deployCfg != nil {
-		h.Write(canonicalMap(deployConfigToMap(deployCfg)))
+		h.Write(canonicalMap(serviceDeployConfigToMap(deployCfg)))
 	} else {
 		h.Write(canonicalMap(map[string]any{}))
 	}
@@ -140,8 +140,8 @@ func ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg *config.DeployConf
 //   - trackedServices: the canonical sorted list of tracked service names
 func ProjectConfigHash(
 	cfg *config.DevboxConfig,
-	deployCfg *config.DeployConfig,
-	svcDeploys map[string]*config.DeployConfig,
+	deployCfg *config.ProjectDeployConfig,
+	svcDeploys map[string]*config.ServiceDeployConfig,
 	trackedServices []string,
 ) string {
 	h := sha256.New()
@@ -158,7 +158,7 @@ func ProjectConfigHash(
 
 	// Hash the top-level deploy config
 	if deployCfg != nil {
-		h.Write(canonicalMap(deployConfigToMap(deployCfg)))
+		h.Write(canonicalMap(projectDeployConfigToMap(deployCfg)))
 	} else {
 		h.Write(canonicalMap(map[string]any{}))
 	}
@@ -168,7 +168,7 @@ func ProjectConfigHash(
 	trackedSvcDeploys := make(map[string]any)
 	for _, svcName := range trackedServices {
 		if svcDeploy, ok := svcDeploys[svcName]; ok && svcDeploy != nil {
-			trackedSvcDeploys[svcName] = deployConfigToMap(svcDeploy)
+			trackedSvcDeploys[svcName] = serviceDeployConfigToMap(svcDeploy)
 		}
 	}
 	h.Write(canonicalMap(trackedSvcDeploys))
@@ -320,13 +320,107 @@ func serviceConfigToMap(svc config.ServiceConfig) map[string]any {
 	return m
 }
 
+// projectDeployConfigToMap converts a ProjectDeployConfig to a map for hashing purposes.
+func projectDeployConfigToMap(cfg *config.ProjectDeployConfig) map[string]any {
+	if cfg == nil {
+		return map[string]any{}
+	}
+
+	m := map[string]any{}
+
+	if cfg.Log != nil {
+		m["log"] = *cfg.Log
+	}
+
+	if len(cfg.Phases) > 0 {
+		phases := make([]any, len(cfg.Phases))
+		for i, phase := range cfg.Phases {
+			p := map[string]any{
+				"name":            phase.Name,
+				"description":     phase.Description,
+				"untracked":       phase.Untracked,
+				"deploy_services": phase.DeployServices,
+			}
+
+			if phase.When != nil {
+				p["when"] = conditionToMap(phase.When)
+			}
+
+			if len(phase.Steps) > 0 {
+				steps := make([]any, len(phase.Steps))
+				for j, step := range phase.Steps {
+					steps[j] = deployStepToMap(step)
+				}
+				p["steps"] = steps
+			}
+
+			phases[i] = p
+		}
+		m["phases"] = phases
+	}
+
+	return m
+}
+
+// serviceDeployConfigToMap converts a ServiceDeployConfig to a map for hashing purposes.
+// Includes the After field which is specific to service-level configs.
+func serviceDeployConfigToMap(cfg *config.ServiceDeployConfig) map[string]any {
+	if cfg == nil {
+		return map[string]any{}
+	}
+
+	m := map[string]any{}
+
+	if len(cfg.After) > 0 {
+		m["after"] = cfg.After
+	}
+
+	if cfg.Log != nil {
+		m["log"] = *cfg.Log
+	}
+
+	if len(cfg.Phases) > 0 {
+		phases := make([]any, len(cfg.Phases))
+		for i, phase := range cfg.Phases {
+			p := map[string]any{
+				"name":            phase.Name,
+				"description":     phase.Description,
+				"untracked":       phase.Untracked,
+				"deploy_services": phase.DeployServices,
+			}
+
+			if phase.When != nil {
+				p["when"] = conditionToMap(phase.When)
+			}
+
+			if len(phase.Steps) > 0 {
+				steps := make([]any, len(phase.Steps))
+				for j, step := range phase.Steps {
+					steps[j] = deployStepToMap(step)
+				}
+				p["steps"] = steps
+			}
+
+			phases[i] = p
+		}
+		m["phases"] = phases
+	}
+
+	return m
+}
+
 // deployConfigToMap converts a DeployConfig to a map for hashing purposes.
+// This is used by validators that work with the generic DeployConfig type.
 func deployConfigToMap(cfg *config.DeployConfig) map[string]any {
 	if cfg == nil {
 		return map[string]any{}
 	}
 
 	m := map[string]any{}
+
+	if len(cfg.After) > 0 {
+		m["after"] = cfg.After
+	}
 
 	if cfg.Log != nil {
 		m["log"] = *cfg.Log

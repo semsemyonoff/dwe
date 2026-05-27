@@ -22,7 +22,7 @@ func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.R
 // Returns the loaded reset config (for inspecting fields like Log) alongside
 // the resolved step list.
 // reg (registry) is used to validate files_gate directives and must be non-nil.
-func LoadAndResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) (*config.DeployConfig, []pipeline.ResolvedStep, error) {
+func LoadAndResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) (*config.ProjectDeployConfig, []pipeline.ResolvedStep, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
 		return nil, nil, fmt.Errorf("internal: __configPath missing from config")

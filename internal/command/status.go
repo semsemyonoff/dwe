@@ -61,7 +61,7 @@ type statusContext struct {
 	Cfg         *config.DevboxConfig
 	State       *journal.ProjectState
 	Tracked     []string
-	SvcDeploys  map[string]*config.DeployConfig
+	SvcDeploys  map[string]*config.ServiceDeployConfig
 	ProjectName string
 	DockerCfg   *config.DockerConfig
 	Topo        map[string][]string

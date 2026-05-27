@@ -182,12 +182,12 @@ func makeSubsetCfg(services map[string]config.ServiceConfig) *config.DevboxConfi
 	}
 }
 
-func shellDeploy(phases ...config.DeployPhase) *config.DeployConfig {
-	return &config.DeployConfig{Phases: phases}
+func shellDeploy(phases ...config.DeployPhase) *config.ServiceDeployConfig {
+	return &config.ServiceDeployConfig{Phases: phases}
 }
 
-func shellDeployAfter(after []string, phases ...config.DeployPhase) *config.DeployConfig {
-	return &config.DeployConfig{After: after, Phases: phases}
+func shellDeployAfter(after []string, phases ...config.DeployPhase) *config.ServiceDeployConfig {
+	return &config.ServiceDeployConfig{After: after, Phases: phases}
 }
 
 func svcEntry(name string) config.ServiceConfig {
@@ -210,7 +210,7 @@ func TestResolveServicesPlanSubset_OneEnvStep(t *testing.T) {
 		"a": svcEntry("a"),
 		"b": svcEntry("b"),
 	})
-	deploys := map[string]*config.DeployConfig{
+	deploys := map[string]*config.ServiceDeployConfig{
 		"a": shellDeploy(deployPhase("a", "setup")),
 		"b": shellDeploy(deployPhase("b", "setup")),
 	}
@@ -245,7 +245,7 @@ func TestResolveServicesPlanSubset_AfterOrdering(t *testing.T) {
 		"b": svcEntry("b"),
 	})
 	// b after [a] → a must come first
-	deploys := map[string]*config.DeployConfig{
+	deploys := map[string]*config.ServiceDeployConfig{
 		"a": shellDeploy(deployPhase("a", "setup")),
 		"b": shellDeployAfter([]string{"a"}, deployPhase("b", "setup")),
 	}
@@ -274,7 +274,7 @@ func TestResolveServicesPlanSubset_IgnoresAfterOutsideSubset(t *testing.T) {
 		"b":    svcEntry("b"),
 		"deps": svcEntry("deps"), // exists in services but not in the subset
 	})
-	deploys := map[string]*config.DeployConfig{
+	deploys := map[string]*config.ServiceDeployConfig{
 		"a":    shellDeployAfter([]string{"deps"}, deployPhase("a", "setup")), // deps outside subset
 		"b":    shellDeploy(deployPhase("b", "setup")),
 		"deps": shellDeploy(deployPhase("deps", "setup")), // in deploys map but not requested
@@ -301,7 +301,7 @@ func TestResolveServicesPlanSubset_MissingDeployFile(t *testing.T) {
 		"a": svcEntry("a"),
 		"b": svcEntry("b"),
 	})
-	deploys := map[string]*config.DeployConfig{
+	deploys := map[string]*config.ServiceDeployConfig{
 		"a": shellDeploy(deployPhase("a", "setup")),
 		// b intentionally missing
 	}

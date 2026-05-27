@@ -1173,14 +1173,14 @@ func TestLoadConfig_deployLoaded(t *testing.T) {
 }
 
 func TestLoadConfig_deployAbsent(t *testing.T) {
-	// No deploy.yml — Deploy field should be zero value (no error).
+	// No deploy.yml — Deploy field should be nil (no error).
 	devboxPath := writeDeployFixture(t, "")
 	cfg, err := LoadConfig(devboxPath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if len(cfg.Deploy.Phases) != 0 {
-		t.Errorf("Deploy.Phases should be empty when deploy.yml absent, got %d phases", len(cfg.Deploy.Phases))
+	if cfg.Deploy != nil {
+		t.Errorf("Deploy should be nil when deploy.yml absent, got %v", cfg.Deploy)
 	}
 }
 
@@ -1649,8 +1649,10 @@ phases:
 	if err == nil {
 		t.Fatal("expected error for after: in project deploy.yml, got nil")
 	}
-	if !errors.Is(err, ErrAfterFieldNotAllowed) {
-		t.Errorf("err = %v, want wraps ErrAfterFieldNotAllowed", err)
+	// The after field is structurally not allowed in ProjectDeployConfig,
+	// so KnownFields(true) YAML decoding rejects it automatically.
+	if !strings.Contains(err.Error(), "after") && !strings.Contains(err.Error(), "unmarshal") {
+		t.Errorf("err = %v, want YAML decode error mentioning 'after' or 'unmarshal'", err)
 	}
 }
 
@@ -1712,8 +1714,10 @@ phases:
 	if err == nil {
 		t.Fatal("expected error for after: in reset.yml, got nil")
 	}
-	if !errors.Is(err, ErrAfterFieldNotAllowed) {
-		t.Errorf("err = %v, want wraps ErrAfterFieldNotAllowed", err)
+	// The after field is structurally not allowed in ProjectDeployConfig (used for reset),
+	// so KnownFields(true) YAML decoding rejects it automatically.
+	if !strings.Contains(err.Error(), "after") && !strings.Contains(err.Error(), "unmarshal") {
+		t.Errorf("err = %v, want YAML decode error mentioning 'after' or 'unmarshal'", err)
 	}
 }
 
@@ -1793,8 +1797,10 @@ phases: []
 	if err == nil {
 		t.Fatal("expected error for after: in service reset.yml, got nil")
 	}
-	if !errors.Is(err, ErrAfterFieldNotAllowed) {
-		t.Errorf("err = %v, want wraps ErrAfterFieldNotAllowed", err)
+	// The after field is structurally not allowed in ProjectDeployConfig (used for service reset),
+	// so KnownFields(true) YAML decoding rejects it automatically.
+	if !strings.Contains(err.Error(), "after") && !strings.Contains(err.Error(), "unmarshal") {
+		t.Errorf("err = %v, want YAML decode error mentioning 'after' or 'unmarshal'", err)
 	}
 }
 

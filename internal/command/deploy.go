@@ -401,7 +401,7 @@ func runDeployHelper(ctx context.Context, cmd *cobra.Command, flags *rootFlags, 
 	case len(opts.Services) == 1:
 		steps, err = deploy.ResolveServicePlan(cfg, reg, opts.Services[0])
 	default:
-		subsetDeploys := make(map[string]*config.DeployConfig, len(opts.Services))
+		subsetDeploys := make(map[string]*config.ServiceDeployConfig, len(opts.Services))
 		for _, name := range opts.Services {
 			subsetDeploys[name] = svcDeploys[name]
 		}
@@ -814,7 +814,7 @@ func clearDeployedPending(statePath string, opts DeployOpts, steps []pipeline.Re
 // collectMissingDeps returns sorted names of after: dependencies of the given
 // services that (a) are not being deployed in this run, (b) have a deploy.yml,
 // and (c) have not yet reached StatusDeployed in state.
-func collectMissingDeps(services []string, svcDeploys map[string]*config.DeployConfig, state *journal.ProjectState) []string {
+func collectMissingDeps(services []string, svcDeploys map[string]*config.ServiceDeployConfig, state *journal.ProjectState) []string {
 	inSet := make(map[string]bool, len(services))
 	for _, s := range services {
 		inSet[s] = true

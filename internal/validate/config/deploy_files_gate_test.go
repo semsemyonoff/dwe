@@ -62,7 +62,7 @@ func TestDeployFilesGateValidator_NilCfg(t *testing.T) {
 // registry is absent but no steps use files_gate.
 func TestDeployFilesGateValidator_NilRegistry_NoGateSteps(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Deploy: config.DeployConfig{
+		Deploy: &config.ProjectDeployConfig{
 			Phases: []config.DeployPhase{
 				{Name: "setup", Steps: []config.DeployStep{{Name: "plain", Type: "shell", Cmd: "true"}}},
 			},
@@ -81,7 +81,7 @@ func TestDeployFilesGateValidator_NilRegistry_NoGateSteps(t *testing.T) {
 // when registry is absent but a step uses files_gate.
 func TestDeployFilesGateValidator_NilRegistry_WithGateSteps(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Deploy: config.DeployConfig{Phases: makeGatePhases("db-download")},
+		Deploy: &config.ProjectDeployConfig{Phases: makeGatePhases("db-download")},
 	}
 	ctx := validate.Context{
 		ProjectRoot:     t.TempDir(),
@@ -102,7 +102,7 @@ func TestDeployFilesGateValidator_UnknownCommand(t *testing.T) {
 
 	cfg := &config.DevboxConfig{
 		Raw:    map[string]any{},
-		Deploy: config.DeployConfig{Phases: makeGatePhases("db-download")},
+		Deploy: &config.ProjectDeployConfig{Phases: makeGatePhases("db-download")},
 	}
 	ctx := validate.Context{
 		ProjectRoot:     t.TempDir(),
@@ -123,7 +123,7 @@ func TestDeployFilesGateValidator_ValidGate(t *testing.T) {
 
 	cfg := &config.DevboxConfig{
 		Raw:    map[string]any{},
-		Deploy: config.DeployConfig{Phases: makeGatePhases("db-download")},
+		Deploy: &config.ProjectDeployConfig{Phases: makeGatePhases("db-download")},
 	}
 	ctx := validate.Context{
 		ProjectRoot:     t.TempDir(),
@@ -178,7 +178,7 @@ func TestDeployFilesGateValidator_ParallelSubStep(t *testing.T) {
 
 	cfg := &config.DevboxConfig{
 		Raw: map[string]any{},
-		Deploy: config.DeployConfig{
+		Deploy: &config.ProjectDeployConfig{
 			Phases: []config.DeployPhase{
 				{
 					Name: "setup",

@@ -48,7 +48,7 @@ func RenderDeployStatus(in StatusInput) string {
 
 // BuildDeployStatusView assembles a view model joining current config hashes
 // against persisted state for each tracked service.
-func BuildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig, svcDeploys map[string]*config.DeployConfig, tracked []string) *statusview.DeployStatusView {
+func BuildDeployStatusView(state *journal.ProjectState, cfg *config.DevboxConfig, svcDeploys map[string]*config.ServiceDeployConfig, tracked []string) *statusview.DeployStatusView {
 	view := &statusview.DeployStatusView{
 		ProjectStatus:     state.Project.Status,
 		ProjectDeployedAt: state.Project.DeployedAt,

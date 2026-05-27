@@ -80,7 +80,7 @@ func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pi
 	}
 
 	// Use after:-based deploy ordering (not runtime depends_on: ordering).
-	sorted, err := TopoSortByAfter(svcDeploys, cfg.Services)
+	sorted, err := topoSortServiceDeploys(svcDeploys, cfg.Services)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pi
 func ResolveServicesPlanSubset(
 	cfg *config.DevboxConfig,
 	reg *registry.Registry,
-	deploys map[string]*config.DeployConfig,
+	deploys map[string]*config.ServiceDeployConfig,
 	names []string,
 ) ([]pipeline.ResolvedStep, error) {
 	// Validate all names have deploy.yml.
@@ -125,7 +125,7 @@ func ResolveServicesPlanSubset(
 	for _, name := range names {
 		inSubset[name] = true
 	}
-	filtered := make(map[string]*config.DeployConfig, len(names))
+	filtered := make(map[string]*config.ServiceDeployConfig, len(names))
 	for _, name := range names {
 		orig := deploys[name]
 		if len(orig.After) == 0 {
@@ -150,7 +150,7 @@ func ResolveServicesPlanSubset(
 	}
 
 	// Topo-sort the subset.
-	sorted, err := TopoSortByAfter(filtered, cfg.Services)
+	sorted, err := topoSortServiceDeploys(filtered, cfg.Services)
 	if err != nil {
 		return nil, err
 	}
@@ -174,4 +174,20 @@ func ResolveServicesPlanSubset(
 		}
 	}
 	return result, nil
+}
+
+// topoSortServiceDeploys wraps TopoSortByAfter to work with ServiceDeployConfig maps.
+// Converts the service-specific type to the generic DeployConfig type for sorting.
+func topoSortServiceDeploys(deploys map[string]*config.ServiceDeployConfig, services map[string]config.ServiceConfig) ([]string, error) {
+	// Build a generic DeployConfig map with the same After values.
+	genericDeploys := make(map[string]*config.DeployConfig, len(deploys))
+	for name, sdc := range deploys {
+		dc := &config.DeployConfig{
+			After:  sdc.After,
+			Log:    sdc.Log,
+			Phases: sdc.Phases,
+		}
+		genericDeploys[name] = dc
+	}
+	return TopoSortByAfter(genericDeploys, services)
 }

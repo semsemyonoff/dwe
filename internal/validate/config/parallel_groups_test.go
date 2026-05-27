@@ -26,7 +26,7 @@ func groupStep(name string, subs ...config.DeployStep) config.DeployStep {
 
 func runDeployParallel(t *testing.T, reg *usercommands.Registry, phases []config.DeployPhase) []validate.Diagnostic {
 	t.Helper()
-	cfg := &config.DevboxConfig{Deploy: config.DeployConfig{Phases: phases}}
+	cfg := &config.DevboxConfig{Deploy: &config.ProjectDeployConfig{Phases: phases}}
 	ctx := validate.Context{
 		ProjectRoot:     t.TempDir(),
 		Cfg:             cfg,
@@ -287,7 +287,7 @@ func TestParallelGroupsValidator_ServiceRunTTY(t *testing.T) {
 
 // Registry-nil tolerance: command-target lookups skipped, builtin still flagged.
 func TestParallelGroupsValidator_RegistryNilTolerance(t *testing.T) {
-	cfg := &config.DevboxConfig{Deploy: config.DeployConfig{Phases: parallelPhases(
+	cfg := &config.DevboxConfig{Deploy: &config.ProjectDeployConfig{Phases: parallelPhases(
 		groupStep("g1",
 			config.DeployStep{Name: "ask", Type: "builtin", Cmd: "confirm"},
 			config.DeployStep{Name: "wf", Type: "command", Cmd: "wf-direct"},

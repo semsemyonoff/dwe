@@ -221,17 +221,17 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/command/deploy.go`, `internal/deploy/plan.go`, `internal/deploy/tracked.go`, `internal/lifecycle/run.go`, `internal/reset/plan.go` — any callers of the renamed types
 - Modify: `internal/validate/config/devbox.go`, `internal/validate/config/deploy_after.go`, `internal/validate/config/deploy_files_gate.go`, `internal/validate/config/parallel_groups.go`
 
-- [ ] create two new structs: `ProjectDeployConfig { Log *bool; Phases []DeployPhase }` and `ServiceDeployConfig { After []string; Log *bool; Phases []DeployPhase }`
-- [ ] update `LoadProjectDeployConfig` to return `*ProjectDeployConfig`; remove `ErrAfterFieldNotAllowed` runtime gate (structural now)
-- [ ] update `LoadServiceDeployConfig` / `LoadServiceDeployConfigs` to return `*ServiceDeployConfig`
-- [ ] update `LoadResetConfig` / `LoadServiceResetConfig` analogously (or pick a single shared struct if same shape — decide during impl)
-- [ ] update `ParseDeployConfigForValidation` — return the appropriate type or keep raw form for validator inspection
-- [ ] grep `ErrAfterFieldNotAllowed` across `internal/` and update all 4+ callsites (`validate/config/deploy_after.go:~95,~242` and any others)
-- [ ] simplify `internal/validate/config/deploy_after.go` — `after` field now only appears in `ServiceDeployConfig`, logic collapses
-- [ ] update `internal/validate/config/deploy_files_gate.go` and `parallel_groups.go` if they reference the union type
-- [ ] add test confirming `after:` in `devbox/deploy.yml` produces a YAML decode error (KnownFields rejects)
-- [ ] add test confirming `after: [foo]` in `devbox/services/<name>/deploy.yml` is accepted and threaded through
-- [ ] run `go test ./internal/config/... ./internal/deploy/... ./internal/lifecycle/... ./internal/reset/... ./internal/validate/...` — must pass before Task 7
+- [x] create two new structs: `ProjectDeployConfig { Log *bool; Phases []DeployPhase }` and `ServiceDeployConfig { After []string; Log *bool; Phases []DeployPhase }`
+- [x] update `LoadProjectDeployConfig` to return `*ProjectDeployConfig`; remove `ErrAfterFieldNotAllowed` runtime gate (structural now)
+- [x] update `LoadServiceDeployConfig` / `LoadServiceDeployConfigs` to return `*ServiceDeployConfig`
+- [x] update `LoadResetConfig` / `LoadServiceResetConfig` analogously (or pick a single shared struct if same shape — decide during impl)
+- [x] update `ParseDeployConfigForValidation` — return the appropriate type or keep raw form for validator inspection
+- [x] grep `ErrAfterFieldNotAllowed` across `internal/` and update all 4+ callsites (`validate/config/deploy_after.go:~95,~242` and any others)
+- [x] simplify `internal/validate/config/deploy_after.go` — `after` field now only appears in `ServiceDeployConfig`, logic collapses
+- [x] update `internal/validate/config/deploy_files_gate.go` and `parallel_groups.go` if they reference the union type
+- [x] add test confirming `after:` in `devbox/deploy.yml` produces a YAML decode error (KnownFields rejects)
+- [x] add test confirming `after: [foo]` in `devbox/services/<name>/deploy.yml` is accepted and threaded through
+- [x] run `go test ./internal/config/... ./internal/deploy/... ./internal/lifecycle/... ./internal/reset/... ./internal/validate/...` — must pass before Task 7
 
 ### Phase B — Additive schema (safe, no breaking)
 

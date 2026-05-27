@@ -7,7 +7,7 @@ import (
 
 func makeDeployCfg(phases []config.DeployPhase) *config.DevboxConfig {
 	return &config.DevboxConfig{
-		Deploy: config.DeployConfig{Phases: phases},
+		Deploy: &config.ProjectDeployConfig{Phases: phases},
 		Raw:    map[string]any{"__configPath": "/tmp/devbox.yml"},
 	}
 }

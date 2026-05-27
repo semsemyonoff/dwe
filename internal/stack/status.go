@@ -26,7 +26,7 @@ type StatusInput struct {
 	Topo       map[string][]string
 	TopoStatus map[string]ui.NodeStatus
 	State      *journal.ProjectState
-	SvcDeploys map[string]*config.DeployConfig
+	SvcDeploys map[string]*config.ServiceDeployConfig
 	Tracked    []string
 }
 

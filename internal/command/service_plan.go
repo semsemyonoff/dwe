@@ -117,7 +117,7 @@ type TogglePlan struct {
 func buildTogglePlan(
 	cfg *config.DevboxConfig,
 	reg *registry.Registry,
-	svcDeploys map[string]*config.DeployConfig,
+	svcDeploys map[string]*config.ServiceDeployConfig,
 	toggles []ToggleAction,
 	deployedServices map[string]bool,
 ) (TogglePlan, error) {

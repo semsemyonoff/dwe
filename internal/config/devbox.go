@@ -98,16 +98,16 @@ func applyBinariesDefaults(b *BinariesConfig) {
 // Binaries is engine policy read from the top-level devbox.yml only — it is
 // not layered with defaults.yml or local.yml. See BinariesConfig for details.
 type DevboxConfig struct {
-	SchemaVersion string         `yaml:"schema_version"`
-	Project       ProjectConfig  `yaml:"project"`
-	Runtime       RuntimeConfig  `yaml:"runtime"`
-	State         string         `yaml:"state"`
-	Exports       ExportsConfig  `yaml:"exports"`
-	Compose       ComposeConfig  `yaml:"compose"`
-	Deploy        DeployConfig   `yaml:"-"`
-	Binaries      BinariesConfig `yaml:"binaries"`
-	UI            UIConfig       `yaml:"ui"`
-	Docs          DocsConfig     `yaml:"docs"`
+	SchemaVersion string              `yaml:"schema_version"`
+	Project       ProjectConfig       `yaml:"project"`
+	Runtime       RuntimeConfig       `yaml:"runtime"`
+	State         string              `yaml:"state"`
+	Exports       ExportsConfig       `yaml:"exports"`
+	Compose       ComposeConfig       `yaml:"compose"`
+	Deploy        *ProjectDeployConfig `yaml:"-"`
+	Binaries      BinariesConfig      `yaml:"binaries"`
+	UI            UIConfig            `yaml:"ui"`
+	Docs          DocsConfig          `yaml:"docs"`
 
 	// Services holds the fully resolved service definitions loaded from
 	// devbox/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
@@ -119,14 +119,49 @@ type DevboxConfig struct {
 	Raw map[string]any `yaml:"-"`
 }
 
-// DeployConfig holds the full deploy pipeline loaded from devbox/deploy.yml.
+// ProjectDeployConfig holds the project-wide deploy pipeline loaded from devbox/deploy.yml.
 // It is loaded separately and not part of the 3-layer config merge.
 //
 // Log enables/disables file logging at .devbox/logs/<pipeline>.log for the pipeline run.
-// nil means "use loader default": LoadProjectDeployConfig defaults to true,
-// LoadResetConfig defaults to false. Set explicitly via top-level `log: true|false`.
-type DeployConfig struct {
+// nil means "use loader default": LoadProjectDeployConfig defaults to true.
+// Set explicitly via top-level `log: true|false`.
+type ProjectDeployConfig struct {
+	Log    *bool         `yaml:"log"`
+	Phases []DeployPhase `yaml:"phases"`
+}
+
+// LogEnabled reports whether file logging is enabled. It assumes the loader
+// has normalized the Log pointer; nil is treated as false defensively.
+func (c *ProjectDeployConfig) LogEnabled() bool {
+	return c != nil && c.Log != nil && *c.Log
+}
+
+// ServiceDeployConfig holds a per-service deploy pipeline loaded from devbox/services/<name>/deploy.yml.
+// It is loaded separately and not part of the 3-layer config merge.
+//
+// Log enables/disables file logging at .devbox/logs/<pipeline>.log for the pipeline run.
+// nil means "use loader default": LoadServiceDeployConfig defaults to true.
+// Set explicitly via top-level `log: true|false`.
+//
+// After specifies deploy-time ordering: the list of service names this service
+// deploys after. Only valid in per-service deploy.yml, not in project-wide deploy.yml.
+type ServiceDeployConfig struct {
 	After  []string      `yaml:"after,omitempty"` // deploy-time ordering: service names this service deploys after
+	Log    *bool         `yaml:"log"`
+	Phases []DeployPhase `yaml:"phases"`
+}
+
+// LogEnabled reports whether file logging is enabled. It assumes the loader
+// has normalized the Log pointer; nil is treated as false defensively.
+func (c *ServiceDeployConfig) LogEnabled() bool {
+	return c != nil && c.Log != nil && *c.Log
+}
+
+// DeployConfig is a union of project and service deploy configs.
+// Used by validators that parse either type without prior context.
+// New code should use ProjectDeployConfig or ServiceDeployConfig.
+type DeployConfig struct {
+	After  []string      `yaml:"after,omitempty"`
 	Log    *bool         `yaml:"log"`
 	Phases []DeployPhase `yaml:"phases"`
 }
@@ -135,6 +170,23 @@ type DeployConfig struct {
 // has normalized the Log pointer; nil is treated as false defensively.
 func (c *DeployConfig) LogEnabled() bool {
 	return c != nil && c.Log != nil && *c.Log
+}
+
+// ServiceDeployConfigsToGeneric converts a map of ServiceDeployConfig to generic DeployConfig.
+// Used when internal functions expect the generic type.
+func ServiceDeployConfigsToGeneric(src map[string]*ServiceDeployConfig) map[string]*DeployConfig {
+	if len(src) == 0 {
+		return make(map[string]*DeployConfig)
+	}
+	result := make(map[string]*DeployConfig, len(src))
+	for name, sdc := range src {
+		result[name] = &DeployConfig{
+			After:  sdc.After,
+			Log:    sdc.Log,
+			Phases: sdc.Phases,
+		}
+	}
+	return result
 }
 
 // DeployPhase groups a set of sequential deploy steps.
@@ -1172,7 +1224,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	// Load devbox/deploy.yml separately (not merged with config layers).
 	deployPath := filepath.Join(baseDir, "devbox", "deploy.yml")
 	if deployCfg, err := LoadProjectDeployConfig(deployPath); err == nil {
-		cfg.Deploy = *deployCfg
+		cfg.Deploy = deployCfg
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", deployPath, err)
 	}
@@ -1846,6 +1898,48 @@ func ValidUpdateMode(s string) bool {
 // loadDeployConfigDecode does the strict YAML decode + shape validation for any
 // pipeline file. It permits all fields including After; context-specific callers
 // enforce restrictions on top of this. NOT exported.
+func loadProjectDeployConfigDecode(path string, defaultLog bool) (*ProjectDeployConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg ProjectDeployConfig
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if err := validatePhaseSteps(cfg.Phases, true); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if cfg.Log == nil {
+		v := defaultLog
+		cfg.Log = &v
+	}
+	return &cfg, nil
+}
+
+func loadServiceDeployConfigDecode(path string, defaultLog bool) (*ServiceDeployConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg ServiceDeployConfig
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if err := validatePhaseSteps(cfg.Phases, false); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if cfg.Log == nil {
+		v := defaultLog
+		cfg.Log = &v
+	}
+	return &cfg, nil
+}
+
 func loadDeployConfigDecode(path string, allowDeployServices bool, defaultLog bool) (*DeployConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -1879,19 +1973,12 @@ func ParseDeployConfigForValidation(path string) (*DeployConfig, error) {
 // LoadProjectDeployConfig loads the project-wide deploy pipeline from devbox/deploy.yml.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
-// The after: field is not valid in project-wide deploy.yml; its presence returns ErrAfterFieldNotAllowed.
+// The after: field is structurally not allowed in project-wide deploy configs.
 //
 // File logging defaults to enabled (Log=true) when unset. Override with
 // `log: false` at the top of deploy.yml.
-func LoadProjectDeployConfig(deployPath string) (*DeployConfig, error) {
-	cfg, err := loadDeployConfigDecode(deployPath, true, true)
-	if err != nil {
-		return nil, err
-	}
-	if len(cfg.After) > 0 {
-		return nil, fmt.Errorf("%w: found in %s", ErrAfterFieldNotAllowed, deployPath)
-	}
-	return cfg, nil
+func LoadProjectDeployConfig(deployPath string) (*ProjectDeployConfig, error) {
+	return loadProjectDeployConfigDecode(deployPath, true)
 }
 
 // LoadServiceDeployConfig loads a per-service deploy pipeline from
@@ -1900,26 +1987,18 @@ func LoadProjectDeployConfig(deployPath string) (*DeployConfig, error) {
 //
 // File logging defaults to enabled (Log=true) when unset. Override with
 // `log: false` at the top of deploy.yml.
-func LoadServiceDeployConfig(deployPath string) (*DeployConfig, error) {
-	return loadDeployConfigDecode(deployPath, false, true)
+func LoadServiceDeployConfig(deployPath string) (*ServiceDeployConfig, error) {
+	return loadServiceDeployConfigDecode(deployPath, true)
 }
 
 // LoadResetConfig loads the reset pipeline from a reset.yml file.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
-// Reset pipelines must not contain deploy_services phases.
-// The after: field is not valid in reset pipelines; its presence returns ErrAfterFieldNotAllowed.
+// Reset pipelines must not contain deploy_services phases or after: fields.
 //
 // File logging defaults to disabled (Log=false). Enable with `log: true` at the top.
-func LoadResetConfig(resetPath string) (*DeployConfig, error) {
-	cfg, err := loadDeployConfigDecode(resetPath, false, false)
-	if err != nil {
-		return nil, err
-	}
-	if len(cfg.After) > 0 {
-		return nil, fmt.Errorf("%w: found in %s", ErrAfterFieldNotAllowed, resetPath)
-	}
-	return cfg, nil
+func LoadResetConfig(resetPath string) (*ProjectDeployConfig, error) {
+	return loadProjectDeployConfigDecode(resetPath, false)
 }
 
 // validatePhaseSteps validates a slice of DeployPhase values.
@@ -2036,8 +2115,8 @@ func validateDependsOnTypes(services map[string]ServiceConfig) error {
 // LoadServiceDeployConfigs loads per-service deploy pipelines from devbox/services/<name>/deploy.yml.
 // Only services present in the services map AND having a corresponding deploy file are returned.
 // Missing deploy files are silently skipped (not every service needs a deploy pipeline).
-func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig) (map[string]*DeployConfig, error) {
-	result := make(map[string]*DeployConfig)
+func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig) (map[string]*ServiceDeployConfig, error) {
+	result := make(map[string]*ServiceDeployConfig)
 
 	for name := range services {
 		path := filepath.Join(baseDir, "devbox", "services", name, "deploy.yml")
@@ -2055,20 +2134,16 @@ func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig)
 
 // LoadServiceResetConfig loads the reset pipeline for a single named service
 // from devbox/services/<name>/reset.yml. Returns (nil, nil) when the file is
-// absent (the service simply has no reset pipeline). Returns a wrapped
-// ErrAfterFieldNotAllowed when the parsed config contains an after: field
-// (reset pipelines have no ordering peers).
-func LoadServiceResetConfig(baseDir, name string) (*DeployConfig, error) {
+// absent (the service simply has no reset pipeline). Reset pipelines structurally
+// do not support the after: field (reset is per-service or full, not ordered).
+func LoadServiceResetConfig(baseDir, name string) (*ProjectDeployConfig, error) {
 	path := filepath.Join(baseDir, "devbox", "services", name, "reset.yml")
-	cfg, err := loadDeployConfigDecode(path, false, false)
+	cfg, err := loadProjectDeployConfigDecode(path, false)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("loading service %q reset: %w", name, err)
-	}
-	if len(cfg.After) > 0 {
-		return nil, fmt.Errorf("%w: found in %s", ErrAfterFieldNotAllowed, path)
 	}
 	return cfg, nil
 }
@@ -2078,17 +2153,17 @@ func LoadServiceResetConfig(baseDir, name string) (*DeployConfig, error) {
 // omitted from the result (nil entry would not be useful to callers).
 // A missing devbox/services/ directory returns an empty map and nil error.
 // Per-folder decode failures are collected and returned via errors.Join.
-func LoadServiceResetConfigs(baseDir string) (map[string]*DeployConfig, error) {
+func LoadServiceResetConfigs(baseDir string) (map[string]*ProjectDeployConfig, error) {
 	servicesDir := filepath.Join(baseDir, "devbox", "services")
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return map[string]*DeployConfig{}, nil
+			return map[string]*ProjectDeployConfig{}, nil
 		}
 		return nil, fmt.Errorf("loading service reset configs: %w", err)
 	}
 
-	result := make(map[string]*DeployConfig)
+	result := make(map[string]*ProjectDeployConfig)
 	var loadErrs []error
 	for _, entry := range entries {
 		if !entry.IsDir() {

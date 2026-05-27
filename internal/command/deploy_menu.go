@@ -315,7 +315,8 @@ func buildDeployServiceItems(baseDir string, cfg *config.DevboxConfig, state *jo
 	if len(deploys) == 0 {
 		return nil, nil
 	}
-	order, err := deploy.TopoSortByAfter(deploys, cfg.Services)
+	genericDeploys := config.ServiceDeployConfigsToGeneric(deploys)
+	order, err := deploy.TopoSortByAfter(genericDeploys, cfg.Services)
 	if err != nil {
 		// Fallback to alphabetical so the menu still works while the ordering
 		// error surfaces through validate / preflight.
