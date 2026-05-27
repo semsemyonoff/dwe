@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"internals/packages.md":                                  "9d0123e9f28e",
+	"internals/packages.md":                                  "2227a0a9b1d3",
 	"reference/cli/devbox_commands_list.md":                  "35d8e9341877",
 	"reference/cli/devbox_commands.md":                       "fb89fa7b45c5",
 	"reference/cli/devbox_completion_bash.md":                "ffccc718ecb8",
@@ -108,7 +108,7 @@ var ContentHashes = map[string]string{
 	"reference/cli/devbox.md":                                "b1b8b073b6b0",
 	"reference/cli/index.md":                                 "45f2bb0a5acb",
 	"reference/cli/starship.md":                              "2b9f7b50923a",
-	"reference/config/commands.md":                           "19c5065dcba0",
+	"reference/config/commands.md":                           "81240d8ac5de",
 	"reference/config/conditions.md":                         "52d01b2dea79",
 	"reference/config/deploy.md":                             "2429605869f6",
 	"reference/config/devbox.md":                             "8cccd9e0f2f7",

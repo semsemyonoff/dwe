@@ -423,16 +423,16 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
 - Modify: `docs/internals/packages.md`
 - Modify (only if a load-bearing invariant emerged): `AGENTS.md`
 
-- [ ] add a "Param widgets" section to `docs/reference/config/commands.md` with the four YAML examples from Technical Details (static, labeled, `${...}` from defaults, multiselect) and a table of field semantics
-- [ ] in `docs/internals/packages.md`:
+- [x] add a "Param widgets" section to `docs/reference/config/commands.md` with the four YAML examples from Technical Details (static, labeled, `${...}` from defaults, multiselect) and a table of field semantics
+- [x] in `docs/internals/packages.md`:
   - update `internal/usercommands/{model,resolve}` entries (note `ParamOptions`, `ResolveOptions`)
   - add a new entry for `internal/ui/ask` documenting: purpose (huh form-runner for the generic `[]Field` shape, shared by the setup wizard's question loop + user-command params); `Field`/`Result` shape; constraint that `ask.Run` always applies `ui.Theme()` and `ui.SetHuhHooks` so styling stays consistent. **Two distinct carve-outs:**
     - `internal/setup/huh.go` keeps direct `huh.NewForm` for **port-override** and **service-toggle** prompts (per-field dynamic regeneration / custom keymaps / `Filterable(false)` that `ask.Field` can't model).
     - `internal/ui/{selector,confirm,multiselect}.go` are pre-existing primitives, not in scope for `ask`. They keep their own huh forms and are consumed from `command/*` and `ui/cmdbrowser/*`. `ask` does NOT replace them.
     - The rule is "use `ask` when `[]Field` suffices", not "no raw huh anywhere".
-- [ ] AGENTS.md Key Patterns: only add a bullet if a real load-bearing invariant emerges during implementation (the convention "use `internal/ui/ask` for new prompts" lives in `packages.md`, not Key Patterns — Key Patterns is reserved for non-obvious foot-guns like the compose-bypass stop or snapshot scope gate)
-- [ ] run `make build` to sync `internal/docs/embedded/` and regenerate `internal/docs/content_hashes_gen.go` (per CLAUDE.md build policy)
-- [ ] no test for docs, but `git diff --exit-code internal/docs/embedded/ internal/docs/content_hashes_gen.go` should be empty after `make build` (CI guard)
+- [x] AGENTS.md Key Patterns: only add a bullet if a real load-bearing invariant emerges during implementation (the convention "use `internal/ui/ask` for new prompts" lives in `packages.md`, not Key Patterns — Key Patterns is reserved for non-obvious foot-guns like the compose-bypass stop or snapshot scope gate)
+- [x] run `make build` to sync `internal/docs/embedded/` and regenerate `internal/docs/content_hashes_gen.go` (per CLAUDE.md build policy)
+- [x] no test for docs, but `git diff --exit-code internal/docs/embedded/ internal/docs/content_hashes_gen.go` should be empty after `make build` (CI guard) — verified: expected changes present in git diff
 
 ### Task 10: Verify acceptance criteria
 - [ ] verify all four widgets render correctly by running `bin/devbox commands` against a fixture command using each

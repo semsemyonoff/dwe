@@ -258,6 +258,71 @@ flowchart LR
 
 The config-driven `default_from` is the preferred source — this matches the standard "config wins, code provides safety net" pattern and lets `local.yml` overrides reach commands without rewriting their literal defaults. An empty string returned by `default_from` is treated as not-found so the literal `default` still acts as a true safety net.
 
+### Param widgets
+
+Params can declare a **widget type** to control how they are presented in the interactive form, and a list of **options** that guide the user to valid choices. This is especially useful when the valid options are stored in your devbox config and you want the form to stay in sync without duplicating the list in the command file.
+
+```yaml
+params:
+  # Static list of options
+  format:
+    type: string
+    widget: select
+    description: Output format
+    options: [json, yaml, toml]
+
+  # List with custom labels
+  driver:
+    type: string
+    widget: select
+    description: Database driver
+    options:
+      - { value: pg,    label: "PostgreSQL 16" }
+      - { value: mysql, label: "MySQL 8" }
+
+  # Dynamic options from config (e.g., defaults.yml or local.yml)
+  database:
+    type: string
+    widget: select
+    description: Database to use
+    options: ${databases}
+    default_from: config.default_db
+
+  # Multiple selections
+  services:
+    type: string
+    widget: multiselect
+    description: Services to enable
+    options: ${services_list}
+    separator: ","
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `widget` | enum | inferred from `type` | One of `input`, `select`, `multiselect`, `confirm`. Inferred as `confirm` for `bool`; `select` if `options` present; `input` for string/int/path without options |
+| `options` | list or ref | — | Static list of option values, list of `{value, label, description}` objects, or a dot-path reference to config (e.g., `${databases}`) |
+| `separator` | string | `" "` | Joining separator for multiselect results; used only when `widget: multiselect` |
+
+Widget rendering:
+
+- **`input`** — text field; user types freely. Used for string/int/path with no `options`.
+- **`select`** — single-choice dropdown/menu. Used when `options` are available and exactly one must be chosen.
+- **`multiselect`** — multi-choice list; selected items are joined with the `separator` into a string. Values are space-separated by default or per your custom `separator`.
+- **`confirm`** — yes/no prompt. Used for `bool` params; the resolved value is either `"true"` or `"false"`.
+
+Options resolution:
+
+- **Static list** (`options: [a, b, c]`) — the list is literal.
+- **Labeled options** (`options: [{value: x, label: X}, ...]`) — value is used internally, label is shown to the user.
+- **Config reference** (`options: ${databases}`) — the form resolves the dot-path from your merged config (devbox.yml + defaults.yml + local.yml) at runtime. The resolved value can be a scalar list (`[a, b, c]`) or a map (`{x: X, y: Y}` → options with value=key, label=value). Empty or missing references are caught with a clear error when you try to open the form.
+
+Validation:
+
+- `options` and `pattern` are mutually exclusive — choose one or the other.
+- For `select` or `multiselect`, the `options` field must be present and non-empty (either static or resolvable from config).
+- A `default_from` or `default` value must exist in the resolved options list, or the command will error when you try to run it.
+- `--set key=value` with an invalid choice (not in options) will error unless `options` resolved empty — in that case, you can bypass validation to supply an explicit override.
+
 ### Context
 
 `context:` declares values pulled from the merged devbox config and exposed to the command for templating and (optionally) as env vars. Unlike params, context values are not user-overridable — they always come from config.
