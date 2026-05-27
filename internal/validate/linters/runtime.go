@@ -105,12 +105,18 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	if override, ok := v.userConfig.BinaryOverride(v.entry.ID); ok {
 		bin = override
 
-		// Validate that the override path exists and is executable
-		if _, err := os.Stat(bin); err != nil {
+		// Validate that the override path exists and is executable.
+		if info, err := os.Stat(bin); err != nil {
 			return append(operationalDiags, fail(
 				v.ID(),
 				fmt.Sprintf("%s: user-config override path %q: %v", v.ID(), bin, err),
 				"verify the path exists and is accessible, or remove the binary_"+v.entry.ID+" setting from ~/.config/devbox/config",
+			))
+		} else if info.Mode()&0o111 == 0 {
+			return append(operationalDiags, fail(
+				v.ID(),
+				fmt.Sprintf("%s: user-config override path %q: file is not executable", v.ID(), bin),
+				"check file permissions on the override binary, or remove the binary_"+v.entry.ID+" setting from ~/.config/devbox/config",
 			))
 		}
 	} else if _, err := exec.LookPath(bin); err != nil {

@@ -106,7 +106,9 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 	case CommandTypeBuiltin:
 		common["cmd"] = true
 		common["with"] = true
-		// workdir and user are rejected for builtin
+		// workdir, user, and runner are rejected for builtin
+		delete(common, "user")
+		delete(common, "runner")
 	case CommandTypeDaemon:
 		common["daemon"] = true
 		common["service"] = true

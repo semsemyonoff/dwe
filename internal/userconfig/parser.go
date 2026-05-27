@@ -94,6 +94,9 @@ func apply(cfg *Config, key, val string, line int) error {
 	default:
 		// Handle binary_* keys for overriding binary paths (linters, etc.)
 		if binName, ok := strings.CutPrefix(key, "binary_"); ok {
+			if strings.TrimSpace(val) == "" {
+				return fmt.Errorf("invalid binary_%s at line %d: path must not be empty", binName, line)
+			}
 			cfg.Binaries[binName] = val
 			return nil
 		}
