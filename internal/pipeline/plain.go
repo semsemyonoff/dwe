@@ -532,9 +532,16 @@ func (r *PlainReporter) FinishGroup(groupAddr string, _ config.DeployStep, succe
 	if r.blockGroupAddr == groupAddr {
 		r.inBlockMode = false
 		r.blockGroupAddr = ""
-		// Freeze the block rows in scrollback and return LiveLine to
-		// single-line mode. No-op when LiveLine is disabled.
 		if r.ttyMode {
+			// Before freezing, finalize cancelled sub-steps (those whose
+			// context was cancelled by FailFast before any reporter event fired).
+			// Without this they remain in running-spinner state in scrollback.
+			for _, e := range r.subs {
+				if e.groupAddr == groupAddr && !e.flushed {
+					r.live.SetBlockRowFinal(e.blockRowIdx, liveui.BlockRowFailed,
+						fmt.Sprintf("[%d/%d] Cancelled: %s", e.pipelineIdx, e.pipelineTotal, e.subName))
+				}
+			}
 			r.live.EndBlock()
 		}
 	}

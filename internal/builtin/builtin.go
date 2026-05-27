@@ -100,7 +100,7 @@ const (
 	// commands.yml type: builtin). Only KindAction builtins are allowed here.
 	CtxUserYAML CallerContext = iota
 	// CtxPredicate is used when a builtin is invoked from a check: position in a pipeline step
-	// or from a validate.yml cmd: entry. Only KindPredicate builtins are allowed here.
+	// or from a validate.yml cmd: entry. KindAction and KindPredicate builtins are both allowed here.
 	CtxPredicate
 	// CtxInternal is used when a builtin is invoked by the engine itself (engine-synthetic phases
 	// or daemon-generated virtual commands). Only KindInternal builtins are allowed here.
