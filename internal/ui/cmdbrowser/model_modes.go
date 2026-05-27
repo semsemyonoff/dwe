@@ -100,25 +100,18 @@ func (m *Model) refreshFilterMatches() {
 	}
 }
 
-// updateFilter handles keypresses while filter mode is active. Printable
-// characters extend the query; Backspace trims it; Esc exits; Enter selects;
-// arrow keys move the list cursor (vi-keys j/k type into the query instead).
+// updateFilter handles keypresses while filter mode is active. The search line
+// behaves like a text input: every printable character — including letters
+// bound elsewhere as global shortcuts (i / y / e / q / j / k / h / l) — is
+// appended to the query rather than triggering the shortcut. Only non-
+// printable keys (Enter, Backspace, Esc, arrows, page nav) keep their
+// semantics. Global shortcuts remain available outside filter mode.
 func (m *Model) updateFilter(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Enter) {
 		if it, ok := m.list.SelectedItem().(listItem); ok && !it.header {
 			m.result = Result{Idx: it.origIdx, Action: actionForMode(m.opts.Mode), SkipConfirm: m.skipConfirm}
 			return m, tea.Quit
 		}
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.Inspect) {
-		// Inspect inside filter: leave filter session intact so Esc still
-		// restores expansion when the overlay closes.
-		m.openInspect()
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.SkipConfirm) && m.opts.Mode == ModeRun {
-		m.skipConfirm = !m.skipConfirm
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Backspace) {
@@ -129,10 +122,12 @@ func (m *Model) updateFilter(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	// Treat printable text as filter input before checking Cancel or navigation
-	// so that "q", "j", "k" and similar keys type into the query rather than
-	// acting as quit/vi-navigation shortcuts. Non-printable keys (esc, arrows,
-	// ctrl sequences) have empty or non-printable msg.Text and fall through.
+	// Printable text goes into the query BEFORE consulting any letter-keyed
+	// shortcut (Inspect=i, SkipConfirm=y, EditParams=e, Cancel=q, vi-nav
+	// j/k/h/l). The cursor is "on the search line" — typed characters must
+	// extend the search string, not fire commands. Non-printable keys (esc,
+	// arrows, page nav, ctrl sequences) have empty or non-printable msg.Text
+	// and fall through to the matchers below.
 	if t := msg.Text; t != "" && isPrintable(t) {
 		if m.filter != nil {
 			m.filter.query += t

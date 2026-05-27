@@ -81,6 +81,40 @@ func TestFilter_BackspaceTrims(t *testing.T) {
 	}
 }
 
+// TestFilter_LetterShortcutsTypeIntoQuery verifies that letter keys bound to
+// global shortcuts (Inspect=i, SkipConfirm=y, EditParams=e, Cancel=q) extend
+// the filter query instead of firing the shortcut while the cursor is on the
+// search line. Non-printable keys (Esc, Backspace, arrows) keep their
+// shortcut semantics — verified by TestEsc_InFilterExitsFilterOnly and
+// TestFilter_BackspaceTrims.
+func TestFilter_LetterShortcutsTypeIntoQuery(t *testing.T) {
+	items := filterTestItems()
+	items[0].Inspect = func(int) string { return "inspect details" }
+	m := newModel("pick", items, DefaultOptions(), 120, 26)
+	m.Update(syntheticKey("/"))
+	if m.focus != focusFilter {
+		t.Fatalf("entering filter failed; focus=%v", m.focus)
+	}
+	for _, r := range "iyeq" {
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if m.filter == nil {
+		t.Fatalf("filter exited unexpectedly; focus=%v", m.focus)
+	}
+	if m.focus != focusFilter {
+		t.Errorf("focus=%v, want focusFilter — letter shortcuts must not exit the search line", m.focus)
+	}
+	if m.filter.query != "iyeq" {
+		t.Errorf("query=%q, want %q — letter shortcuts must extend the query", m.filter.query, "iyeq")
+	}
+	if m.inspect != nil {
+		t.Errorf("'i' inside filter must not open inspect")
+	}
+	if m.skipConfirm {
+		t.Errorf("'y' inside filter must not toggle skip-confirm")
+	}
+}
+
 func TestFilter_EnterSelectsMatchedItem(t *testing.T) {
 	m := newModel("pick", filterTestItems(), DefaultOptions(), 120, 26)
 	m.Update(syntheticKey("/"))
