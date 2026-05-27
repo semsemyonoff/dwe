@@ -404,9 +404,9 @@ func mapRunError(err error) error {
 - Modify: `docs/reference/cli/` (regenerate via `devbox docs generate` if the new `--no-tui` flag changes auto-generated CLI reference)
 - Move: `docs/plans/2026-05-26-status-tui.md` → `docs/plans/completed/`
 
-- [ ] regenerate CLI reference: `bin/devbox docs generate` (after `make build`)
-- [ ] add a one-paragraph note about TUI auto-activation and `--no-tui` near the `devbox status` reference if there's a freeform section (skip if reference is fully auto-generated)
-- [ ] `mkdir -p docs/plans/completed && mv docs/plans/2026-05-26-status-tui.md docs/plans/completed/`
+- [x] regenerate CLI reference: `bin/devbox docs generate` (after `make build`)
+- [x] add a one-paragraph note about TUI auto-activation and `--no-tui` near the `devbox status` reference if there's a freeform section (skip if reference is fully auto-generated)
+- [x] `mkdir -p docs/plans/completed && mv docs/plans/2026-05-26-status-tui.md docs/plans/completed/`
 
 ## Post-Completion
 
