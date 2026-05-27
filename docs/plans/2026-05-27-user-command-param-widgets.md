@@ -411,10 +411,10 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
 **Files:**
 - Read-only check: `internal/ui/huh.go`
 
-- [ ] confirm `internal/ui/huh.go` is untouched — it is the shared theme/glyph/hook layer consumed by `ui.Selector` (`internal/command/service.go:84,290`, `deploy.go:579`), `ui.ConfirmRun` (`internal/command/shell.go:24`), `ui.MultiSelect`, and now `internal/ui/ask` (Task 1)
-- [ ] grep `RunParamForm\|ParamField\b` across the repo — should be zero hits after Task 7's delete
-- [ ] grep usages of `internal/ui/huh.go` exports to confirm `ask` uses them (`Theme`, `SetHuhHooks`, palette functions as applicable)
-- [ ] run `make test` — must pass before Task 9
+- [x] confirm `internal/ui/huh.go` is untouched — it is the shared theme/glyph/hook layer consumed by `ui.Selector` (`internal/command/service.go:84,290`, `deploy.go:579`), `ui.ConfirmRun` (`internal/command/shell.go:24`), `ui.MultiSelect`, and now `internal/ui/ask` (Task 1)
+- [x] grep `RunParamForm\|ParamField\b` across the repo — should be zero hits after Task 7's delete
+- [x] grep usages of `internal/ui/huh.go` exports to confirm `ask` uses them (`Theme`, `SetHuhHooks`, palette functions as applicable)
+- [x] run `make test` — must pass before Task 9
 
 ### Task 9: Documentation
 
