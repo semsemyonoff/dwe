@@ -33,7 +33,7 @@ project:
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

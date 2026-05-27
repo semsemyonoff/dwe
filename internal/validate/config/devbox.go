@@ -150,7 +150,7 @@ func (v *servicesValidator) Domain() string {
 // this side).
 var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 	config.ServiceTypeApp: {
-		"type": true, "container": true, "mandatory": true, "compose": true,
+		"type": true, "container": true, "required": true, "compose": true,
 		"ports": true, "hosts": true, "icon": true, "info": true, "status": true,
 		"on_enable": true, "on_disable": true, "notes": true,
 		"depends_on": true,
@@ -158,12 +158,12 @@ var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 		"configs": true, "dirs": true, "extends": true, "cli": true, "render": true,
 	},
 	config.ServiceTypeInfra: {
-		"type": true, "container": true, "mandatory": true, "compose": true,
+		"type": true, "container": true, "required": true, "compose": true,
 		"ports": true, "hosts": true, "icon": true, "info": true, "status": true, "depends_on": true,
 		"on_enable": true, "on_disable": true, "notes": true,
 	},
 	config.ServiceTypeTool: {
-		"type": true, "container": true, "mandatory": true, "compose": true,
+		"type": true, "container": true, "required": true, "compose": true,
 		"ports": true, "hosts": true, "icon": true, "info": true, "status": true,
 		"on_enable": true, "on_disable": true, "notes": true,
 	},

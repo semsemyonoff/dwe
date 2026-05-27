@@ -234,7 +234,7 @@ func serviceConfigToMap(svc config.ServiceConfig) map[string]any {
 	m := map[string]any{
 		"type":              svc.Type,
 		"container":         svc.Container,
-		"mandatory":         svc.Mandatory,
+		"required":          svc.Required,
 		"dir":               svc.Dir,
 		"dir_internal":      svc.DirInternal,
 		"work_dir_internal": svc.WorkDirInternal,

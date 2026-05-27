@@ -679,7 +679,7 @@ type ServiceInfoPath struct {
 func allowedFieldsFor(t ServiceType) map[string]bool {
 	// Fields permitted for every service type.
 	common := []string{
-		"type", "container", "mandatory", "compose",
+		"type", "container", "required", "compose",
 		"ports", "hosts", "icon", "info", "status",
 		"on_enable", "on_disable", "notes",
 	}
@@ -722,8 +722,8 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 type ServiceConfig struct {
 	Type            ServiceType          `yaml:"type"`
 	Container       string               `yaml:"container"`
-	Mandatory       bool                 `yaml:"mandatory"`
-	Enabled         bool                 `yaml:"-"` // computed: mandatory || services.<name>.enabled
+	Required        bool                 `yaml:"required"`
+	Enabled         bool                 `yaml:"-"` // computed: required || services.<name>.enabled
 	Ports           map[string]int       `yaml:"ports,omitempty"`
 	Hosts           map[string]string    `yaml:"hosts,omitempty"`
 	Icon            string               `yaml:"icon,omitempty"`
@@ -1168,7 +1168,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	// here we deep-merge entries by port-name / host-name so a partial override
 	// only touches the listed keys.
 	for name, svc := range services {
-		if svc.Mandatory {
+		if svc.Required {
 			svc.Enabled = true
 		} else {
 			val, ok := ResolvePath(merged, "services."+name+".enabled")
@@ -1696,7 +1696,7 @@ func injectServicesIntoRaw(raw map[string]any, services map[string]ServiceConfig
 		}
 		entry["type"] = string(svc.Type)
 		entry["container"] = svc.Container
-		entry["mandatory"] = svc.Mandatory
+		entry["required"] = svc.Required
 		entry["enabled"] = svc.Enabled
 		entry["dir"] = svc.Dir
 		entry["dir_internal"] = svc.DirInternal

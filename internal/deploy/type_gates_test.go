@@ -29,8 +29,8 @@ project:
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"main": "type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\n",
-		"db":   "type: infra\ncontainer: db\nmandatory: true\n",
+		"main": "type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\n",
+		"db":   "type: infra\ncontainer: db\nrequired: true\n",
 	} {
 		svcDir := filepath.Join(devboxDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -58,7 +58,7 @@ project:
 
 // writeThreeServiceFixture builds a project with app + tool + infra services.
 // deployFor lists which services get a deploy.yml; mandatory lists which services
-// are marked mandatory: true (and thus always enabled). Services not in mandatory
+// are marked required: true (and thus always enabled). Services not in mandatory
 // are disabled by default (no enabled: true in merged config).
 func writeThreeServiceFixture(t *testing.T, deployFor []string, mandatory []string) string {
 	t.Helper()
@@ -94,7 +94,7 @@ project:
 		}
 		yml := content
 		if mandatorySet[name] {
-			yml += "mandatory: true\n"
+			yml += "required: true\n"
 		}
 		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(yml), 0o644); err != nil {
 			t.Fatal(err)
@@ -234,7 +234,7 @@ project:
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"main":    "type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\ndepends_on:\n  - adminer\n",
+		"main":    "type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\ndepends_on:\n  - adminer\n",
 		"adminer": "type: tool\ncontainer: adminer\n",
 	} {
 		svcDir := filepath.Join(devboxDir, "services", name)

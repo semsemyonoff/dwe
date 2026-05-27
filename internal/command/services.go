@@ -31,7 +31,7 @@ func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 			Icon:      svc.DisplayIcon(),
 			Dir:       svc.Dir,
 			Container: svc.Container,
-			Mandatory: svc.Mandatory,
+			Mandatory: svc.Required,
 			Enabled:   svc.Enabled,
 		})
 	}
@@ -39,7 +39,7 @@ func buildServiceRows(cfg *config.DevboxConfig) []serviceRow {
 }
 
 func isServiceManageable(svc config.ServiceConfig) bool {
-	return !svc.IsInfra() || !svc.Mandatory
+	return !svc.IsInfra() || !svc.Required
 }
 
 // sortedServiceNames returns services ordered by type first, then by name.

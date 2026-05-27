@@ -330,7 +330,7 @@ func neverSelectFn(t *testing.T) selectServiceFn {
 
 func TestPickService_DirectArg_ReturnedUnchanged(t *testing.T) {
 	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"main":   {Type: "app", Container: "app-main", Required: true},
 		"second": {Type: "app", Container: "app-second", Enabled: true},
 	})
 	name, err := pickService(cfg, "main", neverSelectFn(t))
@@ -344,7 +344,7 @@ func TestPickService_DirectArg_ReturnedUnchanged(t *testing.T) {
 
 func TestPickService_SingleEnabled_AutoSelect(t *testing.T) {
 	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"main":   {Type: "app", Container: "app-main", Required: true},
 		"second": {Type: "app", Container: "app-second", Enabled: false},
 	})
 	// Only "main" is enabled (mandatory); selector should not be called.
@@ -359,7 +359,7 @@ func TestPickService_SingleEnabled_AutoSelect(t *testing.T) {
 
 func TestPickService_NoEnabledServices_ReturnsError(t *testing.T) {
 	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: false, Enabled: false},
+		"main":   {Type: "app", Container: "app-main", Required: false, Enabled: false},
 		"second": {Type: "app", Container: "app-second", Enabled: false},
 	})
 	_, err := pickService(cfg, "", neverSelectFn(t))
@@ -373,7 +373,7 @@ func TestPickService_NoEnabledServices_ReturnsError(t *testing.T) {
 
 func TestPickService_MultipleEnabled_CallsSelector(t *testing.T) {
 	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"main":   {Type: "app", Container: "app-main", Required: true},
 		"second": {Type: "app", Container: "app-second", Enabled: true},
 	})
 	selectorCalled := false
@@ -398,7 +398,7 @@ func TestPickService_MultipleEnabled_CallsSelector(t *testing.T) {
 
 func TestPickService_MultipleEnabled_SelectorSeesOnlyEnabledServices(t *testing.T) {
 	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
-		"main":     {Type: "app", Container: "app-main", Mandatory: true},
+		"main":     {Type: "app", Container: "app-main", Required: true},
 		"second":   {Type: "app", Container: "app-second", Enabled: true},
 		"disabled": {Type: "app", Container: "app-disabled", Enabled: false},
 	})
@@ -424,7 +424,7 @@ func TestPickService_MultipleEnabled_SelectorSeesOnlyEnabledServices(t *testing.
 
 func TestPickService_SelectorPicksSecond(t *testing.T) {
 	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
-		"alpha": {Type: "app", Container: "app-alpha", Mandatory: true},
+		"alpha": {Type: "app", Container: "app-alpha", Required: true},
 		"beta":  {Type: "app", Container: "app-beta", Enabled: true},
 	})
 	// sorted order: alpha, beta → index 1 = "beta"
@@ -890,7 +890,7 @@ func TestRunServicesCLI_EnvFlagOverridesConfig(t *testing.T) {
 // ErrCancelled from the selector is propagated by pickService.
 func TestPickService_SelectorReturnsErrCancelled_Propagated(t *testing.T) {
 	cfg := makeMultiServiceCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Container: "app-main", Mandatory: true},
+		"main":   {Type: "app", Container: "app-main", Required: true},
 		"second": {Type: "app", Container: "app-second", Enabled: true},
 	})
 	cancelSelector := func(c *config.DevboxConfig, names []string) (string, error) {

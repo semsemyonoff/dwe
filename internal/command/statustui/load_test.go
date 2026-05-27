@@ -95,7 +95,7 @@ func TestJoinNonEmpty(t *testing.T) {
 func TestBuildTabs_AllRunning(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: config.ServiceTypeApp, Container: "app-main", Mandatory: true},
+			"main": {Type: config.ServiceTypeApp, Container: "app-main", Required: true},
 		},
 		nil,
 	)
@@ -124,7 +124,7 @@ func TestBuildTabs_AllRunning(t *testing.T) {
 func TestBuildTabs_AllStopped(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: config.ServiceTypeApp, Container: "app-main", Mandatory: true},
+			"main": {Type: config.ServiceTypeApp, Container: "app-main", Required: true},
 		},
 		nil,
 	)
@@ -146,7 +146,7 @@ func TestBuildTabs_AllStopped(t *testing.T) {
 func TestBuildTabs_Partial(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main":   {Type: config.ServiceTypeApp, Container: "app-main", Mandatory: true},
+			"main":   {Type: config.ServiceTypeApp, Container: "app-main", Required: true},
 			"second": {Type: config.ServiceTypeApp, Container: "app-second", Enabled: true},
 		},
 		nil,
@@ -190,7 +190,7 @@ func TestBuildTabs_EmptyService(t *testing.T) {
 func TestBuildTabs_WithNilState(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: config.ServiceTypeApp, Container: "app-main", Mandatory: true},
+			"main": {Type: config.ServiceTypeApp, Container: "app-main", Required: true},
 		},
 		nil,
 	)
@@ -215,7 +215,7 @@ func TestBuildTabs_PrependsWarningOnRenderError(t *testing.T) {
 			"main": {
 				Type:      config.ServiceTypeApp,
 				Container: "app-main",
-				Mandatory: true,
+				Required: true,
 				Status: []config.StatusColumn{
 					{Name: "X", Value: "{{ this is broken syntax"},
 				},

@@ -48,7 +48,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Enabled:   true,
-						Mandatory: false,
+						Required: false,
 					},
 				},
 			},
@@ -92,7 +92,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Enabled:   true,
-						Mandatory: false,
+						Required: false,
 					},
 				},
 			},

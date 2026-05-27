@@ -51,7 +51,7 @@ func countServices(cfg *config.DevboxConfig) (int, int) {
 			continue
 		}
 		total++
-		if svc.Enabled || svc.Mandatory {
+		if svc.Enabled || svc.Required {
 			enabled++
 		}
 	}

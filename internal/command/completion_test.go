@@ -159,13 +159,13 @@ func TestOptionalServiceNameCompletion_filtersOutMandatory(t *testing.T) {
 	// Simulate what optionalServiceNameCompletion does.
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"main":   {Type: "app", Mandatory: true},
-			"worker": {Type: "worker", Mandatory: false},
+			"main":   {Type: "app", Required: true},
+			"worker": {Type: "worker", Required: false},
 		},
 	}
 	var names []string
 	for name, svc := range cfg.Services {
-		if !svc.Mandatory {
+		if !svc.Required {
 			names = append(names, name)
 		}
 	}

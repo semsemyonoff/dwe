@@ -128,7 +128,7 @@ func TestServiceConfigHash(t *testing.T) {
 	svc := config.ServiceConfig{
 		Type:            "app",
 		Container:       "main",
-		Mandatory:       false,
+		Required:        false,
 		Dir:             "/app",
 		DirInternal:     "/src",
 		WorkDirInternal: "/src",

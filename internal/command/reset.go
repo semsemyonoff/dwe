@@ -273,8 +273,8 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 	// Confirmation prompt (after preflight so fast-fail checks run first).
 	if !yes {
 		promptMsg := fmt.Sprintf("Reset service %q? This will stop the container and clear its deployed state, requiring a subsequent 'devbox deploy run --service %s'. Continue?", name, name)
-		if svc.Mandatory {
-			promptMsg = fmt.Sprintf("Service %q is mandatory. Reset will clear its deployed state and require a subsequent deploy. Continue?", name)
+		if svc.Required {
+			promptMsg = fmt.Sprintf("Service %q is required. Reset will clear its deployed state and require a subsequent deploy. Continue?", name)
 		}
 		if ui.IsInteractiveFn(cmd.InOrStdin()) {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s [y/N] ", promptMsg)

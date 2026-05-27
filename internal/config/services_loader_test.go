@@ -26,7 +26,7 @@ func TestLoadServices_happyPath(t *testing.T) {
 	writeServiceFolder(t, dir, "web", `
 type: app
 container: app-web
-mandatory: true
+required: true
 dir: ./services/web
 dir_internal: /workspace
 ports:

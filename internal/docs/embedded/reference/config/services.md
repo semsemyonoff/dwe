@@ -55,7 +55,7 @@ Locked rules:
 |-------------------|:-----:|:------:|:-------:|
 | `type`            |   ✓   |   ✓    |    ✓    |
 | `container`       |   ✓   |   ✓    |    ✓    |
-| `mandatory`       |   ✓   |   ✓    |    ✓    |
+| `required`        |   ✓   |   ✓    |    ✓    |
 | `compose`         |   ✓   |   ✓    |    ✓    |
 | `ports`           |   ✓   |   ✓    |    ✓    |
 | `hosts`           |   ✓   |   ✓    |    ✓    |
@@ -77,13 +77,23 @@ Locked rules:
 
 A disallowed field is a hard load error (`ErrServiceFieldNotAllowed`). Validation aggregates per-file violations via `errors.Join` so a single parse pass surfaces every issue at once.
 
+### Why the type matrix
+
+The per-type allowlists reflect the distinct roles services play in the dev environment:
+
+- **`app`**: owns source code and a running container. Supports mounts, templates, and deploy orchestration (`dir`, `extends`, `configs`, `depends_on`).
+- **`tool`**: standalone utility container (database UI, observability frontend, etc.). No source ownership; cannot depend on services or be a `depends_on` target for other services.
+- **`infra`**: supporting container (database, cache, broker, reverse proxy). Can be a `depends_on` target but not own source; lighter footprint than app.
+
+This separation ensures that build and deploy logic is explicit (defined only in `type: app`), and that infrastructure services remain independently testable without dragging in application code.
+
 ## Load behavior
 
 - Each `devbox/services/<name>/service.yml` is strict-decoded — unknown and per-type-disallowed fields are hard errors. `LoadServices` collects errors from all folders via `errors.Join` so every broken folder surfaces at once, not just the first.
 - Service inheritance via `extends:` is resolved in topological order (parents before children) so multi-level chains (`C → B → A`) merge correctly regardless of map iteration order. Cycles and unknown parents are reported as load errors. `extends:` is **app-only**.
 - For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices / maps are defensively copied (`slices.Clone` / `maps.Clone`) so mutating a child never corrupts the parent.
 - The `dirs` field is deduplicated across parent and child (parent first, child appended). `cli.env` is recursively merged: parent provides defaults, child wins on key conflicts.
-- After loading, `enabled` is resolved from the 3-layer merge (`services.<name>.enabled`); mandatory services force `enabled: true`.
+- After loading, `enabled` is resolved from the 3-layer merge (`services.<name>.enabled`); required services force `enabled: true`.
 - Overlays under `services.<name>` may set **only** `enabled:`, `ports:`, and `hosts:`. Any other field there is a layer-aware overlay error — structural fields (`container`, `dir`, `configs`, `compose`, `extends`, …) belong in `devbox/services/<name>/service.yml`. The overlay validator also enforces shape: `ports:` must be a map of name → integer in `1..65535`; `hosts:` must be a map of name → string.
 - `ports:` and `hosts:` are **deep-merged by entry name** on top of the declared map: a per-developer override under `devbox/local.yml` only touches the listed keys; declared entries the overlay does not mention are preserved. New entries may also be introduced via overlay. This is a first-class devbox feature: developers routinely need to remap a port that clashes with something already bound on their host, or switch their `*.local` hostname, without editing the shared `devbox/services/<name>/service.yml`.
 - Each resolved service (including the post-overlay `ports` / `hosts` nested maps) is injected into `DevboxConfig.Raw["services"]` so dot-paths like `services.main.ports.http` and `services.adminer.hosts.web` resolve in export rules, `docker.yml` templates, command `default_from:`, and `info.yml` references.
@@ -124,7 +134,7 @@ devbox/services/
 # type: app — owns source under dir:, has deploy lifecycle, renders templates
 type: app
 container: app-main
-mandatory: true
+required: true
 dir: ./services/main
 dir_internal: /workspace
 work_dir_internal: /workspace/src
@@ -201,13 +211,15 @@ info:
 
 ## Field reference
 
+**host vs internal terminology:** Fields ending in `*_internal` or using the suffix convention (like `dir` for host, `dir_internal` for container) refer to paths: host side runs on your machine, internal side is the container mount point. Apply the same distinction to ports and hostnames: `ports.http` binds a container port to your host; `hosts.main` is the hostname the container resolves as.
+
 ### Top-level service fields
 
 | Field | Type | Required | Allowed for | Description |
 |-------|------|----------|-------------|-------------|
 | `type` | string | yes | app / tool / infra | Discriminator — selects the field allowlist for this entry. |
 | `container` | string | no (defaults to folder name) | all | Docker container name. Omit to use the service folder name as the container name. |
-| `mandatory` | bool | no | all | When true, the service is always enabled; the overlay cannot disable it. |
+| `required` | bool | no | all | When true, the service is always enabled; the overlay cannot disable it. |
 | `compose` | list | no | all | Additional compose overlay files activated when the service is enabled. |
 | `ports` | `map[string]int` | no | all | Named container ports. See [`ports` field](#ports-field). |
 | `hosts` | `map[string]string` | no | all | Named hostnames. See [`hosts` field](#hosts-field). |

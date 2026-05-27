@@ -146,7 +146,7 @@ func TestTopoSortByAfter_selfReference(t *testing.T) {
 func makeMandatoryServicesMap(spec map[string]bool) map[string]config.ServiceConfig {
 	m := make(map[string]config.ServiceConfig, len(spec))
 	for name, mandatory := range spec {
-		m[name] = config.ServiceConfig{Mandatory: mandatory}
+		m[name] = config.ServiceConfig{Required: mandatory}
 	}
 	return m
 }

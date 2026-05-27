@@ -74,7 +74,7 @@ func TestBuildServiceRows_sortedByTypeThenName(t *testing.T) {
 		"mailpit": {Type: "tool"},
 		"adminer": {Type: "tool"},
 		"varnish": {Type: "infra"},
-		"db":      {Type: "infra", Mandatory: true},
+		"db":      {Type: "infra", Required: true},
 	}, map[string]testTool{}, nil, nil)
 
 	rows := buildServiceRows(cfg)
@@ -126,7 +126,7 @@ func alwaysToggleFn(idx int) selectToggleFn {
 
 func TestPickServiceToEnable_NoDisabled_ReturnsError(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Mandatory: true},
+		"main":   {Type: "app", Required: true},
 		"second": {Type: "app", Enabled: true},
 	}, map[string]testTool{}, nil, nil)
 
@@ -151,9 +151,9 @@ func TestPickServiceToEnable_SelectorPicksByIndex(t *testing.T) {
 	}
 }
 
-func TestPickServiceToDisable_MandatoryNotShown(t *testing.T) {
+func TestPickServiceToDisable_RequiredNotShown(t *testing.T) {
 	cfg := makeServicesCfg(map[string]config.ServiceConfig{
-		"main":   {Type: "app", Mandatory: true, Enabled: true},
+		"main":   {Type: "app", Required: true, Enabled: true},
 		"second": {Type: "app", Enabled: true},
 		"third":  {Type: "app", Enabled: true},
 	}, map[string]testTool{}, nil, nil)

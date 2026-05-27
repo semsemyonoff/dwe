@@ -173,7 +173,7 @@ func TestFormatUptime(t *testing.T) {
 func TestCollectDaemons_ShellError(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -207,7 +207,7 @@ func TestCollectDaemons_NilCfg(t *testing.T) {
 func TestCollectDaemons_ShellSeam(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,

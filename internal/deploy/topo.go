@@ -45,10 +45,10 @@ func TopoSortByAfter(deploys map[string]*config.DeployConfig, services map[strin
 			if !ok {
 				return nil, fmt.Errorf("%w: service %q after: references %q", ErrDeployUnknownAfterRef, name, dep)
 			}
-			// Mandatory services always deploy before optional ones. An
-			// after: edge from mandatory → optional would invert that order.
-			if svc.Mandatory && !depSvc.Mandatory {
-				return nil, fmt.Errorf("%w: mandatory service %q after: references optional service %q",
+			// Required services always deploy before optional ones. An
+			// after: edge from required → optional would invert that order.
+			if svc.Required && !depSvc.Required {
+				return nil, fmt.Errorf("%w: required service %q after: references optional service %q",
 					ErrMandatoryAfterOptional, name, dep)
 			}
 		}
@@ -124,7 +124,7 @@ func TopoSortByAfter(deploys map[string]*config.DeployConfig, services map[strin
 	mandatory := make([]string, 0, len(order))
 	optional := make([]string, 0, len(order))
 	for _, name := range order {
-		if services[name].Mandatory {
+		if services[name].Required {
 			mandatory = append(mandatory, name)
 		} else {
 			optional = append(optional, name)

@@ -734,7 +734,7 @@ services:
   main:
     type: app
     container: app-main
-    mandatory: true
+    required: true
     dir: ./services/main
     dir_internal: /workspace
     work_dir_internal: /workspace/src
@@ -743,7 +743,7 @@ services:
   main-debug:
     type: app
     container: app-main-debug
-    mandatory: false
+    required: false
     extends: main
     compose:
       - compose/services/main/debug.yml
@@ -763,8 +763,8 @@ func TestLoadServicesConfig_basic(t *testing.T) {
 	if main.Container != "app-main" {
 		t.Errorf("main.Container = %q, want app-main", main.Container)
 	}
-	if !main.Mandatory {
-		t.Error("main.Mandatory should be true")
+	if !main.Required {
+		t.Error("main.Required should be true")
 	}
 	if main.Dir != "./services/main" {
 		t.Errorf("main.Dir = %q, want ./services/main", main.Dir)
@@ -2028,7 +2028,7 @@ services:
   main:
     type: app
     container: app-main
-    mandatory: true
+    required: true
     dir: ./services/main
     dir_internal: /workspace
     work_dir_internal: /workspace/src
@@ -2045,14 +2045,14 @@ services:
   main-debug:
     type: app
     container: app-main-debug
-    mandatory: false
+    required: false
     extends: main
     compose:
       - compose/services/main/debug.yml
   main-run:
     type: app
     container: app-main-run
-    mandatory: false
+    required: false
     extends: main
     cli:
       mode: run
@@ -2142,7 +2142,7 @@ services:
   base:
     type: app
     container: app-base
-    mandatory: true
+    required: true
     dir: ./services/base
     dirs:
       - logs
@@ -2151,19 +2151,19 @@ services:
   child:
     type: app
     container: app-child
-    mandatory: false
+    required: false
     extends: base
     dirs:
       - extra
   child-nodir:
     type: app
     container: app-child-nodir
-    mandatory: false
+    required: false
     extends: base
   child-overlap:
     type: app
     container: app-child-overlap
-    mandatory: false
+    required: false
     extends: base
     dirs:
       - logs
@@ -3432,7 +3432,7 @@ services:
   main:
     type: app
     container: app-main
-    mandatory: true
+    required: true
     dir: ./services/main
     dir_internal: /workspace
     work_dir_internal: /workspace/src
@@ -3441,7 +3441,7 @@ services:
   worker:
     type: app
     container: app-worker
-    mandatory: false
+    required: false
     dir: ./services/worker
     dir_internal: /workspace
     work_dir_internal: /workspace/src
@@ -3568,7 +3568,7 @@ services:
   multi:
     type: app
     container: multi
-    mandatory: true
+    required: true
     dir: ./services/multi
     dir_internal: /workspace
     work_dir_internal: /workspace/src
@@ -3835,7 +3835,7 @@ services:
   parent:
     type: app
     container: parent
-    mandatory: true
+    required: true
     dir: ./services/parent
     render:
       ide:
@@ -3844,12 +3844,12 @@ services:
   child-inherit:
     type: app
     container: child-inherit
-    mandatory: false
+    required: false
     extends: parent
   child-override-enabled:
     type: app
     container: child-override-enabled
-    mandatory: false
+    required: false
     extends: parent
     render:
       ide:
@@ -3857,7 +3857,7 @@ services:
   child-override-template:
     type: app
     container: child-override-template
-    mandatory: false
+    required: false
     extends: parent
     render:
       ide:
@@ -3865,7 +3865,7 @@ services:
   child-override-both:
     type: app
     container: child-override-both
-    mandatory: false
+    required: false
     extends: parent
     render:
       ide:
@@ -4021,7 +4021,7 @@ services:
   parent:
     type: app
     container: parent
-    mandatory: true
+    required: true
     dir: ./services/parent
     render:
       ai:
@@ -4030,12 +4030,12 @@ services:
   child-inherit:
     type: app
     container: child-inherit
-    mandatory: false
+    required: false
     extends: parent
   child-override-enabled:
     type: app
     container: child-override-enabled
-    mandatory: false
+    required: false
     extends: parent
     render:
       ai:
@@ -4043,7 +4043,7 @@ services:
   child-override-template:
     type: app
     container: child-override-template
-    mandatory: false
+    required: false
     extends: parent
     render:
       ai:
@@ -4051,7 +4051,7 @@ services:
   child-override-both:
     type: app
     container: child-override-both
-    mandatory: false
+    required: false
     extends: parent
     render:
       ai:
@@ -4060,7 +4060,7 @@ services:
   grandchild-multi-hop:
     type: app
     container: grandchild
-    mandatory: false
+    required: false
     extends: child-inherit
 `
 	dir := t.TempDir()
@@ -4221,7 +4221,7 @@ services:
   parent:
     type: app
     container: parent
-    mandatory: true
+    required: true
     dir: ./services/parent
     render:
       git:
@@ -4230,12 +4230,12 @@ services:
   child-inherit:
     type: app
     container: child-inherit
-    mandatory: false
+    required: false
     extends: parent
   child-override-enabled:
     type: app
     container: child-override-enabled
-    mandatory: false
+    required: false
     extends: parent
     render:
       git:
@@ -4243,7 +4243,7 @@ services:
   child-override-template:
     type: app
     container: child-override-template
-    mandatory: false
+    required: false
     extends: parent
     render:
       git:
@@ -4251,7 +4251,7 @@ services:
   child-override-both:
     type: app
     container: child-override-both
-    mandatory: false
+    required: false
     extends: parent
     render:
       git:
@@ -4260,7 +4260,7 @@ services:
   grandchild-multi-hop:
     type: app
     container: grandchild
-    mandatory: false
+    required: false
     extends: child-inherit
 `
 	dir := t.TempDir()
@@ -4326,7 +4326,7 @@ func TestLoadConfig_GitNotInjectedIntoRaw(t *testing.T) {
   main:
     type: app
     container: main
-    mandatory: true
+    required: true
     dir: ./services/main
     render:
       git:

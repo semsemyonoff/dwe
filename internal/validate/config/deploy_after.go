@@ -164,12 +164,12 @@ func (v *deployAfterValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				})
 			}
 
-			// Mandatory services always deploy before optional ones; an after:
-			// edge from mandatory → optional inverts that and is invalid.
-			if services[name].Mandatory && !refSvc.Mandatory {
+			// Required services always deploy before optional ones; an after:
+			// edge from required → optional inverts that and is invalid.
+			if services[name].Required && !refSvc.Required {
 				emit(validate.Diagnostic{
 					Severity: validate.SeverityError,
-					Message:  fmt.Sprintf("mandatory service %q after: references optional service %q; mandatory services always deploy before optional ones", name, ref),
+					Message:  fmt.Sprintf("required service %q after: references optional service %q; required services always deploy before optional ones", name, ref),
 				})
 			}
 		}

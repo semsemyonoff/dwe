@@ -52,7 +52,7 @@ func pickService(cfg *config.DevboxConfig, serviceName string, selector selectSe
 	var enabled []string
 	for _, name := range sortedKeys(cfg.Services) {
 		svc := cfg.Services[name]
-		if svc.Mandatory || svc.Enabled {
+		if svc.Required || svc.Enabled {
 			enabled = append(enabled, name)
 		}
 	}

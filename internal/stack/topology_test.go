@@ -101,7 +101,7 @@ services:
 func TestDisabledNodes_ReturnsDisabledServiceContainers(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main":   {Type: "app", Container: "app-main", Mandatory: true},
+			"main":   {Type: "app", Container: "app-main", Required: true},
 			"second": {Type: "app", Container: "app-second", Enabled: false},
 		},
 		map[string]testTool{
@@ -212,7 +212,7 @@ func TestAugmentWithDisabled_NilTopoInitialised(t *testing.T) {
 func TestAugmentWithDisabled_NoDisabledNoop(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool{
 			"adminer":       {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},

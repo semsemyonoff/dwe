@@ -52,11 +52,11 @@ func (v *serviceHooksValidator) Run(ctx validate.Context) []validate.Diagnostic 
 			diags = append(diags, d)
 		}
 
-		// Mandatory service with hooks → warning (hooks never fire).
-		if svc.Mandatory && (svc.OnEnable != nil || svc.OnDisable != nil) {
+		// Required service with hooks → warning (hooks never fire).
+		if svc.Required && (svc.OnEnable != nil || svc.OnDisable != nil) {
 			emit(validate.Diagnostic{
 				Severity: validate.SeverityWarning,
-				Message:  fmt.Sprintf("hooks on mandatory service %q will never fire (mandatory services cannot be toggled)", name),
+				Message:  fmt.Sprintf("hooks on required service %q will never fire (required services cannot be toggled)", name),
 			})
 		}
 

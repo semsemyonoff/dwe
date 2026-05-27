@@ -360,7 +360,7 @@ func TestPickServiceToEnable_TypeSortedAndDecorated(t *testing.T) {
 		"adminer": {Type: config.ServiceTypeTool, Container: "adminer", Enabled: false},
 		"api":     {Type: config.ServiceTypeApp, Container: "app-api", Enabled: false},
 		"varnish": {Type: config.ServiceTypeInfra, Container: "varnish", Enabled: false},
-		"db":      {Type: config.ServiceTypeInfra, Container: "db", Mandatory: true, Enabled: false},
+		"db":      {Type: config.ServiceTypeInfra, Container: "db", Required: true, Enabled: false},
 	}, map[string]testTool{}, nil, nil)
 
 	var labels []string

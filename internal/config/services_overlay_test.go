@@ -210,7 +210,7 @@ project:
 	}
 	for name, content := range map[string]string{
 		"adminer": "type: tool\ncontainer: adminer\nports:\n  http: 8027\nhosts:\n  web: admin.local\n",
-		"main":    "type: app\ncontainer: app-main\nmandatory: true\ndir: ./services/main\nports:\n  http: 80\nhosts:\n  web: app.local\n",
+		"main":    "type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\nports:\n  http: 80\nhosts:\n  web: app.local\n",
 	} {
 		svcDir := filepath.Join(devboxDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -357,7 +357,7 @@ services:
 	mainYML := `
 type: app
 container: app-main
-mandatory: true
+required: true
 dir: ./services/main
 hosts:
   web: tbm.local
@@ -365,7 +365,7 @@ hosts:
 	debugYML := `
 type: app
 container: app-main-debug
-mandatory: false
+required: false
 extends: main
 `
 	writeServiceFolder(t, dir, "main", mainYML)
@@ -420,7 +420,7 @@ services:
 	parentYML := `
 type: app
 container: app-parent
-mandatory: true
+required: true
 dir: ./services/parent
 ports:
   http: 8080
@@ -428,7 +428,7 @@ ports:
 	childYML := `
 type: app
 container: app-child
-mandatory: false
+required: false
 extends: parent
 `
 	writeServiceFolder(t, dir, "parent", parentYML)
@@ -484,7 +484,7 @@ services:
 	parentYML := `
 type: app
 container: app-parent
-mandatory: true
+required: true
 dir: ./services/parent
 hosts:
   web: parent.local
@@ -492,7 +492,7 @@ hosts:
 	childYML := `
 type: app
 container: app-child
-mandatory: false
+required: false
 extends: parent
 hosts:
   web: child.local

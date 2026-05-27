@@ -15,7 +15,7 @@ func makeTestConfig(services map[string]config.ServiceConfig) *config.DevboxConf
 
 func TestPickService_explicitName_returnsDirect(t *testing.T) {
 	cfg := makeTestConfig(map[string]config.ServiceConfig{
-		"main":   {Mandatory: true},
+		"main":   {Required: true},
 		"second": {Enabled: true},
 	})
 	selectorCalled := false
@@ -37,7 +37,7 @@ func TestPickService_explicitName_returnsDirect(t *testing.T) {
 
 func TestPickService_singleEnabled_autoSelect(t *testing.T) {
 	cfg := makeTestConfig(map[string]config.ServiceConfig{
-		"main": {Mandatory: true},
+		"main": {Required: true},
 	})
 	selectorCalled := false
 	sel := func(_ *config.DevboxConfig, _ []string) (string, error) {
@@ -58,7 +58,7 @@ func TestPickService_singleEnabled_autoSelect(t *testing.T) {
 
 func TestPickService_noEnabled_error(t *testing.T) {
 	cfg := makeTestConfig(map[string]config.ServiceConfig{
-		"main": {Mandatory: false, Enabled: false},
+		"main": {Required: false, Enabled: false},
 	})
 	sel := func(_ *config.DevboxConfig, _ []string) (string, error) {
 		return "main", nil
@@ -71,7 +71,7 @@ func TestPickService_noEnabled_error(t *testing.T) {
 
 func TestPickService_multipleEnabled_callsSelector(t *testing.T) {
 	cfg := makeTestConfig(map[string]config.ServiceConfig{
-		"main":   {Mandatory: true},
+		"main":   {Required: true},
 		"second": {Enabled: true},
 	})
 	selectorCalled := false
@@ -92,7 +92,7 @@ func TestPickService_nonInteractiveSelector_multipleEnabled_returnsError(t *test
 	// When a non-TTY error selector is passed and multiple services are enabled,
 	// pickService calls the selector which returns the non-interactive error.
 	cfg := makeTestConfig(map[string]config.ServiceConfig{
-		"main":   {Mandatory: true},
+		"main":   {Required: true},
 		"second": {Enabled: true},
 	})
 	nonTTYSelector := func(_ *config.DevboxConfig, _ []string) (string, error) {
@@ -107,7 +107,7 @@ func TestPickService_nonInteractiveSelector_multipleEnabled_returnsError(t *test
 func TestPickService_nonInteractiveSelector_singleEnabled_autoSelectsWithoutSelector(t *testing.T) {
 	// Even with a non-TTY error selector, single-service auto-select works without calling selector.
 	cfg := makeTestConfig(map[string]config.ServiceConfig{
-		"main": {Mandatory: true},
+		"main": {Required: true},
 	})
 	selectorCalled := false
 	nonTTYSelector := func(_ *config.DevboxConfig, _ []string) (string, error) {

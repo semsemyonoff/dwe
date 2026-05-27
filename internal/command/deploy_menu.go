@@ -333,7 +333,7 @@ func buildDeployServiceItems(baseDir string, cfg *config.DevboxConfig, state *jo
 			Name:      name,
 			Type:      string(svc.Type),
 			Icon:      svc.DisplayIcon(),
-			Mandatory: svc.Mandatory,
+			Mandatory: svc.Required,
 		}
 		if state != nil {
 			if s, ok := state.Services[name]; ok && s != nil {

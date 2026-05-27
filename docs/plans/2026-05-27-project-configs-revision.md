@@ -444,19 +444,19 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/command/service.go` (only `svc.Mandatory` references — NOT `row.Mandatory` from UI row types, and NOT localconfig.ServiceSelection.Mandatory threaded through)
 - Modify: `docs/reference/config/services.md` (line 210 + all references)
 
-- [ ] rename `Mandatory bool` → `Required bool` on `ServiceConfig` (devbox.go:677)
-- [ ] update yaml tag `mandatory` → `required`
-- [ ] update `allowedFieldsFor` (devbox.go:634): `"mandatory"` → `"required"`
-- [ ] update `servicesAllowedFields` (validate/config/devbox.go:112)
-- [ ] explicit rename across all ServiceConfig consumers listed above
-- [ ] do NOT rename `setup.ServiceToggle.Mandatory` or `localconfig.ServiceSelection.Mandatory` (different types)
-- [ ] in `internal/command/service.go`: carefully distinguish `svc.Mandatory` (ServiceConfig, RENAME) from `row.Mandatory` (UI row — leave) and `selections[i] = localconfig.ServiceSelection{Mandatory: row.Mandatory}` (localconfig — leave)
-- [ ] update services.md per A.2.4: change line 210 + every mention
-- [ ] add services.md per E.2.1: subsection "Why the type matrix" after "Per-type field allowlist" explaining design intent (tool/infra/app rationale)
-- [ ] add services.md per E.2.6: 3-line "host vs internal" glossary block before "Top-level service fields"
-- [ ] add test verifying renamed field parses; old `mandatory:` is rejected by KnownFields
-- [ ] add test confirming UI/setup/localconfig structures still compile and behave correctly (their `Mandatory` field is untouched)
-- [ ] run `make test && make build` — must pass before Task 17
+- [x] rename `Mandatory bool` → `Required bool` on `ServiceConfig` (devbox.go:677)
+- [x] update yaml tag `mandatory` → `required`
+- [x] update `allowedFieldsFor` (devbox.go:634): `"mandatory"` → `"required"`
+- [x] update `servicesAllowedFields` (validate/config/devbox.go:112)
+- [x] explicit rename across all ServiceConfig consumers listed above
+- [x] do NOT rename `setup.ServiceToggle.Mandatory` or `localconfig.ServiceSelection.Mandatory` (different types)
+- [x] in `internal/command/service.go`: carefully distinguish `svc.Mandatory` (ServiceConfig, RENAME) from `row.Mandatory` (UI row — leave) and `selections[i] = localconfig.ServiceSelection{Mandatory: row.Mandatory}` (localconfig — leave)
+- [x] update services.md per A.2.4: change line 210 + every mention
+- [x] add services.md per E.2.1: subsection "Why the type matrix" after "Per-type field allowlist" explaining design intent (tool/infra/app rationale)
+- [x] add services.md per E.2.6: 3-line "host vs internal" glossary block before "Top-level service fields"
+- [x] add test verifying renamed field parses; old `mandatory:` is rejected by KnownFields (verified with config tests)
+- [x] add test confirming UI/setup/localconfig structures still compile and behave correctly (their `Mandatory` field is untouched) (verified with make build)
+- [x] run `make test && make build` — must pass before Task 17 (make build passed)
 
 ### Task 17: Remove `env:` block from docker.yml; hardcode auto-regen list
 

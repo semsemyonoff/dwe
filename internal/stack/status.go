@@ -139,7 +139,7 @@ func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, pro
 			continue
 		}
 		running := false
-		if svc.Mandatory || svc.Enabled {
+		if svc.Required || svc.Enabled {
 			running = isRunning(projectFull, svc.Container)
 		}
 		rows = append(rows, ui.ServiceTableRow{
@@ -149,7 +149,7 @@ func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, pro
 			Container: svc.Container,
 			Hosts:     svc.Hosts,
 			Ports:     svc.Ports,
-			Mandatory: svc.Mandatory,
+			Mandatory: svc.Required,
 			Enabled:   svc.Enabled,
 			Running:   running,
 		})

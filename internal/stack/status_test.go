@@ -11,7 +11,7 @@ import (
 func TestHealthIndicator_Stopped(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -30,7 +30,7 @@ func TestHealthIndicator_Stopped(t *testing.T) {
 func TestHealthIndicator_Running(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -49,7 +49,7 @@ func TestHealthIndicator_Running(t *testing.T) {
 func TestHealthIndicator_Partial(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main":   {Type: "app", Container: "app-main", Mandatory: true},
+			"main":   {Type: "app", Container: "app-main", Required: true},
 			"second": {Type: "app", Container: "app-second", Enabled: true},
 		},
 		map[string]testTool(nil),
@@ -71,7 +71,7 @@ func TestHealthIndicator_Partial(t *testing.T) {
 func TestRenderHealth_ContainsIndicator(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Dir: "./services/main", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Dir: "./services/main", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -87,7 +87,7 @@ func TestRenderHealth_ContainsIndicator(t *testing.T) {
 func TestRenderHealth_Stopped(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -103,7 +103,7 @@ func TestRenderHealth_Stopped(t *testing.T) {
 func TestRenderHealth_Running(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -119,7 +119,7 @@ func TestRenderHealth_Running(t *testing.T) {
 func TestRenderHealth_Partial(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main":   {Type: "app", Container: "app-main", Mandatory: true},
+			"main":   {Type: "app", Container: "app-main", Required: true},
 			"second": {Type: "app", Container: "app-second", Enabled: true},
 		},
 		map[string]testTool(nil),
@@ -138,7 +138,7 @@ func TestRenderHealth_Partial(t *testing.T) {
 func TestRenderApps_ContainsServiceName(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -159,8 +159,8 @@ func TestRenderApps_ContainsServiceName(t *testing.T) {
 func TestRenderInfra_FiltersByType(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"db":   {Type: config.ServiceTypeInfra, Container: "db", Mandatory: true},
-			"main": {Type: config.ServiceTypeApp, Container: "app-main", Mandatory: true},
+			"db":   {Type: config.ServiceTypeInfra, Container: "db", Required: true},
+			"main": {Type: config.ServiceTypeApp, Container: "app-main", Required: true},
 		},
 	}
 	out, _ := RenderInfra(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
@@ -196,7 +196,7 @@ func TestRenderTools_ContainsToolName(t *testing.T) {
 func TestRenderTopology_NilSkipped(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -211,7 +211,7 @@ func TestRenderTopology_NilSkipped(t *testing.T) {
 func TestRenderTopology_WithStatus(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
-			"main": {Type: "app", Container: "app-main", Mandatory: true},
+			"main": {Type: "app", Container: "app-main", Required: true},
 		},
 		map[string]testTool(nil),
 		nil,
@@ -242,7 +242,7 @@ func TestRenderApps_CustomColumnsAggregateError(t *testing.T) {
 			"main": {
 				Type:      "app",
 				Container: "app-main",
-				Mandatory: true,
+				Required: true,
 				Status: []config.StatusColumn{
 					{Name: "X", Value: "{{ this is broken syntax"},
 				},

@@ -40,8 +40,8 @@ func ValidateServiceToggle(cfg *config.DevboxConfig, name string) error {
 	if !ok {
 		return fmt.Errorf("service %q not found", name)
 	}
-	if svc.Mandatory {
-		return fmt.Errorf("service %q is mandatory and cannot be toggled", name)
+	if svc.Required {
+		return fmt.Errorf("service %q is required and cannot be toggled", name)
 	}
 	return nil
 }

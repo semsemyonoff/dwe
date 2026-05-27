@@ -81,7 +81,7 @@ func TestRenderSummary_MandatoryCountsAsEnabled(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Services: map[string]config.ServiceConfig{
-			"main":   {Type: config.ServiceTypeApp, Mandatory: true},
+			"main":   {Type: config.ServiceTypeApp, Required: true},
 			"second": {Type: config.ServiceTypeApp, Enabled: true},
 			"third":  {Type: config.ServiceTypeApp, Enabled: false},
 		},
@@ -100,8 +100,8 @@ func TestRenderSummary_ServiceCountIsAppOnly(t *testing.T) {
 		Services: map[string]config.ServiceConfig{
 			"web":     {Type: config.ServiceTypeApp, Enabled: true},
 			"worker":  {Type: config.ServiceTypeApp, Enabled: false},
-			"db":      {Type: config.ServiceTypeInfra, Mandatory: true},
-			"redis":   {Type: config.ServiceTypeInfra, Mandatory: true},
+			"db":      {Type: config.ServiceTypeInfra, Required: true},
+			"redis":   {Type: config.ServiceTypeInfra, Required: true},
 			"adminer": {Type: config.ServiceTypeTool, Enabled: true},
 		},
 	}

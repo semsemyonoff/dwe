@@ -121,11 +121,11 @@ func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv [
 }
 
 // DisabledNodes returns the compose service names for services that
-// are neither mandatory nor enabled in the current config.
+// are neither required nor enabled in the current config.
 func DisabledNodes(cfg *config.DevboxConfig) []string {
 	var names []string
 	for _, svc := range cfg.Services {
-		if !svc.Mandatory && !svc.Enabled && svc.Container != "" {
+		if !svc.Required && !svc.Enabled && svc.Container != "" {
 			names = append(names, svc.Container)
 		}
 	}

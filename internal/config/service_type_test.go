@@ -89,7 +89,7 @@ func TestServiceConfig_PortHostHelpers(t *testing.T) {
 }
 
 func TestAllowedFieldsFor(t *testing.T) {
-	commonFields := []string{"type", "container", "mandatory", "compose", "ports", "hosts", "status"}
+	commonFields := []string{"type", "container", "required", "compose", "ports", "hosts", "status"}
 
 	appOnly := []string{"dir", "dir_internal", "work_dir_internal", "configs", "dirs", "extends", "cli", "render"}
 	dependsOn := "depends_on"

@@ -259,24 +259,24 @@ type selectToggleFn func(title string, items []ui.SelectorItem) (int, error)
 // defaultSelectToggle calls ui.RunSelector.
 var defaultSelectToggle selectToggleFn = ui.RunSelector
 
-// pickServiceToEnable returns the name of a disabled non-mandatory service to enable.
+// pickServiceToEnable returns the name of a disabled non-required service to enable.
 func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
 	for _, name := range sortedServiceNames(cfg.Services) {
 		svc := cfg.Services[name]
-		if isServiceManageable(svc) && !svc.Mandatory && !svc.Enabled {
+		if isServiceManageable(svc) && !svc.Required && !svc.Enabled {
 			candidates = append(candidates, name)
 		}
 	}
 	return pickToggleCandidates(cfg, candidates, "disabled", "Select a service to enable:", selector)
 }
 
-// pickServiceToDisable returns the name of an enabled non-mandatory service to disable.
+// pickServiceToDisable returns the name of an enabled non-required service to disable.
 func pickServiceToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
 	for _, name := range sortedServiceNames(cfg.Services) {
 		svc := cfg.Services[name]
-		if isServiceManageable(svc) && !svc.Mandatory && svc.Enabled {
+		if isServiceManageable(svc) && !svc.Required && svc.Enabled {
 			candidates = append(candidates, name)
 		}
 	}
@@ -295,7 +295,7 @@ func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel,
 			Type:      string(svc.Type),
 			Icon:      svc.DisplayIcon(),
 			Container: svc.Container,
-			Mandatory: svc.Mandatory,
+			Mandatory: svc.Required,
 			Enabled:   svc.Enabled,
 		}
 		items[i] = ui.SelectorItem{
@@ -340,13 +340,13 @@ disabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
-				// Mandatory enable is a no-op + warning.
-				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: service %q is already mandatory; nothing to do\n", name)
+				// Required enable is a no-op + warning.
+				if svc, ok := cfg.Services[name]; ok && svc.Required {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: service %q is already required; nothing to do\n", name)
 					return nil
 				}
 				// Already-enabled optional service: no-op to avoid spurious pending ops.
-				if svc, ok := cfg.Services[name]; ok && !svc.Mandatory && svc.Enabled {
+				if svc, ok := cfg.Services[name]; ok && !svc.Required && svc.Enabled {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "service %q is already enabled\n", name)
 					return nil
 				}
@@ -402,12 +402,12 @@ enabled optional services.`,
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
-				// Cannot disable mandatory.
-				if svc, ok := cfg.Services[name]; ok && svc.Mandatory {
-					return fmt.Errorf("cannot disable mandatory service %q", name)
+				// Cannot disable required.
+				if svc, ok := cfg.Services[name]; ok && svc.Required {
+					return fmt.Errorf("cannot disable required service %q", name)
 				}
 				// Already-disabled optional service: no-op to avoid spurious pending ops.
-				if svc, ok := cfg.Services[name]; ok && !svc.Mandatory && !svc.Enabled {
+				if svc, ok := cfg.Services[name]; ok && !svc.Required && !svc.Enabled {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "service %q is already disabled\n", name)
 					return nil
 				}
@@ -461,7 +461,7 @@ func serviceCompletion(flags *rootFlags, filter serviceFilter) func(*cobra.Comma
 		var names []string
 		for _, name := range sortedServiceNames(cfg.Services) {
 			svc := cfg.Services[name]
-			if svc.Mandatory || !isServiceManageable(svc) {
+			if svc.Required || !isServiceManageable(svc) {
 				continue
 			}
 			switch filter {
