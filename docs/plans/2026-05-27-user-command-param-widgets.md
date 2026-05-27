@@ -341,11 +341,11 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
 - Modify: `internal/validate/commands/commands.go`
 - Modify: `internal/validate/commands/commands_test.go`
 
-- [ ] confirm the `validate/commands` validator calls `CommandDef.Validate` (it should); if not, route the new param diagnostics through it
-- [ ] ensure each new error surfaces as a `validate.Diagnostic` with `Hint` pointing at the offending param + field name (e.g. `params.db.options`)
-- [ ] add a best-effort `default_from`/`default` ∈ resolved options check using `validate.Context.Cfg.Raw` (Cfg is carried via Context — see `internal/validate/validate.go:29`); when `Cfg == nil` (partial load) skip the check silently; runtime in Task 7 is the safety net
-- [ ] write tests that load a fixture command file with each bad-param shape (from Task 4 invariants) and assert diagnostics, including one fixture with `default_from` pointing at a static-options param value that exists vs doesn't exist
-- [ ] run `make test ./internal/validate/commands/...` — must pass before Task 6
+- [x] confirm the `validate/commands` validator calls `CommandDef.Validate` (it should); if not, route the new param diagnostics through it
+- [x] ensure each new error surfaces as a `validate.Diagnostic` with `Hint` pointing at the offending param + field name (e.g. `params.db.options`)
+- [x] add a best-effort `default_from`/`default` ∈ resolved options check using `validate.Context.Cfg.Raw` (Cfg is carried via Context — see `internal/validate/validate.go:29`); when `Cfg == nil` (partial load) skip the check silently; runtime in Task 7 is the safety net
+- [x] write tests that load a fixture command file with each bad-param shape (from Task 4 invariants) and assert diagnostics, including one fixture with `default_from` pointing at a static-options param value that exists vs doesn't exist
+- [x] run `make test ./internal/validate/commands/...` — must pass before Task 6
 
 ### Task 6: `resolve.ResolveOptions`
 
