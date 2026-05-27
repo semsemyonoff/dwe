@@ -300,7 +300,7 @@ params:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `widget` | enum | inferred from `type` | One of `input`, `select`, `multiselect`, `confirm`. Inferred as `confirm` for `bool`; `select` if `options` present; `input` for string/int/path without options |
-| `options` | list or ref | — | Static list of option values, list of `{value, label, description}` objects, or a dot-path reference to config (e.g., `${databases}`) |
+| `options` | list or ref | — | Static list of option values, list of `{value, label}` objects, or a dot-path reference to config (e.g., `${databases}`) |
 | `separator` | string | `" "` | Joining separator for multiselect results; used only when `widget: multiselect` |
 
 Widget rendering:

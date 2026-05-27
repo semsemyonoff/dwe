@@ -490,9 +490,8 @@ func optionsToAskOptions(items []model.OptionItem) []ask.Option {
 	opts := make([]ask.Option, len(items))
 	for i, item := range items {
 		opts[i] = ask.Option{
-			Value:       item.Value,
-			Label:       item.Label,
-			Description: item.Description,
+			Value: item.Value,
+			Label: item.Label,
 		}
 	}
 	return opts

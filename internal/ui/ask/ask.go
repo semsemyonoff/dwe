@@ -30,9 +30,8 @@ const (
 
 // Option represents a single choice in a select or multiselect field.
 type Option struct {
-	Value       string
-	Label       string
-	Description string
+	Value string
+	Label string
 }
 
 // Field describes one form field.

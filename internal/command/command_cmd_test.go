@@ -16,6 +16,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/ui/ask"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
 
@@ -993,5 +994,268 @@ func TestCommandCmd_SignalAwareContext(t *testing.T) {
 	close(releaseCh)
 	if err := <-errCh; err != nil {
 		t.Fatalf("RunE returned error: %v", err)
+	}
+}
+
+// --- buildAskFields ---------------------------------------------------------
+
+func makeDef(params map[string]model.ParamDef) *usercommands.CommandDef {
+	return &usercommands.CommandDef{
+		ID:     "test.cmd",
+		Params: params,
+	}
+}
+
+func TestBuildAskFields_InputWidget(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"name": {Type: model.ParamTypeString},
+	})
+	fields, err := buildAskFields(def, map[string]string{}, map[string]string{}, i18n.NopTranslator{}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(fields))
+	}
+	if fields[0].Kind != ask.FieldInput {
+		t.Errorf("expected FieldInput, got %v", fields[0].Kind)
+	}
+	if fields[0].Key != "name" {
+		t.Errorf("expected key=name, got %q", fields[0].Key)
+	}
+}
+
+func TestBuildAskFields_ConfirmWidget(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"verbose": {Type: model.ParamTypeBool},
+	})
+	fields, err := buildAskFields(def, map[string]string{}, map[string]string{}, i18n.NopTranslator{}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(fields))
+	}
+	if fields[0].Kind != ask.FieldConfirm {
+		t.Errorf("expected FieldConfirm, got %v", fields[0].Kind)
+	}
+}
+
+func TestBuildAskFields_SelectWidget(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"env": {
+			Type:    model.ParamTypeString,
+			Widget:  model.WidgetSelect,
+			Options: &model.ParamOptions{Static: []model.OptionItem{{Value: "dev", Label: "Dev"}, {Value: "prod", Label: "Prod"}}},
+		},
+	})
+	opts := map[string][]model.OptionItem{
+		"env": {{Value: "dev", Label: "Dev"}, {Value: "prod", Label: "Prod"}},
+	}
+	fields, err := buildAskFields(def, map[string]string{"env": "dev"}, map[string]string{}, i18n.NopTranslator{}, "", opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(fields))
+	}
+	if fields[0].Kind != ask.FieldSelect {
+		t.Errorf("expected FieldSelect, got %v", fields[0].Kind)
+	}
+	if len(fields[0].Options) != 2 {
+		t.Errorf("expected 2 options, got %d", len(fields[0].Options))
+	}
+	if fields[0].Options[0].Label != "Dev" {
+		t.Errorf("expected label=Dev, got %q", fields[0].Options[0].Label)
+	}
+}
+
+func TestBuildAskFields_MultiselectWidget_DefaultSplit(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"tags": {
+			Type:   model.ParamTypeString,
+			Widget: model.WidgetMultiselect,
+			Options: &model.ParamOptions{
+				Static: []model.OptionItem{
+					{Value: "a", Label: "A"},
+					{Value: "b", Label: "B"},
+					{Value: "c", Label: "C"},
+				},
+			},
+		},
+	})
+	opts := map[string][]model.OptionItem{
+		"tags": {{Value: "a", Label: "A"}, {Value: "b", Label: "B"}, {Value: "c", Label: "C"}},
+	}
+	// Default is "a b" — should split into ["a", "b"] as pre-selected values.
+	fields, err := buildAskFields(def, map[string]string{"tags": "a b"}, map[string]string{}, i18n.NopTranslator{}, "", opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(fields))
+	}
+	if fields[0].Kind != ask.FieldMultiselect {
+		t.Errorf("expected FieldMultiselect, got %v", fields[0].Kind)
+	}
+	if len(fields[0].Defaults) != 2 || fields[0].Defaults[0] != "a" || fields[0].Defaults[1] != "b" {
+		t.Errorf("expected Defaults=[a b], got %v", fields[0].Defaults)
+	}
+}
+
+func TestBuildAskFields_MultiselectWidget_CustomSeparatorSplit(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"tags": {
+			Type:      model.ParamTypeString,
+			Widget:    model.WidgetMultiselect,
+			Separator: ",",
+			Options:   &model.ParamOptions{Static: []model.OptionItem{{Value: "a"}, {Value: "b"}}},
+		},
+	})
+	opts := map[string][]model.OptionItem{
+		"tags": {{Value: "a", Label: "a"}, {Value: "b", Label: "b"}},
+	}
+	fields, err := buildAskFields(def, map[string]string{"tags": "a,b"}, map[string]string{}, i18n.NopTranslator{}, "", opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields[0].Defaults) != 2 || fields[0].Defaults[0] != "a" || fields[0].Defaults[1] != "b" {
+		t.Errorf("expected Defaults=[a b] with comma sep, got %v", fields[0].Defaults)
+	}
+}
+
+func TestBuildAskFields_SelectEmptyOptions_Required_Error(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"env": {
+			Type:     model.ParamTypeString,
+			Widget:   model.WidgetSelect,
+			Required: true,
+			Options:  &model.ParamOptions{From: "envs"},
+		},
+	})
+	_, err := buildAskFields(def, map[string]string{}, map[string]string{}, i18n.NopTranslator{}, "", map[string][]model.OptionItem{"env": {}})
+	if err == nil {
+		t.Fatal("expected error for required select with empty options")
+	}
+}
+
+func TestBuildAskFields_SelectEmptyOptions_Optional_Skipped(t *testing.T) {
+	def := makeDef(map[string]model.ParamDef{
+		"env": {
+			Type:    model.ParamTypeString,
+			Widget:  model.WidgetSelect,
+			Options: &model.ParamOptions{Static: []model.OptionItem{}},
+		},
+	})
+	fields, err := buildAskFields(def, map[string]string{}, map[string]string{}, i18n.NopTranslator{}, "", map[string][]model.OptionItem{"env": {}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != 0 {
+		t.Errorf("expected 0 fields (optional empty options skipped), got %d", len(fields))
+	}
+}
+
+func TestBuildAskFields_SetEscapeHatch_SkipsField(t *testing.T) {
+	// When a --set value is provided for a select with empty options, the field is skipped
+	// (escape hatch: user bypasses the form).
+	def := makeDef(map[string]model.ParamDef{
+		"env": {
+			Type:     model.ParamTypeString,
+			Widget:   model.WidgetSelect,
+			Required: true,
+			Options:  &model.ParamOptions{From: "envs"},
+		},
+	})
+	fields, err := buildAskFields(
+		def,
+		map[string]string{"env": "staging"}, // prefilled
+		map[string]string{"env": "staging"}, // provided via --set
+		i18n.NopTranslator{}, "",
+		map[string][]model.OptionItem{"env": {}},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != 0 {
+		t.Errorf("expected field skipped via --set escape hatch, got %d fields", len(fields))
+	}
+}
+
+// --- mergeAnswers -----------------------------------------------------------
+
+func TestMergeAnswers_InputSelect_Passthrough(t *testing.T) {
+	defs := map[string]model.ParamDef{
+		"env":  {Type: model.ParamTypeString},
+		"name": {Type: model.ParamTypeString},
+	}
+	res := ask.NewResultForTest(map[string]any{"env": "prod"})
+	prev := map[string]string{"env": "dev", "name": "alice"}
+
+	out := mergeAnswers(res, defs, prev)
+	if out["env"] != "prod" {
+		t.Errorf("env: expected prod, got %q", out["env"])
+	}
+	if out["name"] != "alice" {
+		t.Errorf("name: expected alice (unchanged), got %q", out["name"])
+	}
+}
+
+func TestMergeAnswers_Multiselect_DefaultSeparator(t *testing.T) {
+	defs := map[string]model.ParamDef{
+		"tags": {Type: model.ParamTypeString, Widget: model.WidgetMultiselect},
+	}
+	res := ask.NewResultForTest(map[string]any{"tags": []string{"a", "b", "c"}})
+	out := mergeAnswers(res, defs, map[string]string{})
+	if out["tags"] != "a b c" {
+		t.Errorf("expected 'a b c', got %q", out["tags"])
+	}
+}
+
+func TestMergeAnswers_Multiselect_CustomSeparator(t *testing.T) {
+	defs := map[string]model.ParamDef{
+		"tags": {Type: model.ParamTypeString, Widget: model.WidgetMultiselect, Separator: ","},
+	}
+	res := ask.NewResultForTest(map[string]any{"tags": []string{"x", "y"}})
+	out := mergeAnswers(res, defs, map[string]string{})
+	if out["tags"] != "x,y" {
+		t.Errorf("expected 'x,y', got %q", out["tags"])
+	}
+}
+
+func TestMergeAnswers_Confirm_TrueString(t *testing.T) {
+	defs := map[string]model.ParamDef{
+		"verbose": {Type: model.ParamTypeBool},
+	}
+	res := ask.NewResultForTest(map[string]any{"verbose": true})
+	out := mergeAnswers(res, defs, map[string]string{})
+	if out["verbose"] != "true" {
+		t.Errorf("expected 'true', got %q", out["verbose"])
+	}
+}
+
+func TestMergeAnswers_Confirm_FalseString(t *testing.T) {
+	defs := map[string]model.ParamDef{
+		"verbose": {Type: model.ParamTypeBool},
+	}
+	res := ask.NewResultForTest(map[string]any{"verbose": false})
+	out := mergeAnswers(res, defs, map[string]string{})
+	if out["verbose"] != "false" {
+		t.Errorf("expected 'false', got %q", out["verbose"])
+	}
+}
+
+func TestMergeAnswers_SkippedFieldPreservesDefault(t *testing.T) {
+	// Fields not in the form result (skipped by buildAskFields) are preserved
+	// from prevValues unchanged.
+	defs := map[string]model.ParamDef{
+		"env": {Type: model.ParamTypeString},
+	}
+	// Result has no "env" key — field was skipped.
+	res := ask.NewResultForTest(map[string]any{})
+	prev := map[string]string{"env": "staging"}
+	out := mergeAnswers(res, defs, prev)
+	if out["env"] != "staging" {
+		t.Errorf("expected env=staging preserved from prev, got %q", out["env"])
 	}
 }

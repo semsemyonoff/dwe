@@ -219,9 +219,8 @@ const (
 
 // OptionItem is a single option in a ParamOptions list, with an optional label.
 type OptionItem struct {
-	Value       string `yaml:"value"`
-	Label       string `yaml:"label"`
-	Description string `yaml:"description,omitempty"`
+	Value string `yaml:"value"`
+	Label string `yaml:"label"`
 }
 
 // ParamOptions holds the source of options for select/multiselect widgets.

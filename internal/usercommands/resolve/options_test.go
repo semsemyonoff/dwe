@@ -90,7 +90,8 @@ func TestResolveOptions_FromMapList(t *testing.T) {
 	require.Equal(t, "MySQL 8", result[1].Label)
 }
 
-func TestResolveOptions_FromMapListWithDescription(t *testing.T) {
+func TestResolveOptions_FromMapListWithUnknownKey(t *testing.T) {
+	// Unknown keys in option maps (e.g. "description") are silently ignored.
 	opts := &model.ParamOptions{
 		From: "services",
 	}
@@ -109,7 +110,6 @@ func TestResolveOptions_FromMapListWithDescription(t *testing.T) {
 	require.Len(t, result, 1)
 	require.Equal(t, "main", result[0].Value)
 	require.Equal(t, "Main Service", result[0].Label)
-	require.Equal(t, "The primary service", result[0].Description)
 }
 
 func TestResolveOptions_FromMapListMissingLabel(t *testing.T) {

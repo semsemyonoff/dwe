@@ -101,11 +101,6 @@ func normalizeOptions(path string, resolved any) ([]model.OptionItem, error) {
 					item.Label = item.Value
 				}
 
-				// Description is optional.
-				if desc, ok := m["description"]; ok {
-					item.Description = fmt.Sprint(desc)
-				}
-
 				result[i] = item
 			}
 			return result, nil
