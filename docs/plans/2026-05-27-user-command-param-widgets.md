@@ -251,22 +251,22 @@ params:
 - Create: `internal/ui/ask/ask.go`
 - Create: `internal/ui/ask/ask_test.go`
 
-- [ ] define `FieldKind`, `Field`, `Option`, `Result` types in `internal/ui/ask/ask.go`
-- [ ] place `FieldUnknown` at iota 0 as sentinel; `Run` returns error if any `Field.Kind == FieldUnknown`
-- [ ] add typed accessors on `Result`: `String(key) string`, `Strings(key) []string`, `Bool(key) bool` — callers must NOT touch the underlying map (it stays unexported)
-- [ ] implement `Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Result, error)` wrapping `huh.NewForm` with one group, dispatching per `FieldKind` to `huh.NewInput` / `NewSelect[string]` / `NewMultiSelect[string]` / `NewConfirm`
-- [ ] call `form.RunWithContext(ctx)` (NOT `form.Run()`) so context cancellation propagates — this is load-bearing: command_cmd.go passes a signal-aware context (`internal/command/command_cmd.go:114`)
-- [ ] wire `RunOptions.Input` via `form.WithInput(in)` and `RunOptions.Output` via `form.WithOutput(out)`; zero RunOptions → defaults (`os.Stdin`/`os.Stdout`)
-- [ ] apply `ui.Theme()` to the form (`form.WithTheme(ui.Theme())`) and call `ui.SetHuhHooks(...)` if applicable so styling matches selector/confirm/multiselect; do NOT re-implement theme logic here
-- [ ] populate `Result.values`: input/select → `huh.Form.GetString(key)`; multiselect → `[]string` via the bound slice pointer (huh's standard pattern); confirm → `huh.Form.GetBool(key)`
-- [ ] support per-field `Validate` callbacks (input/select: invoked with the value; multiselect: invoked per selected item)
-- [ ] handle `Required` (huh's `Validate` returning error on empty) and `Default` / `Defaults` (pre-fill)
-- [ ] return `Result` as `map[string]any` (string for scalar kinds, `[]string` for multiselect)
-- [ ] write tests for `BuildFields` (the pure factory if extracted) covering each `FieldKind` — schema-shape assertions only, no interactive form run
-- [ ] write tests for `Run` happy path via huh's programmatic test API (one input field, one select field, one confirm asserting bool) — pattern: copy from `internal/setup/huh_test.go`; test `RunOptions.Input` by feeding scripted bytes
-- [ ] write a context-cancellation test: spawn `Run` in a goroutine, cancel the context, assert `Run` returns within a short timeout with a non-nil error
-- [ ] write tests for validation rejection (required-empty, custom validate returning err)
-- [ ] run `make test ./internal/ui/ask/...` — must pass before Task 2
+- [x] define `FieldKind`, `Field`, `Option`, `Result` types in `internal/ui/ask/ask.go`
+- [x] place `FieldUnknown` at iota 0 as sentinel; `Run` returns error if any `Field.Kind == FieldUnknown`
+- [x] add typed accessors on `Result`: `String(key) string`, `Strings(key) []string`, `Bool(key) bool` — callers must NOT touch the underlying map (it stays unexported)
+- [x] implement `Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Result, error)` wrapping `huh.NewForm` with one group, dispatching per `FieldKind` to `huh.NewInput` / `NewSelect[string]` / `NewMultiSelect[string]` / `NewConfirm`
+- [x] call `form.RunWithContext(ctx)` (NOT `form.Run()`) so context cancellation propagates — this is load-bearing: command_cmd.go passes a signal-aware context (`internal/command/command_cmd.go:114`)
+- [x] wire `RunOptions.Input` via `form.WithInput(in)` and `RunOptions.Output` via `form.WithOutput(out)`; zero RunOptions → defaults (`os.Stdin`/`os.Stdout`)
+- [x] apply `ui.Theme()` to the form (`form.WithTheme(ui.Theme())`) and call `ui.SetHuhHooks(...)` if applicable so styling matches selector/confirm/multiselect; do NOT re-implement theme logic here
+- [x] populate `Result.values`: input/select → `huh.Form.GetString(key)`; multiselect → `[]string` via the bound slice pointer (huh's standard pattern); confirm → `huh.Form.GetBool(key)`
+- [x] support per-field `Validate` callbacks (input/select: invoked with the value; multiselect: invoked per selected item)
+- [x] handle `Required` (huh's `Validate` returning error on empty) and `Default` / `Defaults` (pre-fill)
+- [x] return `Result` as `map[string]any` (string for scalar kinds, `[]string` for multiselect)
+- [x] write tests for `BuildFields` (the pure factory if extracted) covering each `FieldKind` — schema-shape assertions only, no interactive form run
+- [x] write tests for `Run` happy path via huh's programmatic test API (one input field, one select field, one confirm asserting bool) — pattern: copy from `internal/setup/huh_test.go`; test `RunOptions.Input` by feeding scripted bytes
+- [x] write a context-cancellation test: spawn `Run` in a goroutine, cancel the context, assert `Run` returns within a short timeout with a non-nil error
+- [x] write tests for validation rejection (required-empty, custom validate returning err)
+- [x] run `make test ./internal/ui/ask/...` — must pass before Task 2
 
 ### Task 2: Route `internal/setup` form-runner through `internal/ui/ask`
 
