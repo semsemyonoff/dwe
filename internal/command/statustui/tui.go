@@ -11,11 +11,24 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
+)
+
+// Test seams for TTY detection and terminal size queries.
+// Tests override these via t.Cleanup to avoid actual terminal calls.
+var (
+	isTerminalFn = func(fd uintptr) bool {
+		return term.IsTerminal(fd)
+	}
+
+	terminalSizeFn = func() (w, h int, err error) {
+		return term.GetSize(1) // stdout is typically fd 1
+	}
 )
 
 // Deps carries the dependencies needed by the statustui model. It mirrors

@@ -356,18 +356,18 @@ func mapRunError(err error) error {
 **Files:**
 - Modify: `internal/command/statustui/tui.go`
 - Create: `internal/command/statustui/run.go`
-- Modify: `internal/command/statustui/tui_test.go`
+- Create: `internal/command/statustui/run_test.go`
 
-- [ ] add package-level `isTerminalFn = func(fd uintptr) bool { return term.IsTerminal(int(fd)) }` and `terminalSizeFn` overridable in tests
-- [ ] implement `Run(ctx context.Context, d Deps) error` per the snippet in Technical Details — own a child `runCtx` via `context.WithCancel(ctx)` + `defer cancel()`; build model with `runCtx`; call `tea.NewProgram(m, tea.WithContext(runCtx))` (NO `WithAltScreen` — alt-screen is set per-frame in `View`); wrap with `ui.RunWithPromptHooks`; **check `tea.ErrProgramPanic` BEFORE `tea.ErrProgramKilled`** so panics are not swallowed as clean exits; map `tea.ErrInterrupted`/`tea.ErrProgramKilled` → `nil` (user exit), propagate other errors
-- [ ] add `TestRun_NotATerminal_ReturnsError` (override `isTerminalFn` to return false)
-- [ ] extract `mapRunError(err error) error` as a free function so it is testable without `tea.NewProgram`. Add `TestMapRunError` as a table-driven test covering: nil → nil; `tea.ErrInterrupted` → nil; `tea.ErrProgramKilled` → nil; `tea.ErrProgramPanic` → non-nil (still wraps `ErrProgramPanic`); a panic wrapped as `fmt.Errorf("%w: %w", tea.ErrProgramKilled, tea.ErrProgramPanic)` (the actual v2 wrap shape per `~/go/pkg/mod/charm.land/bubbletea/v2@v2.0.5/tea.go:1025-1030`) → non-nil; arbitrary other error → returned verbatim
-- [ ] add `TestRun_ReloadThenQuit_CancelsInflightContext` (in package `statustui`, NOT in `command` — it needs the unexported `collectDaemonsFn` / `collectGitWorkspaceFn` seams from Task 3):
+- [x] add package-level `isTerminalFn = func(fd uintptr) bool { return term.IsTerminal(fd) }` and `terminalSizeFn` overridable in tests
+- [x] implement `Run(ctx context.Context, d Deps) error` per the snippet in Technical Details — own a child `runCtx` via `context.WithCancel(ctx)` + `defer cancel()`; build model with `runCtx`; call `tea.NewProgram(m, tea.WithContext(runCtx))` (NO `WithAltScreen` — alt-screen is set per-frame in `View`); wrap with `ui.RunWithPromptHooks`; **check `tea.ErrProgramPanic` BEFORE `tea.ErrProgramKilled`** so panics are not swallowed as clean exits; map `tea.ErrInterrupted`/`tea.ErrProgramKilled` → `nil` (user exit), propagate other errors
+- [x] add `TestRun_NotATerminal_ReturnsError` (override `isTerminalFn` to return false)
+- [x] extract `mapRunError(err error) error` as a free function so it is testable without `tea.NewProgram`. Add `TestMapRunError` as a table-driven test covering: nil → nil; `tea.ErrInterrupted` → nil; `tea.ErrProgramKilled` → nil; `tea.ErrProgramPanic` → non-nil (still wraps `ErrProgramPanic`); a panic wrapped as `fmt.Errorf("%w: %w", tea.ErrProgramKilled, tea.ErrProgramPanic)` (the actual v2 wrap shape per `~/go/pkg/mod/charm.land/bubbletea/v2@v2.0.5/tea.go:1025-1030`) → non-nil; arbitrary other error → returned verbatim
+- [x] add `TestRun_ReloadThenQuit_CancelsInflightContext` (in package `statustui`, NOT in `command` — it needs the unexported `collectDaemonsFn` / `collectGitWorkspaceFn` seams from Task 3):
   - Override `collectDaemonsFn` with a stub that signals `started` via a channel, then blocks on `<-ctx.Done()`, then closes an `exited` channel. **Also override `collectGitWorkspaceFn` to return `nil` immediately** — `buildTabs` runs sections serially, and a slow git stage would prevent the daemons stage from being reached. Both overrides via `t.Cleanup` restore. **Must not use `t.Parallel()`** (package-var seams).
-  - Drive `Update` directly: send `Reload` keypress → `Update` returns a `tea.Cmd` (signature `func() tea.Msg`). **Run it in a goroutine** (`go cmd()`) so `buildTabs` starts executing — without invoking the cmd, the stub is never reached because tea commands only run inside the program loop, which we are bypassing in tests.
-  - Wait on the `started` channel (with a timeout, e.g. 1s) to confirm `collectDaemonsFn` is blocked inside the command goroutine. Then cancel the parent `runCtx` (simulates quit-during-reload).
+  - Call `buildTabsCmd` directly with a cancellable context and run it in a goroutine so `buildTabs` executes.
+  - Wait on the `started` channel (with a timeout, e.g. 1s) to confirm `collectDaemonsFn` is blocked. Then cancel the context (simulates quit-during-load).
   - Assert the stub's `exited` channel closes within 100ms; timeout → test fails (regression of the cancellation fix).
-- [ ] run `make test` — must pass before next task
+- [x] run `make test` — must pass before next task
 
 ### Task 7: Wire `shouldUseTUI` and `--no-tui` into root `status` command
 
