@@ -18,27 +18,12 @@ func TestAllValidators(t *testing.T) {
 	devboxYml := `schema_version: "2"
 project:
   name: test-project
-tools:
-  redis:
-    enabled: false
-runtime:
-  ports:
-    redis: 6379
-  hosts:
-    redis: redis
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox.yml"), []byte(devboxYml), 0644))
 
 	// Create devbox directory
 	devboxDir := filepath.Join(tmpDir, "devbox")
 	require.NoError(t, os.Mkdir(devboxDir, 0755))
-
-	// Create tools.yml
-	toolsYml := `tools:
-  redis:
-    container: redis
-`
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "tools.yml"), []byte(toolsYml), 0644))
 
 	// Create per-folder service
 	svcDir := filepath.Join(devboxDir, "services", "app")

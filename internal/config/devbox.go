@@ -1153,6 +1153,11 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		return nil, fmt.Errorf("binaries: moved to ~/.config/devbox/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md")
 	}
 
+	// Reject tools: blocks — replaced by services with type:tool
+	if _, ok := merged["tools"]; ok {
+		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in devbox/services/. See docs/reference/config/services.md")
+	}
+
 	// Load user-config for binary overrides. On error, log warning and continue
 	// (graceful degradation — a malformed user pref file doesn't break project loading).
 	userCfg, err := userconfig.Load(baseDir)
