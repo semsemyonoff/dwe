@@ -379,3 +379,180 @@ args:
 		t.Errorf("Up args = %v, want %v (base value should survive)", dcfg.Args.Up, wantUp)
 	}
 }
+
+// Tests for per-key defaults behavior (Task 8)
+
+func TestLoadDockerConfig_DefaultsAppliedWhenAbsent(t *testing.T) {
+	// When args keys are entirely absent, defaults should be applied.
+	yml := `
+project_name: "test"
+args: {}
+env: {}
+`
+	baseDir := writeDockerFixture(t, yml, "")
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+
+	// Verify defaults were applied
+	if !slicesEqual(dcfg.Args.Up, []string{"-d", "--remove-orphans"}) {
+		t.Errorf("Up args = %v, want [-d, --remove-orphans]", dcfg.Args.Up)
+	}
+	if !slicesEqual(dcfg.Args.Logs, []string{"-f"}) {
+		t.Errorf("Logs args = %v, want [-f]", dcfg.Args.Logs)
+	}
+	if !slicesEqual(dcfg.Args.Run, []string{"--rm"}) {
+		t.Errorf("Run args = %v, want [--rm]", dcfg.Args.Run)
+	}
+	if !slicesEqual(dcfg.Args.Down, []string{"--remove-orphans"}) {
+		t.Errorf("Down args = %v, want [--remove-orphans]", dcfg.Args.Down)
+	}
+
+	// Other args should remain nil/empty
+	if len(dcfg.Args.Global) != 0 {
+		t.Errorf("Global args = %v, want empty", dcfg.Args.Global)
+	}
+	if len(dcfg.Args.Stop) != 0 {
+		t.Errorf("Stop args = %v, want empty", dcfg.Args.Stop)
+	}
+}
+
+func TestLoadDockerConfig_ExplicitEmptyOptsOutOfDefault(t *testing.T) {
+	// When args keys are explicitly set to [], defaults should NOT be applied (opt-out).
+	yml := `
+project_name: "test"
+args:
+  up: []
+  logs: []
+  run: []
+  down: []
+env: {}
+`
+	baseDir := writeDockerFixture(t, yml, "")
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+
+	// Verify explicit empty [] is preserved (no default applied)
+	if len(dcfg.Args.Up) != 0 {
+		t.Errorf("Up args = %v, want empty (explicit [] opts out)", dcfg.Args.Up)
+	}
+	if len(dcfg.Args.Logs) != 0 {
+		t.Errorf("Logs args = %v, want empty (explicit [] opts out)", dcfg.Args.Logs)
+	}
+	if len(dcfg.Args.Run) != 0 {
+		t.Errorf("Run args = %v, want empty (explicit [] opts out)", dcfg.Args.Run)
+	}
+	if len(dcfg.Args.Down) != 0 {
+		t.Errorf("Down args = %v, want empty (explicit [] opts out)", dcfg.Args.Down)
+	}
+}
+
+func TestLoadDockerConfig_ExplicitValuesUsed(t *testing.T) {
+	// When args keys have explicit values, they should be used (no merge with defaults).
+	yml := `
+project_name: "test"
+args:
+  up: ["--no-deps"]
+  logs: ["-f", "--tail", "50"]
+  run: ["-it"]
+  down: []
+env: {}
+`
+	baseDir := writeDockerFixture(t, yml, "")
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+
+	// Verify explicit values are used without merging with defaults
+	if !slicesEqual(dcfg.Args.Up, []string{"--no-deps"}) {
+		t.Errorf("Up args = %v, want [--no-deps]", dcfg.Args.Up)
+	}
+	if !slicesEqual(dcfg.Args.Logs, []string{"-f", "--tail", "50"}) {
+		t.Errorf("Logs args = %v, want [-f, --tail, 50]", dcfg.Args.Logs)
+	}
+	if !slicesEqual(dcfg.Args.Run, []string{"-it"}) {
+		t.Errorf("Run args = %v, want [-it]", dcfg.Args.Run)
+	}
+	if len(dcfg.Args.Down) != 0 {
+		t.Errorf("Down args = %v, want empty", dcfg.Args.Down)
+	}
+}
+
+func TestLoadDockerConfig_PartialDefaultsApplied(t *testing.T) {
+	// Mix of absent (get defaults) and explicit (keep values) args.
+	yml := `
+project_name: "test"
+args:
+  up: ["--no-deps"]
+  logs: []
+env: {}
+`
+	baseDir := writeDockerFixture(t, yml, "")
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+
+	// up is explicit, logs is explicit-empty, run/down are absent
+	if !slicesEqual(dcfg.Args.Up, []string{"--no-deps"}) {
+		t.Errorf("Up args = %v, want [--no-deps] (explicit value)", dcfg.Args.Up)
+	}
+	if len(dcfg.Args.Logs) != 0 {
+		t.Errorf("Logs args = %v, want empty (explicit [])", dcfg.Args.Logs)
+	}
+	if !slicesEqual(dcfg.Args.Run, []string{"--rm"}) {
+		t.Errorf("Run args = %v, want [--rm] (default applied)", dcfg.Args.Run)
+	}
+	if !slicesEqual(dcfg.Args.Down, []string{"--remove-orphans"}) {
+		t.Errorf("Down args = %v, want [--remove-orphans] (default applied)", dcfg.Args.Down)
+	}
+}
+
+func TestLoadDockerConfig_LocalOverrideNoDefaults(t *testing.T) {
+	// When local.yml overrides args explicitly, defaults for unset keys in local are still applied.
+	baseYML := `
+project_name: "test"
+args:
+  up: ["--no-deps"]
+env: {}
+`
+	localYML := `
+args:
+  logs: ["-f", "--tail", "100"]
+`
+	baseDir := writeDockerFixture(t, baseYML, localYML)
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+
+	// Both base and local have explicit values — no defaults
+	if !slicesEqual(dcfg.Args.Up, []string{"--no-deps"}) {
+		t.Errorf("Up args = %v, want [--no-deps] (from base)", dcfg.Args.Up)
+	}
+	if !slicesEqual(dcfg.Args.Logs, []string{"-f", "--tail", "100"}) {
+		t.Errorf("Logs args = %v, want [-f, --tail, 100] (from local)", dcfg.Args.Logs)
+	}
+	// run and down are absent from both → defaults applied
+	if !slicesEqual(dcfg.Args.Run, []string{"--rm"}) {
+		t.Errorf("Run args = %v, want [--rm] (default applied)", dcfg.Args.Run)
+	}
+	if !slicesEqual(dcfg.Args.Down, []string{"--remove-orphans"}) {
+		t.Errorf("Down args = %v, want [--remove-orphans] (default applied)", dcfg.Args.Down)
+	}
+}
+

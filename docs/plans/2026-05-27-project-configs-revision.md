@@ -260,16 +260,16 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 
 **Nil-vs-empty distinction (per Codex review):** defaults are applied ONLY when the key is **absent from the YAML source**, NOT when present-but-empty (`up: []`). With `[]string` fields, plain `yaml.Unmarshal` cannot reliably distinguish nil from explicit-empty — both deserialize to a length-0 slice. The implementation MUST inspect the raw YAML map/node presence BEFORE typed unmarshal, OR rely on yaml.v3's documented behavior that an explicit `key: []` produces a non-nil empty slice (verify in impl).
 
-- [ ] in `LoadDockerConfig`: parse YAML twice — first into `map[string]yaml.Node` to detect key presence per-arg, then into `DockerConfig`. For each of the 4 default-bearing args (up/logs/run/down), apply default ONLY if the key was absent in the raw map.
-- [ ] defaults: `Up: [-d, --remove-orphans]`, `Logs: [-f]`, `Run: [--rm]`, `Down: [--remove-orphans]`
-- [ ] for the other 7 args (`Global`, `Stop`, `Restart`, `Ps`, `Exec`, `Pull`, `Build`): no defaults — nil if absent, empty if explicit `[]`, populated if explicit list
-- [ ] add code comment in DockerArgs struct (docker.go:83): `// Extend here when adding new docker subcommands wrapped by devbox.`
-- [ ] update docker.md `### args` section — document the per-key defaults explicitly (enumerate all 11) AND the absent-vs-explicit-empty distinction
-- [ ] add test case: docker.yml omitting `up:` entirely → resolved Up is the default `[-d, --remove-orphans]`
-- [ ] add test case: docker.yml with explicit `up: []` → resolved Up stays empty (the opt-out — CRITICAL Codex flag)
-- [ ] add test case: docker.yml with explicit `up: [--no-deps]` → resolved Up is `[--no-deps]` (no merge with default)
-- [ ] add test case: docker.yml with `args:` block entirely omitted → all 4 defaults applied; others nil
-- [ ] run `go test ./internal/config/...` — must pass before Task 9
+- [x] in `LoadDockerConfig`: parse YAML twice — first into `map[string]yaml.Node` to detect key presence per-arg, then into `DockerConfig`. For each of the 4 default-bearing args (up/logs/run/down), apply default ONLY if the key was absent in the raw map.
+- [x] defaults: `Up: [-d, --remove-orphans]`, `Logs: [-f]`, `Run: [--rm]`, `Down: [--remove-orphans]`
+- [x] for the other 7 args (`Global`, `Stop`, `Restart`, `Ps`, `Exec`, `Pull`, `Build`): no defaults — nil if absent, empty if explicit `[]`, populated if explicit list
+- [x] add code comment in DockerArgs struct (docker.go:83): `// Extend here when adding new docker subcommands wrapped by devbox.`
+- [x] update docker.md `### args` section — document the per-key defaults explicitly (enumerate all 11) AND the absent-vs-explicit-empty distinction
+- [x] add test case: docker.yml omitting `up:` entirely → resolved Up is the default `[-d, --remove-orphans]`
+- [x] add test case: docker.yml with explicit `up: []` → resolved Up stays empty (the opt-out — CRITICAL Codex flag)
+- [x] add test case: docker.yml with explicit `up: [--no-deps]` → resolved Up is `[--no-deps]` (no merge with default)
+- [x] add test case: docker.yml with `args:` block entirely omitted → all 4 defaults applied; others nil
+- [x] run `go test ./internal/config/...` — must pass before Task 9
 
 ### Task 9: i18n for `Messages.Success` / `Messages.Error`
 

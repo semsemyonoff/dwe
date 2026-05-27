@@ -108,12 +108,40 @@ args:
 
 Available subcommand keys: `global`, `up`, `down`, `stop`, `restart`, `logs`, `ps`, `exec`, `run`, `pull`, `build`. (Container health checks use the `docker_wait_healthy` builtin in pipeline steps, which is configurable via `timeout` and `interval` parameters.)
 
+**Per-key defaults:**
+
+Four subcommands have built-in defaults applied automatically when the key is absent from both `docker.yml` and `docker.local.yml`:
+
+| Key | Default |
+|-----|---------|
+| `up` | `["-d", "--remove-orphans"]` |
+| `logs` | `["-f"]` |
+| `run` | `["--rm"]` |
+| `down` | `["--remove-orphans"]` |
+
+Other keys (`global`, `stop`, `restart`, `ps`, `exec`, `pull`, `build`) have no defaults — they are nil if absent, empty if explicitly `[]`, populated if explicitly set.
+
+**Nil vs. explicit empty:**
+
+Defaults are applied **only when the key is absent from the YAML source**. An explicit empty list (`key: []`) opts out of the default:
+
+```yaml
+# Missing up key → use default [-d, --remove-orphans]
+args:
+  logs: []  # Explicit empty → no default applied, stays []
+
+# Explicit up → use the specified value, no merge with default
+args:
+  up: ["--no-deps"]  # Replaces default, no merge
+```
+
 When overriding in `docker.local.yml`, the list replaces the tracked default entirely (lists do not merge):
 
 ```yaml
 # docker.local.yml — remove --progress tty (unsupported in some terminals)
 args:
   global: ["--ansi", "always"]
+  # up, logs, run, down not specified → defaults still apply from docker.yml or built-in
 ```
 
 **Image management subcommands (`pull` and `build`)**

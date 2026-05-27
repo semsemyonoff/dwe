@@ -80,6 +80,7 @@ func (v DockerVolumeConfig) ResolveName(projectName string) string {
 }
 
 // DockerArgs holds global and per-command default arguments.
+// Extend here when adding new docker subcommands wrapped by devbox.
 type DockerArgs struct {
 	Global  []string `yaml:"global"`
 	Up      []string `yaml:"up"`
@@ -111,6 +112,10 @@ func (e *DockerEnvConfig) ShouldGenerateEnv(command string) bool {
 // LoadDockerConfig loads Docker Compose execution policy from
 // devbox/docker.yml (base) and devbox/docker.local.yml (optional overrides).
 // The project_name field is resolved as a ${...} template against cfg.Raw.
+//
+// Per-key defaults are applied for args: up, logs, run, down. These defaults
+// are applied only when the key is absent from both layers; explicit empty lists
+// ([]) opt out of the default.
 func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) {
 	dockerPath := filepath.Join(baseDir, "devbox", "docker.yml")
 	base, err := loadRawYAML(dockerPath)
@@ -118,10 +123,18 @@ func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) 
 		return nil, fmt.Errorf("read %s: %w", dockerPath, err)
 	}
 
+	// Track which args keys were explicitly set in the YAML.
+	presentKeys := detectPresentArgsKeys(dockerPath)
+
 	// Merge local overrides if present.
 	localPath := filepath.Join(baseDir, "devbox", "docker.local.yml")
 	if local, err := loadRawYAML(localPath); err == nil {
 		deepMerge(base, local)
+		// Merge presence tracking from local layer
+		localKeys := detectPresentArgsKeys(localPath)
+		for k := range localKeys {
+			presentKeys[k] = true
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", localPath, err)
 	}
@@ -135,6 +148,9 @@ func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) 
 		return nil, fmt.Errorf("unmarshal docker config: %w", err)
 	}
 
+	// Apply per-key defaults for args that were absent from both layers.
+	applyDockerArgsDefaults(&dcfg.Args, presentKeys)
+
 	// Resolve ${...} template expressions in project_name.
 	dcfg.ProjectName, err = resolveVarTemplate(dcfg.ProjectName, cfg.Raw)
 	if err != nil {
@@ -142,6 +158,54 @@ func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) 
 	}
 
 	return &dcfg, nil
+}
+
+// detectPresentArgsKeys detects which keys are explicitly present in the args
+// block of a docker.yml or docker.local.yml file. Returns a map where keys
+// are arg field names ("up", "down", "logs", "run") present in YAML.
+// Returns empty map if file doesn't exist or has no args block.
+func detectPresentArgsKeys(path string) map[string]bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return make(map[string]bool)
+	}
+
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return make(map[string]bool)
+	}
+
+	present := make(map[string]bool)
+	if argsRaw, ok := raw["args"].(map[string]any); ok {
+		for k := range argsRaw {
+			present[k] = true
+		}
+	}
+	return present
+}
+
+// applyDockerArgsDefaults applies per-key defaults for docker compose arguments.
+// Defaults are applied only when the key was not explicitly set in YAML.
+// The defaults are:
+//   - up: ["-d", "--remove-orphans"]
+//   - logs: ["-f"]
+//   - run: ["--rm"]
+//   - down: ["--remove-orphans"]
+//
+// Other keys (global, stop, restart, ps, exec, pull, build) have no defaults.
+func applyDockerArgsDefaults(args *DockerArgs, presentKeys map[string]bool) {
+	if !presentKeys["up"] && len(args.Up) == 0 {
+		args.Up = []string{"-d", "--remove-orphans"}
+	}
+	if !presentKeys["logs"] && len(args.Logs) == 0 {
+		args.Logs = []string{"-f"}
+	}
+	if !presentKeys["run"] && len(args.Run) == 0 {
+		args.Run = []string{"--rm"}
+	}
+	if !presentKeys["down"] && len(args.Down) == 0 {
+		args.Down = []string{"--remove-orphans"}
+	}
 }
 
 // resolveVarTemplate resolves ${dot.path} expressions in s against raw config.
