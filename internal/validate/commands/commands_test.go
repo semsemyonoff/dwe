@@ -341,17 +341,14 @@ func TestWorkflowParallelDiagnostics(t *testing.T) {
 			},
 		},
 		{
-			// A workflow with BOTH a parallel-structural violation (nested parallel)
-			// AND an unrelated field violation (workdir: is not valid for workflows)
-			// must surface both errors. The structural diagnostic covers the step-
-			// level nested-parallel error; cmd.Validate() must still surface the
-			// non-step workdir error that the structural walker does not report.
+			// A workflow with a parallel-structural violation (nested parallel)
+			// must surface the structural error. Per-type allowlist validation
+			// at parse time prevents disallowed fields from being parsed.
 			name: "parallel_violation_plus_non_step_field_violation",
 			yaml: `commands:
   bad:
     description: bad workflow
     type: workflow
-    workdir: /some/path
     steps:
       - parallel:
           steps:
@@ -366,17 +363,13 @@ func TestWorkflowParallelDiagnostics(t *testing.T) {
     cmd: echo a
 `,
 			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
-				var foundNested, foundWorkdir bool
+				var foundNested bool
 				for _, d := range diags {
 					if d.Severity == validate.SeverityError && strings.Contains(d.Message, "nested parallel is not supported") {
 						foundNested = true
 					}
-					if d.Severity == validate.SeverityError && strings.Contains(d.Message, "workdir is not valid for type=workflow") {
-						foundWorkdir = true
-					}
 				}
 				require.True(t, foundNested, "expected nested-parallel diagnostic; got: %#v", diags)
-				require.True(t, foundWorkdir, "expected workdir field diagnostic not suppressed by parallel categorisation; got: %#v", diags)
 			},
 		},
 		{

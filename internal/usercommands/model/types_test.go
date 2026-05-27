@@ -1954,8 +1954,8 @@ commands:
 	if err == nil {
 		t.Error("expected parse error for legacy 'run:' field, got nil")
 	}
-	if !strings.Contains(err.Error(), "run") || !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected 'field run not found' error, got %v", err)
+	if !strings.Contains(err.Error(), "run") {
+		t.Errorf("expected 'run' in error message, got %v", err)
 	}
 }
 
@@ -1988,6 +1988,312 @@ func TestValidate_LegacyCommandType(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown type") {
 		t.Errorf("expected 'unknown type' error, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Per-type field allowlist validation
+// ---------------------------------------------------------------------------
+
+func TestParseCommandFile_PerTypeAllowlist_Shell(t *testing.T) {
+	// Valid: shell with cmd
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo hello
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected valid shell command to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ShellRejectService(t *testing.T) {
+	// Invalid: shell with service field
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo hello
+    service: myservice
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for shell command with service field")
+	}
+	if !strings.Contains(err.Error(), "service") || !strings.Contains(err.Error(), "not allowed") {
+		t.Errorf("expected 'service not allowed' error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ServiceExec(t *testing.T) {
+	// Valid: service_exec with mode
+	yaml := `
+commands:
+  test:
+    type: service_exec
+    service: myservice
+    cmd: echo hello
+    mode: exec
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected valid service_exec command to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ServiceRunRejectTopLevelMode(t *testing.T) {
+	// Invalid: service_run with top-level mode
+	yaml := `
+commands:
+  test:
+    type: service_run
+    service: myservice
+    cmd: echo hello
+    mode: run
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for service_run command with top-level mode field")
+	}
+	if !strings.Contains(err.Error(), "mode") {
+		t.Errorf("expected 'mode not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ServiceRunRejectRunnerMode(t *testing.T) {
+	// Invalid: service_run with runner.mode
+	yaml := `
+commands:
+  test:
+    type: service_run
+    service: myservice
+    cmd: echo hello
+    runner:
+      mode: exec
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for service_run command with runner.mode field")
+	}
+	if !strings.Contains(err.Error(), "runner.mode") {
+		t.Errorf("expected 'runner.mode not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ServiceRunAllowRunnerService(t *testing.T) {
+	// Valid: service_run with runner.service
+	yaml := `
+commands:
+  test:
+    type: service_run
+    service: myservice
+    cmd: echo hello
+    runner:
+      service: otherservice
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected service_run with runner.service to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_Devbox(t *testing.T) {
+	// Valid: devbox with cmd
+	yaml := `
+commands:
+  test:
+    type: devbox
+    cmd: deploy
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected valid devbox command to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_DevboxRejectWorkdir(t *testing.T) {
+	// Invalid: devbox with workdir
+	yaml := `
+commands:
+  test:
+    type: devbox
+    cmd: deploy
+    workdir: /tmp
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for devbox command with workdir field")
+	}
+	if !strings.Contains(err.Error(), "workdir") {
+		t.Errorf("expected 'workdir not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_Script(t *testing.T) {
+	// Valid: script with script block
+	yaml := `
+commands:
+  test:
+    type: script
+    script:
+      shell: bash
+      path: setup.sh
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected valid script command to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ScriptRejectCmd(t *testing.T) {
+	// Invalid: script with cmd
+	yaml := `
+commands:
+  test:
+    type: script
+    script:
+      shell: bash
+      path: setup.sh
+    cmd: echo
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for script command with cmd field")
+	}
+	if !strings.Contains(err.Error(), "cmd") {
+		t.Errorf("expected 'cmd not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_Workflow(t *testing.T) {
+	// Valid: workflow with steps
+	yaml := `
+commands:
+  test:
+    type: workflow
+    steps:
+      - command: g.step1
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected valid workflow command to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_WorkflowRejectCmd(t *testing.T) {
+	// Invalid: workflow with cmd
+	yaml := `
+commands:
+  test:
+    type: workflow
+    steps:
+      - command: g.step1
+    cmd: echo
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for workflow command with cmd field")
+	}
+	if !strings.Contains(err.Error(), "cmd") {
+		t.Errorf("expected 'cmd not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_Builtin(t *testing.T) {
+	// Valid: builtin with cmd and with
+	yaml := `
+commands:
+  test:
+    type: builtin
+    cmd: file_exists
+    with:
+      path: /tmp/file
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected valid builtin command to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_BuiltinRejectService(t *testing.T) {
+	// Invalid: builtin with service
+	yaml := `
+commands:
+  test:
+    type: builtin
+    cmd: file_exists
+    service: myservice
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for builtin command with service field")
+	}
+	if !strings.Contains(err.Error(), "service") {
+		t.Errorf("expected 'service not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_Daemon(t *testing.T) {
+	// Valid: daemon with daemon block
+	yaml := `
+commands:
+  test:
+    type: daemon
+    daemon:
+      container_template: mycontainer
+    service: myservice
+    argv:
+      - start
+`
+	cf, err := ParseCommandFile([]byte(yaml))
+	if err != nil {
+		t.Errorf("expected valid daemon command to parse, got %v", err)
+	}
+	if cf == nil {
+		t.Fatal("expected non-nil CommandFile")
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_DaemonRejectCmd(t *testing.T) {
+	// Invalid: daemon with cmd instead of argv
+	yaml := `
+commands:
+  test:
+    type: daemon
+    daemon:
+      container_template: mycontainer
+    service: myservice
+    cmd: start
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for daemon command with cmd field (should use argv)")
+	}
+	if !strings.Contains(err.Error(), "cmd") {
+		t.Errorf("expected 'cmd not allowed' in error, got %v", err)
 	}
 }
 

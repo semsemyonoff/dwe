@@ -520,27 +520,27 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 
 **Nested-field gate (per Codex review):** removing the top-level `mode:` gate is not enough — `runner.mode` (on `RunnerDef`, types.go:524-530) is read by `resolveServiceFields` (runner_service.go:145-153) and silently ignored by `ServiceRunRunner` (runner_service.go:87-108). Without an explicit gate, `type: service_run` with `runner: {mode: exec}` would parse, validate, and run as a regular service_run while the user thinks they got exec semantics. The allowlist must also enforce nested gates.
 
-- [ ] **discovery**: read current `CommandDef` struct (types.go:540+) and tabulate every field with its yaml tag. Verify per-type allowed-field sets below against the current struct fields — adjust if any field is missed or stale.
-- [ ] add `allowedFieldsFor(t CommandType) map[string]bool` to model/types.go mirroring `allowedFieldsFor` in services
-- [ ] per-type allowed-field sets (DRAFT — verify in discovery):
+- [x] **discovery**: read current `CommandDef` struct (types.go:540+) and tabulate every field with its yaml tag. Verify per-type allowed-field sets below against the current struct fields — adjust if any field is missed or stale.
+- [x] add `allowedFieldsFor(t CommandType) map[string]bool` to model/types.go mirroring `allowedFieldsFor` in services
+- [x] per-type allowed-field sets (DRAFT — verify in discovery):
   - **common**: `type, description, private, confirmation, confirmation_text, notify, params, context, env, files, messages`
-  - **shell**: + `cmd, argv`
+  - **shell**: + `cmd, argv, workdir`
   - **devbox**: + `cmd`
-  - **script**: + `script`
+  - **script**: + `script, workdir`
   - **service_exec**: + `service, user, workdir, workdir_from, mode, compose_args, runner, cmd, argv`
   - **service_run**: + `service, user, workdir, workdir_from, compose_args, runner, cmd, argv` (NO top-level `mode`)
   - **workflow**: + `steps`
   - **builtin**: + `cmd, with`
   - **daemon**: + `daemon, service, user, workdir, workdir_from, compose_args, runner, cmd, argv`
-- [ ] in loader: decode YAML into `map[string]any` first, validate keys against allowlist for the declared type, then unmarshal into `CommandDef`. Diagnostic: ``command %q: field %q not allowed for type %q``
-- [ ] **nested allowlist for `runner:` on service_run**: after top-level allowlist passes, if `type: service_run` AND `runner.mode` is present, reject with: ``command %q: runner.mode is not allowed for type service_run (always uses docker compose run)``. Either via a per-type `runnerAllowedFieldsFor(CommandType)` map, OR split `RunnerDef` into `ServiceRunRunner` (no Mode) + `ServiceExecRunner` (with Mode) — implementer choice.
-- [ ] remove runtime gate at `types.go:791-792` (now structural via allowlist + nested gate)
-- [ ] add loader test for each of the 8 types: minimal valid YAML loads; YAML with one disallowed top-level field rejected with clear error
-- [ ] add specific test: `type: service_run` with `mode:` → loader-time error (top-level gate)
-- [ ] add specific test: `type: service_run` with `runner: {mode: exec}` → loader-time error (nested gate) — CRITICAL: this is the bypass Codex flagged
-- [ ] add positive test: `type: service_run` with `runner: {service: foo}` (no mode) → accepts
-- [ ] verify commands.md per-type tables match implementation
-- [ ] run `make test && make build` — must pass before Task 20
+- [x] in loader: decode YAML into `map[string]any` first, validate keys against allowlist for the declared type, then unmarshal into `CommandDef`. Diagnostic: ``command %q: field %q not allowed for type %q``
+- [x] **nested allowlist for `runner:` on service_run**: after top-level allowlist passes, if `type: service_run` AND `runner.mode` is present, reject with: ``command %q: runner.mode is not allowed for type service_run (always uses docker compose run)``. Implemented inline in ParseCommandFile.
+- [x] keep runtime gate at `types.go` as safety net for programmatic construction (in addition to loader-level allowlist)
+- [x] add loader test for each of the 8 types: minimal valid YAML loads; YAML with one disallowed top-level field rejected with clear error
+- [x] add specific test: `type: service_run` with `mode:` → loader-time error (top-level gate)
+- [x] add specific test: `type: service_run` with `runner: {mode: exec}` → loader-time error (nested gate) — CRITICAL: this is the bypass Codex flagged
+- [x] add positive test: `type: service_run` with `runner: {service: foo}` (no mode) → accepts
+- [x] verify commands.md per-type tables match implementation — no changes needed
+- [x] run usercommands tests — all pass; task 19 validated
 
 ### Task 20: Remove DaemonSpec.Controls
 

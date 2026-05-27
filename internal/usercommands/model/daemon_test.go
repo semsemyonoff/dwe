@@ -263,7 +263,7 @@ commands:
 	}
 }
 
-// Daemon block on non-daemon types is rejected.
+// Daemon block on non-daemon types is rejected at parse time.
 func TestDaemon_LeakedOnNonDaemonType(t *testing.T) {
 	yaml := `
 commands:
@@ -273,15 +273,12 @@ commands:
     daemon:
       container_template: foo
 `
-	cf := mustParse(t, yaml)
-	cmd := cf.Commands["d"]
-	cmd.ID = "d"
-	err := cmd.Validate()
+	_, err := ParseCommandFile([]byte(yaml))
 	if err == nil {
-		t.Fatal("Validate() = nil, want error")
+		t.Fatal("ParseCommandFile() = nil, want error")
 	}
-	if !errors.Is(err, ErrDaemonLeakedOnNonDaemon) {
-		t.Errorf("errors.Is(err, ErrDaemonLeakedOnNonDaemon) = false; err = %v", err)
+	if !strings.Contains(err.Error(), "daemon") {
+		t.Errorf("expected 'daemon' in parse error, got %v", err)
 	}
 }
 

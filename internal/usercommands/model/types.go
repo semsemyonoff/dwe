@@ -55,6 +55,73 @@ const (
 // DefaultDaemonControls is the full set used when DaemonSpec.Controls is empty.
 var DefaultDaemonControls = []string{DaemonControlStart, DaemonControlLogs, DaemonControlStop, DaemonControlRestart}
 
+// allowedFieldsFor returns the set of top-level field names allowed for a given CommandType.
+// All types share a common set of fields; per-type allowlists extend that common set.
+// The allowlist is derived from what the validate*Type functions explicitly reject.
+func allowedFieldsFor(t CommandType) map[string]bool {
+	common := map[string]bool{
+		"type":               true,
+		"description":        true,
+		"private":            true,
+		"confirmation":       true,
+		"confirmation_text":  true,
+		"notify":             true,
+		"params":             true,
+		"context":            true,
+		"env":                true,
+		"files":              true,
+		"messages":           true,
+		"user":               true,
+		"runner":             true,
+	}
+
+	switch t {
+	case CommandTypeShell:
+		common["cmd"] = true
+		common["argv"] = true
+		common["workdir"] = true
+	case CommandTypeDevbox:
+		common["cmd"] = true
+		// workdir is explicitly rejected for devbox, NOT in allowed set
+	case CommandTypeScript:
+		common["script"] = true
+		common["workdir"] = true
+		// compose_args is rejected for script
+		// workdir_from is rejected for script
+	case CommandTypeServiceExec:
+		common["service"] = true
+		common["workdir"] = true
+		common["workdir_from"] = true
+		common["mode"] = true
+		common["compose_args"] = true
+		common["cmd"] = true
+		common["argv"] = true
+	case CommandTypeServiceRun:
+		common["service"] = true
+		common["workdir"] = true
+		common["workdir_from"] = true
+		common["compose_args"] = true
+		common["cmd"] = true
+		common["argv"] = true
+	case CommandTypeWorkflow:
+		common["steps"] = true
+		// workdir is rejected for workflow
+	case CommandTypeBuiltin:
+		common["cmd"] = true
+		common["with"] = true
+		// workdir and user are rejected for builtin
+	case CommandTypeDaemon:
+		common["daemon"] = true
+		common["service"] = true
+		common["workdir"] = true
+		common["workdir_from"] = true
+		common["compose_args"] = true
+		common["argv"] = true
+	}
+
+	return common
+}
+
 // DaemonSpec is the YAML schema block under a type=daemon command's daemon: key.
 // It describes how the source command expands into virtual .start/.logs/.stop/.restart
 // commands at registry-load time.
@@ -816,6 +883,7 @@ func (c *CommandDef) validateServiceType() error {
 	if !hasCmd && !hasArgv {
 		return fmt.Errorf("one of cmd or argv must be set")
 	}
+	// Runtime safety net: service_run should never have top-level mode (enforced at parse time via allowlist)
 	if c.Type == CommandTypeServiceRun && c.Mode != "" && c.Mode != ExecModeRun {
 		return fmt.Errorf("mode is not applicable for type=service_run (always runs a new container)")
 	}
@@ -1218,8 +1286,61 @@ func (f *CommandFile) Validate() error {
 
 // ParseCommandFile unmarshals YAML bytes into a CommandFile and runs basic field validation.
 func ParseCommandFile(data []byte) (*CommandFile, error) {
-	var cf CommandFile
+	// First pass: decode to raw map to check per-type allowlists.
+	var rawData map[string]any
 	dec := yaml.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&rawData); err != nil {
+		return nil, fmt.Errorf("YAML parse error: %w", err)
+	}
+
+	// Validate per-type allowlists on commands.
+	if cmdMap, ok := rawData["commands"].(map[string]any); ok {
+		for cmdName, cmdVal := range cmdMap {
+			if cmdObj, ok := cmdVal.(map[string]any); ok {
+				// Extract type to determine allowlist.
+				typeVal, hasType := cmdObj["type"]
+				if !hasType {
+					// Type will be caught as required by Validate(), skip allowlist check.
+					continue
+				}
+				typeStr, ok := typeVal.(string)
+				if !ok {
+					continue
+				}
+				ct := CommandType(typeStr)
+
+				// Validate top-level fields against allowlist.
+				allowed := allowedFieldsFor(ct)
+				for fieldName := range cmdObj {
+					if !allowed[fieldName] {
+						return nil, fmt.Errorf("command %q: field %q not allowed for type %q", cmdName, fieldName, typeStr)
+					}
+				}
+
+				// Special validation: service_run cannot have top-level mode.
+				if ct == CommandTypeServiceRun {
+					if _, hasMode := cmdObj["mode"]; hasMode {
+						return nil, fmt.Errorf("command %q: field \"mode\" not allowed for type %q", cmdName, CommandTypeServiceRun)
+					}
+				}
+
+				// Special validation: service_run runner cannot have mode.
+				if ct == CommandTypeServiceRun {
+					if runnerVal, hasRunner := cmdObj["runner"]; hasRunner {
+						if runnerObj, ok := runnerVal.(map[string]any); ok {
+							if _, hasRunnerMode := runnerObj["mode"]; hasRunnerMode {
+								return nil, fmt.Errorf("command %q: runner.mode is not allowed for type service_run (always uses docker compose run)", cmdName)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Second pass: standard YAML decode with KnownFields validation.
+	var cf CommandFile
+	dec = yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cf); err != nil {
 		return nil, fmt.Errorf("YAML parse error: %w", err)
