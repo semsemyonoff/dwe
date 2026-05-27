@@ -38,7 +38,6 @@ In a pipe or with --raw, outputs plain markdown.
 Topics are matched case-insensitively with fuzzy substring matching if exact match fails.
 Examples:
   devbox docs show config/services
-  devbox docs show config/services#section
   devbox docs show config/services --lang ru`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -122,9 +121,9 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: ambiguous topic %q\n", e.Topic)
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Candidates: %s\n", strings.Join(e.Candidates, ", "))
 		default:
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+			return err
 		}
-		return err
+		return ErrSilent
 	}
 
 	// Find the root that contains the resolved topic
@@ -206,7 +205,7 @@ func filterDocRoots(roots []docs.DocRoot, sourceFlag string) []docs.DocRoot {
 	case "all":
 		return roots
 	default:
-		return roots // Default to all
+		return nil
 	}
 }
 
