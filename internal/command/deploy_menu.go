@@ -320,7 +320,7 @@ func buildDeployServiceItems(baseDir string, cfg *config.DevboxConfig, state *jo
 	if err != nil {
 		// Fallback to alphabetical so the menu still works while the ordering
 		// error surfaces through validate / preflight.
-		order = order[:0]
+		order = make([]string, 0, len(deploys))
 		for name := range deploys {
 			order = append(order, name)
 		}

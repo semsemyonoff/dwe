@@ -961,6 +961,7 @@ func writeInfoYML(t *testing.T, content string) string {
 
 func TestUntypedKeysValidator_ConventionKey(t *testing.T) {
 	// Test that a legitimate convention key like `db:` emits an info diagnostic
+	// attributed to the correct source file (devbox.yml).
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
 
@@ -984,16 +985,56 @@ db:
 		Cfg:         cfg,
 	})
 
-	// Should have info diagnostic for the `db` key
+	// Should have info diagnostic for the `db` key attributed to devbox.yml
 	require.True(t, len(diags) > 0, "expected at least one diagnostic")
 	found := false
 	for _, d := range diags {
 		if d.Severity == validate.SeverityInfo && d.Target == "config.untyped-keys" && contains(d.Message, "db") {
 			found = true
+			require.Contains(t, d.File, "devbox.yml", "diagnostic should be attributed to devbox.yml")
 			break
 		}
 	}
 	require.True(t, found, "expected info diagnostic for untyped key 'db'")
+}
+
+func TestUntypedKeysValidator_DefaultsLayerAttribution(t *testing.T) {
+	// Test that a key in defaults.yml is attributed to defaults.yml, not devbox.yml.
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+
+	devboxYML := `
+schema_version: "2"
+project:
+  name: test
+  prefix: test
+`
+	defaultsYML := `
+db:
+  host: localhost
+  port: 5432
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox", "defaults.yml"), []byte(defaultsYML), 0o644))
+
+	cfg, err := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	require.NoError(t, err)
+
+	v := &untypedKeysValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+
+	found := false
+	for _, d := range diags {
+		if d.Severity == validate.SeverityInfo && d.Target == "config.untyped-keys" && contains(d.Message, "db") {
+			found = true
+			require.Contains(t, d.File, "defaults.yml", "diagnostic should be attributed to defaults.yml")
+			break
+		}
+	}
+	require.True(t, found, "expected info diagnostic for untyped key 'db' in defaults.yml")
 }
 
 func TestUntypedKeysValidator_Typo(t *testing.T) {

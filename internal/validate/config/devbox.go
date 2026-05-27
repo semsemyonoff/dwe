@@ -1284,19 +1284,26 @@ func (v *untypedKeysValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	// Scan Raw keys for untyped entries
-	for key := range ctx.Cfg.Raw {
-		// Skip internal engine keys
-		if key == "__configPath" {
-			continue
-		}
-
-		if !knownTypedKeys[key] {
+	// Scan each raw layer independently for per-layer source attribution.
+	seen := make(map[string]bool)
+	for _, layer := range ctx.Cfg.RawLayers {
+		for key := range layer.Data {
+			if key == "__configPath" {
+				continue
+			}
+			if knownTypedKeys[key] {
+				continue
+			}
+			// Emit once per key (first layer that introduces it wins attribution).
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityInfo,
 				Domain:   "config",
 				Target:   "config.untyped-keys",
-				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox.yml")),
+				File:     relPath(ctx.ProjectRoot, layer.Path),
 				Message:  fmt.Sprintf("key %q is accessible via dot-path only; not a typed CLI field — typo check recommended", key),
 			})
 		}
