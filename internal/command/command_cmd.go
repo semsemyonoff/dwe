@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"os/signal"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -213,23 +214,23 @@ func runCommandByID(
 	resolvedOpts := make(map[string][]model.OptionItem)
 	for name, p := range def.Params {
 		if p.Options != nil && (p.EffectiveWidget() == model.WidgetSelect || p.EffectiveWidget() == model.WidgetMultiselect) {
-			opts, rerr := resolve.Options(p.Options, cfg.Raw)
+			items, rerr := resolve.Options(p.Options, cfg.Raw)
 			if rerr != nil {
 				return fmt.Errorf("resolving options for param %q: %w", name, rerr)
 			}
-			resolvedOpts[name] = opts
+			resolvedOpts[name] = items
 
 			// Membership-check rule:
 			// - --set name=value: if options non-empty AND value ∉ options → error.
 			//   Empty options + --set → bypass, trust user.
 			// - default_from/default: if options non-empty AND value ∉ options → error.
 			//   Empty options + default/default_from → error (config bug).
-			if len(opts) > 0 {
+			if len(items) > 0 {
 				value := prefilled[name]
 				if value != "" {
 					// Membership check.
 					found := false
-					for _, opt := range opts {
+					for _, opt := range items {
 						if opt.Value == value {
 							found = true
 							break
@@ -238,7 +239,7 @@ func runCommandByID(
 					if !found {
 						if provided[name] != "" {
 							// --set value not in options.
-							return fmt.Errorf("param %q: value %q not in options", name, value)
+							return fmt.Errorf("param %q: value %q not in options (valid: %s)", name, value, joinOptionValues(items))
 						}
 						// default_from or default not in options.
 						return fmt.Errorf("param %q: default value %q not in options", name, value)
@@ -426,6 +427,17 @@ func buildAskFields(def *usercommands.CommandDef, prefilled, provided map[string
 		switch widget {
 		case model.WidgetInput, model.WidgetConfirm:
 			field.Default = prefilled[name]
+			if widget == model.WidgetInput && p.Pattern != "" {
+				pat, perr := regexp.Compile(p.Pattern)
+				if perr == nil {
+					field.Validate = func(s string) error {
+						if !pat.MatchString(s) {
+							return fmt.Errorf("value must match pattern %s", p.Pattern)
+						}
+						return nil
+					}
+				}
+			}
 
 		case model.WidgetSelect:
 			field.Default = prefilled[name]
@@ -477,6 +489,15 @@ func optionsToAskOptions(items []model.OptionItem) []ask.Option {
 		}
 	}
 	return opts
+}
+
+// joinOptionValues returns a comma-separated list of option values for error messages.
+func joinOptionValues(items []model.OptionItem) string {
+	vals := make([]string, len(items))
+	for i, item := range items {
+		vals[i] = item.Value
+	}
+	return strings.Join(vals, ", ")
 }
 
 // mergeAnswers merges form results back into the values map.

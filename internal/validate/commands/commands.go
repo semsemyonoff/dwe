@@ -478,13 +478,14 @@ func extractOptionValues(v any) []string {
 		out = typed
 	case []any:
 		for _, item := range typed {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			} else if m, ok := item.(map[string]any); ok {
-				if val, ok := m["value"]; ok {
-					if s, ok := val.(string); ok {
-						out = append(out, s)
-					}
+			switch elem := item.(type) {
+			case string:
+				out = append(out, elem)
+			case int, float64, bool:
+				out = append(out, fmt.Sprint(elem))
+			case map[string]any:
+				if val, ok := elem["value"]; ok {
+					out = append(out, fmt.Sprint(val))
 				}
 			}
 		}
