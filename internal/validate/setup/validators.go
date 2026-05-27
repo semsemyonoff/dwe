@@ -266,7 +266,7 @@ func (v *writesScopeValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 	var diags []validate.Diagnostic
 	// forbiddenRoots are top-level keys that must not be written by the wizard.
-	forbiddenRoots := []string{"info", "styles", "docker", "binaries"}
+	forbiddenRoots := []string{"info", "styles", "docker"}
 
 	for _, q := range v.cfg.Questions {
 		if q.Writes == "" {

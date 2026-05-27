@@ -125,9 +125,9 @@ Each task is scoped to a single decision (or two tightly related decisions). Doc
 - Modify: `internal/validate/setup/validators.go`
 - Modify: `internal/validate/setup/validators_test.go`
 
-- [ ] remove `"binaries"` from `forbiddenRoots := []string{...}` (validators.go:269)
-- [ ] update test cases that check forbidden-root rejection for `binaries.*` writes
-- [ ] run `go test ./internal/validate/setup/...` — must pass before Task 3
+- [x] remove `"binaries"` from `forbiddenRoots := []string{...}` (validators.go:269)
+- [x] update test cases that check forbidden-root rejection for `binaries.*` writes
+- [x] run `go test ./internal/validate/setup/...` — must pass before Task 3
 
 ### Task 3: Split SnapshotWorkflow → SnapshotWorkflow + SnapshotVariant
 
