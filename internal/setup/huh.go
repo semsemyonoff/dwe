@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/ui/ask"
 	"devbox-cli/internal/validate/env"
 
 	"charm.land/bubbles/v2/key"
@@ -33,127 +34,53 @@ func NewHuhAsker(out io.Writer) (
 			return nil, nil
 		}
 
-		// Prepare answer bindings for each question type.
-		type answerBinding struct {
-			id          string
-			qType       string
-			stringVal   *string
-			stringSlice *[]string
-			boolVal     *bool
-		}
-
-		var bindings []answerBinding
+		// Build ask.Field objects from questions. Input questions are tracked
+		// separately for post-form coercion.
+		var fields []ask.Field
 		var inputQuestions []Question
-		var huhFields []huh.Field
 
 		for _, q := range questions {
+			field := ask.Field{
+				Key:         q.ID,
+				Title:       q.Title,
+				Description: q.Description,
+				Required:    q.Required,
+			}
+
 			switch q.Type {
 			case TypeInput:
-				// Input questions: bind to *string, will coerce later.
 				inputQuestions = append(inputQuestions, q)
-				val := ""
-				ptr := &val
-
-				field := huh.NewInput().
-					Title(q.Title).
-					Description(q.Description).
-					Value(ptr).
-					Validate(buildInputValidator(q)).
-					// Enable ShowSuggestions so the AcceptSuggestion binding
-					// surfaces in KeyBinds() — we hijack its help slot to
-					// show "esc cancel" in the bottom help line.
-					SuggestionsFunc(func() []string { return []string{" "} }, nil)
-
-				bindings = append(bindings, answerBinding{
-					id:        q.ID,
-					qType:     TypeInput,
-					stringVal: ptr,
-				})
-				huhFields = append(huhFields, field)
+				field.Kind = ask.FieldInput
+				field.Validate = buildInputValidator(q)
 
 			case TypeSelect:
-				// Select: huh returns the value directly, no coercion needed.
-				val := ""
-				ptr := &val
-				opts := make([]huh.Option[string], len(q.Options))
-				for i, opt := range q.Options {
-					opts[i] = huh.NewOption(opt.Label, opt.Value)
+				field.Kind = ask.FieldSelect
+				field.Validate = buildInputValidator(q)
+				for _, opt := range q.Options {
+					field.Options = append(field.Options, ask.Option{
+						Value: opt.Value,
+						Label: opt.Label,
+					})
 				}
-
-				field := huh.NewSelect[string]().
-					Title(q.Title).
-					Description(q.Description).
-					Options(opts...).
-					Value(ptr)
-
-				bindings = append(bindings, answerBinding{
-					id:        q.ID,
-					qType:     TypeSelect,
-					stringVal: ptr,
-				})
-				huhFields = append(huhFields, field)
 
 			case TypeMultiselect:
-				// Multiselect: huh returns []string directly.
-				val := []string{}
-				ptr := &val
-				opts := make([]huh.Option[string], len(q.Options))
-				for i, opt := range q.Options {
-					opts[i] = huh.NewOption(opt.Label, opt.Value)
+				field.Kind = ask.FieldMultiselect
+				for _, opt := range q.Options {
+					field.Options = append(field.Options, ask.Option{
+						Value: opt.Value,
+						Label: opt.Label,
+					})
 				}
 
-				field := huh.NewMultiSelect[string]().
-					Title(q.Title).
-					Description(q.Description).
-					Options(opts...).
-					Value(ptr)
-
-				bindings = append(bindings, answerBinding{
-					id:          q.ID,
-					qType:       TypeMultiselect,
-					stringSlice: ptr,
-				})
-				huhFields = append(huhFields, field)
-
 			case TypeConfirm:
-				// Confirm: huh returns bool directly.
-				val := false
-				ptr := &val
-
-				field := huh.NewConfirm().
-					Title(q.Title).
-					Description(q.Description).
-					Value(ptr)
-
-				bindings = append(bindings, answerBinding{
-					id:      q.ID,
-					qType:   TypeConfirm,
-					boolVal: ptr,
-				})
-				huhFields = append(huhFields, field)
+				field.Kind = ask.FieldConfirm
 			}
+
+			fields = append(fields, field)
 		}
 
-		keymap := huh.NewDefaultKeyMap()
-		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "cancel"))
-		// Hijack help-slots per field type so the bottom help line carries an
-		// "esc cancel" hint regardless of which field type is focused.
-		keymap.Input.AcceptSuggestion = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-		keymap.Select.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-		keymap.MultiSelect.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-
-		form := huh.NewForm(
-			huh.NewGroup(huhFields...).Title("Setup"),
-		).
-			WithTheme(ui.Theme()).
-			WithKeyMap(keymap).
-			WithShowHelp(true).
-			WithOutput(out)
-
-		err := ui.RunWithPromptHooks(func() error {
-			return form.Run()
-		})
-
+		// Run the ask form. ui.Theme() and SetHuhHooks are handled by ask.Run.
+		result, err := ask.Run(ctx, "Setup", fields, ask.RunOptions{Output: out})
 		if err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return nil, ErrWizardCanceled
@@ -161,40 +88,36 @@ func NewHuhAsker(out io.Writer) (
 			return nil, fmt.Errorf("wizard: %w", err)
 		}
 
-		// Coerce input answers to their proper types.
+		// Collect raw input values for coercion.
 		inputRaws := make(map[string]string)
-		for _, b := range bindings {
-			if b.qType == TypeInput && b.stringVal != nil {
-				inputRaws[b.id] = *b.stringVal
-			}
+		for _, q := range inputQuestions {
+			val := result.String(q.ID)
+			inputRaws[q.ID] = val
 		}
 
+		// Coerce input answers to their proper types.
 		coercedInputs, err := coerceInputAnswers(inputQuestions, inputRaws)
 		if err != nil {
 			return nil, err
 		}
 
-		// Assemble final answers map from all bindings.
+		// Assemble final answers map.
 		answers := make(map[string]any)
-
-		// Add coerced input answers.
 		maps.Copy(answers, coercedInputs)
 
-		// Add select/multiselect/confirm answers from huh bindings.
-		for _, b := range bindings {
-			switch b.qType {
+		// Add select/multiselect/confirm answers from result.
+		for _, q := range questions {
+			if q.Type == TypeInput {
+				continue // Already handled via coercion
+			}
+
+			switch q.Type {
 			case TypeSelect:
-				if b.stringVal != nil {
-					answers[b.id] = *b.stringVal
-				}
+				answers[q.ID] = result.String(q.ID)
 			case TypeMultiselect:
-				if b.stringSlice != nil {
-					answers[b.id] = *b.stringSlice
-				}
+				answers[q.ID] = result.Strings(q.ID)
 			case TypeConfirm:
-				if b.boolVal != nil {
-					answers[b.id] = *b.boolVal
-				}
+				answers[q.ID] = result.Bool(q.ID)
 			}
 		}
 
@@ -205,6 +128,13 @@ func NewHuhAsker(out io.Writer) (
 		if len(conflicts) == 0 {
 			return nil, nil
 		}
+
+		// NOTE: This prompt remains a direct huh.NewForm call (not migrated to ask.Run)
+		// because it uses custom keymaps to hijack the AcceptSuggestion binding for
+		// showing "esc cancel" in the help line. The ask.Field API does not support
+		// per-field keymaps; all keymap customization goes through ui.SetHuhHooks which
+		// applies globally. Port-override needs per-prompt keymap overrides that can't
+		// be expressed via ask.Field, so it stays as a raw huh form.
 
 		// Build one input field per conflict for port override.
 		var huhFields []huh.Field
@@ -280,6 +210,13 @@ func NewHuhAsker(out io.Writer) (
 		if len(toggles) == 0 {
 			return map[string]bool{}, nil
 		}
+
+		// NOTE: This prompt remains a direct huh.NewForm call (not migrated to ask.Run)
+		// because it uses custom keymaps (hijacking the Filter binding for "esc cancel")
+		// and also sets Filterable(false) to prevent user filtering. The ask.Field API
+		// does not support these per-field customizations. Additionally, it pre-prints
+		// the "Always on:" mandatory services line before the form opens, which is a
+		// prompt-specific affordance not expressible via ask.Field.
 
 		// Build a huh multi-select. Mandatory rows are shown but locked: huh
 		// has no native "disabled option" concept, so we leave them out of

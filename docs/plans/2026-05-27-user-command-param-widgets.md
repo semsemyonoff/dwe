@@ -281,18 +281,18 @@ params:
 
 These stay in `internal/setup`. Only the *huh form construction + Run* under the hood is replaced — the three-callback API, the validators, and the coercion helpers are untouched.
 
-- [ ] read `internal/setup/huh.go` end-to-end and identify every `huh.NewForm` / `huh.NewInput` / `huh.NewSelect` / `huh.NewMultiSelect` / `huh.NewConfirm` call site
-- [ ] for the **generic question prompt** (`[]Question` loop): convert the field construction into `[]ask.Field` and call `ask.Run(ctx, title, fields, ask.RunOptions{Output: out})` instead of `huh.NewForm(...).WithOutput(out).Run()`
-- [ ] service-toggle and port-override prompts are evaluated separately (next bullets) — they may stay raw
-- [ ] **port-override prompt** (`buildPortValidator` + per-conflict inputs at `internal/setup/huh.go:320+`): leave as direct huh calls if it uses per-field dynamic re-regen that `[]ask.Field` can't model; add a code comment explaining the carve-out
-- [ ] **service-toggle prompt** (`internal/setup/huh.go:137+`): uses custom keymaps, `Filterable(false)`, mandatory-service preamble — migrate only if `ask.Field` can express all three; otherwise leave raw and document the carve-out alongside port-overrides
-- [ ] **question prompt** (the generic `[]Question` loop): this is the migration target — it's the closest match to `ask.Field`
-- [ ] do NOT change `NewHuhAsker`'s public signature or the three returned callback types — `deploy_menu.go:227` consumes specific shapes
-- [ ] do NOT delete the file; only the *migratable* huh-form internals reroute through `ask`
-- [ ] verify multiselect Question values are correctly received as `[]string` from `ask.Result` and feed into `coerceInputAnswers` unchanged
-- [ ] verify confirm Question values are received as `bool` via `Result.Bool(key)` and coerce to the existing `map[string]any` shape (`wizard.go:194` asserts `bool` type)
-- [ ] update `huh_test.go` assertions if they peeked into pre-migration internals; existing wizard-level tests must pass unchanged
-- [ ] run `make test ./internal/setup/...` — must pass before Task 3
+- [x] read `internal/setup/huh.go` end-to-end and identify every `huh.NewForm` / `huh.NewInput` / `huh.NewSelect` / `huh.NewMultiSelect` / `huh.NewConfirm` call site
+- [x] for the **generic question prompt** (`[]Question` loop): convert the field construction into `[]ask.Field` and call `ask.Run(ctx, title, fields, ask.RunOptions{Output: out})` instead of `huh.NewForm(...).WithOutput(out).Run()`
+- [x] service-toggle and port-override prompts are evaluated separately (next bullets) — they may stay raw
+- [x] **port-override prompt** (`buildPortValidator` + per-conflict inputs at `internal/setup/huh.go:320+`): leave as direct huh calls if it uses per-field dynamic re-regen that `[]ask.Field` can't model; add a code comment explaining the carve-out
+- [x] **service-toggle prompt** (`internal/setup/huh.go:137+`): uses custom keymaps, `Filterable(false)`, mandatory-service preamble — migrate only if `ask.Field` can express all three; otherwise leave raw and document the carve-out alongside port-overrides
+- [x] **question prompt** (the generic `[]Question` loop): this is the migration target — it's the closest match to `ask.Field`
+- [x] do NOT change `NewHuhAsker`'s public signature or the three returned callback types — `deploy_menu.go:227` consumes specific shapes
+- [x] do NOT delete the file; only the *migratable* huh-form internals reroute through `ask`
+- [x] verify multiselect Question values are correctly received as `[]string` from `ask.Result` and feed into `coerceInputAnswers` unchanged
+- [x] verify confirm Question values are received as `bool` via `Result.Bool(key)` and coerce to the existing `map[string]any` shape (`wizard.go:194` asserts `bool` type)
+- [x] update `huh_test.go` assertions if they peeked into pre-migration internals; existing wizard-level tests must pass unchanged
+- [x] run `make test ./internal/setup/...` — must pass before Task 3
 
 ### Task 3: Add Widget / Options / Separator to `model.ParamDef`
 
