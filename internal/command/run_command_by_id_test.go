@@ -708,4 +708,3 @@ func TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved(t *testing.T) {
 		t.Errorf("rctx.NonInteractive must be false to preserve the non-TTY Y/n fallback")
 	}
 }
-

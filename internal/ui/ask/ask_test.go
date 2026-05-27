@@ -78,22 +78,23 @@ func TestRunRejectsFieldUnknown(t *testing.T) {
 	}
 }
 
-// TestRunWithInputField tests input field schema construction.
-// Full form execution is tested via internal/setup/huh_test.go pattern.
+// TestRunWithInputField verifies that buildHuhField produces a valid binding for FieldInput.
 func TestRunWithInputField(t *testing.T) {
-	fields := []Field{
-		{
-			Key:      "name",
-			Kind:     FieldInput,
-			Title:    "Enter your name",
-			Required: false,
-		},
+	f := Field{
+		Key:      "name",
+		Kind:     FieldInput,
+		Title:    "Enter your name",
+		Required: false,
 	}
-
-	// Verify that Run rejects fields with FieldUnknown without hanging.
-	// Actual form Run with huh is tested separately via huh's programmatic API.
-	if len(fields) > 0 && fields[0].Kind != FieldUnknown {
-		// Structurally valid; interactive test via setup/huh_test.go pattern.
+	_, binding, err := buildHuhField(f)
+	if err != nil {
+		t.Fatalf("buildHuhField returned error: %v", err)
+	}
+	if binding.key != "name" {
+		t.Errorf("binding.key = %q, want %q", binding.key, "name")
+	}
+	if _, ok := binding.ptr.(*string); !ok {
+		t.Errorf("binding.ptr should be *string for FieldInput, got %T", binding.ptr)
 	}
 }
 
@@ -198,8 +199,8 @@ func TestBuildHuhFieldConfirm(t *testing.T) {
 // TestBuildHuhFieldInvalidKind tests error handling for unsupported kind.
 func TestBuildHuhFieldInvalidKind(t *testing.T) {
 	f := Field{
-		Key:  "invalid",
-		Kind: FieldKind(999), // Invalid kind
+		Key:   "invalid",
+		Kind:  FieldKind(999), // Invalid kind
 		Title: "Test",
 	}
 
@@ -261,8 +262,8 @@ func TestInputFieldWithValidation(t *testing.T) {
 // TestMultiselectFieldWithValidation tests custom validation on multiselect items.
 func TestMultiselectFieldWithValidation(t *testing.T) {
 	f := Field{
-		Key:  "items",
-		Kind: FieldMultiselect,
+		Key:   "items",
+		Kind:  FieldMultiselect,
 		Title: "Select items",
 		Validate: func(s string) error {
 			if s == "forbidden" {
@@ -291,8 +292,8 @@ func TestRunOptionsDefaults(t *testing.T) {
 	// but we can test that nil values don't cause panics.
 	fields := []Field{
 		{
-			Key:  "test",
-			Kind: FieldInput,
+			Key:   "test",
+			Kind:  FieldInput,
 			Title: "Test",
 		},
 	}
@@ -308,7 +309,7 @@ func TestRunOptionsDefaults(t *testing.T) {
 // TestConfirmFieldDefaultParsing tests bool default parsing in confirm field.
 func TestConfirmFieldDefaultParsing(t *testing.T) {
 	tests := []struct {
-		defaultStr string
+		defaultStr  string
 		expectedVal bool
 	}{
 		{"true", true},
@@ -341,14 +342,19 @@ func TestConfirmFieldDefaultParsing(t *testing.T) {
 	}
 }
 
-// TestRunReturnsUserAbortedOnCancel tests that Run returns huh.ErrUserAborted.
-// Note: This is a structural test; actual user abort is hard to simulate.
+// TestRunReturnsUserAbortedOnCancel verifies that huh.ErrUserAborted is a non-nil sentinel
+// and that Result.Has correctly distinguishes present from absent keys.
 func TestRunUserAbortedError(t *testing.T) {
-	// We can't easily simulate the user pressing Esc in a unit test without
-	// mocking huh.Form.Run itself, which is beyond the scope here.
-	// The important thing is that our code correctly maps huh.ErrUserAborted.
 	if huh.ErrUserAborted == nil {
-		t.Skip("huh.ErrUserAborted not available for testing")
+		t.Fatal("huh.ErrUserAborted must be a non-nil sentinel error")
+	}
+	// Verify Has accessor: present key vs absent key.
+	r := NewResultForTest(map[string]any{"present": "value"})
+	if !r.Has("present") {
+		t.Error("Has(present) should return true")
+	}
+	if r.Has("absent") {
+		t.Error("Has(absent) should return false")
 	}
 }
 

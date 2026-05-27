@@ -265,7 +265,8 @@ func (p *ParamOptions) UnmarshalYAML(node *yaml.Node) error {
 
 		// Detect the element type from the first element.
 		firstElem := node.Content[0]
-		if firstElem.Kind == yaml.ScalarNode {
+		switch firstElem.Kind {
+		case yaml.ScalarNode:
 			// Scalar sequence: each element becomes {Value: s, Label: s}.
 			for i, elem := range node.Content {
 				if elem.Kind != yaml.ScalarNode {
@@ -277,7 +278,7 @@ func (p *ParamOptions) UnmarshalYAML(node *yaml.Node) error {
 				})
 			}
 			return nil
-		} else if firstElem.Kind == yaml.MappingNode {
+		case yaml.MappingNode:
 			// Map sequence: decode each as OptionItem.
 			for i, elem := range node.Content {
 				if elem.Kind != yaml.MappingNode {
@@ -290,7 +291,7 @@ func (p *ParamOptions) UnmarshalYAML(node *yaml.Node) error {
 				p.Static = append(p.Static, item)
 			}
 			return nil
-		} else {
+		default:
 			return fmt.Errorf("options[0]: sequence element must be scalar or mapping, got %v", firstElem.Kind)
 		}
 

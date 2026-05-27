@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/usercommands/model"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +17,7 @@ func TestResolveOptions_Static(t *testing.T) {
 		},
 	}
 
-	result, err := ResolveOptions(opts, nil)
+	result, err := Options(opts, nil)
 	require.NoError(t, err)
 	require.Len(t, result, 2)
 	require.Equal(t, "a", result[0].Value)
@@ -30,13 +31,13 @@ func TestResolveOptions_EmptyStatic(t *testing.T) {
 		Static: []model.OptionItem{},
 	}
 
-	result, err := ResolveOptions(opts, nil)
+	result, err := Options(opts, nil)
 	require.NoError(t, err)
 	require.Len(t, result, 0)
 }
 
 func TestResolveOptions_Nil(t *testing.T) {
-	result, err := ResolveOptions(nil, nil)
+	result, err := Options(nil, nil)
 	require.NoError(t, err)
 	require.Len(t, result, 0)
 }
@@ -47,7 +48,7 @@ func TestResolveOptions_FromMissing(t *testing.T) {
 	}
 	raw := map[string]any{"other": "value"}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 0)
 }
@@ -60,7 +61,7 @@ func TestResolveOptions_FromStringList(t *testing.T) {
 		"databases": []any{"users", "logs", "events"},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 3)
 	require.Equal(t, "users", result[0].Value)
@@ -80,7 +81,7 @@ func TestResolveOptions_FromMapList(t *testing.T) {
 		},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 2)
 	require.Equal(t, "pg", result[0].Value)
@@ -103,7 +104,7 @@ func TestResolveOptions_FromMapListWithDescription(t *testing.T) {
 		},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	require.Equal(t, "main", result[0].Value)
@@ -122,7 +123,7 @@ func TestResolveOptions_FromMapListMissingLabel(t *testing.T) {
 		},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	require.Equal(t, "foo", result[0].Value)
@@ -139,7 +140,7 @@ func TestResolveOptions_FromMapListMissingValue(t *testing.T) {
 		},
 	}
 
-	_, err := ResolveOptions(opts, raw)
+	_, err := Options(opts, raw)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing required field 'value'")
 }
@@ -159,7 +160,7 @@ func TestResolveOptions_FromMap(t *testing.T) {
 		},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 3)
 	// Should be sorted.
@@ -181,7 +182,7 @@ func TestResolveOptions_FromNestedPath(t *testing.T) {
 		},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 3)
 	require.Equal(t, "opt1", result[0].Value)
@@ -197,7 +198,7 @@ func TestResolveOptions_FromIntList(t *testing.T) {
 		"ports": []any{8000, 8001, 8002},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 3)
 	require.Equal(t, "8000", result[0].Value)
@@ -213,7 +214,7 @@ func TestResolveOptions_FromFloatList(t *testing.T) {
 		"versions": []any{1.0, 1.5, 2.0},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 3)
 	require.Equal(t, "1", result[0].Value)
@@ -227,7 +228,7 @@ func TestResolveOptions_FromBoolList(t *testing.T) {
 		"flags": []any{true, false},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 2)
 	require.Equal(t, "true", result[0].Value)
@@ -242,7 +243,7 @@ func TestResolveOptions_FromSingleString(t *testing.T) {
 		"single": "value",
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	require.Equal(t, "value", result[0].Value)
@@ -257,7 +258,7 @@ func TestResolveOptions_FromEmptyList(t *testing.T) {
 		"empty": []any{},
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 0)
 }
@@ -273,7 +274,7 @@ func TestResolveOptions_MixedListError(t *testing.T) {
 		},
 	}
 
-	_, err := ResolveOptions(opts, raw)
+	_, err := Options(opts, raw)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "mixed scalar and non-scalar")
 }
@@ -287,7 +288,7 @@ func TestResolveOptions_SingleInt(t *testing.T) {
 		"port": 8080,
 	}
 
-	result, err := ResolveOptions(opts, raw)
+	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	require.Equal(t, "8080", result[0].Value)
@@ -307,7 +308,7 @@ func TestResolveOptions_InvalidTypeError(t *testing.T) {
 		"invalid": &CustomType{Value: "test"}, // Pointer to custom struct
 	}
 
-	_, err := ResolveOptions(opts, raw)
+	_, err := Options(opts, raw)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expected list or map")
 }
@@ -324,7 +325,7 @@ func TestResolveOptions_ListWithComplexMapError(t *testing.T) {
 		},
 	}
 
-	_, err := ResolveOptions(opts, raw)
+	_, err := Options(opts, raw)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "mixed scalar and non-scalar")
 }

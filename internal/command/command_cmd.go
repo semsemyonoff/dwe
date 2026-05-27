@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
 	"sort"
@@ -212,7 +213,7 @@ func runCommandByID(
 	resolvedOpts := make(map[string][]model.OptionItem)
 	for name, p := range def.Params {
 		if p.Options != nil && (p.EffectiveWidget() == model.WidgetSelect || p.EffectiveWidget() == model.WidgetMultiselect) {
-			opts, rerr := resolve.ResolveOptions(p.Options, cfg.Raw)
+			opts, rerr := resolve.Options(p.Options, cfg.Raw)
 			if rerr != nil {
 				return fmt.Errorf("resolving options for param %q: %w", name, rerr)
 			}
@@ -384,7 +385,7 @@ func buildAskFields(def *usercommands.CommandDef, prefilled, provided map[string
 		widget := p.EffectiveWidget()
 
 		// Empty-options rule for select/multiselect.
-		if (widget == model.WidgetSelect || widget == model.WidgetMultiselect) {
+		if widget == model.WidgetSelect || widget == model.WidgetMultiselect {
 			opts := resolvedOpts[name]
 			if len(opts) == 0 {
 				// No options available.
@@ -429,13 +430,6 @@ func buildAskFields(def *usercommands.CommandDef, prefilled, provided map[string
 		case model.WidgetSelect:
 			field.Default = prefilled[name]
 			field.Options = optionsToAskOptions(resolvedOpts[name])
-			if p.Pattern != "" {
-				// Input validation for pattern.
-				field.Validate = func(s string) error {
-					// Pattern validation would go here if needed.
-					return nil
-				}
-			}
 
 		case model.WidgetMultiselect:
 			// Split Default by separator to get initial selections.
@@ -490,12 +484,15 @@ func optionsToAskOptions(items []model.OptionItem) []ask.Option {
 func mergeAnswers(res ask.Result, defs map[string]model.ParamDef, prevValues map[string]string) map[string]string {
 	out := make(map[string]string, len(prevValues))
 	// Start with previous values (unfilled fields will be kept as-is).
-	for k, v := range prevValues {
-		out[k] = v
-	}
+	maps.Copy(out, prevValues)
 
-	// Update with form results.
+	// Update with form results — only keys that were actually in the form.
+	// Fields skipped by buildAskFields (empty-options escape hatch, optional skip)
+	// are absent from res; omitting them preserves the prevValues copy above.
 	for name, def := range defs {
+		if !res.Has(name) {
+			continue
+		}
 		widget := def.EffectiveWidget()
 		switch widget {
 		case model.WidgetInput, model.WidgetSelect:

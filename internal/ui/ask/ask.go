@@ -18,9 +18,13 @@ type FieldKind int
 const (
 	// FieldUnknown is the zero value; Run rejects any Field with this kind.
 	FieldUnknown FieldKind = iota
+	// FieldInput is a free-text input field.
 	FieldInput
+	// FieldSelect is a single-choice select field.
 	FieldSelect
+	// FieldMultiselect is a multi-choice select field.
 	FieldMultiselect
+	// FieldConfirm is a yes/no confirmation field.
 	FieldConfirm
 )
 
@@ -33,14 +37,14 @@ type Option struct {
 
 // Field describes one form field.
 type Field struct {
-	Key         string         // field key, used in Result
-	Title       string         // prompt title
-	Description string         // additional help text
-	Kind        FieldKind      // field type (input/select/multiselect/confirm)
-	Required    bool           // if true, huh validates non-empty on submit
-	Default     string         // prefilled value (scalar); for multiselect this is the joined default
-	Defaults    []string       // pre-selected values (multiselect only)
-	Options     []Option       // choices for select/multiselect
+	Key         string             // field key, used in Result
+	Title       string             // prompt title
+	Description string             // additional help text
+	Kind        FieldKind          // field type (input/select/multiselect/confirm)
+	Required    bool               // if true, huh validates non-empty on submit
+	Default     string             // prefilled value (scalar); for multiselect this is the joined default
+	Defaults    []string           // pre-selected values (multiselect only)
+	Options     []Option           // choices for select/multiselect
 	Validate    func(string) error // optional per-field validation; for multiselect, called per-item
 }
 
@@ -95,6 +99,12 @@ func NewResultForTest(values map[string]any) Result {
 	return Result{values: values}
 }
 
+// Has reports whether the Result contains a value for key (i.e., the field was present in the form).
+func (r Result) Has(key string) bool {
+	_, ok := r.values[key]
+	return ok
+}
+
 // IsEmpty reports whether the Result has no values (for testing).
 func (r Result) IsEmpty() bool {
 	return len(r.values) == 0
@@ -145,18 +155,7 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 		bindings = append(bindings, binding)
 	}
 
-	// Snapshot hooks before running form.
-	before, after := ui.SnapshotHuhHooks()
-	if before != nil {
-		before()
-	}
-	defer func() {
-		if after != nil {
-			after()
-		}
-	}()
-
-	// Build and run the form.
+	// Build and run the form, wrapped in the canonical prompt hooks.
 	form := huh.NewForm(
 		huh.NewGroup(huhFields...).Title(title),
 	).
@@ -164,7 +163,9 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 		WithInput(opts.Input).
 		WithOutput(opts.Output)
 
-	err := form.RunWithContext(ctx)
+	err := ui.RunWithPromptHooks(func() error {
+		return form.RunWithContext(ctx)
+	})
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return Result{}, huh.ErrUserAborted

@@ -9,7 +9,7 @@ import (
 	"devbox-cli/internal/usercommands/model"
 )
 
-// ResolveOptions resolves a ParamOptions to a list of OptionItem.
+// Options resolves a ParamOptions to a list of OptionItem.
 //
 // When Options.Static is set, it returns a copy of the list.
 // When Options.From is set (a dot-path), it resolves the path against the
@@ -21,7 +21,7 @@ import (
 //
 // If the path is missing or resolves to nil, an empty slice is returned
 // without error (the caller decides whether to enforce non-empty).
-func ResolveOptions(opts *model.ParamOptions, raw map[string]any) ([]model.OptionItem, error) {
+func Options(opts *model.ParamOptions, raw map[string]any) ([]model.OptionItem, error) {
 	if opts == nil {
 		return []model.OptionItem{}, nil
 	}

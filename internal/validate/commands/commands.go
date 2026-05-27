@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -422,33 +423,33 @@ func paramStructuralDiagnostics(cmd model.CommandDef, relFile string, cfg *confi
 		}
 
 		// Validate default_from + default against resolved options (only if cfg available).
-		if cfg != nil && (pdef.DefaultFrom != "" || pdef.Default != "") {
-			effectiveDefault := pdef.DefaultFrom
-			if effectiveDefault == "" {
-				effectiveDefault = pdef.Default
-			}
+		// Only check for select/multiselect since other widgets can't have resolved options.
+		if cfg != nil && (pdef.DefaultFrom != "" || pdef.Default != "") &&
+			(effective == model.WidgetSelect || effective == model.WidgetMultiselect) &&
+			pdef.Options != nil && pdef.Options.From != "" {
+
+			// Determine the effective default value and its source label.
+			effectiveDefault := pdef.Default
 			defaultSource := "default"
+			canCheck := true
 			if pdef.DefaultFrom != "" {
-				defaultSource = fmt.Sprintf("default_from %q", pdef.DefaultFrom)
+				// Resolve the dot-path to its actual value; skip the check if unresolvable.
+				rawVal, ok := config.ResolvePath(cfg.Raw, pdef.DefaultFrom)
+				if !ok || rawVal == nil {
+					canCheck = false
+				} else {
+					effectiveDefault = fmt.Sprint(rawVal)
+					defaultSource = fmt.Sprintf("default_from %q", pdef.DefaultFrom)
+				}
 			}
 
-			// Only check for select/multiselect since other widgets can't have resolved options.
-			if (effective == model.WidgetSelect || effective == model.WidgetMultiselect) &&
-				pdef.Options != nil && pdef.Options.From != "" {
+			if canCheck && effectiveDefault != "" {
 				// Try to resolve the options from the config.
 				resolved, ok := config.ResolvePath(cfg.Raw, pdef.Options.From)
 				if ok && resolved != nil {
-					// Convert resolved value to a list we can check membership in.
 					optionValues := extractOptionValues(resolved)
-					if len(optionValues) > 0 && effectiveDefault != "" {
-						found := false
-						for _, optVal := range optionValues {
-							if optVal == effectiveDefault {
-								found = true
-								break
-							}
-						}
-						if !found {
+					if len(optionValues) > 0 {
+						if !slices.Contains(optionValues, effectiveDefault) {
 							out = append(out, validate.Diagnostic{
 								Severity: validate.SeverityError,
 								Domain:   "commands",

@@ -32,7 +32,7 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
 - **Pipeline / Deploy / Lifecycle**: `internal/pipeline`, `internal/deploy`, `internal/lifecycle`, `internal/reset`, `internal/condition`, `internal/filesgate`
 - **Builtins / Templates / Git**: `internal/builtin`, `internal/tpl`, `internal/templates`, `internal/git`, `internal/pathsafe`
 - **User commands**: `internal/usercommands/{model,loader,registry,resolve,runtime}`
-- **UI / Rendering**: `internal/render`, `internal/ui`, `internal/ui/cmdbrowser`, `internal/liveui`
+- **UI / Rendering**: `internal/render`, `internal/ui`, `internal/ui/ask`, `internal/ui/cmdbrowser`, `internal/liveui`
 - **Notifications**: `internal/notify` + hookpoints in `command/deploy`, `lifecycle/RunRun`, `usercommands/runtime/RunCommand`
 - **Snapshot**: `internal/snapshot`, `internal/validate/snapshot`
 - **Validation**: `internal/validate/{config,templates,commands,env,checks,linters,i18n,snapshot,setup,diag}`, `internal/preflight`
