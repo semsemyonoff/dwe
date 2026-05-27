@@ -27,5 +27,6 @@ func All() []validate.Validator {
 		&parallelGroupsValidator{},
 		&lifecycleParallelGroupsValidator{},
 		&resetParallelGroupsValidator{},
+		&untypedKeysValidator{},
 	}
 }

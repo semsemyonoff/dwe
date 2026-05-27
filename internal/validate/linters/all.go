@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/validate"
 )
 
@@ -34,7 +35,7 @@ func builtinAdapters() map[string]Adapter {
 // Reserved-flag rejection short-circuits at binding time: bad user flags
 // produce a synthetic error validator instead of registering the linter, so no
 // subprocess ever runs for that entry.
-func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string) []validate.Validator {
+func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string, userCfg *userconfig.Config) []validate.Validator {
 	if validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
 		// Return as a top-level DomainLevel+Global validator so that
 		// `devbox validate linters [id]` surfaces the error rather than silently
@@ -43,7 +44,7 @@ func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir stri
 		return []validate.Validator{newLinterErrorValidator("_config", 0,
 			fmt.Sprintf("devbox/validate.yml: %v", validateLoadErr))}
 	}
-	children := buildLinterChildren(validateCfg, baseDir)
+	children := buildLinterChildren(validateCfg, baseDir, userCfg)
 	if len(children) == 0 {
 		return nil
 	}
@@ -53,7 +54,7 @@ func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir stri
 // buildLinterChildren assembles the per-linter validators that become the
 // group's children. Separated from All() so tests can inspect the child set
 // without unwrapping the group.
-func buildLinterChildren(validateCfg *config.ValidateConfig, baseDir string) []validate.Validator {
+func buildLinterChildren(validateCfg *config.ValidateConfig, baseDir string, userCfg *userconfig.Config) []validate.Validator {
 	adapters := builtinAdapters()
 
 	// Deterministic ordering for autodetected built-ins.
@@ -87,7 +88,7 @@ func buildLinterChildren(validateCfg *config.ValidateConfig, baseDir string) []v
 					fmt.Sprintf("generic linter %q requires at least one entry in paths: (generic adapters have no built-in defaults)", entry.ID)))
 				continue
 			}
-			out = append(out, newLinterValidator(entry, adapter, baseDir))
+			out = append(out, newLinterValidator(entry, adapter, baseDir, userCfg))
 		}
 	}
 
@@ -99,7 +100,7 @@ func buildLinterChildren(validateCfg *config.ValidateConfig, baseDir string) []v
 		}
 		adapter := adapters[id]
 		entry := config.LinterEntry{ID: id, Type: "builtin"}
-		out = append(out, newLinterValidator(entry, adapter, baseDir))
+		out = append(out, newLinterValidator(entry, adapter, baseDir, userCfg))
 	}
 
 	return out

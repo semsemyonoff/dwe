@@ -92,6 +92,11 @@ func apply(cfg *Config, key, val string, line int) error {
 		}
 		cfg.MermaidTheme = t
 	default:
+		// Handle binary_* keys for overriding binary paths (linters, etc.)
+		if binName, ok := strings.CutPrefix(key, "binary_"); ok {
+			cfg.Binaries[binName] = val
+			return nil
+		}
 		// Unknown keys are warnings — forward-compat with future channel
 		// keys when an older MVP-only binary reads a richer config.
 		slog.Warn("userconfig: unknown key", "key", key, "line", line)

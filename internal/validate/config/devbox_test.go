@@ -958,3 +958,125 @@ func writeInfoYML(t *testing.T, content string) string {
 
 	return root
 }
+
+func TestUntypedKeysValidator_ConventionKey(t *testing.T) {
+	// Test that a legitimate convention key like `db:` emits an info diagnostic
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+
+	devboxYML := `
+schema_version: "2"
+project:
+  name: test
+  prefix: test
+db:
+  host: localhost
+  port: 5432
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+
+	cfg, err := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	require.NoError(t, err)
+
+	v := &untypedKeysValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+
+	// Should have info diagnostic for the `db` key
+	require.True(t, len(diags) > 0, "expected at least one diagnostic")
+	found := false
+	for _, d := range diags {
+		if d.Severity == validate.SeverityInfo && d.Target == "config.untyped-keys" && contains(d.Message, "db") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "expected info diagnostic for untyped key 'db'")
+}
+
+func TestUntypedKeysValidator_Typo(t *testing.T) {
+	// Test that a typo like `procject:` is caught
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+
+	devboxYML := `
+schema_version: "2"
+procject:
+  name: test
+  prefix: test
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+
+	cfg, err := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	require.NoError(t, err)
+
+	v := &untypedKeysValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+
+	// Should have info diagnostic for the typo
+	require.True(t, len(diags) > 0, "expected at least one diagnostic")
+	found := false
+	for _, d := range diags {
+		if d.Severity == validate.SeverityInfo && d.Target == "config.untyped-keys" && contains(d.Message, "procject") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "expected info diagnostic for untyped key 'procject'")
+}
+
+func TestUntypedKeysValidator_AllTypedKeys(t *testing.T) {
+	// Test that a config with only typed keys emits no diagnostics
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+
+	devboxYML := `
+schema_version: "2"
+project:
+  name: test
+  prefix: test
+runtime:
+  version: "1.0"
+state: .devbox/state
+exports:
+  env: []
+compose:
+  override: test
+ui:
+  terminal_width: 100
+docs:
+  mermaid: auto
+services: {}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+
+	cfg, err := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	require.NoError(t, err)
+
+	v := &untypedKeysValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+
+	// Should have no untyped-keys diagnostics
+	for _, d := range diags {
+		require.False(t, d.Target == "config.untyped-keys", "unexpected untyped-keys diagnostic: %s", d.Message)
+	}
+}
+
+func TestUntypedKeysValidator_NoConfig(t *testing.T) {
+	// Test that validator handles nil config gracefully
+	v := &untypedKeysValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: "/tmp",
+		Cfg:         nil,
+	})
+
+	require.Equal(t, 0, len(diags), "expected no diagnostics for nil config")
+}

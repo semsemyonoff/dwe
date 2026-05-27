@@ -138,3 +138,49 @@ func TestParse_LanguageAnyValue(t *testing.T) {
 	require.NoError(t, parse(strings.NewReader(in), cfg))
 	assert.Equal(t, "ru_RU.UTF-8", cfg.Language)
 }
+
+func TestParse_BinaryOverrides(t *testing.T) {
+	in := `binary_shellcheck = /usr/local/bin/shellcheck
+binary_hadolint = /custom/hadolint
+`
+	cfg := Defaults()
+	require.NoError(t, parse(strings.NewReader(in), cfg))
+	assert.Equal(t, "/usr/local/bin/shellcheck", cfg.Binaries["shellcheck"])
+	assert.Equal(t, "/custom/hadolint", cfg.Binaries["hadolint"])
+}
+
+func TestParse_BinaryOverrideWithWhitespace(t *testing.T) {
+	in := "binary_docker =  /opt/bin/docker  \n"
+	cfg := Defaults()
+	require.NoError(t, parse(strings.NewReader(in), cfg))
+	// Parser trims whitespace from values at parse time
+	assert.Equal(t, "/opt/bin/docker", cfg.Binaries["docker"])
+}
+
+func TestBinaryOverride(t *testing.T) {
+	cfg := &Config{
+		Binaries: map[string]string{
+			"shellcheck": "/usr/local/bin/shellcheck",
+			"hadolint":   "  /custom/hadolint  ",
+		},
+	}
+
+	// Present override returns trimmed value and true
+	path, ok := cfg.BinaryOverride("shellcheck")
+	assert.True(t, ok)
+	assert.Equal(t, "/usr/local/bin/shellcheck", path)
+
+	// Whitespace is trimmed
+	path, ok = cfg.BinaryOverride("hadolint")
+	assert.True(t, ok)
+	assert.Equal(t, "/custom/hadolint", path)
+
+	// Missing override returns false
+	_, ok = cfg.BinaryOverride("missing")
+	assert.False(t, ok)
+
+	// Nil config returns false
+	var nilCfg *Config
+	_, ok = nilCfg.BinaryOverride("anything")
+	assert.False(t, ok)
+}

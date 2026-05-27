@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"sync/atomic"
 	"time"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/validate"
 )
 
@@ -32,6 +34,7 @@ type linterValidator struct {
 	entry         config.LinterEntry
 	adapter       Adapter
 	baseDir       string
+	userConfig    *userconfig.Config
 	binExplicit   bool // user set bin: in YAML
 	pathsExplicit bool // user set paths: in YAML
 }
@@ -41,7 +44,7 @@ type linterValidator struct {
 // the canonical wire shape stays minimal — but we record explicit-vs-default
 // flags first so the runtime can distinguish "autodetect" from "user said so"
 // (e.g. for the missing-bin Warning vs silent-skip decision).
-func newLinterValidator(entry config.LinterEntry, adapter Adapter, baseDir string) *linterValidator {
+func newLinterValidator(entry config.LinterEntry, adapter Adapter, baseDir string, userCfg *userconfig.Config) *linterValidator {
 	// Generic entries without an explicit bin: still use an explicit binary
 	// (the entry ID), which the user chose by registering the entry — treat
 	// that as explicit so a missing binary emits a Warning, not a silent skip.
@@ -63,6 +66,7 @@ func newLinterValidator(entry config.LinterEntry, adapter Adapter, baseDir strin
 		entry:         entry,
 		adapter:       adapter,
 		baseDir:       baseDir,
+		userConfig:    userCfg,
 		binExplicit:   binExplicit,
 		pathsExplicit: pathsExplicit,
 	}
@@ -90,11 +94,27 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 		return nil
 	}
 
-	// 2. resolve the binary. Autodetect path silently skips when the default
-	// bin is missing; explicit `bin:` configuration produces a Warning so the
-	// user knows their config didn't take effect.
+	// 2. resolve the binary. Check user-config override first (if any), then fall back
+	// to entry.Bin (which is either user-declared or adapter default).
+	// Autodetect path silently skips when the default bin is missing; explicit
+	// `bin:` configuration or user-override produces a Warning so the user knows
+	// their config didn't take effect.
 	bin := v.entry.Bin
-	if _, err := exec.LookPath(bin); err != nil {
+
+	// Check if user-config has an override for this binary
+	if override, ok := v.userConfig.BinaryOverride(v.entry.ID); ok {
+		bin = override
+
+		// Validate that the override path exists and is executable
+		if _, err := os.Stat(bin); err != nil {
+			return append(operationalDiags, fail(
+				v.ID(),
+				fmt.Sprintf("%s: user-config override path %q: %v", v.ID(), bin, err),
+				"verify the path exists and is accessible, or remove the binary_"+v.entry.ID+" setting from ~/.config/devbox/config",
+			))
+		}
+	} else if _, err := exec.LookPath(bin); err != nil {
+		// No user override; check if default bin is on PATH
 		if !v.binExplicit {
 			// Autodetected default — silent skip.
 			return nil

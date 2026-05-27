@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/validate/diag"
 )
 
@@ -52,6 +53,10 @@ type Context struct {
 	// read this to self-skip when their check is irrelevant for the stage
 	// (e.g. env.ports_free skips on "stop").
 	Stage string
+
+	// UserConfig holds user-level Devbox preferences (binary paths, locale, etc.).
+	// Nil is safe; validators gracefully degrade to defaults.
+	UserConfig *userconfig.Config
 }
 
 // Validator is the interface for domain-specific validators.

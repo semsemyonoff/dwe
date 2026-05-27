@@ -4,6 +4,10 @@
 // per-project override at .devbox/config, and environment variables.
 package userconfig
 
+import (
+	"strings"
+)
+
 // Config holds user-level Devbox preferences. The MVP only covers the
 // notification subsystem; reserved fields are decoded but not exposed yet
 // so adding future channels does not require a schema migration.
@@ -27,6 +31,11 @@ type Config struct {
 	// in the `devbox docs` TUI. Valid values: "auto" (default — follow the
 	// terminal background), "dark", "light".
 	MermaidTheme string
+
+	// Binaries maps binary names to their absolute paths. Populated from
+	// binary_<name>=<path> lines in the config file. Used by linter validators
+	// to override default binary paths.
+	Binaries map[string]string
 }
 
 // Defaults returns a Config initialised to the documented defaults.
@@ -40,6 +49,7 @@ func Defaults() *Config {
 		NotifyCommandsEnabled: true,
 		NotifyChannels:        []string{"native"},
 		MermaidTheme:          "auto",
+		Binaries:              make(map[string]string),
 	}
 }
 
@@ -63,4 +73,16 @@ func (c *Config) NotifyEnabledFor(kind string) bool {
 	default:
 		return false
 	}
+}
+
+// BinaryOverride returns the user-configured override path for a binary name
+// and a boolean indicating whether an override was found. The returned path
+// is trimmed of whitespace. If no override is configured, returns empty string
+// and false.
+func (c *Config) BinaryOverride(name string) (string, bool) {
+	if c == nil || c.Binaries == nil {
+		return "", false
+	}
+	path, ok := c.Binaries[name]
+	return strings.TrimSpace(path), ok
 }

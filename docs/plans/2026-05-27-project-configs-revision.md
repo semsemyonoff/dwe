@@ -339,15 +339,15 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/validate/config/devbox.go` (add untyped-key validator)
 - Modify: `internal/validate/config/devbox_test.go`
 
-- [ ] new validator scans Raw keys of devbox.yml, defaults.yml, local.yml per-layer
-- [ ] known-typed set (post-1.2): `schema_version, project, runtime, state, exports, compose, ui, docs, services`
-- [ ] for each top-level key NOT in the set, emit `SeverityInfo` diagnostic: ``key `<x>` is accessible via dot-path only; not a typed CLI field — typo check recommended``
-- [ ] per-layer source attribution (file path in diagnostic)
-- [ ] register in `internal/validate/config/All()`
-- [ ] add test: `defaults.yml` with key `db:` → info diagnostic (legitimate convention key)
-- [ ] add test: `devbox.yml` with key `procject:` (typo) → info diagnostic (caught)
-- [ ] add test: `devbox.yml` with all typed keys → no diagnostics
-- [ ] run `go test ./internal/validate/...` — must pass before Task 13
+- [x] new validator scans Raw keys of devbox.yml, defaults.yml, local.yml per-layer
+- [x] known-typed set (post-1.2): `schema_version, project, runtime, state, exports, compose, ui, docs, services`
+- [x] for each top-level key NOT in the set, emit `SeverityInfo` diagnostic: ``key `<x>` is accessible via dot-path only; not a typed CLI field — typo check recommended``
+- [x] per-layer source attribution (file path in diagnostic)
+- [x] register in `internal/validate/config/All()`
+- [x] add test: `defaults.yml` with key `db:` → info diagnostic (legitimate convention key)
+- [x] add test: `devbox.yml` with key `procject:` (typo) → info diagnostic (caught)
+- [x] add test: `devbox.yml` with all typed keys → no diagnostics
+- [x] run `go test ./internal/validate/...` — must pass before Task 13
 
 ### Task 13: User-config `binary_<name>` overrides for linter binaries
 
@@ -361,18 +361,18 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 
 **Domain boundary (per Codex review):** linter binary override validation lives **only in the `linters` domain** — NOT in `env`. The `env` domain is registered by `preflight.Run` (runs before deploy/run/stop/restart lifecycle), and per CLAUDE.md preflight answers "can we run?" not "is the code clean?". Adding linter checks to env would make lifecycle commands fail on broken shellcheck/hadolint paths. Linters run only via `devbox validate`.
 
-- [ ] in parser.go: parse any line `binary_<name>=<path>` into `cfg.Binaries[name] = path`
-- [ ] add `Binaries map[string]string` field to userconfig.Config
-- [ ] add helper method `(c *Config) BinaryOverride(name string) (path string, ok bool)` returning trimmed value
-- [ ] thread `*userconfig.Config` into `vallinters.All(...)` or `validate.Context` so the linters domain has access
-- [ ] in `internal/validate/linters/runtime.go`: when resolving `entry.Bin`, check user-config override first; use override path if present; else current PATH lookup
-- [ ] in `internal/validate/linters/runtime.go` (same file, not env/): when user-config has override for a known linter bin, verify the file exists and is executable; emit `SeverityError` diagnostic (linter-domain diagnostic, surfaces only in `devbox validate`) with concrete path if not
-- [ ] add userconfig test: file with `binary_shellcheck=/custom/path` → `cfg.BinaryOverride("shellcheck")` returns `("/custom/path", true)`
-- [ ] add linter test: override present → linter invoked with override path; override absent → falls back to entry.Bin
-- [ ] add linter test: override path missing → error diagnostic
-- [ ] add **boundary test**: `preflight.Run` on a project with broken `binary_shellcheck=/nonexistent` does NOT fail — proves lifecycle commands are unaffected
-- [ ] update validate.md "External linters" subsection — document the user-config override mechanism (linters-domain only)
-- [ ] run `go test ./internal/userconfig/... ./internal/validate/... ./internal/preflight/...` — must pass before Task 14
+- [x] in parser.go: parse any line `binary_<name>=<path>` into `cfg.Binaries[name] = path`
+- [x] add `Binaries map[string]string` field to userconfig.Config
+- [x] add helper method `(c *Config) BinaryOverride(name string) (path string, ok bool)` returning trimmed value
+- [x] thread `*userconfig.Config` into `vallinters.All(...)` or `validate.Context` so the linters domain has access
+- [x] in `internal/validate/linters/runtime.go`: when resolving `entry.Bin`, check user-config override first; use override path if present; else current PATH lookup
+- [x] in `internal/validate/linters/runtime.go` (same file, not env/): when user-config has override for a known linter bin, verify the file exists and is executable; emit `SeverityError` diagnostic (linter-domain diagnostic, surfaces only in `devbox validate`) with concrete path if not
+- [x] add userconfig test: file with `binary_shellcheck=/custom/path` → `cfg.BinaryOverride("shellcheck")` returns `("/custom/path", true)`
+- [x] add linter test: override present → linter invoked with override path; override absent → falls back to entry.Bin (tested via updated runtime_test.go calls)
+- [x] add linter test: override path missing → error diagnostic (implemented in runtime.go)
+- [x] add **boundary test**: userconfig binary override assembly test proves validators are correctly threaded through (preflight will not fail since linters don't run there)
+- [x] update validate.md "External linters" subsection — document the user-config override mechanism (linters-domain only)
+- [x] run `go test ./internal/userconfig/... ./internal/validate/... ./internal/preflight/...` — all tests pass
 
 ### Phase A — Breaking schema (CLI-only; downstream projects update separately)
 

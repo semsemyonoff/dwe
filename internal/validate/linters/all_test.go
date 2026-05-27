@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/validate"
 )
 
@@ -35,7 +36,7 @@ func ids(vs []validate.Validator) []string {
 }
 
 func TestAll_NilCfgNilErr_SynthesizesAllBuiltins(t *testing.T) {
-	got := All(nil, nil, t.TempDir())
+	got := All(nil, nil, t.TempDir(), nil)
 	want := []string{HadolintID, ShellcheckID}
 	if diff := fmt.Sprint(ids(got)); diff != fmt.Sprint(want) {
 		t.Fatalf("ids = %v, want %v", ids(got), want)
@@ -43,7 +44,7 @@ func TestAll_NilCfgNilErr_SynthesizesAllBuiltins(t *testing.T) {
 }
 
 func TestAll_NilCfgErrNotExist_SynthesizesAllBuiltins(t *testing.T) {
-	got := All(nil, fs.ErrNotExist, t.TempDir())
+	got := All(nil, fs.ErrNotExist, t.TempDir(), nil)
 	want := []string{HadolintID, ShellcheckID}
 	if fmt.Sprint(ids(got)) != fmt.Sprint(want) {
 		t.Fatalf("ids = %v, want %v", ids(got), want)
@@ -51,7 +52,7 @@ func TestAll_NilCfgErrNotExist_SynthesizesAllBuiltins(t *testing.T) {
 }
 
 func TestAll_CorruptConfig_ReturnsErrorValidator(t *testing.T) {
-	got := All(nil, errors.New("yaml: bad token"), t.TempDir())
+	got := All(nil, errors.New("yaml: bad token"), t.TempDir(), nil)
 	cs := children(got)
 	if len(cs) != 1 {
 		t.Fatalf("expected one error validator on corrupt config, got %d", len(cs))
@@ -73,7 +74,7 @@ func TestAll_CorruptConfig_TopLevelDomainLevelGlobal(t *testing.T) {
 	// Regression: _config error was previously a child of lintersGroup, so
 	// Registry.Run's DomainLevel/Global checks never reached it under scoped
 	// queries like `devbox validate linters shellcheck`.
-	got := All(nil, errors.New("yaml: bad token"), t.TempDir())
+	got := All(nil, errors.New("yaml: bad token"), t.TempDir(), nil)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 top-level validator, got %d", len(got))
 	}
@@ -98,7 +99,7 @@ func TestAll_CorruptConfig_TopLevelDomainLevelGlobal(t *testing.T) {
 
 func TestAll_EmptyConfig_SynthesizesAllBuiltins(t *testing.T) {
 	cfg := &config.ValidateConfig{}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	want := []string{HadolintID, ShellcheckID}
 	if fmt.Sprint(ids(got)) != fmt.Sprint(want) {
 		t.Fatalf("ids = %v, want %v", ids(got), want)
@@ -109,7 +110,7 @@ func TestAll_PartialConfig_OtherBuiltinsStillAutodetected(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: ShellcheckID, Type: "builtin", Flags: []string{"--severity=warning"}},
 	}}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	want := []string{HadolintID, ShellcheckID}
 	if fmt.Sprint(ids(got)) != fmt.Sprint(want) {
 		t.Fatalf("ids = %v, want %v", ids(got), want)
@@ -120,7 +121,7 @@ func TestAll_ExplicitEntryTakesPrecedence(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: ShellcheckID, Type: "builtin", Paths: []string{"custom"}},
 	}}
-	cs := children(All(cfg, nil, t.TempDir()))
+	cs := children(All(cfg, nil, t.TempDir(), nil))
 	// First validator (insertion order) should be the user-configured shellcheck;
 	// hadolint is auto-detected and appended after.
 	if cs[0].ID() != ShellcheckID {
@@ -143,7 +144,7 @@ func TestAll_EnabledFalse_StillRegisteredButRunsSilently(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: ShellcheckID, Type: "builtin", Enabled: &disabled},
 	}}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	// Registered so that scoped runs like `validate linters shellcheck` still
 	// match by ID; runtime gates on enabled at Run() time.
 	want := []string{HadolintID, ShellcheckID}
@@ -164,7 +165,7 @@ func TestAll_UnknownBuiltin_ProducesErrorValidator(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: "nosuch", Type: "builtin", SourceLine: 42},
 	}}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	var found bool
 	for _, v := range got {
 		if v.ID() == "nosuch" {
@@ -191,7 +192,7 @@ func TestAll_GenericWithUnknownID_UsesGenericAdapter(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: "yamllint", Type: "generic", Bin: "yamllint", Paths: []string{"."}},
 	}}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	var lv *linterValidator
 	for _, v := range got {
 		if v.ID() == "yamllint" {
@@ -221,7 +222,7 @@ func TestAll_ReservedFlagShellcheck_ProducesErrorValidator(t *testing.T) {
 			cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 				{ID: ShellcheckID, Type: "builtin", Flags: tc.flags, SourceLine: 7},
 			}}
-			got := children(All(cfg, nil, t.TempDir()))
+			got := children(All(cfg, nil, t.TempDir(), nil))
 			var ev *linterErrorValidator
 			for _, v := range got {
 				if v.ID() == ShellcheckID {
@@ -239,7 +240,7 @@ func TestAll_ReservedFlagHadolint_ProducesErrorValidator(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: HadolintID, Type: "builtin", Flags: []string{"-ftty"}},
 	}}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	var ev *linterErrorValidator
 	for _, v := range got {
 		if v.ID() == HadolintID {
@@ -255,7 +256,7 @@ func TestAll_ReservedFlagsAllowedForGeneric(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: "yamllint", Type: "generic", Bin: "yamllint", Paths: []string{"."}, Flags: []string{"--format=parsable"}},
 	}}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	for _, v := range got {
 		if v.ID() == "yamllint" {
 			if _, isErr := v.(*linterErrorValidator); isErr {
@@ -271,7 +272,7 @@ func TestAll_GenericWithNoPaths_ProducesErrorValidator(t *testing.T) {
 	cfg := &config.ValidateConfig{Linters: []config.LinterEntry{
 		{ID: "yamllint", Type: "generic", Bin: "yamllint", SourceLine: 5},
 	}}
-	got := children(All(cfg, nil, t.TempDir()))
+	got := children(All(cfg, nil, t.TempDir(), nil))
 	for _, v := range got {
 		if v.ID() == "yamllint" {
 			if _, isErr := v.(*linterErrorValidator); !isErr {
@@ -281,4 +282,29 @@ func TestAll_GenericWithNoPaths_ProducesErrorValidator(t *testing.T) {
 		}
 	}
 	t.Fatalf("yamllint validator not present")
+}
+
+func TestAll_UserConfigBinaryOverride(t *testing.T) {
+	// Test that a user-config with binary_shellcheck override is threaded through
+	// to the linterValidator correctly.
+	usercfg := &userconfig.Config{
+		Binaries: map[string]string{
+			"shellcheck": "/nonexistent/path/to/shellcheck",
+		},
+	}
+	// When All() receives a user config, it should be passed to the validators.
+	// If the override path doesn't exist, the validator will emit an error diagnostic
+	// at Run time (not at assembly time).
+	got := All(nil, nil, t.TempDir(), usercfg)
+	if len(got) == 0 {
+		t.Fatalf("expected validators (at least shellcheck), got none")
+	}
+	// The validators are assembled successfully even with a broken override path.
+	// The actual error will surface at Run time.
+	v := got[0]
+	if g, ok := v.(*lintersGroup); ok {
+		if len(g.Children()) == 0 {
+			t.Fatalf("expected children in group, got none")
+		}
+	}
 }

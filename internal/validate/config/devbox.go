@@ -1237,3 +1237,57 @@ func (v *serviceDeployValidator) Run(ctx validate.Context) []validate.Diagnostic
 
 	return diags
 }
+
+type untypedKeysValidator struct{}
+
+func (v *untypedKeysValidator) ID() string {
+	return "untyped-keys"
+}
+
+func (v *untypedKeysValidator) Domain() string {
+	return "config"
+}
+
+var knownTypedKeys = map[string]bool{
+	"schema_version": true,
+	"project":        true,
+	"runtime":        true,
+	"state":          true,
+	"exports":        true,
+	"compose":        true,
+	"ui":             true,
+	"docs":           true,
+	"services":       true,
+}
+
+func (v *untypedKeysValidator) Run(ctx validate.Context) []validate.Diagnostic {
+	var diags []validate.Diagnostic
+
+	if ctx.Cfg == nil {
+		return diags
+	}
+
+	// Scan Raw keys for untyped entries
+	for key := range ctx.Cfg.Raw {
+		// Skip internal engine keys
+		if key == "__configPath" {
+			continue
+		}
+		// Skip binaries (engine-managed, removed in future versions)
+		if key == "binaries" {
+			continue
+		}
+
+		if !knownTypedKeys[key] {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.untyped-keys",
+				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox.yml")),
+				Message:  fmt.Sprintf("key %q is accessible via dot-path only; not a typed CLI field — typo check recommended", key),
+			})
+		}
+	}
+
+	return diags
+}

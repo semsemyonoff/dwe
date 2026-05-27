@@ -156,7 +156,7 @@ func TestLinterValidator_SuccessPath(t *testing.T) {
 	writeScript(t, base, "a.sh")
 
 	a := &fakeAdapter{id: "fake", bin: "myfakelinter"}
-	v := newLinterValidator(config.LinterEntry{ID: "fake", Paths: []string{"."}}, a, base)
+	v := newLinterValidator(config.LinterEntry{ID: "fake", Paths: []string{"."}}, a, base, nil)
 
 	diags := v.Run(validate.Context{Ctx: context.Background()})
 	for _, d := range diags {
@@ -174,7 +174,7 @@ func TestLinterValidator_NonZeroProducesFindings(t *testing.T) {
 	writeScript(t, base, "a.sh")
 
 	a := &fakeAdapter{id: "fake", bin: "myfakelinter"}
-	v := newLinterValidator(config.LinterEntry{ID: "fake", Paths: []string{"."}}, a, base)
+	v := newLinterValidator(config.LinterEntry{ID: "fake", Paths: []string{"."}}, a, base, nil)
 
 	diags := v.Run(validate.Context{})
 	if len(diags) == 0 {
@@ -196,7 +196,7 @@ func TestLinterValidator_MissingDefaultBinSilentSkip(t *testing.T) {
 	t.Setenv("PATH", dir)
 
 	a := &fakeAdapter{id: "ghost", bin: "ghost-linter"}
-	v := newLinterValidator(config.LinterEntry{ID: "ghost"}, a, t.TempDir())
+	v := newLinterValidator(config.LinterEntry{ID: "ghost"}, a, t.TempDir(), nil)
 
 	diags := v.Run(validate.Context{})
 	if len(diags) != 0 {
@@ -211,7 +211,7 @@ func TestLinterValidator_MissingExplicitBinWarning(t *testing.T) {
 	a := &fakeAdapter{id: "ghost", bin: "ghost-default"}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "ghost", Bin: "ghost-explicit"},
-		a, t.TempDir(),
+		a, t.TempDir(), nil,
 	)
 
 	diags := v.Run(validate.Context{})
@@ -231,7 +231,7 @@ func TestLinterValidator_TimeoutFiresOperationalError(t *testing.T) {
 	a := &fakeAdapter{id: "fake", bin: "myfakelinter"}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"."}},
-		a, base,
+		a, base, nil,
 	)
 
 	start := time.Now()
@@ -258,7 +258,7 @@ func TestLinterValidator_TimeoutNotSilencedByClamp(t *testing.T) {
 	a := &fakeAdapter{id: "fake", bin: "myfakelinter"}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"."}, Severity: &clamp},
-		a, base,
+		a, base, nil,
 	)
 	diags := v.Run(validate.Context{})
 	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
@@ -280,7 +280,7 @@ func TestLinterValidator_OutputTruncationWarning(t *testing.T) {
 	}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"."}},
-		a, base,
+		a, base, nil,
 	)
 	diags := v.Run(validate.Context{})
 	gotWarning := false
@@ -309,7 +309,7 @@ func TestLinterValidator_AdapterParseErrorBecomesError(t *testing.T) {
 	}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"."}},
-		a, base,
+		a, base, nil,
 	)
 	diags := v.Run(validate.Context{})
 	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
@@ -334,7 +334,7 @@ func TestLinterValidator_CrashNotSilencedByClamp(t *testing.T) {
 	}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"."}, Severity: &clamp},
-		a, base,
+		a, base, nil,
 	)
 	diags := v.Run(validate.Context{})
 	if len(diags) != 1 || diags[0].Severity != validate.SeverityError {
@@ -360,7 +360,7 @@ func TestLinterValidator_SeverityClampDowngradesFindings(t *testing.T) {
 	}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"."}, Severity: &clamp},
-		a, base,
+		a, base, nil,
 	)
 	diags := v.Run(validate.Context{})
 	if len(diags) != 1 {
@@ -381,7 +381,7 @@ func TestLinterValidator_UserMissingPathWarning(t *testing.T) {
 	a := &fakeAdapter{id: "fake", bin: "myfakelinter"}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"nope"}},
-		a, base,
+		a, base, nil,
 	)
 	diags := v.Run(validate.Context{})
 	gotWarning := false
@@ -405,7 +405,7 @@ func TestLinterValidator_DisabledIsSilentSkip(t *testing.T) {
 	a := &fakeAdapter{id: "fake", bin: "myfakelinter"}
 	v := newLinterValidator(
 		config.LinterEntry{ID: "fake", Paths: []string{"."}, Enabled: &off},
-		a, base,
+		a, base, nil,
 	)
 	if diags := v.Run(validate.Context{}); len(diags) != 0 {
 		t.Fatalf("enabled:false must be silent skip; got %#v", diags)
