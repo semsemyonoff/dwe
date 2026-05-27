@@ -1181,8 +1181,11 @@ func TestLoadConfig_deployAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if cfg.Deploy != nil {
-		t.Errorf("Deploy should be nil when deploy.yml absent, got %v", cfg.Deploy)
+	if cfg.Deploy == nil {
+		t.Errorf("Deploy should not be nil (empty default when deploy.yml absent), got %v", cfg.Deploy)
+	}
+	if len(cfg.Deploy.Phases) != 0 {
+		t.Errorf("Deploy.Phases should be empty when deploy.yml absent, got %d phases", len(cfg.Deploy.Phases))
 	}
 }
 

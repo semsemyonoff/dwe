@@ -36,14 +36,14 @@ func svcApp(hooks *config.ServiceToggleHooks, onDisable *config.ServiceToggleHoo
 	}
 }
 
-func emptyDeployMap() map[string]*config.DeployConfig {
-	return map[string]*config.DeployConfig{}
+func emptyDeployMap() map[string]*config.ServiceDeployConfig {
+	return map[string]*config.ServiceDeployConfig{}
 }
 
-func deployMapWith(names ...string) map[string]*config.DeployConfig {
-	m := map[string]*config.DeployConfig{}
+func deployMapWith(names ...string) map[string]*config.ServiceDeployConfig {
+	m := map[string]*config.ServiceDeployConfig{}
 	for _, n := range names {
-		m[n] = &config.DeployConfig{}
+		m[n] = &config.ServiceDeployConfig{}
 	}
 	return m
 }

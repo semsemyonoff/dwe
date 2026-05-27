@@ -1207,6 +1207,10 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", deployPath, err)
 	}
+	// Ensure cfg.Deploy is always non-nil (empty by default if deploy.yml is absent)
+	if cfg.Deploy == nil {
+		cfg.Deploy = &ProjectDeployConfig{}
+	}
 
 	// Validate config keys and detect legacy compose.overlays.
 	if err := detectLegacyComposeOverlays(merged); err != nil {

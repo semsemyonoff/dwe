@@ -21,20 +21,18 @@ func TestResolveUpdateMode_UpdateBlockOmitted_NoFlag(t *testing.T) {
 	}
 }
 
-func TestResolveUpdateMode_UpdateBlockPresent_ModeOmitted_NoFlag(t *testing.T) {
-	enabled := true
+func TestResolveUpdateMode_ModeOn_NoFlag(t *testing.T) {
 	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Enabled: &enabled, Mode: ""},
+		Update: &config.LifecycleUpdate{Mode: "on"},
 	}
-	if got := resolveUpdateMode(cfg, false, ""); got != "prompt" {
-		t.Errorf("resolveUpdateMode = %q, want %q", got, "prompt")
+	if got := resolveUpdateMode(cfg, false, ""); got != "on" {
+		t.Errorf("resolveUpdateMode = %q, want %q", got, "on")
 	}
 }
 
-func TestResolveUpdateMode_EnabledFalse_NoFlag(t *testing.T) {
-	disabled := false
+func TestResolveUpdateMode_ModeOff_NoFlag(t *testing.T) {
 	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Enabled: &disabled, Mode: "auto"},
+		Update: &config.LifecycleUpdate{Mode: "off"},
 	}
 	if got := resolveUpdateMode(cfg, false, ""); got != "off" {
 		t.Errorf("resolveUpdateMode = %q, want %q", got, "off")
@@ -42,9 +40,8 @@ func TestResolveUpdateMode_EnabledFalse_NoFlag(t *testing.T) {
 }
 
 func TestResolveUpdateMode_NoUpdateFlag_ForcesOff(t *testing.T) {
-	enabled := true
 	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Enabled: &enabled, Mode: "auto"},
+		Update: &config.LifecycleUpdate{Mode: "on"},
 	}
 	if got := resolveUpdateMode(cfg, true, ""); got != "off" {
 		t.Errorf("resolveUpdateMode with NoUpdate = %q, want %q", got, "off")
@@ -52,39 +49,27 @@ func TestResolveUpdateMode_NoUpdateFlag_ForcesOff(t *testing.T) {
 }
 
 func TestResolveUpdateMode_UpdateFlag_OverridesYAML(t *testing.T) {
-	enabled := true
 	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Enabled: &enabled, Mode: "prompt"},
+		Update: &config.LifecycleUpdate{Mode: "off"},
 	}
-	if got := resolveUpdateMode(cfg, false, "auto"); got != "auto" {
-		t.Errorf("resolveUpdateMode with UpdateMode=auto = %q, want %q", got, "auto")
-	}
-}
-
-func TestResolveUpdateMode_UpdateFlag_OverridesEnabledFalse(t *testing.T) {
-	disabled := false
-	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Enabled: &disabled, Mode: "prompt"},
-	}
-	if got := resolveUpdateMode(cfg, false, "auto"); got != "auto" {
-		t.Errorf("resolveUpdateMode with UpdateMode=auto (enabled:false yaml) = %q, want %q", got, "auto")
+	if got := resolveUpdateMode(cfg, false, "on"); got != "on" {
+		t.Errorf("resolveUpdateMode with UpdateMode=on = %q, want %q", got, "on")
 	}
 }
 
 func TestResolveUpdateMode_UpdateFlag_OverridesOmittedBlock(t *testing.T) {
 	cfg := &config.LifecycleRunConfig{Update: nil}
-	if got := resolveUpdateMode(cfg, false, "check"); got != "check" {
-		t.Errorf("resolveUpdateMode with UpdateMode=check (no block) = %q, want %q", got, "check")
+	if got := resolveUpdateMode(cfg, false, "on"); got != "on" {
+		t.Errorf("resolveUpdateMode with UpdateMode=on (no block) = %q, want %q", got, "on")
 	}
 }
 
 func TestResolveUpdateMode_NoUpdateTakesPrecedenceOverUpdateFlag(t *testing.T) {
-	enabled := true
 	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Enabled: &enabled, Mode: "prompt"},
+		Update: &config.LifecycleUpdate{Mode: "on"},
 	}
-	if got := resolveUpdateMode(cfg, true, "auto"); got != "off" {
-		t.Errorf("resolveUpdateMode with NoUpdate + UpdateMode=auto = %q, want %q", got, "off")
+	if got := resolveUpdateMode(cfg, true, "on"); got != "off" {
+		t.Errorf("resolveUpdateMode with NoUpdate + UpdateMode=on = %q, want %q", got, "off")
 	}
 }
 

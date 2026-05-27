@@ -142,7 +142,7 @@ func TestServiceConfigHash(t *testing.T) {
 	assert.Len(t, hash1, 64)
 
 	// Test with deploy config
-	deployCfg := &config.DeployConfig{
+	deployCfg := &config.ServiceDeployConfig{
 		Phases: []config.DeployPhase{
 			{
 				Name:           "setup",
@@ -176,8 +176,8 @@ func TestProjectConfigHash(t *testing.T) {
 		},
 	}
 
-	deployCfg := &config.DeployConfig{}
-	svcDeploys := map[string]*config.DeployConfig{
+	deployCfg := &config.ProjectDeployConfig{}
+	svcDeploys := map[string]*config.ServiceDeployConfig{
 		"main": nil,
 	}
 
@@ -227,8 +227,8 @@ func TestProjectConfigHashIgnoresUntracked(t *testing.T) {
 		},
 	}
 
-	deployCfg := &config.DeployConfig{}
-	svcDeploys := map[string]*config.DeployConfig{"main": nil}
+	deployCfg := &config.ProjectDeployConfig{}
+	svcDeploys := map[string]*config.ServiceDeployConfig{"main": nil}
 	trackedServices := []string{"main"} // Only main is tracked
 
 	hash1 := ProjectConfigHash(cfg1, deployCfg, svcDeploys, trackedServices)
@@ -289,7 +289,7 @@ func TestHashesNotEmptyOnEmptyInput(t *testing.T) {
 	assert.NotEmpty(t, svcHash)
 
 	cfg := &config.DevboxConfig{Services: map[string]config.ServiceConfig{}}
-	projHash := ProjectConfigHash(cfg, nil, map[string]*config.DeployConfig{}, []string{})
+	projHash := ProjectConfigHash(cfg, nil, map[string]*config.ServiceDeployConfig{}, []string{})
 	assert.Len(t, projHash, 64)
 	assert.NotEmpty(t, projHash)
 }

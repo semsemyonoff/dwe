@@ -19,7 +19,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 		name       string
 		state      *journal.ProjectState
 		cfg        *config.DevboxConfig
-		svcDeploys map[string]*config.DeployConfig
+		svcDeploys map[string]*config.ServiceDeployConfig
 		tracked    []string
 		expectRows int
 		checkRow   func(t *testing.T, row statusview.DeployStatusRow)
@@ -52,7 +52,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 					},
 				},
 			},
-			svcDeploys: map[string]*config.DeployConfig{
+			svcDeploys: map[string]*config.ServiceDeployConfig{
 				"main": nil,
 			},
 			tracked:    []string{"main"},
@@ -96,7 +96,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 					},
 				},
 			},
-			svcDeploys: map[string]*config.DeployConfig{
+			svcDeploys: map[string]*config.ServiceDeployConfig{
 				"main": nil,
 			},
 			tracked:    []string{"main"},
@@ -221,7 +221,7 @@ func TestRenderDeployStatusEmpty(t *testing.T) {
 	out := RenderDeployStatus(StatusInput{
 		Cfg:        cfg,
 		State:      state,
-		SvcDeploys: make(map[string]*config.DeployConfig),
+		SvcDeploys: make(map[string]*config.ServiceDeployConfig),
 		Tracked:    []string{},
 	})
 	assert.Empty(t, out)

@@ -498,8 +498,9 @@ func TestCollectGitWorkspace_UsesConfiguredGitBin(t *testing.T) {
 	if rows[0].Err != nil {
 		t.Fatalf("unexpected Err: %v", rows[0].Err)
 	}
-	if gotBin != "custom-git" {
-		t.Fatalf("shellout bin = %q, want %q", gotBin, "custom-git")
+	// When no userconfig is loaded, GitBin falls back to default "git"
+	if gotBin != "git" {
+		t.Fatalf("shellout bin = %q, want %q", gotBin, "git")
 	}
 }
 

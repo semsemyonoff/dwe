@@ -93,7 +93,7 @@ func TestDiffServiceSelection_MultipleChanges(t *testing.T) {
 func TestValidateServiceToggle_UnknownService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"main": {Mandatory: false},
+			"main": {Required: false},
 		},
 	}
 	if err := ValidateServiceToggle(cfg, "unknown"); err == nil {
@@ -104,7 +104,7 @@ func TestValidateServiceToggle_UnknownService(t *testing.T) {
 func TestValidateServiceToggle_MandatoryService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"main": {Mandatory: true},
+			"main": {Required: true},
 		},
 	}
 	if err := ValidateServiceToggle(cfg, "main"); err == nil {
@@ -115,7 +115,7 @@ func TestValidateServiceToggle_MandatoryService(t *testing.T) {
 func TestValidateServiceToggle_MandatoryInfraService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"db": {Type: config.ServiceTypeInfra, Mandatory: true},
+			"db": {Type: config.ServiceTypeInfra, Required: true},
 		},
 	}
 	if err := ValidateServiceToggle(cfg, "db"); err == nil {
@@ -126,7 +126,7 @@ func TestValidateServiceToggle_MandatoryInfraService(t *testing.T) {
 func TestValidateServiceToggle_OptionalInfraService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"varnish": {Type: config.ServiceTypeInfra, Mandatory: false},
+			"varnish": {Type: config.ServiceTypeInfra, Required: false},
 		},
 	}
 	if err := ValidateServiceToggle(cfg, "varnish"); err != nil {
@@ -137,7 +137,7 @@ func TestValidateServiceToggle_OptionalInfraService(t *testing.T) {
 func TestValidateServiceToggle_OptionalService(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"second": {Mandatory: false},
+			"second": {Required: false},
 		},
 	}
 	if err := ValidateServiceToggle(cfg, "second"); err != nil {
@@ -148,8 +148,8 @@ func TestValidateServiceToggle_OptionalService(t *testing.T) {
 func TestApplyServiceTogglesToYAML_AllOrNothing(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"main":   {Mandatory: true},
-			"second": {Mandatory: false},
+			"main":   {Required: true},
+			"second": {Required: false},
 		},
 	}
 	local := map[string]any{}
@@ -169,8 +169,8 @@ func TestApplyServiceTogglesToYAML_AllOrNothing(t *testing.T) {
 func TestApplyServiceTogglesToYAML_AppliesChanges(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{
-			"second": {Mandatory: false},
-			"third":  {Mandatory: false},
+			"second": {Required: false},
+			"third":  {Required: false},
 		},
 	}
 	local := map[string]any{}

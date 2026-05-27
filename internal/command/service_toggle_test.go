@@ -1747,7 +1747,7 @@ func TestBatchServiceConfigHash(t *testing.T) {
 			"b": {Type: config.ServiceTypeApp, Container: "cb"},
 		},
 	}
-	deploys := map[string]*config.DeployConfig{}
+	deploys := map[string]*config.ServiceDeployConfig{}
 
 	h1 := batchServiceConfigHash(cfg, deploys, "a", "b")
 	h2 := batchServiceConfigHash(cfg, deploys, "b", "a")
