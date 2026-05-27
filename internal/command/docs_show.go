@@ -170,7 +170,7 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 	theme := render.ThemeFromBackground()
 	termWidth := getTermWidth()
 
-	placeholderFunc := buildShowMermaidPlaceholder(cfg, contentWithBanners, theme, termWidth)
+	placeholderFunc := buildShowMermaidPlaceholder(cmd.Context(), cfg, contentWithBanners, theme, termWidth)
 	result, err := render.Render(contentWithBanners, render.Opts{
 		Theme: theme,
 		Width: termWidth,
@@ -224,7 +224,7 @@ func getTermWidth() int {
 // rendered via the configured chain: on success the PNG is cached (use `devbox docs`
 // TUI to view it inline); on failure (mmdc unavailable) the raw mermaid source is
 // shown as a plain code block.
-func buildShowMermaidPlaceholder(cfg *config.DevboxConfig, content []byte, theme string, width int) render.PlaceholderFunc {
+func buildShowMermaidPlaceholder(ctx context.Context, cfg *config.DevboxConfig, content []byte, theme string, width int) render.PlaceholderFunc {
 	mermaidMode := config.MermaidMode(cfg)
 	if mermaidMode == "off" {
 		return nil
@@ -245,7 +245,6 @@ func buildShowMermaidPlaceholder(cfg *config.DevboxConfig, content []byte, theme
 	if theme == "light" {
 		mermaidTheme = mermaid.ThemeLight
 	}
-	ctx := context.Background()
 	for i, block := range blocks {
 		_, err := renderer.Render(ctx, block.Source, mermaidTheme, width)
 		results[i] = renderResult{err: err}
@@ -260,8 +259,8 @@ func buildShowMermaidPlaceholder(cfg *config.DevboxConfig, content []byte, theme
 			// PNG cached; can't inline it in non-TUI output — advise using the TUI.
 			return render.MermaidPlaceholder{Text: "<📊 [diagram cached — use `devbox docs` to view inline]>"}
 		}
-		// mmdc unavailable or disabled → show raw mermaid source as a code block.
-		if errors.Is(r.err, mermaid.ErrMmdcNotAvailable) || errors.Is(r.err, mermaid.ErrRenderingDisabled) {
+		// mmdc unavailable, required-but-missing, or disabled → show raw mermaid source as a code block.
+		if errors.Is(r.err, mermaid.ErrMmdcNotAvailable) || errors.Is(r.err, mermaid.ErrRenderingDisabled) || errors.Is(r.err, mermaid.ErrMmdcRequired) {
 			if index < len(blocks) {
 				src := strings.TrimSpace(blocks[index].Source)
 				return render.MermaidPlaceholder{Text: "```\n" + src + "\n```"}

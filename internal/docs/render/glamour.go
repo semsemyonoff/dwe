@@ -96,6 +96,11 @@ func PlaceholderForFailed(index int) MermaidPlaceholder {
 	}
 }
 
+var (
+	mermaidBlockRE = regexp.MustCompile("(?m)^```mermaid$([\\s\\S]*?)^```$")
+	newlineRE      = regexp.MustCompile("\n")
+)
+
 // ExtractMermaidBlocks extracts all mermaid blocks from markdown without rendering.
 // Returns a list of (source, startLine, endLine) tuples.
 func ExtractMermaidBlocks(input []byte) []struct {
@@ -104,8 +109,7 @@ func ExtractMermaidBlocks(input []byte) []struct {
 	EndLine   int
 } {
 	lines := string(input)
-	re := regexp.MustCompile("(?m)^```mermaid$([\\s\\S]*?)^```$")
-	matches := re.FindAllStringSubmatchIndex(lines, -1)
+	matches := mermaidBlockRE.FindAllStringSubmatchIndex(lines, -1)
 
 	var blocks []struct {
 		Source    string
@@ -116,11 +120,8 @@ func ExtractMermaidBlocks(input []byte) []struct {
 	for _, match := range matches {
 		if len(match) >= 4 {
 			source := input[match[2]:match[3]]
-			startLine := regexp.MustCompile("\n").FindAllIndex(input[:match[0]], -1)
-			startLineNum := len(startLine)
-
-			endLine := regexp.MustCompile("\n").FindAllIndex(input[:match[1]], -1)
-			endLineNum := len(endLine)
+			startLineNum := len(newlineRE.FindAllIndex(input[:match[0]], -1))
+			endLineNum := len(newlineRE.FindAllIndex(input[:match[1]], -1))
 
 			blocks = append(blocks, struct {
 				Source    string
