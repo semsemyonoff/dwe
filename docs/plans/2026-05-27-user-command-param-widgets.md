@@ -300,10 +300,10 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
 - Modify: `internal/usercommands/model/types.go`
 - Modify: `internal/usercommands/model/types_test.go`
 
-- [ ] add `ParamWidget` (string-typed; zero value `""` means "infer from Type") with constants `WidgetInput`/`WidgetSelect`/`WidgetMultiselect`/`WidgetConfirm`
-- [ ] add compile-time check `var _ yaml.Unmarshaler = (*ParamOptions)(nil)` next to `ParamOptions` definition
-- [ ] use pointer receivers consistently on `ParamOptions` (`UnmarshalYAML` mutates, so `IsZero` must also be `*ParamOptions` — nil-safe)
-- [ ] add `OptionItem` struct and `ParamOptions{Static, From}` struct with `UnmarshalYAML` dispatching on `yaml.Node.Kind`:
+- [x] add `ParamWidget` (string-typed; zero value `""` means "infer from Type") with constants `WidgetInput`/`WidgetSelect`/`WidgetMultiselect`/`WidgetConfirm`
+- [x] add compile-time check `var _ yaml.Unmarshaler = (*ParamOptions)(nil)` next to `ParamOptions` definition
+- [x] use pointer receivers consistently on `ParamOptions` (`UnmarshalYAML` mutates, so `IsZero` must also be `*ParamOptions` — nil-safe)
+- [x] add `OptionItem` struct and `ParamOptions{Static, From}` struct with `UnmarshalYAML` dispatching on `yaml.Node.Kind`:
   - **null/missing node** → `IsZero` (no error)
   - **scalar** matching `^\${\s*([^}]+?)\s*}$` → `From` = inner dot-path (trimmed, no braces); this is the canonical form used by `config.ResolvePath` exactly like `DefaultFrom`
   - **scalar** not matching → error: "options: expected `${...}` reference or sequence, got plain scalar"
@@ -312,11 +312,11 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
   - **sequence of maps** (all elements mapping) → decode as `[]OptionItem` with strict `KnownFields`
   - **mixed sequence** (scalar + map intermixed) → error citing the line of the first offending element
   - **mapping node** at the top level → error: "options: expected sequence or `${...}` reference, got mapping"
-- [ ] add `Widget`, `Options`, `Separator` fields to `ParamDef` with yaml tags
-- [ ] add `ParamDef.EffectiveWidget()` helper returning the defaulted widget per the inference table (no mutation; pure function)
-- [ ] write table-driven tests for `ParamOptions.UnmarshalYAML` covering: null/missing, `${x}`, `${ x }` (whitespace), `${}` (empty → error), plain scalar (`foo` → error), empty sequence, scalar sequence, map sequence, mixed sequence (error w/ line), mapping node (error)
-- [ ] write tests for `EffectiveWidget` covering each row of the inference table
-- [ ] run `make test ./internal/usercommands/model/...` — must pass before Task 4
+- [x] add `Widget`, `Options`, `Separator` fields to `ParamDef` with yaml tags
+- [x] add `ParamDef.EffectiveWidget()` helper returning the defaulted widget per the inference table (no mutation; pure function)
+- [x] write table-driven tests for `ParamOptions.UnmarshalYAML` covering: null/missing, `${x}`, `${ x }` (whitespace), `${}` (empty → error), plain scalar (`foo` → error), empty sequence, scalar sequence, map sequence, mixed sequence (error w/ line), mapping node (error)
+- [x] write tests for `EffectiveWidget` covering each row of the inference table
+- [x] run `make test ./internal/usercommands/model/...` — must pass before Task 4
 
 ### Task 4: Load-time validation in `model.CommandDef.Validate`
 

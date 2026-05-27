@@ -1997,3 +1997,497 @@ func setID(cmd CommandDef, id string) CommandDef {
 	cmd.ID = id
 	return cmd
 }
+
+// ---------------------------------------------------------------------------
+// ParamWidget constants
+// ---------------------------------------------------------------------------
+
+func TestParamWidgetConstants(t *testing.T) {
+	widgets := []ParamWidget{WidgetInput, WidgetSelect, WidgetMultiselect, WidgetConfirm}
+	want := []string{"input", "select", "multiselect", "confirm"}
+	for i, w := range widgets {
+		if string(w) != want[i] {
+			t.Errorf("ParamWidget[%d] = %q, want %q", i, w, want[i])
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ParamOptions.UnmarshalYAML tests
+// ---------------------------------------------------------------------------
+
+func TestParamOptions_UnmarshalYAML_Null(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        type: string
+        options:
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["test"].Params["p"]
+	if p.Options != nil && (len(p.Options.Static) > 0 || p.Options.From != "") {
+		t.Errorf("expected null options to be empty, got %+v", p.Options)
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_DotPathReference(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        widget: select
+        options: ${databases}
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["test"].Params["p"]
+	if p.Options == nil {
+		t.Fatalf("expected options to be parsed")
+	}
+	if p.Options.From != "databases" {
+		t.Errorf("From = %q, want databases", p.Options.From)
+	}
+	if len(p.Options.Static) != 0 {
+		t.Errorf("Static = %v, want empty", p.Options.Static)
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_DotPathWithWhitespace(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        widget: select
+        options: '${ nested.path.value }'
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["test"].Params["p"]
+	if p.Options == nil {
+		t.Fatalf("expected options to be parsed")
+	}
+	if p.Options.From != "nested.path.value" {
+		t.Errorf("From = %q, want nested.path.value", p.Options.From)
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_EmptySequence(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        type: string
+        options: []
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["test"].Params["p"]
+	if p.Options == nil || len(p.Options.Static) != 0 {
+		t.Errorf("expected empty static list, got %+v", p.Options)
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_ScalarSequence(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        widget: select
+        options: [json, yaml, toml]
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["test"].Params["p"]
+	if p.Options == nil || len(p.Options.Static) != 3 {
+		t.Fatalf("expected 3 static options, got %+v", p.Options)
+	}
+	wantValues := []string{"json", "yaml", "toml"}
+	for i, item := range p.Options.Static {
+		if item.Value != wantValues[i] || item.Label != wantValues[i] {
+			t.Errorf("options[%d]: Value=%q Label=%q, want Value=%q Label=%q",
+				i, item.Value, item.Label, wantValues[i], wantValues[i])
+		}
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_MapSequence(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        widget: select
+        options:
+          - {value: pg, label: "PostgreSQL 16"}
+          - {value: mysql, label: "MySQL 8"}
+`
+	cf := mustParse(t, yaml)
+	p := cf.Commands["test"].Params["p"]
+	if p.Options == nil || len(p.Options.Static) != 2 {
+		t.Fatalf("expected 2 static options, got %+v", p.Options)
+	}
+	if p.Options.Static[0].Value != "pg" || p.Options.Static[0].Label != "PostgreSQL 16" {
+		t.Errorf("options[0]: got %+v", p.Options.Static[0])
+	}
+	if p.Options.Static[1].Value != "mysql" || p.Options.Static[1].Label != "MySQL 8" {
+		t.Errorf("options[1]: got %+v", p.Options.Static[1])
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_PlainScalar_Error(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        options: just_a_string
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil || !strings.Contains(err.Error(), "expected `${...}` reference or sequence") {
+		t.Errorf("expected error about plain scalar, got %v", err)
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_EmptyReference_Error(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        options: '${ }'
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil || !strings.Contains(err.Error(), "empty") {
+		t.Errorf("expected error about empty reference, got %v", err)
+	}
+}
+
+func TestParamOptions_UnmarshalYAML_Mapping_Error(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo
+    params:
+      p:
+        options:
+          value: foo
+          label: bar
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil || !strings.Contains(err.Error(), "expected sequence or `${...}` reference") {
+		t.Errorf("expected error about mapping, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ParamDef.EffectiveWidget tests
+// ---------------------------------------------------------------------------
+
+func TestParamDef_EffectiveWidget_Explicit(t *testing.T) {
+	tests := []struct {
+		widget ParamWidget
+		want   ParamWidget
+	}{
+		{WidgetInput, WidgetInput},
+		{WidgetSelect, WidgetSelect},
+		{WidgetMultiselect, WidgetMultiselect},
+		{WidgetConfirm, WidgetConfirm},
+	}
+	for _, tt := range tests {
+		p := ParamDef{Widget: tt.widget}
+		if got := p.EffectiveWidget(); got != tt.want {
+			t.Errorf("EffectiveWidget() = %q, want %q", got, tt.want)
+		}
+	}
+}
+
+func TestParamDef_EffectiveWidget_BoolType(t *testing.T) {
+	p := ParamDef{Type: ParamTypeBool}
+	if got := p.EffectiveWidget(); got != WidgetConfirm {
+		t.Errorf("bool type: EffectiveWidget() = %q, want confirm", got)
+	}
+}
+
+func TestParamDef_EffectiveWidget_StaticOptions(t *testing.T) {
+	p := ParamDef{
+		Type: ParamTypeString,
+		Options: &ParamOptions{
+			Static: []OptionItem{{Value: "a"}, {Value: "b"}},
+		},
+	}
+	if got := p.EffectiveWidget(); got != WidgetSelect {
+		t.Errorf("static options: EffectiveWidget() = %q, want select", got)
+	}
+}
+
+func TestParamDef_EffectiveWidget_DynamicOptions(t *testing.T) {
+	p := ParamDef{
+		Type: ParamTypeString,
+		Options: &ParamOptions{
+			From: "some.path",
+		},
+	}
+	if got := p.EffectiveWidget(); got != WidgetSelect {
+		t.Errorf("dynamic options: EffectiveWidget() = %q, want select", got)
+	}
+}
+
+func TestParamDef_EffectiveWidget_StringDefault(t *testing.T) {
+	p := ParamDef{Type: ParamTypeString}
+	if got := p.EffectiveWidget(); got != WidgetInput {
+		t.Errorf("string type: EffectiveWidget() = %q, want input", got)
+	}
+}
+
+func TestParamDef_EffectiveWidget_IntDefault(t *testing.T) {
+	p := ParamDef{Type: ParamTypeInt}
+	if got := p.EffectiveWidget(); got != WidgetInput {
+		t.Errorf("int type: EffectiveWidget() = %q, want input", got)
+	}
+}
+
+func TestParamDef_EffectiveWidget_PathDefault(t *testing.T) {
+	p := ParamDef{Type: ParamTypePath}
+	if got := p.EffectiveWidget(); got != WidgetInput {
+		t.Errorf("path type: EffectiveWidget() = %q, want input", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ParamDef validation tests (in CommandDef.Validate)
+// ---------------------------------------------------------------------------
+
+func TestValidate_Params_InvalidWidget(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.bad",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:   ParamTypeString,
+				Widget: "invalid_widget",
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "widget must be one of") {
+		t.Errorf("expected widget enum error, got %v", err)
+	}
+}
+
+func TestValidate_Params_SelectWithoutOptions(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.bad",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:   ParamTypeString,
+				Widget: WidgetSelect,
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "requires non-empty options") {
+		t.Errorf("expected options required error, got %v", err)
+	}
+}
+
+func TestValidate_Params_InputWithOptions(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.bad",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:   ParamTypeString,
+				Widget: WidgetInput,
+				Options: &ParamOptions{
+					Static: []OptionItem{{Value: "a"}},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "does not accept options") {
+		t.Errorf("expected options rejection error, got %v", err)
+	}
+}
+
+func TestValidate_Params_PatternWithOptions(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.bad",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:    ParamTypeString,
+				Widget:  WidgetSelect,
+				Pattern: "^[a-z]+$",
+				Options: &ParamOptions{
+					Static: []OptionItem{{Value: "abc"}},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected pattern+options error, got %v", err)
+	}
+}
+
+func TestValidate_Params_SeparatorOnInput(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.bad",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:      ParamTypeString,
+				Widget:    WidgetInput,
+				Separator: ",",
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "separator is only valid for multiselect") {
+		t.Errorf("expected separator error, got %v", err)
+	}
+}
+
+func TestValidate_Params_DuplicateOptionValues(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.bad",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:   ParamTypeString,
+				Widget: WidgetSelect,
+				Options: &ParamOptions{
+					Static: []OptionItem{
+						{Value: "a"},
+						{Value: "a"},
+					},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "duplicate option value") {
+		t.Errorf("expected duplicate error, got %v", err)
+	}
+}
+
+func TestValidate_Params_DefaultNotInStaticOptions(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.bad",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:    ParamTypeString,
+				Widget:  WidgetSelect,
+				Default: "invalid",
+				Options: &ParamOptions{
+					Static: []OptionItem{
+						{Value: "a"},
+						{Value: "b"},
+					},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err == nil || !strings.Contains(err.Error(), "not found in static options") {
+		t.Errorf("expected default validation error, got %v", err)
+	}
+}
+
+func TestValidate_Params_DefaultInStaticOptions(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.good",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:    ParamTypeString,
+				Widget:  WidgetSelect,
+				Default: "a",
+				Options: &ParamOptions{
+					Static: []OptionItem{
+						{Value: "a"},
+						{Value: "b"},
+					},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Params_SelectWithDynamicOptions(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.good",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:    ParamTypeString,
+				Widget:  WidgetSelect,
+				Default: "anything",
+				Options: &ParamOptions{
+					From: "databases",
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidate_Params_MultiselectWithSeparator(t *testing.T) {
+	cmd := CommandDef{
+		Type: CommandTypeShell,
+		ID:   "g.good",
+		Cmd:  "echo",
+		Params: map[string]ParamDef{
+			"p": {
+				Type:      ParamTypeString,
+				Widget:    WidgetMultiselect,
+				Separator: ",",
+				Options: &ParamOptions{
+					Static: []OptionItem{{Value: "a"}, {Value: "b"}},
+				},
+			},
+		},
+	}
+	err := cmd.Validate()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

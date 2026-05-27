@@ -203,6 +203,110 @@ type GroupMeta struct {
 	Description string `yaml:"description"`
 }
 
+// ParamWidget identifies the form widget type for prompting a parameter.
+type ParamWidget string
+
+const (
+	// WidgetInput displays a text input field.
+	WidgetInput ParamWidget = "input"
+	// WidgetSelect displays a single-choice selector.
+	WidgetSelect ParamWidget = "select"
+	// WidgetMultiselect displays a multi-choice selector.
+	WidgetMultiselect ParamWidget = "multiselect"
+	// WidgetConfirm displays a yes/no confirmation.
+	WidgetConfirm ParamWidget = "confirm"
+)
+
+// OptionItem is a single option in a ParamOptions list, with an optional label.
+type OptionItem struct {
+	Value       string `yaml:"value"`
+	Label       string `yaml:"label"`
+	Description string `yaml:"description,omitempty"`
+}
+
+// ParamOptions holds the source of options for select/multiselect widgets.
+// Either Static (literal list) or From (dot-path reference) is populated, never both.
+type ParamOptions struct {
+	Static []OptionItem // literal option list
+	From   string       // dot-path reference (canonical form, no ${...} wrapper)
+}
+
+// Compile-time interface check — keeps the contract honest.
+var _ yaml.Unmarshaler = (*ParamOptions)(nil)
+
+// UnmarshalYAML unmarshals a ParamOptions from YAML.
+// Accepts: null/missing (zero), sequence of scalars, sequence of maps,
+// or a scalar ${...} reference. Errors on invalid forms.
+func (p *ParamOptions) UnmarshalYAML(node *yaml.Node) error {
+	if node == nil || node.Tag == "!!null" {
+		return nil
+	}
+
+	switch node.Kind {
+	case yaml.ScalarNode:
+		// Scalar must be a ${...} reference.
+		s := strings.TrimSpace(node.Value)
+		if !strings.HasPrefix(s, "${") || !strings.HasSuffix(s, "}") {
+			return fmt.Errorf("options: expected `${...}` reference or sequence, got plain scalar %q", node.Value)
+		}
+		inner := strings.TrimSpace(s[2 : len(s)-1]) // strip ${ and }
+		if inner == "" {
+			return fmt.Errorf("options: `${}` is empty; expected a dot-path")
+		}
+		p.From = inner
+		return nil
+
+	case yaml.SequenceNode:
+		// Sequence of scalars or maps.
+		if len(node.Content) == 0 {
+			p.Static = []OptionItem{}
+			return nil
+		}
+
+		// Detect the element type from the first element.
+		firstElem := node.Content[0]
+		if firstElem.Kind == yaml.ScalarNode {
+			// Scalar sequence: each element becomes {Value: s, Label: s}.
+			for i, elem := range node.Content {
+				if elem.Kind != yaml.ScalarNode {
+					return fmt.Errorf("options[%d]: mixed scalar and non-scalar sequence not allowed", i)
+				}
+				p.Static = append(p.Static, OptionItem{
+					Value: elem.Value,
+					Label: elem.Value,
+				})
+			}
+			return nil
+		} else if firstElem.Kind == yaml.MappingNode {
+			// Map sequence: decode each as OptionItem.
+			for i, elem := range node.Content {
+				if elem.Kind != yaml.MappingNode {
+					return fmt.Errorf("options[%d]: mixed scalar and non-scalar sequence not allowed", i)
+				}
+				var item OptionItem
+				if err := elem.Decode(&item); err != nil {
+					return fmt.Errorf("options[%d]: %w", i, err)
+				}
+				p.Static = append(p.Static, item)
+			}
+			return nil
+		} else {
+			return fmt.Errorf("options[0]: sequence element must be scalar or mapping, got %v", firstElem.Kind)
+		}
+
+	case yaml.MappingNode:
+		return fmt.Errorf("options: expected sequence or `${...}` reference, got mapping")
+
+	default:
+		return fmt.Errorf("options: unexpected node kind %v", node.Kind)
+	}
+}
+
+// IsZero reports whether the ParamOptions is empty (no static list and no reference).
+func (p *ParamOptions) IsZero() bool {
+	return p == nil || (len(p.Static) == 0 && p.From == "")
+}
+
 // ParamDef defines a single named parameter for a command.
 type ParamDef struct {
 	// Type is the expected value type. Defaults to "string" when empty.
@@ -223,6 +327,36 @@ type ParamDef struct {
 	// value must fully match. Applied only to string and path params; ignored for
 	// bool and int params. An empty Pattern skips validation.
 	Pattern string `yaml:"pattern"`
+	// Widget specifies the form widget type. When empty, inferred from Type and Options.
+	Widget ParamWidget `yaml:"widget"`
+	// Options provides the list of choices for select/multiselect widgets.
+	Options *ParamOptions `yaml:"options"`
+	// Separator is the string used to join multiselect values. Defaults to " ".
+	Separator string `yaml:"separator"`
+}
+
+// EffectiveWidget returns the widget to use for this parameter, applying inference rules.
+// If Widget is explicitly set, returns it. Otherwise infers based on Type and Options:
+//   - bool type → confirm
+//   - non-empty Options → select
+//   - string/int/path type, empty Options → input
+func (pd *ParamDef) EffectiveWidget() ParamWidget {
+	if pd.Widget != "" {
+		return pd.Widget
+	}
+
+	// Infer from Type and Options.
+	if pd.Type == ParamTypeBool {
+		return WidgetConfirm
+	}
+	if pd.Options != nil && len(pd.Options.Static) > 0 {
+		return WidgetSelect
+	}
+	if pd.Options != nil && pd.Options.From != "" {
+		return WidgetSelect
+	}
+	// Default: string, int, path with no options → input.
+	return WidgetInput
 }
 
 // ContextDef defines a single named context value derived from the merged config.
@@ -543,6 +677,11 @@ func (c *CommandDef) Validate() error {
 
 	// Validate file specs (shapes, IDs, access modes, etc.).
 	if err := c.validateFiles(); err != nil {
+		return fmt.Errorf("command %q: %w", c.ID, err)
+	}
+
+	// Validate param widgets and options.
+	if err := c.validateParams(); err != nil {
 		return fmt.Errorf("command %q: %w", c.ID, err)
 	}
 
@@ -921,6 +1060,74 @@ func (c *CommandDef) validateFiles() error {
 		if fspec.Env != "" {
 			if !rePosixEnv.MatchString(fspec.Env) {
 				return fmt.Errorf("files.%s: env must be a valid POSIX env name like MY_VAR (got %q)", fid, fspec.Env)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *CommandDef) validateParams() error {
+	for pname, pdef := range c.Params {
+		// Check Widget is a valid enum value if set.
+		if pdef.Widget != "" {
+			switch pdef.Widget {
+			case WidgetInput, WidgetSelect, WidgetMultiselect, WidgetConfirm:
+				// Valid.
+			default:
+				return fmt.Errorf("params.%s: widget must be one of input, select, multiselect, confirm (got %q)", pname, pdef.Widget)
+			}
+		}
+
+		// Determine the effective widget.
+		effective := pdef.EffectiveWidget()
+
+		// Widget = select/multiselect requires non-empty options.
+		if effective == WidgetSelect || effective == WidgetMultiselect {
+			if pdef.Options == nil || (len(pdef.Options.Static) == 0 && pdef.Options.From == "") {
+				return fmt.Errorf("params.%s: widget %s requires non-empty options", pname, effective)
+			}
+		}
+
+		// Widget = input/confirm must have empty options.
+		if effective == WidgetInput || effective == WidgetConfirm {
+			if pdef.Options != nil && (len(pdef.Options.Static) > 0 || pdef.Options.From != "") {
+				return fmt.Errorf("params.%s: widget %s does not accept options", pname, effective)
+			}
+		}
+
+		// Pattern + Options is not allowed.
+		if pdef.Pattern != "" && pdef.Options != nil && (len(pdef.Options.Static) > 0 || pdef.Options.From != "") {
+			return fmt.Errorf("params.%s: pattern and options are mutually exclusive", pname)
+		}
+
+		// Separator only valid on multiselect.
+		if pdef.Separator != "" && effective != WidgetMultiselect {
+			return fmt.Errorf("params.%s: separator is only valid for multiselect widgets", pname)
+		}
+
+		// Static options: check for duplicate values.
+		if pdef.Options != nil && len(pdef.Options.Static) > 0 {
+			seen := make(map[string]bool)
+			for _, item := range pdef.Options.Static {
+				if seen[item.Value] {
+					return fmt.Errorf("params.%s: duplicate option value %q", pname, item.Value)
+				}
+				seen[item.Value] = true
+			}
+		}
+
+		// Validate default literal against static options.
+		if pdef.Default != "" && pdef.Options != nil && len(pdef.Options.Static) > 0 {
+			found := false
+			for _, item := range pdef.Options.Static {
+				if item.Value == pdef.Default {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("params.%s: default %q not found in static options", pname, pdef.Default)
 			}
 		}
 	}
