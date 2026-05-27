@@ -340,6 +340,11 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Clean up background services before quitting
 		if m.Prefetch != nil {
 			m.Prefetch.Close()
+			// Close the channel so any in-flight waitForProgress goroutine unblocks.
+			if m.prefetchChan != nil {
+				close(m.prefetchChan)
+				m.prefetchChan = nil
+			}
 		}
 		if m.Watcher != nil {
 			_ = m.Watcher.Close()

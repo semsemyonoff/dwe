@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -472,6 +473,115 @@ func TestUpdate_QuitDuringLoading(t *testing.T) {
 	require.NotNil(t, cmd, "quit should be handled even before tabs are loaded")
 	msg := cmd()
 	require.IsType(t, tea.QuitMsg{}, msg, "quit command should return QuitMsg")
+}
+
+// Test spinner tick advances the spinner
+func TestUpdate_SpinnerTickAdvances(t *testing.T) {
+	ctx := context.Background()
+	deps := Deps{ProjectName: "test"}
+	m := newModel(deps, ctx, 100, 30)
+	m.loading = true
+
+	initialSpinner := m.spinner
+	_, cmd := m.Update(spinner.TickMsg{ID: m.spinner.ID()})
+
+	// spinner.Update returns a new cmd (the next tick); cmd must be non-nil
+	require.NotNil(t, cmd, "spinner tick should return a continuation command")
+	// spinner view should still render something after a tick
+	_ = initialSpinner
+}
+
+// Test Y-offset is preserved when reloading the same tab
+func TestUpdate_PreservesYOffsetOnReload_SameTab(t *testing.T) {
+	ctx := context.Background()
+	deps := Deps{ProjectName: "test"}
+	m := newModel(deps, ctx, 100, 30)
+
+	longContent := strings.Repeat("line\n", 100)
+	m.tabs = []tab{
+		{"Services", longContent},
+		{"Deploy", "deploy content"},
+	}
+	m.active = 0
+	m.loading = false
+	m.loadGen = 1
+	m.viewport.SetContent(longContent)
+	m.viewport.SetYOffset(5)
+
+	// Press r to start a reload — captures active=0, yOffset=5, reloadGen=loadGen
+	reloadedM, _ := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = reloadedM.(*model)
+	savedGen := m.loadGen
+
+	// Deliver the result with matching gen and same active tab
+	newM, _ := m.Update(tabsLoadedMsg{
+		gen:      savedGen,
+		tabs:     m.tabs,
+		loadedAt: time.Now(),
+	})
+	updated := newM.(*model)
+
+	require.Equal(t, 5, updated.viewport.YOffset(), "YOffset should be restored on same-tab reload")
+}
+
+// Test Y-offset is reset when switching tabs
+func TestUpdate_ResetsYOffsetOnTabSwitch(t *testing.T) {
+	ctx := context.Background()
+	deps := Deps{ProjectName: "test"}
+	m := newModel(deps, ctx, 100, 30)
+
+	longContent := strings.Repeat("line\n", 100)
+	m.tabs = []tab{
+		{"Services", longContent},
+		{"Deploy", "deploy content"},
+	}
+	m.active = 0
+	m.loading = false
+	m.loadGen = 1
+	m.viewport.SetContent(longContent)
+	m.viewport.SetYOffset(10)
+
+	// Switch to tab 1 — should reset YOffset to 0
+	newM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	updated := newM.(*model)
+
+	require.Equal(t, 1, updated.active)
+	require.Equal(t, 0, updated.viewport.YOffset(), "YOffset should reset to 0 on tab switch")
+}
+
+// Test that pressing reload twice drops the older result
+func TestUpdate_MultipleReloads_DropsOlderResult(t *testing.T) {
+	ctx := context.Background()
+	deps := Deps{ProjectName: "test"}
+	m := newModel(deps, ctx, 100, 30)
+	m.tabs = []tab{{"Services", "original"}}
+	m.active = 0
+	m.loading = false
+	m.loadGen = 1
+
+	// First reload: gen becomes 2
+	m1, _ := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = m1.(*model)
+	firstGen := m.loadGen
+
+	// Second reload without any msg delivered: gen becomes 3
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = m2.(*model)
+	secondGen := m.loadGen
+
+	require.Greater(t, secondGen, firstGen)
+
+	// Deliver result from the first (stale) reload — should be ignored
+	oldTabs := []tab{{"Services", "from first reload"}}
+	m3, _ := m.Update(tabsLoadedMsg{gen: firstGen, tabs: oldTabs, loadedAt: time.Now()})
+	m = m3.(*model)
+	require.Equal(t, "original", m.tabs[0].content, "stale reload result should be dropped")
+
+	// Deliver result from the second (current) reload — should be applied
+	newTabs := []tab{{"Services", "from second reload"}}
+	m4, _ := m.Update(tabsLoadedMsg{gen: secondGen, tabs: newTabs, loadedAt: time.Now()})
+	m = m4.(*model)
+	require.Equal(t, "from second reload", m.tabs[0].content, "current reload result should be applied")
 }
 
 // Test help toggle

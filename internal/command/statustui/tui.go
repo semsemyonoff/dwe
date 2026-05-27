@@ -82,6 +82,7 @@ var _ tea.Model = (*model)(nil)
 func newModel(d Deps, ctx context.Context, w, h int) *model {
 	vp := viewport.New(viewport.WithWidth(w-2), viewport.WithHeight(h-4))
 	hm := help.New()
+	hm.SetWidth(w)
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
@@ -275,7 +276,7 @@ func (m *model) renderTabStrip() string {
 		}
 	}
 
-	strip := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	strip := strings.Join(parts, "   ")
 	// Pad the strip and add a left padding
 	return " " + strip
 }
