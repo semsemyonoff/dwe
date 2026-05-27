@@ -17,9 +17,11 @@ import (
 )
 
 type docsShowFlags struct {
-	lang   string
-	raw    bool
-	source string
+	lang    string
+	raw     bool
+	source  string
+	anchors bool
+	toc     bool
 }
 
 func newDocsShowCmd(flags *rootFlags) *cobra.Command {
@@ -34,9 +36,23 @@ In a TTY, renders the markdown with syntax highlighting and colors.
 In a pipe or with --raw, outputs plain markdown.
 
 Topics are matched case-insensitively with fuzzy substring matching if exact match fails.
+When the match is ambiguous, the segment closest to the input wins (e.g. "services" prefers
+"reference/config/services" over deeper paths that only contain "services" as an intermediate segment).
+
+Append "#anchor" to scope output to a single section. The anchor is the GitHub-style heading
+slug (lower-case, spaces become hyphens, punctuation dropped). Unknown anchors list the
+available slugs in the document.
+
+Use --anchors to list the slug of every H2/H3 heading in the topic (one per line),
+or --toc for a level/slug/text TSV. Both bypass the body and are useful for
+scoping a follow-up "docs show topic#anchor" without reading the whole document.
+
 Examples:
   devbox docs show config/services
-  devbox docs show config/services --lang ru`,
+  devbox docs show config/devbox#binaries
+  devbox docs show config/services --lang ru
+  devbox docs show config/services --anchors
+  devbox docs show config/services --toc`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsShow(cmd, flags, df, args[0])
@@ -66,6 +82,8 @@ Examples:
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from --lang flag / userconfig / $LANG / en)")
 	cmd.Flags().BoolVar(&df.raw, "raw", false, "Output raw markdown (no syntax highlighting, even in TTY)")
 	cmd.Flags().StringVar(&df.source, "source", "all", "Doc source: devbox, project, or all (default: all)")
+	cmd.Flags().BoolVar(&df.anchors, "anchors", false, "Print available anchor slugs (one per line) and exit")
+	cmd.Flags().BoolVar(&df.toc, "toc", false, "Print table of contents (level\\tslug\\ttext, TSV) and exit")
 
 	return cmd
 }
@@ -88,7 +106,7 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 	}
 
 	// Parse topic to extract anchor
-	topicPath, _, err := docs.ParseTopic(topic)
+	topicPath, anchor, err := docs.ParseTopic(topic)
 	if err != nil {
 		return fmt.Errorf("invalid topic: %w", err)
 	}
@@ -117,7 +135,17 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 			}
 		case *docs.MultipleMatchesError:
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: ambiguous topic %q\n", e.Topic)
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Candidates: %s\n", strings.Join(e.Candidates, ", "))
+			if e.Total > len(e.Candidates) {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Candidates (showing %d of %d):\n", len(e.Candidates), e.Total)
+			} else {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Candidates:\n")
+			}
+			for _, c := range e.Candidates {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", c)
+			}
+			if e.Total > len(e.Candidates) {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  ... and %d more\n", e.Total-len(e.Candidates))
+			}
 		default:
 			return err
 		}
@@ -137,6 +165,56 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 	content, sourceLang, isStale, err := docs.ResolveContent(sourceRoot, resolved.Path+".md", locale)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", resolved.Path, err)
+	}
+
+	// --anchors / --toc short-circuit content rendering: they return structural
+	// metadata so an agent can decide which section to pull next, without
+	// reading the (potentially long) document body. Mutually exclusive — flag
+	// validation below picks --toc when both are set.
+	if df.anchors || df.toc {
+		if df.toc {
+			for _, h := range docs.ParseHeadingSlugs(content) {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%d\t%s\t%s\n", h.Level, h.Slug, h.Text)
+			}
+		} else {
+			seen := make(map[string]struct{})
+			for _, h := range docs.ParseHeadingSlugs(content) {
+				if _, ok := seen[h.Slug]; ok {
+					continue
+				}
+				seen[h.Slug] = struct{}{}
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), h.Slug)
+			}
+		}
+		return nil
+	}
+
+	// If an anchor was supplied, scope the content to that section so the
+	// output is the requested sub-tree, not the whole file. Banners (below)
+	// still apply to the sliced view.
+	if anchor != "" {
+		sliced, matched, anchors, ok := docs.SliceByAnchor(content, anchor)
+		if !ok {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: anchor %q not found in %s\n", anchor, resolved.Path)
+			if len(anchors) > 0 {
+				shown := anchors
+				more := 0
+				if len(shown) > docs.MaxAmbiguousCandidates {
+					shown = shown[:docs.MaxAmbiguousCandidates]
+					more = len(anchors) - docs.MaxAmbiguousCandidates
+				}
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Available anchors:\n")
+				for _, a := range shown {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", a)
+				}
+				if more > 0 {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  ... and %d more\n", more)
+				}
+			}
+			return ErrSilent
+		}
+		_ = matched
+		content = sliced
 	}
 
 	// Add translation status banners if applicable

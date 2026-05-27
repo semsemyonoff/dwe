@@ -50,6 +50,13 @@ type Model struct {
 	Watcher           *Watcher // File change watcher (project docs only)
 	ProjectRoot       string   // Path to the project root
 
+	// MmdcNotice is a one-line markdown blockquote prepended to every loaded
+	// topic when mmdc is missing on $PATH and the mermaid renderer is not
+	// explicitly disabled. Empty means no banner. Populated by runDocsTUI
+	// before any topic is loaded, so users see install guidance on the very
+	// first frame instead of discovering it via a broken diagram render.
+	MmdcNotice string
+
 	// Background rendering
 	Prefetch         *Prefetch
 	PrefetchProgress ProgressMsg
@@ -233,6 +240,12 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 		contentToRender = append([]byte(banner), content...)
 	default:
 		contentToRender = content
+	}
+
+	// Prepend the mmdc-missing notice (set once at TUI startup) so users see
+	// install guidance on every topic, not just diagram-bearing ones.
+	if m.MmdcNotice != "" {
+		contentToRender = append([]byte(m.MmdcNotice), contentToRender...)
 	}
 
 	// Use a unique marker per diagram so the post-render pass can swap each

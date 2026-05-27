@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -62,6 +63,7 @@ Generate reference documentation for the CLI and command registry.`,
 	}
 	cmd.AddCommand(newDocsShowCmd(flags))
 	cmd.AddCommand(newDocsListCmd(flags))
+	cmd.AddCommand(newDocsSearchCmd(flags))
 	cmd.AddCommand(newDocsExportCmd(flags))
 	cmd.AddCommand(newDocsCacheCmd(flags))
 	cmd.AddCommand(newDocsGenerateCmd(flags))
@@ -838,6 +840,17 @@ func genTopLevelIndex(outDir string, scopes map[string]bool) error {
 	return os.WriteFile(indexPath, []byte(sb.String()), 0o644)
 }
 
+// mmdcAvailable reports whether the configured mmdc binary resolves on $PATH
+// (or as an absolute path). Used purely for diagnostic banners — the renderer
+// itself handles the actual unavailable-fallback path.
+func mmdcAvailable(bin string) bool {
+	if bin == "" {
+		return false
+	}
+	_, err := exec.LookPath(bin)
+	return err == nil
+}
+
 func runDocsTUI(cmd *cobra.Command, flags *rootFlags, termWidth, termHeight int) error {
 	// Load configuration for doc settings (mermaid config, etc.)
 	cfg, err := config.LoadConfig(flags.configPath)
@@ -895,6 +908,16 @@ func runDocsTUI(cmd *cobra.Command, flags *rootFlags, termWidth, termHeight int)
 	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
+	}
+
+	// Banner: warn once at startup when mmdc is missing on $PATH (and the user
+	// hasn't explicitly disabled mermaid). Skipping the install entirely would
+	// leave users guessing why diagrams never render — the banner points them
+	// at the canonical install section in docs/reference/docs/index.md.
+	if mermaidMode != "off" && !mmdcAvailable(config.MmdcBin(cfg)) {
+		model.MmdcNotice = "> **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. " +
+			"Install with `npm i -g @mermaid-js/mermaid-cli` — see " +
+			"`docs/reference/docs/index.md` § *Installing `mmdc`*.\n\n"
 	}
 
 	// Run via ui.RunWithPromptHooks for proper signal handling

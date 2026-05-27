@@ -2,6 +2,7 @@ package docs
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"testing/fstest"
 )
@@ -145,10 +146,13 @@ func TestResolveFuzzyMatch(t *testing.T) {
 }
 
 func TestResolveMultipleMatches(t *testing.T) {
+	// Two distinct files end with the segment "services" — the resolver cannot
+	// disambiguate without help, so this returns MultipleMatchesError.
 	testFS := fstest.MapFS{
-		"config/services.md": &fstest.MapFile{Data: []byte("# Services")},
-		"services/deploy.md": &fstest.MapFile{Data: []byte("# Deploy")},
-		"cli/reference.md":   &fstest.MapFile{Data: []byte("# CLI Reference")},
+		"config/services.md":  &fstest.MapFile{Data: []byte("# Services A")},
+		"deploy/services.md":  &fstest.MapFile{Data: []byte("# Services B")},
+		"x/services/index.md": &fstest.MapFile{Data: []byte("# Index")},
+		"cli/reference.md":    &fstest.MapFile{Data: []byte("# CLI Reference")},
 	}
 
 	roots := []DocRoot{
@@ -165,13 +169,61 @@ func TestResolveMultipleMatches(t *testing.T) {
 		t.Fatalf("expected MultipleMatchesError, got %v", err)
 	}
 
+	// Tier 2 (last-segment exact) has 2 hits — the resolver should scope the
+	// candidate list to that tier, not the larger substring tier.
 	if len(multiErr.Candidates) != 2 {
-		t.Errorf("expected 2 candidates, got %d", len(multiErr.Candidates))
+		t.Errorf("expected 2 candidates (last-segment tier), got %d: %v", len(multiErr.Candidates), multiErr.Candidates)
+	}
+	if multiErr.Total != 2 {
+		t.Errorf("expected Total=2, got %d", multiErr.Total)
 	}
 
-	// Candidates should be sorted
-	if multiErr.Candidates[0] != "config/services" || multiErr.Candidates[1] != "services/deploy" {
+	if multiErr.Candidates[0] != "config/services" || multiErr.Candidates[1] != "deploy/services" {
 		t.Errorf("candidates not in expected order: %v", multiErr.Candidates)
+	}
+}
+
+func TestResolveLastSegmentPreferred(t *testing.T) {
+	// `services` should land on `config/services` (last segment match) rather
+	// than the deeper `commands/services/foo` paths that only contain the term
+	// as an intermediate segment.
+	testFS := fstest.MapFS{
+		"config/services.md":       &fstest.MapFile{Data: []byte("# Services")},
+		"commands/services/foo.md": &fstest.MapFile{Data: []byte("# Foo")},
+		"commands/services/bar.md": &fstest.MapFile{Data: []byte("# Bar")},
+	}
+	roots := []DocRoot{{Name: "devbox", FS: testFS}}
+
+	got, err := Resolve(roots, "services", "en")
+	if err != nil {
+		t.Fatalf("expected resolution, got error: %v", err)
+	}
+	if got.Path != "config/services" {
+		t.Errorf("expected config/services, got %q", got.Path)
+	}
+}
+
+func TestResolveAmbiguousCap(t *testing.T) {
+	// More than MaxAmbiguousCandidates matches in the chosen tier must produce
+	// a capped Candidates slice with Total reflecting the full count.
+	testFS := fstest.MapFS{}
+	for i := range MaxAmbiguousCandidates + 5 {
+		key := fmt.Sprintf("group%02d/services.md", i)
+		testFS[key] = &fstest.MapFile{Data: []byte("# x")}
+	}
+	roots := []DocRoot{{Name: "devbox", FS: testFS}}
+
+	_, err := Resolve(roots, "services", "en")
+
+	var multiErr *MultipleMatchesError
+	if !errors.As(err, &multiErr) {
+		t.Fatalf("expected MultipleMatchesError, got %v", err)
+	}
+	if len(multiErr.Candidates) != MaxAmbiguousCandidates {
+		t.Errorf("expected Candidates capped to %d, got %d", MaxAmbiguousCandidates, len(multiErr.Candidates))
+	}
+	if multiErr.Total != MaxAmbiguousCandidates+5 {
+		t.Errorf("expected Total=%d, got %d", MaxAmbiguousCandidates+5, multiErr.Total)
 	}
 }
 

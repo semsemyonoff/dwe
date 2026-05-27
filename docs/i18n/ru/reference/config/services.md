@@ -1,6 +1,6 @@
 > Translated from: config/services @ 000000000000
 
-# Конфигурация сервисов (devbox/services/&lt;name&gt;/service.yml)
+# Конфигурация сервисов (`devbox/services/<name>/service.yml`)
 
 Объявления сервисов для проекта devbox.
 

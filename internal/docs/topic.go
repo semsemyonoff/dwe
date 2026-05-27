@@ -68,10 +68,17 @@ func (e *NotFoundError) Error() string {
 	return msg
 }
 
+// MaxAmbiguousCandidates caps how many candidate paths are returned in a
+// MultipleMatchesError. The full count is preserved on Total so callers can
+// render "and N more" without re-enumerating.
+const MaxAmbiguousCandidates = 10
+
 // MultipleMatchesError is returned when topic resolution is ambiguous.
+// Candidates is capped at MaxAmbiguousCandidates; Total holds the full count.
 type MultipleMatchesError struct {
 	Topic      string
 	Candidates []string
+	Total      int
 }
 
 func (e *MultipleMatchesError) Error() string {
@@ -79,39 +86,60 @@ func (e *MultipleMatchesError) Error() string {
 }
 
 // Resolve finds a topic across the given roots.
-// First tries exact match, then falls back to case-insensitive substring matching.
-// Returns NotFoundError or MultipleMatchesError on failure.
+//
+// Match ranking, in order — the first tier with exactly one hit resolves; a
+// tier with two or more hits stops the search and yields a MultipleMatchesError
+// scoped to that tier (so an ambiguous segment match never gets buried under a
+// flood of substring matches):
+//
+//  1. exact path (case-sensitive)
+//  2. last path segment equals topic (case-insensitive) — `services` prefers
+//     `reference/config/services` over `reference/commands/services/...`
+//  3. any path segment equals topic (case-insensitive)
+//  4. case-insensitive substring
+//
+// Returns NotFoundError when no tier matches, or MultipleMatchesError with a
+// capped candidate list when the narrowest non-empty tier has multiple hits.
 func Resolve(roots []DocRoot, topic string, locale string) (*ResolvedTopic, error) {
-	// Build all topics to search across
 	allTopics := AllTopics(roots, locale)
 
-	// Try exact match first (case-sensitive)
+	// Tier 1: exact path (case-sensitive).
 	for _, entry := range allTopics {
 		if entry.Path == topic {
-			return &ResolvedTopic{
-				Path:        entry.Path,
-				Anchor:      "",
-				Source:      entry.Source,
-				DisplayName: entry.DisplayName,
-			}, nil
+			return resolvedFrom(entry), nil
 		}
 	}
 
-	// Fall back to fuzzy matching (case-insensitive substring)
-	fuzzyMatches := []TopicEntry{}
+	// Tier 2: last-segment exact (case-insensitive).
+	lastSegMatches := filterTopics(allTopics, func(p string) bool {
+		return strings.EqualFold(lastSegment(p), topic)
+	})
+	if len(lastSegMatches) == 1 {
+		return resolvedFrom(lastSegMatches[0]), nil
+	}
+
+	// Tier 3: any-segment exact (case-insensitive).
+	segMatches := filterTopics(allTopics, func(p string) bool {
+		for seg := range strings.SplitSeq(p, "/") {
+			if strings.EqualFold(seg, topic) {
+				return true
+			}
+		}
+		return false
+	})
+	if len(segMatches) == 1 {
+		return resolvedFrom(segMatches[0]), nil
+	}
+
+	// Tier 4: case-insensitive substring.
 	topicLower := strings.ToLower(topic)
-
-	for _, entry := range allTopics {
-		if strings.Contains(strings.ToLower(entry.Path), topicLower) {
-			fuzzyMatches = append(fuzzyMatches, entry)
-		}
-	}
+	fuzzyMatches := filterTopics(allTopics, func(p string) bool {
+		return strings.Contains(strings.ToLower(p), topicLower)
+	})
 
 	if len(fuzzyMatches) == 0 {
-		// No matches at all
 		suggestions := []string{}
 		if len(allTopics) > 0 && len(allTopics) <= 10 {
-			// Suggest the first few topics if not too many
 			for i := 0; i < 3 && i < len(allTopics); i++ {
 				suggestions = append(suggestions, allTopics[i].Path)
 			}
@@ -123,26 +151,61 @@ func Resolve(roots []DocRoot, topic string, locale string) (*ResolvedTopic, erro
 	}
 
 	if len(fuzzyMatches) == 1 {
-		// Exactly one match
-		return &ResolvedTopic{
-			Path:        fuzzyMatches[0].Path,
-			Anchor:      "",
-			Source:      fuzzyMatches[0].Source,
-			DisplayName: fuzzyMatches[0].DisplayName,
-		}, nil
+		return resolvedFrom(fuzzyMatches[0]), nil
 	}
 
-	// Multiple matches
-	candidates := []string{}
-	for _, entry := range fuzzyMatches {
+	// Ambiguous: pick the narrowest non-empty tier so the error doesn't dump
+	// the full substring set when a tighter scoping was available.
+	narrowest := fuzzyMatches
+	switch {
+	case len(lastSegMatches) >= 2:
+		narrowest = lastSegMatches
+	case len(segMatches) >= 2:
+		narrowest = segMatches
+	}
+
+	candidates := make([]string, 0, len(narrowest))
+	for _, entry := range narrowest {
 		candidates = append(candidates, entry.Path)
 	}
 	sort.Strings(candidates)
 
+	total := len(candidates)
+	if total > MaxAmbiguousCandidates {
+		candidates = candidates[:MaxAmbiguousCandidates]
+	}
+
 	return nil, &MultipleMatchesError{
 		Topic:      topic,
 		Candidates: candidates,
+		Total:      total,
 	}
+}
+
+func resolvedFrom(e TopicEntry) *ResolvedTopic {
+	return &ResolvedTopic{
+		Path:        e.Path,
+		Anchor:      "",
+		Source:      e.Source,
+		DisplayName: e.DisplayName,
+	}
+}
+
+func filterTopics(topics []TopicEntry, pred func(path string) bool) []TopicEntry {
+	out := make([]TopicEntry, 0, len(topics))
+	for _, e := range topics {
+		if pred(e.Path) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func lastSegment(p string) string {
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 // AllTopics returns a flat list of all available topics across roots.

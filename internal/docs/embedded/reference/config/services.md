@@ -1,4 +1,4 @@
-# Service configuration (devbox/services/&lt;name&gt;/service.yml)
+# Service configuration (`devbox/services/<name>/service.yml`)
 
 Service declarations for the devbox project.
 
