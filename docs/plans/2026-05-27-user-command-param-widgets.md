@@ -353,8 +353,8 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
 - Create: `internal/usercommands/resolve/options.go`
 - Create: `internal/usercommands/resolve/options_test.go`
 
-- [ ] before implementing, run `go list -deps ./internal/usercommands/resolve | grep internal/config` to confirm `resolve` may import `internal/config` (it likely already does for `cfg.Raw` types) — if a cycle would result, lift `ResolvePath` to a leaf package (e.g. `internal/dotpath`) in a precursor commit
-- [ ] implement `ResolveOptions(opts model.ParamOptions, raw map[string]any) ([]model.OptionItem, error)`:
+- [x] before implementing, run `go list -deps ./internal/usercommands/resolve | grep internal/config` to confirm `resolve` may import `internal/config` (it likely already does for `cfg.Raw` types) — if a cycle would result, lift `ResolvePath` to a leaf package (e.g. `internal/dotpath`) in a precursor commit
+- [x] implement `ResolveOptions(opts model.ParamOptions, raw map[string]any) ([]model.OptionItem, error)`:
   - `opts.Static != nil` → return copy
   - `opts.From != ""` → call `config.ResolvePath(raw, opts.From)` directly (From is already canonical dot-path, unwrapped at unmarshal time)
   - normalize result:
@@ -363,8 +363,8 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
     - `map[string]any` → sorted-key list of `OptionItem{Value: key, Label: key}`
     - anything else → error `fmt.Errorf("options %s: expected list or map, got %T", opts.From, value)`
   - path missing → return empty slice, no error (`config.ResolvePath` returns `(any, bool)` — no error to wrap; runtime caller produces the user-facing "empty" error with param context, only if form actually opens)
-- [ ] write table-driven tests covering: static passthrough, `${x}` → []string, `${x}` → []map, `${x}` → map (assert sorted), `${x}` missing, `${x}` wrong type, deeply nested path
-- [ ] run `make test ./internal/usercommands/resolve/...` — must pass before Task 7
+- [x] write table-driven tests covering: static passthrough, `${x}` → []string, `${x}` → []map, `${x}` → map (assert sorted), `${x}` missing, `${x}` wrong type, deeply nested path
+- [x] run `make test ./internal/usercommands/resolve/...` — must pass before Task 7
 
 ### Task 7: Rewire `command_cmd.go` to ask + new resolver
 
