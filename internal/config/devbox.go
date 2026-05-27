@@ -1432,6 +1432,11 @@ func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
 		return nil, fmt.Errorf("loading service %q definition: parse: %w", name, err)
 	}
 
+	// Apply folder-name default to container field if not explicitly set.
+	if svc.Container == "" {
+		svc.Container = name
+	}
+
 	return &svc, nil
 }
 

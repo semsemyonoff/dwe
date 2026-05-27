@@ -175,8 +175,8 @@ ports:
 ```yaml
 # devbox/services/varnish/service.yml
 # type: infra (optional) — toggleable via `devbox services enable varnish`
+# Note: container field is omitted here — it defaults to the folder name "varnish"
 type: infra
-container: varnish
 compose:
   - compose/services/varnish/overlay.yml
 ports:
@@ -206,7 +206,7 @@ info:
 | Field | Type | Required | Allowed for | Description |
 |-------|------|----------|-------------|-------------|
 | `type` | string | yes | app / tool / infra | Discriminator — selects the field allowlist for this entry. |
-| `container` | string | yes | all | Docker container name. |
+| `container` | string | no (defaults to folder name) | all | Docker container name. Omit to use the service folder name as the container name. |
 | `mandatory` | bool | no | all | When true, the service is always enabled; the overlay cannot disable it. |
 | `compose` | list | no | all | Additional compose overlay files activated when the service is enabled. |
 | `ports` | `map[string]int` | no | all | Named container ports. See [`ports` field](#ports-field). |

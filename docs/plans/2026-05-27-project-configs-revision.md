@@ -242,14 +242,14 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/config/devbox_test.go` (services_loader_test.go)
 - Modify: `docs/reference/config/services.md`
 
-- [ ] in `LoadServiceFolder`, after strict-decode: `if svc.Container == "" { svc.Container = name }` (folder name = map key)
-- [ ] update `allowedFieldsFor` — `container` stays in allowlist (no longer required at validator level)
-- [ ] decide and document semantics of folder-default vs extends-inheritance: folder-name default fires BEFORE extends-merge; once the field is non-empty, parent's Container is NOT inherited per existing logic at `devbox.go:1463`. (Confirm this is the intended behavior.)
-- [ ] update services.md line 209 "Required: yes" → "Required: no (defaults to folder name)"; add example
-- [ ] add test case: service.yml with no `container:` → `cfg.Services[name].Container == name`
-- [ ] add test confirming explicit `container: <other>` still wins
-- [ ] add test for extends behavior: child without container, parent with `container: shared` — verify chosen semantics (child gets folder name, NOT parent's)
-- [ ] run `go test ./internal/config/...` — must pass before Task 8
+- [x] in `LoadServiceFolder`, after strict-decode: `if svc.Container == "" { svc.Container = name }` (folder name = map key)
+- [x] update `allowedFieldsFor` — `container` stays in allowlist (no longer required at validator level)
+- [x] decide and document semantics of folder-default vs extends-inheritance: folder-name default fires BEFORE extends-merge; once the field is non-empty, parent's Container is NOT inherited per existing logic at `devbox.go:1463`. (Confirm this is the intended behavior.)
+- [x] update services.md line 209 "Required: yes" → "Required: no (defaults to folder name)"; add example
+- [x] add test case: service.yml with no `container:` → `cfg.Services[name].Container == name`
+- [x] add test confirming explicit `container: <other>` still wins
+- [x] add test for extends behavior: child without container, parent with `container: shared` — verify chosen semantics (child gets folder name, NOT parent's)
+- [x] run `go test ./internal/config/...` — must pass before Task 8
 
 ### Task 8: Per-key defaults for docker `args:`
 

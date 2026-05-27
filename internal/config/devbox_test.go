@@ -822,9 +822,9 @@ services:
 	if err != nil {
 		t.Fatalf("LoadServices: %v", err)
 	}
-	// child with no container should inherit parent's container
-	if got := services["child-no-container"].Container; got != "parent-ctr" {
-		t.Errorf("child-no-container.Container = %q, want parent-ctr (inherited from parent)", got)
+	// child with no container should default to folder name, not inherit parent's container
+	if got := services["child-no-container"].Container; got != "child-no-container" {
+		t.Errorf("child-no-container.Container = %q, want child-no-container (folder-name default, not inherited)", got)
 	}
 	// child with its own container should keep it
 	if got := services["child-own-container"].Container; got != "child-ctr" {

@@ -791,3 +791,62 @@ dir: ./services/web
 		t.Errorf("Icon = %q, want empty", svc.Icon)
 	}
 }
+
+// TestLoadServiceFolder_containerDefaultToFolderName verifies container defaults to folder name.
+func TestLoadServiceFolder_containerDefaultToFolderName(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "myservice", `
+type: tool
+`)
+	svc, err := LoadServiceFolder(dir, "myservice")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if svc.Container != "myservice" {
+		t.Errorf("Container = %q, want %q", svc.Container, "myservice")
+	}
+}
+
+// TestLoadServiceFolder_containerExplicitWins verifies explicit container overrides folder default.
+func TestLoadServiceFolder_containerExplicitWins(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "myservice", `
+type: tool
+container: custom-name
+`)
+	svc, err := LoadServiceFolder(dir, "myservice")
+	if err != nil {
+		t.Fatalf("LoadServiceFolder: %v", err)
+	}
+	if svc.Container != "custom-name" {
+		t.Errorf("Container = %q, want %q", svc.Container, "custom-name")
+	}
+}
+
+// TestLoadServices_containerInheritance verifies folder-name default is applied before extends-merge.
+func TestLoadServices_containerInheritance(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// Parent with explicit container name
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: parent-explicit
+dir: ./services/parent
+`)
+	// Child without container — should get folder name "child", not inherit parent's
+	writeServiceFolder(t, dir, "child", `
+type: app
+extends: parent
+dir: ./services/child
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+	child := services["child"]
+	if child.Container != "child" {
+		t.Errorf("child Container = %q, want %q (folder-name default, not inherited)", child.Container, "child")
+	}
+}
