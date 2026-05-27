@@ -577,9 +577,9 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 **Files:**
 - Modify: `docs/reference/config/index.md`
 
-- [ ] add section "Files that support local overrides" listing `docker.local.yml` (currently the only file with this pattern); explain rationale: docker setup differs per developer (extra volumes, custom args); other configs (lifecycle, info, styles, etc.) are shared project-wide and thus don't have `.local.yml` partners
-- [ ] cross-reference to `docs/reference/config/docker.md` `## docker.local.yml` section
-- [ ] verify with `make build` (embedded docs regenerate cleanly)
+- [x] add section "Files that support local overrides" listing `docker.local.yml` (currently the only file with this pattern); explain rationale: docker setup differs per developer (extra volumes, custom args); other configs (lifecycle, info, styles, etc.) are shared project-wide and thus don't have `.local.yml` partners
+- [x] cross-reference to `docs/reference/config/docker.md` `## docker.local.yml` section
+- [x] verify with `make build` (embedded docs regenerate cleanly)
 
 ### Task 22: `info.md` doc updates — auto-blocks render note + port_via auto-detection
 
