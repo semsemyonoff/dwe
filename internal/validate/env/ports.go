@@ -141,7 +141,7 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	for _, pc := range conflicts {
 		diags = append(diags, fail(
 			"ports_free",
-			fmt.Sprintf("port %d (%s.%s) is bound by container %s",
+			fmt.Sprintf("port %d (%s.%s) is in use: %s",
 				pc.RequestedPort, pc.Service, pc.PortName, pc.OccupiedBy),
 			"free the port (stop the conflicting process or container) and retry\nlsof -i :"+strconv.Itoa(pc.RequestedPort),
 		))

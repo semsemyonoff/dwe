@@ -1317,13 +1317,6 @@ func ParseCommandFile(data []byte) (*CommandFile, error) {
 					}
 				}
 
-				// Special validation: service_run cannot have top-level mode.
-				if ct == CommandTypeServiceRun {
-					if _, hasMode := cmdObj["mode"]; hasMode {
-						return nil, fmt.Errorf("command %q: field \"mode\" not allowed for type %q", cmdName, CommandTypeServiceRun)
-					}
-				}
-
 				// Special validation: service_run runner cannot have mode.
 				if ct == CommandTypeServiceRun {
 					if runnerVal, hasRunner := cmdObj["runner"]; hasRunner {

@@ -3143,6 +3143,25 @@ binaries:
 	}
 }
 
+func TestLoadConfig_rejectsToolsBlock(t *testing.T) {
+	// LoadConfig rejects devbox.yml with tools: block and returns migration error
+	devboxYML := `
+schema_version: "1"
+project:
+  name: test
+tools:
+  - name: mytool
+`
+	path := writeLayeredFixture(t, devboxYML, sampleDefaultsYML, "")
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("LoadConfig: expected error for tools: block, got nil")
+	}
+	if !strings.Contains(err.Error(), "tools: no longer supported") {
+		t.Errorf("LoadConfig error message = %q, want migration message about services with type: tool", err.Error())
+	}
+}
+
 func TestBinaryAccessorDefaults(t *testing.T) {
 	// All accessors return defaults when cfg is nil
 	if got := DevboxBin(nil); got != "devbox" {
