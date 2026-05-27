@@ -585,10 +585,12 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 
 **Files:**
 - Modify: `docs/reference/config/info.md`
+- Modify: `docs/internals/packages.md`
 
-- [ ] in `## Item types` section: add note for `auto-urls` and `auto-hosts` explaining render-time expansion via `Source*Spec` custom UnmarshalYAML pattern (per E.5.3). Cross-reference `docs/internals/packages.md` "info.yml auto-blocks" entry.
-- [ ] in `### auto-urls` subsection: document `port_via:` auto-detection — single infra service with `ports.http==80` or `ports.https==443`. Reference `internal/ui/info_auto_urls.go:138 autoDetectPortVia`. Show example with explicit `port_via:` and example without.
-- [ ] verify with `make build`
+- [x] in `## Item types` section: add note for `auto-urls` and `auto-hosts` explaining render-time expansion via `Source*Spec` custom UnmarshalYAML pattern (per E.5.3). Cross-reference `docs/internals/packages.md` "info.yml auto-blocks" entry.
+- [x] in `### auto-urls` subsection: document `port_via:` auto-detection — single infra service with `ports.http==80` or `ports.https==443`. Reference `internal/ui/info_auto_urls.go:138 autoDetectPortVia`. Show example with explicit `port_via:` and example without.
+- [x] add section to `docs/internals/packages.md` documenting info.yml auto-blocks pattern (render-time expansion, Source*Spec pattern, auto-detection logic)
+- [x] verify with `make build` — build succeeded cleanly
 
 ### Task 23: Verify acceptance criteria + move plan to completed
 

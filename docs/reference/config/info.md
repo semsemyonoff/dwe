@@ -78,6 +78,8 @@ footer: true
 
 All items accept an optional `when:` (Go template expression). Items with a falsy `when` are dropped from the rendered output. All items support an optional `decorative` boolean flag (see [Decorative items](#decorative-items)).
 
+> **Note on `auto-urls` and `auto-hosts` rendering:** `auto-urls` and `auto-hosts` items expand at render time (when `devbox info` is executed), not at YAML load time. The expansion happens inside the info renderer by consulting the current configuration and iterating services in deploy order. This design ensures the dashboard always reflects the latest service definitions and state. See [`docs/internals/packages.md`](../../internals/packages.md) for architectural details on the render-time expansion via the `Source*Spec` pattern.
+
 ### `definition`
 
 A label + value pair, rendered as `Label — Value`.
@@ -149,8 +151,36 @@ Dynamically generates a list of service URLs from the project's configured servi
 | `include` | list | `[app, tool]` | Service types to include: any combination of `app`, `tool`, `infra`. |
 | `hide` | list | — | Service folder keys to exclude entirely. Unknown keys are silently ignored. |
 | `hide_paths` | map | — | Exclude individual sub-paths by service key and path name (e.g. `main: ["SPX profiler"]` hides the path named "SPX profiler" under the service "main"). |
-| `port_via` | string | auto-detected | Override which service to use as the front proxy for generating main URLs. When empty, auto-detection looks for a single enabled `type: infra` service with `ports.http: 80` or `ports.https: 443`. Explicitly named services are required to exist; missing services produce an error. |
+| `port_via` | string | auto-detected | Override which service to use as the front proxy for generating main URLs. When empty, auto-detection searches for a single enabled `type: infra` service declaring either `ports.http: 80` (http traffic) or `ports.https: 443` (https traffic). Explicitly named services are required to exist; missing services produce an error. Auto-detection returns no proxy when zero candidates or multiple candidates are found (in that case, only direct `localhost:<port>` URLs render). |
 | `when` | string | — | Condition; item hidden if falsy. |
+
+**`port_via` auto-detection examples:**
+
+With auto-detection (default — no `port_via:` field):
+```yaml
+# Auto-detects if exactly one infra service has ports.http: 80
+- type: auto-urls
+  include: [app, tool]
+```
+
+In this case, if a service named `nginx` has `ports: {http: 80}` and it is of type `infra` and enabled, it is auto-selected. App and tool services will then render as `proxied URL | localhost:port` (if they declare their own ports) or just `proxied URL` (if host-only). Other services without auto-detected proxy render as `localhost:port` only.
+
+With explicit `port_via:` override:
+```yaml
+# Always use named service as proxy, even if it's not type: infra
+- type: auto-urls
+  include: [app, tool]
+  port_via: api_gateway
+```
+
+When `port_via` is explicitly set, that service must exist or an error is produced at render time. A named service is used for proxy URL construction regardless of its `type:`.
+
+When auto-detection finds zero or multiple infra services with the target port, **no proxy is selected** and services render using only their direct ports (or with just hosts if no port exists):
+```yaml
+# No eligible infra service found → app/tool with only localhost:<port> URLs
+- type: auto-urls
+  include: [app, tool]
+```
 
 Services contribute to `auto-urls` via their `info:` block in `service.yml` (see [services.md](services.md) for the schema). Each service may declare:
 - `title` — override the service header (defaults to title-cased folder name)

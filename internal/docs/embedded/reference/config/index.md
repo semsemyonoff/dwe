@@ -84,6 +84,16 @@ flowchart LR
 
 **Standalone**: `services.yml`, `deploy.yml`, `deploy/<svc>.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml`, and `commands/*.yml` are loaded by dedicated functions in `internal/config/` and `internal/usercommands/`. They are not part of the 3-layer merge but most of them resolve template expressions against the merged config.
 
+## Files that support local overrides
+
+Currently, only `docker.local.yml` supports a `.local.yml` variant for per-developer customization. The pattern is:
+
+**Docker**: `devbox/docker.yml` (tracked, shared project-wide) + `devbox/docker.local.yml` (gitignored, per-developer). The local file is merged on top of the base file, allowing developers to customize their compose execution policy — e.g., add extra volumes, mount local source directories, or override platform/args without affecting teammates.
+
+**Why only docker?** Docker setups are inherently personal — they depend on the developer's local environment (available binaries, volume mounts, platform differences). Other configs like `lifecycle.yml`, `info.yml`, and `styles.yml` are shared project-wide and don't benefit from per-developer overrides.
+
+For more details on `docker.local.yml` semantics and examples, see [docker.yml](docker.md#dockerlocalyml).
+
 ## Pages
 
 - [devbox / defaults / local](devbox.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
