@@ -2297,6 +2297,79 @@ commands:
 	}
 }
 
+func TestParseCommandFile_PerTypeAllowlist_ShellRejectUser(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo hello
+    user: root
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for shell command with user field")
+	}
+	if !strings.Contains(err.Error(), "user") {
+		t.Errorf("expected 'user not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ShellRejectRunner(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: shell
+    cmd: echo hello
+    runner:
+      service: foo
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for shell command with runner field")
+	}
+	if !strings.Contains(err.Error(), "runner") {
+		t.Errorf("expected 'runner not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_WorkflowRejectUser(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: workflow
+    user: root
+    steps:
+      - cmd: echo hello
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for workflow command with user field")
+	}
+	if !strings.Contains(err.Error(), "user") {
+		t.Errorf("expected 'user not allowed' in error, got %v", err)
+	}
+}
+
+func TestParseCommandFile_PerTypeAllowlist_ScriptRejectRunner(t *testing.T) {
+	yaml := `
+commands:
+  test:
+    type: script
+    runner:
+      service: foo
+    script:
+      shell: bash
+      inline: echo hello
+`
+	_, err := ParseCommandFile([]byte(yaml))
+	if err == nil {
+		t.Error("expected parse error for script command with runner field")
+	}
+	if !strings.Contains(err.Error(), "runner") {
+		t.Errorf("expected 'runner not allowed' in error, got %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

@@ -68,8 +68,6 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		"env":               true,
 		"files":             true,
 		"messages":          true,
-		"user":              true,
-		"runner":            true,
 	}
 
 	switch t {
@@ -87,17 +85,21 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		// workdir_from is rejected for script
 	case CommandTypeServiceExec:
 		common["service"] = true
+		common["user"] = true
 		common["workdir"] = true
 		common["workdir_from"] = true
 		common["mode"] = true
 		common["compose_args"] = true
+		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
 	case CommandTypeServiceRun:
 		common["service"] = true
+		common["user"] = true
 		common["workdir"] = true
 		common["workdir_from"] = true
 		common["compose_args"] = true
+		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
 	case CommandTypeWorkflow:
@@ -106,15 +108,15 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 	case CommandTypeBuiltin:
 		common["cmd"] = true
 		common["with"] = true
-		// workdir, user, and runner are rejected for builtin
-		delete(common, "user")
-		delete(common, "runner")
+		// workdir, user, and runner are not in common and not added here — rejected by allowlist
 	case CommandTypeDaemon:
 		common["daemon"] = true
 		common["service"] = true
+		common["user"] = true
 		common["workdir"] = true
 		common["workdir_from"] = true
 		common["compose_args"] = true
+		common["runner"] = true
 		common["argv"] = true
 	}
 
@@ -832,6 +834,12 @@ func (c *CommandDef) validateCommandType() error {
 	if c.Type == CommandTypeDevbox && c.Workdir != "" {
 		return fmt.Errorf("workdir is not valid for type=devbox")
 	}
+	if c.User != "" {
+		return fmt.Errorf("user is not valid for type=%s", c.Type)
+	}
+	if c.Runner != nil {
+		return fmt.Errorf("runner is not valid for type=%s", c.Type)
+	}
 	return nil
 }
 
@@ -853,6 +861,12 @@ func (c *CommandDef) validateScriptType() error {
 	}
 	if c.WorkdirFrom != "" {
 		return fmt.Errorf("workdir_from is not valid for type=script")
+	}
+	if c.User != "" {
+		return fmt.Errorf("user is not valid for type=script")
+	}
+	if c.Runner != nil {
+		return fmt.Errorf("runner is not valid for type=script")
 	}
 	return nil
 }
@@ -913,6 +927,12 @@ func (c *CommandDef) validateWorkflowType() error {
 	}
 	if c.WorkdirFrom != "" {
 		return fmt.Errorf("workdir_from is not valid for type=workflow")
+	}
+	if c.User != "" {
+		return fmt.Errorf("user is not valid for type=workflow")
+	}
+	if c.Runner != nil {
+		return fmt.Errorf("runner is not valid for type=workflow")
 	}
 	for i, step := range c.Steps {
 		if err := step.Validate(); err != nil {
