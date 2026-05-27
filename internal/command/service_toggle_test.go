@@ -24,9 +24,9 @@ import (
 )
 
 // writeTempServiceConfig creates a minimal devbox config in a temp dir and
-// returns the path to devbox.yml. Services map: name → {mandatory, enabled, container}.
+// returns the path to devbox.yml. Services map: name → {required, enabled, container}.
 func writeTempServiceConfig(t *testing.T, services map[string]struct {
-	mandatory bool
+	required  bool
 	enabled   bool
 	container string
 }) string {
@@ -46,7 +46,7 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	devboxLines = append(devboxLines, "  prefix: devbox")
 	hasEnabled := false
 	for name, spec := range services {
-		if spec.enabled && !spec.mandatory {
+		if spec.enabled && !spec.required {
 			if !hasEnabled {
 				devboxLines = append(devboxLines, "services:")
 				hasEnabled = true
@@ -75,8 +75,8 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 		var svcLines []string
 		svcLines = append(svcLines, "type: app")
 		svcLines = append(svcLines, "container: "+container)
-		if spec.mandatory {
-			svcLines = append(svcLines, "mandatory: true")
+		if spec.required {
+			svcLines = append(svcLines, "required: true")
 		}
 		content := strings.Join(svcLines, "\n") + "\n"
 		if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(content), 0o644); err != nil {
@@ -93,7 +93,7 @@ func TestServicesToggle_NonTTY_ReturnsInteractiveRequired(t *testing.T) {
 		enabled   bool
 		container string
 	}{
-		"second": {mandatory: false, enabled: false},
+		"second": {required: false, enabled: false},
 	})
 
 	oldInteractive := ui.IsInteractiveFn
@@ -127,7 +127,7 @@ func TestServicesToggle_AllMandatory_ReturnsError(t *testing.T) {
 		enabled   bool
 		container string
 	}{
-		"main": {mandatory: true, enabled: true},
+		"main": {required: true, enabled: true},
 	})
 
 	oldInteractive := ui.IsInteractiveFn
@@ -158,9 +158,9 @@ func TestServicesToggle_TTY_EnablesAndDisables(t *testing.T) {
 		enabled   bool
 		container string
 	}{
-		"main":   {mandatory: true, enabled: false},
-		"second": {mandatory: false, enabled: false},
-		"third":  {mandatory: false, enabled: true},
+		"main":   {required: true, enabled: false},
+		"second": {required: false, enabled: false},
+		"third":  {required: false, enabled: true},
 	})
 
 	oldInteractive := ui.IsInteractiveFn
@@ -213,7 +213,7 @@ func TestServicesToggle_TTY_CancelNoWrites(t *testing.T) {
 		enabled   bool
 		container string
 	}{
-		"second": {mandatory: false, enabled: false},
+		"second": {required: false, enabled: false},
 	})
 
 	oldInteractive := ui.IsInteractiveFn
@@ -276,9 +276,9 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"main":    "type: app\ncontainer: app-main\nmandatory: true\n",
+		"main":    "type: app\ncontainer: app-main\nrequired: true\n",
 		"adminer": "type: tool\ncontainer: adminer\nports:\n  web: 8080\n",
-		"db":      "type: infra\ncontainer: db\nmandatory: true\n",
+		"db":      "type: infra\ncontainer: db\nrequired: true\n",
 	} {
 		svcDir := filepath.Join(dir, "devbox", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -402,7 +402,7 @@ func TestServiceEnableCmd_MandatoryInfraWarn(t *testing.T) {
 	if err := os.MkdirAll(svcDir1, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(svcDir1, "service.yml"), []byte("type: infra\ncontainer: db\nmandatory: true\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(svcDir1, "service.yml"), []byte("type: infra\ncontainer: db\nrequired: true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1776,8 +1776,8 @@ func TestApplyServiceToggles_MandatoryRejected(t *testing.T) {
 		enabled   bool
 		container string
 	}{
-		"main":   {mandatory: true, enabled: false},
-		"second": {mandatory: false, enabled: false},
+		"main":   {required: true, enabled: false},
+		"second": {required: false, enabled: false},
 	})
 
 	cfg, err := config.LoadConfig(configPath)

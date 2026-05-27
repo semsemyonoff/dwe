@@ -205,7 +205,7 @@ runtime:
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"main":   "type: app\ncontainer: app-main\nmandatory: true\n",
+		"main":   "type: app\ncontainer: app-main\nrequired: true\n",
 		"api":    "type: app\ncontainer: app-api\n",
 		"worker": "type: app\ncontainer: app-worker\n",
 	} {

@@ -44,7 +44,7 @@ func TestApplyMandatoryGate(t *testing.T) {
 		}
 	})
 
-	t.Run("no mandatory: nothing locked", func(t *testing.T) {
+	t.Run("no required: nothing locked", func(t *testing.T) {
 		in := []deployServiceItem{
 			{Name: "a", Type: "app", Mandatory: false, Deployed: false},
 			{Name: "b", Type: "app", Mandatory: false, Deployed: false},

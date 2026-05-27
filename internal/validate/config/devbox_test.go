@@ -547,7 +547,7 @@ func TestStylesValidator_RenameWarnings(t *testing.T) {
 		},
 		{
 			name: "mandatory",
-			yaml: "colors:\n  mandatory: \"#fff\"\n",
+			yaml: "colors:\n  required: \"#fff\"\n",
 			want: []want{{"colors.mandatory is no longer supported", "rename to colors.accent"}},
 		},
 		{

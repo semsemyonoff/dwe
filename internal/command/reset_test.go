@@ -259,7 +259,7 @@ func makeResetServiceTestDir(t *testing.T, serviceName string, enabled, mandator
 	}
 	svcContent := "type: app\ncontainer: app-" + serviceName + "\n"
 	if mandatory {
-		svcContent += "mandatory: true\n"
+		svcContent += "required: true\n"
 	}
 	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(svcContent), 0o644); err != nil {
 		t.Fatalf("write service.yml: %v", err)

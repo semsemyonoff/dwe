@@ -40,7 +40,7 @@ project:
 	// Services are loaded from per-folder devbox/services/<name>/ — not from inline devbox.yml.
 	// dir: services/main ensures CollectGitWorkspace returns a row (making --no-git non-vacuous).
 	for name, content := range map[string]string{
-		"main":    "type: app\ncontainer: app-main\nmandatory: true\ndir: services/main\n",
+		"main":    "type: app\ncontainer: app-main\nrequired: true\ndir: services/main\n",
 		"worker":  "type: app\ncontainer: app-worker\n",
 		"adminer": "type: tool\ncontainer: adminer\nports:\n  main: 8080\nhosts:\n  main: adminer.localhost\n",
 	} {
@@ -77,8 +77,8 @@ project:
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"main": "type: app\ncontainer: app-main\nmandatory: true\ndir: services/main\n",
-		"db":   "type: infra\ncontainer: db\nmandatory: true\n",
+		"main": "type: app\ncontainer: app-main\nrequired: true\ndir: services/main\n",
+		"db":   "type: infra\ncontainer: db\nrequired: true\n",
 	} {
 		svcDir := filepath.Join(devboxDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {

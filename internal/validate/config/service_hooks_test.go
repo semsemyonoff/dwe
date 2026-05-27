@@ -280,7 +280,7 @@ func TestServiceHooksValidator(t *testing.T) {
 				}
 			},
 			setup: func(root string) {
-				writeServiceYML(t, root, "mandatory-svc", "type: app\ncontainer: mandatory-svc\nmandatory: true\n")
+				writeServiceYML(t, root, "mandatory-svc", "type: app\ncontainer: mandatory-svc\nrequired: true\n")
 			},
 			reg:        usercommands.NewEmptyRegistry,
 			wantWarns:  1,
@@ -301,7 +301,7 @@ func TestServiceHooksValidator(t *testing.T) {
 				}
 			},
 			setup: func(root string) {
-				writeServiceYML(t, root, "mandatory-svc", "type: app\ncontainer: mandatory-svc\nmandatory: true\n")
+				writeServiceYML(t, root, "mandatory-svc", "type: app\ncontainer: mandatory-svc\nrequired: true\n")
 			},
 			reg:        usercommands.NewEmptyRegistry,
 			wantWarns:  1,

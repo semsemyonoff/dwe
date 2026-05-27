@@ -230,7 +230,7 @@ func TestServiceEnableCmd_MandatoryWarn(t *testing.T) {
 		enabled   bool
 		container string
 	}{
-		"main": {mandatory: true, enabled: false},
+		"main": {required: true, enabled: false},
 	})
 	flags := &rootFlags{configPath: configPath}
 	cmd := newServiceEnableCmd(flags)
@@ -252,7 +252,7 @@ func TestServiceDisableCmd_MandatoryError(t *testing.T) {
 		enabled   bool
 		container string
 	}{
-		"main": {mandatory: true, enabled: true},
+		"main": {required: true, enabled: true},
 	})
 	flags := &rootFlags{configPath: configPath}
 	cmd := newServiceDisableCmd(flags)
