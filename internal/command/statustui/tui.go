@@ -3,6 +3,7 @@ package statustui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -70,7 +71,6 @@ type model struct {
 	reloading     bool   //nolint:unused
 	width         int
 	height        int
-	err           error     //nolint:unused
 	reloadAt      time.Time //nolint:unused
 }
 
@@ -126,7 +126,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.tabs = msg.tabs
-		m.err = msg.err
 		m.reloadAt = msg.loadedAt
 		m.loading = false
 		m.reloading = false
@@ -143,6 +142,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		// Guard against tab navigation before tabs are loaded.
+		if len(m.tabs) == 0 {
+			return m, nil
+		}
 		// Handle tab navigation
 		switch {
 		case key.Matches(msg, m.keys.NextTab):
@@ -284,8 +287,6 @@ func (m *model) renderStatusBar() string {
 	switch {
 	case m.loading:
 		leftParts = append(leftParts, "·", "loading…")
-	case m.err != nil:
-		leftParts = append(leftParts, "·", "error")
 	case m.reloading:
 		leftParts = append(leftParts, "·", "reloading…")
 	case len(m.tabs) > 0 && m.deps.Cfg != nil:
@@ -308,7 +309,6 @@ func (m *model) renderStatusBar() string {
 	leftSide := lipgloss.JoinHorizontal(lipgloss.Top, leftParts...)
 
 	// Build right side: help text
-	m.help.SetWidth(m.width - 10) // Account for left side + padding
 	rightSide := m.help.View(m.keys)
 
 	// Combine with padding
@@ -355,46 +355,14 @@ func (m *model) View() tea.View {
 		return v
 	}
 
-	// Show error state
-	if m.err != nil {
-		errorMsg := fmt.Sprintf("Error: %v\n\nPress r to retry, q to quit", m.err)
-		errorView := lipgloss.NewStyle().
-			Width(m.width-4).
-			Padding(1, 2).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(ui.ColorDanger())).
-			Render(errorMsg)
-		centered := lipgloss.NewStyle().
-			Width(m.width).
-			Height(m.height - 4).
-			Align(lipgloss.Center).
-			AlignVertical(lipgloss.Center).
-			Render(errorView)
-		titleBar := m.renderTitleBar()
-		content := lipgloss.JoinVertical(lipgloss.Top, titleBar, centered)
-		v := tea.NewView(content)
-		v.AltScreen = true
-		return v
-	}
-
 	// Normal view: title / tabs / divider / viewport / status bar
 	titleBar := m.renderTitleBar()
 	tabStrip := m.renderTabStrip()
 
-	// Set viewport dimensions to account for: title (1) + tabs (1) + divider (1) + status bar (1)
-	viewportHeight := m.height - 4
-	m.viewport.SetWidth(m.width - 2)
-	m.viewport.SetHeight(viewportHeight)
-
-	// Set viewport content if tabs are loaded
-	if len(m.tabs) > m.active {
-		m.viewport.SetContent(m.tabs[m.active].content)
-	}
-
-	// Render divider line - simple horizontal separator
+	// Render divider line — a full-width horizontal separator.
 	dividerLine := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(ui.ColorMuted())).
-		Render(lipgloss.NewStyle().Width(m.width - 2).Render("─"))
+		Render(strings.Repeat("─", m.width-2))
 
 	statusBar := m.renderStatusBar()
 	viewportContent := m.viewport.View()

@@ -33,6 +33,9 @@ type StatusInput struct {
 // HealthIndicator returns just the health indicator glyph and state (e.g., "● running")
 // without the "Devbox: " prefix.
 func HealthIndicator(in StatusInput) string {
+	if in.Cfg == nil {
+		return ""
+	}
 	rows := collectRowsByType(in.Cfg, in.IsRunning, in.Cfg.Project.FullName(), nil)
 	return selectHealthIndicator(rows, in.TopoStatus)
 }

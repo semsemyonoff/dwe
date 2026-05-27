@@ -19,7 +19,6 @@ type tabsLoadedMsg struct {
 	gen      uint64
 	tabs     []tab
 	loadedAt time.Time
-	err      error
 }
 
 // Package-level seams for testability. Tests override these to avoid slow
@@ -160,7 +159,6 @@ func buildTabsCmd(ctx context.Context, d Deps, gen uint64) tea.Cmd {
 			gen:      gen,
 			tabs:     tabs,
 			loadedAt: time.Now(),
-			err:      nil,
 		}
 	}
 }
