@@ -561,7 +561,6 @@ var (
 	ErrServiceHostsShape       = errors.New("config: hosts must be a map of name to hostname")
 	ErrServicePortOutOfRange   = errors.New("config: port value out of range 1..65535")
 	ErrDependsOnTool           = errors.New("config: depends_on target must not be a tool service")
-	ErrAfterFieldNotAllowed    = errors.New("config: after field is only valid in per-service deploy.yml")
 )
 
 // validServiceTypes is the closed set of allowed ServiceType values.
@@ -1507,9 +1506,6 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 			continue
 		}
 		parent := services[svc.Extends]
-		if svc.Container == "" {
-			svc.Container = parent.Container
-		}
 		if svc.Dir == "" {
 			svc.Dir = parent.Dir
 		}

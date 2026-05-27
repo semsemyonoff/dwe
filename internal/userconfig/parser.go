@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var keyLineRe = regexp.MustCompile(`^[a-z][a-z0-9_]*\s*=\s*.*$`)
+var keyLineRe = regexp.MustCompile(`^[a-z][a-z0-9_-]*\s*=\s*.*$`)
 
 // parse reads a flat key=value config from r and merges into cfg in place.
 // Empty source merges no keys (defaults survive). Parser errors are returned

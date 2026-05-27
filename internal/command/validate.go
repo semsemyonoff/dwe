@@ -321,7 +321,6 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 		ValidateCfg:         validateCfg,
 		ValidateCfgWarnings: validateWarnings,
 		ValidateCfgLoadErr:  validateLoadErr,
-		UserConfig:          userCfg,
 	}
 
 	// Load snapshot.yml once, threading the result + any load error into
