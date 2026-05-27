@@ -91,9 +91,9 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 		FocusZone:         FocusTree,
 		TermWidth:         termWidth,
 		TermHeight:        termHeight,
-		ContentWidth:      termWidth - 40,
-		ContentHeight:     termHeight - 4,
-		Viewport:          NewViewportWidget(termWidth-40, termHeight-4),
+		ContentWidth:      max(termWidth-40, 1),
+		ContentHeight:     max(termHeight-4, 1),
+		Viewport:          NewViewportWidget(max(termWidth-40, 1), max(termHeight-4, 1)),
 		StatusBar:         NewStatusBarWidget(),
 		SearchState:       NewSearchState(),
 		DiagramState:      NewDiagramState(nil),
@@ -298,8 +298,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.TermWidth = msg.Width
 		m.TermHeight = msg.Height
-		m.ContentWidth = m.TermWidth - 40
-		m.ContentHeight = m.TermHeight - 4
+		m.ContentWidth = max(m.TermWidth-40, 1)
+		m.ContentHeight = max(m.TermHeight-4, 1)
 		if m.Viewport != nil {
 			m.Viewport.SetDimensions(m.ContentWidth, m.ContentHeight)
 		}
