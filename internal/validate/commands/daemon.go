@@ -23,7 +23,6 @@ var daemonSentinels = []struct {
 	{model.ErrDaemonContainerTemplateRequired, "container_template"},
 	{model.ErrDaemonOnAlreadyRunningInvalid, "on_already_running"},
 	{model.ErrDaemonStopTimeoutInvalid, "stop_timeout"},
-	{model.ErrDaemonControlsInvalid, "controls"},
 }
 
 // paramRefRe matches ${param.<name>} references in a template literal.
@@ -131,46 +130,6 @@ func daemonStructuralDiagnostics(cmd model.CommandDef, relFile string) ([]valida
 				File:     relFile,
 				Message:  fmt.Sprintf("daemon: stop_timeout must be positive (got %q)", s),
 				Hint:     "use a positive duration like \"10s\" or \"500ms\"",
-			})
-		}
-	}
-
-	if len(cmd.Daemon.Controls) > 0 {
-		valid := map[string]bool{
-			model.DaemonControlStart:   true,
-			model.DaemonControlLogs:    true,
-			model.DaemonControlStop:    true,
-			model.DaemonControlRestart: true,
-		}
-		seen := make(map[string]bool, len(cmd.Daemon.Controls))
-		var unknown []string
-		for _, ctrl := range cmd.Daemon.Controls {
-			if !valid[ctrl] {
-				unknown = append(unknown, ctrl)
-				continue
-			}
-			seen[ctrl] = true
-		}
-		for _, ctrl := range unknown {
-			fields["controls"] = true
-			out = append(out, validate.Diagnostic{
-				Severity: validate.SeverityError,
-				Domain:   "commands",
-				Target:   target,
-				File:     relFile,
-				Message:  fmt.Sprintf("daemon: controls: unknown control %q", ctrl),
-				Hint:     "valid controls: start, logs, stop, restart",
-			})
-		}
-		if seen[model.DaemonControlRestart] && (!seen[model.DaemonControlStart] || !seen[model.DaemonControlStop]) {
-			fields["controls"] = true
-			out = append(out, validate.Diagnostic{
-				Severity: validate.SeverityError,
-				Domain:   "commands",
-				Target:   target,
-				File:     relFile,
-				Message:  "daemon: controls: restart requires start and stop",
-				Hint:     "restart is composed of stop + start\nboth must appear in controls",
 			})
 		}
 	}

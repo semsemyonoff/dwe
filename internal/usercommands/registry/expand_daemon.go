@@ -20,15 +20,6 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 		return nil
 	}
 
-	controls := src.Daemon.Controls
-	if len(controls) == 0 {
-		controls = model.DefaultDaemonControls
-	}
-	want := make(map[string]bool, len(controls))
-	for _, c := range controls {
-		want[c] = true
-	}
-
 	base := src.ID
 
 	// effectiveService/User/Workdir/WorkdirFrom mirror validateDaemonType's
@@ -75,67 +66,60 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 
 	var out []model.CommandDef
 
-	if want[model.DaemonControlStart] {
-		c := mk(model.DaemonControlStart)
-		c.Type = model.CommandTypeBuiltin
-		c.Cmd = "docker_daemon_start"
-		with := map[string]any{
-			"container_template": src.Daemon.ContainerTemplate,
-			"daemon_id":          base,
-			"label_params":       labelParams,
-			"service":            effectiveService,
-			"user":               string(effectiveUser),
-			"workdir":            effectiveWorkdir,
-			"workdir_from":       effectiveWorkdirFrom,
-			"argv":               stringsToAnySlice(src.Argv),
-			"compose_args":       stringsToAnySlice(src.ComposeArgs),
-			"env":                stringMapToAnyMap(src.Env),
-			"on_already_running": src.Daemon.OnAlreadyRunning,
-		}
-		if src.Daemon.AutoRemove != nil {
-			with["auto_remove"] = *src.Daemon.AutoRemove
-		}
-		c.With = with
-		out = append(out, c)
+	// Always generate all four virtual commands (start, logs, stop, restart)
+	c := mk(model.DaemonControlStart)
+	c.Type = model.CommandTypeBuiltin
+	c.Cmd = "docker_daemon_start"
+	with := map[string]any{
+		"container_template": src.Daemon.ContainerTemplate,
+		"daemon_id":          base,
+		"label_params":       labelParams,
+		"service":            effectiveService,
+		"user":               string(effectiveUser),
+		"workdir":            effectiveWorkdir,
+		"workdir_from":       effectiveWorkdirFrom,
+		"argv":               stringsToAnySlice(src.Argv),
+		"compose_args":       stringsToAnySlice(src.ComposeArgs),
+		"env":                stringMapToAnyMap(src.Env),
+		"on_already_running": src.Daemon.OnAlreadyRunning,
 	}
+	if src.Daemon.AutoRemove != nil {
+		with["auto_remove"] = *src.Daemon.AutoRemove
+	}
+	c.With = with
+	out = append(out, c)
 
-	if want[model.DaemonControlLogs] {
-		c := mk(model.DaemonControlLogs)
-		c.Type = model.CommandTypeBuiltin
-		c.Cmd = "docker_daemon_logs"
-		c.With = map[string]any{
-			"container_template": src.Daemon.ContainerTemplate,
-		}
-		out = append(out, c)
+	c = mk(model.DaemonControlLogs)
+	c.Type = model.CommandTypeBuiltin
+	c.Cmd = "docker_daemon_logs"
+	c.With = map[string]any{
+		"container_template": src.Daemon.ContainerTemplate,
 	}
+	out = append(out, c)
 
-	if want[model.DaemonControlStop] {
-		c := mk(model.DaemonControlStop)
-		c.Type = model.CommandTypeBuiltin
-		c.Cmd = "docker_daemon_stop"
-		with := map[string]any{
-			"container_template": src.Daemon.ContainerTemplate,
-		}
-		if src.Daemon.StopTimeout != "" {
-			with["stop_timeout"] = src.Daemon.StopTimeout
-		}
-		c.With = with
-		out = append(out, c)
+	c = mk(model.DaemonControlStop)
+	c.Type = model.CommandTypeBuiltin
+	c.Cmd = "docker_daemon_stop"
+	with = map[string]any{
+		"container_template": src.Daemon.ContainerTemplate,
 	}
+	if src.Daemon.StopTimeout != "" {
+		with["stop_timeout"] = src.Daemon.StopTimeout
+	}
+	c.With = with
+	out = append(out, c)
 
-	if want[model.DaemonControlRestart] {
-		c := mk(model.DaemonControlRestart)
-		c.Type = model.CommandTypeWorkflow
-		passthrough := make(map[string]string, len(src.Params))
-		for pname := range src.Params {
-			passthrough[pname] = "${param." + pname + "}"
-		}
-		c.Steps = []model.WorkflowStep{
-			{Command: base + "." + model.DaemonControlStop, With: passthrough},
-			{Command: base + "." + model.DaemonControlStart, With: passthrough},
-		}
-		out = append(out, c)
+	c = mk(model.DaemonControlRestart)
+	c.Type = model.CommandTypeWorkflow
+	passthrough := make(map[string]string, len(src.Params))
+	for pname := range src.Params {
+		passthrough[pname] = "${param." + pname + "}"
 	}
+	c.Steps = []model.WorkflowStep{
+		{Command: base + "." + model.DaemonControlStop, With: passthrough},
+		{Command: base + "." + model.DaemonControlStart, With: passthrough},
+	}
+	out = append(out, c)
 
 	return out
 }

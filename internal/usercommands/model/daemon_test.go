@@ -28,7 +28,6 @@ commands:
       on_already_running: error
       auto_remove: true
       stop_timeout: 10s
-      controls: [start, logs, stop, restart]
 `
 	cf := mustParse(t, yaml)
 	cmd, ok := cf.Commands["queue"]
@@ -52,9 +51,6 @@ commands:
 	}
 	if cmd.Daemon.StopTimeout != "10s" {
 		t.Errorf("StopTimeout = %q, want 10s", cmd.Daemon.StopTimeout)
-	}
-	if len(cmd.Daemon.Controls) != 4 {
-		t.Errorf("Controls len = %d, want 4", len(cmd.Daemon.Controls))
 	}
 	cmd.ID = "queue"
 	if err := cmd.Validate(); err != nil {
@@ -179,36 +175,6 @@ commands:
 			wantErrSubs: []string{"must be positive"},
 		},
 		{
-			name: "controls restart without stop",
-			yaml: `
-commands:
-  d:
-    type: daemon
-    service: app-main
-    argv: [echo]
-    daemon:
-      container_template: foo
-      controls: [start, restart]
-`,
-			wantErrIs:   []error{ErrDaemonControlsInvalid},
-			wantErrSubs: []string{"restart requires start and stop"},
-		},
-		{
-			name: "controls unknown entry",
-			yaml: `
-commands:
-  d:
-    type: daemon
-    service: app-main
-    argv: [echo]
-    daemon:
-      container_template: foo
-      controls: [start, stop, foo]
-`,
-			wantErrIs:   []error{ErrDaemonControlsInvalid},
-			wantErrSubs: []string{"unknown control"},
-		},
-		{
 			name: "multi-field: missing service + bad on_already_running joined",
 			yaml: `
 commands:
@@ -294,15 +260,6 @@ func TestDaemon_SourceDaemonOnBuiltinIsAllowed(t *testing.T) {
 	}
 	if err := cmd.Validate(); err != nil {
 		t.Errorf("Validate() error = %v, want nil (SourceDaemon should be invisible)", err)
-	}
-}
-
-// DefaultDaemonControls contains all four control names.
-func TestDaemon_DefaultControls(t *testing.T) {
-	got := strings.Join(DefaultDaemonControls, ",")
-	want := "start,logs,stop,restart"
-	if got != want {
-		t.Errorf("DefaultDaemonControls = %q, want %q", got, want)
 	}
 }
 

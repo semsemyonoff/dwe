@@ -214,33 +214,26 @@ func TestLoadRegistry_Daemon_RestartPassesParams(t *testing.T) {
 	}
 }
 
-func TestLoadRegistry_Daemon_ControlsSubset(t *testing.T) {
+func TestLoadRegistry_Daemon_AlwaysGeneratesAllFour(t *testing.T) {
 	yml := `
 commands:
   queue:
     type: daemon
-    description: subset
+    description: always generates all four
     service: app-main
     daemon:
-      container_template: q_${param.name}
-      controls: [start, stop]
+      container_template: q
     params:
       name:
         default: default
         pattern: ^[a-z]+$
 `
 	reg := mustRegistry(t, map[string]string{"main.yml": yml})
-	if _, err := reg.Get("main.queue.start"); err != nil {
-		t.Errorf(".start missing: %v", err)
-	}
-	if _, err := reg.Get("main.queue.stop"); err != nil {
-		t.Errorf(".stop missing: %v", err)
-	}
-	if _, err := reg.Get("main.queue.logs"); err == nil {
-		t.Error(".logs should be absent with controls: [start, stop]")
-	}
-	if _, err := reg.Get("main.queue.restart"); err == nil {
-		t.Error(".restart should be absent with controls: [start, stop]")
+	expected := []string{"main.queue.start", "main.queue.logs", "main.queue.stop", "main.queue.restart"}
+	for _, id := range expected {
+		if _, err := reg.Get(id); err != nil {
+			t.Errorf("%q missing: %v", id, err)
+		}
 	}
 }
 

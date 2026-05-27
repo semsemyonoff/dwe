@@ -1076,7 +1076,6 @@ commands:
       on_already_running: error   # error | noop
       auto_remove: true           # default true → adds --rm
       stop_timeout: 10s
-      controls: [start, logs, stop, restart]
 ```
 
 `service`, `workdir`/`workdir_from`, `user`, `env`, `params`, `argv`, `compose_args` follow the same semantics as [`type: service_run`](#type-service_run). The daemon-specific configuration lives entirely under the `daemon:` block.
@@ -1089,7 +1088,6 @@ commands:
 | `on_already_running` | optional | `error` | `error` aborts `.start` if the container already exists; `noop` makes `.start` idempotent. |
 | `auto_remove` | optional | `true` | When true, `.start` adds `--rm` so the container is removed when it stops. |
 | `stop_timeout` | optional | `10s` | Duration string. Converted to integer seconds at `docker stop -t <secs>`; values below 1s round up to 1s (never `0`). |
-| `controls` | optional | `[start, logs, stop, restart]` | Subset of the four virtual commands to generate. If `restart` is listed, both `start` AND `stop` must also be listed. |
 
 ### Container naming
 
@@ -1124,7 +1122,6 @@ Every daemon container carries three labels so `docker ps` is the single source 
 - `daemon.container_template` is required and non-empty.
 - `daemon.on_already_running` is one of `error` / `noop` (empty = default `error`).
 - `daemon.stop_timeout` parses via `time.ParseDuration` and is strictly positive.
-- `daemon.controls` is a subset of `{start, logs, stop, restart}`; if `restart` is listed, `start` and `stop` must also be listed.
 - Every `${param.X}` referenced in `container_template` must be declared in `params:` AND carry a `pattern:` (advisory — the runtime regex on the rendered container name is the authoritative gate).
 - Synthetic IDs (`<base>.start`, `.logs`, `.stop`, `.restart`) must not collide with any explicit command in the registry.
 

@@ -166,37 +166,6 @@ func TestDaemonValidator_StopTimeoutSubSecondAccepted(t *testing.T) {
 	require.Nil(t, findDiag(diags, "stop_timeout"), "sub-second stop_timeout must be accepted; got: %#v", diags)
 }
 
-func TestDaemonValidator_ControlsRestartCrossRule(t *testing.T) {
-	content := `commands:
-  queue:
-    type: daemon
-    service: app
-    daemon:
-      container_template: "q"
-      controls: [start, restart]
-    argv: [echo]
-`
-	diags := runValidator(t, content)
-	d := findDiag(diags, "restart requires start and stop")
-	require.NotNil(t, d, "expected cross-control diagnostic; got: %#v", diags)
-	require.Equal(t, 1, countContains(diags, "restart requires start and stop"))
-}
-
-func TestDaemonValidator_ControlsUnknown(t *testing.T) {
-	content := `commands:
-  queue:
-    type: daemon
-    service: app
-    daemon:
-      container_template: "q"
-      controls: [start, stop, foo]
-    argv: [echo]
-`
-	diags := runValidator(t, content)
-	d := findDiag(diags, `unknown control "foo"`)
-	require.NotNil(t, d, "expected unknown-control diagnostic; got: %#v", diags)
-}
-
 func TestDaemonValidator_MultiFieldNoDoubleEmission(t *testing.T) {
 	// Daemon missing service: AND with stop_timeout: "garbage" — both must surface,
 	// neither double-emitted via the model fallback.
@@ -248,23 +217,22 @@ func TestDaemonValidator_ParamRefWithoutPatternWarns(t *testing.T) {
 	require.Equal(t, validate.SeverityWarning, d.Severity)
 }
 
-func TestDaemonValidator_ServiceMissingAndControlsInvalidBothSurface(t *testing.T) {
+func TestDaemonValidator_ServiceMissingAndBadOnAlreadyRunning(t *testing.T) {
 	// Regression for the per-field suppression bug: a daemon missing service:
-	// AND with invalid controls must surface BOTH diagnostics. Per-field
-	// suppression keeps service alive even when controls is categorised.
+	// AND with invalid on_already_running must surface BOTH diagnostics.
 	content := `commands:
   queue:
     type: daemon
     daemon:
       container_template: "q"
-      controls: [start, restart]
+      on_already_running: bogus
     argv: [echo]
 `
 	diags := runValidator(t, content)
 	require.NotNil(t, findDiag(diags, "daemon: service required"))
-	require.NotNil(t, findDiag(diags, "restart requires start and stop"))
+	require.NotNil(t, findDiag(diags, "on_already_running"))
 	require.Equal(t, 1, countContains(diags, "daemon: service required"))
-	require.Equal(t, 1, countContains(diags, "restart requires start and stop"))
+	require.Equal(t, 1, countContains(diags, "on_already_running"))
 }
 
 func TestDaemonValidator_HappyPath(t *testing.T) {
@@ -276,7 +244,6 @@ func TestDaemonValidator_HappyPath(t *testing.T) {
       container_template: "q_${param.name}"
       on_already_running: noop
       stop_timeout: "10s"
-      controls: [start, logs, stop, restart]
     params:
       name:
         default: default

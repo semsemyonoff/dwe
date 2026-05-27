@@ -559,16 +559,16 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - DELETE: `daemon_test.go:~303-308` test for DefaultDaemonControls subset behavior
 - KEEP: `DaemonControlStart/Logs/Stop/Restart` constants (still used by `expand_daemon.go` to label generated virtual commands)
 
-- [ ] delete `Controls` field per above
-- [ ] delete `DefaultDaemonControls` per above
-- [ ] delete `Controls` validation block in `validateDaemonType` (types.go:~930-943)
-- [ ] delete `Controls` validation block in `validate/commands/daemon.go:~138-167`
-- [ ] update `registry/expand_daemon.go`: always generate all 4 virtual commands; no Controls consultation
-- [ ] delete obsolete test in `daemon_test.go:~303-308`
-- [ ] update commands.md `## type: daemon` section: remove documentation of `controls:` subset selection
-- [ ] add test confirming all 4 virtual commands are always generated for a `type: daemon` command
-- [ ] add test confirming YAML with `controls:` under a daemon block now produces a KnownFields error
-- [ ] run `make test && make build` — must pass before Task 21
+- [x] delete `Controls` field per above
+- [x] delete `DefaultDaemonControls` per above
+- [x] delete `Controls` validation block in `validateDaemonType` (types.go:~930-943)
+- [x] delete `Controls` validation block in `validate/commands/daemon.go:~138-167`
+- [x] update `registry/expand_daemon.go`: always generate all 4 virtual commands; no Controls consultation
+- [x] delete obsolete test in `daemon_test.go:~303-308`
+- [x] update commands.md `## type: daemon` section: remove documentation of `controls:` subset selection
+- [x] add test confirming all 4 virtual commands are always generated for a `type: daemon` command
+- [x] add test confirming YAML with `controls:` under a daemon block now produces a KnownFields error
+- [x] run `make test && make build` — must pass before Task 21
 
 ### Phase E — Standalone docs + verification
 

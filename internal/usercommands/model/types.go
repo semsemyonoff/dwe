@@ -52,8 +52,6 @@ const (
 	DaemonControlRestart = "restart"
 )
 
-// DefaultDaemonControls is the full set used when DaemonSpec.Controls is empty.
-var DefaultDaemonControls = []string{DaemonControlStart, DaemonControlLogs, DaemonControlStop, DaemonControlRestart}
 
 // allowedFieldsFor returns the set of top-level field names allowed for a given CommandType.
 // All types share a common set of fields; per-type allowlists extend that common set.
@@ -124,7 +122,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 
 // DaemonSpec is the YAML schema block under a type=daemon command's daemon: key.
 // It describes how the source command expands into virtual .start/.logs/.stop/.restart
-// commands at registry-load time.
+// commands at registry-load time. All four virtual commands are always generated.
 type DaemonSpec struct {
 	// ContainerTemplate is a template literal rendered at runtime to produce the
 	// container name (after the project prefix). May reference ${param.X}.
@@ -140,9 +138,6 @@ type DaemonSpec struct {
 	// as raw string so validate/commands can surface parseable diagnostics
 	// instead of YAML decode errors.
 	StopTimeout string `yaml:"stop_timeout"`
-	// Controls is the subset of {start,logs,stop,restart} to generate.
-	// Empty → all four.
-	Controls []string `yaml:"controls"`
 }
 
 // ParamType describes the expected value type of a command parameter.
@@ -969,7 +964,6 @@ var (
 	ErrDaemonContainerTemplateRequired = errors.New("daemon: container_template required")
 	ErrDaemonOnAlreadyRunningInvalid   = errors.New("daemon: on_already_running must be \"error\" or \"noop\"")
 	ErrDaemonStopTimeoutInvalid        = errors.New("daemon: stop_timeout invalid")
-	ErrDaemonControlsInvalid           = errors.New("daemon: controls invalid")
 	ErrDaemonLeakedOnNonDaemon         = errors.New("daemon: daemon block is only valid on type=daemon")
 )
 
@@ -1026,21 +1020,6 @@ func (c *CommandDef) validateDaemonType() error {
 			errs = append(errs, fmt.Errorf("%w: parse %q: %v", ErrDaemonStopTimeoutInvalid, s, err))
 		} else if d <= 0 {
 			errs = append(errs, fmt.Errorf("%w: must be positive (got %q)", ErrDaemonStopTimeoutInvalid, s))
-		}
-	}
-
-	if len(c.Daemon.Controls) > 0 {
-		seen := make(map[string]bool, len(c.Daemon.Controls))
-		for _, ctrl := range c.Daemon.Controls {
-			switch ctrl {
-			case DaemonControlStart, DaemonControlLogs, DaemonControlStop, DaemonControlRestart:
-				seen[ctrl] = true
-			default:
-				errs = append(errs, fmt.Errorf("%w: unknown control: %q", ErrDaemonControlsInvalid, ctrl))
-			}
-		}
-		if seen[DaemonControlRestart] && (!seen[DaemonControlStart] || !seen[DaemonControlStop]) {
-			errs = append(errs, fmt.Errorf("%w: restart requires start and stop", ErrDaemonControlsInvalid))
 		}
 	}
 

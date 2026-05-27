@@ -729,6 +729,24 @@ commands:
 	}
 }
 
+func TestLoadCommandFile_Daemon_ControlsFieldRejected(t *testing.T) {
+	dir := t.TempDir()
+	absPath := writeYAML(t, dir, "services.yml", `
+commands:
+  queue:
+    type: daemon
+    service: app-main
+    daemon:
+      container_template: q
+      controls: [start, logs, stop, restart]
+`)
+
+	_, err := LoadCommandFile(absPath, dir)
+	if err == nil {
+		t.Fatal("expected unknown-field error for controls field, got nil")
+	}
+}
+
 func TestLoadCommandFile_DumpDeployFixture(t *testing.T) {
 	// Load and validate the dump-deploy fixture with read-mode candidates and glob+match+sort.
 	dir := t.TempDir()
