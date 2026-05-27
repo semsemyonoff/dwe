@@ -285,14 +285,14 @@ func mapRunError(err error) error {
 - Create: `internal/command/statustui/keys.go` (keyMap with `tab`/`shift+tab`/`left`/`right`/`1`-`5`/`r`/`q`/`?`/`ctrl+c`)
 - Create: `internal/command/statustui/tui_test.go`
 
-- [ ] define `type Deps struct { Cfg *config.DevboxConfig; State *journal.ProjectState; Tracked []string; SvcDeploys map[string]*config.DeployConfig; ProjectName string; DockerCfg *config.DockerConfig; Topo map[string][]string; TopoStatus map[string]ui.NodeStatus; IsRunning stack.ContainerCheckFn; ProjectRoot string }`
-- [ ] define `type tab struct { title, content string }` and `type model struct { ... }` per Technical Details
-- [ ] define `keyMap` with named bindings (`NextTab`, `PrevTab`, `Tab1..Tab5`, `Reload`, `Help`, `Quit`); implement `ShortHelp()` / `FullHelp()` for `bubbles/v2/help`
-- [ ] implement `newModel(d Deps, ctx context.Context, w, h int) *model` (returns **pointer**, not value — methods use pointer receivers so only `*model` implements `tea.Model`; passing a value to `tea.NewProgram` would fail at compile time). Initialise viewport, help, keyMap, spinner, `loading=true`, storing `ctx` on the model for later use by `buildTabsCmd`. Mirrors `cmdbrowser/model.go:71-75` and `cmdbrowser/run.go:136-137`
-- [ ] add a static interface assertion at package scope: `var _ tea.Model = (*model)(nil)` — catches receiver-type mistakes at compile time rather than at first `tea.NewProgram` call
-- [ ] write placeholder methods using **pointer receivers** (`func (m *model) View() tea.View { return tea.NewView("loading") }`, `func (m *model) Init() tea.Cmd { return nil }`, `func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return m, nil }`). Pointer receivers are required because later tasks mutate model state in `Init`/`Update` (`m.loadGen++`, etc.) — value receivers would silently discard those mutations
-- [ ] add a smoke test `TestNewModel_Defaults` asserting model fields are wired (tabs empty, loading true, active 0)
-- [ ] run `make test` — must pass before next task
+- [x] define `type Deps struct { Cfg *config.DevboxConfig; State *journal.ProjectState; Tracked []string; SvcDeploys map[string]*config.DeployConfig; ProjectName string; DockerCfg *config.DockerConfig; Topo map[string][]string; TopoStatus map[string]ui.NodeStatus; IsRunning stack.ContainerCheckFn; ProjectRoot string }`
+- [x] define `type tab struct { title, content string }` and `type model struct { ... }` per Technical Details
+- [x] define `keyMap` with named bindings (`NextTab`, `PrevTab`, `Tab1..Tab5`, `Reload`, `Help`, `Quit`); implement `ShortHelp()` / `FullHelp()` for `bubbles/v2/help`
+- [x] implement `newModel(d Deps, ctx context.Context, w, h int) *model` (returns **pointer**, not value — methods use pointer receivers so only `*model` implements `tea.Model`; passing a value to `tea.NewProgram` would fail at compile time). Initialise viewport, help, keyMap, spinner, `loading=true`, storing `ctx` on the model for later use by `buildTabsCmd`. Mirrors `cmdbrowser/model.go:71-75` and `cmdbrowser/run.go:136-137`
+- [x] add a static interface assertion at package scope: `var _ tea.Model = (*model)(nil)` — catches receiver-type mistakes at compile time rather than at first `tea.NewProgram` call
+- [x] write placeholder methods using **pointer receivers** (`func (m *model) View() tea.View { return tea.NewView("loading") }`, `func (m *model) Init() tea.Cmd { return nil }`, `func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return m, nil }`). Pointer receivers are required because later tasks mutate model state in `Init`/`Update` (`m.loadGen++`, etc.) — value receivers would silently discard those mutations
+- [x] add a smoke test `TestNewModel_Defaults` asserting model fields are wired (tabs empty, loading true, active 0)
+- [x] run `make test` — must pass before next task
 
 ### Task 3: Implement `buildTabs` (serial section rendering)
 
