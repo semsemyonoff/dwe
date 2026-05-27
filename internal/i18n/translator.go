@@ -29,6 +29,14 @@ type Translator interface {
 	// "ui.docs.section.properties").
 	// Returns the fallback if no translation is found.
 	T(locale, uiKey, fallback string) string
+
+	// CommandSuccessMessage looks up a command's localized success message.
+	// Returns the fallback if no translation is found.
+	CommandSuccessMessage(locale, commandID, fallback string) string
+
+	// CommandErrorMessage looks up a command's localized error message.
+	// Returns the fallback if no translation is found.
+	CommandErrorMessage(locale, commandID, fallback string) string
 }
 
 // NopTranslator is a no-op Translator that always returns the fallback.
@@ -62,6 +70,16 @@ func (NopTranslator) GroupDescription(_, _, fallback string) string {
 
 // T implements Translator.
 func (NopTranslator) T(_, _, fallback string) string {
+	return fallback
+}
+
+// CommandSuccessMessage implements Translator.
+func (NopTranslator) CommandSuccessMessage(_, _, fallback string) string {
+	return fallback
+}
+
+// CommandErrorMessage implements Translator.
+func (NopTranslator) CommandErrorMessage(_, _, fallback string) string {
 	return fallback
 }
 

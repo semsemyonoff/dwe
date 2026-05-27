@@ -194,3 +194,53 @@ func (s *Store) GroupDescription(locale, groupID, fallback string) string {
 	}
 	return ""
 }
+
+// CommandSuccessMessage looks up a command's success message.
+// Lookup chain: locale → "en" → fallback → ""
+func (s *Store) CommandSuccessMessage(locale, commandID, fallback string) string {
+	if s == nil || s.locales == nil {
+		return fallback
+	}
+
+	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
+		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Success != "" {
+			return cs.Messages.Success
+		}
+	}
+
+	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
+		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Success != "" {
+			return cs.Messages.Success
+		}
+	}
+
+	if fallback != "" {
+		return fallback
+	}
+	return ""
+}
+
+// CommandErrorMessage looks up a command's error message.
+// Lookup chain: locale → "en" → fallback → ""
+func (s *Store) CommandErrorMessage(locale, commandID, fallback string) string {
+	if s == nil || s.locales == nil {
+		return fallback
+	}
+
+	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
+		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Error != "" {
+			return cs.Messages.Error
+		}
+	}
+
+	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
+		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Error != "" {
+			return cs.Messages.Error
+		}
+	}
+
+	if fallback != "" {
+		return fallback
+	}
+	return ""
+}

@@ -435,6 +435,152 @@ func TestStoreGroupDescription(t *testing.T) {
 	}
 }
 
+func TestStoreCommandSuccessMessage(t *testing.T) {
+	tests := []struct {
+		name      string
+		store     *Store
+		locale    string
+		commandID string
+		fallback  string
+		want      string
+	}{
+		{
+			name: "hit in requested locale",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{
+						"deploy": {Messages: MessageStrings{Success: "Deployment successful"}},
+					}},
+					"ru": {Commands: map[string]CommandStrings{
+						"deploy": {Messages: MessageStrings{Success: "Развертывание успешно"}},
+					}},
+				},
+			},
+			locale:    "ru",
+			commandID: "deploy",
+			fallback:  "default",
+			want:      "Развертывание успешно",
+		},
+		{
+			name: "miss in locale, hit in en",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{
+						"deploy": {Messages: MessageStrings{Success: "Deployment successful"}},
+					}},
+					"ru": {Commands: map[string]CommandStrings{}},
+				},
+			},
+			locale:    "ru",
+			commandID: "deploy",
+			fallback:  "default",
+			want:      "Deployment successful",
+		},
+		{
+			name: "miss everywhere, use fallback",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{}},
+				},
+			},
+			locale:    "en",
+			commandID: "unknown",
+			fallback:  "fallback message",
+			want:      "fallback message",
+		},
+		{
+			name:      "nil store returns fallback",
+			store:     nil,
+			locale:    "ru",
+			commandID: "deploy",
+			fallback:  "fallback",
+			want:      "fallback",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.store.CommandSuccessMessage(tt.locale, tt.commandID, tt.fallback)
+			if got != tt.want {
+				t.Errorf("CommandSuccessMessage(%q, %q, %q) = %q, want %q", tt.locale, tt.commandID, tt.fallback, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStoreCommandErrorMessage(t *testing.T) {
+	tests := []struct {
+		name      string
+		store     *Store
+		locale    string
+		commandID string
+		fallback  string
+		want      string
+	}{
+		{
+			name: "hit in requested locale",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{
+						"deploy": {Messages: MessageStrings{Error: "Deployment failed"}},
+					}},
+					"ru": {Commands: map[string]CommandStrings{
+						"deploy": {Messages: MessageStrings{Error: "Развертывание не удалось"}},
+					}},
+				},
+			},
+			locale:    "ru",
+			commandID: "deploy",
+			fallback:  "default",
+			want:      "Развертывание не удалось",
+		},
+		{
+			name: "miss in locale, hit in en",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{
+						"deploy": {Messages: MessageStrings{Error: "Deployment failed"}},
+					}},
+					"ru": {Commands: map[string]CommandStrings{}},
+				},
+			},
+			locale:    "ru",
+			commandID: "deploy",
+			fallback:  "default",
+			want:      "Deployment failed",
+		},
+		{
+			name: "miss everywhere, use fallback",
+			store: &Store{
+				locales: map[string]*Bundle{
+					"en": {Commands: map[string]CommandStrings{}},
+				},
+			},
+			locale:    "en",
+			commandID: "unknown",
+			fallback:  "error occurred",
+			want:      "error occurred",
+		},
+		{
+			name:      "nil store returns fallback",
+			store:     nil,
+			locale:    "ru",
+			commandID: "deploy",
+			fallback:  "fallback",
+			want:      "fallback",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.store.CommandErrorMessage(tt.locale, tt.commandID, tt.fallback)
+			if got != tt.want {
+				t.Errorf("CommandErrorMessage(%q, %q, %q) = %q, want %q", tt.locale, tt.commandID, tt.fallback, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStoreAvailableLocales(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -281,16 +281,16 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/usercommands/runtime/runner.go` (two callsites)
 - Modify: `docs/reference/config/i18n.md`
 
-- [ ] add struct `MessageStrings { Success string; Error string }` in bundle.go
-- [ ] add `Messages MessageStrings` field to `CommandStrings`
-- [ ] add `CommandSuccessMessage(locale, commandID, fallback string) string` and `CommandErrorMessage(...)` to Translator interface
-- [ ] implement on NopTranslator (return fallback) and Store (lookup `commands.<id>.messages.success` etc.)
-- [ ] wire `runner.go:246` (error path) to translator
-- [ ] wire `runner.go:252` (success path) to translator
-- [ ] update i18n.md `### commands.<id>.*` section with `messages.success` / `messages.error` keys
-- [ ] add Store tests: present locale + key returns translated; missing returns fallback
-- [ ] add runner test (or integration) confirming translator is consulted
-- [ ] run `go test ./internal/i18n/... ./internal/usercommands/runtime/...` — must pass before Task 10
+- [x] add struct `MessageStrings { Success string; Error string }` in bundle.go
+- [x] add `Messages MessageStrings` field to `CommandStrings`
+- [x] add `CommandSuccessMessage(locale, commandID, fallback string) string` and `CommandErrorMessage(...)` to Translator interface
+- [x] implement on NopTranslator (return fallback) and Store (lookup `commands.<id>.messages.success` etc.)
+- [x] wire `runner.go:246` (error path) to translator
+- [x] wire `runner.go:252` (success path) to translator
+- [x] update i18n.md `### commands.<id>.*` section with `messages.success` / `messages.error` keys
+- [x] add Store tests: present locale + key returns translated; missing returns fallback
+- [x] add runner test (or integration) confirming translator is consulted
+- [x] run `go test ./internal/i18n/... ./internal/usercommands/runtime/...` — must pass before Task 10
 
 ### Task 10: i18n for `OptionItem.Label`
 

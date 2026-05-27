@@ -7,11 +7,18 @@ type Bundle struct {
 	Groups   map[string]GroupStrings   `yaml:"groups"`
 }
 
+// MessageStrings contains translated command success and error messages.
+type MessageStrings struct {
+	Success string `yaml:"success"`
+	Error   string `yaml:"error"`
+}
+
 // CommandStrings contains translations for a command's user-facing text.
 type CommandStrings struct {
 	Description      string                  `yaml:"description"`
 	ConfirmationText string                  `yaml:"confirmation_text"`
 	Params           map[string]ParamStrings `yaml:"params"`
+	Messages         MessageStrings          `yaml:"messages"`
 }
 
 // ParamStrings contains translations for a parameter.

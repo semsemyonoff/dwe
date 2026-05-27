@@ -256,6 +256,19 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 }
 
 func emitCommandMessage(ctx RunContext, message string, success bool) error {
+	// Consult translator if available, falling back to the raw message
+	if ctx.Translator != nil && ctx.Cmd != nil && ctx.Cmd.ID != "" {
+		var translated string
+		if success {
+			translated = ctx.Translator.CommandSuccessMessage(ctx.Locale, ctx.Cmd.ID, "")
+		} else {
+			translated = ctx.Translator.CommandErrorMessage(ctx.Locale, ctx.Cmd.ID, "")
+		}
+		if translated != "" {
+			message = translated
+		}
+	}
+
 	if message == "" {
 		return nil
 	}
