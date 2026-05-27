@@ -52,3 +52,18 @@ func (w *ViewportWidget) ScrollEnd() {
 func (w *ViewportWidget) View() string {
 	return w.v.View()
 }
+
+// ScrollToLine scrolls the viewport so that the given line index sits at the
+// top. Used by heading navigation.
+func (w *ViewportWidget) ScrollToLine(line int) {
+	if line < 0 {
+		line = 0
+	}
+	w.v.SetYOffset(line)
+}
+
+// Content returns the raw content set on the viewport. Used by heading
+// navigation to locate the line containing a heading's text.
+func (w *ViewportWidget) Content() string {
+	return w.content
+}

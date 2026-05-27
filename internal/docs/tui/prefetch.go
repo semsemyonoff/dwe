@@ -19,10 +19,15 @@ type WorkItem struct {
 	generation int // set by Queue; stale items (wrong generation) don't update the counter
 }
 
-// ProgressMsg reports prefetch progress to the TUI.
+// ProgressMsg reports prefetch progress to the TUI. Generation matches the
+// value Prefetch.generation had when the work item that produced this
+// message was queued — the Model uses it to drop stale messages emitted by
+// workers that finished after the user already navigated to a different
+// topic (those messages reference counters that no longer apply).
 type ProgressMsg struct {
-	Rendered int
-	Total    int
+	Rendered   int
+	Total      int
+	Generation int
 }
 
 // Prefetch manages background mermaid rendering with a bounded worker pool.
@@ -114,9 +119,12 @@ func (p *Prefetch) renderOne(ctx context.Context, work WorkItem) {
 		return
 	}
 
-	// Report progress (non-blocking)
+	// Report progress (non-blocking). Generation is the work item's own gen
+	// (which equals the current p.generation because stale items returned
+	// above), so the receiver can compare against the topic it is currently
+	// tracking and discard messages from an older topic.
 	select {
-	case p.progress <- ProgressMsg{Rendered: rendered, Total: total}:
+	case p.progress <- ProgressMsg{Rendered: rendered, Total: total, Generation: work.generation}:
 	case <-ctx.Done():
 	}
 }
@@ -158,4 +166,27 @@ func (p *Prefetch) Queue(items []WorkItem) {
 func (p *Prefetch) Close() {
 	p.cancel()
 	p.wg.Wait()
+}
+
+// Generation returns the current queue generation. The Model compares this
+// against incoming ProgressMsg to drop stale messages emitted by workers
+// that finished after the user navigated to a different topic.
+func (p *Prefetch) Generation() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.generation
+}
+
+// BeginTopic advances the generation without queuing new work. The TUI
+// calls this on every topic transition (including no-diagram and directory
+// topics, which never reach Queue) so progress ticks from the previously
+// loaded topic are dropped by the Model's ProgressMsg handler. Returns the
+// new generation for callers that need to compare later.
+func (p *Prefetch) BeginTopic() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.generation++
+	p.rendered = 0
+	p.total = 0
+	return p.generation
 }

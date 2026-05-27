@@ -39,6 +39,22 @@ func NewFileCache(dir string, capBytes int64, underlying Renderer, version func(
 	}
 }
 
+// Lookup returns the cached PNG bytes for the given source/theme/width
+// without falling through to the underlying renderer. The second return is
+// false on cache miss. Used by callers (the TUI) that need a synchronous
+// cache check without risking a blocking mmdc invocation.
+func (fc *FileCache) Lookup(src string, theme Theme, width int) ([]byte, bool) {
+	key := fc.cacheKey(src, theme, width)
+	keyPath := filepath.Join(fc.Dir, key+".png")
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, false
+	}
+	t := now()
+	_ = os.Chtimes(keyPath, t, t)
+	return data, true
+}
+
 // Render returns the PNG for the given mermaid source, using the disk cache.
 // The cache key is sha256(src + "|" + theme + "|" + width + "|" + version)[:32].
 // Concurrent same-key misses are deduplicated via singleflight.
@@ -162,7 +178,10 @@ func (fc *FileCache) evictIfNeeded() {
 
 func (fc *FileCache) cacheKey(src string, theme Theme, width int) string {
 	h := sha256.New()
-	_, _ = fmt.Fprintf(h, "%s|%s|%d|%s", src, theme, width, fc.Version())
+	// renderOptsVersion participates in the hash so any change to the
+	// mmdc invocation (currently the `--scale 3` flag) invalidates old
+	// cache entries instead of silently serving stale-format PNGs.
+	_, _ = fmt.Fprintf(h, "%s|%s|%d|%s|%s", src, theme, width, fc.Version(), renderOptsVersion)
 	return fmt.Sprintf("%x", h.Sum(nil))[:32]
 }
 

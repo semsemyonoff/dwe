@@ -5,8 +5,8 @@ import (
 	"os"
 	"regexp"
 
+	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/glamour"
 )
 
 // ThemeFromBackground selects a glamour style based on the terminal background.

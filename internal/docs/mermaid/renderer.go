@@ -29,6 +29,15 @@ type Renderer interface {
 	Render(ctx context.Context, src string, theme Theme, width int) ([]byte, error)
 }
 
+// Lookuper is an optional interface implemented by renderers that can
+// surface cached PNG bytes without falling through to the slow path. The
+// TUI relies on this for synchronous inline-image substitution: a cache hit
+// returns immediately; a miss is silently skipped (the placeholder text
+// stays in place until the async prefetch finishes the render).
+type Lookuper interface {
+	Lookup(src string, theme Theme, width int) ([]byte, bool)
+}
+
 // Disabled always returns ErrRenderingDisabled.
 type Disabled struct{}
 

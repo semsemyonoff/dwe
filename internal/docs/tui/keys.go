@@ -13,11 +13,8 @@ type KeyMap struct {
 	End           key.Binding
 	Enter         key.Binding
 	Tab           key.Binding
-	Help          key.Binding
 	Quit          key.Binding
 	SearchStart   key.Binding
-	SearchNext    key.Binding
-	SearchPrev    key.Binding
 	DiagramNext   key.Binding
 	DiagramPrev   key.Binding
 	DiagramOpen   key.Binding
@@ -39,14 +36,11 @@ func DefaultKeyMap() KeyMap {
 		End:           key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "end")),
 		Enter:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
 		Tab:           key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "focus")),
-		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
-		SearchStart:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-		SearchNext:    key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next match")),
-		SearchPrev:    key.NewBinding(key.WithKeys("N"), key.WithHelp("N", "prev match")),
-		DiagramNext:   key.NewBinding(key.WithKeys("]"), key.WithHelp("]d", "next diagram")),
-		DiagramPrev:   key.NewBinding(key.WithKeys("["), key.WithHelp("[d", "prev diagram")),
-		DiagramOpen:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "view")),
+		Quit:          key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"), key.WithHelp("esc/q", "quit")),
+		SearchStart:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter tree")),
+		DiagramNext:   key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next diagram")),
+		DiagramPrev:   key.NewBinding(key.WithKeys("["), key.WithHelp("[", "prev diagram")),
+		DiagramOpen:   key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "open diagram")),
 		DiagramCopy:   key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy")),
 		LanguageCycle: key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "language")),
 		ShowEnglish:   key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "English")),
@@ -54,20 +48,22 @@ func DefaultKeyMap() KeyMap {
 	}
 }
 
+// ShortHelp is retained to satisfy the bubbles/v2 help.KeyMap interface but
+// is not displayed — the footer always renders FullHelp.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{
-		k.Help,
-		k.Quit,
-	}
+	return []key.Binding{k.Up, k.Down, k.Enter, k.SearchStart, k.Quit}
 }
 
+// FullHelp returns the grouped bindings rendered in the footer. Every
+// binding the model handles appears here so users can discover the keymap
+// without leaving the TUI.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.PageUp, k.PageDown, k.Start, k.End},
 		{k.Left, k.Right, k.Enter, k.Tab},
-		{k.SearchStart, k.SearchNext, k.SearchPrev},
+		{k.SearchStart},
 		{k.DiagramPrev, k.DiagramNext, k.DiagramOpen, k.DiagramCopy},
 		{k.LanguageCycle, k.ShowEnglish, k.Reload},
-		{k.Help, k.Quit},
+		{k.Quit},
 	}
 }

@@ -4,11 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/mermaid"
@@ -21,17 +22,19 @@ type Model struct {
 	Tree       *TreeWidget
 	Viewport   *ViewportWidget
 	StatusBar  *StatusBarWidget
+	Help       help.Model
+	Filter     *TreeFilter
 	Keys       KeyMap
 	Translator i18n.Translator
 	Locale     string
 	Theme      string
+	Title      string // Brand-bar title; "Devbox · <project> · Documentation".
 
 	// Data
 	Roots []docs.DocRoot
 
 	// Rendering
 	MermaidRenderer mermaid.Renderer
-	CanInlineImages bool
 
 	// Current state
 	CurrentTopic      *TreeNode
@@ -40,9 +43,7 @@ type Model struct {
 	ContentHeight     int
 	TermWidth         int
 	TermHeight        int
-	SearchState       *SearchState
 	DiagramState      *DiagramState
-	SearchIndex       *SearchIndex
 	TmuxHintShown     bool
 	AvailableLocales  []string // Available languages for the current file
 	CurrentSourceLang string   // The actual source language (en if fallback, otherwise requested)
@@ -53,6 +54,22 @@ type Model struct {
 	Prefetch         *Prefetch
 	PrefetchProgress ProgressMsg
 	prefetchChan     chan ProgressMsg
+
+	// Tracks the last topic loaded into the viewport so heading navigation
+	// can skip a redundant re-render when the cursor jumps between headings
+	// of the same file.
+	currentlyLoadedPath   string
+	currentlyLoadedLocale string
+
+	// Cached glamour output + diagram metadata so prefetch progress events
+	// can re-run diagram inlining without re-rendering glamour.
+	lastRenderedOutput   string
+	lastRenderedDiagrams []render.DiagramRef
+
+	// Per-session temp dir for "open diagram" exports. One dir per Model so
+	// concurrent `devbox docs` sessions don't race on the same temp filename.
+	// Lazily created on first export; left on disk at exit (os cleans /tmp).
+	diagramExportDir string
 
 	ctx      context.Context
 	initCmd  tea.Cmd // cmd to run on first Init() call
@@ -68,17 +85,20 @@ const (
 
 var _ tea.Model = (*Model)(nil)
 
-func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translator i18n.Translator, renderer mermaid.Renderer, termWidth, termHeight int, projectRoot string) (*Model, error) {
+func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translator i18n.Translator, renderer mermaid.Renderer, termWidth, termHeight int, projectRoot, title, mermaidTheme string) (*Model, error) {
 	treeWidget, err := NewTreeWidget(roots)
 	if err != nil {
 		return nil, err
 	}
 
-	darkBg := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
-	theme := "dark"
-	if !darkBg {
-		theme = "light"
-	}
+	theme := resolveMermaidTheme(mermaidTheme)
+
+	hm := help.New()
+	hm.ShowAll = true // Always render the full grouped help, matching cmdbrowser.
+	applyDocsHelpStyles(&hm.Styles)
+
+	contentW := viewportInnerWidth(termWidth)
+	contentH := viewportInnerHeight(termHeight)
 
 	m := &Model{
 		Roots:             roots,
@@ -86,19 +106,19 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 		Locale:            locale,
 		Translator:        translator,
 		MermaidRenderer:   renderer,
-		CanInlineImages:   mermaid.CanInline(),
+		Help:              hm,
+		Filter:            NewTreeFilter(),
 		Keys:              DefaultKeyMap(),
 		Theme:             theme,
+		Title:             title,
 		FocusZone:         FocusTree,
 		TermWidth:         termWidth,
 		TermHeight:        termHeight,
-		ContentWidth:      max(termWidth-40, 1),
-		ContentHeight:     max(termHeight-4, 1),
-		Viewport:          NewViewportWidget(max(termWidth-40, 1), max(termHeight-4, 1)),
+		ContentWidth:      contentW,
+		ContentHeight:     contentH,
+		Viewport:          NewViewportWidget(contentW, contentH),
 		StatusBar:         NewStatusBarWidget(),
-		SearchState:       NewSearchState(),
 		DiagramState:      NewDiagramState(nil),
-		SearchIndex:       BuildSearchIndex(nil, ""),
 		TmuxHintShown:     false,
 		AvailableLocales:  []string{},
 		CurrentSourceLang: "en",
@@ -134,10 +154,30 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 // loadTopic loads and renders content for the given tree node.
 // It returns a tea.Cmd that starts listening for prefetch progress if diagrams were queued.
 func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
+	// Advance the prefetch generation on every topic transition — including
+	// directories and no-diagram files — so any in-flight ProgressMsg from
+	// the previously loaded topic is rejected by the Update handler. Done
+	// before the early-return because dir/no-diagram topics never reach
+	// Queue and would otherwise let stale ticks pass the generation check.
+	if m.Prefetch != nil {
+		m.Prefetch.BeginTopic()
+	}
+	m.PrefetchProgress = ProgressMsg{}
+	m.StatusBar.SetProgress(0, 0)
+
 	if node == nil || node.Node == nil || node.Node.IsDir {
 		m.Viewport.SetContent("")
 		m.AvailableLocales = []string{}
 		m.CurrentSourceLang = "en"
+		m.lastRenderedOutput = ""
+		m.lastRenderedDiagrams = nil
+		// Clear the "loaded topic" cache too. Otherwise selectCursor's
+		// path-equality check would treat a later return-to-same-file as
+		// already-loaded and skip the re-render, leaving the viewport
+		// blank (cleared above) for the file the user just selected.
+		m.currentlyLoadedPath = ""
+		m.currentlyLoadedLocale = ""
+		m.StatusBar.SetPath("")
 		return nil, nil
 	}
 
@@ -195,10 +235,11 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 		contentToRender = content
 	}
 
+	// Use a unique marker per diagram so the post-render pass can swap each
+	// occurrence with a kitty graphics escape (or a per-state text fallback)
+	// without ambiguous matches.
 	placeholderFunc := func(index int) render.MermaidPlaceholder {
-		return render.MermaidPlaceholder{
-			Text: "<📊 [rendering]>",
-		}
+		return render.MermaidPlaceholder{Text: diagramMarker(index)}
 	}
 
 	opts := render.Opts{
@@ -214,14 +255,21 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 
 	output := string(result.Output)
 
-	m.Viewport.SetContent(output)
+	// Cache the glamour output and diagram list so subsequent prefetch
+	// progress events can re-run inlineDiagrams without re-rendering
+	// glamour. Progress was already reset at the top of loadTopic, so
+	// prefetchFinished() correctly reports "not yet" during this first
+	// inline pass.
+	m.lastRenderedOutput = output
+	m.lastRenderedDiagrams = result.Diagrams
+
+	m.Viewport.SetContent(m.inlineDiagrams(output, result.Diagrams))
 	m.StatusBar.SetPath(path)
 	m.StatusBar.SetLanguage(sourceLang)
+	m.currentlyLoadedPath = path
+	m.currentlyLoadedLocale = m.Locale
 
-	// Update search index and diagram state for the new content
-	m.SearchIndex = BuildSearchIndex(content, path)
 	m.DiagramState = NewDiagramState(result.Diagrams)
-	m.SearchState.Close()
 
 	// Queue diagrams for prefetch rendering if we have any; return a Cmd to start
 	// listening for progress so the status bar updates as diagrams are rendered.
@@ -236,7 +284,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 			items[i] = WorkItem{
 				Source: diag.Source,
 				Theme:  theme,
-				Width:  m.ContentWidth,
+				Width:  diagramRenderWidth(),
 				Index:  i,
 			}
 		}
@@ -246,6 +294,128 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 
 	return nil, nil
 }
+
+// quit closes background services and returns the tea.Quit command.
+func (m *Model) quit() (tea.Model, tea.Cmd) {
+	m.quitting = true
+	if m.Prefetch != nil {
+		m.Prefetch.Close()
+		if m.prefetchChan != nil {
+			close(m.prefetchChan)
+			m.prefetchChan = nil
+		}
+	}
+	if m.Watcher != nil {
+		_ = m.Watcher.Close()
+	}
+	return m, tea.Quit
+}
+
+// handleFilterKey routes input while the tree filter is active. Esc closes,
+// Enter accepts (keeps cursor where it is, drops the filter), Backspace pops
+// a rune, Up/Down navigate the filtered list, and any printable rune
+// extends the query and re-filters live.
+func (m *Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.Filter.Close()
+		m.Tree.ApplyFilter(nil)
+		return m, nil
+	case "enter":
+		// Capture the highlighted match BEFORE clearing the filter.
+		// ApplyFilter(nil) recomputes unfiltered visibility, and
+		// ensureCursorVisible would reset the cursor to visible[0] if the
+		// match was a heading or sat under a collapsed parent — leaving
+		// the user on the wrong topic. By expanding ancestors first we
+		// guarantee the captured node stays visible after the filter
+		// drops, and then re-pin the cursor on it before loading.
+		picked := m.Tree.Cursor()
+		expandAncestors(picked)
+		m.Filter.Close()
+		m.Tree.ApplyFilter(nil)
+		if picked != nil {
+			m.Tree.SetCursor(picked)
+		}
+		cmd := m.selectCursor()
+		m.FocusZone = FocusViewport
+		return m, cmd
+	case "backspace":
+		m.Filter.Backspace()
+		m.Tree.ApplyFilter(m.Filter)
+		return m, m.selectCursor()
+	case "up":
+		m.Tree.MoveUp()
+		return m, m.selectCursor()
+	case "down":
+		m.Tree.MoveDown()
+		return m, m.selectCursor()
+	}
+	// Printable runes extend the query. Reject control chars and multi-rune
+	// keys (function keys, arrows already handled above) so the query stays
+	// to typed text.
+	if len(msg.Text) == 0 {
+		return m, nil
+	}
+	for _, r := range msg.Text {
+		if r >= 32 && r != 127 {
+			m.Filter.Append(r)
+		}
+	}
+	m.Tree.ApplyFilter(m.Filter)
+	return m, m.selectCursor()
+}
+
+// selectCursor handles tree cursor movement: loads the file backing the
+// current row (or, for heading rows, the parent file) and scrolls the
+// viewport to the heading when applicable. Directory rows just update
+// CurrentTopic so the displayed path follows the cursor.
+func (m *Model) selectCursor() tea.Cmd {
+	node := m.Tree.Cursor()
+	if node == nil {
+		return nil
+	}
+	m.CurrentTopic = node
+	// For directory rows there's nothing to load; loadTopic will clear the
+	// viewport which is the right behaviour.
+	if m.Tree.IsDir(node) {
+		cmd, _ := m.loadTopic(node)
+		return cmd
+	}
+
+	var cmd tea.Cmd
+	if m.currentlyLoadedPath != node.Node.Path || m.currentlyLoadedLocale != m.Locale {
+		cmd, _ = m.loadTopic(node)
+	}
+	if node.Heading != nil {
+		m.scrollToHeading(node.Heading)
+	} else {
+		m.Viewport.ScrollToLine(0)
+	}
+	return cmd
+}
+
+// scrollToHeading finds the first line of the rendered viewport content that
+// contains the heading text and scrolls so that line is at the top. ANSI
+// escape sequences emitted by glamour are stripped before comparison.
+func (m *Model) scrollToHeading(h *docs.Heading) {
+	if m.Viewport == nil || h == nil || h.Text == "" {
+		return
+	}
+	lines := strings.Split(m.Viewport.Content(), "\n")
+	needle := strings.ToLower(h.Text)
+	for i, line := range lines {
+		if strings.Contains(strings.ToLower(stripANSI(line)), needle) {
+			m.Viewport.ScrollToLine(i)
+			return
+		}
+	}
+}
+
+// ansiRE matches CSI / OSC escape sequences emitted by glamour so heading
+// text can be located in the rendered output.
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07`)
+
+func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 
 func (m *Model) ensurePrefetch() {
 	if m.Prefetch != nil {
@@ -299,8 +469,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.TermWidth = msg.Width
 		m.TermHeight = msg.Height
-		m.ContentWidth = max(m.TermWidth-40, 1)
-		m.ContentHeight = max(m.TermHeight-4, 1)
+		m.ContentWidth = viewportInnerWidth(m.TermWidth)
+		m.ContentHeight = viewportInnerHeight(m.TermHeight)
 		if m.Viewport != nil {
 			m.Viewport.SetDimensions(m.ContentWidth, m.ContentHeight)
 		}
@@ -323,9 +493,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, topicCmd
 	case ProgressMsg:
-		// Update progress from prefetch worker pool; re-subscribe for the next tick.
+		// Drop messages from a previous topic — when the user navigates
+		// away while workers are still rendering, ticks for the prior
+		// topic can still arrive on the persistent channel. Comparing the
+		// message generation against the prefetch's current generation
+		// keeps the model state aligned with the topic actually loaded.
+		if m.Prefetch != nil && msg.Generation != m.Prefetch.Generation() {
+			if m.prefetchChan != nil {
+				return m, waitForProgress(m.prefetchChan)
+			}
+			return m, nil
+		}
+		// Each prefetch tick may have populated the cache for the diagrams
+		// of the currently-loaded topic, so re-run inline substitution on
+		// the cached glamour output. Swaps "<📊 [rendering…]>" for either
+		// the cached-state text or the "render failed" fallback.
 		m.PrefetchProgress = msg
 		m.StatusBar.SetProgress(msg.Rendered, msg.Total)
+		if m.lastRenderedOutput != "" && len(m.lastRenderedDiagrams) > 0 {
+			m.Viewport.SetContent(m.inlineDiagrams(m.lastRenderedOutput, m.lastRenderedDiagrams))
+		}
 		if m.prefetchChan != nil {
 			return m, waitForProgress(m.prefetchChan)
 		}
@@ -335,44 +522,45 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.Keys.Quit) {
-		m.quitting = true
-		// Clean up background services before quitting
-		if m.Prefetch != nil {
-			m.Prefetch.Close()
-			// Close the channel so any in-flight waitForProgress goroutine unblocks.
-			if m.prefetchChan != nil {
-				close(m.prefetchChan)
-				m.prefetchChan = nil
-			}
-		}
-		if m.Watcher != nil {
-			_ = m.Watcher.Close()
-		}
-		return m, tea.Quit
+	// Ctrl-C always quits, even while filtering, so the user has a guaranteed
+	// way out without first having to close the filter.
+	if msg.String() == "ctrl+c" {
+		return m.quit()
 	}
 
-	// Handle search keys
+	// Filter mode captures most keys. Routed early so `q` and other
+	// single-letter shortcuts type into the query instead of triggering
+	// commands.
+	if m.Filter != nil && m.Filter.Active {
+		return m.handleFilterKey(msg)
+	}
+
+	if key.Matches(msg, m.Keys.Quit) {
+		return m.quit()
+	}
+
+	// Tree filter: "/" opens an inline filter on tree row labels. The
+	// previous "content search" stub never had an entry UI so the key is
+	// repurposed here.
 	if key.Matches(msg, m.Keys.SearchStart) {
-		m.SearchState.Open("", m.SearchIndex)
-		return m, nil
-	}
-	if key.Matches(msg, m.Keys.SearchNext) && m.SearchState.IsOpen {
-		m.SearchState.Next()
-		return m, nil
-	}
-	if key.Matches(msg, m.Keys.SearchPrev) && m.SearchState.IsOpen {
-		m.SearchState.Prev()
+		m.Filter.Open()
+		m.Tree.ApplyFilter(m.Filter)
 		return m, nil
 	}
 
 	// Handle diagram keys
 	if key.Matches(msg, m.Keys.DiagramNext) {
 		m.DiagramState.Next()
+		m.refreshDiagramView()
 		return m, nil
 	}
 	if key.Matches(msg, m.Keys.DiagramPrev) {
 		m.DiagramState.Prev()
+		m.refreshDiagramView()
+		return m, nil
+	}
+	if key.Matches(msg, m.Keys.DiagramOpen) {
+		_ = m.openCurrentDiagram()
 		return m, nil
 	}
 	if key.Matches(msg, m.Keys.DiagramCopy) {
@@ -380,8 +568,6 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			_ = CopyViaOSC52(diagram.Source, os.Stdout)
 			if !m.TmuxHintShown && ClipboardTmuxHint() {
 				m.TmuxHintShown = true
-				// In a real implementation, we'd update the status bar with the hint
-				// For now, just mark it as shown
 			}
 		}
 		return m, nil
@@ -429,20 +615,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.Keys.Up):
 		if m.FocusZone == FocusTree {
 			m.Tree.MoveUp()
-			if m.Tree.Cursor() != nil {
-				m.CurrentTopic = m.Tree.Cursor()
-				cmd, _ = m.loadTopic(m.CurrentTopic)
-			}
+			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollUp()
 		}
 	case key.Matches(msg, m.Keys.Down):
 		if m.FocusZone == FocusTree {
 			m.Tree.MoveDown()
-			if m.Tree.Cursor() != nil {
-				m.CurrentTopic = m.Tree.Cursor()
-				cmd, _ = m.loadTopic(m.CurrentTopic)
-			}
+			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollDown()
 		}
@@ -457,20 +637,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.Keys.Start):
 		if m.FocusZone == FocusTree {
 			m.Tree.MoveStart()
-			if m.Tree.Cursor() != nil {
-				m.CurrentTopic = m.Tree.Cursor()
-				cmd, _ = m.loadTopic(m.CurrentTopic)
-			}
+			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollStart()
 		}
 	case key.Matches(msg, m.Keys.End):
 		if m.FocusZone == FocusTree {
 			m.Tree.MoveEnd()
-			if m.Tree.Cursor() != nil {
-				m.CurrentTopic = m.Tree.Cursor()
-				cmd, _ = m.loadTopic(m.CurrentTopic)
-			}
+			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollEnd()
 		}
@@ -481,9 +655,21 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.FocusZone = FocusTree
 		}
 	case key.Matches(msg, m.Keys.Enter):
-		if m.FocusZone == FocusTree && m.Tree.Cursor() != nil && !m.Tree.IsDir(m.Tree.Cursor()) {
-			m.CurrentTopic = m.Tree.Cursor()
-			cmd, _ = m.loadTopic(m.CurrentTopic)
+		if m.FocusZone == FocusTree && m.Tree.Cursor() != nil {
+			node := m.Tree.Cursor()
+			switch {
+			case m.Tree.IsDir(node) || (node.Heading == nil && len(node.Children) > 0):
+				// Directories and files-with-headings expand on Enter; focus
+				// moves to the viewport so the user can read what they
+				// expanded without an extra Tab keypress.
+				if !node.Expanded {
+					m.Tree.Toggle()
+				}
+				m.FocusZone = FocusViewport
+			default:
+				cmd = m.selectCursor()
+				m.FocusZone = FocusViewport
+			}
 		}
 	}
 

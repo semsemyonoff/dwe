@@ -2,14 +2,12 @@ package command
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docs"
-	"devbox-cli/internal/docs/mermaid"
 	"devbox-cli/internal/docs/render"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/userconfig"
@@ -218,55 +216,11 @@ func getTermWidth() int {
 	return w
 }
 
-// buildShowMermaidPlaceholder returns a PlaceholderFunc that respects the configured
-// mermaid mode. When mode is "off", returns nil so mermaid blocks are passed through
-// verbatim as plain code blocks. For "auto" and "mmdc", each block is synchronously
-// rendered via the configured chain: on success the PNG is cached (use `devbox docs`
-// TUI to view it inline); on failure (mmdc unavailable) the raw mermaid source is
-// shown as a plain code block.
-func buildShowMermaidPlaceholder(ctx context.Context, cfg *config.DevboxConfig, content []byte, theme string, width int) render.PlaceholderFunc {
-	mermaidMode := config.MermaidMode(cfg)
-	if mermaidMode == "off" {
-		return nil
-	}
-
-	cacheDir, _ := mermaid.CacheDir()
-	strict := mermaidMode == "mmdc"
-	cacheCapBytes := int64(config.MermaidCacheSizeMB(cfg) * 1024 * 1024)
-	renderer := mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, strict)
-
-	// Pre-extract all mermaid blocks so we can map index → source and render result.
-	blocks := render.ExtractMermaidBlocks(content)
-	type renderResult struct {
-		err error
-	}
-	results := make([]renderResult, len(blocks))
-	mermaidTheme := mermaid.ThemeDark
-	if theme == "light" {
-		mermaidTheme = mermaid.ThemeLight
-	}
-	for i, block := range blocks {
-		_, err := renderer.Render(ctx, block.Source, mermaidTheme, width)
-		results[i] = renderResult{err: err}
-	}
-
-	return func(index int) render.MermaidPlaceholder {
-		if index >= len(results) {
-			return render.PlaceholderForDisabled(index)
-		}
-		r := results[index]
-		if r.err == nil {
-			// PNG cached; can't inline it in non-TUI output — advise using the TUI.
-			return render.MermaidPlaceholder{Text: "<📊 [diagram cached — use `devbox docs` to view inline]>"}
-		}
-		// mmdc unavailable, required-but-missing, or disabled → show raw mermaid source as a code block.
-		if errors.Is(r.err, mermaid.ErrMmdcNotAvailable) || errors.Is(r.err, mermaid.ErrRenderingDisabled) || errors.Is(r.err, mermaid.ErrMmdcRequired) {
-			if index < len(blocks) {
-				src := strings.TrimSpace(blocks[index].Source)
-				return render.MermaidPlaceholder{Text: "```\n" + src + "\n```"}
-			}
-		}
-		// Other error (timeout, syntax, etc.)
-		return render.MermaidPlaceholder{Text: "<📊 [diagram render failed]>", Err: r.err.Error()}
-	}
+// buildShowMermaidPlaceholder always returns nil so PreprocessMermaid leaves
+// mermaid fenced blocks verbatim. `devbox docs show` is meant for piping /
+// scripting; rendering diagrams to PNG and showing a "cached" placeholder
+// added noise without ever displaying the diagram. The interactive
+// `devbox docs` TUI is the place to view rendered diagrams.
+func buildShowMermaidPlaceholder(_ context.Context, _ *config.DevboxConfig, _ []byte, _ string, _ int) render.PlaceholderFunc {
+	return nil
 }

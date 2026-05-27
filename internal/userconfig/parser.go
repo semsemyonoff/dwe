@@ -85,12 +85,37 @@ func apply(cfg *Config, key, val string, line int) error {
 		cfg.notifyWebhookURLs = parseList(val)
 	case "language":
 		cfg.Language = val
+	case "mermaid_theme":
+		t, ok := normalizeMermaidTheme(val)
+		if !ok {
+			return fmt.Errorf("invalid mermaid_theme %q at line %d (want auto|dark|light)", val, line)
+		}
+		cfg.MermaidTheme = t
 	default:
 		// Unknown keys are warnings — forward-compat with future channel
 		// keys when an older MVP-only binary reads a richer config.
 		slog.Warn("userconfig: unknown key", "key", key, "line", line)
 	}
 	return nil
+}
+
+// normalizeMermaidTheme returns the canonical theme value for "auto", "dark",
+// "light" (case-insensitive, whitespace-trimmed). The empty string maps to
+// "auto" so both files and env vars can signal "default" the same way. The
+// caller composes the source-specific error (file line vs env var name) on
+// ok==false; we don't bake "at line N" into the helper because the env
+// path has no line number.
+func normalizeMermaidTheme(val string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(val)) {
+	case "", "auto":
+		return "auto", true
+	case "dark":
+		return "dark", true
+	case "light":
+		return "light", true
+	default:
+		return "", false
+	}
 }
 
 func parseBool(val string, line int, key string) (bool, error) {

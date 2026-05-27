@@ -41,6 +41,5 @@ func (w *StatusBarWidget) View() string {
 	if w.language != "" {
 		status += fmt.Sprintf("  [%s]", w.language)
 	}
-	status += "  ?:help  q:quit"
 	return status
 }

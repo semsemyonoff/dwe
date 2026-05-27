@@ -10,11 +10,18 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const mmdcTimeout = 10 * time.Second
+
+// renderOptsVersion is mixed into the cache key so cached PNGs that were
+// produced under a different mmdc invocation (different `--scale`, theme
+// arg shape, etc.) are not silently reused after this code changes.
+// Bump whenever the flags below change in a way that affects the output
+// bytes.
+const renderOptsVersion = "v2-scale3"
 
 // MmdcRenderer renders mermaid diagrams using the mmdc CLI.
 type MmdcRenderer struct {
@@ -62,8 +69,15 @@ func (m *MmdcRenderer) Render(ctx context.Context, src string, theme Theme, widt
 		themeArg = "dark"
 	}
 
+	// --scale 3 turns on Puppeteer's HiDPI rendering so the PNG is sampled
+	// at 3× the logical width. The output PNG ends up width*3 pixels wide,
+	// which keeps text and edges crisp in the system viewer (and on retina
+	// displays) instead of looking pixelated at the cost of ~3× file size.
 	cmd := exec.CommandContext(ctx, m.Bin, "-i", inputFile, "-o", outputFile,
-		"-b", "transparent", "-t", themeArg, "--width", strconv.Itoa(width), "--quiet")
+		"-b", "transparent", "-t", themeArg,
+		"--width", strconv.Itoa(width),
+		"--scale", "3",
+		"--quiet")
 
 	// Platform-specific setup (see mmdc_unix.go / mmdc_windows.go).
 	configureCommand(cmd)
@@ -118,16 +132,47 @@ func probeMmdcVersion(bin string) string {
 }
 
 // New constructs a mermaid renderer chain with cache, mmdc, and fallback.
-// It wraps mmdc with a file cache (XDG-aware).
-// If strict is true, missing mmdc returns ErrMmdcRequired; otherwise ErrMmdcNotAvailable.
+// It wraps mmdc with a file cache (XDG-aware). If strict is true, missing
+// mmdc returns ErrMmdcRequired; otherwise ErrMmdcNotAvailable.
+//
+// The version accessor returned to the cache is truly non-blocking:
+//   - A background goroutine runs probeMmdcVersion exactly once and stores
+//     the result in an atomic.Value.
+//   - Callers (cache lookup / cache key) read the atomic. Before the probe
+//     completes they see "unknown"; afterwards they see the real version.
+//
+// We intentionally avoid sync.OnceValue here: although it memoises after
+// the first call, concurrent callers BLOCK on the in-flight invocation —
+// so a UI-thread cacheKey hitting the OnceValue before the pre-warmed
+// goroutine returns still waits the up-to-2s probe timeout. The atomic
+// pattern below cannot block under any condition.
+//
+// Cache-key stability: "unknown" is a deterministic value, so cache keys
+// computed before the probe completes are stable and reproducible across
+// runs — they just don't pin to a specific mmdc version. After the probe
+// completes, subsequent keys include the real version (effectively
+// invalidating any "unknown"-bucketed entries, which were rare because
+// the probe normally returns in <100ms).
 func New(bin string, cacheDir string, capBytes int64, strict bool) Renderer {
-	versionOnce := sync.OnceValue(func() string {
-		return probeMmdcVersion(bin)
-	})
+	versionFn := nonblockingVersion(bin)
 
 	mmdc := NewMmdc(bin, strict)
-	mmdc.Version = versionOnce
+	mmdc.Version = versionFn
 
-	cache := NewFileCache(cacheDir, capBytes, mmdc, versionOnce)
-	return cache
+	return NewFileCache(cacheDir, capBytes, mmdc, versionFn)
+}
+
+// nonblockingVersion returns a closure that reports the current cached
+// mmdc version without ever blocking. A background goroutine populates the
+// real value asynchronously; until it lands, the closure returns "unknown".
+func nonblockingVersion(bin string) func() string {
+	var v atomic.Value
+	v.Store("unknown")
+	go func() {
+		v.Store(probeMmdcVersion(bin))
+	}()
+	return func() string {
+		s, _ := v.Load().(string)
+		return s
+	}
 }

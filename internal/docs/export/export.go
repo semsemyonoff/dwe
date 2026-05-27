@@ -69,20 +69,18 @@ func Tree(dst string, roots []docs.DocRoot, opts Opts) error {
 }
 
 func exportRoot(dst string, root docs.DocRoot, opts Opts) error {
-	// Determine the subdirectory for this root
-	rootSubdir := root.Name
-	if root.Name == "devbox" {
-		rootSubdir = "reference"
-	}
-
-	// Build tree to get directory structure
+	// Use root.Name as the subdir so the canonical tree shape is preserved
+	// (e.g. dst/devbox/reference/config/services.md, dst/devbox/internals/...,
+	// dst/project/...). The earlier override (devbox → "reference") combined
+	// with canonical node.Path values like "reference/config/services.md"
+	// produced "dst/reference/reference/..." and stuffed internals under
+	// reference; using the root name keeps roots separated and matches the
+	// source layout.
 	tree, err := docs.BuildTree(root)
 	if err != nil {
 		return fmt.Errorf("cannot build tree for %s docs: %w", root.Name, err)
 	}
-
-	// Walk and export files
-	return walkAndExport(dst, rootSubdir, tree, root, opts)
+	return walkAndExport(dst, root.Name, tree, root, opts)
 }
 
 func walkAndExport(dst, subdir string, node *docs.Node, root docs.DocRoot, opts Opts) error {

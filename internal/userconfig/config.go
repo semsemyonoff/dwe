@@ -22,6 +22,11 @@ type Config struct {
 	// Language holds the user's preferred language code. Empty string means
 	// unset; locale resolution will fall through to $LANG / "en".
 	Language string
+
+	// MermaidTheme overrides the theme used when rendering mermaid diagrams
+	// in the `devbox docs` TUI. Valid values: "auto" (default — follow the
+	// terminal background), "dark", "light".
+	MermaidTheme string
 }
 
 // Defaults returns a Config initialised to the documented defaults.
@@ -34,6 +39,7 @@ func Defaults() *Config {
 		NotifyDeployEnabled:   true,
 		NotifyCommandsEnabled: true,
 		NotifyChannels:        []string{"native"},
+		MermaidTheme:          "auto",
 	}
 }
 

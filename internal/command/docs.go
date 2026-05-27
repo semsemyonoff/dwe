@@ -846,14 +846,13 @@ func runDocsTUI(cmd *cobra.Command, flags *rootFlags, termWidth, termHeight int)
 		cfg = &config.DevboxConfig{}
 	}
 
-	// Get project root and user config language
+	// Get project root, user config language, and mermaid theme override.
 	projectRoot := flags.ProjectRoot()
 	var cfgLang string
-	if projectRoot != "" {
-		ucfg, err := userconfig.Load(projectRoot)
-		if err == nil && ucfg != nil {
-			cfgLang = ucfg.Language
-		}
+	var mermaidTheme string
+	if ucfg, err := userconfig.Load(projectRoot); err == nil && ucfg != nil {
+		cfgLang = ucfg.Language
+		mermaidTheme = ucfg.MermaidTheme
 	}
 
 	// Resolve locale directly from config and environment — do NOT use flags.Locale
@@ -886,9 +885,14 @@ func runDocsTUI(cmd *cobra.Command, flags *rootFlags, termWidth, termHeight int)
 	// Create translator for TUI strings
 	translator := i18n.TranslatorOrNop(flags.I18n)
 
-	// Create the model
+	// Create the model. Title shape matches cmdbrowser: "Devbox · <project> · Documentation".
 	ctx := cmd.Context()
-	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot)
+	projectName := ""
+	if cfg != nil {
+		projectName = cfg.Project.Name
+	}
+	title := selectorTitle(projectName, "Documentation")
+	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
 	}

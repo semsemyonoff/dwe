@@ -302,6 +302,35 @@ docs:
 - Never render diagrams; always show raw mermaid blocks
 - Useful for low-bandwidth or resource-constrained environments
 
+### Installing `mmdc`
+
+`mmdc` (mermaid-cli) drives a headless Chromium via puppeteer. Two install paths:
+
+- **npm (recommended)** — `npm i -g @mermaid-js/mermaid-cli`. Puppeteer manages its own Chromium download under `~/.cache/puppeteer/` and stays in sync with the installed mermaid-cli version. Upgrading is `npm update -g @mermaid-js/mermaid-cli`.
+- **Homebrew** — `brew install mermaid-cli`. Works, but the formula pins a specific puppeteer version that expects an exact Chromium build; if your `~/.cache/puppeteer/` doesn't already contain that build the first render fails with `Could not find Chrome (ver. …)`. Fix by either running `npx puppeteer browsers install chrome@<version-from-error>` once, or switching to the npm install above which avoids the version-pinning problem entirely.
+
+Verify the install with a one-off render outside Devbox:
+
+```sh
+echo 'flowchart LR; A-->B' > /tmp/x.mmd
+mmdc -i /tmp/x.mmd -o /tmp/x.png
+```
+
+If that produces a PNG, `devbox docs` will too.
+
+### Diagram theme (`mermaid_theme`)
+
+Override which mermaid theme is rendered, independent of the terminal background. Set in the user-config file (`~/.config/devbox/config` global, `.devbox/config` per-project, env var wins).
+
+| Key | Type | Default | Values |
+|---|---|---|---|
+| `mermaid_theme` | string | `auto` | `auto` / `dark` / `light` |
+
+- `auto` — probe the terminal background and pick a matching theme.
+- `dark` / `light` — hard-pin the theme. Useful for transparent terminals where background detection is unreliable, or to standardise the cached PNGs across machines.
+
+Env override: `DEVBOX_MERMAID_THEME=dark`. The chosen theme is part of the cache key, so flipping the value re-renders rather than serving a wrong-themed PNG.
+
 ### Cache management
 
 Diagram PNG files are cached under `$XDG_CACHE_HOME/devbox/mermaid/` (or system temp dir as fallback).

@@ -18,6 +18,7 @@ const (
 	envNotifyCommandsEnabled = "DEVBOX_NOTIFY_COMMANDS_ENABLED"
 	envNotifyChannels        = "DEVBOX_NOTIFY_CHANNELS"
 	envLanguage              = "DEVBOX_LANGUAGE"
+	envMermaidTheme          = "DEVBOX_MERMAID_THEME"
 )
 
 // Load resolves the effective Config by applying:
@@ -96,6 +97,13 @@ func applyEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv(envLanguage); ok {
 		cfg.Language = strings.TrimSpace(v)
+	}
+	if v, ok := os.LookupEnv(envMermaidTheme); ok {
+		t, valid := normalizeMermaidTheme(v)
+		if !valid {
+			return fmt.Errorf("userconfig: invalid %s %q (want auto|dark|light)", envMermaidTheme, v)
+		}
+		cfg.MermaidTheme = t
 	}
 	return nil
 }
