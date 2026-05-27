@@ -108,16 +108,13 @@ The optional update probe runs before any phase. It can fetch from the upstream 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `update.enabled` | bool | `true` when the `update:` block is present | Master switch. Writing the `update:` key is itself the opt-in. |
-| `update.mode` | string | `prompt` | One of `prompt`, `auto`, `check`, `off`. |
+| `update.mode` | string | `on` (when the `update:` block is present) | One of `on`, `off`. Writing the `update:` key is itself the opt-in. |
 
 Mode behaviour:
 
 | Mode | Fetches | Pulls | Behaviour when behind |
 |------|---------|-------|------------------------|
-| `prompt` | yes | with consent | Asks before pulling; on non-TTY, behaves like `check`. |
-| `auto` | yes | yes | Pulls without asking. |
-| `check` | yes | no | Warns; never modifies the working tree. |
+| `on` | yes | with consent | Prompts before pulling; on non-TTY, checks for upstream drift and warns (check semantics). |
 | `off` | no | no | Probe disabled (same as `--no-update` flag). |
 
 Layered precedence at runtime: `--no-update` flag > `--update <mode>` flag > `EffectiveMode()` from YAML.
@@ -198,8 +195,7 @@ run:
 # devbox/lifecycle.yml
 run:
   update:
-    enabled: true
-    mode: prompt
+    mode: on
   show_info: true
   final_message: "Project is ready for work!"
   phases:
@@ -231,7 +227,8 @@ A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
 `LoadLifecycleConfig()` enforces:
 
 - Each step in `run.phases` and `stop.phases` has a `type:` field with one of `shell`, `devbox`, `command`, `builtin`.
-- `update.mode`, when set, is one of `prompt`, `auto`, `check`, `off`.
+- `update.mode`, when set, is one of `on`, `off`. Old values (`prompt`, `auto`, `check`) are rejected with a clear error.
+- `update.enabled` is not allowed (removed in favor of `mode: off` to disable the probe).
 - `deploy_services: true` is rejected (only valid in `deploy.yml`).
 - `final_message` and `log` are normalized to defaults when absent.
 
@@ -242,7 +239,7 @@ Lifecycle phases use the same `parallel:` step-group container as `deploy.yml`. 
 ## Common pitfalls
 
 - **Forgetting `continue_on_error: true` on hook steps** — without it, a failing pre-stop hook aborts the entire stop sequence and containers are never stopped.
-- **Using `update: {}` to disable the probe** — empty block opts in (Enabled defaults to `true`). Use `mode: off`, `enabled: false`, or omit the `update:` key entirely.
+- **Using `update: {}` with `enabled: true`** — the `enabled` field is no longer supported. Writing the `update:` key is itself the opt-in; use `mode: off` to disable the probe, or omit the `update:` key entirely.
 - **Adding `deploy_services` phases** — they are deploy-only. Lifecycle pipelines call services via `type: command` references instead.
 - **Editing `lifecycle.yml` to use direct `docker compose` calls** — the public API is `type: devbox` with `cmd: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
 

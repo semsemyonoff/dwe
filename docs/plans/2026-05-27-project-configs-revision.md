@@ -497,17 +497,17 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - old `mode: check` → REJECTED, no equivalent (check-only is gone; `mode: on` provides warn-on-non-TTY fallback)
 - old `mode: off` → STILL VALID
 
-- [ ] remove `Enabled` field from `LifecycleUpdate` struct
-- [ ] change `Mode` enum to accept only `on` and `off`; update `ValidUpdateMode` (devbox.go:~1831)
-- [ ] in lifecycle/run.go: `EffectiveMode()` maps `on` → prompt-with-TTY-fallback-to-check behavior, `off` → no-op
-- [ ] update validator that checks Mode enum values — accept only `on`/`off`
-- [ ] delete obsolete test cases in `devbox_test.go:2736-2762` covering old 4-value enum
-- [ ] update lifecycle.md `## run.update` section per A.3.3: collapsed `mode: on|off`; describe what `on` does (prompt + check fallback on non-TTY)
-- [ ] add test: `mode: on` exhibits prompt-with-TTY-fallback-to-check behavior
-- [ ] add test: `mode: off` short-circuits the probe entirely
-- [ ] add test confirming `enabled:` (any value) rejected
-- [ ] add test confirming old mode values (`prompt`, `auto`, `check`) rejected with clear error
-- [ ] run `make test && make build` — must pass before Task 19
+- [x] remove `Enabled` field from `LifecycleUpdate` struct
+- [x] change `Mode` enum to accept only `on` and `off`; update `ValidUpdateMode` (devbox.go:~1831)
+- [x] in lifecycle/run.go: `EffectiveMode()` maps `on` → prompt-with-TTY-fallback-to-check behavior, `off` → no-op (implemented in EffectiveMode)
+- [x] update validator that checks Mode enum values — accept only `on`/`off` (ValidUpdateMode updated)
+- [x] delete obsolete test cases in `devbox_test.go:2736-2762` covering old 4-value enum (TestEffectiveMode completely replaced)
+- [x] update lifecycle.md `## run.update` section per A.3.3: collapsed `mode: on|off`; describe what `on` does (prompt + check fallback on non-TTY)
+- [x] add test: `mode: on` exhibits prompt-with-TTY-fallback-to-check behavior (TestEffectiveMode covers this)
+- [x] add test: `mode: off` short-circuits the probe entirely (TestEffectiveMode covers this)
+- [x] add test confirming `enabled:` (any value) rejected (TestLoadLifecycleConfig_RejectsEnabledField)
+- [x] add test confirming old mode values (`prompt`, `auto`, `check`) rejected with clear error (TestLoadLifecycleConfig_RejectsOldMode*)
+- [x] run `make test && make build` — must pass before Task 19 (all tests pass; build succeeds)
 
 ### Task 19: Per-type allowlist for CommandDef + service_run mode gate (top-level AND nested)
 

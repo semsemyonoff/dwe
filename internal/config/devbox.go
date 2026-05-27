@@ -1773,8 +1773,9 @@ func (cfg *LifecycleRunConfig) LogEnabled() bool {
 }
 
 // EffectiveMode returns the resolved update mode before any CLI flag is applied.
-// Precedence: missing block → off; enabled:false → off; enabled:true+no mode → prompt;
-// enabled:true+mode set → that value. CLI flags (--no-update, --update) override this.
+// Precedence: missing block → off; update block present with empty mode → on;
+// update block present with mode set → that value (on or off).
+// CLI flags (--no-update, --update) override this.
 func (cfg *LifecycleRunConfig) EffectiveMode() string {
 	if cfg == nil {
 		return "off"
@@ -1782,16 +1783,8 @@ func (cfg *LifecycleRunConfig) EffectiveMode() string {
 	if cfg.Update == nil {
 		return "off"
 	}
-	if cfg.Update.Enabled == nil {
-		// Loader is responsible for setting Enabled when the block is present;
-		// this branch only fires if a caller bypasses LoadLifecycleConfig.
-		return "off"
-	}
-	if !*cfg.Update.Enabled {
-		return "off"
-	}
 	if cfg.Update.Mode == "" {
-		return "prompt"
+		return "on"
 	}
 	return cfg.Update.Mode
 }
@@ -1810,11 +1803,9 @@ func (cfg *LifecycleStopConfig) LogEnabled() bool {
 }
 
 // LifecycleUpdate configures the optional git update probe run at the start of devbox run.
-// Enabled is a pointer so absent (nil) is distinguishable from explicit false at load time.
-// Mode must be one of: prompt, auto, check, off.
+// Mode must be one of: on, off.
 type LifecycleUpdate struct {
-	Enabled *bool  `yaml:"enabled"`
-	Mode    string `yaml:"mode"`
+	Mode string `yaml:"mode"`
 }
 
 // LoadLifecycleConfig loads the lifecycle pipeline from devbox/lifecycle.yml.
@@ -1844,13 +1835,9 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 			cfg.Run.Log = &f
 		}
 		if cfg.Run.Update != nil {
-			if cfg.Run.Update.Enabled == nil {
-				t := true
-				cfg.Run.Update.Enabled = &t
-			}
 			if cfg.Run.Update.Mode != "" {
 				if !ValidUpdateMode(cfg.Run.Update.Mode) {
-					return nil, fmt.Errorf("lifecycle run: update.mode %q is invalid; must be one of: prompt, auto, check, off", cfg.Run.Update.Mode)
+					return nil, fmt.Errorf("lifecycle run: update.mode %q is invalid; must be one of: on, off", cfg.Run.Update.Mode)
 				}
 			}
 		}
@@ -1870,10 +1857,10 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 	return &cfg, nil
 }
 
-// ValidUpdateMode reports whether s is one of the four allowed update mode values.
+// ValidUpdateMode reports whether s is one of the allowed update mode values.
 func ValidUpdateMode(s string) bool {
 	switch s {
-	case "prompt", "auto", "check", "off":
+	case "on", "off":
 		return true
 	}
 	return false
