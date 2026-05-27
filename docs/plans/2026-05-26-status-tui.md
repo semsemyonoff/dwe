@@ -322,12 +322,12 @@ func mapRunError(err error) error {
 - Modify: `internal/command/statustui/tui.go`
 - Modify: `internal/command/statustui/tui_test.go`
 
-- [ ] implement `renderTitleBar(m)` returning `ui.LogoMarkPlain() + " devbox · " + m.deps.ProjectName + " · Status"` styled with accent+bold from `ui/styles.go`
-- [ ] implement `renderTabStrip(m)` hand-rolled (Charm `bubbletea/examples/tabs` pattern): active tab wrapped in `▌` / `▐` with accent background; inactive tabs dimmed; tabs joined with `   `
-- [ ] implement `renderStatusBar(m)` with left side `<HealthIndicator> · loaded Ns ago` (or `· reloading…` when `m.reloading`) + optional `· pending: deploy(N)` in orange; right side from `m.help.View(m.keys)`. **Must call `m.help.SetWidth(m.width)` before `View` is called** — `bubbles/v2/help` only truncates when width is set (`~/go/pkg/mod/charm.land/bubbles/v2@v2.1.0/help/help.go:115-127`); without this the status bar overflows on narrow terminals
-- [ ] implement `View() tea.View` (returns `tea.View` struct, not string) composing title / tabs / divider / viewport / status bar via `lipgloss.JoinVertical`; show spinner centered when `m.loading`; show centered error + "press q to quit, r to retry" when `m.err != nil`; show "terminal too small (need 60×16)" when `m.width<60 || m.height<16`. Final return: `v := tea.NewView(content); v.AltScreen = true; return v` (mirrors `cmdbrowser/model.go:427-429`)
-- [ ] add `TestView_LoadingShowsSpinner`, `TestView_TooSmall`, `TestView_RendersTitleAndTabs`, `TestView_ErrorPathShowsRetryHint` (substring assertions on `model.View().Content` — remember it's now a struct field, not a return value)
-- [ ] run `make test` — must pass before next task
+- [x] implement `renderTitleBar(m)` returning `ui.LogoMarkPlain() + " devbox · " + m.deps.ProjectName + " · Status"` styled with accent+bold from `ui/styles.go`
+- [x] implement `renderTabStrip(m)` hand-rolled (Charm `bubbletea/examples/tabs` pattern): active tab wrapped in `▌` / `▐` with accent background; inactive tabs dimmed; tabs joined with `   `
+- [x] implement `renderStatusBar(m)` with left side `<HealthIndicator> · loaded Ns ago` (or `· reloading…` when `m.reloading`) + optional `· pending: deploy(N)` in orange; right side from `m.help.View(m.keys)`. **Must call `m.help.SetWidth(m.width)` before `View` is called** — `bubbles/v2/help` only truncates when width is set (`~/go/pkg/mod/charm.land/bubbles/v2@v2.1.0/help/help.go:115-127`); without this the status bar overflows on narrow terminals
+- [x] implement `View() tea.View` (returns `tea.View` struct, not string) composing title / tabs / divider / viewport / status bar via `lipgloss.JoinVertical`; show spinner centered when `m.loading`; show centered error + "press q to quit, r to retry" when `m.err != nil`; show "terminal too small (need 60×16)" when `m.width<60 || m.height<16`. Final return: `v := tea.NewView(content); v.AltScreen = true; return v` (mirrors `cmdbrowser/model.go:427-429`)
+- [x] add `TestView_LoadingShowsSpinner`, `TestView_TooSmall`, `TestView_RendersTitleAndTabs`, `TestView_ErrorPathShowsRetryHint` (substring assertions on `model.View().Content` — remember it's now a struct field, not a return value)
+- [x] run `make test` — must pass before next task
 
 ### Task 5: Implement `Init` and `Update` (tab cycling, digit jump, reload, quit, resize, scroll delegation)
 
