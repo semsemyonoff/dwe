@@ -429,15 +429,19 @@ func TestUpdate_TabSwitchInvalidatesPendingReloadRestore(t *testing.T) {
 	require.Equal(t, 1, m.active)
 	require.Equal(t, uint64(0), m.reloadGen, "tab switch should clear reloadGen")
 
-	// Simulate the old reload completing — offset should NOT be restored
+	// Simulate the old reload completing — offset should NOT be restored.
+	// Note: msg.gen == m.loadGen (both are 2), so the message is NOT dropped by
+	// the stale-gen check. Instead, the offset restore is skipped because
+	// m.reloadGen was cleared to 0 by the tab switch, so the condition
+	// `m.reloadGen == msg.gen` is false, and GotoTop() is called instead.
 	staleMsg := tabsLoadedMsg{
 		gen:      savedReloadGen,
 		tabs:     m.tabs,
 		loadedAt: time.Now(),
 	}
-	// The stale msg gen != m.loadGen (which was bumped by reload), so it's dropped
 	finalM, _ := m.Update(staleMsg)
 	require.Equal(t, 1, finalM.(*model).active, "active tab should remain unchanged")
+	require.Equal(t, 0, finalM.(*model).viewport.YOffset(), "offset should be reset to top, not restored")
 }
 
 // Test quit returns tea.Quit
@@ -451,6 +455,21 @@ func TestUpdate_QuitReturnsTeaQuit(t *testing.T) {
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	require.NotNil(t, cmd, "quit key should return a command")
 	// Execute the command and verify it is tea.Quit
+	msg := cmd()
+	require.IsType(t, tea.QuitMsg{}, msg, "quit command should return QuitMsg")
+}
+
+// Test quit works during loading (before tabs are available)
+func TestUpdate_QuitDuringLoading(t *testing.T) {
+	ctx := context.Background()
+	deps := Deps{ProjectName: "test"}
+	m := newModel(deps, ctx, 100, 30)
+	// tabs empty, loading = true — simulates the initial loading state
+	require.True(t, m.loading)
+	require.Empty(t, m.tabs)
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	require.NotNil(t, cmd, "quit should be handled even before tabs are loaded")
 	msg := cmd()
 	require.IsType(t, tea.QuitMsg{}, msg, "quit command should return QuitMsg")
 }

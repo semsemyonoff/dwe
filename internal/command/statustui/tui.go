@@ -47,8 +47,8 @@ type Deps struct {
 
 // tab represents one rendered section of the status view.
 type tab struct {
-	title   string //nolint:unused
-	content string //nolint:unused
+	title   string
+	content string
 }
 
 // model is the bubbletea program backing the status TUI. It manages five
@@ -64,14 +64,14 @@ type model struct {
 	keys          keyMap
 	spinner       spinner.Model
 	loading       bool
-	reloadActive  int    //nolint:unused
-	reloadYOffset int    //nolint:unused
-	loadGen       uint64 //nolint:unused
-	reloadGen     uint64 //nolint:unused
-	reloading     bool   //nolint:unused
+	reloadActive  int
+	reloadYOffset int
+	loadGen       uint64
+	reloadGen     uint64
+	reloading     bool
 	width         int
 	height        int
-	reloadAt      time.Time //nolint:unused
+	reloadAt      time.Time
 }
 
 // Compile-time assertion that model implements tea.Model.
@@ -142,6 +142,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		// Always allow quit, even while loading.
+		if key.Matches(msg, m.keys.Quit) {
+			return m, tea.Quit
+		}
 		// Guard against tab navigation before tabs are loaded.
 		if len(m.tabs) == 0 {
 			return m, nil
@@ -222,9 +226,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
 		}
 
 	case spinner.TickMsg:
@@ -311,10 +312,11 @@ func (m *model) renderStatusBar() string {
 	// Build right side: help text
 	rightSide := m.help.View(m.keys)
 
-	// Combine with padding
+	// Combine with padding; clamp spacer so narrow terminals don't get a negative Width.
+	spacerW := max(0, m.width-lipgloss.Width(leftSide)-lipgloss.Width(rightSide))
 	status := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftSide,
-		lipgloss.NewStyle().Width(m.width-lipgloss.Width(leftSide)-lipgloss.Width(rightSide)).Render(""),
+		lipgloss.NewStyle().Width(spacerW).Render(""),
 		rightSide)
 
 	return lipgloss.NewStyle().
@@ -342,9 +344,10 @@ func (m *model) View() tea.View {
 	// Show loading state
 	if m.loading {
 		spinnerView := m.spinner.View()
+		// Loading view only has a title bar (1 row); spinner fills the rest.
 		centered := lipgloss.NewStyle().
 			Width(m.width).
-			Height(m.height - 4).
+			Height(m.height - 1).
 			Align(lipgloss.Center).
 			AlignVertical(lipgloss.Center).
 			Render(spinnerView)

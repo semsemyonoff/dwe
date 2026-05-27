@@ -280,11 +280,11 @@ func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInpu
 			_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
 		}
 	case sectionDaemons:
-		rows, errs := stack.CollectDaemons(ctx, sc.Cfg, sc.normalisedDockerCfg())
-		body, _ := stack.RenderDaemons(rows)
+		rows, collectErrs := stack.CollectDaemons(ctx, sc.Cfg, sc.normalisedDockerCfg())
+		body, renderErrs := stack.RenderDaemons(rows)
 		writeNonEmpty(out, body)
-		if len(errs) > 0 {
-			_, _ = fmt.Fprintf(errW, "warning: %d daemon row(s) failed to render\n", len(errs))
+		if n := len(collectErrs) + len(renderErrs); n > 0 {
+			_, _ = fmt.Fprintf(errW, "warning: %d daemon row(s) failed to render\n", n)
 		}
 	case sectionDeploy:
 		writeNonEmpty(out, stack.RenderDeployStatus(in))
