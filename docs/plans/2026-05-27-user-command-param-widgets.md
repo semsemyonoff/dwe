@@ -374,37 +374,37 @@ These stay in `internal/setup`. Only the *huh form construction + Run* under the
 - Delete: `internal/ui/paramform.go`
 - Delete: `internal/ui/paramform_test.go`
 
-- [ ] replace `runParamForm = ui.RunParamForm` seam with `runAsk = ask.Run` (keep the seam so tests can inject); the seam signature must accept `RunOptions` so tests pass scripted Input/Output
-- [ ] when invoking the form, pass `ask.RunOptions{Input: stdin, Output: stdout}` using the existing IO seams (do NOT default to `os.Stdin`/`os.Stdout` — that would break tests and IDE-embedded runs)
-- [ ] preserve cancel-error mapping: `errors.Is(err, huh.ErrUserAborted)` → return `ui.ErrCancelled` (today's behavior at `internal/ui/paramform.go:214`); `command_cmd.go` callers already swallow only `ui.ErrCancelled`
-- [ ] rewrite `paramFieldsFromDef` as `buildAskFields(def, prefilled, provided, opts.Translator, opts.Locale, resolvedOpts map[string][]model.OptionItem) ([]ask.Field, error)`:
+- [x] replace `runParamForm = ui.RunParamForm` seam with `runAsk = ask.Run` (keep the seam so tests can inject); the seam signature must accept `RunOptions` so tests pass scripted Input/Output
+- [x] when invoking the form, pass `ask.RunOptions{Input: stdin, Output: stdout}` using the existing IO seams (do NOT default to `os.Stdin`/`os.Stdout` — that would break tests and IDE-embedded runs)
+- [x] preserve cancel-error mapping: `errors.Is(err, huh.ErrUserAborted)` → return `ui.ErrCancelled` (today's behavior at `internal/ui/paramform.go:214`); `command_cmd.go` callers already swallow only `ui.ErrCancelled`
+- [x] rewrite `paramFieldsFromDef` as `buildAskFields(def, prefilled, provided, opts.Translator, opts.Locale, resolvedOpts map[string][]model.OptionItem) ([]ask.Field, error)`:
   - dispatch on `def.EffectiveWidget()`
   - for `multiselect`: split `Default` by `def.Separator` into `Defaults`
   - thread `OptionItem` → `ask.Option` for select/multiselect
   - apply the empty-options rule per-param (see above); return error to caller on first violation
-- [ ] add `mergeAnswers(values map[string]string, ans ask.Result, defs map[string]ParamDef) map[string]string`:
+- [x] add `mergeAnswers(values map[string]string, ans ask.Result, defs map[string]ParamDef) map[string]string`:
   - input/select → `ans.String(key)` directly
   - confirm → `strconv.FormatBool(ans.Bool(key))` ("true"/"false") so `${param.X}` template (string-only) interpolates correctly
   - multiselect → `strings.Join(ans.Strings(key), def.Separator)` (default sep `" "`)
-- [ ] call `resolve.ResolveOptions` for every select/multiselect param **before** the `showForm` decision
-- [ ] **membership-check rule** (source-aware, asymmetric on empty options):
+- [x] call `resolve.ResolveOptions` for every select/multiselect param **before** the `showForm` decision
+- [x] **membership-check rule** (source-aware, asymmetric on empty options):
   - `--set name=value` for a select/multiselect param: if options non-empty AND value ∉ options → error. Empty options + `--set` → **bypass membership**, trust the user's explicit value (escape hatch when dynamic source is broken and user wants to override).
   - `default_from` resolved to a value: if options non-empty AND resolved value ∉ options → error. Empty options + `default_from` → **error**: `"options ${%s} resolved empty, but param %q has default_from %q — fix defaults.yml/local.yml or remove default_from"`. Rationale: defaults are config-authored, not user-overridable in this invocation; silently using an unvalidated default hides config bugs.
   - literal `default` (fallback when `default_from` misses, per `resolve.go:82`): same as `default_from` — if options non-empty AND default ∉ options → error; if options empty → error. Same rationale.
   - Net effect: only `--set` lets the form proceed past an empty dynamic options list; defaults must be backed by a valid resolved options list.
-- [ ] **empty-options rule** (per-param, fires at field-build time — runs AFTER step 2's membership-check already caught the default/default_from + empty-opts case, so buildAskFields only sees `--set`-prefilled or unprefilled params reaching this point): when iterating params in `buildAskFields`, for each select/multiselect param with `len(resolvedOpts[name]) == 0`:
+- [x] **empty-options rule** (per-param, fires at field-build time — runs AFTER step 2's membership-check already caught the default/default_from + empty-opts case, so buildAskFields only sees `--set`-prefilled or unprefilled params reaching this point): when iterating params in `buildAskFields`, for each select/multiselect param with `len(resolvedOpts[name]) == 0`:
   - prefilled via `--set` → **skip the field**, keep the explicit user value (escape hatch — paired with the membership-bypass above)
   - no prefilled value AND `def.Required` → **error**: `"no options for param %q: ${%s} is empty in defaults.yml/local.yml"`
   - no prefilled value AND `!def.Required` → **skip the field** (param ends up with empty string, which is fine for optional)
-- [ ] this means `buildAskFields` must return `([]ask.Field, error)`; callers handle the error before opening the form
-- [ ] this per-param logic replaces the previous "showForm + empty-list → error" aggregate check; the `showForm` decision itself stays as-is (aggregate on `allRequiredSatisfied || ForceParamForm`)
-- [ ] use the existing `canPromptHuh`/`skipPrompts` seam at `command_cmd.go:203-213` — do NOT introduce a new `opts.NonInteractive` flag; the `showForm` decision stays as-is (canPromptHuh + (ForceParamForm || !allRequiredSatisfied))
-- [ ] non-interactive behavior unchanged: if `!canPromptHuh` and required params unsatisfied → existing error path at `command_cmd.go:227`
-- [ ] delete `internal/ui/paramform.go` + tests (no callers after this task)
-- [ ] update tests: replace assertions about `ui.ParamField` shape with assertions about `[]ask.Field`; add tests for membership-rejection and empty-dynamic-options error
-- [ ] write tests for `buildAskFields` covering: each `EffectiveWidget` row, multiselect default splitting, `OptionItem`-with-label preservation
-- [ ] write tests for `mergeAnswers` (multiselect join with default + custom separator, scalar passthrough)
-- [ ] run `make test` — must pass before Task 8
+- [x] this means `buildAskFields` must return `([]ask.Field, error)`; callers handle the error before opening the form
+- [x] this per-param logic replaces the previous "showForm + empty-list → error" aggregate check; the `showForm` decision itself stays as-is (aggregate on `allRequiredSatisfied || ForceParamForm`)
+- [x] use the existing `canPromptHuh`/`skipPrompts` seam at `command_cmd.go:203-213` — do NOT introduce a new `opts.NonInteractive` flag; the `showForm` decision stays as-is (canPromptHuh + (ForceParamForm || !allRequiredSatisfied))
+- [x] non-interactive behavior unchanged: if `!canPromptHuh` and required params unsatisfied → existing error path at `command_cmd.go:227`
+- [x] delete `internal/ui/paramform.go` + tests (no callers after this task)
+- [x] update tests: replace assertions about `ui.ParamField` shape with assertions about `[]ask.Field`; add tests for membership-rejection and empty-dynamic-options error
+- [x] write tests for `buildAskFields` covering: each `EffectiveWidget` row, multiselect default splitting, `OptionItem`-with-label preservation
+- [x] write tests for `mergeAnswers` (multiselect join with default + custom separator, scalar passthrough)
+- [x] run `make test` — must pass before Task 8
 
 ### Task 8: Verify shared huh infrastructure intact
 

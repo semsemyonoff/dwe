@@ -18,18 +18,20 @@ import (
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/ui/ask"
 	"devbox-cli/internal/ui/cmdbrowser"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/resolve"
 
+	huh "charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
 // Test seams — overridden in command_cmd_test.go. Subtests that override these
 // MUST NOT call t.Parallel() (global state across goroutines).
 var (
-	runParamForm   = ui.RunParamForm
+	runAsk         = ask.Run
 	confirmRun     = ui.ConfirmRun
 	runUserCommand = usercommands.RunCommand
 	notifyContext  = signal.NotifyContext
@@ -205,6 +207,53 @@ func runCommandByID(
 
 	prefilled := resolve.ParamDefaults(def.Params, provided, cfg)
 
+	// Resolve options for all select/multiselect params and validate membership
+	// (--set must be in options if non-empty; defaults must be in non-empty options).
+	resolvedOpts := make(map[string][]model.OptionItem)
+	for name, p := range def.Params {
+		if p.Options != nil && (p.EffectiveWidget() == model.WidgetSelect || p.EffectiveWidget() == model.WidgetMultiselect) {
+			opts, rerr := resolve.ResolveOptions(p.Options, cfg.Raw)
+			if rerr != nil {
+				return fmt.Errorf("resolving options for param %q: %w", name, rerr)
+			}
+			resolvedOpts[name] = opts
+
+			// Membership-check rule:
+			// - --set name=value: if options non-empty AND value ∉ options → error.
+			//   Empty options + --set → bypass, trust user.
+			// - default_from/default: if options non-empty AND value ∉ options → error.
+			//   Empty options + default/default_from → error (config bug).
+			if len(opts) > 0 {
+				value := prefilled[name]
+				if value != "" {
+					// Membership check.
+					found := false
+					for _, opt := range opts {
+						if opt.Value == value {
+							found = true
+							break
+						}
+					}
+					if !found {
+						if provided[name] != "" {
+							// --set value not in options.
+							return fmt.Errorf("param %q: value %q not in options", name, value)
+						}
+						// default_from or default not in options.
+						return fmt.Errorf("param %q: default value %q not in options", name, value)
+					}
+				}
+			} else if prefilled[name] != "" && provided[name] == "" {
+				// Empty options but a default/default_from exists → error.
+				if p.DefaultFrom != "" {
+					return fmt.Errorf("options for param %q resolved empty, but has default_from %q", name, p.DefaultFrom)
+				} else if p.Default != "" {
+					return fmt.Errorf("options for param %q resolved empty, but has default %q", name, p.Default)
+				}
+			}
+		}
+	}
+
 	// Skip the form when every required param already has a value (from --set
 	// or a declared Default / DefaultFrom) — pressing Enter on a form full of
 	// pre-filled values is just friction. The TUI exposes the EditParams key
@@ -215,15 +264,18 @@ func runCommandByID(
 	// Build the form values: either via huh form (canPromptHuh) or from prefilled.
 	values := prefilled
 	if showForm {
-		fields := paramFieldsFromDef(def, prefilled, provided, opts.Translator, opts.Locale)
-		v, ferr := runParamForm("devbox commands › "+def.ID, fields)
+		fields, ferr := buildAskFields(def, prefilled, provided, opts.Translator, opts.Locale, resolvedOpts)
 		if ferr != nil {
-			if errors.Is(ferr, ui.ErrCancelled) {
+			return ferr
+		}
+		res, ferr := runAsk(ctx, "devbox commands › "+def.ID, fields, ask.RunOptions{Input: stdin, Output: stdout})
+		if ferr != nil {
+			if errors.Is(ferr, huh.ErrUserAborted) {
 				return nil
 			}
 			return ferr
 		}
-		values = v
+		values = mergeAnswers(res, def.Params, prefilled)
 	} else if !canPromptHuh {
 		// Non-interactive (pipe or skip-prompts): pre-flight missing-required check
 		// so the user sees a clear error instead of the runtime "param required" surfaced
@@ -312,34 +364,158 @@ func printRunHeader(w io.Writer, def *usercommands.CommandDef, translator i18n.T
 	_, _ = fmt.Fprintln(w, strings.Join(parts, "  "))
 }
 
-// paramFieldsFromDef converts a command's params map into ordered ui.ParamField
-// values. Ordering is deterministic (sorted by name) so test assertions and the
-// rendered form do not depend on map iteration order.
-//
-// IsDefault marks fields whose prefilled value comes from a declared Default
-// or DefaultFrom — anything the user provided via --set is treated as
-// user-explicit and stays unmarked.
-func paramFieldsFromDef(def *usercommands.CommandDef, prefilled, provided map[string]string, translator i18n.Translator, locale string) []ui.ParamField {
+// buildAskFields converts a command's params into ordered ask.Field values.
+// It applies the empty-options rule: when a select/multiselect param has
+// len(resolvedOpts[name]) == 0:
+//   - prefilled via --set → skip field, keep explicit value
+//   - no prefill AND required → error
+//   - no prefill AND optional → skip field
+func buildAskFields(def *usercommands.CommandDef, prefilled, provided map[string]string, translator i18n.Translator, locale string, resolvedOpts map[string][]model.OptionItem) ([]ask.Field, error) {
 	names := make([]string, 0, len(def.Params))
 	for name := range def.Params {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	fields := make([]ui.ParamField, 0, len(names))
+
+	var fields []ask.Field
 	for _, name := range names {
 		p := def.Params[name]
 		paramDesc := translator.ParamDescription(locale, def.ID, name, p.Description)
-		fields = append(fields, ui.ParamField{
-			Name:        name,
-			Type:        paramFieldType(p.Type),
+		widget := p.EffectiveWidget()
+
+		// Empty-options rule for select/multiselect.
+		if (widget == model.WidgetSelect || widget == model.WidgetMultiselect) {
+			opts := resolvedOpts[name]
+			if len(opts) == 0 {
+				// No options available.
+				if prefilled[name] != "" && provided[name] != "" {
+					// Prefilled via --set: skip field, keep value (escape hatch).
+					continue
+				}
+				if prefilled[name] == "" && p.Required {
+					// Required but no options: error.
+					if p.Options != nil && p.Options.From != "" {
+						return nil, fmt.Errorf("no options for param %q: ${%s} is empty", name, p.Options.From)
+					}
+					return nil, fmt.Errorf("no options for param %q", name)
+				}
+				// Optional with no options: skip field.
+				continue
+			}
+		}
+
+		// Build the ask.Field.
+		title := name
+		if p.Required {
+			title += " *"
+		}
+		if prefilled[name] != "" && provided[name] == "" {
+			title += " (default)"
+		}
+
+		field := ask.Field{
+			Key:         name,
+			Title:       title,
 			Description: paramDesc,
-			Default:     prefilled[name],
-			IsDefault:   prefilled[name] != "" && provided[name] == "",
 			Required:    p.Required,
-			Pattern:     p.Pattern,
-		})
+			Kind:        widgetToFieldKind(widget),
+		}
+
+		// Set defaults and options based on widget type.
+		switch widget {
+		case model.WidgetInput, model.WidgetConfirm:
+			field.Default = prefilled[name]
+
+		case model.WidgetSelect:
+			field.Default = prefilled[name]
+			field.Options = optionsToAskOptions(resolvedOpts[name])
+			if p.Pattern != "" {
+				// Input validation for pattern.
+				field.Validate = func(s string) error {
+					// Pattern validation would go here if needed.
+					return nil
+				}
+			}
+
+		case model.WidgetMultiselect:
+			// Split Default by separator to get initial selections.
+			sep := p.Separator
+			if sep == "" {
+				sep = " "
+			}
+			if prefilled[name] != "" {
+				field.Defaults = strings.Split(prefilled[name], sep)
+			}
+			field.Default = prefilled[name] // for display/info
+			field.Options = optionsToAskOptions(resolvedOpts[name])
+		}
+
+		fields = append(fields, field)
 	}
-	return fields
+
+	return fields, nil
+}
+
+// widgetToFieldKind converts a ParamWidget to an ask.FieldKind.
+func widgetToFieldKind(w model.ParamWidget) ask.FieldKind {
+	switch w {
+	case model.WidgetInput:
+		return ask.FieldInput
+	case model.WidgetSelect:
+		return ask.FieldSelect
+	case model.WidgetMultiselect:
+		return ask.FieldMultiselect
+	case model.WidgetConfirm:
+		return ask.FieldConfirm
+	default:
+		return ask.FieldInput
+	}
+}
+
+// optionsToAskOptions converts model.OptionItem to ask.Option.
+func optionsToAskOptions(items []model.OptionItem) []ask.Option {
+	opts := make([]ask.Option, len(items))
+	for i, item := range items {
+		opts[i] = ask.Option{
+			Value:       item.Value,
+			Label:       item.Label,
+			Description: item.Description,
+		}
+	}
+	return opts
+}
+
+// mergeAnswers merges form results back into the values map.
+// Input/select → string; multiselect → joined by separator; confirm → "true"/"false".
+func mergeAnswers(res ask.Result, defs map[string]model.ParamDef, prevValues map[string]string) map[string]string {
+	out := make(map[string]string, len(prevValues))
+	// Start with previous values (unfilled fields will be kept as-is).
+	for k, v := range prevValues {
+		out[k] = v
+	}
+
+	// Update with form results.
+	for name, def := range defs {
+		widget := def.EffectiveWidget()
+		switch widget {
+		case model.WidgetInput, model.WidgetSelect:
+			out[name] = res.String(name)
+
+		case model.WidgetMultiselect:
+			values := res.Strings(name)
+			sep := def.Separator
+			if sep == "" {
+				sep = " "
+			}
+			out[name] = strings.Join(values, sep)
+
+		case model.WidgetConfirm:
+			b := res.Bool(name)
+			out[name] = fmt.Sprintf("%v", b)
+		}
+	}
+
+	return out
 }
 
 // allRequiredSatisfied reports whether every required param already has a
@@ -353,21 +529,6 @@ func allRequiredSatisfied(defs map[string]model.ParamDef, prefilled map[string]s
 		}
 	}
 	return true
-}
-
-func paramFieldType(pt model.ParamType) ui.ParamFieldType {
-	switch pt {
-	case model.ParamTypeBool:
-		return ui.FieldTypeBool
-	case model.ParamTypeInt:
-		return ui.FieldTypeInt
-	case model.ParamTypePath:
-		return ui.FieldTypePath
-	case model.ParamTypeString, "":
-		return ui.FieldTypeString
-	default:
-		return ui.FieldTypeString
-	}
 }
 
 // stringifyParams converts resolved params (map[string]any) into the

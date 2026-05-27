@@ -90,6 +90,16 @@ func (r Result) Bool(key string) bool {
 	return b
 }
 
+// NewResultForTest creates a Result with the given map for testing purposes.
+func NewResultForTest(values map[string]any) Result {
+	return Result{values: values}
+}
+
+// IsEmpty reports whether the Result has no values (for testing).
+func (r Result) IsEmpty() bool {
+	return len(r.values) == 0
+}
+
 // RunOptions controls how Run executes.
 type RunOptions struct {
 	Input  io.Reader // defaults to os.Stdin if zero

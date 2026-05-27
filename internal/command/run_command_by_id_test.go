@@ -9,10 +9,12 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/ui/ask"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
+
+	huh "charm.land/huh/v2"
 )
 
 // stubOrchestratorSeams replaces the four package-level seams in command_cmd.go
@@ -21,13 +23,13 @@ import (
 func stubOrchestratorSeams(t *testing.T) *orchestratorStubs {
 	t.Helper()
 	s := &orchestratorStubs{}
-	origForm := runParamForm
+	origAsk := runAsk
 	origConfirm := confirmRun
 	origRun := runUserCommand
 	origNotify := notifyContext
 	origInteractive := ui.IsInteractiveFn
 	t.Cleanup(func() {
-		runParamForm = origForm
+		runAsk = origAsk
 		confirmRun = origConfirm
 		runUserCommand = origRun
 		notifyContext = origNotify
@@ -39,8 +41,8 @@ func stubOrchestratorSeams(t *testing.T) *orchestratorStubs {
 type orchestratorStubs struct {
 	formCalls    int
 	formTitle    string
-	formFields   []ui.ParamField
-	formValues   map[string]string
+	formFields   []ask.Field
+	formValues   ask.Result
 	formErr      error
 	confirmCalls int
 	confirmTitle string
@@ -54,21 +56,34 @@ type orchestratorStubs struct {
 }
 
 func (s *orchestratorStubs) installForm() {
-	runParamForm = func(title string, fields []ui.ParamField) (map[string]string, error) {
+	runAsk = func(ctx context.Context, title string, fields []ask.Field, opts ask.RunOptions) (ask.Result, error) {
 		s.formCalls++
 		s.formTitle = title
 		s.formFields = fields
 		if s.formErr != nil {
-			return nil, s.formErr
+			return ask.Result{}, s.formErr
 		}
-		out := s.formValues
-		if out == nil {
-			out = map[string]string{}
+		// Return the configured stub values or defaults.
+		if s.formValues.IsEmpty() {
+			// formValues not set: populate with field defaults.
+			defaults := make(map[string]any)
 			for _, f := range fields {
-				out[f.Name] = f.Default
+				switch f.Kind {
+				case ask.FieldInput, ask.FieldSelect:
+					defaults[f.Key] = f.Default
+				case ask.FieldMultiselect:
+					if f.Defaults != nil {
+						defaults[f.Key] = f.Defaults
+					} else {
+						defaults[f.Key] = []string{}
+					}
+				case ask.FieldConfirm:
+					defaults[f.Key] = false
+				}
 			}
+			return ask.NewResultForTest(defaults), nil
 		}
-		return out, nil
+		return s.formValues, nil
 	}
 }
 
@@ -189,7 +204,7 @@ func TestRunCommandByID_FormInvokedWhenRequiredUnsatisfied(t *testing.T) {
 	ui.IsInteractiveFn = func(io.Reader) bool { return true }
 	// Stub the form to return a user-supplied value so BuildRunContext's
 	// required-check passes after the form runs.
-	s.formValues = map[string]string{"env": "prod"}
+	s.formValues = ask.NewResultForTest(map[string]any{"env": "prod"})
 	s.installForm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -207,7 +222,7 @@ func TestRunCommandByID_FormInvokedWhenRequiredUnsatisfied(t *testing.T) {
 	if s.formCalls != 1 {
 		t.Errorf("form should be invoked when a required param has no default; got %d", s.formCalls)
 	}
-	if len(s.formFields) != 1 || s.formFields[0].Name != "env" || !s.formFields[0].Required {
+	if len(s.formFields) != 1 || s.formFields[0].Key != "env" || !s.formFields[0].Required {
 		t.Errorf("expected required field env; got %+v", s.formFields)
 	}
 	if s.runCalls != 1 {
@@ -270,8 +285,8 @@ func TestRunCommandByID_ForceParamFormOpensFormDespiteDefaults(t *testing.T) {
 	if s.formCalls != 1 {
 		t.Errorf("form should open under ForceParamForm even with defaults; got %d", s.formCalls)
 	}
-	if len(s.formFields) != 1 || !s.formFields[0].IsDefault {
-		t.Errorf("default-sourced field should carry IsDefault=true; got %+v", s.formFields)
+	if len(s.formFields) != 1 || !strings.Contains(s.formFields[0].Title, "default") {
+		t.Errorf("default-sourced field should have (default) in title; got %+v", s.formFields)
 	}
 }
 
@@ -355,7 +370,7 @@ func TestRunCommandByID_MissingRequiredWithYes_Error(t *testing.T) {
 func TestRunCommandByID_FormCancel_ExitZero(t *testing.T) {
 	s := stubOrchestratorSeams(t)
 	ui.IsInteractiveFn = func(io.Reader) bool { return true }
-	s.formErr = ui.ErrCancelled
+	s.formErr = huh.ErrUserAborted
 	s.installForm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -441,7 +456,7 @@ func TestRunCommandByID_ConfirmationSummary_UsesNormalizedParams(t *testing.T) {
 	s.confirmOK = true
 	// Form returns empty string for the optional param — orchestrator should
 	// fall back to the declared Default in the summary.
-	s.formValues = map[string]string{"mode": ""}
+	s.formValues = ask.NewResultForTest(map[string]any{"mode": ""})
 	s.installForm()
 	s.installConfirm()
 	s.installRunner()
@@ -694,40 +709,3 @@ func TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved(t *testing.T) {
 	}
 }
 
-// --- paramFieldsFromDef --------------------------------------------------
-
-func TestParamFieldsFromDef_DeterministicOrder(t *testing.T) {
-	def := &usercommands.CommandDef{
-		Params: map[string]model.ParamDef{
-			"zeta":  {Type: model.ParamTypeBool},
-			"alpha": {Type: model.ParamTypeString, Required: true, Pattern: "^x"},
-			"beta":  {Type: model.ParamTypeInt},
-		},
-	}
-	pre := map[string]string{"alpha": "xy", "beta": "3"}
-	fields := paramFieldsFromDef(def, pre, nil, i18n.NopTranslator{}, "")
-	if len(fields) != 3 {
-		t.Fatalf("expected 3 fields; got %d", len(fields))
-	}
-	wantOrder := []string{"alpha", "beta", "zeta"}
-	for i, name := range wantOrder {
-		if fields[i].Name != name {
-			t.Errorf("[%d]: want %q, got %q", i, name, fields[i].Name)
-		}
-	}
-	if fields[0].Default != "xy" || !fields[0].Required || fields[0].Pattern != "^x" {
-		t.Errorf("alpha field: %+v", fields[0])
-	}
-	if fields[1].Type != ui.FieldTypeInt {
-		t.Errorf("beta should be FieldTypeInt; got %v", fields[1].Type)
-	}
-	if fields[2].Type != ui.FieldTypeBool {
-		t.Errorf("zeta should be FieldTypeBool; got %v", fields[2].Type)
-	}
-}
-
-func TestParamFieldType_DefaultsToString(t *testing.T) {
-	if got := paramFieldType(""); got != ui.FieldTypeString {
-		t.Errorf("empty ParamType should map to FieldTypeString; got %v", got)
-	}
-}
