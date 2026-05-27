@@ -1,7 +1,6 @@
 package stack
 
 import (
-	"fmt"
 	"maps"
 	"os/exec"
 	"slices"
@@ -31,11 +30,16 @@ type StatusInput struct {
 	Tracked    []string
 }
 
+// HealthIndicator returns just the health indicator glyph and state (e.g., "● running")
+// without the "Devbox: " prefix.
+func HealthIndicator(in StatusInput) string {
+	rows := collectRowsByType(in.Cfg, in.IsRunning, in.Cfg.Project.FullName(), nil)
+	return selectHealthIndicator(rows, in.TopoStatus)
+}
+
 // RenderHealth returns the "Devbox: ●/◐/○ ..." indicator line (no trailing newline).
 func RenderHealth(in StatusInput) string {
-	rows := collectRowsByType(in.Cfg, in.IsRunning, in.Cfg.Project.FullName(), nil)
-	indicator := selectHealthIndicator(rows, in.TopoStatus)
-	return fmt.Sprintf("Devbox: %s", indicator)
+	return "Devbox: " + HealthIndicator(in)
 }
 
 // RenderApps returns the Apps section (services with type=app) title + table.

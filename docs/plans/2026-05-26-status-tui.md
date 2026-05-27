@@ -272,11 +272,11 @@ func mapRunError(err error) error {
 - Modify: `internal/stack/status.go`
 - Modify: `internal/stack/status_test.go`
 
-- [ ] add exported `HealthIndicator(in StatusInput) string` returning just the indicator (no `Devbox: ` prefix)
-- [ ] refactor `RenderHealth` to `"Devbox: " + HealthIndicator(in)`
-- [ ] add `TestHealthIndicator_*` tests mirroring `TestRenderHealth_*` (running / stopped / partial) asserting on the glyph + textual state, without the `Devbox: ` prefix
-- [ ] verify existing `TestRenderHealth_*` tests still pass unchanged
-- [ ] run `make test` — must pass before next task
+- [x] add exported `HealthIndicator(in StatusInput) string` returning just the indicator (no `Devbox: ` prefix)
+- [x] refactor `RenderHealth` to `"Devbox: " + HealthIndicator(in)`
+- [x] add `TestHealthIndicator_*` tests mirroring `TestRenderHealth_*` (running / stopped / partial) asserting on the glyph + textual state, without the `Devbox: ` prefix
+- [x] verify existing `TestRenderHealth_*` tests still pass unchanged
+- [x] run `make test` — must pass before next task
 
 ### Task 2: Create `statustui` package skeleton with `Deps`, keys, and styles
 

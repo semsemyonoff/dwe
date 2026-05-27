@@ -8,6 +8,66 @@ import (
 	"devbox-cli/internal/ui"
 )
 
+func TestHealthIndicator_Stopped(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	neverRunning := func(_, _ string) bool { return false }
+	out := HealthIndicator(StatusInput{Cfg: cfg, IsRunning: neverRunning})
+	if !strings.Contains(out, "○ stopped") {
+		t.Errorf("expected '○ stopped' indicator, got: %q", out)
+	}
+	if strings.Contains(out, "Devbox:") {
+		t.Errorf("HealthIndicator should not include 'Devbox:' prefix, got: %q", out)
+	}
+}
+
+func TestHealthIndicator_Running(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Mandatory: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	alwaysRunning := func(_, _ string) bool { return true }
+	out := HealthIndicator(StatusInput{Cfg: cfg, IsRunning: alwaysRunning})
+	if !strings.Contains(out, "● running") {
+		t.Errorf("expected '● running' indicator, got: %q", out)
+	}
+	if strings.Contains(out, "Devbox:") {
+		t.Errorf("HealthIndicator should not include 'Devbox:' prefix, got: %q", out)
+	}
+}
+
+func TestHealthIndicator_Partial(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main":   {Type: "app", Container: "app-main", Mandatory: true},
+			"second": {Type: "app", Container: "app-second", Enabled: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	partialRunning := func(_, container string) bool {
+		return container == "app-main"
+	}
+	out := HealthIndicator(StatusInput{Cfg: cfg, IsRunning: partialRunning})
+	if !strings.Contains(out, "◐ partial") {
+		t.Errorf("expected '◐ partial' indicator, got: %q", out)
+	}
+	if strings.Contains(out, "Devbox:") {
+		t.Errorf("HealthIndicator should not include 'Devbox:' prefix, got: %q", out)
+	}
+}
+
 func TestRenderHealth_ContainsIndicator(t *testing.T) {
 	cfg := makeServicesCfg(
 		map[string]config.ServiceConfig{
