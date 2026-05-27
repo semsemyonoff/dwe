@@ -189,6 +189,7 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 	}{
 		{"--no-apps", "Apps", statusFixture},
 		{"--no-tools", "Tools", statusFixture},
+		{"--no-infra", "Infra", statusFixtureWithInfra},
 		{"--no-deploy", "Deploy Status", statusFixtureWithDeploy},
 		{"--no-topology", "Topology", statusFixture},
 		{"--no-git", "Git Workspace", statusFixture},
@@ -597,6 +598,18 @@ func TestStatusSubcommands_NeverInvokeTUI(t *testing.T) {
 			if strings.Contains(out, "Devbox:") {
 				// Health indicator should only appear in default view, not subcommands
 				t.Errorf("subcommand %q should not print health indicator", subcmd)
+			}
+			// For subcommands that produce content with the basic fixture, verify
+			// that plain rendering ran (not empty/failed).
+			switch subcmd {
+			case "apps":
+				if !strings.Contains(out, "Apps") {
+					t.Errorf("subcommand %q should render Apps section, got:\n%s", subcmd, out)
+				}
+			case "tools":
+				if !strings.Contains(out, "Tools") {
+					t.Errorf("subcommand %q should render Tools section, got:\n%s", subcmd, out)
+				}
 			}
 		})
 	}

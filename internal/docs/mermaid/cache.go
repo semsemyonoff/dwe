@@ -49,7 +49,8 @@ func (fc *FileCache) Render(ctx context.Context, src string, theme Theme, width 
 	// Try cache hit first (before singleflight so we don't hold the lock).
 	if data, err := os.ReadFile(keyPath); err == nil {
 		// Refresh mtime to mark as recently used (for LRU eviction).
-		_ = os.Chtimes(keyPath, now(), now())
+		t := now()
+		_ = os.Chtimes(keyPath, t, t)
 		fc.evictIfNeeded()
 		return data, nil
 	}
