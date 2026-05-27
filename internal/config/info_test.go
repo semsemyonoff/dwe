@@ -925,3 +925,26 @@ func TestDefaultInfoConfig(t *testing.T) {
 		t.Error("Footer should be true")
 	}
 }
+
+func TestLoadInfoConfig_rejectsSettings(t *testing.T) {
+	yml := `
+settings:
+  line_width: 100
+sections:
+  - id: test
+    items:
+      - type: info
+        text: test
+`
+	path := writeTempYML(t, yml)
+	_, err := LoadInfoConfig(path)
+	if err == nil {
+		t.Fatal("expected error for settings block, got nil")
+	}
+	if !strings.Contains(err.Error(), "settings: removed from info.yml") {
+		t.Errorf("error should mention settings removal: %v", err)
+	}
+	if !strings.Contains(err.Error(), "docs/reference/config/info.md") {
+		t.Errorf("error should reference documentation: %v", err)
+	}
+}

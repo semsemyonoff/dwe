@@ -109,15 +109,15 @@ Each task is scoped to a single decision (or two tightly related decisions). Doc
 
 **Loader-level rejection (per Codex v3 review):** `LoadInfoConfig` uses lenient `yaml.Unmarshal` (`info.go:~258,~270`). Simply removing the `Settings` field would make old `settings:` blocks **silently ignored** by normal `devbox info` paths — violating CLAUDE.md "invalid shapes must be rejected, not reinterpreted". Same pattern as the v2 fix for `LoadConfig`/`LoadDockerConfig`.
 
-- [ ] delete `Settings InfoSettings` field from `InfoConfig` struct (info.go:14)
-- [ ] delete `InfoSettings` struct definition (info.go:21-25)
-- [ ] update `DefaultInfoConfig()` (info.go:~224) to drop the `Settings: InfoSettings{...}` initializer
-- [ ] **add loader-level rejection in `LoadInfoConfig`**: after loading raw map, inspect for top-level `settings:` key; if present, return error: ``settings: removed from info.yml — the line_width customization was never wired up. See docs/reference/config/info.md.``
-- [ ] grep `internal/` for any remaining references to `InfoSettings` or `cfg.Info.Settings` — remove if found
-- [ ] grep `internal/config/testdata/` for fixtures with `settings:` block under info — clean them up
-- [ ] update tests in `info_test.go` — remove any cases referencing `settings:` block
-- [ ] add test calling `LoadInfoConfig` directly with `settings:` block in info.yml → expect explicit migration error
-- [ ] run `go test ./internal/config/...` — must pass before Task 2
+- [x] delete `Settings InfoSettings` field from `InfoConfig` struct (info.go:14)
+- [x] delete `InfoSettings` struct definition (info.go:21-25)
+- [x] update `DefaultInfoConfig()` (info.go:~224) to drop the `Settings: InfoSettings{...}` initializer
+- [x] **add loader-level rejection in `LoadInfoConfig`**: after loading raw map, inspect for top-level `settings:` key; if present, return error: ``settings: removed from info.yml — the line_width customization was never wired up. See docs/reference/config/info.md.``
+- [x] grep `internal/` for any remaining references to `InfoSettings` or `cfg.Info.Settings` — remove if found
+- [x] grep `internal/config/testdata/` for fixtures with `settings:` block under info — clean them up (none found)
+- [x] update tests in `info_test.go` — remove any cases referencing `settings:` block (none found)
+- [x] add test calling `LoadInfoConfig` directly with `settings:` block in info.yml → expect explicit migration error
+- [x] run `go test ./internal/config/...` — passed
 
 ### Task 2: Remove "binaries" from forbiddenRoots in setup validator
 

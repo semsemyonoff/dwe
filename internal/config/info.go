@@ -11,17 +11,9 @@ import (
 // InfoConfig is the top-level structure of devbox/info.yml.
 // It describes what to render when showing project info/help.
 type InfoConfig struct {
-	Settings InfoSettings  `yaml:"settings"`
 	Sections []InfoSection `yaml:"sections"`
 	// Footer controls whether a closing table header line is printed after all sections.
 	Footer bool `yaml:"footer"`
-}
-
-// InfoSettings controls global display parameters for the info output.
-type InfoSettings struct {
-	// LineWidth is the inner width (in characters) used for table header padding
-	// and text truncation. Default (0) falls back to 76.
-	LineWidth int `yaml:"line_width"`
 }
 
 // InfoSection is a named block of info content, optionally enclosed by a table header.
@@ -221,7 +213,6 @@ func (i InfoItem) SubgroupHideOnEmpty() bool {
 func DefaultInfoConfig() *InfoConfig {
 	decorativeTrue := true
 	return &InfoConfig{
-		Settings: InfoSettings{LineWidth: 0},
 		Sections: []InfoSection{
 			{
 				ID:          "urls",
@@ -265,6 +256,16 @@ func LoadInfoConfig(path string) (*InfoConfig, error) {
 		}
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
+
+	// Check for removed settings: block before parsing.
+	var rawMap map[string]any
+	if err := yaml.Unmarshal(data, &rawMap); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if _, hasSettings := rawMap["settings"]; hasSettings {
+		return nil, fmt.Errorf("parse %s: settings: removed from info.yml — the line_width customization was never wired up. See docs/reference/config/info.md", path)
+	}
+
 	var cfg InfoConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
