@@ -210,6 +210,17 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 		return operationalDiags
 	}
 
+	// 5b. Non-ExitError run failure (process failed to start — e.g. TOCTOU race
+	// after LookPath, OS resource limit). The adapter cannot interpret exitCode=-1
+	// without the original error message, so surface it as an operational failure.
+	if runErr != nil && exitCode == -1 {
+		return append(operationalDiags, fail(
+			v.ID(),
+			fmt.Sprintf("%s: failed to start: %v", v.ID(), runErr),
+			"check that the binary is executable and the system has sufficient resources",
+		))
+	}
+
 	// 6. truncation Warning — emitted before parse so the user knows the
 	// findings might be incomplete.
 	if stdoutBuf.Truncated() || stderrBuf.Truncated() {
