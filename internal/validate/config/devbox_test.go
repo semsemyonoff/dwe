@@ -1080,3 +1080,35 @@ func TestUntypedKeysValidator_NoConfig(t *testing.T) {
 
 	require.Equal(t, 0, len(diags), "expected no diagnostics for nil config")
 }
+
+func TestDevboxValidator_RejectedBinariesBlock(t *testing.T) {
+	// Test that the validator emits an error when binaries: block is present in devbox.yml
+	tmpDir := t.TempDir()
+	devboxYML := filepath.Join(tmpDir, "devbox.yml")
+
+	err := os.WriteFile(devboxYML, []byte(`
+schema_version: "2"
+project:
+  name: test
+binaries:
+  docker: podman
+`), 0644)
+	require.NoError(t, err)
+
+	v := &devboxValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: tmpDir,
+		ConfigPath:  devboxYML,
+	})
+
+	// Should have a binaries diagnostic + schema + load check
+	binariesFound := false
+	for _, diag := range diags {
+		if diag.Target == "config.devbox.binaries" && diag.Severity == validate.SeverityError {
+			binariesFound = true
+			require.Contains(t, diag.Message, "binaries: removed from devbox.yml")
+			break
+		}
+	}
+	require.True(t, binariesFound, "expected error diagnostic for binaries block")
+}

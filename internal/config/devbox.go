@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
@@ -14,89 +15,73 @@ import (
 
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/userconfig"
 
 	"gopkg.in/yaml.v3"
 )
 
-// BinariesConfig holds binary overrides for engine policy.
-//
-// Fields are read from the top-level devbox.yml only — not layered with
-// defaults.yml or local.yml. Empty fields fall back to built-in defaults
-// (devbox, docker, sh, git, mmdc). Use DevboxBin/DockerBin/ShellBin/GitBin/MmdcBin accessors to read.
-type BinariesConfig struct {
-	Devbox string `yaml:"devbox"`
-	Docker string `yaml:"docker"`
-	Shell  string `yaml:"shell"`
-	Git    string `yaml:"git"`
-	Mmdc   string `yaml:"mmdc"`
-}
-
 // DevboxBin returns the configured devbox binary name (default: "devbox").
+// Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
 func DevboxBin(cfg *DevboxConfig) string {
-	if cfg == nil || cfg.Binaries.Devbox == "" {
-		return "devbox"
+	if cfg != nil && cfg.userConfig != nil {
+		if path, ok := cfg.userConfig.BinaryOverride("devbox"); ok {
+			return path
+		}
 	}
-	return cfg.Binaries.Devbox
+	return "devbox"
 }
 
 // DockerBin returns the configured docker binary name (default: "docker").
+// Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
 func DockerBin(cfg *DevboxConfig) string {
-	if cfg == nil || cfg.Binaries.Docker == "" {
-		return "docker"
+	if cfg != nil && cfg.userConfig != nil {
+		if path, ok := cfg.userConfig.BinaryOverride("docker"); ok {
+			return path
+		}
 	}
-	return cfg.Binaries.Docker
+	return "docker"
 }
 
 // ShellBin returns the configured shell binary name (default: "sh").
+// Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
 func ShellBin(cfg *DevboxConfig) string {
-	if cfg == nil || cfg.Binaries.Shell == "" {
-		return "sh"
+	if cfg != nil && cfg.userConfig != nil {
+		if path, ok := cfg.userConfig.BinaryOverride("shell"); ok {
+			return path
+		}
 	}
-	return cfg.Binaries.Shell
+	return "sh"
 }
 
 // GitBin returns the configured git binary name (default: "git").
+// Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
 func GitBin(cfg *DevboxConfig) string {
-	if cfg == nil || cfg.Binaries.Git == "" {
-		return "git"
+	if cfg != nil && cfg.userConfig != nil {
+		if path, ok := cfg.userConfig.BinaryOverride("git"); ok {
+			return path
+		}
 	}
-	return cfg.Binaries.Git
+	return "git"
 }
 
 // MmdcBin returns the configured mmdc binary name (default: "mmdc").
+// Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
 func MmdcBin(cfg *DevboxConfig) string {
-	if cfg == nil || cfg.Binaries.Mmdc == "" {
-		return "mmdc"
+	if cfg != nil && cfg.userConfig != nil {
+		if path, ok := cfg.userConfig.BinaryOverride("mmdc"); ok {
+			return path
+		}
 	}
-	return cfg.Binaries.Mmdc
-}
-
-// applyBinariesDefaults fills empty BinariesConfig fields with built-in defaults.
-func applyBinariesDefaults(b *BinariesConfig) {
-	if b.Devbox == "" {
-		b.Devbox = "devbox"
-	}
-	if b.Docker == "" {
-		b.Docker = "docker"
-	}
-	if b.Shell == "" {
-		b.Shell = "sh"
-	}
-	if b.Git == "" {
-		b.Git = "git"
-	}
+	return "mmdc"
 }
 
 // DevboxConfig is the merged top-level devbox configuration.
 // It is produced by layering devbox.yml → devbox/defaults.yml → devbox/local.yml.
-//
-// Binaries is engine policy read from the top-level devbox.yml only — it is
-// not layered with defaults.yml or local.yml. See BinariesConfig for details.
 type DevboxConfig struct {
 	SchemaVersion string              `yaml:"schema_version"`
 	Project       ProjectConfig       `yaml:"project"`
@@ -105,7 +90,6 @@ type DevboxConfig struct {
 	Exports       ExportsConfig       `yaml:"exports"`
 	Compose       ComposeConfig       `yaml:"compose"`
 	Deploy        *ProjectDeployConfig `yaml:"-"`
-	Binaries      BinariesConfig      `yaml:"binaries"`
 	UI            UIConfig            `yaml:"ui"`
 	Docs          DocsConfig          `yaml:"docs"`
 
@@ -117,6 +101,11 @@ type DevboxConfig struct {
 	// Raw holds the merged config as a plain map, used for dot-path resolution
 	// in export rules. Populated only by LoadConfig; not serialized.
 	Raw map[string]any `yaml:"-"`
+
+	// userConfig holds user-level preferences loaded from ~/.config/devbox/config
+	// and .devbox/config. Used by binary accessors to resolve engine binary overrides.
+	// Nil if load failed (graceful degradation).
+	userConfig *userconfig.Config `yaml:"-"`
 }
 
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from devbox/deploy.yml.
@@ -1149,18 +1138,18 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
 
-	// Binaries are engine policy: read from top-level devbox.yml only, never layered.
-	// Re-parse the base file to get the raw binaries block, overwriting whatever the
-	// merged unmarshal produced. Defaults are applied after so a partial top-level
-	// block (e.g. only docker: podman) still gets sensible values for the other fields.
-	var topView struct {
-		Binaries BinariesConfig `yaml:"binaries"`
+	// Reject binaries: blocks — they've moved to user-config
+	if _, ok := merged["binaries"]; ok {
+		return nil, fmt.Errorf("binaries: moved to ~/.config/devbox/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md.")
 	}
-	if topBytes, err := os.ReadFile(devboxPath); err == nil {
-		_ = yaml.Unmarshal(topBytes, &topView) // best-effort; parse errors fall back to defaults
+
+	// Load user-config for binary overrides. On error, log warning and continue
+	// (graceful degradation — a malformed user pref file doesn't break project loading).
+	userCfg, err := userconfig.Load(baseDir)
+	if err != nil {
+		slog.Warn("userconfig load failed; binary overrides will fall back to PATH defaults", "err", err)
 	}
-	cfg.Binaries = topView.Binaries
-	applyBinariesDefaults(&cfg.Binaries)
+	cfg.userConfig = userCfg
 
 	for i, rule := range cfg.Exports.Env {
 		if IsReservedExportName(rule.Name) {
@@ -1172,16 +1161,6 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	cfg.Raw = merged
 	// Store config path so deploy resolution can find service deploy files.
 	cfg.Raw["__configPath"] = devboxPath
-
-	// Normalize Raw["binaries"] so dot-path lookups (e.g. ${binaries.docker} in
-	// export rules) see the same effective values as cfg.Binaries.* Go callers.
-	// Any binaries: block from defaults.yml or local.yml is silently discarded here.
-	cfg.Raw["binaries"] = map[string]any{
-		"devbox": cfg.Binaries.Devbox,
-		"docker": cfg.Binaries.Docker,
-		"shell":  cfg.Binaries.Shell,
-		"git":    cfg.Binaries.Git,
-	}
 
 	// Step 4: resolve per-service Enabled and per-developer port/host overrides
 	// from the merged overlay (devbox/defaults.yml + devbox/local.yml). The

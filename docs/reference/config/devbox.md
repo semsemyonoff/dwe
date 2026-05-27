@@ -10,13 +10,13 @@ The three layers of the merged devbox config.
   - [Where service fields come from](#where-service-fields-come-from)
 - [devbox.yml](#devboxyml)
   - [Field reference](#field-reference)
+  - [Binary overrides](#binary-overrides)
+  - [Project convention keys](#project-convention-keys)
 - [devbox/defaults.yml](#devboxdefaultsyml)
-  - [`services`](#services)
-  - [`debug`](#debug)
+  - [`services` overlay](#services-overlay)
   - [`runtime`](#runtime)
   - [`state`](#state)
   - [`exports.env`](#exportsenv)
-  - [`db`](#db)
   - [`compose`](#compose)
   - [`ide`](#ide)
 - [devbox/local.yml](#devboxlocalyml)
@@ -53,7 +53,6 @@ The three files share a single namespace — the same key in different layers is
 |---------|-------|
 | Project name and prefix | `devbox.yml` |
 | Schema version | `devbox.yml` |
-| Binary overrides (`binaries:`) | `devbox.yml` only (engine policy, not layered) |
 | Service ports / hosts (apps, tools, infra) | [`devbox/services.yml`](services.md) (per-entry `ports:` / `hosts:` maps) |
 | Service structural definitions (container / compose / status / render) | [`devbox/services.yml`](services.md) |
 | Optional service enabled state (across all types) | `defaults.yml` (overrideable in `local.yml`) |
@@ -114,45 +113,36 @@ project:
 | `schema_version` | string | Config schema version. Must be `"2"` — the CLI rejects v1 projects with a clear error. |
 | `project.name` | string | Short project identifier (used in container names, `.env`) |
 | `project.prefix` | string | Prefix for Docker project name and container labels |
-| `binaries.devbox` | string | Devbox binary name for nested calls and plan display. Default: `devbox`. |
-| `binaries.docker` | string | Docker binary name used for all `docker compose` execution. Default: `docker`. Override with `podman` or any OCI-compatible binary. |
-| `binaries.shell` | string | Shell used for host-side script and lifecycle step execution. Default: `sh`. |
 
 `project.prefix` and `project.name` combine to form the Docker Compose project name via the template in `docker.yml` (`${project.prefix}-${project.name}`).
 
-### `binaries` block
+## Binary overrides
 
-The optional `binaries:` block overrides the executables devbox shells out to. It is read from `devbox.yml` only — values set in `defaults.yml` or `local.yml` are silently ignored.
+Binary paths (docker, git, devbox, shell, mmdc) are configured at the user level via `~/.config/devbox/config`, not in `devbox.yml`. See the [user config reference](../../../internal-user-config.md) for details on overriding binaries using `binary_<name>=<path>` entries.
 
-```yaml
-binaries:
-  devbox: devbox          # nested devbox calls and plan display
-  docker: docker          # all docker compose execution
-  shell: sh               # host-side script / lifecycle step execution
-  git: git                # git update probe / pull and `devbox status git` shellouts
-```
+## Project convention keys
 
-All four keys are optional; any key omitted uses its default. Partial overrides are safe:
+Beyond the typed fields documented above, `devbox.yml`, `defaults.yml`, and `local.yml` support an open namespace of convention keys. These keys are not interpreted by the CLI directly — they are exposed via dot-paths in the merged config and consumed by export rules, templates, and custom commands.
 
-```yaml
-binaries:
-  docker: podman          # only substitute docker; devbox/shell/git stay at defaults
-```
+Common convention keys include:
 
-The effective values are accessible as `${binaries.devbox}`, `${binaries.docker}`, `${binaries.shell}`, and `${binaries.git}` in template expressions (commands, docker.yml project_name, export rules).
+- `db.*` — Database credentials and metadata (e.g., `db.database`, `db.user`, `db.password`) — consumed by export rules to populate `DB_*` env variables.
+- Custom project settings — Any top-level key you add is accessible via dot-path (e.g., `my_setting.value` in a template).
 
-> **Engine policy, not user state.** The `binaries:` block controls which executables the CLI itself invokes — it is part of the project's engine contract, not per-user configuration. Commit it in `devbox.yml`; do not put it in `local.yml`.
-
-### `binaries.mmdc`
-
-Override the path or name of the `mmdc` (mermaid-cli) binary used to render mermaid diagrams in `devbox docs`. Defaults to `mmdc` (searches `$PATH`).
+Example:
 
 ```yaml
-binaries:
-  mmdc: mermaid  # or /path/to/mmdc
+db:
+  database: myapp
+  user: root
+  password: secret
+
+my_custom:
+  timeout: 30
+  retries: 3
 ```
 
-The `mmdc` binary is optional; when unavailable, diagram rendering degrades gracefully (see `docs.mermaid` below).
+These can be referenced in export rules (`from: db.user`), templates (`${db.database}`), and used by custom commands or scripts. The open namespace allows projects to extend the config schema without CLI changes.
 
 ### `docs`
 
@@ -182,7 +172,7 @@ docs:
 
 **Sections**:
 
-### `services`
+### `services` overlay
 
 Toggle optional services of any type (services declared in [`devbox/services.yml`](services.md) without `mandatory: true`). Apps, tools, and infra share one overlay namespace — the `type:` discriminator lives in `services.yml`, not here.
 
@@ -199,17 +189,6 @@ services:
 ```
 
 Allowed fields under `services.<name>` in any overlay layer are `enabled`, `ports`, and `hosts`. Adding structural fields like `container:`, `compose:`, `extends:`, etc. is a layer-aware overlay error — those fields live in `devbox/services/<name>/service.yml`. Port and host maps are deep-merged by entry name. Mandatory services are always active and have no toggle.
-
-### `debug`
-
-```yaml
-debug:
-  idekey: PHPSTORM
-```
-
-| Field | Description |
-|-------|-------------|
-| `debug.idekey` | Xdebug IDE key exported as `XDEBUG_IDEKEY` in `.env` |
 
 ### `runtime`
 
@@ -279,29 +258,6 @@ exports:
 
 These are managed by the CLI; do not redeclare them as export rules.
 
-### `db`
-
-Database settings for the project. The keys are not interpreted by the CLI directly — they are exposed via dot-paths and consumed by export rules in `defaults.yml` (`DB_DATABASE`, `DB_USER`, `DB_PASSWORD`, etc.) and by declarative commands.
-
-```yaml
-db:
-  database: laravel
-  second_database: laravel_second
-  user: root
-  password: root
-  backup_dir: backups/db
-```
-
-| Field | Description |
-|-------|-------------|
-| `db.database` | Primary database name (exported as `DB_DATABASE`) |
-| `db.second_database` | Optional secondary database name, referenced by per-service `db.create` commands when the `second` service is enabled |
-| `db.user` | Database user (exported as `DB_USER`) |
-| `db.password` | Database password (exported as `DB_PASSWORD`) |
-| `db.backup_dir` | Project-relative directory for SQL dumps used by `db.dump-create` / `db.dump-deploy` commands |
-
-Add new fields here whenever a command or export rule needs project-wide DB metadata; the YAML map is open-ended.
-
 ### `compose`
 
 Compose file configuration used by the Docker control plane.
@@ -337,13 +293,6 @@ services:
 
 runtime:
   use_https: true
-
-db:
-  user: myuser
-  password: mypassword
-
-debug:
-  idekey: VSCODE
 ```
 
 > Per-developer port / host overrides are supported via `local.yml`. Use `services.<name>.ports` or `services.<name>.hosts` to override specific entries; the values are deep-merged by key on top of the project-level declarations in `devbox/services/<name>/service.yml`.

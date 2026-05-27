@@ -14,6 +14,10 @@ import (
 // SchemaField is the YAML key for the schema version gate in devbox.yml.
 // SupportedSchema is the only accepted schema_version value.
 // ConfigFilename is the standard project config filename.
+//
+// SupportedSchema = "2" is frozen per CLAUDE.md "no schema_version bumps" policy.
+// Devbox is pre-release with no external users, so breaking changes are made directly
+// without migration paths or version gates.
 const (
 	SchemaField     = "schema_version"
 	SupportedSchema = "2"

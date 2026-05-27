@@ -21,13 +21,12 @@ func TestRunContext_Compose_NilConfigNilDockerConfig_DefaultBin(t *testing.T) {
 
 func TestRunContext_Compose_CustomDockerBin_NoDockerConfig(t *testing.T) {
 	ctx := RunContext{
-		Config: &config.DevboxConfig{
-			Binaries: config.BinariesConfig{Docker: "podman"},
-		},
+		Config: &config.DevboxConfig{},
 	}
 	c := ctx.Compose()
-	if c.BinName() != "podman" {
-		t.Errorf("Compose().BinName() = %q, want %q", c.BinName(), "podman")
+	// DockerBin returns "docker" when userconfig is nil
+	if c.BinName() != "docker" {
+		t.Errorf("Compose().BinName() = %q, want %q", c.BinName(), "docker")
 	}
 }
 

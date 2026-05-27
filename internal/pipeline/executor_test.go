@@ -2016,9 +2016,9 @@ func TestExecAction_UnknownType(t *testing.T) {
 func TestExecStep_ShellFromConfig(t *testing.T) {
 	// Use a step that would fail if run under "sh" but trivially succeeds under
 	// the configured shell. We assert the step succeeds with a shell that exists.
+	// The shell binary defaults to "sh" when userconfig is nil.
 	cfg := &config.DevboxConfig{
-		Binaries: config.BinariesConfig{Shell: "sh"}, // must be a real shell for the test to pass
-		Raw:      map[string]any{},
+		Raw: map[string]any{},
 	}
 	step := config.DeployStep{Name: "noop", Type: "shell", Cmd: "true"}
 	err := ExecStep(context.Background(), step, t.TempDir(), cfg, nil, nil, false)

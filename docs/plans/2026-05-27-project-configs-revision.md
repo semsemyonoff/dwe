@@ -386,27 +386,27 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `docs/reference/config/devbox.md` (multiple sections — see below)
 - Modify: `internal/project/project.go` (frozen-schema comment per 1.3)
 
-- [ ] add unexported field `userConfig *userconfig.Config` to `DevboxConfig` struct
-- [ ] in `LoadConfig`: call `userconfig.Load(baseDir)`; **on error, log warning via the existing seam (see `command/root.go:156-160` for the pattern) and assign nil**. NEVER propagate the error from LoadConfig — userconfig load failures must NOT break project config loading. A malformed user preference file degrades gracefully to "no overrides", matching existing notify/locale behavior.
-- [ ] rewrite `DevboxBin`/`DockerBin`/`ShellBin`/`GitBin`/`MmdcBin` to: if `cfg != nil && cfg.userConfig != nil`, consult `cfg.userConfig.BinaryOverride(name)`; else fall back to default name string (`"docker"`, `"git"`, etc.)
-- [ ] delete `BinariesConfig` struct and `Binaries` field from `DevboxConfig` (devbox.go:26+, :108)
-- [ ] delete `applyBinariesDefaults` (devbox.go:80)
-- [ ] remove `Raw["binaries"]` injection in `LoadConfig` (devbox.go:1117-1124)
-- [ ] **CRITICAL — loader-level rejection (not just validator)**: `LoadConfig` uses lenient `yaml.Unmarshal` (`devbox.go:1084-1125`), and `validate/config/devbox.go` validator only runs under `devbox validate`. Without loader-level rejection, normal commands (`deploy run`, `run`, `stop`) would **silently ignore** old `binaries:` blocks — violating CLAUDE.md "invalid shapes must be rejected, not reinterpreted". Add rejection IN `LoadConfig` itself: after merging the 3 layers, inspect the raw merged map for top-level `binaries:` key; if present, return error with migration hint: ``binaries: moved to ~/.config/devbox/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md.``
-- [ ] keep the `validate/config/devbox.go` diagnostic as well — it surfaces under `devbox validate` even before loader fails (better DX for users running validate first)
-- [ ] add test calling `LoadConfig` directly on a project with `binaries:` block → expect the migration error (not a silent successful load)
-- [ ] add test via a normal-command entry point (e.g. `command/deploy.go` setup path) → expect the same migration error surfaces, not silent acceptance
-- [ ] update devbox.md per E.1.1+E.1.5: delete `### debug` (line 203) and `### db` (line 282); add `### Project convention keys` explaining open dot-path namespace with examples
-- [ ] update devbox.md per E.1.6: rename `### services` → `### services overlay` (line 185)
-- [ ] update devbox.md per A.1.2: delete `### binaries` block doc (line 123), `### binaries.mmdc` (line 146), line 142 `${binaries.*}` mention, "Engine policy" note. Add brief pointer to user-config doc for binary overrides.
-- [ ] add comment in project.go:17 per E.1.3: `// SupportedSchema = "2" — frozen per CLAUDE.md "no schema_version bumps"`
-- [ ] add test: with userconfig present, `config.DockerBin(cfg)` returns user override; without, returns `"docker"`
-- [ ] add test: with `cfg == nil`, all five accessors return PATH-default strings (no panic)
-- [ ] add test: **malformed `~/.config/devbox/config`** (e.g. bad bool, garbage line) → `LoadConfig` still returns valid `*DevboxConfig`, `cfg.userConfig` is nil, accessors fall back to defaults, a warning is logged
-- [ ] add test: malformed **project-level** `.devbox/config` → same graceful degradation
-- [ ] add test confirming `binaries:` block in devbox.yml triggers the new validator's error diagnostic
-- [ ] add test confirming `${binaries.*}` dot-path no longer resolves through Raw
-- [ ] run `go test ./...` and `make build` — must pass before Task 15
+- [x] add unexported field `userConfig *userconfig.Config` to `DevboxConfig` struct
+- [x] in `LoadConfig`: call `userconfig.Load(baseDir)`; **on error, log warning via the existing seam (see `command/root.go:156-160` for the pattern) and assign nil**. NEVER propagate the error from LoadConfig — userconfig load failures must NOT break project config loading. A malformed user preference file degrades gracefully to "no overrides", matching existing notify/locale behavior.
+- [x] rewrite `DevboxBin`/`DockerBin`/`ShellBin`/`GitBin`/`MmdcBin` to: if `cfg != nil && cfg.userConfig != nil`, consult `cfg.userConfig.BinaryOverride(name)`; else fall back to default name string (`"docker"`, `"git"`, etc.)
+- [x] delete `BinariesConfig` struct and `Binaries` field from `DevboxConfig` (devbox.go:26+, :108)
+- [x] delete `applyBinariesDefaults` (devbox.go:80)
+- [x] remove `Raw["binaries"]` injection in `LoadConfig` (devbox.go:1117-1124)
+- [x] **CRITICAL — loader-level rejection (not just validator)**: `LoadConfig` uses lenient `yaml.Unmarshal` (`devbox.go:1084-1125`), and `validate/config/devbox.go` validator only runs under `devbox validate`. Without loader-level rejection, normal commands (`deploy run`, `run`, `stop`) would **silently ignore** old `binaries:` blocks — violating CLAUDE.md "invalid shapes must be rejected, not reinterpreted". Add rejection IN `LoadConfig` itself: after merging the 3 layers, inspect the raw merged map for top-level `binaries:` key; if present, return error with migration hint: ``binaries: moved to ~/.config/devbox/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md.``
+- [x] keep the `validate/config/devbox.go` diagnostic as well — it surfaces under `devbox validate` even before loader fails (better DX for users running validate first)
+- [x] add test calling `LoadConfig` directly on a project with `binaries:` block → expect the migration error (not a silent successful load)
+- [x] add test via a normal-command entry point (e.g. `command/deploy.go` setup path) → expect the same migration error surfaces, not silent acceptance
+- [x] update devbox.md per E.1.1+E.1.5: delete `### debug` (line 203) and `### db` (line 282); add `### Project convention keys` explaining open dot-path namespace with examples
+- [x] update devbox.md per E.1.6: rename `### services` → `### services overlay` (line 185)
+- [x] update devbox.md per A.1.2: delete `### binaries` block doc (line 123), `### binaries.mmdc` (line 146), line 142 `${binaries.*}` mention, "Engine policy" note. Add brief pointer to user-config doc for binary overrides.
+- [x] add comment in project.go:17 per E.1.3: `// SupportedSchema = "2" — frozen per CLAUDE.md "no schema_version bumps"`
+- [x] add test: with userconfig present, `config.DockerBin(cfg)` returns user override; without, returns `"docker"`
+- [x] add test: with `cfg == nil`, all five accessors return PATH-default strings (no panic)
+- [x] add test: **malformed `~/.config/devbox/config`** (e.g. bad bool, garbage line) → `LoadConfig` still returns valid `*DevboxConfig`, `cfg.userConfig` is nil, accessors fall back to defaults, a warning is logged
+- [x] add test: malformed **project-level** `.devbox/config` → same graceful degradation
+- [x] add test confirming `binaries:` block in devbox.yml triggers the new validator's error diagnostic
+- [x] add test confirming `${binaries.*}` dot-path no longer resolves through Raw
+- [x] run `go test ./...` and `make build` — must pass before Task 15
 
 ### Task 15: Rename `info.host_key`/`port_key` → `primary_host`/`primary_port`
 

@@ -67,6 +67,23 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		})
 	}
 
+	// Check 1b: Check for removed `binaries:` block
+	if rawData, err := os.ReadFile(configPath); err == nil {
+		var rawCfg map[string]any
+		if err := yaml.Unmarshal(rawData, &rawCfg); err == nil {
+			if _, hasBinaries := rawCfg["binaries"]; hasBinaries {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   "config.devbox.binaries",
+					File:     relPath(ctx.ProjectRoot, configPath),
+					Message:  "binaries: removed from devbox.yml — binary paths are now configured in ~/.config/devbox/config using binary_<name>=<path> entries.",
+					Hint:     "See docs/reference/config/devbox.md for details.",
+				})
+			}
+		}
+	}
+
 	// Check 2: Config loading and validation
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -1271,10 +1288,6 @@ func (v *untypedKeysValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	for key := range ctx.Cfg.Raw {
 		// Skip internal engine keys
 		if key == "__configPath" {
-			continue
-		}
-		// Skip binaries (engine-managed, removed in future versions)
-		if key == "binaries" {
 			continue
 		}
 

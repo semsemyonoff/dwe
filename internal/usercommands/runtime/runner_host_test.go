@@ -279,16 +279,6 @@ func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 			cfg:       &config.DevboxConfig{},
 			wantShell: "sh",
 		},
-		{
-			name:      "explicit bash",
-			cfg:       &config.DevboxConfig{Binaries: config.BinariesConfig{Shell: "bash"}},
-			wantShell: "bash",
-		},
-		{
-			name:      "explicit zsh",
-			cfg:       &config.DevboxConfig{Binaries: config.BinariesConfig{Shell: "zsh"}},
-			wantShell: "zsh",
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

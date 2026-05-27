@@ -362,16 +362,16 @@ func TestBinName_CustomBin(t *testing.T) {
 
 func TestNewCompose_PopulatesBinFromConfig(t *testing.T) {
 	cfg := &config.DevboxConfig{
-		Compose:  config.ComposeConfig{Base: "compose.yaml"},
-		Binaries: config.BinariesConfig{Docker: "podman"},
+		Compose: config.ComposeConfig{Base: "compose.yaml"},
 	}
 	dockerCfg := &config.DockerConfig{ProjectName: "test"}
 	c := NewCompose(cfg, dockerCfg)
-	if c.Bin != "podman" {
-		t.Errorf("NewCompose Bin = %q, want %q", c.Bin, "podman")
+	// DockerBin returns "docker" when userconfig is nil
+	if c.Bin != "docker" {
+		t.Errorf("NewCompose Bin = %q, want %q", c.Bin, "docker")
 	}
-	if c.BinName() != "podman" {
-		t.Errorf("NewCompose BinName() = %q, want %q", c.BinName(), "podman")
+	if c.BinName() != "docker" {
+		t.Errorf("NewCompose BinName() = %q, want %q", c.BinName(), "docker")
 	}
 }
 

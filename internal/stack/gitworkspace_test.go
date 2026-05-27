@@ -487,7 +487,6 @@ func TestCollectGitWorkspace_UsesConfiguredGitBin(t *testing.T) {
 	t.Cleanup(func() { gitShellOutFn = prev })
 
 	cfg := &config.DevboxConfig{
-		Binaries: config.BinariesConfig{Git: "custom-git"},
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},
