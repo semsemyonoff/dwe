@@ -659,10 +659,10 @@ type ServiceNotes struct {
 
 // ServiceInfoBlock holds display metadata for a service's dashboard entry.
 type ServiceInfoBlock struct {
-	Title   string            `yaml:"title,omitempty"`
-	HostKey string            `yaml:"host_key,omitempty"`
-	PortKey string            `yaml:"port_key,omitempty"`
-	Paths   []ServiceInfoPath `yaml:"paths,omitempty"`
+	Title       string            `yaml:"title,omitempty"`
+	PrimaryHost string            `yaml:"primary_host,omitempty"`
+	PrimaryPort string            `yaml:"primary_port,omitempty"`
+	Paths       []ServiceInfoPath `yaml:"paths,omitempty"`
 }
 
 // ServiceInfoPath describes a sub-URL under a service's main URL.
@@ -848,20 +848,20 @@ func (s ServiceConfig) DisplayTitle(folderKey string) string {
 	return strings.Join(words, " ")
 }
 
-// DisplayHostKey returns the resolved host key for this service.
-// If Info.HostKey is non-empty, returns it; otherwise returns "web".
+// DisplayHostKey returns the resolved primary host key for this service.
+// If Info.PrimaryHost is non-empty, returns it; otherwise returns "web".
 func (s ServiceConfig) DisplayHostKey() string {
-	if s.Info.HostKey != "" {
-		return s.Info.HostKey
+	if s.Info.PrimaryHost != "" {
+		return s.Info.PrimaryHost
 	}
 	return "web"
 }
 
-// DisplayPortKey returns the resolved port key for this service.
-// If Info.PortKey is non-empty, returns it; otherwise returns "http".
+// DisplayPortKey returns the resolved primary port key for this service.
+// If Info.PrimaryPort is non-empty, returns it; otherwise returns "http".
 func (s ServiceConfig) DisplayPortKey() string {
-	if s.Info.PortKey != "" {
-		return s.Info.PortKey
+	if s.Info.PrimaryPort != "" {
+		return s.Info.PrimaryPort
 	}
 	return "http"
 }

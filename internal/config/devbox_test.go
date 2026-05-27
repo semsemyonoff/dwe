@@ -2315,7 +2315,7 @@ func TestServiceConfig_DisplayHostKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			s := ServiceConfig{Info: ServiceInfoBlock{HostKey: tt.hostKey}}
+			s := ServiceConfig{Info: ServiceInfoBlock{PrimaryHost: tt.hostKey}}
 			got := s.DisplayHostKey()
 			if got != tt.want {
 				t.Errorf("DisplayHostKey() = %q, want %q", got, tt.want)
@@ -2337,7 +2337,7 @@ func TestServiceConfig_DisplayPortKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			s := ServiceConfig{Info: ServiceInfoBlock{PortKey: tt.portKey}}
+			s := ServiceConfig{Info: ServiceInfoBlock{PrimaryPort: tt.portKey}}
 			got := s.DisplayPortKey()
 			if got != tt.want {
 				t.Errorf("DisplayPortKey() = %q, want %q", got, tt.want)
@@ -2354,8 +2354,8 @@ container: app-main
 icon: "📦"
 info:
   title: "Main App"
-  host_key: web
-  port_key: http
+  primary_host: web
+  primary_port: http
   paths:
     - name: "API Docs"
       path: /api/docs
@@ -2374,11 +2374,11 @@ info:
 	if svc.Info.Title != "Main App" {
 		t.Errorf("Info.Title = %q, want Main App", svc.Info.Title)
 	}
-	if svc.Info.HostKey != "web" {
-		t.Errorf("Info.HostKey = %q, want web", svc.Info.HostKey)
+	if svc.Info.PrimaryHost != "web" {
+		t.Errorf("Info.PrimaryHost = %q, want web", svc.Info.PrimaryHost)
 	}
-	if svc.Info.PortKey != "http" {
-		t.Errorf("Info.PortKey = %q, want http", svc.Info.PortKey)
+	if svc.Info.PrimaryPort != "http" {
+		t.Errorf("Info.PrimaryPort = %q, want http", svc.Info.PrimaryPort)
 	}
 	if len(svc.Info.Paths) != 2 {
 		t.Errorf("len(Info.Paths) = %d, want 2", len(svc.Info.Paths))
@@ -2398,6 +2398,27 @@ info:
 	}
 	if svc.Info.Paths[1].Icon != "" {
 		t.Errorf("Paths[1].Icon = %q, want empty", svc.Info.Paths[1].Icon)
+	}
+}
+
+func TestLoadServiceFolder_rejectOldInfoFieldNames(t *testing.T) {
+	dir := t.TempDir()
+	serviceYAML := `
+type: app
+container: app-main
+info:
+  title: "My App"
+  host_key: web
+  port_key: http
+`
+	writeServiceYAML(t, dir, "main", serviceYAML)
+	_, err := LoadServiceFolder(dir, "main")
+	if err == nil {
+		t.Fatalf("LoadServiceFolder: expected error for old field names, got nil")
+	}
+	// KnownFields strict-decode rejects unknown fields
+	if !strings.Contains(err.Error(), "unknown field") && !strings.Contains(err.Error(), "not found") {
+		t.Errorf("LoadServiceFolder error should mention unknown field, got: %v", err)
 	}
 }
 

@@ -418,14 +418,14 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/validate/config/devbox.go` (if validators inspect these fields)
 - Modify: `docs/reference/config/services.md` (`### info block` section)
 
-- [ ] rename `HostKey string` → `PrimaryHost string` in `ServiceInfoBlock` (devbox.go:617)
-- [ ] rename `PortKey string` → `PrimaryPort string` (devbox.go:618)
-- [ ] update yaml tags `host_key` → `primary_host`, `port_key` → `primary_port`
-- [ ] grep `internal/` for `\.HostKey\b\|\.PortKey\b` — update all consumers (auto_urls, auto_hosts, journal/hash, validators)
-- [ ] update services.md `### info block` example and table
-- [ ] add test verifying renamed fields parse correctly via test fixtures in `internal/config/testdata/`
-- [ ] add test confirming old name `host_key:` is now rejected (KnownFields strict-decode)
-- [ ] run `make test && make build` — must pass before Task 16
+- [x] rename `HostKey string` → `PrimaryHost string` in `ServiceInfoBlock` (devbox.go:617)
+- [x] rename `PortKey string` → `PrimaryPort string` (devbox.go:618)
+- [x] update yaml tags `host_key` → `primary_host`, `port_key` → `primary_port`
+- [x] grep `internal/` for `\.HostKey\b\|\.PortKey\b` — update all consumers (auto_urls, auto_hosts, journal/hash, validators)
+- [x] update services.md `### info block` example and table
+- [x] add test verifying renamed fields parse correctly via test fixtures in `internal/config/testdata/`
+- [x] add test confirming old name `host_key:` is now rejected (KnownFields strict-decode)
+- [x] run `make test && make build` — must pass before Task 16
 
 ### Task 16: Rename `mandatory` → `required` on ServiceConfig
 

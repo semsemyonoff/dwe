@@ -137,8 +137,8 @@ ports:
   http: 80
 info:
   title: "Main Application"
-  host_key: web
-  port_key: http
+  primary_host: web
+  primary_port: http
   paths:
     - name: "API Documentation"
       path: /api/docs
@@ -286,8 +286,8 @@ Optional metadata for rendering this service in the `devbox info` dashboard.
 type: app
 info:
   title: "Main Application"
-  host_key: web
-  port_key: http
+  primary_host: web
+  primary_port: http
   paths:
     - name: "API Documentation"
       path: /api/docs
@@ -300,8 +300,8 @@ info:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `title` | string | title-case(folder-name) | Display name for this service in the dashboard (e.g., `"Main Application"`). Replaces the folder-name-derived default. |
-| `host_key` | string | `web` | Which key from `hosts` to surface in the main URL row (e.g., `console` for a multi-host service). |
-| `port_key` | string | `http` | Which key from `ports` to surface in the main URL row (e.g., `console` for a multi-port service). |
+| `primary_host` | string | `web` | Which key from `hosts` to surface in the main URL row (e.g., `console` for a multi-host service). |
+| `primary_port` | string | `http` | Which key from `ports` to surface in the main URL row (e.g., `console` for a multi-port service). |
 | `paths` | list | — | Ordered list of sub-paths under the main URL. See [`info.paths` entries](#infopaths-entries) below. |
 
 #### `info.paths` entries

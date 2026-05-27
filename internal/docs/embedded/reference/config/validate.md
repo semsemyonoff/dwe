@@ -395,6 +395,21 @@ The generic adapter runs `bin <flags> <files...>` and converts a non-zero exit i
 5. Explicit `bin:` configured but missing on PATH → one Warning diagnostic (config problem, not code problem).
 6. Path expansion yields no files → silent skip.
 
+### User-config binary overrides
+
+You can override the binary path for any linter using your user-level config file (`~/.config/devbox/config`). This is useful when you have custom installations, replacements (e.g., `podman` instead of `docker`), or binaries outside the default PATH.
+
+Add a line to your user config:
+
+```
+binary_shellcheck=/custom/path/to/shellcheck
+binary_hadolint=/opt/hadolint
+```
+
+The format is `binary_<linter-id>=<path>`. Paths are absolute or relative to your current directory. If the path does not exist or is not executable, `devbox validate` will emit an error diagnostic in the `linters` domain.
+
+**Note:** These overrides are **only** consulted during `devbox validate`. Lifecycle commands (deploy, run, stop, etc.) do not use linter binaries, so broken overrides do not affect normal operation.
+
 ### Scope
 
 Run all linters or narrow to one with the `linters` subcommand:

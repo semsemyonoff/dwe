@@ -34,9 +34,9 @@ func TestRenderAutoURLs(t *testing.T) {
 						Ports:   map[string]int{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
-							Title:   "Main",
-							HostKey: "web",
-							PortKey: "http",
+							Title:       "Main",
+							PrimaryHost: "web",
+							PrimaryPort: "http",
 							Paths: []config.ServiceInfoPath{
 								{Name: "API specification", Path: "/api/docs", Icon: "📖"},
 								{Name: "Clockwork", Path: "/__clockwork", Icon: ""},
@@ -367,7 +367,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: "",
 		},
 		{
-			name: "service with custom host_key and port_key",
+			name: "service with custom primary_host and primary_port",
 			cfg: &config.DevboxConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
@@ -383,9 +383,9 @@ func TestRenderAutoURLs(t *testing.T) {
 						Ports:   map[string]int{"api": 9010, "console": 9011},
 						Hosts:   map[string]string{"s3": "s3.local", "console": "minio.local"},
 						Info: config.ServiceInfoBlock{
-							Title:   "MinIO Console",
-							HostKey: "console",
-							PortKey: "console",
+							Title:       "MinIO Console",
+							PrimaryHost: "console",
+							PrimaryPort: "console",
 						},
 					},
 				},

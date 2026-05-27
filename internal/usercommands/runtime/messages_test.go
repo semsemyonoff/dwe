@@ -134,6 +134,10 @@ func (m *mockTranslator) CommandErrorMessage(_, _, _ string) string {
 	return m.errorMessage
 }
 
+func (m *mockTranslator) ParamOptionLabel(_, _, _, _, fallback string) string {
+	return fallback
+}
+
 func TestRunCommand_Messages_TranslatorConsultedForSuccess(t *testing.T) {
 	cmd := &CommandDef{
 		ID:   "test.translated-success",

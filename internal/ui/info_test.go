@@ -1228,9 +1228,9 @@ func TestRenderInfo_AutoURLs_Integration(t *testing.T) {
 					"http": 8080,
 				},
 				Info: config.ServiceInfoBlock{
-					Title:   "My App",
-					HostKey: "web",
-					PortKey: "http",
+					Title:       "My App",
+					PrimaryHost: "web",
+					PrimaryPort: "http",
 				},
 			},
 		},
