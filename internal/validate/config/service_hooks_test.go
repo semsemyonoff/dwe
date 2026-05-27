@@ -273,7 +273,7 @@ func TestServiceHooksValidator(t *testing.T) {
 						"mandatory-svc": {
 							Type:      config.ServiceTypeApp,
 							Container: "mandatory-svc",
-							Required: true,
+							Required:  true,
 							OnEnable:  &config.ServiceToggleHooks{Requires: config.RequiresRestart},
 						},
 					},
@@ -294,7 +294,7 @@ func TestServiceHooksValidator(t *testing.T) {
 						"mandatory-svc": {
 							Type:      config.ServiceTypeApp,
 							Container: "mandatory-svc",
-							Required: true,
+							Required:  true,
 							OnDisable: &config.ServiceToggleHooks{Requires: config.RequiresRestart},
 						},
 					},

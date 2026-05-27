@@ -24,7 +24,7 @@ Execution order: optional git update probe → before-run hooks → docker up �
 Use 'devbox docker up' for a bare Docker Compose start without hooks or the update probe.`,
 		Example: `  devbox run
   devbox run --no-update
-  devbox run --update auto`,
+  devbox run --update on`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,7 +45,7 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 	}
 
 	cmd.Flags().BoolVar(&noUpdate, "no-update", false, "disable git update probe regardless of lifecycle.yml config")
-	cmd.Flags().StringVar(&updateMode, "update", "", "override update probe mode (prompt|auto|check|off)")
+	cmd.Flags().StringVar(&updateMode, "update", "", "override update probe mode (on|off)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
 	addSkipPreflightFlag(cmd, &skipPreflight)
 	addSilentFlag(cmd, &silent)

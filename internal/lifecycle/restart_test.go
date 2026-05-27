@@ -151,8 +151,7 @@ func TestRunRestart_NoUpdatePropagated(t *testing.T) {
           cmd: "true"
 run:
   update:
-    enabled: true
-    mode: auto
+    mode: on
   final_message: "Ready."
   phases:
     - name: s

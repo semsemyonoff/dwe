@@ -61,8 +61,7 @@ flowchart LR
 ```yaml
 run:
   update:
-    enabled: true
-    mode: prompt        # prompt | auto | check | off
+    mode: on            # on | off
   show_info: true
   final_message: "Project is ready for work!"
   log: false            # tee status + child stdout/stderr to .devbox/logs/run.log

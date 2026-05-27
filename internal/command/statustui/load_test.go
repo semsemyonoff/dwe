@@ -215,7 +215,7 @@ func TestBuildTabs_PrependsWarningOnRenderError(t *testing.T) {
 			"main": {
 				Type:      config.ServiceTypeApp,
 				Container: "app-main",
-				Required: true,
+				Required:  true,
 				Status: []config.StatusColumn{
 					{Name: "X", Value: "{{ this is broken syntax"},
 				},

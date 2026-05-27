@@ -100,11 +100,11 @@ func TestLoadValidateConfig_typoStageSuggestion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
 	if _, err := tmpfile.Write([]byte(content)); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	tmpfile.Close()
+	_ = tmpfile.Close()
 
 	_, warnings, err := LoadValidateConfig(tmpfile.Name())
 	if err != nil {
@@ -134,11 +134,11 @@ func TestLoadValidateConfig_restartStageNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
 	if _, err := tmpfile.Write([]byte(content)); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	tmpfile.Close()
+	_ = tmpfile.Close()
 
 	_, warnings, err := LoadValidateConfig(tmpfile.Name())
 	if err != nil {
@@ -168,11 +168,11 @@ func TestLoadValidateConfig_resetStageNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
 	if _, err := tmpfile.Write([]byte(content)); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	tmpfile.Close()
+	_ = tmpfile.Close()
 
 	_, warnings, err := LoadValidateConfig(tmpfile.Name())
 	if err != nil {
@@ -202,11 +202,11 @@ func TestLoadValidateConfig_validStagesNoWarning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
 	if _, err := tmpfile.Write([]byte(content)); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	tmpfile.Close()
+	_ = tmpfile.Close()
 
 	_, warnings, err := LoadValidateConfig(tmpfile.Name())
 	if err != nil {

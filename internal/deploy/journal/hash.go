@@ -409,53 +409,6 @@ func serviceDeployConfigToMap(cfg *config.ServiceDeployConfig) map[string]any {
 	return m
 }
 
-// deployConfigToMap converts a DeployConfig to a map for hashing purposes.
-// This is used by validators that work with the generic DeployConfig type.
-func deployConfigToMap(cfg *config.DeployConfig) map[string]any {
-	if cfg == nil {
-		return map[string]any{}
-	}
-
-	m := map[string]any{}
-
-	if len(cfg.After) > 0 {
-		m["after"] = cfg.After
-	}
-
-	if cfg.Log != nil {
-		m["log"] = *cfg.Log
-	}
-
-	if len(cfg.Phases) > 0 {
-		phases := make([]any, len(cfg.Phases))
-		for i, phase := range cfg.Phases {
-			p := map[string]any{
-				"name":            phase.Name,
-				"description":     phase.Description,
-				"untracked":       phase.Untracked,
-				"deploy_services": phase.DeployServices,
-			}
-
-			if phase.When != nil {
-				p["when"] = conditionToMap(phase.When)
-			}
-
-			if len(phase.Steps) > 0 {
-				steps := make([]any, len(phase.Steps))
-				for j, step := range phase.Steps {
-					steps[j] = deployStepToMap(step)
-				}
-				p["steps"] = steps
-			}
-
-			phases[i] = p
-		}
-		m["phases"] = phases
-	}
-
-	return m
-}
-
 // deployStepToMap converts a config.DeployStep to a map for hashing purposes.
 // Works for both top-level steps and parallel sub-steps.
 func deployStepToMap(step config.DeployStep) map[string]any {

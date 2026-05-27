@@ -242,7 +242,7 @@ func TestRenderApps_CustomColumnsAggregateError(t *testing.T) {
 			"main": {
 				Type:      "app",
 				Container: "app-main",
-				Required: true,
+				Required:  true,
 				Status: []config.StatusColumn{
 					{Name: "X", Value: "{{ this is broken syntax"},
 				},

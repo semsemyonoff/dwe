@@ -226,7 +226,7 @@ func TestServicesGroup_NoArgs(t *testing.T) {
 // no-op + warning (not an error).
 func TestServiceEnableCmd_MandatoryWarn(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
+		required  bool
 		enabled   bool
 		container string
 	}{
@@ -239,8 +239,8 @@ func TestServiceEnableCmd_MandatoryWarn(t *testing.T) {
 	if err := cmd.RunE(cmd, []string{"main"}); err != nil {
 		t.Fatalf("enable mandatory should be no-op + warning, got: %v", err)
 	}
-	if !strings.Contains(stderr.String(), "already mandatory") {
-		t.Errorf("expected 'already mandatory' warning, got: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "already required") {
+		t.Errorf("expected 'already required' warning, got: %q", stderr.String())
 	}
 }
 
@@ -248,7 +248,7 @@ func TestServiceEnableCmd_MandatoryWarn(t *testing.T) {
 // returns an error.
 func TestServiceDisableCmd_MandatoryError(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
+		required  bool
 		enabled   bool
 		container string
 	}{
@@ -260,8 +260,8 @@ func TestServiceDisableCmd_MandatoryError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error disabling mandatory service, got nil")
 	}
-	if !strings.Contains(err.Error(), "mandatory") {
-		t.Errorf("error should mention 'mandatory', got: %v", err)
+	if !strings.Contains(err.Error(), "required") {
+		t.Errorf("error should mention 'required', got: %v", err)
 	}
 }
 

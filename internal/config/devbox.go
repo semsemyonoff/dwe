@@ -83,15 +83,15 @@ func MmdcBin(cfg *DevboxConfig) string {
 // DevboxConfig is the merged top-level devbox configuration.
 // It is produced by layering devbox.yml → devbox/defaults.yml → devbox/local.yml.
 type DevboxConfig struct {
-	SchemaVersion string              `yaml:"schema_version"`
-	Project       ProjectConfig       `yaml:"project"`
-	Runtime       RuntimeConfig       `yaml:"runtime"`
-	State         string              `yaml:"state"`
-	Exports       ExportsConfig       `yaml:"exports"`
-	Compose       ComposeConfig       `yaml:"compose"`
+	SchemaVersion string               `yaml:"schema_version"`
+	Project       ProjectConfig        `yaml:"project"`
+	Runtime       RuntimeConfig        `yaml:"runtime"`
+	State         string               `yaml:"state"`
+	Exports       ExportsConfig        `yaml:"exports"`
+	Compose       ComposeConfig        `yaml:"compose"`
 	Deploy        *ProjectDeployConfig `yaml:"-"`
-	UI            UIConfig            `yaml:"ui"`
-	Docs          DocsConfig          `yaml:"docs"`
+	UI            UIConfig             `yaml:"ui"`
+	Docs          DocsConfig           `yaml:"docs"`
 
 	// Services holds the fully resolved service definitions loaded from
 	// devbox/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
@@ -1140,7 +1140,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 
 	// Reject binaries: blocks — they've moved to user-config
 	if _, ok := merged["binaries"]; ok {
-		return nil, fmt.Errorf("binaries: moved to ~/.config/devbox/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md.")
+		return nil, fmt.Errorf("binaries: moved to ~/.config/devbox/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md")
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue

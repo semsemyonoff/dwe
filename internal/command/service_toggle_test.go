@@ -89,7 +89,7 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 
 func TestServicesToggle_NonTTY_ReturnsInteractiveRequired(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
+		required  bool
 		enabled   bool
 		container string
 	}{
@@ -123,7 +123,7 @@ func TestServicesToggle_NonTTY_ReturnsInteractiveRequired(t *testing.T) {
 
 func TestServicesToggle_AllMandatory_ReturnsError(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
+		required  bool
 		enabled   bool
 		container string
 	}{
@@ -154,7 +154,7 @@ func TestServicesToggle_AllMandatory_ReturnsError(t *testing.T) {
 
 func TestServicesToggle_TTY_EnablesAndDisables(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
+		required  bool
 		enabled   bool
 		container string
 	}{
@@ -209,7 +209,7 @@ func TestServicesToggle_TTY_EnablesAndDisables(t *testing.T) {
 
 func TestServicesToggle_TTY_CancelNoWrites(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
+		required  bool
 		enabled   bool
 		container string
 	}{
@@ -413,8 +413,8 @@ func TestServiceEnableCmd_MandatoryInfraWarn(t *testing.T) {
 	if err := cmd.RunE(cmd, []string{"db"}); err != nil {
 		t.Fatalf("enable mandatory infra should be no-op + warning, got: %v", err)
 	}
-	if !strings.Contains(stderr.String(), "already mandatory") {
-		t.Errorf("expected 'already mandatory' warning, got: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "already required") {
+		t.Errorf("expected 'already required' warning, got: %q", stderr.String())
 	}
 }
 
@@ -1772,7 +1772,7 @@ func TestBatchServiceConfigHash(t *testing.T) {
 // rejects an attempt to disable a mandatory service.
 func TestApplyServiceToggles_MandatoryRejected(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
-		mandatory bool
+		required  bool
 		enabled   bool
 		container string
 	}{

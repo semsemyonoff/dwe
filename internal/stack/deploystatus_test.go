@@ -47,7 +47,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 			cfg: &config.DevboxConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
-						Enabled:   true,
+						Enabled:  true,
 						Required: false,
 					},
 				},
@@ -91,7 +91,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 			cfg: &config.DevboxConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
-						Enabled:   true,
+						Enabled:  true,
 						Required: false,
 					},
 				},

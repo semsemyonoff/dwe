@@ -52,25 +52,24 @@ const (
 	DaemonControlRestart = "restart"
 )
 
-
 // allowedFieldsFor returns the set of top-level field names allowed for a given CommandType.
 // All types share a common set of fields; per-type allowlists extend that common set.
 // The allowlist is derived from what the validate*Type functions explicitly reject.
 func allowedFieldsFor(t CommandType) map[string]bool {
 	common := map[string]bool{
-		"type":               true,
-		"description":        true,
-		"private":            true,
-		"confirmation":       true,
-		"confirmation_text":  true,
-		"notify":             true,
-		"params":             true,
-		"context":            true,
-		"env":                true,
-		"files":              true,
-		"messages":           true,
-		"user":               true,
-		"runner":             true,
+		"type":              true,
+		"description":       true,
+		"private":           true,
+		"confirmation":      true,
+		"confirmation_text": true,
+		"notify":            true,
+		"params":            true,
+		"context":           true,
+		"env":               true,
+		"files":             true,
+		"messages":          true,
+		"user":              true,
+		"runner":            true,
 	}
 
 	switch t {

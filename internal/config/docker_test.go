@@ -538,4 +538,3 @@ env:
 		t.Errorf("error message = %q, should mention env removal", err.Error())
 	}
 }
-

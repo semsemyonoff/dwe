@@ -12,7 +12,7 @@ import (
 //
 // Rules: lower-case the text, keep ASCII/Unicode letters, digits, hyphens,
 // and underscores, drop everything else, and turn whitespace runs into single
-// hyphens. Underscores are preserved (heading text like `` `on_enable` `` must
+// hyphens. Underscores are preserved (heading text like “ `on_enable` “ must
 // slug to `on_enable-and-...`, so we cannot use stripInlineMarkdown which
 // strips `_` as emphasis); markdown links and backtick code spans are
 // flattened to their inner text before the character pass.

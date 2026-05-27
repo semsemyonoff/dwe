@@ -143,7 +143,7 @@ func RunRun(ctx RunContext) (err error) {
 	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
 
 	if ctx.UpdateMode != "" && !config.ValidUpdateMode(ctx.UpdateMode) {
-		return fmt.Errorf("invalid --update mode %q: must be one of: prompt, auto, check, off", ctx.UpdateMode)
+		return fmt.Errorf("invalid --update mode %q: must be one of: on, off", ctx.UpdateMode)
 	}
 
 	errOut := ctx.ErrOut

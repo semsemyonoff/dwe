@@ -308,7 +308,7 @@ func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage
 		userCfg, err = userconfig.Load(projectRoot)
 		if err != nil {
 			// Log warning but continue with nil userConfig
-			fmt.Fprintf(cmd.ErrOrStderr(), "warning: user config load failed: %v\n", err)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: user config load failed: %v\n", err)
 		}
 	}
 

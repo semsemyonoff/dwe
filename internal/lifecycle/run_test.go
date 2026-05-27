@@ -145,7 +145,7 @@ func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 		return true, nil
 	}
 
-	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "auto"}
+	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "on"}
 	err := RunRun(ctx)
 	if err != nil {
 		t.Errorf("unexpected error after simulated pull: %v", err)
@@ -189,8 +189,7 @@ func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
-	enabled := "true"
-	yaml := "run:\n  update:\n    enabled: " + enabled + "\n    mode: auto\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
+	yaml := "run:\n  update:\n    mode: on\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
 	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
@@ -264,7 +263,7 @@ func TestRunRun_ProbeError(t *testing.T) {
 		return git.Status{}, errors.New("probe failed")
 	}
 
-	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "auto"}
+	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "on"}
 	err := RunRun(ctx)
 	if err == nil {
 		t.Fatal("expected error from probe failure, got nil")
@@ -316,7 +315,7 @@ func TestRunRun_WarnOnFetchFailed(t *testing.T) {
 		}, nil
 	}
 
-	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "auto"}
+	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "on"}
 	err := RunRun(ctx)
 	if err != nil {
 		t.Errorf("unexpected error on fetch failure (should warn and continue): %v", err)
@@ -349,7 +348,7 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 		return false, errors.New("network error")
 	}
 
-	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "auto"}
+	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "on"}
 	err := RunRun(ctx)
 	if err != nil {
 		t.Errorf("expected command to continue after pull error (warn path), got: %v", err)
@@ -434,7 +433,7 @@ func TestRunRun_ReRendersDotEnvAfterPull(t *testing.T) {
 		return true, nil
 	}
 
-	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "auto"}
+	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "on"}
 	if err := RunRun(ctx); err != nil {
 		t.Fatalf("RunRun: %v", err)
 	}
