@@ -405,8 +405,17 @@ func Run(
 //  1. compute stepHash := journal.StepHash(rs.Step)
 //  2. evaluate phase-level when — if false, skip and continue
 //  3. evaluate step-level when: — if false, skip and continue
-//  4. if files_gate present: probe gate — if not satisfied, skip (bypasses SkipDecider)
-//     else: consult SkipDecider(addr, rs, stepHash) — on Skip, record skip and continue
+//  4. files_gate / journal-skip interaction (asymmetric by state):
+//     - files_gate.state == missing: probe gate — if not satisfied, skip
+//     (bypasses SkipDecider so the producer pattern re-runs whenever the
+//     artifact is absent, regardless of journal contents).
+//     - files_gate.state == readable: consult SkipDecider FIRST. On Skip,
+//     record skip via state and continue without probing the gate. On Run,
+//     probe the gate and skip if unsatisfied. This keeps consumer steps
+//     (especially destructive ones) idempotent: the gate only fires on the
+//     first run, after which the journal carries the load.
+//     - no files_gate: consult SkipDecider(addr, rs, stepHash) — on Skip,
+//     record skip and continue.
 //  5. on Run, call recorder.OnStepStart, then ExecAction, then post-step hooks,
 //     then check conditions
 //  6. on success: recorder.OnStepFinish
@@ -580,8 +589,30 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		}
 	}
 
-	// Step 3: Evaluate files_gate (if present).
-	// When a gate is present, it replaces the journal-skip-decider logic (journal bypass).
+	// Step 3: files_gate / journal-skip interaction.
+	//
+	// Asymmetric by gate state:
+	//   - state: missing (producer pattern) — bypass SkipDecider entirely; the
+	//     gate alone decides. The artifact's filesystem state is the source of
+	//     truth, and a deleted artifact must re-run the producer regardless of
+	//     what the journal recorded.
+	//   - state: readable (consumer pattern) — consult SkipDecider first. If
+	//     the journal says Skip, honor it without probing the gate. This keeps
+	//     destructive consumers (e.g. drop+restore) idempotent: the gate fires
+	//     once, and subsequent runs short-circuit via the journal. To force a
+	//     re-check, use an explicit check: directive, the same lever as any
+	//     other step.
+	//   - no gate — consult SkipDecider (Step 3c below).
+	if rs.FilesGate != nil && rs.FilesGate.State == filesgate.StateReadable {
+		decision := opts.SkipDecider(addr, rs, stepHash)
+		if decision == journal.Skip {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
+			opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
+			return nil
+		}
+	}
+
 	if rs.FilesGate != nil {
 		// Guard: runtime must have a registry to evaluate gates.
 		if opts.Registry == nil {
@@ -666,9 +697,11 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
 			return nil
 		}
-		// Gate satisfied — proceed to execution (bypass journal-skip-decider).
+		// Gate satisfied — proceed to execution. For state: readable, the
+		// journal-skip check above already cleared us; for state: missing,
+		// the gate alone authorises the run.
 	} else {
-		// Step 3b: No gate present — consult skip decision.
+		// Step 3c: No gate present — consult skip decision.
 		decision := opts.SkipDecider(addr, rs, stepHash)
 		if decision == journal.Skip {
 			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)

@@ -528,7 +528,12 @@ Use `check:` to assert that a step had its intended effect — e.g. that a migra
 
 - **No file errors → skip**, not fail. If `state: readable` and no files match, the step is skipped (not failed). Configuration errors (bad template, bad glob, missing params) do produce an error and fail the step.
 - **AND'ed with `when:`** — both must be satisfied for the step to run. If `when:` is false, the gate is never evaluated (short-circuits). If `when:` is true but the gate is unsatisfied, the step is skipped.
-- **Journal-skip bypass** — steps with `files_gate:` **always re-evaluate the gate on every deploy**, bypassing the journal's "already deployed" skip optimization. This ensures a producer step with `state: missing` re-runs after its artifact is deleted between deploys. This is the deliberate trade-off: gate re-evaluation vs. idempotency caching. (Gateless steps remain idempotency-cached as before.)
+- **Journal-skip interaction (asymmetric by `state:`)** — the gate's interaction with the journal "already deployed" skip optimization depends on `state:`:
+  - `state: missing` (producer pattern) **bypasses journal-skip**. The gate alone decides whether the step runs, every deploy. A producer step with `state: missing` re-runs after its artifact is deleted between deploys, because filesystem state — not the journal — is the source of truth.
+  - `state: readable` (consumer pattern) **respects journal-skip**. The journal is consulted first; if it recorded a successful run, the step is skipped without probing the gate. The gate effectively fires only on the first run, after which the journal carries the load. This keeps destructive consumers (e.g. drop + restore) idempotent by default. To force re-evaluation on every run, add an explicit `check:` directive — the same lever used by any other step.
+  - Gateless steps are journal-skipped as before.
+
+  Adding or changing a `files_gate:` directive invalidates the recorded step hash, so the next run re-evaluates from scratch regardless of `state:`.
 - **Probe scope** — only files with `access: read` or `access: read_write` participate. Files with `access: write` only are rejected at plan-time validation if listed in the gate's `require:` spec.
 
 **Before and after example:**
@@ -773,7 +778,7 @@ Validation runs at `devbox validate` and at plan resolution; either path catches
 - **SIGINT**: `RunWithOptions` installs a `signal.NotifyContext(SIGINT, SIGTERM)` on the parent context once per pipeline run. A user Ctrl-C cancels the context, which propagates to every active sub-step's child process. No orphaned `docker compose` / `sleep` processes after a clean shutdown.
 - **`fail_fast: true`**: first failing sub-step (not counting `continue_on_error: true` ones) cancels the group; remaining sub-steps observe `ctx.Done()` and their children are killed. The group's error is the first failure wrapped with its sub-step address.
 - **`fail_fast: false`**: all sub-steps run to completion. Errors are wrapped per-sub-step (`parallel sub-step "phase/group/sub": <err>`) and combined via `errors.Join`.
-- **Per-sub-step `when` / `files_gate` / journal-skip**: each sub-step still runs through the same `step-when → files_gate → journal-skip (only when gate is nil) → ExecAction → check` pipeline. Group-`when` is evaluated **once**; per-sub-step `when` is **also** evaluated inside the goroutine.
+- **Per-sub-step `when` / `files_gate` / journal-skip**: each sub-step still runs through the same `step-when → (files_gate ↔ journal-skip) → ExecAction → check` pipeline. The `files_gate ↔ journal-skip` interaction is asymmetric: `state: missing` bypasses journal-skip; `state: readable` and gateless steps consult journal-skip first (see [`files_gate:`](#files_gate-pre-condition-for-files)). Group-`when` is evaluated **once**; per-sub-step `when` is **also** evaluated inside the goroutine.
 - **Journal**: each sub-step is journaled independently under `(phase, sub-step.Name)`. The group itself is not journaled. `journal.StepHash(step)` is computed from the sub-step alone, so reordering or adding sub-steps does not invalidate siblings.
 
 ### Reporter and logging
@@ -910,7 +915,9 @@ Key behaviors:
 - **Service config change** → all service steps re-run
 - **Project config change** → all project-level steps re-run
 - **Has `check:` action** → step always runs (even if hash matches), so the check re-validates idempotency
-- **Has `files_gate:`** → gate is re-evaluated on every deploy; the journal skip is bypassed so the gate decision is always current (the journal still records the step for audit/status display using `step_hash` which includes the gate config)
+- **Has `files_gate: state: missing`** → journal skip is bypassed and the gate is re-evaluated on every deploy (the producer pattern: artifact deletion must re-trigger production regardless of journal contents)
+- **Has `files_gate: state: readable`** → journal skip is consulted first like any other step; the gate only fires when the journal would otherwise let the step run (the consumer pattern: destructive consumers stay idempotent). Use an explicit `check:` to force re-evaluation on every run
+- In both cases the journal records the step for audit/status display using `step_hash`, which includes the gate config — so changing the gate invalidates the recorded hash and re-triggers the step
 - **Previous step failed** → step re-runs on next deploy (allows `--resume` to continue from the failure)
 
 Use `devbox deploy state show` to inspect the journal, `devbox deploy state clear` to reset it, and `devbox deploy state repair` to fix corrupted aggregates.
