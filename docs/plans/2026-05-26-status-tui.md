@@ -335,9 +335,9 @@ func mapRunError(err error) error {
 - Modify: `internal/command/statustui/tui.go`
 - Modify: `internal/command/statustui/tui_test.go`
 
-- [ ] **All model methods MUST use pointer receivers** (`func (m *model) Init() tea.Cmd`, etc.) — mirrors `cmdbrowser/model.go:169` precedent. With value receivers, `Init`'s mutations to `loadGen` would not persist. bubbletea v2 calls `Init()` once on the program model (`~/go/pkg/mod/charm.land/bubbletea/v2@v2.0.5/tea.go:1118`)
-- [ ] implement `Init() tea.Cmd`: bump `m.loadGen++` (initial load gets gen 1, NOT 0, so any zero-value `tabsLoadedMsg` from test code is always treated as stale and dropped); return `tea.Batch(m.spinner.Tick, buildTabsCmd(m.ctx, m.deps, m.loadGen))`. No need to send an initial `tea.WindowSizeMsg` manually: bubbletea v2 sends one on program start (`~/go/pkg/mod/charm.land/bubbletea/v2@v2.0.5/screen.go:5-11`, `tea.go:1091-1093`)
-- [ ] implement `Update(msg tea.Msg) (tea.Model, tea.Cmd)` handling:
+- [x] **All model methods MUST use pointer receivers** (`func (m *model) Init() tea.Cmd`, etc.) — mirrors `cmdbrowser/model.go:169` precedent. With value receivers, `Init`'s mutations to `loadGen` would not persist. bubbletea v2 calls `Init()` once on the program model (`~/go/pkg/mod/charm.land/bubbletea/v2@v2.0.5/tea.go:1118`)
+- [x] implement `Init() tea.Cmd`: bump `m.loadGen++` (initial load gets gen 1, NOT 0, so any zero-value `tabsLoadedMsg` from test code is always treated as stale and dropped); return `tea.Batch(m.spinner.Tick, buildTabsCmd(m.ctx, m.deps, m.loadGen))`. No need to send an initial `tea.WindowSizeMsg` manually: bubbletea v2 sends one on program start (`~/go/pkg/mod/charm.land/bubbletea/v2@v2.0.5/screen.go:5-11`, `tea.go:1091-1093`)
+- [x] implement `Update(msg tea.Msg) (tea.Model, tea.Cmd)` handling:
   - `tea.WindowSizeMsg`: update `width`/`height`, recompute viewport size, call `m.help.SetWidth(m.width)`, re-`SetContent`.
   - `tabsLoadedMsg{gen, ...}`: **drop if `msg.gen != m.loadGen`** (a newer reload superseded this one). Otherwise populate tabs/err/reloadAt, clear `loading`/`reloading`. For YOffset restore: only if `m.reloadGen == msg.gen && m.reloadActive == m.active` → `m.viewport.SetYOffset(m.reloadYOffset)`; otherwise `GotoTop`. Then clear `m.reloadGen` (one-shot).
   - **`tea.KeyPressMsg`** (NOT `tea.KeyMsg` — bubbletea v2 emits both `KeyPressMsg` and `KeyReleaseMsg` per `~/go/pkg/mod/charm.land/bubbletea/v2@v2.0.5/key.go:257`; handling `KeyMsg` directly double-fires on terminals that emit releases. Bubbles `key.Matches` is documented under `case tea.KeyPressMsg` at `~/go/pkg/mod/charm.land/bubbles/v2@v2.1.0/key/key.go:21`) dispatched via `key.Matches`:
@@ -346,10 +346,10 @@ func mapRunError(err error) error {
     - **Help**: toggle `m.help.ShowAll`.
     - **Quit**: return `tea.Quit`.
   - `spinner.TickMsg`: delegate to spinner.
-- [ ] on tab switch: `m.viewport.SetContent(m.tabs[m.active].content)` + `m.viewport.GotoTop()`
-- [ ] delegate unmatched key/mouse msgs to `m.viewport.Update(msg)`. Default viewport keybindings in `bubbles/v2/viewport v2.1.0` (per `~/go/pkg/mod/charm.land/bubbles/v2@v2.1.0/viewport/keymap.go:22-57`): `↑`/`↓`, `j`/`k`, page up/down, space/`f`/`b`, `u`/`d` (half-page). **No** `g`/`G` or home/end — do not promise these in any documentation or `--help` text
-- [ ] add `TestUpdate_TabCycling`, `TestUpdate_DigitJump`, `TestUpdate_QuitReturnsTeaQuit`, `TestUpdate_ReloadFiresCmd`, `TestUpdate_WindowResize_RecomputesViewportAndHelp` (assert help width is set), `TestUpdate_PreservesYOffsetOnReload_SameTab`, `TestUpdate_ResetsYOffsetOnTabSwitch`, `TestUpdate_SpinnerTickAdvances`, `TestUpdate_StaleTabsLoadedMsgIgnored` (send a tabsLoadedMsg with gen lower than m.loadGen → state unchanged), `TestUpdate_TabSwitchInvalidatesPendingReloadRestore` (start a reload on tab A, switch to tab B, deliver tabsLoadedMsg → assert YOffset reset to 0, not the captured offset), `TestUpdate_MultipleReloads_DropsOlderResult` (press Reload twice without delivering any tabsLoadedMsg between; deliver msg with the earlier gen → ignored; deliver msg with the later gen → applied)
-- [ ] run `make test` — must pass before next task
+- [x] on tab switch: `m.viewport.SetContent(m.tabs[m.active].content)` + `m.viewport.GotoTop()`
+- [x] delegate unmatched key/mouse msgs to `m.viewport.Update(msg)`. Default viewport keybindings in `bubbles/v2/viewport v2.1.0` (per `~/go/pkg/mod/charm.land/bubbles/v2@v2.1.0/viewport/keymap.go:22-57`): `↑`/`↓`, `j`/`k`, page up/down, space/`f`/`b`, `u`/`d` (half-page). **No** `g`/`G` or home/end — do not promise these in any documentation or `--help` text
+- [x] add `TestUpdate_TabCycling`, `TestUpdate_DigitJump`, `TestUpdate_QuitReturnsTeaQuit`, `TestUpdate_ReloadFiresCmd`, `TestUpdate_WindowResize_RecomputesViewportAndHelp` (assert help width is set), `TestUpdate_PreservesYOffsetOnReload_SameTab`, `TestUpdate_ResetsYOffsetOnTabSwitch`, `TestUpdate_SpinnerTickAdvances`, `TestUpdate_StaleTabsLoadedMsgIgnored` (send a tabsLoadedMsg with gen lower than m.loadGen → state unchanged), `TestUpdate_TabSwitchInvalidatesPendingReloadRestore` (start a reload on tab A, switch to tab B, deliver tabsLoadedMsg → assert YOffset reset to 0, not the captured offset), `TestUpdate_MultipleReloads_DropsOlderResult` (press Reload twice without delivering any tabsLoadedMsg between; deliver msg with the earlier gen → ignored; deliver msg with the later gen → applied)
+- [x] run `make test` — must pass before next task
 
 ### Task 6: Implement `Run` (TTY check, `tea.NewProgram`, error mapping)
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -90,12 +91,138 @@ func newModel(d Deps, ctx context.Context, w, h int) *model {
 
 // Init returns a command to be executed by bubbletea on program start.
 func (m *model) Init() tea.Cmd {
-	return nil
+	m.loadGen++
+	return tea.Batch(m.spinner.Tick, buildTabsCmd(m.ctx, m.deps, m.loadGen))
 }
 
 // Update processes messages and returns the updated model and a command.
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.viewport.SetWidth(m.width - 2)
+		m.viewport.SetHeight(m.height - 4)
+		m.help.SetWidth(m.width)
+		if len(m.tabs) > m.active {
+			m.viewport.SetContent(m.tabs[m.active].content)
+		}
+		return m, nil
+
+	case tabsLoadedMsg:
+		// Drop stale messages from older reloads
+		if msg.gen != m.loadGen {
+			return m, nil
+		}
+		m.tabs = msg.tabs
+		m.err = msg.err
+		m.reloadAt = msg.loadedAt
+		m.loading = false
+		m.reloading = false
+
+		// Restore YOffset if this is a reload that matches the active tab
+		if m.reloadGen == msg.gen && m.reloadActive == m.active && len(m.tabs) > m.active {
+			m.viewport.SetContent(m.tabs[m.active].content)
+			m.viewport.SetYOffset(m.reloadYOffset)
+		} else if len(m.tabs) > m.active {
+			m.viewport.SetContent(m.tabs[m.active].content)
+			m.viewport.GotoTop()
+		}
+		m.reloadGen = 0
+		return m, nil
+
+	case tea.KeyPressMsg:
+		// Handle tab navigation
+		switch {
+		case key.Matches(msg, m.keys.NextTab):
+			m.active = (m.active + 1) % len(m.tabs)
+			m.reloadGen = 0
+			if len(m.tabs) > m.active {
+				m.viewport.SetContent(m.tabs[m.active].content)
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.PrevTab):
+			m.active = (m.active - 1 + len(m.tabs)) % len(m.tabs)
+			m.reloadGen = 0
+			if len(m.tabs) > m.active {
+				m.viewport.SetContent(m.tabs[m.active].content)
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Tab1):
+			if 0 < len(m.tabs) {
+				m.active = 0
+				m.reloadGen = 0
+				m.viewport.SetContent(m.tabs[m.active].content)
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Tab2):
+			if 1 < len(m.tabs) {
+				m.active = 1
+				m.reloadGen = 0
+				m.viewport.SetContent(m.tabs[m.active].content)
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Tab3):
+			if 2 < len(m.tabs) {
+				m.active = 2
+				m.reloadGen = 0
+				m.viewport.SetContent(m.tabs[m.active].content)
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Tab4):
+			if 3 < len(m.tabs) {
+				m.active = 3
+				m.reloadGen = 0
+				m.viewport.SetContent(m.tabs[m.active].content)
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Tab5):
+			if 4 < len(m.tabs) {
+				m.active = 4
+				m.reloadGen = 0
+				m.viewport.SetContent(m.tabs[m.active].content)
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Reload):
+			m.loadGen++
+			m.reloadActive = m.active
+			m.reloadYOffset = m.viewport.YOffset()
+			m.reloadGen = m.loadGen
+			m.reloading = true
+			return m, buildTabsCmd(m.ctx, m.deps, m.loadGen)
+
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+			return m, nil
+
+		case key.Matches(msg, m.keys.Quit):
+			return m, tea.Quit
+		}
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
+
+	// Delegate unmatched messages to viewport for scroll handling
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
 }
 
 // renderTitleBar renders the branded title bar — `{▪} devbox · <project> · Status`
