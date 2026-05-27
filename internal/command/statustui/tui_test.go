@@ -269,8 +269,8 @@ func TestUpdate_WindowResize_RecomputesViewportAndHelp(t *testing.T) {
 	require.Equal(t, 40, updatedModel.height)
 
 	// Verify viewport was recomputed (using Width/Height methods)
-	require.Equal(t, 118, updatedModel.viewport.Width())  // width - 2
-	require.Equal(t, 36, updatedModel.viewport.Height())  // height - 4
+	require.Equal(t, 118, updatedModel.viewport.Width()) // width - 2
+	require.Equal(t, 36, updatedModel.viewport.Height()) // height - 4
 }
 
 // Test tab cycling logic
@@ -444,7 +444,7 @@ func TestUpdate_TabSwitchInvalidatesPendingReloadRestore(t *testing.T) {
 
 	// Switch to tab 1
 	m.active = 1
-	m.reloadGen = 0  // This is what happens on tab switch
+	m.reloadGen = 0 // This is what happens on tab switch
 
 	require.Equal(t, 1, m.active)
 	require.Equal(t, uint64(0), m.reloadGen)

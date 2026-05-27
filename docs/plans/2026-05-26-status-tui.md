@@ -389,14 +389,14 @@ func mapRunError(err error) error {
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify the five tabs render in the correct order (Services, Deploy, Topology, Git, Daemons) via `TestBuildTabs_*`
-- [ ] verify title bar contains `▪`, `devbox`, project name, and `Status` via `TestView_RendersTitleAndTabs`
-- [ ] verify status bar contains a health glyph and `loaded Ns ago` via `TestView_*` assertions
-- [ ] verify `--no-tui`, `--no-<section>`, and non-TTY all force plain output via `TestShouldUseTUI_Matrix`
-- [ ] verify subcommands are unaffected via `TestStatusSubcommands_NeverInvokeTUI`
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
-- [ ] run `make build` to confirm the binary builds
+- [x] verify the five tabs render in the correct order (Services, Deploy, Topology, Git, Daemons) via `TestBuildTabs_*`
+- [x] verify title bar contains `▪`, `devbox`, project name, and `Status` via `TestView_RendersTitleAndTabs`
+- [x] verify status bar contains a health glyph and `loaded Ns ago` via `TestView_*` assertions
+- [x] verify `--no-tui`, `--no-<section>`, and non-TTY all force plain output via `TestShouldUseTUI_Matrix`
+- [x] verify subcommands are unaffected via `TestStatusSubcommands_NeverInvokeTUI`
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint`
+- [x] run `make build` to confirm the binary builds
 
 ### Task 9: Update documentation and move plan to completed
 

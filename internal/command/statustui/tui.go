@@ -22,9 +22,7 @@ import (
 // Test seams for TTY detection and terminal size queries.
 // Tests override these via t.Cleanup to avoid actual terminal calls.
 var (
-	isTerminalFn = func(fd uintptr) bool {
-		return term.IsTerminal(fd)
-	}
+	isTerminalFn = term.IsTerminal
 
 	terminalSizeFn = func() (w, h int, err error) {
 		return term.GetSize(1) // stdout is typically fd 1
@@ -283,13 +281,14 @@ func (m *model) renderTabStrip() string {
 func (m *model) renderStatusBar() string {
 	// Build left side: health indicator + loaded timestamp
 	var leftParts []string
-	if m.loading {
+	switch {
+	case m.loading:
 		leftParts = append(leftParts, "·", "loading…")
-	} else if m.err != nil {
+	case m.err != nil:
 		leftParts = append(leftParts, "·", "error")
-	} else if m.reloading {
+	case m.reloading:
 		leftParts = append(leftParts, "·", "reloading…")
-	} else if len(m.tabs) > 0 && m.deps.Cfg != nil {
+	case len(m.tabs) > 0 && m.deps.Cfg != nil:
 		// Get health indicator (only if Cfg is available)
 		in := stack.StatusInput{
 			Cfg:        m.deps.Cfg,
@@ -315,7 +314,7 @@ func (m *model) renderStatusBar() string {
 	// Combine with padding
 	status := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftSide,
-		lipgloss.NewStyle().Width(m.width - lipgloss.Width(leftSide) - lipgloss.Width(rightSide)).Render(""),
+		lipgloss.NewStyle().Width(m.width-lipgloss.Width(leftSide)-lipgloss.Width(rightSide)).Render(""),
 		rightSide)
 
 	return lipgloss.NewStyle().
@@ -360,7 +359,7 @@ func (m *model) View() tea.View {
 	if m.err != nil {
 		errorMsg := fmt.Sprintf("Error: %v\n\nPress r to retry, q to quit", m.err)
 		errorView := lipgloss.NewStyle().
-			Width(m.width - 4).
+			Width(m.width-4).
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(ui.ColorDanger())).

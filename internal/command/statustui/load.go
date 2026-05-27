@@ -133,7 +133,9 @@ func buildTabs(ctx context.Context, d Deps) []tab {
 	// Daemons
 	daemonRows, daemonErrs := collectDaemonsFn(ctx, d.Cfg, normaliseDocker(d.DockerCfg))
 	daemonsBody, renderErrs := stack.RenderDaemons(daemonRows)
-	allDaemonErrs := append(daemonErrs, renderErrs...)
+	allDaemonErrs := make([]error, 0, len(daemonErrs)+len(renderErrs))
+	allDaemonErrs = append(allDaemonErrs, daemonErrs...)
+	allDaemonErrs = append(allDaemonErrs, renderErrs...)
 	daemons := joinNonEmpty(warningPrefix(len(allDaemonErrs)), daemonsBody)
 	if daemons == "" {
 		daemons = "no daemons running"

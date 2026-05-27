@@ -102,8 +102,8 @@ func TestBuildTabs_AllRunning(t *testing.T) {
 	alwaysRunning := func(_, _ string) bool { return true }
 
 	deps := Deps{
-		Cfg:       cfg,
-		IsRunning: alwaysRunning,
+		Cfg:         cfg,
+		IsRunning:   alwaysRunning,
 		ProjectName: "test",
 	}
 
@@ -131,8 +131,8 @@ func TestBuildTabs_AllStopped(t *testing.T) {
 	neverRunning := func(_, _ string) bool { return false }
 
 	deps := Deps{
-		Cfg:       cfg,
-		IsRunning: neverRunning,
+		Cfg:         cfg,
+		IsRunning:   neverRunning,
 		ProjectName: "test",
 	}
 
@@ -156,8 +156,8 @@ func TestBuildTabs_Partial(t *testing.T) {
 	}
 
 	deps := Deps{
-		Cfg:       cfg,
-		IsRunning: partialRunning,
+		Cfg:         cfg,
+		IsRunning:   partialRunning,
 		ProjectName: "test",
 	}
 
@@ -175,8 +175,8 @@ func TestBuildTabs_EmptyService(t *testing.T) {
 	)
 
 	deps := Deps{
-		Cfg:       cfg,
-		IsRunning: func(_, _ string) bool { return false },
+		Cfg:         cfg,
+		IsRunning:   func(_, _ string) bool { return false },
 		ProjectName: "test",
 	}
 
