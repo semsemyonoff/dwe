@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/config"
 	"devbox-cli/internal/usercommands/loader"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
@@ -120,6 +121,14 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 					categorisedDaemonFields[cf.FilePath+"/"+name] = fields
 				}
 			}
+
+			// Emit param diagnostics.
+			pDiags := paramStructuralDiagnostics(cmd, relFile, ctx.Cfg)
+			if len(pDiags) > 0 {
+				categorisedCmds[cf.FilePath+"/"+name] = true
+				diags = append(diags, pDiags...)
+			}
+
 			diags = append(diags, notifyDaemonDiagnostics(cmd, relFile)...)
 		}
 	}
@@ -129,12 +138,11 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	// than per-file cf.Validate()) ensures a categorised error in one command
 	// does not hide unrelated semantic errors in other commands of the same file.
 	//
-	// For commands that DID produce categorised parallel-structural diagnostics,
-	// we still run cmd.Validate() — it may surface unrelated field violations
-	// (e.g. workdir: or cmd: set on a workflow) that the structural walker does
-	// not cover. We only suppress the fallback when the error is step-level
-	// (the error string contains ": step["), meaning it duplicates something the
-	// structural diagnostics already reported more clearly.
+	// For commands that DID produce categorised structural diagnostics, we still
+	// run cmd.Validate() — it may surface unrelated field violations that the
+	// structural walkers do not cover. We suppress fallback errors that are
+	// step-level (": step["), param-level ("params."), or already categorized
+	// daemon field errors.
 	for _, cf := range parsedFiles {
 		relFile, _ := filepath.Rel(ctx.ProjectRoot, cf.FilePath)
 		for _, name := range sortedCommandNames(cf) {
@@ -172,11 +180,14 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 					}
 					continue
 				}
-				// Skip step-level errors already covered by structural parallel
-				// diagnostics (e.g. nested-parallel, confirm-in-parallel). Non-step
-				// errors (workdir, cmd, service, etc.) are surfaced regardless.
-				if categorisedCmds[cf.FilePath+"/"+name] && strings.Contains(err.Error(), ": step[") {
-					continue
+				// Skip errors already covered by categorised structural diagnostics:
+				// - step-level errors from workflow validation
+				// - param-level errors from param validation
+				if categorisedCmds[cf.FilePath+"/"+name] {
+					errMsg := err.Error()
+					if strings.Contains(errMsg, ": step[") || strings.Contains(errMsg, "params.") {
+						continue
+					}
 				}
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityError,
@@ -282,6 +293,209 @@ func sortedCommandNames(cf *model.CommandFile) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// paramStructuralDiagnostics emits categorized diagnostics for param validation violations.
+// It checks widget/options rules and validates default/default_from values against
+// resolved options (if cfg is available). Returns diagnostics or nil if no violations.
+func paramStructuralDiagnostics(cmd model.CommandDef, relFile string, cfg *config.DevboxConfig) []validate.Diagnostic {
+	var out []validate.Diagnostic
+	target := fmt.Sprintf("commands:%s", cmd.ID)
+
+	for pname, pdef := range cmd.Params {
+		paramTarget := fmt.Sprintf("%s:params.%s", target, pname)
+
+		// Check Widget is a valid enum value if set.
+		if pdef.Widget != "" {
+			switch pdef.Widget {
+			case model.WidgetInput, model.WidgetSelect, model.WidgetMultiselect, model.WidgetConfirm:
+				// Valid.
+			default:
+				out = append(out, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   paramTarget,
+					File:     relFile,
+					Message:  fmt.Sprintf("params.%s.widget: must be one of input, select, multiselect, confirm (got %q)", pname, pdef.Widget),
+					Hint:     "fix the widget value or remove it to use automatic inference",
+				})
+				continue
+			}
+		}
+
+		effective := pdef.EffectiveWidget()
+
+		// Widget = select/multiselect requires non-empty options.
+		if effective == model.WidgetSelect || effective == model.WidgetMultiselect {
+			if pdef.Options == nil || (len(pdef.Options.Static) == 0 && pdef.Options.From == "") {
+				out = append(out, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   paramTarget,
+					File:     relFile,
+					Message:  fmt.Sprintf("params.%s.widget: widget %s requires non-empty options", pname, effective),
+					Hint:     "add a static list or a reference to defaults.yml/local.yml via options: ${...}",
+				})
+				continue
+			}
+		}
+
+		// Widget = input/confirm must have empty options.
+		if effective == model.WidgetInput || effective == model.WidgetConfirm {
+			if pdef.Options != nil && (len(pdef.Options.Static) > 0 || pdef.Options.From != "") {
+				out = append(out, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   paramTarget,
+					File:     relFile,
+					Message:  fmt.Sprintf("params.%s.widget: widget %s does not accept options", pname, effective),
+					Hint:     "remove the options field or change widget to select/multiselect",
+				})
+				continue
+			}
+		}
+
+		// Pattern + Options is not allowed.
+		if pdef.Pattern != "" && pdef.Options != nil && (len(pdef.Options.Static) > 0 || pdef.Options.From != "") {
+			out = append(out, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "commands",
+				Target:   paramTarget,
+				File:     relFile,
+				Message:  fmt.Sprintf("params.%s: pattern and options are mutually exclusive", pname),
+				Hint:     "use either pattern (regex validation) or options (choice list), not both",
+			})
+			continue
+		}
+
+		// Separator only valid on multiselect.
+		if pdef.Separator != "" && effective != model.WidgetMultiselect {
+			out = append(out, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "commands",
+				Target:   paramTarget,
+				File:     relFile,
+				Message:  fmt.Sprintf("params.%s.separator: only valid for multiselect widgets", pname),
+				Hint:     "remove separator or change widget to multiselect",
+			})
+			continue
+		}
+
+		// Static options: check for duplicate values.
+		if pdef.Options != nil && len(pdef.Options.Static) > 0 {
+			seen := make(map[string]bool)
+			for _, item := range pdef.Options.Static {
+				if seen[item.Value] {
+					out = append(out, validate.Diagnostic{
+						Severity: validate.SeverityError,
+						Domain:   "commands",
+						Target:   paramTarget,
+						File:     relFile,
+						Message:  fmt.Sprintf("params.%s.options: duplicate option value %q", pname, item.Value),
+						Hint:     "remove the duplicate entry",
+					})
+					break
+				}
+				seen[item.Value] = true
+			}
+		}
+
+		// Validate default literal against static options.
+		if pdef.Default != "" && pdef.Options != nil && len(pdef.Options.Static) > 0 {
+			found := false
+			for _, item := range pdef.Options.Static {
+				if item.Value == pdef.Default {
+					found = true
+					break
+				}
+			}
+			if !found {
+				out = append(out, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "commands",
+					Target:   paramTarget,
+					File:     relFile,
+					Message:  fmt.Sprintf("params.%s.default: %q not found in static options", pname, pdef.Default),
+					Hint:     "fix the default value or add it to options",
+				})
+			}
+		}
+
+		// Validate default_from + default against resolved options (only if cfg available).
+		if cfg != nil && (pdef.DefaultFrom != "" || pdef.Default != "") {
+			effectiveDefault := pdef.DefaultFrom
+			if effectiveDefault == "" {
+				effectiveDefault = pdef.Default
+			}
+			defaultSource := "default"
+			if pdef.DefaultFrom != "" {
+				defaultSource = fmt.Sprintf("default_from %q", pdef.DefaultFrom)
+			}
+
+			// Only check for select/multiselect since other widgets can't have resolved options.
+			if (effective == model.WidgetSelect || effective == model.WidgetMultiselect) &&
+				pdef.Options != nil && pdef.Options.From != "" {
+				// Try to resolve the options from the config.
+				resolved, ok := config.ResolvePath(cfg.Raw, pdef.Options.From)
+				if ok && resolved != nil {
+					// Convert resolved value to a list we can check membership in.
+					optionValues := extractOptionValues(resolved)
+					if len(optionValues) > 0 && effectiveDefault != "" {
+						found := false
+						for _, optVal := range optionValues {
+							if optVal == effectiveDefault {
+								found = true
+								break
+							}
+						}
+						if !found {
+							out = append(out, validate.Diagnostic{
+								Severity: validate.SeverityError,
+								Domain:   "commands",
+								Target:   paramTarget,
+								File:     relFile,
+								Message:  fmt.Sprintf("params.%s: %s %q not found in resolved options ${%s}", pname, defaultSource, effectiveDefault, pdef.Options.From),
+								Hint:     "check that defaults.yml/local.yml provides this value in the options list",
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return out
+}
+
+// extractOptionValues converts a resolved options value to a list of string values.
+// Handles: []string, []any of scalars, []any of maps with "value" key, or map[string]any.
+func extractOptionValues(v any) []string {
+	var out []string
+
+	switch typed := v.(type) {
+	case []string:
+		out = typed
+	case []any:
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			} else if m, ok := item.(map[string]any); ok {
+				if val, ok := m["value"]; ok {
+					if s, ok := val.(string); ok {
+						out = append(out, s)
+					}
+				}
+			}
+		}
+	case map[string]any:
+		// Extract keys as option values.
+		for key := range typed {
+			out = append(out, key)
+		}
+		sort.Strings(out)
+	}
+
+	return out
 }
 
 // workflowStructuralDiagnostics emits categorised diagnostics for known

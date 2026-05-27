@@ -494,3 +494,237 @@ func TestBuildRegistryFromParsedDuplicates(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate command ID")
 }
+
+// TestParamValidationDiagnostics tests param widget/options validation with categorized diagnostics.
+func TestParamValidationDiagnostics(t *testing.T) {
+	tests := []struct {
+		name      string
+		yaml      string
+		checkDiag func(*testing.T, []validate.Diagnostic)
+	}{
+		{
+			name: "select_without_options_rejected",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      db:
+        type: string
+        widget: select
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Target, "params.db") &&
+						strings.Contains(d.Message, "widget select requires non-empty options") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected select-without-options error; got: %#v", diags)
+			},
+		},
+		{
+			name: "input_with_options_rejected",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      format:
+        type: string
+        widget: input
+        options: [json, yaml]
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Target, "params.format") &&
+						strings.Contains(d.Message, "widget input does not accept options") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected input-with-options error; got: %#v", diags)
+			},
+		},
+		{
+			name: "invalid_widget_value_rejected",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      choice:
+        type: string
+        widget: invalid
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Target, "params.choice") &&
+						strings.Contains(d.Message, "must be one of") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected invalid-widget error; got: %#v", diags)
+			},
+		},
+		{
+			name: "pattern_with_options_rejected",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      email:
+        type: string
+        pattern: '^[^@]+@[^@]+$'
+        options: [a@b.com, c@d.com]
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Target, "params.email") &&
+						strings.Contains(d.Message, "pattern and options are mutually exclusive") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected pattern-with-options error; got: %#v", diags)
+			},
+		},
+		{
+			name: "separator_on_input_rejected",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      name:
+        type: string
+        widget: input
+        separator: ","
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Target, "params.name") &&
+						strings.Contains(d.Message, "separator") &&
+						strings.Contains(d.Message, "multiselect") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected separator-on-input error; got: %#v", diags)
+			},
+		},
+		{
+			name: "duplicate_option_values_rejected",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      db:
+        type: string
+        widget: select
+        options: [mysql, postgres, mysql]
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Target, "params.db") &&
+						strings.Contains(d.Message, "duplicate option value") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected duplicate-options error; got: %#v", diags)
+			},
+		},
+		{
+			name: "default_not_in_options_rejected",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      db:
+        type: string
+        widget: select
+        options: [mysql, postgres]
+        default: mongodb
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				var found bool
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError &&
+						strings.Contains(d.Target, "params.db") &&
+						strings.Contains(d.Message, "default") &&
+						strings.Contains(d.Message, "not found in static options") {
+						found = true
+					}
+				}
+				require.True(t, found, "expected default-not-in-options error; got: %#v", diags)
+			},
+		},
+		{
+			name: "valid_select_with_options_accepted",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      db:
+        type: string
+        widget: select
+        options: [mysql, postgres]
+        default: mysql
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError && strings.Contains(d.Message, "params.db") {
+						t.Fatalf("unexpected param error: %#v", d)
+					}
+				}
+			},
+		},
+		{
+			name: "valid_multiselect_with_separator_accepted",
+			yaml: `commands:
+  test:
+    type: shell
+    cmd: echo hi
+    params:
+      services:
+        type: string
+        widget: multiselect
+        options: [web, db, cache]
+        separator: ","
+`,
+			checkDiag: func(t *testing.T, diags []validate.Diagnostic) {
+				for _, d := range diags {
+					if d.Severity == validate.SeverityError && strings.Contains(d.Message, "params.services") {
+						t.Fatalf("unexpected param error: %#v", d)
+					}
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cmdDir := filepath.Join(dir, "devbox", "commands")
+			require.NoError(t, os.MkdirAll(cmdDir, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "test.yml"), []byte(tc.yaml), 0o644))
+
+			v := &Validator{}
+			diags := v.Run(validate.Context{ProjectRoot: dir})
+			tc.checkDiag(t, diags)
+		})
+	}
+}
