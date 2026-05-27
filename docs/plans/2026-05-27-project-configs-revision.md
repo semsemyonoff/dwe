@@ -323,15 +323,15 @@ Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portabi
 - Modify: `internal/validate/config/validate_yml_test.go`
 - Modify: `docs/reference/config/validate.md` (add note about validated stage set)
 
-- [ ] in existing `internal/validate/config/validate_yml.go` validator: iterate `ValidateCfg.Checks[*].Stages` — for each stage not in the **actual preflight set** `{"deploy", "run", "stop", "command"}` (per `internal/config/validate.go:29-34`) emit `SeverityWarning` diagnostic
-- [ ] hint includes the known stage list AND notes that `restart` is composite (stop+run, no separate preflight) and `reset` uses the stop stage; so `stages: [restart]` / `stages: [reset]` checks would never fire
-- [ ] if Levenshtein distance to a known value ≤ 2, include "did you mean X?"
-- [ ] add test: validate.yml with `stages: [deplooy]` → warning with hint "did you mean deploy?"
-- [ ] add test: validate.yml with `stages: [restart]` → warning with hint about composite nature
-- [ ] add test: validate.yml with `stages: [deploy, run]` → no warning
-- [ ] add test: empty stages → no warning (other validators handle that)
-- [ ] update validate.md mentioning warning behavior + explicit stage vocabulary
-- [ ] run `go test ./internal/validate/...` — must pass before Task 12
+- [x] in existing `internal/validate/config/validate_yml.go` validator: iterate `ValidateCfg.Checks[*].Stages` — for each stage not in the **actual preflight set** `{"deploy", "run", "stop", "command"}` (per `internal/config/validate.go:29-34`) emit `SeverityWarning` diagnostic
+- [x] hint includes the known stage list AND notes that `restart` is composite (stop+run, no separate preflight) and `reset` uses the stop stage; so `stages: [restart]` / `stages: [reset]` checks would never fire
+- [x] if Levenshtein distance to a known value ≤ 2, include "did you mean X?"
+- [x] add test: validate.yml with `stages: [deplooy]` → warning with hint "did you mean deploy?"
+- [x] add test: validate.yml with `stages: [restart]` → warning with hint about composite nature
+- [x] add test: validate.yml with `stages: [deploy, run]` → no warning
+- [x] add test: empty stages → no warning (other validators handle that)
+- [x] update validate.md mentioning warning behavior + explicit stage vocabulary
+- [x] run `go test ./internal/validate/...` — must pass before Task 12
 
 ### Task 12: Info-level diagnostic for untyped top-level keys
 

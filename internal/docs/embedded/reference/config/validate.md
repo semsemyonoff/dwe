@@ -116,7 +116,12 @@ A check runs whenever its `stages` list contains a stage the caller asked for. T
 
 `devbox validate` without `--stage` runs every check regardless of stage.
 
-Stages outside the reserved set are accepted (open enum) but produce an info-level diagnostic at load time: `stage "X" not bound to built-in hooks`. They can still be invoked explicitly with `devbox validate --stage <name>`.
+Unknown stages are accepted (open enum) but produce a **warning** at load time so users catch typos early:
+
+- `stage "deplooy" is not a known preflight stage` (with a suggestion if close via Levenshtein distance)
+- Special notes: `restart` is composite (uses both stop and run stages, no separate preflight); `reset` uses the stop stage only
+
+Unknown stages can still be invoked explicitly with `devbox validate --stage <name>` if needed (e.g. for custom validation workflows).
 
 ## Available builtins
 

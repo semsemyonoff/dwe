@@ -56,7 +56,7 @@ func TestLoadValidateConfig_missingFile(t *testing.T) {
 	}
 }
 
-func TestLoadValidateConfig_unknownStageEmitsInfoWarning(t *testing.T) {
+func TestLoadValidateConfig_unknownStageEmitsWarning(t *testing.T) {
 	cfg, warnings, err := LoadValidateConfig("testdata/validate/unknown_stage.yml")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -68,8 +68,8 @@ func TestLoadValidateConfig_unknownStageEmitsInfoWarning(t *testing.T) {
 		t.Fatalf("warnings = %d, want 1: %+v", len(warnings), warnings)
 	}
 	w := warnings[0]
-	if w.Severity != diag.SeverityInfo {
-		t.Errorf("warning severity = %v, want SeverityInfo", w.Severity)
+	if w.Severity != diag.SeverityWarning {
+		t.Errorf("warning severity = %v, want SeverityWarning", w.Severity)
 	}
 	if !strings.Contains(w.Message, `"preview"`) {
 		t.Errorf("warning message %q should name the unknown stage", w.Message)
@@ -79,6 +79,141 @@ func TestLoadValidateConfig_unknownStageEmitsInfoWarning(t *testing.T) {
 	}
 	if w.Line <= 0 {
 		t.Errorf("warning line = %d, want > 0", w.Line)
+	}
+	if !strings.Contains(w.Hint, "Known stages") {
+		t.Errorf("hint %q should list known stages", w.Hint)
+	}
+}
+
+func TestLoadValidateConfig_typoStageSuggestion(t *testing.T) {
+	// Create a test file with a typo in stage name.
+	content := `checks:
+  - id: typo-check
+    description: check with typo stage
+    stages: [deplooy]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'
+`
+	tmpfile, err := os.CreateTemp("", "validate-*.yml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name())
+	if _, err := tmpfile.Write([]byte(content)); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpfile.Close()
+
+	_, warnings, err := LoadValidateConfig(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d: %+v", len(warnings), warnings)
+	}
+	w := warnings[0]
+	if !strings.Contains(w.Hint, "deploy") {
+		t.Errorf("hint should suggest 'deploy' for typo 'deplooy': %q", w.Hint)
+	}
+}
+
+func TestLoadValidateConfig_restartStageNote(t *testing.T) {
+	// Create a test file with "restart" stage (composite, not a preflight stage).
+	content := `checks:
+  - id: restart-check
+    description: check with restart stage
+    stages: [restart]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'
+`
+	tmpfile, err := os.CreateTemp("", "validate-*.yml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name())
+	if _, err := tmpfile.Write([]byte(content)); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpfile.Close()
+
+	_, warnings, err := LoadValidateConfig(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d", len(warnings))
+	}
+	w := warnings[0]
+	if !strings.Contains(w.Hint, "composite") {
+		t.Errorf("hint should mention that restart is composite: %q", w.Hint)
+	}
+}
+
+func TestLoadValidateConfig_resetStageNote(t *testing.T) {
+	// Create a test file with "reset" stage (uses stop stage for preflight).
+	content := `checks:
+  - id: reset-check
+    description: check with reset stage
+    stages: [reset]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'
+`
+	tmpfile, err := os.CreateTemp("", "validate-*.yml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name())
+	if _, err := tmpfile.Write([]byte(content)); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpfile.Close()
+
+	_, warnings, err := LoadValidateConfig(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d", len(warnings))
+	}
+	w := warnings[0]
+	if !strings.Contains(w.Hint, "stop") {
+		t.Errorf("hint should mention that reset uses stop stage: %q", w.Hint)
+	}
+}
+
+func TestLoadValidateConfig_validStagesNoWarning(t *testing.T) {
+	// Create a test file with valid stages only.
+	content := `checks:
+  - id: valid-check
+    description: check with valid stages
+    stages: [deploy, run, stop, command]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'
+`
+	tmpfile, err := os.CreateTemp("", "validate-*.yml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name())
+	if _, err := tmpfile.Write([]byte(content)); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpfile.Close()
+
+	_, warnings, err := LoadValidateConfig(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings for valid stages, got %d: %+v", len(warnings), warnings)
 	}
 }
 

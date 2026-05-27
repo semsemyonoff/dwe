@@ -114,6 +114,58 @@ type rawCheckEntry struct {
 	With        map[string]any `yaml:"with"`
 }
 
+// findClosestStage returns a known stage name if the input is within
+// Levenshtein distance 2, else empty string.
+func findClosestStage(input string) string {
+	knownStages := []string{"deploy", "run", "stop", "command"}
+	const maxDistance = 2
+
+	var closest string
+	closestDist := maxDistance + 1
+
+	for _, known := range knownStages {
+		d := levenshteinDistance(input, known)
+		if d <= maxDistance && d < closestDist {
+			closest = known
+			closestDist = d
+		}
+	}
+
+	return closest
+}
+
+// levenshteinDistance computes the edit distance between two strings.
+func levenshteinDistance(a, b string) int {
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+
+	// Use two rows for space efficiency.
+	prev := make([]int, len(b)+1)
+	curr := make([]int, len(b)+1)
+
+	for j := range prev {
+		prev[j] = j
+	}
+
+	for i := 1; i <= len(a); i++ {
+		curr[0] = i
+		for j := 1; j <= len(b); j++ {
+			if a[i-1] == b[j-1] {
+				curr[j] = prev[j-1]
+			} else {
+				curr[j] = 1 + min(prev[j], min(curr[j-1], prev[j-1]))
+			}
+		}
+		prev, curr = curr, prev
+	}
+
+	return prev[len(b)]
+}
+
 // LoadValidateConfig reads and strictly decodes devbox/validate.yml.
 //
 // Returns (cfg, warnings, nil) on success. Soft issues (unknown stages outside
@@ -201,14 +253,30 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 			if _, ok := reservedValidateStages[stage]; ok {
 				continue
 			}
+
+			// Unknown stage: emit warning with suggestion if close to a known value.
+			hint := "Known stages: deploy, run, stop, command"
+
+			switch stage {
+			case "restart":
+				hint += "\n\nNote: restart is composite (stop + run, no separate preflight stage). If you need to check before stopping, use stages: [stop]. If you need to check before running, use stages: [run]."
+			case "reset":
+				hint += "\n\nNote: reset uses the stop preflight stage. If you need to check before reset, use stages: [stop]."
+			default:
+				// Check for typos via Levenshtein distance.
+				if suggestion := findClosestStage(stage); suggestion != "" {
+					hint += fmt.Sprintf("\n\nDid you mean %q?", suggestion)
+				}
+			}
+
 			warnings = append(warnings, diag.Diagnostic{
-				Severity: diag.SeverityInfo,
+				Severity: diag.SeverityWarning,
 				Domain:   "config",
 				Target:   "validate",
 				File:     diagFile,
 				Line:     line,
-				Message:  fmt.Sprintf("stage %q not bound to built-in hooks", stage),
-				Hint:     "Reserved stages: deploy, run, stop, command. Custom stages are accepted but won't run automatically — invoke via `devbox validate --stage <name>`.",
+				Message:  fmt.Sprintf("check %q: stage %q is not a known preflight stage", r.ID, stage),
+				Hint:     hint,
 			})
 		}
 

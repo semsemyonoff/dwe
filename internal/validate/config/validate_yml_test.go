@@ -36,18 +36,18 @@ func TestValidateYmlValidator(t *testing.T) {
 			ctx: validate.Context{
 				ValidateCfgWarnings: []validate.Diagnostic{
 					{
-						Severity: validate.SeverityInfo,
+						Severity: validate.SeverityWarning,
 						Domain:   "config",
 						Target:   "validate",
 						File:     "devbox/validate.yml",
 						Line:     7,
-						Message:  `stage "custom" not bound to built-in hooks`,
+						Message:  `check "my-check": stage "deplooy" is not a known preflight stage`,
 					},
 				},
 			},
 			wantLen:  1,
-			wantSev:  validate.SeverityInfo,
-			wantMsg:  `stage "custom" not bound to built-in hooks`,
+			wantSev:  validate.SeverityWarning,
+			wantMsg:  `check "my-check": stage "deplooy" is not a known preflight stage`,
 			wantFile: "devbox/validate.yml",
 		},
 		{
