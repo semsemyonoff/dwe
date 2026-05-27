@@ -288,6 +288,9 @@ func (p *ParamOptions) UnmarshalYAML(node *yaml.Node) error {
 				if err := elem.Decode(&item); err != nil {
 					return fmt.Errorf("options[%d]: %w", i, err)
 				}
+				if item.Value == "" {
+					return fmt.Errorf("options[%d]: 'value' field is required and must be non-empty (check for typos)", i)
+				}
 				p.Static = append(p.Static, item)
 			}
 			return nil
@@ -1107,10 +1110,13 @@ func (c *CommandDef) validateParams() error {
 			return fmt.Errorf("params.%s: separator is only valid for multiselect widgets", pname)
 		}
 
-		// Static options: check for duplicate values.
+		// Static options: check for empty and duplicate values.
 		if pdef.Options != nil && len(pdef.Options.Static) > 0 {
 			seen := make(map[string]bool)
-			for _, item := range pdef.Options.Static {
+			for i, item := range pdef.Options.Static {
+				if item.Value == "" {
+					return fmt.Errorf("params.%s: options[%d] has empty value (check for typos in the 'value' key)", pname, i)
+				}
 				if seen[item.Value] {
 					return fmt.Errorf("params.%s: duplicate option value %q", pname, item.Value)
 				}
@@ -1120,15 +1126,22 @@ func (c *CommandDef) validateParams() error {
 
 		// Validate default literal against static options.
 		if pdef.Default != "" && pdef.Options != nil && len(pdef.Options.Static) > 0 {
-			found := false
+			optionSet := make(map[string]bool, len(pdef.Options.Static))
 			for _, item := range pdef.Options.Static {
-				if item.Value == pdef.Default {
-					found = true
-					break
-				}
+				optionSet[item.Value] = true
 			}
-			if !found {
-				return fmt.Errorf("params.%s: default %q not found in static options", pname, pdef.Default)
+			candidates := []string{pdef.Default}
+			if effective == WidgetMultiselect {
+				sep := pdef.Separator
+				if sep == "" {
+					sep = " "
+				}
+				candidates = strings.Split(pdef.Default, sep)
+			}
+			for _, candidate := range candidates {
+				if !optionSet[candidate] {
+					return fmt.Errorf("params.%s: default %q not found in static options", pname, candidate)
+				}
 			}
 		}
 	}

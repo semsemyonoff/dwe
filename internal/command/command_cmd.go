@@ -228,21 +228,28 @@ func runCommandByID(
 			if len(items) > 0 {
 				value := prefilled[name]
 				if value != "" {
-					// Membership check.
-					found := false
-					for _, opt := range items {
-						if opt.Value == value {
-							found = true
-							break
+					// For multiselect, validate each selected item individually.
+					candidates := []string{value}
+					if p.EffectiveWidget() == model.WidgetMultiselect {
+						sep := p.Separator
+						if sep == "" {
+							sep = " "
 						}
+						candidates = strings.Split(value, sep)
 					}
-					if !found {
-						if provided[name] != "" {
-							// --set value not in options.
-							return fmt.Errorf("param %q: value %q not in options (valid: %s)", name, value, joinOptionValues(items))
+					optionSet := make(map[string]bool, len(items))
+					for _, opt := range items {
+						optionSet[opt.Value] = true
+					}
+					for _, candidate := range candidates {
+						if !optionSet[candidate] {
+							if provided[name] != "" {
+								// --set value not in options.
+								return fmt.Errorf("param %q: value %q not in options (valid: %s)", name, candidate, joinOptionValues(items))
+							}
+							// default_from or default not in options.
+							return fmt.Errorf("param %q: default value %q not in options", name, candidate)
 						}
-						// default_from or default not in options.
-						return fmt.Errorf("param %q: default value %q not in options", name, value)
 					}
 				}
 			} else if prefilled[name] != "" && provided[name] == "" {

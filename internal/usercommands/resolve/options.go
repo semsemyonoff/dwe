@@ -115,7 +115,7 @@ func normalizeOptions(path string, resolved any) ([]model.OptionItem, error) {
 		}
 
 	case map[string]any:
-		// Map: sorted-key list with {Value: key, Label: key}.
+		// Map: sorted-key list with Value=key, Label=map-value (falls back to key).
 		keys := make([]string, 0, len(v))
 		for k := range v {
 			keys = append(keys, k)
@@ -124,9 +124,13 @@ func normalizeOptions(path string, resolved any) ([]model.OptionItem, error) {
 
 		result := make([]model.OptionItem, len(keys))
 		for i, k := range keys {
+			label := k
+			if s, ok := v[k].(string); ok && s != "" {
+				label = s
+			}
 			result[i] = model.OptionItem{
 				Value: k,
-				Label: k,
+				Label: label,
 			}
 		}
 		return result, nil

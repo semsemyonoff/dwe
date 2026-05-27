@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -382,10 +381,21 @@ func paramStructuralDiagnostics(cmd model.CommandDef, relFile string, cfg *confi
 			continue
 		}
 
-		// Static options: check for duplicate values.
+		// Static options: check for empty and duplicate values.
 		if pdef.Options != nil && len(pdef.Options.Static) > 0 {
 			seen := make(map[string]bool)
-			for _, item := range pdef.Options.Static {
+			for i, item := range pdef.Options.Static {
+				if item.Value == "" {
+					out = append(out, validate.Diagnostic{
+						Severity: validate.SeverityError,
+						Domain:   "commands",
+						Target:   paramTarget,
+						File:     relFile,
+						Message:  fmt.Sprintf("params.%s.options[%d]: empty value (check for typos in the 'value' key)", pname, i),
+						Hint:     "ensure each option has a non-empty 'value' field",
+					})
+					break
+				}
 				if seen[item.Value] {
 					out = append(out, validate.Diagnostic{
 						Severity: validate.SeverityError,
@@ -403,22 +413,30 @@ func paramStructuralDiagnostics(cmd model.CommandDef, relFile string, cfg *confi
 
 		// Validate default literal against static options.
 		if pdef.Default != "" && pdef.Options != nil && len(pdef.Options.Static) > 0 {
-			found := false
+			optionSet := make(map[string]bool, len(pdef.Options.Static))
 			for _, item := range pdef.Options.Static {
-				if item.Value == pdef.Default {
-					found = true
+				optionSet[item.Value] = true
+			}
+			candidates := []string{pdef.Default}
+			if effective == model.WidgetMultiselect {
+				sep := pdef.Separator
+				if sep == "" {
+					sep = " "
+				}
+				candidates = strings.Split(pdef.Default, sep)
+			}
+			for _, candidate := range candidates {
+				if !optionSet[candidate] {
+					out = append(out, validate.Diagnostic{
+						Severity: validate.SeverityError,
+						Domain:   "commands",
+						Target:   paramTarget,
+						File:     relFile,
+						Message:  fmt.Sprintf("params.%s.default: %q not found in static options", pname, candidate),
+						Hint:     "fix the default value or add it to options",
+					})
 					break
 				}
-			}
-			if !found {
-				out = append(out, validate.Diagnostic{
-					Severity: validate.SeverityError,
-					Domain:   "commands",
-					Target:   paramTarget,
-					File:     relFile,
-					Message:  fmt.Sprintf("params.%s.default: %q not found in static options", pname, pdef.Default),
-					Hint:     "fix the default value or add it to options",
-				})
 			}
 		}
 
@@ -449,15 +467,30 @@ func paramStructuralDiagnostics(cmd model.CommandDef, relFile string, cfg *confi
 				if ok && resolved != nil {
 					optionValues := extractOptionValues(resolved)
 					if len(optionValues) > 0 {
-						if !slices.Contains(optionValues, effectiveDefault) {
-							out = append(out, validate.Diagnostic{
-								Severity: validate.SeverityError,
-								Domain:   "commands",
-								Target:   paramTarget,
-								File:     relFile,
-								Message:  fmt.Sprintf("params.%s: %s %q not found in resolved options ${%s}", pname, defaultSource, effectiveDefault, pdef.Options.From),
-								Hint:     "check that defaults.yml/local.yml provides this value in the options list",
-							})
+						candidates := []string{effectiveDefault}
+						if effective == model.WidgetMultiselect {
+							sep := pdef.Separator
+							if sep == "" {
+								sep = " "
+							}
+							candidates = strings.Split(effectiveDefault, sep)
+						}
+						optionSet := make(map[string]bool, len(optionValues))
+						for _, v := range optionValues {
+							optionSet[v] = true
+						}
+						for _, candidate := range candidates {
+							if !optionSet[candidate] {
+								out = append(out, validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Domain:   "commands",
+									Target:   paramTarget,
+									File:     relFile,
+									Message:  fmt.Sprintf("params.%s: %s %q not found in resolved options ${%s}", pname, defaultSource, candidate, pdef.Options.From),
+									Hint:     "check that defaults.yml/local.yml provides this value in the options list",
+								})
+								break
+							}
 						}
 					}
 				}

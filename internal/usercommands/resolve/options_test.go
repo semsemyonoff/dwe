@@ -163,11 +163,13 @@ func TestResolveOptions_FromMap(t *testing.T) {
 	result, err := Options(opts, raw)
 	require.NoError(t, err)
 	require.Len(t, result, 3)
-	// Should be sorted.
+	// Should be sorted by key.
 	require.Equal(t, "dev", result[0].Value)
-	require.Equal(t, "dev", result[0].Label)
+	require.Equal(t, "development", result[0].Label) // map value used as label
 	require.Equal(t, "prod", result[1].Value)
+	require.Equal(t, "production", result[1].Label)
 	require.Equal(t, "qa", result[2].Value)
+	require.Equal(t, "quality assurance", result[2].Label)
 }
 
 func TestResolveOptions_FromNestedPath(t *testing.T) {
