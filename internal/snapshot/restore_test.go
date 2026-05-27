@@ -17,7 +17,7 @@ import (
 
 // newSnapCfgWithRestore builds a snapshot config exposing a default `restore`
 // block of the given steps and optional named variants.
-func newSnapCfgWithRestore(steps []model.WorkflowStep, variants map[string]config.SnapshotWorkflow) *config.SnapshotConfig {
+func newSnapCfgWithRestore(steps []model.WorkflowStep, variants map[string]config.SnapshotVariant) *config.SnapshotConfig {
 	return &config.SnapshotConfig{
 		Create:  &config.SnapshotWorkflow{Steps: []model.WorkflowStep{{Command: "noop"}}},
 		Restore: &config.SnapshotWorkflow{Steps: steps, Variants: variants},
@@ -316,7 +316,7 @@ func TestRestore_MissingVariantFallsBackToDefault(t *testing.T) {
 		[]model.WorkflowStep{{Command: "fake.marker"}},
 		// Provide a different variant, NOT "unknown-variant", so the fallback
 		// path is exercised.
-		map[string]config.SnapshotWorkflow{
+		map[string]config.SnapshotVariant{
 			"other": {Steps: []model.WorkflowStep{{Command: "fake.marker"}}},
 		},
 	)

@@ -69,6 +69,17 @@ func (p ServicesMismatchPolicy) Effective() ServicesMismatchValue {
 	}
 }
 
+// SnapshotVariant is a named alternative body within a SnapshotWorkflow,
+// selectable via --using=<variant>. Variants cannot themselves have variants
+// (enforced structurally by the type definition).
+type SnapshotVariant struct {
+	// Description is human-readable help text for the variant.
+	Description string `yaml:"description"`
+	// Steps is the variant body. Reuses model.WorkflowStep so the existing
+	// runner handles when:/confirm/parallel/continue_on_error uniformly.
+	Steps []model.WorkflowStep `yaml:"steps"`
+}
+
 // SnapshotWorkflow is one of the create/restore/remove workflow blocks in
 // devbox/snapshot.yml. The Steps shape reuses model.WorkflowStep directly so
 // snapshot workflows are executed by the same runner as user `type: workflow`
@@ -81,7 +92,8 @@ type SnapshotWorkflow struct {
 	Steps []model.WorkflowStep `yaml:"steps"`
 	// Variants holds named alternative bodies selectable via --using=<variant>.
 	// Variant names must match [a-z0-9][a-z0-9._-]{0,30}.
-	Variants map[string]SnapshotWorkflow `yaml:"variants"`
+	// Variants cannot themselves have variants (enforced structurally).
+	Variants map[string]SnapshotVariant `yaml:"variants"`
 }
 
 // LocalYMLPolicy is the YAML shape under snapshot.yml `local_yml`. PreserveKeys
@@ -174,6 +186,8 @@ func validateServicesMismatchPolicy(policy string) error {
 
 // validateSnapshotWorkflow checks step shapes and variant naming for a single
 // top-level block. A nil workflow is allowed (the block is optional).
+// Nested variants are structurally impossible (SnapshotVariant has no Variants field),
+// so the runtime check for them is not needed.
 func validateSnapshotWorkflow(kind string, w *SnapshotWorkflow) error {
 	if w == nil {
 		return nil
@@ -186,9 +200,6 @@ func validateSnapshotWorkflow(kind string, w *SnapshotWorkflow) error {
 	for name, variant := range w.Variants {
 		if !snapshotVariantNamePattern.MatchString(name) {
 			return fmt.Errorf("%s: variant name %q is invalid (allowed: [a-z0-9][a-z0-9._-]{0,30})", kind, name)
-		}
-		if len(variant.Variants) > 0 {
-			return fmt.Errorf("%s: variant %q: nested variants are not allowed", kind, name)
 		}
 		for i, step := range variant.Steps {
 			if err := step.Validate(); err != nil {

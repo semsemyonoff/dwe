@@ -167,7 +167,7 @@ func TestCreate_VariantMissingErrorsBeforeAnyFilesystemMutation(t *testing.T) {
 	snapCfg := &config.SnapshotConfig{
 		Create: &config.SnapshotWorkflow{
 			Steps: []model.WorkflowStep{{Command: "x"}},
-			Variants: map[string]config.SnapshotWorkflow{
+			Variants: map[string]config.SnapshotVariant{
 				"only": {Steps: []model.WorkflowStep{{Command: "x"}}},
 			},
 		},

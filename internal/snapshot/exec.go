@@ -151,7 +151,10 @@ func SelectWorkflow(cfg *config.SnapshotConfig, kind, variant string) (*config.S
 
 	if base != nil {
 		if v, ok := base.Variants[variant]; ok {
-			return &v, nil
+			return &config.SnapshotWorkflow{
+				Description: v.Description,
+				Steps:       v.Steps,
+			}, nil
 		}
 	}
 

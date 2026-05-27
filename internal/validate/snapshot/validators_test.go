@@ -80,7 +80,7 @@ func TestVariantPairingValidator(t *testing.T) {
 	cfg := &config.SnapshotConfig{
 		Create: &config.SnapshotWorkflow{
 			Steps: []model.WorkflowStep{{Command: "x"}},
-			Variants: map[string]config.SnapshotWorkflow{
+			Variants: map[string]config.SnapshotVariant{
 				"db-only": {Steps: []model.WorkflowStep{{Command: "y"}}},
 			},
 		},
@@ -99,7 +99,7 @@ func TestVariantPairingValidator(t *testing.T) {
 
 	// Restore exists but only with mismatched variants and no default steps → warn.
 	cfg.Restore = &config.SnapshotWorkflow{
-		Variants: map[string]config.SnapshotWorkflow{
+		Variants: map[string]config.SnapshotVariant{
 			"other": {Steps: []model.WorkflowStep{{Command: "z"}}},
 		},
 	}
@@ -108,7 +108,7 @@ func TestVariantPairingValidator(t *testing.T) {
 	}
 
 	// Restore has matching variant → no diag.
-	cfg.Restore.Variants["db-only"] = config.SnapshotWorkflow{Steps: []model.WorkflowStep{{Command: "z"}}}
+	cfg.Restore.Variants["db-only"] = config.SnapshotVariant{Steps: []model.WorkflowStep{{Command: "z"}}}
 	if got := (&variantPairingValidator{cfg: cfg}).Run(validate.Context{}); len(got) != 0 {
 		t.Fatalf("matched variant: want no diag, got %+v", got)
 	}
@@ -170,7 +170,7 @@ func TestTemplateScopeValidator_AllowsCreatedAtInRestore(t *testing.T) {
 func TestTemplateScopeValidator_WalksParallelAndVariants(t *testing.T) {
 	cfg := &config.SnapshotConfig{
 		Create: &config.SnapshotWorkflow{
-			Variants: map[string]config.SnapshotWorkflow{
+			Variants: map[string]config.SnapshotVariant{
 				"v": {Steps: []model.WorkflowStep{
 					{Parallel: &model.WorkflowParallel{Steps: []model.WorkflowStep{
 						{Command: "x", With: map[string]string{"k": "${snapshot.created_at}"}},

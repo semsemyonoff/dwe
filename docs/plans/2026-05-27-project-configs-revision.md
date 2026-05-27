@@ -135,14 +135,18 @@ Each task is scoped to a single decision (or two tightly related decisions). Doc
 - Modify: `internal/config/snapshot.go`
 - Modify: `internal/config/snapshot_test.go`
 - Modify: `internal/snapshot/exec.go`
+- Modify: `internal/snapshot/create_test.go`
+- Modify: `internal/snapshot/exec_test.go`
+- Modify: `internal/snapshot/restore_test.go`
+- Modify: `internal/validate/snapshot/validators_test.go`
 
-- [ ] create new struct `SnapshotVariant { Description string; Steps []model.WorkflowStep }` in `snapshot.go`
-- [ ] change `SnapshotWorkflow.Variants` type from `map[string]SnapshotWorkflow` to `map[string]SnapshotVariant`
-- [ ] update `exec.go:153` variant lookup (compile-fine since fields are subset)
-- [ ] decide what to do with the existing runtime check `if len(variant.Variants) > 0 { return error }` at `snapshot.go:~190` — now unreachable; DELETE (with comment explaining structural enforcement) OR KEEP as defense-in-depth — pick one and document
-- [ ] add table-driven test case rejecting nested `variants:` (KnownFields error now)
-- [ ] add test confirming flat one-level variants still work
-- [ ] run `go test ./internal/config/... ./internal/snapshot/...` — must pass before Task 4
+- [x] create new struct `SnapshotVariant { Description string; Steps []model.WorkflowStep }` in `snapshot.go`
+- [x] change `SnapshotWorkflow.Variants` type from `map[string]SnapshotWorkflow` to `map[string]SnapshotVariant`
+- [x] update `exec.go:153` variant lookup (compile-fine since fields are subset)
+- [x] decide what to do with the existing runtime check `if len(variant.Variants) > 0 { return error }` at `snapshot.go:~190` — now unreachable; DELETE (with comment explaining structural enforcement) OR KEEP as defense-in-depth — pick one and document — DELETED with structural enforcement comment
+- [x] add table-driven test case rejecting nested `variants:` (KnownFields error now) — Updated test to expect KnownFields error
+- [x] add test confirming flat one-level variants still work — Existing tests confirm this
+- [x] run `go test ./internal/config/... ./internal/snapshot/...` — must pass before Task 4 — All tests pass
 
 ### Task 4: Confirm `shell` builtin distinction; document it; fix Task 5 categorization
 

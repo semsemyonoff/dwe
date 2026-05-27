@@ -159,7 +159,7 @@ func TestSelectWorkflow_CreateMissingVariantErrors(t *testing.T) {
 	cfg := &config.SnapshotConfig{
 		Create: &config.SnapshotWorkflow{
 			Steps: []model.WorkflowStep{{Command: "default"}},
-			Variants: map[string]config.SnapshotWorkflow{
+			Variants: map[string]config.SnapshotVariant{
 				"db-only": {Steps: []model.WorkflowStep{{Command: "v1"}}},
 			},
 		},
@@ -180,7 +180,7 @@ func TestSelectWorkflow_RestoreMissingVariantFallsBack(t *testing.T) {
 	cfg := &config.SnapshotConfig{
 		Restore: &config.SnapshotWorkflow{
 			Steps: []model.WorkflowStep{{Command: "default-restore"}},
-			Variants: map[string]config.SnapshotWorkflow{
+			Variants: map[string]config.SnapshotVariant{
 				"db-only": {Steps: []model.WorkflowStep{{Command: "restore-v1"}}},
 			},
 		},

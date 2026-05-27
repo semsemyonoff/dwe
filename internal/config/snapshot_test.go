@@ -83,7 +83,7 @@ remove:
 		t.Errorf("create step[2].Parallel: %+v", cfg.Create.Steps[2].Parallel)
 	}
 	if v, ok := cfg.Create.Variants["db-only"]; !ok || len(v.Steps) != 1 {
-		t.Errorf("Create.Variants[db-only]: %+v", cfg.Create.Variants)
+		t.Errorf("Create.Variants[db-only]: %+v", v)
 	}
 	if cfg.Restore == nil || len(cfg.Restore.Steps) != 1 {
 		t.Fatalf("Restore.Steps: %+v", cfg.Restore)
@@ -234,8 +234,10 @@ create:
 	if err == nil {
 		t.Fatal("expected nested-variants rejection, got nil")
 	}
-	if !strings.Contains(err.Error(), "nested variants") {
-		t.Errorf("error should mention nested variants: %v", err)
+	// Nested variants are now rejected at YAML decode time (KnownFields error)
+	// because SnapshotVariant has no Variants field.
+	if !strings.Contains(err.Error(), "variants") {
+		t.Errorf("error should mention variants field: %v", err)
 	}
 }
 
