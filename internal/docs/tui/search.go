@@ -19,12 +19,12 @@ type SearchIndex struct {
 	entries []SearchEntry
 }
 
+var headingRe = regexp.MustCompile(`^(#+)\s+(.+)$`)
+
 // BuildSearchIndex scans markdown content and extracts all headings.
 func BuildSearchIndex(content []byte, source string) *SearchIndex {
 	lines := bytes.Split(content, []byte("\n"))
 	var entries []SearchEntry
-
-	headingRe := regexp.MustCompile(`^(#+)\s+(.+)$`)
 
 	for i, line := range lines {
 		matches := headingRe.FindSubmatch(line)

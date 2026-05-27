@@ -1,7 +1,6 @@
 package command
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -778,7 +777,7 @@ func genTopLevelIndex(outDir string, scopes map[string]bool) error {
 	return os.WriteFile(indexPath, []byte(sb.String()), 0o644)
 }
 
-func runDocsTUI(_ *cobra.Command, flags *rootFlags, termWidth, termHeight int) error {
+func runDocsTUI(cmd *cobra.Command, flags *rootFlags, termWidth, termHeight int) error {
 	// Load configuration for doc settings (mermaid config, etc.)
 	cfg, err := config.LoadConfig(flags.configPath)
 	if err != nil {
@@ -827,7 +826,7 @@ func runDocsTUI(_ *cobra.Command, flags *rootFlags, termWidth, termHeight int) e
 	translator := i18n.TranslatorOrNop(flags.I18n)
 
 	// Create the model
-	ctx := context.Background()
+	ctx := cmd.Context()
 	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
@@ -835,7 +834,7 @@ func runDocsTUI(_ *cobra.Command, flags *rootFlags, termWidth, termHeight int) e
 
 	// Run via ui.RunWithPromptHooks for proper signal handling
 	runErr := ui.RunWithPromptHooks(func() error {
-		prog := tea.NewProgram(model)
+		prog := tea.NewProgram(model, tea.WithContext(ctx))
 		_, e := prog.Run()
 		return e
 	})

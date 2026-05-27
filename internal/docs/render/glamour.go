@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 
@@ -38,9 +39,13 @@ func Render(input []byte, opts Opts, placeholderFunc PlaceholderFunc) (Result, e
 	)
 	if err != nil {
 		// Fall back to a default style if theme selection fails
-		renderer, _ = glamour.NewTermRenderer(
+		var fallbackErr error
+		renderer, fallbackErr = glamour.NewTermRenderer(
 			glamour.WithWordWrap(opts.Width),
 		)
+		if fallbackErr != nil {
+			return Result{}, fmt.Errorf("glamour: create renderer: %w (fallback: %v)", err, fallbackErr)
+		}
 	}
 
 	output, err := renderer.Render(string(preprocessed))

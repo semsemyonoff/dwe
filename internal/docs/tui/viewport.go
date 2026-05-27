@@ -9,7 +9,6 @@ type ViewportWidget struct {
 	content string
 	width   int
 	height  int
-	yOffset int
 }
 
 func NewViewportWidget(width, height int) *ViewportWidget {
@@ -25,7 +24,6 @@ func NewViewportWidget(width, height int) *ViewportWidget {
 func (w *ViewportWidget) SetContent(content string) {
 	w.content = content
 	w.v.SetContent(content)
-	w.yOffset = 0
 }
 
 func (w *ViewportWidget) SetDimensions(width, height int) {

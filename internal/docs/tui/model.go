@@ -54,6 +54,7 @@ type Model struct {
 	PrefetchProgress ProgressMsg
 	prefetchChan     chan ProgressMsg
 
+	ctx      context.Context
 	initCmd  tea.Cmd // cmd to run on first Init() call
 	quitting bool
 }
@@ -104,6 +105,7 @@ func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translat
 		ProjectRoot:       projectRoot,
 		Prefetch:          nil, // Lazily created when needed
 		PrefetchProgress:  ProgressMsg{},
+		ctx:               ctx,
 		quitting:          false,
 	}
 
@@ -249,9 +251,8 @@ func (m *Model) ensurePrefetch() {
 	if m.Prefetch != nil {
 		return
 	}
-	ctx := context.Background()
 	m.prefetchChan = make(chan ProgressMsg, 10)
-	m.Prefetch = NewPrefetch(ctx, m.MermaidRenderer, m.prefetchChan)
+	m.Prefetch = NewPrefetch(m.ctx, m.MermaidRenderer, m.prefetchChan)
 }
 
 // waitForFileChange returns a Cmd that blocks until the next file-change event.
