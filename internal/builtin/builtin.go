@@ -20,6 +20,7 @@
 //   - service_dirs_ensure           — ensure service hub directories exist
 //   - docker_remove_project_volumes — remove all Docker volumes for the project
 //   - docker_wait_healthy           — wait until containers are healthy
+//   - containers_running            — fast "is running" check (no polling, no timeout)
 //   - docker_daemon_start           — start a named daemon container (docker compose run -d)
 //   - docker_daemon_logs            — tail daemon container logs foreground (interactive)
 //   - docker_daemon_stop            — stop a named daemon container (idempotent)
@@ -83,6 +84,7 @@ var registry = map[string]Builtin{
 	"service_dirs_ensure":           serviceDirsEnsureBuiltin{},
 	"docker_remove_project_volumes": dockerRemoveProjectVolumesBuiltin{},
 	"docker_wait_healthy":           dockerWaitHealthyBuiltin{},
+	"containers_running":            containersRunningBuiltin{},
 	"docker_daemon_start":           daemonStartBuiltin{},
 	"docker_daemon_logs":            daemonLogsBuiltin{},
 	"docker_daemon_stop":            daemonStopBuiltin{},

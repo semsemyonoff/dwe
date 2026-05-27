@@ -116,13 +116,41 @@ const (
 type ExecMode string
 
 const (
-	// ExecModeExec always uses docker compose exec (fails if container not running).
+	// ExecModeExec calls docker compose exec directly. If the container is not
+	// running docker emits its own (cryptic) error. Prefer ExecModeExecOrFail
+	// for clearer diagnostics; this mode exists for callers that need the raw
+	// behaviour.
 	ExecModeExec ExecMode = "exec"
 	// ExecModeRun always uses docker compose run --rm.
 	ExecModeRun ExecMode = "run"
 	// ExecModeExecOrRun checks if container is running; uses exec if so, run otherwise.
+	// Emits a warning when the fallback to run actually triggers — ephemeral run
+	// containers are an easy source of confusion (state not persisted, no shared
+	// network with other compose services, etc.).
 	ExecModeExecOrRun ExecMode = "exec-or-run"
+	// ExecModeExecOrFail (default) pre-checks the target service and refuses
+	// with a clear devbox-level error when the container is not running.
+	// Prevents the silent compose-fallback that ExecModeExecOrRun does for
+	// tools that legitimately work as ephemeral runs (mc, composer, etc.).
+	ExecModeExecOrFail ExecMode = "exec-or-fail"
 )
+
+// DefaultExecMode is the ExecMode used when a service_exec command does not
+// specify mode. It is exec-or-fail rather than exec so that a "service not
+// running" condition surfaces as an actionable devbox error rather than a raw
+// compose stderr trace.
+const DefaultExecMode = ExecModeExecOrFail
+
+// IsValid reports whether m is one of the canonical ExecMode values.
+// The empty string is considered valid (interpreted as the default at the
+// dispatch site); use this for schema validation, not for switch coverage.
+func (m ExecMode) IsValid() bool {
+	switch m {
+	case "", ExecModeExec, ExecModeRun, ExecModeExecOrRun, ExecModeExecOrFail:
+		return true
+	}
+	return false
+}
 
 // FileAccess specifies whether a file is read, written, or both.
 type FileAccess string
@@ -790,6 +818,12 @@ func (c *CommandDef) validateServiceType() error {
 	}
 	if c.Type == CommandTypeServiceRun && c.Mode != "" && c.Mode != ExecModeRun {
 		return fmt.Errorf("mode is not applicable for type=service_run (always runs a new container)")
+	}
+	if !c.Mode.IsValid() {
+		return fmt.Errorf("mode %q is invalid (must be one of: exec, run, exec-or-run, exec-or-fail)", c.Mode)
+	}
+	if c.Runner != nil && !c.Runner.Mode.IsValid() {
+		return fmt.Errorf("runner.mode %q is invalid (must be one of: exec, run, exec-or-run, exec-or-fail)", c.Runner.Mode)
 	}
 	return nil
 }

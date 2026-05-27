@@ -103,6 +103,7 @@ phases:
             key: value
         continue_on_error: true    # optional: failure does not abort the pipeline
         skip_confirm: true         # optional: bypass confirmation prompts for this step
+        untracked: true            # optional: exclude this step from [N/M] counter and suppress its output
         files_gate: readable       # short form: state must be readable|missing
         # or long form:
         files_gate:
@@ -152,6 +153,7 @@ phases:
 | `files_gate` | typed gate | Pre-condition based on file existence/absence from a command's `files:` block. Step skipped if unsatisfied. See [`files_gate:` (pre-condition for files)](#files_gate-pre-condition-for-files). |
 | `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](lifecycle.md). **Behavior change:** when the step body succeeds but `check:` fails, and `continue_on_error: true`, the step is reported as failed and the pipeline continues to the next step (symmetric with body-failure semantics). |
 | `skip_confirm` | bool | When `true`, bypasses confirmation prompts for this step only — equivalent to a per-step `-y` / `--yes`. Propagates to the step body and its `check:` action. ORed with the pipeline-wide skip-confirm flag, so the step is non-interactive whenever either is set. Useful when most of the pipeline is interactive but one step (e.g. a `confirm` builtin guarding an idempotent action, or a command that re-prompts internally) should always proceed. |
+| `untracked` | bool | When `true`, the step is excluded from the `[N/M]` step counter and its lifecycle output (start/done lines) is suppressed. Failures still surface. ORed with phase-level `untracked` — use the step-level flag to hide a single stack-up or wait-healthy step without moving it into a dedicated untracked phase. Allowed on parallel-group steps; sub-steps inherit untracked status from their group. |
 
 ## Step execution types
 
@@ -232,6 +234,7 @@ The following builtins are available for use in pipeline steps (`type: builtin`)
 | `confirm` | Interactive Y/n prompt (skipped under `--yes`) |
 | `docker_remove_project_volumes` | Remove all volumes whose name is prefixed with the compose project name |
 | `docker_wait_healthy` | Wait for Docker containers to reach healthy state |
+| `containers_running` | Fast "is running" check (no polling, no timeout, no healthcheck required) |
 | `remove_paths` | Delete project-relative paths from the filesystem |
 
 ### `service_dirs_ensure`
@@ -371,6 +374,35 @@ Waits for Docker containers to reach a healthy state. Polls the active Docker Co
 - If a container is `unhealthy` or the timeout elapses before all containers become `healthy`, returns an error and stops the pipeline.
 - Containers with no healthcheck (status `none`) are treated as always healthy and skipped.
 - The active stack is determined by the current overlay set (default, enabled services, enabled tools). This builtin respects `ComposeFiles()`, not `ComposeFilesAll()`.
+
+### `containers_running`
+
+Fast "is running" check for compose services. Unlike `docker_wait_healthy` it does not poll, does not honour a timeout, and does not require services to declare a healthcheck — a single `docker compose ps --status=running --services` call returns the set of currently-running services, and the builtin diffs that against the requested list.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `services` | list of strings | required | Compose service names that must be currently running. Empty list is rejected. |
+
+**Example: gate a pipeline step on a running service**
+
+```yaml
+- name: stack-up
+  type: devbox
+  cmd: "docker up"
+  check:
+    type: builtin
+    cmd: containers_running
+    with:
+      services: [app-main, db]
+```
+
+**When to choose this over `docker_wait_healthy`:**
+
+- The service has no healthcheck — `docker_wait_healthy` would either skip it (treated as healthy) or hang waiting for a status that never arrives.
+- You need a precondition for a follow-up step (e.g. `service_exec`) and want a clear "container X is not running" error instead of a compose stderr trace.
+- The pipeline runs immediately after `docker up` and you just want to confirm the stack came up, without paying a polling round-trip.
+
+If services are missing, the builtin fails with `services not running: <comma-separated list>`.
 
 ### `remove_paths`
 

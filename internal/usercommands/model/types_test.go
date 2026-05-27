@@ -61,12 +61,15 @@ func TestUserModeConstants(t *testing.T) {
 }
 
 func TestExecModeConstants(t *testing.T) {
-	modes := []ExecMode{ExecModeExec, ExecModeRun, ExecModeExecOrRun}
-	want := []string{"exec", "run", "exec-or-run"}
+	modes := []ExecMode{ExecModeExec, ExecModeRun, ExecModeExecOrRun, ExecModeExecOrFail}
+	want := []string{"exec", "run", "exec-or-run", "exec-or-fail"}
 	for i, m := range modes {
 		if string(m) != want[i] {
 			t.Errorf("ExecMode[%d] = %q, want %q", i, m, want[i])
 		}
+	}
+	if DefaultExecMode != ExecModeExecOrFail {
+		t.Errorf("DefaultExecMode = %q, want %q", DefaultExecMode, ExecModeExecOrFail)
 	}
 }
 

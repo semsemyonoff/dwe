@@ -188,7 +188,13 @@ type DeployStep struct {
 	FilesGate       *filesgate.FilesGate `yaml:"files_gate,omitempty"`
 	ContinueOnError bool                 `yaml:"continue_on_error,omitempty"`
 	SkipConfirm     bool                 `yaml:"skip_confirm,omitempty"`
-	Parallel        *ParallelGroup       `yaml:"parallel,omitempty"`
+	// Untracked excludes this step from the [N/M] step counter and suppresses
+	// its lifecycle output (start/done lines). Mirrors DeployPhase.Untracked
+	// but at step granularity so a single stack-up / wait-healthy step can be
+	// hidden without moving it into a dedicated untracked phase. Failures are
+	// still surfaced.
+	Untracked bool           `yaml:"untracked,omitempty"`
+	Parallel  *ParallelGroup `yaml:"parallel,omitempty"`
 	// SubStepOverrides applies pipeline-side orchestration directives (currently
 	// files_gate) to named sub-steps of the workflow referenced by Cmd. Keys are
 	// the sub-step Name (or, when absent, the sub-step's referenced Command).
@@ -231,6 +237,7 @@ var deployStepKnownFields = map[string]bool{
 	"files_gate":         true,
 	"continue_on_error":  true,
 	"skip_confirm":       true,
+	"untracked":          true,
 	"parallel":           true,
 	"sub_step_overrides": true,
 }

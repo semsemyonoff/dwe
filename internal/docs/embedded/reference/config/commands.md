@@ -691,17 +691,28 @@ Suggested conventions for scripts under `devbox/scripts/` (independent of ShellC
 
 ## Type: service_exec
 
-Runs a command inside an existing container via `docker compose exec`. With `mode: exec-or-run`, falls back to `docker compose run --rm` if the container is not running.
+Runs a command inside an existing container via `docker compose exec`. The `mode:` field controls what happens when the target container is not running — see [mode resolution](#mode-resolution) below.
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `service` | yes | Compose service name |
 | `cmd` / `argv` | one of | Shell command string OR raw argv |
-| `mode` | optional | `exec` (default), `run`, or `exec-or-run` |
+| `mode` | optional | `exec-or-fail` (default), `exec`, `run`, or `exec-or-run` — see [mode resolution](#mode-resolution) |
 | `user` | optional | Container user to run as. See [User resolution](#user-resolution) for the full list of accepted values and the fallback rules. |
 | `workdir` | optional | Container workdir; rendered with templates |
 | `workdir_from` | optional | Dot-path into merged config resolving to the workdir string |
 | `compose_args` | optional | Extra flags forwarded to `docker compose exec/run` (templated) |
+
+### Mode resolution
+
+| Mode | When container is running | When container is not running |
+|------|---------------------------|-------------------------------|
+| `exec-or-fail` (default) | runs via `docker compose exec` | refuses with a clear devbox error suggesting `devbox docker up <svc>` |
+| `exec` | runs via `docker compose exec` | calls `compose exec` anyway; docker emits its own (cryptic) error |
+| `run` | always runs a fresh ephemeral container via `docker compose run --rm` | same |
+| `exec-or-run` | runs via `docker compose exec` | silently falls back to `docker compose run --rm`; emits a yellow warning so the ephemeral-container behaviour is visible |
+
+Pick `exec-or-fail` (the default) for normal interactive tools that depend on persistent container state (databases, application servers, etc.) — a missing container should surface as an actionable error, not a side-effecting one-off run. Pick `exec-or-run` only for tools that legitimately work as ephemeral runs (mc, composer install on a fresh checkout, etc.) and where you understand that no state will persist between invocations. `runner.mode` follows the same enum and same precedence rules as `runner.user`.
 
 ### User resolution
 

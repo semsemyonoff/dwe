@@ -68,7 +68,7 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 				groupName = "(unnamed)"
 			}
 			indexRange := ""
-			if !rs.Phase.Untracked && trackedTotal > 0 {
+			if !rs.IsUntracked() && trackedTotal > 0 {
 				indexRange = fmt.Sprintf("[%d-%d/%d] ", startIdx, endIdx, trackedTotal)
 			}
 			header := fmt.Sprintf("%s%s[parallel group: %s (%d steps, max_concurrent=%d, fail_fast=%v)]",
@@ -84,11 +84,11 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 			subIndent := indent + "  "
 			subDetailIndent := detailIndent + "  "
 			for _, sub := range rs.Parallel.Steps {
-				if !rs.Phase.Untracked {
+				if !rs.IsUntracked() {
 					trackedIndex++
 				}
 				idxPrefix := ""
-				if !rs.Phase.Untracked && trackedTotal > 0 {
+				if !rs.IsUntracked() && trackedTotal > 0 {
 					idxPrefix = fmt.Sprintf("[%d/%d] ", trackedIndex, trackedTotal)
 				}
 				printLeafStep(out, sub, subIndent, subDetailIndent, idxPrefix, devboxBin)
@@ -96,7 +96,7 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 			continue
 		}
 
-		if !rs.Phase.Untracked {
+		if !rs.IsUntracked() {
 			trackedIndex++
 		}
 		printLeafStep(out, rs, indent, detailIndent, "", devboxBin)
@@ -136,11 +136,11 @@ func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPr
 
 // computeTrackedTotal counts steps for the plan-table index display, mirroring the
 // executor's trackedTotal computation: parallel groups contribute len(sub-steps);
-// steps in untracked phases are excluded.
+// steps marked untracked (at phase or step level) are excluded.
 func computeTrackedTotal(steps []ResolvedStep) int {
 	total := 0
 	for _, rs := range steps {
-		if rs.Phase.Untracked {
+		if rs.IsUntracked() {
 			continue
 		}
 		if rs.Parallel != nil {

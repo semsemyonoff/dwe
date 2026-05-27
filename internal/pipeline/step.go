@@ -40,6 +40,13 @@ type ResolvedParallel struct {
 	Steps         []ResolvedStep
 }
 
+// IsUntracked reports whether this step is excluded from the [N/M] counter
+// and its lifecycle output suppressed — true when either the enclosing phase
+// or the step itself sets untracked. Failures still surface regardless.
+func (rs ResolvedStep) IsUntracked() bool {
+	return rs.Phase.Untracked || rs.Step.Untracked
+}
+
 // StepAddress returns the full address of a step for display and lookup:
 //   - orchestrator steps: "<phase>/<step>"
 //   - service steps:      "<service>/<phase>/<step>"

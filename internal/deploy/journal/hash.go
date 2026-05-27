@@ -372,6 +372,7 @@ func deployStepToMap(step config.DeployStep) map[string]any {
 		"description":       step.Description,
 		"continue_on_error": step.ContinueOnError,
 		"skip_confirm":      step.SkipConfirm,
+		"untracked":         step.Untracked,
 	}
 
 	if len(step.With) > 0 {

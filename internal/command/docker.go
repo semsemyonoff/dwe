@@ -78,7 +78,9 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 }
 
 func newDockerUpCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	var wait bool
+
+	cmd := &cobra.Command{
 		Use:   "up [services...]",
 		Short: "Start compose services",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -86,10 +88,17 @@ func newDockerUpCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return p.compose.Exec("up", args...)
+			extra := args
+			if wait {
+				extra = append([]string{"--wait"}, args...)
+			}
+			return p.compose.Exec("up", extra...)
 		},
 		SilenceUsage: true,
 	}
+
+	cmd.Flags().BoolVar(&wait, "wait", false, "block until all services are healthy (forwards --wait to docker compose up; requires healthchecks on every started service)")
+	return cmd
 }
 
 func newDockerDownCmd(flags *rootFlags) *cobra.Command {

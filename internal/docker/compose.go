@@ -4,6 +4,7 @@
 package docker
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os"
@@ -234,6 +235,32 @@ func (c *Compose) ContainerIDs() ([]string, error) {
 // Compose's docker binary. Wraps the package-level HealthStatus function.
 func (c *Compose) HealthStatus(id string) (string, error) {
 	return HealthStatus(c.BinName(), id)
+}
+
+// RunningServices returns the subset of the given service names whose container
+// is currently in the running state. Unlike ContainerIDsFor (which returns
+// container IDs) this queries by service name and uses
+// `compose ps --status running --services [services...]` so the output is one
+// service name per line — fast, no polling, correct for services without a
+// healthcheck. Empty services slice returns nil.
+func (c *Compose) RunningServices(ctx context.Context, services []string) ([]string, error) {
+	args := c.BuildInternalArgs("ps", "--status", "running", "--services")
+	args = append(args, services...)
+
+	cmd := exec.CommandContext(ctx, c.BinName(), args...) //nolint:gosec
+	cmd.Env = c.BuildEnv()
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%s compose ps --services: %w", c.BinName(), err)
+	}
+
+	var names []string
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			names = append(names, line)
+		}
+	}
+	return names, nil
 }
 
 // ContainerIDsFor returns the IDs of running containers for the given services.

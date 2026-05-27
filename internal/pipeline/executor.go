@@ -434,14 +434,14 @@ func RunWithOptions(opts RunOptions) error {
 		ctx, stop = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 	}
-	// trackedTotal excludes steps belonging to phases with Untracked=true.
-	// These steps receive index=0, total=0 in reporter calls so PlainReporter
-	// can suppress output for them.
+	// trackedTotal excludes steps marked untracked — either via the enclosing
+	// phase or the step itself. These receive index=0, total=0 in reporter
+	// calls so PlainReporter can suppress output for them.
 	// A parallel group contributes len(group.Steps) to the total — each
 	// sub-step gets its own reserved index in the [N/M] display.
 	trackedTotal := 0
 	for _, rs := range opts.Steps {
-		if rs.Phase.Untracked {
+		if rs.IsUntracked() {
 			continue
 		}
 		if rs.Parallel != nil {
@@ -500,7 +500,7 @@ func RunWithOptions(opts RunOptions) error {
 		// the leading index of that block.
 		stepIndex, stepTotal := 0, 0
 		var subIndices []int
-		if !rs.Phase.Untracked {
+		if !rs.IsUntracked() {
 			if rs.Parallel != nil {
 				subIndices = make([]int, len(rs.Parallel.Steps))
 				for i := range subIndices {

@@ -9,27 +9,30 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/render"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands/model"
 )
 
 // ServiceExecRunner executes type=service_exec commands via `docker compose exec`.
-// When Mode is ExecModeExecOrRun it checks whether the target container is
-// running and falls back to `docker compose run --rm` if it is not.
+// The behaviour when the target container is not running depends on Mode:
+//   - exec-or-fail (default): refuses with a clear devbox error.
+//   - exec-or-run: silently falls back to `docker compose run --rm` (with a
+//     warning written to stderr so the ephemeral-container behaviour is visible).
+//   - exec / run: forced; exec lets compose emit its own error if the container
+//     is missing.
 type ServiceExecRunner struct{}
 
 // BuildCommand constructs the exec.Cmd for the given context.
-// When mode is exec-or-run the container state is checked at build time:
-// if the container is not running the command will use `run --rm` instead.
-// The supplied ctx is attached to the returned *exec.Cmd so callers can
-// cancel the child by cancelling ctx.
+// See ServiceExecRunner for mode semantics. The supplied ctx is attached to
+// the returned *exec.Cmd so callers can cancel the child by cancelling ctx.
 func (r *ServiceExecRunner) BuildCommand(ctx context.Context, rc RunContext, compose *docker.Compose) (*exec.Cmd, error) {
 	svc, user, workdir, mode, err := resolveServiceFields(rc)
 	if err != nil {
 		return nil, err
 	}
 	if mode == "" {
-		mode = model.ExecModeExec
+		mode = model.DefaultExecMode
 	}
 
 	argv, err := buildServiceArgv(rc)
@@ -46,12 +49,23 @@ func (r *ServiceExecRunner) BuildCommand(ctx context.Context, rc RunContext, com
 	switch mode {
 	case model.ExecModeRun:
 		useExec = false
+	case model.ExecModeExecOrFail:
+		// Pre-check so that "service not running" surfaces as a clean devbox
+		// error rather than a raw compose stderr trace.
+		running, checkErr := isContainerRunning(compose, svc)
+		if checkErr == nil && !running {
+			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `devbox docker up %s`, or set `mode: exec-or-run` if a one-off ephemeral container is acceptable", svc, svc)
+		}
+		// On probe error we proceed; compose will fail with its own error if needed.
 	case model.ExecModeExecOrRun:
 		running, checkErr := isContainerRunning(compose, svc)
 		if checkErr != nil {
 			running = true
 		}
 		useExec = running
+		if !running {
+			render.NewWriter(stderr(rc)).Warning(fmt.Sprintf("service %q is not running — falling back to ephemeral `docker compose run --rm`; state will not persist between invocations", svc))
+		}
 	}
 
 	composeArgs, err := buildRenderedComposeArgs(rc)
