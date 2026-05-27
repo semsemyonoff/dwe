@@ -46,8 +46,11 @@ Examples:
 		},
 		SilenceUsage: true,
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			// Load sources for completion (tolerant of errors)
-			projectRoot := flags.ProjectRoot()
+			// completionConfigPath must be called first: __complete bypasses PersistentPreRunE.
+			_, projectRoot, err := completionConfigPath(flags, cmd)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
 			roots := docs.Sources(projectRoot)
 
 			// Use a nil-safe translator for completion paths

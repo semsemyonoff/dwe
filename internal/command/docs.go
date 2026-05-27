@@ -796,8 +796,9 @@ func runDocsTUI(_ *cobra.Command, flags *rootFlags, termWidth, termHeight int) e
 		}
 	}
 
-	// Resolve locale (use provided --lang flag, then config, then environment)
-	locale := i18n.ResolveLocale(flags.Locale, cfgLang, os.Getenv("LANG"))
+	// Resolve locale directly from config and environment — do NOT use flags.Locale
+	// (it is clamped to the YAML i18n store, a different namespace from markdown translations).
+	locale := i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
 
 	// Build mermaid renderer chain based on config
 	var renderer mermaid.Renderer

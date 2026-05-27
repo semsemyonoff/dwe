@@ -12,10 +12,11 @@ import (
 
 // WorkItem represents a diagram to be rendered.
 type WorkItem struct {
-	Source string
-	Theme  mermaid.Theme
-	Width  int
-	Index  int // Diagram index for ordering
+	Source     string
+	Theme      mermaid.Theme
+	Width      int
+	Index      int // Diagram index for ordering
+	generation int // set by Queue; stale items (wrong generation) don't update the counter
 }
 
 // ProgressMsg reports prefetch progress to the TUI.
@@ -26,15 +27,16 @@ type ProgressMsg struct {
 
 // Prefetch manages background mermaid rendering with a bounded worker pool.
 type Prefetch struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	renderer  mermaid.Renderer
-	progress  chan<- ProgressMsg
-	workQueue chan WorkItem
-	wg        sync.WaitGroup
-	mu        sync.Mutex
-	rendered  int
-	total     int
+	ctx        context.Context
+	cancel     context.CancelFunc
+	renderer   mermaid.Renderer
+	progress   chan<- ProgressMsg
+	workQueue  chan WorkItem
+	wg         sync.WaitGroup
+	mu         sync.Mutex
+	generation int // incremented on each Queue call to discard stale renders
+	rendered   int
+	total      int
 }
 
 const MaxPrefetchWorkers = 2
@@ -54,18 +56,11 @@ func NewPrefetch(ctx context.Context, renderer mermaid.Renderer, progress chan<-
 		total:     0,
 	}
 
-	// Start the worker pool using WaitGroup + semaphore (NOT errgroup.WithContext:
-	// one worker failure must not cancel siblings — per CLAUDE.md linters pattern).
-	sem := make(chan struct{}, MaxPrefetchWorkers)
+	// Start the worker pool (NOT errgroup.WithContext: one worker failure must
+	// not cancel siblings — per CLAUDE.md linters pattern).
 	var workerWG sync.WaitGroup
 	for range MaxPrefetchWorkers {
-		sem <- struct{}{}
-		workerWG.Add(1)
-		go func() {
-			defer func() { <-sem }()
-			defer workerWG.Done()
-			p.worker(pctx)
-		}()
+		workerWG.Go(func() { p.worker(pctx) })
 	}
 
 	// Wait for all workers to finish in the background so Close() can join them.
@@ -107,10 +102,17 @@ func (p *Prefetch) renderOne(ctx context.Context, work WorkItem) {
 	}
 
 	p.mu.Lock()
-	p.rendered++
+	stale := work.generation != p.generation
+	if !stale {
+		p.rendered++
+	}
 	rendered := p.rendered
 	total := p.total
 	p.mu.Unlock()
+
+	if stale {
+		return
+	}
 
 	// Report progress (non-blocking)
 	select {
@@ -131,9 +133,16 @@ func (p *Prefetch) Queue(items []WorkItem) {
 	})
 
 	p.mu.Lock()
+	p.generation++
+	gen := p.generation
 	p.rendered = 0
 	p.total = len(items)
 	p.mu.Unlock()
+
+	// Stamp each item with the current generation before enqueuing.
+	for i := range items {
+		items[i].generation = gen
+	}
 
 	// Enqueue all items (non-blocking send with context awareness)
 	for _, item := range items {
