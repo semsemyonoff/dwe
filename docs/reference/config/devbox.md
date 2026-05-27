@@ -53,19 +53,19 @@ The three files share a single namespace — the same key in different layers is
 |---------|-------|
 | Project name and prefix | `devbox.yml` |
 | Schema version | `devbox.yml` |
-| Service ports / hosts (apps, tools, infra) | [`devbox/services.yml`](services.md) (per-entry `ports:` / `hosts:` maps) |
-| Service structural definitions (container / compose / status / render) | [`devbox/services.yml`](services.md) |
+| Service ports / hosts (apps, tools, infra) | [`devbox/services/<name>/service.yml`](services.md) (per-entry `ports:` / `hosts:` maps) |
+| Service structural definitions (container / compose / status / render) | [`devbox/services/<name>/service.yml`](services.md) |
 | Optional service enabled state (across all types) | `defaults.yml` (overrideable in `local.yml`) |
 | Export rules (`exports.env`) | `defaults.yml` |
 | IDE config defaults | `defaults.yml` |
 | `db` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
-| Service port / host values | [`devbox/services.yml`](services.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
+| Service port / host values | [`devbox/services/<name>/service.yml`](services.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
 | Wizard-generated configuration | `local.yml` (written by `devbox deploy` when answering setup questions or port conflicts) |
 
-Service definitions themselves (apps, tools, infra — including their ports / hosts) live in [`devbox/services.yml`](services.md), which is loaded separately and not part of this merge. The 3-layer overlay carries `services.<name>.enabled`, `services.<name>.ports`, and `services.<name>.hosts`. Port and host maps are deep-merged by entry name so a partial override only touches the listed keys.
+Service definitions themselves (apps, tools, infra — including their ports / hosts) live in [`devbox/services/<name>/service.yml`](services.md) per-folder files, which are loaded separately and not part of this merge. The 3-layer overlay carries `services.<name>.enabled`, `services.<name>.ports`, and `services.<name>.hosts`. Port and host maps are deep-merged by entry name so a partial override only touches the listed keys.
 
 The `devbox deploy` command includes an interactive wizard that runs on fresh projects (when `devbox/local.yml` is missing or empty). The wizard collects answers to questions declared in [`devbox/setup.yml`](setup.md) and prompts for port overrides when conflicts exist. All answers are deep-merged into `local.yml` and written atomically before deployment proceeds. See [`devbox/setup.yml`](setup.md) for schema details.
 
@@ -89,7 +89,7 @@ Dot-paths are consumed by:
 
 ### Where service fields come from
 
-`services.<name>.*` paths in the merged map are populated by `LoadConfig`. After loading `devbox/services.yml` (canonical declarations with `type:`), the loader validates every overlay layer against the declared set (`validateServicesOverlay`), merges the 3 layers, then resolves `enabled` per service (mandatory wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — is injected into `raw["services"]`. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of `services.yml`.
+`services.<name>.*` paths in the merged map are populated by `LoadConfig`. After loading each `devbox/services/<name>/service.yml` (canonical declaration with `type:`), the loader validates every overlay layer against the declared set (`validateServicesOverlay`), merges the 3 layers, then resolves `enabled` per service (required wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — is injected into `raw["services"]`. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of the per-service folder structure.
 
 ## devbox.yml
 
@@ -174,7 +174,7 @@ docs:
 
 ### `services` overlay
 
-Toggle optional services of any type (services declared in [`devbox/services.yml`](services.md) without `mandatory: true`). Apps, tools, and infra share one overlay namespace — the `type:` discriminator lives in `services.yml`, not here.
+Toggle optional services of any type (services declared in [`devbox/services/<name>/service.yml`](services.md) without `required: true`). Apps, tools, and infra share one overlay namespace — the `type:` discriminator lives in each service's `service.yml`, not here.
 
 ```yaml
 services:
@@ -188,11 +188,11 @@ services:
     enabled: true
 ```
 
-Allowed fields under `services.<name>` in any overlay layer are `enabled`, `ports`, and `hosts`. Adding structural fields like `container:`, `compose:`, `extends:`, etc. is a layer-aware overlay error — those fields live in `devbox/services/<name>/service.yml`. Port and host maps are deep-merged by entry name. Mandatory services are always active and have no toggle.
+Allowed fields under `services.<name>` in any overlay layer are `enabled`, `ports`, and `hosts`. Adding structural fields like `container:`, `compose:`, `extends:`, etc. is a layer-aware overlay error — those fields live in `devbox/services/<name>/service.yml`. Port and host maps are deep-merged by entry name. Required services are always active and have no toggle.
 
 ### `runtime`
 
-Runtime settings that affect `.env` generation and the info dashboard but are not per-service. Per-service ports / hosts live in [`devbox/services.yml`](services.md) under each entry's `ports:` / `hosts:` maps (and are reachable as `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>` dot-paths).
+Runtime settings that affect `.env` generation and the info dashboard but are not per-service. Per-service ports / hosts live in [`devbox/services/<name>/service.yml`](services.md) under each entry's `ports:` / `hosts:` maps (and are reachable as `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>` dot-paths).
 
 ```yaml
 runtime:
@@ -271,7 +271,7 @@ compose:
 |-------|-------------|
 | `compose.base` | Base compose file (always included) |
 
-Service-specific overlays live under `services.<name>.compose` (a list of file paths per service entry) in [`devbox/services.yml`](services.md). The compose-file emission order is `base → tools (sorted) → infra (sorted) → apps (sorted)`.
+Service-specific overlays live under `services.<name>.compose` (a list of file paths per service entry) in [`devbox/services/<name>/service.yml`](services.md). The compose-file emission order is `base → tools (sorted) → infra (sorted) → apps (sorted)`.
 
 ---
 

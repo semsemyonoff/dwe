@@ -9,10 +9,16 @@ List all available documentation topics.
 Output is tab-separated for easy parsing by scripts and agents:
   <source>\t<path>\t<lang>
 
+The --match flag filters by topic path using shell-style globs. * matches
+any characters within one path segment; ** spans separators (so reference/**
+matches every nested topic under reference/).
+
 Examples:
   devbox docs list
   devbox docs list --lang ru
   devbox docs list --source devbox
+  devbox docs list --match 'reference/config/*'
+  devbox docs list --match 'reference/commands/**'
 
 ```
 devbox docs list [flags]
@@ -23,6 +29,7 @@ devbox docs list [flags]
 ```
   -h, --help            help for list
       --lang string     Language code (default: from --lang flag / userconfig / $LANG / en)
+      --match string    Filter topics by shell-style glob on path (use ** to cross /)
       --source string   Doc source: devbox, project, or all (default: all) (default "all")
 ```
 

@@ -42,6 +42,7 @@ Generated reference for the `devbox` command tree.
   - [devbox docs export](devbox_docs_export.md) — Export documentation to a directory
   - [devbox docs generate](devbox_docs_generate.md) — Generate reference documentation
   - [devbox docs list](devbox_docs_list.md) — List all available documentation topics
+  - [devbox docs search](devbox_docs_search.md) — Search documentation for a literal substring
   - [devbox docs show](devbox_docs_show.md) — Show documentation for a topic
 - [devbox info](devbox_info.md) — Display project info dashboard (URLs, hosts, services, tools)
 - [devbox prompt](devbox_prompt.md) — Print a compact shell-prompt segment for the current project

@@ -53,8 +53,6 @@ footer: true
 | `sections` | list | — | Ordered list of section definitions. |
 | `footer` | bool | `false` | When `true`, a closing table-header line is rendered after all sections. |
 
-> The struct exposes a `settings.line_width` knob, but the current Lipgloss-based renderer ignores it — terminal width is detected automatically. The field is kept reserved; do not rely on it.
-
 ## Section fields
 
 | Field | Type | Default | Description |
@@ -184,16 +182,16 @@ When auto-detection finds zero or multiple infra services with the target port, 
 
 Services contribute to `auto-urls` via their `info:` block in `service.yml` (see [services.md](services.md) for the schema). Each service may declare:
 - `title` — override the service header (defaults to title-cased folder name)
-- `host_key` — which `hosts` entry to surface as the main URL (default: `web`)
-- `port_key` — which `ports` entry to surface (default: `http`)
+- `primary_host` — which `hosts` entry to surface as the main URL (default: `web`)
+- `primary_port` — which `ports` entry to surface (default: `http`)
 - `paths` — ordered list of sub-paths under the main URL
 
 Services without an `info` block are included in the `include` types but render only their main URL if hosts and ports exist.
 
 **URL assembly rules:**
-- `hosts[host_key]` **and** `ports[port_key]` (direct binding) → `<proxied URL> | <direct URL>`
-- only `hosts[host_key]` → `<proxied URL>` (if `port_via` available)
-- only `ports[port_key]` → `http://localhost:<port>`
+- `hosts[primary_host]` **and** `ports[primary_port]` (direct binding) → `<proxied URL> | <direct URL>`
+- only `hosts[primary_host]` → `<proxied URL>` (if `port_via` available)
+- only `ports[primary_port]` → `http://localhost:<port>`
 - neither → row silently omitted
 
 `<proxied URL>` uses the `port_via` service's ports for scheme/port selection; `<direct URL>` uses the service's own port. Ports `:80` and `:443` are omitted from output.
@@ -300,7 +298,7 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 | `{{ .State }}` | string | Active state (empty if none) |
 | `{{ .Runtime.UseHTTPS }}` | bool | HTTPS enabled. |
 | `{{ .Runtime.SPX.Path }}` | string | SPX profiler path. |
-| `{{ (index .Services "main").Enabled }}` | bool | Whether the service `main` is enabled (mandatory services are always true). |
+| `{{ (index .Services "main").Enabled }}` | bool | Whether the service `main` is enabled (required services are always true). |
 | `{{ (index .Services "main").Container }}` | string | Container name on the `main` service. |
 | `{{ (index .Services "main").Port "http" }}` | int | Named port lookup. `Port(name)` is a method on `ServiceConfig` (returns `0` if absent). |
 | `{{ (index .Services "main").Host "web" }}` | string | Named host lookup. `Host(name)` returns `""` if absent. |

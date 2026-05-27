@@ -17,9 +17,9 @@ Overview of all configuration files in the devbox system.
 | `devbox.yml` | yes | layer 1 | Project identity and service structure |
 | `devbox/defaults.yml` | yes | layer 2 | Versioned defaults: runtime, exports, service enabled toggles |
 | `devbox/local.yml` | no (gitignored) | layer 3 | Per-user overrides: state, service enabled toggles |
-| `devbox/services.yml` | yes | standalone | Service declarations with dirs, cli, configs |
+| `devbox/services/<name>/service.yml` | yes | standalone | Per-service declaration (dirs, cli, configs, ports) |
 | `devbox/deploy.yml` | yes | standalone | Orchestrator deploy pipeline (phases + steps) |
-| `devbox/deploy/<svc>.yml` | yes | standalone | Per-service deploy pipelines |
+| `devbox/services/<name>/deploy.yml` | yes | standalone | Per-service deploy pipelines |
 | `devbox/reset.yml` | yes | standalone | Reset pipeline |
 | `devbox/lifecycle.yml` | yes | standalone | Run / stop pipelines (driving `devbox run`/`stop`/`restart`) |
 | `devbox/docker.yml` | yes | standalone | Compose execution policy |
@@ -53,14 +53,14 @@ flowchart LR
     A[devbox.yml] --> B[devbox/defaults.yml] --> C[devbox/local.yml]
   end
 
-  S[devbox/services.yml] -. injected into Raw .-> merged
+  S["devbox/services/&lt;name&gt;/service.yml"] -. injected into Raw .-> merged
 
   merged --> R[(DevboxConfig.Raw<br/>+ typed structs)]
 
   subgraph standalone["Standalone loaders"]
     direction TB
     D[devbox/deploy.yml]
-    DS[devbox/deploy/&lt;svc&gt;.yml]
+    DS["devbox/services/&lt;name&gt;/deploy.yml"]
     RS[devbox/reset.yml]
     L[devbox/lifecycle.yml]
     DK[devbox/docker.yml<br/>+ docker.local.yml]
@@ -80,9 +80,9 @@ flowchart LR
 
 ## Merged vs standalone
 
-**Merged (3-layer config)**: `devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml` are deep-merged at startup. Later layers win; maps merge recursively. The result is the effective config used for `.env` generation, topology resolution, and export rules. `devbox/services.yml` is loaded separately and then injected into the merged raw map so dot-paths like `services.main.container` resolve.
+**Merged (3-layer config)**: `devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml` are deep-merged at startup. Later layers win; maps merge recursively. The result is the effective config used for `.env` generation, topology resolution, and export rules. Each `devbox/services/<name>/service.yml` is loaded separately and then injected into the merged raw map so dot-paths like `services.main.container` resolve.
 
-**Standalone**: `services.yml`, `deploy.yml`, `deploy/<svc>.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml`, and `commands/*.yml` are loaded by dedicated functions in `internal/config/` and `internal/usercommands/`. They are not part of the 3-layer merge but most of them resolve template expressions against the merged config.
+**Standalone**: `devbox/services/<name>/service.yml`, `deploy.yml`, `devbox/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml`, and `commands/*.yml` are loaded by dedicated functions in `internal/config/` and `internal/usercommands/`. They are not part of the 3-layer merge but most of them resolve template expressions against the merged config.
 
 ## Files that support local overrides
 
@@ -97,10 +97,10 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 ## Pages
 
 - [devbox / defaults / local](devbox.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
-- [services.yml](services.md) — service declarations, extends, dirs, cli config
+- [services/<name>/service.yml](services.md) — per-service declarations, extends, dirs, cli config
 - [deploy.yml / reset.yml](deploy.md) — deploy and reset pipelines, steps, builtins, file logging, idempotent deploy
 - [state.yml](state.md) — deploy state tracking, skip-decision table, hashing, lock file, recovery from crashes
-- [lifecycle.yml](lifecycle.md) — run/stop pipelines, update probe, hook phases, mandatory service gate
+- [lifecycle.yml](lifecycle.md) — run/stop pipelines, update probe, hook phases, required service gate
 - [Conditions and Actions](conditions.md) — typed conditions for `when:`, typed actions for `check:` and step bodies, predicate vs engine-builtin distinction
 - [docker.yml](docker.md) — Compose execution policy, project name, env triggers
 - [styles.yml](styles.md) — ASCII header, color palette, separator

@@ -19,7 +19,7 @@
 | `devbox render ai` | Hub-level agent docs (`AGENTS.md`, `CLAUDE.md` symlink, …) | Template packs under `devbox/templates/ai/<pack>/` driven by `manifest.yml` |
 | `devbox render git` | Per-service shell git hooks at `<svc.Dir>/src/.git/hooks/<basename>` (mode `0755`) | Template packs under `devbox/templates/git/<pack>/` driven by `manifest.yml` |
 
-All four subcommands read the same merged config (`devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml`, with `devbox/services.yml` joined in). They differ in what they iterate and where they write.
+All four subcommands read the same merged config (`devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml`, with per-service declarations from `devbox/services/<name>/service.yml` joined in). They differ in what they iterate and where they write.
 
 ## Common pipeline
 
@@ -28,7 +28,7 @@ flowchart LR
   L1[devbox.yml] --> M
   L2[devbox/defaults.yml] --> M
   L3[devbox/local.yml] --> M
-  S[devbox/services.yml] --> M
+  S["devbox/services/*/service.yml"] --> M
   M[("Merged config")]
 
   M --> E[render env]
@@ -112,7 +112,7 @@ This mirrors the existing user-local override convention in the project:
 
 | Canonical (tracked) | Local sibling (gitignored) |
 |---------------------|----------------------------|
-| `devbox/devbox.yml` | `devbox/local.yml` (documented in [`services.yml`](../config/services.md)) |
+| `devbox/devbox.yml` | `devbox/local.yml` (documented in [services reference](../config/services.md)) |
 | `devbox/docker.yml` | `devbox/docker.local.yml` |
 | `devbox/templates/<kind>/<pack>/` | `devbox/templates/<kind>/<pack>.local/` |
 
@@ -144,6 +144,6 @@ For IDE/AI, a local override that produces a different rendered output is a work
 ## Related references
 
 - [`devbox.yml` / `defaults.yml` / `local.yml`](../config/devbox.md) — merged config layers and dot-path resolution (used by `render env`)
-- [`services.yml`](../config/services.md) — service definitions, `ide` / `ai` / `git` blocks, `extends` chains
+- [service definitions (`devbox/services/*/service.yml`)](../config/services.md) — service definitions, `ide` / `ai` / `git` blocks, `extends` chains
 - [Templates](../templates.md) — Go template syntax, sprout helpers, render context (shared with info / commands / pipelines)
 - CLI reference: [`devbox render`](../cli/devbox_render.md), [`devbox render env`](../cli/devbox_render_env.md), [`devbox render ide`](../cli/devbox_render_ide.md), [`devbox render ai`](../cli/devbox_render_ai.md), [`devbox render git`](../cli/devbox_render_git.md)

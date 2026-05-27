@@ -45,7 +45,7 @@ On the next `devbox deploy run`, each step's `action_hash` is compared to the re
 This mechanism ensures that:
 - Deploying an unchanged codebase is fast (unchanged steps skip)
 - Editing a step body automatically re-triggers it
-- Editing config files (`services.yml`, `deploy.yml`) invalidates the affected scope and re-runs the impacted steps
+- Editing service config files (`devbox/services/<name>/service.yml`, `devbox/services/<name>/deploy.yml`) or the project deploy config (`devbox/deploy.yml`) invalidates the affected scope and re-runs the impacted steps
 - The journal survives crashes mid-deploy, allowing `--resume` on the next run
 
 ## File location
@@ -82,7 +82,7 @@ devbox deploy state repair
 |-------|------|-------------|
 | `schema_version` | string | Always `"1"`; reserved for future format changes |
 | `project` | object | Project-level state (deployed_at, config_hash, status, etc.) |
-| `services` | map | Per-service state, keyed by service name from `services.yml` |
+| `services` | map | Per-service state, keyed by service folder name (`devbox/services/<name>/`) |
 | `pending` | object | Pending operations that need to be applied; present only when `devbox services enable/disable` was run without `--apply`. Written atomically by the toggle command; cleared by `devbox restart`, `devbox deploy run`, or `devbox reset run` |
 
 ### Project-level fields
@@ -101,7 +101,7 @@ devbox deploy state repair
 |-------|------|-------------|
 | `status` | enum | `deployed`, `partial`, `failed`, `not_deployed` (service never ran, or all steps skipped) |
 | `deployed_at` | ISO 8601 timestamp | When this service was last fully deployed |
-| `config_hash` | sha256 hex | Fingerprint of `services.<name>` block + per-service `deploy/<name>.yml` |
+| `config_hash` | sha256 hex | Fingerprint of `devbox/services/<name>/service.yml` + `devbox/services/<name>/deploy.yml` |
 | `last_run` | object | Timing and outcome of the last deploy attempt for this service |
 | `phases` | map | Per-phase state for this service's phases |
 
@@ -182,23 +182,23 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 A service's `config_hash` covers two things:
 
 ```
-sha256(canonical_json(services.<name>) + canonical_json(deploy/<name>.yml))
+sha256(canonical_json(services.<name>) + canonical_json(devbox/services/<name>/deploy.yml))
 ```
 
-- The service definition from `services.yml` (Enabled, Depends, Type, Dir, etc.)
-- The per-service deploy pipeline from `devbox/deploy/<name>.yml` (or empty if absent)
+- The service definition from `devbox/services/<name>/service.yml` (Enabled, Depends, Type, Dir, etc.)
+- The per-service deploy pipeline from `devbox/services/<name>/deploy.yml` (or empty if absent)
 
-When the service's `config_hash` changes (e.g., you edit `services.yml` or `devbox/deploy/main.yml`), **all steps in that service's phases are treated as absent**. They re-run on the next deploy regardless of their `action_hash`.
+When the service's `config_hash` changes (e.g., you edit `devbox/services/main/service.yml` or `devbox/services/main/deploy.yml`), **all steps in that service's phases are treated as absent**. They re-run on the next deploy regardless of their `action_hash`.
 
 ### config_hash for the project
 
 The project-level `config_hash` covers three things:
 
 ```
-sha256(canonical_json(services[tracked_only]) + canonical_json(deploy.yml) + canonical_json(deploy/<tracked>.yml for all tracked services))
+sha256(canonical_json(services[tracked_only]) + canonical_json(devbox/deploy.yml) + canonical_json(devbox/services/<tracked>/deploy.yml for all tracked services))
 ```
 
-**"Tracked" means:** A service is tracked iff it appears in the resolved deploy plan (i.e., enabled in `services.yml` AND inlined by a `deploy_services: true` phase in `deploy.yml`). Tools are never tracked. Services without a `deploy/<name>.yml` are still tracked if they appear in the plan.
+**"Tracked" means:** A service is tracked iff it appears in the resolved deploy plan (i.e., enabled in `devbox/services/<name>/service.yml` AND inlined by a `deploy_services: true` phase in `devbox/deploy.yml`). Tools are never tracked. Services without a `devbox/services/<name>/deploy.yml` are still tracked if they appear in the plan.
 
 When the project's `config_hash` changes (e.g., you edit `devbox/deploy.yml` or add a service), **all project-scope steps are treated as absent** and re-run on the next deploy.
 
@@ -212,7 +212,7 @@ Invalidation happens in **two layers**:
 
 2. **Project-scope validation** — before deciding whether a project-level step should skip, check: does the project's current `config_hash` match the persisted one? If not, treat the step's prior state as absent.
 
-This ensures that a changed `services.yml` cannot lead to skips, even when step bodies are unchanged.
+This ensures that a changed service config cannot lead to skips, even when step bodies are unchanged.
 
 ## Pending state
 
@@ -468,29 +468,27 @@ $ devbox deploy run
 
 The install step re-runs because its hash changed. Steps with unchanged hashes are skipped.
 
-### Example: edit services.yml, invalidate service scope
+### Example: edit a service config, invalidate service scope
 
 ```yaml
-# services.yml
-main:
-  enabled: true
-  type: app
-  dir: services/main
-  depends_on:
-    - db
+# devbox/services/main/service.yml
+enabled: true
+type: app
+dir: services/main
+depends_on:
+  - db
 ```
 
 Edit the main service:
 
 ```yaml
-# services.yml
-main:
-  enabled: true
-  type: app
-  dir: services/main
-  depends_on:
-    - db
-    - cache  # added dependency
+# devbox/services/main/service.yml
+enabled: true
+type: app
+dir: services/main
+depends_on:
+  - db
+  - cache  # added dependency
 ```
 
 The service's `config_hash` changes, so all of `main`'s steps re-run:
@@ -559,4 +557,4 @@ devbox deploy run --resume
 - `devbox reset run` — reset and clear deploy state
 - `devbox services enable/disable` — toggle services (writes `pending` when not using `--apply`)
 - See also [deploy.yml](deploy.md) — how to declare steps and phases
-- See also [lifecycle.yml](lifecycle.md) — how `devbox run` gates on mandatory service deployment
+- See also [lifecycle.yml](lifecycle.md) — how `devbox run` gates on required service deployment

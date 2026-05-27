@@ -16,10 +16,10 @@ var (
 	ErrDeploySelfReference = errors.New("deploy: service references itself in after")
 	// ErrDeployUnknownAfterRef is returned when after: references a service that does not exist.
 	ErrDeployUnknownAfterRef = errors.New("deploy: after references unknown service")
-	// ErrMandatoryAfterOptional is returned when a mandatory service declares an
-	// after: edge that points to an optional service. Mandatory services must
+	// ErrMandatoryAfterOptional is returned when a required service declares an
+	// after: edge that points to an optional service. Required services must
 	// always deploy before optional services, so the constraint is invalid.
-	ErrMandatoryAfterOptional = errors.New("deploy: mandatory service cannot declare after an optional service")
+	ErrMandatoryAfterOptional = errors.New("deploy: required service cannot declare after an optional service")
 )
 
 // TopoSortByAfter returns service names in deploy-order (dependencies-first) based

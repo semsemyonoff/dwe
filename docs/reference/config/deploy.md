@@ -57,7 +57,7 @@ flowchart TB
 
   subgraph svc["devbox/services/&lt;service&gt;/deploy.yml — one file per service"]
     direction TB
-    S1["mandatory service<br/>(always inlined)"]
+    S1["required service<br/>(always inlined)"]
     S2["optional service A<br/>(inlined when enabled)"]
     S3["optional service B<br/>(inlined when enabled)"]
     SN["…N services"]
@@ -70,7 +70,7 @@ flowchart TB
   R[devbox/reset.yml] --> RPLAN[Resolved plan] --> RUN2[(PlainReporter)]
 ```
 
-Any service type (app, tool, or infra) may have a `devbox/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (mandatory ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
+Any service type (app, tool, or infra) may have a `devbox/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (required ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
 
 The `after:` field in `devbox/services/<name>/deploy.yml` declares deploy-time ordering between services (separate from runtime `depends_on:`). See [Top-level fields](#top-level-fields) for details.
 
@@ -287,10 +287,10 @@ Creates service hub directories.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `service` | string | required | Service key from `services.yml` |
+| `service` | string | required | Service folder name from `devbox/services/<name>/` |
 | `mode` | string | `skip` | `skip`, `error`, or `recreate` |
 
-Resolved dir list: `[src, configs]` + `ServiceConfig.Dirs` (from `services.yml`). Each entry must be a non-empty relative path that does not escape the service `dir`.
+Resolved dir list: `[src, configs]` + `ServiceConfig.Dirs` (from the service's `service.yml`). Each entry must be a non-empty relative path that does not escape the service `dir`.
 
 Mode behavior:
 
@@ -323,7 +323,7 @@ When the corresponding `configs[]` entry has a `mountpoint`, the builtin also to
 
 ### `service_configs_check`
 
-Verifies that all template config files declared in `services.yml` exist in the service hub after a `service_configs_copy` step. Use as a `check:` action to assert that configs were successfully deployed.
+Verifies that all template config files declared in the service's `service.yml` exist in the service hub after a `service_configs_copy` step. Use as a `check:` action to assert that configs were successfully deployed.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -657,7 +657,7 @@ Use `untracked: true` on the `post-deploy` phase to suppress system step message
 
 ## `deploy_services` marker
 
-In `deploy.yml`, a phase with `deploy_services: true` is a placeholder. The CLI replaces it with the inlined per-service pipelines at runtime, ordered by dependency (`depends_on` in `services.yml`). Only enabled services are included.
+In `deploy.yml`, a phase with `deploy_services: true` is a placeholder. The CLI replaces it with the inlined per-service pipelines at runtime, ordered by dependency (`depends_on` in each service's `devbox/services/<name>/service.yml`). Only enabled services are included.
 
 ```yaml
 phases:
@@ -964,7 +964,7 @@ The workflow's own `when:` on a sub-step is evaluated first; an override gate is
 
 By default, `devbox deploy run` tracks the outcome and hash of every executed step in `.devbox/deploy/state.yml`. On the next deploy run, steps that succeeded with unchanged `action_hash` values are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency).
 
-This makes deploys idempotent: re-running an unchanged project is fast (unchanged steps are skipped), while editing a step body automatically re-triggers it. Edits to `services.yml` or `deploy.yml` invalidate the affected scope and force those steps to re-run.
+This makes deploys idempotent: re-running an unchanged project is fast (unchanged steps are skipped), while editing a step body automatically re-triggers it. Edits to service config files (`devbox/services/<name>/service.yml`) or deploy configs (`devbox/deploy.yml`, `devbox/services/<name>/deploy.yml`) invalidate the affected scope and force those steps to re-run.
 
 Key behaviors:
 

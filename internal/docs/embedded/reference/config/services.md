@@ -47,7 +47,7 @@ Locked rules:
 - `ports:` is always `map[string]int` and `hosts:` is always `map[string]string`. There is no `port:` / `host:` scalar shorthand. A single-port entry writes `ports: { http: 8025 }`.
 - Type semantics partition `docker compose` file emission to `tool → infra → app` order.
 
-`type: infra` services may be optional (`mandatory: false`) — they take a `compose:` overlay and are toggleable via `devbox services enable|disable <name>` like apps and tools. Mandatory infra (`mandatory: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
+`type: infra` services may be optional (`required: false`) — they take a `compose:` overlay and are toggleable via `devbox services enable|disable <name>` like apps and tools. Required infra (`required: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
 
 ## Per-type field allowlist
 
@@ -177,7 +177,7 @@ render:
 # type: infra — backing service, may be a depends_on target
 type: infra
 container: db
-mandatory: true                     # always-on backing service
+required: true                      # always-on backing service
 ports:
   mysql: 13306
 ```
@@ -474,7 +474,7 @@ render:
 
 IDE rendering requires **both** activation and policy conditions:
 
-1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; mandatory services are always enabled).
+1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; required services are always enabled).
 2. **IDE policy**: The `render.ide.enabled` setting must be `true`.
 
 A service is rendered only if both are satisfied. Disabling either suppresses rendering.
@@ -562,6 +562,7 @@ dir: ./services/main
 
 ```yaml
 # devbox/services/main-debug/service.yml
+type: app
 extends: main
 container: app-main-debug
 dir: ./services/main
@@ -603,7 +604,7 @@ render:
 
 Agent docs rendering requires **both** activation and policy conditions:
 
-1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; mandatory services are always enabled).
+1. **Project activation**: The service must be enabled at the project level (via the 3-layer config merge; required services are always enabled).
 2. **Agent docs policy**: The `render.ai.enabled` setting must be `true`.
 
 A service is rendered only if both are satisfied. Disabling either suppresses rendering.
@@ -729,17 +730,19 @@ flowchart LR
 
 Resolution rules:
 
-- Scalar fields (`type`, `dir`, `dir_internal`, `work_dir_internal`, `cli.mode`, `cli.shell`, `cli.user`, `cli.workdir`) — child wins when set, parent fills in only when child's value is empty.
+- Scalar fields (`dir`, `dir_internal`, `work_dir_internal`, `cli.mode`, `cli.shell`, `cli.user`, `cli.workdir`) — child wins when set, parent fills in only when child's value is empty. `type` is required in every `service.yml` and is never inherited.
 - `dirs` — parent's list comes first; child entries are appended; duplicates are removed (parent order preserved).
 - `configs` — child wholly replaces parent when set (child has its own list); parent's list is used only when child omits the key.
 - `cli.env` — recursive map merge: parent provides defaults, child overrides per key.
 - `render.ide.enabled`, `render.ide.template`, `render.ai.enabled`, `render.ai.template`, `render.git.enabled`, and `render.git.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
-- `container`, `mandatory`, `compose`, `depends_on` — never inherited. A child that omits `container` keeps an empty value, which is rejected at runtime; declare it explicitly. The same applies to `compose` and `depends_on`: each child specifies its own.
+- `compose` — inherited when the child declares no `compose:` list of its own (parent's list is cloned); the child's own list wholly replaces the parent's, not merged.
+- `container`, `required`, `depends_on` — never inherited. A child that omits `container` defaults to its service folder name at load time. Each child specifies its own `depends_on`.
 
 ```yaml
 # devbox/services/main/service.yml
+type: app
 container: app-main
-mandatory: true
+required: true
 dir: ./services/main
 dirs: [logs, home, runtime]
 cli:
@@ -752,9 +755,10 @@ render:
 
 ```yaml
 # devbox/services/main-debug/service.yml
+type: app
 extends: main            # inherits dir, dirs, cli, render, etc.
 container: app-main-debug
-mandatory: false
+required: false
 compose:
   - compose/services/main/debug.yml
 cli:
@@ -773,7 +777,7 @@ render:
 # devbox/services/main/service.yml
 type: app
 container: app-main
-mandatory: true
+required: true
 dir: ./services/main
 dir_internal: /workspace
 work_dir_internal: /workspace/src
@@ -849,8 +853,8 @@ Notes are shown in the plan output (`devbox services enable/disable --print-plan
 
 - **Editing `dir` in `extends` child** — a child that sets `dir` completely replaces the parent's `dir` (not merged). This is intentional for services that live in a different host directory.
 - **Absolute paths in `dirs`** — dirs entries must be relative paths. Absolute paths or paths containing `..` are rejected by `service_dirs_ensure` as a security check.
-- **Missing `container` in child** — `container` is **not** inherited via `extends:`. A child without an explicit `container` carries an empty value, which fails at runtime. Always declare `container` per service.
-- **Forgetting `compose:` and `depends_on:` on a child** — also not inherited. Optional services that need their own overlay or dependency must declare it explicitly.
+- **Missing `container` in child** — `container` is **not** inherited via `extends:`. A child without an explicit `container` defaults to its folder name (the same default that applies to any service). Declare `container` explicitly when the folder name is not the right container name.
+- **Forgetting `depends_on:` on a child** — not inherited. A child that needs a dependency must declare it explicitly. (`compose:` is inherited from the parent when the child omits it — see "Resolution rules" above.)
 - **`render:` block under a `tool` / `infra` service** — the `render:` block is app-only. Tool / infra entries that declare it fail to load. To attach a template pack to a non-app service it must first be retyped to `app` (with the prerequisite `dir:`).
 - **Pre-existing non-symlink at a managed symlink path** — if `CLAUDE.md` (or another `symlinks[].link` path) already exists as a regular file, `devbox render ai` refuses to overwrite it and exits with an error: `refuse to overwrite non-symlink file at <path>; remove it or disable via render.ai.enabled: false`. Delete the file first, or set `render.ai.enabled: false` for that service.
 

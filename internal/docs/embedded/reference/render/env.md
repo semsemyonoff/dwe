@@ -173,22 +173,24 @@ When `-o <path>` is supplied:
 
 ## Worked example
 
-`devbox/services.yml`:
+`devbox/services/main/service.yml`:
 
 ```yaml
-services:
-  main:
-    type: app
-    container: app-main
-    mandatory: true
-    dir: ./services/main
-    ports:
-      http: 8080
-  adminer:
-    type: tool
-    container: adminer
-    ports:
-      http: 8027
+type: app
+container: app-main
+required: true
+dir: ./services/main
+ports:
+  http: 8080
+```
+
+`devbox/services/adminer/service.yml`:
+
+```yaml
+type: tool
+container: adminer
+ports:
+  http: 8027
 ```
 
 `devbox/defaults.yml`:

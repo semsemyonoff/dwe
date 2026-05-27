@@ -10,9 +10,23 @@ In a TTY, renders the markdown with syntax highlighting and colors.
 In a pipe or with --raw, outputs plain markdown.
 
 Topics are matched case-insensitively with fuzzy substring matching if exact match fails.
+When the match is ambiguous, the segment closest to the input wins (e.g. "services" prefers
+"reference/config/services" over deeper paths that only contain "services" as an intermediate segment).
+
+Append "#anchor" to scope output to a single section. The anchor is the GitHub-style heading
+slug (lower-case, spaces become hyphens, punctuation dropped). Unknown anchors list the
+available slugs in the document.
+
+Use --anchors to list the slug of every H2/H3 heading in the topic (one per line),
+or --toc for a level/slug/text TSV. Both bypass the body and are useful for
+scoping a follow-up "docs show topic#anchor" without reading the whole document.
+
 Examples:
   devbox docs show config/services
+  devbox docs show config/devbox#binaries
   devbox docs show config/services --lang ru
+  devbox docs show config/services --anchors
+  devbox docs show config/services --toc
 
 ```
 devbox docs show <topic> [flags]
@@ -21,10 +35,12 @@ devbox docs show <topic> [flags]
 ### Options
 
 ```
+      --anchors         Print available anchor slugs (one per line) and exit
   -h, --help            help for show
       --lang string     Language code (default: from --lang flag / userconfig / $LANG / en)
       --raw             Output raw markdown (no syntax highlighting, even in TTY)
       --source string   Doc source: devbox, project, or all (default: all) (default "all")
+      --toc             Print table of contents (level\tslug\ttext, TSV) and exit
 ```
 
 ### Options inherited from parent commands

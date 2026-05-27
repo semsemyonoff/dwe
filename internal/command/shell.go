@@ -86,7 +86,7 @@ Mode controls how the shell is opened (--mode auto|exec|run):
   run   — always start a new container via 'docker compose run --rm'
 
 Shell, user, working directory, and env defaults are read from the service
-cli config block in devbox/services.yml and can be overridden with flags.
+cli config block in devbox/services/<name>/service.yml and can be overridden with flags.
 
 When no service argument is given, the command auto-selects if only one enabled
 service exists, or shows an interactive selector when multiple services are enabled.`,

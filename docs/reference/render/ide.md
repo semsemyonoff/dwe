@@ -49,7 +49,7 @@ A service participates in IDE rendering only when **both** flags are true:
 
 | Gate | Source | Default |
 |------|--------|---------|
-| Project-level | `services.<name>.enabled` (3-layer merged + mandatory override) | depends on service |
+| Project-level | `services.<name>.enabled` (3-layer merged + required service override) | depends on service |
 | IDE policy | `services.<name>.render.ide.enabled` | `true` for `type: app`; `false` otherwise |
 
 If either gate is false, the service is skipped. Skips fall into two groups:
@@ -182,7 +182,7 @@ Templates receive a single object with these top-level fields:
 | `.ServiceCfg` | the effective service config of `.Resolved`, after `extends` resolution. | e.g. `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` reflect the rendering service's overlay. |
 | `.Runtime` | merged `runtime` block | `.Runtime.UseHTTPS`, `.Runtime.SPX.Path`. Per-service ports / hosts live on each service entry — use `((index .Services "<name>").Port "<port-name>")` / `((index .Services "<name>").Host "<host-name>")`. |
 | `.Services` | `map[string]ServiceConfig` keyed by service name | Indexed access only (Go template requirement): `(index .Services "main")`. Filter by type via `.AppServices` / `.ToolServices` / `.InfraServices` (zero-arg methods returning typed subsets). |
-| `.Cfg` | merged `DevboxConfig` (advanced) | `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+| `.Cfg` | merged `DevboxConfig` (advanced) | `.Cfg.Raw` is the post-merge config map after devbox normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
 > **Advisory.** IDE outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in IDE templates: any value layered in from `devbox/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
 
@@ -218,7 +218,11 @@ The same guards are applied to the pack itself: the pack directory is checked fo
 Layout:
 
 ```
-devbox/services.yml
+devbox/services/
+  main/
+    service.yml
+  main-debug/
+    service.yml
 devbox/templates/ide/
   default/
     .devcontainer/devcontainer.json.tmpl
@@ -229,23 +233,25 @@ devbox/templates/ide/
     .vscode/launch.json.tmpl
 ```
 
-`devbox/services.yml`:
+`devbox/services/main/service.yml`:
 
 ```yaml
-services:
-  main:
-    type: app
-    container: app-main
-    dir: ./services/main
-    # render.ide.enabled defaults to true (type: app)
+type: app
+container: app-main
+dir: ./services/main
+# render.ide.enabled defaults to true (type: app)
+```
 
-  main-debug:
-    extends: main
-    container: app-main-debug
-    dir: ./services/main          # same dir as parent — collision
-    render:
-      ide:
-        template: main-debug       # use the main-debug pack
+`devbox/services/main-debug/service.yml`:
+
+```yaml
+type: app
+extends: main
+container: app-main-debug
+dir: ./services/main          # same dir as parent — collision
+render:
+  ide:
+    template: main-debug       # use the main-debug pack
 ```
 
 Template `devbox/templates/ide/main-debug/.vscode/settings.json.tmpl`:
@@ -293,7 +299,7 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Common pitfalls
 
-- **Non-`app` services do not render by default.** Set `services.<name>.render.ide.enabled: true` explicitly in `services.yml` to opt in.
+- **Non-`app` services do not render by default.** Set `render.ide.enabled: true` in `devbox/services/<name>/service.yml` to opt in.
 - **Typos in `render.ide.template` are hard errors.** Explicit packs are strict; a missing `devbox/templates/ide/<name>/` does not silently fall through to `default/`. Either fix the name or remove `render.ide.template`.
 - **Templates referencing missing fields fail.** Strict-mode rendering means `{{.ServiceCfg.NoSuchField}}` aborts rendering. Guard optional fields with `{{if ...}}`.
 - **Symlinks at destinations are refused.** If `.devcontainer/` or `settings.json` is a symlink, the renderer will not overwrite it. Remove the symlink and re-run.

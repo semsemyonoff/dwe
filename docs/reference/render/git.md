@@ -55,7 +55,7 @@ A service participates in git-hook rendering only when **both** flags are true:
 
 | Gate | Source | Default |
 |------|--------|---------|
-| Project-level | `services.<name>.enabled` (3-layer merged + mandatory override) | depends on service |
+| Project-level | `services.<name>.enabled` (3-layer merged + required service override) | depends on service |
 | Git policy | `services.<name>.render.git.enabled` | `true` for `type: app`; `false` otherwise |
 
 The default policy mirrors [`render ide`](ide.md) (not `render ai`): only `type: app` services render hooks by default, because that is where developers typically commit code. Other service types must opt in explicitly with `render.git.enabled: true`.
@@ -140,7 +140,7 @@ Same shape as `render ide` and `render ai`:
 | `.Resolved` | **rendering identity** — the name of the service whose hub is actually being rendered (the deepest-extends collision winner). Equals `.Service` in the no-collision case. |
 | `.ServiceCfg` | effective service config of `.Resolved` (the rendering service), after `extends` resolution. Fields like `.ServiceCfg.Container` reflect the extender's overlay. |
 | `.Runtime` | merged `runtime` block |
-| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
 > **Why `.Service` and `.Resolved` differ.** When two services share the same `dir:` (typically a base + an `extends:` child like `main` and `main-debug`), the collision policy picks the deepest extender as the hub owner — that's `.Resolved`. But user-facing config sections keyed by service name (`git.hooks.<svc>`, `cs.<svc>`, …) are populated only on the base by convention, so raw-config lookups must use `.Service` (the chain root) to resolve. The two fields keep the *behavioral identity* (which container to attach to, which overlay applies) and the *config identity* (where to look up user values) distinguishable.
 
@@ -179,7 +179,9 @@ The renderer applies the same boundary chain as IDE/AI, adapted for the `.git/ho
 Layout:
 
 ```
-devbox/services.yml
+devbox/services/
+  main/
+    service.yml
 devbox/templates/git/
   default/
     manifest.yml
@@ -203,15 +205,13 @@ Template `devbox/templates/git/default/pre-commit.tmpl`:
 exec devbox run --service {{.Resolved}} lint
 ```
 
-`devbox/services.yml`:
+`devbox/services/main/service.yml`:
 
 ```yaml
-services:
-  main:
-    type: app
-    container: app-main
-    dir: ./services/main
-    # render.git.enabled defaults to true (type: app)
+type: app
+container: app-main
+dir: ./services/main
+# render.git.enabled defaults to true (type: app)
 ```
 
 `devbox render git`:

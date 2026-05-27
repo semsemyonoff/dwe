@@ -364,7 +364,7 @@ func applyMandatoryGate(in []deployServiceItem) []deployServiceItem {
 	for i := range out {
 		if !out[i].Mandatory {
 			out[i].Locked = true
-			out[i].LockedHint = "deploy mandatory services first"
+			out[i].LockedHint = "deploy required services first"
 		}
 	}
 	return out

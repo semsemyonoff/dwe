@@ -43,7 +43,7 @@ the service. Run `devbox deploy run --service <name>` to re-provision it.
   deployable. If there is no `deploy.yml`, use the full `devbox reset run`
   instead.
 
-Mandatory services are **allowed** to be per-service reset (mandatory protects
+Required services (`required: true`) are **allowed** to be per-service reset (`required` protects
 from `services disable`, not from reset).
 
 | Option | Description |

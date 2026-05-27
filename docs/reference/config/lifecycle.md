@@ -127,9 +127,9 @@ When the probe finds a dirty tree, no upstream, or a fetch failure it warns and 
 | `show_info` | bool | `false` | Append a `devbox info` render after the last phase. |
 | `final_message` | string | `Project is ready for work!` | Success message printed at the very end. |
 
-## Mandatory service deployment gate
+## Required service deployment gate
 
-`devbox run` automatically gates on mandatory services being deployed. Before the run pipeline starts, the command checks that all **tracked** services (those appearing in the resolved deploy plan) have `status: deployed` in the state file.
+`devbox run` automatically gates on required services being deployed. Before the run pipeline starts, the command checks that all **tracked** services (those appearing in the resolved deploy plan) have `status: deployed` in the state file.
 
 If any tracked service is not yet deployed, `devbox run` exits with an error: "run `devbox deploy run` first". This prevents running against a partially-initialized environment — bypassing the gate would just hand `docker compose up` a service whose volumes/configs/database have never been provisioned, and the run would fail almost immediately with an unrelated error. Always deploy first.
 

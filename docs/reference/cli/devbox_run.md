@@ -20,7 +20,7 @@ devbox run [flags]
 ```
   devbox run
   devbox run --no-update
-  devbox run --update auto
+  devbox run --update on
 ```
 
 ### Options
@@ -30,7 +30,7 @@ devbox run [flags]
       --no-update        disable git update probe regardless of lifecycle.yml config
       --silent           suppress the end-of-run desktop notification
       --skip-preflight   bypass environment probes and project checks before running
-      --update string    override update probe mode (prompt|auto|check|off)
+      --update string    override update probe mode (on|off)
   -y, --yes              skip confirmation prompts inside hook steps
 ```
 

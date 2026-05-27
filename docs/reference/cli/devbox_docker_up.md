@@ -10,6 +10,7 @@ devbox docker up [services...] [flags]
 
 ```
   -h, --help   help for up
+      --wait   block until all services are healthy (forwards --wait to docker compose up; requires healthchecks on every started service)
 ```
 
 ### Options inherited from parent commands

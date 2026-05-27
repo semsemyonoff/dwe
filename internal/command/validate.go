@@ -96,7 +96,7 @@ Scope targets:
 	configCmd := &cobra.Command{
 		Use:          "config",
 		Short:        "Validate configuration files",
-		Long:         `Check devbox.yml, services.yml, deploy.yml, reset.yml, and related config files for errors.`,
+		Long:         `Check devbox.yml, devbox/services/<name>/service.yml, deploy.yml, reset.yml, and related config files for errors.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

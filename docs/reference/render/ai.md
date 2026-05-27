@@ -56,7 +56,7 @@ A service participates in agent-docs rendering only when **both** flags are true
 
 | Gate | Source | Default |
 |------|--------|---------|
-| Project-level | `services.<name>.enabled` (3-layer merged + mandatory override) | depends on service |
+| Project-level | `services.<name>.enabled` (3-layer merged + required service override) | depends on service |
 | Agent docs policy | `services.<name>.render.ai.enabled` | `true` for **all** service types |
 
 Note the contrast with IDE rendering: agent docs default to `true` for every type. The rationale is that hub identity (what this directory *is* and how an AI agent should approach it) is useful for every service, not only `app` services.
@@ -215,7 +215,7 @@ Templates receive the same object shape as IDE templates:
 | `.Resolved` | **rendering identity** — service whose hub is actually being rendered (collision-policy winner). For AI the winner is the shallowest extender, so `.Resolved` typically equals `.Service`. |
 | `.ServiceCfg` | effective service config of `.Resolved`, after `extends` resolution. |
 | `.Runtime` | merged `runtime` block |
-| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (binaries normalized; `services.*` injected from `services.yml`) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
 > **Advisory.** AI outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`AGENTS.md`, `.claude/CLAUDE.md`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in AI templates: any value layered in from `devbox/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
 
@@ -266,7 +266,11 @@ The result is **content-idempotent**: re-running `devbox render ai` produces a h
 Layout:
 
 ```
-devbox/services.yml
+devbox/services/
+  main/
+    service.yml
+  main-debug/
+    service.yml
 devbox/templates/ai/
   default/
     manifest.yml
@@ -300,19 +304,21 @@ Service container: {{.ServiceCfg.Container}}
 Workspace root: {{.ServiceCfg.DirInternal}}
 ```
 
-`devbox/services.yml`:
+`devbox/services/main/service.yml`:
 
 ```yaml
-services:
-  main:
-    type: app
-    container: app-main
-    dir: ./services/main
+type: app
+container: app-main
+dir: ./services/main
+```
 
-  main-debug:
-    extends: main
-    container: app-main-debug
-    dir: ./services/main          # same hub as parent — collision
+`devbox/services/main-debug/service.yml`:
+
+```yaml
+type: app
+extends: main
+container: app-main-debug
+dir: ./services/main          # same hub as parent — collision
 ```
 
 `devbox render ai`:

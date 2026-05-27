@@ -5,8 +5,8 @@ Toggle optional services (interactive) or enable/disable individually
 ### Synopsis
 
 Open an interactive multi-select form to enable or disable optional services.
-Mandatory services (including mandatory infra) are always active and shown
-pre-checked / locked. Optional infra services (mandatory: false) appear
+Required services (including required infra) are always active and shown
+pre-checked / locked. Optional infra services (required: false) appear
 alongside apps and tools.
 
 On submit, changes are written to devbox/local.yml and .env is regenerated.

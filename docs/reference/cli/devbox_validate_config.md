@@ -4,7 +4,7 @@ Validate configuration files
 
 ### Synopsis
 
-Check devbox.yml, services.yml, deploy.yml, reset.yml, and related config files for errors.
+Check devbox.yml, devbox/services/<name>/service.yml, deploy.yml, reset.yml, and related config files for errors.
 
 ```
 devbox validate config [flags]
