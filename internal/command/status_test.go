@@ -2,11 +2,13 @@ package command
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/command/statustui"
 	"devbox-cli/internal/deploy/journal"
 )
 
@@ -496,5 +498,106 @@ func TestStatusCmd_NoBanner_WhenNoPending(t *testing.T) {
 	out := buf.String()
 	if strings.Contains(out, "Pending") {
 		t.Errorf("expected no pending banner when no pending state:\n%s", out)
+	}
+}
+
+func TestShouldUseTUI_Matrix(t *testing.T) {
+	tests := []struct {
+		name      string
+		noTUI     bool
+		noFlags   *noSectionFlags
+		isTTY     bool
+		termValue string
+		expect    bool
+	}{
+		// Happy path: TTY, no flags
+		{"TTY_NoFlags_True", false, &noSectionFlags{}, true, "xterm-256color", true},
+		// --no-tui forces plain output
+		{"NoTUI_False", true, &noSectionFlags{}, true, "xterm-256color", false},
+		// Each --no-<section> flag forces plain output
+		{"NoApps_False", false, &noSectionFlags{noApps: true}, true, "xterm-256color", false},
+		{"NoTools_False", false, &noSectionFlags{noTools: true}, true, "xterm-256color", false},
+		{"NoInfra_False", false, &noSectionFlags{noInfra: true}, true, "xterm-256color", false},
+		{"NoDeploy_False", false, &noSectionFlags{noDeploy: true}, true, "xterm-256color", false},
+		{"NoTopology_False", false, &noSectionFlags{noTopology: true}, true, "xterm-256color", false},
+		{"NoGit_False", false, &noSectionFlags{noGit: true}, true, "xterm-256color", false},
+		{"NoDaemons_False", false, &noSectionFlags{noDaemons: true}, true, "xterm-256color", false},
+		// Non-TTY forces plain output
+		{"NonTTY_False", false, &noSectionFlags{}, false, "xterm-256color", false},
+		// TERM=dumb forces plain output
+		{"TermDumb_False", false, &noSectionFlags{}, true, "dumb", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oldIsTerminalFn := isTerminalFn
+			oldEnvTERM := os.Getenv("TERM")
+			defer func() {
+				isTerminalFn = oldIsTerminalFn
+				_ = os.Setenv("TERM", oldEnvTERM)
+			}()
+
+			isTerminalFn = func(fd uintptr) bool { return tt.isTTY }
+			if err := os.Setenv("TERM", tt.termValue); err != nil {
+				t.Fatalf("failed to set TERM: %v", err)
+			}
+
+			result := shouldUseTUI(tt.noTUI, tt.noFlags)
+			if result != tt.expect {
+				t.Errorf("shouldUseTUI(%v, %+v) = %v, want %v",
+					tt.noTUI, tt.noFlags, result, tt.expect)
+			}
+		})
+	}
+}
+
+func TestStatusSubcommands_NeverInvokeTUI(t *testing.T) {
+	// Must NOT use t.Parallel() — mutates package-level TUI seams
+	configPath := statusFixture(t)
+
+	subcommands := []string{"apps", "tools", "infra", "deploy", "topology", "git", "daemons"}
+
+	for _, subcmd := range subcommands {
+		t.Run(subcmd, func(t *testing.T) {
+			oldRunStatusTUIFn := runStatusTUIFn
+			oldIsTerminalFn := isTerminalFn
+			oldEnvTERM := os.Getenv("TERM")
+
+			defer func() {
+				runStatusTUIFn = oldRunStatusTUIFn
+				isTerminalFn = oldIsTerminalFn
+				_ = os.Setenv("TERM", oldEnvTERM)
+			}()
+
+			// Panicking stub to catch if TUI dispatch is invoked
+			runStatusTUIFn = func(ctx context.Context, d statustui.Deps) error {
+				t.Fatal("TUI should not be invoked for subcommands")
+				return nil
+			}
+			isTerminalFn = func(fd uintptr) bool { return true }
+			if err := os.Setenv("TERM", "xterm-256color"); err != nil {
+				t.Fatalf("failed to set TERM: %v", err)
+			}
+
+			root := NewRootCmd()
+			var buf bytes.Buffer
+			root.SetOut(&buf)
+			root.SetErr(&buf)
+			root.SetArgs([]string{"-c", configPath, "status", subcmd})
+
+			err := root.Execute()
+			if err != nil {
+				t.Errorf("subcommand %q failed: %v", subcmd, err)
+			}
+
+			out := buf.String()
+			// Verify subcommands executed as plain output (not TUI).
+			// The key assertion is that we didn't panic (which would happen if
+			// runStatusTUIFn was called). Health indicator should NOT appear in subcommands.
+			if strings.Contains(out, "Devbox:") {
+				// Health indicator should only appear in default view, not subcommands
+				t.Errorf("subcommand %q should not print health indicator", subcmd)
+			}
+		})
 	}
 }

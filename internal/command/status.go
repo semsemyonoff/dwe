@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/command/statustui"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
@@ -15,7 +17,15 @@ import (
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
+)
+
+// Test seams for TTY detection and TUI dispatch.
+// Tests override these via assignment to suppress TUI or verify dispatch logic.
+var (
+	isTerminalFn   = term.IsTerminal
+	runStatusTUIFn = statustui.Run
 )
 
 // section identifies one of the renderable status sections used by the
@@ -152,8 +162,23 @@ func (f *noSectionFlags) isSuppressed(s section) bool {
 	return false
 }
 
+func shouldUseTUI(noTUI bool, no *noSectionFlags) bool {
+	if noTUI {
+		return false
+	}
+	if no.noApps || no.noTools || no.noInfra || no.noDeploy ||
+		no.noTopology || no.noGit || no.noDaemons {
+		return false
+	}
+	if os.Getenv("TERM") == "dumb" {
+		return false
+	}
+	return isTerminalFn(os.Stdout.Fd())
+}
+
 func newStatusCmd(flags *rootFlags) *cobra.Command {
 	noFlags := &noSectionFlags{}
+	var noTUI bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show stack health and per-section status (read-only)",
@@ -174,9 +199,25 @@ in the default view.`,
 			if err != nil {
 				return err
 			}
+			if shouldUseTUI(noTUI, noFlags) {
+				deps := statustui.Deps{
+					Cfg:         sc.Cfg,
+					State:       sc.State,
+					Tracked:     sc.Tracked,
+					SvcDeploys:  sc.SvcDeploys,
+					ProjectName: sc.ProjectName,
+					DockerCfg:   sc.DockerCfg,
+					Topo:        sc.Topo,
+					TopoStatus:  sc.TopoStatus,
+					IsRunning:   sc.IsRunning,
+					ProjectRoot: sc.ProjectRoot,
+				}
+				return runStatusTUIFn(cmd.Context(), deps)
+			}
 			return renderDefaultStatus(cmd, sc, noFlags)
 		},
 	}
+	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "force plain text output even on a TTY")
 	cmd.Flags().BoolVar(&noFlags.noApps, "no-apps", false, "suppress the apps section")
 	cmd.Flags().BoolVar(&noFlags.noTools, "no-tools", false, "suppress the tools section")
 	cmd.Flags().BoolVar(&noFlags.noInfra, "no-infra", false, "suppress the infra section")

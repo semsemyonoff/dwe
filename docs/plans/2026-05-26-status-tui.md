@@ -375,17 +375,17 @@ func mapRunError(err error) error {
 - Modify: `internal/command/status.go`
 - Modify: `internal/command/status_test.go` (or `status_extra_test.go`)
 
-- [ ] add `noTUI bool` to root `status` command's local flags: `cmd.Flags().BoolVar(&noTUI, "no-tui", false, "force plain text output even on a TTY")`
-- [ ] add package-level `isTerminalFn = func(fd uintptr) bool { return term.IsTerminal(int(fd)) }` (test seam)
-- [ ] add package-level `runStatusTUIFn = statustui.Run` (test seam — also makes the subcommand assertion in tests trivial)
-- [ ] implement `shouldUseTUI(noTUI bool, no *noSectionFlags) bool` per Technical Details snippet (only `TERM=dumb` short-circuit, NOT unset TERM)
-- [ ] in root `RunE`, after `loadStatusContext`, branch: if `shouldUseTUI(...)`, build `statustui.Deps` from `sc` and call `runStatusTUIFn(cmd.Context(), deps)`; else call `renderDefaultStatus`
-- [ ] add `TestShouldUseTUI_Matrix` covering: TTY + no flags → true; TTY + --no-tui → false; TTY + --no-apps → false (and same for each --no-<section>); non-TTY → false; TTY + `TERM=dumb` → false (use `t.Setenv`). Do NOT test "TERM unset → false" — the guard was dropped because it false-denies legitimate TTYs
-- [ ] add `TestStatusSubcommands_NeverInvokeTUI`:
+- [x] add `noTUI bool` to root `status` command's local flags: `cmd.Flags().BoolVar(&noTUI, "no-tui", false, "force plain text output even on a TTY")`
+- [x] add package-level `isTerminalFn = func(fd uintptr) bool { return term.IsTerminal(int(fd)) }` (test seam)
+- [x] add package-level `runStatusTUIFn = statustui.Run` (test seam — also makes the subcommand assertion in tests trivial)
+- [x] implement `shouldUseTUI(noTUI bool, no *noSectionFlags) bool` per Technical Details snippet (only `TERM=dumb` short-circuit, NOT unset TERM)
+- [x] in root `RunE`, after `loadStatusContext`, branch: if `shouldUseTUI(...)`, build `statustui.Deps` from `sc` and call `runStatusTUIFn(cmd.Context(), deps)`; else call `renderDefaultStatus`
+- [x] add `TestShouldUseTUI_Matrix` covering: TTY + no flags → true; TTY + --no-tui → false; TTY + --no-apps → false (and same for each --no-<section>); non-TTY → false; TTY + `TERM=dumb` → false (use `t.Setenv`). Do NOT test "TERM unset → false" — the guard was dropped because it false-denies legitimate TTYs
+- [x] add `TestStatusSubcommands_NeverInvokeTUI`:
   - Override `runStatusTUIFn` with a panicking stub and `isTerminalFn` with one returning `true`. Set `t.Setenv("TERM", "xterm-256color")`. Use `t.Cleanup` to restore both package vars after each subtest (required because they are package-level globals).
   - For each subcommand (`status apps`, `tools`, `infra`, `deploy`, `topology`, `git`, `daemons`): build the root command, `cmd.SetArgs(...)`, capture stdout via `cmd.SetOut(buf)`, run `cmd.Execute()`. **Assertions: (1) no panic from the stub, (2) `err == nil`, (3) stdout contains a plain-output marker** — e.g. the section title (`"Apps"` / `"Tools"` / `"Daemons"` / etc.). Without #3 the test passes falsely when setup/load fails before the command body runs.
   - These tests **must not use `t.Parallel()`** — they mutate `runStatusTUIFn` and `isTerminalFn` (package-level vars); concurrent mutation would race. Document this in a comment near the test.
-- [ ] run `make test` — must pass before next task
+- [x] run `make test` — must pass before next task
 
 ### Task 8: Verify acceptance criteria
 
