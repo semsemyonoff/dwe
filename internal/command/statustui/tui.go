@@ -55,23 +55,24 @@ type tab struct {
 // tabs (Services, Deploy, Topology, Git, Daemons) with a shared viewport,
 // title bar, tab strip, and status bar.
 type model struct {
-	deps          Deps
-	ctx           context.Context
-	tabs          []tab
-	active        int
-	viewport      viewport.Model
-	help          help.Model
-	keys          keyMap
-	spinner       spinner.Model
-	loading       bool
-	reloadActive  int
-	reloadYOffset int
-	loadGen       uint64
-	reloadGen     uint64
-	reloading     bool
-	width         int
-	height        int
-	reloadAt      time.Time
+	deps            Deps
+	ctx             context.Context
+	tabs            []tab
+	active          int
+	viewport        viewport.Model
+	help            help.Model
+	keys            keyMap
+	spinner         spinner.Model
+	loading         bool
+	reloadActive    int
+	reloadYOffset   int
+	loadGen         uint64
+	reloadGen       uint64
+	reloading       bool
+	width           int
+	height          int
+	reloadAt        time.Time
+	healthIndicator string // cached; recomputed only on tab reload
 }
 
 // Compile-time assertion that model implements tea.Model.
@@ -141,6 +142,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.tabs = msg.tabs
 		m.reloadAt = msg.loadedAt
+		m.healthIndicator = msg.healthIndicator
 		m.loading = false
 		m.reloading = false
 
@@ -306,16 +308,7 @@ func (m *model) renderStatusBar() string {
 	case m.reloading:
 		leftParts = append(leftParts, "·", "reloading…")
 	case len(m.tabs) > 0 && m.deps.Cfg != nil:
-		// Get health indicator (only if Cfg is available)
-		in := stack.StatusInput{
-			Cfg:        m.deps.Cfg,
-			IsRunning:  m.deps.IsRunning,
-			Topo:       m.deps.Topo,
-			TopoStatus: m.deps.TopoStatus,
-			State:      m.deps.State,
-		}
-		indicator := stack.HealthIndicator(in)
-		leftParts = append(leftParts, indicator)
+		leftParts = append(leftParts, m.healthIndicator)
 		if !m.reloadAt.IsZero() {
 			elapsed := time.Since(m.reloadAt)
 			leftParts = append(leftParts, fmt.Sprintf("loaded %v ago", elapsed.Round(time.Second)))
@@ -327,8 +320,8 @@ func (m *model) renderStatusBar() string {
 	// Build right side: help text
 	rightSide := m.help.View(m.keys)
 
-	// Combine with padding; clamp spacer so narrow terminals don't get a negative Width.
-	spacerW := max(0, m.width-lipgloss.Width(leftSide)-lipgloss.Width(rightSide))
+	// Padding(0,1) adds 1 col each side = 2 total; subtract from available content width.
+	spacerW := max(0, m.width-2-lipgloss.Width(leftSide)-lipgloss.Width(rightSide))
 	status := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftSide,
 		lipgloss.NewStyle().Width(spacerW).Render(""),

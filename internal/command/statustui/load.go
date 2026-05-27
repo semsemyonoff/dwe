@@ -16,9 +16,10 @@ import (
 // tabsLoadedMsg is emitted when buildTabsCmd completes and carries the
 // loaded tabs, timestamp, and a generation number for stale-message filtering.
 type tabsLoadedMsg struct {
-	gen      uint64
-	tabs     []tab
-	loadedAt time.Time
+	gen             uint64
+	tabs            []tab
+	loadedAt        time.Time
+	healthIndicator string
 }
 
 // Package-level seams for testability. Tests override these to avoid slow
@@ -87,9 +88,10 @@ func renderGitTab(ctx context.Context, d Deps) string {
 }
 
 // buildTabs executes all five Render* functions serially and returns the
-// composed tabs. Each renderer returns (body, errs) — body strings are joined
-// with joinNonEmpty, errs trigger a warning prefix.
-func buildTabs(ctx context.Context, d Deps) []tab {
+// composed tabs and a cached health indicator string. Each renderer returns
+// (body, errs) — body strings are joined with joinNonEmpty, errs trigger a
+// warning prefix.
+func buildTabs(ctx context.Context, d Deps) ([]tab, string) {
 	in := stack.StatusInput{
 		Cfg:        d.Cfg,
 		IsRunning:  d.IsRunning,
@@ -140,13 +142,14 @@ func buildTabs(ctx context.Context, d Deps) []tab {
 		daemons = "no daemons running"
 	}
 
-	return []tab{
+	tabs := []tab{
 		{"Services", services},
 		{"Deploy", deploy},
 		{"Topology", topology},
 		{"Git", git},
 		{"Daemons", daemons},
 	}
+	return tabs, stack.HealthIndicator(in)
 }
 
 // buildTabsCmd returns a bubbletea command that calls buildTabs and emits
@@ -154,11 +157,12 @@ func buildTabs(ctx context.Context, d Deps) []tab {
 // and returned in the message for stale-message filtering.
 func buildTabsCmd(ctx context.Context, d Deps, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		tabs := buildTabs(ctx, d)
+		tabs, health := buildTabs(ctx, d)
 		return tabsLoadedMsg{
-			gen:      gen,
-			tabs:     tabs,
-			loadedAt: time.Now(),
+			gen:             gen,
+			tabs:            tabs,
+			loadedAt:        time.Now(),
+			healthIndicator: health,
 		}
 	}
 }
