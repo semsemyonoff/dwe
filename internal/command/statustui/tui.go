@@ -84,10 +84,10 @@ var _ tea.Model = (*model)(nil)
 func (m *model) viewportHeight() int {
 	// 3 fixed chrome rows above the viewport.
 	fixed := 3
-	// Status bar height equals the rendered help height (help is always the
-	// tallest element in the status bar row).
-	helpRows := lipgloss.Height(m.help.View(m.keys))
-	return max(0, m.height-fixed-helpRows)
+	// Measure the actual rendered status bar height so that any overflow
+	// (leftSide + helpText > available width) is accounted for correctly.
+	statusRows := lipgloss.Height(m.renderStatusBar())
+	return max(0, m.height-fixed-statusRows)
 }
 
 // newModel creates a new status TUI model. It initializes the viewport,
@@ -128,7 +128,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.viewport.SetWidth(m.width - 2)
-		m.help.SetWidth(m.width)
 		m.viewport.SetHeight(m.viewportHeight())
 		if len(m.tabs) > m.active {
 			m.viewport.SetContent(m.tabs[m.active].content)
@@ -317,8 +316,12 @@ func (m *model) renderStatusBar() string {
 
 	leftSide := strings.Join(leftParts, "  ")
 
-	// Build right side: help text
-	rightSide := m.help.View(m.keys)
+	// Build right side: help text, constrained to the remaining available
+	// width so leftSide + rightSide never exceeds the content area.
+	availHelp := max(0, m.width-2-lipgloss.Width(leftSide))
+	helpModel := m.help
+	helpModel.SetWidth(availHelp)
+	rightSide := helpModel.View(m.keys)
 
 	// Padding(0,1) adds 1 col each side = 2 total; subtract from available content width.
 	spacerW := max(0, m.width-2-lipgloss.Width(leftSide)-lipgloss.Width(rightSide))
