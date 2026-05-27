@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
@@ -41,6 +42,9 @@ type dockerPipeline struct {
 	compose   *docker.Compose
 }
 
+// envRegenCommands lists docker commands that trigger automatic .env regeneration.
+var envRegenCommands = []string{"up", "run", "exec", "restart", "build"}
+
 func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error) {
 	cfg, err := config.LoadConfig(flags.configPath)
 	if err != nil {
@@ -56,8 +60,8 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 		dockerCfg = &config.DockerConfig{}
 	}
 
-	// Auto-generate .env if configured for this command.
-	if dockerCfg.Env.ShouldGenerateEnv(command) {
+	// Auto-generate .env before these commands.
+	if slices.Contains(envRegenCommands, command) {
 		if _, err := envfile.Regenerate(flags.configPath); err != nil {
 			return nil, fmt.Errorf("generating .env: %w", err)
 		}

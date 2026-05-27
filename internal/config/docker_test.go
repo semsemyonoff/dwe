@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -19,10 +20,6 @@ args:
   ps: []
   exec: []
   run: ["--rm"]
-
-env:
-  auto_generate: true
-  commands: [up, run, exec]
 `
 
 // writeDockerFixture creates devbox/docker.yml and optionally devbox/docker.local.yml
@@ -96,20 +93,6 @@ func TestLoadDockerConfig_Basic(t *testing.T) {
 	if len(dcfg.Args.Run) != 1 || dcfg.Args.Run[0] != "--rm" {
 		t.Errorf("Run args = %v, want [--rm]", dcfg.Args.Run)
 	}
-
-	// Env config
-	if !dcfg.Env.AutoGenerate {
-		t.Error("Env.AutoGenerate = false, want true")
-	}
-	wantCmds := []string{"up", "run", "exec"}
-	if len(dcfg.Env.Commands) != len(wantCmds) {
-		t.Fatalf("Env.Commands len = %d, want %d", len(dcfg.Env.Commands), len(wantCmds))
-	}
-	for i, v := range wantCmds {
-		if dcfg.Env.Commands[i] != v {
-			t.Errorf("Env.Commands[%d] = %q, want %q", i, dcfg.Env.Commands[i], v)
-		}
-	}
 }
 
 func TestLoadDockerConfig_LocalOverride(t *testing.T) {
@@ -117,8 +100,6 @@ func TestLoadDockerConfig_LocalOverride(t *testing.T) {
 args:
   global: ["--ansi", "always"]
   logs: ["-f", "--tail", "100"]
-env:
-  auto_generate: false
 `
 	baseDir := writeDockerFixture(t, sampleDockerYML, localYML)
 	cfg := &DevboxConfig{
@@ -157,17 +138,11 @@ env:
 	if len(dcfg.Args.Up) != len(wantUp) {
 		t.Fatalf("Up args len = %d, want %d", len(dcfg.Args.Up), len(wantUp))
 	}
-
-	// Env overridden
-	if dcfg.Env.AutoGenerate {
-		t.Error("Env.AutoGenerate = true, want false")
-	}
 }
 
 func TestLoadDockerConfig_ProjectNameResolution(t *testing.T) {
 	yml := `project_name: "${project.prefix}-${project.name}"
 args: {}
-env: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
 	cfg := &DevboxConfig{
@@ -201,7 +176,6 @@ func TestLoadDockerConfig_NoLocalFile(t *testing.T) {
 	// Should succeed with just docker.yml and no local override.
 	yml := `project_name: "test"
 args: {}
-env: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
 	cfg := &DevboxConfig{Raw: map[string]any{}}
@@ -212,35 +186,6 @@ env: {}
 	}
 	if dcfg.ProjectName != "test" {
 		t.Errorf("ProjectName = %q, want %q", dcfg.ProjectName, "test")
-	}
-}
-
-func TestDockerEnvConfig_ShouldGenerateEnv(t *testing.T) {
-	env := &DockerEnvConfig{
-		AutoGenerate: true,
-		Commands:     []string{"up", "run", "exec"},
-	}
-
-	if !env.ShouldGenerateEnv("up") {
-		t.Error("ShouldGenerateEnv(up) = false, want true")
-	}
-	if !env.ShouldGenerateEnv("exec") {
-		t.Error("ShouldGenerateEnv(exec) = false, want true")
-	}
-	if env.ShouldGenerateEnv("down") {
-		t.Error("ShouldGenerateEnv(down) = true, want false")
-	}
-	if env.ShouldGenerateEnv("stop") {
-		t.Error("ShouldGenerateEnv(stop) = true, want false")
-	}
-
-	// Disabled auto_generate
-	envDisabled := &DockerEnvConfig{
-		AutoGenerate: false,
-		Commands:     []string{"up"},
-	}
-	if envDisabled.ShouldGenerateEnv("up") {
-		t.Error("ShouldGenerateEnv(up) with disabled = true, want false")
 	}
 }
 
@@ -298,7 +243,6 @@ args:
   up: []
   pull: ["--policy", "always"]
   build: ["--progress", "plain"]
-env: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
 	cfg := &DevboxConfig{Raw: map[string]any{}}
@@ -339,7 +283,6 @@ args:
   up: []
   pull: ["--policy", "always"]
   build: ["--progress", "plain"]
-env: {}
 `
 	localYML := `
 args:
@@ -387,7 +330,6 @@ func TestLoadDockerConfig_DefaultsAppliedWhenAbsent(t *testing.T) {
 	yml := `
 project_name: "test"
 args: {}
-env: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
 	cfg := &DevboxConfig{Raw: map[string]any{}}
@@ -429,7 +371,6 @@ args:
   logs: []
   run: []
   down: []
-env: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
 	cfg := &DevboxConfig{Raw: map[string]any{}}
@@ -463,7 +404,6 @@ args:
   logs: ["-f", "--tail", "50"]
   run: ["-it"]
   down: []
-env: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
 	cfg := &DevboxConfig{Raw: map[string]any{}}
@@ -495,7 +435,6 @@ project_name: "test"
 args:
   up: ["--no-deps"]
   logs: []
-env: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
 	cfg := &DevboxConfig{Raw: map[string]any{}}
@@ -526,7 +465,6 @@ func TestLoadDockerConfig_LocalOverrideNoDefaults(t *testing.T) {
 project_name: "test"
 args:
   up: ["--no-deps"]
-env: {}
 `
 	localYML := `
 args:
@@ -553,6 +491,51 @@ args:
 	}
 	if !slicesEqual(dcfg.Args.Down, []string{"--remove-orphans"}) {
 		t.Errorf("Down args = %v, want [--remove-orphans] (default applied)", dcfg.Args.Down)
+	}
+}
+
+// Tests for loader-level rejection of env: block (Task 17)
+
+func TestLoadDockerConfig_RejectionOnEnvBlockInDockerYml(t *testing.T) {
+	// Old docker.yml with env: block should be rejected at load time.
+	yml := `
+project_name: "test"
+args: {}
+env:
+  auto_generate: true
+  commands: [up, run]
+`
+	baseDir := writeDockerFixture(t, yml, "")
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	_, err := LoadDockerConfig(baseDir, cfg)
+	if err == nil {
+		t.Fatal("expected error for env: block in docker.yml")
+	}
+	if !strings.Contains(err.Error(), "env: removed from docker.yml") {
+		t.Errorf("error message = %q, should mention env removal", err.Error())
+	}
+}
+
+func TestLoadDockerConfig_RejectionOnEnvBlockInDockerLocalYml(t *testing.T) {
+	// Old docker.local.yml with env: block should be rejected at load time.
+	baseYML := `
+project_name: "test"
+args: {}
+`
+	localYML := `
+env:
+  auto_generate: false
+`
+	baseDir := writeDockerFixture(t, baseYML, localYML)
+	cfg := &DevboxConfig{Raw: map[string]any{}}
+
+	_, err := LoadDockerConfig(baseDir, cfg)
+	if err == nil {
+		t.Fatal("expected error for env: block in docker.local.yml")
+	}
+	if !strings.Contains(err.Error(), "env: removed from docker.local.yml") {
+		t.Errorf("error message = %q, should mention env removal", err.Error())
 	}
 }
 

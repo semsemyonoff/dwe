@@ -2,6 +2,7 @@ package command
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"devbox-cli/internal/config"
@@ -28,10 +29,6 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 			Ps:      []string{},
 			Exec:    []string{},
 			Run:     []string{"--rm"},
-		},
-		Env: config.DockerEnvConfig{
-			AutoGenerate: true,
-			Commands:     []string{"up", "run", "exec"},
 		},
 	}
 
@@ -100,13 +97,9 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 	assertArgs(t, "run", args, expected)
 }
 
-// TestDockerEnvAutoGeneration verifies ShouldGenerateEnv logic.
-func TestDockerEnvAutoGeneration(t *testing.T) {
-	envCfg := config.DockerEnvConfig{
-		AutoGenerate: true,
-		Commands:     []string{"up", "run", "exec"},
-	}
-
+// TestDockerEnvRegenCommands verifies .env regeneration triggers for the hardcoded command list.
+func TestDockerEnvRegenCommands(t *testing.T) {
+	// Task 17: .env is now hardcoded to regenerate for {up, run, exec, restart, build}.
 	tests := []struct {
 		command string
 		want    bool
@@ -114,31 +107,20 @@ func TestDockerEnvAutoGeneration(t *testing.T) {
 		{"up", true},
 		{"run", true},
 		{"exec", true},
+		{"restart", true},
+		{"build", true},
 		{"down", false},
 		{"stop", false},
-		{"restart", false},
 		{"logs", false},
 		{"ps", false},
+		{"pull", false},
 		{"wait", false},
 	}
 
 	for _, tt := range tests {
-		if got := envCfg.ShouldGenerateEnv(tt.command); got != tt.want {
-			t.Errorf("ShouldGenerateEnv(%q) = %v, want %v", tt.command, got, tt.want)
-		}
-	}
-}
-
-// TestDockerEnvAutoGenerationDisabled verifies no commands trigger env gen when disabled.
-func TestDockerEnvAutoGenerationDisabled(t *testing.T) {
-	envCfg := config.DockerEnvConfig{
-		AutoGenerate: false,
-		Commands:     []string{"up", "run", "exec"},
-	}
-
-	for _, cmd := range []string{"up", "run", "exec", "down"} {
-		if envCfg.ShouldGenerateEnv(cmd) {
-			t.Errorf("ShouldGenerateEnv(%q) = true when auto_generate is false", cmd)
+		got := slices.Contains(envRegenCommands, tt.command)
+		if got != tt.want {
+			t.Errorf("command %q in envRegenCommands: %v, want %v", tt.command, got, tt.want)
 		}
 	}
 }
