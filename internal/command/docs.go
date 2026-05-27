@@ -430,7 +430,7 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 			return fmt.Errorf("creating group dir %s: %w", groupDir, err)
 		}
 		for _, def := range defs {
-			if err := writeCommandMarkdown(def, groupDir, store, locale); err != nil {
+			if err := writeCommandMarkdown(def, groupDir, reg, store, locale); err != nil {
 				return err
 			}
 		}
@@ -438,8 +438,22 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 	return nil
 }
 
+// stepCommandDescription returns the localized description for the command
+// referenced by a workflow step, or "" when the command is unknown or has no
+// description. Used by workflow rendering to annotate step IDs.
+func stepCommandDescription(reg *usercommands.Registry, store *i18n.Store, locale, commandID string) string {
+	if reg == nil || commandID == "" {
+		return ""
+	}
+	target, err := reg.Get(commandID)
+	if err != nil {
+		return ""
+	}
+	return store.CommandDescription(locale, target.ID, target.Description)
+}
+
 // writeCommandMarkdown writes a single command's documentation to a markdown file.
-func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.Store, locale string) error {
+func writeCommandMarkdown(def *usercommands.CommandDef, dir string, reg *usercommands.Registry, store *i18n.Store, locale string) error {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "# %s\n\n", def.ID)
@@ -544,12 +558,59 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, store *i18n.
 	case usercommands.CommandTypeWorkflow:
 		if len(def.Steps) > 0 {
 			stepsHeader := store.T(locale, "docs.section.steps", "Steps")
+			parallelLabel := store.T(locale, "docs.workflow.parallel", "parallel")
+			subStepsLabel := store.T(locale, "docs.workflow.sub_steps", "sub-steps")
 			sb.WriteString("## " + stepsHeader + "\n\n")
 			for i, step := range def.Steps {
-				if step.Confirm != "" {
+				switch {
+				case step.Confirm != "":
 					fmt.Fprintf(&sb, "%d. **confirm:** %s\n", i+1, step.Confirm)
-				} else {
+				case step.Parallel != nil:
+					p := step.Parallel
+					var meta []string
+					if p.MaxConcurrent > 0 {
+						meta = append(meta, fmt.Sprintf("max_concurrent=%d", p.MaxConcurrent))
+					}
+					if p.FailFast != nil {
+						meta = append(meta, fmt.Sprintf("fail_fast=%v", *p.FailFast))
+					}
+					line := fmt.Sprintf("%d. **%s:** %d %s", i+1, parallelLabel, len(p.Steps), subStepsLabel)
+					if len(meta) > 0 {
+						line += " (" + strings.Join(meta, ", ") + ")"
+					}
+					if step.When != "" {
+						line += " (when: " + step.When + ")"
+					}
+					if step.ContinueOnError {
+						line += " (continue_on_error)"
+					}
+					sb.WriteString(line + "\n")
+					for _, sub := range p.Steps {
+						subLine := "   - `" + sub.Command + "`"
+						if desc := stepCommandDescription(reg, store, locale, sub.Command); desc != "" {
+							subLine += " — " + desc
+						}
+						if len(sub.With) > 0 {
+							var pairs []string
+							for k, v := range sub.With {
+								pairs = append(pairs, k+"="+v)
+							}
+							sort.Strings(pairs)
+							subLine += " (with: " + strings.Join(pairs, ", ") + ")"
+						}
+						if sub.When != "" {
+							subLine += " (when: " + sub.When + ")"
+						}
+						if sub.ContinueOnError {
+							subLine += " (continue_on_error)"
+						}
+						sb.WriteString(subLine + "\n")
+					}
+				default:
 					line := fmt.Sprintf("%d. `%s`", i+1, step.Command)
+					if desc := stepCommandDescription(reg, store, locale, step.Command); desc != "" {
+						line += " — " + desc
+					}
 					if len(step.With) > 0 {
 						var pairs []string
 						for k, v := range step.With {

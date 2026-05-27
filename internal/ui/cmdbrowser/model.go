@@ -738,7 +738,7 @@ func listHeight(h int) int { return max(bodyHeight(h)-3, 3) }
 // content width as it did in v1 — so callers can pass this value straight to
 // `Width(...)` and the rendered panel will span exactly this many cells.
 func leftWidth(w int) int {
-	return max(w/3, 22)
+	return max(2*w/9, 18)
 }
 
 // rightWidth returns the **total frame width** of the right panel so that the

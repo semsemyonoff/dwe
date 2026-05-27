@@ -234,8 +234,10 @@ func TestGenTopLevelIndexCliOnly(t *testing.T) {
 	}
 }
 
-// TestWriteCommandMarkdown_Workflow checks workflow step rendering.
+// TestWriteCommandMarkdown_Workflow checks workflow step rendering: command,
+// parallel, and confirm steps, plus the registry-driven description annotation.
 func TestWriteCommandMarkdown_Workflow(t *testing.T) {
+	failFast := false
 	def := &usercommands.CommandDef{
 		ID:          "db.bootstrap",
 		Group:       "db",
@@ -245,17 +247,34 @@ func TestWriteCommandMarkdown_Workflow(t *testing.T) {
 		Steps: []usercommands.WorkflowStep{
 			{Command: "db.create"},
 			{Command: "db.migrate", With: map[string]string{"env": "test"}},
+			{
+				When: "${param.warm}",
+				Parallel: &usercommands.WorkflowParallel{
+					MaxConcurrent: 2,
+					FailFast:      &failFast,
+					Steps: []usercommands.WorkflowStep{
+						{Command: "db.seed"},
+						{Command: "db.vacuum", ContinueOnError: true},
+					},
+				},
+			},
+			{Confirm: "All done?"},
 		},
 	}
 
-	// Load the embedded i18n store for testing
+	reg := usercommands.NewEmptyRegistry()
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.create", Description: "Create the database"})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.migrate", Description: "Apply migrations"})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.seed", Description: "Seed initial data"})
+	reg.AddCommandForTest(&usercommands.CommandDef{ID: "db.vacuum", Description: "Vacuum tables"})
+
 	store, err := i18n.Load("")
 	if err != nil {
 		t.Fatalf("failed to load i18n store: %v", err)
 	}
 
 	dir := t.TempDir()
-	if err := writeCommandMarkdown(def, dir, store, "en"); err != nil {
+	if err := writeCommandMarkdown(def, dir, reg, store, "en"); err != nil {
 		t.Fatalf("writeCommandMarkdown: %v", err)
 	}
 
@@ -263,13 +282,20 @@ func TestWriteCommandMarkdown_Workflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bootstrap.md not written: %v", err)
 	}
-
 	content := string(data)
-	if !strings.Contains(content, "db.create") {
-		t.Errorf("step not rendered: %s", content)
+
+	wants := []string{
+		"1. `db.create` — Create the database",
+		"2. `db.migrate` — Apply migrations (with: env=test)",
+		"3. **parallel:** 2 sub-steps (max_concurrent=2, fail_fast=false) (when: ${param.warm})",
+		"   - `db.seed` — Seed initial data",
+		"   - `db.vacuum` — Vacuum tables (continue_on_error)",
+		"4. **confirm:** All done?",
 	}
-	if !strings.Contains(content, "db.migrate") {
-		t.Errorf("step not rendered: %s", content)
+	for _, w := range wants {
+		if !strings.Contains(content, w) {
+			t.Errorf("expected substring %q not found in output:\n%s", w, content)
+		}
 	}
 }
 
@@ -297,7 +323,7 @@ func TestWriteCommandMarkdown_Params(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	if err := writeCommandMarkdown(def, dir, store, "en"); err != nil {
+	if err := writeCommandMarkdown(def, dir, nil, store, "en"); err != nil {
 		t.Fatalf("writeCommandMarkdown: %v", err)
 	}
 

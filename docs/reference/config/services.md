@@ -275,6 +275,8 @@ If omitted, a type-based default is used:
 
 Icons are treated as opaque user content — ZWJ-joined emoji (family glyphs, profession modifiers, skin-tone variations) are supported but not validated for length. The icon appears only in the `devbox info` output; it is not used elsewhere.
 
+> **⚠️ Avoid emoji with `Emoji_Presentation=No`.** Codepoints like `🛢️` (U+1F6E2), `🗄️` (U+1F5C4), and `⚙️` (U+2699) are "text-default" — they only render as colour emoji when followed by VS-16 (U+FE0F), and many terminal + font combinations on macOS and Linux ignore that hint and draw them at 1 cell instead of 2. Lipgloss measures them at 2 cells, so the status / info tables under-fill and every column to the right of the icon shifts. Prefer codepoints that are emoji by default — e.g. `📦`, `🧱`, `🐳`, `📚`, `💾`, `🔧`, `🧰` — or stick to single-width ASCII / box-drawing symbols. The same caveat applies to icons set under `info.paths[].icon` and to user-defined `auto-hosts` / `auto-urls` icons in `devbox/info.yml`.
+
 ### `info` block
 
 Optional metadata for rendering this service in the `devbox info` dashboard.

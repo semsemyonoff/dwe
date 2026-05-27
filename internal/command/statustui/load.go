@@ -70,9 +70,10 @@ func normaliseDocker(d *config.DockerConfig) *config.DockerConfig {
 // and ui.RenderGitWorkspace. Returns a placeholder when no repos are tracked,
 // and prepends a warning prefix if rows contain errors.
 func renderGitTab(ctx context.Context, d Deps) string {
+	title := ui.RenderSectionTitle("Git Workspace")
 	rows := collectGitWorkspaceFn(ctx, d.Cfg, d.ProjectRoot)
 	if len(rows) == 0 {
-		return "no git workspace tracked"
+		return joinNonEmpty(title, "no git workspace tracked")
 	}
 
 	// Count rows with errors and prepend a warning if any.
@@ -84,7 +85,7 @@ func renderGitTab(ctx context.Context, d Deps) string {
 	}
 
 	body := ui.RenderGitWorkspace(rows)
-	return joinNonEmpty(warningPrefix(errCount), body)
+	return joinNonEmpty(title, warningPrefix(errCount), body)
 }
 
 // buildTabs executes all five Render* functions serially and returns the

@@ -95,7 +95,7 @@ A label + value pair, rendered as `Label — Value`.
 |-------|-------------|
 | `name` | Label text |
 | `value` | Value text (plain string or template expression) |
-| `icon` | Optional emoji or symbol prepended to value |
+| `icon` | Optional emoji or symbol prepended to value. Prefer codepoints with `Emoji_Presentation=Yes` (e.g. `📦`, `🐳`, `💾`); text-default codepoints like `🛢️`, `🗄️`, `⚙️` may render at 1 cell in some terminals and shift the dashboard layout — see [`icon` field](services.md#icon-field) in the services reference for the full caveat. |
 | `indent` | Optional leading whitespace count. Default for definition items is `2`; pass `0` to flush left. Negative values are rejected. |
 | `when` | Condition; item hidden if falsy |
 

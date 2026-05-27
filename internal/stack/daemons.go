@@ -251,7 +251,7 @@ func RenderDaemons(rows []statusview.DaemonRow) (string, []error) {
 		return "", nil
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderBrandedSectionTitle("Daemons"))
+	b.WriteString(ui.RenderSectionTitle("Daemons"))
 	b.WriteByte('\n')
 	b.WriteString(body)
 	b.WriteByte('\n')

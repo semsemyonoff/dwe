@@ -267,7 +267,7 @@ func TestPrintCommandInspect_workflow(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
+	printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "services.main.bootstrap") {
 		t.Errorf("output should contain command ID")
@@ -292,7 +292,7 @@ func TestPrintCommandInspect_serviceExec(t *testing.T) {
 		Cmd:     "php artisan migrate",
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
+	printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "service_exec") {
 		t.Errorf("output should contain type: %s", out)
@@ -315,7 +315,7 @@ func TestPrintCommandInspect_withParams(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
+	printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "Params") {
 		t.Errorf("output should contain Params section: %s", out)
@@ -337,7 +337,7 @@ func TestPrintCommandInspect_withConfirmation(t *testing.T) {
 		ConfirmationText: "Drop database?",
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
+	printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "confirmation") {
 		t.Errorf("output should contain confirmation flag: %s", out)
@@ -358,7 +358,7 @@ func TestPrintCommandInspect_withMessages(t *testing.T) {
 		},
 	}
 	buf := &testBuf{}
-	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
+	printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "Messages") {
 		t.Errorf("output should contain Messages section: %s", out)
@@ -396,7 +396,7 @@ func TestPrintCommandInspect_daemonStart_derivedFromLine(t *testing.T) {
 
 	// Without cfg: derived-from line + Daemon subsection, no Container subsection.
 	buf := &testBuf{}
-	printInspect(buf, def, nil, i18n.NopTranslator{}, "")
+	printInspect(buf, def, nil, nil, i18n.NopTranslator{}, "")
 	out := buf.String()
 	if !contains(out, "derived from") || !contains(out, "daemon services.main.queue") {
 		t.Errorf("expected 'derived from: daemon services.main.queue' line, got:\n%s", out)
@@ -423,7 +423,7 @@ func TestPrintCommandInspect_daemonStart_derivedFromLine(t *testing.T) {
 		Raw:     map[string]any{},
 	}
 	buf2 := &testBuf{}
-	printInspect(buf2, def, cfg, i18n.NopTranslator{}, "")
+	printInspect(buf2, def, cfg, nil, i18n.NopTranslator{}, "")
 	out2 := buf2.String()
 	if !contains(out2, "Container") {
 		t.Errorf("expected Container subsection when cfg is non-nil, got:\n%s", out2)
@@ -586,8 +586,8 @@ func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
 		if _, err := resolveCommandID(reg, []string{}, false, "laravel", cs.selector); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if cs.title != "Devbox · laravel · Select command" {
-			t.Errorf("title = %q, want %q", cs.title, "Devbox · laravel · Select command")
+		if cs.title != "Devbox · laravel · Commands" {
+			t.Errorf("title = %q, want %q", cs.title, "Devbox · laravel · Commands")
 		}
 	})
 
@@ -596,8 +596,8 @@ func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
 		if _, err := resolveCommandID(reg, []string{"db"}, false, "laravel", cs.selector); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if cs.title != "Devbox · laravel · Select command (db)" {
-			t.Errorf("title = %q, want %q", cs.title, "Devbox · laravel · Select command (db)")
+		if cs.title != "Devbox · laravel · Commands (db)" {
+			t.Errorf("title = %q, want %q", cs.title, "Devbox · laravel · Commands (db)")
 		}
 	})
 
@@ -606,8 +606,8 @@ func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
 		if _, err := resolveCommandID(reg, []string{}, false, "", cs.selector); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if cs.title != "Devbox · Select command" {
-			t.Errorf("title = %q, want %q", cs.title, "Devbox · Select command")
+		if cs.title != "Devbox · Commands" {
+			t.Errorf("title = %q, want %q", cs.title, "Devbox · Commands")
 		}
 	})
 }

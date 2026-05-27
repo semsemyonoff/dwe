@@ -118,7 +118,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				skipConfirmFromTUI bool
 				forceFormFromTUI   bool
 			)
-			selector := makeBrowserSelector(cfg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale)
+			selector := makeBrowserSelector(cfg, reg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale)
 			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
@@ -185,7 +185,7 @@ func runCommandByID(
 
 	// Inspect route — write the formatted definition and stop.
 	if opts.Inspect {
-		printInspect(stdout, def, cfg, opts.Translator, opts.Locale)
+		printInspect(stdout, def, cfg, reg, opts.Translator, opts.Locale)
 		return nil
 	}
 
@@ -436,7 +436,7 @@ type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string
 //
 // For ModeInspect the skipConfirmOut / forceFormOut pointers are unused
 // (their key bindings are disabled in inspect mode); pass nil.
-func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool, translator i18n.Translator, locale string) selectCommandFn {
+func makeBrowserSelector(cfg *config.DevboxConfig, reg *usercommands.Registry, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool, translator i18n.Translator, locale string) selectCommandFn {
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
@@ -449,7 +449,7 @@ func makeBrowserSelector(cfg *config.DevboxConfig, mode cmdbrowser.Mode, include
 				ParamCount:  len(d.Params),
 				Inspect: func(width int) string {
 					var buf bytes.Buffer
-					printInspectAt(&buf, curDef, cfg, width, translator, locale)
+					printInspectAt(&buf, curDef, cfg, reg, width, translator, locale)
 					return buf.String()
 				},
 			}
@@ -506,7 +506,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 		if len(defs) == 0 {
 			return "", fmt.Errorf("command %q not found", arg)
 		}
-		return selector(defs, selectorTitle(projectName, "Select command ("+arg+")"))
+		return selector(defs, selectorTitle(projectName, "Commands ("+arg+")"))
 	}
 	// No arg — show full list.
 	var defs []*usercommands.CommandDef
@@ -518,7 +518,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 	if len(defs) == 0 {
 		return "", fmt.Errorf("no commands available")
 	}
-	return selector(defs, selectorTitle(projectName, "Select command"))
+	return selector(defs, selectorTitle(projectName, "Commands"))
 }
 
 // selectorTitle composes the selector header from a fixed "Devbox" prefix,
@@ -670,6 +670,25 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 	}
 }
 
+// inspectStepDescription returns the localized description for the command
+// referenced by a workflow step, formatted with a leading em-dash separator so
+// it can be concatenated onto a definition value. Returns "" when the command
+// is unknown or carries no description.
+func inspectStepDescription(reg *usercommands.Registry, translator i18n.Translator, locale, commandID string) string {
+	if reg == nil || commandID == "" {
+		return ""
+	}
+	target, err := reg.Get(commandID)
+	if err != nil {
+		return ""
+	}
+	desc := translator.CommandDescription(locale, target.ID, target.Description)
+	if desc == "" {
+		return ""
+	}
+	return " — " + desc
+}
+
 // printInspect writes a detailed view of a command definition using Lipgloss styles.
 // cfg may be nil at call sites that exercise the renderer purely structurally
 // (tests); the resolved container-name block is then omitted.
@@ -678,13 +697,13 @@ func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Com
 // (e.g. an inspect viewport narrower than the terminal), use
 // [printInspectAt] with the explicit width — otherwise values wrap to the
 // terminal and get silently clipped when the viewport renders.
-func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, translator i18n.Translator, locale string) {
-	printInspectAt(w, def, cfg, 0, translator, locale)
+func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, reg *usercommands.Registry, translator i18n.Translator, locale string) {
+	printInspectAt(w, def, cfg, reg, 0, translator, locale)
 }
 
 // printInspectAt is [printInspect] with an explicit wrap width. maxWidth == 0
 // falls back to the terminal width.
-func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, maxWidth int, translator i18n.Translator, locale string) {
+func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, reg *usercommands.Registry, maxWidth int, translator i18n.Translator, locale string) {
 	def2 := func(name, value string, indent int) {
 		_, _ = fmt.Fprintln(w, ui.RenderDefinitionAt(name, value, indent, "", maxWidth))
 	}
@@ -825,7 +844,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.Devbo
 				}
 				def2(label, desc, 4)
 				for j, sub := range p.Steps {
-					subDesc := sub.Command
+					subDesc := sub.Command + inspectStepDescription(reg, translator, locale, sub.Command)
 					if sub.When != "" {
 						subDesc += "  when: " + sub.When
 					}
@@ -836,7 +855,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.Devbo
 				}
 			default:
 				label := fmt.Sprintf("[%d]", i)
-				desc := step.Command
+				desc := step.Command + inspectStepDescription(reg, translator, locale, step.Command)
 				if len(step.With) > 0 {
 					var pairs []string
 					for k, v := range step.With {

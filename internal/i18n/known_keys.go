@@ -28,4 +28,6 @@ var KnownUIKeys = []string{
 	"docs.property.builtin",
 	"docs.property.compose_args",
 	"docs.property.script",
+	"docs.workflow.parallel",
+	"docs.workflow.sub_steps",
 }
