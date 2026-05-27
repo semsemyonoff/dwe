@@ -28,7 +28,7 @@ devbox [flags]
 * [devbox compose](devbox_compose.md)	 - Low-level Docker Compose diagnostics
 * [devbox deploy](devbox_deploy.md)	 - Deploy pipeline commands
 * [devbox docker](devbox_docker.md)	 - Docker Compose lifecycle commands
-* [devbox docs](devbox_docs.md)	 - Generate documentation for devbox commands
+* [devbox docs](devbox_docs.md)	 - Browse and manage documentation
 * [devbox info](devbox_info.md)	 - Display project info dashboard (URLs, hosts, services, tools)
 * [devbox prompt](devbox_prompt.md)	 - Print a compact shell-prompt segment for the current project
 * [devbox render](devbox_render.md)	 - Render derived artifacts from the merged devbox config
