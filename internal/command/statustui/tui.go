@@ -77,9 +77,22 @@ type model struct {
 // Compile-time assertion that model implements tea.Model.
 var _ tea.Model = (*model)(nil)
 
+// viewportHeight returns the viewport height for the current terminal size and
+// help state. The layout is: titleBar(1) + tabStrip(1) + divider(1) + viewport
+// + statusBar. statusBar grows when help is expanded (ShowAll=true).
+func (m *model) viewportHeight() int {
+	// 3 fixed chrome rows above the viewport.
+	fixed := 3
+	// Status bar height equals the rendered help height (help is always the
+	// tallest element in the status bar row).
+	helpRows := lipgloss.Height(m.help.View(m.keys))
+	return max(0, m.height-fixed-helpRows)
+}
+
 // newModel creates a new status TUI model. It initializes the viewport,
 // help, spinner, and other UI components.
 func newModel(d Deps, ctx context.Context, w, h int) *model {
+	// Initial viewport height: h - 3 chrome rows - 1 compact help row = h-4.
 	vp := viewport.New(viewport.WithWidth(w-2), viewport.WithHeight(h-4))
 	hm := help.New()
 	hm.SetWidth(w)
@@ -114,8 +127,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.viewport.SetWidth(m.width - 2)
-		m.viewport.SetHeight(m.height - 4)
 		m.help.SetWidth(m.width)
+		m.viewport.SetHeight(m.viewportHeight())
 		if len(m.tabs) > m.active {
 			m.viewport.SetContent(m.tabs[m.active].content)
 		}
@@ -226,6 +239,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
+			m.viewport.SetHeight(m.viewportHeight())
 			return m, nil
 		}
 
@@ -308,7 +322,7 @@ func (m *model) renderStatusBar() string {
 		}
 	}
 
-	leftSide := lipgloss.JoinHorizontal(lipgloss.Top, leftParts...)
+	leftSide := strings.Join(leftParts, "  ")
 
 	// Build right side: help text
 	rightSide := m.help.View(m.keys)
