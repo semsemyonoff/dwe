@@ -124,7 +124,7 @@ All five builtins live in `internal/builtin/` and are usable both as `type: buil
 
 ### `shell`
 
-Runs a shell command via hardcoded `sh -c` (matching the deploy `when:` predicate convention). Exit 0 = pass.
+Runs a shell command via hardcoded `sh -c` (matching the deploy `when:` predicate convention). Exit 0 = pass. This builtin uses POSIX-portable `sh -c` regardless of the project's configured shell, ensuring checks run identically across all environments.
 
 | Key | Type | Required | Default | Description |
 |-----|------|----------|---------|-------------|
@@ -132,6 +132,8 @@ Runs a shell command via hardcoded `sh -c` (matching the deploy `when:` predicat
 | `timeout` | duration | no | `10s` | Maximum execution time. |
 
 Error message on non-zero exit: `exit status N: <last line of stderr>`.
+
+See [deploy.md: `cmd: shell` vs `type: shell`](deploy.md#cmd-shell-builtin-vs-type-shell-step) for the distinction between this builtin and the `type: shell` step execution type.
 
 ### `file_exists`
 

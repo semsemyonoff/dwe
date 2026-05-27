@@ -157,14 +157,14 @@ Each task is scoped to a single decision (or two tightly related decisions). Doc
 
 Per CLAUDE.md the `shell` builtin uses hardcoded `sh -c` (deliberate — portability rationale matches condition predicates). It is NOT redundant with `DeployStep{type: shell, cmd: <command>}` which uses `ShellBin`. This task documents the distinction; no code change.
 
-- [ ] read `shell.go` and verify the hardcoded `sh` claim
-- [ ] verify whether `internal/condition/condition.go:113` (`exec.Command("sh", "-c", command)` for `when:`/`check:` shell predicates) goes through the builtin registry or directly. Outcome determines Task 5 categorization of `shell`:
+- [x] read `shell.go` and verify the hardcoded `sh` claim
+- [x] verify whether `internal/condition/condition.go:113` (`exec.Command("sh", "-c", command)` for `when:`/`check:` shell predicates) goes through the builtin registry or directly. Outcome determines Task 5 categorization of `shell`:
   - If only validate.yml `cmd: shell` calls it → Predicate kind (current plan)
   - If `when:`/`check:` also call it → still Predicate (consistent with use)
   - If used internally only → Internal kind (re-categorize in Task 5)
-- [ ] add deploy.md subsection "`cmd: shell` (builtin) vs `type: shell` (step)" — explain: step `type: shell` uses `config.ShellBin(cfg)` (user-configurable); builtin `cmd: shell` uses hardcoded `sh -c` for portability invariants. Show example of each.
-- [ ] cross-reference from validate.md if it uses `cmd: shell` (per testdata)
-- [ ] confirm via `make build` that embedded docs regenerate cleanly — must pass before Task 5
+- [x] add deploy.md subsection "`cmd: shell` (builtin) vs `type: shell` (step)" — explain: step `type: shell` uses `config.ShellBin(cfg)` (user-configurable); builtin `cmd: shell` uses hardcoded `sh -c` for portability invariants. Show example of each.
+- [x] cross-reference from validate.md if it uses `cmd: shell` (per testdata)
+- [x] confirm via `make build` that embedded docs regenerate cleanly — must pass before Task 5
 
 ### Task 5: Categorize builtin registry (action / predicate / internal)
 
