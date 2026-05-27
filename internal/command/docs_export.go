@@ -79,13 +79,6 @@ func runDocsExport(cmd *cobra.Command, rflags *rootFlags, df *docsExportFlags, t
 		}
 	}
 
-	// Internals is not yet included in roots from docs.Sources(),
-	// so we check if the user requested it and inform them (future feature)
-	if df.includeInternals {
-		// TODO: Add internals support when the tree structure includes them
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: --include-internals is not yet supported\n")
-	}
-
 	// Export the documentation tree
 	opts := export.Opts{
 		Lang:             locale,

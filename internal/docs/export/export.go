@@ -90,6 +90,12 @@ func walkAndExport(dst, subdir string, node *docs.Node, root docs.DocRoot, opts 
 		return nil
 	}
 
+	// Skip the internals subtree when IncludeInternals is false.
+	// Node.Path for a top-level directory equals its name ("internals").
+	if !opts.IncludeInternals && node.Path == "internals" && root.Name == "devbox" {
+		return nil
+	}
+
 	// Create subdirectory path
 	targetPath := filepath.Join(dst, subdir, node.Path)
 

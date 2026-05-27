@@ -144,20 +144,30 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 	// Get available locales for this file
 	m.AvailableLocales = docs.AvailableLocalesFor(m.Roots, path)
 
-	// Resolve expects paths without .md extension; ResolveContent expects paths with .md.
-	topicPath := strings.TrimSuffix(path, ".md")
-	resolved, err := docs.Resolve(m.Roots, topicPath, m.Locale)
-	if err != nil {
-		m.Viewport.SetContent("Error: " + err.Error())
-		return nil, err
-	}
-
-	// Find the DocRoot that matches the resolved source
+	// Find the DocRoot for this node. Use the TreeNode's RootName when available so
+	// a project doc with the same path as a built-in doc loads from the correct root.
 	var sourceRoot docs.DocRoot
-	for _, root := range m.Roots {
-		if root.Name == resolved.Source {
-			sourceRoot = root
-			break
+	if node.RootName != "" {
+		for _, root := range m.Roots {
+			if root.Name == node.RootName {
+				sourceRoot = root
+				break
+			}
+		}
+	}
+	// Fall back to Resolve if RootName is unset (shouldn't happen in normal flow).
+	if sourceRoot.Name == "" {
+		topicPath := strings.TrimSuffix(path, ".md")
+		resolved, err := docs.Resolve(m.Roots, topicPath, m.Locale)
+		if err != nil {
+			m.Viewport.SetContent("Error: " + err.Error())
+			return nil, err
+		}
+		for _, root := range m.Roots {
+			if root.Name == resolved.Source {
+				sourceRoot = root
+				break
+			}
 		}
 	}
 
@@ -296,9 +306,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case FileChangedMsg:
 		// File changed on disk; reload the current topic if it matches.
+		// msg.Path is an absolute fsnotify path; Node.Path is relative to the docs root,
+		// so we reconstruct the absolute path from ProjectRoot for comparison.
 		var topicCmd tea.Cmd
-		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && m.CurrentTopic.Node.Path == msg.Path {
-			topicCmd, _ = m.loadTopic(m.CurrentTopic)
+		if m.CurrentTopic != nil && m.CurrentTopic.Node != nil && m.ProjectRoot != "" {
+			projectDocsPath := filepath.Join(m.ProjectRoot, "docs")
+			absPath := filepath.Join(projectDocsPath, m.CurrentTopic.Node.Path)
+			if filepath.Clean(absPath) == filepath.Clean(msg.Path) {
+				topicCmd, _ = m.loadTopic(m.CurrentTopic)
+			}
 		}
 		// Re-subscribe so the next event is delivered.
 		if m.Watcher != nil {

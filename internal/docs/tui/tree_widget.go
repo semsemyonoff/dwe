@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"devbox-cli/internal/docs"
 )
 
@@ -9,6 +11,7 @@ type TreeNode struct {
 	Expanded bool
 	Parent   *TreeNode
 	Children []*TreeNode
+	RootName string // which DocRoot this node came from
 }
 
 type TreeWidget struct {
@@ -34,6 +37,8 @@ func (tw *TreeWidget) rebuild() error {
 	}
 	tw.visible = nil
 
+	useGroups := len(tw.roots) > 1
+
 	for _, root := range tw.roots {
 		tree, err := docs.BuildTree(root)
 		if err != nil {
@@ -42,8 +47,24 @@ func (tw *TreeWidget) rebuild() error {
 		if tree == nil || tree.Children == nil {
 			continue
 		}
-		for _, child := range tree.Children {
-			tw.addNodeAsChild(child, tw.root)
+		if useGroups {
+			groupName := strings.ToUpper(root.Name[:1]) + root.Name[1:]
+			groupNode := &docs.Node{Name: groupName, IsDir: true, Path: root.Name}
+			groupTreeNode := &TreeNode{
+				Node:     groupNode,
+				Expanded: true,
+				Parent:   tw.root,
+				Children: []*TreeNode{},
+				RootName: root.Name,
+			}
+			tw.root.Children = append(tw.root.Children, groupTreeNode)
+			for _, child := range tree.Children {
+				tw.addNodeAsChild(child, groupTreeNode, root.Name)
+			}
+		} else {
+			for _, child := range tree.Children {
+				tw.addNodeAsChild(child, tw.root, root.Name)
+			}
 		}
 	}
 
@@ -54,17 +75,18 @@ func (tw *TreeWidget) rebuild() error {
 	return nil
 }
 
-func (tw *TreeWidget) addNodeAsChild(node *docs.Node, parent *TreeNode) {
+func (tw *TreeWidget) addNodeAsChild(node *docs.Node, parent *TreeNode, rootName string) {
 	treeNode := &TreeNode{
 		Node:     node,
 		Expanded: false,
 		Parent:   parent,
 		Children: []*TreeNode{},
+		RootName: rootName,
 	}
 	parent.Children = append(parent.Children, treeNode)
 	if node.IsDir && node.Children != nil {
 		for _, child := range node.Children {
-			tw.addNodeAsChild(child, treeNode)
+			tw.addNodeAsChild(child, treeNode, rootName)
 		}
 	}
 }

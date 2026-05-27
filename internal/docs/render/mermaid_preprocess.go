@@ -19,10 +19,14 @@ type PlaceholderFunc func(index int) MermaidPlaceholder
 
 // PreprocessMermaid scans markdown and replaces mermaid fenced blocks with placeholders.
 // Returns the modified markdown, a list of extracted diagrams, and any non-mermaid processing errors.
+// When placeholderFunc is nil, mermaid blocks are left verbatim (raw code blocks pass through to glamour).
 // Edge cases:
 // - Nested fences are NOT handled specially; only the first ```mermaid opens a block.
 // - A block without a closing ``` consumes lines to EOF and emits a placeholder + warning.
 func PreprocessMermaid(input []byte, placeholderFunc PlaceholderFunc) (output []byte, diagrams []DiagramRef, err error) {
+	if placeholderFunc == nil {
+		return input, nil, nil
+	}
 	lines := bytes.Split(input, []byte("\n"))
 	var result [][]byte
 	var foundDiagrams []DiagramRef
