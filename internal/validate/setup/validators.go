@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/setup"
 	"devbox-cli/internal/validate"
 )

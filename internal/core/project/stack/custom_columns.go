@@ -4,7 +4,7 @@ import (
 	"maps"
 	"slices"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/tpl"
 )
 

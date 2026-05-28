@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestMergeExcludes(t *testing.T) {

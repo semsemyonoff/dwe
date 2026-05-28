@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/reset"
 	"devbox-cli/internal/usercommands"
 )

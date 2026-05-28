@@ -2,7 +2,7 @@
 // and provides the PlainReporter implementation.
 package pipeline
 
-import "devbox-cli/internal/config"
+import "devbox-cli/internal/core/project/config"
 
 // Reporter receives lifecycle events from the deploy/reset pipeline executor
 // and renders them to the terminal. The only implementation is PlainReporter,

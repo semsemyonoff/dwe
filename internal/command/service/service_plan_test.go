@@ -11,7 +11,7 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/command/deploy"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/lifecycle"
 	"devbox-cli/internal/usercommands/model"

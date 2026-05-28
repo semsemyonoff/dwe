@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"

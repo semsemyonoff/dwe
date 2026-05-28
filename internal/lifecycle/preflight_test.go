@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/shared/git"
 	"devbox-cli/internal/usercommands"

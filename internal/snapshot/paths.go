@@ -6,7 +6,7 @@ package snapshot
 import (
 	"path/filepath"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // Default subdirectory under the project root where unpacked snapshots live.

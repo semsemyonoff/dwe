@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/validate"
 )
 

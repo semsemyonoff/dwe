@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/runtime"

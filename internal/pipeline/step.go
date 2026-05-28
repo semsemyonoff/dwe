@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/condition"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/filesgate"
 )
 

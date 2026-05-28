@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // renderAutoHosts renders the auto-hosts info item block.

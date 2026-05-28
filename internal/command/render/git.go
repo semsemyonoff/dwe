@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/config"
-	"devbox-cli/internal/services"
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/shared/render"
 	gitpkg "devbox-cli/internal/templates/git"
 	"devbox-cli/internal/templates/manifest"

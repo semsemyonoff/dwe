@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // ServiceEnabledDiff records a service whose Enabled flag differs between the

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"devbox-cli/internal/command/statusview"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestMapRunError(t *testing.T) {

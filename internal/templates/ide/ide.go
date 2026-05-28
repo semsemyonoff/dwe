@@ -15,7 +15,7 @@ import (
 	"strings"
 	"text/template"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/pathsafe"
 	"devbox-cli/internal/templates/manifest"
 	"devbox-cli/internal/templates/packroot"

@@ -13,7 +13,7 @@ import (
 
 	"go.uber.org/goleak"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestParsePorcelainV2_Clean(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/usercommands/model"

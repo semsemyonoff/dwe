@@ -10,7 +10,7 @@ import (
 	huh "charm.land/huh/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestThemeNonNilByDefault(t *testing.T) {

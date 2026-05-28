@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/envfile"
 	"devbox-cli/internal/shared/render"

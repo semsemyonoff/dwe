@@ -14,9 +14,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/project/stack"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 )
 

@@ -2,7 +2,7 @@ package deploy_test
 
 import (
 	"devbox-cli/internal/condition"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func makeDeployCfg(phases []config.DeployPhase) *config.DevboxConfig {

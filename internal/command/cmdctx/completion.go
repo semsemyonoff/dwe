@@ -1,7 +1,7 @@
 package cmdctx
 
 import (
-	"devbox-cli/internal/project"
+	"devbox-cli/internal/core/project/project"
 
 	"github.com/spf13/cobra"
 )

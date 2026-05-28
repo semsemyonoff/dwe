@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 
 	"github.com/spf13/cobra"
 )

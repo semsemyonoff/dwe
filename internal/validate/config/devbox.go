@@ -12,9 +12,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/project/project"
 	"devbox-cli/internal/deploy"
-	"devbox-cli/internal/project"
 	"devbox-cli/internal/reset"
 	"devbox-cli/internal/validate"
 )

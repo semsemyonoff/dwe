@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"devbox-cli/internal/config"
-	"devbox-cli/internal/stack"
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/project/stack"
 	"devbox-cli/internal/ui"
 )
 

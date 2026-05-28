@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/ui"

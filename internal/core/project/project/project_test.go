@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/project"
+	"devbox-cli/internal/core/project/project"
 )
 
 // makeProject creates a temp dir with a devbox.yml containing the given schema_version.

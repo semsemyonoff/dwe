@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/filesgate"
 

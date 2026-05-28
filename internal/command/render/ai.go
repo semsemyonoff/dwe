@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/services"
+	"devbox-cli/internal/core/project/services"
 	aipkg "devbox-cli/internal/templates/ai"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/pathsafe"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/templates/manifest"

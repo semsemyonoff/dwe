@@ -40,7 +40,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"devbox-cli/internal/command/statusview"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // gitShellOutFn is the seam used by CollectGitWorkspace to invoke git. Tests

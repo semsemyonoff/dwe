@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/builtin"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"

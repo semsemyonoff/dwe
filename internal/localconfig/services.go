@@ -3,7 +3,7 @@ package localconfig
 import (
 	"fmt"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // ServiceSelection is the minimal service state needed for diff and validation logic.

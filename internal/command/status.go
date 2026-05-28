@@ -11,10 +11,10 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/command/statustui"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/project/stack"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/stack"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 

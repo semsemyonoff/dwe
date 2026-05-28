@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/ui/ask"

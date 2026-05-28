@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/validate"
 )

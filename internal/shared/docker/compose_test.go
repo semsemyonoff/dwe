@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestNewCompose(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 type dockerRemoveProjectVolumesBuiltin struct{}

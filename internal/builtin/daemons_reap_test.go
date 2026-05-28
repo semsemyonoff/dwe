@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/render"
 )

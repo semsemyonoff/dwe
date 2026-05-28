@@ -1,6 +1,6 @@
 package templates
 
-import "devbox-cli/internal/config"
+import "devbox-cli/internal/core/project/config"
 
 func appServices(services map[string]config.ServiceConfig) map[string]config.ServiceConfig {
 	apps := make(map[string]config.ServiceConfig)

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/validate"
 )

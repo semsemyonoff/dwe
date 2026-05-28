@@ -6,7 +6,7 @@ import (
 	"testing"
 	"text/template"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func sampleServices() map[string]config.ServiceConfig {

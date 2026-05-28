@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/validate"
 )

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 var (

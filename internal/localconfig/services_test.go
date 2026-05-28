@@ -3,7 +3,7 @@ package localconfig
 import (
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestDiffServiceSelection_NothingChanged(t *testing.T) {

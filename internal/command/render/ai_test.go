@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	aipkg "devbox-cli/internal/templates/ai"
 
 	yamlPkg "gopkg.in/yaml.v3"

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/services"
+	"devbox-cli/internal/core/project/services"
 
 	"github.com/spf13/cobra"
 )

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestDeployOrder_Empty(t *testing.T) {

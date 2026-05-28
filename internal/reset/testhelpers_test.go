@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/condition"
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func writeResetYML(t *testing.T, dir, content string) {

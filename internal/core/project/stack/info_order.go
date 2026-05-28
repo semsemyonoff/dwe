@@ -1,7 +1,7 @@
 package stack
 
 import (
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // DeployOrder returns services ordered by deployment dependencies, grouped by type.

@@ -37,7 +37,7 @@ linters:
       # but new(T) creates a zero-value pointer, not a pointer to the intended value.
       - linters:
           - modernize
-        path: internal/config/(info|ui)_test\.go
+        path: internal/core/project/config/(info|ui)_test\.go
         text: "newexpr"
 
 formatters:

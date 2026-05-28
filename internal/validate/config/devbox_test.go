@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	devconfig "devbox-cli/internal/config"
+	devconfig "devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/validate"
 )
 

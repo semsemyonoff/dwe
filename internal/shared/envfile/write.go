@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // Write renders the .env content from cfg and writes it to outputPath,

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // Entry is one element returned by ListSnapshots: the loaded manifest plus

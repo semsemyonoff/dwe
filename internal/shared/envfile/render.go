@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // HostUID returns the UID to use for container builds.

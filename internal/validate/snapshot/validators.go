@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/tpl"
 	coresnap "devbox-cli/internal/snapshot"
 	"devbox-cli/internal/usercommands/model"

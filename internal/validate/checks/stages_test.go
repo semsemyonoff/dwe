@@ -3,7 +3,7 @@ package checks
 import (
 	"testing"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 func TestMatchStage(t *testing.T) {

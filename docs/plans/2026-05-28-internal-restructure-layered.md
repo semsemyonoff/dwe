@@ -273,18 +273,18 @@ linters:
 - Modify: all `.go` files importing these (mass sed)
 - Modify: `.golangci.yml` line 40 — `path: internal/config/(info|ui)_test\.go` → `path: internal/core/project/config/(info|ui)_test\.go`
 
-- [ ] `git mv internal/project internal/core/project/project`
-- [ ] `git mv internal/config internal/core/project/config`
-- [ ] `git mv internal/services internal/core/project/services`
-- [ ] `git mv internal/stack internal/core/project/stack`
-- [ ] *(userconfig + localconfig deferred to Tasks 8–9 for rename)*
-- [ ] update `.golangci.yml` exclusion path for `internal/config/(info|ui)_test\.go` to new location
-- [ ] run sed for these 4 packages (or full sed pass)
-- [ ] `goimports -w .`
-- [ ] `go build ./...` — must pass
-- [ ] `make test` — must pass
-- [ ] `make lint` — must pass (exclusion still matches; no new revive/modernize warnings)
-- [ ] commit: `refactor(internal): cluster project model under core/project/`
+- [x] `git mv internal/project internal/core/project/project`
+- [x] `git mv internal/config internal/core/project/config`
+- [x] `git mv internal/services internal/core/project/services`
+- [x] `git mv internal/stack internal/core/project/stack`
+- [x] *(userconfig + localconfig deferred to Tasks 8–9 for rename)*
+- [x] update `.golangci.yml` exclusion path for `internal/config/(info|ui)_test\.go` to new location
+- [x] run sed for these 4 packages (or full sed pass)
+- [x] `goimports -w .`
+- [x] `go build ./...` — must pass
+- [x] `make test` — must pass
+- [x] `make lint` — must pass (exclusion still matches; no new revive/modernize warnings)
+- [x] commit: `refactor(internal): cluster project model under core/project/`
 
 ### Task 4: Move core/execution cluster (incl. test-race update)
 

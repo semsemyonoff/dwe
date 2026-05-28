@@ -6,7 +6,7 @@ package snapshot
 import (
 	"path/filepath"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	coresnap "devbox-cli/internal/snapshot"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"

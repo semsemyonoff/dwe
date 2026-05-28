@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	coresnap "devbox-cli/internal/snapshot"
 	"devbox-cli/internal/validate"
 )

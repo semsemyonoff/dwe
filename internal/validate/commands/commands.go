@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/usercommands/loader"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"

@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 )
 
 // Compose encapsulates the state needed to build and execute docker compose commands.

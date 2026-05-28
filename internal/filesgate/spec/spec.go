@@ -4,7 +4,7 @@ package spec
 import (
 	"fmt"
 
-	"devbox-cli/internal/config"
+	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/usercommands/registry"
 )
