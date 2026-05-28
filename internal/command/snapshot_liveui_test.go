@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/liveui"
+	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands/model"

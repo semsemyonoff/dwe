@@ -10,8 +10,8 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/render"
-	"devbox-cli/internal/i18n"
 	pipeline "devbox-cli/internal/pipeline"
+	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/userconfig"
 
 	"github.com/charmbracelet/x/term"

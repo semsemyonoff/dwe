@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/usercommands"
 )
 

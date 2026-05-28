@@ -10,8 +10,8 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/localconfig"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/services"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 

@@ -13,7 +13,7 @@ import (
 
 	"devbox-cli/internal/command"
 	pipeline "devbox-cli/internal/pipeline"
-	"devbox-cli/internal/version"
+	"devbox-cli/internal/shared/version"
 )
 
 // executeWithFang runs fang.Execute against root, capturing stdout/stderr,

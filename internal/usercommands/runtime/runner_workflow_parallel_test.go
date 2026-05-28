@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // ffTrue / ffFalse are reusable *bool literals for the FailFast tristate.

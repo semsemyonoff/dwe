@@ -9,11 +9,11 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/daemon"
-	"devbox-cli/internal/docker"
 	"devbox-cli/internal/lifecycle"
-	"devbox-cli/internal/lock"
 	"devbox-cli/internal/preflight"
+	"devbox-cli/internal/shared/daemon"
+	"devbox-cli/internal/shared/docker"
+	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/registry"
 

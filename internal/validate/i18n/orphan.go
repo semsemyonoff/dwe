@@ -3,7 +3,7 @@ package i18n
 import (
 	"fmt"
 
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"
 )

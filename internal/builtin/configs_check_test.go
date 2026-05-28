@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 func TestServiceConfigsCheckBuiltin_Validate(t *testing.T) {

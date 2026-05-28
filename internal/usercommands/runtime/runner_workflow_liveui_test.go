@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/liveui"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/liveui"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // liveLineCapture wraps the test factory so each invocation records the

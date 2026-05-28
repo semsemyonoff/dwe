@@ -10,7 +10,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/filesgate"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // buildLeafWithRequiredFile builds a shell command whose Files block declares a

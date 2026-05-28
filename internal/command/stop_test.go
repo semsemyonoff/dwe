@@ -9,7 +9,7 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
+	"devbox-cli/internal/shared/docker"
 )
 
 func TestStopCmd_Use(t *testing.T) {

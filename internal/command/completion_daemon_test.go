@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/daemon"
+	"devbox-cli/internal/shared/daemon"
 )
 
 func TestBuildDaemonSetPSArgs_endToEnd(t *testing.T) {

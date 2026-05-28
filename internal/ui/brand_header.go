@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"strings"
 
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // BrandHeader is the input to RenderBrandHeader. Project and Version drive the

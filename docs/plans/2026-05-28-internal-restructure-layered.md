@@ -257,14 +257,14 @@ linters:
 - Modify: all `.go` files importing these (mass sed)
 - Modify: `Makefile` (LDFLAGS lines 8–11 — `internal/version` → `internal/shared/version`; test-race `./internal/lock` → `./internal/shared/lock`)
 
-- [ ] `git mv internal/docker internal/shared/docker` (repeat for all 12 shared packages)
-- [ ] update `Makefile` LDFLAGS: four `-X devbox-cli/internal/version.<Field>=...` lines become `-X devbox-cli/internal/shared/version.<Field>=...`
-- [ ] update `Makefile` `test-race` target: replace `./internal/lock` with `./internal/shared/lock` (other paths in that line still old; final paths updated in Tasks 4, 5)
-- [ ] run `scripts/restructure-imports.sh` (full pass — harmless to run substitutions for not-yet-moved pkgs)
-- [ ] `go build ./...` — must pass
-- [ ] `make build` — must pass and binary should still embed correct version (verify `bin/devbox version` shows real commit hash, not "dev")
-- [ ] `make test` — must pass
-- [ ] commit: `refactor(internal): move leaf infra to shared/`
+- [x] `git mv internal/docker internal/shared/docker` (repeat for all 12 shared packages)
+- [x] update `Makefile` LDFLAGS: four `-X devbox-cli/internal/version.<Field>=...` lines become `-X devbox-cli/internal/shared/version.<Field>=...`
+- [x] update `Makefile` `test-race` target: replace `./internal/lock` with `./internal/shared/lock` (other paths in that line still old; final paths updated in Tasks 4, 5)
+- [x] run `scripts/restructure-imports.sh` (full pass — harmless to run substitutions for not-yet-moved pkgs) ⚠️ NOTE: full-pass sed rewrites imports for unmoved packages to non-existent paths, breaking the build. Workaround: ran a targeted sed limited to the 12 shared packages. Future tasks should follow the same pattern (targeted sed per task) or move all packages before running the full script.
+- [x] `go build ./...` — must pass
+- [x] `make build` — must pass and binary should still embed correct version (verify `bin/devbox version` shows real commit hash, not "dev")
+- [x] `make test` — must pass
+- [x] commit: `refactor(internal): move leaf infra to shared/`
 
 ### Task 3: Move core/project cluster (incl. .golangci.yml exclusion update)
 

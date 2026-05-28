@@ -6,7 +6,7 @@ import (
 
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/mermaid"
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 )
 
 func TestNewModel(t *testing.T) {

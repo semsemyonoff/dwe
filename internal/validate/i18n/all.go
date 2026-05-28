@@ -1,7 +1,7 @@
 package i18n
 
 import (
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"
 )

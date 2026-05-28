@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/ui"
 )
 

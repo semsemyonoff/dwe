@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // BuildCustomColumns returns the ordered list of custom status-column names

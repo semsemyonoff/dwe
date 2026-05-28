@@ -8,8 +8,8 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
 	"devbox-cli/internal/services"
+	"devbox-cli/internal/shared/render"
 	gitpkg "devbox-cli/internal/templates/git"
 	"devbox-cli/internal/templates/manifest"
 

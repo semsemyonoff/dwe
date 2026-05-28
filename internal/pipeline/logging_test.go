@@ -13,8 +13,8 @@ import (
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/liveui"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/liveui"
+	"devbox-cli/internal/shared/render"
 )
 
 func TestOpenPipelineLog_CreatesDevboxLogsDirectory(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // HealthGetFn returns the Docker health status string for a container by ID.

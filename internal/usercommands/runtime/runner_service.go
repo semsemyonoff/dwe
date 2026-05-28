@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
-	"devbox-cli/internal/render"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/docker"
+	"devbox-cli/internal/shared/render"
+	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/usercommands/model"
 )
 

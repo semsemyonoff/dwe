@@ -17,9 +17,9 @@ import (
 
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/filesgate/spec"
-	"devbox-cli/internal/liveui"
-	"devbox-cli/internal/render"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/liveui"
+	"devbox-cli/internal/shared/render"
+	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/resolve"

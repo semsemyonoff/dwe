@@ -37,7 +37,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // ExecContext holds the runtime context passed to every builtin execution.

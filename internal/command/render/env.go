@@ -5,7 +5,7 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/envfile"
+	"devbox-cli/internal/shared/envfile"
 
 	"github.com/spf13/cobra"
 )

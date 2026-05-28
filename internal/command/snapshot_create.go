@@ -13,15 +13,15 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/lock"
+	"devbox-cli/internal/shared/render"
+	"devbox-cli/internal/shared/version"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/userconfig"
-	"devbox-cli/internal/version"
 
 	"github.com/spf13/cobra"
 )

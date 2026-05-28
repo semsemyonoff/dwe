@@ -2,7 +2,7 @@ package command
 
 import (
 	pipeline "devbox-cli/internal/pipeline"
-	"devbox-cli/internal/prompt"
+	"devbox-cli/internal/shared/prompt"
 
 	"devbox-cli/internal/command/cmdctx"
 

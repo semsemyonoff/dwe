@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/daemon"
+	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/validate"
 )
 

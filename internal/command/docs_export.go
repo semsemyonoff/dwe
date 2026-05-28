@@ -7,7 +7,7 @@ import (
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/export"
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"

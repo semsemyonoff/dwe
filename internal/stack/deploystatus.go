@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/ui"
 )
 

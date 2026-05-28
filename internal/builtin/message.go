@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // validMessageLevels lists the accepted level values for the message builtin.

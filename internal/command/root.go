@@ -18,13 +18,13 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/project"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/i18n"
+	"devbox-cli/internal/shared/render"
+	"devbox-cli/internal/shared/version"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/userconfig"
-	"devbox-cli/internal/version"
 
 	"github.com/spf13/cobra"
 )

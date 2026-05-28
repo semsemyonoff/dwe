@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/i18n"
-	"devbox-cli/internal/render"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/i18n"
+	"devbox-cli/internal/shared/render"
+	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/ui"
 )
 

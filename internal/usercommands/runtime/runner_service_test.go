@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/docker"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // testCompose returns a minimal *docker.Compose for use in tests.

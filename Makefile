@@ -5,10 +5,10 @@ MODULE      := devbox-cli
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS  := -X devbox-cli/internal/version.Version=$(VERSION) \
-            -X devbox-cli/internal/version.Commit=$(COMMIT) \
-            -X devbox-cli/internal/version.Date=$(DATE) \
-            -X devbox-cli/internal/version.BuiltBy=make
+LDFLAGS  := -X devbox-cli/internal/shared/version.Version=$(VERSION) \
+            -X devbox-cli/internal/shared/version.Commit=$(COMMIT) \
+            -X devbox-cli/internal/shared/version.Date=$(DATE) \
+            -X devbox-cli/internal/shared/version.BuiltBy=make
 
 .PHONY: build test test-v test-race clean tidy lint embedded-docs gen-docs-manifest
 
@@ -30,7 +30,7 @@ test-v:
 	go test -v ./...
 
 test-race:
-	go test -race ./internal/deploy/journal ./internal/lock ./internal/pipeline
+	go test -race ./internal/deploy/journal ./internal/shared/lock ./internal/pipeline
 
 lint:
 	@which golangci-lint > /dev/null 2>&1 || \

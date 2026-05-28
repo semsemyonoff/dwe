@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"devbox-cli/internal/docker"
+	"devbox-cli/internal/shared/docker"
 )
 
 func TestDockerWaitHealthyValidate(t *testing.T) {

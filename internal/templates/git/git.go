@@ -17,8 +17,8 @@ import (
 	"text/template"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/pathsafe"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/pathsafe"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/templates/manifest"
 	"devbox-cli/internal/templates/packroot"
 )

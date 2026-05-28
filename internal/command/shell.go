@@ -8,8 +8,8 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
 	"devbox-cli/internal/services"
+	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/ui"
 
 	"maps"

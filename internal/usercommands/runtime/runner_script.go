@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // ScriptRunner executes type=script commands by running one or more script files.

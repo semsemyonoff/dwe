@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // --- ParseEnvKeys / EnvLineKey ---

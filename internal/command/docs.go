@@ -15,7 +15,7 @@ import (
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/mermaid"
 	"devbox-cli/internal/docs/tui"
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/userconfig"

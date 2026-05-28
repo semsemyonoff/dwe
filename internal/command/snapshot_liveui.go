@@ -9,8 +9,8 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"devbox-cli/internal/liveui"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/liveui"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands/model"

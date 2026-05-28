@@ -8,7 +8,7 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/pipeline"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/usercommands"
 )
 

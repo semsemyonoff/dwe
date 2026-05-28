@@ -18,7 +18,7 @@ import (
 
 	"devbox-cli/internal/builtin"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/usercommands/runtime"

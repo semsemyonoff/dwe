@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/git"
+	"devbox-cli/internal/shared/git"
 )
 
 func TestRunRestart_MissingLifecycleYML(t *testing.T) {

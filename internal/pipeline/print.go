@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/ui"
 )
 

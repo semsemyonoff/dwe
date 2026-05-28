@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/docker"
+	"devbox-cli/internal/shared/render"
 )
 
 func TestParseDaemonsPSOutput_NDJSON(t *testing.T) {

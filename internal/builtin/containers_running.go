@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
+	"devbox-cli/internal/shared/docker"
 )
 
 // containersRunningBuiltin is a fast "is running" check for compose services.

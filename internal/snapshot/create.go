@@ -13,7 +13,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/usercommands/registry"
 )
 

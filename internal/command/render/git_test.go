@@ -8,7 +8,7 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // setupGitPack writes a git template pack at devbox/templates/git/<packName>/.

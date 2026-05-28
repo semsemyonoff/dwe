@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // makeMessageCtx returns an ExecContext with a captured output buffer.

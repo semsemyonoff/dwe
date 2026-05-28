@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"devbox-cli/internal/builtin"
-	"devbox-cli/internal/render"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/render"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // BuiltinRunner executes type=builtin commands by invoking an engine-internal

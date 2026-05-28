@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/shared/tpl"
 	coresnap "devbox-cli/internal/snapshot"
-	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/validate"
 )

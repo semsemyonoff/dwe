@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // EnsureVolumes creates any declared volumes that do not yet exist.

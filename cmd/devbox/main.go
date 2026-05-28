@@ -16,9 +16,9 @@ import (
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/project"
-	"devbox-cli/internal/prompt"
+	"devbox-cli/internal/shared/prompt"
+	"devbox-cli/internal/shared/version"
 	"devbox-cli/internal/ui"
-	"devbox-cli/internal/version"
 )
 
 func main() {

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // makeExecCtx returns an ExecContext with an in-memory output writer and the

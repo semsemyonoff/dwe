@@ -13,7 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
 
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // Icon glyphs used by block-row finalisation and by pipeline reporter text

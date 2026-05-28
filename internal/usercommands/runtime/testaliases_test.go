@@ -1,7 +1,7 @@
 package runtime
 
 import (
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/usercommands/resolve"

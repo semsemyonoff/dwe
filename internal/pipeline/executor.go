@@ -23,9 +23,9 @@ import (
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/filesgate/spec"
-	"devbox-cli/internal/i18n"
-	"devbox-cli/internal/liveui"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/i18n"
+	"devbox-cli/internal/shared/liveui"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/usercommands"
 )
 

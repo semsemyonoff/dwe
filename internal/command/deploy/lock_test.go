@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/lock"
+	"devbox-cli/internal/shared/lock"
 
 	"github.com/spf13/cobra"
 )

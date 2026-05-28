@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
+	"devbox-cli/internal/shared/docker"
 )
 
 type dockerWaitHealthyBuiltin struct{}

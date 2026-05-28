@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strings"
 
-	"devbox-cli/internal/pathsafe"
+	"devbox-cli/internal/shared/pathsafe"
 )
 
 // Archive safety constants. Constants for now — promote to SnapshotConfig

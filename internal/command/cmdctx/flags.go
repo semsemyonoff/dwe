@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )

@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // defaultIndent is the leading-space indent applied to definition items that

@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
+	"devbox-cli/internal/shared/docker"
 )
 
 // TestDockerPipelineBuildsCompose verifies that the docker pipeline correctly

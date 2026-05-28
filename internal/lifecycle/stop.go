@@ -11,9 +11,9 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/i18n"
-	"devbox-cli/internal/lock"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/i18n"
+	"devbox-cli/internal/shared/lock"
+	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/usercommands"
 )
 

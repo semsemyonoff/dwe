@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
+	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"

@@ -8,7 +8,7 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/envfile"
+	"devbox-cli/internal/shared/envfile"
 )
 
 // makeEnvCfg builds a DevboxConfig with the given export rules and raw map.

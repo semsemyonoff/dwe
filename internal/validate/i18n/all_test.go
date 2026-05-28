@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"

@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/docker"
+	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/ui"
 )
 

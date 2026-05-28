@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/render"
+	"devbox-cli/internal/shared/render"
 )
 
 // TestEnsureVolumes_BinarySubstitution verifies that EnsureVolumes uses the

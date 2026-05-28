@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/git"
+	"devbox-cli/internal/shared/git"
 )
 
 // --- resolveUpdateMode tests (unexported, same package) ---

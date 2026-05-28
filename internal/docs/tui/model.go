@@ -14,7 +14,7 @@ import (
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/mermaid"
 	"devbox-cli/internal/docs/render"
-	"devbox-cli/internal/i18n"
+	"devbox-cli/internal/shared/i18n"
 )
 
 type Model struct {

@@ -12,7 +12,7 @@ import (
 
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/notify"
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/userconfig"
 )

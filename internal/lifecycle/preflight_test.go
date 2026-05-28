@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/config"
-	"devbox-cli/internal/git"
 	"devbox-cli/internal/preflight"
+	"devbox-cli/internal/shared/git"
 	"devbox-cli/internal/usercommands"
 )
 

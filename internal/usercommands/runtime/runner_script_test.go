@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/tpl"
+	"devbox-cli/internal/shared/tpl"
 )
 
 // writeScript writes content to a temporary file and returns its path.
