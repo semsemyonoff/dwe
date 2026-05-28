@@ -1,5 +1,5 @@
 // Package command wires up the devbox-cli cobra command tree.
-package command
+package cli
 
 import (
 	"errors"

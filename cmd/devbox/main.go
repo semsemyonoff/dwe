@@ -12,7 +12,7 @@ import (
 	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/spf13/pflag"
 
-	command "devbox-cli/internal/cli"
+	"devbox-cli/internal/cli"
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
@@ -26,7 +26,7 @@ func main() {
 		os.Exit(prompt.Run(os.Stdout, os.Args[2:]))
 	}
 
-	root := command.NewRootCmd()
+	root := cli.NewRootCmd()
 
 	// Custom error handler: suppress output for ErrSilent (command already
 	// printed its own error) and for ExitCode-bearing errors (which have already

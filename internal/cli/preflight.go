@@ -1,4 +1,4 @@
-package command
+package cli
 
 import "devbox-cli/internal/core/execution/preflight"
 

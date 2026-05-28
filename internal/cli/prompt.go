@@ -1,4 +1,4 @@
-package command
+package cli
 
 import (
 	pipeline "devbox-cli/internal/core/execution/pipeline"

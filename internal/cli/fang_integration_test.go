@@ -1,4 +1,4 @@
-package command_test
+package cli_test
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"charm.land/fang/v2"
 	"github.com/spf13/cobra"
 
-	command "devbox-cli/internal/cli"
+	"devbox-cli/internal/cli"
 	pipeline "devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/shared/version"
 )
@@ -32,7 +32,7 @@ func executeWithFang(t *testing.T, root *cobra.Command, args []string, opts ...f
 
 // TestFangHelpOutput verifies that --help produces non-empty styled help.
 func TestFangHelpOutput(t *testing.T) {
-	root := command.NewRootCmd()
+	root := cli.NewRootCmd()
 	stdout, _, err := executeWithFang(t, root, []string{"--help"})
 	if err != nil {
 		t.Fatalf("--help returned unexpected error: %v", err)
@@ -48,7 +48,7 @@ func TestFangHelpOutput(t *testing.T) {
 
 // TestFangVersionFlag verifies that --version prints version information.
 func TestFangVersionFlag(t *testing.T) {
-	root := command.NewRootCmd()
+	root := cli.NewRootCmd()
 	stdout, _, err := executeWithFang(t, root, []string{"--version"},
 		fang.WithVersion(version.Version),
 		fang.WithCommit(version.Commit),
@@ -76,7 +76,7 @@ func TestFangErrorHandlerSuppressesErrSilent(t *testing.T) {
 		fang.DefaultErrorHandler(w, fang.Styles{}, err)
 	}
 
-	root := command.NewRootCmd()
+	root := cli.NewRootCmd()
 	// Override the RunE to return ErrSilent.
 	root.RunE = func(cmd *cobra.Command, args []string) error {
 		return pipeline.ErrSilent
@@ -101,7 +101,7 @@ func TestFangErrorHandlerSuppressesErrSilent(t *testing.T) {
 // TestFangSilenceSettings verifies that Fang sets SilenceErrors and SilenceUsage
 // on the root command automatically.
 func TestFangSilenceSettings(t *testing.T) {
-	root := command.NewRootCmd()
+	root := cli.NewRootCmd()
 	// fang.Execute sets these; simulate by checking after a --help run.
 	outBuf := &bytes.Buffer{}
 	root.SetOut(outBuf)
@@ -125,7 +125,7 @@ func TestFangUnknownCommandError(t *testing.T) {
 		handledErr = err
 	}
 
-	root := command.NewRootCmd()
+	root := cli.NewRootCmd()
 	root.SetOut(io.Discard)
 	root.SetErr(captured)
 	root.SetArgs([]string{"nonexistent-command-xyz"})
