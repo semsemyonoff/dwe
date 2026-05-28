@@ -13,6 +13,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
+	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
@@ -24,7 +25,6 @@ import (
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/core/workflow/setup"
-	"devbox-cli/internal/localconfig"
 
 	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
@@ -86,7 +86,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	existing, err := localconfig.LoadLocalYAML(localPath)
+	existing, err := localpkg.LoadLocalYAML(localPath)
 	if err != nil {
 		return fmt.Errorf("read existing local.yml: %w", err)
 	}

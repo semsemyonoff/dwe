@@ -17,7 +17,7 @@ package service
 // 	"devbox-cli/internal/core/project/config"
 // 	"devbox-cli/internal/core/workflow/deploy/journal"
 // 	"devbox-cli/internal/core/workflow/lifecycle"
-// 	"devbox-cli/internal/localconfig"
+// 	localpkg "devbox-cli/internal/core/project/local"
 // 	"devbox-cli/internal/core/ui"
 
 // 	"github.com/spf13/cobra"
@@ -1788,12 +1788,12 @@ package service
 
 // 	baseDir := filepath.Dir(configPath)
 // 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
-// 	local, err := localconfig.LoadLocalYAML(localPath)
+// 	local, err := localpkg.LoadLocalYAML(localPath)
 // 	if err != nil {
 // 		t.Fatalf("load local.yml: %v", err)
 // 	}
 
-// 	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, []string{"second"}, []string{"main"}); err == nil {
+// 	if err := localpkg.ApplyServiceTogglesToYAML(cfg, local, []string{"second"}, []string{"main"}); err == nil {
 // 		t.Fatal("expected error for mandatory toggle, got nil")
 // 	}
 // }

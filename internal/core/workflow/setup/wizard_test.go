@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/validate/env"
-	"devbox-cli/internal/localconfig"
 )
 
 func TestWizardRunHappyPath(t *testing.T) {
@@ -44,7 +44,7 @@ func TestWizardRunHappyPath(t *testing.T) {
 	}
 
 	// Verify the file was written
-	content, err := localconfig.LoadLocalYAML(localPath)
+	content, err := localpkg.LoadLocalYAML(localPath)
 	if err != nil {
 		t.Fatalf("LoadLocalYAML() error = %v", err)
 	}
@@ -168,7 +168,7 @@ func TestWizardRunPortConflict(t *testing.T) {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 
-	content, err := localconfig.LoadLocalYAML(localPath)
+	content, err := localpkg.LoadLocalYAML(localPath)
 	if err != nil {
 		t.Fatalf("LoadLocalYAML() error = %v", err)
 	}
@@ -457,7 +457,7 @@ func TestWizardRunDeepMergePreservesExisting(t *testing.T) {
 			"name": "existing_name",
 		},
 	}
-	if err := localconfig.WriteLocalYAML(localPath, existing); err != nil {
+	if err := localpkg.WriteLocalYAML(localPath, existing); err != nil {
 		t.Fatalf("WriteLocalYAML() error = %v", err)
 	}
 
@@ -481,7 +481,7 @@ func TestWizardRunDeepMergePreservesExisting(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	content, _ := localconfig.LoadLocalYAML(localPath)
+	content, _ := localpkg.LoadLocalYAML(localPath)
 	app, _ := content["app"].(map[string]any)
 
 	// Check that both old and new values are present

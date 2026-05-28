@@ -403,14 +403,14 @@ linters:
 
 > **Confirmed collision**: `internal/cli/service/service_toggle.go:312` and `:413` contain `local, err := localconfig.LoadLocalYAML(...)`. The alias approach (`localpkg`) avoids any per-file variable rename.
 
-- [ ] `git mv internal/localconfig internal/core/project/local`
-- [ ] sed in `internal/core/project/local/*.go` only: replace `^package localconfig$` with `package local`
-- [ ] sed across ALL `.go` files: import string `"devbox-cli/internal/localconfig"` → `localpkg "devbox-cli/internal/core/project/local"`
-- [ ] sed across ALL `.go` files: identifier `localconfig.` → `localpkg.`
-- [ ] `goimports -w .`
-- [ ] `go build ./...` — must pass (no collision with `local` local variables because callers use `localpkg`)
-- [ ] `make test` — must pass
-- [ ] commit: `refactor(config): rename localconfig package to local (with localpkg alias)`
+- [x] `git mv internal/localconfig internal/core/project/local`
+- [x] sed in `internal/core/project/local/*.go` only: replace `^package localconfig$` with `package local`
+- [x] sed across ALL `.go` files: import string `"devbox-cli/internal/localconfig"` → `localpkg "devbox-cli/internal/core/project/local"`
+- [x] sed across ALL `.go` files: identifier `localconfig.` → `localpkg.`
+- [x] `goimports -w .`
+- [x] `go build ./...` — must pass (no collision with `local` local variables because callers use `localpkg`)
+- [x] `make test` — must pass
+- [x] commit: `refactor(config): rename localconfig package to local (with localpkg alias)`
 
 ### Task 10: Add depguard rules + smoke-test enforcement
 

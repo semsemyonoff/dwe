@@ -14,13 +14,13 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	cmdDeploy "devbox-cli/internal/cli/deploy"
 	"devbox-cli/internal/core/project/config"
+	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/usercommands/runtime"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/core/workflow/lifecycle"
-	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/envfile"
 	"devbox-cli/internal/shared/lock"
@@ -309,14 +309,14 @@ func mutateAndPlan(
 	} else {
 		toDisable = []string{name}
 	}
-	local, err := localconfig.LoadLocalYAML(localPath)
+	local, err := localpkg.LoadLocalYAML(localPath)
 	if err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
+	if err := localpkg.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localconfig.WriteLocalYAML(localPath, local); err != nil {
+	if err := localpkg.WriteLocalYAML(localPath, local); err != nil {
 		rollback()
 		return TogglePlan{}, nil, nil, err
 	}
@@ -410,14 +410,14 @@ func mutateAndPlanBatch(
 	}
 
 	// Step 1: Write local.yml with all toggles applied in one pass.
-	local, err := localconfig.LoadLocalYAML(localPath)
+	local, err := localpkg.LoadLocalYAML(localPath)
 	if err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localconfig.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
+	if err := localpkg.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localconfig.WriteLocalYAML(localPath, local); err != nil {
+	if err := localpkg.WriteLocalYAML(localPath, local); err != nil {
 		rollback()
 		return TogglePlan{}, nil, nil, err
 	}

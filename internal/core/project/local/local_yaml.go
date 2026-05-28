@@ -1,4 +1,4 @@
-package localconfig
+package local
 
 import (
 	"errors"

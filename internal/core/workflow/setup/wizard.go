@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/validate/env"
-	"devbox-cli/internal/localconfig"
 )
 
 // ServiceToggle describes a service candidate for the wizard's enable/disable
@@ -124,7 +124,7 @@ func Run(ctx context.Context, deps WizardDeps) error {
 	}
 
 	// Load existing local.yml (if any).
-	existing, err := localconfig.LoadLocalYAML(deps.LocalPath)
+	existing, err := localpkg.LoadLocalYAML(deps.LocalPath)
 	if err != nil {
 		return fmt.Errorf("read existing local.yml: %w", err)
 	}
@@ -154,7 +154,7 @@ func Run(ctx context.Context, deps WizardDeps) error {
 	}
 
 	// Write atomically.
-	if err := localconfig.WriteLocalYAML(deps.LocalPath, merged); err != nil {
+	if err := localpkg.WriteLocalYAML(deps.LocalPath, merged); err != nil {
 		return fmt.Errorf("write local.yml: %w", err)
 	}
 

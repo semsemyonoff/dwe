@@ -8,11 +8,11 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
+	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/shared/render"
 
 	"github.com/spf13/cobra"
@@ -115,11 +115,11 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		return err
 	}
 
-	selections := make([]localconfig.ServiceSelection, len(rows))
+	selections := make([]localpkg.ServiceSelection, len(rows))
 	for i, row := range rows {
-		selections[i] = localconfig.ServiceSelection{Name: row.Name, Enabled: row.Enabled, Mandatory: row.Mandatory}
+		selections[i] = localpkg.ServiceSelection{Name: row.Name, Enabled: row.Enabled, Mandatory: row.Mandatory}
 	}
-	toEnable, toDisable := localconfig.DiffServiceSelection(selections, result.Kept)
+	toEnable, toDisable := localpkg.DiffServiceSelection(selections, result.Kept)
 	if len(toEnable) == 0 && len(toDisable) == 0 {
 		return nil
 	}
