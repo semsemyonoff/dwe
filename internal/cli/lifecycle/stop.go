@@ -139,24 +139,7 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 			}
 			return nil
 		},
-		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			if len(args) > 0 {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-			configPath, _, err := cmdctx.CompletionConfigPath(flags, cmd)
-			if err != nil {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-			cfg, err := config.LoadConfig(configPath)
-			if err != nil {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-			names := make([]string, 0, len(cfg.Services))
-			for n := range cfg.Services {
-				names = append(names, n)
-			}
-			return names, cobra.ShellCompDirectiveNoFileComp
-		},
+		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
