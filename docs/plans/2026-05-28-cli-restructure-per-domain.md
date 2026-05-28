@@ -501,12 +501,12 @@ Final tidy pass. After Tasks 1–10, root.go still has `addCmd` helper and 17 im
 
 ### Task 13: Update AGENTS.md and docs/internals/packages.md
 
-- [ ] Update `AGENTS.md` "Project Structure & Module Organization" `internal/cli/` section to list the 17 new subpackages (replace the brief mention of `cli/`, `cli/cmdctx/`, `cli/deploy/`, `cli/render/`, `cli/service/` with the full list)
-- [ ] Update `docs/internals/packages.md`: **replace** the current short `cli/` paragraph in §Per-package responsibilities with a new subsection covering all 17 subpackages (do not append; the existing brief mention of `cli/`, `cli/cmdctx/`, `cli/deploy/`, `cli/render/`, `cli/service/` is now obsolete). Each subpackage gets one short paragraph covering responsibility + the pattern (`NewCmd(groupID, flags)` standard, multi-export only for `lifecycle/`, `AttachInstallUninstall(parent, flags)` for `completion/`); document the Go-naming rationale (why `docker/` and `compose/` are split — see *Naming rationale* in this plan)
-- [ ] Verify symlink: `readlink CLAUDE.md` shows `AGENTS.md`
-- [ ] `make build` — regenerates embedded `AGENTS.md` and `packages.md`; must succeed
-- [ ] `make test` — must pass
-- [ ] Commit: `docs(internals): document per-domain cli/ subpackage layout`
+- [x] Update `AGENTS.md` "Project Structure & Module Organization" `internal/cli/` section to list the 17 new subpackages (replace the brief mention of `cli/`, `cli/cmdctx/`, `cli/deploy/`, `cli/render/`, `cli/service/` with the full list)
+- [x] Update `docs/internals/packages.md`: **replace** the current short `cli/` paragraph in §Per-package responsibilities with a new subsection covering all 17 subpackages (do not append; the existing brief mention of `cli/`, `cli/cmdctx/`, `cli/deploy/`, `cli/render/`, `cli/service/` is now obsolete). Each subpackage gets one short paragraph covering responsibility + the pattern (`NewCmd(groupID, flags)` standard, multi-export only for `lifecycle/`, `AttachInstallUninstall(parent, flags)` for `completion/`); document the Go-naming rationale (why `docker/` and `compose/` are split — see *Naming rationale* in this plan)
+- [x] Verify symlink: `readlink CLAUDE.md` shows `AGENTS.md`
+- [x] `make build` — regenerates embedded `AGENTS.md` and `packages.md`; must succeed
+- [x] `make test` — must pass
+- [x] Commit: `docs(internals): document per-domain cli/ subpackage layout`
 
 ### Task 14: Final move-to-completed
 

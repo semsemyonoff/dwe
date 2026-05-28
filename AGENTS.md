@@ -28,7 +28,7 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
 
 `internal/` is organized in three layers (layering rules — `depguard` activation pending; see `docs/internals/packages.md` § Dependency Rules):
 
-- **`internal/cli/`** — cobra command tree (`cli/`, `cli/cmdctx/`, `cli/deploy/`, `cli/render/`, `cli/service/`). Composition root; no domain logic.
+- **`internal/cli/`** — cobra command tree. Composition root in `cli/root.go`; no domain logic. 17 subpackages: `cmdctx/` (shared `RootFlags` bundle); per-command-subtree packages `command/`, `completion/`, `compose/`, `deploy/`, `docker/`, `docs/`, `info/`, `prompt/`, `render/`, `service/`, `shell/`, `snapshot/`, `status/`, `validate/`, `version/`; `lifecycle/` (multi-export Go-domain grouping for `run`/`stop`/`restart`/`reset`, sharing a `preflightRun` test seam). Each subpackage exports a single `NewCmd(groupID, flags)` (or the `lifecycle.NewRunCmd`/`NewStopCmd`/`NewRestartCmd`/`NewResetCmd` set, or `completion.AttachInstallUninstall(parent, flags)`); siblings communicate via `cmdctx/` and never cross-import each other.
 - **`internal/core/`** — domain logic, subclustered:
   - **`core/project/`**: `project/`, `config/`, `user/` (imported as `userpkg`), `local/` (imported as `localpkg`), `services/`, `stack/`
   - **`core/execution/`**: `pipeline/`, `condition/`, `filesgate/`, `builtin/`, `templates/`, `preflight/`
