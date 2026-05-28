@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
 // FileRecorder records step execution to a state file for idempotent re-runs.

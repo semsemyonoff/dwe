@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot"
 
 	"github.com/spf13/cobra"
 )

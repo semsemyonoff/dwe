@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/runtime"
 )

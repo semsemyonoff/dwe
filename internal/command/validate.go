@@ -9,7 +9,7 @@ import (
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
-	"devbox-cli/internal/setup"
+	"devbox-cli/internal/core/workflow/setup"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/setup"
+	"devbox-cli/internal/core/workflow/setup"
 	"devbox-cli/internal/validate"
 )
 

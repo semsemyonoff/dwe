@@ -10,7 +10,7 @@ import (
 
 	"devbox-cli/internal/core/execution/condition"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
 // buildParallelGroupStep constructs a top-level ResolvedStep that wraps a

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/liveui"
-	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/runtime"

@@ -12,7 +12,7 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"

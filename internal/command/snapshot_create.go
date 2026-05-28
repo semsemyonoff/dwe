@@ -13,11 +13,11 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/version"
-	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"

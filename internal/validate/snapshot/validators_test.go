@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	coresnap "devbox-cli/internal/snapshot"
+	coresnap "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/validate"
 )

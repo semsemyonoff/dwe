@@ -1,7 +1,7 @@
 package setup
 
 import (
-	"devbox-cli/internal/setup"
+	"devbox-cli/internal/core/workflow/setup"
 	"devbox-cli/internal/validate"
 )
 

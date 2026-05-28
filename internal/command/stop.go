@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/execution/preflight"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/lifecycle"
+	"devbox-cli/internal/core/workflow/lifecycle"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/lock"

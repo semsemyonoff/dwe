@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/statustui"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
 // statusFixture creates a minimal devbox project on disk for end-to-end

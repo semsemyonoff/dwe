@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/core/workflow/deploy"
 )
 
 func makeDeployMap(t *testing.T, entries map[string][]string) map[string]*config.DeployConfig {

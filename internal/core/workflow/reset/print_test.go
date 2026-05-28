@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/reset"
+	"devbox-cli/internal/core/workflow/reset"
 )
 
 func TestPrintPlanShell_Empty(t *testing.T) {

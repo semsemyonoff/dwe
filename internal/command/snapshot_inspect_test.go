@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot"
 )
 
 // snapshotInspectProject builds a devbox project with the given service map

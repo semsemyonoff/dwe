@@ -13,8 +13,8 @@ import (
 	"devbox-cli/internal/command/statustui"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/deploy"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 

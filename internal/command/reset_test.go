@@ -12,9 +12,9 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy"
-	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/reset"
+	"devbox-cli/internal/core/workflow/deploy"
+	"devbox-cli/internal/core/workflow/deploy/journal"
+	"devbox-cli/internal/core/workflow/reset"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/registry"

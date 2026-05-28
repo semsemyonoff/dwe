@@ -1,7 +1,7 @@
 package command
 
 import (
-	"devbox-cli/internal/lifecycle"
+	"devbox-cli/internal/core/workflow/lifecycle"
 
 	"devbox-cli/internal/command/cmdctx"
 

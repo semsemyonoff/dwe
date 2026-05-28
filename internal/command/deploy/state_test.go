@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/command/cmdctx"
 	pipeline "devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

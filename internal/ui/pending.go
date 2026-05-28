@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
 // RenderPendingBanner returns a formatted warning string for outstanding pending

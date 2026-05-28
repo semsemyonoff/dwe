@@ -12,8 +12,8 @@ import (
 
 	"devbox-cli/internal/core/execution/preflight"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/shared/envfile"
 	"devbox-cli/internal/shared/git"

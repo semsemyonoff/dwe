@@ -6,7 +6,7 @@ import (
 
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/usercommands"
 )
 

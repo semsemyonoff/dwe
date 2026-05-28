@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot"
 )
 
 func sha256Hex(b []byte) string {

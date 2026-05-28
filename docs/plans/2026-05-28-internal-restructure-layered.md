@@ -314,18 +314,18 @@ linters:
 - Modify: all `.go` files importing these (mass sed)
 - Modify: `Makefile` line 33 — replace `./internal/deploy/journal` with `./internal/core/workflow/deploy/journal`
 
-- [ ] `git mv internal/deploy internal/core/workflow/deploy` (preserves `deploy/journal/` subpkg)
-- [ ] `git mv internal/lifecycle internal/core/workflow/lifecycle`
-- [ ] `git mv internal/reset internal/core/workflow/reset`
-- [ ] `git mv internal/snapshot internal/core/workflow/snapshot`
-- [ ] `git mv internal/setup internal/core/workflow/setup`
-- [ ] update `Makefile` `test-race` — `./internal/deploy/journal` → `./internal/core/workflow/deploy/journal`
-- [ ] sed import paths
-- [ ] `goimports -w .`
-- [ ] `go build ./...` — must pass
-- [ ] `make test` — must pass
-- [ ] `make test-race` — must pass (all three paths now point at moved locations)
-- [ ] commit: `refactor(internal): cluster named workflows under core/workflow/`
+- [x] `git mv internal/deploy internal/core/workflow/deploy` (preserves `deploy/journal/` subpkg)
+- [x] `git mv internal/lifecycle internal/core/workflow/lifecycle`
+- [x] `git mv internal/reset internal/core/workflow/reset`
+- [x] `git mv internal/snapshot internal/core/workflow/snapshot`
+- [x] `git mv internal/setup internal/core/workflow/setup`
+- [x] update `Makefile` `test-race` — `./internal/deploy/journal` → `./internal/core/workflow/deploy/journal`
+- [x] sed import paths
+- [x] `goimports -w .`
+- [x] `go build ./...` — must pass
+- [x] `make test` — must pass
+- [x] `make test-race` — must pass (all three paths now point at moved locations)
+- [x] commit: `refactor(internal): cluster named workflows under core/workflow/`
 
 ### Task 6: Move remaining core/ subtrees + update embedded-docs scripts + go:generate path
 

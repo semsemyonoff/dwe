@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/ui"

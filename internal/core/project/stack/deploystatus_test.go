@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/ui"
 
 	"github.com/stretchr/testify/assert"

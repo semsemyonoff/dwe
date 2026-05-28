@@ -14,8 +14,8 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
-	"devbox-cli/internal/deploy"
-	"devbox-cli/internal/reset"
+	"devbox-cli/internal/core/workflow/deploy"
+	"devbox-cli/internal/core/workflow/reset"
 	"devbox-cli/internal/validate"
 )
 

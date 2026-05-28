@@ -3,7 +3,7 @@ package statusview
 import (
 	"time"
 
-	"devbox-cli/internal/deploy/journal"
+	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
 // ConfigDelta represents the relationship between persisted and current config hashes.

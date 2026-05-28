@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/reset"
+	"devbox-cli/internal/core/workflow/reset"
 	"devbox-cli/internal/usercommands"
 )
 
