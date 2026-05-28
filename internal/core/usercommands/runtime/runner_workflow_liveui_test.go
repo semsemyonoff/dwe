@@ -175,7 +175,7 @@ func TestWorkflowRunner_Parallel_LiveLine_Skipped(t *testing.T) {
 }
 
 // TestWorkflowRunner_Parallel_ContextCancel_StopsCleanly mimics the SIGINT
-// path: signal.NotifyContext in command_cmd.go cancels the parent context;
+// path: signal.NotifyContext in internal/cli/command/ cancels the parent context;
 // errgroup propagates that into running sub-steps via exec.CommandContext.
 // This test cancels mid-block and verifies the runner returns promptly with
 // the LiveLine stopped — no leaked goroutines.

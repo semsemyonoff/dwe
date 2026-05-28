@@ -17,7 +17,7 @@ import (
 	huh "charm.land/huh/v2"
 )
 
-// stubOrchestratorSeams replaces the four package-level seams in command_cmd.go
+// stubOrchestratorSeams replaces the four package-level seams in runbyid.go
 // and ui.IsInteractiveFn, restoring them on cleanup.
 // Subtests using this MUST NOT call t.Parallel().
 func stubOrchestratorSeams(t *testing.T) *orchestratorStubs {

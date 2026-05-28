@@ -1,4 +1,4 @@
-// Package command wires up the devbox-cli cobra command tree.
+// Package cli wires up the devbox-cli cobra command tree.
 package cli
 
 import (

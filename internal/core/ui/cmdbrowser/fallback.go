@@ -26,9 +26,9 @@ var (
 // runFallback delegates to the flat huh-backed selector. The Items are
 // projected onto ui.SelectorItem (label + description). The returned index
 // maps 1:1 into the original items slice, and the action is always ActionRun
-// — the flat fallback cannot express inspect intent (the call site at
-// command_cmd.go for ModeInspect still proceeds to inspect because it builds
-// its own follow-up from the returned ID).
+// — the flat fallback cannot express inspect intent (the call site in
+// internal/cli/command/ for ModeInspect still proceeds to inspect because it
+// builds its own follow-up from the returned ID).
 // includePrivate mirrors Options.IncludePrivate so private commands are
 // excluded from the selector when the caller has not opted in.
 func runFallback(title string, items []Item, includePrivate bool) (Result, error) {
