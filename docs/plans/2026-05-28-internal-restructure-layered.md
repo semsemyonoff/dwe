@@ -464,18 +464,18 @@ linters:
 
 ### Task 13: Verify acceptance criteria
 
-- [ ] verify directory layout matches plan: `find internal -maxdepth 3 -type d | sort` shows exactly `cli/`, `core/`, `shared/` and their expected children
-- [ ] verify no leftover `internal/<flat-package>/` siblings: `ls internal/` should show ONLY `cli`, `core`, `shared`
-- [ ] verify all 36 packages relocated correctly per mapping table (spot-check a few: `internal/core/workflow/snapshot/`, `internal/shared/lock/`, `internal/core/project/user/`)
-- [ ] verify `userconfig`/`localconfig` package names no longer exist: `grep -rn '^package userconfig\|^package localconfig' --include='*.go'` returns empty
-- [ ] verify `cmd/devbox/main.go` imports updated: `grep -c 'devbox-cli/internal/' cmd/devbox/main.go` returns 7; `grep 'devbox-cli/internal/command\|devbox-cli/internal/config\|devbox-cli/internal/pipeline' cmd/devbox/main.go` returns empty (all paths now layered)
-- [ ] verify `Makefile` LDFLAGS point at new version package: `grep 'devbox-cli/internal/shared/version' Makefile` returns 4 matches
-- [ ] verify `Makefile` test-race target points at moved paths: `grep -E 'test-race.*internal/(shared|core)' Makefile` returns the updated line
-- [ ] verify no `nolint:depguard` was added: `grep -rn 'nolint:depguard' --include='*.go'` returns empty
-- [ ] verify no stale files: `[ ! -d internal/docs/embedded ] && [ ! -f internal/docs/content_hashes_gen.go ]`
-- [ ] run final gate: `make build && make test && make lint`
-- [ ] verify `git log --oneline -20` shows clean refactor commits (no merge mess)
-- [ ] verify built binary version: `bin/devbox version` shows real commit hash (not "dev" / "unknown")
+- [x] verify directory layout matches plan: `find internal -maxdepth 3 -type d | sort` shows exactly `cli/`, `core/`, `shared/` and their expected children
+- [x] verify no leftover `internal/<flat-package>/` siblings: `ls internal/` should show ONLY `cli`, `core`, `shared`
+- [x] verify all 36 packages relocated correctly per mapping table (spot-check a few: `internal/core/workflow/snapshot/`, `internal/shared/lock/`, `internal/core/project/user/`)
+- [x] verify `userconfig`/`localconfig` package names no longer exist: `grep -rn '^package userconfig\|^package localconfig' --include='*.go'` returns empty
+- [x] verify `cmd/devbox/main.go` imports updated: `grep -c 'devbox-cli/internal/' cmd/devbox/main.go` returns 7; `grep 'devbox-cli/internal/command\|devbox-cli/internal/config\|devbox-cli/internal/pipeline' cmd/devbox/main.go` returns empty (all paths now layered)
+- [x] verify `Makefile` LDFLAGS point at new version package: `grep 'devbox-cli/internal/shared/version' Makefile` returns 4 matches
+- [x] verify `Makefile` test-race target points at moved paths: line 33 contains `./internal/core/workflow/deploy/journal ./internal/shared/lock ./internal/core/execution/pipeline` (target+command split across two lines, so the single-line regex in the original check did not match — paths themselves verified manually)
+- [x] verify no `nolint:depguard` was added: `grep -rn 'nolint:depguard' --include='*.go'` returns empty
+- [x] verify no stale files: `[ ! -d internal/docs/embedded ] && [ ! -f internal/docs/content_hashes_gen.go ]`
+- [x] run final gate: `make build && make test && make lint`
+- [x] verify `git log --oneline -20` shows clean refactor commits (no merge mess)
+- [x] verify built binary version: `bin/devbox version` shows real commit hash (not "dev" / "unknown")
 
 ### Task 14: Final cleanup
 
