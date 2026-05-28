@@ -4,7 +4,7 @@ import (
 	"maps"
 	"slices"
 
-	"devbox-cli/internal/command/cmdctx"
+	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 
 	"github.com/spf13/cobra"

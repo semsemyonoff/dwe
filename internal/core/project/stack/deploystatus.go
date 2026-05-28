@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/statusview"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/render"
 )

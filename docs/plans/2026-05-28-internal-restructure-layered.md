@@ -366,17 +366,17 @@ linters:
 - Modify: `internal/cli/statustui/*` → `internal/core/ui/statustui/*`
 - Modify: all `.go` files importing these (including `cmd/devbox/main.go`)
 
-- [ ] `git mv internal/command internal/cli`
-- [ ] `git mv internal/cli/statusview internal/core/ui/statusview`
-- [ ] `git mv internal/cli/statustui internal/core/ui/statustui`
-- [ ] **Sed order** (longest path FIRST to avoid prefix-rewrite of subpackage references):
-  - [ ] sed `devbox-cli/internal/command/statusview` → `devbox-cli/internal/core/ui/statusview`
-  - [ ] sed `devbox-cli/internal/command/statustui` → `devbox-cli/internal/core/ui/statustui`
-  - [ ] then sed `devbox-cli/internal/command` → `devbox-cli/internal/cli` (catches cmdctx/deploy/render/service subpkgs naturally because they were already inside command/)
-- [ ] `goimports -w .`
-- [ ] `go build ./...` — must pass (verify `cmd/devbox/main.go` builds with new `internal/cli` import)
-- [ ] `make test` — must pass
-- [ ] commit: `refactor(internal): rename command/ to cli/, move statusview+statustui to core/ui/`
+- [x] `git mv internal/command internal/cli`
+- [x] `git mv internal/cli/statusview internal/core/ui/statusview`
+- [x] `git mv internal/cli/statustui internal/core/ui/statustui`
+- [x] **Sed order** (longest path FIRST to avoid prefix-rewrite of subpackage references):
+  - [x] sed `devbox-cli/internal/command/statusview` → `devbox-cli/internal/core/ui/statusview`
+  - [x] sed `devbox-cli/internal/command/statustui` → `devbox-cli/internal/core/ui/statustui`
+  - [x] then sed `devbox-cli/internal/command` → `devbox-cli/internal/cli` (catches cmdctx/deploy/render/service subpkgs naturally because they were already inside command/)
+- [x] `goimports -w .`
+- [x] `go build ./...` — must pass (verify `cmd/devbox/main.go` builds with new `internal/cli` import)
+- [x] `make test` — must pass
+- [x] commit: `refactor(internal): rename command/ to cli/, move statusview+statustui to core/ui/`
 
 ### Task 8: Rename userconfig → user (package-alias approach)
 

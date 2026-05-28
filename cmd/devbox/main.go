@@ -12,7 +12,7 @@ import (
 	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/spf13/pflag"
 
-	"devbox-cli/internal/command"
+	command "devbox-cli/internal/cli"
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"

@@ -1,0 +1,67 @@
+package command
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"devbox-cli/internal/cli/cmdctx"
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/shared/version"
+
+	"github.com/spf13/cobra"
+)
+
+func newInfoCmd(flags *cmdctx.RootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "info",
+		Short: "Display project info dashboard (URLs, hosts, services, tools)",
+		Long: `Display a styled project dashboard loaded from devbox/info.yml.
+
+Shows project name, URLs, hosts, services, tools, and runtime details.
+The dashboard is driven by Go templates evaluated against the merged devbox config.`,
+		Example: "  devbox info",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInfo(cmd, flags)
+		},
+		SilenceUsage: true,
+	}
+}
+
+func runInfo(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+	cfg, err := config.LoadConfig(flags.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	infoPath := filepath.Join(flags.ProjectRoot(), "devbox", "info.yml")
+	infoCfg, err := config.LoadInfoConfig(infoPath)
+	if err != nil {
+		return fmt.Errorf("loading devbox/info.yml: %w", err)
+	}
+
+	stylesCfg := flags.StylesCfg
+
+	// Always render the branded identity line; the ASCII art block inside the
+	// helper is gated by header.lines.
+	header := ui.BrandHeader{
+		Project: cfg.Project.FullName(),
+		Version: version.Version,
+	}
+	if stylesCfg != nil {
+		header.Tagline = stylesCfg.Header.Tagline
+		header.Lines = stylesCfg.Header.Lines
+		header.Font = stylesCfg.Header.Font
+	}
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), ui.RenderBrandHeader(header))
+	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+
+	out, err := ui.RenderInfo(cfg, infoCfg)
+	if err != nil {
+		return fmt.Errorf("rendering info: %w", err)
+	}
+
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
+	return nil
+}

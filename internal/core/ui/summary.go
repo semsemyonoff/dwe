@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui/statusview"
 )
 
 // RenderSummary returns a compact project summary string.

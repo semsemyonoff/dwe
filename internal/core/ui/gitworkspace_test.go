@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/command/statusview"
+	"devbox-cli/internal/core/ui/statusview"
 )
 
 func TestRenderGitWorkspace_Empty(t *testing.T) {

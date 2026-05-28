@@ -4,7 +4,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 
-	"devbox-cli/internal/command/statusview"
+	"devbox-cli/internal/core/ui/statusview"
 )
 
 // RenderGitWorkspace renders a styled Lipgloss table of per-service git
