@@ -473,16 +473,16 @@ Final tidy pass. After Tasks 1–10, root.go still has `addCmd` helper and 17 im
 - Rename: `internal/cli/render/root.go` → `internal/cli/render/render.go`
 - Delete: `internal/cli/shell_status_version_test.go` (1235 LoC of commented-out tests; dead)
 
-- [ ] Verify `internal/cli/root.go` is already free of inline `newXxxCmd` declarations (all moved in Tasks 1–10); if any survived (e.g. helpers used only by root), audit and either inline or move
-- [ ] Remove the `addCmd` helper function from `internal/cli/root.go` (now unused — every subpackage's `NewCmd` sets its own `GroupID`)
-- [ ] `git mv internal/cli/deploy/root.go internal/cli/deploy/deploy.go`
-- [ ] `git mv internal/cli/render/root.go internal/cli/render/render.go`
-- [ ] `git rm internal/cli/shell_status_version_test.go`
-- [ ] Verify `internal/cli/*.go` list contains ONLY: `root.go`, `root_test.go`, `root_resolver_test.go`, `fang_integration_test.go`, `coverage_test.go`
-- [ ] Verify `internal/cli/root.go` is <100 LoC and `grep -c 'addCmd(' internal/cli/root.go` returns 0
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test && make lint` — all three must pass
-- [ ] Commit: `refactor(cli): shrink root.go, rename deploy/render entrypoints, drop dead test file`
+- [x] Verify `internal/cli/root.go` is already free of inline `newXxxCmd` declarations (all moved in Tasks 1–10); if any survived (e.g. helpers used only by root), audit and either inline or move
+- [x] Remove the `addCmd` helper function from `internal/cli/root.go` (now unused — every subpackage's `NewCmd` sets its own `GroupID`)
+- [x] `git mv internal/cli/deploy/root.go internal/cli/deploy/deploy.go` (also renamed `deploy/root_test.go` → `deploy/deploy_test.go` for symmetry)
+- [x] `git mv internal/cli/render/root.go internal/cli/render/render.go`
+- [x] `git rm internal/cli/shell_status_version_test.go`
+- [x] Verify `internal/cli/*.go` list contains ONLY: `root.go`, `root_test.go`, `root_resolver_test.go`, `fang_integration_test.go` — ⚠️ DEVIATION from plan text: `coverage_test.go` was deleted in Task 9 (no remaining cases after docs/command moves) and `completion_test.go` (the single root-wiring integration test `TestCompletionCmd_InAdvancedGroupWithShellSubcommands`) was folded into `root_test.go` here. Final cli/ root has 4 files.
+- [x] Verify `grep -c 'addCmd(' internal/cli/root.go` returns 0 — ⚠️ DEVIATION: `root.go` is 334 LoC, not <100 LoC. The plan's <100 LoC target is incompatible with what was specified to remain in §Solution Overview ("Retains: NewRootCmd, initRootCmd, PersistentPreRunE, runRoot, applyStyles, resolveLocalization, allowedWithoutProject, isValidateCommand"). The eight retained helpers — particularly `PersistentPreRunE` (~55 LoC of project-resolution branching) and `runRoot` (~70 LoC of project-summary rendering) — comprise the bulk of the file. Shrinking further would require moving them into a new sub-helper file inside `cli/` (no clear home in any subpackage since they touch persistent-flag wiring + project resolution, both root concerns). Deferred as a future tidy; the substantive goal of the refactor (no inline `newXxxCmd` declarations, no `addCmd` helper) is met.
+- [x] `goimports -w .`
+- [x] `go build ./... && make test && make lint` — all three pass
+- [x] Commit: `refactor(cli): shrink root.go, rename deploy/render entrypoints, drop dead test file`
 
 ### Task 12: Verify acceptance criteria
 

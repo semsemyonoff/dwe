@@ -214,12 +214,6 @@ func resolveLocalization(flags *cmdctx.RootFlags) {
 	flags.Locale = store.ClampLocale(i18n.ResolveLocale("", cfgLang, os.Getenv("LANG")))
 }
 
-// addCmd assigns a group ID to cmd and adds it to parent.
-func addCmd(parent *cobra.Command, groupID string, cmd *cobra.Command) {
-	cmd.GroupID = groupID
-	parent.AddCommand(cmd)
-}
-
 // allowedWithoutProject returns true for commands that can run without a project.
 // These commands are allowed through when no devbox.yml is found via upward discovery.
 // Note: explicit -c /bad/path is still fatal even for these commands — the allowlist
