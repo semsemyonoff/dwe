@@ -330,15 +330,20 @@ Largest single-subtree move. 12 source files mostly already split by subcommand;
 - Delete: `internal/cli/snapshot.go`, `internal/cli/snapshot_create.go`, `internal/cli/snapshot_restore.go`, `internal/cli/snapshot_remove.go`, `internal/cli/snapshot_pack.go`, `internal/cli/snapshot_unpack.go`, `internal/cli/snapshot_liveui.go`, plus `_test.go` siblings (12 files total)
 - Modify: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/snapshot.go internal/cli/snapshot/snapshot.go`
-- [ ] `git mv internal/cli/snapshot_create.go internal/cli/snapshot/create.go` (and repeat for restore/remove/pack/unpack/liveui)
-- [ ] Same rename for all `_test.go` files: drop `snapshot_` prefix
-- [ ] Change `package cli` → `package snapshot` across all 12+ files
-- [ ] Rename `newSnapshotCmd(flags)` → `NewCmd(groupID, flags)`; sub-builders (`newSnapshotListCmd`, `newSnapshotInspectCmd`, etc.) keep `newXxx` (unexported, set inside `NewCmd`)
-- [ ] Update `internal/cli/root.go`: `addCmd(root, groupPipelines, newSnapshotCmd(flags))` → `root.AddCommand(snapshot.NewCmd(groupPipelines, flags))`
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 7
-- [ ] Commit: `refactor(cli): extract snapshot subpackage`
+- [x] `git mv internal/cli/snapshot.go internal/cli/snapshot/snapshot.go`
+- [x] `git mv internal/cli/snapshot_create.go internal/cli/snapshot/create.go` (and repeat for restore/remove/pack/unpack/liveui)
+- [x] Same rename for all `_test.go` files: drop `snapshot_` prefix
+- [x] Change `package cli` → `package snapshot` across all 12+ files
+- [x] Rename `newSnapshotCmd(flags)` → `NewCmd(groupID, flags)`; sub-builders (`newSnapshotListCmd`, `newSnapshotInspectCmd`, etc.) keep `newXxx` (unexported, set inside `NewCmd`)
+- [x] Update `internal/cli/root.go`: `addCmd(root, groupPipelines, newSnapshotCmd(flags))` → `root.AddCommand(snapshot.NewCmd(groupPipelines, flags))`
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — must pass before Task 7
+- [x] Commit: `refactor(cli): extract snapshot subpackage`
+
+**Notes:**
+- The new package is named `snapshot` and collides with the `internal/core/workflow/snapshot` import. Aliased the workflow package as `snapshotpkg` across all 11 files that import it (same convention as `userpkg`/`localpkg`/`versioninfo`/`promptpkg` used in earlier tasks). All `snapshot.X` references to the workflow package were rewritten to `snapshotpkg.X`.
+- In `internal/cli/root.go`, imported the new package as `cmdSnapshot` to follow the established alias convention.
+- `TestSnapshotNameCompletion` previously called `NewRootCmd()` to get a cobra.Command carrying the `--config` persistent flag. Replaced with an inline minimal `&cobra.Command{Use: "devbox"}` plus a `PersistentFlags().StringVarP(&flags.ConfigPath, "config", ...)` registration — same coverage without dragging the cli root into a sibling-package test.
 
 ### Task 7: `cli/status/`
 

@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 
@@ -51,7 +51,7 @@ func newSnapshotRemoveCmd(flags *cmdctx.RootFlags) *cobra.Command {
 func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
-	if err := snapshot.ValidateName(name); err != nil {
+	if err := snapshotpkg.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -96,7 +96,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 		}
 		n := cmdctx.NewNotifier(ucfg)
 		defer func() {
-			if errors.As(err, new(*snapshot.RemoveCancelledError)) {
+			if errors.As(err, new(*snapshotpkg.RemoveCancelledError)) {
 				return
 			}
 			n.Notify(context.Background(), notify.Event{
@@ -120,7 +120,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 	stdout := cmd.OutOrStdout()
 	stderr := cmd.ErrOrStderr()
 
-	params := snapshot.RemoveParams{
+	params := snapshotpkg.RemoveParams{
 		Cfg:            cfg,
 		SnapCfg:        snapCfg,
 		Registry:       reg,
@@ -130,7 +130,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 		NonInteractive: !ui.IsInteractiveFn(os.Stdin),
 		Stdout:         stdout,
 		Stderr:         stderr,
-		ConfirmRemove: func(m *snapshot.Manifest) (bool, error) {
+		ConfirmRemove: func(m *snapshotpkg.Manifest) (bool, error) {
 			if !ui.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "snapshot remove needs confirmation; pass --yes to proceed non-interactively")
 				return false, nil
@@ -141,14 +141,14 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 			}
 			return ui.RunConfirm(prompt, "Remove", "Cancel")
 		},
-		StepObserverFactory: func(steps []model.WorkflowStep) snapshot.StepObserverCloser {
+		StepObserverFactory: func(steps []model.WorkflowStep) snapshotpkg.StepObserverCloser {
 			return newSnapshotLiveObserver("snapshot remove: "+name, noLive, steps)
 		},
 	}
 
-	res, runErr := snapshot.Remove(ctx, params)
+	res, runErr := snapshotpkg.Remove(ctx, params)
 	if runErr != nil {
-		if errors.As(runErr, new(*snapshot.RemoveCancelledError)) {
+		if errors.As(runErr, new(*snapshotpkg.RemoveCancelledError)) {
 			_, _ = fmt.Fprintln(stderr, "snapshot remove cancelled")
 			return runErr
 		}

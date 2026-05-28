@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"archive/tar"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 
 	"github.com/spf13/cobra"
 )
@@ -33,13 +33,13 @@ func snapshotTestProject(t *testing.T) string {
 	return dir
 }
 
-func writeTestSnapshot(t *testing.T, base, name string, m *snapshot.Manifest) {
+func writeTestSnapshot(t *testing.T, base, name string, m *snapshotpkg.Manifest) {
 	t.Helper()
 	dir := filepath.Join(base, "snapshots", name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := snapshot.SaveManifest(filepath.Join(dir, snapshot.ManifestFileName), m); err != nil {
+	if err := snapshotpkg.SaveManifest(filepath.Join(dir, snapshotpkg.ManifestFileName), m); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 }
@@ -70,19 +70,19 @@ func TestSnapshotList_TableAndJSON(t *testing.T) {
 	}
 	older := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC)
-	writeTestSnapshot(t, base, "alpha", &snapshot.Manifest{
+	writeTestSnapshot(t, base, "alpha", &snapshotpkg.Manifest{
 		Name:      "alpha",
 		CreatedAt: older,
-		Artifacts: []snapshot.ArtifactInfo{{Path: "x", Size: 2048}},
+		Artifacts: []snapshotpkg.ArtifactInfo{{Path: "x", Size: 2048}},
 	})
-	writeTestSnapshot(t, base, "beta", &snapshot.Manifest{
+	writeTestSnapshot(t, base, "beta", &snapshotpkg.Manifest{
 		Name:        "beta",
 		CreatedAt:   newer,
 		Description: "WIP",
 	})
 
 	// Set current pointer to beta.
-	if err := snapshot.WriteCurrent(base, "beta"); err != nil {
+	if err := snapshotpkg.WriteCurrent(base, "beta"); err != nil {
 		t.Fatalf("write current: %v", err)
 	}
 
@@ -148,12 +148,12 @@ func TestSnapshotCurrent(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		writeTestSnapshot(t, base, "feature-x", &snapshot.Manifest{
+		writeTestSnapshot(t, base, "feature-x", &snapshotpkg.Manifest{
 			Name:        "feature-x",
 			CreatedAt:   time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
 			Description: "wip",
 		})
-		if err := snapshot.WriteCurrent(base, "feature-x"); err != nil {
+		if err := snapshotpkg.WriteCurrent(base, "feature-x"); err != nil {
 			t.Fatalf("write current: %v", err)
 		}
 		var out, errW bytes.Buffer
@@ -175,11 +175,11 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 		ConfigPath: filepath.Join(base, "devbox.yml"),
 		Root:       base,
 	}
-	writeTestSnapshot(t, base, "feature-x", &snapshot.Manifest{
+	writeTestSnapshot(t, base, "feature-x", &snapshotpkg.Manifest{
 		Name:      "feature-x",
 		CreatedAt: time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
-		Project:   snapshot.ProjectInfo{Name: "testproj", ConfigHash: "abc"},
-		Artifacts: []snapshot.ArtifactInfo{
+		Project:   snapshotpkg.ProjectInfo{Name: "testproj", ConfigHash: "abc"},
+		Artifacts: []snapshotpkg.ArtifactInfo{
 			{Path: "db/main.sql.gz", Size: 1024, Sha256: strings.Repeat("a", 64)},
 		},
 	})
@@ -203,10 +203,10 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 			t.Fatalf("err: %v", err)
 		}
 		var payload struct {
-			Source             string             `json:"source"`
-			Manifest           *snapshot.Manifest `json:"manifest"`
-			CurrentConfigHash  string             `json:"current_config_hash"`
-			ConfigHashDiverged bool               `json:"config_hash_diverged"`
+			Source             string                `json:"source"`
+			Manifest           *snapshotpkg.Manifest `json:"manifest"`
+			CurrentConfigHash  string                `json:"current_config_hash"`
+			ConfigHashDiverged bool                  `json:"config_hash_diverged"`
 		}
 		if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 			t.Fatalf("decode: %v\n%s", err, out.String())
@@ -284,10 +284,10 @@ func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 		t.Fatalf("write state: %v", err)
 	}
 
-	writeTestSnapshot(t, base, "snap", &snapshot.Manifest{
+	writeTestSnapshot(t, base, "snap", &snapshotpkg.Manifest{
 		Name:      "snap",
 		CreatedAt: time.Now().UTC(),
-		Project:   snapshot.ProjectInfo{Name: "testproj", ConfigHash: "snap-hash"},
+		Project:   snapshotpkg.ProjectInfo{Name: "testproj", ConfigHash: "snap-hash"},
 	})
 
 	var out bytes.Buffer
@@ -301,7 +301,7 @@ func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 
 func TestSnapshotCmd_ArgsValidation(t *testing.T) {
 	// Verify each subcommand declares its Args validator (no in-RunE arg parsing).
-	root := newSnapshotCmd(&cmdctx.RootFlags{})
+	root := NewCmd("", &cmdctx.RootFlags{})
 	cases := []struct {
 		name        string
 		args        []string
@@ -338,12 +338,13 @@ func TestSnapshotNameCompletion(t *testing.T) {
 		ConfigPath: filepath.Join(base, "devbox.yml"),
 		Root:       base,
 	}
-	writeTestSnapshot(t, base, "alpha", &snapshot.Manifest{Name: "alpha", CreatedAt: time.Now().UTC()})
-	writeTestSnapshot(t, base, "beta", &snapshot.Manifest{Name: "beta", CreatedAt: time.Now().UTC()})
+	writeTestSnapshot(t, base, "alpha", &snapshotpkg.Manifest{Name: "alpha", CreatedAt: time.Now().UTC()})
+	writeTestSnapshot(t, base, "beta", &snapshotpkg.Manifest{Name: "beta", CreatedAt: time.Now().UTC()})
 
 	fn := snapshotNameCompletion(flags)
 	// Pass a real cobra.Command — completion contract reads Lookup("config") off root.
-	root := NewRootCmd()
+	root := &cobra.Command{Use: "devbox"}
+	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", flags.ConfigPath, "")
 	names, dir := fn(root, nil, "")
 	if dir != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("directive = %v", dir)

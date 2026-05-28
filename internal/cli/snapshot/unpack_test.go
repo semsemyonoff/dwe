@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 )
 
 func sha256Hex(b []byte) string {
@@ -57,16 +57,16 @@ func buildFixtureTarGz(t *testing.T, baseA, name, outPath string) {
 	if err := os.WriteFile(filepath.Join(snapDir, "data", "a.txt"), body, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := &snapshot.Manifest{
+	m := &snapshotpkg.Manifest{
 		Name:      name,
 		CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-		Project:   snapshot.ProjectInfo{Name: "testproj"},
-		Artifacts: []snapshot.ArtifactInfo{{Path: "data/a.txt", Size: int64(len(body)), Sha256: sha256Hex(body)}},
+		Project:   snapshotpkg.ProjectInfo{Name: "testproj"},
+		Artifacts: []snapshotpkg.ArtifactInfo{{Path: "data/a.txt", Size: int64(len(body)), Sha256: sha256Hex(body)}},
 	}
-	if err := snapshot.SaveManifest(filepath.Join(snapDir, snapshot.ManifestFileName), m); err != nil {
+	if err := snapshotpkg.SaveManifest(filepath.Join(snapDir, snapshotpkg.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := snapshot.Pack(snapsRoot, snapDir, name, outPath, nil); err != nil {
+	if _, err := snapshotpkg.Pack(snapsRoot, snapDir, name, outPath, nil); err != nil {
 		t.Fatalf("Pack: %v", err)
 	}
 }
@@ -138,20 +138,20 @@ func TestSnapshotUnpack_VerifiedWithWarnings(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(snapDir, "data", "a.txt"), body, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := &snapshot.Manifest{
+	m := &snapshotpkg.Manifest{
 		Name:      name,
 		CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-		Project:   snapshot.ProjectInfo{Name: "testproj"},
-		Artifacts: []snapshot.ArtifactInfo{
+		Project:   snapshotpkg.ProjectInfo{Name: "testproj"},
+		Artifacts: []snapshotpkg.ArtifactInfo{
 			{Path: "data/a.txt", Size: int64(len(body)), Sha256: sha256Hex(body)},
 			{Path: "data/missing.txt", Size: 1, Sha256: "deadbeef"},
 		},
 	}
-	if err := snapshot.SaveManifest(filepath.Join(snapDir, snapshot.ManifestFileName), m); err != nil {
+	if err := snapshotpkg.SaveManifest(filepath.Join(snapDir, snapshotpkg.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
 	tarPath := filepath.Join(t.TempDir(), "fix.tar.gz")
-	if _, err := snapshot.Pack(snapsRoot, snapDir, name, tarPath, nil); err != nil {
+	if _, err := snapshotpkg.Pack(snapsRoot, snapDir, name, tarPath, nil); err != nil {
 		t.Fatalf("Pack: %v", err)
 	}
 

@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/runtime"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
 )
@@ -50,7 +50,7 @@ const snapshotTimestampLayout = "06-01-02 15:04:05"
 // Lifecycle: the snapshot package owns `defer obs.Close()` (see ExecParams /
 // CreateParams / RestoreParams / RemoveParams.StepObserverFactory). The
 // command layer never references the observer after handing the factory off.
-func newSnapshotLiveObserver(label string, disabled bool, steps []model.WorkflowStep) snapshot.StepObserverCloser {
+func newSnapshotLiveObserver(label string, disabled bool, steps []model.WorkflowStep) snapshotpkg.StepObserverCloser {
 	if disabled {
 		return nil
 	}
@@ -98,7 +98,7 @@ func snapshotStepLabel(s model.WorkflowStep) string {
 // events as persistent log lines above a single-line live footer — matching
 // the PlainReporter sequential rendering used by `deploy run` / lifecycle
 // pipelines. Implements runtime.WorkflowStepObserver, runtime.StepIOSuspender,
-// and snapshot.StepObserverCloser.
+// and snapshotpkg.StepObserverCloser.
 type snapshotLiveObserver struct {
 	live   *liveui.LiveLine
 	labels []string
@@ -113,9 +113,9 @@ type snapshotLiveObserver struct {
 
 // Compile-time interface assertions: break the build if either contract drifts.
 var (
-	_ runtime.WorkflowStepObserver = (*snapshotLiveObserver)(nil)
-	_ runtime.StepIOSuspender      = (*snapshotLiveObserver)(nil)
-	_ snapshot.StepObserverCloser  = (*snapshotLiveObserver)(nil)
+	_ runtime.WorkflowStepObserver   = (*snapshotLiveObserver)(nil)
+	_ runtime.StepIOSuspender        = (*snapshotLiveObserver)(nil)
+	_ snapshotpkg.StepObserverCloser = (*snapshotLiveObserver)(nil)
 )
 
 // timestampPrefix returns the gray "[YY-MM-DD HH:MM:SS] " prefix matching

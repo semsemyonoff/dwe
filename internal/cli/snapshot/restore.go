@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 
@@ -74,7 +74,7 @@ func newSnapshotRollbackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes, noLive, silent bool, operation, notifyOp string) (err error) {
 	baseDir := flags.ProjectRoot()
 
-	if err := snapshot.ValidateName(name); err != nil {
+	if err := snapshotpkg.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -115,7 +115,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		}
 		n := cmdctx.NewNotifier(ucfg)
 		defer func() {
-			if errors.As(err, new(*snapshot.RestoreCancelledError)) {
+			if errors.As(err, new(*snapshotpkg.RestoreCancelledError)) {
 				return
 			}
 			n.Notify(context.Background(), notify.Event{
@@ -139,7 +139,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	stdout := cmd.OutOrStdout()
 	stderr := cmd.ErrOrStderr()
 
-	params := snapshot.RestoreParams{
+	params := snapshotpkg.RestoreParams{
 		Cfg:            cfg,
 		SnapCfg:        snapCfg,
 		Registry:       reg,
@@ -150,7 +150,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		Stdout:         stdout,
 		Stderr:         stderr,
 		Operation:      operation,
-		ConfirmRestore: func(rc snapshot.RestoreConfirmContext) (bool, error) {
+		ConfirmRestore: func(rc snapshotpkg.RestoreConfirmContext) (bool, error) {
 			if !ui.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "snapshot restore needs confirmation; pass --yes to proceed non-interactively")
 				return false, nil
@@ -161,30 +161,30 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 				notes = append(notes, "config_hash diverged from current project")
 			}
 			if !rc.ServicesDiff.IsEmpty() {
-				notes = append(notes, "services diff: "+snapshot.FormatServicesDiff(rc.ServicesDiff))
+				notes = append(notes, "services diff: "+snapshotpkg.FormatServicesDiff(rc.ServicesDiff))
 			}
 			if len(notes) > 0 {
 				prompt += " (" + strings.Join(notes, "; ") + ")"
 			}
 			return ui.RunConfirm(prompt, "Restore", "Cancel")
 		},
-		StepObserverFactory: func(steps []model.WorkflowStep) snapshot.StepObserverCloser {
+		StepObserverFactory: func(steps []model.WorkflowStep) snapshotpkg.StepObserverCloser {
 			return newSnapshotLiveObserver("snapshot "+operation+": "+name, noLive, steps)
 		},
 	}
 
 	var (
-		res    *snapshot.RestoreResult
+		res    *snapshotpkg.RestoreResult
 		runErr error
 	)
 	if operation == "rollback" {
-		res, runErr = snapshot.Rollback(ctx, params)
+		res, runErr = snapshotpkg.Rollback(ctx, params)
 	} else {
-		res, runErr = snapshot.Restore(ctx, params)
+		res, runErr = snapshotpkg.Restore(ctx, params)
 	}
 
 	if runErr != nil {
-		if errors.As(runErr, new(*snapshot.RestoreCancelledError)) {
+		if errors.As(runErr, new(*snapshotpkg.RestoreCancelledError)) {
 			_, _ = fmt.Fprintf(stderr, "snapshot %s cancelled\n", operation)
 			return runErr
 		}
@@ -201,7 +201,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 
 func runSnapshotRollback(cmd *cobra.Command, flags *cmdctx.RootFlags, yes, noLive, silent bool) error {
 	// rollback resolves the target name from snapshot.yml; pass an empty name
-	// to runSnapshotRestore and dispatch through snapshot.Rollback below.
+	// to runSnapshotRestore and dispatch through snapshotpkg.Rollback below.
 	baseDir := flags.ProjectRoot()
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
 	if err != nil {
@@ -213,24 +213,24 @@ func runSnapshotRollback(cmd *cobra.Command, flags *cmdctx.RootFlags, yes, noLiv
 	if snapCfg.RollbackTarget == "" {
 		return fmt.Errorf("snapshot rollback: rollback_target is not set in devbox/snapshot.yml")
 	}
-	if err := snapshot.ValidateName(snapCfg.RollbackTarget); err != nil {
+	if err := snapshotpkg.ValidateName(snapCfg.RollbackTarget); err != nil {
 		return fmt.Errorf("snapshot rollback: rollback_target %q in devbox/snapshot.yml: %w", snapCfg.RollbackTarget, err)
 	}
 	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, noLive, silent, "rollback", "snapshot:rollback")
 }
 
-func writeRestoreOutcome(w io.Writer, operation string, res *snapshot.RestoreResult) {
+func writeRestoreOutcome(w io.Writer, operation string, res *snapshotpkg.RestoreResult) {
 	if res == nil {
 		return
 	}
 	switch res.Status {
-	case snapshot.StatusOk:
+	case snapshotpkg.StatusOk:
 		verb := operation + "d"
 		if operation == "rollback" {
 			verb = "rolled back"
 		}
 		_, _ = fmt.Fprintf(w, "snapshot %q %s in %dms\n", res.Manifest.Name, verb, res.DurationMs)
-	case snapshot.StatusInterrupted:
+	case snapshotpkg.StatusInterrupted:
 		_, _ = fmt.Fprintf(w, "snapshot %s %q interrupted; pre-restore backup kept at %s\n", operation, res.Manifest.Name, res.BackupDir)
 	default:
 		_, _ = fmt.Fprintf(w, "snapshot %s %q failed; pre-restore backup kept at %s\n", operation, res.Manifest.Name, res.BackupDir)

@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 
@@ -53,7 +53,7 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 	if name == "" {
 		name = deriveNameFromTarPath(tarPath)
 	}
-	if err := snapshot.ValidateName(name); err != nil {
+	if err := snapshotpkg.ValidateName(name); err != nil {
 		return fmt.Errorf("snapshot unpack: invalid target name %q: %w", name, err)
 	}
 
@@ -67,9 +67,9 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 	}
 	defer releaseLocks()
 
-	snapshotsRoot := snapshot.SnapshotsDir(baseDir, snapCfg)
+	snapshotsRoot := snapshotpkg.SnapshotsDir(baseDir, snapCfg)
 
-	res, err := snapshot.Unpack(tarPath, snapshotsRoot, name, snapshot.UnpackOptions{
+	res, err := snapshotpkg.Unpack(tarPath, snapshotsRoot, name, snapshotpkg.UnpackOptions{
 		AssumeYes: yes,
 		NoVerify:  noVerify,
 		ConfirmOverwrite: func() (bool, error) {
@@ -89,11 +89,11 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 		Stderr: stderr,
 	})
 	if err != nil {
-		if errors.As(err, new(*snapshot.UnpackCancelledError)) {
+		if errors.As(err, new(*snapshotpkg.UnpackCancelledError)) {
 			_, _ = fmt.Fprintln(stderr, "snapshot unpack cancelled")
 			return err
 		}
-		if errors.As(err, new(*snapshot.UnpackVerifyDeclinedError)) {
+		if errors.As(err, new(*snapshotpkg.UnpackVerifyDeclinedError)) {
 			_, _ = fmt.Fprintln(stderr, "snapshot unpack declined after verification warnings")
 			return err
 		}
@@ -109,11 +109,11 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 
 	_, _ = fmt.Fprintf(stderr, "snapshot %q unpacked into %s", name, res.SnapshotDir)
 	switch res.Verification {
-	case snapshot.VerificationSkipped:
+	case snapshotpkg.VerificationSkipped:
 		_, _ = fmt.Fprint(stderr, " (verification skipped)")
-	case snapshot.VerificationClean:
+	case snapshotpkg.VerificationClean:
 		_, _ = fmt.Fprint(stderr, " (verified)")
-	case snapshot.VerificationWarned:
+	case snapshotpkg.VerificationWarned:
 		n := len(res.VerifyReport.Missing) + len(res.VerifyReport.HashMismatch) + len(res.VerifyReport.Extra)
 		_, _ = fmt.Fprintf(stderr, " (verified with %d warnings)", n)
 	}

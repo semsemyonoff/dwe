@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/version"
@@ -55,7 +55,7 @@ func newSnapshotCreateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, description, variant string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
-	if err := snapshot.ValidateName(name); err != nil {
+	if err := snapshotpkg.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -99,7 +99,7 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 		}
 		n := cmdctx.NewNotifier(ucfg)
 		defer func() {
-			if errors.As(err, new(*snapshot.CreateCancelledError)) {
+			if errors.As(err, new(*snapshotpkg.CreateCancelledError)) {
 				return
 			}
 			n.Notify(context.Background(), notify.Event{
@@ -125,7 +125,7 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 	stdout := cmd.OutOrStdout()
 	stderr := cmd.ErrOrStderr()
 
-	params := snapshot.CreateParams{
+	params := snapshotpkg.CreateParams{
 		Cfg:            cfg,
 		SnapCfg:        snapCfg,
 		Registry:       reg,
@@ -149,15 +149,15 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 				"Cancel",
 			)
 		},
-		StepObserverFactory: func(steps []model.WorkflowStep) snapshot.StepObserverCloser {
+		StepObserverFactory: func(steps []model.WorkflowStep) snapshotpkg.StepObserverCloser {
 			return newSnapshotLiveObserver("snapshot create: "+name, noLive, steps)
 		},
 	}
 
-	res, runErr := snapshot.Create(ctx, params)
+	res, runErr := snapshotpkg.Create(ctx, params)
 	if runErr != nil {
 		// Cancellation: silent, exit 0 — the manifest is left untouched.
-		if errors.As(runErr, new(*snapshot.CreateCancelledError)) {
+		if errors.As(runErr, new(*snapshotpkg.CreateCancelledError)) {
 			_, _ = fmt.Fprintln(stderr, "snapshot create cancelled")
 			return runErr
 		}
@@ -175,14 +175,14 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 
 // writeCreateOutcome prints a single human-readable summary line of the
 // create attempt to stderr (machine-readable manifest is on disk).
-func writeCreateOutcome(w io.Writer, res *snapshot.CreateResult) {
+func writeCreateOutcome(w io.Writer, res *snapshotpkg.CreateResult) {
 	if res == nil {
 		return
 	}
 	switch res.Status {
-	case snapshot.StatusOk:
+	case snapshotpkg.StatusOk:
 		_, _ = fmt.Fprintf(w, "snapshot %q created at %s\n", res.Manifest.Name, res.SnapshotDir)
-	case snapshot.StatusInterrupted:
+	case snapshotpkg.StatusInterrupted:
 		if res.BackupRestored {
 			_, _ = fmt.Fprintf(w, "snapshot %q interrupted; previous snapshot restored at %s\n", res.Manifest.Name, res.SnapshotDir)
 		} else {

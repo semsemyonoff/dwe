@@ -20,6 +20,7 @@ import (
 	cmdRender "devbox-cli/internal/cli/render"
 	cmdService "devbox-cli/internal/cli/service"
 	cmdShell "devbox-cli/internal/cli/shell"
+	cmdSnapshot "devbox-cli/internal/cli/snapshot"
 	cmdValidate "devbox-cli/internal/cli/validate"
 	cmdVersion "devbox-cli/internal/cli/version"
 	"devbox-cli/internal/core/project/config"
@@ -83,7 +84,7 @@ func NewRootCmd() *cobra.Command {
 	// Pipelines group: deploy, reset, snapshot.
 	root.AddCommand(cmdDeploy.NewCmd(groupPipelines, flags))
 	addCmd(root, groupPipelines, newResetCmd(flags))
-	addCmd(root, groupPipelines, newSnapshotCmd(flags))
+	root.AddCommand(cmdSnapshot.NewCmd(groupPipelines, flags))
 
 	// Advanced group: low-level and diagnostic commands.
 	addCmd(root, groupAdvanced, newCommandCmd(flags))

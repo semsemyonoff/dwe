@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"encoding/json"
@@ -13,23 +13,24 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 
 	"github.com/spf13/cobra"
 )
 
-// newSnapshotCmd builds the `devbox snapshot` command group.
+// NewCmd builds the `devbox snapshot` command group.
 //
 // Read-only subcommands (list, current, inspect) ship in this task; the
 // mutating subcommands (create, restore, rollback, remove, pack, unpack) are
 // added by later tasks in the snapshot subsystem plan.
-func newSnapshotCmd(flags *cmdctx.RootFlags) *cobra.Command {
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
 		Short: "Capture, restore, and manage project snapshots",
 		Long: `Capture the state of a devbox project (databases, indices, devbox
 local config, deploy state) into a named directory under ./snapshots/<name>/,
 and restore or roll back to it. Workflows live in devbox/snapshot.yml.`,
+		GroupID:      groupID,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newSnapshotListCmd(flags))
@@ -66,11 +67,11 @@ func runSnapshotList(flags *cmdctx.RootFlags, out, errW io.Writer, jsonOut bool)
 	if err != nil {
 		return err
 	}
-	entries, err := snapshot.ListSnapshots(baseDir, snapCfg)
+	entries, err := snapshotpkg.ListSnapshots(baseDir, snapCfg)
 	if err != nil {
 		return err
 	}
-	current, readCurErr := snapshot.ReadCurrent(baseDir)
+	current, readCurErr := snapshotpkg.ReadCurrent(baseDir)
 	if readCurErr != nil {
 		_, _ = fmt.Fprintf(errW, "warning: could not read current snapshot pointer: %v\n", readCurErr)
 	}
@@ -120,7 +121,7 @@ type snapshotListJSONEntry struct {
 	Dir         string `json:"dir"`
 }
 
-func writeSnapshotListJSON(out io.Writer, entries []snapshot.Entry, current string) error {
+func writeSnapshotListJSON(out io.Writer, entries []snapshotpkg.Entry, current string) error {
 	payload := make([]snapshotListJSONEntry, 0, len(entries))
 	for _, e := range entries {
 		j := snapshotListJSONEntry{
@@ -159,7 +160,7 @@ func newSnapshotCurrentCmd(flags *cmdctx.RootFlags) *cobra.Command {
 
 func runSnapshotCurrent(flags *cmdctx.RootFlags, out, errW io.Writer) error {
 	baseDir := flags.ProjectRoot()
-	name, err := snapshot.ReadCurrent(baseDir)
+	name, err := snapshotpkg.ReadCurrent(baseDir)
 	if err != nil {
 		return err
 	}
@@ -171,8 +172,8 @@ func runSnapshotCurrent(flags *cmdctx.RootFlags, out, errW io.Writer) error {
 	if err != nil {
 		return err
 	}
-	manifestPath := snapshot.ManifestPath(baseDir, snapCfg, name)
-	m, mErr := snapshot.LoadManifest(manifestPath)
+	manifestPath := snapshotpkg.ManifestPath(baseDir, snapCfg, name)
+	m, mErr := snapshotpkg.LoadManifest(manifestPath)
 	if mErr != nil {
 		_, _ = fmt.Fprintln(out, name)
 		_, _ = fmt.Fprintf(errW, "warning: manifest unreadable at %s: %v\n", manifestPath, mErr)
@@ -206,7 +207,7 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 		return err
 	}
 
-	currentHash := snapshot.ProjectConfigHash(baseDir)
+	currentHash := snapshotpkg.ProjectConfigHash(baseDir)
 	diverged := m.Project.ConfigHash != "" && currentHash != "" && m.Project.ConfigHash != currentHash
 
 	// Diff captured services against the current project. Errors loading the
@@ -214,10 +215,10 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 	// nil so the section is omitted; the project-resolution invariant for
 	// `inspect` guarantees configPath is set when invoked normally, but tests may
 	// construct cmdctx.RootFlags without it.
-	var servicesDiff *snapshot.ServicesDiff
+	var servicesDiff *snapshotpkg.ServicesDiff
 	if len(m.Project.Services) > 0 && flags.ConfigPath != "" {
 		if cfg, cfgErr := config.LoadConfig(flags.ConfigPath); cfgErr == nil && cfg != nil {
-			d := snapshot.DiffServices(m.Project.Services, cfg.Services)
+			d := snapshotpkg.DiffServices(m.Project.Services, cfg.Services)
 			servicesDiff = &d
 		}
 	}
@@ -226,11 +227,11 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
 		return enc.Encode(struct {
-			Source             string                 `json:"source"`
-			Manifest           *snapshot.Manifest     `json:"manifest"`
-			CurrentConfigHash  string                 `json:"current_config_hash"`
-			ConfigHashDiverged bool                   `json:"config_hash_diverged"`
-			ServicesDiff       *snapshot.ServicesDiff `json:"services_diff,omitempty"`
+			Source             string                    `json:"source"`
+			Manifest           *snapshotpkg.Manifest     `json:"manifest"`
+			CurrentConfigHash  string                    `json:"current_config_hash"`
+			ConfigHashDiverged bool                      `json:"config_hash_diverged"`
+			ServicesDiff       *snapshotpkg.ServicesDiff `json:"services_diff,omitempty"`
 		}{
 			Source:             source,
 			Manifest:           m,
@@ -272,7 +273,7 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 		if servicesDiff.IsEmpty() {
 			fmt.Fprintf(&b, "services:       in sync (%d captured)\n", len(m.Project.Services))
 		} else {
-			fmt.Fprintf(&b, "services:       %s\n", snapshot.FormatServicesDiff(*servicesDiff))
+			fmt.Fprintf(&b, "services:       %s\n", snapshotpkg.FormatServicesDiff(*servicesDiff))
 		}
 	} else if len(m.Project.Services) > 0 {
 		fmt.Fprintf(&b, "services:       %d captured (current project not loaded)\n", len(m.Project.Services))
@@ -302,25 +303,25 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 // a tar-archive path when it ends in ".tar.gz" or ".tgz" *and* the file
 // exists; otherwise it is treated as a snapshot name under the project's
 // snapshots dir. The chosen source identifier is returned alongside.
-func loadInspectManifest(baseDir, arg string) (*snapshot.Manifest, string, error) {
+func loadInspectManifest(baseDir, arg string) (*snapshotpkg.Manifest, string, error) {
 	if looksLikeTarArchive(arg) {
 		if _, err := os.Stat(arg); err == nil {
-			m, err := snapshot.ReadManifestFromTar(arg)
+			m, err := snapshotpkg.ReadManifestFromTar(arg)
 			if err != nil {
 				return nil, "", err
 			}
 			return m, arg, nil
 		}
 	}
-	if err := snapshot.ValidateName(arg); err != nil {
+	if err := snapshotpkg.ValidateName(arg); err != nil {
 		return nil, "", err
 	}
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
 	if err != nil {
 		return nil, "", err
 	}
-	manifestPath := snapshot.ManifestPath(baseDir, snapCfg, arg)
-	m, err := snapshot.LoadManifest(manifestPath)
+	manifestPath := snapshotpkg.ManifestPath(baseDir, snapCfg, arg)
+	m, err := snapshotpkg.LoadManifest(manifestPath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -349,7 +350,7 @@ func snapshotNameCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []stri
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		entries, err := snapshot.ListSnapshots(projectRoot, snapCfg)
+		entries, err := snapshotpkg.ListSnapshots(projectRoot, snapCfg)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -377,7 +378,7 @@ func loadSnapshotConfigOrNil(baseDir string) (*config.SnapshotConfig, error) {
 	return cfg, nil
 }
 
-func formatSnapshotSummary(m *snapshot.Manifest) string {
+func formatSnapshotSummary(m *snapshotpkg.Manifest) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s", m.Name)
 	if m.Description != "" {

@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 )
 
 // snapshotInspectProject builds a devbox project with the given service map
@@ -59,27 +59,27 @@ func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 	return dir
 }
 
-func writeSnapshotWithServices(t *testing.T, base, name string, captured []snapshot.ServiceSnapshot) {
+func writeSnapshotWithServices(t *testing.T, base, name string, captured []snapshotpkg.ServiceSnapshot) {
 	t.Helper()
 	dir := filepath.Join(base, "snapshots", name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	m := &snapshot.Manifest{
+	m := &snapshotpkg.Manifest{
 		Name:      name,
 		CreatedAt: time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
-		Project: snapshot.ProjectInfo{
+		Project: snapshotpkg.ProjectInfo{
 			Name:     "testproj",
 			Services: captured,
 		},
 	}
-	if err := snapshot.SaveManifest(filepath.Join(dir, snapshot.ManifestFileName), m); err != nil {
+	if err := snapshotpkg.SaveManifest(filepath.Join(dir, snapshotpkg.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestSnapshotInspect_ServicesDiff(t *testing.T) {
-	captured := []snapshot.ServiceSnapshot{
+	captured := []snapshotpkg.ServiceSnapshot{
 		{Name: "db", Enabled: true},
 		{Name: "main", Enabled: true},
 	}
@@ -87,7 +87,7 @@ func TestSnapshotInspect_ServicesDiff(t *testing.T) {
 	tests := []struct {
 		name     string
 		services map[string]bool
-		captured []snapshot.ServiceSnapshot
+		captured []snapshotpkg.ServiceSnapshot
 		wantText []string
 		dontWant []string
 	}{
@@ -153,7 +153,7 @@ func TestSnapshotInspect_ServicesDiff(t *testing.T) {
 
 func TestSnapshotInspect_ServicesDiff_JSON(t *testing.T) {
 	base := snapshotInspectProject(t, map[string]bool{"main": true})
-	writeSnapshotWithServices(t, base, "snap", []snapshot.ServiceSnapshot{
+	writeSnapshotWithServices(t, base, "snap", []snapshotpkg.ServiceSnapshot{
 		{Name: "db", Enabled: true},
 		{Name: "main", Enabled: true},
 	})
@@ -166,7 +166,7 @@ func TestSnapshotInspect_ServicesDiff_JSON(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 	var payload struct {
-		ServicesDiff *snapshot.ServicesDiff `json:"services_diff"`
+		ServicesDiff *snapshotpkg.ServicesDiff `json:"services_diff"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("decode: %v\n%s", err, out.String())

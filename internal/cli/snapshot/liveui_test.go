@@ -1,4 +1,4 @@
-package cli
+package snapshot
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/runtime"
-	"devbox-cli/internal/core/workflow/snapshot"
+	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/liveui"
 )
 
@@ -199,5 +199,5 @@ func TestSnapshotLiveObserver_ImplementsContracts(t *testing.T) {
 	// at test time too in case the file is split.
 	var _ runtime.WorkflowStepObserver = (*snapshotLiveObserver)(nil)
 	var _ runtime.StepIOSuspender = (*snapshotLiveObserver)(nil)
-	var _ snapshot.StepObserverCloser = (*snapshotLiveObserver)(nil)
+	var _ snapshotpkg.StepObserverCloser = (*snapshotLiveObserver)(nil)
 }
