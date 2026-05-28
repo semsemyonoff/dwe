@@ -12,3 +12,7 @@ bin/
 
 # tools
 .ralphex/
+
+# Generated: synced from docs/ by scripts/sync-embedded-docs.sh on `make build`
+# and `make test*` (which depend on the embedded-docs target).
+/internal/core/docs/embedded/

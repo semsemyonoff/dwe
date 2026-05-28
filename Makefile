@@ -23,13 +23,13 @@ build: tidy embedded-docs gen-docs-manifest
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/devbox
 	@echo "Built: $(BIN_DIR)/$(BINARY_NAME)"
 
-test:
+test: embedded-docs
 	go test ./...
 
-test-v:
+test-v: embedded-docs
 	go test -v ./...
 
-test-race:
+test-race: embedded-docs
 	go test -race ./internal/core/workflow/deploy/journal ./internal/shared/lock ./internal/core/execution/pipeline
 
 lint:
