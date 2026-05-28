@@ -1,11 +1,11 @@
-package cli
+package docs
 
 import (
 	"fmt"
 	"os"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/docs"
+	coredocs "devbox-cli/internal/core/docs"
 	"devbox-cli/internal/core/docs/export"
 	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/shared/i18n"
@@ -65,10 +65,10 @@ func runDocsExport(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsExportF
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
 
 	// Load sources for documentation
-	allRoots := docs.Sources(projectRoot)
+	allRoots := coredocs.Sources(projectRoot)
 
 	// Build the roots list based on options
-	roots := []docs.DocRoot{}
+	roots := []coredocs.DocRoot{}
 	for _, r := range allRoots {
 		// Always include devbox
 		if r.Name == "devbox" {

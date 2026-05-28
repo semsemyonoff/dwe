@@ -1,7 +1,6 @@
-package cli
+package docs
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,77 +10,13 @@ import (
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/docs"
-	"devbox-cli/internal/core/docs/mermaid"
-	"devbox-cli/internal/core/docs/tui"
-	"devbox-cli/internal/core/project/config"
-	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
 
-	cobradoc "github.com/spf13/cobra/doc"
-
-	tea "charm.land/bubbletea/v2"
-	"golang.org/x/term"
-
 	"github.com/spf13/cobra"
+	cobradoc "github.com/spf13/cobra/doc"
 )
-
-type docsFlags struct {
-	output         string
-	format         string
-	scope          string
-	lang           string
-	includeHidden  bool
-	includePrivate bool
-}
-
-// docsSelectorTitle mirrors cli/command.SelectorTitle to avoid a cross-sibling
-// cli import while docs.go still lives in package cli. The helper moves with
-// docs.go when it migrates into cli/docs/ in a follow-up refactor.
-func docsSelectorTitle(projectName, base string) string {
-	parts := []string{"Devbox"}
-	if projectName != "" {
-		parts = append(parts, projectName)
-	}
-	parts = append(parts, base)
-	return strings.Join(parts, " · ")
-}
-
-func newDocsCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "docs",
-		Short: "Browse and manage documentation",
-		Long: `Browse and manage devbox documentation.
-
-View documentation interactively with a TUI browser or display specific topics.
-Generate reference documentation for the CLI and command registry.`,
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Check if we're in a TTY
-			if !term.IsTerminal(int(os.Stdout.Fd())) {
-				return errors.New("devbox docs without arguments requires a TTY; use 'devbox docs show <topic>' or 'devbox docs list' for non-interactive use")
-			}
-
-			// Get terminal dimensions
-			width, height, err := term.GetSize(int(os.Stdout.Fd()))
-			if err != nil {
-				return fmt.Errorf("failed to get terminal size: %w", err)
-			}
-
-			return runDocsTUI(cmd, flags, width, height)
-		},
-	}
-	cmd.AddCommand(newDocsShowCmd(flags))
-	cmd.AddCommand(newDocsListCmd(flags))
-	cmd.AddCommand(newDocsSearchCmd(flags))
-	cmd.AddCommand(newDocsExportCmd(flags))
-	cmd.AddCommand(newDocsCacheCmd(flags))
-	cmd.AddCommand(newDocsGenerateCmd(flags))
-	return cmd
-}
 
 func newDocsGenerateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsFlags{}
@@ -862,93 +797,4 @@ func mmdcAvailable(bin string) bool {
 	}
 	_, err := exec.LookPath(bin)
 	return err == nil
-}
-
-func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeight int) error {
-	// Load configuration for doc settings (mermaid config, etc.)
-	cfg, err := config.LoadConfig(flags.ConfigPath)
-	if err != nil {
-		// If config fails to load, use defaults (docs still work without full config)
-		cfg = &config.DevboxConfig{}
-	}
-
-	// Get project root, user config language, and mermaid theme override.
-	projectRoot := flags.ProjectRoot()
-	var cfgLang string
-	var mermaidTheme string
-	if ucfg, err := userpkg.Load(projectRoot); err == nil && ucfg != nil {
-		cfgLang = ucfg.Language
-		mermaidTheme = ucfg.MermaidTheme
-	}
-
-	// Resolve locale directly from config and environment — do NOT use flags.Locale
-	// (it is clamped to the YAML i18n store, a different namespace from markdown translations).
-	locale := i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
-
-	// Build mermaid renderer chain based on config
-	var renderer mermaid.Renderer
-	cacheDir, err := mermaid.CacheDir()
-	if err != nil {
-		cacheDir = ""
-	}
-
-	cacheCapBytes := int64(config.MermaidCacheSizeMB(cfg) * 1024 * 1024)
-	mermaidMode := config.MermaidMode(cfg)
-
-	switch mermaidMode {
-	case "off":
-		renderer = mermaid.Disabled{}
-	case "mmdc":
-		// Strict mode: mmdc is required
-		renderer = mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, true)
-	default: // "auto"
-		renderer = mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, false)
-	}
-
-	// Get sources (devbox + project docs)
-	sources := docs.Sources(projectRoot)
-
-	// Create translator for TUI strings
-	translator := i18n.TranslatorOrNop(flags.I18n)
-
-	// Create the model. Title shape matches cmdbrowser: "Devbox · <project> · Documentation".
-	ctx := cmd.Context()
-	projectName := ""
-	if cfg != nil {
-		projectName = cfg.Project.Name
-	}
-	title := docsSelectorTitle(projectName, "Documentation")
-	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
-	if err != nil {
-		return fmt.Errorf("failed to create TUI model: %w", err)
-	}
-
-	// Banner: warn once at startup when mmdc is missing on $PATH (and the user
-	// hasn't explicitly disabled mermaid). Skipping the install entirely would
-	// leave users guessing why diagrams never render — the banner points them
-	// at the canonical install section in docs/reference/docs/index.md.
-	if mermaidMode != "off" && !mmdcAvailable(config.MmdcBin(cfg)) {
-		model.MmdcNotice = "> **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. " +
-			"Install with `npm i -g @mermaid-js/mermaid-cli` — see " +
-			"`docs/reference/docs/index.md` § *Installing `mmdc`*.\n\n"
-	}
-
-	// Run via ui.RunWithPromptHooks for proper signal handling
-	runErr := ui.RunWithPromptHooks(func() error {
-		prog := tea.NewProgram(model, tea.WithContext(ctx))
-		_, e := prog.Run()
-		return e
-	})
-
-	if runErr != nil {
-		if errors.Is(runErr, tea.ErrProgramPanic) {
-			return runErr
-		}
-		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
-			return ui.ErrCancelled
-		}
-		return runErr
-	}
-
-	return nil
 }

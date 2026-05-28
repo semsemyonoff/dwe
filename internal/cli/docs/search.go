@@ -1,11 +1,11 @@
-package cli
+package docs
 
 import (
 	"fmt"
 	"os"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/docs"
+	coredocs "devbox-cli/internal/core/docs"
 	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/shared/i18n"
 
@@ -54,7 +54,7 @@ Examples:
 
 func runDocsSearch(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsSearchFlags, query string) error {
 	projectRoot := rflags.ProjectRoot()
-	allRoots := docs.Sources(projectRoot)
+	allRoots := coredocs.Sources(projectRoot)
 
 	roots := filterDocRoots(allRoots, df.source)
 	if len(roots) == 0 {
@@ -70,7 +70,7 @@ func runDocsSearch(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsSearchF
 	}
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
 
-	hits := docs.Search(roots, query, locale)
+	hits := coredocs.Search(roots, query, locale)
 	if df.limit > 0 && len(hits) > df.limit {
 		hits = hits[:df.limit]
 	}

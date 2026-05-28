@@ -1,4 +1,4 @@
-package cli
+package docs
 
 import (
 	"os"
@@ -381,8 +381,7 @@ services:
 		includePrivate: false,
 	}
 
-	root := NewRootCmd()
-	_ = root // ensure root is built (registers docs subcommand).
+	root := buildDocsTestRoot(flags)
 
 	// Find the docs generate subcommand.
 	docsCmd, _, err2 := root.Find([]string{"docs", "generate"})
@@ -425,7 +424,7 @@ func TestCLIIndexNotGeneratedWithoutMarkdown(t *testing.T) {
 	}
 
 	// Write an index directly to confirm the function still works correctly.
-	root := NewRootCmd()
+	root := buildDocsTestRoot(&cmdctx.RootFlags{})
 	if err := genCLIIndex(root, dir, false); err != nil {
 		t.Fatalf("genCLIIndex: %v", err)
 	}

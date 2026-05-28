@@ -1,4 +1,4 @@
-package cli
+package docs
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/docs"
+	coredocs "devbox-cli/internal/core/docs"
 	"devbox-cli/internal/core/docs/render"
 	pipeline "devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
@@ -66,13 +66,13 @@ Examples:
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			roots := docs.Sources(projectRoot)
+			roots := coredocs.Sources(projectRoot)
 
 			// Use a nil-safe translator for completion paths
 			tr := i18n.TranslatorOrNop(flags.I18n)
 			_ = tr // Unused here; available for future i18n of completion output
 
-			topics := docs.AllTopics(roots, "en")
+			topics := coredocs.AllTopics(roots, "en")
 			var completions []string
 			for _, topic := range topics {
 				completions = append(completions, topic.Path)
@@ -108,13 +108,13 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	}
 
 	// Parse topic to extract anchor
-	topicPath, anchor, err := docs.ParseTopic(topic)
+	topicPath, anchor, err := coredocs.ParseTopic(topic)
 	if err != nil {
 		return fmt.Errorf("invalid topic: %w", err)
 	}
 
 	// Load sources for documentation
-	allRoots := docs.Sources(projectRoot)
+	allRoots := coredocs.Sources(projectRoot)
 
 	// Filter by --source flag
 	roots := filterDocRoots(allRoots, df.source)
@@ -126,16 +126,16 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
 
 	// Resolve topic across roots
-	resolved, err := docs.Resolve(roots, topicPath, locale)
+	resolved, err := coredocs.Resolve(roots, topicPath, locale)
 	if err != nil {
 		// Extract suggestions for user-friendly error messages
 		switch e := err.(type) {
-		case *docs.NotFoundError:
+		case *coredocs.NotFoundError:
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: topic %q not found\n", e.Topic)
 			if len(e.Suggestions) > 0 {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Did you mean: %s\n", strings.Join(e.Suggestions, ", "))
 			}
-		case *docs.MultipleMatchesError:
+		case *coredocs.MultipleMatchesError:
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: ambiguous topic %q\n", e.Topic)
 			if e.Total > len(e.Candidates) {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Candidates (showing %d of %d):\n", len(e.Candidates), e.Total)
@@ -155,7 +155,7 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	}
 
 	// Find the root that contains the resolved topic
-	var sourceRoot docs.DocRoot
+	var sourceRoot coredocs.DocRoot
 	for _, r := range roots {
 		if r.Name == resolved.Source {
 			sourceRoot = r
@@ -164,7 +164,7 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	}
 
 	// Resolve content with language fallback and staleness check
-	content, sourceLang, isStale, err := docs.ResolveContent(sourceRoot, resolved.Path+".md", locale)
+	content, sourceLang, isStale, err := coredocs.ResolveContent(sourceRoot, resolved.Path+".md", locale)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", resolved.Path, err)
 	}
@@ -175,12 +175,12 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	// validation below picks --toc when both are set.
 	if df.anchors || df.toc {
 		if df.toc {
-			for _, h := range docs.ParseHeadingSlugs(content) {
+			for _, h := range coredocs.ParseHeadingSlugs(content) {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%d\t%s\t%s\n", h.Level, h.Slug, h.Text)
 			}
 		} else {
 			seen := make(map[string]struct{})
-			for _, h := range docs.ParseHeadingSlugs(content) {
+			for _, h := range coredocs.ParseHeadingSlugs(content) {
 				if _, ok := seen[h.Slug]; ok {
 					continue
 				}
@@ -195,15 +195,15 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	// output is the requested sub-tree, not the whole file. Banners (below)
 	// still apply to the sliced view.
 	if anchor != "" {
-		sliced, matched, anchors, ok := docs.SliceByAnchor(content, anchor)
+		sliced, matched, anchors, ok := coredocs.SliceByAnchor(content, anchor)
 		if !ok {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Error: anchor %q not found in %s\n", anchor, resolved.Path)
 			if len(anchors) > 0 {
 				shown := anchors
 				more := 0
-				if len(shown) > docs.MaxAmbiguousCandidates {
-					shown = shown[:docs.MaxAmbiguousCandidates]
-					more = len(anchors) - docs.MaxAmbiguousCandidates
+				if len(shown) > coredocs.MaxAmbiguousCandidates {
+					shown = shown[:coredocs.MaxAmbiguousCandidates]
+					more = len(anchors) - coredocs.MaxAmbiguousCandidates
 				}
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Available anchors:\n")
 				for _, a := range shown {
@@ -264,7 +264,7 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 }
 
 // filterDocRoots filters documentation sources by the --source flag.
-func filterDocRoots(roots []docs.DocRoot, sourceFlag string) []docs.DocRoot {
+func filterDocRoots(roots []coredocs.DocRoot, sourceFlag string) []coredocs.DocRoot {
 	switch sourceFlag {
 	case "devbox":
 		for i, r := range roots {

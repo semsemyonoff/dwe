@@ -421,17 +421,22 @@ Split `docs.go` (942 LoC) into `docs.go` + `generate.go`; rename others to drop 
   - Tests (all 7): `internal/cli/docs_test.go`, `internal/cli/docs_cache_test.go`, `internal/cli/docs_export_test.go`, `internal/cli/docs_list_test.go`, `internal/cli/docs_list_glob_test.go`, `internal/cli/docs_root_test.go`, `internal/cli/docs_show_test.go`
 - Modify: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/docs.go internal/cli/docs/docs.go`
-- [ ] `git mv internal/cli/docs_cache.go internal/cli/docs/cache.go` (repeat for export/list/search/show — drop `docs_` prefix)
-- [ ] Rename all 7 `_test.go` files (drop `docs_` prefix): `docs_test.go` → `docs_test.go` (stays — tests for the main `newDocsCmd`), `docs_cache_test.go` → `cache_test.go`, `docs_export_test.go` → `export_test.go`, `docs_list_test.go` → `list_test.go`, `docs_list_glob_test.go` → `list_glob_test.go`, `docs_root_test.go` → `root_test.go` (this one tests `newDocsCmd` root behaviour — placement next to `docs.go` is correct), `docs_show_test.go` → `show_test.go`
-- [ ] Change `package cli` → `package docs` across files; watch for collision with `devbox-cli/internal/core/docs` import — keep the import alias as-is (or rename to `coredocs`)
-- [ ] Use Read/Write to split `docs.go` into:
-  - `docs.go`: `NewCmd(groupID, flags)` (was `newDocsCmd`), `docsFlags` type, `runDocsTUI`
+- [x] `git mv internal/cli/docs.go internal/cli/docs/docs.go`
+- [x] `git mv internal/cli/docs_cache.go internal/cli/docs/cache.go` (repeat for export/list/search/show — drop `docs_` prefix)
+- [x] Rename all 7 `_test.go` files (drop `docs_` prefix): `docs_test.go` → `generate_test.go` (it actually tests `runDocsGenerate` / `validateDocsFlags` / `resolveFormats` / `genRegistryMarkdown` / `writeCommandMarkdown` / `genCommandsIndex` / `genTopLevelIndex`, all of which moved into `generate.go`), `docs_cache_test.go` → `cache_test.go`, `docs_export_test.go` → `export_test.go`, `docs_list_test.go` → `list_test.go`, `docs_list_glob_test.go` → `list_glob_test.go`, `docs_root_test.go` → `docs_test.go` (this one tests `newDocsCmd` root behaviour — now placed next to `docs.go`), `docs_show_test.go` → `show_test.go`
+- [x] Change `package cli` → `package docs` across files; `devbox-cli/internal/core/docs` aliased as `coredocs` in docs.go / export.go / list.go / search.go / show.go to avoid the symbol-vs-package collision
+- [x] Use Read/Write to split `docs.go` into:
+  - `docs.go`: `NewCmd(groupID, flags)` (was `newDocsCmd`), `docsFlags` type, `runDocsTUI`, `docsSelectorTitle`
   - `generate.go`: `newDocsGenerateCmd`, `runDocsGenerate`, `validateDocsFlags`, `resolveFormats`, `resolveScopes`, `genCLIDocs`, `genHiddenCLIMarkdown`, `genHiddenCLIYaml`, `genHiddenCLIMan`, `walkAllCommands`, `genCLIIndex`, `writeCLIIndexEntries`, `genRegistryDocs`, `genRegistryMarkdown`, `stepCommandDescription`, `writeCommandMarkdown`, `genCommandsIndex`, `genTopLevelIndex`, `mmdcAvailable`
-- [ ] Update `internal/cli/root.go`: `addCmd(root, groupAdvanced, newDocsCmd(flags))` → `root.AddCommand(docs.NewCmd(groupAdvanced, flags))` (alias the import if `docs` name collides with the existing `core/docs` import — likely needs `cmdDocs "devbox-cli/internal/cli/docs"`)
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 10
-- [ ] Commit: `refactor(cli): extract docs subpackage with docs.go split into docs+generate`
+- [x] Update `internal/cli/root.go`: `addCmd(root, groupAdvanced, newDocsCmd(flags))` → `root.AddCommand(cmdDocs.NewCmd(groupAdvanced, flags))`; imported as `cmdDocs "devbox-cli/internal/cli/docs"` to avoid collision with `core/docs`
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — passed before Task 10
+- [x] Commit: `refactor(cli): extract docs subpackage with docs.go split into docs+generate`
+
+**Notes:**
+- `internal/cli/coverage_test.go` previously held `genCLIDocs` / `walkAllCommands` / `genHiddenCLI*` tests that referenced unexported symbols now living in `cli/docs`. These tests moved into the new `internal/cli/docs/coverage_test.go`. After the move the original `internal/cli/coverage_test.go` had no remaining cases, so it was deleted; the cli/ package's smoke coverage is now provided by `root_test.go` / `root_resolver_test.go` / `fang_integration_test.go`.
+- `TestDocsGenerateCommand_Integration` and `TestCLIIndexNotGeneratedWithoutMarkdown` previously called `cli.NewRootCmd()` to obtain a wired root. Replaced with `buildDocsTestRoot(flags)` in `internal/cli/docs/coverage_test.go` — constructs a minimal `&cobra.Command{Use: "devbox"}` with an `advanced` group and attaches `docs.NewCmd("advanced", flags)`. Crucially the helper does NOT register the `--config` persistent flag with `StringVarP(&flags.ConfigPath, ...)`: `StringVarP` rewrites the bound variable to the default value at registration time, which would clobber `flags.ConfigPath` that the test already set. Tests reach into the docs subtree via `root.Find([]string{"docs", "generate"})` and pass the cmd directly to `runDocsGenerate`.
+- `docsSelectorTitle` stays inline in the new `cli/docs/docs.go` (rather than collapsing to a shared helper) because lifting it into a shared place would create a `cli/docs` → `cli/command` cross-sibling import. The duplicate is two lines and they will collapse naturally if/when the broader cross-sibling rule is enforced via depguard and a shared location appears.
 
 ### Task 10: `cli/lifecycle/` (multi-export)
 

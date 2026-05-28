@@ -16,6 +16,7 @@ import (
 	cmdCompose "devbox-cli/internal/cli/compose"
 	cmdDeploy "devbox-cli/internal/cli/deploy"
 	cmdDocker "devbox-cli/internal/cli/docker"
+	cmdDocs "devbox-cli/internal/cli/docs"
 	cmdInfo "devbox-cli/internal/cli/info"
 	cmdPrompt "devbox-cli/internal/cli/prompt"
 	cmdRender "devbox-cli/internal/cli/render"
@@ -92,7 +93,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(cmdCommand.NewCmd(groupAdvanced, flags))
 	root.AddCommand(cmdDocker.NewCmd(groupAdvanced, flags))
 	root.AddCommand(cmdCompose.NewCmd(groupAdvanced, flags))
-	addCmd(root, groupAdvanced, newDocsCmd(flags))
+	root.AddCommand(cmdDocs.NewCmd(groupAdvanced, flags))
 
 	// Add the built-in Cobra completion command to the Advanced group,
 	// then attach install/uninstall subcommands.

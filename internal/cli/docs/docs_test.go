@@ -1,4 +1,4 @@
-package cli
+package docs
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 
 func TestDocsRootNonTTY(t *testing.T) {
 	// Test that non-TTY returns an appropriate error
-	cmd := newDocsCmd(&cmdctx.RootFlags{
+	cmd := NewCmd("", &cmdctx.RootFlags{
 		ConfigPath: "",
 		Root:       "",
 		Locale:     "en",
@@ -33,7 +33,7 @@ func TestDocsRootNonTTY(t *testing.T) {
 
 func TestDocsRootWithArgs(t *testing.T) {
 	// Test that docs with arguments bypasses the parent RunE
-	cmd := newDocsCmd(&cmdctx.RootFlags{
+	cmd := NewCmd("", &cmdctx.RootFlags{
 		ConfigPath: "",
 		Root:       "",
 		Locale:     "en",
@@ -60,7 +60,7 @@ func TestDocsRootWithArgs(t *testing.T) {
 
 func TestDocsRootStructure(t *testing.T) {
 	// Test that the docs command is properly configured
-	cmd := newDocsCmd(&cmdctx.RootFlags{
+	cmd := NewCmd("", &cmdctx.RootFlags{
 		ConfigPath: "",
 		Root:       "",
 		Locale:     "en",
@@ -76,7 +76,7 @@ func TestDocsRootStructure(t *testing.T) {
 
 func TestDocsShowRegressionCheck(t *testing.T) {
 	// Regression test: ensure existing docs generate subcommand still works
-	cmd := newDocsCmd(&cmdctx.RootFlags{
+	cmd := NewCmd("", &cmdctx.RootFlags{
 		ConfigPath: "",
 		Root:       "",
 		Locale:     "en",

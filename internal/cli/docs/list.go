@@ -1,4 +1,4 @@
-package cli
+package docs
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/docs"
+	coredocs "devbox-cli/internal/core/docs"
 	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/shared/i18n"
 
@@ -58,7 +58,7 @@ Examples:
 func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags) error {
 	// Determine project root and load sources
 	projectRoot := rflags.ProjectRoot()
-	allRoots := docs.Sources(projectRoot)
+	allRoots := coredocs.Sources(projectRoot)
 
 	// Filter by --source flag
 	roots := filterDocRoots(allRoots, df.source)
@@ -80,7 +80,7 @@ func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
 
 	// Get all topics
-	topics := docs.AllTopics(roots, locale)
+	topics := coredocs.AllTopics(roots, locale)
 
 	// Compile the glob once so an invalid pattern fails the command instead of
 	// silently filtering nothing.
