@@ -1,4 +1,4 @@
-package cli
+package compose
 
 import (
 	"errors"
@@ -14,10 +14,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newComposeCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewCmd builds the `devbox compose` command tree.
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "compose",
 		Short:        "Low-level Docker Compose diagnostics",
+		GroupID:      groupID,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newComposeFilesCmd(flags))

@@ -259,14 +259,17 @@ Two thin docker-binary passthroughs as **separate packages** — combining them 
 - Delete: `internal/cli/docker.go`, `internal/cli/docker_test.go`, `internal/cli/compose.go`, `internal/cli/compose_test.go`
 - Modify: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/docker.go internal/cli/docker/docker.go` (and test)
-- [ ] `git mv internal/cli/compose.go internal/cli/compose/compose.go` (and test)
-- [ ] Change `package cli` → `package docker` in `cli/docker/*.go`; change `package cli` → `package compose` in `cli/compose/*.go`
-- [ ] Rename `newDockerCmd(flags)` → `NewCmd(groupID, flags)`; rename `newComposeCmd(flags)` → `NewCmd(groupID, flags)`
-- [ ] Update `internal/cli/root.go`: replace `addCmd(root, groupAdvanced, newDockerCmd(flags))` → `root.AddCommand(docker.NewCmd(groupAdvanced, flags))`; same for compose. Two new imports needed: `"devbox-cli/internal/cli/docker"` and `"devbox-cli/internal/cli/compose"`. Watch for name collisions with shared docker primitives (`shared/docker` is typically imported plain or as `dockerpkg`); alias the cli imports as `cmdDocker`/`cmdCompose` if a collision surfaces.
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 4
-- [ ] Commit: `refactor(cli): extract docker and compose as separate subpackages`
+- [x] `git mv internal/cli/docker.go internal/cli/docker/docker.go` (and test)
+- [x] `git mv internal/cli/compose.go internal/cli/compose/compose.go` (and test)
+- [x] Change `package cli` → `package docker` in `cli/docker/*.go`; change `package cli` → `package compose` in `cli/compose/*.go`
+- [x] Rename `newDockerCmd(flags)` → `NewCmd(groupID, flags)`; rename `newComposeCmd(flags)` → `NewCmd(groupID, flags)`
+- [x] Update `internal/cli/root.go`: replace `addCmd(root, groupAdvanced, newDockerCmd(flags))` → `root.AddCommand(docker.NewCmd(groupAdvanced, flags))`; same for compose. Imports aliased as `cmdDocker`/`cmdCompose` to avoid collision with `shared/docker`. Within `cli/docker/docker.go`, the `shared/docker` import is aliased as `dockerpkg` because the package itself is now named `docker`.
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — must pass before Task 4
+- [x] Commit: `refactor(cli): extract docker and compose as separate subpackages`
+
+**Notes:**
+- `coverage_test.go` had four compose tests (`TestComposeFilesCmd_RunE`, `TestComposeFilesCmd_RunE_InvalidConfig`, `TestComposeArgvCmd_RunE`, `TestComposeArgvCmd_RunE_InvalidConfig`) that referenced unexported helpers (`newComposeFilesCmd`, `newComposeArgvCmd`). Moved them into `cli/compose/compose_test.go` with a local `makeMinimalProject` helper since they can no longer reach the cli-package internals after the move.
 
 ### Task 4: `cli/completion/`
 

@@ -1,8 +1,10 @@
-package cli
+package compose
 
 import (
 	"bytes"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -245,7 +247,7 @@ func TestWaitContainersHealthy_mixedNoHealthcheckAndHealthy(t *testing.T) {
 // after the refactor: files, raw, argv (wait removed, run renamed to raw).
 func TestComposeSubcommands(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	composeCmd := newComposeCmd(flags)
+	composeCmd := NewCmd("", flags)
 
 	expectedSubs := []string{"files", "raw", "argv"}
 	commands := composeCmd.Commands()
@@ -436,4 +438,77 @@ func commandNames(cmds []*cobra.Command) []string {
 		names[i] = c.Name()
 	}
 	return names
+}
+
+func makeMinimalProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	devboxYML := `project:
+  name: test
+  prefix: devbox
+`
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svcDir := filepath.Join(devboxDir, "services", "main")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ndir: ./services/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dockerYML := "project_name: devbox-test\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "docker.yml"), []byte(dockerYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestComposeFilesCmd_RunE(t *testing.T) {
+	dir := makeMinimalProject(t)
+	composeYAML := "services:\n  web:\n    image: nginx\n"
+	if err := os.WriteFile(filepath.Join(dir, "compose.yaml"), []byte(composeYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	cmd := newComposeFilesCmd(flags)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestComposeFilesCmd_RunE_InvalidConfig(t *testing.T) {
+	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/devbox.yml"}
+	cmd := newComposeFilesCmd(flags)
+	if err := cmd.RunE(cmd, nil); err == nil {
+		t.Fatal("expected error for invalid config path")
+	}
+}
+
+func TestComposeArgvCmd_RunE(t *testing.T) {
+	dir := makeMinimalProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	cmd := newComposeArgvCmd(flags)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	if err := cmd.RunE(cmd, []string{"up"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "docker compose") {
+		t.Errorf("expected 'docker compose' in output, got: %q", buf.String())
+	}
+}
+
+func TestComposeArgvCmd_RunE_InvalidConfig(t *testing.T) {
+	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/devbox.yml"}
+	cmd := newComposeArgvCmd(flags)
+	if err := cmd.RunE(cmd, []string{"up"}); err == nil {
+		t.Fatal("expected error for invalid config path")
+	}
 }

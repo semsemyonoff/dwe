@@ -1,4 +1,4 @@
-package cli
+package docker
 
 import (
 	"errors"
@@ -8,17 +8,19 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/docker"
+	dockerpkg "devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/envfile"
 	"devbox-cli/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
 
-func newDockerCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewCmd builds the `devbox docker` command tree.
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "docker",
 		Short:        "Docker Compose lifecycle commands",
+		GroupID:      groupID,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newDockerUpCmd(flags))
@@ -40,7 +42,7 @@ func newDockerCmd(flags *cmdctx.RootFlags) *cobra.Command {
 type dockerPipeline struct {
 	cfg       *config.DevboxConfig
 	dockerCfg *config.DockerConfig
-	compose   *docker.Compose
+	compose   *dockerpkg.Compose
 }
 
 // envRegenCommands lists docker commands that trigger automatic .env regeneration.
@@ -69,11 +71,11 @@ func newDockerPipeline(flags *cmdctx.RootFlags, command string) (*dockerPipeline
 	}
 
 	// Ensure declared Docker resources exist before the command runs.
-	if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, command, config.DockerBin(cfg), render.Stdout()); err != nil {
+	if err := dockerpkg.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, command, config.DockerBin(cfg), render.Stdout()); err != nil {
 		return nil, fmt.Errorf("ensuring volumes: %w", err)
 	}
 
-	compose := docker.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg)
 
 	return &dockerPipeline{
 		cfg:       cfg,
@@ -246,11 +248,11 @@ func stripDockerCommandSeparator(args []string) []string {
 // resolvePullInvocation returns the Compose instance and extra args for a pull command.
 // When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
 // The returned extra args are just the service names (pull doesn't have flags like --force).
-func resolvePullInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*docker.Compose, []string) {
+func resolvePullInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*dockerpkg.Compose, []string) {
 	if all {
-		return docker.NewComposeAll(cfg, dockerCfg), services
+		return dockerpkg.NewComposeAll(cfg, dockerCfg), services
 	}
-	return docker.NewCompose(cfg, dockerCfg), services
+	return dockerpkg.NewCompose(cfg, dockerCfg), services
 }
 
 func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -279,12 +281,12 @@ func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
 // When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
 // When force is true, prepends --no-cache --pull to the extra args.
 // The returned extra args include the force flags (if applicable) and service names.
-func resolveBuildInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*docker.Compose, []string) {
-	var compose *docker.Compose
+func resolveBuildInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*dockerpkg.Compose, []string) {
+	var compose *dockerpkg.Compose
 	if all {
-		compose = docker.NewComposeAll(cfg, dockerCfg)
+		compose = dockerpkg.NewComposeAll(cfg, dockerCfg)
 	} else {
-		compose = docker.NewCompose(cfg, dockerCfg)
+		compose = dockerpkg.NewCompose(cfg, dockerCfg)
 	}
 
 	extraArgs := make([]string, 0, len(services)+2)

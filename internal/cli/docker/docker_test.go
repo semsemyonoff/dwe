@@ -1,4 +1,4 @@
-package cli
+package docker
 
 import (
 	"reflect"
@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/docker"
+	dockerpkg "devbox-cli/internal/shared/docker"
 )
 
 // TestDockerPipelineBuildsCompose verifies that the docker pipeline correctly
@@ -33,7 +33,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 		},
 	}
 
-	compose := docker.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg)
 
 	// Verify up args include policy defaults + service args.
 	args := compose.BuildArgs("up", "redis")
@@ -129,7 +129,7 @@ func TestDockerEnvRegenCommands(t *testing.T) {
 // TestDockerCommandSubcommands verifies the docker command group has all expected subcommands.
 func TestDockerCommandSubcommands(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	dockerCmd := newDockerCmd(flags)
+	dockerCmd := NewCmd("", flags)
 
 	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "pull", "build", "project-name"}
 	commands := dockerCmd.Commands()
@@ -208,13 +208,13 @@ func TestResolvePullInvocation(t *testing.T) {
 	tests := []struct {
 		name    string
 		all     bool
-		want    func(*docker.Compose) bool
+		want    func(*dockerpkg.Compose) bool
 		wantArg []string
 	}{
 		{
 			name: "pull without --all uses ComposeFiles",
 			all:  false,
-			want: func(c *docker.Compose) bool {
+			want: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{"svc"},
@@ -222,7 +222,7 @@ func TestResolvePullInvocation(t *testing.T) {
 		{
 			name: "pull with --all uses ComposeFilesAll",
 			all:  true,
-			want: func(c *docker.Compose) bool {
+			want: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"svc"},
@@ -271,7 +271,7 @@ func TestDockerPullArgs(t *testing.T) {
 		},
 	}
 
-	compose := docker.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg)
 	args := compose.BuildArgs("pull", "svc")
 	expected := []string{
 		"compose",
@@ -314,7 +314,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 		all      bool
 		force    bool
 		services []string
-		check    func(*docker.Compose) bool
+		check    func(*dockerpkg.Compose) bool
 		wantArg  []string
 	}{
 		{
@@ -322,7 +322,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			all:      false,
 			force:    false,
 			services: nil,
-			check: func(c *docker.Compose) bool {
+			check: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{},
@@ -332,7 +332,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			all:      true,
 			force:    false,
 			services: []string{"svc"},
-			check: func(c *docker.Compose) bool {
+			check: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"svc"},
@@ -342,7 +342,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			all:      false,
 			force:    true,
 			services: []string{"svc"},
-			check: func(c *docker.Compose) bool {
+			check: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{"--no-cache", "--pull", "svc"},
@@ -352,7 +352,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			all:      true,
 			force:    true,
 			services: []string{"svc"},
-			check: func(c *docker.Compose) bool {
+			check: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"--no-cache", "--pull", "svc"},
@@ -362,7 +362,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			all:      false,
 			force:    false,
 			services: []string{"svc1", "svc2"},
-			check: func(c *docker.Compose) bool {
+			check: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			wantArg: []string{"svc1", "svc2"},
@@ -372,7 +372,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 			all:      true,
 			force:    true,
 			services: []string{"svc1", "svc2"},
-			check: func(c *docker.Compose) bool {
+			check: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			wantArg: []string{"--no-cache", "--pull", "svc1", "svc2"},
@@ -468,7 +468,7 @@ func TestDockerBuildArgs(t *testing.T) {
 		},
 	}
 
-	compose := docker.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			args := compose.BuildArgs("build", tt.extraArgs...)
@@ -505,7 +505,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 		allFlag         bool
 		forceFlag       bool
 		services        []string
-		expectedCompose func(*docker.Compose) bool
+		expectedCompose func(*dockerpkg.Compose) bool
 		expectedArgs    []string
 	}{
 		{
@@ -514,7 +514,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			allFlag:      false,
 			forceFlag:    false,
 			services:     []string{},
-			expectedCompose: func(c *docker.Compose) bool {
+			expectedCompose: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			expectedArgs: []string{},
@@ -525,7 +525,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			allFlag:      true,
 			forceFlag:    false,
 			services:     []string{},
-			expectedCompose: func(c *docker.Compose) bool {
+			expectedCompose: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			expectedArgs: []string{},
@@ -536,7 +536,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			allFlag:      false,
 			forceFlag:    false,
 			services:     []string{},
-			expectedCompose: func(c *docker.Compose) bool {
+			expectedCompose: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			expectedArgs: []string{},
@@ -547,7 +547,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			allFlag:      false,
 			forceFlag:    false,
 			services:     []string{"svc-x"},
-			expectedCompose: func(c *docker.Compose) bool {
+			expectedCompose: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			expectedArgs: []string{"svc-x"},
@@ -558,7 +558,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			allFlag:      false,
 			forceFlag:    true,
 			services:     []string{},
-			expectedCompose: func(c *docker.Compose) bool {
+			expectedCompose: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
 			},
 			expectedArgs: []string{"--no-cache", "--pull"},
@@ -569,7 +569,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			allFlag:      true,
 			forceFlag:    false,
 			services:     []string{},
-			expectedCompose: func(c *docker.Compose) bool {
+			expectedCompose: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			expectedArgs: []string{},
@@ -580,7 +580,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			allFlag:      true,
 			forceFlag:    true,
 			services:     []string{},
-			expectedCompose: func(c *docker.Compose) bool {
+			expectedCompose: func(c *dockerpkg.Compose) bool {
 				return reflect.DeepEqual(c.Files, cfg.ComposeFilesAll())
 			},
 			expectedArgs: []string{"--no-cache", "--pull"},
@@ -589,7 +589,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.legacyTarget, func(t *testing.T) {
-			var compose *docker.Compose
+			var compose *dockerpkg.Compose
 			var extraArgs []string
 
 			if tt.legacyTarget == "image_pull" || tt.legacyTarget == "image_pull_all" {
