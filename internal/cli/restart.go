@@ -4,6 +4,7 @@ import (
 	"devbox-cli/internal/core/workflow/lifecycle"
 
 	"devbox-cli/internal/cli/cmdctx"
+	"devbox-cli/internal/cli/info"
 
 	"github.com/spf13/cobra"
 )
@@ -28,7 +29,7 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 				Ctx:           cmd.Context(),
 				ConfigPath:    flags.ConfigPath,
 				Yes:           yes,
-				ShowInfo:      func() error { return runInfo(cmd, flags) },
+				ShowInfo:      func() error { return info.Run(cmd, flags) },
 				SkipPreflight: skipPreflight,
 				ErrOut:        cmd.ErrOrStderr(),
 				Translator:    flags.I18n,

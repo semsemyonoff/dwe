@@ -4,6 +4,7 @@ import (
 	"devbox-cli/internal/core/workflow/lifecycle"
 
 	"devbox-cli/internal/cli/cmdctx"
+	"devbox-cli/internal/cli/info"
 
 	"github.com/spf13/cobra"
 )
@@ -36,7 +37,7 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 				NoUpdate:      noUpdate,
 				UpdateMode:    updateMode,
 				Yes:           yes,
-				ShowInfo:      func() error { return runInfo(cmd, flags) },
+				ShowInfo:      func() error { return info.Run(cmd, flags) },
 				SkipPreflight: skipPreflight,
 				SkipNotify:    silent,
 				ErrOut:        cmd.ErrOrStderr(),

@@ -1,15 +1,17 @@
-package cli
+// Package prompt provides the `devbox prompt` command.
+package prompt
 
 import (
 	pipeline "devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/shared/prompt"
+	promptpkg "devbox-cli/internal/shared/prompt"
 
 	"devbox-cli/internal/cli/cmdctx"
 
 	"github.com/spf13/cobra"
 )
 
-func newPromptCmd(_ *cmdctx.RootFlags) *cobra.Command {
+// NewCmd builds the `devbox prompt` command.
+func NewCmd(groupID string, _ *cmdctx.RootFlags) *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
 		Use:   "prompt",
@@ -25,6 +27,7 @@ exists primarily for --help discoverability and shell completion. Exits 0
 inside a devbox project and 1 outside (or on any silent failure).`,
 		Example: "  devbox prompt\n  devbox prompt --check",
 		Args:    cobra.NoArgs,
+		GroupID: groupID,
 		// Prompt output is consumed by shells — never let cobra print usage or
 		// error banners that would corrupt the rendered prompt line.
 		SilenceUsage:  true,
@@ -34,7 +37,7 @@ inside a devbox project and 1 outside (or on any silent failure).`,
 			if check {
 				passthrough = []string{"--check"}
 			}
-			if prompt.Run(cmd.OutOrStdout(), passthrough) != 0 {
+			if promptpkg.Run(cmd.OutOrStdout(), passthrough) != 0 {
 				return pipeline.ErrSilent
 			}
 			return nil

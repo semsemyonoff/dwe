@@ -218,14 +218,19 @@ Three tiny single-command packages, bundled into one commit because each is triv
 - Delete: `internal/cli/info.go`, `internal/cli/info_test.go`, `internal/cli/version_cmd.go`, `internal/cli/prompt.go`, `internal/cli/prompt_test.go`
 - Modify: `internal/cli/root.go` (replace `newInfoCmd`/`newVersionCmd`/`newPromptCmd` calls)
 
-- [ ] `git mv internal/cli/info.go internal/cli/info/info.go` and `git mv internal/cli/info_test.go internal/cli/info/info_test.go`
-- [ ] In `info/info.go`: change `package cli` → `package info`, rename `newInfoCmd` → `NewCmd`, add `GroupID: groupID` param; update test file imports
-- [ ] `git mv internal/cli/version_cmd.go internal/cli/version/version.go`; change package, rename `newVersionCmd` → `NewCmd(groupID string)` (no flags)
-- [ ] `git mv internal/cli/prompt.go internal/cli/prompt/prompt.go` and `git mv internal/cli/prompt_test.go internal/cli/prompt/prompt_test.go`; change package, rename `newPromptCmd` → `NewCmd`
-- [ ] Update `internal/cli/root.go`: replace `addCmd(root, groupCore, newInfoCmd(flags))` → `root.AddCommand(info.NewCmd(groupCore, flags))`; same pattern for version + prompt; add imports
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 2
-- [ ] Commit: `refactor(cli): extract info/version/prompt micropackages`
+- [x] `git mv internal/cli/info.go internal/cli/info/info.go` and `git mv internal/cli/info_test.go internal/cli/info/info_test.go`
+- [x] In `info/info.go`: change `package cli` → `package info`, rename `newInfoCmd` → `NewCmd`, add `GroupID: groupID` param; update test file imports
+- [x] `git mv internal/cli/version_cmd.go internal/cli/version/version.go`; change package, rename `newVersionCmd` → `NewCmd(groupID string)` (no flags)
+- [x] `git mv internal/cli/prompt.go internal/cli/prompt/prompt.go` and `git mv internal/cli/prompt_test.go internal/cli/prompt/prompt_test.go`; change package, rename `newPromptCmd` → `NewCmd`
+- [x] Update `internal/cli/root.go`: replace `addCmd(root, groupCore, newInfoCmd(flags))` → `root.AddCommand(info.NewCmd(groupCore, flags))`; same pattern for version + prompt; add imports
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — must pass before Task 2
+- [x] Commit: `refactor(cli): extract info/version/prompt micropackages`
+
+**Notes:**
+- `runInfo` was renamed and exported as `info.Run` because `cli/run.go` and `cli/restart.go` consume it for the `ShowInfo` lifecycle callback. cli (parent) → cli/info (child) import is fine in Task 1; when Task 10 moves run/restart into `cli/lifecycle/`, this becomes a sibling import — documenting here so that's expected, not a violation.
+- The internal-helper test `TestPromptAllowedWithoutProject` (which called the unexported `allowedWithoutProject` from `cli` package) was removed; its behaviour remains covered by `TestPromptCmd_OutsideProjectReturnsSilent` and `TestPromptCmd_RunOutsideProject` integration tests.
+- The `version` and `prompt` package names collided with `internal/shared/version` and `internal/shared/prompt` imports — aliased as `versioninfo` and `promptpkg` respectively in the new files.
 
 ### Task 2: `cli/validate/`
 

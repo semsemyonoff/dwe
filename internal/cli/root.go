@@ -12,8 +12,11 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	cmdDeploy "devbox-cli/internal/cli/deploy"
+	cmdInfo "devbox-cli/internal/cli/info"
+	cmdPrompt "devbox-cli/internal/cli/prompt"
 	cmdRender "devbox-cli/internal/cli/render"
 	cmdService "devbox-cli/internal/cli/service"
+	cmdVersion "devbox-cli/internal/cli/version"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
 	userpkg "devbox-cli/internal/core/project/user"
@@ -56,8 +59,8 @@ func NewRootCmd() *cobra.Command {
 	)
 
 	// Core group: project info and version.
-	addCmd(root, groupCore, newInfoCmd(flags))
-	addCmd(root, groupCore, newVersionCmd())
+	root.AddCommand(cmdInfo.NewCmd(groupCore, flags))
+	root.AddCommand(cmdVersion.NewCmd(groupCore))
 
 	// Environment group: lifecycle and shell access.
 	addCmd(root, groupEnvironment, newRunCmd(flags))
@@ -65,7 +68,7 @@ func NewRootCmd() *cobra.Command {
 	addCmd(root, groupEnvironment, newRestartCmd(flags))
 	addCmd(root, groupEnvironment, newShellCmd(flags))
 	addCmd(root, groupEnvironment, newStatusCmd(flags))
-	addCmd(root, groupEnvironment, newPromptCmd(flags))
+	root.AddCommand(cmdPrompt.NewCmd(groupEnvironment, flags))
 
 	// Configuration group: services, tools, rendering, validation.
 	root.AddCommand(cmdService.NewCmd(groupConfiguration, flags))

@@ -1,4 +1,5 @@
-package cli
+// Package info provides the `devbox info` command.
+package info
 
 import (
 	"fmt"
@@ -12,7 +13,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newInfoCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewCmd builds the `devbox info` command.
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info",
 		Short: "Display project info dashboard (URLs, hosts, services, tools)",
@@ -22,14 +24,18 @@ Shows project name, URLs, hosts, services, tools, and runtime details.
 The dashboard is driven by Go templates evaluated against the merged devbox config.`,
 		Example: "  devbox info",
 		Args:    cobra.NoArgs,
+		GroupID: groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInfo(cmd, flags)
+			return Run(cmd, flags)
 		},
 		SilenceUsage: true,
 	}
 }
 
-func runInfo(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+// Run executes the info dashboard render, writing to cmd.OutOrStdout.
+// Exported so lifecycle commands can chain the info display after a successful
+// `devbox run` / `devbox restart`.
+func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)

@@ -1,4 +1,4 @@
-package cli
+package info_test
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/cli"
 )
 
 // writeMinimalInfoYML writes a minimal info.yml to dir and returns its path.
@@ -48,7 +50,7 @@ func TestInfoCmd_RendersSection(t *testing.T) {
         value: "{{ .Project.Name }}"
 `)
 
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -84,7 +86,7 @@ func TestInfoCmd_RendersWarningAndInfoItems(t *testing.T) {
         text: "127.0.0.1 app.local"
 `)
 
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -123,7 +125,7 @@ func TestInfoCmd_ConditionalItems(t *testing.T) {
         when: "{{if eq .Project.Name \"nonexistent\"}}true{{end}}"
 `)
 
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -159,7 +161,7 @@ func TestInfoCmd_StylesMissingIsGraceful(t *testing.T) {
         value: "{{ .Project.Name }}"
 `)
 	// No devbox/styles.yml — must not cause an error.
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -193,7 +195,7 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 		t.Fatalf("writing styles.yml: %v", err)
 	}
 
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -217,7 +219,7 @@ func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 	cfgPath := writeMinimalDevboxYML(t, dir)
 	// Intentionally no info.yml written.
 
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
@@ -256,7 +258,7 @@ func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
         value: "{{ .Project.Name }}"
 `)
 
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -278,7 +280,7 @@ func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
 
 // TestInfoCmd_MissingConfig returns an error when devbox.yml is not found.
 func TestInfoCmd_MissingConfig(t *testing.T) {
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -312,7 +314,7 @@ func TestInfoCmd_UsesUIRenderInfo(t *testing.T) {
 footer: true
 `)
 
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)

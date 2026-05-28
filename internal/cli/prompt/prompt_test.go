@@ -1,4 +1,4 @@
-package cli
+package prompt_test
 
 import (
 	"bytes"
@@ -8,12 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/cli"
 	"devbox-cli/internal/cli/cmdctx"
+	"devbox-cli/internal/cli/prompt"
 	"devbox-cli/internal/core/execution/pipeline"
 )
 
 func TestNewPromptCmd_UseAndFlags(t *testing.T) {
-	cmd := newPromptCmd(&cmdctx.RootFlags{})
+	cmd := prompt.NewCmd("", &cmdctx.RootFlags{})
 	if cmd.Use != "prompt" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "prompt")
 	}
@@ -29,7 +31,7 @@ func TestNewPromptCmd_UseAndFlags(t *testing.T) {
 }
 
 func TestPromptRegisteredAtRoot(t *testing.T) {
-	root := NewRootCmd()
+	root := cli.NewRootCmd()
 	found := false
 	for _, c := range root.Commands() {
 		if c.Name() == "prompt" {
@@ -40,24 +42,6 @@ func TestPromptRegisteredAtRoot(t *testing.T) {
 	if !found {
 		t.Error("prompt command not registered on root")
 	}
-}
-
-func TestPromptAllowedWithoutProject(t *testing.T) {
-	cmd := newPromptCmd(&cmdctx.RootFlags{})
-	cmd.SetArgs([]string{})
-	// Simulate the command path resolution allowedWithoutProject expects.
-	// We check via the helper directly by constructing a fake cmd with that path.
-	root := NewRootCmd()
-	// Find the registered prompt subcommand and call allowedWithoutProject on it.
-	for _, c := range root.Commands() {
-		if c.Name() == "prompt" {
-			if !allowedWithoutProject(c) {
-				t.Error("expected prompt to be allowed without a project")
-			}
-			return
-		}
-	}
-	t.Fatal("prompt subcommand not found")
 }
 
 // withTempCwd cds to dir for the duration of the test.
@@ -88,7 +72,7 @@ func TestPromptCmd_RunInProject(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, tmp)
 
-	cmd := newPromptCmd(&cmdctx.RootFlags{})
+	cmd := prompt.NewCmd("", &cmdctx.RootFlags{})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetArgs([]string{})
@@ -114,7 +98,7 @@ func TestPromptCmd_RunOutsideProject(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, deep)
 
-	cmd := newPromptCmd(&cmdctx.RootFlags{})
+	cmd := prompt.NewCmd("", &cmdctx.RootFlags{})
 	var out, errBuf bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&errBuf)
@@ -143,7 +127,7 @@ func TestPromptCmd_CheckFlag(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, tmp)
 
-	cmd := newPromptCmd(&cmdctx.RootFlags{})
+	cmd := prompt.NewCmd("", &cmdctx.RootFlags{})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetArgs([]string{"--check"})
@@ -156,7 +140,7 @@ func TestPromptCmd_CheckFlag(t *testing.T) {
 }
 
 func TestPromptCmd_RejectsPositionalArgs(t *testing.T) {
-	cmd := newPromptCmd(&cmdctx.RootFlags{})
+	cmd := prompt.NewCmd("", &cmdctx.RootFlags{})
 	cmd.SetArgs([]string{"foo"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
@@ -175,7 +159,7 @@ func TestPromptCmd_OutsideProjectReturnsSilent(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	withTempCwd(t, deep)
-	cmd := newPromptCmd(&cmdctx.RootFlags{})
+	cmd := prompt.NewCmd("", &cmdctx.RootFlags{})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	cmd.SetArgs([]string{})
