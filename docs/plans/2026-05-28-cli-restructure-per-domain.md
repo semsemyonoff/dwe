@@ -275,21 +275,22 @@ Two thin docker-binary passthroughs as **separate packages** — combining them 
 
 Special pattern: `AttachInstallUninstall(parent, flags)`. Split `completion_install.go` into install + uninstall.
 
-**Files:**
-- Create: `internal/cli/completion/completion.go`, `internal/cli/completion/install.go`, `internal/cli/completion/uninstall.go`, `internal/cli/completion/daemon.go`, plus `_test.go` siblings
-- Delete: `internal/cli/completion_install.go`, `internal/cli/completion_daemon.go`, `internal/cli/completion_test.go`, `internal/cli/completion_install_test.go`, `internal/cli/completion_uninstall_test.go`, `internal/cli/completion_daemon_test.go`
-- Modify: `internal/cli/root.go`
+**Files (as implemented — see ⚠️ DEVIATION notes below):**
+- Created: `internal/cli/completion/completion.go`, `internal/cli/completion/install.go`, `internal/cli/completion/uninstall.go`, `internal/cli/completion/install_test.go`, `internal/cli/completion/uninstall_test.go`
+- Deleted: `internal/cli/completion_install.go`, `internal/cli/completion_install_test.go`, `internal/cli/completion_uninstall_test.go`
+- Retained in cli/ (deferred to Task 8): `internal/cli/completion_test.go`, `internal/cli/completion_daemon.go`, `internal/cli/completion_daemon_test.go`
+- Modified: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/completion_daemon.go internal/cli/completion/daemon.go` (and test)
-- [ ] `git mv internal/cli/completion_test.go internal/cli/completion/completion_test.go`
-- [ ] Split `internal/cli/completion_install.go` (`git mv` to `install.go`, then split out uninstall via Read/Write):
-  - `completion.go`: `AttachInstallUninstall(parent *cobra.Command, flags *cmdctx.RootFlags)`, `completionExitError`, `isSupportedShell` (shared)
-  - `install.go`: `newInstallCompletionCmd`, `resolveShellName`, `resolveInstallPath`, `completionFileInDir`, `resolvePowerShellInstallPath`, `defaultResolvePowerShellProfile`, `generateCompletionContent`, `atomicWriteCompletion`, `runInstall`, `runInstallDryRun`, `emitShellHints`
+- [x] ⚠️ DEVIATION: `completion_daemon.go` + `completion_daemon_test.go` NOT moved in this task. They host `daemonSetCompletion` for `command --set` flag completion, which is consumed by `command_cmd.go`. Moving them to `cli/completion/` now and then again to `cli/command/` in Task 8 (or leaving them in `cli/completion/` and having `cli/command/` sibling-import them) would either churn or violate the "no cross-sibling cli imports" rule. Defer the move to Task 8, where they fit naturally as `cli/command/daemonset.go` (tightly coupled to command rendering, not to shell-completion install). Files remain at `internal/cli/completion_daemon.go` and `internal/cli/completion_daemon_test.go`.
+- [x] ⚠️ DEVIATION: `completion_test.go` NOT moved either — its tests reference `registryIDCompletion` (still in cli/ until Task 8), `NewRootCmd`, and `groupAdvanced`. The `TestCompletionCmd_InAdvancedGroupWithShellSubcommands` integration test must stay in cli/ to verify root wiring. File remains at `internal/cli/completion_test.go`.
+- [x] Split `internal/cli/completion_install.go` into `internal/cli/completion/{completion,install,uninstall}.go` via Read/Write (not `git mv`, since the source is one file and the destination is three):
+  - `completion.go`: `AttachInstallUninstall(parent *cobra.Command, flags *cmdctx.RootFlags)`, `completionExitError`, `isSupportedShell`, `supportedShells`, `ErrUnsupportedShell` (shared)
+  - `install.go`: `newInstallCompletionCmd`, `resolveShellName`, `resolveInstallPath`, `completionFileInDir`, `resolvePowerShellInstallPath`, `defaultResolvePowerShellProfile`, `generateCompletionContent`, `atomicWriteCompletion`, `runInstall`, `runInstallDryRun`, `emitShellHints`, plus seam vars `resolvePowerShellProfile`/`completionHomeDir`/`completionReadFile`
   - `uninstall.go`: `newUninstallCompletionCmd`, `runUninstall`, `emitZshFpathHint`
-- [ ] `git mv internal/cli/completion_install_test.go internal/cli/completion/install_test.go`; same for uninstall test
-- [ ] Change all `package cli` → `package completion`
-- [ ] In `completion.go`, implement `AttachInstallUninstall(parent, flags)` that calls `parent.AddCommand(newInstallCompletionCmd())` and `parent.AddCommand(newUninstallCompletionCmd())`
-- [ ] Update `internal/cli/root.go`:
+- [x] Port `completion_install_test.go` → `cli/completion/install_test.go` and `completion_uninstall_test.go` → `cli/completion/uninstall_test.go`. The tests used `NewRootCmd()`; rewrote them around a `buildCompletionTestRoot()` helper that constructs a minimal cobra parent + calls `AttachInstallUninstall` — same coverage without dragging in cli root's `PersistentPreRunE`.
+- [x] All new files use `package completion`
+- [x] `completion.go` implements `AttachInstallUninstall(parent, flags)` that calls `parent.AddCommand(newInstallCompletionCmd())` and `parent.AddCommand(newUninstallCompletionCmd())`
+- [x] Update `internal/cli/root.go`:
   ```go
   root.InitDefaultCompletionCmd()
   if completionCmd, _, err := root.Find([]string{"completion"}); err == nil && completionCmd != nil {
@@ -297,9 +298,9 @@ Special pattern: `AttachInstallUninstall(parent, flags)`. Split `completion_inst
       completion.AttachInstallUninstall(completionCmd, flags)
   }
   ```
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 5
-- [ ] Commit: `refactor(cli): extract completion subpackage`
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — passed before Task 5
+- [x] Commit: `refactor(cli): extract completion subpackage`
 
 ### Task 5: `cli/shell/`
 
@@ -373,8 +374,9 @@ Split `command_cmd.go` (1262 LoC) into 5 files by responsibility.
 
 **Files:**
 - Create: `internal/cli/command/{command,run,list,inspect,completion}.go` + tests
-- Delete: `internal/cli/command_cmd.go`, `internal/cli/command_cmd_test.go`, `internal/cli/run_command_by_id_test.go`
-- Modify: `internal/cli/root.go`
+- Also absorb (deferred from Task 4): `internal/cli/completion_daemon.go` → `internal/cli/command/daemonset.go` (holds `daemonSetCompletion`, called by `command_cmd.go`); `internal/cli/completion_daemon_test.go` → `internal/cli/command/daemonset_test.go`; `internal/cli/completion_test.go` → split (root-wiring test stays in cli/; the `registryIDCompletion` / `buildRegistryCompletions` tests move to `internal/cli/command/completion_test.go`)
+- Delete: `internal/cli/command_cmd.go`, `internal/cli/command_cmd_test.go`, `internal/cli/run_command_by_id_test.go`, `internal/cli/completion_daemon.go`, `internal/cli/completion_daemon_test.go`
+- Modify: `internal/cli/root.go`, `internal/cli/completion_test.go` (drop tests that moved to cli/command)
 
 - [ ] `git mv internal/cli/command_cmd.go internal/cli/command/command.go`
 - [ ] `git mv internal/cli/command_cmd_test.go internal/cli/command/command_test.go`

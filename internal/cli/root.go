@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
+	"devbox-cli/internal/cli/completion"
 	cmdCompose "devbox-cli/internal/cli/compose"
 	cmdDeploy "devbox-cli/internal/cli/deploy"
 	cmdDocker "devbox-cli/internal/cli/docker"
@@ -94,8 +95,7 @@ func NewRootCmd() *cobra.Command {
 	root.InitDefaultCompletionCmd()
 	if completionCmd, _, err := root.Find([]string{"completion"}); err == nil && completionCmd != nil {
 		completionCmd.GroupID = groupAdvanced
-		completionCmd.AddCommand(newInstallCompletionCmd())
-		completionCmd.AddCommand(newUninstallCompletionCmd())
+		completion.AttachInstallUninstall(completionCmd, flags)
 	}
 
 	return root

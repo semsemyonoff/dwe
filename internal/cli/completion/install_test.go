@@ -1,4 +1,4 @@
-package cli
+package completion
 
 import (
 	"bytes"
@@ -8,7 +8,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/cli/cmdctx"
+
+	"github.com/spf13/cobra"
 )
+
+// buildCompletionTestRoot builds a minimal cobra tree containing the
+// install/uninstall subcommands under a synthetic "completion" parent. It
+// stands in for the real devbox root in unit tests without dragging in the
+// project-resolution PersistentPreRunE chain.
+func buildCompletionTestRoot() *cobra.Command {
+	root := &cobra.Command{Use: "devbox"}
+	completionCmd := &cobra.Command{Use: "completion"}
+	root.AddCommand(completionCmd)
+	AttachInstallUninstall(completionCmd, &cmdctx.RootFlags{})
+	return root
+}
 
 // buildFreshInstallCmd builds a fresh root command and returns the install
 // subcommand under `devbox completion install`. A fresh root is required per
@@ -16,7 +32,7 @@ import (
 func buildFreshInstallCmd(t *testing.T) func(args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	return func(args ...string) (string, string, error) {
-		root := NewRootCmd()
+		root := buildCompletionTestRoot()
 		var outBuf, errBuf bytes.Buffer
 		root.SetOut(&outBuf)
 		root.SetErr(&errBuf)
@@ -416,7 +432,7 @@ func TestResolvePowerShellInstallPath_HomeUnresolvable(t *testing.T) {
 // --- completion command has install subcommand ---
 
 func TestCompletionCmdHasInstallSubcommand(t *testing.T) {
-	root := NewRootCmd()
+	root := buildCompletionTestRoot()
 	completionCmd, _, err := root.Find([]string{"completion"})
 	if err != nil || completionCmd == nil {
 		t.Fatal("completion command not found")
@@ -434,7 +450,7 @@ func TestCompletionCmdHasInstallSubcommand(t *testing.T) {
 }
 
 func TestInstallCompletionCmd_ValidArgsFunction(t *testing.T) {
-	root := NewRootCmd()
+	root := buildCompletionTestRoot()
 	installCmd, _, err := root.Find([]string{"completion", "install"})
 	if err != nil || installCmd == nil {
 		t.Fatal("completion install command not found")

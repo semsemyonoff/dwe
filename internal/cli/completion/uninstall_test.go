@@ -1,4 +1,4 @@
-package cli
+package completion
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 func buildFreshUninstallCmd(t *testing.T) func(args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	return func(args ...string) (string, string, error) {
-		root := NewRootCmd()
+		root := buildCompletionTestRoot()
 		var outBuf, errBuf bytes.Buffer
 		root.SetOut(&outBuf)
 		root.SetErr(&errBuf)
@@ -113,7 +113,7 @@ func TestUninstallCompletion_UnsupportedShell_FromEnv(t *testing.T) {
 }
 
 func TestCompletionCmdHasUninstallSubcommand(t *testing.T) {
-	root := NewRootCmd()
+	root := buildCompletionTestRoot()
 	completionCmd, _, err := root.Find([]string{"completion"})
 	if err != nil || completionCmd == nil {
 		t.Fatal("completion command not found")
@@ -131,7 +131,7 @@ func TestCompletionCmdHasUninstallSubcommand(t *testing.T) {
 }
 
 func TestUninstallCompletionCmd_ValidArgsFunction(t *testing.T) {
-	root := NewRootCmd()
+	root := buildCompletionTestRoot()
 	uninstallCmd, _, err := root.Find([]string{"completion", "uninstall"})
 	if err != nil || uninstallCmd == nil {
 		t.Fatal("completion uninstall command not found")

@@ -1,36 +1,17 @@
-package cli
+package completion
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 )
-
-// ErrUnsupportedShell is returned when a shell name is not one of the four
-// supported values: bash, zsh, fish, powershell.
-var ErrUnsupportedShell = errors.New("unsupported shell")
-
-// completionExitError carries a fixed exit code for main.go's ExitCode() dispatch.
-type completionExitError struct {
-	msg  string
-	code int
-}
-
-func (e *completionExitError) Error() string { return e.msg }
-func (e *completionExitError) ExitCode() int { return e.code }
-
-// supportedShells is the canonical list accepted by install/uninstall.
-var supportedShells = []string{"bash", "zsh", "fish", "powershell"}
 
 // Seams for unit testing — overridden in tests.
 var (
@@ -125,10 +106,6 @@ func resolveShellName(args []string) (string, error) {
 		return "", fmt.Errorf("%w: %q (from $SHELL); pass the shell name explicitly; supported shells: %s", ErrUnsupportedShell, base, strings.Join(supportedShells, ", "))
 	}
 	return base, nil
-}
-
-func isSupportedShell(s string) bool {
-	return slices.Contains(supportedShells, s)
 }
 
 // resolveInstallPath returns the absolute target file path for the completion script.
@@ -306,92 +283,4 @@ func emitShellHints(cmd *cobra.Command, shell, targetPath string) {
 		_, _ = fmt.Fprintf(errW, "\nTo enable completions, add the following line to your PowerShell profile ($PROFILE):\n")
 		_, _ = fmt.Fprintf(errW, ". %q\n", abs)
 	}
-}
-
-func newUninstallCompletionCmd() *cobra.Command {
-	var customDir string
-
-	cmd := &cobra.Command{
-		Use:   "uninstall [shell]",
-		Short: "Uninstall shell completion for devbox",
-		Long: `Remove the devbox shell completion script from the standard location for your
-shell. The target file is determined automatically from the shell name (or
-detected from $SHELL).
-
-Supported shells: bash, zsh, fish, powershell
-
-To uninstall for a specific shell:
-
-    devbox completion uninstall zsh
-    devbox completion uninstall bash
-
-Override the target directory:
-
-    devbox completion uninstall zsh --path ~/.config/completions
-
-NOTES
-  - Dotfiles (e.g. ~/.zshrc, PowerShell $PROFILE) are never modified.
-  - If the completion file does not exist, the command exits successfully.
-  - Homebrew tap users should use generate_completions_from_executable instead.`,
-		Args: cobra.MaximumNArgs(1),
-		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
-			if len(args) > 0 {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-			return supportedShells, cobra.ShellCompDirectiveNoFileComp
-		},
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			shell, err := resolveShellName(args)
-			if err != nil {
-				return err
-			}
-			targetPath, err := resolveInstallPath(shell, customDir)
-			if err != nil {
-				return err
-			}
-			return runUninstall(cmd, targetPath)
-		},
-	}
-
-	cmd.Flags().StringVar(&customDir, "path", "", "uninstall from this directory instead of the default location")
-
-	return cmd
-}
-
-// runUninstall removes the completion file at targetPath. A missing file is
-// treated as success (idempotent).
-func runUninstall(cmd *cobra.Command, targetPath string) error {
-	err := os.Remove(targetPath)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Completion file not found (already uninstalled): %s\n", targetPath)
-			return nil
-		}
-		return fmt.Errorf("removing completion file: %w", err)
-	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Uninstalled completion from %s\n", targetPath)
-	return nil
-}
-
-// emitZshFpathHint checks ~/.zshrc for a reference to the completion dir; if
-// missing it prints the fpath snippet to stderr.
-func emitZshFpathHint(cmd *cobra.Command, targetPath string) {
-	installDir := filepath.Dir(targetPath)
-	home, err := completionHomeDir()
-	if err != nil {
-		return
-	}
-	zshrc := filepath.Join(home, ".zshrc")
-	data, err := completionReadFile(zshrc)
-	if err == nil {
-		if strings.Contains(string(data), installDir) {
-			return
-		}
-	}
-	// Print the fpath hint.
-	errW := cmd.ErrOrStderr()
-	_, _ = fmt.Fprintf(errW, "\nTo enable completions, add the following to %s:\n\n", zshrc)
-	_, _ = fmt.Fprintf(errW, "    fpath=(%s $fpath)\n", installDir)
-	_, _ = fmt.Fprintf(errW, "    autoload -Uz compinit && compinit\n")
 }
