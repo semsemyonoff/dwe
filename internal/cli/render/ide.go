@@ -10,7 +10,6 @@ import (
 	"devbox-cli/internal/core/execution/templates/ide"
 	"devbox-cli/internal/core/execution/templates/manifest"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/shared/pathsafe"
 	"devbox-cli/internal/shared/render"
 
@@ -52,7 +51,7 @@ the IDE collision-policy winner (deepest extends) is rendered. This means
 'render ide main' renders main-debug whenever main-debug is enabled.`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
-		ValidArgsFunction: services.NameCompletion(flags),
+		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {

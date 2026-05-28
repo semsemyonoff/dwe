@@ -75,8 +75,9 @@ var singleToggleAddPendingOps = journal.AddPendingOps
 var singleToggleRunDeploy func(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts cmdDeploy.Opts) error
 
 func init() {
-	// Assigned in init to avoid an init-order cycle (runDeployHelper is defined
-	// in deploy.go, same package, but var init order is file-declaration order).
+	// Assigned in init because var init order is file-declaration order across
+	// packages; using a package-init avoids a nil seam if this file initializes
+	// before cmdDeploy.RunHelper is set up.
 	singleToggleRunDeploy = cmdDeploy.RunHelper
 	multiToggleRunDeploy = cmdDeploy.RunHelper
 }

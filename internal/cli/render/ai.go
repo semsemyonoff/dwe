@@ -8,7 +8,6 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	aipkg "devbox-cli/internal/core/execution/templates/ai"
-	"devbox-cli/internal/core/project/services"
 
 	"devbox-cli/internal/core/execution/templates/manifest"
 	"devbox-cli/internal/core/project/config"
@@ -51,7 +50,7 @@ hub owner) is rendered. This means 'render ai main-debug' still renders the
 parent 'main' identity for the shared hub.`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
-		ValidArgsFunction: services.NameCompletion(flags),
+		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {

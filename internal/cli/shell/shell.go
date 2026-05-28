@@ -8,7 +8,6 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/docker"
 
@@ -103,7 +102,7 @@ service exists, or shows an interactive selector when multiple services are enab
   devbox shell main --user deploy --workdir /app`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
-		ValidArgsFunction: services.NameCompletion(flags),
+		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Validate mutual exclusion: --root and --user cannot both be set.
 			if asRoot && flagUser != "" {
