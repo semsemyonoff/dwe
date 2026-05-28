@@ -15,7 +15,7 @@ const defaultIndent = 2
 
 // RenderInfo builds and returns the full styled info dashboard string for the
 // given devbox config and info configuration. It replaces the legacy
-// table-header / definition rendering in internal/command/info.go.
+// table-header / definition rendering in internal/cli/info.go.
 //
 // Returns an error if any Go template expression in text/value/when fields
 // fails to evaluate.

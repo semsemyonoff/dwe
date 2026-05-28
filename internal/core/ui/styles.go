@@ -1,5 +1,5 @@
 // Package ui provides Lipgloss-based styled rendering for the devbox CLI.
-// It is separate from internal/render, which handles plain ANSI output used by
+// It is separate from internal/shared/render, which handles plain ANSI output used by
 // deploy, docker, and passthrough commands.
 package ui
 
@@ -24,7 +24,7 @@ type hexPair struct{ Light, Dark string }
 // Built-in light/dark defaults for the 7 semantic tokens. These are plain hex
 // strings (not lipgloss.AdaptiveColor) because the package-level Color*()
 // accessors must return raw hex — they bridge v1 lipgloss (this package), v2
-// lipgloss (internal/ui/cmdbrowser), and Fang's ColorScheme.
+// lipgloss (internal/core/ui/cmdbrowser), and Fang's ColorScheme.
 var (
 	defaultAccent  = hexPair{Light: "#0EA5E9", Dark: "#2EC3EB"}
 	defaultSuccess = hexPair{Light: "#16A34A", Dark: "#22C55E"}
@@ -52,7 +52,7 @@ var (
 )
 
 // v1 lipgloss styles for the 7 semantic tokens. Built once per ApplyStyles
-// call from the resolved hex values. Used directly by internal/ui consumers.
+// call from the resolved hex values. Used directly by internal/core/ui consumers.
 var (
 	styleAccent  lipgloss.Style
 	styleSuccess lipgloss.Style

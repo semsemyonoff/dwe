@@ -5,7 +5,7 @@ import (
 )
 
 // badgeRender returns a function that renders the type badge for a command
-// type using existing styles.yml keys (via the internal/ui style accessors).
+// type using existing styles.yml keys (via the internal/core/ui style accessors).
 // Unknown / missing types fall back to the muted style. This keeps cmdbrowser
 // from introducing new style keys in v1.
 func badgeRender(typ string) func(string) string {

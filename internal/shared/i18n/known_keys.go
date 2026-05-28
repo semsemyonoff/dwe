@@ -1,7 +1,7 @@
 package i18n
 
 // KnownUIKeys is the authoritative list of valid ui.* keys.
-// This must stay in sync with internal/i18n/translations/en.yml.
+// This must stay in sync with internal/shared/i18n/translations/en.yml.
 // Used by the validator to flag typo'd keys like "ui.docs.section.properies".
 var KnownUIKeys = []string{
 	"docs.section.properties",

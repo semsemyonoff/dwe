@@ -1,5 +1,5 @@
 // Package cmdbrowser palette.go is the only sanctioned bridge between the
-// lipgloss v1 palette defined in internal/ui and the charm.land/lipgloss/v2
+// lipgloss v1 palette defined in internal/core/ui and the charm.land/lipgloss/v2
 // styles required by bubbles/v2. It reads raw color strings via the
 // ui.Color*() accessors and constructs v2 lipgloss styles locally — v1 styles
 // are never imported here, and v2 styles never leak outside cmdbrowser.

@@ -9,7 +9,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 )
 
-// testTool mirrors the one in internal/stack/testhelpers_test.go for test config building.
+// testTool mirrors the one in internal/core/project/stack/testhelpers_test.go for test config building.
 type testTool struct {
 	Enabled   bool
 	Container string

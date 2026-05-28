@@ -9,8 +9,8 @@ import (
 )
 
 // Severity is the validation diagnostic severity. Re-exported from the leaf
-// diag package so loaders that cannot import internal/validate (e.g.
-// internal/config, which validate depends on) can still produce diagnostics.
+// diag package so loaders that cannot import internal/core/validate (e.g.
+// internal/core/project/config, which validate depends on) can still produce diagnostics.
 type Severity = diag.Severity
 
 // Severity levels (re-exported from diag).

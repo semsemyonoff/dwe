@@ -4,7 +4,7 @@ import "github.com/charmbracelet/lipgloss"
 
 // LogoMark returns the Devbox logomark "{▪}" with the inner square colored
 // using the accent token. The braces stay default text color. Use this in v1
-// lipgloss contexts (internal/ui consumers, root + info headers, status section
+// lipgloss contexts (internal/core/ui consumers, root + info headers, status section
 // titles, docs generator progress lines, version output).
 //
 // Lipgloss handles NO_COLOR / non-TTY downgrade via its color profile, so this

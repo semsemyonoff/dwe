@@ -9,7 +9,7 @@ import (
 // cursor sequences AND screen data lines into the SAME grid in actual write
 // order, mirroring how a real terminal consumes a single byte stream.
 //
-// Mirror of internal/liveui/liveline_test.go's helper, retained here so the
+// Mirror of internal/shared/liveui/liveline_test.go's helper, retained here so the
 // pipeline package's own tests can keep their cursor-invariant assertions
 // without depending on liveui's _test.go test helpers (which are not exported
 // outside the liveui test binary).

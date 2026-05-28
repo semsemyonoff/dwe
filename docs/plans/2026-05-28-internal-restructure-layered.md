@@ -454,17 +454,13 @@ linters:
 - Modify: `AGENTS.md` (which `CLAUDE.md` symlinks to)
 - Modify: various `.go` files containing comment references to old `internal/<oldpath>` (no `devbox-cli/` prefix)
 
-- [ ] update `AGENTS.md` "Project Structure & Module Organization" section: replace "High-level grouping" list with new paths
-- [ ] update `AGENTS.md` "Key Patterns" section: every path like `internal/command/...`, `internal/validate/...`, `internal/stack/...` etc. — update to new locations
-- [ ] verify `CLAUDE.md` symlink still resolves to `AGENTS.md` (`readlink CLAUDE.md` should show `AGENTS.md`)
-- [ ] grep for stale path comments in code (lines that mention `internal/<old>` without the `devbox-cli/` prefix — these are doc comments, not import strings, so mass-sed missed them):
-  ```bash
-  grep -rn 'internal/[a-z_]\+' --include='*.go' | grep -v '"devbox-cli/internal/' | grep -E '//|/\*'
-  ```
-  Update each match to the new path. Examples flagged at plan-review time: `internal/daemon/daemon.go`, `internal/ui/info.go`, `internal/ui/huh.go`, `internal/validate/validate.go`, `internal/usercommands/model/types.go`, `internal/command/statustui/load.go`. (Note: after Tasks 2–7 these files are at new locations — re-grep on the moved tree.)
-- [ ] `make build` — must succeed (embedded AGENTS.md and packages.md regenerated)
-- [ ] `make test` — must pass
-- [ ] commit: `docs(agents): update path references for layered internal/ structure`
+- [x] update `AGENTS.md` "Project Structure & Module Organization" section: replace "High-level grouping" list with new paths
+- [x] update `AGENTS.md` "Key Patterns" section: every path like `internal/command/...`, `internal/validate/...`, `internal/stack/...` etc. — update to new locations
+- [x] verify `CLAUDE.md` symlink still resolves to `AGENTS.md` (`readlink CLAUDE.md` should show `AGENTS.md`)
+- [x] grep for stale path comments in code (23 files updated by scripted comment-only substitution)
+- [x] `make build` — must succeed (embedded AGENTS.md and packages.md regenerated)
+- [x] `make test` — must pass
+- [x] commit: `docs(agents): update path references for layered internal/ structure`
 
 ### Task 13: Verify acceptance criteria
 

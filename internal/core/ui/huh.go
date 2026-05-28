@@ -52,7 +52,7 @@ func snapshotHuhHooks() (before, after func()) {
 }
 
 // SnapshotHuhHooks exposes the current hook pair. Used by cross-package tests
-// (e.g. internal/pipeline) to assert hook installation; production callers
+// (e.g. internal/core/execution/pipeline) to assert hook installation; production callers
 // should use snapshotHuhHooks via the prompt entry points instead.
 func SnapshotHuhHooks() (before, after func()) {
 	return snapshotHuhHooks()
@@ -60,7 +60,7 @@ func SnapshotHuhHooks() (before, after func()) {
 
 // RunWithPromptHooks runs fn wrapped by the snapshotted before/after hook pair.
 // It is the canonical entry point for full-screen prompt-like UI (e.g. the
-// command browser TUI) outside of internal/ui's huh-backed primitives: it
+// command browser TUI) outside of internal/core/ui's huh-backed primitives: it
 // snapshots the current (before, after) pair once, calls before(), defers
 // after(), then invokes fn(). The after hook still fires when fn returns an
 // error so a paused LiveLine always resumes.

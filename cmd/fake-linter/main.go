@@ -1,5 +1,5 @@
 // Command fake-linter is a test helper that mimics a real linter binary for
-// the internal/validate/linters runtime tests. Behavior is selected via the
+// the internal/core/validate/linters runtime tests. Behavior is selected via the
 // FAKE_LINTER_MODE environment variable so tests can put one binary on PATH
 // and exercise multiple code paths.
 //

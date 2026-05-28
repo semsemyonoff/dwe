@@ -1,6 +1,6 @@
 // Package cmdbrowser implements the interactive two-panel TUI used by
 // `devbox commands` when no exact command ID is supplied. It is a sibling of
-// internal/ui — callers import it directly. A facade in internal/ui would
+// internal/core/ui — callers import it directly. A facade in internal/core/ui would
 // form a cycle (ui → cmdbrowser → ui).
 package cmdbrowser
 

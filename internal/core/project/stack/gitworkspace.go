@@ -8,7 +8,7 @@
 // per-row errors are captured on row.Err.
 //
 // Probe target: by project convention the actual source tree lives under
-// `<svc.Dir>/src/` (mirrors `internal/templates/git`, which writes hooks to
+// `<svc.Dir>/src/` (mirrors `internal/core/execution/templates/git`, which writes hooks to
 // `<svc.Dir>/src/.git/hooks/`). When `<svc.Dir>/src` is missing the service
 // is omitted from the output entirely; when it exists but lacks its own
 // `.git`, blank cells are emitted (no row error).

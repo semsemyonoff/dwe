@@ -62,7 +62,7 @@ func TestRunPipeline_ParallelSubStep_NestedWorkflowParallel_Rejected(t *testing.
 		t.Fatal("expected nested-parallel error from pipeline parallel → workflow-parallel")
 	}
 	// The pipeline executor masks step errors as ErrSilent in the return value
-	// (see internal/pipeline/errors.go). The original sentinel is captured in
+	// (see internal/core/execution/pipeline/errors.go). The original sentinel is captured in
 	// the FailStep reporter event.
 	var failErr error
 	for _, e := range rep.events {

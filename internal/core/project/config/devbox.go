@@ -251,7 +251,7 @@ type DeployStep struct {
 	// files_gate) to named sub-steps of the workflow referenced by Cmd. Keys are
 	// the sub-step Name (or, when absent, the sub-step's referenced Command).
 	// Only valid when Type == "command" and the target command is a workflow.
-	// Plan-time validation lives in internal/pipeline.ResolvePhaseSteps.
+	// Plan-time validation lives in internal/core/execution/pipeline.ResolvePhaseSteps.
 	SubStepOverrides map[string]SubStepOverride `yaml:"sub_step_overrides,omitempty"`
 }
 
@@ -308,7 +308,7 @@ var deployStepLeafOnlyFields = []string{
 //     files_gate/continue_on_error)
 //
 // Length of parallel.steps is NOT enforced here; that check lives in
-// internal/pipeline.ResolvePhaseSteps so it can return a typed sentinel
+// internal/core/execution/pipeline.ResolvePhaseSteps so it can return a typed sentinel
 // (ErrEmptyParallelSteps) without an import cycle.
 func (s *DeployStep) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.MappingNode {

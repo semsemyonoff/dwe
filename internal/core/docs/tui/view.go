@@ -14,7 +14,7 @@ import (
 
 // applyDocsHelpStyles overwrites the palette-driven fields on a bubbles/v2
 // help.Styles using the project palette accessors. Same approach as
-// internal/ui/cmdbrowser so the docs TUI footer reads with the same
+// internal/core/ui/cmdbrowser so the docs TUI footer reads with the same
 // vocabulary as the commands TUI.
 func applyDocsHelpStyles(s *help.Styles) {
 	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorAccent()))

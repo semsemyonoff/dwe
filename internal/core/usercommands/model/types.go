@@ -39,7 +39,7 @@ const (
 	CommandTypeBuiltin CommandType = "builtin"
 	// CommandTypeDaemon is a declarative sugar type expanded at registry-load time
 	// into four virtual commands: <base>.start, <base>.logs, <base>.stop, <base>.restart.
-	// Daemon-typed commands are never executed directly — see internal/daemon/.
+	// Daemon-typed commands are never executed directly — see internal/shared/daemon/.
 	CommandTypeDaemon CommandType = "daemon"
 )
 

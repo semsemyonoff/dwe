@@ -2,10 +2,10 @@
 // command system: container-name resolution, standardised label construction,
 // and `docker ps --filter` argv builders.
 //
-// This package is consumed by `internal/builtin`, `internal/stack` (status),
-// `internal/validate/commands`, and `internal/command` (completion + inspect).
-// It deliberately has no dependencies on `internal/usercommands` or
-// `internal/config` so any caller can import it without dragging in the
+// This package is consumed by `internal/core/execution/builtin`, `internal/core/project/stack` (status),
+// `internal/core/validate/commands`, and `internal/cli` (completion + inspect).
+// It deliberately has no dependencies on `internal/core/usercommands` or
+// `internal/core/project/config` so any caller can import it without dragging in the
 // command/runtime trees.
 package daemon
 

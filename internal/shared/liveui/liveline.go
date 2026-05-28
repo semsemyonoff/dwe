@@ -175,7 +175,7 @@ func (l *LiveLine) tickLoop() {
 }
 
 // Tick drives one redraw frame deterministically. Test-only helper exported
-// so tests in other packages (e.g. internal/pipeline) can drive the LiveLine
+// so tests in other packages (e.g. internal/core/execution/pipeline) can drive the LiveLine
 // without leaking internals through reflection.
 func (l *LiveLine) Tick() { l.advance() }
 
