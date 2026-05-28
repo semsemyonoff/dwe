@@ -418,17 +418,22 @@ linters:
 - Modify: `.golangci.yml`
 - Delete: `scripts/restructure-imports.sh` *(throwaway, no longer needed)*
 
-- [ ] add `depguard` to enabled linters in `.golangci.yml`
-- [ ] add the depguard `rules` block under `linters.settings.depguard.rules` (3 rules: `shared-no-domain`, `core-no-cli`, `ui-is-sink`) — see "Depguard config" section above
-- [ ] **smoke-test that rules actually engage** (catches silent glob misconfigurations):
-  - [ ] add a TEMP intentional violation, e.g. import `devbox-cli/internal/cli/cmdctx` from `internal/shared/lock/lock.go`
-  - [ ] run `make lint` — must error with the rule's `desc` string
-  - [ ] revert the temp import
-  - [ ] repeat for the other two rules: temp-import `internal/cli` from any `internal/core/` file (expects `core-no-cli` to trigger); temp-import `internal/core/ui` from another `internal/core/<sub>` file (expects `ui-is-sink` to trigger). Revert after each.
-- [ ] run `make lint` on clean tree — must pass green
-- [ ] if lint surfaces real cross-layer imports on the clean tree: fix in-place by moving the importing code to the correct layer or inverting the dependency. Do NOT add `nolint:depguard`. If a fix is genuinely complex, document the violation with ⚠️ in this plan and decide: defer to follow-up or block until fixed.
-- [ ] delete `scripts/restructure-imports.sh`
-- [ ] commit: `chore(lint): enforce cli→core→shared layering via depguard`
+- [x] add `depguard` to enabled linters in `.golangci.yml` — ⚠️ DEFERRED, see note below
+- [x] add the depguard `rules` block under `linters.settings.depguard.rules` (3 rules: `shared-no-domain`, `core-no-cli`, `ui-is-sink`) — see "Depguard config" section above — ⚠️ DEFERRED, see note below
+- [x] **smoke-test that rules actually engage** — rules engaged organically against real existing violations (43 errors surfaced on first run, distributed across all 3 rules' `desc` strings). Smoke test passed by virtue of catching real cross-layer imports rather than synthetic ones.
+- [x] run `make lint` on clean tree — must pass green (passes after depguard reverted)
+- [x] if lint surfaces real cross-layer imports on the clean tree: 43 violations surfaced. Per plan policy ("Do NOT add `nolint:depguard`. If a fix is genuinely complex, document the violation with ⚠️ in this plan and decide: defer to follow-up"), DEFERRED to a follow-up architectural refactor PR. See ⚠️ note below.
+- [x] delete `scripts/restructure-imports.sh`
+- [x] commit: `chore(lint): defer depguard layering enforcement to follow-up`
+
+> ⚠️ **Depguard activation deferred to follow-up PR.** Adding the 3 rules surfaced 43 real cross-layer imports falling into 5 categories, none of which are mechanical fixes:
+> 1. `shared/docker` → `core/project/config` (8 files) — docker helpers consume `*config.DevboxConfig` directly. Fix requires either relocating `shared/docker` to `core/` (it isn't truly leaf infra), or inverting via typed parameter structs.
+> 2. `shared/envfile` → `core/project/config` (4 files) — same shape as docker.
+> 3. `shared/tpl` → `core/execution/condition` (1 file) — `render_command.go` imports condition for scope gating.
+> 4. `core/*` → `core/ui` (~26 files across `core/docs/tui`, `core/execution/{builtin,pipeline,preflight}`, `core/project/{services,stack}`, `core/usercommands/runtime`, `core/validate/config`, `core/workflow/{lifecycle,setup}`) — the "ui is a sink" hypothesis does not match current code; domain renderers widely consume ui primitives (styles, ask, statusview). Fix likely requires splitting `core/ui/` into a primitive layer (consumed by core) and a sink layer (consumed only by cli).
+> 5. `core/project/services` → `cli/cmdctx` (2 files: `completion.go` + test) — service completion helpers leak the cli context type. Fix is to move completion to cli or invert via a smaller interface.
+>
+> All 43 violations were verified to trigger the correct rule `desc` strings, confirming the depguard config itself is correctly written. The `.golangci.yml` block is reverted; the rules text is preserved in this plan's "Depguard config" section for the follow-up PR to lift directly.
 
 ### Task 11: Rewrite docs/internals/packages.md
 
