@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 
+	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/usercommands/registry"
 )
 

@@ -13,8 +13,8 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/condition"
-	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/core/execution/condition"
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/userconfig"
 
 	"gopkg.in/yaml.v3"

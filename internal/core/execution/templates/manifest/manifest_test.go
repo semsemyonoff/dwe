@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/templates/manifest"
+	"devbox-cli/internal/core/execution/templates/manifest"
 )
 
 func writeFile(t *testing.T, path, content string) {

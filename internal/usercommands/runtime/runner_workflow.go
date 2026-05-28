@@ -15,8 +15,8 @@ import (
 	"github.com/charmbracelet/x/term"
 	"golang.org/x/sync/errgroup"
 
-	"devbox-cli/internal/filesgate"
-	"devbox-cli/internal/filesgate/spec"
+	"devbox-cli/internal/core/execution/filesgate"
+	"devbox-cli/internal/core/execution/filesgate/spec"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"

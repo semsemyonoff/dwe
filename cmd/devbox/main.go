@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/pflag"
 
 	"devbox-cli/internal/command"
+	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
-	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/shared/prompt"
 	"devbox-cli/internal/shared/version"
 	"devbox-cli/internal/ui"

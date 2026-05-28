@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/usercommands/registry"
 )
 

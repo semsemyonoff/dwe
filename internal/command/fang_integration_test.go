@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"devbox-cli/internal/command"
-	pipeline "devbox-cli/internal/pipeline"
+	pipeline "devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/shared/version"
 )
 

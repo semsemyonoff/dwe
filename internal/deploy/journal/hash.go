@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"sort"
 
-	"devbox-cli/internal/condition"
+	"devbox-cli/internal/core/execution/condition"
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/filesgate"
 )
 
 // Hashes are computed from raw, untranslated fields; do not introduce locale-dependent

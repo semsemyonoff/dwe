@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/builtin"
+	"devbox-cli/internal/core/execution/builtin"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
 )

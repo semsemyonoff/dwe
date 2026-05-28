@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/filesgate"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

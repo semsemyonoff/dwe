@@ -3,8 +3,8 @@ package journal
 import (
 	"testing"
 
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/filesgate"
 
 	"github.com/stretchr/testify/assert"
 )

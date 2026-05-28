@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/condition"
+	"devbox-cli/internal/core/execution/condition"
 	"devbox-cli/internal/core/project/config"
 )
 

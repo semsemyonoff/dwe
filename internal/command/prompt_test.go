@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/pipeline"
+	"devbox-cli/internal/core/execution/pipeline"
 )
 
 func TestNewPromptCmd_UseAndFlags(t *testing.T) {

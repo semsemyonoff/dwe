@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/usercommands/model"
 )
 

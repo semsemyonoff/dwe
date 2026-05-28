@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
+	aipkg "devbox-cli/internal/core/execution/templates/ai"
 	"devbox-cli/internal/core/project/config"
-	aipkg "devbox-cli/internal/templates/ai"
 
 	yamlPkg "gopkg.in/yaml.v3"
 )

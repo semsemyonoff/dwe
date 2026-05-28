@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/templates/ide"
+	"devbox-cli/internal/core/execution/templates/manifest"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/pathsafe"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/templates/ide"
-	"devbox-cli/internal/templates/manifest"
 )
 
 // Minimal inline templates used by RenderTemplateFile unit tests.

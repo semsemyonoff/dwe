@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/validate"
 )

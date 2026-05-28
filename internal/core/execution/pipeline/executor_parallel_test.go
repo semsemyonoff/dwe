@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"devbox-cli/internal/condition"
+	"devbox-cli/internal/core/execution/condition"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy/journal"
 )

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
+	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy"
-	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/usercommands"
 )
 

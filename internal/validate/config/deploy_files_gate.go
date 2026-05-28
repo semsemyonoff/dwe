@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"devbox-cli/internal/core/execution/filesgate"
+	"devbox-cli/internal/core/execution/filesgate/spec"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/filesgate"
-	"devbox-cli/internal/filesgate/spec"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/validate"
 )

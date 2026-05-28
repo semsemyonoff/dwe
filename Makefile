@@ -30,7 +30,7 @@ test-v:
 	go test -v ./...
 
 test-race:
-	go test -race ./internal/deploy/journal ./internal/shared/lock ./internal/pipeline
+	go test -race ./internal/deploy/journal ./internal/shared/lock ./internal/core/execution/pipeline
 
 lint:
 	@which golangci-lint > /dev/null 2>&1 || \

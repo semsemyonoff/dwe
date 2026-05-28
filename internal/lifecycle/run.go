@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"devbox-cli/internal/core/execution/preflight"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
 	"devbox-cli/internal/notify"
-	"devbox-cli/internal/preflight"
 	"devbox-cli/internal/shared/envfile"
 	"devbox-cli/internal/shared/git"
 	"devbox-cli/internal/shared/i18n"

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/pipeline"
 )
 
 func TestRunPhases_HappyPath(t *testing.T) {

@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/builtin"
-	"devbox-cli/internal/condition"
+	"devbox-cli/internal/core/execution/builtin"
+	"devbox-cli/internal/core/execution/condition"
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/filesgate"
 )
 
 // ResolvedStep holds a pipeline step together with the phase it belongs to,

@@ -16,11 +16,11 @@ import (
 	"strings"
 	"text/template"
 
+	"devbox-cli/internal/core/execution/templates/manifest"
+	"devbox-cli/internal/core/execution/templates/packroot"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/pathsafe"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/templates/manifest"
-	"devbox-cli/internal/templates/packroot"
 )
 
 // SkippedService carries information about a service that was skipped during git rendering.

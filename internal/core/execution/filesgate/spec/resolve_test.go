@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"devbox-cli/internal/filesgate"
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/usercommands/model"
 )
 

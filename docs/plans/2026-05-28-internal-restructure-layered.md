@@ -293,19 +293,19 @@ linters:
 - Modify: all `.go` files importing these (mass sed)
 - Modify: `Makefile` line 33 — replace `./internal/pipeline` with `./internal/core/execution/pipeline`
 
-- [ ] `git mv internal/pipeline internal/core/execution/pipeline`
-- [ ] `git mv internal/condition internal/core/execution/condition`
-- [ ] `git mv internal/filesgate internal/core/execution/filesgate`
-- [ ] `git mv internal/builtin internal/core/execution/builtin`
-- [ ] `git mv internal/templates internal/core/execution/templates`
-- [ ] `git mv internal/preflight internal/core/execution/preflight`
-- [ ] update `Makefile` `test-race` — `./internal/pipeline` → `./internal/core/execution/pipeline`
-- [ ] sed import paths
-- [ ] `goimports -w .`
-- [ ] `go build ./...` — must pass
-- [ ] `make test` — must pass
-- [ ] `make test-race` — must pass (target now points at moved paths for lock+pipeline; deploy/journal still old until Task 5)
-- [ ] commit: `refactor(internal): cluster pipeline engine under core/execution/`
+- [x] `git mv internal/pipeline internal/core/execution/pipeline`
+- [x] `git mv internal/condition internal/core/execution/condition`
+- [x] `git mv internal/filesgate internal/core/execution/filesgate`
+- [x] `git mv internal/builtin internal/core/execution/builtin`
+- [x] `git mv internal/templates internal/core/execution/templates`
+- [x] `git mv internal/preflight internal/core/execution/preflight`
+- [x] update `Makefile` `test-race` — `./internal/pipeline` → `./internal/core/execution/pipeline`
+- [x] sed import paths
+- [x] `goimports -w .`
+- [x] `go build ./...` — must pass
+- [x] `make test` — must pass
+- [x] `make test-race` — must pass (target now points at moved paths for lock+pipeline; deploy/journal still old until Task 5)
+- [x] commit: `refactor(internal): cluster pipeline engine under core/execution/`
 
 ### Task 5: Move core/workflow cluster (incl. final test-race update)
 

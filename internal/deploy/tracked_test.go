@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/usercommands"
 
 	"github.com/stretchr/testify/assert"

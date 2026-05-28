@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"devbox-cli/internal/command/cmdctx"
+	gitpkg "devbox-cli/internal/core/execution/templates/git"
+	"devbox-cli/internal/core/execution/templates/manifest"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/shared/render"
-	gitpkg "devbox-cli/internal/templates/git"
-	"devbox-cli/internal/templates/manifest"
 
 	"github.com/spf13/cobra"
 )

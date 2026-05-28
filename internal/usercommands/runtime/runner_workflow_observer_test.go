@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/shared/tpl"
 	"devbox-cli/internal/usercommands/model"
 )

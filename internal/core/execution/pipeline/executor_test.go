@@ -12,11 +12,11 @@ import (
 	"sync"
 	"testing"
 
-	"devbox-cli/internal/builtin"
-	"devbox-cli/internal/condition"
+	"devbox-cli/internal/core/execution/builtin"
+	"devbox-cli/internal/core/execution/condition"
+	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy/journal"
-	"devbox-cli/internal/filesgate"
 	"devbox-cli/internal/usercommands"
 )
 

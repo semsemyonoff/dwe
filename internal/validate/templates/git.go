@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"devbox-cli/internal/core/execution/templates/git"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/templates/git"
 	"devbox-cli/internal/validate"
 )
 

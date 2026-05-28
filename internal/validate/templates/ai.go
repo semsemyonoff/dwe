@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"devbox-cli/internal/core/execution/templates/ai"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/templates/ai"
 	"devbox-cli/internal/validate"
 )
 

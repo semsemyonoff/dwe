@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/deploy"
-	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/usercommands"
 )
