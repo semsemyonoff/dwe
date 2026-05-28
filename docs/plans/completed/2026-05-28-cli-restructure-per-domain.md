@@ -510,8 +510,8 @@ Final tidy pass. After Tasks 1–10, root.go still has `addCmd` helper and 17 im
 
 ### Task 14: Final move-to-completed
 
-- [ ] `mv docs/plans/2026-05-28-cli-restructure-per-domain.md docs/plans/completed/`
-- [ ] Commit: `move completed plan: 2026-05-28-cli-restructure-per-domain.md`
+- [x] `mv docs/plans/2026-05-28-cli-restructure-per-domain.md docs/plans/completed/`
+- [x] Commit: `move completed plan: 2026-05-28-cli-restructure-per-domain.md`
 
 ## Post-Completion
 
