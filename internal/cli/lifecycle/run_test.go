@@ -1,4 +1,4 @@
-package cli
+package lifecycle
 
 import (
 	"os"
@@ -13,7 +13,7 @@ import (
 
 func TestRunCmd_Use(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newRunCmd(flags)
+	cmd := NewRunCmd(groupEnvironment, flags)
 	if cmd.Use != "run" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "run")
 	}
@@ -21,7 +21,7 @@ func TestRunCmd_Use(t *testing.T) {
 
 func TestRunCmd_NoArgs(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newRunCmd(flags)
+	cmd := NewRunCmd(groupEnvironment, flags)
 	if cmd.Args == nil {
 		t.Error("Args validator should be set (cobra.NoArgs)")
 	}
@@ -32,7 +32,7 @@ func TestRunCmd_NoArgs(t *testing.T) {
 
 func TestRunCmd_FlagsExist(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newRunCmd(flags)
+	cmd := NewRunCmd(groupEnvironment, flags)
 
 	if cmd.Flags().Lookup("no-update") == nil {
 		t.Error("missing --no-update flag")
@@ -46,7 +46,8 @@ func TestRunCmd_FlagsExist(t *testing.T) {
 }
 
 func TestRunCmd_RegisteredAtRoot(t *testing.T) {
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	found := false
 	for _, c := range root.Commands() {
 		if c.Name() == "run" {
@@ -60,7 +61,8 @@ func TestRunCmd_RegisteredAtRoot(t *testing.T) {
 }
 
 func TestRunCmd_InEnvironmentGroup(t *testing.T) {
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	for _, c := range root.Commands() {
 		if c.Name() == "run" {
 			if c.GroupID != groupEnvironment {
@@ -89,7 +91,8 @@ func TestRunRun_MissingLifecycleYML(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"run"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
@@ -117,7 +120,8 @@ func TestRunRun_MissingRunSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"run"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)

@@ -1,15 +1,15 @@
-package cli
+package lifecycle
 
 import (
-	"devbox-cli/internal/core/workflow/lifecycle"
-
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/cli/info"
+	lifecyclepkg "devbox-cli/internal/core/workflow/lifecycle"
 
 	"github.com/spf13/cobra"
 )
 
-func newRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewRunCmd builds the `devbox run` cobra command.
+func NewRunCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var noUpdate bool
 	var updateMode string
 	var yes bool
@@ -29,9 +29,10 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
   devbox run --no-update
   devbox run --update on`,
 		Args:         cobra.NoArgs,
+		GroupID:      groupID,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return lifecycle.RunRun(lifecycle.RunContext{
+			return lifecyclepkg.RunRun(lifecyclepkg.RunContext{
 				Ctx:           cmd.Context(),
 				ConfigPath:    flags.ConfigPath,
 				NoUpdate:      noUpdate,

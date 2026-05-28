@@ -1,4 +1,4 @@
-package cli
+package lifecycle
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 func TestStopCmd_Use(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newStopCmd(flags)
+	cmd := NewStopCmd(groupEnvironment, flags)
 	if cmd.Use != "stop [service]" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "stop [service]")
 	}
@@ -22,7 +22,7 @@ func TestStopCmd_Use(t *testing.T) {
 
 func TestStopCmd_MaximumOneArg(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newStopCmd(flags)
+	cmd := NewStopCmd(groupEnvironment, flags)
 
 	// Zero args allowed.
 	if err := cmd.Args(cmd, []string{}); err != nil {
@@ -40,7 +40,7 @@ func TestStopCmd_MaximumOneArg(t *testing.T) {
 
 func TestStopCmd_FlagsExist(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newStopCmd(flags)
+	cmd := NewStopCmd(groupEnvironment, flags)
 	if cmd.Flags().Lookup("yes") == nil {
 		t.Error("missing --yes flag")
 	}
@@ -50,7 +50,8 @@ func TestStopCmd_FlagsExist(t *testing.T) {
 }
 
 func TestStopCmd_RegisteredAtRoot(t *testing.T) {
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	for _, c := range root.Commands() {
 		if c.Name() == "stop" {
 			return
@@ -65,7 +66,8 @@ func TestRunStop_MissingLifecycleYML(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"stop"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
@@ -90,7 +92,8 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"stop"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
@@ -250,7 +253,7 @@ func TestStopCmd_OneArg_UnknownService(t *testing.T) {
 	stopContainerFn = func(_ context.Context, _, _ string, _ int) error { return nil }
 
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: filepath.Dir(cfgPath)}
-	cmd := newStopCmd(flags)
+	cmd := NewStopCmd(groupEnvironment, flags)
 	cmd.SilenceErrors = true
 	err := cmd.RunE(cmd, []string{"nonexistent"})
 	if !errors.Is(err, ErrUnknownService) {

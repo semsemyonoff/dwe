@@ -1,4 +1,4 @@
-package cli
+package lifecycle
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/workflow/lifecycle"
+	lifecyclepkg "devbox-cli/internal/core/workflow/lifecycle"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/lock"
@@ -81,7 +81,8 @@ func stopServiceLocked(ctx context.Context, deps StopServiceDeps, name string) e
 	return stopContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec)
 }
 
-func newStopCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewStopCmd builds the `devbox stop` cobra command.
+func NewStopCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var skipPreflight bool
 
@@ -99,11 +100,12 @@ Use 'devbox docker down' for a bare Docker Compose stop-and-remove without hooks
 Use 'devbox docker stop' for the low-level compose stop (no container removal).`,
 		Example:      `  devbox stop\n  devbox stop postgres`,
 		Args:         cobra.MaximumNArgs(1),
+		GroupID:      groupID,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				// Full-stack stop via lifecycle.
-				return lifecycle.RunStop(lifecycle.StopContext{
+				return lifecyclepkg.RunStop(lifecyclepkg.StopContext{
 					Ctx:           cmd.Context(),
 					ConfigPath:    flags.ConfigPath,
 					Yes:           yes,

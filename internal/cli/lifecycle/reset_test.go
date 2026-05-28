@@ -1,4 +1,4 @@
-package cli
+package lifecycle
 
 import (
 	"bytes"
@@ -304,7 +304,17 @@ func stubPreflightRun(t *testing.T) {
 // TestResetServiceRun_FlagsExist verifies --service, --yes, --skip-preflight flags exist on reset run.
 func TestResetServiceRun_FlagsExist(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newResetRunCmd(flags)
+	resetCmd := NewResetCmd(groupPipelines, flags)
+	var cmd *cobra.Command
+	for _, sub := range resetCmd.Commands() {
+		if sub.Name() == "run" {
+			cmd = sub
+			break
+		}
+	}
+	if cmd == nil {
+		t.Fatal("reset run subcommand missing")
+	}
 	if cmd.Flags().Lookup("service") == nil {
 		t.Error("missing --service flag on reset run")
 	}
@@ -329,7 +339,8 @@ func TestResetServiceRun_UnknownService(t *testing.T) {
 	}
 	stubPreflightRun(t)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +368,8 @@ func TestResetServiceRun_NoDeployFile(t *testing.T) {
 		return nil
 	}
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +413,8 @@ func TestResetServiceRun_NoResetYML(t *testing.T) {
 	}
 	stubPreflightRun(t)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +456,8 @@ func TestResetServiceRun_WithResetYML(t *testing.T) {
 	stopContainerFn = func(_ context.Context, _, _ string, _ int) error { return nil }
 	stubPreflightRun(t)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +489,8 @@ func TestResetServiceRun_DisabledServiceStop(t *testing.T) {
 	}
 	stubPreflightRun(t)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +558,8 @@ on_disable:
 	stopContainerFn = func(_ context.Context, _, _ string, _ int) error { return nil }
 	stubPreflightRun(t)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -603,7 +619,8 @@ on_disable:
 	stopContainerFn = func(_ context.Context, _, _ string, _ int) error { return nil }
 	stubPreflightRun(t)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -634,7 +651,8 @@ func TestResetServiceRun_TTYConfirmationDecline(t *testing.T) {
 	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -665,7 +683,8 @@ func TestResetServiceRun_TTYConfirmationAccept(t *testing.T) {
 	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}
@@ -690,7 +709,8 @@ func TestResetServiceRun_MandatoryService(t *testing.T) {
 	stubPreflightRun(t)
 
 	var out bytes.Buffer
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatal(err)
 	}

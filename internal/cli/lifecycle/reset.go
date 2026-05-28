@@ -1,4 +1,4 @@
-package cli
+package lifecycle
 
 import (
 	"bufio"
@@ -36,11 +36,13 @@ var resetServiceRunHook = runtime.RunCommand
 // to intercept hook calls before any registry lookup.
 var resetRunHookFn = runResetHook
 
-func newResetCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewResetCmd builds the `devbox reset` cobra command group.
+func NewResetCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "reset",
 		Short:        "Reset pipeline commands",
 		Long:         `Commands for running the declarative reset pipeline (devbox/reset.yml).`,
+		GroupID:      groupID,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newResetPlanCmd(flags))

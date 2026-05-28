@@ -447,15 +447,21 @@ Four top-level commands (run/stop/restart/reset) + the `preflightRun` test-seam 
 - Delete: `internal/cli/run.go`, `internal/cli/run_test.go`, `internal/cli/stop.go`, `internal/cli/stop_test.go`, `internal/cli/restart.go`, `internal/cli/restart_test.go`, `internal/cli/reset.go`, `internal/cli/reset_test.go`, `internal/cli/preflight.go`
 - Modify: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/run.go internal/cli/lifecycle/run.go` (and test); same for stop, restart, reset
-- [ ] `git mv internal/cli/preflight.go internal/cli/lifecycle/lifecycle.go` (the 9-line file becomes the shared `lifecycle.go` carrier; rename inside if needed)
-- [ ] Change `package cli` → `package lifecycle` across all 9 files
-- [ ] In `lifecycle.go`, keep `var preflightRun = preflight.Run` as a package-level test seam. **Note**: only `reset.go` calls `preflightRun(...)`; `stop.go` calls `preflight.Run(...)` directly and `run.go`/`restart.go` route through `deploy.RunHelper`. This refactor preserves the existing asymmetry — do NOT redirect stop/run/restart through the seam in this PR.
-- [ ] Rename `newRunCmd(flags)` → `NewRunCmd(groupID, flags)`; same for stop/restart/reset
-- [ ] Update `internal/cli/root.go`: four `addCmd(...)` calls become four `root.AddCommand(lifecycle.NewXxxCmd(group, flags))` calls (run/restart in groupEnvironment, stop in groupEnvironment, reset in groupPipelines)
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 11
-- [ ] Commit: `refactor(cli): extract lifecycle subpackage (run/stop/restart/reset)`
+- [x] `git mv internal/cli/run.go internal/cli/lifecycle/run.go` (and test); same for stop, restart, reset
+- [x] `git mv internal/cli/preflight.go internal/cli/lifecycle/lifecycle.go` (the 9-line file becomes the shared `lifecycle.go` carrier; rename inside if needed)
+- [x] Change `package cli` → `package lifecycle` across all 9 files
+- [x] In `lifecycle.go`, keep `var preflightRun = preflight.Run` as a package-level test seam. **Note**: only `reset.go` calls `preflightRun(...)`; `stop.go` calls `preflight.Run(...)` directly and `run.go`/`restart.go` route through `deploy.RunHelper`. This refactor preserves the existing asymmetry — do NOT redirect stop/run/restart through the seam in this PR.
+- [x] Rename `newRunCmd(flags)` → `NewRunCmd(groupID, flags)`; same for stop/restart/reset
+- [x] Update `internal/cli/root.go`: four `addCmd(...)` calls become four `root.AddCommand(lifecycle.NewXxxCmd(group, flags))` calls (run/restart in groupEnvironment, stop in groupEnvironment, reset in groupPipelines)
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — must pass before Task 11
+- [x] Commit: `refactor(cli): extract lifecycle subpackage (run/stop/restart/reset)`
+
+**Notes:**
+- Imported in `root.go` as `cmdLifecycle "devbox-cli/internal/cli/lifecycle"` to follow the established alias convention.
+- The `internal/core/workflow/lifecycle` import collides with the new package name `lifecycle`. Aliased as `lifecyclepkg` in `run.go`, `restart.go`, and `stop.go` (same convention as `userpkg`/`localpkg`/`versioninfo`/`promptpkg`/`snapshotpkg` used in earlier tasks).
+- `run_test.go` / `stop_test.go` / `restart_test.go` / `reset_test.go` previously called `cli.NewRootCmd()` to drive subcommands through the cli root. The new `package lifecycle` cannot import `internal/cli` (would form a cycle since `cli/root.go` now imports `cli/lifecycle`). Added a `buildLifecycleTestRoot(flags)` helper in `internal/cli/lifecycle/testhelpers_test.go` that constructs a minimal `&cobra.Command{Use: "devbox"}` with the `-c/--config` persistent flag, registers the `environment` and `pipelines` cobra groups, and attaches all four lifecycle subcommands. The helper also declares local `groupEnvironment` / `groupPipelines` constants so the existing `c.GroupID != groupEnvironment` assertions work unchanged.
+- `TestResetServiceRun_FlagsExist` previously called the unexported `newResetRunCmd(flags)`. Replaced with a `NewResetCmd(groupPipelines, flags)` walk of `Commands()` to find the `run` subcommand — same coverage without exposing the package-private builder.
 
 ### Task 11: Cleanup — root.go shrinkage + existing-subpackage renames + dead file removal
 

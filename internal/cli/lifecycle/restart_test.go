@@ -1,4 +1,4 @@
-package cli
+package lifecycle
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 
 func TestRestartCmd_Use(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newRestartCmd(flags)
+	cmd := NewRestartCmd(groupEnvironment, flags)
 	if cmd.Use != "restart" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "restart")
 	}
@@ -19,7 +19,7 @@ func TestRestartCmd_Use(t *testing.T) {
 
 func TestRestartCmd_NoArgs(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newRestartCmd(flags)
+	cmd := NewRestartCmd(groupEnvironment, flags)
 	if cmd.Args == nil {
 		t.Error("Args validator should be set (cobra.NoArgs)")
 	}
@@ -30,14 +30,15 @@ func TestRestartCmd_NoArgs(t *testing.T) {
 
 func TestRestartCmd_FlagsExist(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	cmd := newRestartCmd(flags)
+	cmd := NewRestartCmd(groupEnvironment, flags)
 	if cmd.Flags().Lookup("yes") == nil {
 		t.Error("missing --yes flag")
 	}
 }
 
 func TestRestartCmd_RegisteredAtRoot(t *testing.T) {
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	for _, c := range root.Commands() {
 		if c.Name() == "restart" {
 			return
@@ -50,7 +51,8 @@ func TestRunRestart_MissingLifecycleYML(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"restart"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
@@ -80,7 +82,8 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"restart"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
@@ -104,7 +107,8 @@ func TestRunRestart_MissingRunSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
-	root := NewRootCmd()
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"restart"})
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)

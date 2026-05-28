@@ -18,6 +18,7 @@ import (
 	cmdDocker "devbox-cli/internal/cli/docker"
 	cmdDocs "devbox-cli/internal/cli/docs"
 	cmdInfo "devbox-cli/internal/cli/info"
+	cmdLifecycle "devbox-cli/internal/cli/lifecycle"
 	cmdPrompt "devbox-cli/internal/cli/prompt"
 	cmdRender "devbox-cli/internal/cli/render"
 	cmdService "devbox-cli/internal/cli/service"
@@ -72,9 +73,9 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(cmdVersion.NewCmd(groupCore))
 
 	// Environment group: lifecycle and shell access.
-	addCmd(root, groupEnvironment, newRunCmd(flags))
-	addCmd(root, groupEnvironment, newStopCmd(flags))
-	addCmd(root, groupEnvironment, newRestartCmd(flags))
+	root.AddCommand(cmdLifecycle.NewRunCmd(groupEnvironment, flags))
+	root.AddCommand(cmdLifecycle.NewStopCmd(groupEnvironment, flags))
+	root.AddCommand(cmdLifecycle.NewRestartCmd(groupEnvironment, flags))
 	root.AddCommand(cmdShell.NewCmd(groupEnvironment, flags))
 	root.AddCommand(cmdStatus.NewCmd(groupEnvironment, flags))
 	root.AddCommand(cmdPrompt.NewCmd(groupEnvironment, flags))
@@ -86,7 +87,7 @@ func NewRootCmd() *cobra.Command {
 
 	// Pipelines group: deploy, reset, snapshot.
 	root.AddCommand(cmdDeploy.NewCmd(groupPipelines, flags))
-	addCmd(root, groupPipelines, newResetCmd(flags))
+	root.AddCommand(cmdLifecycle.NewResetCmd(groupPipelines, flags))
 	root.AddCommand(cmdSnapshot.NewCmd(groupPipelines, flags))
 
 	// Advanced group: low-level and diagnostic commands.
