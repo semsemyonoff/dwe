@@ -440,13 +440,13 @@ linters:
 **Files:**
 - Modify: `docs/internals/packages.md`
 
-- [ ] rewrite top-level grouping section: replace alphabetical/flat layout description with 3-layer structure (`cli/`, `core/{project,execution,workflow,...}`, `shared/`)
-- [ ] under each layer section, list packages with their new paths
-- [ ] add new "Dependency Rules" section documenting the depguard contract (3 rules + soft intra-core ordering)
-- [ ] `make build` — must succeed (regenerates `internal/core/docs/embedded/internals/packages.md`; content hash also updates)
-- [ ] verify the regenerated embedded copy is up-to-date: `git diff --exit-code internal/core/docs/embedded/ internal/core/docs/content_hashes_gen.go` (should show no uncommitted changes)
-- [ ] `make test` — must pass
-- [ ] commit: `docs(internals): rewrite packages.md under new layered structure`
+- [x] rewrite top-level grouping section: replace alphabetical/flat layout description with 3-layer structure (`cli/`, `core/{project,execution,workflow,...}`, `shared/`)
+- [x] under each layer section, list packages with their new paths
+- [x] add new "Dependency Rules" section documenting the depguard contract (3 rules + soft intra-core ordering)
+- [x] `make build` — must succeed (regenerates `internal/core/docs/embedded/internals/packages.md`; content hash also updates)
+- [x] verify the regenerated embedded copy is up-to-date: post-commit `make build` shows no further diff (intra-task `git diff` is expected to show the regeneration that will be included in the commit)
+- [x] `make test` — must pass
+- [x] commit: `docs(internals): rewrite packages.md under new layered structure`
 
 ### Task 12: Update AGENTS.md + cleanup stale path comments
 
