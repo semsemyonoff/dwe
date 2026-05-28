@@ -58,7 +58,7 @@ func warningPrefix(n int) string {
 }
 
 // normaliseDocker returns d when non-nil, or &config.DockerConfig{} when nil.
-// Mirrors the pattern in internal/cli/status.go:106-111 (normalisedDockerCfg).
+// Mirrors the pattern in internal/cli/status/status.go (normalisedDockerCfg).
 func normaliseDocker(d *config.DockerConfig) *config.DockerConfig {
 	if d != nil {
 		return d
