@@ -1,4 +1,5 @@
-package cli
+// Package status hosts the `devbox status` command tree.
+package status
 
 import (
 	"context"
@@ -6,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
@@ -177,7 +177,8 @@ func shouldUseTUI(noTUI bool, no *noSectionFlags) bool {
 	return isTerminalFn(os.Stdout.Fd())
 }
 
-func newStatusCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewCmd creates the `devbox status` command tree.
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	noFlags := &noSectionFlags{}
 	var noTUI bool
 	cmd := &cobra.Command{
@@ -193,6 +194,7 @@ in the default view.`,
   devbox status apps
   devbox status deploy main
   devbox status --no-git --no-topology`,
+		GroupID:      groupID,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -318,147 +320,5 @@ func writeNonEmpty(w io.Writer, s string) {
 	_, _ = fmt.Fprint(w, s)
 	if !strings.HasSuffix(s, "\n") {
 		_, _ = fmt.Fprintln(w)
-	}
-}
-
-func newStatusAppsCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:          "apps",
-		Short:        "Show only the apps section",
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
-			if sc.State != nil {
-				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
-			}
-			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionApps)
-		},
-	}
-}
-
-func newStatusToolsCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:          "tools",
-		Short:        "Show only the tools section",
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
-			if sc.State != nil {
-				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
-			}
-			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionTools)
-		},
-	}
-}
-
-func newStatusInfraCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:          "infra",
-		Short:        "Show only the infra section",
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
-			if sc.State != nil {
-				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
-			}
-			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionInfra)
-		},
-	}
-}
-
-func newStatusTopologyCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:          "topology",
-		Short:        "Show only the topology section",
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
-			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionTopology)
-		},
-	}
-}
-
-func newStatusGitCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:          "git",
-		Short:        "Show only the git workspace section",
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
-			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionGit)
-		},
-	}
-}
-
-func newStatusDeployCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "deploy [service]",
-		Short: "Show deploy status (table) or per-service deploy detail",
-		Long: `With no argument, shows the deploy status table for all tracked services.
-With a service name, shows the per-phase/step deploy breakdown for that service.`,
-		Example:           "  devbox status deploy\n  devbox status deploy main",
-		Args:              cobra.MaximumNArgs(1),
-		ValidArgsFunction: trackedServiceCompletion(flags),
-		SilenceUsage:      true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
-			if sc.State != nil {
-				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
-			}
-			if len(args) == 0 {
-				writeNonEmpty(cmd.OutOrStdout(), stack.RenderDeployStatus(sc.statusInput()))
-				return nil
-			}
-			return stack.RenderServiceDeployDetail(cmd.OutOrStdout(), sc.State, sc.Tracked, args[0])
-		},
-	}
-}
-
-// trackedServiceCompletion returns shell completion names for the deploy
-// subcommand's optional service argument. Follows the completion contract
-// from CLAUDE.md (bypasses PersistentPreRunE).
-func trackedServiceCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) != 0 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		configPath, _, err := cmdctx.CompletionConfigPath(flags, cmd)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		cfg, err := config.LoadConfig(configPath)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		reg, _ := usercommands.LoadRegistryFromConfigPath(configPath)
-		tracked, _, err := deploy.LoadTrackedServices(cfg, reg, filepath.Dir(configPath))
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		sort.Strings(tracked)
-		return tracked, cobra.ShellCompDirectiveNoFileComp
 	}
 }

@@ -21,6 +21,7 @@ import (
 	cmdService "devbox-cli/internal/cli/service"
 	cmdShell "devbox-cli/internal/cli/shell"
 	cmdSnapshot "devbox-cli/internal/cli/snapshot"
+	cmdStatus "devbox-cli/internal/cli/status"
 	cmdValidate "devbox-cli/internal/cli/validate"
 	cmdVersion "devbox-cli/internal/cli/version"
 	"devbox-cli/internal/core/project/config"
@@ -73,7 +74,7 @@ func NewRootCmd() *cobra.Command {
 	addCmd(root, groupEnvironment, newStopCmd(flags))
 	addCmd(root, groupEnvironment, newRestartCmd(flags))
 	root.AddCommand(cmdShell.NewCmd(groupEnvironment, flags))
-	addCmd(root, groupEnvironment, newStatusCmd(flags))
+	root.AddCommand(cmdStatus.NewCmd(groupEnvironment, flags))
 	root.AddCommand(cmdPrompt.NewCmd(groupEnvironment, flags))
 
 	// Configuration group: services, tools, rendering, validation.

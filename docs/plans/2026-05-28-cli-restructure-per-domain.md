@@ -354,24 +354,29 @@ Split monolithic `status.go` (464 LoC) into one file per subcommand.
 - Delete: `internal/cli/status.go`, `internal/cli/status_daemons.go`, `internal/cli/status_test.go`, `internal/cli/status_extra_test.go`
 - Modify: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/status.go internal/cli/status/status.go`
-- [ ] `git mv internal/cli/status_daemons.go internal/cli/status/daemons.go`
-- [ ] `git mv internal/cli/status_test.go internal/cli/status/status_test.go`
-- [ ] `git mv internal/cli/status_extra_test.go internal/cli/status/status_extra_test.go`
-- [ ] Change `package cli` → `package status` in all moved files
-- [ ] Use Read/Write to split `status.go` into:
-  - `status.go`: `NewCmd(groupID, flags)` (was `newStatusCmd`), `statusContext` type, `loadStatusContext`, `(*statusContext).normalisedDockerCfg`, `(*statusContext).statusInput`, `section` enum + `defaultSectionOrder`, `noSectionFlags` type, `shouldUseTUI`, `renderDefaultStatus`, `renderSection`, `writeNonEmpty`, `trackedServiceCompletion`, test seams (`isTerminalFn`, `runStatusTUIFn`)
+- [x] `git mv internal/cli/status.go internal/cli/status/status.go`
+- [x] `git mv internal/cli/status_daemons.go internal/cli/status/daemons.go`
+- [x] `git mv internal/cli/status_test.go internal/cli/status/status_test.go`
+- [x] `git mv internal/cli/status_extra_test.go internal/cli/status/status_extra_test.go`
+- [x] Change `package cli` → `package status` in all moved files
+- [x] Use Read/Write to split `status.go` into:
+  - `status.go`: `NewCmd(groupID, flags)` (was `newStatusCmd`), `statusContext` type, `loadStatusContext`, `(*statusContext).normalisedDockerCfg`, `(*statusContext).statusInput`, `section` enum + `defaultSectionOrder`, `noSectionFlags` type, `shouldUseTUI`, `renderDefaultStatus`, `renderSection`, `writeNonEmpty`, test seams (`isTerminalFn`, `runStatusTUIFn`)
   - `apps.go`: `newStatusAppsCmd`
   - `tools.go`: `newStatusToolsCmd`
   - `infra.go`: `newStatusInfraCmd`
   - `topology.go`: `newStatusTopologyCmd`
   - `git.go`: `newStatusGitCmd`
-  - `deploy.go`: `newStatusDeployCmd`
-- [ ] Rename `newStatusCmd(flags)` → `NewCmd(groupID, flags)`
-- [ ] Update `internal/cli/root.go`: `addCmd(root, groupEnvironment, newStatusCmd(flags))` → `root.AddCommand(status.NewCmd(groupEnvironment, flags))`
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 8
-- [ ] Commit: `refactor(cli): extract status subpackage with per-subcommand file split`
+  - `deploy.go`: `newStatusDeployCmd` + `trackedServiceCompletion` (moved here since it is the sole consumer)
+- [x] Rename `newStatusCmd(flags)` → `NewCmd(groupID, flags)`
+- [x] Update `internal/cli/root.go`: `addCmd(root, groupEnvironment, newStatusCmd(flags))` → `root.AddCommand(status.NewCmd(groupEnvironment, flags))` (imported as `cmdStatus`)
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — must pass before Task 8
+- [x] Commit: `refactor(cli): extract status subpackage with per-subcommand file split`
+
+**Notes:**
+- `trackedServiceCompletion` moved from `status.go` into `deploy.go` since the deploy subcommand is its only caller; this keeps `status.go` free of the `sort`/`config`/`usercommands`/`deploy` imports that the completion helper requires.
+- `TestStatusCmd_*` tests previously called `cli.NewRootCmd()` to drive subcommands through the cli root. The new `package status` would need to import `internal/cli` to do that, forming a cycle. Replaced with a `buildStatusTestRoot()` helper that constructs a minimal `&cobra.Command{Use: "devbox"}` with the `-c/--config` persistent flag, registers the `environment` cobra group, and attaches `status.NewCmd("environment", flags)`. Same observable behaviour for status-level integration tests; `RootFlags.ProjectRoot()` falls back to `filepath.Dir(ConfigPath)` so `PersistentPreRunE` is not needed.
+- `TestStatusCmd_ToolsRootCmdRemoved` continues to pass: the minimal test root only registers the status subcommand, so `devbox tools` is still "unknown command".
 
 ### Task 8: `cli/command/`
 

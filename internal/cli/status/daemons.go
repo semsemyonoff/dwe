@@ -1,4 +1,4 @@
-package cli
+package status
 
 import (
 	"devbox-cli/internal/cli/cmdctx"

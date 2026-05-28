@@ -1,4 +1,4 @@
-package cli
+package status
 
 import (
 	"bytes"
@@ -8,9 +8,26 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/ui/statustui"
 	"devbox-cli/internal/core/workflow/deploy/journal"
+
+	"github.com/spf13/cobra"
 )
+
+// buildStatusTestRoot constructs a minimal cobra root carrying the persistent
+// `-c/--config` flag plus the status subcommand. Replaces cli.NewRootCmd() in
+// tests so this package does not import its parent (which would form a cycle).
+// flags.ConfigPath is the binding target for `-c`, and ProjectRoot falls back
+// to filepath.Dir(ConfigPath) — same observable behaviour as the cli root.
+func buildStatusTestRoot() *cobra.Command {
+	flags := &cmdctx.RootFlags{}
+	root := &cobra.Command{Use: "devbox", SilenceUsage: true}
+	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
+	root.AddGroup(&cobra.Group{ID: "environment", Title: "Environment Commands:"})
+	root.AddCommand(NewCmd("environment", flags))
+	return root
+}
 
 // statusFixture creates a minimal devbox project on disk for end-to-end
 // status command tests and returns the devbox.yml path.
@@ -146,7 +163,7 @@ func statusFixtureWithDeploy(t *testing.T) string {
 
 func TestStatusCmd_DefaultPrintsHealthAndSections(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -164,7 +181,7 @@ func TestStatusCmd_DefaultPrintsHealthAndSections(t *testing.T) {
 
 func TestStatusCmd_NoAppsFlagSuppressesSection(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -198,7 +215,7 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.flag, func(t *testing.T) {
 			configPath := tt.fixtureOn(t)
-			root := NewRootCmd()
+			root := buildStatusTestRoot()
 			var buf bytes.Buffer
 			root.SetOut(&buf)
 			root.SetErr(&buf)
@@ -219,7 +236,7 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 
 func TestStatusCmd_AppsSubcommandRendersOnlyApps(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -238,7 +255,7 @@ func TestStatusCmd_AppsSubcommandRendersOnlyApps(t *testing.T) {
 
 func TestStatusCmd_ToolsSubcommandRendersOnlyTools(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -260,7 +277,7 @@ func TestStatusCmd_ToolsSubcommandRendersOnlyTools(t *testing.T) {
 
 func TestStatusCmd_InfraSubcommandRendersOnlyInfra(t *testing.T) {
 	configPath := statusFixtureWithInfra(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -281,7 +298,7 @@ func TestStatusCmd_InfraSubcommandRendersOnlyInfra(t *testing.T) {
 // `devbox tools` should error as unknown after the unification.
 func TestStatusCmd_ToolsRootCmdRemoved(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -293,7 +310,7 @@ func TestStatusCmd_ToolsRootCmdRemoved(t *testing.T) {
 
 func TestStatusCmd_DaemonsSubcommandRuns(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -325,7 +342,7 @@ func TestStatusCmd_DefaultOrderAppsToolsInfra(t *testing.T) {
 
 func TestStatusDeployCmd_UnknownService_Errors(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -341,7 +358,7 @@ func TestStatusDeployCmd_UnknownService_Errors(t *testing.T) {
 
 func TestStatusCmd_RejectsPositionalArg_E2E(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -354,7 +371,7 @@ func TestStatusCmd_RejectsPositionalArg_E2E(t *testing.T) {
 
 func TestStatusDeployCmd_NoArgs_RunsWithoutError(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -366,7 +383,7 @@ func TestStatusDeployCmd_NoArgs_RunsWithoutError(t *testing.T) {
 
 func TestStatusDeployCmd_TwoArgs_Rejected(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -378,7 +395,7 @@ func TestStatusDeployCmd_TwoArgs_Rejected(t *testing.T) {
 
 func TestStatusCmd_TopologySubcommandRuns(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -393,7 +410,7 @@ func TestStatusCmd_TopologySubcommandRuns(t *testing.T) {
 
 func TestStatusCmd_GitSubcommandRuns(t *testing.T) {
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -433,7 +450,7 @@ func statusFixtureWithPending(t *testing.T) string {
 
 func TestStatusCmd_ShowsPendingBanner_DefaultView(t *testing.T) {
 	configPath := statusFixtureWithPending(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -455,7 +472,7 @@ func TestStatusCmd_ShowsPendingBanner_DefaultView(t *testing.T) {
 
 func TestStatusCmd_ShowsPendingBanner_AppsSubcommand(t *testing.T) {
 	configPath := statusFixtureWithPending(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -471,7 +488,7 @@ func TestStatusCmd_ShowsPendingBanner_AppsSubcommand(t *testing.T) {
 
 func TestStatusCmd_ShowsPendingBanner_DeploySubcommand(t *testing.T) {
 	configPath := statusFixtureWithPending(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -488,7 +505,7 @@ func TestStatusCmd_ShowsPendingBanner_DeploySubcommand(t *testing.T) {
 func TestStatusCmd_NoBanner_WhenNoPending(t *testing.T) {
 	// statusFixture has no pending entries in the state file (no state file at all)
 	configPath := statusFixture(t)
-	root := NewRootCmd()
+	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
@@ -580,7 +597,7 @@ func TestStatusSubcommands_NeverInvokeTUI(t *testing.T) {
 				t.Fatalf("failed to set TERM: %v", err)
 			}
 
-			root := NewRootCmd()
+			root := buildStatusTestRoot()
 			var buf bytes.Buffer
 			root.SetOut(&buf)
 			root.SetErr(&buf)
