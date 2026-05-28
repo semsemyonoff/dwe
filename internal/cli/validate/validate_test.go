@@ -1,4 +1,4 @@
-package cli
+package validate
 
 import (
 	"bytes"
@@ -57,7 +57,7 @@ func TestValidateDispatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Verify that the command tree structure is correct.
-			root := newValidateCmd("", &cmdctx.RootFlags{})
+			root := NewCmd("", &cmdctx.RootFlags{})
 			require.NotNil(t, root)
 
 			// Check subcommands exist.
@@ -72,7 +72,7 @@ func TestValidateDispatch(t *testing.T) {
 
 func TestValidateCommandTree(t *testing.T) {
 	// Verify the command tree structure.
-	cmd := newValidateCmd("", &cmdctx.RootFlags{})
+	cmd := NewCmd("", &cmdctx.RootFlags{})
 	require.NotNil(t, cmd)
 
 	// Check root command properties.
@@ -110,7 +110,7 @@ func TestValidateCommandTree(t *testing.T) {
 
 func TestValidateFlags(t *testing.T) {
 	// Verify that --strict and --quiet flags are defined and inherited.
-	cmd := newValidateCmd("", &cmdctx.RootFlags{})
+	cmd := NewCmd("", &cmdctx.RootFlags{})
 
 	// Set flags on a subcommand.
 	cmd.SetArgs([]string{"--strict", "--quiet", "config"})
@@ -127,7 +127,7 @@ func TestValidateFlags(t *testing.T) {
 
 func TestValidateNoArgs(t *testing.T) {
 	// Leaf commands should reject positional arguments.
-	cmd := newValidateCmd("", &cmdctx.RootFlags{})
+	cmd := NewCmd("", &cmdctx.RootFlags{})
 
 	// Find a leaf command (e.g., config/deploy).
 	deployCmd, _, _ := cmd.Find([]string{"config", "deploy"})
@@ -147,7 +147,7 @@ func TestValidateUsesLoadForValidate(t *testing.T) {
 	require.NoError(t, err)
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -162,14 +162,14 @@ func TestValidateUsesLoadForValidate(t *testing.T) {
 }
 
 func TestValidateStageFlag(t *testing.T) {
-	cmd := newValidateCmd("", &cmdctx.RootFlags{})
+	cmd := NewCmd("", &cmdctx.RootFlags{})
 	stageFlag := cmd.PersistentFlags().Lookup("stage")
 	require.NotNil(t, stageFlag)
 	require.Equal(t, "", stageFlag.DefValue)
 }
 
 func TestValidateEnvAndChecksSubcommands(t *testing.T) {
-	cmd := newValidateCmd("", &cmdctx.RootFlags{})
+	cmd := NewCmd("", &cmdctx.RootFlags{})
 
 	envCmd, _, _ := cmd.Find([]string{"env"})
 	require.NotNil(t, envCmd)
@@ -196,7 +196,7 @@ func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -225,7 +225,7 @@ func TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -253,7 +253,7 @@ func TestValidateChecksScopedByIDMalformedValidateYmlSurfacesDiagnostic(t *testi
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -275,7 +275,7 @@ func TestValidateMissingValidateYmlIsSilent(t *testing.T) {
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -303,7 +303,7 @@ func TestValidateEnvScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -349,7 +349,7 @@ func TestValidateExitCodeInterface(t *testing.T) {
 // TestValidateLintersSubcommand verifies the `linters [id]` subcommand is wired
 // up and accepts an optional positional ID argument.
 func TestValidateLintersSubcommand(t *testing.T) {
-	cmd := newValidateCmd("", &cmdctx.RootFlags{})
+	cmd := NewCmd("", &cmdctx.RootFlags{})
 	lintersCmd, _, _ := cmd.Find([]string{"linters"})
 	require.NotNil(t, lintersCmd)
 	require.Equal(t, "linters", lintersCmd.Name())
@@ -366,7 +366,7 @@ func TestValidateLintersRunsLintersDomainOnly(t *testing.T) {
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
@@ -393,7 +393,7 @@ func TestValidateLintersScopedByIDFiltersToOne(t *testing.T) {
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
@@ -414,7 +414,7 @@ func TestValidateLintersUnknownIDIsNotHardError(t *testing.T) {
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
@@ -439,7 +439,7 @@ func TestValidateLintersStrictUpgradesWarningToError(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox", "validate.yml"), []byte(yml), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
@@ -470,7 +470,7 @@ func TestValidateLintersScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -485,7 +485,7 @@ func TestValidateLintersScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.
 
 // TestValidateSnapshotSubcommand registers and the basic scopes resolve.
 func TestValidateSnapshotSubcommand(t *testing.T) {
-	cmd := newValidateCmd("", &cmdctx.RootFlags{})
+	cmd := NewCmd("", &cmdctx.RootFlags{})
 	snapCmd, _, _ := cmd.Find([]string{"snapshot"})
 	require.NotNil(t, snapCmd)
 	require.Equal(t, "snapshot", snapCmd.Name())
@@ -506,7 +506,7 @@ func TestValidateSnapshotRunsAndSurfacesPerSnapshotDiagnostics(t *testing.T) {
 	require.NoError(t, os.MkdirAll(brokenDir, 0o755))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -529,7 +529,7 @@ func TestValidateSnapshotScopedByName(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "snapshots", "beta"), 0o755))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
@@ -561,7 +561,7 @@ func TestValidateSnapshotVerifyFlag(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
 
 	// Without --verify: snap1.checksums must not appear.
-	cmd := newValidateCmd("", flags)
+	cmd := NewCmd("", flags)
 	var out1 bytes.Buffer
 	cmd.SetOut(&out1)
 	cmd.SetErr(&out1)

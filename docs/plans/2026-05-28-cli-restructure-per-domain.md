@@ -241,13 +241,13 @@ Single-file subtree; isolated dependencies.
 - Delete: `internal/cli/validate.go`, `internal/cli/validate_test.go`
 - Modify: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/validate.go internal/cli/validate/validate.go` and `git mv internal/cli/validate_test.go internal/cli/validate/validate_test.go`
-- [ ] Change `package cli` → `package validate`; rename `newValidateCmd(groupID, flags)` → `NewCmd(groupID, flags)` (signature already matches)
-- [ ] Update test file imports; if tests reference unexported helpers from other cli files (e.g. `loadForValidate`), surface findings as ⚠️
-- [ ] Update `internal/cli/root.go`: replace `root.AddCommand(newValidateCmd(groupConfiguration, flags))` → `root.AddCommand(validate.NewCmd(groupConfiguration, flags))`
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 3
-- [ ] Commit: `refactor(cli): extract validate subpackage`
+- [x] `git mv internal/cli/validate.go internal/cli/validate/validate.go` and `git mv internal/cli/validate_test.go internal/cli/validate/validate_test.go`
+- [x] Change `package cli` → `package validate`; rename `newValidateCmd(groupID, flags)` → `NewCmd(groupID, flags)` (signature already matches)
+- [x] Update test file imports; if tests reference unexported helpers from other cli files (e.g. `loadForValidate`), surface findings as ⚠️ — no external references; `loadForValidate`, `errPartialLoad`, `validationFailedError` are all internal to the validate file pair
+- [x] Update `internal/cli/root.go`: replace `root.AddCommand(newValidateCmd(groupConfiguration, flags))` → `root.AddCommand(validate.NewCmd(groupConfiguration, flags))` (imported as `cmdValidate` to avoid colliding with `core/validate`)
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — must pass before Task 3
+- [x] Commit: `refactor(cli): extract validate subpackage`
 
 ### Task 3: `cli/docker/` and `cli/compose/` (two micropackages)
 

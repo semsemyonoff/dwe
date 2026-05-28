@@ -1,4 +1,5 @@
-package cli
+// Package validate hosts the devbox validate command tree.
+package validate
 
 import (
 	"errors"
@@ -44,8 +45,8 @@ func (e *validationFailedError) ExitCode() int {
 	return validate.ExitCode(e.summary, e.strict)
 }
 
-// newValidateCmd builds the root validate command with all subcommands.
-func newValidateCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
+// NewCmd builds the root validate command with all subcommands.
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var strict, quiet bool
 	var stage string
 	var verifyChecksums bool
