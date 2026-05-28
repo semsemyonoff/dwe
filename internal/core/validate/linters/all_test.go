@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/userconfig"
 )
 
 // children unwraps the single lintersGroup returned by All() into its child
@@ -287,7 +287,7 @@ func TestAll_GenericWithNoPaths_ProducesErrorValidator(t *testing.T) {
 func TestAll_UserConfigBinaryOverride(t *testing.T) {
 	// Test that a user-config with binary_shellcheck override is threaded through
 	// to the linterValidator correctly.
-	usercfg := &userconfig.Config{
+	usercfg := &userpkg.Config{
 		Binaries: map[string]string{
 			"shellcheck": "/nonexistent/path/to/shellcheck",
 		},

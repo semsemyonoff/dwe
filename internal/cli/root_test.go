@@ -390,7 +390,7 @@ func TestLocaleIsAlwaysSet(t *testing.T) {
 	}
 }
 
-// TestLocaleResolutionWithUserconfig verifies that userconfig.Language
+// TestLocaleResolutionWithUserconfig verifies that userpkg.Language
 // takes precedence over $LANG.
 func TestLocaleResolutionWithUserconfig(t *testing.T) {
 	dir := t.TempDir()

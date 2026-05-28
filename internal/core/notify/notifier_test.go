@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 )
 
 // recordingBackend captures every notify call for assertions.
@@ -32,7 +32,7 @@ func withInteractive(t *testing.T, v bool) {
 	t.Cleanup(func() { isInteractiveForNotify = prev })
 }
 
-func enabledCfg() *userconfig.Config { return userconfig.Defaults() }
+func enabledCfg() *userpkg.Config { return userpkg.Defaults() }
 
 func TestNew_NilConfig_ReturnsNoop(t *testing.T) {
 	withInteractive(t, true)
@@ -130,17 +130,17 @@ func TestNotify_DisabledNotifier_DoesNotCallBackend(t *testing.T) {
 func TestNotify_PerOpGate(t *testing.T) {
 	tests := []struct {
 		name    string
-		mutate  func(c *userconfig.Config)
+		mutate  func(c *userpkg.Config)
 		kind    Op
 		wantHit bool
 	}{
-		{"run-off blocks OpRun", func(c *userconfig.Config) { c.NotifyRunEnabled = false }, OpRun, false},
-		{"run-on permits OpRun", func(_ *userconfig.Config) {}, OpRun, true},
-		{"deploy-off blocks OpDeploy", func(c *userconfig.Config) { c.NotifyDeployEnabled = false }, OpDeploy, false},
-		{"deploy-on permits OpDeploy", func(_ *userconfig.Config) {}, OpDeploy, true},
-		{"command-off blocks OpCommand", func(c *userconfig.Config) { c.NotifyCommandsEnabled = false }, OpCommand, false},
-		{"command-on permits OpCommand", func(_ *userconfig.Config) {}, OpCommand, true},
-		{"OpUnknown is dropped", func(_ *userconfig.Config) {}, OpUnknown, false},
+		{"run-off blocks OpRun", func(c *userpkg.Config) { c.NotifyRunEnabled = false }, OpRun, false},
+		{"run-on permits OpRun", func(_ *userpkg.Config) {}, OpRun, true},
+		{"deploy-off blocks OpDeploy", func(c *userpkg.Config) { c.NotifyDeployEnabled = false }, OpDeploy, false},
+		{"deploy-on permits OpDeploy", func(_ *userpkg.Config) {}, OpDeploy, true},
+		{"command-off blocks OpCommand", func(c *userpkg.Config) { c.NotifyCommandsEnabled = false }, OpCommand, false},
+		{"command-on permits OpCommand", func(_ *userpkg.Config) {}, OpCommand, true},
+		{"OpUnknown is dropped", func(_ *userpkg.Config) {}, OpUnknown, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

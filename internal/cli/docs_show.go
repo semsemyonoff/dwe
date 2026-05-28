@@ -11,8 +11,8 @@ import (
 	"devbox-cli/internal/core/docs/render"
 	pipeline "devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/userconfig"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
@@ -101,7 +101,7 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	var cfgLang string
 	projectRoot := rflags.ProjectRoot()
 	if projectRoot != "" {
-		ucfg, err := userconfig.Load(projectRoot)
+		ucfg, err := userpkg.Load(projectRoot)
 		if err == nil && ucfg != nil {
 			cfgLang = ucfg.Language
 		}

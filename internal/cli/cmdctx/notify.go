@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"devbox-cli/internal/core/notify"
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 )
 
 // Notifier is the minimal interface consumers depend on. Tests override
@@ -14,6 +14,6 @@ type Notifier interface {
 }
 
 // NewNotifier constructs the production notifier; tests override it.
-var NewNotifier = func(cfg *userconfig.Config) Notifier {
+var NewNotifier = func(cfg *userpkg.Config) Notifier {
 	return notify.New(cfg)
 }

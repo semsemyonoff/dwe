@@ -2,7 +2,7 @@
 // key=value file. It merges defaults, a global config at
 // ~/.config/devbox/config (same path on every OS), an optional
 // per-project override at .devbox/config, and environment variables.
-package userconfig
+package user
 
 import (
 	"strings"
@@ -55,7 +55,7 @@ func Defaults() *Config {
 
 // NotifyEnabledFor reports whether notifications should fire for the
 // given operation kind. The string-keyed form keeps the notify package
-// from import-cycling back to userconfig.
+// from import-cycling back to userpkg.
 //
 // Recognised kinds: "deploy", "run", "command". Anything else returns
 // false (defensive).

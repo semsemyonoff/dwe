@@ -1,4 +1,4 @@
-package userconfig
+package user
 
 import (
 	"errors"

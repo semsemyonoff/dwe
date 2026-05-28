@@ -386,14 +386,14 @@ linters:
 
 > **Why the alias approach**: bare `user.X` collides with the `os/user` package imported in `internal/shared/envfile/render.go`, `internal/shared/tpl/render_command.go`, `internal/cli/service_cli.go`. Importing as `userpkg "devbox-cli/internal/core/project/user"` everywhere is mechanical, has zero collision surface, and is uniform. Dropping the alias where unambiguous is a follow-up.
 
-- [ ] `git mv internal/userconfig internal/core/project/user`
-- [ ] sed in `internal/core/project/user/*.go` only: replace `^package userconfig$` with `package user`
-- [ ] sed across ALL `.go` files: import string `"devbox-cli/internal/userconfig"` → `userpkg "devbox-cli/internal/core/project/user"`
-- [ ] sed across ALL `.go` files: identifier `userconfig.` → `userpkg.`
-- [ ] `goimports -w .`
-- [ ] `go build ./...` — must pass (no `user`/`os/user` ambiguity because callers use `userpkg`)
-- [ ] `make test` — must pass
-- [ ] commit: `refactor(config): rename userconfig package to user (with userpkg alias)`
+- [x] `git mv internal/userconfig internal/core/project/user`
+- [x] sed in `internal/core/project/user/*.go` only: replace `^package userconfig$` with `package user`
+- [x] sed across ALL `.go` files: import string `"devbox-cli/internal/userconfig"` → `userpkg "devbox-cli/internal/core/project/user"`
+- [x] sed across ALL `.go` files: identifier `userconfig.` → `userpkg.`
+- [x] `goimports -w .`
+- [x] `go build ./...` — must pass (no `user`/`os/user` ambiguity because callers use `userpkg`)
+- [x] `make test` — must pass
+- [x] commit: `refactor(config): rename userconfig package to user (with userpkg alias)`
 
 ### Task 9: Rename localconfig → local (package-alias approach)
 

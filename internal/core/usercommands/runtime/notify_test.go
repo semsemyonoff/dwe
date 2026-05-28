@@ -12,9 +12,9 @@ import (
 
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/tpl"
-	"devbox-cli/internal/userconfig"
 )
 
 type recordingNotifier struct {
@@ -40,7 +40,7 @@ func installRecordingNotifier(t *testing.T) *recordingNotifier {
 	t.Helper()
 	rec := &recordingNotifier{}
 	orig := newNotifier
-	newNotifier = func(_ *userconfig.Config) notifier { return rec }
+	newNotifier = func(_ *userpkg.Config) notifier { return rec }
 	t.Cleanup(func() { newNotifier = orig })
 	return rec
 }
@@ -50,7 +50,7 @@ func countingUserconfigLoad(t *testing.T) *int32 {
 	t.Helper()
 	var n int32
 	orig := userconfigLoadFunc
-	userconfigLoadFunc = func(projectRoot string) (*userconfig.Config, error) {
+	userconfigLoadFunc = func(projectRoot string) (*userpkg.Config, error) {
 		atomic.AddInt32(&n, 1)
 		return orig(projectRoot)
 	}
@@ -168,7 +168,7 @@ func TestRunCommand_NotifyFalse_NoUserconfigLoad(t *testing.T) {
 		t.Fatalf("RunCommand: %v", err)
 	}
 	if got := atomic.LoadInt32(counter); got != 0 {
-		t.Errorf("userconfig.Load invocations = %d, want 0 for Notify=false", got)
+		t.Errorf("userpkg.Load invocations = %d, want 0 for Notify=false", got)
 	}
 }
 

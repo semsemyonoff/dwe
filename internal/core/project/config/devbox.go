@@ -15,7 +15,7 @@ import (
 
 	"devbox-cli/internal/core/execution/condition"
 	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 
 	"gopkg.in/yaml.v3"
 )
@@ -110,7 +110,7 @@ type DevboxConfig struct {
 	// userConfig holds user-level preferences loaded from ~/.config/devbox/config
 	// and .devbox/config. Used by binary accessors to resolve engine binary overrides.
 	// Nil if load failed (graceful degradation).
-	userConfig *userconfig.Config `yaml:"-"`
+	userConfig *userpkg.Config `yaml:"-"`
 }
 
 // RawConfigLayer holds a single raw YAML layer with its source path.
@@ -1165,7 +1165,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 
 	// Load user-config for binary overrides. On error, log warning and continue
 	// (graceful degradation — a malformed user pref file doesn't break project loading).
-	userCfg, err := userconfig.Load(baseDir)
+	userCfg, err := userpkg.Load(baseDir)
 	if err != nil {
 		slog.Warn("userconfig load failed; binary overrides will fall back to PATH defaults", "err", err)
 	}

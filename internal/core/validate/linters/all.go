@@ -7,8 +7,8 @@ import (
 	"sort"
 
 	"devbox-cli/internal/core/project/config"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/userconfig"
 )
 
 // builtinAdapters is the single source of truth for the built-in adapter set.
@@ -35,7 +35,7 @@ func builtinAdapters() map[string]Adapter {
 // Reserved-flag rejection short-circuits at binding time: bad user flags
 // produce a synthetic error validator instead of registering the linter, so no
 // subprocess ever runs for that entry.
-func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string, userCfg *userconfig.Config) []validate.Validator {
+func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string, userCfg *userpkg.Config) []validate.Validator {
 	if validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
 		// Return as a top-level DomainLevel+Global validator so that
 		// `devbox validate linters [id]` surfaces the error rather than silently
@@ -54,7 +54,7 @@ func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir stri
 // buildLinterChildren assembles the per-linter validators that become the
 // group's children. Separated from All() so tests can inspect the child set
 // without unwrapping the group.
-func buildLinterChildren(validateCfg *config.ValidateConfig, baseDir string, userCfg *userconfig.Config) []validate.Validator {
+func buildLinterChildren(validateCfg *config.ValidateConfig, baseDir string, userCfg *userpkg.Config) []validate.Validator {
 	adapters := builtinAdapters()
 
 	// Deterministic ordering for autodetected built-ins.

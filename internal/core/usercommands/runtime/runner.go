@@ -188,7 +188,7 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 	// Conditional notifier install — only when this is the top-level user
 	// invocation of a command opted into notifications. Workflow sub-steps
 	// and pipeline-invoked commands have SkipNotify=true and skip this
-	// block entirely, avoiding the per-sub-step userconfig.Load.
+	// block entirely, avoiding the per-sub-step userpkg.Load.
 	if rc.Cmd != nil && rc.Cmd.Notify && !rc.SkipNotify {
 		start := time.Now()
 		var projectName string

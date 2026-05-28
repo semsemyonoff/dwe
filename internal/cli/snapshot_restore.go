@@ -15,13 +15,13 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -108,7 +108,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 
 	if !silent {
 		start := time.Now()
-		ucfg, ucfgErr := userconfig.Load(baseDir)
+		ucfg, ucfgErr := userpkg.Load(baseDir)
 		if ucfgErr != nil {
 			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
 			ucfg = nil

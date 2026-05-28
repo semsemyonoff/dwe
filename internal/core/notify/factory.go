@@ -4,7 +4,7 @@ import (
 	"os"
 	"slices"
 
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 
 	"github.com/charmbracelet/x/term"
 )
@@ -33,7 +33,7 @@ var isInteractiveForNotify = func() bool {
 	return isStdinTTY()
 }
 
-// New constructs a Notifier from a userconfig. Returns a disabled
+// New constructs a Notifier from a userpkg. Returns a disabled
 // (noop) Notifier when:
 //   - cfg is nil or master switch off
 //   - no channels configured
@@ -42,7 +42,7 @@ var isInteractiveForNotify = func() bool {
 //
 // A disabled Notifier still satisfies the Notify(ctx, ev) contract
 // (it just drops every event). A nil *Notifier is also safe to call.
-func New(cfg *userconfig.Config) *Notifier {
+func New(cfg *userpkg.Config) *Notifier {
 	if cfg == nil || !cfg.NotifyEnabled || len(cfg.NotifyChannels) == 0 {
 		return &Notifier{cfg: cfg, backend: noopBackend{}, enabled: false}
 	}

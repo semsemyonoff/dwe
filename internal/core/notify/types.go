@@ -19,7 +19,7 @@ const (
 	OpCommand
 )
 
-// configKey returns the string key used by userconfig.Config.NotifyEnabledFor.
+// configKey returns the string key used by userpkg.Config.NotifyEnabledFor.
 // The string-keyed form keeps userconfig from importing notify.
 func (k Op) configKey() string {
 	switch k {

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/notify"
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 )
 
 type recordingNotifier struct {
@@ -44,7 +44,7 @@ func installRecordingNotifier(t *testing.T) *recordingNotifier {
 	t.Helper()
 	rec := &recordingNotifier{}
 	orig := newNotifier
-	newNotifier = func(_ *userconfig.Config) notifier { return rec }
+	newNotifier = func(_ *userpkg.Config) notifier { return rec }
 	t.Cleanup(func() { newNotifier = orig })
 	return rec
 }

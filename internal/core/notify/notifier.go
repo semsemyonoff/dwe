@@ -3,14 +3,14 @@ package notify
 import (
 	"context"
 
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 )
 
 // Notifier is the concrete handle returned by New. A nil receiver is
 // safe to call — Notify short-circuits — so hookpoints can store the
 // return of New without nil-guarding.
 type Notifier struct {
-	cfg     *userconfig.Config
+	cfg     *userpkg.Config
 	backend backend
 	enabled bool
 }

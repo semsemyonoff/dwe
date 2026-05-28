@@ -16,6 +16,7 @@ import (
 	cmdService "devbox-cli/internal/cli/service"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/statusview"
 	"devbox-cli/internal/core/usercommands"
@@ -24,7 +25,6 @@ import (
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/version"
-	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -183,7 +183,7 @@ It provides config validation, rendering, topology inspection, and project info 
 
 func resolveLocalization(flags *cmdctx.RootFlags) {
 	var cfgLang string
-	ucfg, err := userconfig.Load(flags.Root)
+	ucfg, err := userpkg.Load(flags.Root)
 	if err != nil {
 		slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)
 	} else if ucfg != nil {

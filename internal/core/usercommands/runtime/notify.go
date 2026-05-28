@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"devbox-cli/internal/core/notify"
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 )
 
 // notifier is the consumer-local interface declared per the plan's
@@ -15,13 +15,13 @@ type notifier interface {
 
 // newNotifier is the package-level seam: production constructs a real
 // *notify.Notifier; tests override to record events.
-var newNotifier = func(cfg *userconfig.Config) notifier {
+var newNotifier = func(cfg *userpkg.Config) notifier {
 	return notify.New(cfg)
 }
 
 // userconfigLoadFunc is the package-level seam for userconfig loading.
 // Tests override to count invocations / inject failures without touching disk.
-var userconfigLoadFunc = userconfig.Load
+var userconfigLoadFunc = userpkg.Load
 
 // TestSnapshotRC is a test-only hook fired at the top of RunCommand with
 // the inbound RunContext. Tests in other packages set this to capture

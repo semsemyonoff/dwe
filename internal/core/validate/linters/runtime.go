@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/userconfig"
 )
 
 // DefaultLinterTimeout caps the wall-clock duration of a single linter
@@ -34,7 +34,7 @@ type linterValidator struct {
 	entry         config.LinterEntry
 	adapter       Adapter
 	baseDir       string
-	userConfig    *userconfig.Config
+	userConfig    *userpkg.Config
 	binExplicit   bool // user set bin: in YAML
 	pathsExplicit bool // user set paths: in YAML
 }
@@ -44,7 +44,7 @@ type linterValidator struct {
 // the canonical wire shape stays minimal — but we record explicit-vs-default
 // flags first so the runtime can distinguish "autodetect" from "user said so"
 // (e.g. for the missing-bin Warning vs silent-skip decision).
-func newLinterValidator(entry config.LinterEntry, adapter Adapter, baseDir string, userCfg *userconfig.Config) *linterValidator {
+func newLinterValidator(entry config.LinterEntry, adapter Adapter, baseDir string, userCfg *userpkg.Config) *linterValidator {
 	// Generic entries without an explicit bin: still use an explicit binary
 	// (the entry ID), which the user chose by registering the entry — treat
 	// that as explicit so a missing binary emits a Warning, not a silent skip.

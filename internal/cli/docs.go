@@ -15,10 +15,10 @@ import (
 	"devbox-cli/internal/core/docs/mermaid"
 	"devbox-cli/internal/core/docs/tui"
 	"devbox-cli/internal/core/project/config"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/userconfig"
 
 	cobradoc "github.com/spf13/cobra/doc"
 
@@ -864,7 +864,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	projectRoot := flags.ProjectRoot()
 	var cfgLang string
 	var mermaidTheme string
-	if ucfg, err := userconfig.Load(projectRoot); err == nil && ucfg != nil {
+	if ucfg, err := userpkg.Load(projectRoot); err == nil && ucfg != nil {
 		cfgLang = ucfg.Language
 		mermaidTheme = ucfg.MermaidTheme
 	}

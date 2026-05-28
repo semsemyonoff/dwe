@@ -9,6 +9,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/validate"
@@ -23,7 +24,6 @@ import (
 	valtmpl "devbox-cli/internal/core/validate/templates"
 	"devbox-cli/internal/core/workflow/setup"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -305,9 +305,9 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	// Load user-config diagnostically (nil is OK if it fails or is absent).
 	// Per the pattern in command/root.go:156-160, userconfig load failures
 	// are logged as warnings and do not break project-level validation.
-	var userCfg *userconfig.Config
+	var userCfg *userpkg.Config
 	if projectRoot != "" {
-		userCfg, err = userconfig.Load(projectRoot)
+		userCfg, err = userpkg.Load(projectRoot)
 		if err != nil {
 			// Log warning but continue with nil userConfig
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: user config load failed: %v\n", err)
@@ -487,7 +487,7 @@ func validateScopeLabel(scope []string) string {
 // scope. When config.validate IS in scope it already surfaces the same parse
 // error, so passing the error to AllForStage as well would emit a duplicate
 // diagnostic and inflate the error count.
-func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.Config, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string, userCfg *userconfig.Config) *validate.Registry {
+func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.Config, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string, userCfg *userpkg.Config) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)

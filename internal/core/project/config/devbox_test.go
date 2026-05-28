@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 )
 
 // sampleDevboxYML reflects the lean devbox.yml (project identity only).
@@ -3202,7 +3202,7 @@ func TestBinaryAccessorDefaults(t *testing.T) {
 func TestBinaryAccessorUserConfigOverrides(t *testing.T) {
 	// Accessors use userConfig overrides when available
 	cfg := &DevboxConfig{
-		userConfig: &userconfig.Config{
+		userConfig: &userpkg.Config{
 			Binaries: map[string]string{
 				"devbox": "/custom/devbox",
 				"docker": "podman",
@@ -3232,7 +3232,7 @@ func TestBinaryAccessorUserConfigOverrides(t *testing.T) {
 func TestBinaryAccessorPartialUserConfigOverrides(t *testing.T) {
 	// Accessors fall back to defaults for missing overrides
 	cfg := &DevboxConfig{
-		userConfig: &userconfig.Config{
+		userConfig: &userpkg.Config{
 			Binaries: map[string]string{
 				"docker": "podman",
 			},

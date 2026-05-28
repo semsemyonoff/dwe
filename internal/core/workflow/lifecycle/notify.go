@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"devbox-cli/internal/core/notify"
-	"devbox-cli/internal/userconfig"
+	userpkg "devbox-cli/internal/core/project/user"
 )
 
 // notifier is the consumer-local interface declared per the plan's
@@ -17,6 +17,6 @@ type notifier interface {
 // newNotifier is the package-level seam: production code constructs a
 // real *notify.Notifier from the userconfig; tests override the var to
 // record events.
-var newNotifier = func(cfg *userconfig.Config) notifier {
+var newNotifier = func(cfg *userpkg.Config) notifier {
 	return notify.New(cfg)
 }

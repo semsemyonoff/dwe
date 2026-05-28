@@ -12,8 +12,8 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/notify"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/shared/lock"
-	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -41,7 +41,7 @@ func swapNewNotifier(t *testing.T) *recordingNotifier {
 	t.Helper()
 	rec := &recordingNotifier{}
 	prev := newNotifier
-	newNotifier = func(_ *userconfig.Config) cmdctx.Notifier { return rec }
+	newNotifier = func(_ *userpkg.Config) cmdctx.Notifier { return rec }
 	t.Cleanup(func() { newNotifier = prev })
 	return rec
 }

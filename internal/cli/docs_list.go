@@ -8,8 +8,8 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/docs"
+	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/userconfig"
 
 	"github.com/spf13/cobra"
 )
@@ -70,7 +70,7 @@ func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags
 	// Load user config to get the configured language
 	var cfgLang string
 	if projectRoot != "" {
-		ucfg, err := userconfig.Load(projectRoot)
+		ucfg, err := userpkg.Load(projectRoot)
 		if err == nil && ucfg != nil {
 			cfgLang = ucfg.Language
 		}
