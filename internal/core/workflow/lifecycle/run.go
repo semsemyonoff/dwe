@@ -11,17 +11,17 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/execution/preflight"
+	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/notify"
 	"devbox-cli/internal/shared/envfile"
 	"devbox-cli/internal/shared/git"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/userconfig"
 )
 

@@ -339,24 +339,24 @@ linters:
 
 > **Rationale for merging script updates into this task**: `make build` invokes `sync-embedded-docs` and `gen-docs-content-hashes` before compilation. If `internal/docs/` moves but the scripts are not updated in the same commit, the next `make build` writes generated files into the old `internal/docs/...` path (which no longer holds Go source), corrupting the tree. Co-locate the script updates with the move.
 
-- [ ] `git mv internal/usercommands internal/core/usercommands`
-- [ ] `git mv internal/validate internal/core/validate`
-- [ ] `git mv internal/docs internal/core/docs`
-- [ ] `git mv internal/ui internal/core/ui`
-- [ ] `git mv internal/notify internal/core/notify`
-- [ ] update `scripts/sync-embedded-docs.sh`: change `EMBEDDED_DIR="$REPO_ROOT/internal/docs/embedded"` → `EMBEDDED_DIR="$REPO_ROOT/internal/core/docs/embedded"`
-- [ ] update `scripts/gen-docs-content-hashes.sh`: change default `OUTPUT_FILE="${1:-internal/docs/content_hashes_gen.go}"` → `OUTPUT_FILE="${1:-internal/core/docs/content_hashes_gen.go}"`
-- [ ] update `internal/core/docs/embed.go:9` go:generate directive: `../../scripts/sync-embedded-docs.sh` → `../../../scripts/sync-embedded-docs.sh`
-- [ ] update `.golangci.yml`: `path: internal/usercommands/usercommands\.go` → `path: internal/core/usercommands/usercommands\.go`
-- [ ] update `.golangci.yml`: `path: internal/docs/tui/` → `path: internal/core/docs/tui/`
-- [ ] sed import paths
-- [ ] `goimports -w .`
-- [ ] `go build ./...` — must pass
-- [ ] `make build` — must pass (regenerates embedded docs into new location; confirms scripts hit new paths)
-- [ ] verify no stale files at old paths: `[ ! -d internal/docs ]` and `[ ! -f internal/docs/content_hashes_gen.go ]`
-- [ ] `make test` — must pass
-- [ ] `make lint` — must pass
-- [ ] commit: `refactor(internal): move usercommands/validate/docs/ui/notify to core/ + update embed scripts`
+- [x] `git mv internal/usercommands internal/core/usercommands`
+- [x] `git mv internal/validate internal/core/validate`
+- [x] `git mv internal/docs internal/core/docs`
+- [x] `git mv internal/ui internal/core/ui`
+- [x] `git mv internal/notify internal/core/notify`
+- [x] update `scripts/sync-embedded-docs.sh`: change `EMBEDDED_DIR="$REPO_ROOT/internal/docs/embedded"` → `EMBEDDED_DIR="$REPO_ROOT/internal/core/docs/embedded"`
+- [x] update `scripts/gen-docs-content-hashes.sh`: change default `OUTPUT_FILE="${1:-internal/docs/content_hashes_gen.go}"` → `OUTPUT_FILE="${1:-internal/core/docs/content_hashes_gen.go}"`
+- [x] update `internal/core/docs/embed.go:9` go:generate directive: `../../scripts/sync-embedded-docs.sh` → `../../../scripts/sync-embedded-docs.sh`
+- [x] update `.golangci.yml`: `path: internal/usercommands/usercommands\.go` → `path: internal/core/usercommands/usercommands\.go`
+- [x] update `.golangci.yml`: `path: internal/docs/tui/` → `path: internal/core/docs/tui/`
+- [x] sed import paths
+- [x] `goimports -w .`
+- [x] `go build ./...` — must pass
+- [x] `make build` — must pass (regenerates embedded docs into new location; confirms scripts hit new paths)
+- [x] verify no stale files at old paths: `[ ! -d internal/docs ]` and `[ ! -f internal/docs/content_hashes_gen.go ]`
+- [x] `make test` — must pass (note: fixed `runtime_test.go` relative path to `cmd/fake-linter` — added one extra `..` segment for the deeper location)
+- [x] `make lint` — must pass
+- [x] commit: `refactor(internal): move usercommands/validate/docs/ui/notify to core/ + update embed scripts`
 
 ### Task 7: Rename internal/command/ → internal/cli/ and relocate statusview/statustui
 

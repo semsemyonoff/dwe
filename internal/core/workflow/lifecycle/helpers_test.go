@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/core/usercommands"
 )
 
 // init replaces PreflightFunc with a no-op for the test binary so lifecycle

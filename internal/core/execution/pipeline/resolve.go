@@ -12,9 +12,9 @@ import (
 	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/execution/filesgate/spec"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/shared/tpl"
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/registry"
 )
 
 // Exported sentinel errors for parallel-group plan-time validation. Callers

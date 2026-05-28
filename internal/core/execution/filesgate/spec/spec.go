@@ -6,7 +6,7 @@ import (
 
 	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/registry"
 )
 
 // Issue represents a validation issue with a files_gate directive.

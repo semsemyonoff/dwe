@@ -3,7 +3,7 @@ package stack
 import (
 	"testing"
 
-	"devbox-cli/internal/ui"
+	"devbox-cli/internal/core/ui"
 )
 
 // --- AggregateHealth ---

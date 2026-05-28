@@ -28,9 +28,9 @@ import (
 
 	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
-	"devbox-cli/internal/ui"
 )
 
 // daemonsShellOutFn is the seam used by CollectDaemons to invoke docker ps.

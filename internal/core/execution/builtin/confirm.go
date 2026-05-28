@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/ui"
+	"devbox-cli/internal/core/ui"
 )
 
 // runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.

@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands"
+	"devbox-cli/internal/core/usercommands/runtime"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/usercommands"
-	"devbox-cli/internal/usercommands/runtime"
 )
 
 // A pipeline parallel sub-step that resolves to a workflow with `parallel:`

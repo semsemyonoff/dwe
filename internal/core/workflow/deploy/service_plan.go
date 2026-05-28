@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/registry"
 )
 
 // ErrServiceNoDeployFile is returned by ResolveServicePlan when the named

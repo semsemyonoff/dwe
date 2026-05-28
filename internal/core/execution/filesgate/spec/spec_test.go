@@ -7,8 +7,8 @@ import (
 
 	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/registry"
 )
 
 func TestValidate_CommandRequired(t *testing.T) {

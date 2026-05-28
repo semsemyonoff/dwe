@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/docs/mermaid"
+	"devbox-cli/internal/core/docs/mermaid"
 
 	"github.com/spf13/cobra"
 )

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/ui"
 )
 
 // ContainerCheckFn reports whether a container with the given name is running

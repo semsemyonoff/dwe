@@ -10,12 +10,12 @@ import (
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/execution/preflight"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands"
+	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/workflow/lifecycle"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/lock"
-	"devbox-cli/internal/usercommands"
-	"devbox-cli/internal/usercommands/registry"
 
 	"github.com/spf13/cobra"
 )

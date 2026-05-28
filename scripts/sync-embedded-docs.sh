@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sync docs from the repo root (docs/reference, docs/internals, docs/i18n) into internal/docs/embedded/
+# Sync docs from the repo root (docs/reference, docs/internals, docs/i18n) into internal/core/docs/embedded/
 # Idempotent: runs safely multiple times with no side effects on unchanged inputs.
 
 set -euo pipefail
@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOCS_ROOT="$REPO_ROOT/docs"
-EMBEDDED_DIR="$REPO_ROOT/internal/docs/embedded"
+EMBEDDED_DIR="$REPO_ROOT/internal/core/docs/embedded"
 
 # Source trees to sync
 SOURCES=(

@@ -13,12 +13,12 @@ import (
 	"io"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/usercommands"
-	"devbox-cli/internal/validate"
-	valchecks "devbox-cli/internal/validate/checks"
-	valconfig "devbox-cli/internal/validate/config"
-	valenv "devbox-cli/internal/validate/env"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/usercommands"
+	"devbox-cli/internal/core/validate"
+	valchecks "devbox-cli/internal/core/validate/checks"
+	valconfig "devbox-cli/internal/core/validate/config"
+	valenv "devbox-cli/internal/core/validate/env"
 )
 
 // Error is returned when preflight surfaces any error-severity diagnostic.

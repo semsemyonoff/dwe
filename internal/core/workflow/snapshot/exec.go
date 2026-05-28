@@ -6,10 +6,10 @@ import (
 	"io"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/runtime"
 	"devbox-cli/internal/shared/tpl"
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/registry"
-	"devbox-cli/internal/usercommands/runtime"
 )
 
 // ExecParams describes one invocation of a snapshot workflow (create, restore,

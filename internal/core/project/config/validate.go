@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"devbox-cli/internal/validate/diag"
+	"devbox-cli/internal/core/validate/diag"
 )
 
 // ValidateConfigFileName is the filename of the project-level validate.yml,

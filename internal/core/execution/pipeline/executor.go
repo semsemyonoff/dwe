@@ -22,11 +22,11 @@ import (
 	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/execution/filesgate/spec"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/usercommands"
 )
 
 // stdoutIsTTY reports whether os.Stdout is attached to a terminal.

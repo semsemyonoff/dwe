@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/ui"
+	"devbox-cli/internal/core/ui"
 )
 
 func TestHealthIndicator_Stopped(t *testing.T) {

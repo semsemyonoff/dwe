@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	huh "charm.land/huh/v2"
 
-	"devbox-cli/internal/ui"
+	"devbox-cli/internal/core/ui"
 )
 
 // TestWizardHelpKeepsEscAfterSuggestionsRefresh locks the AcceptSuggestion

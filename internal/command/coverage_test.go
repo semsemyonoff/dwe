@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )

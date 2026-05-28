@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/ui"
 )
 
 // newTestConfirmCtx returns an ExecContext for use in confirm builtin tests.

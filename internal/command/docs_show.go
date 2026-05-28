@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"devbox-cli/internal/command/cmdctx"
+	"devbox-cli/internal/core/docs"
+	"devbox-cli/internal/core/docs/render"
 	pipeline "devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/docs"
-	"devbox-cli/internal/docs/render"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/userconfig"
 

@@ -1,8 +1,8 @@
 package snapshot
 
 import (
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/runtime"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime"
 )
 
 // StepObserverCloser bundles a workflow step observer with a Close method so

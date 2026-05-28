@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/ui"
+	"devbox-cli/internal/core/ui"
 )
 
 // --- FetchComposeTopology bin parameter ---

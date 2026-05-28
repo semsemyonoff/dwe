@@ -7,8 +7,8 @@ import (
 
 	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/registry"
 )
 
 func newParallelStep(name string, max int, failFast *bool, subs ...config.DeployStep) config.DeployStep {

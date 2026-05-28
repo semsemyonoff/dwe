@@ -1,6 +1,6 @@
 package stack
 
-import "devbox-cli/internal/ui"
+import "devbox-cli/internal/core/ui"
 
 // Health represents the overall running health of the stack.
 type Health int

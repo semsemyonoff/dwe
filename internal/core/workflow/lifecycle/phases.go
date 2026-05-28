@@ -7,8 +7,8 @@ import (
 
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/usercommands"
 )
 
 // RunPhases resolves and executes a set of lifecycle pipeline phases.

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/ui"
 )
 
 // fixedTime is the clock injected into the test reporter so timestamp

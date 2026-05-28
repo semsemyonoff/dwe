@@ -3,8 +3,8 @@ package command
 import (
 	"fmt"
 
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/version"
-	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 )

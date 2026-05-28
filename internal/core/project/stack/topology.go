@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/docker"
-	"devbox-cli/internal/ui"
 )
 
 // FetchComposeTopology runs `docker compose config` with the given compose files

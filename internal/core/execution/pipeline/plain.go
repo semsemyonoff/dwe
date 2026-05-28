@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/ui"
 )
 
 // Icons used in step output lines. Aliased from liveui for backwards-

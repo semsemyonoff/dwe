@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/registry"
 )
 
 func writeStringFile(t *testing.T, path, body string) {

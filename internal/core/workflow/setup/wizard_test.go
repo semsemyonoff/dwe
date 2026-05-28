@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/validate/env"
 	"devbox-cli/internal/localconfig"
-	"devbox-cli/internal/validate/env"
 )
 
 func TestWizardRunHappyPath(t *testing.T) {

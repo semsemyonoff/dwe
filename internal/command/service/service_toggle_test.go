@@ -18,7 +18,7 @@ package service
 // 	"devbox-cli/internal/core/workflow/deploy/journal"
 // 	"devbox-cli/internal/core/workflow/lifecycle"
 // 	"devbox-cli/internal/localconfig"
-// 	"devbox-cli/internal/ui"
+// 	"devbox-cli/internal/core/ui"
 
 // 	"github.com/spf13/cobra"
 // 	"gopkg.in/yaml.v3"

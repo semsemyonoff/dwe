@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands"
+	"devbox-cli/internal/core/usercommands"
 
 	"github.com/stretchr/testify/assert"
 )

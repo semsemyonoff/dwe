@@ -10,7 +10,7 @@ import (
 
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/registry"
 )
 
 // ImplicitEnvStep is always the first step of any deploy plan.

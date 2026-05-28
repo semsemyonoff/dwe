@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/usercommands/model"
 )
 
 // newSnapCfgWithRestore builds a snapshot config exposing a default `restore`

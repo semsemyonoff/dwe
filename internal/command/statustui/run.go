@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"devbox-cli/internal/ui"
+	"devbox-cli/internal/core/ui"
 )
 
 // Run launches the status TUI, returning an error if not a terminal or if

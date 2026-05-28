@@ -11,10 +11,10 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/validate/env"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/core/workflow/setup"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/validate/env"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"

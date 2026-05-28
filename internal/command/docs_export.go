@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/docs"
-	"devbox-cli/internal/docs/export"
+	"devbox-cli/internal/core/docs"
+	"devbox-cli/internal/core/docs/export"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/userconfig"
 

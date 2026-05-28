@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/model"
+	"devbox-cli/internal/core/usercommands/model"
 )
 
 func TestRemove_DeletesDirAndClearsCurrent(t *testing.T) {

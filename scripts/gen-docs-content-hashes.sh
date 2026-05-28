@@ -6,7 +6,7 @@
 
 set -e
 
-OUTPUT_FILE="${1:-internal/docs/content_hashes_gen.go}"
+OUTPUT_FILE="${1:-internal/core/docs/content_hashes_gen.go}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 

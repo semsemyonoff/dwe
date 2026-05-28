@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/usercommands/model"
+	"devbox-cli/internal/core/usercommands/model"
 )
 
 func TestResolveRequireIDs(t *testing.T) {

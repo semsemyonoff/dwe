@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/usercommands"
 )
 
 // StopContext carries all parameters for the stop lifecycle entry point.

@@ -3,7 +3,7 @@ package lifecycle
 import (
 	"context"
 
-	"devbox-cli/internal/notify"
+	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/userconfig"
 )
 

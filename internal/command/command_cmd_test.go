@@ -15,11 +15,11 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/ask"
+	"devbox-cli/internal/core/usercommands"
+	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/ui/ask"
-	"devbox-cli/internal/usercommands"
-	"devbox-cli/internal/usercommands/model"
 
 	"github.com/spf13/cobra"
 )

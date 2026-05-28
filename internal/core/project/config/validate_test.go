@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/validate/diag"
+	"devbox-cli/internal/core/validate/diag"
 )
 
 func TestLoadValidateConfig_happy(t *testing.T) {

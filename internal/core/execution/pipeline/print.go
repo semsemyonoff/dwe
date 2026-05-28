@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/ui"
 )
 
 // PrintPlanTable prints the plan in human-readable table format.

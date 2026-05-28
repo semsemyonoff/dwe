@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands"
-	"devbox-cli/internal/usercommands/runtime"
+	"devbox-cli/internal/core/usercommands"
+	"devbox-cli/internal/core/usercommands/runtime"
 )
 
 // TestExecCommandAction_SetsSkipNotify verifies the pipeline executor

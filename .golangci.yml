@@ -23,13 +23,13 @@ linters:
       # usercommands.go is a re-export facade; real docs live on the source types.
       - linters:
           - revive
-        path: internal/usercommands/usercommands\.go
+        path: internal/core/usercommands/usercommands\.go
         text: "exported"
       # internal/docs/tui/ widget types are package-internal implementation details.
       # They are exported only because they appear in Model fields; they have no public API.
       - linters:
           - revive
-        path: internal/docs/tui/
+        path: internal/core/docs/tui/
         text: "exported"
       # info_test.go uses ptrBool helper to create bool pointers in test fixtures.
       # ui_test.go uses intPtr helper to create int pointers in test fixtures.

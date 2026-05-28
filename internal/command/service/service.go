@@ -9,11 +9,11 @@ import (
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/services"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/localconfig"
 	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )

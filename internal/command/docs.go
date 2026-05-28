@@ -11,13 +11,13 @@ import (
 	"strings"
 
 	"devbox-cli/internal/command/cmdctx"
+	"devbox-cli/internal/core/docs"
+	"devbox-cli/internal/core/docs/mermaid"
+	"devbox-cli/internal/core/docs/tui"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/docs"
-	"devbox-cli/internal/docs/mermaid"
-	"devbox-cli/internal/docs/tui"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/userconfig"
 
 	cobradoc "github.com/spf13/cobra/doc"

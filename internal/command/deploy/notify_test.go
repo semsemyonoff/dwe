@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/notify"
+	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/userconfig"
 

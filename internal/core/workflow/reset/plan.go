@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/usercommands/registry"
+	"devbox-cli/internal/core/usercommands/registry"
 )
 
 // ResolvePlan builds the ordered step list from the reset pipeline config.

@@ -9,8 +9,8 @@ import (
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/services"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/docker"
-	"devbox-cli/internal/ui"
 
 	"maps"
 

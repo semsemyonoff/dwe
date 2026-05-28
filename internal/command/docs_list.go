@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/docs"
+	"devbox-cli/internal/core/docs"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/userconfig"
 

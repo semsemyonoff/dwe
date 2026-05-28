@@ -10,7 +10,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/ui"
+	"devbox-cli/internal/core/ui"
 )
 
 // tabsLoadedMsg is emitted when buildTabsCmd completes and carries the

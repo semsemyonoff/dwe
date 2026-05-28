@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/ui/ask"
-	"devbox-cli/internal/validate/env"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/ask"
+	"devbox-cli/internal/core/validate/env"
 
 	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"

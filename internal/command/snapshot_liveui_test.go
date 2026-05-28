@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime"
 	"devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/liveui"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/runtime"
 )
 
 // withSnapshotLiveLineFactory swaps both the live-line factory and the

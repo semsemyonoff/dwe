@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
-	"devbox-cli/internal/validate"
+	"devbox-cli/internal/core/validate"
 
 	"github.com/stretchr/testify/require"
 )

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/shared/tpl"
-	"devbox-cli/internal/usercommands/model"
-	"devbox-cli/internal/usercommands/registry"
 )
 
 // testCfg returns a minimal DevboxConfig usable for snapshot exec tests.

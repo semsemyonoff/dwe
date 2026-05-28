@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/reset"
-	"devbox-cli/internal/usercommands"
 )
 
 // makeResetCfg returns a DevboxConfig with __configPath pointing to a

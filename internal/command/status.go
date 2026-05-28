@@ -13,10 +13,10 @@ import (
 	"devbox-cli/internal/command/statustui"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
+	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/ui"
-	"devbox-cli/internal/usercommands"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"

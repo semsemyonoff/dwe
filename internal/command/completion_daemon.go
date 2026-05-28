@@ -15,9 +15,9 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
-	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )

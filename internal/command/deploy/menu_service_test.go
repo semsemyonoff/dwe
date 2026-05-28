@@ -11,8 +11,8 @@ import (
 
 	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"

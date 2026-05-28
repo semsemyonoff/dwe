@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/shared/tpl"
-	"devbox-cli/internal/usercommands/registry"
 )
 
 // RemoveParams describes one `devbox snapshot remove` invocation. The caller

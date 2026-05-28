@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/command/cmdctx"
+	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/usercommands"
 )
 
 // TestValidateDocsFlags checks that invalid flag values are rejected.
