@@ -198,7 +198,7 @@ ports:
 # type: tool — ephemeral utility container, never a depends_on target
 type: tool
 container: adminer
-icon: "⚙️"
+icon: "🔧"
 compose:
   - compose/tools/adminer.yml
 ports:
@@ -223,7 +223,7 @@ info:
 | `compose` | list | no | all | Additional compose overlay files activated when the service is enabled. |
 | `ports` | `map[string]int` | no | all | Named container ports. See [`ports` field](#ports-field). |
 | `hosts` | `map[string]string` | no | all | Named hostnames. See [`hosts` field](#hosts-field). |
-| `icon` | string | no | all | Visual indicator emoji or symbol used in the `devbox info` dashboard. If omitted, a type default is used: `type: app` → 📦, `type: tool` → ⚙️, `type: infra` → 🧱. See [`icon` field](#icon-field). |
+| `icon` | string | no | all | Visual indicator emoji or symbol used in the `devbox info` dashboard. If omitted, a type default is used: `type: app` → 📦, `type: tool` → 🔧, `type: infra` → 🧱. See [`icon` field](#icon-field). |
 | `info` | block | no | all | Display metadata for the info dashboard — title override, host/port key selection, and sub-paths. See [`info` block](#info-block). |
 | `depends_on` | list | no | app / infra | Ordered dependency on other services (affects deploy order). A `type: tool` target is rejected at load. |
 | `status` | list | no | all | Custom columns for the per-type `devbox status apps` / `tools` / `infra` table — see [`status` block](#status-block). |
@@ -282,12 +282,16 @@ If omitted, a type-based default is used:
 | `type` | Default icon |
 |--------|--------------|
 | `app` | 📦 |
-| `tool` | ⚙️ |
+| `tool` | 🔧 |
 | `infra` | 🧱 |
 
 Icons are treated as opaque user content — ZWJ-joined emoji (family glyphs, profession modifiers, skin-tone variations) are supported but not validated for length. The icon appears only in the `devbox info` output; it is not used elsewhere.
 
-> **⚠️ Avoid emoji with `Emoji_Presentation=No`.** Codepoints like `🛢️` (U+1F6E2), `🗄️` (U+1F5C4), and `⚙️` (U+2699) are "text-default" — they only render as colour emoji when followed by VS-16 (U+FE0F), and many terminal + font combinations on macOS and Linux ignore that hint and draw them at 1 cell instead of 2. Lipgloss measures them at 2 cells, so the status / info tables under-fill and every column to the right of the icon shifts. Prefer codepoints that are emoji by default — e.g. `📦`, `🧱`, `🐳`, `📚`, `💾`, `🔧`, `🧰` — or stick to single-width ASCII / box-drawing symbols. The same caveat applies to icons set under `info.paths[].icon` and to user-defined `auto-hosts` / `auto-urls` icons in `devbox/info.yml`.
+> **⚠️ Avoid emoji with `Emoji_Presentation=No`.** Codepoints like `🛢` (U+1F6E2), `🗄` (U+1F5C4), and `⚙` (U+2699) are "text-default" — they only render as colour emoji when followed by VS-16 (U+FE0F), and many terminal + font combinations on macOS and Linux ignore that hint and draw them at 1 cell instead of 2. Lipgloss measures them at 2 cells, so the status / info tables under-fill and every column to the right of the icon shifts.
+>
+> `devbox validate` flags these icons (warning, scope `config.icons`) and suggests safe replacements from a curated map. **At render time the runtime drops ambiguous icons entirely** rather than letting them break column alignment — they will simply not appear in the dashboard, status table, or toggle menu. The same caveat applies to icons set under `info.paths[].icon` and to user-defined `auto-hosts` / `auto-urls` icons in `devbox/info.yml`.
+>
+> Prefer codepoints that are emoji by default — e.g. `📦`, `🧱`, `🐳`, `📚`, `💾`, `🔧`, `🧰` — or stick to single-width ASCII / box-drawing symbols.
 
 ### `info` block
 

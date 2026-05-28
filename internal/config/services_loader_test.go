@@ -714,8 +714,8 @@ func TestDisplayIcon_appDefault(t *testing.T) {
 func TestDisplayIcon_toolDefault(t *testing.T) {
 	t.Parallel()
 	s := ServiceConfig{Type: ServiceTypeTool}
-	if got := s.DisplayIcon(); got != "⚙️" {
-		t.Errorf("got %q, want %q", got, "⚙️")
+	if got := s.DisplayIcon(); got != "🔧" {
+		t.Errorf("got %q, want %q", got, "🔧")
 	}
 }
 

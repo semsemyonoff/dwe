@@ -101,7 +101,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"adminer": {
 						Type:    config.ServiceTypeTool,
 						Enabled: true,
-						Icon:    "⚙️",
+						Icon:    "🔧",
 						Ports:   map[string]int{"http": 8027},
 						Hosts:   map[string]string{"web": "pilot.db.local"},
 						Info: config.ServiceInfoBlock{
@@ -116,7 +116,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Adminer",
-				"  ⚙️ Adminer — http://pilot.db.local | http://localhost:8027",
+				"  🔧 Adminer — http://pilot.db.local | http://localhost:8027",
 			}, "\n"),
 		},
 		{
@@ -127,7 +127,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"redis": {
 						Type:    config.ServiceTypeTool,
 						Enabled: true,
-						Icon:    "⚙️",
+						Icon:    "🔧",
 						Ports:   map[string]int{"http": 6379},
 						Hosts:   map[string]string{},
 						Info: config.ServiceInfoBlock{
@@ -142,7 +142,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"Redis",
-				"  ⚙️ Redis — http://localhost:6379",
+				"  🔧 Redis — http://localhost:6379",
 			}, "\n"),
 		},
 		{
@@ -379,7 +379,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"minio": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Icon:    "⚙️",
+						Icon:    "🔧",
 						Ports:   map[string]int{"api": 9010, "console": 9011},
 						Hosts:   map[string]string{"s3": "s3.local", "console": "minio.local"},
 						Info: config.ServiceInfoBlock{
@@ -397,7 +397,7 @@ func TestRenderAutoURLs(t *testing.T) {
 			wantOut: strings.Join([]string{
 				"",
 				"MinIO Console",
-				"  ⚙️ MinIO Console — http://minio.local | http://localhost:9011",
+				"  🔧 MinIO Console — http://minio.local | http://localhost:9011",
 			}, "\n"),
 		},
 		{
@@ -615,7 +615,7 @@ func TestRenderAutoURLs(t *testing.T) {
 				"  📦 Main — http://pilot.local",
 				"",
 				"Tool1",
-				"  ⚙️ Tool1 — http://localhost:9000",
+				"  🔧 Tool1 — http://localhost:9000",
 			}, "\n"),
 		},
 		{

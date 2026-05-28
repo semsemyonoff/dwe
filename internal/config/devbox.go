@@ -822,7 +822,12 @@ func (s ServiceConfig) GitRenderEnabled() bool {
 
 // DisplayIcon returns the resolved icon for this service.
 // If Icon is non-empty, returns it; otherwise returns the type-default icon.
-// app -> "📦", tool -> "⚙️", infra -> "🧱", unknown -> "".
+// app -> "📦", tool -> "🔧", infra -> "🧱", unknown -> "".
+//
+// The tool default is intentionally 🔧 (wrench) rather than ⚙ (gear): gear's
+// base codepoint (U+2699) has Emoji_Presentation = No, so terminals disagree
+// on its width even with VS16 — see ui.IsAmbiguousWidthIcon. Wrench renders
+// reliably as 2 cells everywhere.
 func (s ServiceConfig) DisplayIcon() string {
 	if s.Icon != "" {
 		return s.Icon
@@ -831,7 +836,7 @@ func (s ServiceConfig) DisplayIcon() string {
 	case ServiceTypeApp:
 		return "📦"
 	case ServiceTypeTool:
-		return "⚙️"
+		return "🔧"
 	case ServiceTypeInfra:
 		return "🧱"
 	default:
