@@ -1,9 +1,12 @@
 package render
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/envfile"
 )
@@ -232,5 +235,41 @@ func TestFormatValue_boolFormatNonBoolValue(t *testing.T) {
 	// When format is bool but value is not a bool, falls through to Sprintf.
 	if got := envfile.FormatValue("yes", "bool"); got != "yes" {
 		t.Errorf("FormatValue(yes, bool) = %q, want yes", got)
+	}
+}
+
+// TestRunRenderEnv_ToFile verifies the file-writing path: a non-empty
+// outputPath causes the rendered .env to land at that path on disk.
+func TestRunRenderEnv_ToFile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "devbox.yml")
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
+	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := filepath.Join(dir, ".env")
+	if err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: cfgPath}, out); err != nil {
+		t.Fatalf("runRenderEnv: %v", err)
+	}
+
+	body, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if !strings.Contains(string(body), "PROJECT=testproject") {
+		t.Errorf("output missing PROJECT=testproject: %q", body)
+	}
+}
+
+// TestRunRenderEnv_InvalidConfig verifies that a config-load failure is
+// surfaced as an error (not silently dropped).
+func TestRunRenderEnv_InvalidConfig(t *testing.T) {
+	err := runRenderEnv(&cmdctx.RootFlags{ConfigPath: "/nonexistent/devbox.yml"}, "/tmp/whatever.env")
+	if err == nil {
+		t.Fatal("expected error for missing config, got nil")
+	}
+	if !strings.Contains(err.Error(), "loading config") {
+		t.Errorf("err = %v, want one wrapping 'loading config'", err)
 	}
 }
