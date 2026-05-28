@@ -311,15 +311,15 @@ Rename `service_cli.go` → `exec.go` (misnomer from prior refactor — they are
 - Delete: `internal/cli/shell.go`, `internal/cli/shell_test.go`, `internal/cli/service_cli.go`
 - Modify: `internal/cli/root.go`
 
-- [ ] `git mv internal/cli/shell.go internal/cli/shell/shell.go` (and test)
-- [ ] `git mv internal/cli/service_cli.go internal/cli/shell/exec.go` (the misnamed file with `resolveShellOptions`, `containerStateStatus`, `dockerExecCLI`, `composeRunCLI`, `runInteractive`, `errContainerNotFound`)
-- [ ] Change `package cli` → `package shell` in all 3 files
-- [ ] Watch for `os/user` collision: `exec.go` already imports `"os/user"`. After move, no symbol conflict with package name `shell`. No alias needed unless surface changes.
-- [ ] Rename `newShellCmd(flags)` → `NewCmd(groupID, flags)`
-- [ ] Update `internal/cli/root.go`: `addCmd(root, groupEnvironment, newShellCmd(flags))` → `root.AddCommand(shell.NewCmd(groupEnvironment, flags))`
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 6
-- [ ] Commit: `refactor(cli): extract shell subpackage (renames service_cli.go to exec.go)`
+- [x] `git mv internal/cli/shell.go internal/cli/shell/shell.go` (and test)
+- [x] `git mv internal/cli/service_cli.go internal/cli/shell/exec.go` (the misnamed file with `resolveShellOptions`, `containerStateStatus`, `dockerExecCLI`, `composeRunCLI`, `runInteractive`, `errContainerNotFound`)
+- [x] Change `package cli` → `package shell` in all 3 files
+- [x] Watch for `os/user` collision: `exec.go` already imports `"os/user"`. After move, no symbol conflict with package name `shell`. No alias needed unless surface changes.
+- [x] Rename `newShellCmd(flags)` → `NewCmd(groupID, flags)`
+- [x] Update `internal/cli/root.go`: `addCmd(root, groupEnvironment, newShellCmd(flags))` → `root.AddCommand(shell.NewCmd(groupEnvironment, flags))` (imported as `cmdShell` to follow the established convention in root.go)
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — must pass before Task 6
+- [x] Commit: `refactor(cli): extract shell subpackage (renames service_cli.go to exec.go)`
 
 ### Task 6: `cli/snapshot/`
 

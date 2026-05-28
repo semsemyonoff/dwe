@@ -1,4 +1,4 @@
-package cli
+package shell
 
 import (
 	"errors"
@@ -72,7 +72,8 @@ func pickService(cfg *config.DevboxConfig, serviceName string, selector selectSe
 	}
 }
 
-func newShellCmd(flags *cmdctx.RootFlags) *cobra.Command {
+// NewCmd builds the `devbox shell` cobra command.
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var asRoot bool
 	var flagMode string
 	var flagShell string
@@ -171,6 +172,7 @@ service exists, or shows an interactive selector when multiple services are enab
 	cmd.Flags().StringVar(&flagUser, "user", "", "user to run as inside the container")
 	cmd.Flags().StringVar(&flagWorkDir, "workdir", "", "working directory inside the container")
 	cmd.Flags().StringArrayVar(&flagEnvVars, "env", nil, "set an environment variable (KEY=VALUE); overrides service cli.env config")
+	cmd.GroupID = groupID
 	return cmd
 }
 

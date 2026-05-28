@@ -1,4 +1,4 @@
-package cli
+package shell
 
 import (
 	"encoding/json"
