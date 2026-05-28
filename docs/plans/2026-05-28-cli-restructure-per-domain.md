@@ -486,22 +486,18 @@ Final tidy pass. After Tasks 1–10, root.go still has `addCmd` helper and 17 im
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] `find internal/cli -maxdepth 1 -type d | sort` shows exactly 18 entries (`internal/cli` itself + 17 subpackages: `cmdctx`, `command`, `completion`, `compose`, `deploy`, `docker`, `docs`, `info`, `lifecycle`, `prompt`, `render`, `service`, `shell`, `snapshot`, `status`, `validate`, `version`)
-- [ ] `ls internal/cli/*.go` shows ONLY: `root.go`, `root_test.go`, `root_resolver_test.go`, `fang_integration_test.go`, `coverage_test.go`
-- [ ] `wc -l internal/cli/root.go` shows <100 LoC
-- [ ] `grep -c 'addCmd(' internal/cli/root.go` returns 0
-- [ ] `grep -c 'newInfoCmd\|newVersionCmd\|newPromptCmd\|newRunCmd\|newStopCmd\|newRestartCmd\|newResetCmd\|newShellCmd\|newStatusCmd\|newSnapshotCmd\|newCommandCmd\|newValidateCmd\|newDocsCmd\|newDockerCmd\|newComposeCmd\|newInstallCompletionCmd\|newUninstallCompletionCmd' internal/cli/root.go` returns 0
-- [ ] No `nolint:depguard` was added: `grep -rn 'nolint:depguard' --include='*.go' internal/cli/` returns empty
-- [ ] No new cross-sibling cli imports: `grep -rn '"devbox-cli/internal/cli/' internal/cli/ --include='*.go' | grep -v '_test.go' | grep -v cmdctx | grep -v 'internal/cli/deploy' | sort -u` returns only the pre-existing `cli/service` → `cli/deploy` line
-- [ ] No stuttering identifiers — explicit pattern check, portable across grep variants (no backreferences):
-  ```bash
-  grep -nE 'docker\.NewDocker|compose\.NewCompose|info\.NewInfo|version\.NewVersion|prompt\.NewPrompt|shell\.NewShell|status\.NewStatus|snapshot\.NewSnapshot|validate\.NewValidate|command\.NewCommand|docs\.NewDocs|lifecycle\.NewLifecycle' internal/cli/root.go
-  ```
-  must return empty. (Catches any `pkg.New<Pkg>` stutter pattern. `lifecycle.NewRunCmd`/`NewStopCmd` are deliberately allowed multi-export — the regex specifically targets `New<PackageName>` not arbitrary `New<X>`.)
-- [ ] Test seams preserved during moves:
+- [x] `find internal/cli -maxdepth 1 -type d | sort` shows exactly 18 entries (`internal/cli` itself + 17 subpackages: `cmdctx`, `command`, `completion`, `compose`, `deploy`, `docker`, `docs`, `info`, `lifecycle`, `prompt`, `render`, `service`, `shell`, `snapshot`, `status`, `validate`, `version`)
+- [x] ⚠️ DEVIATION: `ls internal/cli/*.go` shows 4 files (`root.go`, `root_test.go`, `root_resolver_test.go`, `fang_integration_test.go`) — NOT 5. `coverage_test.go` was deleted in Task 9 (no remaining cases after docs/command moves) and `completion_test.go` was folded into `root_test.go` in Task 11. This was already documented in Task 11 notes; the acceptance-criterion file list is stale.
+- [x] ⚠️ DEVIATION: `wc -l internal/cli/root.go` shows 334 LoC, not <100. Already documented in Task 11 — incompatible with what Solution Overview specified to remain (`PersistentPreRunE` and `runRoot` alone are ~125 LoC). Deferred as future tidy.
+- [x] `grep -c 'addCmd(' internal/cli/root.go` returns 0
+- [x] `grep -c 'newInfoCmd\|...\|newUninstallCompletionCmd' internal/cli/root.go` returns 0
+- [x] No `nolint:depguard` was added: `grep -rn 'nolint:depguard' --include='*.go' internal/cli/` returns empty
+- [x] ⚠️ DEVIATION: Cross-sibling cli imports include three lines, not one. The pre-existing `cli/service` → `cli/deploy` line (`service/service_plan.go`, `service/service_toggle.go`) is present as expected. Two additional `cli/lifecycle/{run,restart}.go` → `cli/info` imports are intentional and were explicitly anticipated in Task 1 notes: `info.Run` is consumed for the `ShowInfo` lifecycle callback, and the import became a sibling import once Task 10 moved run/restart into `cli/lifecycle/`. No new unanticipated cross-sibling imports.
+- [x] No stuttering identifiers — grep for `docker.NewDocker|compose.NewCompose|...|lifecycle.NewLifecycle` in `internal/cli/root.go` returns empty.
+- [x] Test seams preserved during moves:
   - `grep -c 'preflightRun = preflight.Run' internal/cli/lifecycle/lifecycle.go` returns 1
-  - `grep -nE 'isTerminalFn|runStatusTUIFn' internal/cli/status/status.go` returns ≥2 matches
-- [ ] `make build && make test && make lint` — all pass
+  - `grep -nE 'isTerminalFn|runStatusTUIFn' internal/cli/status/status.go` returns 4 matches (declarations + call sites)
+- [x] `make build && make test && make lint` — all pass (0 lint issues)
 
 ### Task 13: Update AGENTS.md and docs/internals/packages.md
 
