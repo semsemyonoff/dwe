@@ -224,7 +224,6 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 		path == "devbox version" ||
 		path == "devbox prompt" ||
 		strings.HasPrefix(path, "devbox completion") ||
-		strings.HasPrefix(path, "devbox print") ||
 		strings.HasPrefix(path, "devbox docs")
 }
 

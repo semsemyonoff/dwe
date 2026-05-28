@@ -98,7 +98,8 @@ When a service name is given, stops only that service's container directly via
 
 Use 'devbox docker down' for a bare Docker Compose stop-and-remove without hooks.
 Use 'devbox docker stop' for the low-level compose stop (no container removal).`,
-		Example:      `  devbox stop\n  devbox stop postgres`,
+		Example: `  devbox stop
+  devbox stop postgres`,
 		Args:         cobra.MaximumNArgs(1),
 		GroupID:      groupID,
 		SilenceUsage: true,
