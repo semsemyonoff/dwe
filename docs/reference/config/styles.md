@@ -108,7 +108,7 @@ Each token has a built-in light and dark hex default. At startup,
 `ApplyStyles` calls `lipgloss.HasDarkBackground()` once and resolves every
 token to a single hex string for the rest of the process. The resolved value
 is exposed via `ui.Color*()` accessors and bridges three styling layers: v1
-lipgloss (`internal/ui/`), v2 lipgloss (`internal/ui/cmdbrowser/`), and Fang's
+lipgloss (`internal/core/ui/`), v2 lipgloss (`internal/core/ui/cmdbrowser/`), and Fang's
 `ColorScheme`.
 
 | Token | Light default | Dark default |

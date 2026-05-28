@@ -26,7 +26,7 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
 
 **Per-package responsibilities, invariants, and cross-package contracts live in [`docs/internals/packages.md`](docs/internals/packages.md).** Read the relevant section there before modifying any package — it captures non-obvious load-bearing details (sequencing, sentinels, allowlists, render ordering) that are expensive to re-derive from the code.
 
-`internal/` is organized in three layers (enforced by `depguard` — see `docs/internals/packages.md` § Dependency Rules):
+`internal/` is organized in three layers (layering rules — `depguard` activation pending; see `docs/internals/packages.md` § Dependency Rules):
 
 - **`internal/cli/`** — cobra command tree (`cli/`, `cli/cmdctx/`, `cli/deploy/`, `cli/render/`, `cli/service/`). Composition root; no domain logic.
 - **`internal/core/`** — domain logic, subclustered:

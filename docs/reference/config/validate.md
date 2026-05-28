@@ -39,7 +39,7 @@ The validate command runs three domains in addition to the existing YAML-shape v
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
-| `env.*` | Hardcoded in Go (`internal/validate/env/`) | No — seven fixed probes |
+| `env.*` | Hardcoded in Go (`internal/core/validate/env/`) | No — seven fixed probes |
 | `checks.*` | `devbox/validate.yml` entries | Yes — declarative |
 | `linters.*` | Built-in adapters (shellcheck, hadolint) + `devbox/validate.yml` `linters:` block | Yes — declarative |
 | `snapshot.*` | On-disk snapshot directories + `devbox/snapshot.yml` | No — fixed validators per snapshot name |
@@ -125,7 +125,7 @@ Unknown stages can still be invoked explicitly with `devbox validate --stage <na
 
 ## Available builtins
 
-All five builtins live in `internal/builtin/` and are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
+All five builtins live in `internal/core/execution/builtin/` and are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
 
 ### `shell`
 

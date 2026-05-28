@@ -256,7 +256,7 @@ When `devbox services enable` or `devbox services disable` is run without `--app
   Run: devbox restart
 ```
 
-The banner is rendered by `ui.RenderPendingBanner(p *journal.PendingApply)` in `internal/ui/`. It iterates `pending.operations` and renders one line per op. Empty string is returned (no banner) when `pending` is nil.
+The banner is rendered by `ui.RenderPendingBanner(p *journal.PendingApply)` in `internal/core/ui/`. It iterates `pending.operations` and renders one line per op. Empty string is returned (no banner) when `pending` is nil.
 
 ## Skip decision table
 

@@ -38,7 +38,7 @@ Workflow steps (string-based — separate, not covered here):
 
 ### `type: builtin` — predicates
 
-Builtin conditions test filesystem state using the **predicate registry** in `internal/condition`. Predicates are distinct from engine builtins (like `service_configs_copy`) — they live in a separate namespace and cannot be used in `check:` actions.
+Builtin conditions test filesystem state using the **predicate registry** in `internal/core/execution/condition`. Predicates are distinct from engine builtins (like `service_configs_copy`) — they live in a separate namespace and cannot be used in `check:` actions.
 
 ```yaml
 when:
@@ -126,8 +126,8 @@ See [deploy.md](deploy.md) for the full action reference and the semantics of `c
 
 The pipeline system has **two separate `type: builtin` namespaces**, disambiguated by YAML position:
 
-1. **Predicates** — used in `when: type: builtin`. Live in `internal/condition`, e.g. `dir-empty`, `file-exists`.
-2. **Engine builtins** — used in step bodies and `check: type: builtin`. Live in `internal/builtin`, e.g. `service_configs_copy`, `service_configs_check`, `message`.
+1. **Predicates** — used in `when: type: builtin`. Live in `internal/core/execution/condition`, e.g. `dir-empty`, `file-exists`.
+2. **Engine builtins** — used in step bodies and `check: type: builtin`. Live in `internal/core/execution/builtin`, e.g. `service_configs_copy`, `service_configs_check`, `message`.
 
 Example of the distinction:
 
@@ -170,7 +170,7 @@ steps:
     when: "cmd: test -d /tmp/workdir"
 ```
 
-Workflow conditions are evaluated by `internal/tpl/render_command.go` and `internal/condition` string-classification logic. See [commands.md](commands.md) for the full workflow grammar.
+Workflow conditions are evaluated by `internal/shared/tpl/render_command.go` and `internal/core/execution/condition` string-classification logic. See [commands.md](commands.md) for the full workflow grammar.
 
 ## Related documentation
 

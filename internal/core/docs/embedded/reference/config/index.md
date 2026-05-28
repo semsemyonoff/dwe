@@ -82,7 +82,7 @@ flowchart LR
 
 **Merged (3-layer config)**: `devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml` are deep-merged at startup. Later layers win; maps merge recursively. The result is the effective config used for `.env` generation, topology resolution, and export rules. Each `devbox/services/<name>/service.yml` is loaded separately and then injected into the merged raw map so dot-paths like `services.main.container` resolve.
 
-**Standalone**: `devbox/services/<name>/service.yml`, `deploy.yml`, `devbox/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml`, and `commands/*.yml` are loaded by dedicated functions in `internal/config/` and `internal/usercommands/`. They are not part of the 3-layer merge but most of them resolve template expressions against the merged config.
+**Standalone**: `devbox/services/<name>/service.yml`, `deploy.yml`, `devbox/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml`, and `commands/*.yml` are loaded by dedicated functions in `internal/core/project/config/` and `internal/core/usercommands/`. They are not part of the 3-layer merge but most of them resolve template expressions against the merged config.
 
 ## Files that support local overrides
 
