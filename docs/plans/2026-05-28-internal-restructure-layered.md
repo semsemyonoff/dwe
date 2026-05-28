@@ -243,12 +243,12 @@ linters:
 **Files:**
 - Create: `scripts/restructure-imports.sh` *(throwaway helper, deleted in Task 10)*
 
-- [ ] verify clean baseline: `git status` shows only `refactoring` branch state; no uncommitted changes (user already confirmed revert)
-- [ ] run `make test` and record passing baseline — capture failing tests if any (must be empty)
-- [ ] run `make lint` and record passing baseline
-- [ ] write `scripts/restructure-imports.sh`. **Substitution ordering rule**: for any pair of paths where one is a prefix of the other (e.g., `internal/command/statusview` and `internal/command`), put the longer/more-specific substitution FIRST in the script so sed doesn't pre-rewrite the prefix. Apply the same rule for `internal/docs` vs `internal/docs/tui` and any similar pairs.
-- [ ] script also runs `goimports -w .` at end. Note: running `goimports` on a partially-renamed tree is safe — it operates on file syntax, not package resolution.
-- [ ] commit baseline state: `chore: prep for internal/ restructure (baseline)`
+- [x] verify clean baseline: `git status` shows only `refactoring` branch state; no uncommitted changes (user already confirmed revert)
+- [x] run `make test` and record passing baseline — capture failing tests if any (must be empty)
+- [x] run `make lint` and record passing baseline
+- [x] write `scripts/restructure-imports.sh`. **Substitution ordering rule**: for any pair of paths where one is a prefix of the other (e.g., `internal/command/statusview` and `internal/command`), put the longer/more-specific substitution FIRST in the script so sed doesn't pre-rewrite the prefix. Apply the same rule for `internal/docs` vs `internal/docs/tui` and any similar pairs.
+- [x] script also runs `goimports -w .` at end. Note: running `goimports` on a partially-renamed tree is safe — it operates on file syntax, not package resolution.
+- [x] commit baseline state: `chore: prep for internal/ restructure (baseline)`
 
 ### Task 2: Move shared/ packages (incl. Makefile LDFLAGS update)
 
