@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/usercommands"
 )
@@ -367,8 +368,8 @@ services:
 	if err != nil {
 		t.Fatalf("i18n.Load: %v", err)
 	}
-	flags := &rootFlags{
-		configPath: filepath.Join(tmpDir, "devbox.yml"),
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(tmpDir, "devbox.yml"),
 		I18n:       store,
 		Locale:     "en",
 	}

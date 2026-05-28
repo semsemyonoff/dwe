@@ -5,12 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/command/cmdctx"
 )
 
 // --- cobra wiring tests ---
 
 func TestRunCmd_Use(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newRunCmd(flags)
 	if cmd.Use != "run" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "run")
@@ -18,7 +20,7 @@ func TestRunCmd_Use(t *testing.T) {
 }
 
 func TestRunCmd_NoArgs(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newRunCmd(flags)
 	if cmd.Args == nil {
 		t.Error("Args validator should be set (cobra.NoArgs)")
@@ -29,7 +31,7 @@ func TestRunCmd_NoArgs(t *testing.T) {
 }
 
 func TestRunCmd_FlagsExist(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newRunCmd(flags)
 
 	if cmd.Flags().Lookup("no-update") == nil {

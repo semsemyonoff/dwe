@@ -7,13 +7,14 @@ import (
 	"os/exec"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 
 	"github.com/spf13/cobra"
 )
 
-func newComposeCmd(flags *rootFlags) *cobra.Command {
+func newComposeCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "compose",
 		Short:        "Low-level Docker Compose diagnostics",
@@ -32,7 +33,7 @@ func newComposeCmd(flags *rootFlags) *cobra.Command {
 //
 // With --bare, only the project name is injected (no default compose files).
 // This is useful for commands that use a standalone compose file like the installer.
-func newComposeRawCmd(flags *rootFlags) *cobra.Command {
+func newComposeRawCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:                "raw [--bare] [-- docker-compose-args...]",
 		Short:              "Run docker compose directly with resolved file list and project name (escape hatch)",
@@ -41,7 +42,7 @@ func newComposeRawCmd(flags *rootFlags) *cobra.Command {
 			// Parse --bare flag manually (DisableFlagParsing is on).
 			bare, passArgs := extractBareFlag(args)
 
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
@@ -100,13 +101,13 @@ func extractBareFlag(args []string) (bare bool, rest []string) {
 // newComposeArgvCmd creates the `devbox compose argv` command.
 // It shows the full `docker compose` command that `devbox docker <command>` would
 // execute, without running it. Useful for diagnostics and debugging.
-func newComposeArgvCmd(flags *rootFlags) *cobra.Command {
+func newComposeArgvCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "argv <command> [args...]",
 		Short: "Show the full docker compose command that would be executed",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
@@ -134,13 +135,13 @@ func newComposeArgvCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newComposeFilesCmd(flags *rootFlags) *cobra.Command {
+func newComposeFilesCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "files",
 		Short: "Print resolved compose file list (base + enabled overlays), one per line",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}

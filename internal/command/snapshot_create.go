@@ -11,12 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/userconfig"
 	"devbox-cli/internal/version"
@@ -25,7 +27,7 @@ import (
 )
 
 // newSnapshotCreateCmd: `devbox snapshot create <name> [-d desc] [--using=variant] [-y]`.
-func newSnapshotCreateCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotCreateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		description string
 		variant     string
@@ -46,18 +48,18 @@ func newSnapshotCreateCmd(flags *rootFlags) *cobra.Command {
 	cmd.Flags().StringVar(&variant, "using", "", "select a create-workflow variant from snapshot.yml")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip overwrite confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
-	addSilentFlag(cmd, &silent)
+	cmdctx.AddSilent(cmd, &silent)
 	return cmd
 }
 
-func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, variant string, yes, noLive, silent bool) (err error) {
+func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, description, variant string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
 		return err
 	}
 
-	cfg, err := config.LoadConfig(flags.configPath)
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -70,7 +72,7 @@ func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, 
 		return fmt.Errorf("snapshot create: no create: block defined in %s", config.SnapshotConfigPath(baseDir))
 	}
 
-	reg, err := loadCommandRegistry(flags.configPath)
+	reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
@@ -78,9 +80,8 @@ func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, 
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
-			render.Stdout().Error(lhe.Error())
-			return lhe
+			render.Stdout().Error(phe.Error())
+			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
 	}
@@ -96,7 +97,7 @@ func runSnapshotCreate(cmd *cobra.Command, flags *rootFlags, name, description, 
 			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
 			ucfg = nil
 		}
-		n := newNotifier(ucfg)
+		n := cmdctx.NewNotifier(ucfg)
 		defer func() {
 			if errors.As(err, new(*snapshot.CreateCancelledError)) {
 				return

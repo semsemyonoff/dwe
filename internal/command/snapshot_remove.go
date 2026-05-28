@@ -10,12 +10,14 @@ import (
 	"syscall"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/userconfig"
@@ -24,7 +26,7 @@ import (
 )
 
 // newSnapshotRemoveCmd: `devbox snapshot remove <name> [-y]`.
-func newSnapshotRemoveCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotRemoveCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		yes    bool
 		noLive bool
@@ -42,18 +44,18 @@ func newSnapshotRemoveCmd(flags *rootFlags) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip remove confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
-	addSilentFlag(cmd, &silent)
+	cmdctx.AddSilent(cmd, &silent)
 	return cmd
 }
 
-func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive, silent bool) (err error) {
+func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
 		return err
 	}
 
-	cfg, err := config.LoadConfig(flags.configPath)
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -69,7 +71,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, n
 	// guards on Registry != nil so nil is safe when no workflow runs.
 	var reg *registry.Registry
 	if snapCfg.Remove != nil {
-		reg, err = loadCommandRegistry(flags.configPath)
+		reg, err = usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("loading command registry: %w", err)
 		}
@@ -78,9 +80,8 @@ func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, n
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
-			render.Stdout().Error(lhe.Error())
-			return lhe
+			render.Stdout().Error(phe.Error())
+			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
 	}
@@ -93,7 +94,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *rootFlags, name string, yes, n
 			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
 			ucfg = nil
 		}
-		n := newNotifier(ucfg)
+		n := cmdctx.NewNotifier(ucfg)
 		defer func() {
 			if errors.As(err, new(*snapshot.RemoveCancelledError)) {
 				return

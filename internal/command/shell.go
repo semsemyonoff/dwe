@@ -4,10 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/services"
 	"devbox-cli/internal/ui"
+
+	"maps"
 
 	"github.com/spf13/cobra"
 )
@@ -50,7 +55,7 @@ func pickService(cfg *config.DevboxConfig, serviceName string, selector selectSe
 
 	// Collect enabled services in sorted order.
 	var enabled []string
-	for _, name := range sortedKeys(cfg.Services) {
+	for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
 		svc := cfg.Services[name]
 		if svc.Required || svc.Enabled {
 			enabled = append(enabled, name)
@@ -67,7 +72,7 @@ func pickService(cfg *config.DevboxConfig, serviceName string, selector selectSe
 	}
 }
 
-func newShellCmd(flags *rootFlags) *cobra.Command {
+func newShellCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var asRoot bool
 	var flagMode string
 	var flagShell string
@@ -97,7 +102,7 @@ service exists, or shows an interactive selector when multiple services are enab
   devbox shell main --user deploy --workdir /app`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
-		ValidArgsFunction: serviceNameCompletion(flags),
+		ValidArgsFunction: services.NameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Validate mutual exclusion: --root and --user cannot both be set.
 			if asRoot && flagUser != "" {
@@ -108,7 +113,7 @@ service exists, or shows an interactive selector when multiple services are enab
 				return fmt.Errorf("--mode must be one of: auto, exec, run (got %q)", flagMode)
 			}
 
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
@@ -177,24 +182,4 @@ type shellCLIFlags struct {
 	user    string
 	workDir string
 	envVars []string // KEY=VALUE pairs from --env flags; override service cli.env config
-}
-
-// serviceNameCompletion returns a ValidArgsFunction that completes service names
-// from the loaded devbox config.
-func serviceNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) != 0 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		configPath, _, err := completionConfigPath(flags, cmd)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		cfg, err := config.LoadConfig(configPath)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		names := sortedKeys(cfg.Services)
-		return names, cobra.ShellCompDirectiveNoFileComp
-	}
 }

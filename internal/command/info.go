@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/ui"
 	"devbox-cli/internal/version"
@@ -11,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newInfoCmd(flags *rootFlags) *cobra.Command {
+func newInfoCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info",
 		Short: "Display project info dashboard (URLs, hosts, services, tools)",
@@ -28,8 +29,8 @@ The dashboard is driven by Go templates evaluated against the merged devbox conf
 	}
 }
 
-func runInfo(cmd *cobra.Command, flags *rootFlags) error {
-	cfg, err := config.LoadConfig(flags.configPath)
+func runInfo(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -40,7 +41,7 @@ func runInfo(cmd *cobra.Command, flags *rootFlags) error {
 		return fmt.Errorf("loading devbox/info.yml: %w", err)
 	}
 
-	stylesCfg := flags.stylesCfg
+	stylesCfg := flags.StylesCfg
 
 	// Always render the branded identity line; the ASCII art block inside the
 	// helper is gated by header.lines.

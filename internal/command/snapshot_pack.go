@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/render"
@@ -13,7 +14,7 @@ import (
 )
 
 // newSnapshotPackCmd: `devbox snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`.
-func newSnapshotPackCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotPackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		outPath  string
 		excludes []string
@@ -33,7 +34,7 @@ func newSnapshotPackCmd(flags *rootFlags) *cobra.Command {
 	return cmd
 }
 
-func runSnapshotPack(cmd *cobra.Command, flags *rootFlags, name, outPath string, cliExcludes []string) error {
+func runSnapshotPack(cmd *cobra.Command, flags *cmdctx.RootFlags, name, outPath string, cliExcludes []string) error {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
@@ -48,9 +49,8 @@ func runSnapshotPack(cmd *cobra.Command, flags *rootFlags, name, outPath string,
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
-			render.Stdout().Error(lhe.Error())
-			return lhe
+			render.Stdout().Error(phe.Error())
+			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
 	}

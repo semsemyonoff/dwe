@@ -10,6 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
+	cmdDeploy "devbox-cli/internal/command/deploy"
+	cmdRender "devbox-cli/internal/command/render"
+	cmdService "devbox-cli/internal/command/service"
 	"devbox-cli/internal/command/statusview"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
@@ -34,165 +38,13 @@ const (
 	groupAdvanced      = "advanced"
 )
 
-// rootFlags holds flags shared across all commands.
-type rootFlags struct {
-	configPath  string
-	projectRoot string
-	stylesCfg   *config.StylesConfig // populated by PersistentPreRunE before any command runs
-	Locale      string               // 2-letter language code (always set; defaults to "en")
-	I18n        *i18n.Store          // translations store (never nil after PersistentPreRunE)
-}
-
-// Callers needing localized strings read rflags.I18n and rflags.Locale to look up
-// display text. Both are guaranteed non-nil after PersistentPreRunE completes
-// (Load failures degrade gracefully to empty store and default locale, not fatal errors).
-// Completion paths (__complete) bypass PersistentPreRunE, so I18n may be nil there —
-// completion handlers must check before use.
-
-// ProjectRoot returns the resolved project root directory. Falls back to
-// filepath.Dir(configPath) so tests that construct rootFlags directly without
-// going through PersistentPreRunE (which sets projectRoot) still work.
-func (f *rootFlags) ProjectRoot() string {
-	if f.projectRoot != "" {
-		return f.projectRoot
-	}
-	if f.configPath != "" {
-		return filepath.Dir(f.configPath)
-	}
-	return ""
-}
+const defaultLocale = "en"
 
 // NewRootCmd builds and returns the root cobra.Command.
 func NewRootCmd() *cobra.Command {
-	flags := &rootFlags{}
+	flags := &cmdctx.RootFlags{}
 
-	root := &cobra.Command{
-		Use:   "devbox",
-		Short: "devbox-cli — local development environment toolkit",
-		Long: `devbox-cli is the core engine for the devbox local development environment.
-
-It provides config validation, rendering, topology inspection, and project info display.
-Run 'devbox' with no arguments to display a compact project summary and available commands.
-Run 'devbox info' for the full info dashboard.`,
-		// PersistentPreRunE resolves the project root before any subcommand runs.
-		// It walks upward from cwd (discovery mode) or uses the explicit -c path,
-		// validates schema_version, and populates flags.configPath / flags.projectRoot.
-		// Commands that work without a project (version, completion, print, docs) are
-		// allowed through when no project is found via discovery.
-		// The validate command bypasses schema validation so it can report schema errors
-		// as diagnostics instead of aborting before the validators run.
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Detect whether --config/-c was explicitly supplied.
-			// Read from root to be unambiguous: PersistentPreRunE receives the leaf command.
-			explicit := cmd.Root().PersistentFlags().Lookup("config").Changed
-
-			var configArg string
-			if explicit {
-				configArg = flags.configPath
-			}
-
-			// For validate commands, use Locate (no schema check) instead of Resolve.
-			if isValidateCommand(cmd) {
-				loc, found, err := project.Locate(configArg)
-				if err != nil {
-					// project.Locate never returns ErrNotFound as an error (discovery miss
-					// returns (zero, false, nil)); propagate any real error immediately.
-					return err
-				}
-				if found {
-					flags.configPath = loc.ConfigPath
-					flags.projectRoot = loc.Root
-					flags.stylesCfg = applyStyles(flags.projectRoot, cmd.ErrOrStderr())
-
-					// Load userconfig and i18n for validate command.
-					var cfgLang string
-					ucfg, err := userconfig.Load(flags.projectRoot)
-					if err != nil {
-						slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)
-					} else if ucfg != nil {
-						cfgLang = ucfg.Language
-					}
-
-					store, err := i18n.Load(flags.projectRoot)
-					if err != nil {
-						slog.Warn("i18n load failed; UI strings will use English fallbacks", "err", err)
-						store = &i18n.Store{}
-					}
-					if store == nil {
-						store = &i18n.Store{}
-					}
-					flags.I18n = store
-					flags.Locale = store.ClampLocale(i18n.ResolveLocale("", cfgLang, os.Getenv("LANG")))
-					return nil
-				}
-				// Locate miss — validate always requires a project.
-				return project.ErrNotFound
-			}
-
-			// Normal commands: use Resolve (with schema validation).
-			resolved, err := project.Resolve(configArg)
-			if err != nil {
-				if errors.Is(err, project.ErrNotFound) {
-					// Discovery miss — only allowlisted commands proceed without a project.
-					if allowedWithoutProject(cmd) {
-						flags.stylesCfg = applyStyles("", cmd.ErrOrStderr())
-						flags.I18n, _ = i18n.Load("")
-						if flags.I18n == nil {
-							flags.I18n = &i18n.Store{}
-						}
-						flags.Locale = "en"
-						return nil
-					}
-					return err
-				}
-				// Explicit bad path or schema error — always fatal.
-				return err
-			}
-
-			flags.configPath = resolved.ConfigPath
-			flags.projectRoot = resolved.Root
-			flags.stylesCfg = applyStyles(flags.projectRoot, cmd.ErrOrStderr())
-
-			// Load userconfig — on error, degrade gracefully.
-			var cfgLang string
-			ucfg, err := userconfig.Load(flags.projectRoot)
-			if err != nil {
-				slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)
-			} else if ucfg != nil {
-				cfgLang = ucfg.Language
-			}
-
-			// Load i18n store — on error, use empty store (graceful fallback).
-			store, err := i18n.Load(flags.projectRoot)
-			if err != nil {
-				slog.Warn("i18n load failed; UI strings will use English fallbacks", "err", err)
-				store = &i18n.Store{}
-			}
-			if store == nil {
-				store = &i18n.Store{}
-			}
-			flags.I18n = store
-
-			// Resolve and store the active locale, clamped to locales the store
-			// actually has so that an unsupported $LANG doesn't silently produce
-			// English content filed under a foreign-language path.
-			flags.Locale = store.ClampLocale(i18n.ResolveLocale("", cfgLang, os.Getenv("LANG")))
-			return nil
-		},
-		// Running 'devbox' with no subcommand shows project summary + help.
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRoot(cmd, flags)
-		},
-		// Suppress cobra's default "Run 'devbox --help' for more information" footer.
-		SilenceUsage: true,
-	}
-
-	root.PersistentFlags().StringVarP(
-		&flags.configPath,
-		"config", "c",
-		"",
-		"path to devbox.yml (default: auto-discover from cwd upward)",
-	)
+	root := initRootCmd(flags)
 
 	// Define command groups for organized help output.
 	root.AddGroup(
@@ -216,12 +68,12 @@ Run 'devbox info' for the full info dashboard.`,
 	addCmd(root, groupEnvironment, newPromptCmd(flags))
 
 	// Configuration group: services, tools, rendering, validation.
-	addCmd(root, groupConfiguration, newServiceCmd(flags))
-	addCmd(root, groupConfiguration, newRenderCmd(flags))
-	addCmd(root, groupConfiguration, newValidateCmd(flags))
+	root.AddCommand(cmdService.NewCmd(groupConfiguration, flags))
+	root.AddCommand(cmdRender.NewCmd(groupConfiguration, flags))
+	root.AddCommand(newValidateCmd(groupConfiguration, flags))
 
 	// Pipelines group: deploy, reset, snapshot.
-	addCmd(root, groupPipelines, newDeployCmd(flags))
+	root.AddCommand(cmdDeploy.NewCmd(groupPipelines, flags))
 	addCmd(root, groupPipelines, newResetCmd(flags))
 	addCmd(root, groupPipelines, newSnapshotCmd(flags))
 
@@ -240,12 +92,114 @@ Run 'devbox info' for the full info dashboard.`,
 		completionCmd.AddCommand(newUninstallCompletionCmd())
 	}
 
-	// Internal: hidden Make-compatibility command.
-	printCmd := newPrintCmd()
-	printCmd.Hidden = true
-	root.AddCommand(printCmd)
-
 	return root
+}
+
+func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "devbox",
+		Short: "devbox — local development environment toolkit",
+		Long: `devbox is the core engine for the devbox local development environment.
+
+It provides config validation, rendering, topology inspection, and project info display.`,
+		// PersistentPreRunE resolves the project root before any subcommand runs.
+		// It walks upward from cwd (discovery mode) or uses the explicit -c path,
+		// validates schema_version, and populates flags.ConfigPath / flags.Root.
+		// Commands that work without a project (version, completion, print, docs) are
+		// allowed through when no project is found via discovery.
+		// The validate command bypasses schema validation so it can report schema errors
+		// as diagnostics instead of aborting before the validators run.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Detect whether --config/-c was explicitly supplied.
+			// Read from root to be unambiguous: PersistentPreRunE receives the leaf command.
+			explicit := cmd.Root().PersistentFlags().Lookup("config").Changed
+
+			var configArg string
+			if explicit {
+				configArg = flags.ConfigPath
+			}
+
+			// For validate commands, use Locate (no schema check) instead of Resolve.
+			if isValidateCommand(cmd) {
+				loc, found, err := project.Locate(configArg)
+				if err != nil {
+					// project.Locate never returns ErrNotFound as an error (discovery miss
+					// returns (zero, false, nil)); propagate any real error immediately.
+					return err
+				}
+				if found {
+					flags.ConfigPath = loc.ConfigPath
+					flags.Root = loc.Root
+					flags.StylesCfg = applyStyles(flags.Root, cmd.ErrOrStderr())
+
+					resolveLocalization(flags)
+					return nil
+				}
+				// Locate miss — validate always requires a project.
+				return project.ErrNotFound
+			}
+
+			// Normal commands: use Resolve (with schema validation).
+			resolved, err := project.Resolve(configArg)
+			if err != nil {
+				if errors.Is(err, project.ErrNotFound) {
+					// Discovery miss — only allowlisted commands proceed without a project.
+					if allowedWithoutProject(cmd) {
+						flags.StylesCfg = applyStyles("", cmd.ErrOrStderr())
+						flags.I18n, _ = i18n.Load("")
+						if flags.I18n == nil {
+							flags.I18n = &i18n.Store{}
+						}
+						flags.Locale = defaultLocale
+						return nil
+					}
+					return err
+				}
+				// Explicit bad path or schema error — always fatal.
+				return err
+			}
+
+			flags.ConfigPath = resolved.ConfigPath
+			flags.Root = resolved.Root
+			flags.StylesCfg = applyStyles(flags.Root, cmd.ErrOrStderr())
+
+			resolveLocalization(flags)
+			return nil
+		},
+		// Running 'devbox' with no subcommand shows project summary + help.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRoot(cmd, flags)
+		},
+	}
+	cmd.PersistentFlags().StringVarP(
+		&flags.ConfigPath,
+		"config", "c",
+		"",
+		"path to devbox.yml (default: auto-discover from cwd upward)",
+	)
+
+	return cmd
+}
+
+func resolveLocalization(flags *cmdctx.RootFlags) {
+	var cfgLang string
+	ucfg, err := userconfig.Load(flags.Root)
+	if err != nil {
+		slog.Warn("userconfig load failed; locale falls through to $LANG/en", "err", err)
+	} else if ucfg != nil {
+		cfgLang = ucfg.Language
+	}
+
+	store, err := i18n.Load(flags.Root)
+	if err != nil {
+		slog.Warn("i18n load failed; UI strings will use English fallbacks", "err", err)
+		store = &i18n.Store{}
+	}
+	if store == nil {
+		store = &i18n.Store{}
+	}
+	flags.I18n = store
+	flags.Locale = store.ClampLocale(i18n.ResolveLocale("", cfgLang, os.Getenv("LANG")))
 }
 
 // addCmd assigns a group ID to cmd and adds it to parent.
@@ -300,15 +254,15 @@ func applyStyles(projectRoot string, errW io.Writer) *config.StylesConfig {
 // runRoot is the handler for `devbox` with no subcommand.
 // It prints an ASCII header and compact project summary (when a config is
 // found), followed by the Cobra/Fang help output.
-func runRoot(cmd *cobra.Command, flags *rootFlags) error {
-	stylesCfg := flags.stylesCfg // already applied by PersistentPreRunE
+func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+	stylesCfg := flags.StylesCfg // already applied by PersistentPreRunE
 
-	if flags.projectRoot == "" {
+	if flags.Root == "" {
 		// No project found via discovery — skip summary, show help only.
 		return cmd.Help()
 	}
 
-	cfg, err := config.LoadConfig(flags.configPath)
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	switch {
 	case err == nil:
 		// Always render the branded identity line; the ASCII art block inside
@@ -328,15 +282,15 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 		// Load deploy state and build deploy summary.
 		var deploySummary *statusview.DeploySummary
 		var pending *journal.PendingApply
-		statePath := filepath.Join(flags.projectRoot, journal.DefaultRelPath)
+		statePath := filepath.Join(flags.Root, journal.DefaultRelPath)
 		state, err := journal.Load(statePath)
 		if err == nil && state != nil {
 			pending = state.Pending
 			// Get tracked services to know the total.
 			// Tolerate registry load failures (e.g. command-file syntax errors)
 			// so that the root summary remains visible even when commands are broken.
-			reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath)
-			tracked, _, err := deploy.LoadTrackedServices(cfg, reg, flags.projectRoot)
+			reg, _ := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
+			tracked, _, err := deploy.LoadTrackedServices(cfg, reg, flags.Root)
 			if err == nil && len(tracked) > 0 {
 				// Count how many tracked services are deployed.
 				deployedCount := 0
@@ -370,6 +324,5 @@ func runRoot(cmd *cobra.Command, flags *rootFlags) error {
 		return err
 	}
 
-	// Always show help regardless of whether config loaded.
 	return cmd.Help()
 }

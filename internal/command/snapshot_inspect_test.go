@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/snapshot"
 )
 
@@ -127,9 +128,9 @@ func TestSnapshotInspect_ServicesDiff(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			base := snapshotInspectProject(t, tc.services)
 			writeSnapshotWithServices(t, base, "snap", tc.captured)
-			flags := &rootFlags{
-				configPath:  filepath.Join(base, "devbox.yml"),
-				projectRoot: base,
+			flags := &cmdctx.RootFlags{
+				ConfigPath: filepath.Join(base, "devbox.yml"),
+				Root:       base,
 			}
 			var out bytes.Buffer
 			if err := runSnapshotInspect(flags, &out, "snap", false); err != nil {
@@ -156,9 +157,9 @@ func TestSnapshotInspect_ServicesDiff_JSON(t *testing.T) {
 		{Name: "db", Enabled: true},
 		{Name: "main", Enabled: true},
 	})
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 	var out bytes.Buffer
 	if err := runSnapshotInspect(flags, &out, "snap", true); err != nil {

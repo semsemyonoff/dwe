@@ -14,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/daemon"
 	"devbox-cli/internal/i18n"
@@ -50,7 +51,7 @@ type runOpts struct {
 	Locale         string          // active locale code (e.g. "ru", "en")
 }
 
-func newCommandCmd(flags *rootFlags) *cobra.Command {
+func newCommandCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		setFlags    []string
 		skipConfirm bool
@@ -86,7 +87,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			return registryIDCompletion(flags, inspect)(cmd, args, toComplete)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			reg, err := loadCommandRegistry(flags.configPath)
+			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
 				return err
 			}
@@ -96,7 +97,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				if len(args) == 0 {
 					return errors.New("id required with --inspect")
 				}
-				cfg, _ := config.LoadConfig(flags.configPath)
+				cfg, _ := config.LoadConfig(flags.ConfigPath)
 				return runCommandByID(
 					cmd.Context(),
 					cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
@@ -110,7 +111,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			}
 
 			// Run route: existing selector behavior.
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
@@ -154,7 +155,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 	_ = cmd.RegisterFlagCompletionFunc("set", daemonSetCompletion(flags))
 	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompts; intended for non-interactive use such as scripts and nested command runs")
 	cmd.Flags().BoolVarP(&inspectFlag, "inspect", "i", false, "Show the full definition of the given command id instead of running it")
-	addSilentFlag(cmd, &silent)
+	cmdctx.AddSilent(cmd, &silent)
 	cmd.MarkFlagsMutuallyExclusive("inspect", "set")
 	cmd.MarkFlagsMutuallyExclusive("inspect", "yes")
 	cmd.MarkFlagsMutuallyExclusive("inspect", "silent")
@@ -566,7 +567,7 @@ func stringifyParams(params map[string]any) map[string]string {
 	return out
 }
 
-func newCommandListCmd(flags *rootFlags) *cobra.Command {
+func newCommandListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var showAll bool
 
 	cmd := &cobra.Command{
@@ -585,7 +586,7 @@ Use --all to include private commands.`,
 			if len(args) > 0 {
 				groupFilter = args[0]
 			}
-			reg, err := loadCommandRegistry(flags.configPath)
+			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
 				return err
 			}
@@ -602,12 +603,6 @@ Use --all to include private commands.`,
 	}
 	cmd.Flags().BoolVar(&showAll, "all", false, "Include private commands")
 	return cmd
-}
-
-// loadCommandRegistry loads the command registry from devbox/commands/ relative
-// to the config file. Returns an empty registry when the directory does not exist.
-func loadCommandRegistry(configPath string) (*usercommands.Registry, error) {
-	return usercommands.LoadRegistryFromConfigPath(configPath)
 }
 
 // selectCommandFn is the function signature for interactive command selection.
@@ -818,17 +813,17 @@ func commandDefToTreeNode(cmd *usercommands.CommandDef, translator i18n.Translat
 // from the registry. When includePrivate is true, private command IDs are also
 // returned (useful for `inspect`). When false, only public IDs are returned
 // (useful for `run`).
-func registryIDCompletion(flags *rootFlags, includePrivate bool) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+func registryIDCompletion(flags *cmdctx.RootFlags, includePrivate bool) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		// Only complete the first positional argument.
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		configPath, _, err := completionConfigPath(flags, cmd)
+		configPath, _, err := cmdctx.CompletionConfigPath(flags, cmd)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		reg, err := loadCommandRegistry(configPath)
+		reg, err := usercommands.LoadRegistryFromConfigPath(configPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

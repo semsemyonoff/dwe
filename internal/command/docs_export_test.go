@@ -6,16 +6,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestDocsExportCommand(t *testing.T) {
 	// Verify the command structure
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsExportCmd(flags)
@@ -25,11 +27,11 @@ func TestDocsExportCommand(t *testing.T) {
 }
 
 func TestDocsExportFlags(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsExportCmd(flags)
@@ -46,11 +48,11 @@ func TestDocsExportBasic(t *testing.T) {
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "export")
 
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsExportCmd(flags)
@@ -81,11 +83,11 @@ func TestDocsExportWithForce(t *testing.T) {
 	err = os.WriteFile(filepath.Join(targetDir, "existing.txt"), []byte("existing"), 0o644)
 	require.NoError(t, err)
 
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsExportCmd(flags)
@@ -107,11 +109,11 @@ func TestDocsExportOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "export")
 
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsExportCmd(flags)

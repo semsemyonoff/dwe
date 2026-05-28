@@ -14,6 +14,7 @@ import (
 
 	"devbox-cli/internal/command"
 	"devbox-cli/internal/config"
+	"devbox-cli/internal/pipeline"
 	"devbox-cli/internal/project"
 	"devbox-cli/internal/prompt"
 	"devbox-cli/internal/ui"
@@ -31,7 +32,7 @@ func main() {
 	// printed its own error) and for ExitCode-bearing errors (which have already
 	// printed their own diagnostics table). Otherwise delegate to Fang's default styled output.
 	errHandler := func(w io.Writer, styles fang.Styles, err error) {
-		if errors.Is(err, command.ErrSilent) {
+		if errors.Is(err, pipeline.ErrSilent) {
 			return
 		}
 		var ec interface{ ExitCode() int }

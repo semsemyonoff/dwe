@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/userconfig"
@@ -17,7 +18,7 @@ type docsSearchFlags struct {
 	limit  int
 }
 
-func newDocsSearchCmd(flags *rootFlags) *cobra.Command {
+func newDocsSearchCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsSearchFlags{}
 
 	cmd := &cobra.Command{
@@ -51,7 +52,7 @@ Examples:
 	return cmd
 }
 
-func runDocsSearch(cmd *cobra.Command, rflags *rootFlags, df *docsSearchFlags, query string) error {
+func runDocsSearch(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsSearchFlags, query string) error {
 	projectRoot := rflags.ProjectRoot()
 	allRoots := docs.Sources(projectRoot)
 

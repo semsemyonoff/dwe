@@ -3,10 +3,12 @@ package command
 import (
 	"devbox-cli/internal/lifecycle"
 
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/spf13/cobra"
 )
 
-func newRestartCmd(flags *rootFlags) *cobra.Command {
+func newRestartCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var skipPreflight bool
 
@@ -24,7 +26,7 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecycle.RunRestart(lifecycle.RunContext{
 				Ctx:           cmd.Context(),
-				ConfigPath:    flags.configPath,
+				ConfigPath:    flags.ConfigPath,
 				Yes:           yes,
 				ShowInfo:      func() error { return runInfo(cmd, flags) },
 				SkipPreflight: skipPreflight,
@@ -36,6 +38,6 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
-	addSkipPreflightFlag(cmd, &skipPreflight)
+	cmdctx.AddSkipPreflight(cmd, &skipPreflight)
 	return cmd
 }

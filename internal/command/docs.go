@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/mermaid"
@@ -36,7 +37,7 @@ type docsFlags struct {
 	includePrivate bool
 }
 
-func newDocsCmd(flags *rootFlags) *cobra.Command {
+func newDocsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
 		Short: "Browse and manage documentation",
@@ -70,7 +71,7 @@ Generate reference documentation for the CLI and command registry.`,
 	return cmd
 }
 
-func newDocsGenerateCmd(flags *rootFlags) *cobra.Command {
+func newDocsGenerateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsFlags{}
 
 	cmd := &cobra.Command{
@@ -100,7 +101,7 @@ Supported scopes:  all, cli, commands`,
 	return cmd
 }
 
-func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error {
+func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags) error {
 	if err := validateDocsFlags(df); err != nil {
 		return err
 	}
@@ -173,7 +174,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *rootFlags, df *docsFlags) error
 	}
 
 	if scopes["commands"] {
-		reg, err := loadCommandRegistry(rflags.configPath)
+		reg, err := usercommands.LoadRegistryFromConfigPath(rflags.ConfigPath)
 		if err != nil {
 			return err
 		}
@@ -851,9 +852,9 @@ func mmdcAvailable(bin string) bool {
 	return err == nil
 }
 
-func runDocsTUI(cmd *cobra.Command, flags *rootFlags, termWidth, termHeight int) error {
+func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeight int) error {
 	// Load configuration for doc settings (mermaid config, etc.)
-	cfg, err := config.LoadConfig(flags.configPath)
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		// If config fails to load, use defaults (docs still work without full config)
 		cfg = &config.DevboxConfig{}

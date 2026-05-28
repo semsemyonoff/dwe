@@ -66,6 +66,11 @@ func preflightActionLabel(stage string) string {
 	}
 }
 
+// RunFn is the signature of Run. Commands that want a swappable preflight
+// (e.g. for tests, or to override the implementation) accept a RunFn and
+// default to Run when nil.
+type RunFn = func(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error
+
 // Run executes env + checks (filtered by stage) and renders diagnostics to
 // errOut. Returns *Error on any error-severity diagnostic.
 //

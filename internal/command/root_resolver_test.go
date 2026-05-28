@@ -262,7 +262,7 @@ func TestRootResolver_DocsScope_NoProject_AllFails(t *testing.T) {
 }
 
 // TestRootResolver_FlagsPopulated verifies that after PersistentPreRunE runs,
-// flags.configPath is the absolute path and flags.projectRoot is the directory.
+// flags.ConfigPath is the absolute path and flags.projectRoot is the directory.
 // We test this indirectly through a command that would fail if the path were wrong.
 func TestRootResolver_FlagsPopulated_RelativePath(t *testing.T) {
 	dir := t.TempDir()

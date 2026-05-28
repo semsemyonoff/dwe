@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/userconfig"
@@ -19,7 +20,7 @@ type docsListFlags struct {
 	match  string
 }
 
-func newDocsListCmd(flags *rootFlags) *cobra.Command {
+func newDocsListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsListFlags{}
 
 	cmd := &cobra.Command{
@@ -54,7 +55,7 @@ Examples:
 	return cmd
 }
 
-func runDocsList(cmd *cobra.Command, rflags *rootFlags, df *docsListFlags) error {
+func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags) error {
 	// Determine project root and load sources
 	projectRoot := rflags.ProjectRoot()
 	allRoots := docs.Sources(projectRoot)

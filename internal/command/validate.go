@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/project"
@@ -44,14 +45,15 @@ func (e *validationFailedError) ExitCode() int {
 }
 
 // newValidateCmd builds the root validate command with all subcommands.
-func newValidateCmd(flags *rootFlags) *cobra.Command {
+func newValidateCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var strict, quiet bool
 	var stage string
 	var verifyChecksums bool
 
 	cmd := &cobra.Command{
-		Use:   "validate",
-		Short: "Validate project configuration and files",
+		GroupID: groupID,
+		Use:     "validate",
+		Short:   "Validate project configuration and files",
 		Long: `Check project configuration files, template packs, command definitions, environment readiness, and project checks for errors and warnings.
 
 Validation runs statically without executing any commands or starting services. Results are
@@ -236,7 +238,7 @@ Scope targets:
 }
 
 // newValidateConfigSubCmd creates a leaf command for a single config validator.
-func newValidateConfigSubCmd(flags *rootFlags, strict, quiet *bool, stage *string, id, short string) *cobra.Command {
+func newValidateConfigSubCmd(flags *cmdctx.RootFlags, strict, quiet *bool, stage *string, id, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:          id,
 		Short:        short,
@@ -249,7 +251,7 @@ func newValidateConfigSubCmd(flags *rootFlags, strict, quiet *bool, stage *strin
 }
 
 // newValidateTemplateSubCmd creates a leaf command for a single template validator.
-func newValidateTemplateSubCmd(flags *rootFlags, strict, quiet *bool, stage *string, id, short string) *cobra.Command {
+func newValidateTemplateSubCmd(flags *cmdctx.RootFlags, strict, quiet *bool, stage *string, id, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:          id,
 		Short:        short,
@@ -263,7 +265,7 @@ func newValidateTemplateSubCmd(flags *rootFlags, strict, quiet *bool, stage *str
 
 // runValidate executes validators matching the given scope and renders diagnostics.
 // scope may be nil (run all), or a list like ["config"], ["config", "deploy"], etc.
-func runValidate(cmd *cobra.Command, flags *rootFlags, strict, quiet bool, stage string, verifyChecksums bool, scope []string) error {
+func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool, stage string, verifyChecksums bool, scope []string) error {
 	cfg, configPath, projectRoot, err := loadForValidate(flags)
 	// cfg may be nil if load failed, but that's OK — validators will report the error.
 	// Only abort for infrastructure errors (cwd unreadable, etc.)
@@ -382,9 +384,9 @@ var errPartialLoad = errors.New("partial load")
 // at the caller level. It returns the merged config (or nil if load failed), the paths,
 // and errPartialLoad if the config load failed but we should continue (to allow the
 // validators to surface file-level diagnostics).
-func loadForValidate(flags *rootFlags) (*config.DevboxConfig, string, string, error) {
+func loadForValidate(flags *cmdctx.RootFlags) (*config.DevboxConfig, string, string, error) {
 	// First, locate the project (without schema validation).
-	loc, found, err := project.Locate(flags.configPath)
+	loc, found, err := project.Locate(flags.ConfigPath)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("locating project: %w", err)
 	}

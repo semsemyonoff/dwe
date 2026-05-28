@@ -4,15 +4,17 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestDocsListCommand(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsListCmd(flags)
@@ -22,11 +24,11 @@ func TestDocsListCommand(t *testing.T) {
 }
 
 func TestDocsListFlags(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsListCmd(flags)
@@ -36,11 +38,11 @@ func TestDocsListFlags(t *testing.T) {
 
 // TestDocsListOutput executes the list command and verifies tab-separated output format.
 func TestDocsListOutput(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsListCmd(flags)

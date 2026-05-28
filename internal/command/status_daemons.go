@@ -1,6 +1,8 @@
 package command
 
 import (
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/spf13/cobra"
 )
 
@@ -8,7 +10,7 @@ import (
 // stand-alone view of running daemon containers for the current project.
 // Routes through renderSection so the section formatting matches the default
 // orchestrator exactly.
-func newStatusDaemonsCmd(flags *rootFlags) *cobra.Command {
+func newStatusDaemonsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "daemons",
 		Short:        "Show only the daemons section",

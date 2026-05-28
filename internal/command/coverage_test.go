@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/deploy"
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/usercommands"
@@ -69,105 +69,6 @@ func TestPrintTreeNodes_NodeWithTags(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "app.install") {
 		t.Errorf("expected label, got: %q", out)
-	}
-}
-
-// --- sourceDotEnv ---
-
-func TestSourceDotEnv_Basic(t *testing.T) {
-	dir := t.TempDir()
-	envFile := filepath.Join(dir, ".env")
-	content := "TEST_VAR_SRCENV=hello\n# comment\nANOTHER=world\n"
-	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := deploy.SourceDotEnv(envFile); err != nil {
-		t.Fatalf("SourceDotEnv: %v", err)
-	}
-	if os.Getenv("TEST_VAR_SRCENV") != "hello" {
-		t.Errorf("expected TEST_VAR_SRCENV=hello, got %q", os.Getenv("TEST_VAR_SRCENV"))
-	}
-	t.Cleanup(func() {
-		_ = os.Unsetenv("TEST_VAR_SRCENV")
-		_ = os.Unsetenv("ANOTHER")
-	})
-}
-
-func TestSourceDotEnv_QuotedValues(t *testing.T) {
-	dir := t.TempDir()
-	envFile := filepath.Join(dir, ".env")
-	content := `QUOTED_VAR="quoted value"` + "\nSINGLE='single'\n"
-	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := deploy.SourceDotEnv(envFile); err != nil {
-		t.Fatalf("SourceDotEnv: %v", err)
-	}
-	if os.Getenv("QUOTED_VAR") != "quoted value" {
-		t.Errorf("expected unquoted value, got %q", os.Getenv("QUOTED_VAR"))
-	}
-	t.Cleanup(func() {
-		_ = os.Unsetenv("QUOTED_VAR")
-		_ = os.Unsetenv("SINGLE")
-	})
-}
-
-func TestSourceDotEnv_MissingFile(t *testing.T) {
-	err := deploy.SourceDotEnv("/nonexistent/.env")
-	if err == nil {
-		t.Fatal("expected error for missing .env file")
-	}
-}
-
-func TestSourceDotEnv_EmptyLines(t *testing.T) {
-	dir := t.TempDir()
-	envFile := filepath.Join(dir, ".env")
-	content := "\n\n# only comments\n\n"
-	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := deploy.SourceDotEnv(envFile); err != nil {
-		t.Fatalf("SourceDotEnv with only comments/blanks: %v", err)
-	}
-}
-
-// --- loadCommandRegistry ---
-
-func TestLoadCommandRegistry_NoDirReturnsEmpty(t *testing.T) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, "devbox.yml")
-	// No devbox/commands/ directory.
-	reg, err := loadCommandRegistry(configPath)
-	if err != nil {
-		t.Fatalf("expected no error for missing commands dir: %v", err)
-	}
-	if reg == nil {
-		t.Fatal("expected non-nil registry")
-	}
-}
-
-func TestLoadCommandRegistry_WithCommands(t *testing.T) {
-	dir := t.TempDir()
-	cmdDir := filepath.Join(dir, "devbox", "commands")
-	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	yml := `commands:
-  up:
-    type: shell
-    description: Start services
-    cmd: docker compose up
-`
-	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	configPath := filepath.Join(dir, "devbox.yml")
-	reg, err := loadCommandRegistry(configPath)
-	if err != nil {
-		t.Fatalf("loadCommandRegistry: %v", err)
-	}
-	if _, err := reg.Get("db.up"); err != nil {
-		t.Errorf("expected db.up command in registry: %v", err)
 	}
 }
 
@@ -515,7 +416,7 @@ func makeMinimalProject(t *testing.T) string {
 
 func TestCommandListCmd_RunE_NoCommands(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newCommandListCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -542,7 +443,7 @@ func TestCommandListCmd_RunE_WithCommands(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newCommandListCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -565,7 +466,7 @@ func TestCommandListCmd_RunE_WithGroupFilter(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newCommandListCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -593,7 +494,7 @@ func TestCommandInspectCmd_RunE_DirectID(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newCommandCmd(flags)
 	if err := cmd.Flags().Set("inspect", "true"); err != nil {
 		t.Fatal(err)
@@ -608,49 +509,6 @@ func TestCommandInspectCmd_RunE_DirectID(t *testing.T) {
 	}
 }
 
-// --- newDeployPlanCmd RunE with temp project ---
-
-func TestDeployPlanCmd_RunE_EmptyPlan(t *testing.T) {
-	dir := makeMinimalProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
-	cmd := newDeployPlanCmd(flags)
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	if err := cmd.RunE(cmd, nil); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// Title rendering exists (RenderSectionTitle returns ANSI-styled text but
-	// always contains the plain text payload).
-	if !strings.Contains(buf.String(), "Deploy plan") {
-		t.Errorf("expected plan output to contain 'Deploy plan', got: %q", buf.String())
-	}
-}
-
-func TestDeployPlanCmd_RunE_ShellFormat(t *testing.T) {
-	dir := makeMinimalProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
-	cmd := newDeployPlanCmd(flags)
-	if err := cmd.Flags().Set("format", "shell"); err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.RunE(cmd, nil); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestDeployPlanCmd_RunE_UnknownService(t *testing.T) {
-	dir := makeMinimalProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
-	cmd := newDeployPlanCmd(flags)
-	if err := cmd.Flags().Set("service", "nonexistent"); err != nil {
-		t.Fatal(err)
-	}
-	err := cmd.RunE(cmd, nil)
-	if err == nil {
-		t.Fatal("expected error for unknown service")
-	}
-}
-
 // --- compose commands RunE ---
 
 func TestComposeFilesCmd_RunE(t *testing.T) {
@@ -660,7 +518,7 @@ func TestComposeFilesCmd_RunE(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "compose.yaml"), []byte(composeYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newComposeFilesCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -670,7 +528,7 @@ func TestComposeFilesCmd_RunE(t *testing.T) {
 }
 
 func TestComposeFilesCmd_RunE_InvalidConfig(t *testing.T) {
-	flags := &rootFlags{configPath: "/nonexistent/devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/devbox.yml"}
 	cmd := newComposeFilesCmd(flags)
 	if err := cmd.RunE(cmd, nil); err == nil {
 		t.Fatal("expected error for invalid config path")
@@ -679,7 +537,7 @@ func TestComposeFilesCmd_RunE_InvalidConfig(t *testing.T) {
 
 func TestComposeArgvCmd_RunE(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
 	cmd := newComposeArgvCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -692,73 +550,9 @@ func TestComposeArgvCmd_RunE(t *testing.T) {
 }
 
 func TestComposeArgvCmd_RunE_InvalidConfig(t *testing.T) {
-	flags := &rootFlags{configPath: "/nonexistent/devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/devbox.yml"}
 	cmd := newComposeArgvCmd(flags)
 	if err := cmd.RunE(cmd, []string{"up"}); err == nil {
 		t.Fatal("expected error for invalid config path")
-	}
-}
-
-// --- runRenderEnv ---
-
-func TestRunRenderEnv_ToFile(t *testing.T) {
-	dir := makeMinimalProject(t)
-	outputPath := filepath.Join(dir, ".env")
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
-	if err := runRenderEnv(flags, outputPath); err != nil {
-		t.Fatalf("runRenderEnv: %v", err)
-	}
-	if _, err := os.Stat(outputPath); err != nil {
-		t.Errorf("expected .env file to be written: %v", err)
-	}
-}
-
-func TestRunRenderEnv_InvalidConfig(t *testing.T) {
-	flags := &rootFlags{configPath: "/nonexistent/devbox.yml"}
-	err := runRenderEnv(flags, "")
-	if err == nil {
-		t.Fatal("expected error for invalid config")
-	}
-}
-
-// --- newCommandInspectCmd RunE error paths ---
-
-func TestCommandInspectCmd_RunE_NotFoundID(t *testing.T) {
-	dir := makeMinimalProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dir, "devbox.yml")}
-	cmd := newCommandCmd(flags)
-	if err := cmd.Flags().Set("inspect", "true"); err != nil {
-		t.Fatal(err)
-	}
-	err := cmd.RunE(cmd, []string{"nonexistent.cmd"})
-	if err == nil {
-		t.Fatal("expected error for non-existent command ID")
-	}
-}
-
-// --- newPrint* RunE (success/warning/info) ---
-
-func TestNewPrintSuccessCmd_RunE(t *testing.T) {
-	cmd := newPrintSuccessCmd()
-	// RunE writes to render.Stdout() which is os.Stdout; just verify no error.
-	err := cmd.RunE(cmd, []string{"all good"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestNewPrintWarningCmd_RunE(t *testing.T) {
-	cmd := newPrintWarningCmd()
-	err := cmd.RunE(cmd, []string{"watch out"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestNewPrintInfoCmd_RunE(t *testing.T) {
-	cmd := newPrintInfoCmd()
-	err := cmd.RunE(cmd, []string{"just info"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/spf13/cobra"
 )
 
 func TestDocsCacheCommand(t *testing.T) {
 	t.Run("cache subcommand is registered", func(t *testing.T) {
-		flags := &rootFlags{}
+		flags := &cmdctx.RootFlags{}
 		cmd := newDocsCacheCmd(flags)
 		if cmd.Name() != "cache" {
 			t.Errorf("expected 'cache', got %s", cmd.Name())
@@ -50,7 +52,7 @@ func TestDocsCacheCommand(t *testing.T) {
 	})
 
 	t.Run("parent cache command does not have RunE", func(t *testing.T) {
-		flags := &rootFlags{}
+		flags := &cmdctx.RootFlags{}
 		cmd := newDocsCacheCmd(flags)
 		if cmd.RunE != nil {
 			t.Errorf("cache parent command should not have RunE (cobra prints help by default)")
@@ -104,7 +106,7 @@ func TestDocsCacheCommand(t *testing.T) {
 	})
 
 	t.Run("cache command short description is not empty", func(t *testing.T) {
-		flags := &rootFlags{}
+		flags := &cmdctx.RootFlags{}
 		cmd := newDocsCacheCmd(flags)
 		if cmd.Short == "" {
 			t.Errorf("expected non-empty Short description for cache command")
@@ -112,7 +114,7 @@ func TestDocsCacheCommand(t *testing.T) {
 	})
 
 	t.Run("cache command long description is not empty", func(t *testing.T) {
-		flags := &rootFlags{}
+		flags := &cmdctx.RootFlags{}
 		cmd := newDocsCacheCmd(flags)
 		if cmd.Long == "" {
 			t.Errorf("expected non-empty Long description for cache command")

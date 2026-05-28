@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 )
@@ -127,7 +128,7 @@ func TestDockerEnvRegenCommands(t *testing.T) {
 
 // TestDockerCommandSubcommands verifies the docker command group has all expected subcommands.
 func TestDockerCommandSubcommands(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	dockerCmd := newDockerCmd(flags)
 
 	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "pull", "build", "project-name"}
@@ -241,7 +242,7 @@ func TestResolvePullInvocation(t *testing.T) {
 
 // TestDockerPullCmd verifies pull command registration and flag parsing.
 func TestDockerPullCmd(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	pullCmd := newDockerPullCmd(flags)
 
 	if pullCmd.Name() != "pull" {
@@ -391,7 +392,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 
 // TestDockerBuildCmd verifies build command registration and flag parsing.
 func TestDockerBuildCmd(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	buildCmd := newDockerBuildCmd(flags)
 
 	if buildCmd.Name() != "build" {

@@ -15,12 +15,11 @@ type ProjectLockHeldError struct {
 }
 
 func (e *ProjectLockHeldError) Error() string {
-	return fmt.Sprintf("%s operation in progress: pid %d", e.Operation, e.PID)
+	return fmt.Sprintf("%s operation in progress: pid %d (wait for it to finish or kill it and retry)", e.Operation, e.PID)
 }
 
-// ExitCode returns 2 so the CLI surfaces lock-held as a distinct, machine-
-// readable failure mode (matches the existing lockHeldError in the command
-// layer).
+// ExitCode returns 2 so the CLI surfaces lock-held as a distinct,
+// machine-readable failure mode.
 func (e *ProjectLockHeldError) ExitCode() int { return 2 }
 
 // DeployLockPath returns the canonical path to deploy.lock for the given

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
@@ -22,7 +23,7 @@ import (
 // Read-only subcommands (list, current, inspect) ship in this task; the
 // mutating subcommands (create, restore, rollback, remove, pack, unpack) are
 // added by later tasks in the snapshot subsystem plan.
-func newSnapshotCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
 		Short: "Capture, restore, and manage project snapshots",
@@ -44,7 +45,7 @@ and restore or roll back to it. Workflows live in devbox/snapshot.yml.`,
 }
 
 // newSnapshotListCmd: `devbox snapshot list [--json]`.
-func newSnapshotListCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:          "list",
@@ -59,7 +60,7 @@ func newSnapshotListCmd(flags *rootFlags) *cobra.Command {
 	return cmd
 }
 
-func runSnapshotList(flags *rootFlags, out, errW io.Writer, jsonOut bool) error {
+func runSnapshotList(flags *cmdctx.RootFlags, out, errW io.Writer, jsonOut bool) error {
 	baseDir := flags.ProjectRoot()
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
 	if err != nil {
@@ -144,7 +145,7 @@ func writeSnapshotListJSON(out io.Writer, entries []snapshot.Entry, current stri
 }
 
 // newSnapshotCurrentCmd: `devbox snapshot current`.
-func newSnapshotCurrentCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotCurrentCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "current",
 		Short:        "Show the snapshot currently restored into the project",
@@ -156,7 +157,7 @@ func newSnapshotCurrentCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func runSnapshotCurrent(flags *rootFlags, out, errW io.Writer) error {
+func runSnapshotCurrent(flags *cmdctx.RootFlags, out, errW io.Writer) error {
 	baseDir := flags.ProjectRoot()
 	name, err := snapshot.ReadCurrent(baseDir)
 	if err != nil {
@@ -182,7 +183,7 @@ func runSnapshotCurrent(flags *rootFlags, out, errW io.Writer) error {
 }
 
 // newSnapshotInspectCmd: `devbox snapshot inspect <name|tar-path> [--json]`.
-func newSnapshotInspectCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotInspectCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:               "inspect <name|tar-path>",
@@ -198,7 +199,7 @@ func newSnapshotInspectCmd(flags *rootFlags) *cobra.Command {
 	return cmd
 }
 
-func runSnapshotInspect(flags *rootFlags, out io.Writer, arg string, jsonOut bool) error {
+func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, jsonOut bool) error {
 	baseDir := flags.ProjectRoot()
 	m, source, err := loadInspectManifest(baseDir, arg)
 	if err != nil {
@@ -212,10 +213,10 @@ func runSnapshotInspect(flags *rootFlags, out io.Writer, arg string, jsonOut boo
 	// current config (or a manifest with no services captured) leave servicesDiff
 	// nil so the section is omitted; the project-resolution invariant for
 	// `inspect` guarantees configPath is set when invoked normally, but tests may
-	// construct rootFlags without it.
+	// construct cmdctx.RootFlags without it.
 	var servicesDiff *snapshot.ServicesDiff
-	if len(m.Project.Services) > 0 && flags.configPath != "" {
-		if cfg, cfgErr := config.LoadConfig(flags.configPath); cfgErr == nil && cfg != nil {
+	if len(m.Project.Services) > 0 && flags.ConfigPath != "" {
+		if cfg, cfgErr := config.LoadConfig(flags.ConfigPath); cfgErr == nil && cfg != nil {
 			d := snapshot.DiffServices(m.Project.Services, cfg.Services)
 			servicesDiff = &d
 		}
@@ -335,12 +336,12 @@ func looksLikeTarArchive(s string) bool {
 // argument. Follows the CLAUDE.md completion contract (calls
 // completionConfigPath before touching the project; returns NoFileComp on
 // any error so tab-complete is never noisy).
-func snapshotNameCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+func snapshotNameCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		_, projectRoot, err := completionConfigPath(flags, cmd)
+		_, projectRoot, err := cmdctx.CompletionConfigPath(flags, cmd)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

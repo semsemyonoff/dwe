@@ -6,10 +6,12 @@ import (
 	"os"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/render"
 	"devbox-cli/internal/i18n"
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/userconfig"
 
 	"github.com/charmbracelet/x/term"
@@ -24,7 +26,7 @@ type docsShowFlags struct {
 	toc     bool
 }
 
-func newDocsShowCmd(flags *rootFlags) *cobra.Command {
+func newDocsShowCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsShowFlags{}
 
 	cmd := &cobra.Command{
@@ -60,7 +62,7 @@ Examples:
 		SilenceUsage: true,
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			// completionConfigPath must be called first: __complete bypasses PersistentPreRunE.
-			_, projectRoot, err := completionConfigPath(flags, cmd)
+			_, projectRoot, err := cmdctx.CompletionConfigPath(flags, cmd)
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
@@ -88,9 +90,9 @@ Examples:
 	return cmd
 }
 
-func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic string) error {
+func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags, topic string) error {
 	// Load project config for mermaid settings; tolerate missing config.
-	cfg, err := config.LoadConfig(rflags.configPath)
+	cfg, err := config.LoadConfig(rflags.ConfigPath)
 	if err != nil {
 		cfg = &config.DevboxConfig{}
 	}
@@ -149,7 +151,7 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 		default:
 			return err
 		}
-		return ErrSilent
+		return pipeline.ErrSilent
 	}
 
 	// Find the root that contains the resolved topic
@@ -211,7 +213,7 @@ func runDocsShow(cmd *cobra.Command, rflags *rootFlags, df *docsShowFlags, topic
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  ... and %d more\n", more)
 				}
 			}
-			return ErrSilent
+			return pipeline.ErrSilent
 		}
 		_ = matched
 		content = sliced

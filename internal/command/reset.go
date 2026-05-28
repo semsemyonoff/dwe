@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/condition"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
@@ -20,6 +21,7 @@ import (
 	"devbox-cli/internal/reset"
 	"devbox-cli/internal/tpl"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/registry"
 	"devbox-cli/internal/usercommands/runtime"
 
@@ -34,7 +36,7 @@ var resetServiceRunHook = runtime.RunCommand
 // to intercept hook calls before any registry lookup.
 var resetRunHookFn = runResetHook
 
-func newResetCmd(flags *rootFlags) *cobra.Command {
+func newResetCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "reset",
 		Short:        "Reset pipeline commands",
@@ -49,7 +51,7 @@ func newResetCmd(flags *rootFlags) *cobra.Command {
 
 // newResetPlanCmd creates the `devbox reset plan` command.
 // Shows the resolved reset plan from devbox/reset.yml.
-func newResetPlanCmd(flags *rootFlags) *cobra.Command {
+func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var format string
 
 	cmd := &cobra.Command{
@@ -58,11 +60,11 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			reg, err := loadCommandRegistry(flags.configPath)
+			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
@@ -92,7 +94,7 @@ func newResetPlanCmd(flags *rootFlags) *cobra.Command {
 //
 // File logging is controlled by the top-level `log:` field in devbox/reset.yml
 // (default: disabled). Enable with `log: true` to write .devbox/logs/reset.log.
-func newResetRunCmd(flags *rootFlags) *cobra.Command {
+func newResetRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var serviceName string
 	var skipPreflight bool
@@ -124,23 +126,23 @@ the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
 	cmd.Flags().StringVar(&serviceName, "service", "", "reset only this service")
-	addSkipPreflightFlag(cmd, &skipPreflight)
+	cmdctx.AddSkipPreflight(cmd, &skipPreflight)
 	return cmd
 }
 
-func resetRunCmd(cmd *cobra.Command, flags *rootFlags, yes bool, skipPreflight bool) error {
+func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPreflight bool) error {
 	ctx := cmd.Context()
 	workDir := flags.ProjectRoot()
 	statePath := filepath.Join(workDir, journal.DefaultRelPath)
 
 	// Load cfg + registry BEFORE acquiring locks so preflight can reject
 	// without leaving a stale lock file.
-	cfg, err := config.LoadConfig(flags.configPath)
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	reg, regErr := loadCommandRegistry(flags.configPath)
+	reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if regErr != nil {
 		reg = nil
 	}
@@ -159,9 +161,8 @@ func resetRunCmd(cmd *cobra.Command, flags *rootFlags, yes bool, skipPreflight b
 	releaseLocks, err := lock.AcquireProjectLocks(workDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
-			render.Stdout().Error(lhe.Error())
-			return lhe
+			render.Stdout().Error(phe.Error())
+			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
 	}
@@ -205,7 +206,7 @@ func resetRunCmd(cmd *cobra.Command, flags *rootFlags, yes bool, skipPreflight b
 	}
 
 	if err := pipeline.RunWithOptions(opts); err != nil {
-		if errors.Is(err, ErrSilent) && logEnabled {
+		if errors.Is(err, pipeline.ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}
 		return err
@@ -230,13 +231,13 @@ func resetRunCmd(cmd *cobra.Command, flags *rootFlags, yes bool, skipPreflight b
 // (outside the lock), then acquires the project lock and atomically stops
 // the container, executes the per-service reset.yml (if present), and
 // writes a PendingDeploy journal entry.
-func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes bool, skipPreflight bool) error {
+func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes bool, skipPreflight bool) error {
 	ctx := cmd.Context()
 	workDir := flags.ProjectRoot()
 	statePath := filepath.Join(workDir, journal.DefaultRelPath)
 	baseDir := workDir
 
-	cfg, err := config.LoadConfig(flags.configPath)
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -256,7 +257,7 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 		return fmt.Errorf("%w: %s — per-service reset clears deployed state and requires a subsequent deploy; service %q has no deploy.yml, so its deployed state cannot be re-provisioned. Use full 'devbox reset run' instead", deploy.ErrServiceNoDeployFile, name, name)
 	}
 
-	reg, regErr := loadCommandRegistry(flags.configPath)
+	reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if regErr != nil {
 		reg = nil
 	}
@@ -302,9 +303,8 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
-			render.Stdout().Error(lhe.Error())
-			return lhe
+			render.Stdout().Error(phe.Error())
+			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
 	}
@@ -368,7 +368,7 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *rootFlags, name string, yes b
 			Locale:       flags.Locale,
 		}
 		if runErr := pipeline.RunWithOptions(runOpts); runErr != nil {
-			if errors.Is(runErr, ErrSilent) && logEnabled {
+			if errors.Is(runErr, pipeline.ErrSilent) && logEnabled {
 				w.Warning("Full output saved to: " + logPath)
 			}
 			return runErr
@@ -426,7 +426,7 @@ func runResetHook(ctx context.Context, cmd *cobra.Command, cfg *config.DevboxCon
 
 // newResetStepCmd creates the `devbox reset step <phase>/<step>` command.
 // Runs a single step from the reset pipeline by address.
-func newResetStepCmd(flags *rootFlags) *cobra.Command {
+func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var dryRun bool
 
 	cmd := &cobra.Command{
@@ -435,7 +435,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
@@ -477,7 +477,7 @@ func newResetStepCmd(flags *rootFlags) *cobra.Command {
 			}
 
 			workDir := flags.ProjectRoot()
-			reg, err := loadCommandRegistry(flags.configPath)
+			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}

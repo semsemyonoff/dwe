@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/command/statustui"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
@@ -73,8 +74,8 @@ type statusContext struct {
 
 // loadStatusContext loads the full status context. Called from each
 // subcommand's RunE. errW receives warnings (e.g. corrupt state file).
-func loadStatusContext(flags *rootFlags, errW io.Writer) (*statusContext, error) {
-	cfg, err := config.LoadConfig(flags.configPath)
+func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext, error) {
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
@@ -84,12 +85,12 @@ func loadStatusContext(flags *rootFlags, errW io.Writer) (*statusContext, error)
 		_, _ = fmt.Fprintf(errW, "warning: deploy state unreadable (%v); deploy section suppressed\n", err)
 		state = nil
 	}
-	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.configPath)
+	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, flags.ProjectRoot())
 	if err != nil {
 		return nil, fmt.Errorf("loading tracked services: %w", err)
 	}
-	projectName, dockerCfg, err := stack.ResolveProjectAndDocker(flags.configPath, cfg)
+	projectName, dockerCfg, err := stack.ResolveProjectAndDocker(flags.ConfigPath, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func loadStatusContext(flags *rootFlags, errW io.Writer) (*statusContext, error)
 		TopoStatus:  topoStatus,
 		IsRunning:   isRunning,
 		ProjectRoot: flags.ProjectRoot(),
-		ConfigPath:  flags.configPath,
+		ConfigPath:  flags.ConfigPath,
 	}, nil
 }
 
@@ -176,7 +177,7 @@ func shouldUseTUI(noTUI bool, no *noSectionFlags) bool {
 	return isTerminalFn(os.Stdout.Fd())
 }
 
-func newStatusCmd(flags *rootFlags) *cobra.Command {
+func newStatusCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	noFlags := &noSectionFlags{}
 	var noTUI bool
 	cmd := &cobra.Command{
@@ -320,7 +321,7 @@ func writeNonEmpty(w io.Writer, s string) {
 	}
 }
 
-func newStatusAppsCmd(flags *rootFlags) *cobra.Command {
+func newStatusAppsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "apps",
 		Short:        "Show only the apps section",
@@ -339,7 +340,7 @@ func newStatusAppsCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newStatusToolsCmd(flags *rootFlags) *cobra.Command {
+func newStatusToolsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "tools",
 		Short:        "Show only the tools section",
@@ -358,7 +359,7 @@ func newStatusToolsCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newStatusInfraCmd(flags *rootFlags) *cobra.Command {
+func newStatusInfraCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "infra",
 		Short:        "Show only the infra section",
@@ -377,7 +378,7 @@ func newStatusInfraCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newStatusTopologyCmd(flags *rootFlags) *cobra.Command {
+func newStatusTopologyCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "topology",
 		Short:        "Show only the topology section",
@@ -393,7 +394,7 @@ func newStatusTopologyCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newStatusGitCmd(flags *rootFlags) *cobra.Command {
+func newStatusGitCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "git",
 		Short:        "Show only the git workspace section",
@@ -409,7 +410,7 @@ func newStatusGitCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newStatusDeployCmd(flags *rootFlags) *cobra.Command {
+func newStatusDeployCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "deploy [service]",
 		Short: "Show deploy status (table) or per-service deploy detail",
@@ -439,12 +440,12 @@ With a service name, shows the per-phase/step deploy breakdown for that service.
 // trackedServiceCompletion returns shell completion names for the deploy
 // subcommand's optional service argument. Follows the completion contract
 // from CLAUDE.md (bypasses PersistentPreRunE).
-func trackedServiceCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+func trackedServiceCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		configPath, _, err := completionConfigPath(flags, cmd)
+		configPath, _, err := cmdctx.CompletionConfigPath(flags, cmd)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

@@ -7,10 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/command/cmdctx"
+	"devbox-cli/internal/pipeline"
 )
 
 func TestNewPromptCmd_UseAndFlags(t *testing.T) {
-	cmd := newPromptCmd(&rootFlags{})
+	cmd := newPromptCmd(&cmdctx.RootFlags{})
 	if cmd.Use != "prompt" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "prompt")
 	}
@@ -40,7 +43,7 @@ func TestPromptRegisteredAtRoot(t *testing.T) {
 }
 
 func TestPromptAllowedWithoutProject(t *testing.T) {
-	cmd := newPromptCmd(&rootFlags{})
+	cmd := newPromptCmd(&cmdctx.RootFlags{})
 	cmd.SetArgs([]string{})
 	// Simulate the command path resolution allowedWithoutProject expects.
 	// We check via the helper directly by constructing a fake cmd with that path.
@@ -85,7 +88,7 @@ func TestPromptCmd_RunInProject(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, tmp)
 
-	cmd := newPromptCmd(&rootFlags{})
+	cmd := newPromptCmd(&cmdctx.RootFlags{})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetArgs([]string{})
@@ -111,7 +114,7 @@ func TestPromptCmd_RunOutsideProject(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, deep)
 
-	cmd := newPromptCmd(&rootFlags{})
+	cmd := newPromptCmd(&cmdctx.RootFlags{})
 	var out, errBuf bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&errBuf)
@@ -126,7 +129,7 @@ func TestPromptCmd_RunOutsideProject(t *testing.T) {
 		}
 		return
 	}
-	if !errors.Is(err, ErrSilent) {
+	if !errors.Is(err, pipeline.ErrSilent) {
 		t.Fatalf("expected ErrSilent, got %T: %v", err, err)
 	}
 	if out.Len() != 0 {
@@ -140,7 +143,7 @@ func TestPromptCmd_CheckFlag(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, tmp)
 
-	cmd := newPromptCmd(&rootFlags{})
+	cmd := newPromptCmd(&cmdctx.RootFlags{})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetArgs([]string{"--check"})
@@ -153,7 +156,7 @@ func TestPromptCmd_CheckFlag(t *testing.T) {
 }
 
 func TestPromptCmd_RejectsPositionalArgs(t *testing.T) {
-	cmd := newPromptCmd(&rootFlags{})
+	cmd := newPromptCmd(&cmdctx.RootFlags{})
 	cmd.SetArgs([]string{"foo"})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
@@ -172,7 +175,7 @@ func TestPromptCmd_OutsideProjectReturnsSilent(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	withTempCwd(t, deep)
-	cmd := newPromptCmd(&rootFlags{})
+	cmd := newPromptCmd(&cmdctx.RootFlags{})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	cmd.SetArgs([]string{})
@@ -180,7 +183,7 @@ func TestPromptCmd_OutsideProjectReturnsSilent(t *testing.T) {
 	if err == nil {
 		t.Skip("may be running inside a parent devbox project")
 	}
-	if !errors.Is(err, ErrSilent) {
+	if !errors.Is(err, pipeline.ErrSilent) {
 		t.Errorf("expected ErrSilent, got %T: %v", err, err)
 	}
 }

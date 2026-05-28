@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"devbox-cli/internal/command"
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/version"
 )
 
@@ -69,7 +70,7 @@ func TestFangVersionFlag(t *testing.T) {
 func TestFangErrorHandlerSuppressesErrSilent(t *testing.T) {
 	captured := &bytes.Buffer{}
 	errHandler := func(w io.Writer, _ fang.Styles, err error) {
-		if errors.Is(err, command.ErrSilent) {
+		if errors.Is(err, pipeline.ErrSilent) {
 			return
 		}
 		fang.DefaultErrorHandler(w, fang.Styles{}, err)
@@ -78,7 +79,7 @@ func TestFangErrorHandlerSuppressesErrSilent(t *testing.T) {
 	root := command.NewRootCmd()
 	// Override the RunE to return ErrSilent.
 	root.RunE = func(cmd *cobra.Command, args []string) error {
-		return command.ErrSilent
+		return pipeline.ErrSilent
 	}
 	root.SetErr(captured)
 	root.SetArgs([]string{})

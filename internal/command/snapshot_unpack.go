@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/render"
@@ -17,7 +18,7 @@ import (
 )
 
 // newSnapshotUnpackCmd: `devbox snapshot unpack <tar-path> [--as=<name>] [-y]`.
-func newSnapshotUnpackCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotUnpackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		asName   string
 		yes      bool
@@ -38,7 +39,7 @@ func newSnapshotUnpackCmd(flags *rootFlags) *cobra.Command {
 	return cmd
 }
 
-func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName string, yes, noVerify bool) error {
+func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asName string, yes, noVerify bool) error {
 	baseDir := flags.ProjectRoot()
 	stderr := cmd.ErrOrStderr()
 
@@ -59,9 +60,8 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName str
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
-			render.Stdout().Error(lhe.Error())
-			return lhe
+			render.Stdout().Error(phe.Error())
+			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
 	}
@@ -100,7 +100,7 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *rootFlags, tarPath, asName str
 		return err
 	}
 
-	cfg, cfgErr := config.LoadConfig(flags.configPath)
+	cfg, cfgErr := config.LoadConfig(flags.ConfigPath)
 	if cfgErr == nil && res.Manifest != nil && res.Manifest.Project.Name != "" && cfg.Project.Name != "" && res.Manifest.Project.Name != cfg.Project.Name {
 		_, _ = fmt.Fprintf(stderr,
 			"warning: archive project name %q differs from current project %q\n",

@@ -99,9 +99,8 @@ func RunRun(ctx RunContext) (err error) {
 		}
 		n := newNotifier(ucfg)
 		defer func() {
-			// Preflight-blocked and lock-held are not run failures — suppress
-			// the notification (matches deploy.go which also skips notify for
-			// *preflight.Error and *lockHeldError).
+			// Preflight-blocked and lock-held are not run failures —
+			// suppress the notification.
 			if errors.As(err, new(*preflight.Error)) {
 				return
 			}

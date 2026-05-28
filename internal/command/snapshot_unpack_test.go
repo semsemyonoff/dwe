@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/snapshot"
 )
 
@@ -76,7 +77,7 @@ func TestSnapshotUnpack_VerifiedSummary(t *testing.T) {
 	buildFixtureTarGz(t, srcBase, "fix", tarPath)
 
 	dstBase := snapshotUnpackProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dstBase, "devbox.yml"), projectRoot: dstBase}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "devbox.yml"), Root: dstBase}
 
 	cmd := newSnapshotUnpackCmd(flags)
 	var stderr bytes.Buffer
@@ -104,7 +105,7 @@ func TestSnapshotUnpack_NoVerifyFlag(t *testing.T) {
 	buildFixtureTarGz(t, srcBase, "fix", tarPath)
 
 	dstBase := snapshotUnpackProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dstBase, "devbox.yml"), projectRoot: dstBase}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "devbox.yml"), Root: dstBase}
 
 	cmd := newSnapshotUnpackCmd(flags)
 	var stderr bytes.Buffer
@@ -155,7 +156,7 @@ func TestSnapshotUnpack_VerifiedWithWarnings(t *testing.T) {
 	}
 
 	dstBase := snapshotUnpackProject(t)
-	flags := &rootFlags{configPath: filepath.Join(dstBase, "devbox.yml"), projectRoot: dstBase}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "devbox.yml"), Root: dstBase}
 
 	cmd := newSnapshotUnpackCmd(flags)
 	var stderr bytes.Buffer

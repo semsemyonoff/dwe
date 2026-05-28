@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/envfile"
@@ -14,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newDockerCmd(flags *rootFlags) *cobra.Command {
+func newDockerCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "docker",
 		Short:        "Docker Compose lifecycle commands",
@@ -45,8 +46,8 @@ type dockerPipeline struct {
 // envRegenCommands lists docker commands that trigger automatic .env regeneration.
 var envRegenCommands = []string{"up", "run", "exec", "restart", "build"}
 
-func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error) {
-	cfg, err := config.LoadConfig(flags.configPath)
+func newDockerPipeline(flags *cmdctx.RootFlags, command string) (*dockerPipeline, error) {
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
@@ -62,7 +63,7 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 
 	// Auto-generate .env before these commands.
 	if slices.Contains(envRegenCommands, command) {
-		if _, err := envfile.Regenerate(flags.configPath); err != nil {
+		if _, err := envfile.Regenerate(flags.ConfigPath); err != nil {
 			return nil, fmt.Errorf("generating .env: %w", err)
 		}
 	}
@@ -81,7 +82,7 @@ func newDockerPipeline(flags *rootFlags, command string) (*dockerPipeline, error
 	}, nil
 }
 
-func newDockerUpCmd(flags *rootFlags) *cobra.Command {
+func newDockerUpCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var wait bool
 
 	cmd := &cobra.Command{
@@ -105,7 +106,7 @@ func newDockerUpCmd(flags *rootFlags) *cobra.Command {
 	return cmd
 }
 
-func newDockerDownCmd(flags *rootFlags) *cobra.Command {
+func newDockerDownCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "down",
 		Short: "Stop and remove compose services",
@@ -120,7 +121,7 @@ func newDockerDownCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newDockerStopCmd(flags *rootFlags) *cobra.Command {
+func newDockerStopCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop [services...]",
 		Short: "Stop compose services",
@@ -135,7 +136,7 @@ func newDockerStopCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newDockerRestartCmd(flags *rootFlags) *cobra.Command {
+func newDockerRestartCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "restart [services...]",
 		Short: "Restart compose services",
@@ -150,7 +151,7 @@ func newDockerRestartCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newDockerLogsCmd(flags *rootFlags) *cobra.Command {
+func newDockerLogsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logs [services...]",
 		Short: "View compose service logs",
@@ -165,7 +166,7 @@ func newDockerLogsCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newDockerPsCmd(flags *rootFlags) *cobra.Command {
+func newDockerPsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ps",
 		Short: "List compose containers",
@@ -180,7 +181,7 @@ func newDockerPsCmd(flags *rootFlags) *cobra.Command {
 	}
 }
 
-func newDockerExecCmd(flags *rootFlags) *cobra.Command {
+func newDockerExecCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:                "exec <service> [-- cmd...]",
 		Short:              "Execute a command in a running compose service",
@@ -205,7 +206,7 @@ being consumed by devbox's parser.`,
 	}
 }
 
-func newDockerRunCmd(flags *rootFlags) *cobra.Command {
+func newDockerRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:                "run <service> [-- cmd...]",
 		Short:              "Run a one-off command in a compose service",
@@ -252,7 +253,7 @@ func resolvePullInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerCon
 	return docker.NewCompose(cfg, dockerCfg), services
 }
 
-func newDockerPullCmd(flags *rootFlags) *cobra.Command {
+func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var all bool
 
 	cmd := &cobra.Command{
@@ -294,7 +295,7 @@ func resolveBuildInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerCo
 	return compose, extraArgs
 }
 
-func newDockerBuildCmd(flags *rootFlags) *cobra.Command {
+func newDockerBuildCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var all bool
 	var force bool
 
@@ -318,13 +319,13 @@ func newDockerBuildCmd(flags *rootFlags) *cobra.Command {
 	return cmd
 }
 
-func newDockerProjectNameCmd(flags *rootFlags) *cobra.Command {
+func newDockerProjectNameCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "project-name",
 		Short: "Print the resolved compose project name",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}

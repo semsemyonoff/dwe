@@ -7,12 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 )
 
 func TestStopCmd_Use(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newStopCmd(flags)
 	if cmd.Use != "stop [service]" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "stop [service]")
@@ -20,7 +21,7 @@ func TestStopCmd_Use(t *testing.T) {
 }
 
 func TestStopCmd_MaximumOneArg(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newStopCmd(flags)
 
 	// Zero args allowed.
@@ -38,7 +39,7 @@ func TestStopCmd_MaximumOneArg(t *testing.T) {
 }
 
 func TestStopCmd_FlagsExist(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newStopCmd(flags)
 	if cmd.Flags().Lookup("yes") == nil {
 		t.Error("missing --yes flag")
@@ -248,7 +249,7 @@ func TestStopCmd_OneArg_UnknownService(t *testing.T) {
 	t.Cleanup(func() { stopContainerFn = prev })
 	stopContainerFn = func(_ context.Context, _, _ string, _ int) error { return nil }
 
-	flags := &rootFlags{configPath: cfgPath, projectRoot: filepath.Dir(cfgPath)}
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: filepath.Dir(cfgPath)}
 	cmd := newStopCmd(flags)
 	cmd.SilenceErrors = true
 	err := cmd.RunE(cmd, []string{"nonexistent"})

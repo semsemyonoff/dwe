@@ -67,33 +67,6 @@ func TestCommandGroups(t *testing.T) {
 	}
 }
 
-// TestPrintCmdIsHidden verifies that the print command is hidden (internal Make compatibility).
-func TestPrintCmdIsHidden(t *testing.T) {
-	root := NewRootCmd()
-	for _, c := range root.Commands() {
-		if c.Name() == "print" {
-			if !c.Hidden {
-				t.Error("print command should be hidden")
-			}
-			return
-		}
-	}
-	t.Error("print command not found in root commands")
-}
-
-// TestPrintCmdHasNoGroupID verifies that the hidden print command is not assigned to any group.
-func TestPrintCmdHasNoGroupID(t *testing.T) {
-	root := NewRootCmd()
-	for _, c := range root.Commands() {
-		if c.Name() == "print" {
-			if c.GroupID != "" {
-				t.Errorf("print command should have no groupID, got %q", c.GroupID)
-			}
-			return
-		}
-	}
-}
-
 // TestRenderCmdIsInConfigurationGroup verifies "render" specifically (it has a subcommand use field).
 func TestRenderCmdRegisteredWithGroup(t *testing.T) {
 	root := NewRootCmd()
@@ -359,7 +332,7 @@ func TestLocaleResolutionWithLangEnv(t *testing.T) {
 	}
 }
 
-// TestI18nStoreIsNonNilAfterInit verifies that rootFlags.I18n is never nil
+// TestI18nStoreIsNonNilAfterInit verifies that RootFlags.I18n is never nil
 // after PersistentPreRunE completes.
 func TestI18nStoreIsNonNilAfterInit(t *testing.T) {
 	dir := t.TempDir()
@@ -385,7 +358,7 @@ func TestI18nStoreIsNonNilAfterInit(t *testing.T) {
 	}
 }
 
-// TestLocaleIsAlwaysSet verifies that rootFlags.Locale is never empty
+// TestLocaleIsAlwaysSet verifies that RootFlags.Locale is never empty
 // after PersistentPreRunE completes.
 func TestLocaleIsAlwaysSet(t *testing.T) {
 	dir := t.TempDir()

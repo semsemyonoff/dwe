@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/i18n"
 	"devbox-cli/internal/ui"
@@ -737,7 +738,7 @@ func TestResolveCommandID_nonInteractiveSelector_exactID_succeeds(t *testing.T) 
 // --- commands parent command surface ---
 
 func TestCommandCmd_AcceptsOptionalArg(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
 	if err := cmd.Args(cmd, []string{}); err != nil {
 		t.Errorf("0 args should be accepted: %v", err)
@@ -751,7 +752,7 @@ func TestCommandCmd_AcceptsOptionalArg(t *testing.T) {
 }
 
 func TestCommandCmd_HasFlags(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
 
 	cases := []struct {
@@ -781,7 +782,7 @@ func TestCommandCmd_HasFlags(t *testing.T) {
 }
 
 func TestCommandCmd_HasCmdAlias(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
 	if !slices.Contains(cmd.Aliases, "cmd") {
 		t.Errorf("commands command should have 'cmd' alias, got %v", cmd.Aliases)
@@ -789,7 +790,7 @@ func TestCommandCmd_HasCmdAlias(t *testing.T) {
 }
 
 func TestCommandCmd_StillHasListSubcommand(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
 	var found *cobra.Command
 	for _, sub := range cmd.Commands() {
@@ -804,7 +805,7 @@ func TestCommandCmd_StillHasListSubcommand(t *testing.T) {
 }
 
 func TestCommandCmd_NoRunOrInspectSubcommand(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
 	for _, sub := range cmd.Commands() {
 		if sub.Name() == "run" || sub.Name() == "inspect" {
@@ -814,7 +815,7 @@ func TestCommandCmd_NoRunOrInspectSubcommand(t *testing.T) {
 }
 
 func TestCommandCmd_InspectWithoutID_Error(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
 	if err := cmd.Flags().Set("inspect", "true"); err != nil {
 		t.Fatal(err)
@@ -829,7 +830,7 @@ func TestCommandCmd_InspectWithoutID_Error(t *testing.T) {
 }
 
 func TestCommandCmd_InspectAndSet_MutuallyExclusive(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	parent := &cobra.Command{Use: "test"}
 	parent.AddCommand(newCommandCmd(flags))
 	parent.SetArgs([]string{"commands", "--inspect", "--set", "k=v", "db.up"})
@@ -841,7 +842,7 @@ func TestCommandCmd_InspectAndSet_MutuallyExclusive(t *testing.T) {
 }
 
 func TestCommandCmd_InspectAndYes_MutuallyExclusive(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	parent := &cobra.Command{Use: "test"}
 	parent.AddCommand(newCommandCmd(flags))
 	parent.SetArgs([]string{"commands", "--inspect", "--yes", "db.up"})
@@ -854,7 +855,7 @@ func TestCommandCmd_InspectAndYes_MutuallyExclusive(t *testing.T) {
 
 func TestCommandCmd_AliasDispatch(t *testing.T) {
 	// Verify the 'cmd' alias resolves through cobra parent dispatch.
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	parent := &cobra.Command{Use: "devbox"}
 	parent.AddCommand(newCommandCmd(flags))
 
@@ -880,7 +881,7 @@ func TestCommandCmd_InspectSkipsSignalSetup(t *testing.T) {
 		return context.WithCancel(parent)
 	}
 
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newCommandCmd(flags)
 	if err := cmd.Flags().Set("inspect", "true"); err != nil {
 		t.Fatal(err)
@@ -897,8 +898,7 @@ func TestCommandCmd_InspectSkipsSignalSetup(t *testing.T) {
 // cobra context with notifyContext(SIGINT, SIGTERM) and forwards the wrapped
 // context to runUserCommand.
 func TestCommandCmd_SignalAwareContext(t *testing.T) {
-	// Create a minimal temp project so config.LoadConfig and loadCommandRegistry
-	// both succeed.
+	// Minimal temp project so config + registry loads succeed.
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "devbox.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\n"), 0o644); err != nil {
@@ -942,7 +942,7 @@ func TestCommandCmd_SignalAwareContext(t *testing.T) {
 	t.Cleanup(func() { ui.IsInteractiveFn = origInteractive })
 	ui.IsInteractiveFn = func(io.Reader) bool { return false }
 
-	flags := &rootFlags{configPath: cfgPath}
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
 	cmd := newCommandCmd(flags)
 	cmd.SetContext(context.Background())
 

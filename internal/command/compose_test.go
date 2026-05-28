@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/render"
@@ -243,7 +244,7 @@ func TestWaitContainersHealthy_mixedNoHealthcheckAndHealthy(t *testing.T) {
 // TestComposeSubcommands verifies the compose command group has the expected subcommands
 // after the refactor: files, raw, argv (wait removed, run renamed to raw).
 func TestComposeSubcommands(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	composeCmd := newComposeCmd(flags)
 
 	expectedSubs := []string{"files", "raw", "argv"}
@@ -339,7 +340,7 @@ func TestComposeArgvOutput(t *testing.T) {
 
 // TestComposeArgvCmd verifies the cobra command for `compose argv` requires at least one arg.
 func TestComposeArgvCmd(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newComposeArgvCmd(flags)
 
 	// No args should fail validation.

@@ -4,15 +4,17 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestDocsShowExactMatch(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsShowCmd(flags)
@@ -22,11 +24,11 @@ func TestDocsShowExactMatch(t *testing.T) {
 }
 
 func TestDocsShowRawMode(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsShowCmd(flags)
@@ -41,11 +43,11 @@ func TestGetTermWidth(t *testing.T) {
 }
 
 func TestDocsShowMissingTopic(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsShowCmd(flags)
@@ -58,11 +60,11 @@ func TestDocsShowMissingTopic(t *testing.T) {
 }
 
 func TestDocsShowBuiltinTopic(t *testing.T) {
-	flags := &rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		I18n:        nil,
-		Locale:      "en",
+	flags := &cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		I18n:       nil,
+		Locale:     "en",
 	}
 
 	cmd := newDocsShowCmd(flags)

@@ -1,12 +1,15 @@
 package command
 
 import (
+	pipeline "devbox-cli/internal/pipeline"
 	"devbox-cli/internal/prompt"
+
+	"devbox-cli/internal/command/cmdctx"
 
 	"github.com/spf13/cobra"
 )
 
-func newPromptCmd(_ *rootFlags) *cobra.Command {
+func newPromptCmd(_ *cmdctx.RootFlags) *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
 		Use:   "prompt",
@@ -32,7 +35,7 @@ inside a devbox project and 1 outside (or on any silent failure).`,
 				passthrough = []string{"--check"}
 			}
 			if prompt.Run(cmd.OutOrStdout(), passthrough) != 0 {
-				return ErrSilent
+				return pipeline.ErrSilent
 			}
 			return nil
 		},

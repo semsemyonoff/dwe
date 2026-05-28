@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/command/cmdctx"
 )
 
 func TestRestartCmd_Use(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newRestartCmd(flags)
 	if cmd.Use != "restart" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "restart")
@@ -16,7 +18,7 @@ func TestRestartCmd_Use(t *testing.T) {
 }
 
 func TestRestartCmd_NoArgs(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newRestartCmd(flags)
 	if cmd.Args == nil {
 		t.Error("Args validator should be set (cobra.NoArgs)")
@@ -27,7 +29,7 @@ func TestRestartCmd_NoArgs(t *testing.T) {
 }
 
 func TestRestartCmd_FlagsExist(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newRestartCmd(flags)
 	if cmd.Flags().Lookup("yes") == nil {
 		t.Error("missing --yes flag")

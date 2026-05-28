@@ -13,9 +13,11 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/daemon"
 	"devbox-cli/internal/docker"
+	"devbox-cli/internal/usercommands"
 
 	"github.com/spf13/cobra"
 )
@@ -64,7 +66,7 @@ func runDaemonSetPS(ctx context.Context, compose *docker.Compose, projectFull, d
 //
 // Failures return empty + NoFileComp silently (CLAUDE.md "Completion helpers"
 // rule: completion never surfaces errors to the terminal).
-func daemonSetCompletion(flags *rootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -76,11 +78,11 @@ func daemonSetCompletion(flags *rootFlags) func(*cobra.Command, []string, string
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		configPath, projectRoot, err := completionConfigPath(flags, cmd)
+		configPath, projectRoot, err := cmdctx.CompletionConfigPath(flags, cmd)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		reg, err := loadCommandRegistry(configPath)
+		reg, err := usercommands.LoadRegistryFromConfigPath(configPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

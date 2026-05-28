@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/docs"
 	"devbox-cli/internal/docs/export"
 	"devbox-cli/internal/i18n"
@@ -19,7 +20,7 @@ type docsExportFlags struct {
 	force            bool
 }
 
-func newDocsExportCmd(flags *rootFlags) *cobra.Command {
+func newDocsExportCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsExportFlags{}
 
 	cmd := &cobra.Command{
@@ -49,7 +50,7 @@ Examples:
 	return cmd
 }
 
-func runDocsExport(cmd *cobra.Command, rflags *rootFlags, df *docsExportFlags, targetDir string) error {
+func runDocsExport(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsExportFlags, targetDir string) error {
 	// Load user config to get the configured language
 	var cfgLang string
 	projectRoot := rflags.ProjectRoot()

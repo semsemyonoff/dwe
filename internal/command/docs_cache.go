@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"os"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/docs/mermaid"
 
 	"github.com/spf13/cobra"
 )
 
-func newDocsCacheCmd(_ *rootFlags) *cobra.Command {
+func newDocsCacheCmd(_ *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cache",
 		Short: "Manage mermaid diagram cache",

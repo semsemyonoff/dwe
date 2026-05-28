@@ -7,12 +7,14 @@ import (
 	"io"
 	"path/filepath"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/daemon"
 	"devbox-cli/internal/docker"
 	"devbox-cli/internal/lifecycle"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/preflight"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/registry"
 
 	"github.com/spf13/cobra"
@@ -79,7 +81,7 @@ func stopServiceLocked(ctx context.Context, deps StopServiceDeps, name string) e
 	return stopContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec)
 }
 
-func newStopCmd(flags *rootFlags) *cobra.Command {
+func newStopCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var skipPreflight bool
 
@@ -103,7 +105,7 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 				// Full-stack stop via lifecycle.
 				return lifecycle.RunStop(lifecycle.StopContext{
 					Ctx:           cmd.Context(),
-					ConfigPath:    flags.configPath,
+					ConfigPath:    flags.ConfigPath,
 					Yes:           yes,
 					SkipPreflight: skipPreflight,
 					ErrOut:        cmd.ErrOrStderr(),
@@ -113,15 +115,15 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 			}
 			// Per-service stop.
 			name := args[0]
-			cfg, err := config.LoadConfig(flags.configPath)
+			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			reg, regErr := loadCommandRegistry(flags.configPath)
+			reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if regErr != nil {
 				reg = nil
 			}
-			baseDir := filepath.Dir(flags.configPath)
+			baseDir := filepath.Dir(flags.ConfigPath)
 			deps := StopServiceDeps{
 				Cfg:            cfg,
 				CmdRegistry:    reg,
@@ -139,7 +141,7 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			configPath, _, err := completionConfigPath(flags, cmd)
+			configPath, _, err := cmdctx.CompletionConfigPath(flags, cmd)
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
@@ -156,6 +158,6 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
-	addSkipPreflightFlag(cmd, &skipPreflight)
+	cmdctx.AddSkipPreflight(cmd, &skipPreflight)
 	return cmd
 }

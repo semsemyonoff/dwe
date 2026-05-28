@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/deploy"
 	"devbox-cli/internal/deploy/journal"
@@ -302,7 +303,7 @@ func stubPreflightRun(t *testing.T) {
 
 // TestResetServiceRun_FlagsExist verifies --service, --yes, --skip-preflight flags exist on reset run.
 func TestResetServiceRun_FlagsExist(t *testing.T) {
-	flags := &rootFlags{configPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
 	cmd := newResetRunCmd(flags)
 	if cmd.Flags().Lookup("service") == nil {
 		t.Error("missing --service flag on reset run")

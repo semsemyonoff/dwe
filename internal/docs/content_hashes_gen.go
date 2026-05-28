@@ -120,7 +120,7 @@ var ContentHashes = map[string]string{
 	"reference/config/lifecycle.md":                          "703ea1ec7019",
 	"reference/config/notifications.md":                      "ec343c919f75",
 	"reference/config/reset.md":                              "1341035ff542",
-	"reference/config/services.md":                           "e89f26c6167f",
+	"reference/config/services.md":                           "69c1ac7c25df",
 	"reference/config/setup.md":                              "2e27f5b952f3",
 	"reference/config/snapshot.md":                           "0f8ae4d7d7e5",
 	"reference/config/state.md":                              "4efd663d062a",

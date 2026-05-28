@@ -12,12 +12,14 @@ import (
 	"syscall"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/config"
 	"devbox-cli/internal/lock"
 	"devbox-cli/internal/notify"
 	"devbox-cli/internal/render"
 	"devbox-cli/internal/snapshot"
 	"devbox-cli/internal/ui"
+	"devbox-cli/internal/usercommands"
 	"devbox-cli/internal/usercommands/model"
 	"devbox-cli/internal/userconfig"
 
@@ -25,7 +27,7 @@ import (
 )
 
 // newSnapshotRestoreCmd: `devbox snapshot restore <name> [-y]`.
-func newSnapshotRestoreCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotRestoreCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		yes    bool
 		noLive bool
@@ -43,12 +45,12 @@ func newSnapshotRestoreCmd(flags *rootFlags) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip restore confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
-	addSilentFlag(cmd, &silent)
+	cmdctx.AddSilent(cmd, &silent)
 	return cmd
 }
 
 // newSnapshotRollbackCmd: `devbox snapshot rollback [-y]`.
-func newSnapshotRollbackCmd(flags *rootFlags) *cobra.Command {
+func newSnapshotRollbackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		yes    bool
 		noLive bool
@@ -65,18 +67,18 @@ func newSnapshotRollbackCmd(flags *rootFlags) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip rollback confirmation")
 	cmd.Flags().BoolVar(&noLive, "no-live", false, "disable the per-step live UI; emit plain stdout")
-	addSilentFlag(cmd, &silent)
+	cmdctx.AddSilent(cmd, &silent)
 	return cmd
 }
 
-func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, noLive, silent bool, operation, notifyOp string) (err error) {
+func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes, noLive, silent bool, operation, notifyOp string) (err error) {
 	baseDir := flags.ProjectRoot()
 
 	if err := snapshot.ValidateName(name); err != nil {
 		return err
 	}
 
-	cfg, err := config.LoadConfig(flags.configPath)
+	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -89,7 +91,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, 
 		return fmt.Errorf("snapshot %s: no devbox/snapshot.yml found at %s", operation, config.SnapshotConfigPath(baseDir))
 	}
 
-	reg, err := loadCommandRegistry(flags.configPath)
+	reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
@@ -97,9 +99,8 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, 
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			lhe := &lockHeldError{operation: phe.Operation, pid: phe.PID}
-			render.Stdout().Error(lhe.Error())
-			return lhe
+			render.Stdout().Error(phe.Error())
+			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
 	}
@@ -112,7 +113,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, 
 			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
 			ucfg = nil
 		}
-		n := newNotifier(ucfg)
+		n := cmdctx.NewNotifier(ucfg)
 		defer func() {
 			if errors.As(err, new(*snapshot.RestoreCancelledError)) {
 				return
@@ -198,7 +199,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *rootFlags, name string, yes, 
 	return nil
 }
 
-func runSnapshotRollback(cmd *cobra.Command, flags *rootFlags, yes, noLive, silent bool) error {
+func runSnapshotRollback(cmd *cobra.Command, flags *cmdctx.RootFlags, yes, noLive, silent bool) error {
 	// rollback resolves the target name from snapshot.yml; pass an empty name
 	// to runSnapshotRestore and dispatch through snapshot.Rollback below.
 	baseDir := flags.ProjectRoot()

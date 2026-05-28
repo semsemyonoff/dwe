@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"devbox-cli/internal/command/cmdctx"
 	"devbox-cli/internal/snapshot"
 
 	"github.com/spf13/cobra"
@@ -45,9 +46,9 @@ func writeTestSnapshot(t *testing.T, base, name string, m *snapshot.Manifest) {
 
 func TestSnapshotList_Empty(t *testing.T) {
 	base := snapshotTestProject(t)
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 	var out, errW bytes.Buffer
 	if err := runSnapshotList(flags, &out, &errW, false); err != nil {
@@ -63,9 +64,9 @@ func TestSnapshotList_Empty(t *testing.T) {
 
 func TestSnapshotList_TableAndJSON(t *testing.T) {
 	base := snapshotTestProject(t)
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 	older := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC)
@@ -128,9 +129,9 @@ func TestSnapshotList_TableAndJSON(t *testing.T) {
 
 func TestSnapshotCurrent(t *testing.T) {
 	base := snapshotTestProject(t)
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 
 	t.Run("cleared", func(t *testing.T) {
@@ -170,9 +171,9 @@ func TestSnapshotCurrent(t *testing.T) {
 
 func TestSnapshotInspect_FromDir(t *testing.T) {
 	base := snapshotTestProject(t)
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 	writeTestSnapshot(t, base, "feature-x", &snapshot.Manifest{
 		Name:      "feature-x",
@@ -228,9 +229,9 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 
 func TestSnapshotInspect_FromTar(t *testing.T) {
 	base := snapshotTestProject(t)
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 
 	// Build a small .tar.gz with a manifest.yml.
@@ -269,9 +270,9 @@ func TestSnapshotInspect_FromTar(t *testing.T) {
 
 func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 	base := snapshotTestProject(t)
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 	// Write a deploy state with a different config_hash.
 	stateDir := filepath.Join(base, ".devbox", "deploy")
@@ -300,7 +301,7 @@ func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 
 func TestSnapshotCmd_ArgsValidation(t *testing.T) {
 	// Verify each subcommand declares its Args validator (no in-RunE arg parsing).
-	root := newSnapshotCmd(&rootFlags{})
+	root := newSnapshotCmd(&cmdctx.RootFlags{})
 	cases := []struct {
 		name        string
 		args        []string
@@ -333,9 +334,9 @@ func TestSnapshotCmd_ArgsValidation(t *testing.T) {
 
 func TestSnapshotNameCompletion(t *testing.T) {
 	base := snapshotTestProject(t)
-	flags := &rootFlags{
-		configPath:  filepath.Join(base, "devbox.yml"),
-		projectRoot: base,
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "devbox.yml"),
+		Root:       base,
 	}
 	writeTestSnapshot(t, base, "alpha", &snapshot.Manifest{Name: "alpha", CreatedAt: time.Now().UTC()})
 	writeTestSnapshot(t, base, "beta", &snapshot.Manifest{Name: "beta", CreatedAt: time.Now().UTC()})

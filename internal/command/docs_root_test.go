@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"testing"
 
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestDocsRootNonTTY(t *testing.T) {
 	// Test that non-TTY returns an appropriate error
-	cmd := newDocsCmd(&rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		Locale:      "en",
-		I18n:        nil,
+	cmd := newDocsCmd(&cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		Locale:     "en",
+		I18n:       nil,
 	})
 
 	// Simulate non-TTY by using a buffer as stdout
@@ -31,11 +33,11 @@ func TestDocsRootNonTTY(t *testing.T) {
 
 func TestDocsRootWithArgs(t *testing.T) {
 	// Test that docs with arguments bypasses the parent RunE
-	cmd := newDocsCmd(&rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		Locale:      "en",
-		I18n:        nil,
+	cmd := newDocsCmd(&cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		Locale:     "en",
+		I18n:       nil,
 	})
 
 	// Adding subcommands should work
@@ -58,11 +60,11 @@ func TestDocsRootWithArgs(t *testing.T) {
 
 func TestDocsRootStructure(t *testing.T) {
 	// Test that the docs command is properly configured
-	cmd := newDocsCmd(&rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		Locale:      "en",
-		I18n:        nil,
+	cmd := newDocsCmd(&cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		Locale:     "en",
+		I18n:       nil,
 	})
 
 	require.NotNil(t, cmd)
@@ -74,11 +76,11 @@ func TestDocsRootStructure(t *testing.T) {
 
 func TestDocsShowRegressionCheck(t *testing.T) {
 	// Regression test: ensure existing docs generate subcommand still works
-	cmd := newDocsCmd(&rootFlags{
-		configPath:  "",
-		projectRoot: "",
-		Locale:      "en",
-		I18n:        nil,
+	cmd := newDocsCmd(&cmdctx.RootFlags{
+		ConfigPath: "",
+		Root:       "",
+		Locale:     "en",
+		I18n:       nil,
 	})
 
 	generateCmd := cmd.Commands()

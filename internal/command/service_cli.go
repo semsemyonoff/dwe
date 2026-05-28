@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"slices"
 	"strings"
 
 	"devbox-cli/internal/config"
@@ -236,7 +237,7 @@ func dockerExecCLI(containerName, shell, u, workDir string, env map[string]strin
 	if workDir != "" {
 		args = append(args, "-w", workDir)
 	}
-	for _, k := range sortedKeys(env) {
+	for _, k := range slices.Sorted(maps.Keys(env)) {
 		args = append(args, "-e", k+"="+env[k])
 	}
 	args = append(args, containerName, shell)
@@ -263,7 +264,7 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 	if workDir != "" {
 		args = append(args, "-w", workDir)
 	}
-	for _, k := range sortedKeys(env) {
+	for _, k := range slices.Sorted(maps.Keys(env)) {
 		args = append(args, "-e", k+"="+env[k])
 	}
 	args = append(args, serviceName, shell)

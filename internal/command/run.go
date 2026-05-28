@@ -3,10 +3,12 @@ package command
 import (
 	"devbox-cli/internal/lifecycle"
 
+	"devbox-cli/internal/command/cmdctx"
+
 	"github.com/spf13/cobra"
 )
 
-func newRunCmd(flags *rootFlags) *cobra.Command {
+func newRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var noUpdate bool
 	var updateMode string
 	var yes bool
@@ -30,7 +32,7 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecycle.RunRun(lifecycle.RunContext{
 				Ctx:           cmd.Context(),
-				ConfigPath:    flags.configPath,
+				ConfigPath:    flags.ConfigPath,
 				NoUpdate:      noUpdate,
 				UpdateMode:    updateMode,
 				Yes:           yes,
@@ -47,7 +49,7 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 	cmd.Flags().BoolVar(&noUpdate, "no-update", false, "disable git update probe regardless of lifecycle.yml config")
 	cmd.Flags().StringVar(&updateMode, "update", "", "override update probe mode (on|off)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
-	addSkipPreflightFlag(cmd, &skipPreflight)
-	addSilentFlag(cmd, &silent)
+	cmdctx.AddSkipPreflight(cmd, &skipPreflight)
+	cmdctx.AddSilent(cmd, &silent)
 	return cmd
 }
