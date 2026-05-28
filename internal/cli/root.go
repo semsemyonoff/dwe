@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
+	cmdCommand "devbox-cli/internal/cli/command"
 	"devbox-cli/internal/cli/completion"
 	cmdCompose "devbox-cli/internal/cli/compose"
 	cmdDeploy "devbox-cli/internal/cli/deploy"
@@ -88,7 +89,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(cmdSnapshot.NewCmd(groupPipelines, flags))
 
 	// Advanced group: low-level and diagnostic commands.
-	addCmd(root, groupAdvanced, newCommandCmd(flags))
+	root.AddCommand(cmdCommand.NewCmd(groupAdvanced, flags))
 	root.AddCommand(cmdDocker.NewCmd(groupAdvanced, flags))
 	root.AddCommand(cmdCompose.NewCmd(groupAdvanced, flags))
 	addCmd(root, groupAdvanced, newDocsCmd(flags))

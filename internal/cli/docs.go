@@ -37,6 +37,18 @@ type docsFlags struct {
 	includePrivate bool
 }
 
+// docsSelectorTitle mirrors cli/command.SelectorTitle to avoid a cross-sibling
+// cli import while docs.go still lives in package cli. The helper moves with
+// docs.go when it migrates into cli/docs/ in a follow-up refactor.
+func docsSelectorTitle(projectName, base string) string {
+	parts := []string{"Devbox"}
+	if projectName != "" {
+		parts = append(parts, projectName)
+	}
+	parts = append(parts, base)
+	return strings.Join(parts, " · ")
+}
+
 func newDocsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
@@ -905,7 +917,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	if cfg != nil {
 		projectName = cfg.Project.Name
 	}
-	title := selectorTitle(projectName, "Documentation")
+	title := docsSelectorTitle(projectName, "Documentation")
 	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)

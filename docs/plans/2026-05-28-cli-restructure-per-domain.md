@@ -388,21 +388,27 @@ Split `command_cmd.go` (1262 LoC) into 5 files by responsibility.
 - Delete: `internal/cli/command_cmd.go`, `internal/cli/command_cmd_test.go`, `internal/cli/run_command_by_id_test.go`, `internal/cli/completion_daemon.go`, `internal/cli/completion_daemon_test.go`
 - Modify: `internal/cli/root.go`, `internal/cli/completion_test.go` (drop tests that moved to cli/command)
 
-- [ ] `git mv internal/cli/command_cmd.go internal/cli/command/command.go`
-- [ ] `git mv internal/cli/command_cmd_test.go internal/cli/command/command_test.go`
-- [ ] `git mv internal/cli/run_command_by_id_test.go internal/cli/command/runbyid_test.go` (test for `devbox command run-by-id`; file name disambiguates from `lifecycle/run.go`)
-- [ ] Change `package cli` → `package command`
-- [ ] Use Read/Write to split `command.go` into:
+- [x] `git mv internal/cli/command_cmd.go internal/cli/command/command.go`
+- [x] `git mv internal/cli/command_cmd_test.go internal/cli/command/command_test.go`
+- [x] `git mv internal/cli/run_command_by_id_test.go internal/cli/command/runbyid_test.go` (test for `devbox command run-by-id`; file name disambiguates from `lifecycle/run.go`)
+- [x] Change `package cli` → `package command`
+- [x] Use Read/Write to split `command.go` into:
   - `command.go`: `NewCmd(groupID, flags)` (was `newCommandCmd`), top-level command construction
   - `runbyid.go` (NOT `run.go` — avoids visual collision with `lifecycle/run.go` in sibling packages; the function name `runCommandByID` already encodes the distinction): `runCommandByID`, `printRunHeader`, `buildAskFields`, `widgetToFieldKind`, `optionsToAskOptions`, `joinOptionValues`, `mergeAnswers`, `allRequiredSatisfied`, `stringifyParams`
   - `list.go`: `newCommandListCmd`, `makeBrowserSelector`, `resolveCommandID`, `selectorTitle`, `parseSetFlags`, `buildTreeNodes`, `findGroupNode`, `groupNodeToChildren`, `groupNodeToSingleNode`, `commandDefToTreeNode`, `printTreeNodes`, `printTreeNode`
   - `inspect.go`: `inspectStepDescription`, `printInspect`, `printInspectAt`
   - `completion.go`: `registryIDCompletion`
-- [ ] **Test file split decision: not done in this refactor.** `command_test.go` (1339 LoC) stays as one file even though it covers code now in 5 production files. Splitting test files is out of scope; we accept production/test asymmetry here. `go test` builds correctly because all tests live in the same package.
-- [ ] Update `internal/cli/root.go`: `addCmd(root, groupAdvanced, newCommandCmd(flags))` → `root.AddCommand(command.NewCmd(groupAdvanced, flags))`
-- [ ] `goimports -w .`
-- [ ] `go build ./... && make test` — must pass before Task 9
-- [ ] Commit: `refactor(cli): extract command subpackage with file split by responsibility`
+- [x] **Test file split decision: not done in this refactor.** `command_test.go` (1339 LoC) stays as one file even though it covers code now in 5 production files. Splitting test files is out of scope; we accept production/test asymmetry here. `go test` builds correctly because all tests live in the same package.
+- [x] Update `internal/cli/root.go`: `addCmd(root, groupAdvanced, newCommandCmd(flags))` → `root.AddCommand(command.NewCmd(groupAdvanced, flags))`
+- [x] `goimports -w .`
+- [x] `go build ./... && make test` — passed before Task 9
+- [x] Commit: `refactor(cli): extract command subpackage with file split by responsibility`
+
+**Notes:**
+- Imported in `root.go` as `cmdCommand "devbox-cli/internal/cli/command"` to follow established alias convention.
+- ⚠️ DEVIATION: `coverage_test.go` (cross-cutting smoke) was split rather than left whole. The command-related cases (`TestPrintTreeNodes_*`, `TestPrintCommandInspect_*`, `TestCommandListCmd_RunE_*`, `TestCommandInspectCmd_RunE_DirectID`) moved to `internal/cli/command/coverage_test.go` since they call unexported symbols from the new `command` package. The docs/genCLI/walkAllCommands cases stayed in `internal/cli/coverage_test.go` until Task 9 moves them with the docs subpackage.
+- ⚠️ DEVIATION: `docs.go` (still in `cli/` until Task 9) previously called the package-private `selectorTitle` helper for its TUI header. To avoid a new `cli/` → `cli/command/` cross-sibling import (forbidden by the plan), a small `docsSelectorTitle` duplicate was added inline in `internal/cli/docs.go`; both copies collapse when Task 9 moves docs.go and inlines the helper into `cli/docs/docs.go`. The original helper stays unexported as `selectorTitle` in `cli/command/list.go`.
+- `TestCompletionCmd_InAdvancedGroupWithShellSubcommands` (root-wiring integration test) stayed in `internal/cli/completion_test.go`; the registry-completion unit tests (`TestBuildRegistryCompletions`, `TestRegistryIDCompletion_noSecondArg`, `TestCommandsCmd_ActiveHelp_PointsAtInspectFlag`) moved to `internal/cli/command/completion_test.go` alongside the moved `registryIDCompletion` helper.
 
 ### Task 9: `cli/docs/`
 
