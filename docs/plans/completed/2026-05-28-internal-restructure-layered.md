@@ -479,9 +479,9 @@ linters:
 
 ### Task 14: Final cleanup
 
-- [ ] verify `docs/plans/completed/` exists (it does — `ls docs/plans/completed/ | head -3`)
-- [ ] `mv docs/plans/2026-05-28-internal-restructure-layered.md docs/plans/completed/`
-- [ ] commit: `move completed plan: 2026-05-28-internal-restructure-layered.md`
+- [x] verify `docs/plans/completed/` exists (it does — `ls docs/plans/completed/ | head -3`)
+- [x] `mv docs/plans/2026-05-28-internal-restructure-layered.md docs/plans/completed/`
+- [x] commit: `move completed plan: 2026-05-28-internal-restructure-layered.md`
 
 ## Post-Completion
 
