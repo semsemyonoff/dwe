@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -195,6 +194,36 @@ type deployCancelledError struct{}
 
 func (e *deployCancelledError) Error() string { return "deploy cancelled" }
 func (e *deployCancelledError) ExitCode() int { return 0 }
+
+// deployMissingDepsConfirmFn is the swap seam for the after-deps confirmation
+// form. Tests override this to inject Yes/No/cancelled without driving stdin.
+var deployMissingDepsConfirmFn = ui.RunConfirm
+
+// confirmMissingDeps handles the "declared after: deps not in this run" gate.
+// Interactive: prompts via deployMissingDepsConfirmFn; cancellation (Esc or
+// Cancel button) returns *deployCancelledError. Non-interactive: logs to
+// stderr and proceeds.
+func confirmMissingDeps(cmd *cobra.Command, services, missing []string, isInteractive bool) error {
+	if !isInteractive {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			"info: services %v declare after: deps not in this run; missing deploys: %v\n",
+			services, missing)
+		return nil
+	}
+	title := fmt.Sprintf("Declared after: deps not in this run — proceed anyway? (missing: %s)",
+		strings.Join(missing, ", "))
+	ok, err := deployMissingDepsConfirmFn(title, "Proceed", "Cancel")
+	if err != nil {
+		if errors.Is(err, ui.ErrCancelled) {
+			return &deployCancelledError{}
+		}
+		return err
+	}
+	if !ok {
+		return &deployCancelledError{}
+	}
+	return nil
+}
 
 // Opts holds the options for runDeployHelper.
 type Opts struct {
@@ -640,19 +669,8 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	// Journal-check: warn if after: deps of requested services are not deployed.
 	if len(opts.Services) > 0 && !opts.Force {
 		if missing := collectMissingDeps(opts.Services, svcDeploys, state); len(missing) > 0 {
-			if isInteractive {
-				msg := fmt.Sprintf("declared after: deps not in this run; missing deploys: {%s} — proceed anyway? [y/N] ",
-					strings.Join(missing, ", "))
-				_, _ = fmt.Fprint(cmd.OutOrStdout(), msg)
-				reader := bufio.NewReader(cmd.InOrStdin())
-				line, _ := reader.ReadString('\n')
-				line = strings.TrimSpace(strings.ToLower(line))
-				if line != "y" && line != "yes" {
-					return &deployCancelledError{}
-				}
-			} else {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "info: services %v declare after: deps not in this run; missing deploys: %v\n",
-					opts.Services, missing)
+			if err := confirmMissingDeps(cmd, opts.Services, missing, isInteractive); err != nil {
+				return err
 			}
 		}
 	}

@@ -341,13 +341,13 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
 - Modify: `internal/cli/deploy/deploy.go`
 - Create: `internal/cli/deploy/missing_deps_test.go` (no existing `deploy_test.go` — sibling test files in this package are `lock_test.go`, `menu_test.go`, `menu_service_test.go`, `plan_test.go`, `state_test.go`, `notify_test.go`)
 
-- [ ] add a confirm seam at package level in `deploy.go` (alongside any existing seams):
+- [x] add a confirm seam at package level in `deploy.go` (alongside any existing seams):
   ```go
   // deployMissingDepsConfirmFn is the swap seam for the after-deps prompt.
   var deployMissingDepsConfirmFn = ui.RunConfirm
   ```
   Required for the same reason as the reset seam (Task 3): `runConfirmFormFn` in `ui/confirm.go` is package-private.
-- [ ] in `deploy.go:640-658`, replace the `bufio.NewReader` block inside the `if isInteractive` branch:
+- [x] in `deploy.go:640-658`, replace the `bufio.NewReader` block inside the `if isInteractive` branch:
   ```go
   title := fmt.Sprintf("Declared after: deps not in this run — proceed anyway? (missing: %s)",
       strings.Join(missing, ", "))
@@ -362,14 +362,14 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
       return &deployCancelledError{}
   }
   ```
-- [ ] keep the non-interactive `else` branch unchanged (still logs info about missing deps to stderr)
-- [ ] drop `bufio` import if no other uses remain in `deploy.go`; add `errors` import if not already present
-- [ ] create `missing_deps_test.go` with minimal coverage:
+- [x] keep the non-interactive `else` branch unchanged (still logs info about missing deps to stderr)
+- [x] drop `bufio` import if no other uses remain in `deploy.go`; add `errors` import if not already present
+- [x] create `missing_deps_test.go` with minimal coverage:
   - test asserting cancel-path (`deployMissingDepsConfirmFn` returns `(false, nil)`) → returns `*deployCancelledError`
   - test asserting Esc-path (`deployMissingDepsConfirmFn` returns `(false, ui.ErrCancelled)`) → returns `*deployCancelledError`
   - test asserting accept-path (`deployMissingDepsConfirmFn` returns `(true, nil)`) → proceeds (no cancel error)
   - test asserting non-interactive path still emits stderr info message and proceeds (no confirm seam invoked)
-- [ ] run tests: `go test ./internal/cli/deploy/...` — must pass before Task 5
+- [x] run tests: `go test ./internal/cli/deploy/...` — must pass before Task 5
 
 ### Task 5: Documentation
 
