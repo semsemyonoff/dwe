@@ -132,11 +132,11 @@ var registry = map[string]registryEntry{
 	"env_keys_present":   {envKeysPresentBuiltin{}, KindPredicate},
 	"tcp_reachable":      {tcpReachableBuiltin{}, KindPredicate},
 	// KindInternal: engine-only; not callable from user-authored YAML
-	"docker_daemon_start": {daemonStartBuiltin{}, KindInternal},
-	"docker_daemon_logs":  {daemonLogsBuiltin{}, KindInternal},
-	"docker_daemon_stop":             {daemonStopBuiltin{}, KindInternal},
-	"docker_stop_remove_container":   {dockerStopRemoveContainerBuiltin{}, KindInternal},
-	"daemons_reap":                   {daemonsReapBuiltin{}, KindInternal},
+	"docker_daemon_start":          {daemonStartBuiltin{}, KindInternal},
+	"docker_daemon_logs":           {daemonLogsBuiltin{}, KindInternal},
+	"docker_daemon_stop":           {daemonStopBuiltin{}, KindInternal},
+	"docker_stop_remove_container": {dockerStopRemoveContainerBuiltin{}, KindInternal},
+	"daemons_reap":                 {daemonsReapBuiltin{}, KindInternal},
 }
 
 // Get returns the named builtin if it exists and is compatible with ctx.
