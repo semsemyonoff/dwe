@@ -18,6 +18,7 @@ import (
 	cmdDocker "devbox-cli/internal/cli/docker"
 	cmdDocs "devbox-cli/internal/cli/docs"
 	cmdInfo "devbox-cli/internal/cli/info"
+	cmdLogs "devbox-cli/internal/cli/logs"
 	cmdLifecycle "devbox-cli/internal/cli/lifecycle"
 	cmdPrompt "devbox-cli/internal/cli/prompt"
 	cmdRender "devbox-cli/internal/cli/render"
@@ -81,6 +82,7 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 	root.AddCommand(cmdLifecycle.NewRestartCmd(groupEnvironment, flags))
 	root.AddCommand(cmdShell.NewCmd(groupEnvironment, flags))
 	root.AddCommand(cmdStatus.NewCmd(groupEnvironment, flags))
+	root.AddCommand(cmdLogs.NewCmd(groupEnvironment, flags))
 	root.AddCommand(cmdPrompt.NewCmd(groupEnvironment, flags))
 
 	// Configuration group: services, tools, rendering, validation.

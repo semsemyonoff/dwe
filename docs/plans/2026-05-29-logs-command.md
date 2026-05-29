@@ -122,13 +122,13 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
 - Modify: `internal/cli/root.go` (register under environment group)
 - Create: `internal/cli/logs/logs_test.go`
 
-- [ ] create `internal/cli/logs/logs.go` with `NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command`
-- [ ] cobra command: `Use: "logs <service>"`, `Args: cobra.ExactArgs(1)`, RunE wiring to local `runLogs(cmd, flags, args, options)`
-- [ ] register flags: `--tail` (int, default 50), `--since` (string, default ""), `--follow` / `-f` (bool, default false)
-- [ ] (conditional) if Plan 1 has landed, no local `--json` flag — use `rflags.Output`. Else add `--json` (bool, default false) as transitional flag.
-- [ ] in `root.go`: `root.AddCommand(cmdLogs.NewCmd(groupEnvironment, flags))`
-- [ ] write test: `devbox logs` (no args) errors with usage; `devbox logs <name>` accepts
-- [ ] run `go test ./internal/cli/logs/...` and `go test ./internal/cli/...` — must pass before Task 2
+- [x] create `internal/cli/logs/logs.go` with `NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command`
+- [x] cobra command: `Use: "logs <service>"`, `Args: cobra.ExactArgs(1)`, RunE wiring to local `runLogs(cmd, flags, args, options)`
+- [x] register flags: `--tail` (int, default 50), `--since` (string, default ""), `--follow` / `-f` (bool, default false)
+- [x] (conditional) if Plan 1 has landed, no local `--json` flag — use `rflags.Output`. Else add `--json` (bool, default false) as transitional flag.
+- [x] in `root.go`: `root.AddCommand(cmdLogs.NewCmd(groupEnvironment, flags))`
+- [x] write test: `devbox logs` (no args) errors with usage; `devbox logs <name>` accepts
+- [x] run `go test ./internal/cli/logs/...` and `go test ./internal/cli/...` — must pass before Task 2
 
 ### Task 2: Service resolution
 
