@@ -336,12 +336,9 @@ Priority error sites to wrap (10-15, ordered by user-facing frequency):
 - Audit: `internal/core/**/*.go`
 - Modify: any direct-print sites found
 
-- [ ] run `grep -rnE 'fmt\.(Print|Fprint)f?' internal/core/` and inspect each hit (note: `-E` for ERE; bare `\(...\)` BRE form returns nothing on macOS BSD grep)
-- [ ] for any `fmt.Print*(...)` writing to `os.Stdout`/`os.Stderr` directly (rather than via passed-in `io.Writer`), refactor to accept a writer parameter and let the caller in `internal/cli` decide
-- [ ] for `fmt.Fprint*(cmd.OutOrStdout(), ...)` paths in core: these are already correct, no change
-- [ ] for `slog.*` warnings: these go to a logger sink configured by cli layer (not stdout), no change
-- [ ] document in plan if no hits found
-- [ ] run `make test` — must pass before Task 11
+- [x] run `grep -rnE 'fmt\.(Print|Fprint)f?' internal/core/` and inspect each hit
+- [x] **No bare `fmt.Print*` writing to `os.Stdout`/`os.Stderr` found** — all `fmt.Fprint*` in `internal/core/` write to `strings.Builder`, passed-in `io.Writer` params, or `r.logFile`. No refactoring needed.
+- [x] run `make test` — must pass before Task 11
 
 ### Task 11: Update `runRoot` summary for JSON mode
 
