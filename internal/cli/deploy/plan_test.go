@@ -125,6 +125,28 @@ func TestRunDeployPlan_JSONModeNoInfoLine(t *testing.T) {
 	}
 }
 
+// TestRunDeployPlan_ServiceScopeNoInfoLine verifies that --service plans do
+// NOT emit the orchestrator-default notice, since the orchestrator pipeline
+// is not what drives a per-service plan (ResolveServicePlan reads the
+// per-service file). The notice would be misleading even though the file is
+// absent at the project level.
+func TestRunDeployPlan_ServiceScopeNoInfoLine(t *testing.T) {
+	dir := makeMinimalProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+
+	cmd := &cobra.Command{}
+	var errBuf bytes.Buffer
+	cmd.SetErr(&errBuf)
+
+	// nonexistent service still triggers the "service not found" error path;
+	// the notice gate must run before that error and stay silent.
+	_ = runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{ServiceName: "nonexistent"})
+
+	if errBuf.Len() != 0 {
+		t.Errorf("expected no info line for --service scope; stderr = %q", errBuf.String())
+	}
+}
+
 // TestRunDeployPlan_UserDeployYMLNoInfoLine verifies that a project with a
 // devbox/deploy.yml does not emit the default-pipeline info line.
 func TestRunDeployPlan_UserDeployYMLNoInfoLine(t *testing.T) {

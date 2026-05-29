@@ -68,10 +68,12 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 	}
 
 	// Apply deploy default when no deploy.yml is on disk (cfg.Deploy has empty
-	// phases in that case, set by LoadConfig).
+	// phases in that case, set by LoadConfig). The notice is suppressed when
+	// rendering a per-service plan — the orchestrator default is not driving
+	// the output in that case (ResolveServicePlan reads the per-service file).
 	ensuredDeploy, deployDefaulted := deploy.EnsureDeployConfig(cfg.Deploy)
 	cfg.Deploy = ensuredDeploy
-	if deployDefaulted {
+	if deployDefaulted && opts.ServiceName == "" {
 		cmdctx.EmitDefaultNotice(cmd, flags, "deploy", "deploy")
 	}
 

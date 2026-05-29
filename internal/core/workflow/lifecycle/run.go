@@ -189,8 +189,10 @@ func RunRun(ctx RunContext) (err error) {
 		return fmt.Errorf("load lifecycle config: %w", err)
 	}
 	runCfg, defaulted := EnsureRunConfig(lifecycleCfg)
+	defaultNotified := false
 	if defaulted && ctx.OnDefaultUsed != nil {
 		ctx.OnDefaultUsed(DefaultedRun)
+		defaultNotified = true
 	}
 
 	effectiveMode := resolveUpdateMode(runCfg, ctx.NoUpdate, ctx.UpdateMode)
@@ -253,7 +255,7 @@ func RunRun(ctx RunContext) (err error) {
 			return fmt.Errorf("reloading lifecycle config after pull: %w", err)
 		}
 		runCfg, defaulted = EnsureRunConfig(lifecycleCfg)
-		if defaulted && ctx.OnDefaultUsed != nil {
+		if defaulted && !defaultNotified && ctx.OnDefaultUsed != nil {
 			ctx.OnDefaultUsed(DefaultedRun)
 		}
 		reg, err = usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)

@@ -130,6 +130,56 @@ func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
 	}
 }
 
+// TestRunRun_MissingLifecycleYML_DefaultedCallbackFiresOnceAcrossPullReload
+// guards against the OnDefaultUsed callback being invoked twice when
+// lifecycle.yml is absent both before and after a pull. The CLI surfaces this
+// callback as a stderr info line — two callbacks would print two duplicate
+// notices.
+func TestRunRun_MissingLifecycleYML_DefaultedCallbackFiresOnceAcrossPullReload(t *testing.T) {
+	stubRunPhases(t)
+
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+
+	origProbe := GitProbeFunc
+	origPull := GitPullFFOnlyFunc
+	t.Cleanup(func() {
+		GitProbeFunc = origProbe
+		GitPullFFOnlyFunc = origPull
+	})
+
+	GitProbeFunc = func(_, _ string, _ bool) (git.Status, error) {
+		return git.Status{
+			IsRepo:      true,
+			HasUpstream: true,
+			Branch:      "main",
+			Upstream:    "origin/main",
+			FetchOK:     true,
+			Behind:      1,
+		}, nil
+	}
+	GitPullFFOnlyFunc = func(_, _ string) (bool, error) {
+		// Pull "succeeds" but lifecycle.yml remains absent (e.g. a doc-only
+		// upstream change). Both EnsureRunConfig calls return defaulted=true.
+		return true, nil
+	}
+
+	var called []DefaultedPipeline
+	ctx := RunContext{
+		ConfigPath: cfgPath,
+		UpdateMode: "on",
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
+	}
+	if err := RunRun(ctx); err != nil {
+		t.Fatalf("RunRun: %v", err)
+	}
+	if len(called) != 1 || called[0] != DefaultedRun {
+		t.Errorf("OnDefaultUsed should fire exactly once across pre/post-pull reload, got %v", called)
+	}
+}
+
 func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)

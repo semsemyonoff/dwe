@@ -43,7 +43,7 @@ Deploy and reset pipeline declarations.
 
 All three are loaded separately and are not merged with the 3-layer config.
 
-Both `devbox/deploy.yml` and `devbox/reset.yml` are optional. When absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (no devbox/deploy.yml on disk).`
+Both `devbox/deploy.yml` and `devbox/reset.yml` are optional. When absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (no devbox/<deploy|reset>.yml on disk).` The info line is suppressed in `--output json` mode.
 
 **Default deploy pipeline** (fires when `devbox/deploy.yml` is absent):
 
