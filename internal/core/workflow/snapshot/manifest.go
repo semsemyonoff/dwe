@@ -20,11 +20,11 @@ const (
 // ArtifactInfo records a single user-produced artifact inside the snapshot.
 type ArtifactInfo struct {
 	// Path is the snapshot-relative POSIX path of the artifact.
-	Path string `yaml:"path"`
+	Path string `yaml:"path" json:"path"`
 	// Size is the byte length of the artifact at the time of capture.
-	Size int64 `yaml:"size"`
+	Size int64 `yaml:"size" json:"size"`
 	// Sha256 is the lowercase hex sha256 of the artifact contents.
-	Sha256 string `yaml:"sha256"`
+	Sha256 string `yaml:"sha256" json:"sha256"`
 }
 
 // ServiceSnapshot records one service from the effective service set at
@@ -32,10 +32,10 @@ type ArtifactInfo struct {
 // captured project and the current project's services.
 type ServiceSnapshot struct {
 	// Name is the service key from cfg.Services.
-	Name string `yaml:"name"`
+	Name string `yaml:"name" json:"name"`
 	// Enabled mirrors ServiceConfig.Enabled at capture time (mandatory ||
 	// services.<name>.enabled).
-	Enabled bool `yaml:"enabled"`
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // ProjectInfo records the project identity and config hash at capture time.
@@ -43,46 +43,46 @@ type ServiceSnapshot struct {
 // empty hash as a match against any current hash.
 type ProjectInfo struct {
 	// Name is the devbox project name (cfg.Project.Name).
-	Name string `yaml:"name"`
+	Name string `yaml:"name" json:"name"`
 	// ConfigHash mirrors deploy/journal ProjectLevelState.ConfigHash; empty
 	// when no deploy has populated state.yml yet.
-	ConfigHash string `yaml:"config_hash"`
+	ConfigHash string `yaml:"config_hash" json:"config_hash"`
 	// Services records the effective service set at capture time, sorted by
 	// Name for deterministic manifest output. Used by restore to detect
 	// service-set divergence between snapshot and current project.
-	Services []ServiceSnapshot `yaml:"services,omitempty"`
+	Services []ServiceSnapshot `yaml:"services,omitempty" json:"services,omitempty"`
 }
 
 // DevboxFiles records which devbox files were captured into <snap>/devbox/.
 type DevboxFiles struct {
 	// LocalYML is the relative path of the captured local.yml (relative to
 	// the snapshot dir), e.g. "devbox/local.yml".
-	LocalYML string `yaml:"local_yml,omitempty"`
+	LocalYML string `yaml:"local_yml,omitempty" json:"local_yml,omitempty"`
 	// DeployState is the relative path of the captured deploy state file.
-	DeployState string `yaml:"deploy_state,omitempty"`
+	DeployState string `yaml:"deploy_state,omitempty" json:"deploy_state,omitempty"`
 }
 
 // LastCreate records the outcome of the most recent create attempt.
 type LastCreate struct {
 	// At is the wall-clock timestamp the create attempt finished (or was
 	// interrupted at).
-	At time.Time `yaml:"at,omitempty"`
+	At time.Time `yaml:"at,omitempty" json:"at,omitzero"`
 	// Status is one of StatusOk / StatusFailed / StatusInterrupted.
-	Status string `yaml:"status,omitempty"`
+	Status string `yaml:"status,omitempty" json:"status,omitempty"`
 	// FailedStep is the workflow-step identifier that failed (when known).
-	FailedStep string `yaml:"failed_step,omitempty"`
+	FailedStep string `yaml:"failed_step,omitempty" json:"failed_step,omitempty"`
 }
 
 // LastRestore records the outcome of the most recent restore attempt.
 type LastRestore struct {
 	// At is the wall-clock timestamp the restore attempt finished.
-	At time.Time `yaml:"at,omitempty"`
+	At time.Time `yaml:"at,omitempty" json:"at,omitzero"`
 	// Status mirrors LastCreate.Status.
-	Status string `yaml:"status,omitempty"`
+	Status string `yaml:"status,omitempty" json:"status,omitempty"`
 	// DurationMs is the wall-clock duration of the restore in milliseconds.
-	DurationMs int64 `yaml:"duration_ms,omitempty"`
+	DurationMs int64 `yaml:"duration_ms,omitempty" json:"duration_ms,omitempty"`
 	// FailedStep is the workflow-step identifier that failed (when known).
-	FailedStep string `yaml:"failed_step,omitempty"`
+	FailedStep string `yaml:"failed_step,omitempty" json:"failed_step,omitempty"`
 }
 
 // Manifest is the canonical shape of a snapshot's manifest.yml.
@@ -92,26 +92,26 @@ type LastRestore struct {
 // devbox versions can add metadata without breaking older readers.
 type Manifest struct {
 	// Name mirrors the snapshot directory name.
-	Name string `yaml:"name"`
+	Name string `yaml:"name" json:"name"`
 	// CreatedAt is the wall-clock timestamp the create flow started.
-	CreatedAt time.Time `yaml:"created_at"`
+	CreatedAt time.Time `yaml:"created_at" json:"created_at"`
 	// Description is the human-readable description provided via `-d`.
-	Description string `yaml:"description,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 	// Project identifies the source project + config hash at capture time.
-	Project ProjectInfo `yaml:"project"`
+	Project ProjectInfo `yaml:"project" json:"project"`
 	// DevboxVersion is the version string of the devbox CLI that created it.
-	DevboxVersion string `yaml:"devbox_version,omitempty"`
+	DevboxVersion string `yaml:"devbox_version,omitempty" json:"devbox_version,omitempty"`
 	// Variant is the snapshot variant name (empty for the default block).
-	Variant string `yaml:"variant,omitempty"`
+	Variant string `yaml:"variant,omitempty" json:"variant,omitempty"`
 	// Artifacts lists every user-produced file in the snapshot with its
 	// size and sha256. Devbox files under DevboxSubdir are not included.
-	Artifacts []ArtifactInfo `yaml:"artifacts,omitempty"`
+	Artifacts []ArtifactInfo `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 	// DevboxFiles records which devbox files were captured alongside.
-	DevboxFiles DevboxFiles `yaml:"devbox_files,omitempty"`
+	DevboxFiles DevboxFiles `yaml:"devbox_files,omitempty" json:"devbox_files,omitzero"`
 	// LastCreate / LastRestore record the outcome of the most recent
 	// create / restore attempt for this snapshot.
-	LastCreate  *LastCreate  `yaml:"last_create,omitempty"`
-	LastRestore *LastRestore `yaml:"last_restore,omitempty"`
+	LastCreate  *LastCreate  `yaml:"last_create,omitempty" json:"last_create,omitempty"`
+	LastRestore *LastRestore `yaml:"last_restore,omitempty" json:"last_restore,omitempty"`
 }
 
 // NewManifest returns a Manifest pre-populated with the given name and a

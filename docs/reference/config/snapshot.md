@@ -381,9 +381,9 @@ When either lock is already held by another live process, the operation exits 75
 ## Related commands
 
 - `devbox snapshot create <name> [-d <desc>] [--using=<variant>] [-y] [--no-live]`
-- `devbox snapshot list [--json]`
-- `devbox snapshot current`
-- `devbox snapshot inspect <name|tar-path> [--json]`
+- `devbox snapshot list [--output json] [--pretty]`
+- `devbox snapshot current [--output json] [--pretty]`
+- `devbox snapshot inspect <name|tar-path> [--output json] [--pretty]`
 - `devbox snapshot restore <name> [-y] [--no-live]`
 - `devbox snapshot rollback [-y] [--no-live]`
 - `devbox snapshot remove <name> [-y] [--no-live]`

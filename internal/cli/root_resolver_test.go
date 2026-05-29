@@ -210,7 +210,7 @@ func TestRootResolver_DocsScope_NoProject_CLIWorks(t *testing.T) {
 	root.SetErr(&buf)
 	// Use a temp output dir so we don't pollute cwd.
 	outDir := filepath.Join(tmpDir, "docs")
-	root.SetArgs([]string{"docs", "generate", "--scope", "cli", "--output", outDir})
+	root.SetArgs([]string{"docs", "generate", "--scope", "cli", "--out", outDir})
 
 	if err := root.Execute(); err != nil {
 		t.Errorf("docs generate --scope cli without project should succeed, got: %v", err)

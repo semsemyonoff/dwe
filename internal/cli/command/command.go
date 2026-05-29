@@ -88,7 +88,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				if flags.Output == "json" {
 					def, err := reg.Get(args[0])
 					if err != nil {
-						return err
+						return cmdctx.ErrWrap("command_unknown", err).WithDetail("id", args[0])
 					}
 					translator := i18n.TranslatorOrNop(flags.I18n)
 					data := buildCommandInspectJSON(def, translator, flags.Locale)

@@ -375,7 +375,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	var userCfg *userpkg.Config
 	if projectRoot != "" {
 		userCfg, err = userpkg.Load(projectRoot)
-		if err != nil {
+		if err != nil && flags.Output != "json" {
 			// Log warning but continue with nil userConfig
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: user config load failed: %v\n", err)
 		}
@@ -472,7 +472,8 @@ func loadForValidate(flags *cmdctx.RootFlags) (*config.DevboxConfig, string, str
 		return nil, "", "", fmt.Errorf("locating project: %w", err)
 	}
 	if !found {
-		return nil, "", "", project.ErrNotFound
+		return nil, "", "", cmdctx.ErrWrap("project_not_found", project.ErrNotFound).
+			WithHint("run from a Devbox project directory or pass --config")
 	}
 
 	configPath := loc.ConfigPath

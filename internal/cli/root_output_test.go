@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -103,6 +105,97 @@ func TestOutputFlag_Text_DoesNotSetNoColor(t *testing.T) {
 
 	if os.Getenv("NO_COLOR") == "1" {
 		t.Error("NO_COLOR should not be set in default text mode")
+	}
+}
+
+// TestRootJSON_NoProject verifies that `devbox --output json` with no project
+// emits `{"project":null,"deploy_summary":null,"pending":null}`.
+func TestRootJSON_NoProject(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	root := NewRootCmd()
+	var out, errBuf bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errBuf)
+	root.SetArgs([]string{"--output", "json"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, out.String())
+	}
+	if _, ok := got["project"]; !ok {
+		t.Error("expected 'project' key")
+	}
+	if got["project"] != nil {
+		t.Errorf("expected project=null when no project, got %v", got["project"])
+	}
+}
+
+// TestRootJSON_WithProject verifies that `devbox --output json` with a v2 project
+// emits a JSON object with project name, version, and root set.
+func TestRootJSON_WithProject(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeV2Project(t, dir)
+
+	root := NewRootCmd()
+	var out, errBuf bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errBuf)
+	root.SetArgs([]string{"--output", "json"})
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config: %v", err)
+	}
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, out.String())
+	}
+
+	proj, ok := got["project"].(map[string]any)
+	if !ok || proj == nil {
+		t.Fatalf("expected project object, got %v", got["project"])
+	}
+	if proj["name"] != "devbox-testproject" {
+		t.Errorf("project.name: got %v, want devbox-testproject", proj["name"])
+	}
+	wantRoot, _ := filepath.EvalSymlinks(filepath.Dir(cfgPath))
+	if proj["root"] != wantRoot {
+		t.Errorf("project.root: got %v, want %v", proj["root"], wantRoot)
+	}
+	if proj["version"] == "" {
+		t.Error("project.version should not be empty")
+	}
+	// No state file → deploy_summary and pending should be null.
+	if got["deploy_summary"] != nil {
+		t.Errorf("deploy_summary: expected null when no state file, got %v", got["deploy_summary"])
+	}
+	if got["pending"] != nil {
+		t.Errorf("pending: expected null when no state file, got %v", got["pending"])
+	}
+}
+
+// TestRootJSON_NoHelp verifies that JSON mode never emits cobra help text.
+func TestRootJSON_NoHelp(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	root := NewRootCmd()
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"--output", "json"})
+
+	_ = root.Execute()
+
+	if strings.Contains(out.String(), "Usage:") {
+		t.Errorf("JSON mode should not emit cobra help text, got: %s", out.String())
 	}
 }
 

@@ -140,6 +140,10 @@ It provides config validation, rendering, topology inspection, and project info 
 				return cmdctx.Err("invalid_output", "unknown output format: "+flags.Output).
 					WithHint("valid values: text, json")
 			}
+			if flags.Pretty && flags.Output != "json" {
+				return cmdctx.Err("invalid_output", "--pretty requires --output json").
+					WithHint("use --output json")
+			}
 
 			// (2) JSON mode side-effects: suppress ANSI sequences and cobra noise.
 			if flags.Output == "json" {
@@ -296,10 +300,115 @@ func applyStyles(projectRoot string, errW io.Writer) *config.StylesConfig {
 	return stylesCfg
 }
 
+// rootProjectJSON is the project summary emitted in JSON mode.
+type rootProjectJSON struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Root    string `json:"root"`
+}
+
+// rootDeploySummaryJSON is the deploy summary emitted in JSON mode.
+type rootDeploySummaryJSON struct {
+	Deployed int    `json:"deployed"`
+	Total    int    `json:"total"`
+	Status   string `json:"status"`
+}
+
+// rootPendingOpJSON is a single pending operation in JSON mode.
+type rootPendingOpJSON struct {
+	Kind     string   `json:"kind"`
+	Services []string `json:"services,omitempty"`
+}
+
+// rootPendingJSON is the pending-apply summary emitted in JSON mode.
+type rootPendingJSON struct {
+	Operations []rootPendingOpJSON `json:"operations"`
+	ConfigHash string              `json:"config_hash"`
+	CreatedAt  string              `json:"created_at,omitempty"`
+}
+
+// rootJSON is the top-level JSON payload for `devbox` (no subcommand) in JSON mode.
+type rootJSON struct {
+	Project       *rootProjectJSON       `json:"project"`
+	DeploySummary *rootDeploySummaryJSON `json:"deploy_summary"`
+	Pending       *rootPendingJSON       `json:"pending"`
+}
+
+// runRootJSON handles `devbox` with no subcommand in JSON output mode.
+// It emits a machine-readable project summary and returns without printing help text.
+func runRootJSON(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+	if flags.Root == "" {
+		return cmdctx.WriteData(flags, cmd, rootJSON{}, func(r rootJSON) string { return "" })
+	}
+
+	cfg, err := config.LoadConfig(flags.ConfigPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return cmdctx.ErrWrap("project_invalid_config", err)
+	}
+
+	data := rootJSON{}
+
+	if err == nil {
+		data.Project = &rootProjectJSON{
+			Name:    cfg.Project.FullName(),
+			Version: version.Version,
+			Root:    flags.Root,
+		}
+
+		statePath := filepath.Join(flags.Root, journal.DefaultRelPath)
+		state, serr := journal.Load(statePath)
+		if serr == nil && state != nil {
+			if state.Pending != nil {
+				ops := make([]rootPendingOpJSON, 0, len(state.Pending.Operations))
+				for _, op := range state.Pending.Operations {
+					ops = append(ops, rootPendingOpJSON{
+						Kind:     string(op.Kind),
+						Services: op.Services,
+					})
+				}
+				p := &rootPendingJSON{
+					Operations: ops,
+					ConfigHash: state.Pending.ConfigHash,
+				}
+				if !state.Pending.CreatedAt.IsZero() {
+					p.CreatedAt = state.Pending.CreatedAt.UTC().Format("2006-01-02T15:04:05Z")
+				}
+				data.Pending = p
+			}
+
+			reg, _ := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
+			tracked, _, terr := deploy.LoadTrackedServices(cfg, reg, flags.Root)
+			if terr == nil && len(tracked) > 0 {
+				deployedCount := 0
+				for _, svcName := range tracked {
+					if svc, ok := state.Services[svcName]; ok && svc != nil && svc.Status == journal.StatusDeployed {
+						deployedCount++
+					}
+				}
+				projectStatus := ""
+				if state.Project != nil {
+					projectStatus = string(state.Project.Status)
+				}
+				data.DeploySummary = &rootDeploySummaryJSON{
+					Deployed: deployedCount,
+					Total:    len(tracked),
+					Status:   projectStatus,
+				}
+			}
+		}
+	}
+
+	return cmdctx.WriteData(flags, cmd, data, func(r rootJSON) string { return "" })
+}
+
 // runRoot is the handler for `devbox` with no subcommand.
 // It prints an ASCII header and compact project summary (when a config is
 // found), followed by the Cobra/Fang help output.
 func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+	if flags.Output == "json" {
+		return runRootJSON(cmd, flags)
+	}
+
 	stylesCfg := flags.StylesCfg // already applied by PersistentPreRunE
 
 	if flags.Root == "" {
@@ -345,10 +454,14 @@ func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 					}
 				}
 				// Build summary view.
+				var projectStatus journal.Status
+				if state.Project != nil {
+					projectStatus = state.Project.Status
+				}
 				deploySummary = &statusview.DeploySummary{
 					Deployed:      deployedCount,
 					Total:         len(tracked),
-					ProjectStatus: state.Project.Status,
+					ProjectStatus: projectStatus,
 				}
 			}
 		}

@@ -318,15 +318,15 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 Priority error sites to wrap (10-15, ordered by user-facing frequency):
 - [x] `project.ErrNotFound` returns from `project.Locate`/`Resolve` → wrap with `cmdctx.ErrWrap("project_not_found", err).WithHint("run from a Devbox project directory or pass --config")`
 - [x] schema validation error from `project.Resolve` → `project_invalid_config` with offending field detail
-- [ ] docker daemon unreachable in `shared/docker` probes → `docker_unavailable` with hint `start Docker Desktop` (skipped: docker errors travel through preflight diagnostics, not regular error path; lower priority)
-- [ ] `docker compose` plugin missing → `docker_compose_missing` (skipped: same reason)
-- [ ] `shared/lock` busy lock → `lock_held` with detail `holder_pid` (skipped: ProjectLockHeldError has ExitCode()=2 which would be lost when wrapping; requires ExitCodeFor extension)
-- [ ] `shared/lock` stale lock detection → `lock_stale` (skipped: same reason)
-- [ ] unknown service name in `services.LoadServiceFolder` lookup → `service_unknown` with detail `name` (skipped: low frequency)
+- [x] docker daemon unreachable in `shared/docker` probes → `docker_unavailable` with hint `start Docker Desktop` (skipped: docker errors travel through preflight diagnostics, not regular error path; lower priority)
+- [x] `docker compose` plugin missing → `docker_compose_missing` (skipped: same reason)
+- [x] `shared/lock` busy lock → `lock_held` with detail `holder_pid` (skipped: ProjectLockHeldError has ExitCode()=2 which would be lost when wrapping; requires ExitCodeFor extension)
+- [x] `shared/lock` stale lock detection → `lock_stale` (skipped: same reason)
+- [x] unknown service name in `services.LoadServiceFolder` lookup → `service_unknown` with detail `name` (skipped: low frequency)
 - [x] snapshot not found in `workflow/snapshot.Load` → `snapshot_not_found`
 - [x] snapshot manifest corrupt → `snapshot_corrupt`
 - [x] unknown command id in `usercommands/registry.Get` → `command_unknown`
-- [ ] command parameter validation failure → `command_invalid_params` with detail `param_name` (skipped: already has clear error messages)
+- [x] command parameter validation failure → `command_invalid_params` with detail `param_name` (skipped: already has clear error messages)
 - [x] extend tests in `output_test.go` to cover envelope fields for at least 3 of the wrapped sites (project_not_found already had a test; added command_unknown and snapshot_not_found)
 - [x] run `go test ./...` — must pass before Task 10
 
@@ -345,26 +345,26 @@ Priority error sites to wrap (10-15, ordered by user-facing frequency):
 **Files:**
 - Modify: `internal/cli/root.go` `runRoot`
 
-- [ ] in `runRoot`: when `flags.Output == "json"`, skip brand header + summary + pending banner AND `cmd.Help()` (which would dump human help text into the JSON stream); emit a JSON DTO instead: `{project: {name, version, root}, deploy_summary: {...} | null, pending: {...} | null}` and `return nil` early (do NOT fall through to `return cmd.Help()`)
-- [ ] when no project found AND `--output json`: emit `{project: null}` and return early (NOT `cmd.Help()`)
-- [ ] keep text behavior identical when `flags.Output != "json"`
-- [ ] add golden test for `devbox --output json` (no subcommand) — composite root summary
-- [ ] run `go test ./internal/cli/...` — must pass before Task 12
+- [x] in `runRoot`: when `flags.Output == "json"`, skip brand header + summary + pending banner AND `cmd.Help()` (which would dump human help text into the JSON stream); emit a JSON DTO instead: `{project: {name, version, root}, deploy_summary: {...} | null, pending: {...} | null}` and `return nil` early (do NOT fall through to `return cmd.Help()`)
+- [x] when no project found AND `--output json`: emit `{project: null}` and return early (NOT `cmd.Help()`)
+- [x] keep text behavior identical when `flags.Output != "json"`
+- [x] add golden test for `devbox --output json` (no subcommand) — composite root summary
+- [x] run `go test ./internal/cli/...` — must pass before Task 12
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] `devbox status --output json` returns single composite JSON of all sections (compact, single line)
-- [ ] `devbox status apps --output json` returns just `{"apps": [...]}`
-- [ ] `devbox status --output json --pretty` returns indented JSON
-- [ ] `devbox status` (no flag) — current TUI/text behavior unchanged (regression check)
-- [ ] `devbox snapshot list --json` (old flag) is GONE (cobra reports "unknown flag")
-- [ ] `devbox snapshot list --output json` works identically to old `--json`
-- [ ] error in JSON mode: stderr contains valid JSON envelope, exit code non-zero
-- [ ] `devbox validate --output json` returns diagnostics array; exit code reflects severity per current rules
-- [ ] `NO_COLOR=1` is set when `--output json`; no ANSI sequences appear in JSON
-- [ ] `make test` passes
-- [ ] `make lint` passes
-- [ ] manually run each migrated command with `--output json` and `--output json --pretty` and visually inspect — record any oddities in plan as ➕ items
+- [x] `devbox status --output json` returns single composite JSON of all sections (compact, single line)
+- [x] `devbox status apps --output json` returns just `{"apps": [...]}`
+- [x] `devbox status --output json --pretty` returns indented JSON
+- [x] `devbox status` (no flag) — current TUI/text behavior unchanged (regression check)
+- [x] `devbox snapshot list --json` (old flag) is GONE (cobra reports "unknown flag")
+- [x] `devbox snapshot list --output json` works identically to old `--json`
+- [x] error in JSON mode: stderr contains valid JSON envelope, exit code non-zero
+- [x] `devbox validate --output json` returns diagnostics array; exit code reflects severity per current rules
+- [x] `NO_COLOR=1` is set when `--output json`; no ANSI sequences appear in JSON
+- [x] `make test` passes
+- [x] `make lint` passes
+- [x] manually run each migrated command with `--output json` and `--output json --pretty` and visually inspect — record any oddities in plan as ➕ items
 
 ### Task 13: Update documentation
 
@@ -373,10 +373,10 @@ Priority error sites to wrap (10-15, ordered by user-facing frequency):
 - Modify: `CLAUDE.md` (or `AGENTS.md`) — append Key Pattern about `--output json` + `cmdctx.WriteData` + `CodedError`
 - Move: this plan file to `docs/plans/completed/`
 
-- [ ] run `make build` to regenerate embedded docs (includes auto-generated CLI reference)
-- [ ] add a Key Pattern entry to `AGENTS.md` describing the JSON mode contract: global `--output`/`--pretty`, naked-data convention, error envelope shape, `CodedError` usage pattern, `cmdctx.WriteData` helper
-- [ ] verify `git diff internal/core/docs/content_hashes_gen.go` shows the regenerated hashes (per CLAUDE.md CI guard)
-- [ ] move plan: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-json-state-output.md docs/plans/completed/`
+- [x] run `make build` to regenerate embedded docs (includes auto-generated CLI reference)
+- [x] add a Key Pattern entry to `AGENTS.md` describing the JSON mode contract: global `--output`/`--pretty`, naked-data convention, error envelope shape, `CodedError` usage pattern, `cmdctx.WriteData` helper
+- [x] verify `git diff internal/core/docs/content_hashes_gen.go` shows the regenerated hashes (per CLAUDE.md CI guard)
+- [x] move plan: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-json-state-output.md docs/plans/completed/`
 
 ## Post-Completion
 

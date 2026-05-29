@@ -10,9 +10,9 @@ import (
 // ServiceEnabledDiff records a service whose Enabled flag differs between the
 // manifest's captured state and the current project's effective config.
 type ServiceEnabledDiff struct {
-	Name            string
-	ManifestEnabled bool
-	LocalEnabled    bool
+	Name            string `json:"name"`
+	ManifestEnabled bool   `json:"manifest_enabled"`
+	LocalEnabled    bool   `json:"local_enabled"`
 }
 
 // ServicesDiff is the typed result of comparing a snapshot manifest's captured
@@ -22,14 +22,14 @@ type ServicesDiff struct {
 	// OnlyInSnapshot lists service names present in the manifest but absent
 	// from the current project — restoring is likely to leave dangling
 	// artifacts referencing services that no longer exist.
-	OnlyInSnapshot []string
+	OnlyInSnapshot []string `json:"only_in_snapshot,omitempty"`
 	// OnlyLocal lists service names present in the current project but
 	// absent from the manifest — restore will not touch them, but the user
 	// may expect them to be reset to a known state.
-	OnlyLocal []string
+	OnlyLocal []string `json:"only_local,omitempty"`
 	// EnabledDiff lists services present in both sides whose Enabled flag
 	// differs.
-	EnabledDiff []ServiceEnabledDiff
+	EnabledDiff []ServiceEnabledDiff `json:"enabled_differs,omitempty"`
 }
 
 // IsEmpty reports whether all three diff groups are empty.

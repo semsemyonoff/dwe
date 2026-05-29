@@ -113,7 +113,7 @@ func runSnapshotList(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
 		return err
 	}
 	current, readCurErr := snapshotpkg.ReadCurrent(baseDir)
-	if readCurErr != nil {
+	if readCurErr != nil && flags.Output != "json" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read current snapshot pointer: %v\n", readCurErr)
 	}
 
@@ -485,4 +485,3 @@ type snapshotInterruptedError struct{ wrapped error }
 func (e *snapshotInterruptedError) Error() string { return e.wrapped.Error() }
 func (e *snapshotInterruptedError) Unwrap() error { return e.wrapped }
 func (e *snapshotInterruptedError) ExitCode() int { return 130 }
-

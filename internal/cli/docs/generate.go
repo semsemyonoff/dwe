@@ -30,7 +30,7 @@ declarative command registry (devbox/commands/).
 Supported formats: markdown, yaml, man, all
 Supported scopes:  all, cli, commands`,
 		Example: `  devbox docs generate
-  devbox docs generate --format markdown --scope cli --output docs/reference
+  devbox docs generate --format markdown --scope cli --out docs/reference
   devbox docs generate --format all --scope all --include-private`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsGenerate(cmd, flags, df)
@@ -38,7 +38,7 @@ Supported scopes:  all, cli, commands`,
 		SilenceUsage: true,
 	}
 
-	cmd.Flags().StringVarP(&df.output, "output", "o", "docs/reference", "Output directory for generated docs")
+	cmd.Flags().StringVar(&df.output, "out", "docs/reference", "Output directory for generated docs")
 	cmd.Flags().StringVar(&df.format, "format", "markdown", "Output format: markdown, yaml, man, all")
 	cmd.Flags().StringVar(&df.scope, "scope", "all", "Scope: all, cli, commands")
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from userconfig / $LANG)")

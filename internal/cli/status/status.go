@@ -82,7 +82,9 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 	statePath := filepath.Join(flags.ProjectRoot(), journal.DefaultRelPath)
 	state, err := journal.Load(statePath)
 	if err != nil {
-		_, _ = fmt.Fprintf(errW, "warning: deploy state unreadable (%v); deploy section suppressed\n", err)
+		if flags.Output != "json" {
+			_, _ = fmt.Fprintf(errW, "warning: deploy state unreadable (%v); deploy section suppressed\n", err)
+		}
 		state = nil
 	}
 	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
