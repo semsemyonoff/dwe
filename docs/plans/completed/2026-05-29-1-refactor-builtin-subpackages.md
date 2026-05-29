@@ -382,10 +382,10 @@ When each `*Builtin` struct is renamed:
 - Modify: `AGENTS.md` / `CLAUDE.md` if "Key Patterns" mentions builtin internals
 - Move: this plan file → `docs/plans/completed/`
 
-- [ ] update `docs/internals/packages.md` section on `internal/core/execution/builtin/` to describe spec + 5 domain subpackages (containers, services, fs, env, interaction) + root remnants (shell, tcp_reachable)
-- [ ] check `AGENTS.md` Key Patterns for any references to internal builtin types or registry shape that need updating
-- [ ] verify all checkboxes above are `[x]`
-- [ ] move plan file: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-1-refactor-builtin-subpackages.md docs/plans/completed/`
+- [x] update `docs/internals/packages.md` section on `internal/core/execution/builtin/` to describe spec + 5 domain subpackages (containers, services, fs, env, interaction) + root remnants (shell, tcp_reachable)
+- [x] check `AGENTS.md` Key Patterns for any references to internal builtin types or registry shape that need updating
+- [x] verify all checkboxes above are `[x]`
+- [x] move plan file: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-1-refactor-builtin-subpackages.md docs/plans/completed/`
 
 ## Post-Completion
 
