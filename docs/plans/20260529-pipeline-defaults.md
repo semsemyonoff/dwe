@@ -294,8 +294,8 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
 - Create: `docs/plans/20260529-pipeline-defaults-audit.md` (audit checklist + findings)
 - Modify: this plan file (add follow-up tasks with `➕` prefix if the audit surfaces new in-scope work)
 
-- [ ] build a bare-minimum project fixture: only `devbox/devbox.yml` (minimal valid config) + one service folder `devbox/services/demo/service.yml`
-- [ ] run each top-level command against the fixture and record the outcome (✅ succeeds / ⚠️ silent partial / ❌ hard error) in the audit doc:
+- [x] build a bare-minimum project fixture: only `devbox/devbox.yml` (minimal valid config) + one service folder `devbox/services/demo/service.yml`
+- [x] run each top-level command against the fixture and record the outcome (✅ succeeds / ⚠️ silent partial / ❌ hard error) in the audit doc:
   - `devbox` (root, no subcommand)
   - `devbox deploy plan / run / menu`
   - `devbox reset plan / run`
@@ -310,11 +310,11 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
   - `devbox docs` (list / get / llms-txt / generate)
   - `devbox logs <service>`
   - `devbox version`, `devbox completion`, `devbox prompt`
-- [ ] for the three known-bad commands (`deploy run` silent noop, `reset run` hard error, `run`/`restart` hard error), record the today-failure mode explicitly — these are the regression baselines for Tasks 2–5
-- [ ] for every other ⚠️ or ❌: add a `➕` follow-up task in this plan describing the file involved, whether a default fits the same pattern, and where the wrapper lives. If it does NOT fit (genuinely required file, or error-improvement-only), note it and either close the follow-up or scope it out
-- [ ] for genuinely-required files (e.g. `devbox.yml` itself), verify the error message is actionable; file a follow-up if not
-- [ ] commit audit doc; this task is done only when the audit checklist is complete and any `➕` follow-ups are added below
-- [ ] no test changes in this task — discovery only. Run `make test` to confirm nothing broke from fixture creation; must pass before Task 2
+- [x] for the three known-bad commands (`deploy run` silent noop, `reset run` hard error, `run`/`restart` hard error), record the today-failure mode explicitly — these are the regression baselines for Tasks 2–5
+- [x] for every other ⚠️ or ❌: add a `➕` follow-up task in this plan describing the file involved, whether a default fits the same pattern, and where the wrapper lives. If it does NOT fit (genuinely required file, or error-improvement-only), note it and either close the follow-up or scope it out
+- [x] for genuinely-required files (e.g. `devbox.yml` itself), verify the error message is actionable; file a follow-up if not
+- [x] commit audit doc; this task is done only when the audit checklist is complete and any `➕` follow-ups are added below
+- [x] no test changes in this task — discovery only. Run `make test` to confirm nothing broke from fixture creation; must pass before Task 2
 
 ### Task 2: Shared CLI emit helper + deploy defaults
 
