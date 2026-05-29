@@ -33,7 +33,7 @@ func main() {
 	// printed its own error) and for ExitCode-bearing errors (which have already
 	// printed their own diagnostics table). In JSON mode, emit a JSON error
 	// envelope to stderr. Otherwise delegate to Fang's default styled output.
-	errHandler := func(w io.Writer, styles fang.Styles, err error) {
+	errHandler := func(w io.Writer, fangStyles fang.Styles, err error) {
 		if errors.Is(err, pipeline.ErrSilent) {
 			return
 		}
@@ -46,7 +46,7 @@ func main() {
 			cmdctx.WriteError(flags, root, err)
 			return
 		}
-		fang.DefaultErrorHandler(w, styles, err)
+		fang.DefaultErrorHandler(w, fangStyles, err)
 	}
 
 	opts := []fang.Option{

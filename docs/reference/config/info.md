@@ -29,7 +29,7 @@ Info dashboard configuration.
 
 ## Purpose
 
-`devbox/info.yml` declares the content of the `devbox info` dashboard: sections, items, conditional visibility, and template expressions. It is rendered by `ui.RenderInfo()` using Lipgloss.
+`devbox/info.yml` declares the content of the `devbox info` dashboard: sections, items, conditional visibility, and template expressions. It is rendered by `render.Info()` (in `internal/core/ui/render/`) using Lipgloss.
 
 Loaded separately by `LoadInfoConfig()`. Not merged with the 3-layer config.
 
@@ -415,4 +415,4 @@ footer: true
 ## Related commands
 
 - `devbox info` — render the full dashboard
-- `devbox` (no args) — shows compact summary (not from `info.yml`, uses `ui.RenderSummary`)
+- `devbox` (no args) — shows compact summary (not from `info.yml`, uses `render.Summary`)

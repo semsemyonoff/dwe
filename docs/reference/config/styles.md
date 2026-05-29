@@ -25,8 +25,8 @@ every UI surface (tables, status sections, command browser, Fang help output),
 and the separator character used in definition lists.
 
 It is loaded by `LoadStylesConfig()` and applied at startup via
-`ui.ApplyStyles()`. Omitting the file entirely produces identical built-in
-defaults.
+`styles.ApplyStyles()` (in `internal/core/ui/styles/`). Omitting the file
+entirely produces identical built-in defaults.
 
 ## Structure
 
@@ -99,7 +99,7 @@ Character used between label and value in definition items (e.g.
 ## Omitting the file
 
 If `devbox/styles.yml` does not exist, `LoadStylesConfig()` returns a
-zero-value struct and `ui.ApplyStyles()` falls back to built-in defaults.
+zero-value struct and `styles.ApplyStyles()` falls back to built-in defaults.
 The CLI works identically — no error is produced.
 
 ## Light / dark resolution
@@ -107,9 +107,9 @@ The CLI works identically — no error is produced.
 Each token has a built-in light and dark hex default. At startup,
 `ApplyStyles` calls `lipgloss.HasDarkBackground()` once and resolves every
 token to a single hex string for the rest of the process. The resolved value
-is exposed via `ui.Color*()` accessors and bridges three styling layers: v1
-lipgloss (`internal/core/ui/`), v2 lipgloss (`internal/core/ui/cmdbrowser/`), and Fang's
-`ColorScheme`.
+is exposed via `styles.Color*()` accessors and bridges three styling layers: v1
+lipgloss (`internal/core/ui/render/`, `internal/core/ui/widgets/`), v2 lipgloss
+(`internal/core/ui/cmdbrowser/`), and Fang's `ColorScheme`.
 
 | Token | Light default | Dark default |
 |-------|---------------|--------------|

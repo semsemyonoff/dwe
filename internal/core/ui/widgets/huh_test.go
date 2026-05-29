@@ -22,9 +22,6 @@ func TestSetHuhHooks_FiresAroundConfirm(t *testing.T) {
 
 	origConfirm := runConfirmFormFn
 	t.Cleanup(func() { runConfirmFormFn = origConfirm })
-	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
-		return true, nil
-	}
 
 	var order []string
 	SetHuhHooks(

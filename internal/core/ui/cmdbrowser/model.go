@@ -366,8 +366,8 @@ func (m *Model) applyLayout() {
 		w, ih := m.inspectViewportSize()
 		m.inspect.vp.SetWidth(w)
 		m.inspect.vp.SetHeight(ih)
-		if render := m.items[m.inspect.inspectIdx].Inspect; render != nil {
-			if content := render(w); content != "" {
+		if inspectFn := m.items[m.inspect.inspectIdx].Inspect; inspectFn != nil {
+			if content := inspectFn(w); content != "" {
 				m.inspect.vp.SetContent(content)
 			}
 		}
