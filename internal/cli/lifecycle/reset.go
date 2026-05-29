@@ -112,9 +112,11 @@ func newResetRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Execute the reset pipeline from devbox/reset.yml.
 
 When --service <name> is given, resets only that service:
-runs on_disable.before hooks (if enabled), stops the container via 'docker stop',
-executes devbox/services/<name>/reset.yml (if present), then marks the service
-as requiring a subsequent deploy.
+runs on_disable.before hooks (if enabled), stops and removes the container,
+deletes the service 'dir:' if declared and present on disk, executes
+devbox/services/<name>/reset.yml (if present), then marks the service as
+requiring a subsequent deploy. Volumes are NOT auto-removed; use
+'docker_remove_project_volumes' in services/<name>/reset.yml to opt in.
 
 File logging is disabled by default for reset. Enable it with 'log: true' at
 the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
@@ -288,11 +290,9 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	// Resolve whether the service directory actually exists on disk; the
 	// always-on baseline only adds the files phase when there is something to
 	// remove.
-	dirAbs := ""
 	dirExists := false
 	if svc.Dir != "" {
-		dirAbs = filepath.Join(baseDir, svc.Dir)
-		if _, statErr := os.Stat(dirAbs); statErr == nil {
+		if _, statErr := os.Stat(filepath.Join(baseDir, svc.Dir)); statErr == nil {
 			dirExists = true
 		}
 	}

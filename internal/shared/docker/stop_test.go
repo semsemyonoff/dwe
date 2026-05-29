@@ -2,9 +2,9 @@ package docker
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -32,18 +32,10 @@ func TestStopContainer_OtherError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected wrapped error, got nil")
 	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		// Just verify the error message mentions "docker stop".
-		msg := err.Error()
-		found := false
-		for _, substr := range []string{"docker stop", "permission denied"} {
-			if len(msg) > 0 {
-				found = true
-				_ = substr
-			}
-		}
-		if !found {
-			t.Errorf("error message %q does not mention docker stop context", msg)
+	msg := err.Error()
+	for _, want := range []string{"docker stop", "permission denied"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q missing %q", msg, want)
 		}
 	}
 }
@@ -110,10 +102,10 @@ func TestRemoveContainer_GenericError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected wrapped error, got nil")
 	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		msg := err.Error()
-		if msg == "" {
-			t.Errorf("error message is empty")
+	msg := err.Error()
+	for _, want := range []string{"docker rm", "permission denied"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q missing %q", msg, want)
 		}
 	}
 }
