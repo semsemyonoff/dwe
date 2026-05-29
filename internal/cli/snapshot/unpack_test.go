@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/cli/cmdctx"
-	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/archive"
 	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
@@ -67,7 +67,7 @@ func buildFixtureTarGz(t *testing.T, baseA, name, outPath string) {
 	if err := meta.SaveManifest(filepath.Join(snapDir, meta.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := snapshotpkg.Pack(snapsRoot, snapDir, name, outPath, nil); err != nil {
+	if _, err := archive.Pack(snapsRoot, snapDir, name, outPath, nil); err != nil {
 		t.Fatalf("Pack: %v", err)
 	}
 }
@@ -152,7 +152,7 @@ func TestSnapshotUnpack_VerifiedWithWarnings(t *testing.T) {
 		t.Fatal(err)
 	}
 	tarPath := filepath.Join(t.TempDir(), "fix.tar.gz")
-	if _, err := snapshotpkg.Pack(snapsRoot, snapDir, name, tarPath, nil); err != nil {
+	if _, err := archive.Pack(snapsRoot, snapDir, name, tarPath, nil); err != nil {
 		t.Fatalf("Pack: %v", err)
 	}
 

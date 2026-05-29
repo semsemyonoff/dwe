@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui/widgets"
-	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/archive"
 	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
@@ -70,7 +70,7 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 
 	snapshotsRoot := meta.SnapshotsDir(baseDir, snapCfg)
 
-	res, err := snapshotpkg.Unpack(tarPath, snapshotsRoot, name, snapshotpkg.UnpackOptions{
+	res, err := archive.Unpack(tarPath, snapshotsRoot, name, archive.UnpackOptions{
 		AssumeYes: yes,
 		NoVerify:  noVerify,
 		ConfirmOverwrite: func() (bool, error) {
@@ -90,11 +90,11 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 		Stderr: stderr,
 	})
 	if err != nil {
-		if errors.As(err, new(*snapshotpkg.UnpackCancelledError)) {
+		if errors.As(err, new(*archive.UnpackCancelledError)) {
 			_, _ = fmt.Fprintln(stderr, "snapshot unpack cancelled")
 			return err
 		}
-		if errors.As(err, new(*snapshotpkg.UnpackVerifyDeclinedError)) {
+		if errors.As(err, new(*archive.UnpackVerifyDeclinedError)) {
 			_, _ = fmt.Fprintln(stderr, "snapshot unpack declined after verification warnings")
 			return err
 		}
@@ -110,11 +110,11 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 
 	_, _ = fmt.Fprintf(stderr, "snapshot %q unpacked into %s", name, res.SnapshotDir)
 	switch res.Verification {
-	case snapshotpkg.VerificationSkipped:
+	case archive.VerificationSkipped:
 		_, _ = fmt.Fprint(stderr, " (verification skipped)")
-	case snapshotpkg.VerificationClean:
+	case archive.VerificationClean:
 		_, _ = fmt.Fprint(stderr, " (verified)")
-	case snapshotpkg.VerificationWarned:
+	case archive.VerificationWarned:
 		n := len(res.VerifyReport.Missing) + len(res.VerifyReport.HashMismatch) + len(res.VerifyReport.Extra)
 		_, _ = fmt.Fprintf(stderr, " (verified with %d warnings)", n)
 	}

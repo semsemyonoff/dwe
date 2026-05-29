@@ -1,4 +1,4 @@
-package snapshot
+package archive
 
 import (
 	"archive/tar"

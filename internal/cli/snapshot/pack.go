@@ -6,7 +6,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/archive"
 	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
@@ -62,7 +62,7 @@ func runSnapshotPack(cmd *cobra.Command, flags *cmdctx.RootFlags, name, outPath 
 
 	excludes := mergeExcludes(snapCfg, cliExcludes)
 
-	res, err := snapshotpkg.Pack(snapshotsRoot, snapDir, name, outPath, excludes)
+	res, err := archive.Pack(snapshotsRoot, snapDir, name, outPath, excludes)
 	if err != nil {
 		return err
 	}

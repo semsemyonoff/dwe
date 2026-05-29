@@ -1,4 +1,9 @@
-package snapshot
+// Package archive implements the tar I/O layer of the snapshot subsystem:
+// Pack, Unpack, VerifyExtractedArtifacts, and ReadManifestFromTar. It is
+// behaviour-free above the descriptor types defined in
+// internal/core/workflow/snapshot/meta — everything in this package operates
+// on bytes, paths, and meta.Manifest.
+package archive
 
 import (
 	"fmt"

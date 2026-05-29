@@ -223,14 +223,14 @@ Done in current `snapshot/` package, before subpkg extraction. This is the "intr
 - Modify: root .go files using Pack/Unpack/UnpackOptions/etc. (create.go, restore.go, list.go, archive_inspect.go's callers)
 - Modify: external callers in `internal/cli/snapshot/`, `internal/core/validate/snapshot/`
 
-- [ ] create `archive/` directory; move the 5 archive_*.go files into it; rename to drop `archive_` prefix (the dir name carries that meaning)
-- [ ] change `package snapshot` → `package archive`; add `meta` import where needed (verify.go uses meta.Manifest; pack.go signature uses meta.SnapshotsDir or similar coordinates)
-- [ ] verify all symbols crossing the new boundary are exported (Pack, Unpack, PackResult, UnpackResult, UnpackOptions, UnpackCancelledError, UnpackVerifyDeclinedError, VerifyExtractedArtifacts, ArtifactVerifyReport, VerificationOutcome, ReadManifestFromTar)
-- [ ] move corresponding test files; update package decl + symbol refs
-- [ ] in root .go files: add `import "devbox-cli/internal/core/workflow/snapshot/archive"`; replace `Pack(...)` → `archive.Pack(...)`, `Unpack` → `archive.Unpack`, etc.
-- [ ] update external callers across `internal/cli/snapshot/`, `internal/core/validate/snapshot/`
-- [ ] run `make test ./internal/core/workflow/snapshot/...` — must pass before Task 4
-- [ ] run `make lint` — must pass before Task 4
+- [x] create `archive/` directory; move the 5 archive_*.go files into it; rename to drop `archive_` prefix (the dir name carries that meaning)
+- [x] change `package snapshot` → `package archive`; add `meta` import where needed (verify.go uses meta.Manifest; pack.go signature uses meta.SnapshotsDir or similar coordinates)
+- [x] verify all symbols crossing the new boundary are exported (Pack, Unpack, PackResult, UnpackResult, UnpackOptions, UnpackCancelledError, UnpackVerifyDeclinedError, VerifyExtractedArtifacts, ArtifactVerifyReport, VerificationOutcome, ReadManifestFromTar)
+- [x] move corresponding test files; update package decl + symbol refs
+- [x] in root .go files: add `import "devbox-cli/internal/core/workflow/snapshot/archive"`; replace `Pack(...)` → `archive.Pack(...)`, `Unpack` → `archive.Unpack`, etc. (no root callers required updates — grep confirmed archive symbols were only referenced inside the archive_*.go files themselves)
+- [x] update external callers across `internal/cli/snapshot/`, `internal/core/validate/snapshot/` (cli/snapshot/pack.go, unpack.go, unpack_test.go, snapshot.go updated; validate/snapshot/ touched none of the archive symbols)
+- [x] run `make test ./internal/core/workflow/snapshot/...` — must pass before Task 4
+- [x] run `make lint` — must pass before Task 4
 
 ### Task 4: Verify root snapshot package + cross-package callers
 

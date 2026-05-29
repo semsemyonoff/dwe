@@ -12,6 +12,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui/render"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/archive"
 	"devbox-cli/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
@@ -372,7 +373,7 @@ func loadInspectManifest(baseDir, arg string) (*meta.Manifest, string, error) {
 			}
 			return nil, "", cmdctx.ErrWrap("snapshot_corrupt", err).WithDetail("path", arg)
 		}
-		m, err := snapshotpkg.ReadManifestFromTar(arg)
+		m, err := archive.ReadManifestFromTar(arg)
 		if err != nil {
 			return nil, "", cmdctx.ErrWrap("snapshot_corrupt", err).WithDetail("path", arg)
 		}
