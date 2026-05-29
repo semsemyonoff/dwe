@@ -1,4 +1,4 @@
-package builtin
+package services
 
 import (
 	"bufio"
@@ -12,9 +12,12 @@ import (
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
-type serviceConfigsCopyBuiltin struct{}
+// ConfigsCopy implements the service_configs_copy builtin: copy service template
+// configs into the per-service hub configs/ directory.
+type ConfigsCopy struct{}
 
-func (serviceConfigsCopyBuiltin) Validate(with map[string]any) error {
+// Validate checks the with-params for service_configs_copy.
+func (ConfigsCopy) Validate(with map[string]any) error {
 	service := spec.GetStringParam(with, "service", "")
 	if service == "" {
 		return fmt.Errorf("builtin service_configs_copy: missing required param 'service'")
@@ -28,13 +31,15 @@ func (serviceConfigsCopyBuiltin) Validate(with map[string]any) error {
 	}
 }
 
-func (serviceConfigsCopyBuiltin) Describe(with map[string]any) string {
+// Describe returns a human-readable plan line for service_configs_copy.
+func (ConfigsCopy) Describe(with map[string]any) string {
 	service := spec.GetStringParam(with, "service", "")
 	mode := spec.GetStringParam(with, "mode", "replace")
 	return fmt.Sprintf("builtin: service_configs_copy(service=%s, mode=%s)", service, mode)
 }
 
-func (serviceConfigsCopyBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run copies declared configs from configs/services/<svc>/ into <svc.Dir>/configs/.
+func (ConfigsCopy) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
 	serviceName := spec.GetStringParam(with, "service", "")
 	mode := spec.GetStringParam(with, "mode", "replace")
 

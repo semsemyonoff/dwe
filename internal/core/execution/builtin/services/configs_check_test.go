@@ -1,4 +1,4 @@
-package builtin
+package services
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ func TestServiceConfigsCheckBuiltin_Validate(t *testing.T) {
 		},
 	}
 
-	builtin := serviceConfigsCheckBuiltin{}
+	builtin := ConfigsCheck{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := builtin.Validate(tt.with)
@@ -57,7 +57,7 @@ func TestServiceConfigsCheckBuiltin_Validate(t *testing.T) {
 }
 
 func TestServiceConfigsCheckBuiltin_Describe(t *testing.T) {
-	builtin := serviceConfigsCheckBuiltin{}
+	builtin := ConfigsCheck{}
 	result := builtin.Describe(map[string]any{"service": "main"})
 	if !strings.Contains(result, "service_configs_check") || !strings.Contains(result, "main") {
 		t.Errorf("Describe() = %q, want to contain 'service_configs_check' and 'main'", result)
@@ -177,7 +177,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 			tmpDir := t.TempDir()
 			cfg := tt.setup(t, tmpDir)
 
-			builtin := serviceConfigsCheckBuiltin{}
+			builtin := ConfigsCheck{}
 			ctx := spec.ExecContext{
 				Config:      cfg,
 				ProjectRoot: tmpDir,
@@ -217,7 +217,7 @@ func TestServiceConfigsCheckBuiltin_Run_OutputWriterLogsErrors(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)
 
-	b := serviceConfigsCheckBuiltin{}
+	b := ConfigsCheck{}
 	ctx := spec.ExecContext{
 		Config:      cfg,
 		ProjectRoot: tmpDir,

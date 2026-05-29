@@ -1,4 +1,4 @@
-package builtin
+package services
 
 import (
 	"bytes"
@@ -14,10 +14,10 @@ import (
 	"devbox-cli/internal/shared/render"
 )
 
-// --- serviceConfigsCopyBuiltin.Validate ---
+// --- ConfigsCopy.Validate ---
 
 func TestServiceConfigsCopy_Validate_MissingService(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	err := b.Validate(nil)
 	if err == nil {
 		t.Fatal("expected error for missing service")
@@ -28,7 +28,7 @@ func TestServiceConfigsCopy_Validate_MissingService(t *testing.T) {
 }
 
 func TestServiceConfigsCopy_Validate_InvalidMode(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	err := b.Validate(map[string]any{"service": "main", "mode": "bogus"})
 	if err == nil {
 		t.Fatal("expected error for invalid mode")
@@ -36,7 +36,7 @@ func TestServiceConfigsCopy_Validate_InvalidMode(t *testing.T) {
 }
 
 func TestServiceConfigsCopy_Validate_ValidModes(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	for _, mode := range []string{"default", "replace", "update"} {
 		err := b.Validate(map[string]any{"service": "main", "mode": mode})
 		if err != nil {
@@ -46,17 +46,17 @@ func TestServiceConfigsCopy_Validate_ValidModes(t *testing.T) {
 }
 
 func TestServiceConfigsCopy_Validate_DefaultMode(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	err := b.Validate(map[string]any{"service": "main"})
 	if err != nil {
 		t.Fatalf("expected no error when mode is omitted (defaults to replace): %v", err)
 	}
 }
 
-// --- serviceConfigsCopyBuiltin.Describe ---
+// --- ConfigsCopy.Describe ---
 
 func TestServiceConfigsCopy_Describe(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	desc := b.Describe(map[string]any{"service": "main", "mode": "update"})
 	if !strings.Contains(desc, "main") {
 		t.Errorf("expected service name in describe, got %q", desc)
@@ -221,20 +221,10 @@ func TestCopyConfigFile_Update_NoAdditions(t *testing.T) {
 	}
 }
 
-// --- removePathsBuiltin.Validate edge case ---
-
-func TestRemovePaths_Validate_InvalidPathsType(t *testing.T) {
-	b := removePathsBuiltin{}
-	err := b.Validate(map[string]any{"paths": 123})
-	if err == nil {
-		t.Fatal("expected error for invalid paths type")
-	}
-}
-
-// --- serviceConfigsCopyBuiltin.Run early error paths ---
+// --- ConfigsCopy.Run early error paths ---
 
 func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{Services: map[string]config.ServiceConfig{}},
 		ProjectRoot: t.TempDir(),
@@ -250,7 +240,7 @@ func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
 }
 
 func TestServiceConfigsCopy_Run_EmptyServiceDir(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	ctx := spec.ExecContext{
 		Config: &config.DevboxConfig{
 			Services: map[string]config.ServiceConfig{
@@ -267,7 +257,7 @@ func TestServiceConfigsCopy_Run_EmptyServiceDir(t *testing.T) {
 }
 
 func TestServiceConfigsCopy_Run_NoConfigs_Succeeds(t *testing.T) {
-	b := serviceConfigsCopyBuiltin{}
+	b := ConfigsCopy{}
 	ctx := spec.ExecContext{
 		Config: &config.DevboxConfig{
 			Services: map[string]config.ServiceConfig{
@@ -280,5 +270,33 @@ func TestServiceConfigsCopy_Run_NoConfigs_Succeeds(t *testing.T) {
 	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err != nil {
 		t.Fatalf("Run with no configs should succeed: %v", err)
+	}
+}
+
+// --- touchFile ---
+
+func TestTouchFile_CreatesFile(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "sub", "file.txt")
+	if err := touchFile(p); err != nil {
+		t.Fatalf("touchFile: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Errorf("expected file to exist: %v", err)
+	}
+}
+
+func TestTouchFile_ExistingFileIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "existing.txt")
+	if err := os.WriteFile(p, []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := touchFile(p); err != nil {
+		t.Fatalf("touchFile on existing file: %v", err)
+	}
+	data, _ := os.ReadFile(p)
+	if string(data) != "content" {
+		t.Errorf("touchFile should not modify existing file, got: %q", data)
 	}
 }

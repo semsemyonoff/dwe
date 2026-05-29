@@ -286,14 +286,14 @@ When each `*Builtin` struct is renamed:
 - Move + modify: `configs_copy_test.go`, `configs_check_test.go`, `dirs_ensure_test.go` → `services/`
 - Modify: `internal/core/execution/builtin/builtin.go`
 
-- [ ] create `services/services.go` with `func Builtins() map[string]spec.Entry` returning the 3 service entries + leading doc comment
-- [ ] move 3 implementation files; change package decl; add spec import; rename types (`serviceConfigsCopyBuiltin` → `ConfigsCopy`, etc.)
-- [ ] update receivers to short single-letter (`c ConfigsCopy`, etc.) + doc comments leading with new type name
-- [ ] update helper/ExecContext references to `spec.*`
-- [ ] move 3 test files; update package and type instantiations
-- [ ] in root `builtin.go`: add `for k, v := range services.Builtins() { r[k] = v }`; import services package
-- [ ] run `make test ./internal/core/execution/builtin/...` — must pass before Task 5
-- [ ] run `make lint` — must pass before Task 5
+- [x] create `services/services.go` with `func Builtins() map[string]spec.Entry` returning the 3 service entries + leading doc comment
+- [x] move 3 implementation files; change package decl; add spec import; rename types (`serviceConfigsCopyBuiltin` → `ConfigsCopy`, etc.)
+- [x] update receivers to short single-letter (`c ConfigsCopy`, etc.) + doc comments leading with new type name
+- [x] update helper/ExecContext references to `spec.*`
+- [x] move 3 test files; update package and type instantiations
+- [x] in root `builtin.go`: add `for k, v := range services.Builtins() { r[k] = v }`; import services package
+- [x] run `make test ./internal/core/execution/builtin/...` — must pass before Task 5
+- [x] run `make lint` — must pass before Task 5
 
 ### Task 5: Extract `fs/` subpackage (`file_exists`, `remove_paths`)
 

@@ -1,4 +1,4 @@
-package builtin
+package services
 
 import (
 	"context"
@@ -10,9 +10,12 @@ import (
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
-type serviceConfigsCheckBuiltin struct{}
+// ConfigsCheck implements the service_configs_check builtin: verify declared
+// service config files exist under the per-service hub configs/ directory.
+type ConfigsCheck struct{}
 
-func (serviceConfigsCheckBuiltin) Validate(with map[string]any) error {
+// Validate checks the with-params for service_configs_check.
+func (ConfigsCheck) Validate(with map[string]any) error {
 	service := spec.GetStringParam(with, "service", "")
 	if service == "" {
 		return fmt.Errorf("builtin service_configs_check: missing required param 'service'")
@@ -20,12 +23,14 @@ func (serviceConfigsCheckBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (serviceConfigsCheckBuiltin) Describe(with map[string]any) string {
+// Describe returns a human-readable plan line for service_configs_check.
+func (ConfigsCheck) Describe(with map[string]any) string {
 	service := spec.GetStringParam(with, "service", "")
 	return fmt.Sprintf("builtin: service_configs_check(service=%s)", service)
 }
 
-func (serviceConfigsCheckBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run verifies that every declared config file exists; missing files cause an error.
+func (ConfigsCheck) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
 	serviceName := spec.GetStringParam(with, "service", "")
 
 	svc, ok := ectx.Config.Services[serviceName]

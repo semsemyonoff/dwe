@@ -1,4 +1,4 @@
-package builtin
+package services
 
 import (
 	"context"
@@ -17,9 +17,12 @@ import (
 // service_configs_copy when configs: entries are declared on the service.
 var mandatoryDirs = []string{"src"}
 
-type serviceDirsEnsureBuiltin struct{}
+// DirsEnsure implements the service_dirs_ensure builtin: create the mandatory
+// and configured directories under the per-service hub directory.
+type DirsEnsure struct{}
 
-func (serviceDirsEnsureBuiltin) Validate(with map[string]any) error {
+// Validate checks the with-params for service_dirs_ensure.
+func (DirsEnsure) Validate(with map[string]any) error {
 	service := spec.GetStringParam(with, "service", "")
 	if service == "" {
 		return fmt.Errorf("builtin service_dirs_ensure: missing required param 'service'")
@@ -33,13 +36,15 @@ func (serviceDirsEnsureBuiltin) Validate(with map[string]any) error {
 	}
 }
 
-func (serviceDirsEnsureBuiltin) Describe(with map[string]any) string {
+// Describe returns a human-readable plan line for service_dirs_ensure.
+func (DirsEnsure) Describe(with map[string]any) string {
 	service := spec.GetStringParam(with, "service", "")
 	mode := spec.GetStringParam(with, "mode", "skip")
 	return fmt.Sprintf("builtin: service_dirs_ensure(service=%s, mode=%s)", service, mode)
 }
 
-func (serviceDirsEnsureBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run creates the mandatory and configured directories per the chosen mode.
+func (DirsEnsure) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
 	serviceName := spec.GetStringParam(with, "service", "")
 	mode := spec.GetStringParam(with, "mode", "skip")
 

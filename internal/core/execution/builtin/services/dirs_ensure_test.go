@@ -1,4 +1,4 @@
-package builtin
+package services
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ func makeCfgWithService(name, dir string, dirs []string) *config.DevboxConfig {
 // ---- Validate ------------------------------------------------------------
 
 func TestServiceDirsEnsureValidate(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 
 	cases := []struct {
 		name    string
@@ -67,7 +67,7 @@ func TestServiceDirsEnsureValidate(t *testing.T) {
 // ---- Describe ------------------------------------------------------------
 
 func TestServiceDirsEnsureDescribe(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	got := b.Describe(map[string]any{"service": "main", "mode": "skip"})
 	want := "builtin: service_dirs_ensure(service=main, mode=skip)"
 	if got != want {
@@ -161,7 +161,7 @@ func TestValidateRelDir(t *testing.T) {
 // ---- Run: skip mode (default) --------------------------------------------
 
 func TestServiceDirsEnsureRun_SkipMode(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -191,7 +191,7 @@ func TestServiceDirsEnsureRun_SkipMode(t *testing.T) {
 }
 
 func TestServiceDirsEnsureRun_SkipExisting(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 	// Pre-create all dirs.
@@ -214,7 +214,7 @@ func TestServiceDirsEnsureRun_SkipExisting(t *testing.T) {
 // ---- Run: error mode -----------------------------------------------------
 
 func TestServiceDirsEnsureRun_ErrorMode_ExistingDir(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 	// Pre-create src to trigger error mode.
@@ -233,7 +233,7 @@ func TestServiceDirsEnsureRun_ErrorMode_ExistingDir(t *testing.T) {
 }
 
 func TestServiceDirsEnsureRun_ErrorMode_CreatesMissingDirs(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -258,7 +258,7 @@ func TestServiceDirsEnsureRun_ErrorMode_CreatesMissingDirs(t *testing.T) {
 // ---- Run: recreate mode --------------------------------------------------
 
 func TestServiceDirsEnsureRun_RecreateMode(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 
@@ -290,7 +290,7 @@ func TestServiceDirsEnsureRun_RecreateMode(t *testing.T) {
 }
 
 func TestServiceDirsEnsureRun_RecreateMode_MandatoryDirsSafe(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 
@@ -321,7 +321,7 @@ func TestServiceDirsEnsureRun_RecreateMode_MandatoryDirsSafe(t *testing.T) {
 // ---- Run: error cases ----------------------------------------------------
 
 func TestServiceDirsEnsureRun_UnknownService(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	ctx := makeExecCtx(t, root)
 	ctx.Config = makeCfgWithService("main", "services/main", nil)
@@ -333,7 +333,7 @@ func TestServiceDirsEnsureRun_UnknownService(t *testing.T) {
 }
 
 func TestServiceDirsEnsureRun_NonDirConflict(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -355,7 +355,7 @@ func TestServiceDirsEnsureRun_NonDirConflict(t *testing.T) {
 }
 
 func TestServiceDirsEnsureRun_AbsolutePathInDirs(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 
 	cfg := makeCfgWithService("main", "services/main", []string{"/etc/passwd"})
@@ -369,7 +369,7 @@ func TestServiceDirsEnsureRun_AbsolutePathInDirs(t *testing.T) {
 }
 
 func TestServiceDirsEnsureRun_PathTraversalInDirs(t *testing.T) {
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	root := t.TempDir()
 
 	cfg := makeCfgWithService("main", "services/main", []string{"../../escape"})
@@ -379,15 +379,6 @@ func TestServiceDirsEnsureRun_PathTraversalInDirs(t *testing.T) {
 	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error for path traversal in dirs, got nil")
-	}
-}
-
-// ---- Registry ------------------------------------------------------------
-
-func TestServiceDirsEnsureRegistered(t *testing.T) {
-	_, ok := Get("service_dirs_ensure", CtxUserYAML)
-	if !ok {
-		t.Error("service_dirs_ensure not found in builtin registry")
 	}
 }
 
@@ -459,7 +450,7 @@ func TestServiceDirsEnsure_EmptyServiceDir(t *testing.T) {
 		ProjectRoot: root,
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
-	b := serviceDirsEnsureBuiltin{}
+	b := DirsEnsure{}
 	err := b.Run(context.Background(), map[string]any{"service": "main"}, ctx)
 	if err == nil {
 		t.Fatal("expected error when service dir is empty")

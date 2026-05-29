@@ -133,30 +133,12 @@ func TestRemovePaths_Run_InvalidPathsType(t *testing.T) {
 	}
 }
 
-// --- touchFile ---
+// --- removePathsBuiltin.Validate edge case ---
 
-func TestTouchFile_CreatesFile(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, "sub", "file.txt")
-	if err := touchFile(p); err != nil {
-		t.Fatalf("touchFile: %v", err)
-	}
-	if _, err := os.Stat(p); err != nil {
-		t.Errorf("expected file to exist: %v", err)
-	}
-}
-
-func TestTouchFile_ExistingFileIsNoOp(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, "existing.txt")
-	if err := os.WriteFile(p, []byte("content"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := touchFile(p); err != nil {
-		t.Fatalf("touchFile on existing file: %v", err)
-	}
-	data, _ := os.ReadFile(p)
-	if string(data) != "content" {
-		t.Errorf("touchFile should not modify existing file, got: %q", data)
+func TestRemovePaths_Validate_InvalidPathsType(t *testing.T) {
+	b := removePathsBuiltin{}
+	err := b.Validate(map[string]any{"paths": 123})
+	if err == nil {
+		t.Fatal("expected error for invalid paths type")
 	}
 }
