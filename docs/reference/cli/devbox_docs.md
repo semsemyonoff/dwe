@@ -34,6 +34,7 @@ devbox docs [flags]
 * [devbox docs export](devbox_docs_export.md)	 - Export documentation to a directory
 * [devbox docs generate](devbox_docs_generate.md)	 - Generate reference documentation
 * [devbox docs list](devbox_docs_list.md)	 - List all available documentation topics
+* [devbox docs llms-txt](devbox_docs_llms-txt.md)	 - Emit an llms.txt project index for AI agents
 * [devbox docs search](devbox_docs_search.md)	 - Search documentation for a literal substring
 * [devbox docs show](devbox_docs_show.md)	 - Show documentation for a topic
 

@@ -50,6 +50,8 @@ Keep behavior and docs aligned. Devbox configuration documentation lives in `doc
 
 Update these when changing schemas, commands, service toggles, deploys, or hooks.
 
+For AI agent orientation, `devbox docs llms-txt` emits a compact llms.txt index (project context, services, commands, and docs pointers) designed for AI agents to load once and navigate the project — run it inside a project for a project-aware snapshot, or outside one for a generic devbox reference.
+
 ## Build, Test, and Development Commands
 
 - `make build` runs `go mod tidy`, syncs `docs/` into `internal/core/docs/embedded/` (via `scripts/sync-embedded-docs.sh`), regenerates `internal/core/docs/content_hashes_gen.go` (via `scripts/gen-docs-content-hashes.sh`), builds `./cmd/devbox`, and writes `bin/devbox`. Run `make build` (not `go build`) after editing docs under `docs/reference/`, `docs/internals/`, or `docs/i18n/` — otherwise the embedded docs in the binary will be stale.

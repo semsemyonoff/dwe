@@ -219,10 +219,10 @@ Signatures (in `internal/cli/docs/llmstxt.go`):
 - Modify: `AGENTS.md` / `CLAUDE.md` (mention llms.txt as the AI orientation entry point)
 - Move: this plan to `docs/plans/completed/`
 
-- [ ] run `make build` to regenerate embedded docs and CLI reference
-- [ ] add a short note to AGENTS.md "Configuration Documentation" section mentioning `devbox docs llms-txt` as the agent-targeted index
-- [ ] verify content-hashes manifest is updated and committed (per CLAUDE.md CI guard)
-- [ ] `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-llms-txt-export.md docs/plans/completed/`
+- [x] run `make build` to regenerate embedded docs and CLI reference
+- [x] add a short note to AGENTS.md "Configuration Documentation" section mentioning `devbox docs llms-txt` as the agent-targeted index
+- [x] verify content-hashes manifest is updated and committed (per CLAUDE.md CI guard)
+- [x] `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-llms-txt-export.md docs/plans/completed/`
 
 ## Post-Completion
 

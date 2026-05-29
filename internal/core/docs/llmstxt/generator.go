@@ -24,9 +24,9 @@ type ServiceSummary struct {
 
 // InfoSummary holds extracted project-info data for the Project section.
 type InfoSummary struct {
-	Title    string
-	URLs     []string
-	Hosts    []string
+	Title string
+	URLs  []string
+	Hosts []string
 }
 
 // Opts configures document generation.
