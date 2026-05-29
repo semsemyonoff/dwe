@@ -1,18 +1,14 @@
 package command
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/shared/i18n"
-
-	"github.com/spf13/cobra"
 )
 
 // buildTestRegistry builds a small registry with deterministic content for JSON tests.
@@ -57,21 +53,6 @@ func buildTestRegistry(t *testing.T) *usercommands.Registry {
 		Private:   false,
 	})
 	return reg
-}
-
-// runListCmd runs `commands list` with given flags and args, returns stdout.
-func runListCmd(t *testing.T, flags *cmdctx.RootFlags, args ...string) string {
-	t.Helper()
-	root := &cobra.Command{Use: "devbox", SilenceErrors: true, SilenceUsage: true}
-	root.AddCommand(NewCmd("", flags))
-	var out bytes.Buffer
-	root.SetOut(&out)
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs(append([]string{"commands"}, args...))
-	if err := root.Execute(); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	return out.String()
 }
 
 // --- buildCommandsListJSON tests ---

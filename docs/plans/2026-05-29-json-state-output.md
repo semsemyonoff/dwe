@@ -272,22 +272,22 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 
 **Scope addition**: `devbox status deploy [<service>]` takes an optional positional argument (see `Example:` at status.go:195) — when the arg is present, the DTO is the deploy section filtered to that service. Add a separate golden file for this form.
 
-- [ ] in `status.go`: extend `shouldUseTUI` (or RunE entry) to force-off TUI when `rflags.Output == "json"` regardless of user setting
-- [ ] define top-level DTO: `statusJSON struct { Project *projectJSON; Apps []appJSON `json:",omitempty"`; Tools []toolJSON `json:",omitempty"`; Infra *infraJSON `json:",omitempty"`; Daemons []daemonJSON `json:",omitempty"`; Deploy *deployJSON `json:",omitempty"`; Topology *topologyJSON `json:",omitempty"`; Git *gitJSON `json:",omitempty"` }`
-- [ ] `appJSON` includes the richer fields per brainstorm: `Name, Status, Health, Image, ContainerID, ContainerName, Ports []portJSON{Host, Container, Protocol}, Hosts []string, UptimeSeconds int64, RestartCount int, StartedAt string`
-- [ ] tools/infra/daemons/deploy/topology/git DTOs: include text-equivalent fields + machine-readable extras (hashes, raw timestamps, byte counts)
-- [ ] in subcommands (`status apps` etc.): emit ONLY the relevant section wrapped at root: `{"apps": [...]}` — so jq `.apps[]` works identically for composite and per-section
-- [ ] `status deploy <name>` (positional arg form): emit `{"deploy": {...service-filtered-data...}}` matching the same wrapping convention
-- [ ] data collection logic in `core/project/stack` already returns rich data; do NOT refactor stack — wrap its outputs in DTOs at the cli layer
-- [ ] `--no-X` flags omit fields (omitempty makes them absent, NOT null)
-- [ ] dispatch via `cmdctx.WriteData`
-- [ ] **Golden file time normalization** (pick ONE approach for the whole status package — don't mix):
+- [x] in `status.go`: extend `shouldUseTUI` (or RunE entry) to force-off TUI when `rflags.Output == "json"` regardless of user setting
+- [x] define top-level DTO: `statusJSON struct { Project *projectJSON; Apps []appJSON `json:",omitempty"`; Tools []toolJSON `json:",omitempty"`; Infra *infraJSON `json:",omitempty"`; Daemons []daemonJSON `json:",omitempty"`; Deploy *deployJSON `json:",omitempty"`; Topology *topologyJSON `json:",omitempty"`; Git *gitJSON `json:",omitempty"` }`
+- [x] `appJSON` includes the richer fields per brainstorm: `Name, Status, Health, Image, ContainerID, ContainerName, Ports []portJSON{Host, Container, Protocol}, Hosts []string, UptimeSeconds int64, RestartCount int, StartedAt string`
+- [x] tools/infra/daemons/deploy/topology/git DTOs: include text-equivalent fields + machine-readable extras (hashes, raw timestamps, byte counts)
+- [x] in subcommands (`status apps` etc.): emit ONLY the relevant section wrapped at root: `{"apps": [...]}` — so jq `.apps[]` works identically for composite and per-section
+- [x] `status deploy <name>` (positional arg form): emit `{"deploy": {...service-filtered-data...}}` matching the same wrapping convention
+- [x] data collection logic in `core/project/stack` already returns rich data; do NOT refactor stack — wrap its outputs in DTOs at the cli layer
+- [x] `--no-X` flags omit fields (omitempty makes them absent, NOT null)
+- [x] dispatch via `cmdctx.WriteData`
+- [x] **Golden file time normalization** (pick ONE approach for the whole status package — don't mix):
       **Chosen: regex post-process** — before diffing buffer vs golden, run `regexp.MustCompile(`"(started_at|deployed_at)":\s*"[^"]+"`).ReplaceAllString(buf, `"$1":"<TS>"`)` and similarly for `uptime_seconds`. Simpler than test seams, keeps production code untouched. Document in a `// golden-normalize: ...` comment at top of each affected test file.
-- [ ] golden test for composite
-- [ ] golden test for `status apps`
-- [ ] golden test for `status deploy <name>` positional form
-- [ ] add test verifying `--output json` forces TUI off even when stdout is a TTY
-- [ ] run `go test ./internal/cli/status/...` — must pass before Task 8
+- [x] golden test for composite
+- [x] golden test for `status apps`
+- [x] golden test for `status deploy <name>` positional form
+- [x] add test verifying `--output json` forces TUI off even when stdout is a TTY
+- [x] run `go test ./internal/cli/status/...` — must pass before Task 8
 
 ### Task 8: Migrate snapshot list/inspect/current — delete local --json
 

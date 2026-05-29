@@ -29,6 +29,12 @@ With a service name, shows the per-phase/step deploy breakdown for that service.
 			if err != nil {
 				return err
 			}
+			if flags.Output == "json" {
+				if len(args) == 0 {
+					return renderStatusSectionJSON(cmd, sc, sectionDeploy, flags)
+				}
+				return renderDeployDetailJSON(cmd, sc, args[0], flags)
+			}
 			if sc.State != nil {
 				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
 			}

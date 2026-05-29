@@ -17,6 +17,9 @@ func newStatusTopologyCmd(flags *cmdctx.RootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if flags.Output == "json" {
+				return renderStatusSectionJSON(cmd, sc, sectionTopology, flags)
+			}
 			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionTopology)
 		},
 	}

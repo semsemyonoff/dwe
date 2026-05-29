@@ -18,6 +18,9 @@ func newStatusAppsCmd(flags *cmdctx.RootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if flags.Output == "json" {
+				return renderStatusSectionJSON(cmd, sc, sectionApps, flags)
+			}
 			if sc.State != nil {
 				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
 			}

@@ -118,8 +118,7 @@ func buildErrorEnvelope(err error) errorEnvelope {
 // Usage errors (invalid_output, etc.) map to 2; all others map to 1.
 func ExitCodeFor(err error) int {
 	if ce, ok := errors.AsType[*CodedError](err); ok {
-		switch ce.Code {
-		case "invalid_output":
+		if ce.Code == "invalid_output" {
 			return 2
 		}
 	}

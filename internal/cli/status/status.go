@@ -202,6 +202,10 @@ in the default view.`,
 			if err != nil {
 				return err
 			}
+			// JSON mode: skip TUI entirely regardless of TTY state.
+			if flags.Output == "json" {
+				return renderStatusJSON(cmd, sc, noFlags, flags)
+			}
 			if shouldUseTUI(noTUI, noFlags) {
 				deps := statustui.Deps{
 					Cfg:         sc.Cfg,

@@ -174,6 +174,16 @@ func selectHealthIndicator(svcRows []ui.ServiceTableRow, topoStatus map[string]u
 	}
 }
 
+// CollectServiceRows returns the ServiceTableRow slice for services matching
+// the given type. When filter is nil, all services are included.
+// The caller is responsible for any custom-column rendering.
+func CollectServiceRows(in StatusInput, filter *config.ServiceType) []ui.ServiceTableRow {
+	if in.Cfg == nil {
+		return nil
+	}
+	return collectRowsByType(in.Cfg, in.IsRunning, in.Cfg.Project.FullName(), filter)
+}
+
 // ContainerRunning checks if a Docker container is running by full container name.
 // Uses docker inspect to get an exact name match (docker ps name filter uses substring
 // matching against the full /name path which is not portable across Docker versions).
