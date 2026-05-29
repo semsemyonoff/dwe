@@ -7,3 +7,9 @@ import "strings"
 func IsNoSuchContainerErr(stderr string) bool {
 	return strings.Contains(stderr, "No such container")
 }
+
+// IsDaemonUnavailableErr reports whether the stderr output from a docker command
+// indicates that the Docker daemon is not reachable.
+func IsDaemonUnavailableErr(stderr string) bool {
+	return strings.Contains(stderr, "Cannot connect to the Docker daemon")
+}

@@ -98,7 +98,28 @@ func buildDockerLogsArgs(containerName string, opts logsOptions) []string {
 	return args
 }
 
+// validateLogsFlags checks --tail and --since values before invoking docker.
+func validateLogsFlags(opts logsOptions) error {
+	if opts.tail < 0 {
+		return cmdctx.Err("invalid_tail", fmt.Sprintf("--tail must be >= 0, got %d", opts.tail)).
+			WithDetail("value", opts.tail)
+	}
+	if opts.since != "" {
+		_, dErr := time.ParseDuration(opts.since)
+		_, tErr := time.Parse(time.RFC3339, opts.since)
+		if dErr != nil && tErr != nil {
+			return cmdctx.Err("invalid_since", fmt.Sprintf("--since %q is not a valid duration (e.g. 5m) or RFC3339 timestamp", opts.since)).
+				WithHint("use a duration like '5m' or '1h', or an RFC3339 timestamp like '2026-01-01T00:00:00Z'").
+				WithDetail("value", opts.since)
+		}
+	}
+	return nil
+}
+
 func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, opts logsOptions) error {
+	if err := validateLogsFlags(opts); err != nil {
+		return err
+	}
 	containerName, cfg, err := ResolveLogsTarget(flags, args[0])
 	if err != nil {
 		return err
@@ -141,10 +162,14 @@ func runLogsText(cmd *cobra.Command, ctx context.Context, serviceName string, op
 		if isCleanFollowExit(runErr, ctx) {
 			return nil
 		}
-		if docker.IsNoSuchContainerErr(stderrBuf.String()) {
+		captured := stderrBuf.String()
+		if docker.IsNoSuchContainerErr(captured) {
 			return cmdctx.Err("container_not_found",
 				fmt.Sprintf("container for service %q not found — is the project deployed?", serviceName)).
 				WithDetail("container", containerName)
+		}
+		if docker.IsDaemonUnavailableErr(captured) {
+			return cmdctx.Err("docker_unavailable", "cannot connect to Docker daemon — is Docker running?")
 		}
 		return fmt.Errorf("docker logs: %w", runErr)
 	}
@@ -172,7 +197,7 @@ func isCleanFollowExit(err error, ctx context.Context) bool {
 	return false
 }
 
-func runLogsJSON(cmd *cobra.Command, ctx context.Context, _ string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
+func runLogsJSON(cmd *cobra.Command, ctx context.Context, serviceName string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
 
 	// Build base args and insert --timestamps right after "logs".
 	base := buildDockerLogsArgs(containerName, opts)
@@ -206,10 +231,15 @@ func runLogsJSON(cmd *cobra.Command, ctx context.Context, _ string, opts logsOpt
 		return fmt.Errorf("docker logs: %w", err)
 	}
 
+	// Tee stderr so we can scan it for known error patterns after the command
+	// exits, while still streaming its content as NDJSON records.
+	var stderrCapture strings.Builder
+	teedStderr := io.TeeReader(stderrPipe, &stderrCapture)
+
 	ch := make(chan logLineJSON, 16)
 	eg, egCtx := errgroup.WithContext(ctx)
 
-	readPipe := func(pipe io.ReadCloser, stream string) func() error {
+	readPipe := func(pipe io.Reader, stream string) func() error {
 		return func() (retErr error) {
 			defer func() {
 				if r := recover(); r != nil {
@@ -244,7 +274,7 @@ func runLogsJSON(cmd *cobra.Command, ctx context.Context, _ string, opts logsOpt
 	}
 
 	eg.Go(readPipe(stdoutPipe, "stdout"))
-	eg.Go(readPipe(stderrPipe, "stderr"))
+	eg.Go(readPipe(teedStderr, "stderr"))
 
 	// Pipe-closer goroutine: when egCtx is done (cancelled by signal or after
 	// all readers finish), close both pipes. This unblocks any sc.Scan() that
@@ -287,6 +317,15 @@ func runLogsJSON(cmd *cobra.Command, ctx context.Context, _ string, opts logsOpt
 	if cmdErr := dockerCmd.Wait(); cmdErr != nil {
 		if isCleanFollowExit(cmdErr, ctx) {
 			return nil
+		}
+		captured := stderrCapture.String()
+		if docker.IsNoSuchContainerErr(captured) {
+			return cmdctx.Err("container_not_found",
+				fmt.Sprintf("container for service %q not found — is the project deployed?", serviceName)).
+				WithDetail("container", containerName)
+		}
+		if docker.IsDaemonUnavailableErr(captured) {
+			return cmdctx.Err("docker_unavailable", "cannot connect to Docker daemon — is Docker running?")
 		}
 		return fmt.Errorf("docker logs: %w", cmdErr)
 	}

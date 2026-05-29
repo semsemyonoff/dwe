@@ -211,11 +211,11 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
 - Modify: `internal/cli/logs/logs.go`
 - Modify: `internal/cli/logs/logs_test.go`
 
-- [ ] docker stderr scan for known patterns: `"No such container"` → `container_not_found` CodedError; `"Cannot connect to the Docker daemon"` → `docker_unavailable` CodedError (when these mapping codes exist; otherwise plain wrapped errors)
-- [ ] when `--since` value is parseable as duration (e.g. `5m`, `1h`) accept; when parseable as RFC3339 timestamp accept; otherwise fail-fast with `invalid_since` CodedError BEFORE invoking docker
-- [ ] when `--tail` is negative, fail-fast with `invalid_tail` error
-- [ ] write tests covering each error path
-- [ ] run `go test ./internal/cli/logs/...` — must pass before Task 7
+- [x] docker stderr scan for known patterns: `"No such container"` → `container_not_found` CodedError; `"Cannot connect to the Docker daemon"` → `docker_unavailable` CodedError (when these mapping codes exist; otherwise plain wrapped errors)
+- [x] when `--since` value is parseable as duration (e.g. `5m`, `1h`) accept; when parseable as RFC3339 timestamp accept; otherwise fail-fast with `invalid_since` CodedError BEFORE invoking docker
+- [x] when `--tail` is negative, fail-fast with `invalid_tail` error
+- [x] write tests covering each error path
+- [x] run `go test ./internal/cli/logs/...` — must pass before Task 7
 
 ### Task 7: Verify acceptance criteria + smoke test
 

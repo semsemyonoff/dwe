@@ -536,6 +536,162 @@ func TestLogsCmd_Follow_JSONMode_CancellationClean(t *testing.T) {
 	}
 }
 
+// TestLogsCmd_InvalidTail verifies that a negative --tail value is rejected
+// before docker is invoked, returning an invalid_tail CodedError.
+func TestLogsCmd_InvalidTail(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker", "#!/bin/sh\necho 'should not be called'\nexit 0\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp", "--tail", "-1")
+	if err == nil {
+		t.Fatal("expected error for --tail -1, got nil")
+	}
+	var coded *cmdctx.CodedError
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if coded.Code != "invalid_tail" {
+		t.Errorf("error code = %q, want %q", coded.Code, "invalid_tail")
+	}
+}
+
+// TestLogsCmd_InvalidSince verifies that an unrecognized --since value is
+// rejected with an invalid_since CodedError before docker is invoked.
+func TestLogsCmd_InvalidSince(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker", "#!/bin/sh\necho 'should not be called'\nexit 0\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp", "--since", "not-a-duration-or-timestamp")
+	if err == nil {
+		t.Fatal("expected error for invalid --since, got nil")
+	}
+	var coded *cmdctx.CodedError
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if coded.Code != "invalid_since" {
+		t.Errorf("error code = %q, want %q", coded.Code, "invalid_since")
+	}
+}
+
+// TestLogsCmd_ValidSinceDuration verifies that duration-style --since values
+// are accepted and forwarded to docker.
+func TestLogsCmd_ValidSinceDuration(t *testing.T) {
+	dir := t.TempDir()
+	argsLog := filepath.Join(dir, "args.log")
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" >> %s\nexit 0\n", argsLog)
+	fakeBin := makeFakeDocker(t, dir, "docker", script)
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	for _, dur := range []string{"5m", "1h", "30s", "2h30m"} {
+		root.SetArgs([]string{"logs", "myapp", "--since", dur})
+		var outBuf, errBuf bytes.Buffer
+		root.SetOut(&outBuf)
+		root.SetErr(&errBuf)
+		if err := root.Execute(); err != nil {
+			t.Errorf("--since %q should be valid, got error: %v", dur, err)
+		}
+	}
+}
+
+// TestLogsCmd_ValidSinceTimestamp verifies that RFC3339 --since values are
+// accepted.
+func TestLogsCmd_ValidSinceTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	argsLog := filepath.Join(dir, "args.log")
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" >> %s\nexit 0\n", argsLog)
+	fakeBin := makeFakeDocker(t, dir, "docker", script)
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	ts := "2026-01-01T00:00:00Z"
+	root.SetArgs([]string{"logs", "myapp", "--since", ts})
+	var outBuf, errBuf bytes.Buffer
+	root.SetOut(&outBuf)
+	root.SetErr(&errBuf)
+	if err := root.Execute(); err != nil {
+		t.Errorf("--since %q (RFC3339) should be valid, got error: %v", ts, err)
+	}
+}
+
+// TestLogsCmd_TextMode_DaemonUnavailable verifies that "Cannot connect to the
+// Docker daemon" on docker stderr maps to a docker_unavailable CodedError.
+func TestLogsCmd_TextMode_DaemonUnavailable(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock' >&2\nexit 1\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp")
+	if err == nil {
+		t.Fatal("expected docker_unavailable error, got nil")
+	}
+	var coded *cmdctx.CodedError
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if coded.Code != "docker_unavailable" {
+		t.Errorf("error code = %q, want %q", coded.Code, "docker_unavailable")
+	}
+}
+
+// TestLogsCmd_JSONMode_DaemonUnavailable verifies that "Cannot connect to the
+// Docker daemon" in JSON mode also maps to a docker_unavailable CodedError.
+func TestLogsCmd_JSONMode_DaemonUnavailable(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock' >&2\nexit 1\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp")
+	if err == nil {
+		t.Fatal("expected docker_unavailable error in JSON mode, got nil")
+	}
+	var coded *cmdctx.CodedError
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if coded.Code != "docker_unavailable" {
+		t.Errorf("error code = %q, want %q", coded.Code, "docker_unavailable")
+	}
+}
+
+// TestLogsCmd_JSONMode_NoSuchContainer verifies that "No such container" in
+// JSON mode maps to a container_not_found CodedError.
+func TestLogsCmd_JSONMode_NoSuchContainer(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho 'Error response from daemon: No such container: devbox-test-myapp' >&2\nexit 1\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp")
+	if err == nil {
+		t.Fatal("expected container_not_found error in JSON mode, got nil")
+	}
+	var coded *cmdctx.CodedError
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if coded.Code != "container_not_found" {
+		t.Errorf("error code = %q, want %q", coded.Code, "container_not_found")
+	}
+}
+
 // TestLogsCmd_Follow_TextMode_CancellationClean verifies that SIGINT while
 // --follow text mode is active causes the command to return nil.
 func TestLogsCmd_Follow_TextMode_CancellationClean(t *testing.T) {

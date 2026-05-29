@@ -20,3 +20,22 @@ func TestIsNoSuchContainerErr(t *testing.T) {
 		}
 	}
 }
+
+func TestIsDaemonUnavailableErr(t *testing.T) {
+	tests := []struct {
+		stderr string
+		want   bool
+	}{
+		{"Cannot connect to the Docker daemon at unix:///var/run/docker.sock", true},
+		{"Cannot connect to the Docker daemon", true},
+		{"No such container: mycontainer", false},
+		{"permission denied", false},
+		{"", false},
+	}
+	for _, tc := range tests {
+		got := IsDaemonUnavailableErr(tc.stderr)
+		if got != tc.want {
+			t.Errorf("IsDaemonUnavailableErr(%q) = %v, want %v", tc.stderr, got, tc.want)
+		}
+	}
+}
