@@ -22,6 +22,8 @@ type RootFlags struct {
 	StylesCfg  *config.StylesConfig
 	Locale     string
 	I18n       *i18n.Store
+	Output     string // "text" (default) | "json"
+	Pretty     bool   // indent JSON when Output=="json"
 }
 
 // ProjectRoot returns the resolved project root. Falls back to the config

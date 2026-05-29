@@ -163,16 +163,16 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 - Create: `internal/cli/cmdctx/output.go`
 - Create: `internal/cli/cmdctx/output_test.go`
 
-- [ ] add `Output string` and `Pretty bool` fields to `RootFlags`
-- [ ] in new `output.go`: define `errorEnvelope` struct (JSON-tagged: `error.code`, `error.message`, `error.hint`, `error.details`)
-- [ ] in new `output.go`: define `CodedError` with `Code/Message/Hint/Details/Wrapped`, `Error()`, `Unwrap()`, and constructors `Err(code, msg)`, `ErrWrap(code, err)` with chainable `.WithHint(s)`, `.WithDetail(k, v)`
-- [ ] in new `output.go`: implement `WriteData[T any](flags *RootFlags, cmd *cobra.Command, data T, renderText func(T) string) error` — JSON mode uses `json.NewEncoder` (no indent by default; `SetIndent("", "  ")` if `flags.Pretty`); text mode uses `fmt.Fprintln(cmd.OutOrStdout(), renderText(data))`
-- [ ] in new `output.go`: implement `WriteError(flags *RootFlags, cmd *cobra.Command, err error)` — no-op for text mode; for JSON, build envelope via `buildErrorEnvelope` (extract `*CodedError` via `errors.As`; fallback `internal_error`) and write to stderr with `json.NewEncoder`
-- [ ] in new `output.go`: implement private `buildErrorEnvelope(err error) errorEnvelope`
-- [ ] write tests for `WriteData` (text vs json vs json+pretty) — table-driven, capture stdout buffer, compare
-- [ ] write tests for `WriteError` (CodedError extraction, plain-error fallback, text mode no-op, JSON shape valid)
-- [ ] write `TestCodedError_ErrorsAs` — confirm `errors.As(wrapped, &target)` works through `Unwrap`
-- [ ] run `go test ./internal/cli/cmdctx/...` — must pass before Task 2
+- [x] add `Output string` and `Pretty bool` fields to `RootFlags`
+- [x] in new `output.go`: define `errorEnvelope` struct (JSON-tagged: `error.code`, `error.message`, `error.hint`, `error.details`)
+- [x] in new `output.go`: define `CodedError` with `Code/Message/Hint/Details/Wrapped`, `Error()`, `Unwrap()`, and constructors `Err(code, msg)`, `ErrWrap(code, err)` with chainable `.WithHint(s)`, `.WithDetail(k, v)`
+- [x] in new `output.go`: implement `WriteData[T any](flags *RootFlags, cmd *cobra.Command, data T, renderText func(T) string) error` — JSON mode uses `json.NewEncoder` (no indent by default; `SetIndent("", "  ")` if `flags.Pretty`); text mode uses `fmt.Fprintln(cmd.OutOrStdout(), renderText(data))`
+- [x] in new `output.go`: implement `WriteError(flags *RootFlags, cmd *cobra.Command, err error)` — no-op for text mode; for JSON, build envelope via `buildErrorEnvelope` (extract `*CodedError` via `errors.As`; fallback `internal_error`) and write to stderr with `json.NewEncoder`
+- [x] in new `output.go`: implement private `buildErrorEnvelope(err error) errorEnvelope`
+- [x] write tests for `WriteData` (text vs json vs json+pretty) — table-driven, capture stdout buffer, compare
+- [x] write tests for `WriteError` (CodedError extraction, plain-error fallback, text mode no-op, JSON shape valid)
+- [x] write `TestCodedError_ErrorsAs` — confirm `errors.As(wrapped, &target)` works through `Unwrap`
+- [x] run `go test ./internal/cli/cmdctx/...` — must pass before Task 2
 
 ### Task 2: Register --output and --pretty on root, wire side-effects
 
