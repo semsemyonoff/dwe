@@ -9,7 +9,7 @@ returns it to a clean state that requires a subsequent deploy.
 devbox reset run [--yes]
 ```
 
-Executes `devbox/reset.yml`. The file is **optional** — when absent, Devbox uses the built-in default reset pipeline and prints one info line to stderr: `Using built-in default reset pipeline (no devbox/reset.yml on disk).` The info line is suppressed in `--output json` mode.
+Executes `devbox/reset.yml`. The file is **optional** — when absent, Devbox uses the built-in default reset pipeline and prints one info line to stderr: `Using built-in default reset pipeline (override with devbox/reset.yml).` The info line is suppressed in `--output json` mode.
 
 **Default reset pipeline** (fires when `devbox/reset.yml` is absent):
 

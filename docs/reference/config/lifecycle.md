@@ -29,7 +29,7 @@ It is loaded separately by `LoadLifecycleConfig()` and is **not** merged with th
 
 The file is optional for all commands that use it.
 
-When `lifecycle.yml` is absent or a section is absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <run|stop> pipeline (no devbox/lifecycle.yml on disk).` The info line is suppressed in `--output json` mode.
+When `lifecycle.yml` is absent or a section is absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <run|stop> pipeline (override with devbox/lifecycle.yml).` The info line is suppressed in `--output json` mode.
 
 **Default `run:` pipeline** (fires when `lifecycle.yml` is absent or has no `run:` section):
 

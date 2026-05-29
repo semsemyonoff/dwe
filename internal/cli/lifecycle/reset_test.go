@@ -1032,7 +1032,7 @@ func TestRunResetPlan_DefaultPipelineWhenNoResetYML(t *testing.T) {
 		t.Errorf("plan output missing 'docker down'; got:\n%s", outBuf.String())
 	}
 
-	const wantNotice = "Using built-in default reset pipeline (no devbox/reset.yml on disk)."
+	const wantNotice = "Using built-in default reset pipeline (override with devbox/reset.yml)."
 	if !strings.Contains(errBuf.String(), wantNotice) {
 		t.Errorf("stderr missing info line %q; got:\n%s", wantNotice, errBuf.String())
 	}
@@ -1107,7 +1107,7 @@ func TestRunResetPlan_DefaultPipelineShellFormat(t *testing.T) {
 	}
 
 	// Shell format emits the info line too.
-	const wantNotice = "Using built-in default reset pipeline (no devbox/reset.yml on disk)."
+	const wantNotice = "Using built-in default reset pipeline (override with devbox/reset.yml)."
 	if !strings.Contains(errBuf.String(), wantNotice) {
 		t.Errorf("stderr missing info line in shell format; got:\n%s", errBuf.String())
 	}

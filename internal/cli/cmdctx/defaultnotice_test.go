@@ -22,28 +22,28 @@ func TestEmitDefaultNotice(t *testing.T) {
 			output:    "text",
 			pipeline:  "deploy",
 			file:      "deploy",
-			wantInErr: "Using built-in default deploy pipeline (no devbox/deploy.yml on disk).",
+			wantInErr: "Using built-in default deploy pipeline (override with devbox/deploy.yml).",
 		},
 		{
 			name:      "reset text mode",
 			output:    "text",
 			pipeline:  "reset",
 			file:      "reset",
-			wantInErr: "Using built-in default reset pipeline (no devbox/reset.yml on disk).",
+			wantInErr: "Using built-in default reset pipeline (override with devbox/reset.yml).",
 		},
 		{
 			name:      "run lifecycle text mode",
 			output:    "text",
 			pipeline:  "run",
 			file:      "lifecycle",
-			wantInErr: "Using built-in default run pipeline (no devbox/lifecycle.yml on disk).",
+			wantInErr: "Using built-in default run pipeline (override with devbox/lifecycle.yml).",
 		},
 		{
 			name:      "stop lifecycle text mode",
 			output:    "text",
 			pipeline:  "stop",
 			file:      "lifecycle",
-			wantInErr: "Using built-in default stop pipeline (no devbox/lifecycle.yml on disk).",
+			wantInErr: "Using built-in default stop pipeline (override with devbox/lifecycle.yml).",
 		},
 		{
 			name:       "json mode suppressed",
@@ -57,7 +57,7 @@ func TestEmitDefaultNotice(t *testing.T) {
 			output:    "",
 			pipeline:  "deploy",
 			file:      "deploy",
-			wantInErr: "Using built-in default deploy pipeline (no devbox/deploy.yml on disk).",
+			wantInErr: "Using built-in default deploy pipeline (override with devbox/deploy.yml).",
 		},
 	}
 

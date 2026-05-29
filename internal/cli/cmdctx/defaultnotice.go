@@ -15,6 +15,6 @@ func EmitDefaultNotice(cmd *cobra.Command, flags *RootFlags, pipeline string, fi
 		return
 	}
 	render.NewWriter(cmd.ErrOrStderr()).Info(
-		fmt.Sprintf("Using built-in default %s pipeline (no devbox/%s.yml on disk).", pipeline, file),
+		fmt.Sprintf("Using built-in default %s pipeline (override with devbox/%s.yml).", pipeline, file),
 	)
 }

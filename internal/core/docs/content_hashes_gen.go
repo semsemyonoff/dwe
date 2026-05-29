@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"internals/packages.md":                                  "6f48692cc4d2",
+	"internals/packages.md":                                  "89356bc382af",
 	"reference/cli/devbox_commands_list.md":                  "030cd5fd127c",
 	"reference/cli/devbox_commands.md":                       "6adbfd5d6bd0",
 	"reference/cli/devbox_completion_bash.md":                "d4252a5d1749",
@@ -113,15 +113,15 @@ var ContentHashes = map[string]string{
 	"reference/cli/starship.md":                              "2b9f7b50923a",
 	"reference/config/commands.md":                           "787cf73ea2c6",
 	"reference/config/conditions.md":                         "d6d63a90526f",
-	"reference/config/deploy.md":                             "b2f22c7af8d9",
+	"reference/config/deploy.md":                             "fd0c1ca07076",
 	"reference/config/devbox.md":                             "b87700040ab8",
 	"reference/config/docker.md":                             "be17105554b4",
 	"reference/config/i18n.md":                               "349465b47a47",
 	"reference/config/index.md":                              "5630c88661f6",
 	"reference/config/info.md":                               "50e28a32403e",
-	"reference/config/lifecycle.md":                          "67962f806ab6",
+	"reference/config/lifecycle.md":                          "735b74d31a90",
 	"reference/config/notifications.md":                      "ec343c919f75",
-	"reference/config/reset.md":                              "3ff91d26bbc4",
+	"reference/config/reset.md":                              "08db3edb6d31",
 	"reference/config/services.md":                           "f299d4977cd2",
 	"reference/config/setup.md":                              "2e27f5b952f3",
 	"reference/config/snapshot.md":                           "5cd31ef4778a",

@@ -99,7 +99,7 @@ func TestRunDeployPlan_DefaultPipelineWhenNoDeployYML(t *testing.T) {
 		t.Errorf("plan output missing 'docker up --wait'; got:\n%s", outBuf.String())
 	}
 
-	const wantNotice = "Using built-in default deploy pipeline (no devbox/deploy.yml on disk)."
+	const wantNotice = "Using built-in default deploy pipeline (override with devbox/deploy.yml)."
 	if !strings.Contains(errBuf.String(), wantNotice) {
 		t.Errorf("stderr missing info line %q; got:\n%s", wantNotice, errBuf.String())
 	}
