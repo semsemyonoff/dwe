@@ -1,4 +1,4 @@
-package builtin
+package interaction
 
 import (
 	"context"
@@ -14,18 +14,22 @@ import (
 // runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
 var runConfirm = ui.RunConfirm
 
-type confirmBuiltin struct{}
+// Confirm prompts the user for interactive confirmation before continuing.
+type Confirm struct{}
 
-func (confirmBuiltin) Validate(with map[string]any) error {
+// Validate accepts any params; defaults apply when fields are absent.
+func (Confirm) Validate(with map[string]any) error {
 	return nil
 }
 
-func (confirmBuiltin) Describe(with map[string]any) string {
+// Describe returns a plan-line summary of the confirm builtin invocation.
+func (Confirm) Describe(with map[string]any) string {
 	msg := spec.GetStringParam(with, "message", "Are you sure?")
 	return fmt.Sprintf("builtin: confirm(message=%q)", msg)
 }
 
-func (confirmBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run prompts for confirmation and returns "aborted by user" when declined.
+func (Confirm) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.SkipConfirm {
 		return nil
 	}

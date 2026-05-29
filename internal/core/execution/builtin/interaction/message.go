@@ -1,4 +1,4 @@
-package builtin
+package interaction
 
 import (
 	"context"
@@ -17,9 +17,11 @@ var validMessageLevels = map[string]bool{
 	"error":   true,
 }
 
-type messageBuiltin struct{}
+// Message prints a styled line to the pipeline output writer.
+type Message struct{}
 
-func (messageBuiltin) Validate(with map[string]any) error {
+// Validate ensures the required level and text params are present and valid.
+func (Message) Validate(with map[string]any) error {
 	level := spec.GetStringParam(with, "level", "")
 	if level == "" {
 		return fmt.Errorf("builtin message: missing required param 'level'")
@@ -34,13 +36,15 @@ func (messageBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (messageBuiltin) Describe(with map[string]any) string {
+// Describe returns a plan-line summary of the message builtin invocation.
+func (Message) Describe(with map[string]any) string {
 	level := spec.GetStringParam(with, "level", "")
 	text := spec.GetStringParam(with, "text", "")
 	return fmt.Sprintf("builtin: message(level=%s, text=%s)", level, text)
 }
 
-func (messageBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run renders the text through the project template engine and writes it at the configured level.
+func (Message) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
 	level := spec.GetStringParam(with, "level", "")
 	rawText := spec.GetStringParam(with, "text", "")
 

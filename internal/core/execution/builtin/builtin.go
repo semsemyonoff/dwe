@@ -38,6 +38,7 @@ import (
 	"devbox-cli/internal/core/execution/builtin/containers"
 	"devbox-cli/internal/core/execution/builtin/env"
 	"devbox-cli/internal/core/execution/builtin/fs"
+	"devbox-cli/internal/core/execution/builtin/interaction"
 	"devbox-cli/internal/core/execution/builtin/services"
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
@@ -72,9 +73,6 @@ var registry = buildRegistry()
 
 func buildRegistry() map[string]spec.Entry {
 	r := map[string]spec.Entry{
-		// KindAction: user-callable step actions with side effects
-		"confirm": {Impl: confirmBuiltin{}, Kind: spec.KindAction},
-		"message": {Impl: messageBuiltin{}, Kind: spec.KindAction},
 		// KindPredicate: read-only checks for check: positions and validate.yml
 		"shell":         {Impl: Shell{}, Kind: spec.KindPredicate},
 		"tcp_reachable": {Impl: TCPReachable{}, Kind: spec.KindPredicate},
@@ -84,6 +82,7 @@ func buildRegistry() map[string]spec.Entry {
 		services.Builtins(),
 		fs.Builtins(),
 		env.Builtins(),
+		interaction.Builtins(),
 	} {
 		for k, v := range src {
 			if _, dup := r[k]; dup {

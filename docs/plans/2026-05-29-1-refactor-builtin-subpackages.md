@@ -342,16 +342,16 @@ When each `*Builtin` struct is renamed:
 - Move + modify: `confirm_test.go`, `message_test.go` → `interaction/`
 - Modify: `internal/core/execution/builtin/builtin.go`
 
-- [ ] create `interaction/interaction.go` with `func Builtins() map[string]spec.Entry` returning `{"confirm": {Confirm{}, spec.KindAction}, "message": {Message{}, spec.KindAction}}` + doc comment
-- [ ] move 2 implementation files; change package decl; add spec import
-- [ ] rename types: `confirmBuiltin` → `Confirm`, `messageBuiltin` → `Message`
-- [ ] update receivers (`c Confirm`, `m Message`) + doc comments
-- [ ] update helper/ExecContext references to `spec.*`
-- [ ] move 2 test files; update package and instantiations
-- [ ] in root `builtin.go`: add `for k, v := range interaction.Builtins() { r[k] = v }`; import interaction package
-- [ ] update `interactiveBuiltins` map in root `builtin.go` if it references the now-moved `confirm` builtin — only the registered NAME is referenced (`"confirm"`), which is unchanged, so the map itself stays as-is
-- [ ] run `make test ./internal/core/execution/builtin/...` — must pass before Task 8
-- [ ] run `make lint` — must pass before Task 8
+- [x] create `interaction/interaction.go` with `func Builtins() map[string]spec.Entry` returning `{"confirm": {Confirm{}, spec.KindAction}, "message": {Message{}, spec.KindAction}}` + doc comment
+- [x] move 2 implementation files; change package decl; add spec import
+- [x] rename types: `confirmBuiltin` → `Confirm`, `messageBuiltin` → `Message`
+- [x] update receivers (`c Confirm`, `m Message`) + doc comments
+- [x] update helper/ExecContext references to `spec.*`
+- [x] move 2 test files; update package and instantiations
+- [x] in root `builtin.go`: add `for k, v := range interaction.Builtins() { r[k] = v }`; import interaction package
+- [x] update `interactiveBuiltins` map in root `builtin.go` if it references the now-moved `confirm` builtin — only the registered NAME is referenced (`"confirm"`), which is unchanged, so the map itself stays as-is
+- [x] run `make test ./internal/core/execution/builtin/...` — must pass before Task 8
+- [x] run `make lint` — must pass before Task 8
 
 ### Task 8: Verify external callers and integration
 

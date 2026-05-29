@@ -1,4 +1,4 @@
-package builtin
+package interaction
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ func makeMessageCtx(t *testing.T) (spec.ExecContext, *bytes.Buffer) {
 // ---- Validate ---------------------------------------------------------------
 
 func TestMessageValidate(t *testing.T) {
-	b := messageBuiltin{}
+	b := Message{}
 
 	cases := []struct {
 		name    string
@@ -58,7 +58,7 @@ func TestMessageValidate(t *testing.T) {
 // ---- Describe ---------------------------------------------------------------
 
 func TestMessageDescribe(t *testing.T) {
-	b := messageBuiltin{}
+	b := Message{}
 	got := b.Describe(map[string]any{"level": "info", "text": "hello"})
 	want := "builtin: message(level=info, text=hello)"
 	if got != want {
@@ -69,7 +69,7 @@ func TestMessageDescribe(t *testing.T) {
 // ---- Run: all four levels ---------------------------------------------------
 
 func TestMessageRun_AllLevels(t *testing.T) {
-	b := messageBuiltin{}
+	b := Message{}
 
 	levels := []string{"info", "success", "warning", "error"}
 	for _, level := range levels {
@@ -89,7 +89,7 @@ func TestMessageRun_AllLevels(t *testing.T) {
 // ---- Run: template evaluation in text --------------------------------------
 
 func TestMessageRun_TemplateEvaluation(t *testing.T) {
-	b := messageBuiltin{}
+	b := Message{}
 	ctx, buf := makeMessageCtx(t)
 	ctx.Config = &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myproject"},
@@ -108,7 +108,7 @@ func TestMessageRun_TemplateEvaluation(t *testing.T) {
 }
 
 func TestMessageRun_PlainTextNoTemplate(t *testing.T) {
-	b := messageBuiltin{}
+	b := Message{}
 	ctx, buf := makeMessageCtx(t)
 
 	err := b.Run(context.Background(), map[string]any{"level": "success", "text": "no template here"}, ctx)
@@ -117,14 +117,5 @@ func TestMessageRun_PlainTextNoTemplate(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "no template here") {
 		t.Errorf("plain text not found; output: %q", buf.String())
-	}
-}
-
-// ---- Registry ---------------------------------------------------------------
-
-func TestMessageRegistered(t *testing.T) {
-	_, ok := Get("message", CtxUserYAML)
-	if !ok {
-		t.Error("message not found in builtin registry")
 	}
 }
