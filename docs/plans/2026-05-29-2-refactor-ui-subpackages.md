@@ -321,10 +321,10 @@ Several callers use symbols from multiple groups → import multiple subpkgs. Th
 - Modify: `AGENTS.md` / `CLAUDE.md` "section renderer signature contract" if it references old layout
 - Move: this plan file → `docs/plans/completed/`
 
-- [ ] update `docs/internals/packages.md` section on `internal/core/ui/` to describe widgets/styles/render structure + sibling subpkgs
-- [ ] verify "Section renderer signature contract" in CLAUDE.md still matches (returns strings, not `*render.Writer` — should be unchanged)
-- [ ] verify all checkboxes above are `[x]`
-- [ ] move plan file: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-2-refactor-ui-subpackages.md docs/plans/completed/`
+- [x] update `docs/internals/packages.md` section on `internal/core/ui/` to describe widgets/styles/render structure + sibling subpkgs
+- [x] verify "Section renderer signature contract" in CLAUDE.md still matches (returns strings, not `*render.Writer`); refreshed package references to `ui/render/` + `render.X` for accuracy
+- [x] verify all checkboxes above are `[x]`
+- [x] move plan file: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-2-refactor-ui-subpackages.md docs/plans/completed/` (performed after final commit)
 
 ## Post-Completion
 
