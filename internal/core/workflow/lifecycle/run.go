@@ -307,6 +307,7 @@ func RunRestart(ctx RunContext) error {
 		Yes:           ctx.Yes,
 		SkipPreflight: ctx.SkipPreflight,
 		ErrOut:        ctx.ErrOut,
+		OnDefaultUsed: ctx.OnDefaultUsed,
 	}
 	if err := RunStop(stopCtx); err != nil {
 		return err

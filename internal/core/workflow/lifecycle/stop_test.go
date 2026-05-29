@@ -10,16 +10,21 @@ import (
 )
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {
+	// Stub RunPhasesFunc: default stop config contains a type:devbox step
+	// (docker down) whose os.Executable() call would recursively re-run the test binary.
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
 	ctx := StopContext{ConfigPath: cfgPath}
 	if err := RunStop(ctx); err != nil {
-		t.Fatalf("RunStop with missing lifecycle.yml should succeed (auto-reap only), got: %v", err)
+		t.Fatalf("RunStop with missing lifecycle.yml should succeed (built-in default), got: %v", err)
 	}
 }
 
 func TestRunStop_MissingStopSection(t *testing.T) {
+	// Stub RunPhasesFunc for the same reason as TestRunStop_MissingLifecycleYML.
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -58,6 +63,8 @@ func TestRunStop_HappyPath(t *testing.T) {
 }
 
 func TestRunStop_ClearsPendingRestart_KeepsPendingDeploy(t *testing.T) {
+	// No lifecycle.yml → default stop config (type:devbox step) → stub required.
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -93,12 +100,12 @@ func TestRunStop_ClearsPendingRestart_KeepsPendingDeploy(t *testing.T) {
 }
 
 func TestEnsureStopConfig_NilConfig(t *testing.T) {
-	out := EnsureStopConfig(nil)
+	out, defaulted := EnsureStopConfig(nil)
 	if out == nil {
 		t.Fatal("EnsureStopConfig(nil) returned nil")
 	}
-	if len(out.Phases) != 1 {
-		t.Fatalf("expected 1 synthetic phase, got %d", len(out.Phases))
+	if !defaulted {
+		t.Error("EnsureStopConfig(nil) must return defaulted=true")
 	}
 	if out.Phases[0].Name != AutoReapPhaseName {
 		t.Errorf("expected phase name %q, got %q", AutoReapPhaseName, out.Phases[0].Name)
@@ -109,9 +116,12 @@ func TestEnsureStopConfig_NilConfig(t *testing.T) {
 }
 
 func TestEnsureStopConfig_NilStop(t *testing.T) {
-	out := EnsureStopConfig(&config.LifecycleConfig{Stop: nil})
-	if len(out.Phases) != 1 || out.Phases[0].Name != AutoReapPhaseName {
-		t.Fatalf("expected reap-only phases, got %+v", out.Phases)
+	out, defaulted := EnsureStopConfig(&config.LifecycleConfig{Stop: nil})
+	if !defaulted {
+		t.Error("EnsureStopConfig(cfg with nil Stop) must return defaulted=true")
+	}
+	if out.Phases[0].Name != AutoReapPhaseName {
+		t.Fatalf("expected reap phase first, got %+v", out.Phases)
 	}
 }
 
@@ -123,7 +133,10 @@ func TestEnsureStopConfig_PrependsToUserPhases(t *testing.T) {
 			Phases:       []config.DeployPhase{user},
 		},
 	}
-	out := EnsureStopConfig(in)
+	out, defaulted := EnsureStopConfig(in)
+	if defaulted {
+		t.Error("EnsureStopConfig with user stop: section must return defaulted=false")
+	}
 	if len(out.Phases) != 2 {
 		t.Fatalf("expected 2 phases, got %d", len(out.Phases))
 	}
@@ -146,8 +159,92 @@ func TestEnsureStopConfig_DefaultsFinalMessage(t *testing.T) {
 	in := &config.LifecycleConfig{
 		Stop: &config.LifecycleStopConfig{FinalMessage: "", Phases: nil},
 	}
-	out := EnsureStopConfig(in)
+	out, _ := EnsureStopConfig(in)
 	if out.FinalMessage == "" {
 		t.Error("expected fallback final message when empty")
+	}
+}
+
+func TestDefaultStopConfig_Shape(t *testing.T) {
+	d := DefaultStopConfig()
+	if d.FinalMessage != "Project is stopped. Have a nice day!" {
+		t.Errorf("FinalMessage = %q", d.FinalMessage)
+	}
+	if len(d.Phases) != 1 {
+		t.Fatalf("expected 1 phase, got %d", len(d.Phases))
+	}
+	ph := d.Phases[0]
+	if ph.Name == AutoReapPhaseName {
+		t.Error("DefaultStopConfig must NOT include the auto-reap phase")
+	}
+	if len(ph.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(ph.Steps))
+	}
+	step := ph.Steps[0]
+	if step.Type != "devbox" || step.Cmd != "docker down" {
+		t.Errorf("step = {type:%q cmd:%q}, want {type:devbox cmd:docker down}", step.Type, step.Cmd)
+	}
+}
+
+func TestEnsureStopConfig_NilConfig_PhasesMatchDefault(t *testing.T) {
+	out, _ := EnsureStopConfig(nil)
+	d := DefaultStopConfig()
+	// After prepending auto-reap, non-reap phases must equal DefaultStopConfig phases.
+	nonReap := out.Phases[1:]
+	if len(nonReap) != len(d.Phases) {
+		t.Fatalf("non-reap phase count = %d, want %d", len(nonReap), len(d.Phases))
+	}
+	for i, ph := range d.Phases {
+		if nonReap[i].Name != ph.Name {
+			t.Errorf("phase[%d].Name = %q, want %q", i, nonReap[i].Name, ph.Name)
+		}
+	}
+}
+
+func TestRunStop_MissingLifecycleYML_FiresOnDefaultUsed(t *testing.T) {
+	stubRunPhases(t)
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+
+	var called []DefaultedPipeline
+	ctx := StopContext{
+		ConfigPath: cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
+	}
+	if err := RunStop(ctx); err != nil {
+		t.Fatalf("RunStop: %v", err)
+	}
+	if len(called) != 1 || called[0] != DefaultedStop {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q]", called, DefaultedStop)
+	}
+}
+
+func TestRunStop_WithStopSection_DoesNotFireOnDefaultUsed(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	lifecycleYAML := "stop:\n  final_message: bye\n  phases: []\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+		t.Fatalf("writing lifecycle.yml: %v", err)
+	}
+
+	var called []DefaultedPipeline
+	ctx := StopContext{
+		ConfigPath: cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
+	}
+	if err := RunStop(ctx); err != nil {
+		t.Fatalf("RunStop: %v", err)
+	}
+	if len(called) != 0 {
+		t.Errorf("OnDefaultUsed must not fire when stop: section is present, got %v", called)
 	}
 }

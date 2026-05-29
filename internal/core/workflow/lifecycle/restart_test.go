@@ -9,7 +9,7 @@ import (
 	"devbox-cli/internal/shared/git"
 )
 
-func TestRunRestart_MissingLifecycleYML_RunLegUsesDefault(t *testing.T) {
+func TestRunRestart_MissingLifecycleYML_BothLegsUseDefault(t *testing.T) {
 	// Stub RunPhasesFunc to avoid recursive test-binary execution from
 	// type:devbox steps calling os.Executable() in the default run config.
 	stubRunPhases(t)
@@ -27,17 +27,17 @@ func TestRunRestart_MissingLifecycleYML_RunLegUsesDefault(t *testing.T) {
 	if err := RunRestart(ctx); err != nil {
 		t.Fatalf("RunRestart with missing lifecycle.yml should succeed (built-in defaults), got: %v", err)
 	}
-	// Task 4 only adds DefaultedRun handling; DefaultedStop handling is Task 5.
-	// The run leg fires the callback; stop leg uses EnsureStopConfig without callback.
-	if len(called) != 1 || called[0] != DefaultedRun {
-		t.Errorf("OnDefaultUsed calls = %v, want [%q]", called, DefaultedRun)
+	// Both stop and run legs use defaults when lifecycle.yml is absent.
+	// stop fires first, run fires second.
+	if len(called) != 2 || called[0] != DefaultedStop || called[1] != DefaultedRun {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q %q]", called, DefaultedStop, DefaultedRun)
 	}
 }
 
 func TestRunRestart_MissingStopSection(t *testing.T) {
-	// With the auto-reap contract, missing stop: is fine — the stop leg
-	// runs the synthetic reap phase only. Restart should therefore reach
-	// the run leg and succeed.
+	// Missing stop: uses the built-in default stop (which includes a type:devbox
+	// step); stub RunPhasesFunc to avoid recursive test binary execution.
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -150,6 +150,39 @@ run:
 	}
 	if len(deployOp.Services) != 1 || deployOp.Services[0] != "main" {
 		t.Errorf("deploy pending op.Services = %v, want [main]", deployOp.Services)
+	}
+}
+
+func TestRunRestart_OnlyRunSectionPresent_StopUsesDefault(t *testing.T) {
+	// Symmetric counterpart to TestRunRestart_MissingRunSection_UsesDefault:
+	// lifecycle.yml has only run: (no stop:) → stop leg uses default, run leg uses user config.
+	stubRunPhases(t)
+
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	lifecycleYAML := "run:\n  final_message: ready\n  phases: []\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+		t.Fatalf("writing lifecycle.yml: %v", err)
+	}
+
+	var called []DefaultedPipeline
+	ctx := RunContext{
+		ConfigPath: cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
+	}
+	if err := RunRestart(ctx); err != nil {
+		t.Fatalf("RunRestart with only run: section should succeed, got: %v", err)
+	}
+	// stop: absent → DefaultedStop fires; run: present → no default.
+	if len(called) != 1 || called[0] != DefaultedStop {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q]", called, DefaultedStop)
 	}
 }
 

@@ -31,6 +31,10 @@ type StopContext struct {
 	// pipeline steps. When nil, NopTranslator is used (English fallback).
 	Translator i18n.Translator
 	Locale     string
+	// OnDefaultUsed is called when the stop pipeline was absent (file missing
+	// or no stop: section) and the built-in default was used. CLI uses this to
+	// emit the info line on stderr.
+	OnDefaultUsed func(DefaultedPipeline)
 }
 
 // RunStop executes the full stop lifecycle.
@@ -83,7 +87,10 @@ func RunStop(ctx StopContext) error {
 		return fmt.Errorf("loading lifecycle config: %w", err)
 	}
 
-	stopCfg := EnsureStopConfig(lifecycleCfg)
+	stopCfg, defaulted := EnsureStopConfig(lifecycleCfg)
+	if defaulted && ctx.OnDefaultUsed != nil {
+		ctx.OnDefaultUsed(DefaultedStop)
+	}
 
 	if err := RunPhases(cfg, reg, workDir, stopCfg.Phases, "stop", "stop", ctx.Yes, stopCfg.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err

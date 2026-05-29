@@ -114,6 +114,9 @@ Use 'devbox docker stop' for the low-level compose stop (no container removal).`
 					ErrOut:        cmd.ErrOrStderr(),
 					Translator:    flags.I18n,
 					Locale:        flags.Locale,
+					OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {
+						cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle")
+					},
 				})
 			}
 			// Per-service stop.

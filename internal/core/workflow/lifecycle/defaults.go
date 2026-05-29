@@ -45,3 +45,25 @@ func EnsureRunConfig(loaded *config.LifecycleConfig) (*config.LifecycleRunConfig
 	}
 	return loaded.Run, false
 }
+
+// DefaultStopConfig returns a freshly-allocated default stop pipeline. Callers may mutate the result safely.
+// The auto-reap phase is NOT included — EnsureStopConfig always prepends it regardless of defaulting.
+func DefaultStopConfig() *config.LifecycleStopConfig {
+	return &config.LifecycleStopConfig{
+		FinalMessage: "Project is stopped. Have a nice day!",
+		Phases: []config.DeployPhase{
+			{
+				Name:        "stop",
+				Description: "Stop containers",
+				Steps: []config.DeployStep{
+					{
+						Name:        "down",
+						Type:        "devbox",
+						Cmd:         "docker down",
+						Description: "Stop all containers",
+					},
+				},
+			},
+		},
+	}
+}

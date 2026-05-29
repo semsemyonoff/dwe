@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"devbox-cli/internal/cli/cmdctx"
@@ -61,25 +62,31 @@ func TestStopCmd_RegisteredAtRoot(t *testing.T) {
 }
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {
-	// lifecycle.yml is optional for stop — the auto-injected reap phase
-	// runs alone.
+	// Default stop config includes a type:devbox step; stub to prevent recursion.
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
+	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"stop"})
+	root.SetErr(&errBuf)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
 	if err := root.Execute(); err != nil {
-		t.Fatalf("stop with missing lifecycle.yml should succeed, got: %v", err)
+		t.Fatalf("stop with missing lifecycle.yml should succeed (built-in default), got: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "Using built-in default stop pipeline") {
+		t.Errorf("expected info line in stderr, got: %q", errBuf.String())
 	}
 }
 
 func TestRunStop_MissingStopSection(t *testing.T) {
-	// lifecycle.yml without a stop: section is fine — auto-reap runs alone.
+	// Default stop config includes a type:devbox step; stub to prevent recursion.
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -92,15 +99,20 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
+	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"stop"})
+	root.SetErr(&errBuf)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
 	if err := root.Execute(); err != nil {
-		t.Fatalf("stop with no stop: section should succeed, got: %v", err)
+		t.Fatalf("stop with no stop: section should succeed (built-in default), got: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "Using built-in default stop pipeline") {
+		t.Errorf("expected info line in stderr, got: %q", errBuf.String())
 	}
 }
 

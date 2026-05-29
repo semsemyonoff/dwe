@@ -70,8 +70,8 @@ func TestRunRestart_MissingLifecycleYML_UsesDefault(t *testing.T) {
 }
 
 func TestRunRestart_MissingStopSection(t *testing.T) {
-	// Missing stop: section no longer aborts restart — the auto-reap phase
-	// runs and the run leg proceeds.
+	// Missing stop: uses the default stop config (type:devbox step); stub to prevent recursion.
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
