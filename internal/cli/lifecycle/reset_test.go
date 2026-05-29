@@ -91,7 +91,7 @@ phases:
 		t.Fatalf("loading config: %v", err)
 	}
 
-	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
+	resetCfg, steps, _, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("resolving reset plan: %v", err)
 	}
@@ -996,6 +996,120 @@ func TestResetServiceRun_MandatoryService(t *testing.T) {
 	}
 	if state.Pending == nil || state.Pending.Find(journal.PendingDeploy) == nil {
 		t.Error("expected PendingDeploy in journal after mandatory service reset")
+	}
+}
+
+// makeMinimalResetProject writes a bare devbox.yml (no reset.yml, no services)
+// so the default reset pipeline fires.
+func makeMinimalResetProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(
+		"schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestRunResetPlan_DefaultPipelineWhenNoResetYML verifies that a bare project
+// (no devbox/reset.yml) succeeds, includes the docker-down step from the
+// built-in default, and prints the info line on stderr.
+func TestRunResetPlan_DefaultPipelineWhenNoResetYML(t *testing.T) {
+	dir := makeMinimalResetProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+
+	cmd := &cobra.Command{}
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	if err := runResetPlan(cmd, flags, resetPlanOpts{}); err != nil {
+		t.Fatalf("runResetPlan: %v", err)
+	}
+
+	if !strings.Contains(outBuf.String(), "docker down") {
+		t.Errorf("plan output missing 'docker down'; got:\n%s", outBuf.String())
+	}
+
+	const wantNotice = "Using built-in default reset pipeline (no devbox/reset.yml on disk)."
+	if !strings.Contains(errBuf.String(), wantNotice) {
+		t.Errorf("stderr missing info line %q; got:\n%s", wantNotice, errBuf.String())
+	}
+}
+
+// TestRunResetPlan_JSONModeNoInfoLine verifies that --output json suppresses
+// the default-pipeline info line on stderr.
+func TestRunResetPlan_JSONModeNoInfoLine(t *testing.T) {
+	dir := makeMinimalResetProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml"), Output: "json"}
+
+	cmd := &cobra.Command{}
+	var errBuf bytes.Buffer
+	cmd.SetErr(&errBuf)
+
+	_ = runResetPlan(cmd, flags, resetPlanOpts{})
+
+	if errBuf.Len() != 0 {
+		t.Errorf("json mode: expected empty stderr, got %q", errBuf.String())
+	}
+}
+
+// TestRunResetPlan_UserResetYMLNoInfoLine verifies that a project with a
+// devbox/reset.yml does not emit the default-pipeline info line.
+func TestRunResetPlan_UserResetYMLNoInfoLine(t *testing.T) {
+	dir := makeMinimalResetProject(t)
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userReset := "phases:\n  - name: mycleanup\n    steps:\n      - name: step1\n        type: shell\n        cmd: echo bye\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(userReset), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+
+	cmd := &cobra.Command{}
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	if err := runResetPlan(cmd, flags, resetPlanOpts{}); err != nil {
+		t.Fatalf("runResetPlan: %v", err)
+	}
+
+	if errBuf.Len() != 0 {
+		t.Errorf("expected no info line when user reset.yml present; stderr = %q", errBuf.String())
+	}
+	if !strings.Contains(outBuf.String(), "echo bye") {
+		t.Errorf("plan output missing user step 'echo bye'; got:\n%s", outBuf.String())
+	}
+	if strings.Contains(outBuf.String(), "docker down") {
+		t.Errorf("default step 'docker down' should not appear when user reset.yml is present")
+	}
+}
+
+// TestRunResetPlan_DefaultPipelineShellFormat verifies --format shell also
+// works with the default pipeline and does not emit extra stderr.
+func TestRunResetPlan_DefaultPipelineShellFormat(t *testing.T) {
+	dir := makeMinimalResetProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+
+	cmd := &cobra.Command{}
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	if err := runResetPlan(cmd, flags, resetPlanOpts{Format: "shell"}); err != nil {
+		t.Fatalf("runResetPlan(shell): %v", err)
+	}
+
+	// Shell format emits the info line too.
+	const wantNotice = "Using built-in default reset pipeline (no devbox/reset.yml on disk)."
+	if !strings.Contains(errBuf.String(), wantNotice) {
+		t.Errorf("stderr missing info line in shell format; got:\n%s", errBuf.String())
 	}
 }
 

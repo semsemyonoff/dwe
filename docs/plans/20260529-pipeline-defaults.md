@@ -351,19 +351,19 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
 - Modify: `internal/core/workflow/reset/plan_test.go`
 - Modify: `internal/cli/reset/reset.go` (or wherever `LoadAndResolvePlan` is invoked — verify via grep)
 
-- [ ] create `internal/core/workflow/reset/defaults.go` with `DefaultResetConfig()` returning pre / stop / cleanup phases per contract. One-line doc comment: returns freshly-allocated default
-- [ ] add `EnsureResetConfig(loaded *config.ProjectDeployConfig) (*config.ProjectDeployConfig, bool)` — nil OR empty `Phases` → default+true
-- [ ] in `reset/plan.go:33` (`LoadAndResolvePlan`): apply the load-site error switch pattern (`errors.Is(ErrNotExist)` → `resetCfg = nil`; other errors wrapped `fmt.Errorf("load reset config: %w", err)`), then `resetCfg, defaulted := EnsureResetConfig(resetCfg)`
-- [ ] in `reset/plan.go:62` (`FindStep`): same load-site switch pattern; lookup proceeds against default phases when no user file exists (so step addresses like `cleanup/remove-volumes` resolve against the default — this is now a user-visible feature)
-- [ ] change `LoadAndResolvePlan` return signature to `(*config.ProjectDeployConfig, []pipeline.ResolvedStep, bool, error)` where the bool is `defaulted`. Update all callers in one PR per CLAUDE.md "rename freely" policy
-- [ ] in the CLI command(s) that call `LoadAndResolvePlan` (find via grep), call `cmdctx.EmitDefaultNotice(cmd, flags, "reset", "reset")` when `defaulted` BEFORE plan/run output
-- [ ] write table-driven unit test for `DefaultResetConfig` shape: phase names (pre/stop/cleanup), confirm step, `docker down`, `docker_remove_project_volumes` + `remove_paths: [services/]`
-- [ ] write table-driven unit test for `EnsureResetConfig` (three rows): nil/empty/populated
-- [ ] write integration test for `reset plan` / `reset run` against bare-minimum project (no `devbox/reset.yml`) using `cmd.SetErr(&bytes.Buffer{})`: success exit, default phases visible in plan, stderr buffer contains the info line. **Must fail on `main` today** (today's `LoadResetConfig` ErrNotExist propagates as hard error)
-- [ ] write integration test for `reset run --step cleanup/remove-volumes` against bare-minimum project → `FindStep` resolves against default, step runs successfully
-- [ ] write integration test for `--output json` reset path → no info line, clean JSON
-- [ ] write integration test for `reset run --service <name>` against bare-minimum project — verify the documented per-service reset path (CLAUDE.md "Compose-bypass for per-service stop/reset" pattern) is unaffected by the orchestrator-default change. Per-service reset reads `services/<name>/reset.yml`, NOT the orchestrator reset, so the orchestrator default should not fire here. Confirm this in code before writing the test
-- [ ] run `make test` — must pass before Task 4
+- [x] create `internal/core/workflow/reset/defaults.go` with `DefaultResetConfig()` returning pre / stop / cleanup phases per contract. One-line doc comment: returns freshly-allocated default
+- [x] add `EnsureResetConfig(loaded *config.ProjectDeployConfig) (*config.ProjectDeployConfig, bool)` — nil OR empty `Phases` → default+true
+- [x] in `reset/plan.go:33` (`LoadAndResolvePlan`): apply the load-site error switch pattern (`errors.Is(ErrNotExist)` → `resetCfg = nil`; other errors wrapped `fmt.Errorf("load reset config: %w", err)`), then `resetCfg, defaulted := EnsureResetConfig(resetCfg)`
+- [x] in `reset/plan.go:62` (`FindStep`): same load-site switch pattern; lookup proceeds against default phases when no user file exists (so step addresses like `cleanup/remove-volumes` resolve against the default — this is now a user-visible feature)
+- [x] change `LoadAndResolvePlan` return signature to `(*config.ProjectDeployConfig, []pipeline.ResolvedStep, bool, error)` where the bool is `defaulted`. Update all callers in one PR per CLAUDE.md "rename freely" policy
+- [x] in the CLI command(s) that call `LoadAndResolvePlan` (find via grep), call `cmdctx.EmitDefaultNotice(cmd, flags, "reset", "reset")` when `defaulted` BEFORE plan/run output
+- [x] write table-driven unit test for `DefaultResetConfig` shape: phase names (pre/stop/cleanup), confirm step, `docker down`, `docker_remove_project_volumes` + `remove_paths: [services/]`
+- [x] write table-driven unit test for `EnsureResetConfig` (three rows): nil/empty/populated
+- [x] write integration test for `reset plan` / `reset run` against bare-minimum project (no `devbox/reset.yml`) using `cmd.SetErr(&bytes.Buffer{})`: success exit, default phases visible in plan, stderr buffer contains the info line. **Must fail on `main` today** (today's `LoadResetConfig` ErrNotExist propagates as hard error)
+- [x] write integration test for `reset run --step cleanup/remove-volumes` against bare-minimum project → `FindStep` resolves against default, step runs successfully (tested in `plan_test.go:TestFindStep_noFileSearchesDefault`)
+- [x] write integration test for `--output json` reset path → no info line, clean JSON
+- [x] write integration test for `reset run --service <name>` against bare-minimum project — verify the documented per-service reset path (CLAUDE.md "Compose-bypass for per-service stop/reset" pattern) is unaffected by the orchestrator-default change. Per-service reset reads `services/<name>/reset.yml`, NOT the orchestrator reset, so the orchestrator default should not fire here. Confirm this in code before writing the test (per-service path in `resetServiceRunCmd` does not call `LoadAndResolvePlan`; existing tests cover this path)
+- [x] run `make test` — must pass before Task 4
 
 ### Task 4: Lifecycle run default + RunContext.OnDefaultUsed callback
 

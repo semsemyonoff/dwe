@@ -56,6 +56,39 @@ func NewResetCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return cmd
 }
 
+type resetPlanOpts struct {
+	Format string
+}
+
+// runResetPlan is the testable core of newResetPlanCmd. Callers set cmd's
+// Out/Err writers before calling; stderr receives the default-pipeline notice
+// when reset.yml is absent.
+func runResetPlan(cmd *cobra.Command, flags *cmdctx.RootFlags, opts resetPlanOpts) error {
+	cfg, err := config.LoadConfig(flags.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("loading command registry: %w", err)
+	}
+	_, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, reg)
+	if err != nil {
+		return fmt.Errorf("resolving reset plan: %w", err)
+	}
+	if defaulted {
+		cmdctx.EmitDefaultNotice(cmd, flags, "reset", "reset")
+	}
+	devboxBin := config.DevboxBin(cfg)
+	switch opts.Format {
+	case "shell":
+		reset.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
+	default:
+		pipeline.PrintPlanTable(steps, render.NewWriter(cmd.OutOrStdout()), devboxBin)
+	}
+	return nil
+}
+
 // newResetPlanCmd creates the `devbox reset plan` command.
 // Shows the resolved reset plan from devbox/reset.yml.
 func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -67,26 +100,7 @@ func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
-			if err != nil {
-				return fmt.Errorf("loading command registry: %w", err)
-			}
-			steps, err := reset.ResolvePlan(cfg, reg)
-			if err != nil {
-				return fmt.Errorf("resolving reset plan: %w", err)
-			}
-			devboxBin := config.DevboxBin(cfg)
-			switch format {
-			case "shell":
-				reset.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
-			default:
-				pipeline.PrintPlanTable(steps, render.Stdout(), devboxBin)
-			}
-			return nil
+			return runResetPlan(cmd, flags, resetPlanOpts{Format: format})
 		},
 	}
 
@@ -185,9 +199,12 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 		dockerCfg = &config.DockerConfig{}
 	}
 
-	resetCfg, steps, err := reset.LoadAndResolvePlan(cfg, reg)
+	resetCfg, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, reg)
 	if err != nil {
 		return fmt.Errorf("resolving reset plan: %w", err)
+	}
+	if defaulted {
+		cmdctx.EmitDefaultNotice(cmd, flags, "reset", "reset")
 	}
 
 	logEnabled := resetCfg.LogEnabled()

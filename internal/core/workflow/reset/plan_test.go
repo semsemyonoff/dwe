@@ -1,6 +1,8 @@
 package reset_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -40,7 +42,10 @@ func TestFindStep_MissingConfigPath(t *testing.T) {
 
 // --- ResolvePlan tests using filesystem ---
 
-func TestResolvePlan_emptyPhasesReturnsNil(t *testing.T) {
+// TestResolvePlan_emptyPhasesUsesDefault verifies that a reset.yml with an
+// empty phases list is treated as "no user pipeline" and falls back to the
+// built-in default (which has steps).
+func TestResolvePlan_emptyPhasesUsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	writeResetYML(t, dir, `phases: []`)
 	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
@@ -48,8 +53,8 @@ func TestResolvePlan_emptyPhasesReturnsNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(steps) != 0 {
-		t.Errorf("want 0 steps, got %d", len(steps))
+	if len(steps) == 0 {
+		t.Error("empty phases should return default steps, got 0")
 	}
 }
 
@@ -73,6 +78,98 @@ phases:
 	}
 	if steps[0].Step.Name != "remove-dirs" {
 		t.Errorf("step name = %q, want remove-dirs", steps[0].Step.Name)
+	}
+}
+
+// --- Tests for default pipeline (no reset.yml) ---
+
+func TestResolvePlan_noFileUsesDefault(t *testing.T) {
+	dir := t.TempDir()
+	// Write devbox dir without a reset.yml so the default fires.
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	steps, err := reset.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
+	if err != nil {
+		t.Fatalf("unexpected error with no reset.yml: %v", err)
+	}
+	if len(steps) == 0 {
+		t.Fatal("expected default steps but got none")
+	}
+	// Default includes docker down step.
+	found := false
+	for _, s := range steps {
+		if s.Step.Cmd == "docker down" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("default pipeline should include a 'docker down' step")
+	}
+}
+
+func TestLoadAndResolvePlan_noFileReturnsDefaulted(t *testing.T) {
+	dir := t.TempDir()
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	_, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
+	if err != nil {
+		t.Fatalf("unexpected error with no reset.yml: %v", err)
+	}
+	if !defaulted {
+		t.Error("defaulted = false, want true when reset.yml is absent")
+	}
+	if len(steps) == 0 {
+		t.Fatal("expected default steps but got none")
+	}
+}
+
+func TestLoadAndResolvePlan_userFileReturnsFalse(t *testing.T) {
+	dir := t.TempDir()
+	writeResetYML(t, dir, `
+phases:
+  - name: cleanup
+    steps:
+      - name: remove-dirs
+        type: shell
+        cmd: rm -rf services/main/src
+`)
+	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	_, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if defaulted {
+		t.Error("defaulted = true, want false when user reset.yml is present")
+	}
+	if len(steps) != 1 {
+		t.Errorf("want 1 step, got %d", len(steps))
+	}
+}
+
+func TestFindStep_noFileSearchesDefault(t *testing.T) {
+	dir := t.TempDir()
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	// cleanup/remove-volumes is a step in the default pipeline.
+	phase, step, err := reset.FindStep(cfg, "cleanup/remove-volumes")
+	if err != nil {
+		t.Fatalf("FindStep against default: %v", err)
+	}
+	if phase.Name != "cleanup" {
+		t.Errorf("phase.Name = %q, want cleanup", phase.Name)
+	}
+	if step.Name != "remove-volumes" {
+		t.Errorf("step.Name = %q, want remove-volumes", step.Name)
 	}
 }
 
