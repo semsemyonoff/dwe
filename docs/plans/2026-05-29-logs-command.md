@@ -150,13 +150,13 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
 - Modify: `internal/cli/logs/logs_test.go`
 - Create: `internal/cli/logs/testdata/fake-docker-text.sh` (fake docker binary)
 
-- [ ] in `runLogs`: build args slice with `logs`, `--tail`, optionally `--since`, optionally `--follow`, container name
-- [ ] text mode: `exec.CommandContext(ctx, config.DockerBin(cfg), args...)`; `cmd.Stdout = cmd.OutOrStdout()`; `cmd.Stderr = cmd.ErrOrStderr()`; `cmd.Run()`
-- [ ] propagate non-zero exit code from docker; if docker emits a recognizable "No such container" message on stderr, transform to `container_not_found` CodedError. **Reuse existing pattern**: both string-match sites live in `internal/shared/docker/stop.go` (lines 34 and 61 — there is NO separate `rm.go`); extract to `internal/shared/docker/errors.go` as `IsNoSuchContainerErr(stderr string) bool` (preferred, since logs needs it too) and refactor stop.go to use the helper, or copy the same pattern locally for parity.
-- [ ] write fake docker shell script (executable) that echoes canned text + exits 0
-- [ ] write test: text mode produces expected stdout
-- [ ] write test: fake docker exits with code 1 → command returns wrapped error
-- [ ] run `go test ./internal/cli/logs/...` — must pass before Task 4
+- [x] in `runLogs`: build args slice with `logs`, `--tail`, optionally `--since`, optionally `--follow`, container name
+- [x] text mode: `exec.CommandContext(ctx, config.DockerBin(cfg), args...)`; `cmd.Stdout = cmd.OutOrStdout()`; `cmd.Stderr = cmd.ErrOrStderr()`; `cmd.Run()`
+- [x] propagate non-zero exit code from docker; if docker emits a recognizable "No such container" message on stderr, transform to `container_not_found` CodedError. **Reuse existing pattern**: both string-match sites live in `internal/shared/docker/stop.go` (lines 34 and 61 — there is NO separate `rm.go`); extract to `internal/shared/docker/errors.go` as `IsNoSuchContainerErr(stderr string) bool` (preferred, since logs needs it too) and refactor stop.go to use the helper, or copy the same pattern locally for parity.
+- [x] write fake docker shell script (executable) that echoes canned text + exits 0
+- [x] write test: text mode produces expected stdout
+- [x] write test: fake docker exits with code 1 → command returns wrapped error
+- [x] run `go test ./internal/cli/logs/...` — must pass before Task 4
 
 ### Task 4: JSON (NDJSON) mode + timestamp parsing
 

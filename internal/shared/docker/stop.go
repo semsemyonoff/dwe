@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+
 // DefaultStopTimeoutSec is the default timeout passed to `docker stop -t`.
 // Both the per-service stop helper and the daemon_stop builtin use this value
 // so they share a single source of truth.
@@ -31,7 +32,7 @@ func StopContainer(ctx context.Context, dockerBin, containerName string, timeout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		errOut := stderr.String()
-		if strings.Contains(errOut, "No such container") {
+		if IsNoSuchContainerErr(errOut) {
 			return nil
 		}
 		if errOut != "" {
@@ -58,7 +59,7 @@ func RemoveContainer(ctx context.Context, dockerBin, containerName string) error
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		errOut := stderr.String()
-		if strings.Contains(errOut, "No such container") {
+		if IsNoSuchContainerErr(errOut) {
 			return nil
 		}
 		if errOut != "" {

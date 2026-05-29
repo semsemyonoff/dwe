@@ -3,6 +3,7 @@ package logs_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,9 +38,17 @@ func execCmd(t *testing.T, root *cobra.Command, args ...string) (stdout, stderr 
 	return outBuf.String(), errBuf.String(), err
 }
 
-// writeLogsTestConfig creates a temp dir with devbox.yml and optional service folders.
-// services maps service name → container template string.
+// writeLogsTestConfig creates a temp dir with devbox.yml and optional service
+// folders. services maps service name → container template string.
 func writeLogsTestConfig(t *testing.T, dir string, svcs map[string]string) string {
+	t.Helper()
+	return writeLogsTestConfigWithDockerBin(t, dir, svcs, "")
+}
+
+// writeLogsTestConfigWithDockerBin is like writeLogsTestConfig but also writes
+// a .devbox/config file that sets the docker binary override, so tests can use
+// a fake docker binary without touching PATH.
+func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]string, dockerBin string) string {
 	t.Helper()
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
 	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(content), 0o644); err != nil {
@@ -55,7 +64,27 @@ func writeLogsTestConfig(t *testing.T, dir string, svcs map[string]string) strin
 			t.Fatalf("write service.yml: %v", err)
 		}
 	}
+	if dockerBin != "" {
+		devboxDir := filepath.Join(dir, ".devbox")
+		if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+			t.Fatalf("mkdir .devbox: %v", err)
+		}
+		cfg := fmt.Sprintf("binary_docker = %s\n", dockerBin)
+		if err := os.WriteFile(filepath.Join(devboxDir, "config"), []byte(cfg), 0o644); err != nil {
+			t.Fatalf("write .devbox/config: %v", err)
+		}
+	}
 	return filepath.Join(dir, "devbox.yml")
+}
+
+// makeFakeDocker creates an executable shell script in dir and returns its path.
+func makeFakeDocker(t *testing.T, dir, name, script string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake docker %s: %v", p, err)
+	}
+	return p
 }
 
 // TestLogsCmd_NoArgs verifies that invoking logs without a service name
@@ -70,11 +99,11 @@ func TestLogsCmd_NoArgs(t *testing.T) {
 }
 
 // TestLogsCmd_OneArg verifies that invoking logs with exactly one argument
-// is accepted by cobra (arg validation passes, stub RunE returns nil for an
-// unknown service path that will be wired in Task 3).
+// succeeds when the service exists and docker exits 0.
 func TestLogsCmd_OneArg(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeLogsTestConfig(t, dir, map[string]string{"myapp": "myapp"})
+	fakeBin := makeFakeDocker(t, dir, "docker", "#!/bin/sh\nexit 0\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
 	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
 	root := newTestRoot(flags)
 	_, _, err := execCmd(t, root, "logs", "myapp")
@@ -185,5 +214,116 @@ func TestResolveLogsTarget_NoServicesHint(t *testing.T) {
 	var coded *cmdctx.CodedError
 	if !errors.As(err, &coded) || coded.Code != "service_unknown" {
 		t.Errorf("expected service_unknown CodedError, got %v", err)
+	}
+}
+
+// TestLogsCmd_TextMode_Stdout verifies that in text mode the command passes
+// docker stdout through to the caller's stdout.
+func TestLogsCmd_TextMode_Stdout(t *testing.T) {
+	dir := t.TempDir()
+	// Fake docker writes two lines to stdout and exits 0.
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho 'line one from stdout'\necho 'line two from stdout'\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	stdout, _, err := execCmd(t, root, "logs", "myapp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{"line one from stdout", "line two from stdout"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout missing %q; got: %q", want, stdout)
+		}
+	}
+}
+
+// TestLogsCmd_TextMode_Stderr verifies that docker stderr is streamed to
+// the caller's stderr in text mode.
+func TestLogsCmd_TextMode_Stderr(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho 'stderr line' >&2\nexit 0\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, stderr, err := execCmd(t, root, "logs", "myapp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stderr, "stderr line") {
+		t.Errorf("stderr missing 'stderr line'; got: %q", stderr)
+	}
+}
+
+// TestLogsCmd_TextMode_DockerError verifies that a non-zero docker exit code
+// surfaces as a wrapped error.
+func TestLogsCmd_TextMode_DockerError(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho 'some docker error' >&2\nexit 1\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp")
+	if err == nil {
+		t.Fatal("expected error from docker exit code 1, got nil")
+	}
+	if !strings.Contains(err.Error(), "docker logs") {
+		t.Errorf("error %q should mention 'docker logs'", err.Error())
+	}
+}
+
+// TestLogsCmd_TextMode_NoSuchContainer verifies that "No such container" on
+// docker stderr is transformed to a container_not_found CodedError.
+func TestLogsCmd_TextMode_NoSuchContainer(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho 'Error response from daemon: No such container: devbox-test-myapp' >&2\nexit 1\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp")
+	if err == nil {
+		t.Fatal("expected container_not_found error, got nil")
+	}
+	var coded *cmdctx.CodedError
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if coded.Code != "container_not_found" {
+		t.Errorf("error code = %q, want %q", coded.Code, "container_not_found")
+	}
+}
+
+// TestLogsCmd_TextMode_ArgsToDocker verifies that --tail and --since flags are
+// forwarded to docker by inspecting the args log written by the fake binary.
+func TestLogsCmd_TextMode_ArgsToDocker(t *testing.T) {
+	dir := t.TempDir()
+	argsLog := filepath.Join(dir, "args.log")
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" >> %s\nexit 0\n", argsLog)
+	fakeBin := makeFakeDocker(t, dir, "docker", script)
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp", "--tail", "20", "--since", "5m")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := os.ReadFile(argsLog)
+	if err != nil {
+		t.Fatalf("read args log: %v", err)
+	}
+	argsStr := string(got)
+	for _, want := range []string{"logs", "--tail", "20", "--since", "5m"} {
+		if !strings.Contains(argsStr, want) {
+			t.Errorf("docker args missing %q; got: %q", want, argsStr)
+		}
 	}
 }

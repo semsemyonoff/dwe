@@ -3,12 +3,16 @@ package logs
 
 import (
 	"fmt"
+	"io"
+	"os/exec"
+	"strconv"
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/shared/daemon"
+	"devbox-cli/internal/shared/docker"
 
 	"github.com/spf13/cobra"
 )
@@ -67,14 +71,45 @@ func ResolveLogsTarget(flags *cmdctx.RootFlags, serviceName string) (containerNa
 	return containerName, cfg, nil
 }
 
+func buildDockerLogsArgs(containerName string, opts logsOptions) []string {
+	args := []string{"logs"}
+	if opts.tail == 0 {
+		args = append(args, "--tail", "all")
+	} else {
+		args = append(args, "--tail", strconv.Itoa(opts.tail))
+	}
+	if opts.since != "" {
+		args = append(args, "--since", opts.since)
+	}
+	if opts.follow {
+		args = append(args, "--follow")
+	}
+	args = append(args, containerName)
+	return args
+}
+
 func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, opts logsOptions) error {
-	_ = opts
-	_ = cmd
-	containerName, _, err := ResolveLogsTarget(flags, args[0])
+	containerName, cfg, err := ResolveLogsTarget(flags, args[0])
 	if err != nil {
 		return err
 	}
-	_ = containerName
-	// Subprocess wiring implemented in subsequent tasks.
+
+	dockerArgs := buildDockerLogsArgs(containerName, opts)
+	dockerCmd := exec.CommandContext(cmd.Context(), config.DockerBin(cfg), dockerArgs...) //nolint:gosec
+	dockerCmd.Stdout = cmd.OutOrStdout()
+
+	// Tee stderr: stream it to the caller's stderr AND capture it so we can
+	// detect "No such container" after the process exits.
+	var stderrBuf strings.Builder
+	dockerCmd.Stderr = io.MultiWriter(cmd.ErrOrStderr(), &stderrBuf)
+
+	if runErr := dockerCmd.Run(); runErr != nil {
+		if docker.IsNoSuchContainerErr(stderrBuf.String()) {
+			return cmdctx.Err("container_not_found",
+				fmt.Sprintf("container for service %q not found — is the project deployed?", args[0])).
+				WithDetail("container", containerName)
+		}
+		return fmt.Errorf("docker logs: %w", runErr)
+	}
 	return nil
 }
