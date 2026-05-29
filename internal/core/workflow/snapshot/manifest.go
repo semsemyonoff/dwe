@@ -94,7 +94,7 @@ type Manifest struct {
 	// Name mirrors the snapshot directory name.
 	Name string `yaml:"name" json:"name"`
 	// CreatedAt is the wall-clock timestamp the create flow started.
-	CreatedAt time.Time `yaml:"created_at" json:"created_at"`
+	CreatedAt time.Time `yaml:"created_at" json:"created_at,omitzero"`
 	// Description is the human-readable description provided via `-d`.
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 	// Project identifies the source project + config hash at capture time.

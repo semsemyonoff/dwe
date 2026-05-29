@@ -241,7 +241,7 @@ func buildAutoHostsData(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) []
 				continue
 			}
 			if !seen[hostname] {
-				items = append(items, infoItem{Type: "host", Value: ip + "\t" + hostname})
+				items = append(items, infoItem{Type: "host", Label: hostname, Value: ip})
 				seen[hostname] = true
 			}
 		}
