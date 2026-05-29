@@ -18,7 +18,7 @@ import (
 var ImplicitEnvStep = config.DeployStep{
 	Name:        "render-env",
 	Type:        "devbox",
-	Cmd:         "render env -o .env",
+	Cmd:         "render env --out .env",
 	Description: "Generate .env from config (implicit first step)",
 }
 

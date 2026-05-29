@@ -20,7 +20,7 @@ Subcommands:
   ide  — generate IDE config files from template packs
   ai   — generate hub-level agents documentation from template packs
   git  — generate shell git hooks from template packs`,
-		Example: `  devbox render env -o .env
+		Example: `  devbox render env --out .env
   devbox render ide
   devbox render ai
   devbox render git`,

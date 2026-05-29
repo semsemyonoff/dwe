@@ -15,7 +15,7 @@ Subcommands:
 ### Examples
 
 ```
-  devbox render env -o .env
+  devbox render env --out .env
   devbox render ide
   devbox render ai
   devbox render git

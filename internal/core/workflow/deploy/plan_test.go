@@ -24,8 +24,8 @@ func TestResolvePlan_implicitEnvStepAlwaysFirst(t *testing.T) {
 	if steps[0].Step.Name != "render-env" {
 		t.Errorf("first step name = %q, want render-env", steps[0].Step.Name)
 	}
-	if steps[0].Step.Type != "devbox" || steps[0].Step.Cmd != "render env -o .env" {
-		t.Errorf("first step devbox = type %q cmd %q, want type devbox cmd 'render env -o .env'", steps[0].Step.Type, steps[0].Step.Cmd)
+	if steps[0].Step.Type != "devbox" || steps[0].Step.Cmd != "render env --out .env" {
+		t.Errorf("first step devbox = type %q cmd %q, want type devbox cmd 'render env --out .env'", steps[0].Step.Type, steps[0].Step.Cmd)
 	}
 }
 

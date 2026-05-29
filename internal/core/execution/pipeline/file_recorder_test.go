@@ -656,7 +656,7 @@ func TestFileRecorder_ServiceOnlyRunDoesNotStampProjectHash(t *testing.T) {
 	// This is what previously triggered projectStepsSeen=true incorrectly.
 	envStep := ResolvedStep{
 		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
-		Step:  config.DeployStep{Name: "render-env", Type: "devbox", Cmd: "render env -o .env"},
+		Step:  config.DeployStep{Name: "render-env", Type: "devbox", Cmd: "render env --out .env"},
 	}
 	rec.OnStepStart(envStep.StepAddress(), envStep, "env-hash")
 	rec.OnStepFinish(envStep.StepAddress(), envStep, "env-hash", 3)
