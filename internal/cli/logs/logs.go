@@ -246,30 +246,53 @@ func runLogsJSON(cmd *cobra.Command, ctx context.Context, serviceName string, op
 					retErr = fmt.Errorf("reader panic in %s stream: %v", stream, r)
 				}
 			}()
-			sc := bufio.NewScanner(pipe)
-			sc.Buffer(make([]byte, 64*1024), 1024*1024)
-			for sc.Scan() {
+			const maxLineBytes = 1024 * 1024
+			const truncSuffix = "<truncated: line exceeded 1MB>"
+			br := bufio.NewReaderSize(pipe, maxLineBytes)
+			for {
 				if egCtx.Err() != nil {
 					return egCtx.Err()
 				}
-				select {
-				case ch <- parseLine(stream, sc.Text()):
-				case <-egCtx.Done():
-					return egCtx.Err()
-				}
-			}
-			if scErr := sc.Err(); scErr != nil {
-				if errors.Is(scErr, bufio.ErrTooLong) {
-					ts := time.Now().UTC().Format(time.RFC3339Nano)
-					select {
-					case ch <- logLineJSON{Ts: ts, Stream: stream, Msg: "<truncated: line exceeded 1MB>"}:
-					case <-egCtx.Done():
+				chunk, err := br.ReadSlice('\n')
+				if errors.Is(err, bufio.ErrBufferFull) {
+					prefix := append([]byte(nil), chunk...)
+				discard:
+					for {
+						_, dErr := br.ReadSlice('\n')
+						switch {
+						case dErr == nil:
+							break discard
+						case errors.Is(dErr, bufio.ErrBufferFull):
+							continue
+						case errors.Is(dErr, io.EOF):
+							break discard
+						default:
+							return dErr
+						}
 					}
+					msg := strings.TrimRight(string(prefix), "\r\n") + truncSuffix
+					select {
+					case ch <- parseLine(stream, msg):
+					case <-egCtx.Done():
+						return egCtx.Err()
+					}
+					continue
+				}
+				if len(chunk) > 0 {
+					msg := strings.TrimRight(string(chunk), "\r\n")
+					select {
+					case ch <- parseLine(stream, msg):
+					case <-egCtx.Done():
+						return egCtx.Err()
+					}
+				}
+				if errors.Is(err, io.EOF) {
 					return nil
 				}
-				return scErr
+				if err != nil {
+					return err
+				}
 			}
-			return nil
 		}
 	}
 
@@ -303,15 +326,13 @@ func runLogsJSON(cmd *cobra.Command, ctx context.Context, serviceName string, op
 	}
 
 	// egErr was written before close(ch) → happens-before the loop exit above.
-	if egErr != nil {
-		// Ignore context-cancellation errors; they are normal shutdown signals.
-		var isCancelled bool
-		if egCtx.Err() != nil {
-			isCancelled = true
-		}
-		if !isCancelled {
-			return fmt.Errorf("docker logs: stream reader: %w", egErr)
-		}
+	// Check the *parent* ctx, not egCtx: errgroup auto-cancels egCtx whenever
+	// eg.Wait returns, so egCtx.Err() != nil on every error path and would
+	// silently swallow real reader errors. Only suppress when the user-facing
+	// ctx (signal.NotifyContext for --follow, or cmd.Context() otherwise) was
+	// actually cancelled.
+	if egErr != nil && ctx.Err() == nil {
+		return fmt.Errorf("docker logs: stream reader: %w", egErr)
 	}
 
 	if cmdErr := dockerCmd.Wait(); cmdErr != nil {
