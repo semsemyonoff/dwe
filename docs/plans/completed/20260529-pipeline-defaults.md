@@ -451,8 +451,8 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
 
 ### Task 8: Finalise
 
-- [ ] move this plan to `docs/plans/completed/20260529-pipeline-defaults.md`
-- [ ] keep the audit doc next to the completed plan in `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/20260529-pipeline-defaults.md`
+- [x] keep the audit doc next to the completed plan in `docs/plans/completed/`
 
 ## Post-Completion
 
