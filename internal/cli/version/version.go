@@ -4,14 +4,23 @@ package version
 import (
 	"fmt"
 
+	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/ui"
 	versioninfo "devbox-cli/internal/shared/version"
 
 	"github.com/spf13/cobra"
 )
 
+// versionJSON is the DTO emitted when --output json is set.
+type versionJSON struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	BuiltAt string `json:"built_at"`
+	BuiltBy string `json:"built_by"`
+}
+
 // NewCmd builds the `devbox version` command.
-func NewCmd(groupID string) *cobra.Command {
+func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "version",
 		Short:        "Print version information",
@@ -19,9 +28,17 @@ func NewCmd(groupID string) *cobra.Command {
 		Example:      "  devbox version",
 		SilenceUsage: true,
 		GroupID:      groupID,
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s Devbox v%s (commit %s, built %s)\n",
-				ui.LogoMark(), versioninfo.Version, versioninfo.Commit, versioninfo.Date)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dto := versionJSON{
+				Version: versioninfo.Version,
+				Commit:  versioninfo.Commit,
+				BuiltAt: versioninfo.Date,
+				BuiltBy: versioninfo.BuiltBy,
+			}
+			return cmdctx.WriteData(flags, cmd, dto, func(d versionJSON) string {
+				return fmt.Sprintf("%s Devbox v%s (commit %s, built %s)",
+					ui.LogoMark(), d.Version, d.Commit, d.BuiltAt)
+			})
 		},
 	}
 }

@@ -73,7 +73,7 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 
 	// Core group: project info and version.
 	root.AddCommand(cmdInfo.NewCmd(groupCore, flags))
-	root.AddCommand(cmdVersion.NewCmd(groupCore))
+	root.AddCommand(cmdVersion.NewCmd(groupCore, flags))
 
 	// Environment group: lifecycle and shell access.
 	root.AddCommand(cmdLifecycle.NewRunCmd(groupEnvironment, flags))

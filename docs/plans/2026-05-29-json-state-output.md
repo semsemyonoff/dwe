@@ -199,13 +199,13 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 - Create: `internal/cli/version/version_test.go` (does NOT exist yet)
 - Create: `internal/cli/version/testdata/version.json.golden`
 
-- [ ] update `NewCmd` signature to accept `*cmdctx.RootFlags` (it currently takes only `groupID`; check existing call site in `root.go` line 73 and update)
-- [ ] **the existing handler uses `Run:` (no error). Replace with `RunE:` because `cmdctx.WriteData` returns `error`.** Update the function field name and signature accordingly.
-- [ ] define DTO `type versionJSON struct { Version, Commit, BuiltAt string }` with JSON tags `version`, `commit`, `built_at`
-- [ ] in RunE: build DTO from `version.Version`, `version.Commit`, `version.Date`; call `cmdctx.WriteData(rflags, cmd, dto, renderVersionText)`; existing text path becomes the `renderText` closure
-- [ ] golden test: set `flags.Output = "json"`, run, compare buffer to golden file
-- [ ] write text-mode regression test (also new, since no test file exists yet) — captures current text output
-- [ ] run `go test ./internal/cli/version/...` — must pass before Task 4
+- [x] update `NewCmd` signature to accept `*cmdctx.RootFlags` (it currently takes only `groupID`; check existing call site in `root.go` line 73 and update)
+- [x] **the existing handler uses `Run:` (no error). Replace with `RunE:` because `cmdctx.WriteData` returns `error`.** Update the function field name and signature accordingly.
+- [x] define DTO `type versionJSON struct { Version, Commit, BuiltAt string }` with JSON tags `version`, `commit`, `built_at`
+- [x] in RunE: build DTO from `version.Version`, `version.Commit`, `version.Date`; call `cmdctx.WriteData(rflags, cmd, dto, renderVersionText)`; existing text path becomes the `renderText` closure
+- [x] golden test: set `flags.Output = "json"`, run, compare buffer to golden file
+- [x] write text-mode regression test (also new, since no test file exists yet) — captures current text output
+- [x] run `go test ./internal/cli/version/...` — must pass before Task 4
 
 ### Task 4: Migrate `devbox info`
 
