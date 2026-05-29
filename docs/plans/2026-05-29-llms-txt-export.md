@@ -133,14 +133,14 @@ Signatures (in `internal/cli/docs/llmstxt.go`):
 - Create: `internal/core/docs/llmstxt/generator.go`
 - Create: `internal/core/docs/llmstxt/generator_test.go`
 
-- [ ] define `Opts` struct with EXPORTED summary types so cli collectors can populate them: `ProjectRoot, Locale string`, `IncludeIntern bool`, `DocTopics []docs.TopicEntry`, `Commands []CommandSummary`, `Services []ServiceSummary`, `InfoSnapshot *InfoSummary`. The Technical Details snippet uses lowercase names for brevity; the actual types MUST be exported PascalCase for cross-package use.
-- [ ] define `Generate(opts Opts) (string, error)` that returns the full document
-- [ ] implement internal writers: `writeTitle(b *strings.Builder, title string)`, `writeBlockquote(b *strings.Builder, text string)`, `writeSection(b *strings.Builder, heading string, items []sectionItem)`
-- [ ] `sectionItem` type: `{Label, URL, Description string}` — rendered as `- [Label](URL) — Description` per llms.txt spec
-- [ ] generic project-agnostic output when `opts.ProjectRoot == ""`: title "devbox", brief tagline, then Commands + Documentation sections only
-- [ ] write tests for project-agnostic path (snapshot via golden)
-- [ ] write tests for empty/minimal opts (no services, no commands)
-- [ ] run `go test ./internal/core/docs/llmstxt/...` — must pass before Task 2
+- [x] define `Opts` struct with EXPORTED summary types so cli collectors can populate them: `ProjectRoot, Locale string`, `IncludeIntern bool`, `DocTopics []docs.TopicEntry`, `Commands []CommandSummary`, `Services []ServiceSummary`, `InfoSnapshot *InfoSummary`. The Technical Details snippet uses lowercase names for brevity; the actual types MUST be exported PascalCase for cross-package use.
+- [x] define `Generate(opts Opts) (string, error)` that returns the full document
+- [x] implement internal writers: `writeTitle(b *strings.Builder, title string)`, `writeBlockquote(b *strings.Builder, text string)`, `writeSection(b *strings.Builder, heading string, items []sectionItem)`
+- [x] `sectionItem` type: `{Label, URL, Description string}` — rendered as `- [Label](URL) — Description` per llms.txt spec
+- [x] generic project-agnostic output when `opts.ProjectRoot == ""`: title "devbox", brief tagline, then Commands + Documentation sections only
+- [x] write tests for project-agnostic path (snapshot via golden)
+- [x] write tests for empty/minimal opts (no services, no commands)
+- [x] run `go test ./internal/core/docs/llmstxt/...` — must pass before Task 2
 
 ### Task 2: Project-aware collectors (in cli layer)
 

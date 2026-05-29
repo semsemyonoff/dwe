@@ -1,0 +1,12 @@
+# devbox
+
+> devbox is a developer tool for local development environments running on Docker. Use `devbox --help` for a full command list.
+
+## Quick start
+
+- `devbox status` — see what's running
+- `devbox validate` — check project health
+- `devbox info` — project overview
+- `devbox docs llms-txt` — regenerate this index
+- `devbox --help` — full command list
+
