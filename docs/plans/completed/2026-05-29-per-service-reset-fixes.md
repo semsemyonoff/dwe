@@ -397,9 +397,9 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
 
 ### Task 7: [Final] Regenerate embedded docs + close out
 
-- [ ] run `make build` — regenerates `internal/core/docs/embedded/` and `internal/core/docs/content_hashes_gen.go` (CI guard requires this)
-- [ ] verify `git diff --exit-code internal/core/docs/content_hashes_gen.go` is clean after `make build` (the manifest may have changed if doc files were edited; commit any update)
-- [ ] move this plan to `docs/plans/completed/2026-05-29-per-service-reset-fixes.md`
+- [x] run `make build` — regenerates `internal/core/docs/embedded/` and `internal/core/docs/content_hashes_gen.go` (CI guard requires this)
+- [x] verify `git diff --exit-code internal/core/docs/content_hashes_gen.go` is clean after `make build` (the manifest may have changed if doc files were edited; commit any update)
+- [x] move this plan to `docs/plans/completed/2026-05-29-per-service-reset-fixes.md`
 
 ## Post-Completion
 
