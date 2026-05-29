@@ -76,6 +76,7 @@ Generate reference documentation for the CLI and command registry.`,
 	cmd.AddCommand(newDocsExportCmd(flags))
 	cmd.AddCommand(newDocsCacheCmd(flags))
 	cmd.AddCommand(newDocsGenerateCmd(flags))
+	cmd.AddCommand(newDocsLlmsTxtCmd(flags))
 	return cmd
 }
 

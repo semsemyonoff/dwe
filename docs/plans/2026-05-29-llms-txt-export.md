@@ -178,15 +178,15 @@ Signatures (in `internal/cli/docs/llmstxt.go`):
 - Modify: `internal/cli/docs/docs.go` (register new subcommand)
 - Create: `internal/cli/docs/llmstxt_test.go`
 
-- [ ] register `newDocsLlmsTxtCmd(flags *cmdctx.RootFlags) *cobra.Command` in `docs.go` similar to existing `newDocsExportCmd`
-- [ ] cobra command shape: `Use: "llms-txt"`, `Args: cobra.NoArgs` (no positional arguments — per golang-spf13-cobra: declare with Args, never `len(args)` checks in RunE), `SilenceUsage: true` (match existing docs subcommand convention)
-- [ ] flags: `--output PATH` (string, default ""), `--lang LANG` (string, default ""), `--include-internals` (bool, default false), `--no-project` (bool, default false — forces project-agnostic output even if devbox.yml exists)
-- [ ] RunE: resolve locale via `i18n.ResolveLocale(flag, cfgLang, $LANG)` (same chain as other docs commands per CLAUDE.md)
-- [ ] RunE: assemble `Opts` (load registry, cfg, info as relevant); call `llmstxt.Generate(opts)`
-- [ ] RunE: if `--output PATH` empty, write to `cmd.OutOrStdout()`; else `os.WriteFile(path, []byte(out), 0644)` with `os.MkdirAll(filepath.Dir(path), 0755)`
-- [ ] command runs WITHOUT project (per docs subsystem rules: no lock, no preflight, project root optional). **No `allowedWithoutProject` change needed** — `root.go:227` already does `strings.HasPrefix(path, "devbox docs")` which covers `devbox docs llms-txt`. Verified.
-- [ ] write CLI-level test: invoke command, capture stdout, assert non-empty + contains expected H1
-- [ ] run `go test ./internal/cli/docs/...` — must pass before Task 5
+- [x] register `newDocsLlmsTxtCmd(flags *cmdctx.RootFlags) *cobra.Command` in `docs.go` similar to existing `newDocsExportCmd`
+- [x] cobra command shape: `Use: "llms-txt"`, `Args: cobra.NoArgs` (no positional arguments — per golang-spf13-cobra: declare with Args, never `len(args)` checks in RunE), `SilenceUsage: true` (match existing docs subcommand convention)
+- [x] flags: `--output PATH` (string, default ""), `--lang LANG` (string, default ""), `--include-internals` (bool, default false), `--no-project` (bool, default false — forces project-agnostic output even if devbox.yml exists)
+- [x] RunE: resolve locale via `i18n.ResolveLocale(flag, cfgLang, $LANG)` (same chain as other docs commands per CLAUDE.md)
+- [x] RunE: assemble `Opts` (load registry, cfg, info as relevant); call `llmstxt.Generate(opts)`
+- [x] RunE: if `--output PATH` empty, write to `cmd.OutOrStdout()`; else `os.WriteFile(path, []byte(out), 0644)` with `os.MkdirAll(filepath.Dir(path), 0755)`
+- [x] command runs WITHOUT project (per docs subsystem rules: no lock, no preflight, project root optional). **No `allowedWithoutProject` change needed** — `root.go:227` already does `strings.HasPrefix(path, "devbox docs")` which covers `devbox docs llms-txt`. Verified.
+- [x] write CLI-level test: invoke command, capture stdout, assert non-empty + contains expected H1
+- [x] run `go test ./internal/cli/docs/...` — must pass before Task 5
 
 ### Task 5: File output + error path
 
