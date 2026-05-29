@@ -10,12 +10,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"go.uber.org/goleak"
 
 	"devbox-cli/internal/cli/cmdctx"
 	cmdlogs "devbox-cli/internal/cli/logs"
 
 	"github.com/spf13/cobra"
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 // newTestRoot builds a minimal cobra root command with the logs subcommand
 // attached. It does NOT run PersistentPreRunE — callers that need project
@@ -476,5 +483,96 @@ func TestLogsCmd_JSONMode_TextModeNoTimestamps(t *testing.T) {
 	argsStr := string(got)
 	if strings.Contains(argsStr, "--timestamps") {
 		t.Errorf("--timestamps should not appear in text mode docker args; got: %q", argsStr)
+	}
+}
+
+// TestLogsCmd_Follow_JSONMode_CancellationClean verifies that SIGINT while
+// --follow --output json is active causes the command to return nil and that
+// all records emitted before the signal are present in the NDJSON output.
+func TestLogsCmd_Follow_JSONMode_CancellationClean(t *testing.T) {
+	dir := t.TempDir()
+	// Fake docker: emit 3 timestamped lines then block until killed.
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\n"+
+			"echo '2026-05-29T07:30:00.000000000Z first-line'\n"+
+			"echo '2026-05-29T07:30:01.000000000Z second-line'\n"+
+			"echo '2026-05-29T07:30:02.000000000Z third-line'\n"+
+			"sleep 30\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	type result struct {
+		stdout string
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		stdout, _, err := execCmd(t, root, "logs", "myapp", "--follow")
+		done <- result{stdout, err}
+	}()
+
+	// Give the fake docker enough time to start and emit its 3 lines.
+	time.Sleep(400 * time.Millisecond)
+	proc, findErr := os.FindProcess(os.Getpid())
+	if findErr != nil {
+		t.Fatalf("os.FindProcess: %v", findErr)
+	}
+	_ = proc.Signal(os.Interrupt)
+
+	var res result
+	select {
+	case res = <-done:
+	case <-time.After(8 * time.Second):
+		t.Fatal("command did not complete within 8s after SIGINT")
+	}
+
+	if res.err != nil {
+		t.Errorf("expected nil error after SIGINT cancellation, got: %v", res.err)
+	}
+	records := decodeNDJSON(t, res.stdout)
+	if len(records) < 3 {
+		t.Errorf("expected at least 3 NDJSON records before cancellation, got %d", len(records))
+	}
+}
+
+// TestLogsCmd_Follow_TextMode_CancellationClean verifies that SIGINT while
+// --follow text mode is active causes the command to return nil.
+func TestLogsCmd_Follow_TextMode_CancellationClean(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\n"+
+			"echo 'line one'\n"+
+			"echo 'line two'\n"+
+			"sleep 30\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	type result struct {
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		_, _, err := execCmd(t, root, "logs", "myapp", "--follow")
+		done <- result{err}
+	}()
+
+	time.Sleep(400 * time.Millisecond)
+	proc, findErr := os.FindProcess(os.Getpid())
+	if findErr != nil {
+		t.Fatalf("os.FindProcess: %v", findErr)
+	}
+	_ = proc.Signal(os.Interrupt)
+
+	var res result
+	select {
+	case res = <-done:
+	case <-time.After(8 * time.Second):
+		t.Fatal("text mode --follow did not complete within 8s after SIGINT")
+	}
+
+	if res.err != nil {
+		t.Errorf("expected nil error after SIGINT cancellation in text mode, got: %v", res.err)
 	}
 }

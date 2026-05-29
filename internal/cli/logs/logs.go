@@ -3,13 +3,17 @@ package logs
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -100,15 +104,22 @@ func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, opts lo
 		return err
 	}
 
-	if flags.Output == "json" {
-		return runLogsJSON(cmd, args[0], opts, containerName, cfg)
+	ctx := cmd.Context()
+	if opts.follow {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
 	}
-	return runLogsText(cmd, args[0], opts, containerName, cfg)
+
+	if flags.Output == "json" {
+		return runLogsJSON(cmd, ctx, args[0], opts, containerName, cfg)
+	}
+	return runLogsText(cmd, ctx, args[0], opts, containerName, cfg)
 }
 
-func runLogsText(cmd *cobra.Command, serviceName string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
+func runLogsText(cmd *cobra.Command, ctx context.Context, serviceName string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
 	dockerArgs := buildDockerLogsArgs(containerName, opts)
-	dockerCmd := exec.CommandContext(cmd.Context(), config.DockerBin(cfg), dockerArgs...) //nolint:gosec
+	dockerCmd := exec.CommandContext(ctx, config.DockerBin(cfg), dockerArgs...) //nolint:gosec
 	dockerCmd.Stdout = cmd.OutOrStdout()
 
 	// Tee stderr: stream it to the caller's stderr AND capture it so we can
@@ -116,7 +127,20 @@ func runLogsText(cmd *cobra.Command, serviceName string, opts logsOptions, conta
 	var stderrBuf strings.Builder
 	dockerCmd.Stderr = io.MultiWriter(cmd.ErrOrStderr(), &stderrBuf)
 
+	if opts.follow {
+		dockerCmd.Cancel = func() error {
+			if dockerCmd.Process == nil {
+				return nil
+			}
+			return dockerCmd.Process.Signal(os.Interrupt)
+		}
+		dockerCmd.WaitDelay = 3 * time.Second
+	}
+
 	if runErr := dockerCmd.Run(); runErr != nil {
+		if isCleanFollowExit(runErr, ctx) {
+			return nil
+		}
 		if docker.IsNoSuchContainerErr(stderrBuf.String()) {
 			return cmdctx.Err("container_not_found",
 				fmt.Sprintf("container for service %q not found — is the project deployed?", serviceName)).
@@ -127,8 +151,28 @@ func runLogsText(cmd *cobra.Command, serviceName string, opts logsOptions, conta
 	return nil
 }
 
-func runLogsJSON(cmd *cobra.Command, _ string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
-	ctx := cmd.Context()
+// isCleanFollowExit reports whether err represents a graceful termination
+// from signal handling in --follow mode: SIGINT (exit 130), force-kill after
+// WaitDelay expiry, or context cancellation with a negative exit code.
+func isCleanFollowExit(err error, ctx context.Context) bool {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		if exitErr.ExitCode() == 130 {
+			return true
+		}
+		if exitErr.ExitCode() < 0 && ctx.Err() != nil {
+			return true
+		}
+	}
+	if errors.Is(err, exec.ErrWaitDelay) {
+		return true
+	}
+	if strings.Contains(err.Error(), "signal: interrupt") {
+		return true
+	}
+	return false
+}
+
+func runLogsJSON(cmd *cobra.Command, ctx context.Context, _ string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
 
 	// Build base args and insert --timestamps right after "logs".
 	base := buildDockerLogsArgs(containerName, opts)
@@ -138,6 +182,16 @@ func runLogsJSON(cmd *cobra.Command, _ string, opts logsOptions, containerName s
 	dockerArgs = append(dockerArgs, base[1:]...)
 
 	dockerCmd := exec.CommandContext(ctx, config.DockerBin(cfg), dockerArgs...) //nolint:gosec
+
+	if opts.follow {
+		dockerCmd.Cancel = func() error {
+			if dockerCmd.Process == nil {
+				return nil
+			}
+			return dockerCmd.Process.Signal(os.Interrupt)
+		}
+		dockerCmd.WaitDelay = 3 * time.Second
+	}
 
 	stdoutPipe, err := dockerCmd.StdoutPipe()
 	if err != nil {
@@ -192,6 +246,18 @@ func runLogsJSON(cmd *cobra.Command, _ string, opts logsOptions, containerName s
 	eg.Go(readPipe(stdoutPipe, "stdout"))
 	eg.Go(readPipe(stderrPipe, "stderr"))
 
+	// Pipe-closer goroutine: when egCtx is done (cancelled by signal or after
+	// all readers finish), close both pipes. This unblocks any sc.Scan() that
+	// is waiting for data when the subprocess has orphaned child processes
+	// (e.g. a shell script that forked a "sleep" child) still holding the
+	// pipe write-end open. In the normal-exit case egCtx is cancelled by
+	// errgroup.Wait() returning; closing already-EOF pipes is a safe no-op.
+	go func() {
+		<-egCtx.Done()
+		_ = stdoutPipe.Close()
+		_ = stderrPipe.Close()
+	}()
+
 	// Closer goroutine: waits for both readers, then closes ch exactly once.
 	// The write to egErr before close(ch) happens-before the read after the
 	// drain loop exits, satisfying the Go memory model.
@@ -219,6 +285,9 @@ func runLogsJSON(cmd *cobra.Command, _ string, opts logsOptions, containerName s
 	}
 
 	if cmdErr := dockerCmd.Wait(); cmdErr != nil {
+		if isCleanFollowExit(cmdErr, ctx) {
+			return nil
+		}
 		return fmt.Errorf("docker logs: %w", cmdErr)
 	}
 	return nil

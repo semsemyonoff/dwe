@@ -197,13 +197,13 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
 
 **Goroutine leak detection** (golang-concurrency Best Practice #9): `go.uber.org/goleak` is already in `go.mod` as a direct dependency — no new dep required. Import and add to logs_test.go: `func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }`. This catches any goroutine that escapes the test boundary — critical given this command spawns 2-3 goroutines per `--follow` invocation.
 
-- [ ] in `runLogs` (for `--follow` mode only): `ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM); defer stop()`; pass `ctx` to `exec.CommandContext`
-- [ ] set `cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }` so docker gets SIGINT (graceful) instead of SIGKILL when ctx cancels
-- [ ] set `cmd.WaitDelay = 3 * time.Second` to force-kill if docker ignores SIGINT for too long
-- [ ] in error handling: treat `exit code 130` (SIGINT-killed), `ProcessState.ExitCode() == -1` with `ctx.Err() != nil`, and `errors.Is(err, exec.ErrWaitDelay)` ALL as clean exits (return nil), per `daemon_logs.go` precedent
-- [ ] write test: fake docker that loops emitting lines until SIGTERM; test cancels ctx after a small number of lines; verify (a) test completes within ~5s, (b) at least N NDJSON records emitted, (c) RunE returns nil
-- [ ] write test: `--follow` text mode passthrough also survives cancellation cleanly
-- [ ] run `go test ./internal/cli/logs/...` — must pass before Task 6
+- [x] in `runLogs` (for `--follow` mode only): `ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM); defer stop()`; pass `ctx` to `exec.CommandContext`
+- [x] set `cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }` so docker gets SIGINT (graceful) instead of SIGKILL when ctx cancels
+- [x] set `cmd.WaitDelay = 3 * time.Second` to force-kill if docker ignores SIGINT for too long
+- [x] in error handling: treat `exit code 130` (SIGINT-killed), `ProcessState.ExitCode() == -1` with `ctx.Err() != nil`, and `errors.Is(err, exec.ErrWaitDelay)` ALL as clean exits (return nil), per `daemon_logs.go` precedent
+- [x] write test: fake docker that loops emitting lines until SIGTERM; test cancels ctx after a small number of lines; verify (a) test completes within ~5s, (b) at least N NDJSON records emitted, (c) RunE returns nil
+- [x] write test: `--follow` text mode passthrough also survives cancellation cleanly
+- [x] run `go test ./internal/cli/logs/...` — must pass before Task 6
 
 ### Task 6: Error mapping + edge cases
 
