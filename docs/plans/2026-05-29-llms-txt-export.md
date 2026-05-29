@@ -163,13 +163,13 @@ Signatures (in `internal/cli/docs/llmstxt.go`):
 - Modify: `internal/core/docs/llmstxt/generator.go`
 - Modify: `internal/core/docs/llmstxt/generator_test.go`
 
-- [ ] use `[]docs.TopicEntry` (already in `Opts.DocTopics`) — populate via `docs.AllTopics(docs.Sources(projectRoot), locale)` at the cli RunE call site (per `internal/core/docs/topic.go`)
-- [ ] in `Generate`, filter `DocTopics` by category: items under `reference/` become Documentation section entries; items under `internals/` are gated by `opts.IncludeIntern`
-- [ ] format each topic as a link: `[<topic.Title>](devbox-docs://<topic.RelPath>) — <topic.Summary>` per llms.txt spec
-- [ ] **embedded-docs staleness on fresh checkout**: if `opts.DocTopics` is empty (e.g. fresh checkout without `make build`, embedded tree gitignored), gracefully emit an empty Documentation section — do NOT error. Matches the CLAUDE.md content-hashes manifest "absence → no banner" pattern.
-- [ ] write tests verifying both with-internals and without-internals shapes
-- [ ] write test verifying empty-DocTopics produces no Documentation entries but doesn't fail
-- [ ] run `go test ./internal/core/docs/llmstxt/...` — must pass before Task 4
+- [x] use `[]docs.TopicEntry` (already in `Opts.DocTopics`) — populate via `docs.AllTopics(docs.Sources(projectRoot), locale)` at the cli RunE call site (per `internal/core/docs/topic.go`)
+- [x] in `Generate`, filter `DocTopics` by category: items under `reference/` become Documentation section entries; items under `internals/` are gated by `opts.IncludeIntern`
+- [x] format each topic as a link: `[<topic.Title>](devbox-docs://<topic.RelPath>) — <topic.Summary>` per llms.txt spec
+- [x] **embedded-docs staleness on fresh checkout**: if `opts.DocTopics` is empty (e.g. fresh checkout without `make build`, embedded tree gitignored), gracefully emit an empty Documentation section — do NOT error. Matches the CLAUDE.md content-hashes manifest "absence → no banner" pattern.
+- [x] write tests verifying both with-internals and without-internals shapes
+- [x] write test verifying empty-DocTopics produces no Documentation entries but doesn't fail
+- [x] run `go test ./internal/core/docs/llmstxt/...` — must pass before Task 4
 
 ### Task 4: CLI command + flag wiring
 
