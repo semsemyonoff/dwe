@@ -198,3 +198,37 @@ func TestCodedError_NoHintOmitted(t *testing.T) {
 		t.Errorf("details field should be omitted when nil, got: %q", got)
 	}
 }
+
+func TestWriteError_CommandUnknown_EnvelopeShape(t *testing.T) {
+	var errBuf bytes.Buffer
+	cmd := newTestCmd(&bytes.Buffer{}, &errBuf)
+	flags := &cmdctx.RootFlags{Output: "json"}
+
+	ce := cmdctx.ErrWrap("command_unknown", fmt.Errorf(`command "db.up" not found`)).
+		WithDetail("id", "db.up")
+	cmdctx.WriteError(flags, cmd, ce)
+	got := errBuf.String()
+	if !strings.Contains(got, `"code":"command_unknown"`) {
+		t.Errorf("expected command_unknown code, got: %q", got)
+	}
+	if !strings.Contains(got, `"id"`) {
+		t.Errorf("expected id in details, got: %q", got)
+	}
+}
+
+func TestWriteError_SnapshotNotFound_EnvelopeShape(t *testing.T) {
+	var errBuf bytes.Buffer
+	cmd := newTestCmd(&bytes.Buffer{}, &errBuf)
+	flags := &cmdctx.RootFlags{Output: "json"}
+
+	ce := cmdctx.ErrWrap("snapshot_not_found", fmt.Errorf("open manifest.yml: no such file")).
+		WithDetail("name", "release-1")
+	cmdctx.WriteError(flags, cmd, ce)
+	got := errBuf.String()
+	if !strings.Contains(got, `"code":"snapshot_not_found"`) {
+		t.Errorf("expected snapshot_not_found code, got: %q", got)
+	}
+	if !strings.Contains(got, `"name"`) {
+		t.Errorf("expected name in details, got: %q", got)
+	}
+}

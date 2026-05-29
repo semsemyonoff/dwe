@@ -368,7 +368,7 @@ func loadInspectManifest(baseDir, arg string) (*snapshotpkg.Manifest, string, er
 		if _, err := os.Stat(arg); err == nil {
 			m, err := snapshotpkg.ReadManifestFromTar(arg)
 			if err != nil {
-				return nil, "", err
+				return nil, "", cmdctx.ErrWrap("snapshot_corrupt", err).WithDetail("path", arg)
 			}
 			return m, arg, nil
 		}
@@ -383,7 +383,10 @@ func loadInspectManifest(baseDir, arg string) (*snapshotpkg.Manifest, string, er
 	manifestPath := snapshotpkg.ManifestPath(baseDir, snapCfg, arg)
 	m, err := snapshotpkg.LoadManifest(manifestPath)
 	if err != nil {
-		return nil, "", err
+		if os.IsNotExist(err) {
+			return nil, "", cmdctx.ErrWrap("snapshot_not_found", err).WithDetail("name", arg)
+		}
+		return nil, "", cmdctx.ErrWrap("snapshot_corrupt", err).WithDetail("name", arg)
 	}
 	return m, manifestPath, nil
 }

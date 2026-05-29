@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
@@ -39,7 +40,7 @@ func runCommandByID(
 ) error {
 	def, err := reg.Get(id)
 	if err != nil {
-		return err
+		return cmdctx.ErrWrap("command_unknown", err).WithDetail("id", id)
 	}
 
 	// Normalize Translator to never be nil; tests or edge cases might not set it.

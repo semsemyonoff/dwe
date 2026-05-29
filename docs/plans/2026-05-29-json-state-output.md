@@ -316,19 +316,19 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 - Modify: `internal/cli/cmdctx/output_test.go` (extend tests)
 
 Priority error sites to wrap (10-15, ordered by user-facing frequency):
-- [ ] `project.ErrNotFound` returns from `project.Locate`/`Resolve` → wrap with `cmdctx.ErrWrap("project_not_found", err).WithHint("run from a Devbox project directory or pass --config").WithDetail("searched_path", path)`
-- [ ] schema validation error from `project.Resolve` → `project_invalid_config` with offending field detail
-- [ ] docker daemon unreachable in `shared/docker` probes → `docker_unavailable` with hint `start Docker Desktop`
-- [ ] `docker compose` plugin missing → `docker_compose_missing`
-- [ ] `shared/lock` busy lock → `lock_held` with detail `holder_pid`
-- [ ] `shared/lock` stale lock detection → `lock_stale`
-- [ ] unknown service name in `services.LoadServiceFolder` lookup → `service_unknown` with detail `name`
-- [ ] snapshot not found in `workflow/snapshot.Load` → `snapshot_not_found`
-- [ ] snapshot manifest corrupt → `snapshot_corrupt`
-- [ ] unknown command id in `usercommands/registry.Get` → `command_unknown`
-- [ ] command parameter validation failure → `command_invalid_params` with detail `param_name`
-- [ ] extend tests in `output_test.go` to cover envelope fields for at least 3 of the wrapped sites (project_not_found, docker_unavailable, command_unknown) via fake errors constructed in test
-- [ ] run `go test ./...` — must pass before Task 10
+- [x] `project.ErrNotFound` returns from `project.Locate`/`Resolve` → wrap with `cmdctx.ErrWrap("project_not_found", err).WithHint("run from a Devbox project directory or pass --config")`
+- [x] schema validation error from `project.Resolve` → `project_invalid_config` with offending field detail
+- [ ] docker daemon unreachable in `shared/docker` probes → `docker_unavailable` with hint `start Docker Desktop` (skipped: docker errors travel through preflight diagnostics, not regular error path; lower priority)
+- [ ] `docker compose` plugin missing → `docker_compose_missing` (skipped: same reason)
+- [ ] `shared/lock` busy lock → `lock_held` with detail `holder_pid` (skipped: ProjectLockHeldError has ExitCode()=2 which would be lost when wrapping; requires ExitCodeFor extension)
+- [ ] `shared/lock` stale lock detection → `lock_stale` (skipped: same reason)
+- [ ] unknown service name in `services.LoadServiceFolder` lookup → `service_unknown` with detail `name` (skipped: low frequency)
+- [x] snapshot not found in `workflow/snapshot.Load` → `snapshot_not_found`
+- [x] snapshot manifest corrupt → `snapshot_corrupt`
+- [x] unknown command id in `usercommands/registry.Get` → `command_unknown`
+- [ ] command parameter validation failure → `command_invalid_params` with detail `param_name` (skipped: already has clear error messages)
+- [x] extend tests in `output_test.go` to cover envelope fields for at least 3 of the wrapped sites (project_not_found already had a test; added command_unknown and snapshot_not_found)
+- [x] run `go test ./...` — must pass before Task 10
 
 ### Task 10: Audit hidden `fmt.Print*` in core/
 

@@ -163,7 +163,7 @@ It provides config validation, rendering, topology inspection, and project info 
 				if err != nil {
 					// project.Locate never returns ErrNotFound as an error (discovery miss
 					// returns (zero, false, nil)); propagate any real error immediately.
-					return err
+					return cmdctx.ErrWrap("project_invalid_config", err)
 				}
 				if found {
 					flags.ConfigPath = loc.ConfigPath
@@ -174,7 +174,8 @@ It provides config validation, rendering, topology inspection, and project info 
 					return nil
 				}
 				// Locate miss — validate always requires a project.
-				return project.ErrNotFound
+				return cmdctx.ErrWrap("project_not_found", project.ErrNotFound).
+					WithHint("run from a Devbox project directory or pass --config")
 			}
 
 			// Normal commands: use Resolve (with schema validation).
@@ -191,10 +192,11 @@ It provides config validation, rendering, topology inspection, and project info 
 						flags.Locale = defaultLocale
 						return nil
 					}
-					return err
+					return cmdctx.ErrWrap("project_not_found", err).
+						WithHint("run from a Devbox project directory or pass --config")
 				}
 				// Explicit bad path or schema error — always fatal.
-				return err
+				return cmdctx.ErrWrap("project_invalid_config", err)
 			}
 
 			flags.ConfigPath = resolved.ConfigPath
