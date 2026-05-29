@@ -12,7 +12,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/cli/deploy"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/usercommands/runtime"
 	"devbox-cli/internal/core/workflow/deploy/journal"
@@ -287,9 +287,9 @@ type planEntry struct {
 func renderTogglePlan(w io.Writer, plan TogglePlan) {
 	cmdEntry := func(commandID string) planEntry {
 		return planEntry{
-			icon:    ui.StyleInfo("▶"),
+			icon:    styles.StyleInfo("▶"),
 			body:    fmt.Sprintf("devbox commands %s", commandID),
-			stylize: ui.StyleKey,
+			stylize: styles.StyleKey,
 		}
 	}
 
@@ -303,24 +303,24 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 		case journal.PendingDeploy:
 			if len(s.Services) == 1 {
 				entries = append(entries, planEntry{
-					icon:    ui.RenderEnabled("↑"),
+					icon:    styles.RenderEnabled("↑"),
 					body:    fmt.Sprintf("devbox deploy run --service %s", s.Services[0]),
-					stylize: ui.StyleKey,
+					stylize: styles.StyleKey,
 				})
 			} else {
 				body := fmt.Sprintf("→ apply step: deploy services {%s} (dependency-ordered at execution)",
 					strings.Join(s.Services, ", "))
 				entries = append(entries, planEntry{
-					icon:    ui.RenderEnabled("↑"),
+					icon:    styles.RenderEnabled("↑"),
 					body:    body,
-					stylize: ui.StyleInfo,
+					stylize: styles.StyleInfo,
 				})
 			}
 		case journal.PendingRestart:
 			entries = append(entries, planEntry{
-				icon:    ui.StyleWarning("↻"),
+				icon:    styles.StyleWarning("↻"),
 				body:    "→ apply step: restart stack",
-				stylize: ui.StyleInfo,
+				stylize: styles.StyleInfo,
 			})
 		}
 	}
@@ -329,7 +329,7 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 	}
 
 	if len(entries) == 0 && len(plan.Notes) == 0 {
-		_, _ = fmt.Fprintln(w, ui.StyleMuted("No steps required."))
+		_, _ = fmt.Fprintln(w, styles.StyleMuted("No steps required."))
 		return
 	}
 
@@ -339,7 +339,7 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 			plural = ""
 		}
 		header := fmt.Sprintf("Plan to apply (%d step%s):", len(entries), plural)
-		_, _ = fmt.Fprintln(w, ui.StyleSubheader(header))
+		_, _ = fmt.Fprintln(w, styles.StyleSubheader(header))
 
 		// Width of the largest "N." index so dots align in multi-digit plans.
 		idxWidth := len(fmt.Sprintf("%d", len(entries)))
@@ -350,7 +350,7 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 				body = e.stylize(body)
 			}
 			_, _ = fmt.Fprintf(w, "  %s %s  %s\n",
-				ui.StyleMuted(idx),
+				styles.StyleMuted(idx),
 				e.icon,
 				body,
 			)
@@ -361,8 +361,8 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 		if len(entries) > 0 {
 			_, _ = fmt.Fprintln(w, "")
 		}
-		_, _ = fmt.Fprintln(w, ui.StyleSubheader("Notes:"))
-		bullet := ui.StyleInfo("•")
+		_, _ = fmt.Fprintln(w, styles.StyleSubheader("Notes:"))
+		bullet := styles.StyleInfo("•")
 		for _, n := range plan.Notes {
 			_, _ = fmt.Fprintf(w, "  %s %s\n", bullet, n)
 		}

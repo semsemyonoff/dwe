@@ -17,6 +17,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
@@ -263,7 +264,7 @@ func (m *model) renderTitleBar() string {
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Padding(0, 1).
-		Foreground(lipgloss.Color(ui.ColorAccent())).
+		Foreground(lipgloss.Color(styles.ColorAccent())).
 		Bold(true).
 		Render(text)
 }
@@ -280,13 +281,13 @@ func (m *model) renderTabStrip() string {
 		if i == m.active {
 			// Active tab with accent corners
 			parts = append(parts, lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ui.ColorAccent())).
+				Foreground(lipgloss.Color(styles.ColorAccent())).
 				Bold(true).
 				Render("▌"+t.title+"▐"))
 		} else {
 			// Inactive tab, dimmed
 			parts = append(parts, lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ui.ColorMuted())).
+				Foreground(lipgloss.Color(styles.ColorMuted())).
 				Render(t.title))
 		}
 	}
@@ -375,7 +376,7 @@ func (m *model) View() tea.View {
 
 	// Render divider line — a full-width horizontal separator.
 	dividerLine := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.ColorMuted())).
+		Foreground(lipgloss.Color(styles.ColorMuted())).
 		Render(strings.Repeat("─", m.width-2))
 
 	statusBar := m.renderStatusBar()

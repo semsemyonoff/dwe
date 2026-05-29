@@ -12,6 +12,7 @@ import (
 	"devbox-cli/internal/core/project/project"
 	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/validate"
 	valchecks "devbox-cli/internal/core/validate/checks"
@@ -495,11 +496,11 @@ func loadForValidate(flags *cmdctx.RootFlags) (*config.DevboxConfig, string, str
 func styleValidateHeader(text string, summary validate.Summary) string {
 	switch {
 	case summary.Errors > 0:
-		return ui.StyleFailed(text)
+		return styles.StyleFailed(text)
 	case summary.Warnings > 0:
-		return ui.StyleWarning(text)
+		return styles.StyleWarning(text)
 	default:
-		return ui.StyleSectionTitle(text)
+		return styles.StyleSectionTitle(text)
 	}
 }
 

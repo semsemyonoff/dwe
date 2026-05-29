@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // applyPaletteOverride installs a palette where accent and muted are distinct
@@ -25,9 +25,9 @@ import (
 func applyPaletteOverride(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
-		ui.ApplyStyles(&config.StylesConfig{})
+		styles.ApplyStyles(&config.StylesConfig{})
 	})
-	ui.ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{
+	styles.ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{
 		Accent:  "167",
 		Muted:   "245",
 		Success: "78",

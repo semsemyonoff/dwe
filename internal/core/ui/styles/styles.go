@@ -1,7 +1,10 @@
-// Package ui provides Lipgloss-based styled rendering for the devbox CLI.
-// It is separate from internal/shared/render, which handles plain ANSI output used by
-// deploy, docker, and passthrough commands.
-package ui
+// Package styles provides Lipgloss-based theme primitives for the devbox CLI:
+// the 7-token semantic palette (accent/success/warning/danger/muted/border/text),
+// rendering helpers, icon classification, and huh.Theme construction.
+//
+// It is separate from internal/shared/render, which handles plain ANSI output
+// used by deploy, docker, and passthrough commands.
+package styles
 
 import (
 	"os"
@@ -53,7 +56,8 @@ var (
 )
 
 // v1 lipgloss styles for the 7 semantic tokens. Built once per ApplyStyles
-// call from the resolved hex values. Used directly by internal/core/ui consumers.
+// call from the resolved hex values. Used directly by sibling packages via
+// the AccentStyle()/MutedStyle()/... accessor functions below.
 var (
 	styleAccent  lipgloss.Style
 	styleSuccess lipgloss.Style
@@ -64,8 +68,9 @@ var (
 	styleText    lipgloss.Style
 )
 
-// defSep is the delimiter used between a definition label and its value.
-var defSep = "—"
+// DefSep is the delimiter used between a definition label and its value.
+// ApplyStyles mutates this from StylesConfig.Separator when non-empty.
+var DefSep = "—"
 
 func init() {
 	// Establish a sane initial palette before any ApplyStyles call so package
@@ -128,16 +133,40 @@ func ApplyStyles(cfg *config.StylesConfig) {
 	}
 	rebuildSemanticStyles(cfg.Colors)
 	if cfg.Separator != "" {
-		defSep = cfg.Separator
+		DefSep = cfg.Separator
 	}
-	apply := buildPaletteApplier()
-	huhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
+	apply := BuildPaletteApplier()
+	HuhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeBase(isDark)
-		applyFormGlyphs(s)
+		ApplyFormGlyphs(s)
 		apply(s)
 		return s
 	})
 }
+
+// AccentStyle returns the current lipgloss.Style for the accent token. The
+// returned value is a copy; mutating it does not affect the package palette.
+// Used by sibling packages (render, widgets) that need to chain .Bold(true) /
+// .Render(text) without going through the StyleX(string) wrapper.
+func AccentStyle() lipgloss.Style { return styleAccent }
+
+// MutedStyle returns the current lipgloss.Style for the muted token.
+func MutedStyle() lipgloss.Style { return styleMuted }
+
+// SuccessStyle returns the current lipgloss.Style for the success token.
+func SuccessStyle() lipgloss.Style { return styleSuccess }
+
+// WarningStyle returns the current lipgloss.Style for the warning token.
+func WarningStyle() lipgloss.Style { return styleWarning }
+
+// DangerStyle returns the current lipgloss.Style for the danger token.
+func DangerStyle() lipgloss.Style { return styleDanger }
+
+// BorderStyle returns the current lipgloss.Style for the border token.
+func BorderStyle() lipgloss.Style { return styleBorder }
+
+// TextStyle returns the current lipgloss.Style for the text token.
+func TextStyle() lipgloss.Style { return styleText }
 
 // RenderEnabled applies the enabled/running style to s.
 func RenderEnabled(s string) string { return styleSuccess.Render(s) }
@@ -186,7 +215,7 @@ func StyleServiceName(serviceType, s string, active bool) string {
 	if !active {
 		return styleInactiveService(serviceType).Render(s)
 	}
-	return serviceTypeStyle(serviceType).Bold(true).Render(s)
+	return ServiceTypeStyle(serviceType).Bold(true).Render(s)
 }
 
 // StyleServiceType renders a service type badge with its type color.
@@ -194,7 +223,7 @@ func StyleServiceType(serviceType, s string, active bool) string {
 	if !active {
 		return styleInactiveService(serviceType).Render(s)
 	}
-	return serviceTypeStyle(serviceType).Render(s)
+	return ServiceTypeStyle(serviceType).Render(s)
 }
 
 // StyleServiceContainer renders service container metadata as secondary text.
@@ -239,10 +268,13 @@ func StyleOptionWarning(s string) string {
 }
 
 func styleInactiveService(serviceType string) lipgloss.Style {
-	return serviceTypeStyle(serviceType).Bold(false).Faint(true)
+	return ServiceTypeStyle(serviceType).Bold(false).Faint(true)
 }
 
-func serviceTypeStyle(serviceType string) lipgloss.Style {
+// ServiceTypeStyle returns the lipgloss.Style assigned to a service type
+// ("app", "tool", "infra"). Exposed so external renderers (e.g. the topology
+// tree) keep the color mapping in one place.
+func ServiceTypeStyle(serviceType string) lipgloss.Style {
 	switch serviceType {
 	case "app":
 		return styleAccent
@@ -383,20 +415,20 @@ func TermWidth() int {
 	return w
 }
 
-// huhTheme is the package-level huh.Theme built from devbox/styles.yml.
+// HuhTheme is the package-level huh.Theme built from devbox/styles.yml.
 // It defaults to ThemeBase + devbox glyph overrides (no project palette
 // applied) until ApplyStyles is called.
-var huhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
+var HuhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 	s := huh.ThemeBase(isDark)
-	applyFormGlyphs(s)
+	ApplyFormGlyphs(s)
 	applyMultiSelectStateStyles(s, resolvedSuccess, resolvedMuted)
 	return s
 })
 
-// applyFormGlyphs replaces the default huh prefix glyphs with the devbox look:
+// ApplyFormGlyphs replaces the default huh prefix glyphs with the devbox look:
 // "✓ " for selected items, "• " for unselected. Coloring is handled separately
-// by buildPaletteApplier so the glyphs always render even without a palette.
-func applyFormGlyphs(s *huh.Styles) {
+// by BuildPaletteApplier so the glyphs always render even without a palette.
+func ApplyFormGlyphs(s *huh.Styles) {
 	s.Focused.SelectedPrefix = s.Focused.SelectedPrefix.SetString("✓ ")
 	s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.SetString("• ")
 	s.Blurred.SelectedPrefix = s.Blurred.SelectedPrefix.SetString("✓ ")
@@ -419,13 +451,13 @@ func applyMultiSelectStateStyles(s *huh.Styles, selectedColor, unselectedColor s
 }
 
 // Theme returns the current package-level huh.Theme.
-// All huh form/field call sites should use .WithTheme(ui.Theme()) so they
+// All huh form/field call sites should use .WithTheme(styles.Theme()) so they
 // automatically pick up palette changes from styles.yml.
 func Theme() huh.Theme {
-	return huhTheme
+	return HuhTheme
 }
 
-// buildPaletteApplier returns a function that applies project palette colors
+// BuildPaletteApplier returns a function that applies project palette colors
 // to a *huh.Styles in place. The returned function is safe to call multiple
 // times on different *huh.Styles values (no shared state).
 //
@@ -441,7 +473,7 @@ func Theme() huh.Theme {
 // passing nil or an empty StylesColors still produces a fully-themed *huh.Styles
 // — empty user overrides have already been resolved to the built-in defaults
 // by rebuildSemanticStyles.
-func buildPaletteApplier() func(*huh.Styles) {
+func BuildPaletteApplier() func(*huh.Styles) {
 	return func(s *huh.Styles) {
 		accent := huhlip.Color(resolvedAccent)
 		muted := huhlip.Color(resolvedMuted)

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 
 	huh "charm.land/huh/v2"
 )
@@ -158,7 +159,7 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 	form := huh.NewForm(
 		huh.NewGroup(huhFields...).Title(title),
 	).
-		WithTheme(ui.Theme()).
+		WithTheme(styles.Theme()).
 		WithInput(opts.Input).
 		WithOutput(opts.Output)
 

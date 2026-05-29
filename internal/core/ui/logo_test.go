@@ -6,6 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // stripANSI removes ANSI escape sequences from s for plain-text comparison.
@@ -44,7 +46,7 @@ func TestLogoMarkStripsToPlain(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Cleanup(func() { lipgloss.SetColorProfile(saved) })
 
-	ApplyStyles(nil)
+	styles.ApplyStyles(nil)
 	mark := LogoMark()
 	if stripped := stripANSI(mark); stripped != "{▪}" {
 		t.Fatalf("stripANSI(LogoMark) = %q, want %q", stripped, "{▪}")
@@ -59,7 +61,7 @@ func TestLogoMarkContainsAccentWhenColorProfile(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Cleanup(func() { lipgloss.SetColorProfile(saved) })
 
-	ApplyStyles(nil)
+	styles.ApplyStyles(nil)
 	mark := LogoMark()
 	if !strings.ContainsRune(mark, 0x1b) {
 		t.Fatalf("LogoMark under ANSI256 profile has no escape codes: %q", mark)

@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	huh "charm.land/huh/v2"
+
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // runConfirmFormFn is the underlying form runner; swappable in tests.
@@ -19,7 +21,7 @@ func defaultRunConfirmForm(title, affirmative, negative string) (bool, error) {
 		Affirmative(affirmative).
 		Negative(negative).
 		Value(&result)
-	err := huh.NewForm(huh.NewGroup(field)).WithTheme(Theme()).WithShowHelp(false).Run()
+	err := huh.NewForm(huh.NewGroup(field)).WithTheme(styles.Theme()).WithShowHelp(false).Run()
 	return result, err
 }
 
@@ -57,7 +59,7 @@ func defaultRunConfirmRunForm(title, summary string) (bool, error) {
 		Affirmative("Yes").
 		Negative("No").
 		Value(&result)
-	err := huh.NewForm(huh.NewGroup(field)).WithTheme(Theme()).WithShowHelp(false).Run()
+	err := huh.NewForm(huh.NewGroup(field)).WithTheme(styles.Theme()).WithShowHelp(false).Run()
 	return result, err
 }
 

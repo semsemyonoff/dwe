@@ -11,6 +11,7 @@ import (
 
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/validate/env"
 
 	"charm.land/bubbles/v2/key"
@@ -79,7 +80,7 @@ func NewHuhAsker(out io.Writer) (
 			fields = append(fields, field)
 		}
 
-		// Run the ask form. ui.Theme() and SetHuhHooks are handled by ask.Run.
+		// Run the ask form. styles.Theme() and SetHuhHooks are handled by ask.Run.
 		result, err := ask.Run(ctx, "Setup", fields, ask.RunOptions{Output: out})
 		if err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
@@ -173,7 +174,7 @@ func NewHuhAsker(out io.Writer) (
 			huh.NewGroup(huhFields...).
 				Title("Port Overrides"),
 		).
-			WithTheme(ui.Theme()).
+			WithTheme(styles.Theme()).
 			WithKeyMap(keymap).
 			WithShowHelp(true).
 			WithOutput(out)
@@ -251,7 +252,7 @@ func NewHuhAsker(out io.Writer) (
 		}
 
 		if len(mandatoryLabels) > 0 {
-			_, _ = fmt.Fprintln(out, ui.StyleSubheader("Always on: ")+ui.StyleMuted(strings.Join(mandatoryLabels, ", ")))
+			_, _ = fmt.Fprintln(out, styles.StyleSubheader("Always on: ")+styles.StyleMuted(strings.Join(mandatoryLabels, ", ")))
 		}
 
 		picked := initial
@@ -266,7 +267,7 @@ func NewHuhAsker(out io.Writer) (
 		keymap.MultiSelect.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
 
 		form := huh.NewForm(huh.NewGroup(field).Title("Services")).
-			WithTheme(ui.Theme()).
+			WithTheme(styles.Theme()).
 			WithKeyMap(keymap).
 			WithShowHelp(true).
 			WithOutput(out)
@@ -307,9 +308,9 @@ func formatServiceToggleRow(t ServiceToggle) string {
 	if container == "" {
 		container = "-"
 	}
-	return ui.IconPrefix(t.Icon) + ui.StyleServiceOptionName(t.Type, t.Name) + "  " +
-		ui.StyleServiceOptionType(t.Type, "["+typeText+"]") + " " +
-		ui.StyleServiceOptionContainer(container)
+	return styles.IconPrefix(t.Icon) + styles.StyleServiceOptionName(t.Type, t.Name) + "  " +
+		styles.StyleServiceOptionType(t.Type, "["+typeText+"]") + " " +
+		styles.StyleServiceOptionContainer(container)
 }
 
 // applyMultiSelectInitial marks the given option values as pre-selected so the

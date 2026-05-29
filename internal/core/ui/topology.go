@@ -6,6 +6,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/tree"
 	"gopkg.in/yaml.v3"
+
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // NodeStatus represents the display status of a topology node.
@@ -115,7 +117,7 @@ func RenderTopology(deps map[string][]string, status map[string]NodeStatus, cate
 		sort.Strings(roots)
 	}
 
-	root := tree.Root(styleAccent.Bold(true).Render("⁜ Devbox"))
+	root := tree.Root(styles.AccentStyle().Bold(true).Render("⁜ Devbox"))
 	for _, name := range roots {
 		root.Child(buildTopoNode(name, deps, status, categories, nil))
 	}
@@ -165,7 +167,7 @@ func categoryLabel(cat NodeCategory) string {
 // to the shared service-type palette so app/tool/infra colors are defined in
 // one place (styles.go).
 func categoryStyle(cat NodeCategory) lipgloss.Style {
-	return serviceTypeStyle(categoryLabel(cat))
+	return styles.ServiceTypeStyle(categoryLabel(cat))
 }
 
 // topoNodeLabel formats a service name with a category tag and status annotation.
@@ -181,9 +183,9 @@ func topoNodeLabel(name string, status map[string]NodeStatus, categories map[str
 	// Check if the node is disabled — render everything in muted gray.
 	st, hasStatus := status[name]
 	if hasStatus && st == NodeDisabled {
-		return styleMuted.Render(name) +
-			" " + styleMuted.Render("["+categoryLabel(cat)+"]") +
-			" " + styleMuted.Render("(disabled)")
+		return styles.MutedStyle().Render(name) +
+			" " + styles.MutedStyle().Render("["+categoryLabel(cat)+"]") +
+			" " + styles.MutedStyle().Render("(disabled)")
 	}
 
 	// Normal node: name in default color, category tag in its own color.
@@ -198,10 +200,10 @@ func topoNodeLabel(name string, status map[string]NodeStatus, categories map[str
 	switch st {
 	case NodeRunning:
 		label = "running"
-		style = styleSuccess
+		style = styles.SuccessStyle()
 	case NodeStopped:
 		label = "stopped"
-		style = styleWarning
+		style = styles.WarningStyle()
 	default:
 		return sb
 	}

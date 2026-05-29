@@ -33,6 +33,7 @@ import (
 	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/statusview"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
@@ -290,12 +291,12 @@ func applyStyles(projectRoot string, errW io.Writer) *config.StylesConfig {
 	if projectRoot == "" {
 		// No project root — apply defaults silently.
 		stylesCfg := &config.StylesConfig{}
-		ui.ApplyStyles(stylesCfg)
+		styles.ApplyStyles(stylesCfg)
 		return stylesCfg
 	}
 	stylesPath := filepath.Join(projectRoot, "devbox", "styles.yml")
 	stylesCfg, err := config.LoadStylesConfig(stylesPath)
-	ui.ApplyStyles(stylesCfg)
+	styles.ApplyStyles(stylesCfg)
 	if err != nil {
 		render.NewWriter(errW).Warning("styles.yml: " + err.Error())
 	}

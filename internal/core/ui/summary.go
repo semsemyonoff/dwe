@@ -6,6 +6,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui/statusview"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // RenderSummary returns a compact project summary string.
@@ -18,7 +19,7 @@ func RenderSummary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySum
 	// Project identity now lives in the branded header (ui.RenderBrandHeader);
 	// the summary only carries state (when set) and counts.
 	if cfg.State != "" {
-		lines = append(lines, styleMuted.Render("state")+" "+defSep+" "+cfg.State)
+		lines = append(lines, styles.MutedStyle().Render("state")+" "+styles.DefSep+" "+cfg.State)
 	}
 
 	// Service and tool counts, plus deploy status if available.
@@ -26,12 +27,12 @@ func RenderSummary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySum
 	enabledTools := countTools(cfg)
 
 	var line2Parts []string
-	line2Parts = append(line2Parts, styleMuted.Render(fmt.Sprintf("services %d/%d enabled", enabledSvcs, totalSvcs)))
-	line2Parts = append(line2Parts, styleMuted.Render(fmt.Sprintf("tools %d enabled", enabledTools)))
+	line2Parts = append(line2Parts, styles.MutedStyle().Render(fmt.Sprintf("services %d/%d enabled", enabledSvcs, totalSvcs)))
+	line2Parts = append(line2Parts, styles.MutedStyle().Render(fmt.Sprintf("tools %d enabled", enabledTools)))
 
 	if deploySummary != nil && deploySummary.Total > 0 {
 		deployedStr := fmt.Sprintf("services %d/%d deployed", deploySummary.Deployed, deploySummary.Total)
-		line2Parts = append(line2Parts, styleMuted.Render(deployedStr))
+		line2Parts = append(line2Parts, styles.MutedStyle().Render(deployedStr))
 	}
 
 	lines = append(lines, strings.Join(line2Parts, "  "))

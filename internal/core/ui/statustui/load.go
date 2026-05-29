@@ -11,6 +11,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // tabsLoadedMsg is emitted when buildTabsCmd completes and carries the
@@ -52,9 +53,9 @@ func warningPrefix(n int) string {
 		return ""
 	}
 	if n == 1 {
-		return ui.StyleWarning("⚠ 1 expression failed")
+		return styles.StyleWarning("⚠ 1 expression failed")
 	}
-	return ui.StyleWarning(fmt.Sprintf("⚠ %d expression(s) failed", n))
+	return styles.StyleWarning(fmt.Sprintf("⚠ %d expression(s) failed", n))
 }
 
 // normaliseDocker returns d when non-nil, or &config.DockerConfig{} when nil.

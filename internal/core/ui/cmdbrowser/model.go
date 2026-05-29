@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // focus identifies which panel currently receives input. Filter and Inspect
@@ -392,10 +393,10 @@ func (m *Model) View() tea.View {
 	bh := bodyHeight(m.height)
 
 	border := lipgloss.NormalBorder()
-	leftStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bh).BorderForeground(lipgloss.Color(ui.ColorBorder()))
-	rightStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bh).BorderForeground(lipgloss.Color(ui.ColorBorder()))
+	leftStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bh).BorderForeground(lipgloss.Color(styles.ColorBorder()))
+	rightStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bh).BorderForeground(lipgloss.Color(styles.ColorBorder()))
 
-	focusBorder := lipgloss.Color(ui.ColorAccent())
+	focusBorder := lipgloss.Color(styles.ColorAccent())
 	switch m.focus {
 	case focusLeft:
 		leftStyle = leftStyle.BorderForeground(focusBorder)
@@ -435,9 +436,9 @@ func (m *Model) View() tea.View {
 func (m *Model) viewSinglePanel() tea.View {
 	bh := bodyHeight(m.height)
 	border := lipgloss.NormalBorder()
-	style := lipgloss.NewStyle().Border(border).Width(singlePanelWidth(m.width)).Height(bh).BorderForeground(lipgloss.Color(ui.ColorBorder()))
+	style := lipgloss.NewStyle().Border(border).Width(singlePanelWidth(m.width)).Height(bh).BorderForeground(lipgloss.Color(styles.ColorBorder()))
 	if m.focus == focusFilter || m.focus == focusInspect || m.focus == focusRight {
-		style = style.BorderForeground(lipgloss.Color(ui.ColorAccent()))
+		style = style.BorderForeground(lipgloss.Color(styles.ColorAccent()))
 	}
 
 	var body string
@@ -595,7 +596,7 @@ func (m *Model) renderTitleBar(totalWidth int) string {
 	return lipgloss.NewStyle().
 		Width(totalWidth).
 		Padding(0, 1).
-		Foreground(lipgloss.Color(ui.ColorAccent())).
+		Foreground(lipgloss.Color(styles.ColorAccent())).
 		Bold(true).
 		Render(text)
 }

@@ -8,6 +8,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
@@ -166,11 +167,11 @@ func selectHealthIndicator(svcRows []ui.ServiceTableRow, topoStatus map[string]u
 	}
 	switch health {
 	case HealthRunning:
-		return ui.RenderEnabled("● running")
+		return styles.RenderEnabled("● running")
 	case HealthPartial:
-		return ui.RenderPartial("◐ partial")
+		return styles.RenderPartial("◐ partial")
 	default:
-		return ui.RenderStopped("○ stopped")
+		return styles.RenderStopped("○ stopped")
 	}
 }
 

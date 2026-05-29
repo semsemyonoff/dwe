@@ -9,8 +9,8 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/cmdbrowser"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/render"
@@ -351,18 +351,18 @@ func printTreeNode(w io.Writer, node *render.TreeNode, depth int) {
 	sb.WriteString(indent)
 
 	if len(node.Children) > 0 {
-		sb.WriteString(ui.StyleGroup(node.Label))
+		sb.WriteString(styles.StyleGroup(node.Label))
 	} else {
-		sb.WriteString(ui.StyleKey(node.Label))
+		sb.WriteString(styles.StyleKey(node.Label))
 		if len(node.Tags) > 0 {
 			sb.WriteString("  ")
-			sb.WriteString(ui.StyleMuted("[" + strings.Join(node.Tags, ", ") + "]"))
+			sb.WriteString(styles.StyleMuted("[" + strings.Join(node.Tags, ", ") + "]"))
 		}
 	}
 
 	if node.Desc != "" {
 		sb.WriteString("  ")
-		sb.WriteString(ui.StyleMuted("—"))
+		sb.WriteString(styles.StyleMuted("—"))
 		sb.WriteString(" ")
 		sb.WriteString(node.Desc)
 	}

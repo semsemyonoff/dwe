@@ -16,6 +16,7 @@ import (
 	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/validate"
 	valchecks "devbox-cli/internal/core/validate/checks"
@@ -182,7 +183,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		case menuRunService:
 			gated := applyMandatoryGate(items)
 			if len(gated) == 0 {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), ui.StyleWarning("No services with a deploy.yml found."))
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), styles.StyleWarning("No services with a deploy.yml found."))
 				continue
 			}
 			name, err := selectDeployServiceFn(ctx, cmd, "Select service to deploy", gated, true)
@@ -201,7 +202,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 
 		case menuPlanService:
 			if len(items) == 0 {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), ui.StyleWarning("No services with a deploy.yml found."))
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), styles.StyleWarning("No services with a deploy.yml found."))
 				continue
 			}
 			name, err := selectDeployServiceFn(ctx, cmd, "Select service to plan", items, false)
@@ -278,7 +279,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 				if len(remainingConflicts) == 0 {
 					break
 				}
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), ui.StyleWarning(
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), styles.StyleWarning(
 					fmt.Sprintf("Port conflicts remain (%d); please pick different ports.", len(remainingConflicts)),
 				))
 				if iter == maxIter-1 {
@@ -432,7 +433,7 @@ func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal
 		label := padRight(d.label, labelWidth)
 		// Action label in accent, description muted (FG-only so huh's bold
 		// wrapper on the selected row still wins).
-		key := ui.StyleServiceOptionName("app", label) + "  " + ui.StyleOptionMuted(d.description)
+		key := styles.StyleServiceOptionName("app", label) + "  " + styles.StyleOptionMuted(d.description)
 		options = append(options, huh.NewOption(key, string(d.key)))
 	}
 
@@ -448,7 +449,7 @@ func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal
 		Height(max(len(options)+5, 12))
 
 	form := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(ui.Theme()).
+		WithTheme(styles.Theme()).
 		WithKeyMap(deployMenuKeyMap("exit")).
 		WithShowHelp(true).
 		WithOutput(cmd.OutOrStdout())
@@ -540,7 +541,7 @@ func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title
 	}
 
 	form := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(ui.Theme()).
+		WithTheme(styles.Theme()).
 		WithKeyMap(deployMenuKeyMap("back")).
 		WithShowHelp(true).
 		WithOutput(cmd.OutOrStdout())
@@ -566,21 +567,21 @@ func formatDeployServiceLabel(it deployServiceItem, nameWidth int) string {
 		typeText = "-"
 	}
 
-	statusIcon := ui.StyleOptionMuted("·")
+	statusIcon := styles.StyleOptionMuted("·")
 	if it.Deployed {
-		statusIcon = ui.StyleOptionSuccess("✓")
+		statusIcon = styles.StyleOptionSuccess("✓")
 	}
 
 	name := padRight(it.Name, nameWidth)
-	coloredName := ui.StyleServiceOptionName(it.Type, name)
-	typeBadge := ui.StyleServiceOptionType(it.Type, "["+typeText+"]")
+	coloredName := styles.StyleServiceOptionName(it.Type, name)
+	typeBadge := styles.StyleServiceOptionType(it.Type, "["+typeText+"]")
 
 	meta := formatServiceMeta(it)
 	if meta != "" {
-		meta = "  " + ui.StyleServiceOptionContainer(meta)
+		meta = "  " + styles.StyleServiceOptionContainer(meta)
 	}
 
-	return statusIcon + " " + ui.IconPrefix(it.Icon) + coloredName + " " + typeBadge + meta
+	return statusIcon + " " + styles.IconPrefix(it.Icon) + coloredName + " " + typeBadge + meta
 }
 
 // formatServiceMeta builds the secondary text shown after the type badge:
@@ -700,9 +701,9 @@ func runPreWizardPreflight(ctx context.Context, cfg *config.DevboxConfig, baseDi
 	if len(filtered) > 0 {
 		header := "Preflight (wizard prerequisites)"
 		if blocking {
-			header = ui.StyleFailed(header + " — blocking")
+			header = styles.StyleFailed(header + " — blocking")
 		} else {
-			header = ui.StyleWarning(header)
+			header = styles.StyleWarning(header)
 		}
 		_, _ = fmt.Fprintln(errOut, header)
 		_, _ = fmt.Fprintln(errOut, ui.RenderDiagnosticsTable(filtered))

@@ -1,4 +1,4 @@
-package ui
+package styles
 
 // ambiguousIconReplacements maps a problematic base codepoint (an emoji whose
 // Emoji_Presentation = No — e.g. U+1F6E2 🛢, U+2699 ⚙) to safe alternatives

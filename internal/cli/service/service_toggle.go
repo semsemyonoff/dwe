@@ -16,6 +16,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/usercommands/runtime"
@@ -131,7 +132,7 @@ func loadDeployedServices(statePath string) (map[string]bool, error) {
 func probeStackOrWarn(errOut io.Writer, cfg *config.DevboxConfig, baseDir string) bool {
 	running, err := detectStackRunning(cfg, baseDir)
 	if err != nil {
-		_, _ = fmt.Fprintln(errOut, ui.StyleWarning(fmt.Sprintf(
+		_, _ = fmt.Fprintln(errOut, styles.StyleWarning(fmt.Sprintf(
 			"⚠ could not probe stack state (%v); proceeding as if stack is running", err)))
 		return true
 	}
@@ -144,7 +145,7 @@ func warnStackStopped(out io.Writer, plan TogglePlan) {
 	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
 		return
 	}
-	_, _ = fmt.Fprintln(out, ui.StyleWarning(
+	_, _ = fmt.Fprintln(out, styles.StyleWarning(
 		"⚠ stack is not running; hooks and pending state were skipped (local.yml updated)."))
 }
 
@@ -154,7 +155,7 @@ func warnDeployedServicesLoad(errOut io.Writer, err error) {
 	if err == nil {
 		return
 	}
-	_, _ = fmt.Fprintln(errOut, ui.StyleWarning(fmt.Sprintf(
+	_, _ = fmt.Fprintln(errOut, styles.StyleWarning(fmt.Sprintf(
 		"⚠ could not read deploy journal (%v); treating all services as undeployed", err)))
 }
 

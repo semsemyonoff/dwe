@@ -10,6 +10,7 @@ import (
 
 	"devbox-cli/internal/core/docs"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // applyDocsHelpStyles overwrites the palette-driven fields on a bubbles/v2
@@ -17,8 +18,8 @@ import (
 // internal/core/ui/cmdbrowser so the docs TUI footer reads with the same
 // vocabulary as the commands TUI.
 func applyDocsHelpStyles(s *help.Styles) {
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorAccent()))
-	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorMuted()))
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
 	s.ShortKey = keyStyle
 	s.FullKey = keyStyle
 	s.ShortDesc = descStyle
@@ -53,8 +54,8 @@ func (m *Model) renderTwoPanel() tea.View {
 	bh := bodyHeight(m.TermHeight, m.helpHeight())
 
 	border := lipgloss.NormalBorder()
-	borderColor := lipgloss.Color(ui.ColorBorder())
-	accent := lipgloss.Color(ui.ColorAccent())
+	borderColor := lipgloss.Color(styles.ColorBorder())
+	accent := lipgloss.Color(styles.ColorAccent())
 
 	treeStyle := lipgloss.NewStyle().Border(border).Width(lw).Height(bh).BorderForeground(borderColor)
 	viewportStyle := lipgloss.NewStyle().Border(border).Width(rw).Height(bh).BorderForeground(borderColor)
@@ -91,7 +92,7 @@ func (m *Model) renderTitleBar(totalWidth int) string {
 	return lipgloss.NewStyle().
 		Width(totalWidth).
 		Padding(0, 1).
-		Foreground(lipgloss.Color(ui.ColorAccent())).
+		Foreground(lipgloss.Color(styles.ColorAccent())).
 		Bold(true).
 		Render(text)
 }
@@ -99,7 +100,7 @@ func (m *Model) renderTitleBar(totalWidth int) string {
 // renderStatusLine renders the path / language / progress strip pulled from
 // the StatusBar widget, padded to totalWidth so it lines up with the panels.
 func (m *Model) renderStatusLine(totalWidth int) string {
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorMuted()))
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
 	return lipgloss.NewStyle().
 		Width(totalWidth).
 		Padding(0, 1).
@@ -175,8 +176,8 @@ func (m *Model) renderTree() string {
 		return ""
 	}
 
-	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorAccent()))
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorMuted()))
+	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
 
 	inner := leftPanelInnerWidth(m.TermWidth)
 	var sb strings.Builder

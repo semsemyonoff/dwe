@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/validate"
 )
 
@@ -18,7 +18,7 @@ import (
 // (e.g. 🛢, 🗂, ⚙). Such glyphs render unpredictably across terminals — some
 // honour VS16 and draw 2 cells, others ignore it and draw 1, breaking column
 // alignment in status tables, multi-select menus, and the info dashboard.
-// ui.SafeIcon already drops these at render time; this validator surfaces the
+// styles.SafeIcon already drops these at render time; this validator surfaces the
 // issue at config time so authors can fix it instead of seeing icons silently
 // disappear.
 //
@@ -136,7 +136,7 @@ func walkInfoItems(items []config.InfoItem, locPrefix, file string) []validate.D
 // has an entry for the icon's base codepoint; falls back to a generic phrase
 // otherwise.
 func iconDiag(icon, file, target string) (validate.Diagnostic, bool) {
-	if !ui.IsAmbiguousWidthIcon(icon) {
+	if !styles.IsAmbiguousWidthIcon(icon) {
 		return validate.Diagnostic{}, false
 	}
 	hint := buildIconHint(icon)
@@ -151,7 +151,7 @@ func iconDiag(icon, file, target string) (validate.Diagnostic, bool) {
 }
 
 func buildIconHint(icon string) string {
-	suggestions := ui.SuggestSafeIcons(icon, 3)
+	suggestions := styles.SuggestSafeIcons(icon, 3)
 	if len(suggestions) == 0 {
 		return "pick an icon whose base codepoint has Emoji_Presentation = Yes (renders as 2 cells in every terminal)"
 	}

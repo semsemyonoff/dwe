@@ -14,6 +14,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/validate"
 	valchecks "devbox-cli/internal/core/validate/checks"
@@ -140,9 +141,9 @@ func Run(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommand
 	if len(filtered) > 0 {
 		header := preflightHeader(stage, blocking)
 		if blocking {
-			header = ui.StyleFailed(header)
+			header = styles.StyleFailed(header)
 		} else {
-			header = ui.StyleWarning(header)
+			header = styles.StyleWarning(header)
 		}
 		_, _ = fmt.Fprintln(errOut, header)
 		_, _ = fmt.Fprintln(errOut, ui.RenderDiagnosticsTable(filtered))

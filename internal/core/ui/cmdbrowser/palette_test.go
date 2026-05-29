@@ -7,16 +7,16 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 func TestPaletteConstructors_PickUpAppliedColors(t *testing.T) {
 	// Snapshot current palette to avoid bleeding into other tests.
 	t.Cleanup(func() {
-		ui.ApplyStyles(&config.StylesConfig{})
+		styles.ApplyStyles(&config.StylesConfig{})
 	})
 
-	ui.ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{
+	styles.ApplyStyles(&config.StylesConfig{Colors: config.StylesColors{
 		Accent:  "#AABBCC",
 		Success: "#11AA22",
 		Muted:   "#445566",

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
@@ -26,11 +27,11 @@ func RenderPendingBanner(p *journal.PendingApply) string {
 		case journal.PendingDeploy:
 			services := op.ServiceNames()
 			banner := fmt.Sprintf("⚠ Pending: deploy required for: %s", strings.Join(services, ", "))
-			fmt.Fprintln(&sb, StyleWarning(banner))
-			fmt.Fprintln(&sb, "  Run: "+StyleKey("devbox deploy run"))
+			fmt.Fprintln(&sb, styles.StyleWarning(banner))
+			fmt.Fprintln(&sb, "  Run: "+styles.StyleKey("devbox deploy run"))
 		case journal.PendingRestart:
-			fmt.Fprintln(&sb, StyleWarning("⚠ Pending: restart required"))
-			fmt.Fprintln(&sb, "  Run: "+StyleKey("devbox restart"))
+			fmt.Fprintln(&sb, styles.StyleWarning("⚠ Pending: restart required"))
+			fmt.Fprintln(&sb, "  Run: "+styles.StyleKey("devbox restart"))
 		}
 	}
 	return sb.String()

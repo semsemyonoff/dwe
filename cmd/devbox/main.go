@@ -17,7 +17,7 @@ import (
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/shared/prompt"
 	"devbox-cli/internal/shared/version"
 )
@@ -130,13 +130,13 @@ func loadHelpColorScheme(configPath string, explicit bool) fang.ColorSchemeFunc 
 		return nil
 	}
 	// Side-effect: ensure the 7-token palette is resolved before we read
-	// ui.ColorAccent() / ui.ColorMuted() below. ApplyStyles is the canonical
+	// styles.ColorAccent() / styles.ColorMuted() below. ApplyStyles is the canonical
 	// resolution point and is otherwise called from the cobra root PreRunE,
 	// which has not run yet at this point in startup.
-	ui.ApplyStyles(stylesCfg)
+	styles.ApplyStyles(stylesCfg)
 
-	accent := ui.ColorAccent()
-	muted := ui.ColorMuted()
+	accent := styles.ColorAccent()
+	muted := styles.ColorMuted()
 
 	return func(ld lipglossv2.LightDarkFunc) fang.ColorScheme {
 		cs := fang.DefaultColorScheme(ld)

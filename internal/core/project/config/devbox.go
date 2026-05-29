@@ -826,7 +826,7 @@ func (s ServiceConfig) GitRenderEnabled() bool {
 //
 // The tool default is intentionally 🔧 (wrench) rather than ⚙ (gear): gear's
 // base codepoint (U+2699) has Emoji_Presentation = No, so terminals disagree
-// on its width even with VS16 — see ui.IsAmbiguousWidthIcon. Wrench renders
+// on its width even with VS16 — see styles.IsAmbiguousWidthIcon. Wrench renders
 // reliably as 2 cells everywhere.
 func (s ServiceConfig) DisplayIcon() string {
 	if s.Icon != "" {

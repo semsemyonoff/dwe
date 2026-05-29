@@ -11,6 +11,7 @@ import (
 	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/render"
@@ -104,7 +105,7 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 
 	if len(lockedNames) > 0 {
 		w := render.NewWriter(cmd.OutOrStdout())
-		_, _ = fmt.Fprintln(w.Writer(), ui.StyleSubheader("Always on: ")+ui.StyleMuted(strings.Join(lockedNames, ", ")))
+		_, _ = fmt.Fprintln(w.Writer(), styles.StyleSubheader("Always on: ")+styles.StyleMuted(strings.Join(lockedNames, ", ")))
 	}
 
 	result, err := runMultiSelect("Toggle services:", items)
@@ -223,23 +224,23 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 }
 
 func formatServiceToggleLabel(row services.Row) string {
-	return ui.IconPrefix(row.Icon) + ui.StyleServiceName(row.Type, row.Name, rowActive(row))
+	return styles.IconPrefix(row.Icon) + styles.StyleServiceName(row.Type, row.Name, rowActive(row))
 }
 
 func formatServiceToggleOptionLabel(row services.Row) string {
-	return ui.IconPrefix(row.Icon) + ui.StyleServiceOptionName(row.Type, row.Name)
+	return styles.IconPrefix(row.Icon) + styles.StyleServiceOptionName(row.Type, row.Name)
 }
 
 func formatServiceToggleDescription(row services.Row) string {
 	active := rowActive(row)
-	typeBadge := ui.StyleServiceType(row.Type, "["+row.Type+"]", active)
-	container := ui.StyleServiceContainer(displayContainer(row.Container), active)
+	typeBadge := styles.StyleServiceType(row.Type, "["+row.Type+"]", active)
+	container := styles.StyleServiceContainer(displayContainer(row.Container), active)
 	return typeBadge + " " + container
 }
 
 func formatServiceToggleOptionDescription(row services.Row) string {
-	typeBadge := ui.StyleServiceOptionType(row.Type, "["+row.Type+"]")
-	container := ui.StyleServiceOptionContainer(displayContainer(row.Container))
+	typeBadge := styles.StyleServiceOptionType(row.Type, "["+row.Type+"]")
+	container := styles.StyleServiceOptionContainer(displayContainer(row.Container))
 	return typeBadge + " " + container
 }
 

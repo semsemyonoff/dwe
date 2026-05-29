@@ -240,16 +240,16 @@ Several callers use symbols from multiple groups → import multiple subpkgs. Th
 - Move + modify: `styles_test.go`, `icon_test.go` → `styles/`
 - Modify: external callers of styles symbols (per Symbol Mapping)
 
-- [ ] create `styles/` directory; move 3 files; change package to `styles`; add `import "charm.land/huh/v2"` (styles.go uses huh.ThemeBase/ThemeFunc to build HuhTheme — third-party import, not a layering violation)
-- [ ] export the cross-pkg-needed symbols: `defSep` → `DefSep`, `huhTheme` → `HuhTheme`, `applyFormGlyphs` → `ApplyFormGlyphs`, `buildPaletteApplier` → `BuildPaletteApplier`
-- [ ] **add 7 accessor functions** for the lowercase style vars: `AccentStyle() lipgloss.Style { return styleAccent }`, `MutedStyle()`, `SuccessStyle()`, `WarningStyle()`, `DangerStyle()`, `BorderStyle()`, `TextStyle()`. Keep the underlying vars unexported (preserves the `ApplyStyles` mutation invariant). Render-pkg files will call `styles.AccentStyle().Render(text)` etc.
-- [ ] keep intra-pkg lowercase symbols unchanged (`stripTrailingVS16` etc.)
-- [ ] move test files; update package decl + symbol references
-- [ ] **update sibling subpkg `statustui/`** to import `core/ui/styles` and replace `ui.ColorAccent`, `ui.ColorMuted`, `ui.StyleWarning` → `styles.*` (atomic with this task — statustui will not compile if its `ui.X` references break)
-- [ ] update external callers of `ui.ApplyStyles` / `ui.RenderEnabled` / `ui.SafeIcon` / `ui.IsAmbiguousWidthIcon` etc. → `styles.*`
-- [ ] root `internal/core/ui/` no longer has styles/icon/icon_replacements — but still has 17 other files (huh-prefixed package comment stays in some file at root until Task 4)
-- [ ] run `make test` — must pass before Task 3
-- [ ] run `make lint` — must pass before Task 3
+- [x] create `styles/` directory; move 3 files; change package to `styles`; add `import "charm.land/huh/v2"` (styles.go uses huh.ThemeBase/ThemeFunc to build HuhTheme — third-party import, not a layering violation)
+- [x] export the cross-pkg-needed symbols: `defSep` → `DefSep`, `huhTheme` → `HuhTheme`, `applyFormGlyphs` → `ApplyFormGlyphs`, `buildPaletteApplier` → `BuildPaletteApplier`
+- [x] **add 7 accessor functions** for the lowercase style vars: `AccentStyle() lipgloss.Style { return styleAccent }`, `MutedStyle()`, `SuccessStyle()`, `WarningStyle()`, `DangerStyle()`, `BorderStyle()`, `TextStyle()`. Keep the underlying vars unexported (preserves the `ApplyStyles` mutation invariant). Render-pkg files will call `styles.AccentStyle().Render(text)` etc.
+- [x] keep intra-pkg lowercase symbols unchanged (`stripTrailingVS16` etc.) — also exported `ServiceTypeStyle` (consumed by topology.go's category renderer)
+- [x] move test files; update package decl + symbol references; theme-related tests migrated from `huh_test.go` to `styles_test.go`; remaining root tests use a small `test_helpers_test.go` shim around `styles.ApplyStyles(nil)`
+- [x] **update sibling subpkg `statustui/`** to import `core/ui/styles` and replace `ui.ColorAccent`, `ui.ColorMuted`, `ui.StyleWarning` → `styles.*` (atomic with this task — statustui will not compile if its `ui.X` references break). Also updated `cmdbrowser/`, `ask/` styles refs, and `internal/core/ui/`-root callers — all atomic with the symbol removal.
+- [x] update external callers of `ui.ApplyStyles` / `ui.RenderEnabled` / `ui.SafeIcon` / `ui.IsAmbiguousWidthIcon` etc. → `styles.*`
+- [x] root `internal/core/ui/` no longer has styles/icon/icon_replacements — but still has 17 other files (huh-prefixed package comment stays in some file at root until Task 4)
+- [x] run `make test` — must pass before Task 3
+- [x] run `make lint` — must pass before Task 3
 
 ### Task 3: Extract `widgets/` subpackage
 

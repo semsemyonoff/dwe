@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // RenderTable builds and returns a Lipgloss table string using the shared
@@ -18,11 +20,11 @@ import (
 func RenderTable(headers []string, rows [][]string) string {
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleBorder).
+		BorderStyle(styles.BorderStyle()).
 		Headers(headers...).
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleAccent.Bold(true)
+				return styles.AccentStyle().Bold(true)
 			}
 			return lipgloss.NewStyle()
 		})
@@ -136,34 +138,34 @@ func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol 
 		case r.Mandatory:
 			stateStr = "mandatory"
 			cs.base = lipgloss.NewStyle()
-			cs.state = styleAccent.Bold(true)
+			cs.state = styles.AccentStyle().Bold(true)
 		case r.Enabled:
 			stateStr = "enabled"
 			cs.base = lipgloss.NewStyle()
 			cs.state = lipgloss.NewStyle()
 		default:
 			stateStr = "disabled"
-			cs.base = styleMuted
-			cs.state = styleMuted
+			cs.base = styles.MutedStyle()
+			cs.state = styles.MutedStyle()
 		}
 
 		if r.Mandatory || r.Enabled {
 			if r.Running {
 				runStr = "running"
-				cs.run = styleSuccess
+				cs.run = styles.SuccessStyle()
 			} else {
 				runStr = "stopped"
-				cs.run = styleDanger
+				cs.run = styles.DangerStyle()
 			}
 		} else {
 			runStr = "—"
-			cs.run = styleMuted
+			cs.run = styles.MutedStyle()
 		}
 
 		hostsStr := formatHostsCell(r.Hosts)
 		portsStr := formatPortsCell(r.Ports)
 
-		nameCell := IconPrefix(r.Icon) + r.Name
+		nameCell := styles.IconPrefix(r.Icon) + r.Name
 
 		var row []string
 		if withDirCol {
@@ -193,11 +195,11 @@ func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol 
 	}
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleBorder).
+		BorderStyle(styles.BorderStyle()).
 		Headers(headers...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleAccent.Bold(true)
+				return styles.AccentStyle().Bold(true)
 			}
 			if row < 0 || row >= len(cellStyles) {
 				return lipgloss.NewStyle()
@@ -253,11 +255,11 @@ func RenderDaemonTable(rows []DaemonTableRow) string {
 	}
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleBorder).
+		BorderStyle(styles.BorderStyle()).
 		Headers("ID", "PARAMS", "CONTAINER", "UPTIME").
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleAccent.Bold(true)
+				return styles.AccentStyle().Bold(true)
 			}
 			return lipgloss.NewStyle()
 		})
@@ -283,11 +285,11 @@ type DeployStatusRow struct {
 func statusStyleForDelta(delta string) lipgloss.Style {
 	switch delta {
 	case "ok":
-		return styleSuccess
+		return styles.SuccessStyle()
 	case "changed":
-		return styleWarning
+		return styles.WarningStyle()
 	case "missing":
-		return styleWarning
+		return styles.WarningStyle()
 	default:
 		return lipgloss.NewStyle()
 	}
@@ -297,13 +299,13 @@ func statusStyleForDelta(delta string) lipgloss.Style {
 func statusStyleForStatus(status string) lipgloss.Style {
 	switch status {
 	case "deployed":
-		return styleSuccess
+		return styles.SuccessStyle()
 	case "partial", "in_progress":
-		return styleWarning
+		return styles.WarningStyle()
 	case "failed":
-		return styleDanger
+		return styles.DangerStyle()
 	case "not_deployed", "skipped":
-		return styleMuted
+		return styles.MutedStyle()
 	default:
 		return lipgloss.NewStyle()
 	}
@@ -339,11 +341,11 @@ func RenderDeployStatus(rows []DeployStatusRow) string {
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleBorder).
+		BorderStyle(styles.BorderStyle()).
 		Headers("SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleAccent.Bold(true)
+				return styles.AccentStyle().Bold(true)
 			}
 			if row < 0 || row >= len(statusStyles) {
 				return lipgloss.NewStyle()

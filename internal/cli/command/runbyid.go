@@ -15,6 +15,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/resolve"
@@ -223,13 +224,13 @@ func runCommandByID(
 // Format: `▶ <id>  [<type>]  <description>`. Type and description are omitted
 // when empty.
 func printRunHeader(w io.Writer, def *usercommands.CommandDef, translator i18n.Translator, locale string) {
-	parts := []string{"▶ " + ui.StyleKey(def.ID)}
+	parts := []string{"▶ " + styles.StyleKey(def.ID)}
 	if def.Type != "" {
-		parts = append(parts, ui.StyleMuted("["+string(def.Type)+"]"))
+		parts = append(parts, styles.StyleMuted("["+string(def.Type)+"]"))
 	}
 	desc := translator.CommandDescription(locale, def.ID, def.Description)
 	if desc != "" {
-		parts = append(parts, ui.StyleMuted(desc))
+		parts = append(parts, styles.StyleMuted(desc))
 	}
 	_, _ = fmt.Fprintln(w, strings.Join(parts, "  "))
 }

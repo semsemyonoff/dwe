@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 func TestRenderTable_Basic(t *testing.T) {
@@ -80,7 +81,7 @@ func TestRenderTable_SingleRow(t *testing.T) {
 func TestRenderTable_UsesTableStyles(t *testing.T) {
 	resetStyles()
 	// Apply a custom table header color and verify the table still renders without panic.
-	ApplyStyles(&config.StylesConfig{
+	styles.ApplyStyles(&config.StylesConfig{
 		Colors: config.StylesColors{
 			Border: "#CB0000",
 			Accent: "#D10000",

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
@@ -48,9 +49,9 @@ func RenderDeployInfo(state *journal.ProjectState, now time.Time, rows []DeployI
 			header += "never"
 		}
 		if state.Project.Status != "" {
-			header += " " + StyleMuted("("+string(state.Project.Status)+")")
+			header += " " + styles.StyleMuted("("+string(state.Project.Status)+")")
 		}
-		fmt.Fprintln(&sb, StyleKey(header))
+		fmt.Fprintln(&sb, styles.StyleKey(header))
 	}
 
 	if len(rows) == 0 {
@@ -88,15 +89,15 @@ func RenderDeployInfo(state *journal.ProjectState, now time.Time, rows []DeployI
 
 		var icon, when string
 		if r.DeployedAt.IsZero() {
-			icon = StyleOptionMuted("·")
-			when = StyleServiceOptionContainer("not deployed")
+			icon = styles.StyleOptionMuted("·")
+			when = styles.StyleServiceOptionContainer("not deployed")
 		} else {
-			icon = StyleOptionSuccess("✓")
-			when = StyleServiceOptionContainer(relativeTime(r.DeployedAt, now))
+			icon = styles.StyleOptionSuccess("✓")
+			when = styles.StyleServiceOptionContainer(relativeTime(r.DeployedAt, now))
 		}
 
-		coloredName := StyleServiceOptionName(r.Type, name)
-		coloredType := StyleServiceOptionType(r.Type, typeBadge)
+		coloredName := styles.StyleServiceOptionName(r.Type, name)
+		coloredType := styles.StyleServiceOptionType(r.Type, typeBadge)
 
 		fmt.Fprintf(&sb, "  %s %s  %s  %s\n", icon, coloredName, coloredType, when)
 	}

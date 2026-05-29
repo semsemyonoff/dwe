@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 
 	"devbox-cli/internal/core/ui/statusview"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // RenderGitWorkspace renders a styled Lipgloss table of per-service git
@@ -42,20 +43,20 @@ func RenderGitWorkspace(rows []statusview.GitWorkspaceRow) string {
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleBorder).
+		BorderStyle(styles.BorderStyle()).
 		Headers("SERVICE", "DIR", "BRANCH", "SHA", "DIRTY", "AHEAD/BEHIND").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleAccent.Bold(true)
+				return styles.AccentStyle().Bold(true)
 			}
 			if row < 0 || row >= len(dirtyStyles) {
 				return lipgloss.NewStyle()
 			}
 			if col == 4 { // DIRTY column
 				if dirtyStyles[row] {
-					return styleWarning
+					return styles.WarningStyle()
 				}
-				return styleSuccess
+				return styles.SuccessStyle()
 			}
 			return lipgloss.NewStyle()
 		})

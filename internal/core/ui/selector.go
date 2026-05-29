@@ -6,6 +6,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
+
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // ErrCancelled is returned by RunSelector when the user presses q, Esc, or Ctrl-C.
@@ -39,7 +41,7 @@ func defaultRunSelectForm(title string, opts []huh.Option[int]) (int, error) {
 	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
 
 	err := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(Theme()).
+		WithTheme(styles.Theme()).
 		WithKeyMap(keymap).
 		WithShowHelp(true).
 		Run()

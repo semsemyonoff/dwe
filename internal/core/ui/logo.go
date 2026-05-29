@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"devbox-cli/internal/core/ui/styles"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // LogoMark returns the Devbox logomark "{▪}" with the inner square colored
 // using the accent token. The braces stay default text color. Use this in v1
@@ -20,7 +24,7 @@ import "github.com/charmbracelet/lipgloss"
 // Use LogoMarkPlain inside any v2 lipgloss styled container (cmdbrowser title
 // bar, future v2 surfaces) — v1's reset escape would cancel the outer v2 style.
 func LogoMark() string {
-	square := lipgloss.NewStyle().Foreground(lipgloss.Color(ColorAccent())).Render("▪")
+	square := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent())).Render("▪")
 	return "{" + square + "}"
 }
 

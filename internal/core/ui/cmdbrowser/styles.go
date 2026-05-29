@@ -1,8 +1,6 @@
 package cmdbrowser
 
-import (
-	"devbox-cli/internal/core/ui"
-)
+import "devbox-cli/internal/core/ui/styles"
 
 // badgeRender returns a function that renders the type badge for a command
 // type using existing styles.yml keys (via the internal/core/ui style accessors).
@@ -11,20 +9,20 @@ import (
 func badgeRender(typ string) func(string) string {
 	switch typ {
 	case "shell":
-		return ui.StyleInfo
+		return styles.StyleInfo
 	case "script":
-		return ui.StyleKey
+		return styles.StyleKey
 	case "workflow":
-		return ui.StyleWarning
+		return styles.StyleWarning
 	case "service_exec":
-		return ui.RenderEnabled
+		return styles.RenderEnabled
 	case "service_run":
-		return ui.RenderPartial
+		return styles.RenderPartial
 	case "builtin":
-		return ui.StyleMuted
+		return styles.StyleMuted
 	case "devbox":
-		return ui.StyleSectionTitle
+		return styles.StyleSectionTitle
 	default:
-		return ui.StyleMuted
+		return styles.StyleMuted
 	}
 }

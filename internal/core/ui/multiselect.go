@@ -5,6 +5,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
+
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // multiSelectMinHeight is the floor for the multi-select viewport height. The
@@ -48,7 +50,7 @@ func defaultRunMultiSelectForm(title string, opts []huh.Option[string]) ([]strin
 	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
 
 	err := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(Theme()).
+		WithTheme(styles.Theme()).
 		WithKeyMap(keymap).
 		WithShowHelp(true).
 		Run()

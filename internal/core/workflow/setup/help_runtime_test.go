@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	huh "charm.land/huh/v2"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // TestWizardHelpKeepsEscAfterSuggestionsRefresh locks the AcceptSuggestion
@@ -29,7 +29,7 @@ func TestWizardHelpKeepsEscAfterSuggestionsRefresh(t *testing.T) {
 	km.Input.AcceptSuggestion = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
 
 	form := huh.NewForm(huh.NewGroup(field).Title("Port Overrides")).
-		WithTheme(ui.Theme()).
+		WithTheme(styles.Theme()).
 		WithKeyMap(km).
 		WithShowHelp(true)
 

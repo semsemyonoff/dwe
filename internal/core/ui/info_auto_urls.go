@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui/styles"
 )
 
 // renderAutoURLs renders the auto-urls info item block.
@@ -88,7 +89,7 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 		var rows []row
 
 		if mainURL != "" {
-			prefix := fmt.Sprintf("  %s%s", IconPrefix(svc.DisplayIcon()), svc.DisplayTitle(svcName))
+			prefix := fmt.Sprintf("  %s%s", styles.IconPrefix(svc.DisplayIcon()), svc.DisplayTitle(svcName))
 			rows = append(rows, row{prefix, mainURL})
 		}
 
@@ -100,7 +101,7 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 			if pathURL == "" {
 				continue
 			}
-			prefix := fmt.Sprintf("     %s%s", IconPrefix(p.DisplayIcon()), p.Name)
+			prefix := fmt.Sprintf("     %s%s", styles.IconPrefix(p.DisplayIcon()), p.Name)
 			rows = append(rows, row{prefix, pathURL})
 		}
 
@@ -116,7 +117,7 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 			}
 		}
 
-		title := styleAccent.Bold(true).Render(svc.DisplayTitle(svcName))
+		title := styles.AccentStyle().Bold(true).Render(svc.DisplayTitle(svcName))
 		lines := []string{"", title}
 		for _, r := range rows {
 			pad := strings.Repeat(" ", maxW-lipgloss.Width(r.prefix))

@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -52,7 +53,7 @@ func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, e
 //   - hideOnEmpty: section.HideOnEmpty for sections, item.SubgroupHideOnEmpty() for subgroups
 //   - title: section.Title for sections, item.Title for subgroups (NOT item.Text)
 //     Subgroup title should be pre-rendered via tpl.Render before passing in.
-//   - asSection: true → renderSectionTitle(title); false → styleAccent.Bold(true).Render(title)
+//   - asSection: true → renderSectionTitle(title); false → styles.AccentStyle().Bold(true).Render(title)
 //   - sectionID: section ID for error messages (e.g., "tools"); passed through recursion
 //   - itemPath: dot-separated path for nested items (e.g., "" → "items[0]" → "items[0].items[1]")
 //
@@ -153,7 +154,7 @@ func renderBlock(
 		if asSection {
 			head = renderSectionTitle(title)
 		} else {
-			head = styleAccent.Bold(true).Render(title)
+			head = styles.AccentStyle().Bold(true).Render(title)
 		}
 		outSB.WriteString(head)
 		outSB.WriteByte('\n')
@@ -188,11 +189,11 @@ func RenderSectionTitle(text string) string {
 // RenderSubheader renders a bold yellow in-section subheader.
 // Used for grouping sections within a larger block (e.g. Steps, Params).
 func RenderSubheader(text string) string {
-	return styleAccent.Bold(true).Render(text)
+	return styles.AccentStyle().Bold(true).Render(text)
 }
 
 // RenderDefinition renders a styled "key — value" definition line, word-wrapping
-// the value to TermWidth(). For callers that render into a fixed-width context
+// the value to styles.TermWidth(). For callers that render into a fixed-width context
 // (e.g. an inspect viewport narrower than the terminal), use
 // [RenderDefinitionAt] with the explicit width instead — otherwise values are
 // wrapped to the terminal and silently truncated when the viewport renders.
@@ -201,7 +202,7 @@ func RenderDefinition(name, value string, indent int, icon string) string {
 }
 
 // RenderDefinitionAt is [RenderDefinition] with an explicit wrap width.
-// maxWidth == 0 falls back to TermWidth(); pass the viewport's content width
+// maxWidth == 0 falls back to styles.TermWidth(); pass the viewport's content width
 // when rendering for a sub-region.
 func RenderDefinitionAt(name, value string, indent int, icon string, maxWidth int) string {
 	return renderDefinition(name, value, indent, icon, maxWidth)
@@ -209,21 +210,21 @@ func RenderDefinitionAt(name, value string, indent int, icon string, maxWidth in
 
 // renderSectionTitle is the internal implementation of RenderSectionTitle.
 func renderSectionTitle(text string) string {
-	width := min(TermWidth(), 100)
+	width := min(styles.TermWidth(), 100)
 
 	if text == "" {
-		return styleMuted.Render(strings.Repeat("─", width))
+		return styles.MutedStyle().Render(strings.Repeat("─", width))
 	}
 
 	// Build: ── Title ──────...
-	label := styleAccent.Bold(true).Render(" " + text + " ")
+	label := styles.AccentStyle().Bold(true).Render(" " + text + " ")
 	// Strip ANSI for width calculation.
 	labelVisible := " " + text + " "
 	labelWidth := utf8.RuneCountInString(labelVisible)
 
 	remaining := max(width-4-labelWidth, 0)
-	leftDash := styleMuted.Render("──")
-	rightDash := styleMuted.Render(strings.Repeat("─", remaining+2))
+	leftDash := styles.MutedStyle().Render("──")
+	rightDash := styles.MutedStyle().Render(strings.Repeat("─", remaining+2))
 
 	return leftDash + label + rightDash
 }
@@ -248,7 +249,7 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 		if err != nil {
 			return "", err
 		}
-		return styleWarning.Render(text), nil
+		return styles.WarningStyle().Render(text), nil
 
 	case "info":
 		text, err := tpl.Render(item.Text, cfg)
@@ -256,7 +257,7 @@ func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, err
 			return "", err
 		}
 		prefix := strings.Repeat(" ", item.Indent.Value())
-		return styleAccent.Render(prefix + text), nil
+		return styles.AccentStyle().Render(prefix + text), nil
 
 	case "separator":
 		return "", nil
@@ -295,11 +296,11 @@ func renderDefinition(name, value string, indent int, icon string, maxWidth int)
 		iconPrefix = icon + " "
 	}
 
-	sep := defSep
+	sep := styles.DefSep
 	// Visible overhead: indent + icon + name + " " + sep + " "
 	overhead := indent + iconWidth + utf8.RuneCountInString(name) + 1 + utf8.RuneCountInString(sep) + 1
 	if maxWidth <= 0 {
-		maxWidth = TermWidth()
+		maxWidth = styles.TermWidth()
 	}
 	maxValue := max(maxWidth-overhead, 20)
 
@@ -311,15 +312,15 @@ func renderDefinition(name, value string, indent int, icon string, maxWidth int)
 	var sb strings.Builder
 	sb.WriteString(prefix)
 	sb.WriteString(iconPrefix)
-	sb.WriteString(styleAccent.Bold(true).Render(name))
+	sb.WriteString(styles.AccentStyle().Bold(true).Render(name))
 	sb.WriteString(" ")
-	sb.WriteString(styleMuted.Render(sep))
+	sb.WriteString(styles.MutedStyle().Render(sep))
 	sb.WriteString(" ")
-	sb.WriteString(styleText.Render(lines[0]))
+	sb.WriteString(styles.TextStyle().Render(lines[0]))
 	for _, l := range lines[1:] {
 		sb.WriteByte('\n')
 		sb.WriteString(contPrefix)
-		sb.WriteString(styleText.Render(l))
+		sb.WriteString(styles.TextStyle().Render(l))
 	}
 
 	return sb.String()

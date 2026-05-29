@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/validate"
 )
 
@@ -62,11 +63,11 @@ func RenderDiagnosticsTable(rows []DiagnosticRow) string {
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styleBorder).
+		BorderStyle(styles.BorderStyle()).
 		Headers("STATUS", "DOMAIN", "TARGET", "FILE", "MESSAGE", "HINT").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styleAccent.Bold(true)
+				return styles.AccentStyle().Bold(true)
 			}
 			if row < 0 || row >= len(cellStyles) {
 				return lipgloss.NewStyle()
@@ -104,13 +105,13 @@ func severityGlyph(s validate.Severity) string {
 func severityStyle(s validate.Severity) lipgloss.Style {
 	switch s {
 	case validate.SeverityOK:
-		return styleSuccess // green
+		return styles.SuccessStyle() // green
 	case validate.SeverityInfo:
-		return styleMuted // dim gray
+		return styles.MutedStyle() // dim gray
 	case validate.SeverityWarning:
-		return styleWarning // yellow
+		return styles.WarningStyle() // yellow
 	case validate.SeverityError:
-		return styleDanger // red
+		return styles.DangerStyle() // red
 	default:
 		return lipgloss.NewStyle()
 	}
@@ -221,16 +222,16 @@ func splitDisplayWidth(s string, width int) (string, string) {
 func FormatSummary(summary validate.Summary) string {
 	parts := []string{}
 	if summary.Errors > 0 {
-		parts = append(parts, StyleFailed(fmt.Sprintf("%d %s", summary.Errors, pluralize("error", summary.Errors))))
+		parts = append(parts, styles.StyleFailed(fmt.Sprintf("%d %s", summary.Errors, pluralize("error", summary.Errors))))
 	}
 	if summary.Warnings > 0 {
-		parts = append(parts, StyleWarning(fmt.Sprintf("%d %s", summary.Warnings, pluralize("warning", summary.Warnings))))
+		parts = append(parts, styles.StyleWarning(fmt.Sprintf("%d %s", summary.Warnings, pluralize("warning", summary.Warnings))))
 	}
 	if summary.Infos > 0 {
-		parts = append(parts, StyleInfo(fmt.Sprintf("%d %s", summary.Infos, pluralize("info", summary.Infos))))
+		parts = append(parts, styles.StyleInfo(fmt.Sprintf("%d %s", summary.Infos, pluralize("info", summary.Infos))))
 	}
 	if summary.OKs > 0 {
-		parts = append(parts, RenderEnabled(fmt.Sprintf("%d %s", summary.OKs, pluralize("check", summary.OKs))))
+		parts = append(parts, styles.RenderEnabled(fmt.Sprintf("%d %s", summary.OKs, pluralize("check", summary.OKs))))
 	}
 
 	if len(parts) == 0 {

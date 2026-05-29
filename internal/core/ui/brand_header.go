@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 
+	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/shared/render"
 )
 
@@ -28,19 +29,19 @@ type BrandHeader struct {
 func RenderBrandHeader(h BrandHeader) string {
 	var sb strings.Builder
 
-	parts := []string{LogoMark() + " " + styleAccent.Bold(true).Render("Devbox")}
+	parts := []string{LogoMark() + " " + styles.AccentStyle().Bold(true).Render("Devbox")}
 	if h.Project != "" {
-		parts = append(parts, styleText.Render(h.Project))
+		parts = append(parts, styles.TextStyle().Render(h.Project))
 	}
 	if h.Version != "" {
-		parts = append(parts, styleMuted.Render(h.Version))
+		parts = append(parts, styles.MutedStyle().Render(h.Version))
 	}
-	sep := " " + styleMuted.Render("·") + " "
+	sep := " " + styles.MutedStyle().Render("·") + " "
 	sb.WriteString(strings.Join(parts, sep))
 	sb.WriteByte('\n')
 
 	if h.Tagline != "" {
-		sb.WriteString(styleMuted.Render(h.Tagline))
+		sb.WriteString(styles.MutedStyle().Render(h.Tagline))
 		sb.WriteByte('\n')
 	}
 
@@ -49,7 +50,7 @@ func RenderBrandHeader(h BrandHeader) string {
 		w := render.NewWriter(&buf)
 		if err := w.ASCII(h.Lines, h.Font); err == nil && buf.Len() > 0 {
 			sb.WriteByte('\n')
-			sb.WriteString(styleAccent.Render(strings.TrimRight(buf.String(), "\n")))
+			sb.WriteString(styles.AccentStyle().Render(strings.TrimRight(buf.String(), "\n")))
 			sb.WriteByte('\n')
 		}
 	}

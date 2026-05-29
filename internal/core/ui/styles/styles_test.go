@@ -1,9 +1,12 @@
-package ui
+package styles
 
 import (
+	"image/color"
 	"strings"
 	"testing"
 
+	huh "charm.land/huh/v2"
+	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
@@ -30,9 +33,9 @@ func snapshotPalette(t *testing.T) {
 	t.Helper()
 	savedAccent, savedSuccess, savedWarning := resolvedAccent, resolvedSuccess, resolvedWarning
 	savedDanger, savedMuted, savedBorder, savedText := resolvedDanger, resolvedMuted, resolvedBorder, resolvedText
-	savedSep := defSep
+	savedSep := DefSep
 	savedDark := lipgloss.HasDarkBackground()
-	savedTheme := huhTheme
+	savedTheme := HuhTheme
 	t.Cleanup(func() {
 		lipgloss.SetHasDarkBackground(savedDark)
 		rebuildSemanticStyles(config.StylesColors{
@@ -44,8 +47,8 @@ func snapshotPalette(t *testing.T) {
 			Border:  savedBorder,
 			Text:    savedText,
 		})
-		defSep = savedSep
-		huhTheme = savedTheme
+		DefSep = savedSep
+		HuhTheme = savedTheme
 	})
 }
 
@@ -54,14 +57,14 @@ func snapshotPalette(t *testing.T) {
 // pre-date snapshotPalette.
 func resetStyles() {
 	rebuildSemanticStyles(config.StylesColors{})
-	defSep = "—"
+	DefSep = "—"
 }
 
 func TestApplyStyles_Nil(t *testing.T) {
 	snapshotPalette(t)
 	ApplyStyles(nil)
-	if defSep != "—" {
-		t.Errorf("nil cfg must not change defSep: got %q", defSep)
+	if DefSep != "—" {
+		t.Errorf("nil cfg must not change DefSep: got %q", DefSep)
 	}
 }
 
@@ -173,8 +176,8 @@ func TestApplyStyles_PartialOverride_DefaultsFillRest(t *testing.T) {
 func TestApplyStyles_Separator(t *testing.T) {
 	snapshotPalette(t)
 	ApplyStyles(&config.StylesConfig{Separator: ":"})
-	if defSep != ":" {
-		t.Errorf("expected defSep to be ':', got %q", defSep)
+	if DefSep != ":" {
+		t.Errorf("expected DefSep to be ':', got %q", DefSep)
 	}
 }
 
@@ -296,5 +299,180 @@ func TestTermWidth_ReturnsPositive(t *testing.T) {
 	w := TermWidth()
 	if w <= 0 {
 		t.Errorf("expected positive terminal width, got %d", w)
+	}
+}
+
+// --- huh theme tests (migrated from internal/core/ui/huh_test.go) ---
+
+func TestThemeNonNilByDefault(t *testing.T) {
+	th := Theme()
+	if th == nil {
+		t.Fatal("Theme() returned nil before ApplyStyles")
+	}
+}
+
+func TestThemeNonNilAfterApplyStylesNil(t *testing.T) {
+	original := HuhTheme
+	t.Cleanup(func() { HuhTheme = original })
+
+	ApplyStyles(nil)
+	th := Theme()
+	if th == nil {
+		t.Fatal("Theme() returned nil after ApplyStyles(nil)")
+	}
+}
+
+func TestThemeReturnsNonNilStyles(t *testing.T) {
+	original := HuhTheme
+	t.Cleanup(func() { HuhTheme = original })
+
+	ApplyStyles(nil)
+	th := Theme()
+
+	light := th.Theme(false)
+	if light == nil {
+		t.Fatal("Theme().Theme(false) returned nil")
+	}
+
+	dark := th.Theme(true)
+	if dark == nil {
+		t.Fatal("Theme().Theme(true) returned nil")
+	}
+}
+
+func TestDefaultThemeMultiSelectStateStyles(t *testing.T) {
+	original := HuhTheme
+	t.Cleanup(func() { HuhTheme = original })
+	resetStyles()
+	HuhTheme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
+		s := huh.ThemeBase(isDark)
+		ApplyFormGlyphs(s)
+		applyMultiSelectStateStyles(s, resolvedSuccess, resolvedMuted)
+		return s
+	})
+
+	styles := Theme().Theme(false)
+	if !styles.Focused.SelectedOption.GetBold() {
+		t.Error("selected multi-select options should be bold")
+	}
+	if styles.Focused.SelectedOption.GetFaint() {
+		t.Error("selected multi-select options should not be faint")
+	}
+	if styles.Focused.UnselectedOption.GetBold() {
+		t.Error("unselected multi-select options should not be bold")
+	}
+	if !styles.Focused.UnselectedOption.GetFaint() {
+		t.Error("unselected multi-select options should be faint")
+	}
+}
+
+func TestApplyStylesPaletteReflected(t *testing.T) {
+	original := HuhTheme
+	t.Cleanup(func() { HuhTheme = original })
+
+	cfg := &config.StylesConfig{
+		Colors: config.StylesColors{
+			Accent: "#123456",
+		},
+	}
+	ApplyStyles(cfg)
+
+	styles := Theme().Theme(false)
+	got := styles.Focused.Title.GetForeground()
+	want := lipglossv2.Color("#123456")
+	if got != want {
+		t.Errorf("Focused.Title foreground = %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func TestApplyStylesGroupTitlePaletteReflected(t *testing.T) {
+	original := HuhTheme
+	t.Cleanup(func() { HuhTheme = original })
+
+	cfg := &config.StylesConfig{
+		Colors: config.StylesColors{
+			Accent: "#123456",
+		},
+	}
+	ApplyStyles(cfg)
+
+	styles := Theme().Theme(false)
+	got := styles.Group.Title.GetForeground()
+	want := lipglossv2.Color("#123456")
+	if got != want {
+		t.Errorf("Group.Title foreground = %v (%T), want %v (%T)", got, got, want, want)
+	}
+}
+
+func TestBuildPaletteApplierNilNoOp(t *testing.T) {
+	apply := BuildPaletteApplier()
+	s := huh.ThemeBase(false)
+	// Should not panic.
+	apply(s)
+}
+
+func TestBuildPaletteApplierEmptyColorsNoOp(t *testing.T) {
+	apply := BuildPaletteApplier()
+	s := huh.ThemeBase(false)
+	// Calling apply with an empty config should not change any foreground colors
+	// on fields whose color comes from ThemeBase (they should stay as zero/default).
+	apply(s)
+	// The test verifies the applier runs without panicking.
+}
+
+func TestBuildPaletteApplierAllFields(t *testing.T) {
+	c := &config.StylesConfig{Colors: config.StylesColors{
+		Accent:  "#012345",
+		Success: "#011223",
+		Danger:  "#993311",
+		Muted:   "#445566",
+	}}
+	ApplyStyles(c)
+
+	apply := BuildPaletteApplier()
+	s := huh.ThemeBase(false)
+	apply(s)
+
+	accent := lipglossv2.Color("#012345")
+	success := lipglossv2.Color("#011223")
+	danger := lipglossv2.Color("#993311")
+	muted := lipglossv2.Color("#445566")
+
+	tests := []struct {
+		name string
+		got  color.Color
+		want color.Color
+	}{
+		{"Focused.Title", s.Focused.Title.GetForeground(), accent},
+		{"Group.Title", s.Group.Title.GetForeground(), accent},
+		{"Focused.Description", s.Focused.Description.GetForeground(), muted},
+		{"Group.Description", s.Group.Description.GetForeground(), muted},
+		{"Focused.SelectSelector", s.Focused.SelectSelector.GetForeground(), accent},
+		{"Focused.MultiSelectSelector", s.Focused.MultiSelectSelector.GetForeground(), accent},
+		{"Focused.Option", s.Focused.Option.GetForeground(), accent},
+		{"Blurred.Title", s.Blurred.Title.GetForeground(), muted},
+		{"Blurred.Description", s.Blurred.Description.GetForeground(), muted},
+		{"Focused.UnselectedOption", s.Focused.UnselectedOption.GetForeground(), muted},
+		{"Focused.SelectedOption", s.Focused.SelectedOption.GetForeground(), success},
+		{"Focused.SelectedPrefix", s.Focused.SelectedPrefix.GetForeground(), success},
+		{"Focused.ErrorIndicator", s.Focused.ErrorIndicator.GetForeground(), danger},
+		{"Focused.ErrorMessage", s.Focused.ErrorMessage.GetForeground(), danger},
+		{"Focused.NextIndicator", s.Focused.NextIndicator.GetForeground(), accent},
+		{"Focused.PrevIndicator", s.Focused.PrevIndicator.GetForeground(), accent},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("got %v (%T), want %v (%T)", tt.got, tt.got, tt.want, tt.want)
+			}
+		})
+	}
+
+	if !s.Focused.SelectedOption.GetBold() || s.Focused.SelectedOption.GetFaint() {
+		t.Error("focused selected option should be bold and not faint")
+	}
+	if s.Focused.UnselectedOption.GetBold() || !s.Focused.UnselectedOption.GetFaint() {
+		t.Error("focused unselected option should be faint and not bold")
 	}
 }
