@@ -125,17 +125,27 @@ func TestDocsLlmsTxtCommand_OutputFile_WriteError(t *testing.T) {
 }
 
 func TestDocsLlmsTxtCommand_IncludeInternals_Flag(t *testing.T) {
-	flags := newTestLlmsTxtFlags()
-	cmd := newDocsLlmsTxtCmd(flags)
-	cmd.SetArgs([]string{"--include-internals"})
+	runOnce := func(args []string) string {
+		flags := newTestLlmsTxtFlags()
+		cmd := newDocsLlmsTxtCmd(flags)
+		cmd.SetArgs(args)
+		out := &bytes.Buffer{}
+		cmd.SetOut(out)
+		cmd.SetErr(&bytes.Buffer{})
+		require.NoError(t, cmd.Execute())
+		return out.String()
+	}
 
-	out := &bytes.Buffer{}
-	cmd.SetOut(out)
-	cmd.SetErr(&bytes.Buffer{})
+	without := runOnce([]string{})
+	with := runOnce([]string{"--include-internals"})
 
-	err := cmd.Execute()
-	require.NoError(t, err)
-	require.NotEmpty(t, out.String())
+	require.NotEmpty(t, without)
+	require.NotEmpty(t, with)
+	// The flag must actually change the output. Embedded internals docs add
+	// internals/* topics under the Documentation section when the flag is on.
+	require.NotEqual(t, without, with, "--include-internals must change output (embedded internals topics)")
+	require.Contains(t, with, "internals/", "expected internals/ topic when --include-internals is set")
+	require.NotContains(t, without, "internals/", "internals/ topics must be absent without --include-internals")
 }
 
 func TestDocsLlmsTxtCommand_NoProjectFlag_InsideProject(t *testing.T) {

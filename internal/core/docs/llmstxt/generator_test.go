@@ -187,7 +187,6 @@ func TestGenerate_ProjectAware_Golden(t *testing.T) {
 			{ID: "test", Description: "run tests"},
 		},
 		InfoSnapshot: &llmstxt.InfoSummary{
-			Title: "my-project",
 			URLs:  []string{"http://api.local"},
 			Hosts: []string{"api.local"},
 		},

@@ -4,7 +4,6 @@
 
 ## Project
 
-- Project: my-project
 - Service: api (type: app) — API Server
 - Service: db (type: infra)
 - URL: http://api.local

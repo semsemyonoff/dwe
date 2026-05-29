@@ -12,7 +12,6 @@ import (
 type CommandSummary struct {
 	ID          string
 	Description string
-	Group       string
 }
 
 // ServiceSummary is a single service entry for the Project section.
@@ -24,7 +23,6 @@ type ServiceSummary struct {
 
 // InfoSummary holds extracted project-info data for the Project section.
 type InfoSummary struct {
-	Title string
 	URLs  []string
 	Hosts []string
 }
@@ -33,7 +31,6 @@ type InfoSummary struct {
 type Opts struct {
 	ProjectRoot   string
 	ProjectName   string
-	Locale        string
 	IncludeIntern bool
 	DocTopics     []coredocs.TopicEntry
 	Commands      []CommandSummary
@@ -140,10 +137,6 @@ func writeSectionLines(b *strings.Builder, heading string, lines []string) {
 
 func writeProjectSection(b *strings.Builder, opts Opts) {
 	var lines []string
-
-	if opts.ProjectName != "" {
-		lines = append(lines, "Project: "+opts.ProjectName)
-	}
 
 	for _, svc := range opts.Services {
 		entry := "Service: " + svc.Name

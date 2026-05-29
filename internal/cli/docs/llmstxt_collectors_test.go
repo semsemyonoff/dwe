@@ -9,7 +9,7 @@ import (
 )
 
 func TestCollectServiceSummaries_NilCfg(t *testing.T) {
-	result := collectServiceSummaries(nil, i18n.NopTranslator{}, "en")
+	result := collectServiceSummaries(nil)
 	if len(result) != 0 {
 		t.Errorf("expected empty result for nil cfg, got %d items", len(result))
 	}
@@ -19,7 +19,7 @@ func TestCollectServiceSummaries_Empty(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{},
 	}
-	result := collectServiceSummaries(cfg, i18n.NopTranslator{}, "en")
+	result := collectServiceSummaries(cfg)
 	if len(result) != 0 {
 		t.Errorf("expected empty result for no services, got %d items", len(result))
 	}
@@ -39,7 +39,7 @@ func TestCollectServiceSummaries_DeployOrder(t *testing.T) {
 			},
 		},
 	}
-	result := collectServiceSummaries(cfg, i18n.NopTranslator{}, "en")
+	result := collectServiceSummaries(cfg)
 	// DeployOrder with ["app", "tool", "infra"] puts apps before infra.
 	if len(result) != 2 {
 		t.Fatalf("expected 2 services, got %d", len(result))
@@ -68,7 +68,7 @@ func TestCollectServiceSummaries_DisabledExcluded(t *testing.T) {
 			"disabled": {Type: config.ServiceTypeApp, Enabled: false},
 		},
 	}
-	result := collectServiceSummaries(cfg, i18n.NopTranslator{}, "en")
+	result := collectServiceSummaries(cfg)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 service (disabled excluded), got %d", len(result))
 	}
@@ -127,6 +127,21 @@ func TestCollectCommandSummaries_PrivateExcluded(t *testing.T) {
 	}
 }
 
+// sentinelTranslator is an i18n.Translator that returns a sentinel string
+// instead of the fallback for CommandDescription, so tests can detect whether
+// the translator was actually called.
+type sentinelTranslator struct {
+	i18n.NopTranslator
+	called *bool
+}
+
+func (s sentinelTranslator) CommandDescription(locale, commandID, _ string) string {
+	if s.called != nil {
+		*s.called = true
+	}
+	return "translated:" + locale + ":" + commandID
+}
+
 func TestCollectCommandSummaries_TranslatorUsed(t *testing.T) {
 	reg := usercommands.NewEmptyRegistry()
 	reg.AddCommandForTest(&usercommands.CommandDef{
@@ -135,18 +150,22 @@ func TestCollectCommandSummaries_TranslatorUsed(t *testing.T) {
 		Type:        usercommands.CommandTypeShell,
 	})
 
-	// NopTranslator returns the fallback — so description should pass through unchanged.
-	result := collectCommandSummaries(reg, i18n.NopTranslator{}, "en")
+	called := false
+	tr := sentinelTranslator{called: &called}
+	result := collectCommandSummaries(reg, tr, "ru")
 	if len(result) != 1 {
 		t.Fatalf("expected 1 command, got %d", len(result))
 	}
-	if result[0].Description != "deploy the project" {
-		t.Errorf("expected 'deploy the project', got %q", result[0].Description)
+	if !called {
+		t.Errorf("expected translator.CommandDescription to be called")
+	}
+	if result[0].Description != "translated:ru:deploy" {
+		t.Errorf("expected sentinel description 'translated:ru:deploy', got %q", result[0].Description)
 	}
 }
 
 func TestCollectInfoSummary_NilCfg(t *testing.T) {
-	result := collectInfoSummary(nil, "")
+	result := collectInfoSummary(nil)
 	if result != nil {
 		t.Errorf("expected nil for nil cfg, got %+v", result)
 	}
@@ -156,30 +175,10 @@ func TestCollectInfoSummary_EmptyProject(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Services: map[string]config.ServiceConfig{},
 	}
-	result := collectInfoSummary(cfg, "")
-	// No name, no URLs, no hosts -> nil.
+	result := collectInfoSummary(cfg)
+	// No URLs, no hosts -> nil.
 	if result != nil {
-		t.Errorf("expected nil for empty project with no name, got %+v", result)
-	}
-}
-
-func TestCollectInfoSummary_WithProjectName(t *testing.T) {
-	cfg := &config.DevboxConfig{
-		Project:  config.ProjectConfig{Name: "my-project"},
-		Services: map[string]config.ServiceConfig{},
-	}
-	result := collectInfoSummary(cfg, "")
-	if result == nil {
-		t.Fatal("expected non-nil result when project has a name")
-	}
-	if result.Title != "my-project" {
-		t.Errorf("expected title 'my-project', got %q", result.Title)
-	}
-	if len(result.URLs) != 0 {
-		t.Errorf("expected no URLs, got %v", result.URLs)
-	}
-	if len(result.Hosts) != 0 {
-		t.Errorf("expected no Hosts, got %v", result.Hosts)
+		t.Errorf("expected nil for empty project with no services, got %+v", result)
 	}
 }
 
@@ -190,23 +189,43 @@ func TestCollectInfoSummary_ServicesProvideURLsAndHosts(t *testing.T) {
 			"api": {
 				Type:    config.ServiceTypeApp,
 				Enabled: true,
-				Info:    config.ServiceInfoBlock{PrimaryHost: "api.local"},
-				Hosts:   map[string]string{"main": "api.local"},
+				Info:    config.ServiceInfoBlock{PrimaryHost: "web"},
+				Hosts:   map[string]string{"web": "api.local"},
 			},
 		},
 	}
-	result := collectInfoSummary(cfg, "")
+	result := collectInfoSummary(cfg)
 	if result == nil {
 		t.Fatal("expected non-nil info summary")
-	}
-	if result.Title != "my-project" {
-		t.Errorf("expected title 'my-project', got %q", result.Title)
 	}
 	if len(result.URLs) != 1 || result.URLs[0] != "http://api.local" {
 		t.Errorf("expected ['http://api.local'], got %v", result.URLs)
 	}
 	if len(result.Hosts) != 1 || result.Hosts[0] != "api.local" {
 		t.Errorf("expected ['api.local'], got %v", result.Hosts)
+	}
+}
+
+func TestCollectInfoSummary_PrimaryHostMissingFromHostsSkipsURL(t *testing.T) {
+	cfg := &config.DevboxConfig{
+		Services: map[string]config.ServiceConfig{
+			"svc": {
+				Type:    config.ServiceTypeApp,
+				Enabled: true,
+				Info:    config.ServiceInfoBlock{PrimaryHost: "missing"},
+				Hosts:   map[string]string{"web": "svc.local"},
+			},
+		},
+	}
+	result := collectInfoSummary(cfg)
+	if result == nil {
+		t.Fatal("expected non-nil result (hosts still contribute)")
+	}
+	if len(result.URLs) != 0 {
+		t.Errorf("expected no URLs when PrimaryHost key is missing from Hosts, got %v", result.URLs)
+	}
+	if len(result.Hosts) != 1 || result.Hosts[0] != "svc.local" {
+		t.Errorf("expected ['svc.local'], got %v", result.Hosts)
 	}
 }
 
@@ -228,7 +247,7 @@ func TestCollectInfoSummary_HostsSortedDeterministically(t *testing.T) {
 	// Run multiple times to catch map iteration non-determinism.
 	var first []string
 	for i := range 10 {
-		result := collectInfoSummary(cfg, "")
+		result := collectInfoSummary(cfg)
 		if result == nil {
 			t.Fatal("expected non-nil summary")
 		}

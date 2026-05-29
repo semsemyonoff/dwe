@@ -79,7 +79,6 @@ func runDocsLlmsTxt(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsLlmsTx
 	// Assemble Opts — project sections only when a project root is available.
 	opts := llmstxt.Opts{
 		ProjectRoot:   projectRoot,
-		Locale:        locale,
 		IncludeIntern: df.includeInternals,
 		DocTopics:     docTopics,
 	}
@@ -87,11 +86,11 @@ func runDocsLlmsTxt(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsLlmsTx
 	if projectRoot != "" {
 		cfg, err := config.LoadConfig(rflags.ConfigPath)
 		if err == nil && cfg != nil {
-			opts.ProjectName = cfg.Project.Name
+			opts.ProjectName = cfg.Project.FullName()
 
 			tr := i18n.TranslatorOrNop(rflags.I18n)
-			opts.Services = collectServiceSummaries(cfg, tr, locale)
-			opts.InfoSnapshot = collectInfoSummary(cfg, projectRoot)
+			opts.Services = collectServiceSummaries(cfg)
+			opts.InfoSnapshot = collectInfoSummary(cfg)
 
 			if rflags.ConfigPath != "" {
 				if reg, regErr := usercommands.LoadRegistryFromConfigPath(rflags.ConfigPath); regErr == nil {

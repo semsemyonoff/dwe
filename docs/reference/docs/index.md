@@ -10,6 +10,7 @@ Devbox includes an integrated documentation browser and reference system. Access
   - [`devbox docs show <topic>` — Render a single topic](#devbox-docs-show-topic--render-a-single-topic)
   - [`devbox docs list` — List all topics](#devbox-docs-list--list-all-topics)
   - [`devbox docs export <dir>` — Export all docs to disk](#devbox-docs-export-dir--export-all-docs-to-disk)
+  - [`devbox docs llms-txt` — Emit an llms.txt project index for AI agents](#devbox-docs-llms-txt--emit-an-llmstxt-project-index-for-ai-agents)
   - [`devbox docs cache clear` — Clear the mermaid cache](#devbox-docs-cache-clear--clear-the-mermaid-cache)
 - [Language behavior](#language-behavior)
   - [Locale resolution](#locale-resolution)
@@ -185,6 +186,34 @@ devbox docs export ./docs-ru/ --lang ru --include-project
 # Overwrite existing directory
 devbox docs export ./docs-latest/ --force
 ```
+
+### `devbox docs llms-txt` — Emit an llms.txt project index for AI agents
+
+Emit a single [llms.txt](https://llmstxt.org/) document — a dense ~2-5KB index that gives an AI agent a complete picture of what this devbox project is and where to find more detail.
+
+**Usage:**
+```bash
+devbox docs llms-txt                          # print to stdout
+devbox docs llms-txt --output llms.txt        # write to file
+devbox docs llms-txt --include-internals      # include internals/* topics
+devbox docs llms-txt --no-project             # force project-agnostic output
+devbox docs llms-txt --lang ru                # localize command descriptions
+```
+
+**Flags:**
+- `--output PATH` — write to PATH instead of stdout. Parent directories are created as needed.
+- `--lang CODE` — language for command descriptions. Defaults to user config / `$LANG` / `en`.
+- `--include-internals` — include the `internals/` architecture docs in the Documentation section.
+- `--no-project` — force the project-agnostic shape even when run inside a devbox project.
+
+**Output shapes:**
+- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), `## Documentation` (topic links as `devbox-docs://path`), and `## Quick start`.
+- *Outside a project* (or with `--no-project`): generic devbox reference — H1 "devbox", blockquote, `## Documentation`, `## Quick start`. No project-specific sections.
+
+**Details:**
+- Read-only. Acquires no project lock and runs no preflight; works without `devbox.yml`.
+- Disabled services and private commands are excluded.
+- The `devbox-docs://<path>` link scheme corresponds to topic paths consumable by `devbox docs show <path>`.
 
 ### `devbox docs cache clear` — Clear the mermaid cache
 
