@@ -2,7 +2,13 @@
 package logs
 
 import (
+	"fmt"
+	"strings"
+
 	"devbox-cli/internal/cli/cmdctx"
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/project/services"
+	"devbox-cli/internal/shared/daemon"
 
 	"github.com/spf13/cobra"
 )
@@ -40,11 +46,35 @@ With --output json, emits NDJSON: one {"ts","stream","msg"} object per line.`,
 	return cmd
 }
 
+// ResolveLogsTarget loads the project config, validates the service name, and
+// returns the resolved Docker container name and loaded config.
+func ResolveLogsTarget(flags *cmdctx.RootFlags, serviceName string) (containerName string, cfg *config.DevboxConfig, err error) {
+	cfg, err = config.LoadConfig(flags.ConfigPath)
+	if err != nil {
+		return "", nil, cmdctx.ErrWrap("project_invalid_config", err)
+	}
+	svc, ok := cfg.Services[serviceName]
+	if !ok {
+		known := services.SortedNames(cfg.Services)
+		return "", cfg, cmdctx.Err("service_unknown", fmt.Sprintf("no service %q in project", serviceName)).
+			WithHint("available: " + strings.Join(known, ", ")).
+			WithDetail("requested", serviceName)
+	}
+	containerName, err = daemon.ResolveContainerName(cfg.Project.FullName(), svc.Container)
+	if err != nil {
+		return "", cfg, cmdctx.ErrWrap("container_name_invalid", err)
+	}
+	return containerName, cfg, nil
+}
+
 func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, opts logsOptions) error {
 	_ = opts
-	_ = args
 	_ = cmd
-	_ = flags
-	// Implemented in subsequent tasks.
+	containerName, _, err := ResolveLogsTarget(flags, args[0])
+	if err != nil {
+		return err
+	}
+	_ = containerName
+	// Subprocess wiring implemented in subsequent tasks.
 	return nil
 }

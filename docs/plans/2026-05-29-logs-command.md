@@ -136,12 +136,12 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
 - Modify: `internal/cli/logs/logs.go`
 - Modify: `internal/cli/logs/logs_test.go`
 
-- [ ] in `runLogs`: load config via `config.LoadConfig(flags.ConfigPath)`
-- [ ] validate service name: `if _, ok := cfg.Services[name]; !ok { return cmdctx.Err("service_unknown", ...).WithHint("available: " + strings.Join(known, ", ")).WithDetail("requested", name) }` (use plain `fmt.Errorf` if CodedError not yet available from Plan 1)
-- [ ] resolve container: `containerName, err := daemon.ResolveContainerName(cfg.Project.FullName(), cfg.Services[name].Container)`; propagate any error
-- [ ] write test: unknown service returns service_unknown error
-- [ ] write test: known service resolves to expected container name (use minimal config fixture)
-- [ ] run `go test ./internal/cli/logs/...` — must pass before Task 3
+- [x] in `runLogs`: load config via `config.LoadConfig(flags.ConfigPath)`
+- [x] validate service name: `if _, ok := cfg.Services[name]; !ok { return cmdctx.Err("service_unknown", ...).WithHint("available: " + strings.Join(known, ", ")).WithDetail("requested", name) }` (use plain `fmt.Errorf` if CodedError not yet available from Plan 1)
+- [x] resolve container: `containerName, err := daemon.ResolveContainerName(cfg.Project.FullName(), cfg.Services[name].Container)`; propagate any error
+- [x] write test: unknown service returns service_unknown error
+- [x] write test: known service resolves to expected container name (use minimal config fixture)
+- [x] run `go test ./internal/cli/logs/...` — must pass before Task 3
 
 ### Task 3: Subprocess wiring (text mode)
 
