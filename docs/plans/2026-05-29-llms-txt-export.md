@@ -202,15 +202,15 @@ Signatures (in `internal/cli/docs/llmstxt.go`):
 
 ### Task 6: Verify acceptance criteria + smoke test
 
-- [ ] `devbox docs llms-txt` (no project): outputs generic llms.txt to stdout, exit 0
-- [ ] `devbox docs llms-txt` (inside project): outputs project-aware llms.txt to stdout
-- [ ] `devbox docs llms-txt --output /tmp/llms.txt`: writes file, stdout empty, exit 0
-- [ ] `devbox docs llms-txt --lang ru` (conditional — only verify if `ru` translations are configured in fixture; skip otherwise): uses ru descriptions for commands/services
-- [ ] `devbox docs llms-txt --include-internals`: output contains the internals section
-- [ ] `devbox docs llms-txt --no-project` inside a project: output matches the no-project shape
-- [ ] output H1 + blockquote + sections — single `# Title`, optional `> summary`, `## Section` headings
-- [ ] command does NOT acquire any lock and does NOT run preflight (verify with deploy.lock unchanged after invocation)
-- [ ] `make test` and `make lint` pass
+- [x] `devbox docs llms-txt` (no project): outputs generic llms.txt to stdout, exit 0
+- [x] `devbox docs llms-txt` (inside project): outputs project-aware llms.txt to stdout
+- [x] `devbox docs llms-txt --output /tmp/llms.txt`: writes file, stdout empty, exit 0
+- [x] `devbox docs llms-txt --lang ru` (conditional — only verify if `ru` translations are configured in fixture; skip otherwise): uses ru descriptions for commands/services
+- [x] `devbox docs llms-txt --include-internals`: output contains the internals section
+- [x] `devbox docs llms-txt --no-project` inside a project: output matches the no-project shape
+- [x] output H1 + blockquote + sections — single `# Title`, optional `> summary`, `## Section` headings
+- [x] command does NOT acquire any lock and does NOT run preflight (verify with deploy.lock unchanged after invocation)
+- [x] `make test` and `make lint` pass
 
 ### Task 7: Update documentation
 
