@@ -234,8 +234,6 @@ stop:
           cmd: "docker down"
 ```
 
-A fuller example with hook phases lives in `devbox/lifecycle.example.yml`.
-
 ## Validation
 
 `LoadLifecycleConfig()` enforces:
