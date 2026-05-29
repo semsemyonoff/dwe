@@ -298,20 +298,20 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
 - Modify: `internal/cli/lifecycle/reset.go`
 - Modify: `internal/cli/lifecycle/reset_test.go`
 
-- [ ] in `reset.go`, add a package-level confirm seam alongside the existing seams (`resetServiceRunHook`, `resetRunHookFn`, `stopContainerFn`):
+- [x] in `reset.go`, add a package-level confirm seam alongside the existing seams (`resetServiceRunHook`, `resetRunHookFn`, `stopContainerFn`):
   ```go
   // resetConfirmFn is the swap seam for the per-service reset confirmation form.
   // Tests override this to assert prompt content and inject Yes/No/cancelled.
   var resetConfirmFn = ui.RunConfirm
   ```
   This is required because `runConfirmFormFn` in `internal/core/ui/confirm.go:13` is package-private — tests in the `lifecycle` package cannot swap it directly.
-- [ ] replace lines 277-293 (manual prompt) with a `resetConfirmFn` call:
+- [x] replace lines 277-293 (manual prompt) with a `resetConfirmFn` call:
   - build body: header `Reset service %q?`; optional `Warning: this is a required service.` line (when `svc.Required`); bullet list — container line always (`stop and remove container "<svc.Container>"`); dir line only if `svc.Dir != ""` and `os.Stat(filepath.Join(baseDir, svc.Dir))` returns nil; reset.yml line only if `services/<name>/reset.yml` exists (stat check); subsequent-deploy line always (`require a subsequent: devbox deploy run --service <name>`)
   - title = header + "\n\n" + body
   - call `resetConfirmFn(title, "Reset", "Cancel")`
   - on `ui.ErrCancelled` → silent `return nil`; on `!ok` → silent `return nil`; on other error → wrap and return
   - non-interactive without `--yes`: keep existing error string `"non-interactive terminal: use --yes to confirm per-service reset"`
-- [ ] replace lines 295-394 (current flow) with the synthetic-pipeline assembly:
+- [x] replace lines 295-394 (current flow) with the synthetic-pipeline assembly:
   - run `on_disable.before` hooks (existing logic — no change to ordering)
   - acquire project locks (existing logic — no change)
   - load `svcResetCfg` via `config.LoadServiceResetConfig` (may be nil)
@@ -320,11 +320,11 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
   - determine `logEnabled` (`svcResetCfg.LogEnabled()` if non-nil else false)
   - open log via `pipeline.OpenPipelineLog(workDir, "reset-"+name, logEnabled)` + create `pipeline.NewPlainReporter` + call `pipeline.RunWithOptions` exactly once (handle `ErrSilent` and log-path message same as today's 372-380)
   - on success: existing `journal.ReplaceServiceWithPending` block + final `Service %q reset...` stdout line
-- [ ] remove the now-unused `bufio` import from `reset.go` if no other uses remain
-- [ ] remove the call to `stopServiceLocked` and the `StopServiceDeps` construction from `resetServiceRunCmd`; verify `stopServiceLocked` is still used elsewhere — confirm via `grep -n stopServiceLocked internal/cli/lifecycle/` (must still be referenced from `stop.go` for `devbox stop <name>`)
-- [ ] extend `makeResetServiceTestDir` helper in `reset_test.go` (or add a sibling helper) to accept an optional `dir` parameter that writes `dir: ./services/<name>` into `service.yml` and pre-creates `services/<name>/` on disk in the test workdir. Required for case B below.
-- [ ] **rewrite existing tests** `TestResetServiceRun_TTYConfirmationDecline` (`reset_test.go:638`) and `TestResetServiceRun_TTYConfirmationAccept` (`reset_test.go:670`): replace `root.SetIn(strings.NewReader(...))` stdin-feeding with `resetConfirmFn` mock that captures the title argument; assert title contains expected bullets per case
-- [ ] add new tests:
+- [x] remove the now-unused `bufio` import from `reset.go` if no other uses remain
+- [x] remove the call to `stopServiceLocked` and the `StopServiceDeps` construction from `resetServiceRunCmd`; verify `stopServiceLocked` is still used elsewhere — confirm via `grep -n stopServiceLocked internal/cli/lifecycle/` (must still be referenced from `stop.go` for `devbox stop <name>`)
+- [x] extend `makeResetServiceTestDir` helper in `reset_test.go` (or add a sibling helper) to accept an optional `dir` parameter that writes `dir: ./services/<name>` into `service.yml` and pre-creates `services/<name>/` on disk in the test workdir. Required for case B below.
+- [x] **rewrite existing tests** `TestResetServiceRun_TTYConfirmationDecline` (`reset_test.go:638`) and `TestResetServiceRun_TTYConfirmationAccept` (`reset_test.go:670`): replace `root.SetIn(strings.NewReader(...))` stdin-feeding with `resetConfirmFn` mock that captures the title argument; assert title contains expected bullets per case
+- [x] add new tests:
   - case A: service with no `dir:` and no `reset.yml` → only container synthetic phase; assert fake docker-bin was called with `stop` AND `rm`; assert journal updated; assert confirm body has no dir bullet and no reset.yml bullet
   - case B: service with `dir:` present on disk + no `reset.yml` → container + files synthetic phases; assert dir gone after run; assert journal updated; assert confirm body has dir bullet
   - case C: service with `services/<name>/reset.yml` present → all three sources of phases composed in order; assert pipeline runs the user steps too
@@ -333,7 +333,7 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
   - case F: user pressed Esc (mock returns `(false, ui.ErrCancelled)`) → returns nil silently
   - case G: non-interactive without `--yes` → existing error returned
   - case H: pipeline failure (fake docker-bin exits nonzero) → journal NOT updated, error propagated
-- [ ] run tests: `make embedded-docs && go test ./internal/cli/lifecycle/...` — must pass before Task 4
+- [x] run tests: `make embedded-docs && go test ./internal/cli/lifecycle/...` — must pass before Task 4
 
 ### Task 4: Migrate deploy missing-deps prompt to huh
 

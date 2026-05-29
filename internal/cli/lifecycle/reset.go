@@ -1,7 +1,6 @@
 package lifecycle
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -35,6 +34,12 @@ var resetServiceRunHook = runtime.RunCommand
 // resetRunHookFn is the seam for runResetHook itself. Tests can override this
 // to intercept hook calls before any registry lookup.
 var resetRunHookFn = runResetHook
+
+// resetConfirmFn is the swap seam for the per-service reset confirmation form.
+// Tests override this to assert prompt content and inject Yes/No/cancelled.
+// Required because runConfirmFormFn in internal/core/ui/confirm.go is
+// package-private — tests in the lifecycle package cannot swap it directly.
+var resetConfirmFn = ui.RunConfirm
 
 // NewResetCmd builds the `devbox reset` cobra command group.
 func NewResetCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
@@ -273,22 +278,41 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		return fmt.Errorf("loading command registry: %w", regErr)
 	}
 
+	// Load the optional per-service reset.yml early so we can describe it in
+	// the confirm body and assemble synthetic + user phases below.
+	svcResetCfg, err := config.LoadServiceResetConfig(baseDir, name)
+	if err != nil {
+		return fmt.Errorf("loading reset config for service %q: %w", name, err)
+	}
+
+	// Resolve whether the service directory actually exists on disk; the
+	// always-on baseline only adds the files phase when there is something to
+	// remove.
+	dirAbs := ""
+	dirExists := false
+	if svc.Dir != "" {
+		dirAbs = filepath.Join(baseDir, svc.Dir)
+		if _, statErr := os.Stat(dirAbs); statErr == nil {
+			dirExists = true
+		}
+	}
+	hasResetYAML := svcResetCfg != nil && len(svcResetCfg.Phases) > 0
+
 	// Confirmation prompt (after preflight so fast-fail checks run first).
 	if !yes {
-		promptMsg := fmt.Sprintf("Reset service %q? This will stop the container and clear its deployed state, requiring a subsequent 'devbox deploy run --service %s'. Continue?", name, name)
-		if svc.Required {
-			promptMsg = fmt.Sprintf("Service %q is required. Reset will clear its deployed state and require a subsequent deploy. Continue?", name)
+		if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+			return fmt.Errorf("non-interactive terminal: use --yes to confirm per-service reset")
 		}
-		if ui.IsInteractiveFn(cmd.InOrStdin()) {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s [y/N] ", promptMsg)
-			reader := bufio.NewReader(cmd.InOrStdin())
-			line, _ := reader.ReadString('\n')
-			line = strings.TrimSpace(strings.ToLower(line))
-			if line != "y" && line != "yes" {
+		title := buildResetServiceConfirmTitle(name, svc.Container, svc.Dir, svc.Required, dirExists, hasResetYAML)
+		ok, confirmErr := resetConfirmFn(title, "Reset", "Cancel")
+		if confirmErr != nil {
+			if errors.Is(confirmErr, ui.ErrCancelled) {
 				return nil
 			}
-		} else {
-			return fmt.Errorf("non-interactive terminal: use --yes to confirm per-service reset")
+			return fmt.Errorf("confirm reset: %w", confirmErr)
+		}
+		if !ok {
+			return nil
 		}
 	}
 
@@ -312,42 +336,61 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	}
 	defer releaseLocks()
 
-	deps := StopServiceDeps{
-		Cfg:         cfg,
-		CmdRegistry: reg,
-		BaseDir:     baseDir,
-	}
-
-	// Step 2: Stop the container via compose-bypass (works whether enabled or disabled).
-	if err := stopServiceLocked(ctx, deps, name); err != nil {
-		return fmt.Errorf("stopping service %q: %w", name, err)
-	}
-
-	// Step 3: Execute per-service reset.yml if present.
-	svcResetCfg, err := config.LoadServiceResetConfig(baseDir, name)
-	if err != nil {
-		return fmt.Errorf("loading reset config for service %q: %w", name, err)
-	}
-	if svcResetCfg != nil && len(svcResetCfg.Phases) > 0 {
-		dockerCfg, loadErr := config.LoadDockerConfig(baseDir, cfg)
-		if loadErr != nil {
-			if !errors.Is(loadErr, os.ErrNotExist) {
-				return fmt.Errorf("loading docker config: %w", loadErr)
-			}
-			dockerCfg = &config.DockerConfig{}
+	// Docker config is needed by the pipeline for any docker-related builtins
+	// (and is always present in opts so the executor doesn't need to nil-check).
+	dockerCfg, loadErr := config.LoadDockerConfig(baseDir, cfg)
+	if loadErr != nil {
+		if !errors.Is(loadErr, os.ErrNotExist) {
+			return fmt.Errorf("loading docker config: %w", loadErr)
 		}
+		dockerCfg = &config.DockerConfig{}
+	}
 
-		logEnabled := svcResetCfg.LogEnabled()
-		w, logWriter, termOut, logPath, cleanup, openErr := pipeline.OpenPipelineLog(workDir, "reset-"+name, logEnabled)
-		if openErr != nil {
-			return openErr
-		}
-		defer cleanup()
-
-		rep := pipeline.NewPlainReporter(w, logWriter, termOut)
-		defer rep.Close()
-
-		var steps []pipeline.ResolvedStep
+	// Assemble combined step list: synthetic baseline phases first, then any
+	// phases declared in services/<name>/reset.yml. Synthetic phases use
+	// Untracked: true so they're excluded from the [N/M] counter; phase names
+	// must start with "_" so the executor permits KindInternal builtins.
+	steps := []pipeline.ResolvedStep{
+		{
+			Phase: config.DeployPhase{
+				Name:        "_container",
+				Description: "Stop and remove container",
+				Untracked:   true,
+			},
+			Step: config.DeployStep{
+				Name: "stop-and-remove",
+				Type: "builtin",
+				Cmd:  "docker_stop_remove_container",
+				With: map[string]any{
+					"container_template": svc.Container,
+					"stop_timeout":       "10s",
+				},
+			},
+			Service: name,
+		},
+	}
+	if dirExists {
+		// Note: the files phase intentionally does NOT use a "_"-prefix so the
+		// executor selects CtxUserYAML for the body — remove_paths is a
+		// KindAction builtin and is not permitted in CtxInternal.
+		steps = append(steps, pipeline.ResolvedStep{
+			Phase: config.DeployPhase{
+				Name:        "files",
+				Description: "Remove service directory",
+				Untracked:   true,
+			},
+			Step: config.DeployStep{
+				Name: "remove-dir",
+				Type: "builtin",
+				Cmd:  "remove_paths",
+				With: map[string]any{
+					"paths": []any{svc.Dir},
+				},
+			},
+			Service: name,
+		})
+	}
+	if hasResetYAML {
 		for _, phase := range svcResetCfg.Phases {
 			resolved, phaseErr := pipeline.ResolvePhaseSteps(cfg, reg, phase, name)
 			if phaseErr != nil {
@@ -355,32 +398,45 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 			}
 			steps = append(steps, resolved...)
 		}
-
-		runOpts := pipeline.RunOptions{
-			Steps:        steps,
-			Reporter:     rep,
-			Name:         "reset-" + name,
-			Config:       cfg,
-			DockerConfig: dockerCfg,
-			Registry:     reg,
-			WorkDir:      workDir,
-			LogWriter:    logWriter,
-			SkipConfirm:  yes,
-			Translator:   flags.I18n,
-			Locale:       flags.Locale,
-		}
-		if runErr := pipeline.RunWithOptions(runOpts); runErr != nil {
-			if errors.Is(runErr, pipeline.ErrSilent) && logEnabled {
-				w.Warning("Full output saved to: " + logPath)
-			}
-			return runErr
-		}
-		if logEnabled {
-			w.Info("Reset log saved to: " + logPath)
-		}
 	}
 
-	// Step 4: Atomic journal update — remove service state and add PendingDeploy.
+	logEnabled := false
+	if svcResetCfg != nil {
+		logEnabled = svcResetCfg.LogEnabled()
+	}
+	w, logWriter, termOut, logPath, cleanup, openErr := pipeline.OpenPipelineLog(workDir, "reset-"+name, logEnabled)
+	if openErr != nil {
+		return openErr
+	}
+	defer cleanup()
+
+	rep := pipeline.NewPlainReporter(w, logWriter, termOut)
+	defer rep.Close()
+
+	runOpts := pipeline.RunOptions{
+		Steps:        steps,
+		Reporter:     rep,
+		Name:         "reset-" + name,
+		Config:       cfg,
+		DockerConfig: dockerCfg,
+		Registry:     reg,
+		WorkDir:      workDir,
+		LogWriter:    logWriter,
+		SkipConfirm:  yes,
+		Translator:   flags.I18n,
+		Locale:       flags.Locale,
+	}
+	if runErr := pipeline.RunWithOptions(runOpts); runErr != nil {
+		if errors.Is(runErr, pipeline.ErrSilent) && logEnabled {
+			w.Warning("Full output saved to: " + logPath)
+		}
+		return runErr
+	}
+	if logEnabled {
+		w.Info("Reset log saved to: " + logPath)
+	}
+
+	// Final step: atomic journal update — remove service state and add PendingDeploy.
 	configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
 	pendingOp := journal.PendingOp{
 		Kind:     journal.PendingDeploy,
@@ -392,6 +448,27 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Service %q reset. Deploy required: run 'devbox deploy run --service %s'\n", name, name)
 	return nil
+}
+
+// buildResetServiceConfirmTitle constructs the multi-line title for the
+// per-service reset huh confirm form. The body itemises exactly what the
+// reset will do so the user has zero ambiguity before pressing Reset.
+func buildResetServiceConfirmTitle(name, container, dir string, required, dirExists, hasResetYAML bool) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Reset service %q?", name)
+	if required {
+		b.WriteString("\n\nWarning: this is a required service.")
+	}
+	b.WriteString("\n\nThis will:")
+	fmt.Fprintf(&b, "\n  • stop and remove container %q", container)
+	if dirExists {
+		fmt.Fprintf(&b, "\n  • delete directory %s", dir)
+	}
+	if hasResetYAML {
+		fmt.Fprintf(&b, "\n  • run services/%s/reset.yml", name)
+	}
+	fmt.Fprintf(&b, "\n  • require a subsequent: devbox deploy run --service %s", name)
+	return b.String()
 }
 
 // runResetHook looks up a command by ID in the registry and runs it
