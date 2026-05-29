@@ -290,7 +290,9 @@ Creates service hub directories.
 | `service` | string | required | Service folder name from `devbox/services/<name>/` |
 | `mode` | string | `skip` | `skip`, `error`, or `recreate` |
 
-Resolved dir list: `[src, configs]` + `ServiceConfig.Dirs` (from the service's `service.yml`). Each entry must be a non-empty relative path that does not escape the service `dir`.
+Resolved dir list: `[src]` + `ServiceConfig.Dirs` (from the service's `service.yml`). Each entry must be a non-empty relative path that does not escape the service `dir`.
+
+The `configs/` directory is **not** in this list — `service_configs_copy` creates it lazily when a `configs:` block is declared on the service. If you need it created eagerly (or wiped under `recreate`), add `configs` to `dirs:` explicitly.
 
 Mode behavior:
 
@@ -300,11 +302,11 @@ Mode behavior:
 | `error` | create | error | error |
 | `recreate` | create | remove + create | error |
 
-Safety: `src` and `configs` always use `skip` semantics in `recreate` mode (never removes source code or templated configs).
+Safety: `src` always uses `skip` semantics in `recreate` mode (never removes source code). All other dirs — including `configs` if listed in `dirs:` — are wiped under `recreate`.
 
 ### `service_configs_copy`
 
-Copies template config files from `configs/services/<service>/` into `services/<service>/configs/`.
+Copies template config files from `configs/services/<service>/` into `services/<service>/configs/`. Creates the destination `configs/` directory if it does not exist — this is the canonical path for `configs/` creation (the `service_dirs_ensure` builtin does not create it).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|

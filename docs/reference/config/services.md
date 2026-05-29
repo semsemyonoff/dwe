@@ -361,7 +361,7 @@ The source directory `configs/services/<service>/` is owned by the project and c
 
 ### `dirs` field
 
-Additional directories to create inside the service hub directory beyond the mandatory `src` and `configs`.
+Additional directories to create inside the service hub directory beyond the mandatory `src`.
 
 ```yaml
 dirs:
@@ -371,7 +371,8 @@ dirs:
 ```
 
 - Paths are relative to the service `dir` (e.g. `./services/main/logs`).
-- Mandatory dirs (`src`, `configs`) are always created and are not listed here.
+- The `src/` dir is always created and not listed here; it is also protected (skip semantics) in `recreate` mode so source code is never wiped.
+- The `configs/` dir is **not** mandatory — it is created lazily by `service_configs_copy` when a `configs:` block is declared. If you need it created eagerly or wiped under `recreate`, list it explicitly here.
 - When a service `extends` another, the child's `dirs` are appended to the parent's (deduplicated, parent first).
 - Used by the `service_dirs_ensure` builtin during deploy.
 

@@ -92,26 +92,26 @@ func TestBuildDirList(t *testing.T) {
 		{
 			name:      "no extras",
 			input:     nil,
-			wantFirst: []string{"src", "configs"},
-			wantLen:   2,
+			wantFirst: []string{"src"},
+			wantLen:   1,
 		},
 		{
 			name:      "extras appended",
 			input:     []string{"logs", "home"},
-			wantFirst: []string{"src", "configs", "logs", "home"},
-			wantLen:   4,
+			wantFirst: []string{"src", "logs", "home"},
+			wantLen:   3,
 		},
 		{
 			name:      "deduplication: extra duplicates mandatory",
 			input:     []string{"src", "logs"},
-			wantFirst: []string{"src", "configs", "logs"},
-			wantLen:   3,
+			wantFirst: []string{"src", "logs"},
+			wantLen:   2,
 		},
 		{
 			name:      "deduplication: duplicate extras",
 			input:     []string{"logs", "logs", "home"},
-			wantFirst: []string{"src", "configs", "logs", "home"},
-			wantLen:   4,
+			wantFirst: []string{"src", "logs", "home"},
+			wantLen:   3,
 		},
 	}
 
@@ -174,8 +174,8 @@ func TestServiceDirsEnsureRun_SkipMode(t *testing.T) {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 
-	// All dirs must now exist.
-	for _, d := range []string{"src", "configs", "logs", "home", "runtime"} {
+	// All dirs must now exist (configs/ is created lazily by service_configs_copy, not here).
+	for _, d := range []string{"src", "logs", "home", "runtime"} {
 		p := filepath.Join(svcDir, d)
 		info, err := os.Stat(p)
 		if err != nil {
@@ -193,7 +193,7 @@ func TestServiceDirsEnsureRun_SkipExisting(t *testing.T) {
 	root := t.TempDir()
 	svcDir := filepath.Join(root, "services/main")
 	// Pre-create all dirs.
-	for _, d := range []string{"src", "configs", "logs"} {
+	for _, d := range []string{"src", "logs"} {
 		if err := os.MkdirAll(filepath.Join(svcDir, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -246,7 +246,7 @@ func TestServiceDirsEnsureRun_ErrorMode_CreatesMissingDirs(t *testing.T) {
 	if err := b.Run(context.Background(), map[string]any{"service": "main", "mode": "error"}, ctx); err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
-	for _, d := range []string{"src", "configs"} {
+	for _, d := range []string{"src"} {
 		if _, err := os.Stat(filepath.Join(svcDir, d)); err != nil {
 			t.Errorf("dir %q not created: %v", d, err)
 		}

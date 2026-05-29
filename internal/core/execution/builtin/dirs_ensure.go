@@ -11,8 +11,9 @@ import (
 
 // mandatoryDirs are always created for every service hub regardless of config.
 // "recreate" mode uses skip semantics for these dirs to avoid removing source
-// code or config files by accident.
-var mandatoryDirs = []string{"src", "configs"}
+// code by accident. The configs/ directory is created lazily by
+// service_configs_copy when configs: entries are declared on the service.
+var mandatoryDirs = []string{"src"}
 
 type serviceDirsEnsureBuiltin struct{}
 
@@ -128,7 +129,7 @@ func ensureInsideBase(baseDir, abs string) error {
 //	skip     — create if missing, no-op if exists as dir, error if exists as non-dir
 //	error    — create if missing, error if exists (dir or non-dir)
 //	recreate — remove+create if exists as dir, error if exists as non-dir;
-//	           mandatory dirs use skip semantics in recreate mode for safety
+//	           the mandatory src/ dir uses skip semantics in recreate mode for safety
 func ensureDir(abs, rel, mode string, isMandatory bool, ectx ExecContext) error {
 	info, err := os.Lstat(abs)
 	exists := err == nil
