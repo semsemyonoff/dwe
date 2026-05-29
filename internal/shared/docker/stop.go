@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-
 // DefaultStopTimeoutSec is the default timeout passed to `docker stop -t`.
 // Both the per-service stop helper and the daemon_stop builtin use this value
 // so they share a single source of truth.

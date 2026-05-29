@@ -2,11 +2,17 @@
 package logs
 
 import (
+	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
@@ -61,7 +67,7 @@ func ResolveLogsTarget(flags *cmdctx.RootFlags, serviceName string) (containerNa
 	if !ok {
 		known := services.SortedNames(cfg.Services)
 		return "", cfg, cmdctx.Err("service_unknown", fmt.Sprintf("no service %q in project", serviceName)).
-			WithHint("available: " + strings.Join(known, ", ")).
+			WithHint("available: "+strings.Join(known, ", ")).
 			WithDetail("requested", serviceName)
 	}
 	containerName, err = daemon.ResolveContainerName(cfg.Project.FullName(), svc.Container)
@@ -94,6 +100,13 @@ func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, opts lo
 		return err
 	}
 
+	if flags.Output == "json" {
+		return runLogsJSON(cmd, args[0], opts, containerName, cfg)
+	}
+	return runLogsText(cmd, args[0], opts, containerName, cfg)
+}
+
+func runLogsText(cmd *cobra.Command, serviceName string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
 	dockerArgs := buildDockerLogsArgs(containerName, opts)
 	dockerCmd := exec.CommandContext(cmd.Context(), config.DockerBin(cfg), dockerArgs...) //nolint:gosec
 	dockerCmd.Stdout = cmd.OutOrStdout()
@@ -106,10 +119,107 @@ func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, opts lo
 	if runErr := dockerCmd.Run(); runErr != nil {
 		if docker.IsNoSuchContainerErr(stderrBuf.String()) {
 			return cmdctx.Err("container_not_found",
-				fmt.Sprintf("container for service %q not found — is the project deployed?", args[0])).
+				fmt.Sprintf("container for service %q not found — is the project deployed?", serviceName)).
 				WithDetail("container", containerName)
 		}
 		return fmt.Errorf("docker logs: %w", runErr)
+	}
+	return nil
+}
+
+func runLogsJSON(cmd *cobra.Command, _ string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
+	ctx := cmd.Context()
+
+	// Build base args and insert --timestamps right after "logs".
+	base := buildDockerLogsArgs(containerName, opts)
+	dockerArgs := make([]string, 0, len(base)+1)
+	dockerArgs = append(dockerArgs, base[0]) // "logs"
+	dockerArgs = append(dockerArgs, "--timestamps")
+	dockerArgs = append(dockerArgs, base[1:]...)
+
+	dockerCmd := exec.CommandContext(ctx, config.DockerBin(cfg), dockerArgs...) //nolint:gosec
+
+	stdoutPipe, err := dockerCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("docker logs: stdout pipe: %w", err)
+	}
+	stderrPipe, err := dockerCmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("docker logs: stderr pipe: %w", err)
+	}
+
+	if err := dockerCmd.Start(); err != nil {
+		return fmt.Errorf("docker logs: %w", err)
+	}
+
+	ch := make(chan logLineJSON, 16)
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	readPipe := func(pipe io.ReadCloser, stream string) func() error {
+		return func() (retErr error) {
+			defer func() {
+				if r := recover(); r != nil {
+					retErr = fmt.Errorf("reader panic in %s stream: %v", stream, r)
+				}
+			}()
+			sc := bufio.NewScanner(pipe)
+			sc.Buffer(make([]byte, 64*1024), 1024*1024)
+			for sc.Scan() {
+				if egCtx.Err() != nil {
+					return egCtx.Err()
+				}
+				select {
+				case ch <- parseLine(stream, sc.Text()):
+				case <-egCtx.Done():
+					return egCtx.Err()
+				}
+			}
+			if scErr := sc.Err(); scErr != nil {
+				if errors.Is(scErr, bufio.ErrTooLong) {
+					ts := time.Now().UTC().Format(time.RFC3339Nano)
+					select {
+					case ch <- logLineJSON{Ts: ts, Stream: stream, Msg: "<truncated: line exceeded 1MB>"}:
+					case <-egCtx.Done():
+					}
+					return nil
+				}
+				return scErr
+			}
+			return nil
+		}
+	}
+
+	eg.Go(readPipe(stdoutPipe, "stdout"))
+	eg.Go(readPipe(stderrPipe, "stderr"))
+
+	// Closer goroutine: waits for both readers, then closes ch exactly once.
+	// The write to egErr before close(ch) happens-before the read after the
+	// drain loop exits, satisfying the Go memory model.
+	var egErr error
+	go func() {
+		egErr = eg.Wait()
+		close(ch)
+	}()
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	for rec := range ch {
+		_ = enc.Encode(rec) // drain always completes; ignore write errors
+	}
+
+	// egErr was written before close(ch) → happens-before the loop exit above.
+	if egErr != nil {
+		// Ignore context-cancellation errors; they are normal shutdown signals.
+		var isCancelled bool
+		if egCtx.Err() != nil {
+			isCancelled = true
+		}
+		if !isCancelled {
+			return fmt.Errorf("docker logs: stream reader: %w", egErr)
+		}
+	}
+
+	if cmdErr := dockerCmd.Wait(); cmdErr != nil {
+		return fmt.Errorf("docker logs: %w", cmdErr)
 	}
 	return nil
 }

@@ -166,18 +166,18 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
 - Create: `internal/cli/logs/parse_test.go`
 - Create: `internal/cli/logs/testdata/fake-docker-json.sh`
 
-- [ ] in `parse.go`: define `logLineJSON{Ts, Stream, Msg string}` with JSON tags `ts`, `stream`, `msg`
-- [ ] implement `parseLine(stream, raw string) logLineJSON` — split on first whitespace; if first token parses as `time.RFC3339Nano`, use it; else use `time.Now().UTC().Format(time.RFC3339Nano)`; strip trailing CR/LF from msg
-- [ ] in `logs.go`: when JSON mode, append `--timestamps` to docker args; pipe stdout and stderr via `cmd.StdoutPipe()` / `cmd.StderrPipe()`
-- [ ] spawn two reader goroutines via `errgroup.WithContext`. Each reader signature is `func(ch chan<- logLineJSON) error` — explicit send-only channel direction (golang-concurrency: "specify channel direction; the compiler prevents misuse"). Each scans its pipe with `bufio.Scanner`, calls `parseLine`, sends to a shared channel buffered to **16** (small bounded buffer — large buffers mask backpressure per skill)
-- [ ] **bump `bufio.Scanner` buffer**: docker logs routinely exceed the default 64KB max-token-size on stack traces, JSON dumps, base64 payloads. Before each reader's scan loop, call `sc.Buffer(make([]byte, 64*1024), 1024*1024)` (start 64KB, cap 1MB). On `sc.Err() == bufio.ErrTooLong`, emit a synthetic truncation record (`{"stream": "...", "msg": "<truncated: line exceeded 1MB>"}`) rather than dropping the stream silently
-- [ ] **panic safety in readers**: each reader goroutine uses `defer func() { if r := recover(); r != nil { /* convert to error via fmt.Errorf and return — errgroup will cancel siblings */ } }()` so a parser panic doesn't leave the closer goroutine waiting forever on `eg.Wait()`. Alternatively, the drain loop can use `for { select { case rec, ok := <-ch: ...; case <-ctx.Done(): return ctx.Err() } }` so ctx cancellation unblocks the drain even if close never fires
-- [ ] a closer goroutine waits for both readers via `eg.Wait()` then `close(ch)` exactly once; main goroutine drains the channel via `for rec := range ch { ... }` and writes each record via `json.NewEncoder(cmd.OutOrStdout()).Encode(rec)`
-- [ ] each reader's loop checks `ctx.Err()` between `Scan()` iterations as a defensive belt-and-braces signal (the pipe EOF on subprocess kill is the primary exit)
-- [ ] wait for both pipe readers AND the subprocess; on subprocess error after pipe close, propagate
-- [ ] write `parse.go` table-driven tests covering: valid RFC3339Nano line, malformed timestamp (fallback), empty message, CRLF stripping
-- [ ] write integration test with fake docker that emits both stdout and stderr lines → assert NDJSON shape and stream attribution. **NDJSON ordering note**: within a single stream `bufio.Scanner` preserves order; across two streams (stdout/stderr goroutines feeding one channel) ordering is inherently non-deterministic — test must assert per-stream ordering (`stdout` events appear in emit order; `stderr` events appear in emit order) and set-equality on the full collection, NOT a fixed cross-stream sequence
-- [ ] **fake-docker fixture sketch** (for `testdata/fake-docker-json.sh`):
+- [x] in `parse.go`: define `logLineJSON{Ts, Stream, Msg string}` with JSON tags `ts`, `stream`, `msg`
+- [x] implement `parseLine(stream, raw string) logLineJSON` — split on first whitespace; if first token parses as `time.RFC3339Nano`, use it; else use `time.Now().UTC().Format(time.RFC3339Nano)`; strip trailing CR/LF from msg
+- [x] in `logs.go`: when JSON mode, append `--timestamps` to docker args; pipe stdout and stderr via `cmd.StdoutPipe()` / `cmd.StderrPipe()`
+- [x] spawn two reader goroutines via `errgroup.WithContext`. Each reader signature is `func(ch chan<- logLineJSON) error` — explicit send-only channel direction (golang-concurrency: "specify channel direction; the compiler prevents misuse"). Each scans its pipe with `bufio.Scanner`, calls `parseLine`, sends to a shared channel buffered to **16** (small bounded buffer — large buffers mask backpressure per skill)
+- [x] **bump `bufio.Scanner` buffer**: docker logs routinely exceed the default 64KB max-token-size on stack traces, JSON dumps, base64 payloads. Before each reader's scan loop, call `sc.Buffer(make([]byte, 64*1024), 1024*1024)` (start 64KB, cap 1MB). On `sc.Err() == bufio.ErrTooLong`, emit a synthetic truncation record (`{"stream": "...", "msg": "<truncated: line exceeded 1MB>"}`) rather than dropping the stream silently
+- [x] **panic safety in readers**: each reader goroutine uses `defer func() { if r := recover(); r != nil { /* convert to error via fmt.Errorf and return — errgroup will cancel siblings */ } }()` so a parser panic doesn't leave the closer goroutine waiting forever on `eg.Wait()`. Alternatively, the drain loop can use `for { select { case rec, ok := <-ch: ...; case <-ctx.Done(): return ctx.Err() } }` so ctx cancellation unblocks the drain even if close never fires
+- [x] a closer goroutine waits for both readers via `eg.Wait()` then `close(ch)` exactly once; main goroutine drains the channel via `for rec := range ch { ... }` and writes each record via `json.NewEncoder(cmd.OutOrStdout()).Encode(rec)`
+- [x] each reader's loop checks `ctx.Err()` between `Scan()` iterations as a defensive belt-and-braces signal (the pipe EOF on subprocess kill is the primary exit)
+- [x] wait for both pipe readers AND the subprocess; on subprocess error after pipe close, propagate
+- [x] write `parse.go` table-driven tests covering: valid RFC3339Nano line, malformed timestamp (fallback), empty message, CRLF stripping
+- [x] write integration test with fake docker that emits both stdout and stderr lines → assert NDJSON shape and stream attribution. **NDJSON ordering note**: within a single stream `bufio.Scanner` preserves order; across two streams (stdout/stderr goroutines feeding one channel) ordering is inherently non-deterministic — test must assert per-stream ordering (`stdout` events appear in emit order; `stderr` events appear in emit order) and set-equality on the full collection, NOT a fixed cross-stream sequence
+- [x] **fake-docker fixture sketch** (for `testdata/fake-docker-json.sh`):
       ```sh
       #!/bin/sh
       echo "2026-05-29T07:30:00.000000000Z line-from-stdout"
@@ -185,7 +185,7 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
       echo "2026-05-29T07:30:02.000000000Z another-stdout"
       ```
       Marked executable; uses the standard `--timestamps` format docker emits.
-- [ ] run `go test ./internal/cli/logs/...` — must pass before Task 5
+- [x] run `go test ./internal/cli/logs/...` — must pass before Task 5
 
 ### Task 5: `--follow` mode + signal handling
 

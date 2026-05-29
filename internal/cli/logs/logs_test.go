@@ -2,8 +2,10 @@ package logs_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -325,5 +327,154 @@ func TestLogsCmd_TextMode_ArgsToDocker(t *testing.T) {
 		if !strings.Contains(argsStr, want) {
 			t.Errorf("docker args missing %q; got: %q", want, argsStr)
 		}
+	}
+}
+
+// logRec mirrors the NDJSON envelope emitted by `devbox logs --output json`.
+type logRec struct {
+	Ts     string `json:"ts"`
+	Stream string `json:"stream"`
+	Msg    string `json:"msg"`
+}
+
+// decodeNDJSON decodes all NDJSON records from s into a slice of logRec.
+func decodeNDJSON(t *testing.T, s string) []logRec {
+	t.Helper()
+	var records []logRec
+	dec := json.NewDecoder(strings.NewReader(s))
+	for {
+		var r logRec
+		if err := dec.Decode(&r); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatalf("NDJSON decode: %v", err)
+		}
+		records = append(records, r)
+	}
+	return records
+}
+
+// TestLogsCmd_JSONMode_NDJSONShape verifies that --output json emits one NDJSON
+// object per log line with ts, stream, and msg fields correctly populated.
+// Stream attribution is non-deterministic across stdout/stderr goroutines;
+// the test asserts per-stream ordering and set equality, not cross-stream order.
+func TestLogsCmd_JSONMode_NDJSONShape(t *testing.T) {
+	dir := t.TempDir()
+	// The fake binary emits timestamped lines matching docker --timestamps format.
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\n"+
+			"echo '2026-05-29T07:30:00.000000000Z line-from-stdout'\n"+
+			"echo '2026-05-29T07:30:01.000000000Z line-from-stderr' >&2\n"+
+			"echo '2026-05-29T07:30:02.000000000Z another-stdout'\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	stdout, _, err := execCmd(t, root, "logs", "myapp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	records := decodeNDJSON(t, stdout)
+
+	// Partition by stream.
+	var stdoutRecs, stderrRecs []logRec
+	for _, r := range records {
+		switch r.Stream {
+		case "stdout":
+			stdoutRecs = append(stdoutRecs, r)
+		case "stderr":
+			stderrRecs = append(stderrRecs, r)
+		default:
+			t.Errorf("unexpected stream %q in record %+v", r.Stream, r)
+		}
+	}
+
+	// Per-stream ordering must be preserved.
+	if len(stdoutRecs) != 2 {
+		t.Fatalf("expected 2 stdout records, got %d", len(stdoutRecs))
+	}
+	if stdoutRecs[0].Msg != "line-from-stdout" {
+		t.Errorf("stdout[0].msg = %q, want %q", stdoutRecs[0].Msg, "line-from-stdout")
+	}
+	if stdoutRecs[1].Msg != "another-stdout" {
+		t.Errorf("stdout[1].msg = %q, want %q", stdoutRecs[1].Msg, "another-stdout")
+	}
+
+	if len(stderrRecs) != 1 {
+		t.Fatalf("expected 1 stderr record, got %d", len(stderrRecs))
+	}
+	if stderrRecs[0].Msg != "line-from-stderr" {
+		t.Errorf("stderr[0].msg = %q, want %q", stderrRecs[0].Msg, "line-from-stderr")
+	}
+
+	// Every record must have a non-empty ts and valid stream.
+	for i, r := range records {
+		if r.Ts == "" {
+			t.Errorf("records[%d].ts is empty", i)
+		}
+	}
+
+	// Timestamps from the fake output must be preserved verbatim.
+	if stdoutRecs[0].Ts != "2026-05-29T07:30:00.000000000Z" {
+		t.Errorf("stdout[0].ts = %q, want %q", stdoutRecs[0].Ts, "2026-05-29T07:30:00.000000000Z")
+	}
+	if stdoutRecs[1].Ts != "2026-05-29T07:30:02.000000000Z" {
+		t.Errorf("stdout[1].ts = %q, want %q", stdoutRecs[1].Ts, "2026-05-29T07:30:02.000000000Z")
+	}
+	if stderrRecs[0].Ts != "2026-05-29T07:30:01.000000000Z" {
+		t.Errorf("stderr[0].ts = %q, want %q", stderrRecs[0].Ts, "2026-05-29T07:30:01.000000000Z")
+	}
+}
+
+// TestLogsCmd_JSONMode_TimestampsFlag verifies that --timestamps is forwarded
+// to docker when running in JSON mode.
+func TestLogsCmd_JSONMode_TimestampsFlag(t *testing.T) {
+	dir := t.TempDir()
+	argsLog := filepath.Join(dir, "args.log")
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" >> %s\nexit 0\n", argsLog)
+	fakeBin := makeFakeDocker(t, dir, "docker", script)
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, readErr := os.ReadFile(argsLog)
+	if readErr != nil {
+		t.Fatalf("read args log: %v", readErr)
+	}
+	argsStr := string(got)
+	if !strings.Contains(argsStr, "--timestamps") {
+		t.Errorf("expected --timestamps in docker args for JSON mode; got: %q", argsStr)
+	}
+}
+
+// TestLogsCmd_JSONMode_TextModeNoTimestamps verifies that --timestamps is NOT
+// automatically injected in text mode.
+func TestLogsCmd_JSONMode_TextModeNoTimestamps(t *testing.T) {
+	dir := t.TempDir()
+	argsLog := filepath.Join(dir, "args.log")
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" >> %s\nexit 0\n", argsLog)
+	fakeBin := makeFakeDocker(t, dir, "docker", script)
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
+	root := newTestRoot(flags)
+
+	_, _, err := execCmd(t, root, "logs", "myapp")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, readErr := os.ReadFile(argsLog)
+	if readErr != nil {
+		t.Fatalf("read args log: %v", readErr)
+	}
+	argsStr := string(got)
+	if strings.Contains(argsStr, "--timestamps") {
+		t.Errorf("--timestamps should not appear in text mode docker args; got: %q", argsStr)
 	}
 }
