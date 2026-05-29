@@ -87,27 +87,30 @@ func makeMinimalDevboxYML(t *testing.T, dir string) string {
 	return cfgPath
 }
 
-func TestRunRun_MissingLifecycleYML(t *testing.T) {
+func TestRunRun_MissingLifecycleYML_UsesDefault(t *testing.T) {
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
+	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"run"})
+	root.SetErr(&errBuf)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("expected error for missing lifecycle.yml, got nil")
+	if err := root.Execute(); err != nil {
+		t.Fatalf("expected success when lifecycle.yml absent (built-in default), got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "no lifecycle.yml") {
-		t.Errorf("error should mention 'no lifecycle.yml', got: %v", err)
+	if !strings.Contains(errBuf.String(), "Using built-in default run pipeline") {
+		t.Errorf("expected info line in stderr, got: %q", errBuf.String())
 	}
 }
 
-func TestRunRun_MissingRunSection(t *testing.T) {
+func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -120,18 +123,71 @@ func TestRunRun_MissingRunSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
+	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"run"})
+	root.SetErr(&errBuf)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("expected error for missing run: section, got nil")
+	if err := root.Execute(); err != nil {
+		t.Fatalf("expected success when run: section absent (built-in default), got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "run:") && !strings.Contains(err.Error(), "run` section") {
-		t.Errorf("error should mention missing run section, got: %v", err)
+	if !strings.Contains(errBuf.String(), "Using built-in default run pipeline") {
+		t.Errorf("expected info line in stderr, got: %q", errBuf.String())
+	}
+}
+
+func TestRunRun_JSONMode_NoInfoLine(t *testing.T) {
+	stubRunPhases(t)
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+
+	var errBuf strings.Builder
+	flags := &cmdctx.RootFlags{Output: "json"}
+	root := buildLifecycleTestRoot(flags)
+	root.SetArgs([]string{"run"})
+	root.SetErr(&errBuf)
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+
+	// JSON mode: expect success and no info line in stderr.
+	_ = root.Execute() // may succeed or fail; what matters is no info line
+	if strings.Contains(errBuf.String(), "Using built-in default") {
+		t.Errorf("JSON mode must not emit info line; got stderr: %q", errBuf.String())
+	}
+}
+
+func TestRunRun_WithLifecycleYML_NoInfoLine(t *testing.T) {
+	stubRunPhases(t)
+	dir := t.TempDir()
+	cfgPath := makeMinimalDevboxYML(t, dir)
+
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("creating devbox dir: %v", err)
+	}
+	lifecycleYAML := "run:\n  final_message: ready\n  phases:\n    - name: start\n      steps:\n        - name: noop\n          type: shell\n          cmd: \"true\"\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+		t.Fatalf("writing lifecycle.yml: %v", err)
+	}
+
+	var errBuf strings.Builder
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
+	root.SetArgs([]string{"run"})
+	root.SetErr(&errBuf)
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatalf("setting config flag: %v", err)
+	}
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(errBuf.String(), "Using built-in default") {
+		t.Errorf("no info line expected when lifecycle.yml present; got stderr: %q", errBuf.String())
 	}
 }

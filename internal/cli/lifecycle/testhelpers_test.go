@@ -1,10 +1,39 @@
 package lifecycle
 
 import (
+	"context"
+	"io"
+	"testing"
+
 	"devbox-cli/internal/cli/cmdctx"
+	"devbox-cli/internal/core/project/config"
+	lifecyclepkg "devbox-cli/internal/core/workflow/lifecycle"
+	"devbox-cli/internal/core/usercommands"
+	"devbox-cli/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )
+
+// init stubs PreflightFunc so CLI integration tests don't require a real
+// Docker / git environment on the host.
+func init() {
+	lifecyclepkg.PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+		return nil
+	}
+}
+
+// stubRunPhases replaces RunPhasesFunc with a no-op for the duration of t.
+// Required for tests that exercise the built-in default run pipeline, which
+// contains a type:devbox step whose os.Executable() invocation would otherwise
+// recursively re-execute the test binary.
+func stubRunPhases(t *testing.T) {
+	t.Helper()
+	prev := lifecyclepkg.RunPhasesFunc
+	t.Cleanup(func() { lifecyclepkg.RunPhasesFunc = prev })
+	lifecyclepkg.RunPhasesFunc = func(_ *config.DevboxConfig, _ *usercommands.Registry, _ string, _ []config.DeployPhase, _, _ string, _ bool, _ bool, _ i18n.Translator, _ string) error {
+		return nil
+	}
+}
 
 const (
 	groupEnvironment = "environment"

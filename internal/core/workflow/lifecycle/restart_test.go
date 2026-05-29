@@ -3,24 +3,34 @@ package lifecycle
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/git"
 )
 
-func TestRunRestart_MissingLifecycleYML(t *testing.T) {
+func TestRunRestart_MissingLifecycleYML_RunLegUsesDefault(t *testing.T) {
+	// Stub RunPhasesFunc to avoid recursive test-binary execution from
+	// type:devbox steps calling os.Executable() in the default run config.
+	stubRunPhases(t)
+
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	ctx := RunContext{ConfigPath: cfgPath}
-	err := RunRestart(ctx)
-	if err == nil {
-		t.Fatal("expected error for missing lifecycle.yml, got nil")
+	var called []DefaultedPipeline
+	ctx := RunContext{
+		ConfigPath: cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
 	}
-	if !strings.Contains(err.Error(), "no lifecycle.yml") {
-		t.Errorf("error should mention 'no lifecycle.yml', got: %v", err)
+	if err := RunRestart(ctx); err != nil {
+		t.Fatalf("RunRestart with missing lifecycle.yml should succeed (built-in defaults), got: %v", err)
+	}
+	// Task 4 only adds DefaultedRun handling; DefaultedStop handling is Task 5.
+	// The run leg fires the callback; stop leg uses EnsureStopConfig without callback.
+	if len(called) != 1 || called[0] != DefaultedRun {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q]", called, DefaultedRun)
 	}
 }
 
@@ -46,7 +56,11 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 	}
 }
 
-func TestRunRestart_MissingRunSection(t *testing.T) {
+func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
+	// Stub RunPhasesFunc to avoid recursive test-binary execution from
+	// type:devbox steps calling os.Executable() in the default run config.
+	stubRunPhases(t)
+
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -59,13 +73,19 @@ func TestRunRestart_MissingRunSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
-	ctx := RunContext{ConfigPath: cfgPath}
-	err := RunRestart(ctx)
-	if err == nil {
-		t.Fatal("expected error for missing run: section, got nil")
+	var called []DefaultedPipeline
+	ctx := RunContext{
+		ConfigPath: cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
 	}
-	if !strings.Contains(err.Error(), "run:") && !strings.Contains(err.Error(), "run` section") {
-		t.Errorf("error should mention missing run section, got: %v", err)
+	if err := RunRestart(ctx); err != nil {
+		t.Fatalf("RunRestart with missing run: section should succeed (built-in default), got: %v", err)
+	}
+	// The stop leg uses user config (stop: present), run leg uses default.
+	if len(called) != 1 || called[0] != DefaultedRun {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q]", called, DefaultedRun)
 	}
 }
 

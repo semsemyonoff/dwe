@@ -11,17 +11,30 @@ import (
 	"devbox-cli/internal/shared/i18n"
 )
 
+// RunPhasesFunc is a package-level variable so tests can stub phase execution
+// without executing actual devbox/shell commands. Same pattern as PreflightFunc
+// and GitProbeFunc.
+var RunPhasesFunc = runPhases
+
 // RunPhases resolves and executes a set of lifecycle pipeline phases.
-//
-// name is the human-readable label passed to the reporter (e.g. "run", "stop").
-// logFileName is the base name (without extension) for the log file written to .devbox/logs/.
-// logEnabled toggles file logging at .devbox/logs/<logFileName>.log; when false, output
-// goes only to stdout and no log file is created.
-// Phases are resolved with an empty service (lifecycle is orchestrator-only).
-//
-// Returns pipeline.ErrSilent when any aborting step fails (reporter has already printed
-// the failure). Returns other errors for config/IO failures.
+// It delegates to RunPhasesFunc, which tests may replace with a no-op stub.
 func RunPhases(
+	cfg *config.DevboxConfig,
+	reg *usercommands.Registry,
+	workDir string,
+	phases []config.DeployPhase,
+	name string,
+	logFileName string,
+	skipConfirm bool,
+	logEnabled bool,
+	translator i18n.Translator,
+	locale string,
+) error {
+	return RunPhasesFunc(cfg, reg, workDir, phases, name, logFileName, skipConfirm, logEnabled, translator, locale)
+}
+
+// runPhases is the real implementation of phase resolution and execution.
+func runPhases(
 	cfg *config.DevboxConfig,
 	reg *usercommands.Registry,
 	workDir string,

@@ -43,6 +43,9 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 				ErrOut:        cmd.ErrOrStderr(),
 				Translator:    flags.I18n,
 				Locale:        flags.Locale,
+				OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {
+					cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle")
+				},
 			})
 		},
 	}

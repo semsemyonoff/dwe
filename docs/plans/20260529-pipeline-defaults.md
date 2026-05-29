@@ -374,19 +374,19 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
 - Modify: `internal/core/workflow/lifecycle/run_test.go`
 - Modify: `internal/cli/lifecycle/run.go` (cobra adapter — populates `OnDefaultUsed`)
 
-- [ ] create `internal/core/workflow/lifecycle/defaults.go` with: `DefaultedPipeline` typed string + `DefaultedRun` / `DefaultedStop` constants; `DefaultRunConfig()` returning `update.mode = off`, `show_info = true`, `final_message = "Project is ready for work!"`, single `start` phase with `docker up --wait`. One-line doc comment on the constructor: returns freshly-allocated default
-- [ ] add `EnsureRunConfig(loaded *config.LifecycleConfig) (*config.LifecycleRunConfig, bool)` to `defaults.go` — `loaded == nil` OR `loaded.Run == nil` → default+true; otherwise return `loaded.Run, false`
-- [ ] extend `RunContext` in `run.go:42-56` with `OnDefaultUsed func(DefaultedPipeline)` (sibling to existing `ShowInfo`/`SkipNotify`); document the same way the existing fields are documented
-- [ ] in `lifecycle/run.go:180`: apply the load-site error switch pattern (`errors.Is(ErrNotExist)` → `lifecycleCfg = nil`; other errors wrapped `fmt.Errorf("load lifecycle config: %w", err)`); remove the `"no lifecycle.yml — see devbox/lifecycle.example.yml"` hard-error; pass through `EnsureRunConfig`; remove the subsequent `lifecycleCfg.Run == nil` hard-error block; when `defaulted && ctx.OnDefaultUsed != nil`, call `ctx.OnDefaultUsed(lifecycle.DefaultedRun)`
-- [ ] in `lifecycle/run.go:243` (second load — restart path): same treatment, same callback invocation
-- [ ] drop any remaining references to `devbox/lifecycle.example.yml` in this file's error messages
-- [ ] in `internal/cli/lifecycle/run.go` (cobra adapter; find via grep — likely also covers `restart`): populate `RunContext.OnDefaultUsed = func(p lifecycle.DefaultedPipeline) { cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle") }` — single one-liner per adapter, delegating to the shared helper from Task 2
-- [ ] write table-driven unit test for `DefaultRunConfig` shape: `update.mode == "off"`, `show_info == true`, exact `final_message`, single phase named `start` with one `up` step (`type: devbox`, `cmd: "docker up --wait"`)
-- [ ] write table-driven unit test for `EnsureRunConfig` (three rows): `{nil → default,true}`, `{LifecycleConfig{Run: nil, Stop: &…} → default,true}`, `{populated → input,false}`. The middle row covers the partial-section case in one assertion
-- [ ] write integration test for `devbox run` against bare-minimum project using `cmd.SetErr(&bytes.Buffer{})`: stub the `docker up --wait` execution using the existing pipeline test seam (review `preflight_test.go` / `run_test.go` for the pattern); exit 0, stderr buffer contains the info line. **Must fail on `main` today** (today's hard-error path)
-- [ ] write integration test for `--output json` on `run` → no info line in stderr buffer, JSON envelope clean
-- [ ] write integration test for project WITH partial `lifecycle.yml` (only `stop:` populated, no `run:`) → `run` uses default (info line emitted via `OnDefaultUsed(DefaultedRun)`); `stop` uses user config (no `OnDefaultUsed(DefaultedStop)` fired). Task 5 covers the symmetric opposite
-- [ ] run `make test` — must pass before Task 5
+- [x] create `internal/core/workflow/lifecycle/defaults.go` with: `DefaultedPipeline` typed string + `DefaultedRun` / `DefaultedStop` constants; `DefaultRunConfig()` returning `update.mode = off`, `show_info = true`, `final_message = "Project is ready for work!"`, single `start` phase with `docker up --wait`. One-line doc comment on the constructor: returns freshly-allocated default
+- [x] add `EnsureRunConfig(loaded *config.LifecycleConfig) (*config.LifecycleRunConfig, bool)` to `defaults.go` — `loaded == nil` OR `loaded.Run == nil` → default+true; otherwise return `loaded.Run, false`
+- [x] extend `RunContext` in `run.go:42-56` with `OnDefaultUsed func(DefaultedPipeline)` (sibling to existing `ShowInfo`/`SkipNotify`); document the same way the existing fields are documented
+- [x] in `lifecycle/run.go:180`: apply the load-site error switch pattern (`errors.Is(ErrNotExist)` → `lifecycleCfg = nil`; other errors wrapped `fmt.Errorf("load lifecycle config: %w", err)`); remove the `"no lifecycle.yml — see devbox/lifecycle.example.yml"` hard-error; pass through `EnsureRunConfig`; remove the subsequent `lifecycleCfg.Run == nil` hard-error block; when `defaulted && ctx.OnDefaultUsed != nil`, call `ctx.OnDefaultUsed(lifecycle.DefaultedRun)`
+- [x] in `lifecycle/run.go:243` (second load — restart path): same treatment, same callback invocation
+- [x] drop any remaining references to `devbox/lifecycle.example.yml` in this file's error messages
+- [x] in `internal/cli/lifecycle/run.go` (cobra adapter; find via grep — likely also covers `restart`): populate `RunContext.OnDefaultUsed = func(p lifecycle.DefaultedPipeline) { cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle") }` — single one-liner per adapter, delegating to the shared helper from Task 2
+- [x] write table-driven unit test for `DefaultRunConfig` shape: `update.mode == "off"`, `show_info == true`, exact `final_message`, single phase named `start` with one `up` step (`type: devbox`, `cmd: "docker up --wait"`)
+- [x] write table-driven unit test for `EnsureRunConfig` (three rows): `{nil → default,true}`, `{LifecycleConfig{Run: nil, Stop: &…} → default,true}`, `{populated → input,false}`. The middle row covers the partial-section case in one assertion
+- [x] write integration test for `devbox run` against bare-minimum project using `cmd.SetErr(&bytes.Buffer{})`: stub the `docker up --wait` execution using the existing pipeline test seam (review `preflight_test.go` / `run_test.go` for the pattern); exit 0, stderr buffer contains the info line. **Must fail on `main` today** (today's hard-error path)
+- [x] write integration test for `--output json` on `run` → no info line in stderr buffer, JSON envelope clean
+- [x] write integration test for project WITH partial `lifecycle.yml` (only `stop:` populated, no `run:`) → `run` uses default (info line emitted via `OnDefaultUsed(DefaultedRun)`); `stop` uses user config (no `OnDefaultUsed(DefaultedStop)` fired). Task 5 covers the symmetric opposite
+- [x] run `make test` — must pass before Task 5
 
 ### Task 5: Lifecycle stop default — collapse EnsureStopConfig signature
 

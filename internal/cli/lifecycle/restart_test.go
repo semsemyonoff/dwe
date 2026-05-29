@@ -47,23 +47,25 @@ func TestRestartCmd_RegisteredAtRoot(t *testing.T) {
 	t.Error("restart command not registered at root level")
 }
 
-func TestRunRestart_MissingLifecycleYML(t *testing.T) {
+func TestRunRestart_MissingLifecycleYML_UsesDefault(t *testing.T) {
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
+	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"restart"})
+	root.SetErr(&errBuf)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("expected error for missing lifecycle.yml, got nil")
+	if err := root.Execute(); err != nil {
+		t.Fatalf("restart with missing lifecycle.yml should succeed (built-in default), got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "no lifecycle.yml") {
-		t.Errorf("error should mention 'no lifecycle.yml', got: %v", err)
+	if !strings.Contains(errBuf.String(), "Using built-in default run pipeline") {
+		t.Errorf("expected info line in stderr, got: %q", errBuf.String())
 	}
 }
 
@@ -94,7 +96,8 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 	}
 }
 
-func TestRunRestart_MissingRunSection(t *testing.T) {
+func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
+	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -107,18 +110,19 @@ func TestRunRestart_MissingRunSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
+	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
 	root.SetArgs([]string{"restart"})
+	root.SetErr(&errBuf)
 	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("expected error for missing run: section, got nil")
+	if err := root.Execute(); err != nil {
+		t.Fatalf("restart with missing run: section should succeed (built-in default), got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "run:") && !strings.Contains(err.Error(), "run` section") {
-		t.Errorf("error should mention missing run section, got: %v", err)
+	if !strings.Contains(errBuf.String(), "Using built-in default run pipeline") {
+		t.Errorf("expected info line in stderr, got: %q", errBuf.String())
 	}
 }

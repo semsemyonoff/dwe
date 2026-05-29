@@ -66,6 +66,10 @@ type RunContext struct {
 	// pipeline steps. When nil, NopTranslator is used (English fallback).
 	Translator i18n.Translator
 	Locale     string
+	// OnDefaultUsed is called once per pipeline whose YAML section was absent
+	// (either run or stop) and was substituted with a built-in default. CLI
+	// uses this to emit the info line on stderr.
+	OnDefaultUsed func(DefaultedPipeline)
 }
 
 // resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
@@ -178,17 +182,18 @@ func RunRun(ctx RunContext) (err error) {
 	// not running, binary missing, etc.) are surfaced even when lifecycle.yml
 	// is absent or malformed — consistent with how RunStop orders things.
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("no lifecycle.yml — see devbox/lifecycle.example.yml")
-		}
-		return fmt.Errorf("loading lifecycle config: %w", err)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		lifecycleCfg = nil
+	case err != nil:
+		return fmt.Errorf("load lifecycle config: %w", err)
 	}
-	if lifecycleCfg.Run == nil {
-		return fmt.Errorf("lifecycle.yml has no `run:` section — see devbox/lifecycle.example.yml")
+	runCfg, defaulted := EnsureRunConfig(lifecycleCfg)
+	if defaulted && ctx.OnDefaultUsed != nil {
+		ctx.OnDefaultUsed(DefaultedRun)
 	}
 
-	effectiveMode := resolveUpdateMode(lifecycleCfg.Run, ctx.NoUpdate, ctx.UpdateMode)
+	effectiveMode := resolveUpdateMode(runCfg, ctx.NoUpdate, ctx.UpdateMode)
 
 	w := render.Stdout()
 	var pulled bool
@@ -241,11 +246,15 @@ func RunRun(ctx RunContext) (err error) {
 			return err
 		}
 		lifecycleCfg, err = config.LoadLifecycleConfig(lifecyclePath)
-		if err != nil {
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			lifecycleCfg = nil
+		case err != nil:
 			return fmt.Errorf("reloading lifecycle config after pull: %w", err)
 		}
-		if lifecycleCfg.Run == nil {
-			return fmt.Errorf("lifecycle.yml has no `run:` section after pull reload")
+		runCfg, defaulted = EnsureRunConfig(lifecycleCfg)
+		if defaulted && ctx.OnDefaultUsed != nil {
+			ctx.OnDefaultUsed(DefaultedRun)
 		}
 		reg, err = usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
 		if err != nil {
@@ -276,17 +285,17 @@ func RunRun(ctx RunContext) (err error) {
 		}
 	}
 
-	if err := RunPhases(cfg, reg, workDir, lifecycleCfg.Run.Phases, "run", "run", ctx.Yes, lifecycleCfg.Run.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
+	if err := RunPhases(cfg, reg, workDir, runCfg.Phases, "run", "run", ctx.Yes, runCfg.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err
 	}
 
-	if lifecycleCfg.Run.ShowInfo && ctx.ShowInfo != nil {
+	if runCfg.ShowInfo && ctx.ShowInfo != nil {
 		if infoErr := ctx.ShowInfo(); infoErr != nil {
 			w.Warning(fmt.Sprintf("info display failed: %v", infoErr))
 		}
 	}
 
-	w.Success(lifecycleCfg.Run.FinalMessage)
+	w.Success(runCfg.FinalMessage)
 	return nil
 }
 

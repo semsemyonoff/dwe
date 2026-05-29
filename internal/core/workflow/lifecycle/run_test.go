@@ -75,21 +75,34 @@ func TestResolveUpdateMode_NoUpdateTakesPrecedenceOverUpdateFlag(t *testing.T) {
 
 // --- RunRun tests ---
 
-func TestRunRun_MissingLifecycleYML(t *testing.T) {
+func TestRunRun_MissingLifecycleYML_UsesDefault(t *testing.T) {
+	// Stub RunPhasesFunc to avoid recursive test-binary execution from
+	// type:devbox steps calling os.Executable() in the default run config.
+	stubRunPhases(t)
+
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	ctx := RunContext{ConfigPath: cfgPath}
-	err := RunRun(ctx)
-	if err == nil {
-		t.Fatal("expected error for missing lifecycle.yml, got nil")
+	var called []DefaultedPipeline
+	ctx := RunContext{
+		ConfigPath: cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
 	}
-	if !strings.Contains(err.Error(), "no lifecycle.yml") {
-		t.Errorf("error should mention 'no lifecycle.yml', got: %v", err)
+	if err := RunRun(ctx); err != nil {
+		t.Fatalf("RunRun with missing lifecycle.yml should succeed (built-in default), got: %v", err)
+	}
+	if len(called) != 1 || called[0] != DefaultedRun {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q]", called, DefaultedRun)
 	}
 }
 
-func TestRunRun_MissingRunSection(t *testing.T) {
+func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
+	// Stub RunPhasesFunc to avoid recursive test-binary execution from
+	// type:devbox steps calling os.Executable() in the default run config.
+	stubRunPhases(t)
+
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
@@ -102,13 +115,18 @@ func TestRunRun_MissingRunSection(t *testing.T) {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
-	ctx := RunContext{ConfigPath: cfgPath}
-	err := RunRun(ctx)
-	if err == nil {
-		t.Fatal("expected error for missing run: section, got nil")
+	var called []DefaultedPipeline
+	ctx := RunContext{
+		ConfigPath: cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) {
+			called = append(called, p)
+		},
 	}
-	if !strings.Contains(err.Error(), "run:") && !strings.Contains(err.Error(), "run` section") {
-		t.Errorf("error should mention missing run section, got: %v", err)
+	if err := RunRun(ctx); err != nil {
+		t.Fatalf("RunRun with no run: section should succeed (built-in default), got: %v", err)
+	}
+	if len(called) != 1 || called[0] != DefaultedRun {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q]", called, DefaultedRun)
 	}
 }
 

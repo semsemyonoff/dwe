@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands"
+	"devbox-cli/internal/shared/i18n"
 )
 
 // init replaces PreflightFunc with a no-op for the test binary so lifecycle
@@ -16,6 +17,18 @@ import (
 // preflight. Tests that exercise preflight behavior explicitly swap it back.
 func init() {
 	PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+		return nil
+	}
+}
+
+// stubRunPhases replaces RunPhasesFunc with a no-op for the duration of a test.
+// Used by tests that exercise the default-config path to avoid the recursive
+// test-binary execution that occurs when type:devbox steps call os.Executable().
+func stubRunPhases(t *testing.T) {
+	t.Helper()
+	prev := RunPhasesFunc
+	t.Cleanup(func() { RunPhasesFunc = prev })
+	RunPhasesFunc = func(_ *config.DevboxConfig, _ *usercommands.Registry, _ string, _ []config.DeployPhase, _, _ string, _ bool, _ bool, _ i18n.Translator, _ string) error {
 		return nil
 	}
 }

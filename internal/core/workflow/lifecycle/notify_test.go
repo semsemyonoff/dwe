@@ -88,11 +88,18 @@ func TestRunRun_FiresNotifyOnFailure(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	// No lifecycle.yml — RunRun fails on the lifecycle load step.
+	// Write a lifecycle.yml with a YAML parse error to trigger a load failure.
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte("run: [\ninvalid yaml\n"), 0644); err != nil {
+		t.Fatalf("writing lifecycle.yml: %v", err)
+	}
 
 	err := RunRun(RunContext{ConfigPath: cfgPath})
 	if err == nil {
-		t.Fatal("expected error, got nil")
+		t.Fatal("expected error from invalid lifecycle.yml, got nil")
 	}
 
 	evs := rec.snapshot()
