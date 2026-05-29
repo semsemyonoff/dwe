@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"devbox-cli/internal/cli"
+	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
@@ -26,11 +27,12 @@ func main() {
 		os.Exit(prompt.Run(os.Stdout, os.Args[2:]))
 	}
 
-	root := cli.NewRootCmd()
+	root, flags := cli.NewRootCmdWithFlags()
 
 	// Custom error handler: suppress output for ErrSilent (command already
 	// printed its own error) and for ExitCode-bearing errors (which have already
-	// printed their own diagnostics table). Otherwise delegate to Fang's default styled output.
+	// printed their own diagnostics table). In JSON mode, emit a JSON error
+	// envelope to stderr. Otherwise delegate to Fang's default styled output.
 	errHandler := func(w io.Writer, styles fang.Styles, err error) {
 		if errors.Is(err, pipeline.ErrSilent) {
 			return
@@ -38,6 +40,10 @@ func main() {
 		var ec interface{ ExitCode() int }
 		if errors.As(err, &ec) {
 			// validation or other exit-code error: diagnostics already printed
+			return
+		}
+		if flags.Output == "json" {
+			cmdctx.WriteError(flags, root, err)
 			return
 		}
 		fang.DefaultErrorHandler(w, styles, err)
@@ -66,7 +72,7 @@ func main() {
 		if errors.As(err, &ec) {
 			os.Exit(ec.ExitCode())
 		}
-		os.Exit(1)
+		os.Exit(cmdctx.ExitCodeFor(err))
 	}
 }
 

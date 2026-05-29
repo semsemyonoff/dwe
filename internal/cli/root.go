@@ -53,8 +53,11 @@ const (
 
 const defaultLocale = "en"
 
-// NewRootCmd builds and returns the root cobra.Command.
-func NewRootCmd() *cobra.Command {
+// NewRootCmdWithFlags builds and returns the root cobra.Command together with
+// the RootFlags that it owns. Use this in main.go when you need to thread
+// *RootFlags into a closure (e.g. the JSON error handler). All other callers
+// use NewRootCmd() and discard the flags pointer.
+func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 	flags := &cmdctx.RootFlags{}
 
 	root := initRootCmd(flags)
@@ -104,6 +107,12 @@ func NewRootCmd() *cobra.Command {
 		completion.AttachInstallUninstall(completionCmd, flags)
 	}
 
+	return root, flags
+}
+
+// NewRootCmd builds and returns the root cobra.Command.
+func NewRootCmd() *cobra.Command {
+	root, _ := NewRootCmdWithFlags()
 	return root
 }
 
@@ -122,7 +131,24 @@ It provides config validation, rendering, topology inspection, and project info 
 		// The validate command bypasses schema validation so it can report schema errors
 		// as diagnostics instead of aborting before the validators run.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Detect whether --config/-c was explicitly supplied.
+			// (1) Validate --output before anything else so invalid values are
+			// rejected cleanly before lipgloss or fang styles are applied.
+			switch flags.Output {
+			case "", "text", "json":
+				// valid
+			default:
+				return cmdctx.Err("invalid_output", "unknown output format: "+flags.Output).
+					WithHint("valid values: text, json")
+			}
+
+			// (2) JSON mode side-effects: suppress ANSI sequences and cobra noise.
+			if flags.Output == "json" {
+				_ = os.Setenv("NO_COLOR", "1")
+				cmd.Root().SilenceErrors = true
+				cmd.Root().SilenceUsage = true
+			}
+
+			// (3) Detect whether --config/-c was explicitly supplied.
 			// Read from root to be unambiguous: PersistentPreRunE receives the leaf command.
 			explicit := cmd.Root().PersistentFlags().Lookup("config").Changed
 
@@ -188,6 +214,18 @@ It provides config validation, rendering, topology inspection, and project info 
 		"config", "c",
 		"",
 		"path to devbox.yml (default: auto-discover from cwd upward)",
+	)
+	cmd.PersistentFlags().StringVarP(
+		&flags.Output,
+		"output", "o",
+		"text",
+		"output format: text or json",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&flags.Pretty,
+		"pretty",
+		false,
+		"pretty-print JSON output (only with --output json)",
 	)
 
 	return cmd

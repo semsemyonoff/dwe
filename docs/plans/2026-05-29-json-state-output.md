@@ -181,16 +181,16 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 - Modify: `cmd/devbox/main.go`
 - Create: `internal/cli/root_output_test.go`
 
-- [ ] in `root.go` `initRootCmd`: register `cmd.PersistentFlags().StringVarP(&flags.Output, "output", "o", "text", "output format: text or json")` and `cmd.PersistentFlags().BoolVar(&flags.Pretty, "pretty", false, "pretty-print JSON output (only with --output json)")`
-- [ ] in `root.go` `PersistentPreRunE`, **ordering is critical**: (1) validate `flags.Output` first — on invalid value return `cmdctx.Err("invalid_output", "unknown output format").WithHint("valid values: text, json")` (exit code 2). (2) then set NO_COLOR / silence flags. (3) then `applyStyles`. Validating last would let lipgloss-styled fang errors leak through before we reject the invalid flag.
-- [ ] main.go error handler maps `invalid_output` (or any code in a small "usage error" set) to exit 2 instead of 1. Add the mapping to a tiny helper `cmdctx.ExitCodeFor(err)` returning `int`.
-- [ ] in `root.go` `PersistentPreRunE`: when `flags.Output == "json"`, call `os.Setenv("NO_COLOR", "1")` BEFORE `applyStyles`; set `cmd.Root().SilenceErrors = true` and `SilenceUsage = true`
-- [ ] add `NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags)` to `internal/cli/root.go`; refactor body of `NewRootCmd()` to delegate to it (existing 14+ test callers keep working unchanged)
-- [ ] in `main.go`: call `cli.NewRootCmdWithFlags()` to capture flags; extend `errHandler` to check `flags.Output == "json"` and call `cmdctx.WriteError(flags, root, err)` before returning (skip `fang.DefaultErrorHandler` in JSON mode). **Note**: fang's `errHandler` already swallows `ExitCode()`-bearing errors (e.g. validation failures) BEFORE our JSON check, so `validate --output json` correctly emits diagnostics-as-data on stdout without an envelope on stderr — verify this ordering when wiring.
-- [ ] write test: invalid `--output bogus` returns an error before any subcommand runs
-- [ ] write test: `--output json` causes `NO_COLOR` to be set in env after PersistentPreRunE
-- [ ] write test: `--output json` causes `SilenceErrors` and `SilenceUsage` to be `true`
-- [ ] run `go test ./internal/cli/...` — must pass before Task 3
+- [x] in `root.go` `initRootCmd`: register `cmd.PersistentFlags().StringVarP(&flags.Output, "output", "o", "text", "output format: text or json")` and `cmd.PersistentFlags().BoolVar(&flags.Pretty, "pretty", false, "pretty-print JSON output (only with --output json)")`
+- [x] in `root.go` `PersistentPreRunE`, **ordering is critical**: (1) validate `flags.Output` first — on invalid value return `cmdctx.Err("invalid_output", "unknown output format").WithHint("valid values: text, json")` (exit code 2). (2) then set NO_COLOR / silence flags. (3) then `applyStyles`. Validating last would let lipgloss-styled fang errors leak through before we reject the invalid flag.
+- [x] main.go error handler maps `invalid_output` (or any code in a small "usage error" set) to exit 2 instead of 1. Add the mapping to a tiny helper `cmdctx.ExitCodeFor(err)` returning `int`.
+- [x] in `root.go` `PersistentPreRunE`: when `flags.Output == "json"`, call `os.Setenv("NO_COLOR", "1")` BEFORE `applyStyles`; set `cmd.Root().SilenceErrors = true` and `SilenceUsage = true`
+- [x] add `NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags)` to `internal/cli/root.go`; refactor body of `NewRootCmd()` to delegate to it (existing 14+ test callers keep working unchanged)
+- [x] in `main.go`: call `cli.NewRootCmdWithFlags()` to capture flags; extend `errHandler` to check `flags.Output == "json"` and call `cmdctx.WriteError(flags, root, err)` before returning (skip `fang.DefaultErrorHandler` in JSON mode). **Note**: fang's `errHandler` already swallows `ExitCode()`-bearing errors (e.g. validation failures) BEFORE our JSON check, so `validate --output json` correctly emits diagnostics-as-data on stdout without an envelope on stderr — verify this ordering when wiring.
+- [x] write test: invalid `--output bogus` returns an error before any subcommand runs
+- [x] write test: `--output json` causes `NO_COLOR` to be set in env after PersistentPreRunE
+- [x] write test: `--output json` causes `SilenceErrors` and `SilenceUsage` to be `true`
+- [x] run `go test ./internal/cli/...` — must pass before Task 3
 
 ### Task 3: Migrate `devbox version`
 
