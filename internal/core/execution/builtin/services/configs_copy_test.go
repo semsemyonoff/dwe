@@ -75,7 +75,7 @@ func TestCopyConfigFile_Replace(t *testing.T) {
 	if err := os.WriteFile(src, []byte("A=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CopyConfigFile(src, dest, "replace"); err != nil {
+	if err := copyConfigFile(src, dest, "replace"); err != nil {
 		t.Fatalf("CopyConfigFile replace: %v", err)
 	}
 	data, err := os.ReadFile(dest)
@@ -97,7 +97,7 @@ func TestCopyConfigFile_Default_SkipsExisting(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("OLD=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CopyConfigFile(src, dest, "default"); err != nil {
+	if err := copyConfigFile(src, dest, "default"); err != nil {
 		t.Fatalf("CopyConfigFile default: %v", err)
 	}
 	data, _ := os.ReadFile(dest)
@@ -116,7 +116,7 @@ func TestCopyConfigFile_Update_MergesNewKeys(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("A=old\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CopyConfigFile(src, dest, "update"); err != nil {
+	if err := copyConfigFile(src, dest, "update"); err != nil {
 		t.Fatalf("CopyConfigFile update: %v", err)
 	}
 	data, _ := os.ReadFile(dest)
@@ -131,7 +131,7 @@ func TestCopyConfigFile_Update_MergesNewKeys(t *testing.T) {
 
 func TestCopyConfigFile_MissingSrc(t *testing.T) {
 	dir := t.TempDir()
-	err := CopyConfigFile(filepath.Join(dir, "nosrc.env"), filepath.Join(dir, "dest.env"), "replace")
+	err := copyConfigFile(filepath.Join(dir, "nosrc.env"), filepath.Join(dir, "dest.env"), "replace")
 	if err == nil {
 		t.Fatal("expected error for missing src")
 	}
@@ -144,7 +144,7 @@ func TestCopyConfigFile_Default_DestMissing(t *testing.T) {
 	if err := os.WriteFile(src, []byte("A=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CopyConfigFile(src, dest, "default"); err != nil {
+	if err := copyConfigFile(src, dest, "default"); err != nil {
 		t.Fatalf("CopyConfigFile default with missing dest: %v", err)
 	}
 	data, _ := os.ReadFile(dest)
@@ -160,7 +160,7 @@ func TestCopyConfigFile_UnknownMode_DestMissing(t *testing.T) {
 	if err := os.WriteFile(src, []byte("A=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CopyConfigFile(src, dest, "unknown_mode"); err != nil {
+	if err := copyConfigFile(src, dest, "unknown_mode"); err != nil {
 		t.Fatalf("unknown mode fallback should not error: %v", err)
 	}
 }
@@ -175,7 +175,7 @@ func TestCopyConfigFile_UnknownMode_DestExists(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("OLD=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CopyConfigFile(src, dest, "unknown_mode"); err != nil {
+	if err := copyConfigFile(src, dest, "unknown_mode"); err != nil {
 		t.Fatalf("unknown mode with existing dest: %v", err)
 	}
 	data, _ := os.ReadFile(dest)
@@ -192,7 +192,7 @@ func TestCopyConfigFile_Update_NewFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	// dest does not exist: update mode should write src content
-	if err := CopyConfigFile(src, dest, "update"); err != nil {
+	if err := copyConfigFile(src, dest, "update"); err != nil {
 		t.Fatalf("update mode with missing dest: %v", err)
 	}
 	data, _ := os.ReadFile(dest)
@@ -212,7 +212,7 @@ func TestCopyConfigFile_Update_NoAdditions(t *testing.T) {
 		t.Fatal(err)
 	}
 	// All keys in src already exist in dest — no additions.
-	if err := CopyConfigFile(src, dest, "update"); err != nil {
+	if err := copyConfigFile(src, dest, "update"); err != nil {
 		t.Fatalf("update mode with no new keys: %v", err)
 	}
 	data, _ := os.ReadFile(dest)

@@ -12,21 +12,39 @@
 // executed directly in Go — no subprocess is spawned. This makes destructive
 // and file-system operations safe, auditable, and visible in plan output.
 //
-// Canonical builtins:
-//   - confirm                       — interactive user confirmation prompt
-//   - message                       — output styled text
-//   - service_configs_copy          — copy service template configs into the hub
-//   - service_configs_check         — verify service config files exist
-//   - service_dirs_ensure           — ensure service hub directories exist
-//   - docker_remove_project_volumes — remove all Docker volumes for the project
-//   - docker_wait_healthy           — wait until containers are healthy
-//   - containers_running            — fast "is running" check (no polling, no timeout)
-//   - docker_daemon_start           — start a named daemon container (docker compose run -d)
-//   - docker_daemon_logs            — tail daemon container logs foreground (interactive)
-//   - docker_daemon_stop            — stop a named daemon container (idempotent)
-//   - docker_stop_remove_container  — stop and remove a named container (idempotent; used by per-service reset baseline)
-//   - daemons_reap                  — stop all project daemon containers; auto-injected as _auto_reap_daemons
-//   - remove_paths                  — delete declared paths inside the project root
+// Canonical builtins (registry is composed in buildRegistry from per-domain subpackages):
+//
+//	interaction/ (KindAction)
+//	- confirm                       — interactive user confirmation prompt
+//	- message                       — output styled text
+//
+//	services/ (KindAction)
+//	- service_configs_copy          — copy service template configs into the hub
+//	- service_configs_check         — verify service config files exist
+//	- service_dirs_ensure           — ensure service hub directories exist
+//
+//	containers/ (KindAction unless noted)
+//	- docker_remove_project_volumes — remove all Docker volumes for the project
+//	- docker_wait_healthy           — wait until containers are healthy
+//	- containers_running            — (KindPredicate) fast "is running" check
+//	- docker_daemon_start           — start a named daemon container (docker compose run -d)
+//	- docker_daemon_logs            — tail daemon container logs foreground (interactive)
+//	- docker_daemon_stop            — stop a named daemon container (idempotent)
+//	- docker_stop_remove_container  — (KindInternal) stop and remove a named container; per-service reset baseline
+//	- daemons_reap                  — (KindInternal) stop all project daemon containers; auto-injected as _auto_reap_daemons
+//
+//	fs/ (KindAction)
+//	- remove_paths                  — delete declared paths inside the project root
+//	fs/ (KindPredicate)
+//	- file_exists                   — check whether a file exists
+//
+//	env/ (KindPredicate)
+//	- env_keys_present              — verify env-file keys are defined
+//	- executable_in_path            — verify an executable resolves on PATH
+//
+//	root (KindPredicate)
+//	- shell                         — exit-code predicate via /bin/sh
+//	- tcp_reachable                 — TCP host:port reachability predicate
 package builtin
 
 import (

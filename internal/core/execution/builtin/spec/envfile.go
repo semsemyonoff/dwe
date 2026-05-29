@@ -6,13 +6,11 @@ import (
 )
 
 // ParseEnvKeys returns a set of KEY names found in env file content.
-func ParseEnvKeys(data []byte) map[string]bool { return parseEnvKeys(data) }
-
-func parseEnvKeys(data []byte) map[string]bool {
+func ParseEnvKeys(data []byte) map[string]bool {
 	keys := make(map[string]bool)
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
-		if key := envLineKey(scanner.Text()); key != "" {
+		if key := EnvLineKey(scanner.Text()); key != "" {
 			keys[key] = true
 		}
 	}
@@ -50,9 +48,7 @@ func ParseEnvEntries(data []byte) map[string]string {
 
 // EnvLineKey returns the KEY part of a "KEY=VALUE" env line.
 // Returns "" for blank lines and comment lines.
-func EnvLineKey(line string) string { return envLineKey(line) }
-
-func envLineKey(line string) string {
+func EnvLineKey(line string) string {
 	line = strings.TrimSpace(line)
 	if line == "" || strings.HasPrefix(line, "#") {
 		return ""

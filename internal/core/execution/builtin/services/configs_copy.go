@@ -86,17 +86,12 @@ func (ConfigsCopy) Run(_ context.Context, with map[string]any, ectx spec.ExecCon
 	return nil
 }
 
-// CopyConfigFile copies src to dest using the given mode:
+// copyConfigFile copies src to dest using the given mode:
 //   - "default" — skip if dest already exists
 //   - "replace" — overwrite unconditionally
 //   - "update"  — merge new keys from src into dest without overwriting existing values
 //
 // The dest directory is created if it does not exist.
-// Exported for use in tests.
-func CopyConfigFile(src, dest, mode string) error {
-	return copyConfigFile(src, dest, mode)
-}
-
 func copyConfigFile(src, dest, mode string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return fmt.Errorf("create dest dir: %w", err)
