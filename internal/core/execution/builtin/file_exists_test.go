@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 func TestFileExistsValidate(t *testing.T) {
@@ -36,10 +38,10 @@ func TestFileExistsRun(t *testing.T) {
 	}
 
 	b := fileExistsBuiltin{}
-	if err := b.Run(context.Background(), map[string]any{"path": "exists.txt"}, ExecContext{ProjectRoot: dir}); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"path": "exists.txt"}, spec.ExecContext{ProjectRoot: dir}); err != nil {
 		t.Fatalf("present: %v", err)
 	}
-	err := b.Run(context.Background(), map[string]any{"path": "missing.txt"}, ExecContext{ProjectRoot: dir})
+	err := b.Run(context.Background(), map[string]any{"path": "missing.txt"}, spec.ExecContext{ProjectRoot: dir})
 	if err == nil || !strings.Contains(err.Error(), "file not found: missing.txt") {
 		t.Fatalf("want not found, got %v", err)
 	}

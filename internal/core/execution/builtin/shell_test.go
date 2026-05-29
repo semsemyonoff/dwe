@@ -5,11 +5,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 func TestShellValidate(t *testing.T) {
 	t.Parallel()
-	b := shellBuiltin{}
+	b := Shell{}
 	tests := []struct {
 		name    string
 		with    map[string]any
@@ -35,7 +37,7 @@ func TestShellValidate(t *testing.T) {
 
 func TestShellDescribe(t *testing.T) {
 	t.Parallel()
-	got := shellBuiltin{}.Describe(map[string]any{"cmd": "echo hi"})
+	got := Shell{}.Describe(map[string]any{"cmd": "echo hi"})
 	if !strings.Contains(got, "echo hi") {
 		t.Fatalf("describe missing cmd: %q", got)
 	}
@@ -43,14 +45,14 @@ func TestShellDescribe(t *testing.T) {
 
 func TestShellRun(t *testing.T) {
 	t.Parallel()
-	b := shellBuiltin{}
+	b := Shell{}
 	ctx := context.Background()
 
-	if err := b.Run(ctx, map[string]any{"cmd": "exit 0"}, ExecContext{}); err != nil {
+	if err := b.Run(ctx, map[string]any{"cmd": "exit 0"}, spec.ExecContext{}); err != nil {
 		t.Fatalf("exit 0: unexpected error: %v", err)
 	}
 
-	err := b.Run(ctx, map[string]any{"cmd": "echo boom >&2; exit 3"}, ExecContext{})
+	err := b.Run(ctx, map[string]any{"cmd": "echo boom >&2; exit 3"}, spec.ExecContext{})
 	if err == nil || !strings.Contains(err.Error(), "exit status 3") || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("expected exit status 3 with stderr tail, got %v", err)
 	}
@@ -58,9 +60,9 @@ func TestShellRun(t *testing.T) {
 
 func TestShellRunTimeout(t *testing.T) {
 	t.Parallel()
-	b := shellBuiltin{}
+	b := Shell{}
 	start := time.Now()
-	err := b.Run(context.Background(), map[string]any{"cmd": "sleep 5", "timeout": "50ms"}, ExecContext{})
+	err := b.Run(context.Background(), map[string]any{"cmd": "sleep 5", "timeout": "50ms"}, spec.ExecContext{})
 	if err == nil || !strings.Contains(err.Error(), "timeout") {
 		t.Fatalf("want timeout error, got %v", err)
 	}

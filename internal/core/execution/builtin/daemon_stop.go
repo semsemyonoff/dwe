@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
@@ -52,17 +54,17 @@ func stopTimeoutSeconds(raw string) int {
 type daemonStopBuiltin struct{}
 
 func (daemonStopBuiltin) Validate(with map[string]any) error {
-	if getStringParam(with, "container_template", "") == "" {
+	if spec.GetStringParam(with, "container_template", "") == "" {
 		return fmt.Errorf("docker_daemon_stop: container_template required")
 	}
 	return nil
 }
 
 func (daemonStopBuiltin) Describe(with map[string]any) string {
-	return "stop daemon: " + getStringParam(with, "container_template", "?")
+	return "stop daemon: " + spec.GetStringParam(with, "container_template", "?")
 }
 
-func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
+func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("docker_daemon_stop: config not available")
 	}
@@ -72,12 +74,12 @@ func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx Exec
 	}
 
 	projectFull := ectx.Config.Project.FullName()
-	fullName, err := daemon.ResolveContainerName(projectFull, getStringParam(with, "container_template", ""))
+	fullName, err := daemon.ResolveContainerName(projectFull, spec.GetStringParam(with, "container_template", ""))
 	if err != nil {
 		return err
 	}
 
-	secs := stopTimeoutSeconds(getStringParam(with, "stop_timeout", ""))
+	secs := stopTimeoutSeconds(spec.GetStringParam(with, "stop_timeout", ""))
 
 	compose := docker.NewCompose(ectx.Config, dockerCfg)
 

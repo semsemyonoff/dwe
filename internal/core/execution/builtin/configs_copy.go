@@ -15,11 +15,11 @@ import (
 type serviceConfigsCopyBuiltin struct{}
 
 func (serviceConfigsCopyBuiltin) Validate(with map[string]any) error {
-	service := getStringParam(with, "service", "")
+	service := spec.GetStringParam(with, "service", "")
 	if service == "" {
 		return fmt.Errorf("builtin service_configs_copy: missing required param 'service'")
 	}
-	mode := getStringParam(with, "mode", "replace")
+	mode := spec.GetStringParam(with, "mode", "replace")
 	switch mode {
 	case "default", "replace", "update":
 		return nil
@@ -29,14 +29,14 @@ func (serviceConfigsCopyBuiltin) Validate(with map[string]any) error {
 }
 
 func (serviceConfigsCopyBuiltin) Describe(with map[string]any) string {
-	service := getStringParam(with, "service", "")
-	mode := getStringParam(with, "mode", "replace")
+	service := spec.GetStringParam(with, "service", "")
+	mode := spec.GetStringParam(with, "mode", "replace")
 	return fmt.Sprintf("builtin: service_configs_copy(service=%s, mode=%s)", service, mode)
 }
 
-func (serviceConfigsCopyBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
-	serviceName := getStringParam(with, "service", "")
-	mode := getStringParam(with, "mode", "replace")
+func (serviceConfigsCopyBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+	serviceName := spec.GetStringParam(with, "service", "")
+	mode := spec.GetStringParam(with, "mode", "replace")
 
 	svc, ok := ectx.Config.Services[serviceName]
 	if !ok {
@@ -191,4 +191,3 @@ func touchFile(path string) error {
 	}
 	return f.Close()
 }
-

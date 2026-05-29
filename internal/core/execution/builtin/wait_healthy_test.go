@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/shared/docker"
 )
 
@@ -290,7 +292,7 @@ func TestGetDurationParam(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getDurationParam(tt.with, tt.key, tt.defaultVal)
+			got, err := spec.GetDurationParam(tt.with, tt.key, tt.defaultVal)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {

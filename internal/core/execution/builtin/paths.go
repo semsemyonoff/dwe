@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 type removePathsBuiltin struct{}
 
 func (removePathsBuiltin) Validate(with map[string]any) error {
-	paths, err := getStringSlice(with, "paths")
+	paths, err := spec.GetStringSlice(with, "paths")
 	if err != nil {
 		return fmt.Errorf("builtin remove_paths: %w", err)
 	}
@@ -34,12 +36,12 @@ func (removePathsBuiltin) Validate(with map[string]any) error {
 }
 
 func (removePathsBuiltin) Describe(with map[string]any) string {
-	paths, _ := getStringSlice(with, "paths")
+	paths, _ := spec.GetStringSlice(with, "paths")
 	return fmt.Sprintf("builtin: remove_paths(paths=%v)", paths)
 }
 
-func (removePathsBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
-	paths, err := getStringSlice(with, "paths")
+func (removePathsBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+	paths, err := spec.GetStringSlice(with, "paths")
 	if err != nil {
 		return fmt.Errorf("remove_paths: %w", err)
 	}

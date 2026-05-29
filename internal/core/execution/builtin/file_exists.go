@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 type fileExistsBuiltin struct{}
 
 func (fileExistsBuiltin) Validate(with map[string]any) error {
-	path := getStringParam(with, "path", "")
+	path := spec.GetStringParam(with, "path", "")
 	if path == "" {
 		return errors.New("missing required param 'path'")
 	}
@@ -19,12 +21,12 @@ func (fileExistsBuiltin) Validate(with map[string]any) error {
 }
 
 func (fileExistsBuiltin) Describe(with map[string]any) string {
-	path := getStringParam(with, "path", "")
+	path := spec.GetStringParam(with, "path", "")
 	return fmt.Sprintf("builtin: file_exists(path=%s)", path)
 }
 
-func (fileExistsBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
-	path := getStringParam(with, "path", "")
+func (fileExistsBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+	path := spec.GetStringParam(with, "path", "")
 	full := path
 	if !filepath.IsAbs(full) {
 		full = filepath.Join(ectx.ProjectRoot, path)

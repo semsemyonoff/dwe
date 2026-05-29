@@ -8,31 +8,38 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 const shellDefaultTimeout = 10 * time.Second
 
-type shellBuiltin struct{}
+// Shell is the `shell` predicate builtin. It runs a `sh -c` command and
+// reports success based on exit status.
+type Shell struct{}
 
-func (shellBuiltin) Validate(with map[string]any) error {
-	cmd := getStringParam(with, "cmd", "")
+// Validate checks that the cmd param is present and timeout is parseable.
+func (Shell) Validate(with map[string]any) error {
+	cmd := spec.GetStringParam(with, "cmd", "")
 	if cmd == "" {
 		return errors.New("missing required param 'cmd'")
 	}
-	if _, err := getDurationParam(with, "timeout", shellDefaultTimeout); err != nil {
+	if _, err := spec.GetDurationParam(with, "timeout", shellDefaultTimeout); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (shellBuiltin) Describe(with map[string]any) string {
-	cmd := getStringParam(with, "cmd", "")
+// Describe returns a one-line summary for plan output.
+func (Shell) Describe(with map[string]any) string {
+	cmd := spec.GetStringParam(with, "cmd", "")
 	return fmt.Sprintf("builtin: shell(cmd=%s)", cmd)
 }
 
-func (shellBuiltin) Run(ctx context.Context, with map[string]any, _ ExecContext) error {
-	cmdStr := getStringParam(with, "cmd", "")
-	timeout, err := getDurationParam(with, "timeout", shellDefaultTimeout)
+// Run executes the command via `sh -c` with the configured timeout.
+func (Shell) Run(ctx context.Context, with map[string]any, _ spec.ExecContext) error {
+	cmdStr := spec.GetStringParam(with, "cmd", "")
+	timeout, err := spec.GetDurationParam(with, "timeout", shellDefaultTimeout)
 	if err != nil {
 		return err
 	}

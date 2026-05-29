@@ -7,11 +7,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 func TestTCPReachableValidate(t *testing.T) {
 	t.Parallel()
-	b := tcpReachableBuiltin{}
+	b := TCPReachable{}
 	cases := []struct {
 		name    string
 		with    map[string]any
@@ -40,7 +42,7 @@ func TestTCPReachableValidate(t *testing.T) {
 
 func TestTCPReachableDescribe(t *testing.T) {
 	t.Parallel()
-	got := tcpReachableBuiltin{}.Describe(map[string]any{"host": "h", "port": 1234})
+	got := TCPReachable{}.Describe(map[string]any{"host": "h", "port": 1234})
 	if !strings.Contains(got, "h") || !strings.Contains(got, "1234") {
 		t.Fatalf("describe: %q", got)
 	}
@@ -65,8 +67,8 @@ func TestTCPReachableRun(t *testing.T) {
 		}
 	}()
 
-	b := tcpReachableBuiltin{}
-	if err := b.Run(context.Background(), map[string]any{"host": "127.0.0.1", "port": port}, ExecContext{}); err != nil {
+	b := TCPReachable{}
+	if err := b.Run(context.Background(), map[string]any{"host": "127.0.0.1", "port": port}, spec.ExecContext{}); err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 }
@@ -74,9 +76,9 @@ func TestTCPReachableRun(t *testing.T) {
 func TestTCPReachableRunTimeout(t *testing.T) {
 	t.Parallel()
 	// 198.51.100.0/24 is TEST-NET-2 reserved for documentation; unroutable.
-	b := tcpReachableBuiltin{}
+	b := TCPReachable{}
 	start := time.Now()
-	err := b.Run(context.Background(), map[string]any{"host": "198.51.100.1", "port": 81, "timeout": "100ms"}, ExecContext{})
+	err := b.Run(context.Background(), map[string]any{"host": "198.51.100.1", "port": 81, "timeout": "100ms"}, spec.ExecContext{})
 	if err == nil {
 		t.Fatal("want dial error")
 	}

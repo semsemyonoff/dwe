@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 // mandatoryDirs are always created for every service hub regardless of config.
@@ -18,11 +20,11 @@ var mandatoryDirs = []string{"src"}
 type serviceDirsEnsureBuiltin struct{}
 
 func (serviceDirsEnsureBuiltin) Validate(with map[string]any) error {
-	service := getStringParam(with, "service", "")
+	service := spec.GetStringParam(with, "service", "")
 	if service == "" {
 		return fmt.Errorf("builtin service_dirs_ensure: missing required param 'service'")
 	}
-	mode := getStringParam(with, "mode", "skip")
+	mode := spec.GetStringParam(with, "mode", "skip")
 	switch mode {
 	case "skip", "error", "recreate":
 		return nil
@@ -32,14 +34,14 @@ func (serviceDirsEnsureBuiltin) Validate(with map[string]any) error {
 }
 
 func (serviceDirsEnsureBuiltin) Describe(with map[string]any) string {
-	service := getStringParam(with, "service", "")
-	mode := getStringParam(with, "mode", "skip")
+	service := spec.GetStringParam(with, "service", "")
+	mode := spec.GetStringParam(with, "mode", "skip")
 	return fmt.Sprintf("builtin: service_dirs_ensure(service=%s, mode=%s)", service, mode)
 }
 
-func (serviceDirsEnsureBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
-	serviceName := getStringParam(with, "service", "")
-	mode := getStringParam(with, "mode", "skip")
+func (serviceDirsEnsureBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+	serviceName := spec.GetStringParam(with, "service", "")
+	mode := spec.GetStringParam(with, "mode", "skip")
 
 	svc, ok := ectx.Config.Services[serviceName]
 	if !ok {
@@ -130,7 +132,7 @@ func ensureInsideBase(baseDir, abs string) error {
 //	error    — create if missing, error if exists (dir or non-dir)
 //	recreate — remove+create if exists as dir, error if exists as non-dir;
 //	           the mandatory src/ dir uses skip semantics in recreate mode for safety
-func ensureDir(abs, rel, mode string, isMandatory bool, ectx ExecContext) error {
+func ensureDir(abs, rel, mode string, isMandatory bool, ectx spec.ExecContext) error {
 	info, err := os.Lstat(abs)
 	exists := err == nil
 	if err != nil && !os.IsNotExist(err) {
@@ -177,7 +179,7 @@ func ensureDir(abs, rel, mode string, isMandatory bool, ectx ExecContext) error 
 	}
 }
 
-func createDir(abs, rel string, ectx ExecContext) error {
+func createDir(abs, rel string, ectx spec.ExecContext) error {
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return fmt.Errorf("creating %q: %w", rel, err)
 	}

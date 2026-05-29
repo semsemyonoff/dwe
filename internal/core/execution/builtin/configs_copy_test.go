@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 )
@@ -233,7 +235,7 @@ func TestRemovePaths_Validate_InvalidPathsType(t *testing.T) {
 
 func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
 	b := serviceConfigsCopyBuiltin{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{Services: map[string]config.ServiceConfig{}},
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
@@ -249,7 +251,7 @@ func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
 
 func TestServiceConfigsCopy_Run_EmptyServiceDir(t *testing.T) {
 	b := serviceConfigsCopyBuiltin{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config: &config.DevboxConfig{
 			Services: map[string]config.ServiceConfig{
 				"main": {Dir: ""},
@@ -266,7 +268,7 @@ func TestServiceConfigsCopy_Run_EmptyServiceDir(t *testing.T) {
 
 func TestServiceConfigsCopy_Run_NoConfigs_Succeeds(t *testing.T) {
 	b := serviceConfigsCopyBuiltin{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config: &config.DevboxConfig{
 			Services: map[string]config.ServiceConfig{
 				"main": {Dir: "services/main", Configs: nil},

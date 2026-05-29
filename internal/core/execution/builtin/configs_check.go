@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 type serviceConfigsCheckBuiltin struct{}
 
 func (serviceConfigsCheckBuiltin) Validate(with map[string]any) error {
-	service := getStringParam(with, "service", "")
+	service := spec.GetStringParam(with, "service", "")
 	if service == "" {
 		return fmt.Errorf("builtin service_configs_check: missing required param 'service'")
 	}
@@ -19,12 +21,12 @@ func (serviceConfigsCheckBuiltin) Validate(with map[string]any) error {
 }
 
 func (serviceConfigsCheckBuiltin) Describe(with map[string]any) string {
-	service := getStringParam(with, "service", "")
+	service := spec.GetStringParam(with, "service", "")
 	return fmt.Sprintf("builtin: service_configs_check(service=%s)", service)
 }
 
-func (serviceConfigsCheckBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
-	serviceName := getStringParam(with, "service", "")
+func (serviceConfigsCheckBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+	serviceName := spec.GetStringParam(with, "service", "")
 
 	svc, ok := ectx.Config.Services[serviceName]
 	if !ok {

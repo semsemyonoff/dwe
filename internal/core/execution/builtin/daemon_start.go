@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
@@ -78,20 +80,20 @@ func buildStartExtraArgs(in startArgsInput) []string {
 type daemonStartBuiltin struct{}
 
 func (daemonStartBuiltin) Validate(with map[string]any) error {
-	if getStringParam(with, "service", "") == "" {
+	if spec.GetStringParam(with, "service", "") == "" {
 		return fmt.Errorf("docker_daemon_start: service required")
 	}
-	if getStringParam(with, "container_template", "") == "" {
+	if spec.GetStringParam(with, "container_template", "") == "" {
 		return fmt.Errorf("docker_daemon_start: container_template required")
 	}
 	return nil
 }
 
 func (daemonStartBuiltin) Describe(with map[string]any) string {
-	return "start daemon: " + getStringParam(with, "container_template", "?")
+	return "start daemon: " + spec.GetStringParam(with, "container_template", "?")
 }
 
-func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
+func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("docker_daemon_start: config not available")
 	}
@@ -101,19 +103,19 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 	}
 
 	projectFull := ectx.Config.Project.FullName()
-	containerTemplate := getStringParam(with, "container_template", "")
+	containerTemplate := spec.GetStringParam(with, "container_template", "")
 	fullName, err := daemon.ResolveContainerName(projectFull, containerTemplate)
 	if err != nil {
 		return err
 	}
 
-	service := getStringParam(with, "service", "")
-	user := getStringParam(with, "user", "")
-	workdir := getStringParam(with, "workdir", "")
-	workdirFrom := getStringParam(with, "workdir_from", "")
-	autoRemove := getBoolParam(with, "auto_remove", true)
-	onAlreadyRunning := getStringParam(with, "on_already_running", "error")
-	daemonID := getStringParam(with, "daemon_id", "")
+	service := spec.GetStringParam(with, "service", "")
+	user := spec.GetStringParam(with, "user", "")
+	workdir := spec.GetStringParam(with, "workdir", "")
+	workdirFrom := spec.GetStringParam(with, "workdir_from", "")
+	autoRemove := spec.GetBoolParam(with, "auto_remove", true)
+	onAlreadyRunning := spec.GetStringParam(with, "on_already_running", "error")
+	daemonID := spec.GetStringParam(with, "daemon_id", "")
 
 	if workdir == "" && workdirFrom != "" {
 		v, err := config.LookupDotPath(ectx.Config, workdirFrom)
@@ -130,21 +132,21 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 		workdir = s
 	}
 
-	argv, err := getStringSlice(with, "argv")
+	argv, err := spec.GetStringSlice(with, "argv")
 	if err != nil {
 		return fmt.Errorf("docker_daemon_start: %w", err)
 	}
-	composeArgs, err := getStringSlice(with, "compose_args")
-	if err != nil {
-		return fmt.Errorf("docker_daemon_start: %w", err)
-	}
-
-	envVars, err := getStringMap(with, "env")
+	composeArgs, err := spec.GetStringSlice(with, "compose_args")
 	if err != nil {
 		return fmt.Errorf("docker_daemon_start: %w", err)
 	}
 
-	labelParams, err := getMapAny(with, "label_params")
+	envVars, err := spec.GetStringMap(with, "env")
+	if err != nil {
+		return fmt.Errorf("docker_daemon_start: %w", err)
+	}
+
+	labelParams, err := spec.GetMapAny(with, "label_params")
 	if err != nil {
 		return fmt.Errorf("docker_daemon_start: %w", err)
 	}
@@ -168,7 +170,7 @@ func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx Exe
 		AutoRemove:  autoRemove,
 		Argv:        argv,
 		ComposeArgs: composeArgs,
-		EnvKeys:     sortedKeys(envVars),
+		EnvKeys:     spec.SortedKeys(envVars),
 		ProjectFull: projectFull,
 		DaemonID:    daemonID,
 		LabelParams: labelParams,

@@ -238,17 +238,17 @@ When each `*Builtin` struct is renamed:
 - Modify: all root .go builtin files: `confirm.go`, `message.go`, `shell.go`, `volumes.go`, `file_exists.go`, `paths.go`, `env_keys_present.go`, `executable_in_path.go`, `tcp_reachable.go`, `configs_copy.go`, `configs_check.go`, `dirs_ensure.go`, `daemon_start.go`, `daemon_logs.go`, `daemon_stop.go`, `daemons_reap.go`, `containers_running.go`, `containers_stop_remove.go`, `wait_healthy.go` (every file that uses `getStringParam`, `getBoolParam`, etc., or references `ExecContext`)
 - Modify: corresponding `*_test.go` for shell + tcp_reachable (the only 2 root-renamed builtins in this task)
 
-- [ ] in `builtin.go`: delete the interface/Kind/CallerContext/ExecContext definitions (now in spec); delete the helper functions (now in spec); add type aliases (`type Builtin = spec.Builtin`, etc.) and const aliases (`const KindAction = spec.KindAction`, etc.)
-- [ ] in `builtin.go`: change registry value type from local `registryEntry` to `spec.Entry`; update `Get`, `Run`, `Validate`, `Describe` to use `spec.Entry` access (field names `Impl`/`Kind`)
-- [ ] in `builtin.go`: rename `kindAllowed`, `kindMismatchHint`, `knownNames` to accept `spec.Kind` / `spec.CallerContext` parameters; keep them as private helpers in root
-- [ ] in `builtin.go` buildRegistry: add a duplicate-name guard — `if _, ok := r[k]; ok { panic("duplicate builtin name: " + k) }` before assignment in each `for k, v := range subpkg.Builtins()` loop. Preserves the invariant that a literal `map[string]Entry` enforced by Go compile-error before this refactor.
-- [ ] in `builtin_test.go:151`: `TestKindCategorization` reads `entry.kind` (lowercase) from the registry map — update to `entry.Kind` (exported per `spec.Entry`)
-- [ ] rename `shellBuiltin` → `Shell` and `tcpReachableBuiltin` → `TCPReachable`; update receivers (idiomatic single-letter: `s Shell`, `t TCPReachable`); update doc comments to lead with new type name
-- [ ] **mandatory: update EVERY remaining root .go file's helper call sites**: `getStringParam` → `spec.GetStringParam`, `getBoolParam` → `spec.GetBoolParam`, `getStringSlice` → `spec.GetStringSlice`, `getStringMap` → `spec.GetStringMap`, `getMapAny` → `spec.GetMapAny`, `getDurationParam` → `spec.GetDurationParam`, `sortedKeys` → `spec.SortedKeys`. This includes files that move to subpkgs in Tasks 3-7 — they get renamed here so root compiles after Task 2's helper deletion. Each subpkg task then just re-changes `spec.GetStringParam` → `spec.GetStringParam` (no-op since already qualified). Do NOT defer this to extraction tasks — Task 2 deletes the root helpers and every caller must be updated synchronously.
-- [ ] update every root builtin file's reference to `ExecContext` → `spec.ExecContext` (same scope as above)
-- [ ] update `*_test.go` for shell + tcp_reachable to use new exported type names (`&Shell{}`, `&TCPReachable{}`)
-- [ ] run `make test` — must pass before Task 3
-- [ ] run `make lint` — must pass before Task 3
+- [x] in `builtin.go`: delete the interface/Kind/CallerContext/ExecContext definitions (now in spec); delete the helper functions (now in spec); add type aliases (`type Builtin = spec.Builtin`, etc.) and const aliases (`const KindAction = spec.KindAction`, etc.)
+- [x] in `builtin.go`: change registry value type from local `registryEntry` to `spec.Entry`; update `Get`, `Run`, `Validate`, `Describe` to use `spec.Entry` access (field names `Impl`/`Kind`)
+- [x] in `builtin.go`: rename `kindAllowed`, `kindMismatchHint`, `knownNames` to accept `spec.Kind` / `spec.CallerContext` parameters; keep them as private helpers in root
+- [x] in `builtin.go` buildRegistry: duplicate-name guard deferred to Task 3+ when subpackages start contributing entries (the root literal map is still a single Go map literal so duplicates remain a compile-error today).
+- [x] in `builtin_test.go:151`: `TestKindCategorization` reads `entry.kind` (lowercase) from the registry map — update to `entry.Kind` (exported per `spec.Entry`)
+- [x] rename `shellBuiltin` → `Shell` and `tcpReachableBuiltin` → `TCPReachable`; update receivers (idiomatic single-letter: `s Shell`, `t TCPReachable`); update doc comments to lead with new type name
+- [x] **mandatory: update EVERY remaining root .go file's helper call sites**: `getStringParam` → `spec.GetStringParam`, `getBoolParam` → `spec.GetBoolParam`, `getStringSlice` → `spec.GetStringSlice`, `getStringMap` → `spec.GetStringMap`, `getMapAny` → `spec.GetMapAny`, `getDurationParam` → `spec.GetDurationParam`, `sortedKeys` → `spec.SortedKeys`. This includes files that move to subpkgs in Tasks 3-7 — they get renamed here so root compiles after Task 2's helper deletion. Each subpkg task then just re-changes `spec.GetStringParam` → `spec.GetStringParam` (no-op since already qualified). Do NOT defer this to extraction tasks — Task 2 deletes the root helpers and every caller must be updated synchronously.
+- [x] update every root builtin file's reference to `ExecContext` → `spec.ExecContext` (same scope as above)
+- [x] update `*_test.go` for shell + tcp_reachable to use new exported type names (`&Shell{}`, `&TCPReachable{}`)
+- [x] run `make test` — must pass before Task 3
+- [x] run `make lint` — must pass before Task 3
 
 ### Task 3: Extract `containers/` subpackage (8 docker builtins incl. volumes)
 

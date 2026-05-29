@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 )
 
@@ -19,8 +21,8 @@ func (dockerRemoveProjectVolumesBuiltin) Describe(with map[string]any) string {
 	return "builtin: docker_remove_project_volumes()"
 }
 
-func (dockerRemoveProjectVolumesBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
-	// Use the pre-loaded docker config from ExecContext; callers normalise
+func (dockerRemoveProjectVolumesBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+	// Use the pre-loaded docker config from spec.ExecContext; callers normalise
 	// os.ErrNotExist to &config.DockerConfig{} so we never load it here.
 	dockerCfg := ectx.DockerConfig
 	if dockerCfg == nil {

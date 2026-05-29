@@ -7,14 +7,16 @@ import (
 	"io"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/render"
 )
 
-// newTestConfirmCtx returns an ExecContext for use in confirm builtin tests.
-func newTestConfirmCtx(confirmFunc func(string, string, string) (bool, error)) ExecContext {
-	return ExecContext{
+// newTestConfirmCtx returns an spec.ExecContext for use in confirm builtin tests.
+func newTestConfirmCtx(confirmFunc func(string, string, string) (bool, error)) spec.ExecContext {
+	return spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(&bytes.Buffer{}),
@@ -120,7 +122,7 @@ func TestConfirmBuiltin_ConfirmFunc_DefaultParams(t *testing.T) {
 
 // TestConfirmBuiltin_NoConfirmFunc_SkipsWhenSkipConfirmSet verifies plain mode skips on SkipConfirm.
 func TestConfirmBuiltin_NoConfirmFunc_SkipsWhenSkipConfirmSet(t *testing.T) {
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(&bytes.Buffer{}),
@@ -152,7 +154,7 @@ func TestConfirmBuiltin_TTY_UsesRunConfirmWrapper(t *testing.T) {
 	}
 
 	out := &bytes.Buffer{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
@@ -182,7 +184,7 @@ func TestConfirmBuiltin_TTY_ErrCancelled(t *testing.T) {
 	}
 
 	out := &bytes.Buffer{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
@@ -209,7 +211,7 @@ func TestConfirmBuiltin_TTY_Denied(t *testing.T) {
 	}
 
 	out := &bytes.Buffer{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
@@ -229,7 +231,7 @@ func TestConfirmBuiltin_NonTTY_StdinY(t *testing.T) {
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	out := &bytes.Buffer{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
@@ -249,7 +251,7 @@ func TestConfirmBuiltin_NonTTY_StdinN(t *testing.T) {
 	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	out := &bytes.Buffer{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
@@ -267,7 +269,7 @@ func TestConfirmBuiltin_PipedStdin_RoutesToFallback(t *testing.T) {
 	// IsInteractiveFn returns false for bytes.Buffer (not *os.File), so this
 	// test exercises the real IsInteractiveFn behavior with a bytes.Buffer.
 	out := &bytes.Buffer{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),

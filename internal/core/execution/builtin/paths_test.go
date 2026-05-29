@@ -8,12 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 )
 
-func newTestExecCtx(root string) ExecContext {
-	return ExecContext{
+func newTestExecCtx(root string) spec.ExecContext {
+	return spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: root,
 		Output:      render.NewWriter(&bytes.Buffer{}),

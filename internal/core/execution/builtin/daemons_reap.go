@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
@@ -46,7 +48,7 @@ func (daemonsReapBuiltin) Describe(_ map[string]any) string {
 	return "reap running daemons for this project"
 }
 
-func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx ExecContext) error {
+func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("daemons_reap: config not available")
 	}

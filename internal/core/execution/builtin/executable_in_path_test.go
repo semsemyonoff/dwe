@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 func TestExecutableInPathValidate(t *testing.T) {
@@ -28,10 +30,10 @@ func TestExecutableInPathDescribe(t *testing.T) {
 func TestExecutableInPathRun(t *testing.T) {
 	t.Parallel()
 	b := executableInPathBuiltin{}
-	if err := b.Run(context.Background(), map[string]any{"name": "sh"}, ExecContext{}); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"name": "sh"}, spec.ExecContext{}); err != nil {
 		t.Fatalf("sh should be in PATH: %v", err)
 	}
-	err := b.Run(context.Background(), map[string]any{"name": "definitely-not-a-binary-xyzzy"}, ExecContext{})
+	err := b.Run(context.Background(), map[string]any{"name": "definitely-not-a-binary-xyzzy"}, spec.ExecContext{})
 	if err == nil || !strings.Contains(err.Error(), "not found in PATH") {
 		t.Fatalf("want not found, got %v", err)
 	}

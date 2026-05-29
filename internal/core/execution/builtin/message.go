@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -18,14 +20,14 @@ var validMessageLevels = map[string]bool{
 type messageBuiltin struct{}
 
 func (messageBuiltin) Validate(with map[string]any) error {
-	level := getStringParam(with, "level", "")
+	level := spec.GetStringParam(with, "level", "")
 	if level == "" {
 		return fmt.Errorf("builtin message: missing required param 'level'")
 	}
 	if !validMessageLevels[level] {
 		return fmt.Errorf("builtin message: invalid level %q (valid: info, success, warning, error)", level)
 	}
-	text := getStringParam(with, "text", "")
+	text := spec.GetStringParam(with, "text", "")
 	if text == "" {
 		return fmt.Errorf("builtin message: missing required param 'text'")
 	}
@@ -33,14 +35,14 @@ func (messageBuiltin) Validate(with map[string]any) error {
 }
 
 func (messageBuiltin) Describe(with map[string]any) string {
-	level := getStringParam(with, "level", "")
-	text := getStringParam(with, "text", "")
+	level := spec.GetStringParam(with, "level", "")
+	text := spec.GetStringParam(with, "text", "")
 	return fmt.Sprintf("builtin: message(level=%s, text=%s)", level, text)
 }
 
-func (messageBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
-	level := getStringParam(with, "level", "")
-	rawText := getStringParam(with, "text", "")
+func (messageBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+	level := spec.GetStringParam(with, "level", "")
+	rawText := spec.GetStringParam(with, "text", "")
 
 	text, err := tpl.Render(rawText, ectx.Config)
 	if err != nil {

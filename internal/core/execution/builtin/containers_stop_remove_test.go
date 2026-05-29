@@ -7,13 +7,15 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 )
 
-func newDockerStopRemoveCtx(cfg *config.DevboxConfig) (ExecContext, *bytes.Buffer) {
+func newDockerStopRemoveCtx(cfg *config.DevboxConfig) (spec.ExecContext, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
-	return ExecContext{
+	return spec.ExecContext{
 		Config: cfg,
 		Output: render.NewWriter(buf),
 	}, buf
@@ -257,7 +259,7 @@ func TestDockerStopRemoveContainer_Run_NoProjectPrefix(t *testing.T) {
 }
 
 func TestDockerStopRemoveContainer_Run_NilConfig(t *testing.T) {
-	ectx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	ectx := spec.ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
 	err := dockerStopRemoveContainerBuiltin{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "app"},

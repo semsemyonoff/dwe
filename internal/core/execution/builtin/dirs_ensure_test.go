@@ -7,16 +7,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 )
 
-// makeExecCtx returns an ExecContext with an in-memory output writer and the
+// makeExecCtx returns an spec.ExecContext with an in-memory output writer and the
 // given project root directory.
-func makeExecCtx(t *testing.T, projectRoot string) ExecContext {
+func makeExecCtx(t *testing.T, projectRoot string) spec.ExecContext {
 	t.Helper()
 	buf := &bytes.Buffer{}
-	return ExecContext{
+	return spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: projectRoot,
 		Output:      render.NewWriter(buf),
@@ -415,7 +417,7 @@ func TestEnsureDir_ExistsNotDir(t *testing.T) {
 	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	ctx := spec.ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
 	err := ensureDir(p, "notadir.txt", "skip", false, ctx)
 	if err == nil {
 		t.Fatal("expected error when path exists but is not a directory")
@@ -428,7 +430,7 @@ func TestEnsureDir_ErrorMode_Exists(t *testing.T) {
 	if err := os.Mkdir(p, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	ctx := spec.ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
 	err := ensureDir(p, "existing", "error", false, ctx)
 	if err == nil {
 		t.Fatal("expected error in error mode when dir exists")
@@ -438,7 +440,7 @@ func TestEnsureDir_ErrorMode_Exists(t *testing.T) {
 func TestEnsureDir_UnknownMode(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "newdir")
-	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	ctx := spec.ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
 	err := ensureDir(p, "newdir", "bogusmode", false, ctx)
 	if err == nil {
 		t.Fatal("expected error for unknown mode")
@@ -452,7 +454,7 @@ func TestServiceDirsEnsure_EmptyServiceDir(t *testing.T) {
 			"main": {Dir: ""},
 		},
 	}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      cfg,
 		ProjectRoot: root,
 		Output:      render.NewWriter(&bytes.Buffer{}),
@@ -470,7 +472,7 @@ func TestEnsureDir_RecreateMode_Mandatory_Exists(t *testing.T) {
 	if err := os.Mkdir(p, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ctx := ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
+	ctx := spec.ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
 	err := ensureDir(p, "src", "recreate", true, ctx)
 	if err != nil {
 		t.Fatalf("recreate on mandatory+existing dir should skip: %v", err)

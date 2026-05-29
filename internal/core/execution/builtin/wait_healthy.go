@@ -6,6 +6,8 @@ import (
 	"slices"
 	"time"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/docker"
 )
@@ -14,7 +16,7 @@ type dockerWaitHealthyBuiltin struct{}
 
 func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
 	// Validate timeout.
-	timeout, err := getDurationParam(with, "timeout", 60*time.Second)
+	timeout, err := spec.GetDurationParam(with, "timeout", 60*time.Second)
 	if err != nil {
 		return err
 	}
@@ -23,7 +25,7 @@ func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
 	}
 
 	// Validate interval.
-	interval, err := getDurationParam(with, "interval", 2*time.Second)
+	interval, err := spec.GetDurationParam(with, "interval", 2*time.Second)
 	if err != nil {
 		return err
 	}
@@ -31,7 +33,7 @@ func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
 		return fmt.Errorf("builtin docker_wait_healthy: interval must be positive, got %v", interval)
 	}
 
-	// Validate services if present. Check element types before getStringSlice
+	// Validate services if present. Check element types before spec.GetStringSlice
 	// so that non-string entries (e.g. YAML integers) are rejected rather than
 	// silently coerced to strings.
 	if raw, ok := with["services"]; ok && raw != nil {
@@ -43,7 +45,7 @@ func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
 			}
 		}
 	}
-	services, err := getStringSlice(with, "services")
+	services, err := spec.GetStringSlice(with, "services")
 	if err != nil {
 		return err
 	}
@@ -62,9 +64,9 @@ func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
 }
 
 func (dockerWaitHealthyBuiltin) Describe(with map[string]any) string {
-	timeout, _ := getDurationParam(with, "timeout", 60*time.Second)
-	interval, _ := getDurationParam(with, "interval", 2*time.Second)
-	services, _ := getStringSlice(with, "services")
+	timeout, _ := spec.GetDurationParam(with, "timeout", 60*time.Second)
+	interval, _ := spec.GetDurationParam(with, "interval", 2*time.Second)
+	services, _ := spec.GetStringSlice(with, "services")
 
 	if len(services) > 0 {
 		if len(services) == 1 {
@@ -78,13 +80,13 @@ func (dockerWaitHealthyBuiltin) Describe(with map[string]any) string {
 		timeout, interval)
 }
 
-func (dockerWaitHealthyBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
+func (dockerWaitHealthyBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	// Parse parameters.
-	timeout, _ := getDurationParam(with, "timeout", 60*time.Second)
-	interval, _ := getDurationParam(with, "interval", 2*time.Second)
-	services, _ := getStringSlice(with, "services")
+	timeout, _ := spec.GetDurationParam(with, "timeout", 60*time.Second)
+	interval, _ := spec.GetDurationParam(with, "interval", 2*time.Second)
+	services, _ := spec.GetStringSlice(with, "services")
 
-	// Use the pre-loaded docker config from ExecContext; callers normalise
+	// Use the pre-loaded docker config from spec.ExecContext; callers normalise
 	// os.ErrNotExist to &config.DockerConfig{} so we never load it here.
 	dockerCfg := ectx.DockerConfig
 	if dockerCfg == nil {

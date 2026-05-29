@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/render"
@@ -98,10 +100,10 @@ func TestDaemonsReap_Validate_EmptyOK(t *testing.T) {
 	}
 }
 
-func newReapExecContext(buf *bytes.Buffer) ExecContext {
+func newReapExecContext(buf *bytes.Buffer) spec.ExecContext {
 	cfg := &config.DevboxConfig{}
 	cfg.Project.Name = "testproj"
-	return ExecContext{
+	return spec.ExecContext{
 		Config:       cfg,
 		DockerConfig: &config.DockerConfig{},
 		ProjectRoot:  "/tmp",
@@ -110,7 +112,7 @@ func newReapExecContext(buf *bytes.Buffer) ExecContext {
 }
 
 func TestDaemonsReap_Run_NilConfig(t *testing.T) {
-	err := daemonsReapBuiltin{}.Run(context.Background(), nil, ExecContext{})
+	err := daemonsReapBuiltin{}.Run(context.Background(), nil, spec.ExecContext{})
 	if err == nil || !strings.Contains(err.Error(), "config not available") {
 		t.Fatalf("expected config-not-available error, got: %v", err)
 	}

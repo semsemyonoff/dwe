@@ -152,8 +152,8 @@ func TestKindCategorization(t *testing.T) {
 			if !ok {
 				t.Fatalf("builtin %q not in registry", tc.name)
 			}
-			if entry.kind != tc.kind {
-				t.Errorf("kind = %v, want %v", entry.kind, tc.kind)
+			if entry.Kind != tc.kind {
+				t.Errorf("kind = %v, want %v", entry.Kind, tc.kind)
 			}
 			// Verify each context combination
 			_, gotUserYAML := Get(tc.name, CtxUserYAML)
@@ -224,4 +224,3 @@ func TestGetKindMismatch(t *testing.T) {
 		}
 	})
 }
-

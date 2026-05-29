@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 func TestEnvKeysPresentValidate(t *testing.T) {
@@ -43,11 +45,11 @@ func TestEnvKeysPresentRun(t *testing.T) {
 	}
 	b := envKeysPresentBuiltin{}
 
-	if err := b.Run(context.Background(), map[string]any{"file": ".env", "keys": []any{"FOO"}}, ExecContext{ProjectRoot: dir}); err != nil {
+	if err := b.Run(context.Background(), map[string]any{"file": ".env", "keys": []any{"FOO"}}, spec.ExecContext{ProjectRoot: dir}); err != nil {
 		t.Fatalf("FOO present: %v", err)
 	}
 
-	err := b.Run(context.Background(), map[string]any{"file": ".env", "keys": []any{"FOO", "BAZ", "QUUX", "MISSING"}}, ExecContext{ProjectRoot: dir})
+	err := b.Run(context.Background(), map[string]any{"file": ".env", "keys": []any{"FOO", "BAZ", "QUUX", "MISSING"}}, spec.ExecContext{ProjectRoot: dir})
 	if err == nil {
 		t.Fatal("want missing-or-empty error")
 	}
@@ -63,7 +65,7 @@ func TestEnvKeysPresentRun(t *testing.T) {
 		t.Errorf("FOO should not appear, got %v", err)
 	}
 
-	err = b.Run(context.Background(), map[string]any{"file": "nope.env", "keys": []any{"X"}}, ExecContext{ProjectRoot: dir})
+	err = b.Run(context.Background(), map[string]any{"file": "nope.env", "keys": []any{"X"}}, spec.ExecContext{ProjectRoot: dir})
 	if err == nil || !strings.Contains(err.Error(), "file not found") {
 		t.Fatalf("want file not found, got %v", err)
 	}

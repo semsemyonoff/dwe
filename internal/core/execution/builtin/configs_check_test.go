@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 )
@@ -176,7 +178,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 			cfg := tt.setup(t, tmpDir)
 
 			builtin := serviceConfigsCheckBuiltin{}
-			ctx := ExecContext{
+			ctx := spec.ExecContext{
 				Config:      cfg,
 				ProjectRoot: tmpDir,
 				Output:      nil,
@@ -216,7 +218,7 @@ func TestServiceConfigsCheckBuiltin_Run_OutputWriterLogsErrors(t *testing.T) {
 	w := render.NewWriter(&buf)
 
 	b := serviceConfigsCheckBuiltin{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      cfg,
 		ProjectRoot: tmpDir,
 		Output:      w,

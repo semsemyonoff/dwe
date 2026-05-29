@@ -6,15 +6,17 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 )
 
-// makeMessageCtx returns an ExecContext with a captured output buffer.
-func makeMessageCtx(t *testing.T) (ExecContext, *bytes.Buffer) {
+// makeMessageCtx returns an spec.ExecContext with a captured output buffer.
+func makeMessageCtx(t *testing.T) (spec.ExecContext, *bytes.Buffer) {
 	t.Helper()
 	buf := &bytes.Buffer{}
-	ctx := ExecContext{
+	ctx := spec.ExecContext{
 		Config:      &config.DevboxConfig{},
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(buf),

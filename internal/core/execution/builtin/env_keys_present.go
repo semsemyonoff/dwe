@@ -14,11 +14,11 @@ import (
 type envKeysPresentBuiltin struct{}
 
 func (envKeysPresentBuiltin) Validate(with map[string]any) error {
-	file := getStringParam(with, "file", "")
+	file := spec.GetStringParam(with, "file", "")
 	if file == "" {
 		return errors.New("missing required param 'file'")
 	}
-	keys, err := getStringSlice(with, "keys")
+	keys, err := spec.GetStringSlice(with, "keys")
 	if err != nil {
 		return err
 	}
@@ -29,14 +29,14 @@ func (envKeysPresentBuiltin) Validate(with map[string]any) error {
 }
 
 func (envKeysPresentBuiltin) Describe(with map[string]any) string {
-	file := getStringParam(with, "file", "")
-	keys, _ := getStringSlice(with, "keys")
+	file := spec.GetStringParam(with, "file", "")
+	keys, _ := spec.GetStringSlice(with, "keys")
 	return fmt.Sprintf("builtin: env_keys_present(file=%s, keys=[%s])", file, strings.Join(keys, ","))
 }
 
-func (envKeysPresentBuiltin) Run(_ context.Context, with map[string]any, ectx ExecContext) error {
-	file := getStringParam(with, "file", "")
-	keys, err := getStringSlice(with, "keys")
+func (envKeysPresentBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+	file := spec.GetStringParam(with, "file", "")
+	keys, err := spec.GetStringSlice(with, "keys")
 	if err != nil {
 		return err
 	}

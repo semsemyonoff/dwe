@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"devbox-cli/internal/core/execution/builtin/spec"
+
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/docker"
 )
@@ -28,7 +30,7 @@ func (containersRunningBuiltin) Validate(with map[string]any) error {
 			}
 		}
 	}
-	services, err := getStringSlice(with, "services")
+	services, err := spec.GetStringSlice(with, "services")
 	if err != nil {
 		return err
 	}
@@ -48,15 +50,15 @@ func (containersRunningBuiltin) Validate(with map[string]any) error {
 }
 
 func (containersRunningBuiltin) Describe(with map[string]any) string {
-	services, _ := getStringSlice(with, "services")
+	services, _ := spec.GetStringSlice(with, "services")
 	if len(services) == 1 {
 		return fmt.Sprintf("check that service %q is running", services[0])
 	}
 	return fmt.Sprintf("check that %d services are running", len(services))
 }
 
-func (containersRunningBuiltin) Run(ctx context.Context, with map[string]any, ectx ExecContext) error {
-	services, _ := getStringSlice(with, "services")
+func (containersRunningBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+	services, _ := spec.GetStringSlice(with, "services")
 
 	dockerCfg := ectx.DockerConfig
 	if dockerCfg == nil {

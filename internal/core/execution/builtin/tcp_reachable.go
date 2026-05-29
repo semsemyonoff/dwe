@@ -7,14 +7,19 @@ import (
 	"net"
 	"strconv"
 	"time"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 const tcpDefaultTimeout = 3 * time.Second
 
-type tcpReachableBuiltin struct{}
+// TCPReachable is the `tcp_reachable` predicate builtin. It reports success
+// when a TCP dial to host:port completes within the configured timeout.
+type TCPReachable struct{}
 
-func (tcpReachableBuiltin) Validate(with map[string]any) error {
-	host := getStringParam(with, "host", "")
+// Validate checks that host, port, and (optional) timeout are well-formed.
+func (TCPReachable) Validate(with map[string]any) error {
+	host := spec.GetStringParam(with, "host", "")
 	if host == "" {
 		return errors.New("missing required param 'host'")
 	}
@@ -25,25 +30,27 @@ func (tcpReachableBuiltin) Validate(with map[string]any) error {
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("param 'port': out of range 1-65535 (got %d)", port)
 	}
-	if _, err := getDurationParam(with, "timeout", tcpDefaultTimeout); err != nil {
+	if _, err := spec.GetDurationParam(with, "timeout", tcpDefaultTimeout); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tcpReachableBuiltin) Describe(with map[string]any) string {
-	host := getStringParam(with, "host", "")
+// Describe returns a one-line summary for plan output.
+func (TCPReachable) Describe(with map[string]any) string {
+	host := spec.GetStringParam(with, "host", "")
 	port, _ := getIntParam(with, "port")
 	return fmt.Sprintf("builtin: tcp_reachable(host=%s, port=%d)", host, port)
 }
 
-func (tcpReachableBuiltin) Run(ctx context.Context, with map[string]any, _ ExecContext) error {
-	host := getStringParam(with, "host", "")
+// Run dials host:port with the configured timeout.
+func (TCPReachable) Run(ctx context.Context, with map[string]any, _ spec.ExecContext) error {
+	host := spec.GetStringParam(with, "host", "")
 	port, err := getIntParam(with, "port")
 	if err != nil {
 		return err
 	}
-	timeout, err := getDurationParam(with, "timeout", tcpDefaultTimeout)
+	timeout, err := spec.GetDurationParam(with, "timeout", tcpDefaultTimeout)
 	if err != nil {
 		return err
 	}
