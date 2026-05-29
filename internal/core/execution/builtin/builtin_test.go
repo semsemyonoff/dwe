@@ -7,6 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"devbox-cli/internal/core/execution/builtin/containers"
+	"devbox-cli/internal/core/execution/builtin/env"
+	"devbox-cli/internal/core/execution/builtin/fs"
+	"devbox-cli/internal/core/execution/builtin/interaction"
+	"devbox-cli/internal/core/execution/builtin/services"
+	"devbox-cli/internal/core/execution/builtin/spec"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/shared/render"
 )
@@ -114,7 +120,7 @@ func TestRun_UnknownBuiltin(t *testing.T) {
 
 // TestKindCategorization verifies that every registered builtin
 // has the expected kind, and that kind/context gating works as intended.
-// This is the single source of truth for the 18-entry registry categorization.
+// This is the single source of truth for the 19-entry registry categorization.
 func TestKindCategorization(t *testing.T) {
 	type kindCase struct {
 		name        string
@@ -144,6 +150,7 @@ func TestKindCategorization(t *testing.T) {
 		{"docker_daemon_start", KindInternal, false, false, true},
 		{"docker_daemon_logs", KindInternal, false, false, true},
 		{"docker_daemon_stop", KindInternal, false, false, true},
+		{"docker_stop_remove_container", KindInternal, false, false, true},
 		{"daemons_reap", KindInternal, false, false, true},
 	}
 	for _, tc := range cases {
@@ -223,4 +230,81 @@ func TestGetKindMismatch(t *testing.T) {
 			t.Error("daemons_reap must be callable from CtxInternal")
 		}
 	})
+}
+
+// --- Registry composition ---
+
+// allBuiltinNames enumerates every builtin name expected in the registry after
+// the subpackage refactor. Adding or removing a name requires updating this list.
+var allBuiltinNames = []string{
+	// root (cross-cutting predicates)
+	"shell",
+	"tcp_reachable",
+	// containers/
+	"docker_daemon_start",
+	"docker_daemon_logs",
+	"docker_daemon_stop",
+	"docker_stop_remove_container",
+	"daemons_reap",
+	"containers_running",
+	"docker_wait_healthy",
+	"docker_remove_project_volumes",
+	// services/
+	"service_configs_copy",
+	"service_configs_check",
+	"service_dirs_ensure",
+	// fs/
+	"file_exists",
+	"remove_paths",
+	// env/
+	"env_keys_present",
+	"executable_in_path",
+	// interaction/
+	"confirm",
+	"message",
+}
+
+// TestRegistryHasAllNames asserts the registry contains exactly the 19 expected
+// builtin names — guards against accidental drops or duplications when entries
+// move between subpackages.
+func TestRegistryHasAllNames(t *testing.T) {
+	if got, want := len(registry), len(allBuiltinNames); got != want {
+		t.Errorf("registry size = %d, want %d", got, want)
+	}
+	for _, name := range allBuiltinNames {
+		if _, ok := registry[name]; !ok {
+			t.Errorf("registry missing builtin %q", name)
+		}
+	}
+}
+
+// TestNoDuplicateRegistryNames asserts each subpackage's Builtins() map has
+// keys disjoint from every other subpackage and from the root entries. Pairs
+// with the panic guard in buildRegistry() to catch collisions at test time
+// rather than at first program start.
+func TestNoDuplicateRegistryNames(t *testing.T) {
+	sources := []struct {
+		name    string
+		entries map[string]spec.Entry
+	}{
+		{"root", map[string]spec.Entry{
+			"shell":         {Impl: Shell{}, Kind: spec.KindPredicate},
+			"tcp_reachable": {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+		}},
+		{"containers", containers.Builtins()},
+		{"services", services.Builtins()},
+		{"fs", fs.Builtins()},
+		{"env", env.Builtins()},
+		{"interaction", interaction.Builtins()},
+	}
+	owner := map[string]string{}
+	for _, src := range sources {
+		for name := range src.entries {
+			if prev, dup := owner[name]; dup {
+				t.Errorf("builtin %q registered by both %q and %q", name, prev, src.name)
+				continue
+			}
+			owner[name] = src.name
+		}
+	}
 }

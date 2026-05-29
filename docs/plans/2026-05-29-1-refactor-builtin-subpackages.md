@@ -359,13 +359,13 @@ When each `*Builtin` struct is renamed:
 - Modify: `internal/core/execution/builtin/builtin_test.go` (extend `TestKindCategorization`, add new tests)
 - Read-only verification of: `internal/core/execution/pipeline/`, `internal/core/validate/checks/`, `internal/core/workflow/lifecycle/`
 
-- [ ] grep for `builtin.Builtin` / `builtin.ExecContext` / `builtin.CtxUserYAML` / `builtin.Get` / `builtin.Run` / `builtin.Validate` / `builtin.Describe` / `builtin.IsInteractive` across `internal/` — verify all callers still compile with the type aliases
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
-- [ ] verify all 19 builtin names registered: add a one-shot test `TestRegistryHasAllNames` in root `builtin_test.go` that asserts `len(registry) == 19` and each expected name is present
-- [ ] verify IsInteractive still returns true for `confirm` and `docker_daemon_logs`, false for others (extend or add `TestIsInteractive`)
-- [ ] **extend existing `TestKindCategorization` to cover all 19 names** — the current test covers only 18 entries (it is missing `docker_stop_remove_container`, which should be `KindInternal`). Update the test data + header comment to "19-entry registry categorization". The refactor is the right moment to close this pre-existing gap surfaced by Task 8.
-- [ ] add `TestNoDuplicateRegistryNames` in root `builtin_test.go`: call each subpkg's `Builtins()` directly, build a `[]map[string]spec.Entry` slice, and assert pairwise key disjointness. Together with the panic guard in `buildRegistry()` this prevents accidental future collisions.
+- [x] grep for `builtin.Builtin` / `builtin.ExecContext` / `builtin.CtxUserYAML` / `builtin.Get` / `builtin.Run` / `builtin.Validate` / `builtin.Describe` / `builtin.IsInteractive` across `internal/` — verify all callers still compile with the type aliases
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint`
+- [x] verify all 19 builtin names registered: add a one-shot test `TestRegistryHasAllNames` in root `builtin_test.go` that asserts `len(registry) == 19` and each expected name is present
+- [x] verify IsInteractive still returns true for `confirm` and `docker_daemon_logs`, false for others (extend or add `TestIsInteractive`)
+- [x] **extend existing `TestKindCategorization` to cover all 19 names** — the current test covers only 18 entries (it is missing `docker_stop_remove_container`, which should be `KindInternal`). Update the test data + header comment to "19-entry registry categorization". The refactor is the right moment to close this pre-existing gap surfaced by Task 8.
+- [x] add `TestNoDuplicateRegistryNames` in root `builtin_test.go`: call each subpkg's `Builtins()` directly, build a `[]map[string]spec.Entry` slice, and assert pairwise key disjointness. Together with the panic guard in `buildRegistry()` this prevents accidental future collisions.
 
 ### Task 9: Build verification + manual smoke test
 
