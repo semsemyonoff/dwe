@@ -236,10 +236,10 @@ Per golang-concurrency skill principles: every goroutine needs a clear exit; onl
 - Modify: `AGENTS.md` (mention `devbox logs` as the diagnostic entry point in Key Patterns / status section)
 - Move: this plan to `docs/plans/completed/`
 
-- [ ] run `make build` to regenerate embedded docs and CLI reference
-- [ ] add one-line mention in AGENTS.md under the Configuration Documentation / Status section about `devbox logs <service>` for runtime log inspection
-- [ ] verify content-hashes manifest updated (CI guard)
-- [ ] `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-logs-command.md docs/plans/completed/`
+- [x] run `make build` to regenerate embedded docs and CLI reference
+- [x] add one-line mention in AGENTS.md under the Configuration Documentation / Status section about `devbox logs <service>` for runtime log inspection
+- [x] verify content-hashes manifest updated (CI guard)
+- [x] `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-logs-command.md docs/plans/completed/`
 
 ## Post-Completion
 
