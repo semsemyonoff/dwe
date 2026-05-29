@@ -223,13 +223,13 @@ Several callers use symbols from multiple groups → import multiple subpkgs. Th
 - Modify: `internal/core/ui/huh_test.go` (if test references the moved helpers)
 - Modify: `internal/core/ui/styles_test.go`
 
-- [ ] move `huhTheme`, `applyFormGlyphs`, `buildPaletteApplier` definitions from `huh.go` to `styles.go` (still unexported)
-- [ ] remove the now-dead imports in `huh.go` (huh lib references kept only for the hooks)
-- [ ] update `styles.go` to define + use these helpers directly (no cross-file call needed within the same package)
-- [ ] verify `huh.go` only contains `SetHuhHooks`, `ClearHuhHooks`, `SnapshotHuhHooks`, the `defaultRunConfirmForm`-style indirection used by widgets, plus any test seams
-- [ ] update test references if any test directly invoked the moved helpers from huh_test.go
-- [ ] run `make test ./internal/core/ui/...` — must pass before Task 2
-- [ ] run `make lint` — must pass before Task 2
+- [x] move `huhTheme`, `applyFormGlyphs`, `buildPaletteApplier` definitions from `huh.go` to `styles.go` (still unexported)
+- [x] remove the now-dead imports in `huh.go` (huh lib references kept only for the hooks)
+- [x] update `styles.go` to define + use these helpers directly (no cross-file call needed within the same package)
+- [x] verify `huh.go` only contains `SetHuhHooks`, `ClearHuhHooks`, `SnapshotHuhHooks`, the `defaultRunConfirmForm`-style indirection used by widgets, plus any test seams
+- [x] update test references if any test directly invoked the moved helpers from huh_test.go (no changes needed — tests stayed in same package)
+- [x] run `make test ./internal/core/ui/...` — must pass before Task 2
+- [x] run `make lint` — must pass before Task 2
 
 ### Task 2: Extract `styles/` subpackage (FIRST — both widgets/ and render/ depend on it)
 

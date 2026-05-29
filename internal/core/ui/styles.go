@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	huh "charm.land/huh/v2"
+	huhlip "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
 
@@ -380,4 +381,93 @@ func TermWidth() int {
 		return 80
 	}
 	return w
+}
+
+// huhTheme is the package-level huh.Theme built from devbox/styles.yml.
+// It defaults to ThemeBase + devbox glyph overrides (no project palette
+// applied) until ApplyStyles is called.
+var huhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
+	s := huh.ThemeBase(isDark)
+	applyFormGlyphs(s)
+	applyMultiSelectStateStyles(s, resolvedSuccess, resolvedMuted)
+	return s
+})
+
+// applyFormGlyphs replaces the default huh prefix glyphs with the devbox look:
+// "✓ " for selected items, "• " for unselected. Coloring is handled separately
+// by buildPaletteApplier so the glyphs always render even without a palette.
+func applyFormGlyphs(s *huh.Styles) {
+	s.Focused.SelectedPrefix = s.Focused.SelectedPrefix.SetString("✓ ")
+	s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.SetString("• ")
+	s.Blurred.SelectedPrefix = s.Blurred.SelectedPrefix.SetString("✓ ")
+	s.Blurred.UnselectedPrefix = s.Blurred.UnselectedPrefix.SetString("• ")
+}
+
+func applyMultiSelectStateStyles(s *huh.Styles, selectedColor, unselectedColor string) {
+	selected := huhlip.Color(selectedColor)
+	unselected := huhlip.Color(unselectedColor)
+
+	s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(selected).Bold(true).Faint(false)
+	s.Focused.SelectedPrefix = s.Focused.SelectedPrefix.Foreground(selected).Bold(true).Faint(false)
+	s.Blurred.SelectedOption = s.Blurred.SelectedOption.Foreground(selected).Bold(true).Faint(false)
+	s.Blurred.SelectedPrefix = s.Blurred.SelectedPrefix.Foreground(selected).Bold(true).Faint(false)
+
+	s.Focused.UnselectedOption = s.Focused.UnselectedOption.Foreground(unselected).Bold(false).Faint(true)
+	s.Focused.UnselectedPrefix = s.Focused.UnselectedPrefix.Foreground(unselected).Bold(false).Faint(true)
+	s.Blurred.UnselectedOption = s.Blurred.UnselectedOption.Foreground(unselected).Bold(false).Faint(true)
+	s.Blurred.UnselectedPrefix = s.Blurred.UnselectedPrefix.Foreground(unselected).Bold(false).Faint(true)
+}
+
+// Theme returns the current package-level huh.Theme.
+// All huh form/field call sites should use .WithTheme(ui.Theme()) so they
+// automatically pick up palette changes from styles.yml.
+func Theme() huh.Theme {
+	return huhTheme
+}
+
+// buildPaletteApplier returns a function that applies project palette colors
+// to a *huh.Styles in place. The returned function is safe to call multiple
+// times on different *huh.Styles values (no shared state).
+//
+// Palette mapping (7-token → *huh.Styles):
+//   - accent  → Focused.Title, Group.Title, SelectSelector, MultiSelectSelector,
+//     Option, TextInput.Prompt, NextIndicator, PrevIndicator
+//   - muted   → Focused.Description, Group.Description, Blurred.Title,
+//     Blurred.Description, UnselectedOption, TextInput.Placeholder
+//   - success → Focused.SelectedOption, Focused.SelectedPrefix (multi-select checked)
+//   - danger  → Focused.ErrorIndicator, Focused.ErrorMessage
+//
+// The applier reads from the resolved token values (resolvedAccent, etc.) so
+// passing nil or an empty StylesColors still produces a fully-themed *huh.Styles
+// — empty user overrides have already been resolved to the built-in defaults
+// by rebuildSemanticStyles.
+func buildPaletteApplier() func(*huh.Styles) {
+	return func(s *huh.Styles) {
+		accent := huhlip.Color(resolvedAccent)
+		muted := huhlip.Color(resolvedMuted)
+		danger := huhlip.Color(resolvedDanger)
+
+		s.Focused.Title = s.Focused.Title.Foreground(accent).Bold(true)
+		s.Group.Title = s.Group.Title.Foreground(accent).Bold(true)
+
+		s.Focused.Description = s.Focused.Description.Foreground(muted)
+		s.Group.Description = s.Group.Description.Foreground(muted)
+
+		s.Focused.SelectSelector = s.Focused.SelectSelector.Foreground(accent)
+		s.Focused.MultiSelectSelector = s.Focused.MultiSelectSelector.Foreground(accent)
+		s.Focused.Option = s.Focused.Option.Foreground(accent)
+
+		s.Blurred.Title = s.Blurred.Title.Foreground(muted)
+		s.Blurred.Description = s.Blurred.Description.Foreground(muted)
+		s.Focused.TextInput.Placeholder = s.Focused.TextInput.Placeholder.Foreground(muted)
+
+		s.Focused.ErrorIndicator = s.Focused.ErrorIndicator.Foreground(danger)
+		s.Focused.ErrorMessage = s.Focused.ErrorMessage.Foreground(danger)
+
+		s.Focused.TextInput.Prompt = s.Focused.TextInput.Prompt.Foreground(accent)
+		s.Focused.NextIndicator = s.Focused.NextIndicator.Foreground(accent)
+		s.Focused.PrevIndicator = s.Focused.PrevIndicator.Foreground(accent)
+
+		applyMultiSelectStateStyles(s, resolvedSuccess, resolvedMuted)
+	}
 }
