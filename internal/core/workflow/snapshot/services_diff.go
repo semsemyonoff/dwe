@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // ServiceEnabledDiff records a service whose Enabled flag differs between the
@@ -42,8 +43,8 @@ func (d ServicesDiff) IsEmpty() bool {
 // service Name and Enabled flag — it does not inspect ports, hosts, or any
 // other ServiceConfig field. The current map shape mirrors
 // config.DevboxConfig.Services so callers can pass cfg.Services directly.
-func DiffServices(manifest []ServiceSnapshot, current map[string]config.ServiceConfig) ServicesDiff {
-	manifestByName := make(map[string]ServiceSnapshot, len(manifest))
+func DiffServices(manifest []meta.ServiceSnapshot, current map[string]config.ServiceConfig) ServicesDiff {
+	manifestByName := make(map[string]meta.ServiceSnapshot, len(manifest))
 	for _, s := range manifest {
 		manifestByName[s.Name] = s
 	}

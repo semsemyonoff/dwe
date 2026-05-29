@@ -1,7 +1,4 @@
-// Package snapshot implements the devbox snapshot subsystem: canonical paths,
-// manifest read/write, current-pointer state, name validation, artifact scan,
-// and pack/unpack support. Workflow execution is layered on top via exec.go.
-package snapshot
+package meta
 
 import (
 	"path/filepath"

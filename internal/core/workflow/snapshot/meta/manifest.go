@@ -1,4 +1,9 @@
-package snapshot
+// Package meta defines snapshot descriptor types and coordinates: the
+// canonical Manifest shape, path helpers, name validation, the snapshot
+// template variables map, the current-pointer state, the artifact scanner,
+// and atomic file writing. It is the leaf layer of the snapshot subsystem —
+// imported by archive/ and the root snapshot/ package.
+package meta
 
 import (
 	"errors"
@@ -157,37 +162,5 @@ func SaveManifest(path string, m *Manifest) error {
 	if err != nil {
 		return fmt.Errorf("marshal manifest: %w", err)
 	}
-	return writeFileAtomic(path, data, 0o644)
-}
-
-// writeFileAtomic writes data to path atomically using a temp file in the
-// same directory (required for POSIX atomic rename) plus chmod + rename.
-// On any error, the temp file is removed.
-func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	base := filepath.Base(path)
-	tmp, err := os.CreateTemp(dir, "."+base+".*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp: %w", err)
-	}
-	tmpPath := tmp.Name()
-	cleanup := func() { _ = os.Remove(tmpPath) }
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return fmt.Errorf("write temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return fmt.Errorf("close temp: %w", err)
-	}
-	if err := os.Chmod(tmpPath, mode); err != nil {
-		cleanup()
-		return fmt.Errorf("chmod temp: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		cleanup()
-		return fmt.Errorf("rename temp: %w", err)
-	}
-	return nil
+	return WriteFileAtomic(path, data, 0o644)
 }

@@ -20,6 +20,7 @@ import (
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 
@@ -74,7 +75,7 @@ func newSnapshotRollbackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes, noLive, silent bool, operation, notifyOp string) (err error) {
 	baseDir := flags.ProjectRoot()
 
-	if err := snapshotpkg.ValidateName(name); err != nil {
+	if err := meta.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -213,7 +214,7 @@ func runSnapshotRollback(cmd *cobra.Command, flags *cmdctx.RootFlags, yes, noLiv
 	if snapCfg.RollbackTarget == "" {
 		return fmt.Errorf("snapshot rollback: rollback_target is not set in devbox/snapshot.yml")
 	}
-	if err := snapshotpkg.ValidateName(snapCfg.RollbackTarget); err != nil {
+	if err := meta.ValidateName(snapCfg.RollbackTarget); err != nil {
 		return fmt.Errorf("snapshot rollback: rollback_target %q in devbox/snapshot.yml: %w", snapCfg.RollbackTarget, err)
 	}
 	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, noLive, silent, "rollback", "snapshot:rollback")
@@ -224,13 +225,13 @@ func writeRestoreOutcome(w io.Writer, operation string, res *snapshotpkg.Restore
 		return
 	}
 	switch res.Status {
-	case snapshotpkg.StatusOk:
+	case meta.StatusOk:
 		verb := operation + "d"
 		if operation == "rollback" {
 			verb = "rolled back"
 		}
 		_, _ = fmt.Fprintf(w, "snapshot %q %s in %dms\n", res.Manifest.Name, verb, res.DurationMs)
-	case snapshotpkg.StatusInterrupted:
+	case meta.StatusInterrupted:
 		_, _ = fmt.Fprintf(w, "snapshot %s %q interrupted; pre-restore backup kept at %s\n", operation, res.Manifest.Name, res.BackupDir)
 	default:
 		_, _ = fmt.Fprintf(w, "snapshot %s %q failed; pre-restore backup kept at %s\n", operation, res.Manifest.Name, res.BackupDir)

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/pathsafe"
 )
 
@@ -32,7 +33,7 @@ import (
 // opts.ConfirmOverwrite is invoked when the target directory already exists
 // and AssumeYes is false. A nil callback is treated as a refusal.
 func Unpack(tarPath, snapshotsRoot, targetName string, opts UnpackOptions) (*UnpackResult, error) {
-	if err := ValidateName(targetName); err != nil {
+	if err := meta.ValidateName(targetName); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(tarPath); err != nil {
@@ -71,7 +72,7 @@ func Unpack(tarPath, snapshotsRoot, targetName string, opts UnpackOptions) (*Unp
 		return nil, err
 	}
 
-	m, err := LoadManifest(filepath.Join(stagingDir, ManifestFileName))
+	m, err := meta.LoadManifest(filepath.Join(stagingDir, meta.ManifestFileName))
 	if err != nil {
 		cleanupStaging()
 		return nil, fmt.Errorf("unpack: read manifest: %w", err)
@@ -163,7 +164,7 @@ func Unpack(tarPath, snapshotsRoot, targetName string, opts UnpackOptions) (*Unp
 	// restore vars) derive the name from the manifest, not the directory.
 	if m.Name != targetName {
 		m.Name = targetName
-		if err := SaveManifest(filepath.Join(finalDir, ManifestFileName), m); err != nil {
+		if err := meta.SaveManifest(filepath.Join(finalDir, meta.ManifestFileName), m); err != nil {
 			_ = os.RemoveAll(finalDir)
 			if backupDir != "" {
 				if renameErr := os.Rename(backupDir, finalDir); renameErr != nil {

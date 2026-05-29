@@ -9,6 +9,8 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 const (
@@ -30,7 +32,7 @@ const (
 // at maxInspectManifestBytes, and treats the first entry with the exact
 // path "manifest.yml" as authoritative. Returns an error when no manifest
 // entry is present.
-func ReadManifestFromTar(tarPath string) (*Manifest, error) {
+func ReadManifestFromTar(tarPath string) (*meta.Manifest, error) {
 	f, err := os.Open(tarPath)
 	if err != nil {
 		return nil, err
@@ -70,7 +72,7 @@ func ReadManifestFromTar(tarPath string) (*Manifest, error) {
 		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
-		if hdr.Name != ManifestFileName {
+		if hdr.Name != meta.ManifestFileName {
 			continue
 		}
 		data, err := io.ReadAll(io.LimitReader(tr, maxInspectManifestBytes+1))
@@ -80,7 +82,7 @@ func ReadManifestFromTar(tarPath string) (*Manifest, error) {
 		if int64(len(data)) > maxInspectManifestBytes {
 			return nil, fmt.Errorf("read %s: manifest entry exceeds %d bytes", tarPath, maxInspectManifestBytes)
 		}
-		var m Manifest
+		var m meta.Manifest
 		if err := yaml.Unmarshal(data, &m); err != nil {
 			return nil, fmt.Errorf("parse %s manifest: %w", tarPath, err)
 		}

@@ -1,4 +1,4 @@
-package snapshot
+package meta
 
 import (
 	"errors"
@@ -26,7 +26,7 @@ func WriteCurrent(baseDir, name string) error {
 	if err := os.MkdirAll(StateDir(baseDir), 0o755); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
-	return writeFileAtomic(CurrentPointer(baseDir), []byte(name+"\n"), 0o644)
+	return WriteFileAtomic(CurrentPointer(baseDir), []byte(name+"\n"), 0o644)
 }
 
 // ClearCurrent removes the current-pointer file. Missing file is a no-op.

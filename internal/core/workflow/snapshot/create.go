@@ -14,6 +14,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/workflow/deploy/journal"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -77,7 +78,7 @@ type CreateResult struct {
 	// ManifestPath is the absolute path of the written manifest.
 	ManifestPath string
 	// Manifest is the manifest that was written to disk.
-	Manifest *Manifest
+	Manifest *meta.Manifest
 	// Status mirrors Manifest.LastCreate.Status — "ok" / "failed" /
 	// "interrupted".
 	Status string
@@ -108,7 +109,7 @@ type CreateResult struct {
 // "interrupted" and the current pointer is NOT touched. Callers convert
 // ctx.Err()==Canceled into the interrupted exit code.
 func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
-	if err := ValidateName(p.Name); err != nil {
+	if err := meta.ValidateName(p.Name); err != nil {
 		return nil, err
 	}
 	if p.SnapCfg == nil {
@@ -131,7 +132,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		now = time.Now
 	}
 
-	snapDir := SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)
+	snapDir := meta.SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)
 	var backupDir string
 	if _, statErr := os.Stat(snapDir); statErr == nil {
 		// Directory already exists — confirm overwrite or refuse.
@@ -159,7 +160,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		return nil, fmt.Errorf("snapshot: stat existing dir: %w", statErr)
 	}
 
-	if err := os.MkdirAll(filepath.Join(snapDir, DevboxSubdir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(snapDir, meta.DevboxSubdir), 0o755); err != nil {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
 			if rErr := os.Rename(backupDir, snapDir); rErr != nil && p.Stderr != nil {
@@ -185,7 +186,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	if absErr != nil {
 		absSnapDir = snapDir
 	}
-	vars := BuildSnapshotVars(p.Name, absSnapDir, p.Description, p.Variant, createdAt)
+	vars := meta.BuildSnapshotVars(p.Name, absSnapDir, p.Description, p.Variant, createdAt)
 
 	// Run the workflow. On success or failure we still write a manifest.
 	runErr := RunWorkflow(ctx, ExecParams{
@@ -202,35 +203,35 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		StepObserverFactory: p.StepObserverFactory,
 	})
 
-	status := StatusOk
+	status := meta.StatusOk
 	failedStep := ""
 	switch {
 	case runErr == nil:
 		// keep StatusOk
 	case errors.Is(runErr, context.Canceled), errors.Is(runErr, context.DeadlineExceeded):
-		status = StatusInterrupted
+		status = meta.StatusInterrupted
 		failedStep = runErr.Error()
 	default:
-		status = StatusFailed
+		status = meta.StatusFailed
 		failedStep = runErr.Error()
 	}
 
-	artifacts, scanErr := ScanArtifacts(snapDir)
+	artifacts, scanErr := meta.ScanArtifacts(snapDir)
 	if scanErr != nil {
 		// Scan failure on a non-failed workflow demotes to "failed" so the
 		// manifest does not advertise an inconsistent OK state. Keep the
 		// stricter scan error as the failure cause.
-		if status == StatusOk {
-			status = StatusFailed
+		if status == meta.StatusOk {
+			status = meta.StatusFailed
 			failedStep = "artifact scan: " + scanErr.Error()
 		}
 		artifacts = nil
 	}
 
-	m := NewManifest(p.Name, now)
+	m := meta.NewManifest(p.Name, now)
 	m.CreatedAt = createdAt
 	m.Description = p.Description
-	m.Project = ProjectInfo{
+	m.Project = meta.ProjectInfo{
 		Name:       p.Cfg.Project.Name,
 		ConfigHash: ProjectConfigHash(p.BaseDir),
 		Services:   captureServiceSnapshots(p.Cfg.Services),
@@ -239,14 +240,14 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	m.Variant = p.Variant
 	m.Artifacts = artifacts
 	m.DevboxFiles = devboxFiles
-	m.LastCreate = &LastCreate{
+	m.LastCreate = &meta.LastCreate{
 		At:         createdAt,
 		Status:     status,
 		FailedStep: failedStep,
 	}
 
-	manifestPath := ManifestPath(p.BaseDir, p.SnapCfg, p.Name)
-	if err := SaveManifest(manifestPath, m); err != nil {
+	manifestPath := meta.ManifestPath(p.BaseDir, p.SnapCfg, p.Name)
+	if err := meta.SaveManifest(manifestPath, m); err != nil {
 		// Preserve the original workflow / scan error if any; otherwise
 		// surface the manifest write failure.
 		if runErr == nil && scanErr == nil {
@@ -264,7 +265,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		Status:       status,
 	}
 
-	if status != StatusOk {
+	if status != meta.StatusOk {
 		// Restore the previous snapshot if we backed it up: remove the failed
 		// attempt and rename the backup back so the user retains a working state.
 		if backupDir != "" {
@@ -295,7 +296,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	}
 
 	// Success: update the current pointer atomically.
-	if err := WriteCurrent(p.BaseDir, p.Name); err != nil {
+	if err := meta.WriteCurrent(p.BaseDir, p.Name); err != nil {
 		return res, fmt.Errorf("snapshot: update current pointer: %w", err)
 	}
 	return res, nil
@@ -313,13 +314,13 @@ func confirmOverwrite(fn func() (bool, error)) (bool, error) {
 
 // captureServiceSnapshots renders the effective service map into a manifest
 // slice sorted by name for deterministic output. A nil/empty map yields nil.
-func captureServiceSnapshots(services map[string]config.ServiceConfig) []ServiceSnapshot {
+func captureServiceSnapshots(services map[string]config.ServiceConfig) []meta.ServiceSnapshot {
 	if len(services) == 0 {
 		return nil
 	}
-	out := make([]ServiceSnapshot, 0, len(services))
+	out := make([]meta.ServiceSnapshot, 0, len(services))
 	for name, svc := range services {
-		out = append(out, ServiceSnapshot{Name: name, Enabled: svc.Enabled})
+		out = append(out, meta.ServiceSnapshot{Name: name, Enabled: svc.Enabled})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"devbox-cli/internal/core/workflow/deploy/journal"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // localYMLMaxBytes caps the size of any devbox/local.yml input the
@@ -23,11 +24,11 @@ const localYMLMaxBytes = 1 << 20
 // neither file is mandatory at create time. The preserveKeys parameter lists
 // dot-paths to strip from the captured local.yml so they can be re-spliced
 // from the working copy on restore.
-func captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (DevboxFiles, error) {
-	var df DevboxFiles
+func captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (meta.DevboxFiles, error) {
+	var df meta.DevboxFiles
 
 	srcLocal := filepath.Join(baseDir, "devbox", "local.yml")
-	dstLocalRel := filepath.Join(DevboxSubdir, "local.yml")
+	dstLocalRel := filepath.Join(meta.DevboxSubdir, "local.yml")
 	dstLocal := filepath.Join(snapDir, dstLocalRel)
 	wrote, err := captureLocalYML(srcLocal, dstLocal, preserveKeys)
 	if err != nil {
@@ -38,7 +39,7 @@ func captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (DevboxF
 	}
 
 	srcState := filepath.Join(baseDir, journal.DefaultRelPath)
-	dstStateRel := filepath.Join(DevboxSubdir, "deploy-state.yml")
+	dstStateRel := filepath.Join(meta.DevboxSubdir, "deploy-state.yml")
 	dstState := filepath.Join(snapDir, dstStateRel)
 	ok, err := copyFileIfExists(srcState, dstState)
 	if err != nil {
@@ -70,7 +71,7 @@ func captureLocalYML(src, dst string, preserveKeys []string) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return false, err
 	}
-	if err := writeFileAtomic(dst, stripped, 0o644); err != nil {
+	if err := meta.WriteFileAtomic(dst, stripped, 0o644); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -89,7 +90,7 @@ func copyFileIfExists(src, dst string) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return false, err
 	}
-	if err := writeFileAtomic(dst, data, 0o644); err != nil {
+	if err := meta.WriteFileAtomic(dst, data, 0o644); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -113,14 +114,14 @@ func copyFileIfExists(src, dst string) (bool, error) {
 // working-copy file is removed so restored state matches captured state.
 func restoreDevboxFiles(snapDir, baseDir string, preserveKeys []string) error {
 	if err := restoreLocalYML(
-		filepath.Join(snapDir, DevboxSubdir, "local.yml"),
+		filepath.Join(snapDir, meta.DevboxSubdir, "local.yml"),
 		filepath.Join(baseDir, "devbox", "local.yml"),
 		preserveKeys,
 	); err != nil {
 		return err
 	}
 
-	stateSrc := filepath.Join(snapDir, DevboxSubdir, "deploy-state.yml")
+	stateSrc := filepath.Join(snapDir, meta.DevboxSubdir, "deploy-state.yml")
 	stateDst := filepath.Join(baseDir, journal.DefaultRelPath)
 	data, err := os.ReadFile(stateSrc)
 	if err != nil {
@@ -135,7 +136,7 @@ func restoreDevboxFiles(snapDir, baseDir string, preserveKeys []string) error {
 	if err := os.MkdirAll(filepath.Dir(stateDst), 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(stateDst), err)
 	}
-	if err := writeFileAtomic(stateDst, data, 0o644); err != nil {
+	if err := meta.WriteFileAtomic(stateDst, data, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", stateDst, err)
 	}
 	return nil
@@ -190,7 +191,7 @@ func writeLocalYML(dst string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(dst), err)
 	}
-	if err := writeFileAtomic(dst, data, 0o644); err != nil {
+	if err := meta.WriteFileAtomic(dst, data, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", dst, err)
 	}
 	return nil

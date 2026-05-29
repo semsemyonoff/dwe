@@ -6,18 +6,19 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 func TestDiffServices(t *testing.T) {
 	tests := []struct {
 		name     string
-		manifest []ServiceSnapshot
+		manifest []meta.ServiceSnapshot
 		current  map[string]config.ServiceConfig
 		want     ServicesDiff
 	}{
 		{
 			name: "identical",
-			manifest: []ServiceSnapshot{
+			manifest: []meta.ServiceSnapshot{
 				{Name: "db", Enabled: true},
 				{Name: "main", Enabled: true},
 			},
@@ -29,7 +30,7 @@ func TestDiffServices(t *testing.T) {
 		},
 		{
 			name: "only in snapshot",
-			manifest: []ServiceSnapshot{
+			manifest: []meta.ServiceSnapshot{
 				{Name: "cdn", Enabled: false},
 				{Name: "main", Enabled: true},
 			},
@@ -40,7 +41,7 @@ func TestDiffServices(t *testing.T) {
 		},
 		{
 			name: "only local",
-			manifest: []ServiceSnapshot{
+			manifest: []meta.ServiceSnapshot{
 				{Name: "main", Enabled: true},
 			},
 			current: map[string]config.ServiceConfig{
@@ -51,7 +52,7 @@ func TestDiffServices(t *testing.T) {
 		},
 		{
 			name: "enabled flipped",
-			manifest: []ServiceSnapshot{
+			manifest: []meta.ServiceSnapshot{
 				{Name: "db", Enabled: true},
 				{Name: "main", Enabled: false},
 			},
@@ -68,7 +69,7 @@ func TestDiffServices(t *testing.T) {
 		},
 		{
 			name: "deterministic ordering across all groups",
-			manifest: []ServiceSnapshot{
+			manifest: []meta.ServiceSnapshot{
 				{Name: "zeta", Enabled: true},
 				{Name: "alpha", Enabled: true},
 				{Name: "beta", Enabled: false},

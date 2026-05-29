@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/cli/cmdctx"
-	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
 )
@@ -34,13 +34,13 @@ func snapshotTestProject(t *testing.T) string {
 	return dir
 }
 
-func writeTestSnapshot(t *testing.T, base, name string, m *snapshotpkg.Manifest) {
+func writeTestSnapshot(t *testing.T, base, name string, m *meta.Manifest) {
 	t.Helper()
 	dir := filepath.Join(base, "snapshots", name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := snapshotpkg.SaveManifest(filepath.Join(dir, snapshotpkg.ManifestFileName), m); err != nil {
+	if err := meta.SaveManifest(filepath.Join(dir, meta.ManifestFileName), m); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 }
@@ -118,19 +118,19 @@ func TestSnapshotList_TableAndJSON(t *testing.T) {
 	}
 	older := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC)
-	writeTestSnapshot(t, base, "alpha", &snapshotpkg.Manifest{
+	writeTestSnapshot(t, base, "alpha", &meta.Manifest{
 		Name:      "alpha",
 		CreatedAt: older,
-		Artifacts: []snapshotpkg.ArtifactInfo{{Path: "x", Size: 2048}},
+		Artifacts: []meta.ArtifactInfo{{Path: "x", Size: 2048}},
 	})
-	writeTestSnapshot(t, base, "beta", &snapshotpkg.Manifest{
+	writeTestSnapshot(t, base, "beta", &meta.Manifest{
 		Name:        "beta",
 		CreatedAt:   newer,
 		Description: "WIP",
 	})
 
 	// Set current pointer to beta.
-	if err := snapshotpkg.WriteCurrent(base, "beta"); err != nil {
+	if err := meta.WriteCurrent(base, "beta"); err != nil {
 		t.Fatalf("write current: %v", err)
 	}
 
@@ -215,12 +215,12 @@ func TestSnapshotCurrent(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		writeTestSnapshot(t, base, "feature-x", &snapshotpkg.Manifest{
+		writeTestSnapshot(t, base, "feature-x", &meta.Manifest{
 			Name:        "feature-x",
 			CreatedAt:   time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
 			Description: "wip",
 		})
-		if err := snapshotpkg.WriteCurrent(base, "feature-x"); err != nil {
+		if err := meta.WriteCurrent(base, "feature-x"); err != nil {
 			t.Fatalf("write current: %v", err)
 		}
 		cmd, out, _ := makeTestCmd(t)
@@ -264,12 +264,12 @@ func TestSnapshotCurrent(t *testing.T) {
 			Root:       base2,
 			Output:     "json",
 		}
-		writeTestSnapshot(t, base2, "release-1", &snapshotpkg.Manifest{
+		writeTestSnapshot(t, base2, "release-1", &meta.Manifest{
 			Name:        "release-1",
 			CreatedAt:   time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
 			Description: "stable",
 		})
-		if err := snapshotpkg.WriteCurrent(base2, "release-1"); err != nil {
+		if err := meta.WriteCurrent(base2, "release-1"); err != nil {
 			t.Fatalf("write current: %v", err)
 		}
 		cmd, out, _ := makeTestCmd(t)
@@ -287,11 +287,11 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 		ConfigPath: filepath.Join(base, "devbox.yml"),
 		Root:       base,
 	}
-	writeTestSnapshot(t, base, "feature-x", &snapshotpkg.Manifest{
+	writeTestSnapshot(t, base, "feature-x", &meta.Manifest{
 		Name:      "feature-x",
 		CreatedAt: time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
-		Project:   snapshotpkg.ProjectInfo{Name: "testproj", ConfigHash: "abc"},
-		Artifacts: []snapshotpkg.ArtifactInfo{
+		Project:   meta.ProjectInfo{Name: "testproj", ConfigHash: "abc"},
+		Artifacts: []meta.ArtifactInfo{
 			{Path: "db/main.sql.gz", Size: 1024, Sha256: strings.Repeat("a", 64)},
 		},
 	})
@@ -410,10 +410,10 @@ func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 		t.Fatalf("write state: %v", err)
 	}
 
-	writeTestSnapshot(t, base, "snap", &snapshotpkg.Manifest{
+	writeTestSnapshot(t, base, "snap", &meta.Manifest{
 		Name:      "snap",
 		CreatedAt: time.Now().UTC(),
-		Project:   snapshotpkg.ProjectInfo{Name: "testproj", ConfigHash: "snap-hash"},
+		Project:   meta.ProjectInfo{Name: "testproj", ConfigHash: "snap-hash"},
 	})
 
 	cmd, out, _ := makeTestCmd(t)
@@ -464,8 +464,8 @@ func TestSnapshotNameCompletion(t *testing.T) {
 		ConfigPath: filepath.Join(base, "devbox.yml"),
 		Root:       base,
 	}
-	writeTestSnapshot(t, base, "alpha", &snapshotpkg.Manifest{Name: "alpha", CreatedAt: time.Now().UTC()})
-	writeTestSnapshot(t, base, "beta", &snapshotpkg.Manifest{Name: "beta", CreatedAt: time.Now().UTC()})
+	writeTestSnapshot(t, base, "alpha", &meta.Manifest{Name: "alpha", CreatedAt: time.Now().UTC()})
+	writeTestSnapshot(t, base, "beta", &meta.Manifest{Name: "beta", CreatedAt: time.Now().UTC()})
 
 	fn := snapshotNameCompletion(flags)
 	// Pass a real cobra.Command — completion contract reads Lookup("config") off root.

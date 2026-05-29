@@ -11,6 +11,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/registry"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -29,7 +30,7 @@ type RemoveParams struct {
 	// ConfirmRemove is invoked when SkipConfirm is false. A nil callback is
 	// treated as a refusal so non-interactive callers cannot accidentally
 	// destroy a snapshot.
-	ConfirmRemove func(*Manifest) (bool, error)
+	ConfirmRemove func(*meta.Manifest) (bool, error)
 	// StepObserverFactory builds a per-workflow live-UI observer; see
 	// snapshot.StepObserverFactory for the contract. Nil disables.
 	StepObserverFactory StepObserverFactory
@@ -56,7 +57,7 @@ type RemoveResult struct {
 // directory is gone. The current pointer is cleared atomically when it
 // pointed at the removed snapshot.
 func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
-	if err := ValidateName(p.Name); err != nil {
+	if err := meta.ValidateName(p.Name); err != nil {
 		return nil, err
 	}
 	if p.SnapCfg == nil {
@@ -66,7 +67,7 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 		return nil, errors.New("snapshot: devbox config is required")
 	}
 
-	snapDir := SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)
+	snapDir := meta.SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)
 	st, statErr := os.Stat(snapDir)
 	if statErr != nil {
 		if errors.Is(statErr, os.ErrNotExist) {
@@ -79,8 +80,8 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 	}
 
 	// Load manifest opportunistically — missing/corrupt manifest does not block removal.
-	manifestPath := ManifestPath(p.BaseDir, p.SnapCfg, p.Name)
-	m, _ := LoadManifest(manifestPath)
+	manifestPath := meta.ManifestPath(p.BaseDir, p.SnapCfg, p.Name)
+	m, _ := meta.LoadManifest(manifestPath)
 
 	if !p.SkipConfirm {
 		ok, cErr := confirmRemove(p.ConfirmRemove, m)
@@ -118,7 +119,7 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 				variant = m.Variant
 				createdAt = m.CreatedAt
 			}
-			vars := BuildSnapshotVars(name, absSnapDir, desc, variant, createdAt)
+			vars := meta.BuildSnapshotVars(name, absSnapDir, desc, variant, createdAt)
 			if err := RunWorkflow(ctx, ExecParams{
 				Cfg:                 p.Cfg,
 				Registry:            p.Registry,
@@ -142,9 +143,9 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 	}
 
 	cleared := false
-	current, _ := ReadCurrent(p.BaseDir)
+	current, _ := meta.ReadCurrent(p.BaseDir)
 	if current == p.Name {
-		if err := ClearCurrent(p.BaseDir); err != nil {
+		if err := meta.ClearCurrent(p.BaseDir); err != nil {
 			return nil, fmt.Errorf("snapshot %q: clear current pointer: %w", p.Name, err)
 		}
 		cleared = true
@@ -153,14 +154,14 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 	return &RemoveResult{SnapshotDir: snapDir, ClearedCurrent: cleared}, nil
 }
 
-func confirmRemove(fn func(*Manifest) (bool, error), m *Manifest) (bool, error) {
+func confirmRemove(fn func(*meta.Manifest) (bool, error), m *meta.Manifest) (bool, error) {
 	if fn == nil {
 		return false, nil
 	}
 	return fn(m)
 }
 
-func manifestVariant(m *Manifest) string {
+func manifestVariant(m *meta.Manifest) string {
 	if m == nil {
 		return ""
 	}

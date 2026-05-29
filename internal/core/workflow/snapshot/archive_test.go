@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // -- helpers ------------------------------------------------------------------
@@ -42,8 +44,8 @@ func TestPackUnpack_Roundtrip(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(snapDir, "data"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	m := &Manifest{Name: snapName, CreatedAt: time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)}
-	if err := SaveManifest(filepath.Join(snapDir, ManifestFileName), m); err != nil {
+	m := &meta.Manifest{Name: snapName, CreatedAt: time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC)}
+	if err := meta.SaveManifest(filepath.Join(snapDir, meta.ManifestFileName), m); err != nil {
 		t.Fatalf("save manifest: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(snapDir, "data", "a.txt"), []byte("hello"), 0o644); err != nil {
@@ -166,7 +168,7 @@ func TestUnpack_AcceptsTrustedArchive(t *testing.T) {
 	writeTarGz(t, tarPath, []tarEntry{
 		{name: "data/", typeflag: tar.TypeDir},
 		{name: "data/x.txt", typeflag: tar.TypeReg, body: []byte("trusted")},
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: validManifestBytes()},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: validManifestBytes()},
 	})
 
 	root := filepath.Join(t.TempDir(), "snapshots")
@@ -193,9 +195,9 @@ func TestUnpack_AcceptsTrustedArchive(t *testing.T) {
 
 // manifestWithArtifactsBytes builds a manifest yaml document declaring the
 // given artifacts (path, sha256, size taken from len(body)).
-func manifestWithArtifactsBytes(t *testing.T, artifacts []ArtifactInfo) []byte {
+func manifestWithArtifactsBytes(t *testing.T, artifacts []meta.ArtifactInfo) []byte {
 	t.Helper()
-	m := &Manifest{
+	m := &meta.Manifest{
 		Name:      "v",
 		CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 		Artifacts: artifacts,
@@ -208,14 +210,14 @@ func manifestWithArtifactsBytes(t *testing.T, artifacts []ArtifactInfo) []byte {
 }
 
 // writeManifestTo round-trips through SaveManifest's marshaller via a tempdir.
-func writeManifestTo(w io.Writer, m *Manifest) error {
+func writeManifestTo(w io.Writer, m *meta.Manifest) error {
 	dir, err := os.MkdirTemp("", "manifest-")
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	path := filepath.Join(dir, "manifest.yml")
-	if err := SaveManifest(path, m); err != nil {
+	if err := meta.SaveManifest(path, m); err != nil {
 		return err
 	}
 	data, err := os.ReadFile(path)
@@ -234,12 +236,12 @@ func computeSha256Hex(body []byte) string {
 
 func TestUnpack_VerificationHappyPath(t *testing.T) {
 	body := []byte("payload")
-	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+	mBytes := manifestWithArtifactsBytes(t, []meta.ArtifactInfo{
 		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
 	})
 	tarPath := filepath.Join(t.TempDir(), "ok.tar.gz")
 	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
 		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
@@ -263,13 +265,13 @@ func TestUnpack_VerificationHappyPath(t *testing.T) {
 
 func TestUnpack_VerificationMissingDeclined(t *testing.T) {
 	body := []byte("payload")
-	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+	mBytes := manifestWithArtifactsBytes(t, []meta.ArtifactInfo{
 		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
 		{Path: "data/missing.txt", Size: 3, Sha256: computeSha256Hex([]byte("xyz"))},
 	})
 	tarPath := filepath.Join(t.TempDir(), "missing.tar.gz")
 	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
 		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
@@ -302,13 +304,13 @@ func TestUnpack_VerificationMissingDeclined(t *testing.T) {
 
 func TestUnpack_VerificationMissingAccepted(t *testing.T) {
 	body := []byte("payload")
-	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+	mBytes := manifestWithArtifactsBytes(t, []meta.ArtifactInfo{
 		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
 		{Path: "data/missing.txt", Size: 3, Sha256: computeSha256Hex([]byte("xyz"))},
 	})
 	tarPath := filepath.Join(t.TempDir(), "missing-ok.tar.gz")
 	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
 		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
@@ -333,12 +335,12 @@ func TestUnpack_VerificationMissingAccepted(t *testing.T) {
 
 func TestUnpack_VerificationHashMismatch(t *testing.T) {
 	body := []byte("payload")
-	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+	mBytes := manifestWithArtifactsBytes(t, []meta.ArtifactInfo{
 		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex([]byte("different"))},
 	})
 	tarPath := filepath.Join(t.TempDir(), "hash.tar.gz")
 	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
 		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
@@ -364,12 +366,12 @@ func TestUnpack_VerificationHashMismatch(t *testing.T) {
 
 func TestUnpack_VerificationExtraOnly(t *testing.T) {
 	body := []byte("payload")
-	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+	mBytes := manifestWithArtifactsBytes(t, []meta.ArtifactInfo{
 		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex(body)},
 	})
 	tarPath := filepath.Join(t.TempDir(), "extra.tar.gz")
 	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
 		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
 		{name: "data/stowaway.txt", typeflag: tar.TypeReg, body: []byte("uninvited")},
 	})
@@ -402,12 +404,12 @@ func TestUnpack_VerificationExtraOnly(t *testing.T) {
 
 func TestUnpack_NoVerifyBypass(t *testing.T) {
 	body := []byte("payload")
-	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+	mBytes := manifestWithArtifactsBytes(t, []meta.ArtifactInfo{
 		{Path: "data/a.txt", Size: int64(len(body)), Sha256: computeSha256Hex([]byte("different"))},
 	})
 	tarPath := filepath.Join(t.TempDir(), "noverify.tar.gz")
 	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
 		{name: "data/a.txt", typeflag: tar.TypeReg, body: body},
 	})
 	root := filepath.Join(t.TempDir(), "snapshots")
@@ -436,13 +438,13 @@ func TestUnpack_NoVerifyBypass(t *testing.T) {
 
 func TestUnpack_AssumeYesAcceptsAll(t *testing.T) {
 	bodyA := []byte("payload")
-	mBytes := manifestWithArtifactsBytes(t, []ArtifactInfo{
+	mBytes := manifestWithArtifactsBytes(t, []meta.ArtifactInfo{
 		{Path: "data/a.txt", Size: int64(len(bodyA)), Sha256: computeSha256Hex([]byte("nope"))},
 		{Path: "data/missing.txt", Size: 1, Sha256: computeSha256Hex([]byte("x"))},
 	})
 	tarPath := filepath.Join(t.TempDir(), "yes.tar.gz")
 	writeTarGz(t, tarPath, []tarEntry{
-		{name: ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
+		{name: meta.ManifestFileName, typeflag: tar.TypeReg, body: mBytes},
 		{name: "data/a.txt", typeflag: tar.TypeReg, body: bodyA},
 		{name: "data/stowaway.txt", typeflag: tar.TypeReg, body: []byte("uninvited")},
 	})
@@ -474,8 +476,8 @@ func TestUnpack_AssumeYesAcceptsAll(t *testing.T) {
 
 func TestVerifyExtractedArtifacts_RejectsEscapePath(t *testing.T) {
 	staging := t.TempDir()
-	m := &Manifest{
-		Artifacts: []ArtifactInfo{
+	m := &meta.Manifest{
+		Artifacts: []meta.ArtifactInfo{
 			{Path: "../escape", Size: 1, Sha256: "x"},
 		},
 	}
@@ -487,8 +489,8 @@ func TestVerifyExtractedArtifacts_RejectsEscapePath(t *testing.T) {
 
 func TestVerifyExtractedArtifacts_RejectsAbsolutePath(t *testing.T) {
 	staging := t.TempDir()
-	m := &Manifest{
-		Artifacts: []ArtifactInfo{
+	m := &meta.Manifest{
+		Artifacts: []meta.ArtifactInfo{
 			{Path: "/etc/passwd", Size: 1, Sha256: "x"},
 		},
 	}

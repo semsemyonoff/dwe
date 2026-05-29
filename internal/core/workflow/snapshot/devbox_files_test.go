@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 func TestStripPreservedKeys(t *testing.T) {
@@ -336,7 +338,7 @@ func TestRestoreLocalYML_EdgeCases(t *testing.T) {
 			snapDir := filepath.Join(tmp, "snap")
 			baseDir := filepath.Join(tmp, "base")
 			if tc.snap != "" {
-				p := filepath.Join(snapDir, DevboxSubdir, "local.yml")
+				p := filepath.Join(snapDir, meta.DevboxSubdir, "local.yml")
 				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 					t.Fatalf("mkdir snap: %v", err)
 				}
@@ -355,7 +357,7 @@ func TestRestoreLocalYML_EdgeCases(t *testing.T) {
 			}
 
 			err := restoreLocalYML(
-				filepath.Join(snapDir, DevboxSubdir, "local.yml"),
+				filepath.Join(snapDir, meta.DevboxSubdir, "local.yml"),
 				filepath.Join(baseDir, "devbox", "local.yml"),
 				tc.preserveKeys,
 			)

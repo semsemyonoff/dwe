@@ -19,6 +19,7 @@ import (
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/version"
@@ -55,7 +56,7 @@ func newSnapshotCreateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, description, variant string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
-	if err := snapshotpkg.ValidateName(name); err != nil {
+	if err := meta.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -180,9 +181,9 @@ func writeCreateOutcome(w io.Writer, res *snapshotpkg.CreateResult) {
 		return
 	}
 	switch res.Status {
-	case snapshotpkg.StatusOk:
+	case meta.StatusOk:
 		_, _ = fmt.Fprintf(w, "snapshot %q created at %s\n", res.Manifest.Name, res.SnapshotDir)
-	case snapshotpkg.StatusInterrupted:
+	case meta.StatusInterrupted:
 		if res.BackupRestored {
 			_, _ = fmt.Fprintf(w, "snapshot %q interrupted; previous snapshot restored at %s\n", res.Manifest.Name, res.SnapshotDir)
 		} else {

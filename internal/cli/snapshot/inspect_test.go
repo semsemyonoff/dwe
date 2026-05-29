@@ -11,6 +11,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
 )
@@ -61,27 +62,27 @@ func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 	return dir
 }
 
-func writeSnapshotWithServices(t *testing.T, base, name string, captured []snapshotpkg.ServiceSnapshot) {
+func writeSnapshotWithServices(t *testing.T, base, name string, captured []meta.ServiceSnapshot) {
 	t.Helper()
 	dir := filepath.Join(base, "snapshots", name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	m := &snapshotpkg.Manifest{
+	m := &meta.Manifest{
 		Name:      name,
 		CreatedAt: time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
-		Project: snapshotpkg.ProjectInfo{
+		Project: meta.ProjectInfo{
 			Name:     "testproj",
 			Services: captured,
 		},
 	}
-	if err := snapshotpkg.SaveManifest(filepath.Join(dir, snapshotpkg.ManifestFileName), m); err != nil {
+	if err := meta.SaveManifest(filepath.Join(dir, meta.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestSnapshotInspect_ServicesDiff(t *testing.T) {
-	captured := []snapshotpkg.ServiceSnapshot{
+	captured := []meta.ServiceSnapshot{
 		{Name: "db", Enabled: true},
 		{Name: "main", Enabled: true},
 	}
@@ -89,7 +90,7 @@ func TestSnapshotInspect_ServicesDiff(t *testing.T) {
 	tests := []struct {
 		name     string
 		services map[string]bool
-		captured []snapshotpkg.ServiceSnapshot
+		captured []meta.ServiceSnapshot
 		wantText []string
 		dontWant []string
 	}{
@@ -158,7 +159,7 @@ func TestSnapshotInspect_ServicesDiff(t *testing.T) {
 
 func TestSnapshotInspect_ServicesDiff_JSON(t *testing.T) {
 	base := snapshotInspectProject(t, map[string]bool{"main": true})
-	writeSnapshotWithServices(t, base, "snap", []snapshotpkg.ServiceSnapshot{
+	writeSnapshotWithServices(t, base, "snap", []meta.ServiceSnapshot{
 		{Name: "db", Enabled: true},
 		{Name: "main", Enabled: true},
 	})

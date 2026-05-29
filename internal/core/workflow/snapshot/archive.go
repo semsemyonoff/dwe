@@ -3,6 +3,8 @@ package snapshot
 import (
 	"fmt"
 	"io"
+
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // Archive safety constants. Constants for now — promote to SnapshotConfig
@@ -44,7 +46,7 @@ type UnpackResult struct {
 	// SnapshotDir is the absolute final directory the archive was extracted into.
 	SnapshotDir string
 	// Manifest is the manifest read from the unpacked snapshot.
-	Manifest *Manifest
+	Manifest *meta.Manifest
 	// Verification is the discriminator for the verification outcome.
 	Verification VerificationOutcome
 	// VerifyReport carries the per-group artifact verification result.

@@ -10,6 +10,7 @@ import (
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/validate"
 	coresnap "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -147,7 +148,7 @@ func (v *rollbackTargetExistsValidator) Run(_ validate.Context) []validate.Diagn
 	if v.cfg == nil || v.cfg.RollbackTarget == "" {
 		return nil
 	}
-	dir := coresnap.SnapshotDir(v.baseDir, v.cfg, v.cfg.RollbackTarget)
+	dir := meta.SnapshotDir(v.baseDir, v.cfg, v.cfg.RollbackTarget)
 	if _, err := os.Stat(dir); err == nil {
 		return nil
 	}
@@ -240,7 +241,7 @@ func (v *servicesDiffValidator) Run(_ validate.Context) []validate.Diagnostic {
 		Severity: validate.SeverityInfo,
 		Domain:   "snapshot",
 		Target:   fmt.Sprintf("%s.services_diff", v.name),
-		File:     filepath.Join(v.entry.Dir, coresnap.ManifestFileName),
+		File:     filepath.Join(v.entry.Dir, meta.ManifestFileName),
 		Message:  "captured service set diverges from current project",
 		Hint:     coresnap.FormatServicesDiff(diff),
 	}}
@@ -317,7 +318,7 @@ func (v *perSnapshotValidator) Run(_ validate.Context) []validate.Diagnostic {
 			Severity: validate.SeverityError,
 			Domain:   "snapshot",
 			Target:   fmt.Sprintf("%s.manifest_valid", v.name),
-			File:     filepath.Join(v.entry.Dir, coresnap.ManifestFileName),
+			File:     filepath.Join(v.entry.Dir, meta.ManifestFileName),
 			Message:  "manifest is missing or unparseable",
 			Hint:     "remove the snapshot directory or restore a valid manifest.yml",
 		}}
@@ -348,12 +349,12 @@ func (v *perSnapshotValidator) Run(_ validate.Context) []validate.Diagnostic {
 	}
 
 	// last_create_failed: info when the most recent create attempt was not ok.
-	if lc := v.entry.Manifest.LastCreate; lc != nil && lc.Status != "" && lc.Status != coresnap.StatusOk {
+	if lc := v.entry.Manifest.LastCreate; lc != nil && lc.Status != "" && lc.Status != meta.StatusOk {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityInfo,
 			Domain:   "snapshot",
 			Target:   fmt.Sprintf("%s.last_create_failed", v.name),
-			File:     filepath.Join(v.entry.Dir, coresnap.ManifestFileName),
+			File:     filepath.Join(v.entry.Dir, meta.ManifestFileName),
 			Message:  fmt.Sprintf("last create attempt was %q (failed_step=%q)", lc.Status, lc.FailedStep),
 		})
 	}
@@ -361,7 +362,7 @@ func (v *perSnapshotValidator) Run(_ validate.Context) []validate.Diagnostic {
 	// checksums (gated by --verify): rehash the on-disk dir and compare to
 	// manifest. Skip silently when off.
 	if v.verifyChecksums && missing == 0 {
-		current, err := coresnap.ScanArtifacts(v.entry.Dir)
+		current, err := meta.ScanArtifacts(v.entry.Dir)
 		if err != nil {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
@@ -371,7 +372,7 @@ func (v *perSnapshotValidator) Run(_ validate.Context) []validate.Diagnostic {
 				Message:  fmt.Sprintf("rescan failed: %v", err),
 			})
 		} else {
-			byPath := make(map[string]coresnap.ArtifactInfo, len(current))
+			byPath := make(map[string]meta.ArtifactInfo, len(current))
 			for _, a := range current {
 				byPath[a.Path] = a
 			}

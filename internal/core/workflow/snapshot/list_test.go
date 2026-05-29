@@ -5,14 +5,16 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
-func writeManifest(t *testing.T, dir, name string, m *Manifest) {
+func writeManifest(t *testing.T, dir, name string, m *meta.Manifest) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := SaveManifest(filepath.Join(dir, name, ManifestFileName), m); err != nil {
+	if err := meta.SaveManifest(filepath.Join(dir, name, meta.ManifestFileName), m); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 }
@@ -34,12 +36,12 @@ func TestListSnapshots(t *testing.T) {
 	older := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC)
 
-	writeManifest(t, snapsDir, "alpha", &Manifest{
+	writeManifest(t, snapsDir, "alpha", &meta.Manifest{
 		Name:      "alpha",
 		CreatedAt: older,
-		Artifacts: []ArtifactInfo{{Path: "a", Size: 100}, {Path: "b", Size: 200}},
+		Artifacts: []meta.ArtifactInfo{{Path: "a", Size: 100}, {Path: "b", Size: 200}},
 	})
-	writeManifest(t, snapsDir, "beta", &Manifest{
+	writeManifest(t, snapsDir, "beta", &meta.Manifest{
 		Name:      "beta",
 		CreatedAt: newer,
 	})

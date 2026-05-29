@@ -11,19 +11,20 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 func TestRemove_DeletesDirAndClearsCurrent(t *testing.T) {
 	tmp := t.TempDir()
 	snapCfg := &config.SnapshotConfig{}
-	dir := SnapshotDir(tmp, snapCfg, "rm-me")
+	dir := meta.SnapshotDir(tmp, snapCfg, "rm-me")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := SaveManifest(filepath.Join(dir, ManifestFileName), &Manifest{Name: "rm-me", CreatedAt: time.Now().UTC()}); err != nil {
+	if err := meta.SaveManifest(filepath.Join(dir, meta.ManifestFileName), &meta.Manifest{Name: "rm-me", CreatedAt: time.Now().UTC()}); err != nil {
 		t.Fatalf("save manifest: %v", err)
 	}
-	if err := WriteCurrent(tmp, "rm-me"); err != nil {
+	if err := meta.WriteCurrent(tmp, "rm-me"); err != nil {
 		t.Fatalf("write current: %v", err)
 	}
 
@@ -46,7 +47,7 @@ func TestRemove_DeletesDirAndClearsCurrent(t *testing.T) {
 	if _, statErr := os.Stat(dir); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("snapshot dir should be gone, got stat err = %v", statErr)
 	}
-	cur, _ := ReadCurrent(tmp)
+	cur, _ := meta.ReadCurrent(tmp)
 	if cur != "" {
 		t.Errorf("current = %q want empty", cur)
 	}
@@ -63,11 +64,11 @@ func TestRemove_RunsRemoveWorkflowBeforeDeletion(t *testing.T) {
 	// The workflow runs from baseDir so a relative path resolves under tmp.
 	reg := newRegistryWith(t, "rm.cleanup", `printf hello > marker-removed`)
 
-	dir := SnapshotDir(tmp, snapCfg, "with-hook")
+	dir := meta.SnapshotDir(tmp, snapCfg, "with-hook")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := SaveManifest(filepath.Join(dir, ManifestFileName), &Manifest{Name: "with-hook", CreatedAt: time.Now().UTC()}); err != nil {
+	if err := meta.SaveManifest(filepath.Join(dir, meta.ManifestFileName), &meta.Manifest{Name: "with-hook", CreatedAt: time.Now().UTC()}); err != nil {
 		t.Fatalf("save manifest: %v", err)
 	}
 
@@ -110,7 +111,7 @@ func TestRemove_MissingSnapshotIsAnError(t *testing.T) {
 func TestRemove_RefusesWithoutConfirmCallback(t *testing.T) {
 	tmp := t.TempDir()
 	snapCfg := &config.SnapshotConfig{}
-	dir := SnapshotDir(tmp, snapCfg, "nope")
+	dir := meta.SnapshotDir(tmp, snapCfg, "nope")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

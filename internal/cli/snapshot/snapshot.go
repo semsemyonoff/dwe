@@ -12,6 +12,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui/render"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
 )
@@ -65,7 +66,7 @@ type snapshotListJSONEntry struct {
 // snapshotInspectJSON is the shape for `snapshot inspect --output json`.
 type snapshotInspectJSON struct {
 	Source             string                    `json:"source"`
-	Manifest           *snapshotpkg.Manifest     `json:"manifest"`
+	Manifest           *meta.Manifest            `json:"manifest"`
 	CurrentConfigHash  string                    `json:"current_config_hash"`
 	ConfigHashDiverged bool                      `json:"config_hash_diverged"`
 	ServicesDiff       *snapshotpkg.ServicesDiff `json:"services_diff,omitempty"`
@@ -112,7 +113,7 @@ func runSnapshotList(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
 	if err != nil {
 		return cmdctx.ErrWrap("snapshot_list_failed", err)
 	}
-	current, readCurErr := snapshotpkg.ReadCurrent(baseDir)
+	current, readCurErr := meta.ReadCurrent(baseDir)
 	if readCurErr != nil && flags.Output != "json" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read current snapshot pointer: %v\n", readCurErr)
 	}
@@ -189,7 +190,7 @@ func newSnapshotCurrentCmd(flags *cmdctx.RootFlags) *cobra.Command {
 
 func runSnapshotCurrent(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
 	baseDir := flags.ProjectRoot()
-	name, err := snapshotpkg.ReadCurrent(baseDir)
+	name, err := meta.ReadCurrent(baseDir)
 	if err != nil {
 		return cmdctx.ErrWrap("snapshot_current_unreadable", err)
 	}
@@ -204,8 +205,8 @@ func runSnapshotCurrent(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	manifestPath := snapshotpkg.ManifestPath(baseDir, snapCfg, name)
-	m, mErr := snapshotpkg.LoadManifest(manifestPath)
+	manifestPath := meta.ManifestPath(baseDir, snapCfg, name)
+	m, mErr := meta.LoadManifest(manifestPath)
 	if mErr != nil {
 		if flags.Output == "json" {
 			cur := &snapshotCurrentJSON{Name: name}
@@ -363,7 +364,7 @@ func renderSnapshotInspectText(data snapshotInspectJSON) string {
 // a tar-archive path when it ends in ".tar.gz" or ".tgz" *and* the file
 // exists; otherwise it is treated as a snapshot name under the project's
 // snapshots dir. The chosen source identifier is returned alongside.
-func loadInspectManifest(baseDir, arg string) (*snapshotpkg.Manifest, string, error) {
+func loadInspectManifest(baseDir, arg string) (*meta.Manifest, string, error) {
 	if looksLikeTarArchive(arg) {
 		if _, err := os.Stat(arg); err != nil {
 			if os.IsNotExist(err) {
@@ -377,15 +378,15 @@ func loadInspectManifest(baseDir, arg string) (*snapshotpkg.Manifest, string, er
 		}
 		return m, arg, nil
 	}
-	if err := snapshotpkg.ValidateName(arg); err != nil {
+	if err := meta.ValidateName(arg); err != nil {
 		return nil, "", cmdctx.ErrWrap("snapshot_invalid_name", err).WithDetail("name", arg)
 	}
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
 	if err != nil {
 		return nil, "", err
 	}
-	manifestPath := snapshotpkg.ManifestPath(baseDir, snapCfg, arg)
-	m, err := snapshotpkg.LoadManifest(manifestPath)
+	manifestPath := meta.ManifestPath(baseDir, snapCfg, arg)
+	m, err := meta.LoadManifest(manifestPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, "", cmdctx.ErrWrap("snapshot_not_found", err).WithDetail("name", arg)

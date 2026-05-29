@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/pathsafe"
 )
 
@@ -26,7 +27,7 @@ func (r ArtifactVerifyReport) Empty() bool {
 // Manifest-declared paths are validated for containment before being opened:
 // an attacker-crafted manifest cannot make the verifier read files outside
 // the staging directory.
-func VerifyExtractedArtifacts(stagingDir string, m *Manifest) (ArtifactVerifyReport, error) {
+func VerifyExtractedArtifacts(stagingDir string, m *meta.Manifest) (ArtifactVerifyReport, error) {
 	if m == nil {
 		return ArtifactVerifyReport{}, errors.New("verify: nil manifest")
 	}
@@ -35,7 +36,7 @@ func VerifyExtractedArtifacts(stagingDir string, m *Manifest) (ArtifactVerifyRep
 		return ArtifactVerifyReport{}, fmt.Errorf("verify: abs staging: %w", err)
 	}
 
-	declared := make(map[string]ArtifactInfo, len(m.Artifacts))
+	declared := make(map[string]meta.ArtifactInfo, len(m.Artifacts))
 	var report ArtifactVerifyReport
 
 	for _, a := range m.Artifacts {
@@ -82,7 +83,7 @@ func VerifyExtractedArtifacts(stagingDir string, m *Manifest) (ArtifactVerifyRep
 
 	// Extras: anything on disk under stagingDir that is not the manifest and
 	// not under DevboxSubdir, and not declared.
-	scanned, err := ScanArtifacts(stagingDir)
+	scanned, err := meta.ScanArtifacts(stagingDir)
 	if err != nil {
 		return ArtifactVerifyReport{}, fmt.Errorf("verify: scan staging: %w", err)
 	}

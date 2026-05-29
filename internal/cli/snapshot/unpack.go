@@ -11,6 +11,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/ui/widgets"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 
@@ -53,7 +54,7 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 	if name == "" {
 		name = deriveNameFromTarPath(tarPath)
 	}
-	if err := snapshotpkg.ValidateName(name); err != nil {
+	if err := meta.ValidateName(name); err != nil {
 		return fmt.Errorf("snapshot unpack: invalid target name %q: %w", name, err)
 	}
 
@@ -67,7 +68,7 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 	}
 	defer releaseLocks()
 
-	snapshotsRoot := snapshotpkg.SnapshotsDir(baseDir, snapCfg)
+	snapshotsRoot := meta.SnapshotsDir(baseDir, snapCfg)
 
 	res, err := snapshotpkg.Unpack(tarPath, snapshotsRoot, name, snapshotpkg.UnpackOptions{
 		AssumeYes: yes,

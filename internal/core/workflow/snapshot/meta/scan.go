@@ -1,4 +1,4 @@
-package snapshot
+package meta
 
 import (
 	"crypto/sha256"
@@ -58,7 +58,7 @@ func ScanArtifacts(snapDir string) ([]ArtifactInfo, error) {
 		if !fi.Mode().IsRegular() {
 			return fmt.Errorf("snapshot artifact %q is not a regular file", rel)
 		}
-		sum, err := hashFile(path)
+		sum, err := HashFile(path)
 		if err != nil {
 			return fmt.Errorf("hash %s: %w", rel, err)
 		}
@@ -76,8 +76,8 @@ func ScanArtifacts(snapDir string) ([]ArtifactInfo, error) {
 	return out, nil
 }
 
-// hashFile streams f through sha256 and returns the lowercase hex digest.
-func hashFile(path string) (string, error) {
+// HashFile streams f through sha256 and returns the lowercase hex digest.
+func HashFile(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err

@@ -12,6 +12,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 func sha256Hex(b []byte) string {
@@ -57,13 +58,13 @@ func buildFixtureTarGz(t *testing.T, baseA, name, outPath string) {
 	if err := os.WriteFile(filepath.Join(snapDir, "data", "a.txt"), body, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := &snapshotpkg.Manifest{
+	m := &meta.Manifest{
 		Name:      name,
 		CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-		Project:   snapshotpkg.ProjectInfo{Name: "testproj"},
-		Artifacts: []snapshotpkg.ArtifactInfo{{Path: "data/a.txt", Size: int64(len(body)), Sha256: sha256Hex(body)}},
+		Project:   meta.ProjectInfo{Name: "testproj"},
+		Artifacts: []meta.ArtifactInfo{{Path: "data/a.txt", Size: int64(len(body)), Sha256: sha256Hex(body)}},
 	}
-	if err := snapshotpkg.SaveManifest(filepath.Join(snapDir, snapshotpkg.ManifestFileName), m); err != nil {
+	if err := meta.SaveManifest(filepath.Join(snapDir, meta.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := snapshotpkg.Pack(snapsRoot, snapDir, name, outPath, nil); err != nil {
@@ -138,16 +139,16 @@ func TestSnapshotUnpack_VerifiedWithWarnings(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(snapDir, "data", "a.txt"), body, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := &snapshotpkg.Manifest{
+	m := &meta.Manifest{
 		Name:      name,
 		CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-		Project:   snapshotpkg.ProjectInfo{Name: "testproj"},
-		Artifacts: []snapshotpkg.ArtifactInfo{
+		Project:   meta.ProjectInfo{Name: "testproj"},
+		Artifacts: []meta.ArtifactInfo{
 			{Path: "data/a.txt", Size: int64(len(body)), Sha256: sha256Hex(body)},
 			{Path: "data/missing.txt", Size: 1, Sha256: "deadbeef"},
 		},
 	}
-	if err := snapshotpkg.SaveManifest(filepath.Join(snapDir, snapshotpkg.ManifestFileName), m); err != nil {
+	if err := meta.SaveManifest(filepath.Join(snapDir, meta.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
 	tarPath := filepath.Join(t.TempDir(), "fix.tar.gz")

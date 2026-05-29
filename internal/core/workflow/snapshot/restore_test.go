@@ -13,6 +13,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/workflow/deploy/journal"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // newSnapCfgWithRestore builds a snapshot config exposing a default `restore`
@@ -59,7 +60,7 @@ func createBaselineSnap(t *testing.T, baseDir, name, hash string) string {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if res.Status != StatusOk {
+	if res.Status != meta.StatusOk {
 		t.Fatalf("Create status = %q", res.Status)
 	}
 	return res.SnapshotDir
@@ -90,7 +91,7 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	createBaselineSnap(t, tmp, "snap1", "live")
 
 	// Verify the snapshot captured the devbox files.
-	if _, err := os.Stat(filepath.Join(tmp, "snapshots", "snap1", DevboxSubdir, "local.yml")); err != nil {
+	if _, err := os.Stat(filepath.Join(tmp, "snapshots", "snap1", meta.DevboxSubdir, "local.yml")); err != nil {
 		t.Fatalf("snapshot did not capture devbox/local.yml: %v", err)
 	}
 
@@ -119,7 +120,7 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Restore: %v (stderr=%s)", err, errBuf.String())
 	}
-	if res.Status != StatusOk {
+	if res.Status != meta.StatusOk {
 		t.Fatalf("status = %q (stderr=%s)", res.Status, errBuf.String())
 	}
 
@@ -147,7 +148,7 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	}
 
 	// Current pointer is updated.
-	cur, err := ReadCurrent(tmp)
+	cur, err := meta.ReadCurrent(tmp)
 	if err != nil {
 		t.Fatalf("ReadCurrent: %v", err)
 	}
@@ -156,11 +157,11 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	}
 
 	// Manifest records the successful restore.
-	m, err := LoadManifest(res.ManifestPath)
+	m, err := meta.LoadManifest(res.ManifestPath)
 	if err != nil {
 		t.Fatalf("LoadManifest: %v", err)
 	}
-	if m.LastRestore == nil || m.LastRestore.Status != StatusOk {
+	if m.LastRestore == nil || m.LastRestore.Status != meta.StatusOk {
 		t.Errorf("LastRestore = %+v", m.LastRestore)
 	}
 }
@@ -201,7 +202,7 @@ func TestRestore_PreservesLocalYMLPorts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Restore: %v (stderr=%s)", err, errBuf.String())
 	}
-	if res.Status != StatusOk {
+	if res.Status != meta.StatusOk {
 		t.Fatalf("status = %q", res.Status)
 	}
 
@@ -227,7 +228,7 @@ func TestRestore_ConfigHashDivergedBlocksWhenRequired(t *testing.T) {
 	writeDeployState(t, tmp, "live-hash")
 	// Reset current pointer to a sentinel so we can verify the blocked restore
 	// did not touch it.
-	if err := WriteCurrent(tmp, "sentinel"); err != nil {
+	if err := meta.WriteCurrent(tmp, "sentinel"); err != nil {
 		t.Fatalf("WriteCurrent: %v", err)
 	}
 
@@ -253,12 +254,12 @@ func TestRestore_ConfigHashDivergedBlocksWhenRequired(t *testing.T) {
 		t.Fatalf("err = %v, want RestoreBlockedError", err)
 	}
 	// Current pointer must NOT have been updated by the blocked restore.
-	cur, _ := ReadCurrent(tmp)
+	cur, _ := meta.ReadCurrent(tmp)
 	if cur != "sentinel" {
 		t.Errorf("current = %q, want sentinel (must not change on blocked restore)", cur)
 	}
 	// Pre-restore backup must not have been created.
-	if _, err := os.Stat(PreRestoreBackup(tmp)); err == nil {
+	if _, err := os.Stat(meta.PreRestoreBackup(tmp)); err == nil {
 		t.Errorf("backup dir created despite blocked restore")
 	}
 }
@@ -289,7 +290,7 @@ func TestRestore_EmptyManifestHashNeverBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
-	if res.Status != StatusOk {
+	if res.Status != meta.StatusOk {
 		t.Fatalf("status = %q", res.Status)
 	}
 }
@@ -300,13 +301,13 @@ func TestRestore_MissingVariantFallsBackToDefault(t *testing.T) {
 
 	// Mark the snapshot's manifest with a variant that the restore block
 	// doesn't define.
-	manifestPath := filepath.Join(tmp, "snapshots", "v", ManifestFileName)
-	m, err := LoadManifest(manifestPath)
+	manifestPath := filepath.Join(tmp, "snapshots", "v", meta.ManifestFileName)
+	m, err := meta.LoadManifest(manifestPath)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	m.Variant = "unknown-variant"
-	if err := SaveManifest(manifestPath, m); err != nil {
+	if err := meta.SaveManifest(manifestPath, m); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -332,7 +333,7 @@ func TestRestore_MissingVariantFallsBackToDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Restore: %v", err)
 	}
-	if res.Status != StatusOk {
+	if res.Status != meta.StatusOk {
 		t.Fatalf("status = %q", res.Status)
 	}
 	body, err := os.ReadFile(filepath.Join(res.SnapshotDir, "which"))
@@ -350,7 +351,7 @@ func TestRestore_InterruptedKeepsBackupAndCurrent(t *testing.T) {
 	// Capture a baseline and set the current pointer to something else so we
 	// can verify it is NOT changed on cancellation.
 	createBaselineSnap(t, tmp, "snap1", "")
-	if err := WriteCurrent(tmp, "earlier"); err != nil {
+	if err := meta.WriteCurrent(tmp, "earlier"); err != nil {
 		t.Fatalf("seed current: %v", err)
 	}
 
@@ -393,7 +394,7 @@ func TestRestore_InterruptedKeepsBackupAndCurrent(t *testing.T) {
 	if res == nil {
 		t.Fatalf("res is nil; expected partial result")
 	}
-	if res.Status != StatusInterrupted && res.Status != StatusFailed {
+	if res.Status != meta.StatusInterrupted && res.Status != meta.StatusFailed {
 		t.Errorf("status = %q, want interrupted or failed", res.Status)
 	}
 
@@ -402,7 +403,7 @@ func TestRestore_InterruptedKeepsBackupAndCurrent(t *testing.T) {
 		t.Errorf("backup dir missing after interrupt: %v", err)
 	}
 	// Current pointer must remain pointing at the earlier value.
-	cur, _ := ReadCurrent(tmp)
+	cur, _ := meta.ReadCurrent(tmp)
 	if cur != "earlier" {
 		t.Errorf("current = %q, want earlier (must not change on cancel)", cur)
 	}
@@ -433,7 +434,7 @@ func TestRollback_DispatchesToRestoreTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rollback: %v", err)
 	}
-	if res.Status != StatusOk {
+	if res.Status != meta.StatusOk {
 		t.Fatalf("status = %q", res.Status)
 	}
 	if _, err := os.Stat(filepath.Join(res.SnapshotDir, "rb-marker")); err != nil {
@@ -445,15 +446,15 @@ func TestRollback_DispatchesToRestoreTarget(t *testing.T) {
 // to carry the given Services slice. Used by the services_mismatch tests
 // because testCfg() has no services, so created snapshots otherwise carry an
 // empty service set.
-func patchManifestServices(t *testing.T, baseDir, name string, svcs []ServiceSnapshot) {
+func patchManifestServices(t *testing.T, baseDir, name string, svcs []meta.ServiceSnapshot) {
 	t.Helper()
-	mp := filepath.Join(baseDir, "snapshots", name, ManifestFileName)
-	m, err := LoadManifest(mp)
+	mp := filepath.Join(baseDir, "snapshots", name, meta.ManifestFileName)
+	m, err := meta.LoadManifest(mp)
 	if err != nil {
 		t.Fatalf("load manifest: %v", err)
 	}
 	m.Project.Services = svcs
-	if err := SaveManifest(mp, m); err != nil {
+	if err := meta.SaveManifest(mp, m); err != nil {
 		t.Fatalf("save manifest: %v", err)
 	}
 }
@@ -462,7 +463,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 	tests := []struct {
 		name          string
 		policy        string
-		manifestSvcs  []ServiceSnapshot
+		manifestSvcs  []meta.ServiceSnapshot
 		currentSvcs   map[string]config.ServiceConfig
 		skipConfirm   bool
 		wantBlocked   bool
@@ -472,7 +473,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 		{
 			name:         "block_with_divergence_aborts",
 			policy:       "block",
-			manifestSvcs: []ServiceSnapshot{{Name: "db", Enabled: true}, {Name: "old", Enabled: true}},
+			manifestSvcs: []meta.ServiceSnapshot{{Name: "db", Enabled: true}, {Name: "old", Enabled: true}},
 			currentSvcs:  map[string]config.ServiceConfig{"db": {Enabled: true}, "new": {Enabled: true}},
 			skipConfirm:  true,
 			wantBlocked:  true,
@@ -480,14 +481,14 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 		{
 			name:         "block_no_divergence_proceeds",
 			policy:       "block",
-			manifestSvcs: []ServiceSnapshot{{Name: "db", Enabled: true}},
+			manifestSvcs: []meta.ServiceSnapshot{{Name: "db", Enabled: true}},
 			currentSvcs:  map[string]config.ServiceConfig{"db": {Enabled: true}},
 			skipConfirm:  true,
 		},
 		{
 			name:         "warn_skip_confirm_emits_warning",
 			policy:       "warn",
-			manifestSvcs: []ServiceSnapshot{{Name: "db", Enabled: true}},
+			manifestSvcs: []meta.ServiceSnapshot{{Name: "db", Enabled: true}},
 			currentSvcs:  map[string]config.ServiceConfig{"db": {Enabled: false}},
 			skipConfirm:  true,
 			wantWarn:     true,
@@ -495,7 +496,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 		{
 			name:          "warn_interactive_passes_diff_to_callback",
 			policy:        "warn",
-			manifestSvcs:  []ServiceSnapshot{{Name: "old", Enabled: true}},
+			manifestSvcs:  []meta.ServiceSnapshot{{Name: "old", Enabled: true}},
 			currentSvcs:   map[string]config.ServiceConfig{"new": {Enabled: true}},
 			skipConfirm:   false,
 			wantPromptCtx: true,
@@ -503,7 +504,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 		{
 			name:         "ignore_skips_diff_entirely",
 			policy:       "ignore",
-			manifestSvcs: []ServiceSnapshot{{Name: "old", Enabled: true}},
+			manifestSvcs: []meta.ServiceSnapshot{{Name: "old", Enabled: true}},
 			currentSvcs:  map[string]config.ServiceConfig{"new": {Enabled: true}},
 			skipConfirm:  true,
 		},
@@ -558,7 +559,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 					t.Errorf("local.yml mutated despite block: %q", string(body))
 				}
 				// No pre-restore backup.
-				if _, err := os.Stat(PreRestoreBackup(tmp)); err == nil {
+				if _, err := os.Stat(meta.PreRestoreBackup(tmp)); err == nil {
 					t.Errorf("backup dir created despite block")
 				}
 				// Callback must NOT be invoked when block fires.
@@ -596,7 +597,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 func TestRestore_RejectedConfirmDoesNotTouchLocalYml(t *testing.T) {
 	tmp := t.TempDir()
 	createBaselineSnap(t, tmp, "s", "")
-	patchManifestServices(t, tmp, "s", []ServiceSnapshot{{Name: "db", Enabled: true}})
+	patchManifestServices(t, tmp, "s", []meta.ServiceSnapshot{{Name: "db", Enabled: true}})
 
 	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "untouched")
 

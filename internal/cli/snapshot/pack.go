@@ -7,6 +7,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 
@@ -37,7 +38,7 @@ func newSnapshotPackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 func runSnapshotPack(cmd *cobra.Command, flags *cmdctx.RootFlags, name, outPath string, cliExcludes []string) error {
 	baseDir := flags.ProjectRoot()
 
-	if err := snapshotpkg.ValidateName(name); err != nil {
+	if err := meta.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -56,8 +57,8 @@ func runSnapshotPack(cmd *cobra.Command, flags *cmdctx.RootFlags, name, outPath 
 	}
 	defer releaseLocks()
 
-	snapDir := snapshotpkg.SnapshotDir(baseDir, snapCfg, name)
-	snapshotsRoot := snapshotpkg.SnapshotsDir(baseDir, snapCfg)
+	snapDir := meta.SnapshotDir(baseDir, snapCfg, name)
+	snapshotsRoot := meta.SnapshotsDir(baseDir, snapCfg)
 
 	excludes := mergeExcludes(snapCfg, cliExcludes)
 

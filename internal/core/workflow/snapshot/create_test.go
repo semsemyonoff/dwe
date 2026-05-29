@@ -13,6 +13,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/registry"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 func writeStringFile(t *testing.T, path, body string) {
@@ -67,7 +68,7 @@ func TestCreate_EndToEndWritesMarkerAndManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v (stderr=%s)", err, errBuf.String())
 	}
-	if res.Status != StatusOk {
+	if res.Status != meta.StatusOk {
 		t.Fatalf("status = %q want ok", res.Status)
 	}
 
@@ -82,7 +83,7 @@ func TestCreate_EndToEndWritesMarkerAndManifest(t *testing.T) {
 	}
 
 	// Manifest must list the marker file with size + sha256.
-	m, err := LoadManifest(res.ManifestPath)
+	m, err := meta.LoadManifest(res.ManifestPath)
 	if err != nil {
 		t.Fatalf("load manifest: %v", err)
 	}
@@ -113,12 +114,12 @@ func TestCreate_EndToEndWritesMarkerAndManifest(t *testing.T) {
 	if a.Sha256 != wantHash {
 		t.Errorf("artifact sha256 = %q want %q", a.Sha256, wantHash)
 	}
-	if m.LastCreate == nil || m.LastCreate.Status != StatusOk {
+	if m.LastCreate == nil || m.LastCreate.Status != meta.StatusOk {
 		t.Errorf("last_create = %+v", m.LastCreate)
 	}
 
 	// Current pointer points at the snapshot.
-	cur, err := ReadCurrent(tmp)
+	cur, err := meta.ReadCurrent(tmp)
 	if err != nil {
 		t.Fatalf("read current: %v", err)
 	}
@@ -282,23 +283,23 @@ func TestCreate_WorkflowFailureRecordsFailedStatusAndKeepsDir(t *testing.T) {
 	if res == nil {
 		t.Fatal("res = nil; expected non-nil even on failure")
 	}
-	if res.Status != StatusFailed {
-		t.Errorf("status = %q want %q", res.Status, StatusFailed)
+	if res.Status != meta.StatusFailed {
+		t.Errorf("status = %q want %q", res.Status, meta.StatusFailed)
 	}
 	// Snapshot directory is kept.
 	if _, statErr := os.Stat(res.SnapshotDir); statErr != nil {
 		t.Errorf("snapshot dir should be kept on failure: %v", statErr)
 	}
 	// Manifest records last_create.status = "failed".
-	m, mErr := LoadManifest(res.ManifestPath)
+	m, mErr := meta.LoadManifest(res.ManifestPath)
 	if mErr != nil {
 		t.Fatalf("load manifest: %v", mErr)
 	}
-	if m.LastCreate == nil || m.LastCreate.Status != StatusFailed {
+	if m.LastCreate == nil || m.LastCreate.Status != meta.StatusFailed {
 		t.Errorf("last_create = %+v", m.LastCreate)
 	}
 	// Current pointer is NOT updated.
-	cur, _ := ReadCurrent(tmp)
+	cur, _ := meta.ReadCurrent(tmp)
 	if cur != "" {
 		t.Errorf("current = %q want empty (not updated on failure)", cur)
 	}
@@ -335,7 +336,7 @@ func TestCreate_CapturesDevboxFiles(t *testing.T) {
 		t.Errorf("captured deploy state = %q", string(deployBody))
 	}
 
-	m, _ := LoadManifest(res.ManifestPath)
+	m, _ := meta.LoadManifest(res.ManifestPath)
 	if m.DevboxFiles.LocalYML != "devbox/local.yml" {
 		t.Errorf("DevboxFiles.LocalYML = %q", m.DevboxFiles.LocalYML)
 	}
@@ -367,11 +368,11 @@ func TestCreate_CapturesServicesSorted(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	m, err := LoadManifest(res.ManifestPath)
+	m, err := meta.LoadManifest(res.ManifestPath)
 	if err != nil {
 		t.Fatalf("load manifest: %v", err)
 	}
-	want := []ServiceSnapshot{
+	want := []meta.ServiceSnapshot{
 		{Name: "cdn", Enabled: false},
 		{Name: "db", Enabled: true},
 		{Name: "main", Enabled: true},

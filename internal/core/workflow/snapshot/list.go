@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // Entry is one element returned by ListSnapshots: the loaded manifest plus
@@ -15,7 +16,7 @@ import (
 // from the manifest — not a fresh disk walk; rendering callers want a
 // quick header summary, not an integrity scan).
 type Entry struct {
-	Manifest *Manifest
+	Manifest *meta.Manifest
 	// Dir is the absolute filesystem path of the snapshot directory.
 	Dir string
 	// TotalSize is the sum of Manifest.Artifacts[*].Size; it ignores the
@@ -35,7 +36,7 @@ type Entry struct {
 // slice with no error — a project that has never run snapshot create is a
 // valid state.
 func ListSnapshots(baseDir string, cfg *config.SnapshotConfig) ([]Entry, error) {
-	root := SnapshotsDir(baseDir, cfg)
+	root := meta.SnapshotsDir(baseDir, cfg)
 	dents, err := os.ReadDir(root)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -54,8 +55,8 @@ func ListSnapshots(baseDir string, cfg *config.SnapshotConfig) ([]Entry, error) 
 			continue
 		}
 		dir := filepath.Join(root, name)
-		manifestPath := filepath.Join(dir, ManifestFileName)
-		m, mErr := LoadManifest(manifestPath)
+		manifestPath := filepath.Join(dir, meta.ManifestFileName)
+		m, mErr := meta.LoadManifest(manifestPath)
 		entry := Entry{Dir: dir}
 		if mErr == nil {
 			entry.Manifest = m

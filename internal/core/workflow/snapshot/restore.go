@@ -12,6 +12,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/workflow/deploy/journal"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -47,7 +48,7 @@ type RestoreParams struct {
 // config_hash diverges from the current project, and the services diff (zero
 // value when the policy is ignore or the diff is empty).
 type RestoreConfirmContext struct {
-	Manifest       *Manifest
+	Manifest       *meta.Manifest
 	ConfigDiverged bool
 	ServicesDiff   ServicesDiff
 }
@@ -94,7 +95,7 @@ func (e *RestoreBlockedError) Error() string {
 type RestoreResult struct {
 	SnapshotDir  string
 	ManifestPath string
-	Manifest     *Manifest
+	Manifest     *meta.Manifest
 	Status       string
 	DurationMs   int64
 	// BackupDir is the path the pre-restore backup was written to (empty when
@@ -121,7 +122,7 @@ type RestoreResult struct {
 //  9. On failure / SIGINT: leave current pointer untouched; record
 //     last_restore.status in {"failed","interrupted"} with failed_step.
 func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
-	if err := ValidateName(p.Name); err != nil {
+	if err := meta.ValidateName(p.Name); err != nil {
 		return nil, err
 	}
 	if p.Cfg == nil {
@@ -139,15 +140,15 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		now = time.Now
 	}
 
-	snapDir := SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)
+	snapDir := meta.SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)
 	if _, err := os.Stat(snapDir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("snapshot %q: not found at %s", p.Name, snapDir)
 		}
 		return nil, fmt.Errorf("snapshot %q: stat %s: %w", p.Name, snapDir, err)
 	}
-	manifestPath := ManifestPath(p.BaseDir, p.SnapCfg, p.Name)
-	m, err := LoadManifest(manifestPath)
+	manifestPath := meta.ManifestPath(p.BaseDir, p.SnapCfg, p.Name)
+	m, err := meta.LoadManifest(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot %q: load manifest: %w", p.Name, err)
 	}
@@ -238,7 +239,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	if absErr != nil {
 		absSnapDir = snapDir
 	}
-	vars := BuildSnapshotVars(m.Name, absSnapDir, m.Description, m.Variant, m.CreatedAt)
+	vars := meta.BuildSnapshotVars(m.Name, absSnapDir, m.Description, m.Variant, m.CreatedAt)
 
 	start := now()
 	runErr := RunWorkflow(ctx, ExecParams{
@@ -257,26 +258,26 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	finishedAt := now()
 	durationMs := finishedAt.Sub(start).Milliseconds()
 
-	status := StatusOk
+	status := meta.StatusOk
 	failedStep := ""
 	switch {
 	case runErr == nil:
 		// keep StatusOk
 	case errors.Is(runErr, context.Canceled), errors.Is(runErr, context.DeadlineExceeded):
-		status = StatusInterrupted
+		status = meta.StatusInterrupted
 		failedStep = runErr.Error()
 	default:
-		status = StatusFailed
+		status = meta.StatusFailed
 		failedStep = runErr.Error()
 	}
 
-	m.LastRestore = &LastRestore{
+	m.LastRestore = &meta.LastRestore{
 		At:         finishedAt.UTC(),
 		Status:     status,
 		DurationMs: durationMs,
 		FailedStep: failedStep,
 	}
-	if err := SaveManifest(manifestPath, m); err != nil {
+	if err := meta.SaveManifest(manifestPath, m); err != nil {
 		// Preserve any workflow error; otherwise surface the manifest write
 		// failure as the cause.
 		if runErr == nil {
@@ -296,7 +297,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		BackupDir:    backupDir,
 	}
 
-	if status != StatusOk {
+	if status != meta.StatusOk {
 		if p.Stderr != nil && backupDir != "" {
 			_, _ = fmt.Fprintf(p.Stderr,
 				"hint: pre-restore devbox files preserved under %s for manual recovery\n",
@@ -305,7 +306,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return res, runErr
 	}
 
-	if err := WriteCurrent(p.BaseDir, p.Name); err != nil {
+	if err := meta.WriteCurrent(p.BaseDir, p.Name); err != nil {
 		return res, fmt.Errorf("snapshot %q: update current pointer: %w", p.Name, err)
 	}
 	return res, nil
@@ -339,7 +340,7 @@ func confirmRestore(fn func(RestoreConfirmContext) (bool, error), ctx RestoreCon
 // previous backup atomically (write each file via writeFileAtomic). Missing
 // source files are skipped silently.
 func writePreRestoreBackup(baseDir string) (string, error) {
-	backupDir := PreRestoreBackup(baseDir)
+	backupDir := meta.PreRestoreBackup(baseDir)
 	// Remove the previous backup so stale files from an earlier restore can't
 	// confuse manual recovery. We do not need atomicity here: each individual
 	// file write below is atomic via writeFileAtomic.
@@ -368,7 +369,7 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 				return "", fmt.Errorf("create backup dir: %w", err)
 			}
 		}
-		if err := writeFileAtomic(filepath.Join(backupDir, c.dstRel), data, 0o644); err != nil {
+		if err := meta.WriteFileAtomic(filepath.Join(backupDir, c.dstRel), data, 0o644); err != nil {
 			return "", fmt.Errorf("write backup %s: %w", c.dstRel, err)
 		}
 		written++

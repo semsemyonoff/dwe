@@ -198,18 +198,18 @@ Done in current `snapshot/` package, before subpkg extraction. This is the "intr
 - Modify: `restore.go` (1 `writeFileAtomic` caller in `writePreRestoreBackup` → `meta.WriteFileAtomic`; uses `meta.LoadManifest`, `meta.NewManifest`, `meta.SaveManifest`)
 - Modify: all other root .go files that reference Manifest/paths/name/vars/current/StatusX/ScanArtifacts (create.go, remove.go, list.go, exec.go, services_diff.go, archive*.go, archive_inspect.go)
 
-- [ ] create `meta/` directory; move 5 base implementation files + scan.go; change `package snapshot` → `package meta`
-- [ ] create `meta/atomic.go` with the body of the existing `writeFileAtomic` (rename to exported `WriteFileAtomic`); delete it from `manifest.go`
-- [ ] `ScanArtifacts` is already exported (no rename); `hashFile` needs to become `HashFile` — it's a private helper today but will be called from `archive.VerifyExtractedArtifacts` after Task 3
-- [ ] verify exported names: Manifest, NewManifest, LoadManifest, SaveManifest, ArtifactInfo, ArtifactHashMismatch, ServiceSnapshot, ProjectInfo, DevboxFiles (struct), LastCreate, LastRestore, StatusOk/Failed/Interrupted, SnapshotsDir, SnapshotDir, ManifestPath, StateDir, CurrentPointer, LockPath, PreRestoreBackup, DevboxSubdir, ManifestFileName, ValidateName, BuildSnapshotVars, ReadCurrent, WriteCurrent, ClearCurrent, ScanArtifacts, WriteFileAtomic — most already capitalized, only `writeFileAtomic` and `hashFile` need exporting
-- [ ] move corresponding test files; update package decl + intra-pkg references
-- [ ] in each root .go file: add `import "devbox-cli/internal/core/workflow/snapshot/meta"`; replace bare references with `meta.X` qualified form
-- [ ] in `devbox_files.go`: replace 4× `writeFileAtomic(...)` with `meta.WriteFileAtomic(...)`; update `captureDevboxFiles`/`restoreDevboxFiles` to use `meta.DevboxFiles`; the rest of the file (YAML-AST helpers) needs ONLY import-statement and `meta.X` qualified-name updates — no helper refactoring
-- [ ] in `restore.go`: replace 1× `writeFileAtomic(...)` in `writePreRestoreBackup` with `meta.WriteFileAtomic(...)`
-- [ ] update archive_pack.go, archive_unpack.go, archive_inspect.go, archive_verify.go to use `meta.Manifest` etc. (they still live in root in this task; archive_verify.go's `ScanArtifacts` call becomes `meta.ScanArtifacts`)
-- [ ] grep `snapshot\\.` across `internal/cli/snapshot/` and `internal/core/validate/snapshot/` to verify every symbol move has an updated call site
-- [ ] run `make test ./internal/core/workflow/snapshot/...` — must pass before Task 3
-- [ ] run `make lint` — must pass before Task 3
+- [x] create `meta/` directory; move 5 base implementation files + scan.go; change `package snapshot` → `package meta`
+- [x] create `meta/atomic.go` with the body of the existing `writeFileAtomic` (rename to exported `WriteFileAtomic`); delete it from `manifest.go`
+- [x] `ScanArtifacts` is already exported (no rename); `hashFile` needs to become `HashFile` — it's a private helper today but will be called from `archive.VerifyExtractedArtifacts` after Task 3
+- [x] verify exported names: Manifest, NewManifest, LoadManifest, SaveManifest, ArtifactInfo, ArtifactHashMismatch, ServiceSnapshot, ProjectInfo, DevboxFiles (struct), LastCreate, LastRestore, StatusOk/Failed/Interrupted, SnapshotsDir, SnapshotDir, ManifestPath, StateDir, CurrentPointer, LockPath, PreRestoreBackup, DevboxSubdir, ManifestFileName, ValidateName, BuildSnapshotVars, ReadCurrent, WriteCurrent, ClearCurrent, ScanArtifacts, WriteFileAtomic — most already capitalized, only `writeFileAtomic` and `hashFile` need exporting
+- [x] move corresponding test files; update package decl + intra-pkg references
+- [x] in each root .go file: add `import "devbox-cli/internal/core/workflow/snapshot/meta"`; replace bare references with `meta.X` qualified form
+- [x] in `devbox_files.go`: replace 4× `writeFileAtomic(...)` with `meta.WriteFileAtomic(...)`; update `captureDevboxFiles`/`restoreDevboxFiles` to use `meta.DevboxFiles`; the rest of the file (YAML-AST helpers) needs ONLY import-statement and `meta.X` qualified-name updates — no helper refactoring
+- [x] in `restore.go`: replace 1× `writeFileAtomic(...)` in `writePreRestoreBackup` with `meta.WriteFileAtomic(...)`
+- [x] update archive_pack.go, archive_unpack.go, archive_inspect.go, archive_verify.go to use `meta.Manifest` etc. (they still live in root in this task; archive_verify.go's `ScanArtifacts` call becomes `meta.ScanArtifacts`)
+- [x] grep `snapshot\\.` across `internal/cli/snapshot/` and `internal/core/validate/snapshot/` to verify every symbol move has an updated call site
+- [x] run `make test ./internal/core/workflow/snapshot/...` — must pass before Task 3
+- [x] run `make lint` — must pass before Task 3
 
 ### Task 3: Extract `archive/` subpackage (tar layer)
 

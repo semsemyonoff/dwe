@@ -12,7 +12,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/validate"
-	coresnap "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // findFirst returns the first diagnostic whose Target equals target (exactly
@@ -185,12 +185,12 @@ func TestTemplateScopeValidator_WalksParallelAndVariants(t *testing.T) {
 	}
 }
 
-func writeManifest(t *testing.T, dir string, m *coresnap.Manifest) {
+func writeManifest(t *testing.T, dir string, m *meta.Manifest) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := coresnap.SaveManifest(filepath.Join(dir, coresnap.ManifestFileName), m); err != nil {
+	if err := meta.SaveManifest(filepath.Join(dir, meta.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -211,10 +211,10 @@ func TestPerSnapshotValidator_ManifestMissing(t *testing.T) {
 func TestPerSnapshotValidator_ArtifactMissing(t *testing.T) {
 	root := t.TempDir()
 	snapDir := filepath.Join(root, "snapshots", "snap1")
-	writeManifest(t, snapDir, &coresnap.Manifest{
+	writeManifest(t, snapDir, &meta.Manifest{
 		Name:      "snap1",
 		CreatedAt: time.Now().UTC(),
-		Artifacts: []coresnap.ArtifactInfo{{Path: "db/main.sql", Size: 10, Sha256: "deadbeef"}},
+		Artifacts: []meta.ArtifactInfo{{Path: "db/main.sql", Size: 10, Sha256: "deadbeef"}},
 	})
 
 	all := All(nil, nil, nil, root, nil, false)
@@ -227,10 +227,10 @@ func TestPerSnapshotValidator_ArtifactMissing(t *testing.T) {
 func TestPerSnapshotValidator_LastCreateFailedInfo(t *testing.T) {
 	root := t.TempDir()
 	snapDir := filepath.Join(root, "snapshots", "snap2")
-	writeManifest(t, snapDir, &coresnap.Manifest{
+	writeManifest(t, snapDir, &meta.Manifest{
 		Name:       "snap2",
 		CreatedAt:  time.Now().UTC(),
-		LastCreate: &coresnap.LastCreate{Status: coresnap.StatusFailed, FailedStep: "db.dump"},
+		LastCreate: &meta.LastCreate{Status: meta.StatusFailed, FailedStep: "db.dump"},
 	})
 	all := All(nil, nil, nil, root, nil, false)
 	diags := runAll(all)
@@ -251,11 +251,11 @@ func TestPerSnapshotValidator_ChecksumsVerifyDetectsTampering(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Compute the real sha256 by calling ScanArtifacts.
-	scanned, err := coresnap.ScanArtifacts(snapDir)
+	scanned, err := meta.ScanArtifacts(snapDir)
 	if err != nil {
 		t.Fatalf("scan: %v", err)
 	}
-	writeManifest(t, snapDir, &coresnap.Manifest{
+	writeManifest(t, snapDir, &meta.Manifest{
 		Name:      "snap3",
 		CreatedAt: time.Now().UTC(),
 		Artifacts: scanned,

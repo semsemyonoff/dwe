@@ -10,25 +10,26 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/validate"
 	coresnap "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // snapshotEntry builds a coresnap.Entry on disk under root/snapshots/<name>
 // with the given captured services in its manifest.
-func snapshotEntry(t *testing.T, root, name string, captured []coresnap.ServiceSnapshot) coresnap.Entry {
+func snapshotEntry(t *testing.T, root, name string, captured []meta.ServiceSnapshot) coresnap.Entry {
 	t.Helper()
 	dir := filepath.Join(root, "snapshots", name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	m := &coresnap.Manifest{
+	m := &meta.Manifest{
 		Name:      name,
 		CreatedAt: time.Now().UTC(),
-		Project: coresnap.ProjectInfo{
+		Project: meta.ProjectInfo{
 			Name:     "testproj",
 			Services: captured,
 		},
 	}
-	if err := coresnap.SaveManifest(filepath.Join(dir, coresnap.ManifestFileName), m); err != nil {
+	if err := meta.SaveManifest(filepath.Join(dir, meta.ManifestFileName), m); err != nil {
 		t.Fatal(err)
 	}
 	return coresnap.Entry{Dir: dir, Manifest: m}
@@ -36,7 +37,7 @@ func snapshotEntry(t *testing.T, root, name string, captured []coresnap.ServiceS
 
 func TestServicesDiffValidator(t *testing.T) {
 	root := t.TempDir()
-	captured := []coresnap.ServiceSnapshot{
+	captured := []meta.ServiceSnapshot{
 		{Name: "db", Enabled: true},
 		{Name: "main", Enabled: true},
 	}
@@ -45,7 +46,7 @@ func TestServicesDiffValidator(t *testing.T) {
 	tests := []struct {
 		name     string
 		cfg      *config.DevboxConfig
-		manifest []coresnap.ServiceSnapshot
+		manifest []meta.ServiceSnapshot
 		wantDiag bool
 		wantHint []string
 	}{
@@ -108,7 +109,7 @@ func TestServicesDiffValidator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := entry
 			if tc.manifest == nil {
-				e.Manifest = &coresnap.Manifest{Name: "snap", Project: coresnap.ProjectInfo{Name: "testproj"}}
+				e.Manifest = &meta.Manifest{Name: "snap", Project: meta.ProjectInfo{Name: "testproj"}}
 			} else {
 				m := *entry.Manifest
 				m.Project.Services = tc.manifest
@@ -143,7 +144,7 @@ func TestServicesDiffValidator(t *testing.T) {
 // picked up by the All(...) aggregator alongside perSnapshotValidator.
 func TestServicesDiffValidator_RegisteredInAll(t *testing.T) {
 	root := t.TempDir()
-	captured := []coresnap.ServiceSnapshot{
+	captured := []meta.ServiceSnapshot{
 		{Name: "db", Enabled: true},
 	}
 	snapshotEntry(t, root, "s1", captured)

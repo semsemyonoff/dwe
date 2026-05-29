@@ -19,6 +19,7 @@ import (
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/registry"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
 
@@ -51,7 +52,7 @@ func newSnapshotRemoveCmd(flags *cmdctx.RootFlags) *cobra.Command {
 func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes, noLive, silent bool) (err error) {
 	baseDir := flags.ProjectRoot()
 
-	if err := snapshotpkg.ValidateName(name); err != nil {
+	if err := meta.ValidateName(name); err != nil {
 		return err
 	}
 
@@ -130,7 +131,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 		NonInteractive: !widgets.IsInteractiveFn(os.Stdin),
 		Stdout:         stdout,
 		Stderr:         stderr,
-		ConfirmRemove: func(m *snapshotpkg.Manifest) (bool, error) {
+		ConfirmRemove: func(m *meta.Manifest) (bool, error) {
 			if !widgets.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "snapshot remove needs confirmation; pass --yes to proceed non-interactively")
 				return false, nil

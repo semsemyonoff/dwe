@@ -11,6 +11,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/registry"
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -52,7 +53,7 @@ func TestRunWorkflow_PropagatesSnapshotVarsToShellLeaf(t *testing.T) {
 
 	tmp := t.TempDir()
 	snapPath := filepath.Join(tmp, "snap")
-	vars := BuildSnapshotVars("snapname", snapPath, "desc", "", time.Time{})
+	vars := meta.BuildSnapshotVars("snapname", snapPath, "desc", "", time.Time{})
 
 	var out, errBuf bytes.Buffer
 	err := RunWorkflow(context.Background(), ExecParams{
@@ -101,7 +102,7 @@ func TestRunWorkflow_WhenFileExistsShortCircuits(t *testing.T) {
 		Registry: reg,
 		BaseDir:  tmp,
 		Workflow: wf,
-		Vars:     BuildSnapshotVars("n", tmp, "", "", time.Time{}),
+		Vars:     meta.BuildSnapshotVars("n", tmp, "", "", time.Time{}),
 		Scope:    tpl.SnapshotScopeRestoreOrRemove,
 		Stdout:   &out,
 		Stderr:   &errBuf,

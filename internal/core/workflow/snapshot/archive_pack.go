@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"devbox-cli/internal/core/workflow/snapshot/meta"
 )
 
 // glob matching ---------------------------------------------------------------
@@ -133,7 +135,7 @@ func resolveExistingAncestor(dir string) string {
 // directory must not be mutating concurrently — otherwise the archive can
 // be corrupt or truncated).
 func Pack(snapshotsRoot, snapDir, name string, outPath string, excludes []string) (*PackResult, error) {
-	if err := ValidateName(name); err != nil {
+	if err := meta.ValidateName(name); err != nil {
 		return nil, err
 	}
 	if st, err := os.Stat(snapDir); err != nil {
