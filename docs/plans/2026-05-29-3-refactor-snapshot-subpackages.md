@@ -237,12 +237,12 @@ Done in current `snapshot/` package, before subpkg extraction. This is the "intr
 **Files:**
 - Read-only verification of: `internal/cli/snapshot/`, `internal/core/validate/snapshot/`
 
-- [ ] verify root snapshot/ now contains exactly 9 .go files: create, restore, remove, list, exec, devbox_files, services_diff, scan, observer (+ their test files)
-- [ ] grep cli/snapshot/ for `snapshot\\.Manifest`, `snapshot\\.Pack`, etc. — all such references should be qualified to meta/archive
-- [ ] grep validate/snapshot/ for the same — should all be updated
-- [ ] verify no stale references (e.g. `snapshot.UnpackOptions` left somewhere)
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
+- [x] verify root snapshot/ now contains the expected operation files: create, restore, remove, list, exec, devbox_files, services_diff, observer + doc.go (scan moved to meta/ to break the archive→root cycle, so 8 op files + doc.go = 9 .go files total)
+- [x] grep cli/snapshot/ for `snapshot\.Manifest`, `snapshot\.Pack`, etc. — no matches (all references qualified to meta/archive)
+- [x] grep validate/snapshot/ for the same — no matches
+- [x] verify no stale references (e.g. `snapshot.UnpackOptions` left somewhere) — repo-wide grep only matched docs/plans/AGENTS.md (descriptive prose, not code)
+- [x] run full test suite: `make test` — all packages pass
+- [x] run linter: `make lint` — 0 issues
 
 ### Task 5: Build verification + manual round-trip smoke test
 
