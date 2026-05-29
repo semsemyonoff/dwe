@@ -174,14 +174,14 @@ Done in current `snapshot/` package, before subpkg extraction. This is the "intr
 - Create: `internal/core/workflow/snapshot/archive_verify.go`
 - Leave: `internal/core/workflow/snapshot/archive_test.go` AS-IS — keep all tests in one file during Task 1. Test file split happens in Task 3 when archive_test.go's functions live in `archive/` subpkg and naturally group by their source files.
 
-- [ ] keep in `archive.go`: types AND shared constants — `PackResult`, `UnpackResult`, `VerificationOutcome`, `ArtifactVerifyReport`, `ArtifactHashMismatch`, `UnpackOptions`, `UnpackCancelledError`, `UnpackVerifyDeclinedError`, `rejectedTarEntryError` + `maxUnpackBytes`/`maxUnpackFiles` (referenced by `archive_inspect.go:52` and `archive_test.go:150-151`)
-- [ ] move to `archive_pack.go`: `Pack` function + private helpers (globToRegexp, excludesMatch, resolveExistingAncestor) used only by Pack
-- [ ] move to `archive_unpack.go`: `Unpack` + extractTarGz + mkdirRandom + confirmUnpackOverwrite
-- [ ] move to `archive_verify.go`: `VerifyExtractedArtifacts` + printVerifyReport + the `Empty()` method on ArtifactVerifyReport
-- [ ] verify no symbol is referenced from a file other than where it now lives (or stays as a method on a type defined in archive.go)
-- [ ] **decision committed**: archive_test.go stays in one file during Task 1 — the split happens in Task 3 when test files move to `archive/`
-- [ ] run `make test ./internal/core/workflow/snapshot/...` — must pass before Task 2
-- [ ] run `make lint` — must pass before Task 2
+- [x] keep in `archive.go`: types AND shared constants — `PackResult`, `UnpackResult`, `VerificationOutcome`, `ArtifactVerifyReport`, `ArtifactHashMismatch`, `UnpackOptions`, `UnpackCancelledError`, `UnpackVerifyDeclinedError`, `rejectedTarEntryError` + `maxUnpackBytes`/`maxUnpackFiles` (referenced by `archive_inspect.go:52` and `archive_test.go:150-151`)
+- [x] move to `archive_pack.go`: `Pack` function + private helpers (globToRegexp, excludesMatch, resolveExistingAncestor) used only by Pack
+- [x] move to `archive_unpack.go`: `Unpack` + extractTarGz + mkdirRandom + confirmUnpackOverwrite
+- [x] move to `archive_verify.go`: `VerifyExtractedArtifacts` + printVerifyReport + the `Empty()` method on ArtifactVerifyReport
+- [x] verify no symbol is referenced from a file other than where it now lives (or stays as a method on a type defined in archive.go)
+- [x] **decision committed**: archive_test.go stays in one file during Task 1 — the split happens in Task 3 when test files move to `archive/`
+- [x] run `make test ./internal/core/workflow/snapshot/...` — must pass before Task 2
+- [x] run `make lint` — must pass before Task 2
 
 ### Task 2: Extract `meta/` subpackage (descriptors + scan + atomic write)
 
