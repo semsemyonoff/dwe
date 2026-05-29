@@ -323,15 +323,15 @@ When each `*Builtin` struct is renamed:
 - Move + modify: `executable_in_path_test.go` → `env/`
 - Modify: `internal/core/execution/builtin/builtin.go`
 
-- [ ] create `env/env.go` with `func Builtins() map[string]spec.Entry` returning `{"env_keys_present": {KeysPresent{}, spec.KindPredicate}, "executable_in_path": {ExecutableInPath{}, spec.KindPredicate}}` + doc comment
-- [ ] move 2 implementation files; rename `env_keys_present.go` → `keys_present.go`; change package decl; add spec import
-- [ ] rename types: `envKeysPresentBuiltin` → `KeysPresent` (stutter avoidance — package name `env` carries the prefix), `executableInPathBuiltin` → `ExecutableInPath`
-- [ ] update receivers + doc comments
-- [ ] update helper/ExecContext references to `spec.*`
-- [ ] move 2 test files; update package and instantiations; rename test file alongside its impl
-- [ ] in root `builtin.go`: add `for k, v := range env.Builtins() { r[k] = v }`; import env package
-- [ ] run `make test ./internal/core/execution/builtin/...` — must pass before Task 7
-- [ ] run `make lint` — must pass before Task 7
+- [x] create `env/env.go` with `func Builtins() map[string]spec.Entry` returning `{"env_keys_present": {KeysPresent{}, spec.KindPredicate}, "executable_in_path": {ExecutableInPath{}, spec.KindPredicate}}` + doc comment
+- [x] move 2 implementation files; rename `env_keys_present.go` → `keys_present.go`; change package decl; add spec import
+- [x] rename types: `envKeysPresentBuiltin` → `KeysPresent` (stutter avoidance — package name `env` carries the prefix), `executableInPathBuiltin` → `ExecutableInPath`
+- [x] update receivers + doc comments
+- [x] update helper/ExecContext references to `spec.*`
+- [x] move 2 test files; update package and instantiations; rename test file alongside its impl
+- [x] in root `builtin.go`: add `for k, v := range env.Builtins() { r[k] = v }`; import env package
+- [x] run `make test ./internal/core/execution/builtin/...` — must pass before Task 7
+- [x] run `make lint` — must pass before Task 7
 
 ### Task 7: Extract `interaction/` subpackage (`confirm`, `message`)
 

@@ -1,4 +1,4 @@
-package builtin
+package env
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 func TestExecutableInPathValidate(t *testing.T) {
 	t.Parallel()
-	b := executableInPathBuiltin{}
+	b := ExecutableInPath{}
 	if err := b.Validate(map[string]any{"name": "ls"}); err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -21,7 +21,7 @@ func TestExecutableInPathValidate(t *testing.T) {
 
 func TestExecutableInPathDescribe(t *testing.T) {
 	t.Parallel()
-	got := executableInPathBuiltin{}.Describe(map[string]any{"name": "git"})
+	got := ExecutableInPath{}.Describe(map[string]any{"name": "git"})
 	if !strings.Contains(got, "git") {
 		t.Fatalf("describe: %q", got)
 	}
@@ -29,7 +29,7 @@ func TestExecutableInPathDescribe(t *testing.T) {
 
 func TestExecutableInPathRun(t *testing.T) {
 	t.Parallel()
-	b := executableInPathBuiltin{}
+	b := ExecutableInPath{}
 	if err := b.Run(context.Background(), map[string]any{"name": "sh"}, spec.ExecContext{}); err != nil {
 		t.Fatalf("sh should be in PATH: %v", err)
 	}

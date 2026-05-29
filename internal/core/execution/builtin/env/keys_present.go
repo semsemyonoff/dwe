@@ -1,4 +1,4 @@
-package builtin
+package env
 
 import (
 	"context"
@@ -11,9 +11,11 @@ import (
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
-type envKeysPresentBuiltin struct{}
+// KeysPresent verifies that the named env-file declares each requested key with a non-empty value.
+type KeysPresent struct{}
 
-func (envKeysPresentBuiltin) Validate(with map[string]any) error {
+// Validate checks that file and keys params are present.
+func (KeysPresent) Validate(with map[string]any) error {
 	file := spec.GetStringParam(with, "file", "")
 	if file == "" {
 		return errors.New("missing required param 'file'")
@@ -28,13 +30,15 @@ func (envKeysPresentBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (envKeysPresentBuiltin) Describe(with map[string]any) string {
+// Describe returns a human-readable summary for plan display.
+func (KeysPresent) Describe(with map[string]any) string {
 	file := spec.GetStringParam(with, "file", "")
 	keys, _ := spec.GetStringSlice(with, "keys")
 	return fmt.Sprintf("builtin: env_keys_present(file=%s, keys=[%s])", file, strings.Join(keys, ","))
 }
 
-func (envKeysPresentBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run reads the env-file and reports any missing or empty keys.
+func (KeysPresent) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
 	file := spec.GetStringParam(with, "file", "")
 	keys, err := spec.GetStringSlice(with, "keys")
 	if err != nil {

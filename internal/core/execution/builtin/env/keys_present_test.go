@@ -1,4 +1,4 @@
-package builtin
+package env
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 func TestEnvKeysPresentValidate(t *testing.T) {
 	t.Parallel()
-	b := envKeysPresentBuiltin{}
+	b := KeysPresent{}
 	cases := []struct {
 		name    string
 		with    map[string]any
@@ -43,7 +43,7 @@ func TestEnvKeysPresentRun(t *testing.T) {
 	if err := os.WriteFile(envPath, []byte("FOO=bar\nBAZ=\nQUUX=\"\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := envKeysPresentBuiltin{}
+	b := KeysPresent{}
 
 	if err := b.Run(context.Background(), map[string]any{"file": ".env", "keys": []any{"FOO"}}, spec.ExecContext{ProjectRoot: dir}); err != nil {
 		t.Fatalf("FOO present: %v", err)
