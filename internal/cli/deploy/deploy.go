@@ -395,7 +395,10 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	// Reconcile: downstream resolvers in workflow/deploy read cfg.Deploy.Phases directly.
 	// Overwrite here so the default propagates through ResolvePlan.
 	cfg.Deploy = projectDeploy
-	if deployDefaulted {
+	// Per-service runs (ResolveServicePlan / ResolveServicesPlanSubset) do not read
+	// cfg.Deploy.Phases, so the orchestrator-default notice is only meaningful for
+	// whole-project runs.
+	if deployDefaulted && len(opts.Services) == 0 {
 		cmdctx.EmitDefaultNotice(cmd, flags, "deploy", "deploy")
 	}
 
