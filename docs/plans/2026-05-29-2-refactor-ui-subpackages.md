@@ -299,11 +299,11 @@ Several callers use symbols from multiple groups → import multiple subpkgs. Th
 **Files:**
 - Read-only verification of: `internal/cli/`, `internal/core/notify/`, `internal/shared/render/` (if any cross-import)
 
-- [ ] `grep -rEn '\\bui\\.[A-Z]' --include='*.go' internal/` — should match zero (identifier-start scoped to avoid false positives like `liveui.`, `statusview.`)
-- [ ] `grep -rn '"devbox-cli/internal/core/ui"' internal/` — should match zero (only `core/ui/widgets`, `core/ui/styles`, `core/ui/render`, `core/ui/ask`, `core/ui/cmdbrowser`, `core/ui/statusview`, `core/ui/statustui` remain)
-- [ ] verify sibling subpkgs ask/, cmdbrowser/, statusview/, statustui/ compile (their import updates are part of Tasks 2/3/4, not deferred here)
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
+- [x] `grep -rEn '\\bui\\.[A-Z]' --include='*.go' internal/` — should match zero (identifier-start scoped to avoid false positives like `liveui.`, `statusview.`)
+- [x] `grep -rn '"devbox-cli/internal/core/ui"' internal/` — should match zero (only `core/ui/widgets`, `core/ui/styles`, `core/ui/render`, `core/ui/ask`, `core/ui/cmdbrowser`, `core/ui/statusview`, `core/ui/statustui` remain)
+- [x] verify sibling subpkgs ask/, cmdbrowser/, statusview/, statustui/ compile (their import updates are part of Tasks 2/3/4, not deferred here)
+- [x] run full test suite: `make test`
+- [x] run linter: `make lint`
 
 ### Task 6: Build verification + manual visual smoke test
 
