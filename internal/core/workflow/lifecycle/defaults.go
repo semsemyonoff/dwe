@@ -7,6 +7,8 @@ import "devbox-cli/internal/core/project/config"
 // RunContext.OnDefaultUsed and StopContext.OnDefaultUsed.
 type DefaultedPipeline string
 
+// DefaultedRun and DefaultedStop identify which pipeline was substituted with
+// a built-in default when the corresponding YAML section was absent.
 const (
 	DefaultedRun  DefaultedPipeline = "run"
 	DefaultedStop DefaultedPipeline = "stop"

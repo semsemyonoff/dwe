@@ -103,9 +103,9 @@ func TestEnsureResetConfig(t *testing.T) {
 	userPhases := []config.DeployPhase{{Name: "custom", Steps: []config.DeployStep{{Name: "step1", Type: "shell", Cmd: "echo hi"}}}}
 
 	tests := []struct {
-		name          string
-		input         *config.ProjectDeployConfig
-		wantDefaulted bool
+		name           string
+		input          *config.ProjectDeployConfig
+		wantDefaulted  bool
 		wantFirstPhase string
 	}{
 		{

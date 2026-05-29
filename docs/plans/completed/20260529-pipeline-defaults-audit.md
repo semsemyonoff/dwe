@@ -42,25 +42,25 @@ Legend: ✅ succeeds correctly | ⚠️ silent partial (succeeds but produces wr
 
 | Command | Result | Notes |
 |---------|--------|-------|
-| `devbox deploy plan` | ⚠️ | Exit 0 but only shows implicit `render env` step — no container-start steps. Silent noop. |
-| `devbox deploy run --skip-preflight` | ⚠️ | Exit 0, runs only the `env/render-env` implicit step. No docker up, no service steps. Silent noop. |
+| `devbox deploy plan` | ✅ | Fixed by Task 2: `EnsureDeployConfig` returns built-in default (services → docker up --wait → post-deploy). Info line on stderr. |
+| `devbox deploy run --skip-preflight` | ✅ | Fixed by Task 2: same default pipeline fires; containers start as expected. |
 | `devbox deploy state show` | ✅ | Reads existing state, not pipeline-dependent |
 
 ### Reset pipeline
 
 | Command | Result | Notes |
 |---------|--------|-------|
-| `devbox reset plan` | ❌ | `loading reset config devbox/reset.yml: no such file or directory` |
-| `devbox reset run` | ❌ | Same `os.ErrNotExist` propagated from `LoadResetConfig` |
-| `devbox reset step <address>` | ❌ | Same `os.ErrNotExist` from `FindStep` → `LoadResetConfig` |
+| `devbox reset plan` | ✅ | Fixed by Task 3: `EnsureResetConfig` returns built-in default (confirm → docker down → remove volumes + services/). |
+| `devbox reset run` | ✅ | Fixed by Task 3. |
+| `devbox reset step <address>` | ✅ | Fixed by Task 3. |
 
 ### Lifecycle commands
 
 | Command | Result | Notes |
 |---------|--------|-------|
-| `devbox run` | ❌ | `No lifecycle.yml — see devbox/lifecycle.example.yml` |
-| `devbox restart` | ❌ | Stop leg succeeds (auto-reap only), then run leg hits the hard error |
-| `devbox stop` | ⚠️ | Exit 0 but only runs `_auto_reap_daemons` — no `docker down`. Containers not actually stopped. |
+| `devbox run` | ✅ | Fixed by Task 4: `EnsureRunConfig` returns built-in default (docker up --wait). Info line on stderr. |
+| `devbox restart` | ✅ | Fixed by Tasks 4+5: stop leg uses default stop (docker down), run leg uses default run. Two info lines on stderr. |
+| `devbox stop` | ✅ | Fixed by Task 5: `DefaultStopConfig()` includes `docker down` step. Auto-reap + docker down. Info line on stderr. |
 | `devbox stop <service>` | ✅ | Per-service stop (compose-bypass) exits 0 (container not running, no error) |
 
 ### Docker commands
@@ -166,11 +166,11 @@ These are the exact failure modes today that Tasks 2–5 must fix:
 
 ## Summary
 
-Only four commands need pipeline defaults (addressed by Tasks 2–5):
-- `deploy plan` / `deploy run` — silent noop (Task 2)
-- `reset plan` / `reset run` / `reset step` — hard error (Task 3)
-- `run` / `restart` — hard error (Task 4)
-- `stop` — silent partial without `docker down` (Task 5)
+All four previously-failing command groups are now fixed:
+- `deploy plan` / `deploy run` — ✅ fixed by Task 2
+- `reset plan` / `reset run` / `reset step` — ✅ fixed by Task 3
+- `run` / `restart` — ✅ fixed by Task 4
+- `stop` — ✅ fixed by Task 5 (now runs `docker down`, not just auto-reap)
 
 All other commands work correctly with a bare-minimum project, or fail for reasons unrelated to pipeline-file absence (TTY requirement, container not running, no docker.yml for docker subcommands).
 

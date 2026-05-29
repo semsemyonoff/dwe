@@ -440,14 +440,14 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify a project containing only `devbox.yml` + one `devbox/services/<name>/service.yml` successfully runs all of: `devbox deploy plan`, `devbox deploy run` (mocked or against a real local docker), `devbox reset plan`, `devbox reset run`, `devbox run`, `devbox stop`, `devbox restart` — no other devbox YAML present
-- [ ] verify each of those commands prints the info line on stderr when the default fires
-- [ ] verify each stays silent when the user's file is on disk
-- [ ] verify `--output json` mode does NOT emit the info line and does NOT pollute the JSON stream for any of the above
-- [ ] verify the refactored `EnsureStopConfig` (new signature, returning `(*config.LifecycleStopConfig, bool)`) and the three updated tests (`TestEnsureStopConfig_NilConfig`, `_NilStop`, `_PrependsToUserPhases`) all pass
-- [ ] run `make test` — full suite clean
-- [ ] run `make lint` — clean
-- [ ] verify audit checklist in `docs/plans/20260529-pipeline-defaults-audit.md` shows ✅ for every command (or has follow-up tasks closed for ⚠️/❌); any `➕` follow-ups added to this plan after Task 1 must be complete
+- [x] verify a project containing only `devbox.yml` + one `devbox/services/<name>/service.yml` successfully runs all of: `devbox deploy plan`, `devbox deploy run` (mocked or against a real local docker), `devbox reset plan`, `devbox reset run`, `devbox run`, `devbox stop`, `devbox restart` — no other devbox YAML present
+- [x] verify each of those commands prints the info line on stderr when the default fires
+- [x] verify each stays silent when the user's file is on disk
+- [x] verify `--output json` mode does NOT emit the info line and does NOT pollute the JSON stream for any of the above
+- [x] verify the refactored `EnsureStopConfig` (new signature, returning `(*config.LifecycleStopConfig, bool)`) and the three updated tests (`TestEnsureStopConfig_NilConfig`, `_NilStop`, `_PrependsToUserPhases`) all pass
+- [x] run `make test` — full suite clean
+- [x] run `make lint` — clean
+- [x] verify audit checklist in `docs/plans/20260529-pipeline-defaults-audit.md` shows ✅ for every command (or has follow-up tasks closed for ⚠️/❌); any `➕` follow-ups added to this plan after Task 1 must be complete
 
 ### Task 8: Finalise
 

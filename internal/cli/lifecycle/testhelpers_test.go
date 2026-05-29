@@ -7,8 +7,8 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	lifecyclepkg "devbox-cli/internal/core/workflow/lifecycle"
 	"devbox-cli/internal/core/usercommands"
+	lifecyclepkg "devbox-cli/internal/core/workflow/lifecycle"
 	"devbox-cli/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
