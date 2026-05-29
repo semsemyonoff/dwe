@@ -29,6 +29,72 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// validateJSON is the JSON output shape for `devbox validate --output json`.
+type validateJSON struct {
+	Summary     validateSummaryJSON `json:"summary"`
+	Diagnostics []diagnosticJSON    `json:"diagnostics"`
+}
+
+type validateSummaryJSON struct {
+	Ok      int `json:"ok"`
+	Info    int `json:"info"`
+	Warning int `json:"warning"`
+	Error   int `json:"error"`
+}
+
+type diagnosticJSON struct {
+	Severity string `json:"severity"`
+	Scope    string `json:"scope"`
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Message  string `json:"message"`
+	Hint     string `json:"hint,omitempty"`
+}
+
+// severityString converts a validate.Severity to its JSON string representation.
+func severityString(s validate.Severity) string {
+	switch s {
+	case validate.SeverityOK:
+		return "ok"
+	case validate.SeverityInfo:
+		return "info"
+	case validate.SeverityWarning:
+		return "warning"
+	case validate.SeverityError:
+		return "error"
+	default:
+		return "unknown"
+	}
+}
+
+// buildValidateData converts diagnostics and summary into the JSON DTO.
+func buildValidateData(diags []validate.Diagnostic, summary validate.Summary) validateJSON {
+	diagnostics := make([]diagnosticJSON, 0, len(diags))
+	for _, d := range diags {
+		scope := d.Domain
+		if d.Target != "" {
+			scope = d.Domain + "/" + d.Target
+		}
+		diagnostics = append(diagnostics, diagnosticJSON{
+			Severity: severityString(d.Severity),
+			Scope:    scope,
+			File:     d.File,
+			Line:     d.Line,
+			Message:  d.Message,
+			Hint:     d.Hint,
+		})
+	}
+	return validateJSON{
+		Summary: validateSummaryJSON{
+			Ok:      summary.OKs,
+			Info:    summary.Infos,
+			Warning: summary.Warnings,
+			Error:   summary.Errors,
+		},
+		Diagnostics: diagnostics,
+	}
+}
+
 // validationFailedError carries validation diagnostic summary and implements
 // ExitCode() int so main.go can translate it to the appropriate exit code
 // without printing fang's "Error: ..." line.
@@ -358,7 +424,21 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	// Compute summary first so the header can reflect overall severity.
 	summary := validate.Aggregate(diags)
 
-	// Render the diagnostics table (skip when no rows to avoid an empty bordered box).
+	// JSON mode: emit data DTO and preserve exit code via validationFailedError.
+	// Diagnostics ARE the data — no error envelope is emitted for validation
+	// failures (the exit code conveys severity; the envelope would be redundant).
+	if flags.Output == "json" {
+		data := buildValidateData(diags, summary)
+		if err := cmdctx.WriteData(flags, cmd, data, func(validateJSON) string { return "" }); err != nil {
+			return err
+		}
+		if validate.ExitCode(summary, strict) != 0 {
+			return &validationFailedError{summary: summary, strict: strict}
+		}
+		return nil
+	}
+
+	// Text mode: render the diagnostics table (skip when no rows to avoid an empty bordered box).
 	rows := ui.FormatDiagnostics(diags, quiet)
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), styleValidateHeader(validateHeader(scope, stage), summary))
 	if len(rows) > 0 {

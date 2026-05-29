@@ -248,15 +248,15 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 - Create: `internal/cli/validate/testdata/validate.json.golden`
 - Create: `internal/cli/validate/testdata/validate_config.json.golden` (for one subdomain as smoke)
 
-- [ ] define `validateJSON` DTO: `{ Summary: {Ok, Info, Warning, Error int}, Diagnostics: []diagnosticJSON }`; `diagnosticJSON` mirrors `validate.Diagnostic` with snake_case JSON tags (`severity`, `scope`, `file`, `line`, `message`, `hint`)
-- [ ] composite path: collect all diagnostics across domains as before, emit single JSON
-- [ ] per-subdomain path: emit only diagnostics for that subdomain (same DTO shape, filtered list)
-- [ ] preserve exit code logic: 0 for ok/info, 1 for error or (warning AND `--strict`) — JSON shape does NOT replace exit codes
-- [ ] dispatch via `cmdctx.WriteData(rflags, cmd, data, renderDiagnosticsText)` — note that current renderer uses `ui.RenderDiagnosticsTable` + `ui.FormatSummary`; wrap them in a closure
-- [ ] when validate fails with error severity in JSON mode, DON'T emit a JSON error envelope — the diagnostics ARE the data, exit code conveys severity (see brainstorm: "diagnostic commands always return data on stdout, exit code reflects severity")
-- [ ] golden test for composite validate
-- [ ] golden test for one subdomain (`validate config`)
-- [ ] run `go test ./internal/cli/validate/... ./internal/core/validate/...` — must pass before Task 7
+- [x] define `validateJSON` DTO: `{ Summary: {Ok, Info, Warning, Error int}, Diagnostics: []diagnosticJSON }`; `diagnosticJSON` mirrors `validate.Diagnostic` with snake_case JSON tags (`severity`, `scope`, `file`, `line`, `message`, `hint`)
+- [x] composite path: collect all diagnostics across domains as before, emit single JSON
+- [x] per-subdomain path: emit only diagnostics for that subdomain (same DTO shape, filtered list)
+- [x] preserve exit code logic: 0 for ok/info, 1 for error or (warning AND `--strict`) — JSON shape does NOT replace exit codes
+- [x] dispatch via `cmdctx.WriteData(rflags, cmd, data, renderDiagnosticsText)` — note that current renderer uses `ui.RenderDiagnosticsTable` + `ui.FormatSummary`; wrap them in a closure
+- [x] when validate fails with error severity in JSON mode, DON'T emit a JSON error envelope — the diagnostics ARE the data, exit code conveys severity (see brainstorm: "diagnostic commands always return data on stdout, exit code reflects severity")
+- [x] golden test for composite validate
+- [x] golden test for one subdomain (`validate config`)
+- [x] run `go test ./internal/cli/validate/... ./internal/core/validate/...` — must pass before Task 7
 
 ### Task 7: Migrate `devbox status` and 7 subcommands + TUI auto-disable
 

@@ -2,8 +2,10 @@ package validate
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"devbox-cli/internal/cli/cmdctx"
@@ -568,4 +570,268 @@ func TestValidateSnapshotVerifyFlag(t *testing.T) {
 	cmd.SetArgs([]string{"snapshot", "snap1"})
 	_ = cmd.Execute()
 	require.NotContains(t, out1.String(), "snap1.checksums", "no checksums target without --verify")
+}
+
+// runValidateJSONCmd creates a fresh validate command with JSON output flags and
+// runs it, returning stdout and stderr separately. Does not fail on non-zero
+// command exit so callers can assert on validation-failed results.
+func runValidateJSONCmd(t *testing.T, cfgPath string, args ...string) (stdout, stderr string) {
+	t.Helper()
+	flags := &cmdctx.RootFlags{
+		ConfigPath: cfgPath,
+		Output:     "json",
+	}
+	cmd := NewCmd("", flags)
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs(args)
+	_ = cmd.Execute()
+	return outBuf.String(), errBuf.String()
+}
+
+// TestValidateCmd_JSONMode_Structure verifies that `devbox validate --output json`
+// emits a JSON object with the expected top-level keys.
+func TestValidateCmd_JSONMode_Structure(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, devboxPath)
+
+	require.NotEmpty(t, stdout, "JSON output must not be empty")
+	require.True(t, strings.HasPrefix(strings.TrimSpace(stdout), "{"),
+		"JSON output must start with '{', got: %q", stdout[:min(50, len(stdout))])
+
+	var got map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), "output must be valid JSON")
+	require.Contains(t, got, "summary", "JSON must have 'summary' key")
+	require.Contains(t, got, "diagnostics", "JSON must have 'diagnostics' key")
+
+	var summary validateSummaryJSON
+	require.NoError(t, json.Unmarshal(got["summary"], &summary))
+
+	var diagnostics []diagnosticJSON
+	require.NoError(t, json.Unmarshal(got["diagnostics"], &diagnostics), "'diagnostics' must be a JSON array")
+}
+
+// TestValidateCmd_JSONMode_SummaryFields verifies the summary contains numeric fields.
+func TestValidateCmd_JSONMode_SummaryFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, devboxPath)
+
+	var got struct {
+		Summary struct {
+			Ok      int `json:"ok"`
+			Info    int `json:"info"`
+			Warning int `json:"warning"`
+			Error   int `json:"error"`
+		} `json:"summary"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	// Counts should be non-negative (we can't assert exact values since env
+	// probes depend on the host, but the fields must be present and numeric).
+	require.GreaterOrEqual(t, got.Summary.Ok+got.Summary.Info+got.Summary.Warning+got.Summary.Error, 0)
+}
+
+// TestValidateCmd_JSONMode_DiagnosticFields verifies that each diagnostic in the
+// JSON output has the required fields with valid values.
+func TestValidateCmd_JSONMode_DiagnosticFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, devboxPath)
+
+	var got struct {
+		Diagnostics []struct {
+			Severity string `json:"severity"`
+			Scope    string `json:"scope"`
+			Message  string `json:"message"`
+		} `json:"diagnostics"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+
+	validSeverities := map[string]bool{"ok": true, "info": true, "warning": true, "error": true}
+	for i, d := range got.Diagnostics {
+		require.True(t, validSeverities[d.Severity], "diagnostic[%d].severity must be ok/info/warning/error, got %q", i, d.Severity)
+		require.NotEmpty(t, d.Scope, "diagnostic[%d].scope must not be empty", i)
+		// OK diagnostics may have empty messages (they're "pass" signals); others must have one.
+		if d.Severity != "ok" {
+			require.NotEmpty(t, d.Message, "diagnostic[%d].message must not be empty for non-ok severity", i)
+		}
+	}
+}
+
+// TestValidateCmd_JSONMode_ExitCodePreserved verifies that validation errors in
+// JSON mode still produce a non-zero exit code (via validationFailedError).
+func TestValidateCmd_JSONMode_ExitCodePreserved(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	// Snapshot directory with no manifest → error diagnostic.
+	brokenDir := filepath.Join(tmpDir, "snapshots", "broken")
+	require.NoError(t, os.MkdirAll(brokenDir, 0o755))
+
+	flags := &cmdctx.RootFlags{ConfigPath: devboxPath, Output: "json"}
+	cmd := NewCmd("", flags)
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"snapshot"})
+	err := cmd.Execute()
+
+	// The command should return validationFailedError (exit code 1).
+	require.Error(t, err, "validation with errors must return an error in JSON mode")
+	var vfe *validationFailedError
+	require.ErrorAs(t, err, &vfe, "error must be validationFailedError")
+	require.Equal(t, 1, vfe.ExitCode())
+
+	// Stdout must still contain valid JSON diagnostics.
+	stdout := outBuf.String()
+	require.True(t, strings.HasPrefix(strings.TrimSpace(stdout), "{"),
+		"stdout must be JSON even when validation fails, got: %q", stdout[:min(80, len(stdout))])
+
+	var got struct {
+		Summary struct {
+			Error int `json:"error"`
+		} `json:"summary"`
+		Diagnostics []struct {
+			Severity string `json:"severity"`
+		} `json:"diagnostics"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Greater(t, got.Summary.Error, 0, "summary.error must be > 0")
+
+	// Stderr must NOT contain a JSON error envelope (diagnostics are the data).
+	// Note: cobra may print "Error: validation failed" to stderr when SilenceErrors
+	// is not set (which is the case in this isolated unit test, where root's
+	// PersistentPreRunE does not run). The important invariant is that stderr does
+	// NOT contain a JSON error envelope — i.e. it must not start with '{'.
+	stderr := errBuf.String()
+	trimmedStderr := strings.TrimSpace(stderr)
+	if trimmedStderr != "" {
+		require.False(t, strings.HasPrefix(trimmedStderr, "{"),
+			"stderr must not contain a JSON error envelope for validation failures, got: %q", stderr)
+	}
+}
+
+// TestValidateCmd_JSONMode_StrictExitCodePreserved verifies that --strict upgrades
+// warnings to errors in JSON mode (exit code 1).
+func TestValidateCmd_JSONMode_StrictExitCodePreserved(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	// Configure a generic linter with a missing binary → Warning.
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	yml := "linters:\n  totally-fake-linter-xyz:\n    type: generic\n    bin: totally-fake-linter-xyz\n    paths: [\".\"]\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox", "validate.yml"), []byte(yml), 0o644))
+
+	flags := &cmdctx.RootFlags{ConfigPath: devboxPath, Output: "json"}
+	cmd := NewCmd("", flags)
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--strict", "linters", "totally-fake-linter-xyz"})
+	err := cmd.Execute()
+
+	require.Error(t, err)
+	var vfe *validationFailedError
+	require.ErrorAs(t, err, &vfe)
+	require.Equal(t, 1, vfe.ExitCode())
+
+	var got struct {
+		Summary struct {
+			Warning int `json:"warning"`
+		} `json:"summary"`
+	}
+	require.NoError(t, json.Unmarshal(outBuf.Bytes(), &got))
+	require.Greater(t, got.Summary.Warning, 0, "summary.warning must be > 0")
+}
+
+// TestValidateCmd_JSONMode_ConfigGolden captures the JSON shape for `validate config`
+// against a minimal devbox.yml. The golden file is generated with UPDATE_GOLDEN=1.
+func TestValidateCmd_JSONMode_ConfigGolden(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, devboxPath, "config")
+	got := strings.TrimRight(stdout, "\n")
+
+	goldenPath := filepath.Join("testdata", "validate_config.json.golden")
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		require.NoError(t, os.MkdirAll("testdata", 0o755))
+		require.NoError(t, os.WriteFile(goldenPath, []byte(got+"\n"), 0o644))
+		t.Logf("updated golden: %s", goldenPath)
+		return
+	}
+
+	raw, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("reading golden %s: %v (run with UPDATE_GOLDEN=1 to generate)", goldenPath, err)
+	}
+	want := strings.TrimRight(string(raw), "\n")
+	if got != want {
+		t.Errorf("JSON output mismatch:\ngot:  %s\nwant: %s", got, want)
+	}
+}
+
+// TestValidateCmd_JSONMode_NoANSI verifies that JSON output contains no ANSI
+// escape sequences even when validators emit styled text.
+func TestValidateCmd_JSONMode_NoANSI(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, devboxPath, "config")
+	require.NotContains(t, stdout, "\x1b[", "JSON output must not contain ANSI escape sequences")
+}
+
+// TestValidateCmd_JSONMode_PrettyFlag verifies that --pretty produces indented JSON.
+func TestValidateCmd_JSONMode_PrettyFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	flags := &cmdctx.RootFlags{ConfigPath: devboxPath, Output: "json", Pretty: true}
+	cmd := NewCmd("", flags)
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"config"})
+	_ = cmd.Execute()
+
+	got := outBuf.String()
+	require.Contains(t, got, "\n  ", "pretty JSON should contain indented lines")
+	require.Contains(t, got, `"summary"`, "pretty JSON should contain 'summary' key")
+	require.Contains(t, got, `"diagnostics"`, "pretty JSON should contain 'diagnostics' key")
+}
+
+// TestValidateCmd_JSONMode_TextBehaviorUnchanged verifies that text mode still
+// produces the human-readable table+summary format (regression guard).
+func TestValidateCmd_JSONMode_TextBehaviorUnchanged(t *testing.T) {
+	tmpDir := t.TempDir()
+	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	flags := &cmdctx.RootFlags{ConfigPath: devboxPath, Output: "text"}
+	cmd := NewCmd("", flags)
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"config"})
+	_ = cmd.Execute()
+
+	got := outBuf.String()
+	// Text output must NOT be JSON.
+	require.False(t, strings.HasPrefix(strings.TrimSpace(got), "{"),
+		"text mode must not produce JSON output")
+	// Must contain "validation result" summary line.
+	require.Contains(t, got, "validation result", "text mode must produce summary line")
 }
