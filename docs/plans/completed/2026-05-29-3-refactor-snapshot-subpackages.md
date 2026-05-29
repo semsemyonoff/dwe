@@ -262,10 +262,10 @@ Done in current `snapshot/` package, before subpkg extraction. This is the "intr
 - Modify: `AGENTS.md` / `CLAUDE.md` — check "Snapshot template scope gate" section for any references to internal type locations
 - Move: this plan file → `docs/plans/completed/`
 
-- [ ] update `docs/internals/packages.md` to document the three-tier meta/archive/root layout
-- [ ] verify "Snapshot template scope gate" section in CLAUDE.md still accurate (logic lives in `internal/shared/tpl/render_command.go` and `meta.BuildSnapshotVars` — paths only)
-- [ ] verify all checkboxes above are `[x]`
-- [ ] move plan file: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-3-refactor-snapshot-subpackages.md docs/plans/completed/`
+- [x] update `docs/internals/packages.md` to document the three-tier meta/archive/root layout
+- [x] verify "Snapshot template scope gate" section in CLAUDE.md still accurate (updated `snapshot.BuildSnapshotVars` → `meta.BuildSnapshotVars` reference in AGENTS.md)
+- [x] verify all checkboxes above are `[x]`
+- [x] move plan file: done in this commit (`git mv` into `docs/plans/completed/`)
 
 ## Post-Completion
 
