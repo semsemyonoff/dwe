@@ -194,11 +194,11 @@ Signatures (in `internal/cli/docs/llmstxt.go`):
 - Modify: `internal/cli/docs/llmstxt.go`
 - Modify: `internal/cli/docs/llmstxt_test.go`
 
-- [ ] handle `--output PATH`: create parent dirs (`MkdirAll`), write file, return early
-- [ ] wrap file-write error with `cmdctx.ErrWrap("llms_txt_write_failed", err).WithDetail("path", p)` IF Plan 1 (`2026-05-29-json-state-output.md`) Task 1 has already landed; otherwise use plain `fmt.Errorf`
-- [ ] write test: `--output /tmp/some/nested/llms.txt` creates the file and writes content
-- [ ] write test: `--output /forbidden/path/llms.txt` returns an error (use a known-unwritable path or simulate with read-only temp dir)
-- [ ] run `go test ./internal/cli/docs/...` — must pass before Task 6
+- [x] handle `--output PATH`: create parent dirs (`MkdirAll`), write file, return early
+- [x] wrap file-write error with `cmdctx.ErrWrap("llms_txt_write_failed", err).WithDetail("path", p)` IF Plan 1 (`2026-05-29-json-state-output.md`) Task 1 has already landed; otherwise use plain `fmt.Errorf`
+- [x] write test: `--output /tmp/some/nested/llms.txt` creates the file and writes content
+- [x] write test: `--output /forbidden/path/llms.txt` returns an error (use a known-unwritable path or simulate with read-only temp dir)
+- [x] run `go test ./internal/cli/docs/...` — must pass before Task 6
 
 ### Task 6: Verify acceptance criteria + smoke test
 

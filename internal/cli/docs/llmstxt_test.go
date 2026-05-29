@@ -102,6 +102,28 @@ func TestDocsLlmsTxtCommand_OutputFile_CreatesParentDirs(t *testing.T) {
 	require.NotEmpty(t, content)
 }
 
+func TestDocsLlmsTxtCommand_OutputFile_WriteError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping write-error test when running as root")
+	}
+
+	tmpDir := t.TempDir()
+	// Make directory read-only so writing inside it fails.
+	require.NoError(t, os.Chmod(tmpDir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(tmpDir, 0o755) })
+
+	outPath := filepath.Join(tmpDir, "llms.txt")
+
+	flags := newTestLlmsTxtFlags()
+	cmd := newDocsLlmsTxtCmd(flags)
+	cmd.SetArgs([]string{"--output", outPath})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := cmd.Execute()
+	require.Error(t, err, "expected error when writing to read-only directory")
+}
+
 func TestDocsLlmsTxtCommand_IncludeInternals_Flag(t *testing.T) {
 	flags := newTestLlmsTxtFlags()
 	cmd := newDocsLlmsTxtCmd(flags)

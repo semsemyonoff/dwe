@@ -113,10 +113,10 @@ func runDocsLlmsTxt(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsLlmsTx
 
 	// Write to file, creating parent dirs as needed.
 	if mkErr := os.MkdirAll(filepath.Dir(df.output), 0o755); mkErr != nil {
-		return fmt.Errorf("creating output directory: %w", mkErr)
+		return cmdctx.ErrWrap("llms_txt_write_failed", mkErr).WithDetail("path", df.output)
 	}
 	if writeErr := os.WriteFile(df.output, []byte(out), 0o644); writeErr != nil {
-		return fmt.Errorf("writing llms.txt: %w", writeErr)
+		return cmdctx.ErrWrap("llms_txt_write_failed", writeErr).WithDetail("path", df.output)
 	}
 	return nil
 }
