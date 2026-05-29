@@ -16,7 +16,7 @@ type versionJSON struct {
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
 	BuiltAt string `json:"built_at"`
-	BuiltBy string `json:"built_by"`
+	BuiltBy string `json:"built_by,omitempty"`
 }
 
 // NewCmd builds the `devbox version` command.

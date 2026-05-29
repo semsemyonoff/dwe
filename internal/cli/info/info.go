@@ -59,19 +59,19 @@ The dashboard is driven by Go templates evaluated against the merged devbox conf
 func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return cmdctx.ErrWrap("project_invalid_config", err)
 	}
 
 	infoPath := filepath.Join(flags.ProjectRoot(), "devbox", "info.yml")
 	infoCfg, err := config.LoadInfoConfig(infoPath)
 	if err != nil {
-		return fmt.Errorf("loading devbox/info.yml: %w", err)
+		return cmdctx.ErrWrap("project_invalid_config", err)
 	}
 
 	if flags.Output == "json" {
 		data, err := buildInfoData(cfg, infoCfg)
 		if err != nil {
-			return fmt.Errorf("building info data: %w", err)
+			return cmdctx.ErrWrap("internal_error", err)
 		}
 		return cmdctx.WriteData(flags, cmd, data, func(infoJSON) string { return "" })
 	}

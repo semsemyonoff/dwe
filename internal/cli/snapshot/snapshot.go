@@ -436,7 +436,7 @@ func snapshotNameCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []stri
 func loadSnapshotConfigOrNil(baseDir string) (*config.SnapshotConfig, error) {
 	cfg, err := config.LoadSnapshotConfig(config.SnapshotConfigPath(baseDir))
 	if err != nil {
-		return nil, fmt.Errorf("loading snapshot config: %w", err)
+		return nil, cmdctx.ErrWrap("project_invalid_config", err)
 	}
 	return cfg, nil
 }

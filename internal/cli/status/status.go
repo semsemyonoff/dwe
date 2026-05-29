@@ -77,7 +77,7 @@ type statusContext struct {
 func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext, error) {
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, cmdctx.ErrWrap("project_invalid_config", err)
 	}
 	statePath := filepath.Join(flags.ProjectRoot(), journal.DefaultRelPath)
 	state, err := journal.Load(statePath)
@@ -90,11 +90,11 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 	reg, _ := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	tracked, svcDeploys, err := deploy.LoadTrackedServices(cfg, reg, flags.ProjectRoot())
 	if err != nil {
-		return nil, fmt.Errorf("loading tracked services: %w", err)
+		return nil, cmdctx.ErrWrap("project_invalid_config", err)
 	}
 	projectName, dockerCfg, err := stack.ResolveProjectAndDocker(flags.ConfigPath, cfg)
 	if err != nil {
-		return nil, err
+		return nil, cmdctx.ErrWrap("project_invalid_config", err)
 	}
 	topo, topoStatus := stack.ResolveTopology(cfg, dockerCfg, projectName)
 	dockerBin := config.DockerBin(cfg)

@@ -469,7 +469,7 @@ func loadForValidate(flags *cmdctx.RootFlags) (*config.DevboxConfig, string, str
 	// First, locate the project (without schema validation).
 	loc, found, err := project.Locate(flags.ConfigPath)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("locating project: %w", err)
+		return nil, "", "", cmdctx.ErrWrap("project_invalid_config", err)
 	}
 	if !found {
 		return nil, "", "", cmdctx.ErrWrap("project_not_found", project.ErrNotFound).

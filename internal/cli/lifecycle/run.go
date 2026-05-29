@@ -33,12 +33,20 @@ Use 'devbox docker up' for a bare Docker Compose start without hooks or the upda
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecyclepkg.RunRun(lifecyclepkg.RunContext{
-				Ctx:           cmd.Context(),
-				ConfigPath:    flags.ConfigPath,
-				NoUpdate:      noUpdate,
-				UpdateMode:    updateMode,
-				Yes:           yes,
-				ShowInfo:      func() error { return info.Run(cmd, flags) },
+				Ctx:        cmd.Context(),
+				ConfigPath: flags.ConfigPath,
+				NoUpdate:   noUpdate,
+				UpdateMode: updateMode,
+				Yes:        yes,
+				// lifecycle commands are not migrated to JSON output; suppress
+				// the chained info display in JSON mode to avoid a mixed
+				// text+JSON stream on stdout.
+				ShowInfo: func() error {
+					if flags.Output == "json" {
+						return nil
+					}
+					return info.Run(cmd, flags)
+				},
 				SkipPreflight: skipPreflight,
 				SkipNotify:    silent,
 				ErrOut:        cmd.ErrOrStderr(),

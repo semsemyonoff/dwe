@@ -27,10 +27,18 @@ Use 'devbox docker restart' for the low-level compose restart passthrough.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return lifecyclepkg.RunRestart(lifecyclepkg.RunContext{
-				Ctx:           cmd.Context(),
-				ConfigPath:    flags.ConfigPath,
-				Yes:           yes,
-				ShowInfo:      func() error { return info.Run(cmd, flags) },
+				Ctx:        cmd.Context(),
+				ConfigPath: flags.ConfigPath,
+				Yes:        yes,
+				// lifecycle commands are not migrated to JSON output; suppress
+				// the chained info display in JSON mode to avoid a mixed
+				// text+JSON stream on stdout.
+				ShowInfo: func() error {
+					if flags.Output == "json" {
+						return nil
+					}
+					return info.Run(cmd, flags)
+				},
 				SkipPreflight: skipPreflight,
 				ErrOut:        cmd.ErrOrStderr(),
 				Translator:    flags.I18n,
