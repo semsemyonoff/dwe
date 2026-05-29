@@ -277,20 +277,20 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
 - Create: `internal/core/execution/builtin/containers_stop_remove_test.go`
 - Modify: `internal/core/execution/builtin/builtin.go` (registration table)
 
-- [ ] read `builtin.go` to find the existing registration table and confirm naming convention for new builtins; read `daemon_stop.go` as the reference template
-- [ ] create `containers_stop_remove.go` with `dockerStopRemoveContainerBuiltin` struct implementing `Validate` / `Describe` / `Run` — code skeleton in plan Technical Details section
-- [ ] `Validate`: require non-empty `container_template` (matches `daemon_stop.go` convention); no validation on `stop_timeout` (defensive parsing happens in `stopTimeoutSeconds`)
-- [ ] `Describe`: returns `"stop+rm container: " + container_template`
-- [ ] `Run`: resolve `projectFull := ectx.Config.Project.FullName()`; resolve `fullName via daemon.ResolveContainerName(projectFull, container_template)` (mandatory — without this, the builtin silently no-ops on projects with `project.prefix`); compute `secs := stopTimeoutSeconds(stop_timeout)`; `dockerBin := config.DockerBin(ectx.Config)`; call `docker.StopContainer(ctx, dockerBin, fullName, secs)`, emit `✓ container stopped: <fullName>` via `ectx.Output.Writer()` on success; then call `docker.RemoveContainer(ctx, dockerBin, fullName)`, emit `✓ container removed: <fullName>`; wrap errors with operation context
-- [ ] **stop-failure contract**: if `StopContainer` returns non-nil, propagate and do NOT attempt `RemoveContainer` — document with a comment
-- [ ] register the builtin in `builtin.go`
-- [ ] write `TestValidate_RequiresContainerTemplate` (empty / missing → error; non-empty → nil)
-- [ ] write `TestRun_HappyPath` using fake docker-bin: assert (a) container_template resolved with project prefix, (b) `stop` invoked first, (c) `rm -f` invoked second, (d) both output lines emitted
-- [ ] write `TestRun_StopFailurePropagatesAndSkipsRm` (fake bin returns error on stop → rm must NOT be invoked, error wrapped with `stop container "<full>":` prefix)
-- [ ] write `TestRun_MissingContainerIdempotent` (stop returns nil due to "No such container" → rm also tolerates missing → overall success, both output lines emitted)
-- [ ] write `TestRun_ResolvesContainerWithProjectPrefix` (config with `project.prefix=devbox` + `name=tbm` + template=`app-postgres` → docker invoked with `devbox-tbm-app-postgres`)
-- [ ] write test that builtin is registered in `builtin.go` registry (lookup `docker_stop_remove_container` returns non-nil — model after how other builtin registration tests do it; if no such test pattern exists, skip)
-- [ ] run tests: `make embedded-docs && go test ./internal/core/execution/builtin/...` — must pass before Task 3
+- [x] read `builtin.go` to find the existing registration table and confirm naming convention for new builtins; read `daemon_stop.go` as the reference template
+- [x] create `containers_stop_remove.go` with `dockerStopRemoveContainerBuiltin` struct implementing `Validate` / `Describe` / `Run` — code skeleton in plan Technical Details section
+- [x] `Validate`: require non-empty `container_template` (matches `daemon_stop.go` convention); no validation on `stop_timeout` (defensive parsing happens in `stopTimeoutSeconds`)
+- [x] `Describe`: returns `"stop+rm container: " + container_template`
+- [x] `Run`: resolve `projectFull := ectx.Config.Project.FullName()`; resolve `fullName via daemon.ResolveContainerName(projectFull, container_template)` (mandatory — without this, the builtin silently no-ops on projects with `project.prefix`); compute `secs := stopTimeoutSeconds(stop_timeout)`; `dockerBin := config.DockerBin(ectx.Config)`; call `docker.StopContainer(ctx, dockerBin, fullName, secs)`, emit `✓ container stopped: <fullName>` via `ectx.Output.Writer()` on success; then call `docker.RemoveContainer(ctx, dockerBin, fullName)`, emit `✓ container removed: <fullName>`; wrap errors with operation context
+- [x] **stop-failure contract**: if `StopContainer` returns non-nil, propagate and do NOT attempt `RemoveContainer` — document with a comment
+- [x] register the builtin in `builtin.go`
+- [x] write `TestValidate_RequiresContainerTemplate` (empty / missing → error; non-empty → nil)
+- [x] write `TestRun_HappyPath` using fake docker-bin: assert (a) container_template resolved with project prefix, (b) `stop` invoked first, (c) `rm -f` invoked second, (d) both output lines emitted
+- [x] write `TestRun_StopFailurePropagatesAndSkipsRm` (fake bin returns error on stop → rm must NOT be invoked, error wrapped with `stop container "<full>":` prefix)
+- [x] write `TestRun_MissingContainerIdempotent` (stop returns nil due to "No such container" → rm also tolerates missing → overall success, both output lines emitted)
+- [x] write `TestRun_ResolvesContainerWithProjectPrefix` (config with `project.prefix=devbox` + `name=tbm` + template=`app-postgres` → docker invoked with `devbox-tbm-app-postgres`)
+- [x] write test that builtin is registered in `builtin.go` registry (lookup `docker_stop_remove_container` returns non-nil — model after how other builtin registration tests do it; if no such test pattern exists, skip)
+- [x] run tests: `make embedded-docs && go test ./internal/core/execution/builtin/...` — must pass before Task 3
 
 ### Task 3: Refactor `resetServiceRunCmd` to synthetic-pipeline shape
 

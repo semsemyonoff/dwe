@@ -24,6 +24,7 @@
 //   - docker_daemon_start           — start a named daemon container (docker compose run -d)
 //   - docker_daemon_logs            — tail daemon container logs foreground (interactive)
 //   - docker_daemon_stop            — stop a named daemon container (idempotent)
+//   - docker_stop_remove_container  — stop and remove a named container (idempotent; used by per-service reset baseline)
 //   - daemons_reap                  — stop all project daemon containers; auto-injected as _auto_reap_daemons
 //   - remove_paths                  — delete declared paths inside the project root
 package builtin
@@ -133,8 +134,9 @@ var registry = map[string]registryEntry{
 	// KindInternal: engine-only; not callable from user-authored YAML
 	"docker_daemon_start": {daemonStartBuiltin{}, KindInternal},
 	"docker_daemon_logs":  {daemonLogsBuiltin{}, KindInternal},
-	"docker_daemon_stop":  {daemonStopBuiltin{}, KindInternal},
-	"daemons_reap":        {daemonsReapBuiltin{}, KindInternal},
+	"docker_daemon_stop":             {daemonStopBuiltin{}, KindInternal},
+	"docker_stop_remove_container":   {dockerStopRemoveContainerBuiltin{}, KindInternal},
+	"daemons_reap":                   {daemonsReapBuiltin{}, KindInternal},
 }
 
 // Get returns the named builtin if it exists and is compatible with ctx.
