@@ -36,6 +36,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/execution/builtin/containers"
+	"devbox-cli/internal/core/execution/builtin/fs"
 	"devbox-cli/internal/core/execution/builtin/services"
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
@@ -71,12 +72,10 @@ var registry = buildRegistry()
 func buildRegistry() map[string]spec.Entry {
 	r := map[string]spec.Entry{
 		// KindAction: user-callable step actions with side effects
-		"confirm":      {Impl: confirmBuiltin{}, Kind: spec.KindAction},
-		"message":      {Impl: messageBuiltin{}, Kind: spec.KindAction},
-		"remove_paths": {Impl: removePathsBuiltin{}, Kind: spec.KindAction},
+		"confirm": {Impl: confirmBuiltin{}, Kind: spec.KindAction},
+		"message": {Impl: messageBuiltin{}, Kind: spec.KindAction},
 		// KindPredicate: read-only checks for check: positions and validate.yml
 		"shell":              {Impl: Shell{}, Kind: spec.KindPredicate},
-		"file_exists":        {Impl: fileExistsBuiltin{}, Kind: spec.KindPredicate},
 		"executable_in_path": {Impl: executableInPathBuiltin{}, Kind: spec.KindPredicate},
 		"env_keys_present":   {Impl: envKeysPresentBuiltin{}, Kind: spec.KindPredicate},
 		"tcp_reachable":      {Impl: TCPReachable{}, Kind: spec.KindPredicate},
@@ -84,6 +83,7 @@ func buildRegistry() map[string]spec.Entry {
 	for _, src := range []map[string]spec.Entry{
 		containers.Builtins(),
 		services.Builtins(),
+		fs.Builtins(),
 	} {
 		for k, v := range src {
 			if _, dup := r[k]; dup {

@@ -304,14 +304,14 @@ When each `*Builtin` struct is renamed:
 - Move + modify: `file_exists_test.go`, `paths_test.go` → `fs/`
 - Modify: `internal/core/execution/builtin/builtin.go`
 
-- [ ] create `fs/fs.go` with `func Builtins() map[string]spec.Entry` returning `{"file_exists": {FileExists{}, spec.KindPredicate}, "remove_paths": {RemovePaths{}, spec.KindAction}}` + doc comment
-- [ ] move 2 implementation files; change package decl; add spec import; rename types (`fileExistsBuiltin` → `FileExists`, `removePathsBuiltin` → `RemovePaths`)
-- [ ] update receivers + doc comments
-- [ ] update helper/ExecContext references to `spec.*`
-- [ ] move 2 test files; update package and instantiations
-- [ ] in root `builtin.go`: add `for k, v := range fs.Builtins() { r[k] = v }`; import fs package
-- [ ] run `make test ./internal/core/execution/builtin/...` — must pass before Task 6
-- [ ] run `make lint` — must pass before Task 6
+- [x] create `fs/fs.go` with `func Builtins() map[string]spec.Entry` returning `{"file_exists": {FileExists{}, spec.KindPredicate}, "remove_paths": {RemovePaths{}, spec.KindAction}}` + doc comment
+- [x] move 2 implementation files; change package decl; add spec import; rename types (`fileExistsBuiltin` → `FileExists`, `removePathsBuiltin` → `RemovePaths`)
+- [x] update receivers + doc comments
+- [x] update helper/ExecContext references to `spec.*`
+- [x] move 2 test files; update package and instantiations
+- [x] in root `builtin.go`: add `for k, v := range fs.Builtins() { r[k] = v }`; import fs package
+- [x] run `make test ./internal/core/execution/builtin/...` — must pass before Task 6
+- [x] run `make lint` — must pass before Task 6
 
 ### Task 6: Extract `env/` subpackage (`env_keys_present`, `executable_in_path`)
 

@@ -1,4 +1,4 @@
-package builtin
+package fs
 
 import (
 	"context"
@@ -10,9 +10,12 @@ import (
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
-type fileExistsBuiltin struct{}
+// FileExists is a predicate builtin that succeeds when the given path exists
+// inside the project root.
+type FileExists struct{}
 
-func (fileExistsBuiltin) Validate(with map[string]any) error {
+// Validate checks that the required 'path' param is present.
+func (FileExists) Validate(with map[string]any) error {
 	path := spec.GetStringParam(with, "path", "")
 	if path == "" {
 		return errors.New("missing required param 'path'")
@@ -20,12 +23,15 @@ func (fileExistsBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (fileExistsBuiltin) Describe(with map[string]any) string {
+// Describe returns a human-readable description for plan display.
+func (FileExists) Describe(with map[string]any) string {
 	path := spec.GetStringParam(with, "path", "")
 	return fmt.Sprintf("builtin: file_exists(path=%s)", path)
 }
 
-func (fileExistsBuiltin) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run stats the requested path inside the project root and returns an error
+// when the file is missing.
+func (FileExists) Run(_ context.Context, with map[string]any, ectx spec.ExecContext) error {
 	path := spec.GetStringParam(with, "path", "")
 	full := path
 	if !filepath.IsAbs(full) {

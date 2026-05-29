@@ -1,4 +1,4 @@
-package builtin
+package fs
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 func TestFileExistsValidate(t *testing.T) {
 	t.Parallel()
-	b := fileExistsBuiltin{}
+	b := FileExists{}
 	if err := b.Validate(map[string]any{"path": "x"}); err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -23,7 +23,7 @@ func TestFileExistsValidate(t *testing.T) {
 
 func TestFileExistsDescribe(t *testing.T) {
 	t.Parallel()
-	got := fileExistsBuiltin{}.Describe(map[string]any{"path": "x/y"})
+	got := FileExists{}.Describe(map[string]any{"path": "x/y"})
 	if !strings.Contains(got, "x/y") {
 		t.Fatalf("describe: %q", got)
 	}
@@ -37,7 +37,7 @@ func TestFileExistsRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b := fileExistsBuiltin{}
+	b := FileExists{}
 	if err := b.Run(context.Background(), map[string]any{"path": "exists.txt"}, spec.ExecContext{ProjectRoot: dir}); err != nil {
 		t.Fatalf("present: %v", err)
 	}

@@ -1,4 +1,4 @@
-package builtin
+package fs
 
 import (
 	"context"
@@ -10,9 +10,12 @@ import (
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
-type removePathsBuiltin struct{}
+// RemovePaths deletes declared relative paths inside the project root.
+type RemovePaths struct{}
 
-func (removePathsBuiltin) Validate(with map[string]any) error {
+// Validate checks that 'paths' is a non-empty list of relative paths that do
+// not escape the project root.
+func (RemovePaths) Validate(with map[string]any) error {
 	paths, err := spec.GetStringSlice(with, "paths")
 	if err != nil {
 		return fmt.Errorf("builtin remove_paths: %w", err)
@@ -35,12 +38,14 @@ func (removePathsBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (removePathsBuiltin) Describe(with map[string]any) string {
+// Describe returns a human-readable description for plan display.
+func (RemovePaths) Describe(with map[string]any) string {
 	paths, _ := spec.GetStringSlice(with, "paths")
 	return fmt.Sprintf("builtin: remove_paths(paths=%v)", paths)
 }
 
-func (removePathsBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run removes each declared path relative to the project root.
+func (RemovePaths) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	paths, err := spec.GetStringSlice(with, "paths")
 	if err != nil {
 		return fmt.Errorf("remove_paths: %w", err)
