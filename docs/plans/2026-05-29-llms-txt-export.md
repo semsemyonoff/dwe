@@ -150,12 +150,12 @@ Signatures (in `internal/cli/docs/llmstxt.go`):
 - Modify: `internal/core/docs/llmstxt/generator.go` (extend `Generate` to handle project-aware sections)
 - Create: `internal/core/docs/llmstxt/testdata/llms_txt_project.golden`
 
-- [ ] implement `collectServiceSummaries(cfg *config.DevboxConfig, tr i18n.Translator, locale string) []llmstxt.ServiceSummary` — iterate via `config.DeployOrder(cfg, types)` per CLAUDE.md service-iteration rule; include name, type, dir, info.title
-- [ ] implement `collectCommandSummaries(reg *usercommands.Registry, tr i18n.Translator, locale string) []llmstxt.CommandSummary` — translator is injected explicitly; resolve descriptions via the typed interface method `tr.CommandDescription(locale, id, fallback)` directly (the `Translator` interface at `internal/shared/i18n/translator.go` exposes it as a method, not a free function on `*Store`). Use `i18n.TranslatorOrNop(rflags.I18n)` at the cli RunE call site to safely tolerate completion-path bypass.
-- [ ] implement `collectInfoSummary(cfg *config.DevboxConfig, root string) *llmstxt.InfoSummary` — load info.yml via `config.LoadInfoConfig`, resolve vars, gather title + section count (does NOT depend on Plan 1 — calls existing rendering path directly)
-- [ ] update `Generate` to render Project / Services / Commands / Documentation / Quick start sections when project is present
-- [ ] write tests with fake registry + cfg, comparing to golden file
-- [ ] run `go test ./internal/cli/docs/... ./internal/core/docs/llmstxt/...` — must pass before Task 3
+- [x] implement `collectServiceSummaries(cfg *config.DevboxConfig, tr i18n.Translator, locale string) []llmstxt.ServiceSummary` — iterate via `config.DeployOrder(cfg, types)` per CLAUDE.md service-iteration rule; include name, type, dir, info.title
+- [x] implement `collectCommandSummaries(reg *usercommands.Registry, tr i18n.Translator, locale string) []llmstxt.CommandSummary` — translator is injected explicitly; resolve descriptions via the typed interface method `tr.CommandDescription(locale, id, fallback)` directly (the `Translator` interface at `internal/shared/i18n/translator.go` exposes it as a method, not a free function on `*Store`). Use `i18n.TranslatorOrNop(rflags.I18n)` at the cli RunE call site to safely tolerate completion-path bypass.
+- [x] implement `collectInfoSummary(cfg *config.DevboxConfig, root string) *llmstxt.InfoSummary` — load info.yml via `config.LoadInfoConfig`, resolve vars, gather title + section count (does NOT depend on Plan 1 — calls existing rendering path directly)
+- [x] update `Generate` to render Project / Services / Commands / Documentation / Quick start sections when project is present
+- [x] write tests with fake registry + cfg, comparing to golden file
+- [x] run `go test ./internal/cli/docs/... ./internal/core/docs/llmstxt/...` — must pass before Task 3
 
 ### Task 3: Docs catalog reference section
 

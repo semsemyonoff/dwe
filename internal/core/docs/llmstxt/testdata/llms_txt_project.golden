@@ -1,0 +1,25 @@
+# my-project
+
+> devbox project environment. Use `devbox status` to see running services, `devbox validate` to check project health, and `devbox docs llms-txt` to regenerate this index.
+
+## Project
+
+- Project: my-project
+- Service: api (type: app) — API Server
+- Service: db (type: infra)
+- URL: http://api.local
+- Host: api.local
+
+## Commands
+
+- build — build the project
+- test — run tests
+
+## Quick start
+
+- `devbox status` — see what's running
+- `devbox validate` — check project health
+- `devbox info` — project overview
+- `devbox docs llms-txt` — regenerate this index
+- `devbox --help` — full command list
+

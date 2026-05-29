@@ -174,6 +174,46 @@ func TestGenerate_ProjectAware(t *testing.T) {
 	}
 }
 
+func TestGenerate_ProjectAware_Golden(t *testing.T) {
+	opts := llmstxt.Opts{
+		ProjectRoot: "/fake/project",
+		ProjectName: "my-project",
+		Services: []llmstxt.ServiceSummary{
+			{Name: "api", Type: "app", Title: "API Server"},
+			{Name: "db", Type: "infra", Title: ""},
+		},
+		Commands: []llmstxt.CommandSummary{
+			{ID: "build", Description: "build the project"},
+			{ID: "test", Description: "run tests"},
+		},
+		InfoSnapshot: &llmstxt.InfoSummary{
+			Title: "my-project",
+			URLs:  []string{"http://api.local"},
+			Hosts: []string{"api.local"},
+		},
+	}
+	got, err := llmstxt.Generate(opts)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	golden := "testdata/llms_txt_project.golden"
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0644); err != nil {
+			t.Fatalf("failed to update golden: %v", err)
+		}
+		return
+	}
+
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("failed to read golden file %s: %v", golden, err)
+	}
+	if got != string(want) {
+		t.Errorf("Generate (project-aware) output mismatch\ngot:\n%s\nwant:\n%s", got, string(want))
+	}
+}
+
 func TestGenerate_ProjectAware_DefaultName(t *testing.T) {
 	opts := llmstxt.Opts{
 		ProjectRoot: "/some/project",
@@ -187,4 +227,3 @@ func TestGenerate_ProjectAware_DefaultName(t *testing.T) {
 		t.Errorf("expected default project name in H1, got: %q", got[:min(len(got), 40)])
 	}
 }
-
