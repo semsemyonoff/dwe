@@ -30,6 +30,7 @@ devbox [flags]
 * [devbox docker](devbox_docker.md)	 - Docker Compose lifecycle commands
 * [devbox docs](devbox_docs.md)	 - Browse and manage documentation
 * [devbox info](devbox_info.md)	 - Display project info dashboard (URLs, hosts, services, tools)
+* [devbox logs](devbox_logs.md)	 - Stream container logs for a service
 * [devbox prompt](devbox_prompt.md)	 - Print a compact shell-prompt segment for the current project
 * [devbox render](devbox_render.md)	 - Render derived artifacts from the merged devbox config
 * [devbox reset](devbox_reset.md)	 - Reset pipeline commands

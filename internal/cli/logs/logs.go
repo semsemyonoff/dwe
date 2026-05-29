@@ -44,10 +44,11 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 
 In text mode (default), output is passed through unchanged from docker logs.
 With --output json, emits NDJSON: one {"ts","stream","msg"} object per line.`,
-		Example:      "  devbox logs myapp\n  devbox logs myapp --tail 100 --follow\n  devbox logs myapp --output json --since 5m",
-		SilenceUsage: true,
-		GroupID:      groupID,
-		Args:         cobra.ExactArgs(1),
+		Example:           "  devbox logs myapp\n  devbox logs myapp --tail 100 --follow\n  devbox logs myapp --output json --since 5m",
+		SilenceUsage:      true,
+		GroupID:           groupID,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runLogs(cmd, flags, args, opts)
 		},
@@ -159,7 +160,7 @@ func runLogsText(cmd *cobra.Command, ctx context.Context, serviceName string, op
 	}
 
 	if runErr := dockerCmd.Run(); runErr != nil {
-		if isCleanFollowExit(runErr, ctx) {
+		if opts.follow && isCleanFollowExit(runErr, ctx) {
 			return nil
 		}
 		captured := stderrBuf.String()
@@ -198,7 +199,6 @@ func isCleanFollowExit(err error, ctx context.Context) bool {
 }
 
 func runLogsJSON(cmd *cobra.Command, ctx context.Context, serviceName string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
-
 	// Build base args and insert --timestamps right after "logs".
 	base := buildDockerLogsArgs(containerName, opts)
 	dockerArgs := make([]string, 0, len(base)+1)
@@ -315,7 +315,7 @@ func runLogsJSON(cmd *cobra.Command, ctx context.Context, serviceName string, op
 	}
 
 	if cmdErr := dockerCmd.Wait(); cmdErr != nil {
-		if isCleanFollowExit(cmdErr, ctx) {
+		if opts.follow && isCleanFollowExit(cmdErr, ctx) {
 			return nil
 		}
 		captured := stderrCapture.String()
