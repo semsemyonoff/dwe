@@ -232,13 +232,13 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 - Create: `internal/cli/command/testdata/list.json.golden`
 - Create: `internal/cli/command/testdata/inspect.json.golden`
 
-- [ ] verify file paths (look for `printTreeNodes`, `printInspect` in `internal/cli/command/`)
-- [ ] define `commandsListJSON` and `commandInspectJSON` DTOs from the existing `CommandDef` registry types
-- [ ] for `list`: emit flat array (NOT the tree — agents prefer flat). Include `id, title, group, type, private` (respect `--all` flag for private inclusion), and `params: []paramJSON{Name, Type, Required, Default, Description}`
-- [ ] for `inspect`: include all fields shown in text, plus `derived_from` field when `DerivedFromDaemon` (or analogous sugar source field) is non-zero — surface the `Source*Spec` shadow struct in JSON
-- [ ] dispatch via `cmdctx.WriteData`
-- [ ] golden tests for both
-- [ ] run `go test ./internal/cli/command/...` — must pass before Task 6
+- [x] verify file paths (look for `printTreeNodes`, `printInspect` in `internal/cli/command/`)
+- [x] define `commandsListJSON` and `commandInspectJSON` DTOs from the existing `CommandDef` registry types
+- [x] for `list`: emit flat array (NOT the tree — agents prefer flat). Include `id, title, group, type, private` (respect `--all` flag for private inclusion), and `params: []paramJSON{Name, Type, Required, Default, Description}`
+- [x] for `inspect`: include all fields shown in text, plus `derived_from` field when `DerivedFromDaemon` (or analogous sugar source field) is non-zero — surface the `Source*Spec` shadow struct in JSON
+- [x] dispatch via `cmdctx.WriteData`
+- [x] golden tests for both
+- [x] run `go test ./internal/cli/command/...` — must pass before Task 6
 
 ### Task 6: Migrate `devbox validate` and all 9 subdomains
 

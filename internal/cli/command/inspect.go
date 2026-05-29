@@ -14,6 +14,194 @@ import (
 	"devbox-cli/internal/shared/tpl"
 )
 
+// commandInspectJSON is the DTO for `commands [id] --inspect --output json`.
+type commandInspectJSON struct {
+	ID               string            `json:"id"`
+	Type             string            `json:"type"`
+	Description      string            `json:"description,omitempty"`
+	Private          bool              `json:"private,omitempty"`
+	Confirmation     bool              `json:"confirmation,omitempty"`
+	ConfirmationText string            `json:"confirmation_text,omitempty"`
+	DerivedFrom      string            `json:"derived_from,omitempty"`
+	Cmd              string            `json:"cmd,omitempty"`
+	Argv             []string          `json:"argv,omitempty"`
+	Service          string            `json:"service,omitempty"`
+	User             string            `json:"user,omitempty"`
+	Workdir          string            `json:"workdir,omitempty"`
+	WorkdirFrom      string            `json:"workdir_from,omitempty"`
+	Mode             string            `json:"mode,omitempty"`
+	ComposeArgs      []string          `json:"compose_args,omitempty"`
+	Script           *scriptDefJSON    `json:"script,omitempty"`
+	Steps            []stepJSON        `json:"steps,omitempty"`
+	With             map[string]any    `json:"with,omitempty"`
+	DaemonSpec       *daemonSpecJSON   `json:"daemon_spec,omitempty"`
+	Params           []paramEntryJSON  `json:"params,omitempty"`
+	Env              map[string]string `json:"env,omitempty"`
+	Messages         *messagesJSON     `json:"messages,omitempty"`
+}
+
+type scriptDefJSON struct {
+	Shell   string `json:"shell,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Plan    string `json:"plan,omitempty"`
+	Run     string `json:"run,omitempty"`
+	Cleanup string `json:"cleanup,omitempty"`
+}
+
+type stepJSON struct {
+	Kind            string            `json:"kind"`
+	Command         string            `json:"command,omitempty"`
+	Confirm         string            `json:"confirm,omitempty"`
+	When            string            `json:"when,omitempty"`
+	ContinueOnError bool              `json:"continue_on_error,omitempty"`
+	With            map[string]string `json:"with,omitempty"`
+	Parallel        *parallelJSON     `json:"parallel,omitempty"`
+}
+
+type parallelJSON struct {
+	MaxConcurrent int        `json:"max_concurrent,omitempty"`
+	FailFast      *bool      `json:"fail_fast,omitempty"`
+	Steps         []stepJSON `json:"steps,omitempty"`
+}
+
+type daemonSpecJSON struct {
+	ContainerTemplate string `json:"container_template,omitempty"`
+	OnAlreadyRunning  string `json:"on_already_running,omitempty"`
+	AutoRemove        *bool  `json:"auto_remove,omitempty"`
+	StopTimeout       string `json:"stop_timeout,omitempty"`
+}
+
+type messagesJSON struct {
+	Success string `json:"success,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// buildCommandInspectJSON converts a CommandDef to its JSON inspect representation.
+func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) commandInspectJSON {
+	data := commandInspectJSON{
+		ID:          def.ID,
+		Type:        string(def.Type),
+		Description: translator.CommandDescription(locale, def.ID, def.Description),
+		Private:     def.Private,
+		DerivedFrom: def.DerivedFromDaemon,
+	}
+	if def.Confirmation {
+		data.Confirmation = true
+		data.ConfirmationText = translator.CommandConfirmationText(locale, def.ID, def.EffectiveConfirmationText())
+	}
+	if def.Messages.Success != "" || def.Messages.Error != "" {
+		data.Messages = &messagesJSON{
+			Success: def.Messages.Success,
+			Error:   def.Messages.Error,
+		}
+	}
+
+	switch def.Type {
+	case usercommands.CommandTypeShell, usercommands.CommandTypeDevbox:
+		data.Cmd = def.Cmd
+		data.Argv = def.Argv
+		data.Workdir = def.Workdir
+	case usercommands.CommandTypeServiceExec, usercommands.CommandTypeServiceRun:
+		data.Service = def.Service
+		data.User = string(def.User)
+		data.Workdir = def.Workdir
+		data.WorkdirFrom = def.WorkdirFrom
+		data.Mode = string(def.Mode)
+		data.ComposeArgs = def.ComposeArgs
+		data.Cmd = def.Cmd
+		data.Argv = def.Argv
+	case usercommands.CommandTypeScript:
+		if def.Script != nil {
+			shell := def.Script.Shell
+			if shell == "" {
+				shell = "sh"
+			}
+			data.Script = &scriptDefJSON{
+				Shell:   shell,
+				Path:    def.Script.Path,
+				Plan:    def.Script.Plan,
+				Run:     def.Script.Run,
+				Cleanup: def.Script.Cleanup,
+			}
+		}
+		data.Workdir = def.Workdir
+	case usercommands.CommandTypeBuiltin:
+		data.Cmd = def.Cmd
+		if len(def.With) > 0 {
+			data.With = def.With
+		}
+	case usercommands.CommandTypeWorkflow:
+		data.Steps = buildStepsJSON(def.Steps)
+	}
+
+	if def.DerivedFromDaemon != "" && def.SourceDaemon != nil {
+		ds := def.SourceDaemon
+		data.DaemonSpec = &daemonSpecJSON{
+			ContainerTemplate: ds.ContainerTemplate,
+			OnAlreadyRunning:  ds.OnAlreadyRunning,
+			AutoRemove:        ds.AutoRemove,
+			StopTimeout:       ds.StopTimeout,
+		}
+	}
+
+	if len(def.Params) > 0 {
+		names := make([]string, 0, len(def.Params))
+		for name := range def.Params {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		data.Params = make([]paramEntryJSON, 0, len(names))
+		for _, name := range names {
+			p := def.Params[name]
+			data.Params = append(data.Params, paramEntryJSON{
+				Name:        name,
+				Type:        string(p.Type),
+				Required:    p.Required,
+				Default:     p.Default,
+				Description: translator.ParamDescription(locale, def.ID, name, p.Description),
+			})
+		}
+	}
+
+	if len(def.Env) > 0 {
+		data.Env = def.Env
+	}
+
+	return data
+}
+
+// buildStepsJSON converts workflow steps to their JSON representation.
+func buildStepsJSON(steps []usercommands.WorkflowStep) []stepJSON {
+	result := make([]stepJSON, 0, len(steps))
+	for _, step := range steps {
+		s := stepJSON{
+			When:            step.When,
+			ContinueOnError: step.ContinueOnError,
+		}
+		switch {
+		case step.Confirm != "":
+			s.Kind = "confirm"
+			s.Confirm = step.Confirm
+		case step.Parallel != nil:
+			s.Kind = "parallel"
+			p := step.Parallel
+			s.Parallel = &parallelJSON{
+				MaxConcurrent: p.MaxConcurrent,
+				FailFast:      p.FailFast,
+				Steps:         buildStepsJSON(p.Steps),
+			}
+		default:
+			s.Kind = "command"
+			s.Command = step.Command
+			if len(step.With) > 0 {
+				s.With = step.With
+			}
+		}
+		result = append(result, s)
+	}
+	return result
+}
+
 // inspectStepDescription returns the localized description for the command
 // referenced by a workflow step, formatted with a leading em-dash separator so
 // it can be concatenated onto a definition value. Returns "" when the command

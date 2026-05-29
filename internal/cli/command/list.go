@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
@@ -16,6 +17,77 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// commandsListJSON is the top-level DTO for `commands list --output json`.
+type commandsListJSON struct {
+	Commands []commandEntryJSON `json:"commands"`
+}
+
+// commandEntryJSON is a single entry in the flat JSON command list.
+type commandEntryJSON struct {
+	ID      string           `json:"id"`
+	Group   string           `json:"group,omitempty"`
+	Title   string           `json:"title"`
+	Type    string           `json:"type"`
+	Private bool             `json:"private,omitempty"`
+	Params  []paramEntryJSON `json:"params,omitempty"`
+}
+
+// paramEntryJSON represents a single parameter definition in JSON output.
+// Used by both the list and inspect JSON paths.
+type paramEntryJSON struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Required    bool   `json:"required,omitempty"`
+	Default     string `json:"default,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// buildCommandsListJSON builds a flat list of commands from the registry.
+// When showAll is false, private commands are excluded.
+func buildCommandsListJSON(reg *usercommands.Registry, groupFilter string, showAll bool, translator i18n.Translator, locale string) commandsListJSON {
+	var defs []*usercommands.CommandDef
+	if showAll {
+		defs = reg.ListAll(groupFilter)
+	} else {
+		defs = reg.List(groupFilter)
+	}
+	entries := make([]commandEntryJSON, 0, len(defs))
+	for _, def := range defs {
+		entries = append(entries, commandDefToEntryJSON(def, translator, locale))
+	}
+	return commandsListJSON{Commands: entries}
+}
+
+// commandDefToEntryJSON converts a single CommandDef to its JSON list entry.
+func commandDefToEntryJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) commandEntryJSON {
+	entry := commandEntryJSON{
+		ID:      def.ID,
+		Group:   def.Group,
+		Title:   def.LocalName,
+		Type:    string(def.Type),
+		Private: def.Private,
+	}
+	if len(def.Params) > 0 {
+		names := make([]string, 0, len(def.Params))
+		for name := range def.Params {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		entry.Params = make([]paramEntryJSON, 0, len(names))
+		for _, name := range names {
+			p := def.Params[name]
+			entry.Params = append(entry.Params, paramEntryJSON{
+				Name:        name,
+				Type:        string(p.Type),
+				Required:    p.Required,
+				Default:     p.Default,
+				Description: translator.ParamDescription(locale, def.ID, name, p.Description),
+			})
+		}
+	}
+	return entry
+}
 
 func newCommandListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var showAll bool
@@ -39,6 +111,11 @@ Use --all to include private commands.`,
 			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
 				return err
+			}
+			if flags.Output == "json" {
+				translator := i18n.TranslatorOrNop(flags.I18n)
+				data := buildCommandsListJSON(reg, groupFilter, showAll, translator, flags.Locale)
+				return cmdctx.WriteData(flags, cmd, data, func(commandsListJSON) string { return "" })
 			}
 			root := reg.Groups()
 			nodes := buildTreeNodes(root, groupFilter, showAll, i18n.TranslatorOrNop(flags.I18n), flags.Locale)

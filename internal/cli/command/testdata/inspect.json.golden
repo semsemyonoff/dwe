@@ -1,0 +1,1 @@
+{"id":"db.migrate","type":"shell","description":"Run database migrations","cmd":"php artisan migrate","params":[{"name":"env","type":"string","required":true,"default":"local","description":"target environment"}]}

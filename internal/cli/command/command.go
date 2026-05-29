@@ -85,6 +85,15 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				if len(args) == 0 {
 					return errors.New("id required with --inspect")
 				}
+				if flags.Output == "json" {
+					def, err := reg.Get(args[0])
+					if err != nil {
+						return err
+					}
+					translator := i18n.TranslatorOrNop(flags.I18n)
+					data := buildCommandInspectJSON(def, translator, flags.Locale)
+					return cmdctx.WriteData(flags, cmd, data, func(commandInspectJSON) string { return "" })
+				}
 				cfg, _ := config.LoadConfig(flags.ConfigPath)
 				return runCommandByID(
 					cmd.Context(),

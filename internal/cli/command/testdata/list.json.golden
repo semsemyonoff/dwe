@@ -1,0 +1,1 @@
+{"commands":[{"id":"app.install","group":"app","title":"install","type":"service_exec","params":[{"name":"env","type":"string","required":true,"description":"target environment"}]},{"id":"db.migrate","group":"db","title":"migrate","type":"shell"}]}
