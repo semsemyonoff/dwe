@@ -110,7 +110,7 @@ Use --all to include private commands.`,
 			}
 			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
-				return err
+				return cmdctx.ErrWrap("command_registry_invalid", err)
 			}
 			if flags.Output == "json" {
 				translator := i18n.TranslatorOrNop(flags.I18n)

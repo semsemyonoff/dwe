@@ -267,7 +267,9 @@ func buildDeployDetailJSON(sc *statusContext, serviceName string) (*deployDetail
 		return &deployDetailJSON{Service: serviceName, Status: "unknown"}, nil
 	}
 	if !slices.Contains(sc.Tracked, serviceName) {
-		return nil, fmt.Errorf("service %q is not tracked (not deployed)", serviceName)
+		return nil, cmdctx.Err("service_not_tracked",
+			fmt.Sprintf("service %q is not tracked (not deployed)", serviceName)).
+			WithDetail("service", serviceName)
 	}
 	svcState, ok := sc.State.Services[serviceName]
 	if !ok {

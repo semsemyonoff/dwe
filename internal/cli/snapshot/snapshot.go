@@ -374,7 +374,7 @@ func loadInspectManifest(baseDir, arg string) (*snapshotpkg.Manifest, string, er
 		}
 	}
 	if err := snapshotpkg.ValidateName(arg); err != nil {
-		return nil, "", err
+		return nil, "", cmdctx.ErrWrap("snapshot_invalid_name", err).WithDetail("name", arg)
 	}
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
 	if err != nil {

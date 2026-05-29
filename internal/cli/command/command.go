@@ -77,7 +77,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 		RunE: func(cmd *cobra.Command, args []string) error {
 			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
-				return err
+				return cmdctx.ErrWrap("command_registry_invalid", err)
 			}
 
 			// Inspect route: exact id required; private allowed; cfg load errors tolerated.
