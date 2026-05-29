@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"strings"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestRenderDeployInfo_Empty(t *testing.T) {
-	out := RenderDeployInfo(nil, time.Now(), nil)
+	out := DeployInfo(nil, time.Now(), nil)
 	if out != "" {
 		t.Fatalf("expected empty output, got %q", out)
 	}
@@ -28,7 +28,7 @@ func TestRenderDeployInfo_ProjectAndServices(t *testing.T) {
 		{Name: "worker", Type: "app", NotDeployed: true},
 		{Name: "adminer", Type: "tool", DeployedAt: now.Add(-5 * time.Minute), Status: journal.StatusDeployed},
 	}
-	out := RenderDeployInfo(state, now, rows)
+	out := DeployInfo(state, now, rows)
 	if !strings.Contains(out, "Last deploy") {
 		t.Fatalf("missing 'Last deploy' header: %q", out)
 	}

@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"strings"
@@ -17,7 +17,7 @@ func TestRenderInfo_SectionTitle(t *testing.T) {
 		{ID: "s1", Title: "Project Info", Items: nil},
 	})
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRenderInfo_DefinitionItem(t *testing.T) {
 		},
 	})
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestRenderInfo_DefinitionWithIcon(t *testing.T) {
 		},
 	})
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestRenderInfo_WarningItem(t *testing.T) {
 		},
 	})
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestRenderInfo_InfoItem(t *testing.T) {
 		},
 	})
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestRenderInfo_ConditionalItem_Show(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestRenderInfo_ConditionalItem_Hide(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: ""},
 	}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestRenderInfo_TemplateInValue(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "testproject"},
 	}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestRenderInfo_Footer(t *testing.T) {
 		Footer: true,
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestRenderInfo_MultipleSection(t *testing.T) {
 		{ID: "s2", Title: "Second"},
 	})
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestRenderInfo_TemplateError(t *testing.T) {
 		},
 	})
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from invalid template, got nil")
 	}
@@ -224,7 +224,7 @@ func TestRenderInfo_TemplateError(t *testing.T) {
 
 func TestRenderSectionTitle_NonEmpty(t *testing.T) {
 	resetStyles()
-	out := RenderSectionTitle("My Section")
+	out := SectionTitle("My Section")
 	if out == "" {
 		t.Error("expected non-empty output for non-empty title")
 	}
@@ -232,7 +232,7 @@ func TestRenderSectionTitle_NonEmpty(t *testing.T) {
 
 func TestRenderSectionTitle_Empty(t *testing.T) {
 	resetStyles()
-	out := RenderSectionTitle("")
+	out := SectionTitle("")
 	if out == "" {
 		t.Error("expected separator line for empty title")
 	}
@@ -240,7 +240,7 @@ func TestRenderSectionTitle_Empty(t *testing.T) {
 
 func TestRenderSubheader_ReturnsNonEmpty(t *testing.T) {
 	resetStyles()
-	out := RenderSubheader("sub")
+	out := Subheader("sub")
 	if out == "" {
 		t.Error("expected non-empty subheader output")
 	}
@@ -248,7 +248,7 @@ func TestRenderSubheader_ReturnsNonEmpty(t *testing.T) {
 
 func TestRenderDefinition_Basic(t *testing.T) {
 	resetStyles()
-	out := RenderDefinition("key", "value", 0, "")
+	out := Definition("key", "value", 0, "")
 	if !strings.Contains(out, "key") {
 		t.Errorf("expected key in definition output, got %q", out)
 	}
@@ -261,7 +261,7 @@ func TestRenderDefinition_Basic(t *testing.T) {
 func TestRenderDefinitionAt_WrapsToExplicitWidth(t *testing.T) {
 	resetStyles()
 	long := "Restore an OpenSearch snapshot archive: unpack into a temp dir, into the container's restore-repo location, register the repo, resolve the requested indices from the manifest, DROP the matching live indices, restore via the Snapshot Restore API."
-	out := RenderDefinitionAt("description", long, 2, "", 60)
+	out := DefinitionAt("description", long, 2, "", 60)
 	maxW := 0
 	for line := range strings.SplitSeq(stripANSI(out), "\n") {
 		if w := utf8.RuneCountInString(line); w > maxW {
@@ -322,7 +322,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_True(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_False(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestRenderInfo_HideOnEmpty_Mixed(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestRenderInfo_Footer_NoSectionsRendered(t *testing.T) {
 		Footer: true,
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestRenderInfo_Footer_SectionRendered(t *testing.T) {
 		Footer: true,
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestRenderInfo_BareWarningCountsAsContent(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -509,7 +509,7 @@ func TestRenderInfo_DecorativeTrueWarningHidesSection(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -539,7 +539,7 @@ func TestRenderInfo_DecorativeFalseSeparatorCountsAsContent(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -568,7 +568,7 @@ func TestRenderInfo_DecorativeFalseSeparatorTitleless(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -576,7 +576,7 @@ func TestRenderInfo_DecorativeFalseSeparatorTitleless(t *testing.T) {
 	// should appear (footer presence signals at least one section rendered).
 	// Re-run with Footer=true to detect whether rendered=true propagated.
 	infoCfg.Footer = true
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -604,7 +604,7 @@ func TestRenderInfo_DecorativeTrueSeparatorHidesSection(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -623,7 +623,7 @@ func TestRenderInfo_HideOnEmpty_NilItems(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestRenderInfo_SubgroupWhenFalse(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -685,7 +685,7 @@ func TestRenderInfo_SubgroupWhenTrue(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -715,7 +715,7 @@ func TestRenderInfo_SubgroupWhenInvalidExpr(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from invalid when: on subgroup, got nil")
 	}
@@ -744,7 +744,7 @@ func TestRenderInfo_SubgroupAllItemsFiltered(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -784,7 +784,7 @@ func TestRenderInfo_SubgroupHideOnEmptyFalseWithTitle(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -825,7 +825,7 @@ func TestRenderInfo_SubgroupHideOnEmptyFalseDecorativeTrue(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -864,7 +864,7 @@ func TestRenderInfo_SubgroupTitlelessWithAllChildrenFiltered(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -897,7 +897,7 @@ func TestRenderInfo_SubgroupTitlelessWithSurvivingContent(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -934,7 +934,7 @@ func TestRenderInfo_SubgroupWithContentItem(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -980,7 +980,7 @@ func TestRenderInfo_NestedSubgroup(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1021,7 +1021,7 @@ func TestRenderInfo_SubgroupTitleTemplate(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1050,7 +1050,7 @@ func TestRenderInfo_ErrorPropagation_SubgroupTitleTemplate(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad subgroup title template, got nil")
 	}
@@ -1079,7 +1079,7 @@ func TestRenderInfo_ErrorPropagation_NestedItemWhen(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad nested when: expression, got nil")
 	}
@@ -1110,7 +1110,7 @@ func TestRenderInfo_ErrorPropagation_NestedItemValue(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad nested item value template, got nil")
 	}
@@ -1139,7 +1139,7 @@ func TestRenderInfo_ErrorPropagation_NestedItemText(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad nested item text template, got nil")
 	}
@@ -1165,7 +1165,7 @@ func TestRenderInfo_HideOnEmpty_SeparatorOnly(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1189,7 +1189,7 @@ func TestRenderInfo_WhenEvaluationError_Propagates(t *testing.T) {
 		},
 	}
 	cfg := &config.DevboxConfig{}
-	_, err := RenderInfo(cfg, infoCfg)
+	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from invalid when: expression, got nil")
 	}
@@ -1237,7 +1237,7 @@ func TestRenderInfo_AutoURLs_Integration(t *testing.T) {
 		Runtime: config.RuntimeConfig{UseHTTPS: false},
 	}
 
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1281,7 +1281,7 @@ func TestRenderInfo_AutoHosts_Integration(t *testing.T) {
 		},
 	}
 
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1320,7 +1320,7 @@ func TestRenderInfo_AutoURLs_When_Hidden(t *testing.T) {
 		},
 	}
 
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1358,7 +1358,7 @@ func TestRenderBlock_HideOnEmpty_AutoBlock(t *testing.T) {
 		},
 	}
 
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1389,7 +1389,7 @@ func TestRenderBlock_AutoBlock_EmptyServices(t *testing.T) {
 		Services: map[string]config.ServiceConfig{}, // empty
 	}
 
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1408,9 +1408,9 @@ func TestRenderInfo_DefaultConfig(t *testing.T) {
 		Services: map[string]config.ServiceConfig{},
 	}
 
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
-		t.Fatalf("RenderInfo with default config returned error: %v", err)
+		t.Fatalf("Info with default config returned error: %v", err)
 	}
 
 	// With no services, both sections collapse — output should be empty (or just whitespace).
@@ -1441,9 +1441,9 @@ func TestRenderInfo_DefaultConfig_WithServices(t *testing.T) {
 		},
 	}
 
-	out, err := RenderInfo(cfg, infoCfg)
+	out, err := Info(cfg, infoCfg)
 	if err != nil {
-		t.Fatalf("RenderInfo with service returned error: %v", err)
+		t.Fatalf("Info with service returned error: %v", err)
 	}
 
 	if !strings.Contains(out, "URLs") {

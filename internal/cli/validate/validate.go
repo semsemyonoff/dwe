@@ -11,7 +11,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/validate"
@@ -260,7 +260,7 @@ Scope targets:
 	cmd.AddCommand(&cobra.Command{
 		Use:          "translations",
 		Short:        "Validate translation files in devbox/i18n/",
-		Long:         `Check devbox/i18n/*.yml files for parse errors, orphan command/group IDs, and unknown ui.* keys.`,
+		Long:         `Check devbox/i18n/*.yml files for parse errors, orphan command/group IDs, and unknown render.* keys.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -440,12 +440,12 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	}
 
 	// Text mode: render the diagnostics table (skip when no rows to avoid an empty bordered box).
-	rows := ui.FormatDiagnostics(diags, quiet)
+	rows := render.FormatDiagnostics(diags, quiet)
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), styleValidateHeader(validateHeader(scope, stage), summary))
 	if len(rows) > 0 {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderDiagnosticsTable(rows))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.DiagnosticsTable(rows))
 	}
-	summaryLine := ui.FormatSummary(summary)
+	summaryLine := render.FormatSummary(summary)
 	if partialLoadErr != nil {
 		summaryLine += " (main config did not load; some validations skipped)"
 	}

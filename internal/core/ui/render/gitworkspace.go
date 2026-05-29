@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"github.com/charmbracelet/lipgloss"
@@ -8,7 +8,7 @@ import (
 	"devbox-cli/internal/core/ui/styles"
 )
 
-// RenderGitWorkspace renders a styled Lipgloss table of per-service git
+// GitWorkspace renders a styled Lipgloss table of per-service git
 // workspace metadata.
 //
 // Columns: SERVICE, DIR, BRANCH, SHA, DIRTY, AHEAD/BEHIND.
@@ -16,7 +16,7 @@ import (
 // Rows with no own .git (Err == nil, Branch == "") render every git column as
 // "—". Rows with Err != nil render the same way; the caller is expected to
 // emit a single aggregate warning to stderr counting Err != nil rows.
-func RenderGitWorkspace(rows []statusview.GitWorkspaceRow) string {
+func GitWorkspace(rows []statusview.GitWorkspaceRow) string {
 	stringRows := make([][]string, len(rows))
 	dirtyStyles := make([]bool, len(rows))
 

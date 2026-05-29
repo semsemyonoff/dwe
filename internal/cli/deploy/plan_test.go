@@ -38,7 +38,7 @@ func TestRunDeployPlan_DefaultFormatRendersTitle(t *testing.T) {
 	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
 		t.Fatalf("runDeployPlan: %v", err)
 	}
-	// RenderSectionTitle wraps the plain text in ANSI styling but the
+	// SectionTitle wraps the plain text in ANSI styling but the
 	// payload is always present.
 	if !strings.Contains(buf.String(), "Deploy plan") {
 		t.Errorf("output missing 'Deploy plan': %q", buf.String())

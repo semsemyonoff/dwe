@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ type DeployInfoRow struct {
 	NotDeployed bool
 }
 
-// RenderDeployInfo returns a multi-line summary of the last deploy state for
+// DeployInfo returns a multi-line summary of the last deploy state for
 // display at the top of the interactive deploy menu. Returns "" when there is
 // nothing meaningful to show (no project-level state and no per-service
 // entries).
@@ -31,7 +31,7 @@ type DeployInfoRow struct {
 //	  ✓ main      app    5m ago
 //	  ✓ adminer   tool   5m ago
 //	  · worker    app    not deployed
-func RenderDeployInfo(state *journal.ProjectState, now time.Time, rows []DeployInfoRow) string {
+func DeployInfo(state *journal.ProjectState, now time.Time, rows []DeployInfoRow) string {
 	if state == nil && len(rows) == 0 {
 		return ""
 	}

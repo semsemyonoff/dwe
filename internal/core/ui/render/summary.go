@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"fmt"
@@ -9,14 +9,14 @@ import (
 	"devbox-cli/internal/core/ui/styles"
 )
 
-// RenderSummary returns a compact project summary string.
+// Summary returns a compact project summary string.
 // It shows the project name, state, and enabled service/tool counts.
 // When deploySummary is provided, also shows deploy status (N/M deployed).
 // The returned string contains no trailing newline on the last line.
-func RenderSummary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySummary) string {
+func Summary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySummary) string {
 	var lines []string
 
-	// Project identity now lives in the branded header (ui.RenderBrandHeader);
+	// Project identity now lives in the branded header (render.BrandHeader);
 	// the summary only carries state (when set) and counts.
 	if cfg.State != "" {
 		lines = append(lines, styles.MutedStyle().Render("state")+" "+styles.DefSep+" "+cfg.State)

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/statusview"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 
@@ -125,7 +125,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 }
 
 func TestRenderDeployStatus_TableContents(t *testing.T) {
-	rows := []ui.DeployStatusRow{
+	rows := []render.DeployStatusRow{
 		{
 			Service:         "main",
 			Status:          "deployed",
@@ -146,7 +146,7 @@ func TestRenderDeployStatus_TableContents(t *testing.T) {
 		},
 	}
 
-	rendered := ui.RenderDeployStatus(rows)
+	rendered := render.DeployStatus(rows)
 	assert.NotEmpty(t, rendered)
 	assert.Contains(t, rendered, "main")
 	assert.Contains(t, rendered, "db")
@@ -218,7 +218,7 @@ func TestRenderDeployStatusEmpty(t *testing.T) {
 		Services: make(map[string]config.ServiceConfig),
 	}
 
-	out := RenderDeployStatus(StatusInput{
+	out := DeployStatus(StatusInput{
 		Cfg:        cfg,
 		State:      state,
 		SvcDeploys: make(map[string]*config.ServiceDeployConfig),

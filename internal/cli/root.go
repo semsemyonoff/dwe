@@ -31,14 +31,14 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/project"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/statusview"
 	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/shared/render"
+	sharedrender "devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/version"
 
 	"github.com/spf13/cobra"
@@ -298,7 +298,7 @@ func applyStyles(projectRoot string, errW io.Writer) *config.StylesConfig {
 	stylesCfg, err := config.LoadStylesConfig(stylesPath)
 	styles.ApplyStyles(stylesCfg)
 	if err != nil {
-		render.NewWriter(errW).Warning("styles.yml: " + err.Error())
+		sharedrender.NewWriter(errW).Warning("styles.yml: " + err.Error())
 	}
 	return stylesCfg
 }
@@ -424,7 +424,7 @@ func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	case err == nil:
 		// Always render the branded identity line; the ASCII art block inside
 		// the helper is gated by header.lines.
-		header := ui.BrandHeader{
+		header := render.Brand{
 			Project: cfg.Project.FullName(),
 			Version: version.Version,
 		}
@@ -433,7 +433,7 @@ func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 			header.Lines = stylesCfg.Header.Lines
 			header.Font = stylesCfg.Header.Font
 		}
-		_, _ = fmt.Fprint(cmd.OutOrStdout(), ui.RenderBrandHeader(header))
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), render.BrandHeader(header))
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 
 		// Load deploy state and build deploy summary.
@@ -473,8 +473,8 @@ func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		// Print compact project summary; if pending work is recorded, surface
 		// the warning banner directly underneath so the user sees deferred work
 		// before scanning the help output.
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSummary(cfg, deploySummary))
-		if banner := ui.RenderPendingBanner(pending); banner != "" {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.Summary(cfg, deploySummary))
+		if banner := render.PendingBanner(pending); banner != "" {
 			_, _ = fmt.Fprint(cmd.OutOrStdout(), banner)
 		}
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())

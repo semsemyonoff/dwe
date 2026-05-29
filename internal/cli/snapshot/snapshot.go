@@ -10,7 +10,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 
 	"github.com/spf13/cobra"
@@ -171,7 +171,7 @@ func renderSnapshotListText(data snapshotListJSON) string {
 			defaultDash(e.Description),
 		})
 	}
-	return ui.RenderTable(headers, rows)
+	return render.Table(headers, rows)
 }
 
 // newSnapshotCurrentCmd: `devbox snapshot current`.

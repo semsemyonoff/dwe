@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
@@ -25,7 +25,7 @@ type StatusInput struct {
 	Cfg        *config.DevboxConfig
 	IsRunning  ContainerCheckFn
 	Topo       map[string][]string
-	TopoStatus map[string]ui.NodeStatus
+	TopoStatus map[string]render.NodeStatus
 	State      *journal.ProjectState
 	SvcDeploys map[string]*config.ServiceDeployConfig
 	Tracked    []string
@@ -83,9 +83,9 @@ func renderTypeSection(in StatusInput, t config.ServiceType, title string, withD
 		}
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderSectionTitle(title))
+	b.WriteString(render.SectionTitle(title))
 	b.WriteByte('\n')
-	b.WriteString(ui.RenderServicesTable(rows, extraCols, withDirCol))
+	b.WriteString(render.ServicesTable(rows, extraCols, withDirCol))
 	b.WriteByte('\n')
 	return b.String(), errs
 }
@@ -97,12 +97,12 @@ func RenderTopology(in StatusInput) string {
 		return ""
 	}
 	categories := BuildNodeCategories(in.Cfg)
-	rendered := ui.RenderTopology(in.Topo, in.TopoStatus, categories)
+	rendered := render.Topology(in.Topo, in.TopoStatus, categories)
 	if rendered == "" {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderSectionTitle("Topology"))
+	b.WriteString(render.SectionTitle("Topology"))
 	b.WriteByte('\n')
 	b.WriteString(rendered)
 	b.WriteByte('\n')
@@ -128,12 +128,12 @@ func rawSubtree(cfg *config.DevboxConfig, key string) any {
 
 // collectRowsByType returns rows for services matching the given type. When
 // filter is nil, all services are returned (used by health aggregation).
-func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, projectFull string, filter *config.ServiceType) []ui.ServiceTableRow {
+func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, projectFull string, filter *config.ServiceType) []render.ServiceTableRow {
 	if cfg == nil {
 		return nil
 	}
 	names := slices.Sorted(maps.Keys(cfg.Services))
-	rows := make([]ui.ServiceTableRow, 0, len(names))
+	rows := make([]render.ServiceTableRow, 0, len(names))
 	for _, name := range names {
 		svc := cfg.Services[name]
 		if filter != nil && svc.Type != *filter {
@@ -143,7 +143,7 @@ func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, pro
 		if svc.Required || svc.Enabled {
 			running = isRunning(projectFull, svc.Container)
 		}
-		rows = append(rows, ui.ServiceTableRow{
+		rows = append(rows, render.ServiceTableRow{
 			Name:      name,
 			Icon:      svc.DisplayIcon(),
 			Dir:       svc.Dir,
@@ -158,7 +158,7 @@ func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, pro
 	return rows
 }
 
-func selectHealthIndicator(svcRows []ui.ServiceTableRow, topoStatus map[string]ui.NodeStatus) string {
+func selectHealthIndicator(svcRows []render.ServiceTableRow, topoStatus map[string]render.NodeStatus) string {
 	var health Health
 	if HasRuntimeStatuses(topoStatus) {
 		health = AggregateHealthFromTopo(topoStatus)
@@ -178,7 +178,7 @@ func selectHealthIndicator(svcRows []ui.ServiceTableRow, topoStatus map[string]u
 // CollectServiceRows returns the ServiceTableRow slice for services matching
 // the given type. When filter is nil, all services are included.
 // The caller is responsible for any custom-column rendering.
-func CollectServiceRows(in StatusInput, filter *config.ServiceType) []ui.ServiceTableRow {
+func CollectServiceRows(in StatusInput, filter *config.ServiceType) []render.ServiceTableRow {
 	if in.Cfg == nil {
 		return nil
 	}

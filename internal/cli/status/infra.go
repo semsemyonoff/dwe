@@ -2,7 +2,7 @@ package status
 
 import (
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 
 	"github.com/spf13/cobra"
 )
@@ -22,7 +22,7 @@ func newStatusInfraCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return renderStatusSectionJSON(cmd, sc, sectionInfra, flags)
 			}
 			if sc.State != nil {
-				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
+				writeNonEmpty(cmd.OutOrStdout(), render.PendingBanner(sc.State.Pending))
 			}
 			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sectionInfra)
 		},

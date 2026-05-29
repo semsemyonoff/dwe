@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"fmt"
@@ -14,13 +14,13 @@ import (
 // do not specify an explicit indent value.
 const defaultIndent = 2
 
-// RenderInfo builds and returns the full styled info dashboard string for the
+// Info builds and returns the full styled info dashboard string for the
 // given devbox config and info configuration. It replaces the legacy
 // table-header / definition rendering in internal/cli/info/info.go.
 //
 // Returns an error if any Go template expression in text/value/when fields
 // fails to evaluate.
-func RenderInfo(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, error) {
+func Info(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, error) {
 	var sb strings.Builder
 
 	for _, section := range infoCfg.Sections {
@@ -180,35 +180,35 @@ func renderBlock(
 	return result, true, nil
 }
 
-// RenderSectionTitle renders a section header line using Lipgloss styling.
+// SectionTitle renders a section header line using Lipgloss styling.
 // Empty text renders a closing separator line.
-func RenderSectionTitle(text string) string {
+func SectionTitle(text string) string {
 	return renderSectionTitle(text)
 }
 
-// RenderSubheader renders a bold yellow in-section subheader.
+// Subheader renders a bold yellow in-section subheader.
 // Used for grouping sections within a larger block (e.g. Steps, Params).
-func RenderSubheader(text string) string {
+func Subheader(text string) string {
 	return styles.AccentStyle().Bold(true).Render(text)
 }
 
-// RenderDefinition renders a styled "key — value" definition line, word-wrapping
+// Definition renders a styled "key — value" definition line, word-wrapping
 // the value to styles.TermWidth(). For callers that render into a fixed-width context
 // (e.g. an inspect viewport narrower than the terminal), use
-// [RenderDefinitionAt] with the explicit width instead — otherwise values are
+// [DefinitionAt] with the explicit width instead — otherwise values are
 // wrapped to the terminal and silently truncated when the viewport renders.
-func RenderDefinition(name, value string, indent int, icon string) string {
+func Definition(name, value string, indent int, icon string) string {
 	return renderDefinition(name, value, indent, icon, 0)
 }
 
-// RenderDefinitionAt is [RenderDefinition] with an explicit wrap width.
+// DefinitionAt is [Definition] with an explicit wrap width.
 // maxWidth == 0 falls back to styles.TermWidth(); pass the viewport's content width
 // when rendering for a sub-region.
-func RenderDefinitionAt(name, value string, indent int, icon string, maxWidth int) string {
+func DefinitionAt(name, value string, indent int, icon string, maxWidth int) string {
 	return renderDefinition(name, value, indent, icon, maxWidth)
 }
 
-// renderSectionTitle is the internal implementation of RenderSectionTitle.
+// renderSectionTitle is the internal implementation of SectionTitle.
 func renderSectionTitle(text string) string {
 	width := min(styles.TermWidth(), 100)
 

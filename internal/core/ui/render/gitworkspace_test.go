@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"strings"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestRenderGitWorkspace_Empty(t *testing.T) {
-	out := RenderGitWorkspace(nil)
+	out := GitWorkspace(nil)
 	if out == "" {
 		t.Fatal("expected non-empty header even for empty rows")
 	}
@@ -30,7 +30,7 @@ func TestRenderGitWorkspace_PopulatedRow(t *testing.T) {
 			AheadBehind: "+1/-2",
 		},
 	}
-	out := RenderGitWorkspace(rows)
+	out := GitWorkspace(rows)
 	for _, want := range []string{"app", "main", "abcdef12", "dirty", "+1/-2"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in output:\n%s", want, out)
@@ -42,7 +42,7 @@ func TestRenderGitWorkspace_BlankRow(t *testing.T) {
 	rows := []statusview.GitWorkspaceRow{
 		{Service: "app", Dir: "./services/app"}, // no own .git
 	}
-	out := RenderGitWorkspace(rows)
+	out := GitWorkspace(rows)
 	// Branch / SHA / DIRTY / AHEAD/BEHIND should all be "—".
 	if strings.Count(out, "—") < 4 {
 		t.Errorf("expected at least 4 em-dash cells, got:\n%s", out)
@@ -53,7 +53,7 @@ func TestRenderGitWorkspace_CleanRow(t *testing.T) {
 	rows := []statusview.GitWorkspaceRow{
 		{Service: "app", Dir: "./services/app", Branch: "main", SHA: "deadbeef", AheadBehind: "+0/-0"},
 	}
-	out := RenderGitWorkspace(rows)
+	out := GitWorkspace(rows)
 	if !strings.Contains(out, "clean") {
 		t.Errorf("expected 'clean' in output, got:\n%s", out)
 	}

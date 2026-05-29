@@ -15,7 +15,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/project/services"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
@@ -114,8 +114,8 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	diags := registry.Run(vctx)
 
 	if len(diags) > 0 {
-		rows := ui.FormatDiagnostics(diags, false)
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), ui.RenderDiagnosticsTable(rows))
+		rows := render.FormatDiagnostics(diags, false)
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), render.DiagnosticsTable(rows))
 
 		for _, diag := range diags {
 			if diag.Severity >= validate.SeverityError {
@@ -161,11 +161,11 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		// Print last-deploy info + pending banner above the menu form. The
 		// banner is re-rendered each loop iteration so it reappears after a
 		// submenu cancel-and-back.
-		if banner := ui.RenderDeployInfo(state, time.Now(), deployInfoRowsFrom(items)); banner != "" {
+		if banner := render.DeployInfo(state, time.Now(), deployInfoRowsFrom(items)); banner != "" {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), banner)
 		}
 		if pending != nil {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderPendingBanner(pending))
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.PendingBanner(pending))
 		}
 
 		choice, err := selectMenuItemFn(ctx, cmd, pending, showWizard)
@@ -376,13 +376,13 @@ func applyMandatoryGate(in []deployServiceItem) []deployServiceItem {
 }
 
 // deployInfoRowsFrom converts deployServiceItem slice to UI rows.
-func deployInfoRowsFrom(items []deployServiceItem) []ui.DeployInfoRow {
+func deployInfoRowsFrom(items []deployServiceItem) []render.DeployInfoRow {
 	if len(items) == 0 {
 		return nil
 	}
-	rows := make([]ui.DeployInfoRow, 0, len(items))
+	rows := make([]render.DeployInfoRow, 0, len(items))
 	for _, it := range items {
-		row := ui.DeployInfoRow{
+		row := render.DeployInfoRow{
 			Name:        it.Name,
 			Type:        it.Type,
 			DeployedAt:  it.DeployedAt,
@@ -620,7 +620,7 @@ func padRight(s string, w int) string {
 
 // relativeTimeForMenu is a thin wrapper so menu code uses one timebase.
 func relativeTimeForMenu(t time.Time) string {
-	return ui.FormatRelativeTime(t, time.Now())
+	return render.FormatRelativeTime(t, time.Now())
 }
 
 // buildWizardServiceToggles converts the project's manageable services into
@@ -688,8 +688,8 @@ func runPreWizardPreflight(ctx context.Context, cfg *config.DevboxConfig, baseDi
 	}
 
 	diags := reg.Run(vctx)
-	rows := ui.FormatDiagnostics(diags, false)
-	var filtered []ui.DiagnosticRow
+	rows := render.FormatDiagnostics(diags, false)
+	var filtered []render.DiagnosticRow
 	for _, r := range rows {
 		if r.Severity != validate.SeverityOK {
 			filtered = append(filtered, r)
@@ -707,7 +707,7 @@ func runPreWizardPreflight(ctx context.Context, cfg *config.DevboxConfig, baseDi
 			header = styles.StyleWarning(header)
 		}
 		_, _ = fmt.Fprintln(errOut, header)
-		_, _ = fmt.Fprintln(errOut, ui.RenderDiagnosticsTable(filtered))
+		_, _ = fmt.Fprintln(errOut, render.DiagnosticsTable(filtered))
 	}
 	if blocking {
 		return &deployValidationError{"preflight failed; fix the issues above before running the wizard"}

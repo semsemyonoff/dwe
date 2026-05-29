@@ -13,7 +13,7 @@ import (
 	"io"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/validate"
@@ -129,8 +129,8 @@ func Run(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommand
 	// config.validate) are not suppressed. Filter only SeverityOK rows: they
 	// represent passing checks and are noise in preflight output, but info/
 	// warning/error diagnostics must reach the user.
-	rows := ui.FormatDiagnostics(diags, false)
-	var filtered []ui.DiagnosticRow
+	rows := render.FormatDiagnostics(diags, false)
+	var filtered []render.DiagnosticRow
 	for _, r := range rows {
 		if r.Severity != validate.SeverityOK {
 			filtered = append(filtered, r)
@@ -146,7 +146,7 @@ func Run(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommand
 			header = styles.StyleWarning(header)
 		}
 		_, _ = fmt.Fprintln(errOut, header)
-		_, _ = fmt.Fprintln(errOut, ui.RenderDiagnosticsTable(filtered))
+		_, _ = fmt.Fprintln(errOut, render.DiagnosticsTable(filtered))
 	}
 	if blocking {
 		return &Error{Summary: summary}

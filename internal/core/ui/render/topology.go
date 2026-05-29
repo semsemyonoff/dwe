@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"sort"
@@ -80,14 +80,14 @@ func extractDependsOn(n *yaml.Node) []string {
 	return nil
 }
 
-// RenderTopology renders the compose service dependency graph as an indented tree.
+// Topology renders the compose service dependency graph as an indented tree.
 // deps maps service name → services it depends on (from ParseComposeTopology).
 // status maps service name → NodeStatus for node coloring.
 // categories maps service name → NodeCategory for category labels.
 // Services absent from status are treated as NodeUnknown (no color annotation).
 // Services absent from categories default to CatInfra.
 // Returns an empty string when deps is empty.
-func RenderTopology(deps map[string][]string, status map[string]NodeStatus, categories map[string]NodeCategory) string {
+func Topology(deps map[string][]string, status map[string]NodeStatus, categories map[string]NodeCategory) string {
 	if len(deps) == 0 {
 		return ""
 	}

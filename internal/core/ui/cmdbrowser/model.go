@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 )
 
@@ -508,7 +508,7 @@ func (m *Model) treeViewportHeight() int {
 }
 
 // inspectMaxWidth caps the inspect viewport on wide terminals so the content
-// lines up with the section divider rendered by `ui.RenderSectionTitle`
+// lines up with the section divider rendered by `render.SectionTitle`
 // (which uses the same min(TermWidth, 100) cap). Without this, the inspect
 // area would stretch to the full right-panel width and the section dividers
 // would float in a sea of dead space at the right edge.
@@ -586,7 +586,7 @@ func (m *Model) renderRight() string {
 // LogoMark() carries a reset escape that would clip the accent partway
 // through the title.
 func (m *Model) renderTitleBar(totalWidth int) string {
-	text := ui.LogoMarkPlain() + " " + m.title
+	text := render.LogoMarkPlain() + " " + m.title
 	if m.skipConfirm && m.opts.Mode == ModeRun {
 		// Pre-render the toggle with its own success-coloured envelope; the
 		// outer accent style below threads around the existing SGR escapes so

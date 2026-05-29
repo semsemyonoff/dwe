@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"strings"
@@ -15,7 +15,7 @@ func TestRenderTable_Basic(t *testing.T) {
 		{"app-main", "enabled"},
 		{"app-second", "disabled"},
 	}
-	out := RenderTable(headers, rows)
+	out := Table(headers, rows)
 	if !strings.Contains(out, "NAME") {
 		t.Error("expected table to contain header NAME")
 	}
@@ -32,14 +32,14 @@ func TestRenderTable_Basic(t *testing.T) {
 
 func TestRenderDaemonTable_Empty(t *testing.T) {
 	resetStyles()
-	if got := RenderDaemonTable(nil); got != "" {
+	if got := DaemonTable(nil); got != "" {
 		t.Errorf("expected empty string, got %q", got)
 	}
 }
 
 func TestRenderDaemonTable_RendersRows(t *testing.T) {
 	resetStyles()
-	out := RenderDaemonTable([]DaemonTableRow{
+	out := DaemonTable([]DaemonTableRow{
 		{ID: "services.main.queue", Params: "name=default", Container: "proj-php_queue_default", Uptime: "5m0s"},
 	})
 	for _, want := range []string{"ID", "PARAMS", "CONTAINER", "UPTIME", "services.main.queue", "proj-php_queue_default", "5m0s"} {
@@ -51,7 +51,7 @@ func TestRenderDaemonTable_RendersRows(t *testing.T) {
 
 func TestRenderDaemonTable_EmptyNameFallback(t *testing.T) {
 	resetStyles()
-	out := RenderDaemonTable([]DaemonTableRow{
+	out := DaemonTable([]DaemonTableRow{
 		{ID: "single", Params: "", Container: "c1", Uptime: "1s"},
 	})
 	if !strings.Contains(out, "—") {
@@ -61,7 +61,7 @@ func TestRenderDaemonTable_EmptyNameFallback(t *testing.T) {
 
 func TestRenderTable_Empty(t *testing.T) {
 	resetStyles()
-	out := RenderTable([]string{"COL1", "COL2"}, nil)
+	out := Table([]string{"COL1", "COL2"}, nil)
 	if !strings.Contains(out, "COL1") {
 		t.Error("expected empty-rows table to still render headers")
 	}
@@ -69,7 +69,7 @@ func TestRenderTable_Empty(t *testing.T) {
 
 func TestRenderTable_SingleRow(t *testing.T) {
 	resetStyles()
-	out := RenderTable([]string{"TOOL", "PORT"}, [][]string{{"adminer", "8080"}})
+	out := Table([]string{"TOOL", "PORT"}, [][]string{{"adminer", "8080"}})
 	if !strings.Contains(out, "adminer") {
 		t.Error("expected table to contain adminer")
 	}
@@ -87,7 +87,7 @@ func TestRenderTable_UsesTableStyles(t *testing.T) {
 			Accent: "#D10000",
 		},
 	})
-	out := RenderTable([]string{"NAME"}, [][]string{{"foo"}})
+	out := Table([]string{"NAME"}, [][]string{{"foo"}})
 	if !strings.Contains(out, "NAME") {
 		t.Error("expected header NAME in output after ApplyStyles")
 	}
@@ -104,7 +104,7 @@ func TestRenderServicesTable_Basic(t *testing.T) {
 		{Name: "second", Container: "app-second", Enabled: true, Running: false},
 		{Name: "worker", Container: "app-worker", Mandatory: false, Enabled: false},
 	}
-	out := RenderServicesTable(rows, nil, false)
+	out := ServicesTable(rows, nil, false)
 
 	for _, want := range []string{
 		"NAME", "CONTAINER", "HOSTS", "PORTS", "STATE", "RUNNING",
@@ -137,7 +137,7 @@ func TestRenderServicesTable_HostsPortsRendered(t *testing.T) {
 			Name: "bare", Container: "bare", Enabled: true, Running: false,
 		},
 	}
-	out := RenderServicesTable(rows, nil, false)
+	out := ServicesTable(rows, nil, false)
 	for _, want := range []string{
 		"HOSTS", "PORTS",
 		"admin.local", "8027", // single-entry: bare value
@@ -182,7 +182,7 @@ func TestRenderServicesTable_WithDirCol(t *testing.T) {
 		{Name: "main", Dir: "./services/main", Container: "app-main", Mandatory: true, Running: true},
 		{Name: "worker", Dir: "", Container: "app-worker", Enabled: true},
 	}
-	out := RenderServicesTable(rows, nil, true)
+	out := ServicesTable(rows, nil, true)
 	for _, want := range []string{"DIR", "./services/main"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
@@ -195,7 +195,7 @@ func TestRenderServicesTable_WithDirCol(t *testing.T) {
 
 func TestRenderServicesTable_Empty(t *testing.T) {
 	resetStyles()
-	out := RenderServicesTable(nil, nil, false)
+	out := ServicesTable(nil, nil, false)
 	if !strings.Contains(out, "NAME") {
 		t.Error("expected header NAME in empty service table")
 	}
@@ -209,7 +209,7 @@ func TestRenderServicesTable_DisabledRunStr(t *testing.T) {
 	rows := []ServiceTableRow{
 		{Name: "tool", Container: "c-tool", Mandatory: false, Enabled: false},
 	}
-	out := RenderServicesTable(rows, nil, false)
+	out := ServicesTable(rows, nil, false)
 	if !strings.Contains(out, "—") {
 		t.Errorf("disabled service should show em-dash run status\nfull output:\n%s", out)
 	}
@@ -223,7 +223,7 @@ func TestRenderServicesTable_ExtraCols_Populated(t *testing.T) {
 			Extras: map[string]string{"TAG": "v1.2", "ENDPOINT": "http://main"},
 		},
 	}
-	out := RenderServicesTable(rows, []string{"TAG", "ENDPOINT"}, false)
+	out := ServicesTable(rows, []string{"TAG", "ENDPOINT"}, false)
 	for _, want := range []string{"TAG", "ENDPOINT", "v1.2", "http://main"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
@@ -239,7 +239,7 @@ func TestRenderServicesTable_ExtraCols_MissingKey(t *testing.T) {
 			Extras: map[string]string{"TAG": "v1"},
 		},
 	}
-	out := RenderServicesTable(rows, []string{"TAG", "MISSING"}, false)
+	out := ServicesTable(rows, []string{"TAG", "MISSING"}, false)
 	if !strings.Contains(out, "—") {
 		t.Errorf("missing key should render as em-dash:\n%s", out)
 	}
@@ -270,7 +270,7 @@ func TestRenderDeployStatus_Basic(t *testing.T) {
 			LastFailedStep:  "init-db",
 		},
 	}
-	out := RenderDeployStatus(rows)
+	out := DeployStatus(rows)
 
 	for _, want := range []string{
 		"SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED",
@@ -286,7 +286,7 @@ func TestRenderDeployStatus_Basic(t *testing.T) {
 
 func TestRenderDeployStatus_Empty(t *testing.T) {
 	resetStyles()
-	out := RenderDeployStatus(nil)
+	out := DeployStatus(nil)
 	if !strings.Contains(out, "SERVICE") {
 		t.Error("expected header SERVICE in empty deploy status table")
 	}
@@ -305,7 +305,7 @@ func TestRenderDeployStatus_NoFailure(t *testing.T) {
 			LastFailedStep:  "",
 		},
 	}
-	out := RenderDeployStatus(rows)
+	out := DeployStatus(rows)
 	if !strings.Contains(out, "—") {
 		t.Error("expected em-dash for missing last-failed when no failures")
 	}

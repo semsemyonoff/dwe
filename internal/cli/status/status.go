@@ -12,7 +12,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/statustui"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
@@ -66,7 +66,7 @@ type statusContext struct {
 	ProjectName string
 	DockerCfg   *config.DockerConfig
 	Topo        map[string][]string
-	TopoStatus  map[string]ui.NodeStatus
+	TopoStatus  map[string]render.NodeStatus
 	IsRunning   stack.ContainerCheckFn
 	ProjectRoot string
 	ConfigPath  string
@@ -254,7 +254,7 @@ func renderDefaultStatus(cmd *cobra.Command, sc *statusContext, no *noSectionFla
 	_, _ = fmt.Fprintln(out)
 
 	if sc.State != nil {
-		writeNonEmpty(out, ui.RenderPendingBanner(sc.State.Pending))
+		writeNonEmpty(out, render.PendingBanner(sc.State.Pending))
 	}
 
 	for _, s := range defaultSectionOrder {
@@ -296,7 +296,7 @@ func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInpu
 			_, _ = fmt.Fprintf(errW, "warning: %d daemon row(s) failed to render\n", n)
 		}
 	case sectionDeploy:
-		writeNonEmpty(out, stack.RenderDeployStatus(in))
+		writeNonEmpty(out, stack.DeployStatus(in))
 	case sectionTopology:
 		writeNonEmpty(out, stack.RenderTopology(in))
 	case sectionGit:
@@ -304,8 +304,8 @@ func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInpu
 		if len(rows) == 0 {
 			return nil
 		}
-		_, _ = fmt.Fprintln(out, ui.RenderSectionTitle("Git Workspace"))
-		_, _ = fmt.Fprintln(out, ui.RenderGitWorkspace(rows))
+		_, _ = fmt.Fprintln(out, render.SectionTitle("Git Workspace"))
+		_, _ = fmt.Fprintln(out, render.GitWorkspace(rows))
 		failed := 0
 		for _, r := range rows {
 			if r.Err != nil {

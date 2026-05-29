@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 )
 
 // --- FetchComposeTopology bin parameter ---
@@ -169,8 +169,8 @@ func TestAugmentWithDisabled_AddsDisabledNodes(t *testing.T) {
 	topo := map[string][]string{
 		"nginx": {},
 	}
-	status := map[string]ui.NodeStatus{
-		"nginx": ui.NodeRunning,
+	status := map[string]render.NodeStatus{
+		"nginx": render.NodeRunning,
 	}
 
 	newTopo, newStatus := AugmentWithDisabled(cfg, topo, status)
@@ -178,10 +178,10 @@ func TestAugmentWithDisabled_AddsDisabledNodes(t *testing.T) {
 	if _, ok := newTopo["app-second"]; !ok {
 		t.Error("expected app-second added to topology")
 	}
-	if newStatus["app-second"] != ui.NodeDisabled {
+	if newStatus["app-second"] != render.NodeDisabled {
 		t.Errorf("expected app-second NodeDisabled, got %v", newStatus["app-second"])
 	}
-	if newStatus["nginx"] != ui.NodeRunning {
+	if newStatus["nginx"] != render.NodeRunning {
 		t.Errorf("nginx status should be preserved, got %v", newStatus["nginx"])
 	}
 }
@@ -204,7 +204,7 @@ func TestAugmentWithDisabled_NilTopoInitialised(t *testing.T) {
 	if _, ok := newTopo["app-second"]; !ok {
 		t.Error("expected app-second in topo")
 	}
-	if newStatus["app-second"] != ui.NodeDisabled {
+	if newStatus["app-second"] != render.NodeDisabled {
 		t.Errorf("expected app-second NodeDisabled, got %v", newStatus["app-second"])
 	}
 }
@@ -224,7 +224,7 @@ func TestAugmentWithDisabled_NoDisabledNoop(t *testing.T) {
 	)
 
 	topo := map[string][]string{"nginx": {}}
-	status := map[string]ui.NodeStatus{"nginx": ui.NodeRunning}
+	status := map[string]render.NodeStatus{"nginx": render.NodeRunning}
 
 	newTopo, newStatus := AugmentWithDisabled(cfg, topo, status)
 
@@ -244,10 +244,10 @@ func TestRemoveHiddenNodes_RemovesFromBoth(t *testing.T) {
 		"db":   nil,
 		"tool": nil,
 	}
-	status := map[string]ui.NodeStatus{
-		"web":  ui.NodeRunning,
-		"db":   ui.NodeRunning,
-		"tool": ui.NodeDisabled,
+	status := map[string]render.NodeStatus{
+		"web":  render.NodeRunning,
+		"db":   render.NodeRunning,
+		"tool": render.NodeDisabled,
 	}
 	topo2, status2 := RemoveHiddenNodes(topo, status, []string{"tool"})
 	if _, exists := topo2["tool"]; exists {
@@ -266,10 +266,10 @@ func TestRemoveHiddenNodes_PrunesDepsFromOthers(t *testing.T) {
 		"web": {"db", "cache"},
 		"db":  nil,
 	}
-	status := map[string]ui.NodeStatus{
-		"web":   ui.NodeRunning,
-		"db":    ui.NodeRunning,
-		"cache": ui.NodeRunning,
+	status := map[string]render.NodeStatus{
+		"web":   render.NodeRunning,
+		"db":    render.NodeRunning,
+		"cache": render.NodeRunning,
 	}
 	topo2, _ := RemoveHiddenNodes(topo, status, []string{"cache"})
 	for _, dep := range topo2["web"] {
@@ -281,7 +281,7 @@ func TestRemoveHiddenNodes_PrunesDepsFromOthers(t *testing.T) {
 
 func TestRemoveHiddenNodes_EmptyHidden(t *testing.T) {
 	topo := map[string][]string{"web": nil}
-	status := map[string]ui.NodeStatus{"web": ui.NodeRunning}
+	status := map[string]render.NodeStatus{"web": render.NodeRunning}
 	topo2, status2 := RemoveHiddenNodes(topo, status, nil)
 	if len(topo2) != 1 || len(status2) != 1 {
 		t.Errorf("empty hidden list should leave everything unchanged")

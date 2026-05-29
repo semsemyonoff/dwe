@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"strings"
@@ -15,7 +15,7 @@ func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	if strings.Contains(out, "devbox-laravel") {
 		t.Errorf("did not expect project full name in summary, got:\n%s", out)
 	}
@@ -29,7 +29,7 @@ func TestRenderSummary_State(t *testing.T) {
 		Project: config.ProjectConfig{Name: "myapp"},
 		State:   "running",
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	if !strings.Contains(out, "running") {
 		t.Errorf("expected state in summary, got:\n%s", out)
 	}
@@ -39,7 +39,7 @@ func TestRenderSummary_NoState(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	// "state" label should not appear when state is empty
 	if strings.Contains(out, "state") {
 		t.Errorf("did not expect 'state' label when state is empty, got:\n%s", out)
@@ -56,7 +56,7 @@ func TestRenderSummary_NoURL(t *testing.T) {
 			"main": {Type: config.ServiceTypeApp, Hosts: map[string]string{"main": "myapp.localhost"}},
 		},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	// URL must not appear in the compact summary.
 	if strings.Contains(out, "http://") || strings.Contains(out, "https://") {
 		t.Errorf("did not expect URL in compact summary, got:\n%s", out)
@@ -71,7 +71,7 @@ func TestRenderSummary_ServiceCounts(t *testing.T) {
 			"second": {Type: config.ServiceTypeApp, Enabled: false},
 		},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	if !strings.Contains(out, "1/2") {
 		t.Errorf("expected '1/2' service count in summary, got:\n%s", out)
 	}
@@ -86,7 +86,7 @@ func TestRenderSummary_MandatoryCountsAsEnabled(t *testing.T) {
 			"third":  {Type: config.ServiceTypeApp, Enabled: false},
 		},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	if !strings.Contains(out, "2/3") {
 		t.Errorf("expected '2/3' service count (mandatory counts as enabled), got:\n%s", out)
 	}
@@ -105,7 +105,7 @@ func TestRenderSummary_ServiceCountIsAppOnly(t *testing.T) {
 			"adminer": {Type: config.ServiceTypeTool, Enabled: true},
 		},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	if !strings.Contains(out, "services 1/2 enabled") {
 		t.Errorf("expected 'services 1/2 enabled' (apps only), got:\n%s", out)
 	}
@@ -124,7 +124,7 @@ func TestRenderSummary_ToolCounts(t *testing.T) {
 			"mailpit":       {Type: config.ServiceTypeTool, Enabled: true},
 		},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	if !strings.Contains(out, "2 enabled") {
 		t.Errorf("expected '2 enabled' tools in summary, got:\n%s", out)
 	}
@@ -134,7 +134,7 @@ func TestRenderSummary_OneLineWhenNoState(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	lines := strings.Split(out, "\n")
 	if len(lines) != 1 {
 		t.Errorf("expected exactly 1 line in summary (counts only), got %d:\n%s", len(lines), out)
@@ -146,7 +146,7 @@ func TestRenderSummary_TwoLinesWithState(t *testing.T) {
 		Project: config.ProjectConfig{Name: "myapp"},
 		State:   "running",
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	lines := strings.Split(out, "\n")
 	if len(lines) != 2 {
 		t.Errorf("expected exactly 2 lines in summary (state + counts), got %d:\n%s", len(lines), out)
@@ -158,7 +158,7 @@ func TestRenderSummary_NilTools(t *testing.T) {
 		Project:  config.ProjectConfig{Name: "myapp"},
 		Services: nil,
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	if !strings.Contains(out, "tools 0 enabled") {
 		t.Errorf("expected 'tools 0 enabled' when tools are nil, got:\n%s", out)
 	}
@@ -168,7 +168,7 @@ func TestRenderSummary_WithDeploySummaryNil(t *testing.T) {
 	cfg := &config.DevboxConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
-	out := RenderSummary(cfg, nil)
+	out := Summary(cfg, nil)
 	// Should not show "deployed" when summary is nil
 	if strings.Contains(out, "deployed") {
 		t.Errorf("did not expect 'deployed' in summary when nil, got:\n%s", out)
@@ -184,7 +184,7 @@ func TestRenderSummary_WithDeploySummary_AllDeployed(t *testing.T) {
 		Total:         2,
 		ProjectStatus: journal.StatusDeployed,
 	}
-	out := RenderSummary(cfg, summary)
+	out := Summary(cfg, summary)
 	if !strings.Contains(out, "services 2/2 deployed") {
 		t.Errorf("expected 'services 2/2 deployed' in summary, got:\n%s", out)
 	}
@@ -199,7 +199,7 @@ func TestRenderSummary_WithDeploySummary_PartiallyDeployed(t *testing.T) {
 		Total:         3,
 		ProjectStatus: journal.StatusPartial,
 	}
-	out := RenderSummary(cfg, summary)
+	out := Summary(cfg, summary)
 	if !strings.Contains(out, "services 1/3 deployed") {
 		t.Errorf("expected 'services 1/3 deployed' in summary, got:\n%s", out)
 	}
@@ -214,7 +214,7 @@ func TestRenderSummary_WithDeploySummary_ZeroTotal(t *testing.T) {
 		Total:         0,
 		ProjectStatus: journal.StatusNotDeployed,
 	}
-	out := RenderSummary(cfg, summary)
+	out := Summary(cfg, summary)
 	// When total is 0, deploy summary should not appear
 	if strings.Contains(out, "deployed") {
 		t.Errorf("did not expect 'deployed' in summary when total is 0, got:\n%s", out)

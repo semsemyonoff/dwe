@@ -1,6 +1,6 @@
 package stack
 
-import "devbox-cli/internal/core/ui"
+import "devbox-cli/internal/core/ui/render"
 
 // Health represents the overall running health of the stack.
 type Health int
@@ -14,7 +14,7 @@ const (
 
 // AggregateHealth computes the overall stack health from service rows.
 // Only mandatory or enabled services count toward the total.
-func AggregateHealth(rows []ui.ServiceTableRow) Health {
+func AggregateHealth(rows []render.ServiceTableRow) Health {
 	active := 0
 	running := 0
 	for _, r := range rows {
@@ -38,9 +38,9 @@ func AggregateHealth(rows []ui.ServiceTableRow) Health {
 // non-disabled node, indicating that runtime status collection succeeded.
 // A map with only NodeDisabled entries (from AugmentWithDisabled) is not
 // sufficient to compute accurate health.
-func HasRuntimeStatuses(topoStatus map[string]ui.NodeStatus) bool {
+func HasRuntimeStatuses(topoStatus map[string]render.NodeStatus) bool {
 	for _, st := range topoStatus {
-		if st != ui.NodeDisabled {
+		if st != render.NodeDisabled {
 			return true
 		}
 	}
@@ -51,15 +51,15 @@ func HasRuntimeStatuses(topoStatus map[string]ui.NodeStatus) bool {
 // All non-disabled nodes are treated as active (including infrastructure containers
 // such as nginx, db, redis that are not tracked in cfg.Services). Returns HealthStopped
 // when topoStatus is empty.
-func AggregateHealthFromTopo(topoStatus map[string]ui.NodeStatus) Health {
+func AggregateHealthFromTopo(topoStatus map[string]render.NodeStatus) Health {
 	active := 0
 	running := 0
 	for _, status := range topoStatus {
-		if status == ui.NodeDisabled {
+		if status == render.NodeDisabled {
 			continue
 		}
 		active++
-		if status == ui.NodeRunning {
+		if status == render.NodeRunning {
 			running++
 		}
 	}

@@ -18,14 +18,14 @@ import (
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/lock"
-	"devbox-cli/internal/shared/render"
+	sharedrender "devbox-cli/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
@@ -110,8 +110,8 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 		if opts.ServiceName != "" {
 			title = fmt.Sprintf("Deploy plan for service %s", opts.ServiceName)
 		}
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), ui.RenderSectionTitle(title))
-		pipeline.PrintPlanTable(steps, render.NewWriter(cmd.OutOrStdout()), devboxBin)
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.SectionTitle(title))
+		pipeline.PrintPlanTable(steps, sharedrender.NewWriter(cmd.OutOrStdout()), devboxBin)
 	}
 	return nil
 }
@@ -364,7 +364,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	releaseLocks, err := lock.AcquireProjectLocks(workDir)
 	if err != nil {
 		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			render.Stdout().Error(phe.Error())
+			sharedrender.Stdout().Error(phe.Error())
 			return phe
 		}
 		return fmt.Errorf("acquiring project locks: %w", err)
@@ -378,7 +378,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		}
 		dockerCfg = &config.DockerConfig{}
 	}
-	if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), render.Stdout()); err != nil {
+	if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), sharedrender.Stdout()); err != nil {
 		return fmt.Errorf("ensuring volumes: %w", err)
 	}
 

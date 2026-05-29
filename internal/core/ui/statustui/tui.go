@@ -16,7 +16,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
@@ -41,7 +41,7 @@ type Deps struct {
 	ProjectName string
 	DockerCfg   *config.DockerConfig
 	Topo        map[string][]string
-	TopoStatus  map[string]ui.NodeStatus
+	TopoStatus  map[string]render.NodeStatus
 	IsRunning   stack.ContainerCheckFn
 	ProjectRoot string
 }
@@ -260,7 +260,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderTitleBar renders the branded title bar — `{▪} devbox · <project> · Status`
 // in accent+bold, wrapped in lipgloss with padding.
 func (m *model) renderTitleBar() string {
-	text := ui.LogoMarkPlain() + " devbox · " + m.deps.ProjectName + " · Status"
+	text := render.LogoMarkPlain() + " devbox · " + m.deps.ProjectName + " · Status"
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Padding(0, 1).

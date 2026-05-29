@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	versioninfo "devbox-cli/internal/shared/version"
 
 	"github.com/spf13/cobra"
@@ -37,7 +37,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 			}
 			return cmdctx.WriteData(flags, cmd, dto, func(d versionJSON) string {
 				return fmt.Sprintf("%s Devbox v%s (commit %s, built %s)",
-					ui.LogoMark(), d.Version, d.Commit, d.BuiltAt)
+					render.LogoMark(), d.Version, d.Commit, d.BuiltAt)
 			})
 		},
 	}

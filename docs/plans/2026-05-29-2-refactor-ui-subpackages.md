@@ -280,18 +280,19 @@ Several callers use symbols from multiple groups → import multiple subpkgs. Th
 - Move + modify: 10 corresponding test files → `render/`
 - Modify: external callers of render symbols (per Symbol Mapping)
 
-- [ ] create `render/` directory; move 12 implementation files; change package to `render`
-- [ ] add `import "devbox-cli/internal/core/ui/styles"` everywhere — the 7 style vars become `styles.AccentStyle()` etc. (Option A accessor pattern from Solution Overview)
-- [ ] **handle `resetStyles` test helper**: it lives in `styles_test.go` (now `styles/styles_test.go`) and is called 18× by `table_test.go` + 5× by `info_test.go` (now in `render/`). Solutions: (a) replace every `resetStyles()` call site in `render/`'s tests with `styles.ApplyStyles(nil)` (simplest); (b) duplicate `resetStyles` body into `render/`'s test helpers file. Use (a).
-- [ ] handle `snapshotPalette`, `forceTruecolor` test helpers same way — replace calls with the public equivalents or duplicate minimal helpers in `render/`'s test files
-- [ ] move corresponding `*_test.go` files (no testdata/ directories exist anywhere under `internal/core/ui/` — earlier mentions were spurious)
-- [ ] update intra-pkg symbol refs (`renderAutoHosts`, `renderAutoURLs` stay lowercase since same package)
-- [ ] **update sibling subpkg `cmdbrowser/`** to use `core/ui/render` for any render symbols still needed
-- [ ] **update sibling subpkg `statustui/`** to import `core/ui/render` for `NodeStatus`, `RenderSectionTitle`, `RenderGitWorkspace`, `RenderPendingBanner`, `LogoMarkPlain`
-- [ ] update all 64 external callers across `internal/cli/` and `internal/core/` to import the appropriate subpkg(s) and re-qualify `ui.X` references using the Symbol Mapping table
-- [ ] verify root `internal/core/ui/` is empty of .go files (subpkg dirs remain: ask/, cmdbrowser/, statusview/, statustui/, widgets/, styles/, render/)
-- [ ] run `make test` — must pass before Task 5
-- [ ] run `make lint` — must pass before Task 5
+- [x] create `render/` directory; move 12 implementation files; change package to `render`
+- [x] add `import "devbox-cli/internal/core/ui/styles"` everywhere — already imported per-file from Task 2; render-only files keep their existing styles imports
+- [x] **handle `resetStyles` test helper**: kept the in-package `test_helpers_test.go` shim (renamed to `package render`) so call sites in `table_test.go` + `info_test.go` work unchanged
+- [x] handle `snapshotPalette`, `forceTruecolor` test helpers — none were referenced by the migrated tests; only `resetStyles` was used (verified via grep)
+- [x] move corresponding `*_test.go` files (10 files moved); `pending_test.go` was an external-style `package ui_test`, rewritten to `package render_test`
+- [x] update intra-pkg symbol refs (`renderAutoHosts`, `renderAutoURLs` stay lowercase since same package)
+- [x] **update sibling subpkg `cmdbrowser/`** — `model.go` import rewritten to `core/ui/render`; comments referencing `ui.Color*` updated to `styles.Color*`
+- [x] **update sibling subpkg `statustui/`** to import `core/ui/render` for `NodeStatus`, `SectionTitle`, `GitWorkspace`, `PendingBanner`, `LogoMarkPlain`
+- [x] update all external callers across `internal/cli/` and `internal/core/` (30 files) to import `core/ui/render`; bulk-rewrote `ui.X` → `render.X`; aliased conflicting `internal/shared/render` imports as `sharedrender` where both packages are imported (4 files)
+- [x] dropped `Render` prefix from 16 exported functions per revive (e.g. `RenderInfo` → `Info`, `RenderBrandHeader` → `BrandHeader`); renamed the conflict-clashing `BrandHeader` type to `Brand`
+- [x] verify root `internal/core/ui/` is empty of .go files (subpkg dirs remain: ask/, cmdbrowser/, statusview/, statustui/, widgets/, styles/, render/)
+- [x] run `make test` — passed
+- [x] run `make lint` — 0 issues
 
 ### Task 5: Verify cross-package call sites and integration
 

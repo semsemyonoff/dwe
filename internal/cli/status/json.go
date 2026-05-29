@@ -10,7 +10,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 
 	"github.com/spf13/cobra"
@@ -323,11 +323,11 @@ func buildTopologyJSON(sc *statusContext) *topologyJSON {
 		statusStr := "unknown"
 		if nodeStatus, ok := sc.TopoStatus[name]; ok {
 			switch nodeStatus {
-			case ui.NodeRunning:
+			case render.NodeRunning:
 				statusStr = "running"
-			case ui.NodeStopped:
+			case render.NodeStopped:
 				statusStr = "stopped"
-			case ui.NodeDisabled:
+			case render.NodeDisabled:
 				statusStr = "disabled"
 			}
 		}
@@ -468,7 +468,7 @@ func healthStr(h stack.Health) string {
 	}
 }
 
-func serviceStatusStr(row ui.ServiceTableRow) string {
+func serviceStatusStr(row render.ServiceTableRow) string {
 	switch {
 	case row.Running:
 		return "running"

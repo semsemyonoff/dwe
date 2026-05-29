@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"fmt"
@@ -26,10 +26,10 @@ type DiagnosticRow struct {
 	Hint     string
 }
 
-// RenderDiagnosticsTable renders a styled Lipgloss table of validation diagnostics.
+// DiagnosticsTable renders a styled Lipgloss table of validation diagnostics.
 // Columns: STATUS / DOMAIN / TARGET / FILE / MESSAGE / HINT.
 // Status glyphs color-coded by severity: ✓ OK (green), ⓘ info (dim), ⚠ warning (yellow), ✗ error (red).
-func RenderDiagnosticsTable(rows []DiagnosticRow) string {
+func DiagnosticsTable(rows []DiagnosticRow) string {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]map[int]lipgloss.Style, len(rows))
 

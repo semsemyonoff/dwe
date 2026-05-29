@@ -10,7 +10,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 )
 
@@ -47,7 +47,7 @@ func joinNonEmpty(parts ...string) string {
 }
 
 // warningPrefix returns a styled warning line "⚠ N expression(s) failed"
-// when n > 0, or "" when n == 0. Uses the canonical warning style from ui.
+// when n > 0, or "" when n == 0. Uses the canonical warning style from render.
 func warningPrefix(n int) string {
 	if n == 0 {
 		return ""
@@ -68,10 +68,10 @@ func normaliseDocker(d *config.DockerConfig) *config.DockerConfig {
 }
 
 // renderGitTab renders the Git Workspace section by calling collectGitWorkspaceFn
-// and ui.RenderGitWorkspace. Returns a placeholder when no repos are tracked,
+// and render.GitWorkspace. Returns a placeholder when no repos are tracked,
 // and prepends a warning prefix if rows contain errors.
 func renderGitTab(ctx context.Context, d Deps) string {
-	title := ui.RenderSectionTitle("Git Workspace")
+	title := render.SectionTitle("Git Workspace")
 	rows := collectGitWorkspaceFn(ctx, d.Cfg, d.ProjectRoot)
 	if len(rows) == 0 {
 		return joinNonEmpty(title, "no git workspace tracked")
@@ -85,7 +85,7 @@ func renderGitTab(ctx context.Context, d Deps) string {
 		}
 	}
 
-	body := ui.RenderGitWorkspace(rows)
+	body := render.GitWorkspace(rows)
 	return joinNonEmpty(title, warningPrefix(errCount), body)
 }
 
@@ -115,9 +115,9 @@ func buildTabs(ctx context.Context, d Deps) ([]tab, string) {
 	}
 
 	// Deploy Status
-	deploy := stack.RenderDeployStatus(in)
+	deploy := stack.DeployStatus(in)
 	if d.State != nil {
-		pendingBanner := ui.RenderPendingBanner(d.State.Pending)
+		pendingBanner := render.PendingBanner(d.State.Pending)
 		deploy = joinNonEmpty(pendingBanner, deploy)
 	}
 	if deploy == "" {

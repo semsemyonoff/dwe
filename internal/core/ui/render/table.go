@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"fmt"
@@ -11,13 +11,13 @@ import (
 	"devbox-cli/internal/core/ui/styles"
 )
 
-// RenderTable builds and returns a Lipgloss table string using the shared
+// Table builds and returns a Lipgloss table string using the shared
 // border and accent style vars. Headers and rows are rendered with the
 // package-level table styles (configurable via ApplyStyles).
 //
 // headers contains the column names; rows contains the data rows, each a slice
 // of strings with the same length as headers.
-func RenderTable(headers []string, rows [][]string) string {
+func Table(headers []string, rows [][]string) string {
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styles.BorderStyle()).
@@ -115,7 +115,7 @@ func formatPortsCell(ports map[string]int) string {
 	return strings.Join(parts, ", ")
 }
 
-// RenderServicesTable renders a styled Lipgloss table of services.
+// ServicesTable renders a styled Lipgloss table of services.
 // Built-in columns: NAME, [DIR if withDirCol,] CONTAINER, HOSTS, PORTS, STATE, RUNNING.
 // extraCols, if non-nil, lists additional column names appended after the
 // built-ins; each row's value is read from ServiceTableRow.Extras (missing
@@ -126,7 +126,7 @@ func formatPortsCell(ports map[string]int) string {
 // HOSTS / PORTS columns are populated from ServiceTableRow.Hosts / .Ports —
 // devbox treats per-developer port and host overrides as a core feature, so
 // these are always-visible built-in columns rather than opt-in extras.
-func RenderServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
+func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]rowCellStyle, len(rows))
 
@@ -239,9 +239,9 @@ type DaemonTableRow struct {
 	Uptime    string
 }
 
-// RenderDaemonTable renders a styled Lipgloss table of running daemons.
+// DaemonTable renders a styled Lipgloss table of running daemons.
 // Columns: ID, PARAMS, CONTAINER, UPTIME. Empty input returns an empty string.
-func RenderDaemonTable(rows []DaemonTableRow) string {
+func DaemonTable(rows []DaemonTableRow) string {
 	if len(rows) == 0 {
 		return ""
 	}
@@ -311,9 +311,9 @@ func statusStyleForStatus(status string) lipgloss.Style {
 	}
 }
 
-// RenderDeployStatus renders a styled Lipgloss table of deploy status per service.
+// DeployStatus renders a styled Lipgloss table of deploy status per service.
 // Columns: SERVICE, STATUS, CONFIG, PREV HASH, CURR HASH, LAST FAILED.
-func RenderDeployStatus(rows []DeployStatusRow) string {
+func DeployStatus(rows []DeployStatusRow) string {
 	stringRows := make([][]string, len(rows))
 	statusStyles := make([]string, len(rows))
 	deltaStyles := make([]string, len(rows))

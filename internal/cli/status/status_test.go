@@ -112,7 +112,7 @@ project:
 }
 
 // statusFixtureWithDeploy extends statusFixture with a minimal deploy pipeline
-// and a persisted state, so RenderDeployStatus produces output.
+// and a persisted state, so DeployStatus produces output.
 func statusFixtureWithDeploy(t *testing.T) string {
 	t.Helper()
 	configPath := statusFixture(t)
@@ -144,7 +144,7 @@ func statusFixtureWithDeploy(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	// State file so RenderDeployStatus produces a non-empty section.
+	// State file so DeployStatus produces a non-empty section.
 	statePath := filepath.Join(dir, journal.DefaultRelPath)
 	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
 		t.Fatal(err)

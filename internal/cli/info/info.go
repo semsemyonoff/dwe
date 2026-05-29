@@ -7,7 +7,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/shared/version"
 
 	"github.com/spf13/cobra"
@@ -80,7 +80,7 @@ func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 
 	// Always render the branded identity line; the ASCII art block inside the
 	// helper is gated by header.lines.
-	header := ui.BrandHeader{
+	header := render.Brand{
 		Project: cfg.Project.FullName(),
 		Version: version.Version,
 	}
@@ -89,10 +89,10 @@ func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		header.Lines = stylesCfg.Header.Lines
 		header.Font = stylesCfg.Header.Font
 	}
-	_, _ = fmt.Fprint(cmd.OutOrStdout(), ui.RenderBrandHeader(header))
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), render.BrandHeader(header))
 	_, _ = fmt.Fprintln(cmd.OutOrStdout())
 
-	out, err := ui.RenderInfo(cfg, infoCfg)
+	out, err := render.Info(cfg, infoCfg)
 	if err != nil {
 		return fmt.Errorf("rendering info: %w", err)
 	}

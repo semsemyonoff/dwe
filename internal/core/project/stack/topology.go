@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/shared/docker"
 )
 
@@ -33,7 +33,7 @@ func FetchComposeTopology(composeFiles []string, projectName string, processEnv 
 	if err != nil {
 		return nil
 	}
-	deps, err := ui.ParseComposeTopology(out)
+	deps, err := render.ParseComposeTopology(out)
 	if err != nil {
 		return nil
 	}
@@ -53,7 +53,7 @@ func ParseTopologyFromFiles(composeFiles []string) map[string][]string {
 		if err != nil {
 			continue
 		}
-		deps, err := ui.ParseComposeTopology(data)
+		deps, err := render.ParseComposeTopology(data)
 		if err != nil {
 			continue
 		}
@@ -74,7 +74,7 @@ func ParseTopologyFromFiles(composeFiles []string) map[string][]string {
 // overrides from docker.yml process_env are honoured.
 // bin is the Docker-compatible binary (e.g. "docker", "podman"); pass
 // config.DockerBin(cfg) at the call site.
-func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv []string, bin string) map[string]ui.NodeStatus {
+func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv []string, bin string) map[string]render.NodeStatus {
 	if len(composeFiles) == 0 {
 		return nil
 	}
@@ -98,23 +98,23 @@ func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv [
 	allCmd.Env = processEnv
 	allOut, err := allCmd.Output()
 	if err != nil {
-		result := make(map[string]ui.NodeStatus, len(running))
+		result := make(map[string]render.NodeStatus, len(running))
 		for name := range running {
-			result[name] = ui.NodeRunning
+			result[name] = render.NodeRunning
 		}
 		return result
 	}
 
-	result := make(map[string]ui.NodeStatus)
+	result := make(map[string]render.NodeStatus)
 	for line := range strings.SplitSeq(strings.TrimSpace(string(allOut)), "\n") {
 		s := strings.TrimSpace(line)
 		if s == "" {
 			continue
 		}
 		if running[s] {
-			result[s] = ui.NodeRunning
+			result[s] = render.NodeRunning
 		} else {
-			result[s] = ui.NodeStopped
+			result[s] = render.NodeStopped
 		}
 	}
 	return result
@@ -136,7 +136,7 @@ func DisabledNodes(cfg *config.DevboxConfig) []string {
 // AugmentWithDisabled adds disabled services and tools as isolated nodes to topo
 // and marks them NodeDisabled in the status map. If topo is nil, it is initialised
 // to an empty map so disabled nodes are still shown.
-func AugmentWithDisabled(cfg *config.DevboxConfig, topo map[string][]string, topoStatus map[string]ui.NodeStatus) (map[string][]string, map[string]ui.NodeStatus) {
+func AugmentWithDisabled(cfg *config.DevboxConfig, topo map[string][]string, topoStatus map[string]render.NodeStatus) (map[string][]string, map[string]render.NodeStatus) {
 	disabled := DisabledNodes(cfg)
 	if len(disabled) == 0 {
 		return topo, topoStatus
@@ -145,13 +145,13 @@ func AugmentWithDisabled(cfg *config.DevboxConfig, topo map[string][]string, top
 		topo = make(map[string][]string)
 	}
 	if topoStatus == nil {
-		topoStatus = make(map[string]ui.NodeStatus)
+		topoStatus = make(map[string]render.NodeStatus)
 	}
 	for _, name := range disabled {
 		if _, exists := topo[name]; !exists {
 			topo[name] = nil
 		}
-		topoStatus[name] = ui.NodeDisabled
+		topoStatus[name] = render.NodeDisabled
 	}
 	return topo, topoStatus
 }
@@ -159,7 +159,7 @@ func AugmentWithDisabled(cfg *config.DevboxConfig, topo map[string][]string, top
 // RemoveHiddenNodes removes the listed compose service names from the topology
 // graph and status map. Hidden nodes are also pruned from dependency lists so
 // they don't leave dangling references in the tree.
-func RemoveHiddenNodes(topo map[string][]string, status map[string]ui.NodeStatus, hidden []string) (map[string][]string, map[string]ui.NodeStatus) {
+func RemoveHiddenNodes(topo map[string][]string, status map[string]render.NodeStatus, hidden []string) (map[string][]string, map[string]render.NodeStatus) {
 	hide := make(map[string]bool, len(hidden))
 	for _, h := range hidden {
 		hide[h] = true
@@ -188,21 +188,21 @@ func RemoveHiddenNodes(topo map[string][]string, status map[string]ui.NodeStatus
 //   - infra → CatInfra
 //
 // Services without a Container are skipped. Unknown types fall through to CatInfra.
-func BuildNodeCategories(cfg *config.DevboxConfig) map[string]ui.NodeCategory {
-	cats := make(map[string]ui.NodeCategory)
+func BuildNodeCategories(cfg *config.DevboxConfig) map[string]render.NodeCategory {
+	cats := make(map[string]render.NodeCategory)
 	for _, svc := range cfg.Services {
 		if svc.Container == "" {
 			continue
 		}
 		switch svc.Type {
 		case config.ServiceTypeApp:
-			cats[svc.Container] = ui.CatService
+			cats[svc.Container] = render.CatService
 		case config.ServiceTypeTool:
-			cats[svc.Container] = ui.CatTool
+			cats[svc.Container] = render.CatTool
 		case config.ServiceTypeInfra:
-			cats[svc.Container] = ui.CatInfra
+			cats[svc.Container] = render.CatInfra
 		default:
-			cats[svc.Container] = ui.CatInfra
+			cats[svc.Container] = render.CatInfra
 		}
 	}
 	return cats
@@ -245,7 +245,7 @@ func ResolveProjectAndDocker(configPath string, cfg *config.DevboxConfig) (strin
 // It queries docker compose where available, falling back to YAML-only parsing
 // when docker is unavailable. Disabled nodes are then added as isolated
 // entries, and any nodes hidden via docker.yml are removed.
-func ResolveTopology(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, projectName string) (map[string][]string, map[string]ui.NodeStatus) {
+func ResolveTopology(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, projectName string) (map[string][]string, map[string]render.NodeStatus) {
 	composeFiles := cfg.ComposeFiles()
 	var processEnv []string
 	if dockerCfg != nil {
@@ -254,7 +254,7 @@ func ResolveTopology(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, p
 	dockerBin := config.DockerBin(cfg)
 
 	topo := FetchComposeTopology(composeFiles, projectName, processEnv, dockerBin)
-	var topoStatus map[string]ui.NodeStatus
+	var topoStatus map[string]render.NodeStatus
 	if topo == nil {
 		topo = ParseTopologyFromFiles(composeFiles)
 	} else {
@@ -262,7 +262,7 @@ func ResolveTopology(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, p
 		if topoStatus != nil {
 			for name := range topo {
 				if _, ok := topoStatus[name]; !ok {
-					topoStatus[name] = ui.NodeStopped
+					topoStatus[name] = render.NodeStopped
 				}
 			}
 		}

@@ -178,7 +178,7 @@ func TestSkipConfirm_InspectModeIgnoresY(t *testing.T) {
 func TestInspect_RendersAtViewportWidth(t *testing.T) {
 	// Inspect closure receives the viewport's *content width* — the right
 	// panel's inner content area, capped at inspectMaxWidth so the section
-	// divider rendered by ui.RenderSectionTitle (also capped at 100) lines up
+	// divider rendered by render.SectionTitle (also capped at 100) lines up
 	// with the surrounding content. Narrow terminals get the full panel;
 	// wide ones are capped.
 	cases := []struct {

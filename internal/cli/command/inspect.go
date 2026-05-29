@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/i18n"
@@ -237,13 +237,13 @@ func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxC
 // falls back to the terminal width.
 func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, reg *usercommands.Registry, maxWidth int, translator i18n.Translator, locale string) {
 	def2 := func(name, value string, indent int) {
-		_, _ = fmt.Fprintln(w, ui.RenderDefinitionAt(name, value, indent, "", maxWidth))
+		_, _ = fmt.Fprintln(w, render.DefinitionAt(name, value, indent, "", maxWidth))
 	}
 	sub := func(title string) {
-		_, _ = fmt.Fprintln(w, ui.RenderSubheader("  "+title))
+		_, _ = fmt.Fprintln(w, render.Subheader("  "+title))
 	}
 
-	_, _ = fmt.Fprintln(w, ui.RenderSectionTitle(def.ID))
+	_, _ = fmt.Fprintln(w, render.SectionTitle(def.ID))
 	def2("type", string(def.Type), 2)
 	if def.DerivedFromDaemon != "" {
 		def2("derived from", "daemon "+def.DerivedFromDaemon, 2)
@@ -571,5 +571,5 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.Devbo
 		}
 	}
 
-	_, _ = fmt.Fprintln(w, ui.RenderSectionTitle(""))
+	_, _ = fmt.Fprintln(w, render.SectionTitle(""))
 }

@@ -9,7 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"devbox-cli/internal/core/docs"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/styles"
 )
 
@@ -88,7 +88,7 @@ func (m *Model) renderTwoPanel() tea.View {
 // with the panels below. Same shape as cmdbrowser.renderTitleBar so the
 // two TUIs read consistently.
 func (m *Model) renderTitleBar(totalWidth int) string {
-	text := ui.LogoMarkPlain() + " " + m.Title
+	text := render.LogoMarkPlain() + " " + m.Title
 	return lipgloss.NewStyle().
 		Width(totalWidth).
 		Padding(0, 1).

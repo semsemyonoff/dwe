@@ -1,16 +1,16 @@
-package ui
+package render
 
 import (
 	"bytes"
 	"strings"
 
 	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/shared/render"
+	sharedrender "devbox-cli/internal/shared/render"
 )
 
-// BrandHeader is the input to RenderBrandHeader. Project and Version drive the
+// Brand is the input to BrandHeader. Project and Version drive the
 // always-emitted identity line; Tagline and Lines are optional decorations.
-type BrandHeader struct {
+type Brand struct {
 	Project string
 	Version string
 	Tagline string
@@ -18,7 +18,7 @@ type BrandHeader struct {
 	Font    string
 }
 
-// RenderBrandHeader returns the branded header block:
+// BrandHeader returns the branded header block:
 //
 //   - "Devbox · <project> · <version>" identity line (always emitted)
 //   - optional tagline in muted color
@@ -26,7 +26,7 @@ type BrandHeader struct {
 //
 // The returned string ends with a single trailing newline so callers can write
 // it directly without re-adding spacing.
-func RenderBrandHeader(h BrandHeader) string {
+func BrandHeader(h Brand) string {
 	var sb strings.Builder
 
 	parts := []string{LogoMark() + " " + styles.AccentStyle().Bold(true).Render("Devbox")}
@@ -47,7 +47,7 @@ func RenderBrandHeader(h BrandHeader) string {
 
 	if len(h.Lines) > 0 {
 		var buf bytes.Buffer
-		w := render.NewWriter(&buf)
+		w := sharedrender.NewWriter(&buf)
 		if err := w.ASCII(h.Lines, h.Font); err == nil && buf.Len() > 0 {
 			sb.WriteByte('\n')
 			sb.WriteString(styles.AccentStyle().Render(strings.TrimRight(buf.String(), "\n")))

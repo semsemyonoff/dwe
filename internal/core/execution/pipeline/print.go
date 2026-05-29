@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"devbox-cli/internal/core/ui"
-	"devbox-cli/internal/shared/render"
+	"devbox-cli/internal/core/ui/render"
+	sharedrender "devbox-cli/internal/shared/render"
 )
 
 // PrintPlanTable prints the plan in human-readable table format.
@@ -14,7 +14,7 @@ import (
 // Parallel groups are rendered with a header line and indented sub-steps. Indices in the
 // form [N/total] are shown for the group (as a range, e.g. [12-14/25]) and each sub-step.
 // Sequential leaf steps are rendered without an index prefix (legacy format).
-func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
+func PrintPlanTable(steps []ResolvedStep, w *sharedrender.Writer, devboxBin string) {
 	out := w.Writer()
 
 	trackedTotal := computeTrackedTotal(steps)
@@ -30,7 +30,7 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 
 		if phaseKey != lastPhaseKey {
 			if rs.Service != "" && rs.Service != lastService {
-				_, _ = fmt.Fprintln(out, ui.RenderSubheader("service: "+rs.Service))
+				_, _ = fmt.Fprintln(out, render.Subheader("service: "+rs.Service))
 				lastService = rs.Service
 			}
 			phaseLine := rs.Phase.Name
@@ -47,7 +47,7 @@ func PrintPlanTable(steps []ResolvedStep, w *render.Writer, devboxBin string) {
 			if rs.Service != "" {
 				indent = "  "
 			}
-			_, _ = fmt.Fprintln(out, ui.RenderSubheader(indent+phaseLine))
+			_, _ = fmt.Fprintln(out, render.Subheader(indent+phaseLine))
 			lastPhaseKey = phaseKey
 		}
 
@@ -113,7 +113,7 @@ func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPr
 	cmd := StepCommand(rs.Step, devboxBin)
 
 	if desc != "" {
-		_, _ = fmt.Fprintln(out, ui.RenderDefinition(indexPrefix+badge+" "+name, desc, len(indent), ""))
+		_, _ = fmt.Fprintln(out, render.Definition(indexPrefix+badge+" "+name, desc, len(indent), ""))
 	} else {
 		_, _ = fmt.Fprintln(out, indent+indexPrefix+badge+" "+name)
 	}

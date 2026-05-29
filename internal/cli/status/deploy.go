@@ -7,7 +7,7 @@ import (
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 
@@ -36,10 +36,10 @@ With a service name, shows the per-phase/step deploy breakdown for that service.
 				return renderDeployDetailJSON(cmd, sc, args[0], flags)
 			}
 			if sc.State != nil {
-				writeNonEmpty(cmd.OutOrStdout(), ui.RenderPendingBanner(sc.State.Pending))
+				writeNonEmpty(cmd.OutOrStdout(), render.PendingBanner(sc.State.Pending))
 			}
 			if len(args) == 0 {
-				writeNonEmpty(cmd.OutOrStdout(), stack.RenderDeployStatus(sc.statusInput()))
+				writeNonEmpty(cmd.OutOrStdout(), stack.DeployStatus(sc.statusInput()))
 				return nil
 			}
 			return stack.RenderServiceDeployDetail(cmd.OutOrStdout(), sc.State, sc.Tracked, args[0])

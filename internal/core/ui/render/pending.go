@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
-// RenderPendingBanner returns a formatted warning string for outstanding pending
+// PendingBanner returns a formatted warning string for outstanding pending
 // operations recorded in the deploy journal. Returns an empty string when p is
 // nil or has no operations — safe to pass to writeNonEmpty.
 //
@@ -17,7 +17,7 @@ import (
 //
 //   - PendingDeploy  → "⚠ Pending: deploy required for: a, b\n  Run: devbox deploy run"
 //   - PendingRestart → "⚠ Pending: restart required\n  Run: devbox restart"
-func RenderPendingBanner(p *journal.PendingApply) string {
+func PendingBanner(p *journal.PendingApply) string {
 	if p == nil || len(p.Operations) == 0 {
 		return ""
 	}

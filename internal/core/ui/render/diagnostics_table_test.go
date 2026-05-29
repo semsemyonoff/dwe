@@ -1,4 +1,4 @@
-package ui
+package render
 
 import (
 	"strings"
@@ -37,7 +37,7 @@ func TestRenderDiagnosticsTable(t *testing.T) {
 		},
 	}
 
-	output := RenderDiagnosticsTable(rows)
+	output := DiagnosticsTable(rows)
 
 	// Verify the output contains expected elements.
 	checks := []string{
@@ -84,7 +84,7 @@ func TestRenderDiagnosticsTable_WrapsLongMessageAndHint(t *testing.T) {
 		},
 	}
 
-	output := RenderDiagnosticsTable(rows)
+	output := DiagnosticsTable(rows)
 	if !strings.Contains(output, "file id") {
 		t.Fatalf("rendered output missing wrapped message tail: %q", output)
 	}

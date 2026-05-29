@@ -10,7 +10,7 @@ import (
 )
 
 // buildInfoData builds the structured JSON representation of the info dashboard.
-// It mirrors the traversal logic of core/ui.RenderInfo but produces data instead
+// It mirrors the traversal logic of core/ui/render.Info but produces data instead
 // of styled strings. The cli layer is the seam between data and rendering (CLAUDE.md).
 func buildInfoData(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (infoJSON, error) {
 	result := infoJSON{

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 )
 
 func TestHealthIndicator_Stopped(t *testing.T) {
@@ -221,9 +221,9 @@ func TestRenderTopology_WithStatus(t *testing.T) {
 		"nginx":    {"app-main"},
 		"app-main": {},
 	}
-	topoStatus := map[string]ui.NodeStatus{
-		"nginx":    ui.NodeRunning,
-		"app-main": ui.NodeStopped,
+	topoStatus := map[string]render.NodeStatus{
+		"nginx":    render.NodeRunning,
+		"app-main": render.NodeStopped,
 	}
 	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }, Topo: topo, TopoStatus: topoStatus})
 	if !strings.Contains(out, "running") {

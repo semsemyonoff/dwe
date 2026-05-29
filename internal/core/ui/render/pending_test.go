@@ -1,10 +1,10 @@
-package ui_test
+package render_test
 
 import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 )
 
@@ -69,7 +69,7 @@ func TestRenderPendingBanner(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ui.RenderPendingBanner(tt.pending)
+			got := render.PendingBanner(tt.pending)
 			if tt.wantEmpty {
 				if got != "" {
 					t.Errorf("expected empty string, got %q", got)

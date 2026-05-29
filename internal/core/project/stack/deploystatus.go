@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/statusview"
 	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/shared/render"
+	sharedrender "devbox-cli/internal/shared/render"
 )
 
-// RenderDeployStatus returns the Deploy Status section title + table as a
+// DeployStatus returns the Deploy Status section title + table as a
 // single string. Returns empty string when in.State is nil or no tracked
 // service yields a row.
-func RenderDeployStatus(in StatusInput) string {
+func DeployStatus(in StatusInput) string {
 	if in.State == nil {
 		return ""
 	}
@@ -26,9 +26,9 @@ func RenderDeployStatus(in StatusInput) string {
 		return ""
 	}
 
-	uiRows := make([]ui.DeployStatusRow, len(view.Rows))
+	uiRows := make([]render.DeployStatusRow, len(view.Rows))
 	for i, row := range view.Rows {
-		uiRows[i] = ui.DeployStatusRow{
+		uiRows[i] = render.DeployStatusRow{
 			Service:         row.Service,
 			Status:          string(row.Status),
 			ConfigDelta:     string(row.ConfigDelta),
@@ -39,9 +39,9 @@ func RenderDeployStatus(in StatusInput) string {
 		}
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderSectionTitle("Deploy Status"))
+	b.WriteString(render.SectionTitle("Deploy Status"))
 	b.WriteByte('\n')
-	b.WriteString(ui.RenderDeployStatus(uiRows))
+	b.WriteString(render.DeployStatus(uiRows))
 	b.WriteByte('\n')
 	return b.String()
 }
@@ -127,7 +127,7 @@ func RenderServiceDeployDetail(w io.Writer, state *journal.ProjectState, tracked
 		return fmt.Errorf("service %q is not tracked (not deployed)", serviceName)
 	}
 
-	rw := render.NewWriter(w)
+	rw := sharedrender.NewWriter(w)
 	svcState, ok := state.Services[serviceName]
 	if !ok {
 		_, _ = fmt.Fprintf(rw.Writer(), "Service %q not deployed yet\n", serviceName)
@@ -140,7 +140,7 @@ func RenderServiceDeployDetail(w io.Writer, state *journal.ProjectState, tracked
 	if svcState.LastRun != nil {
 		_, _ = fmt.Fprintf(rw.Writer(), "Last run: %s\n", svcState.LastRun.Status)
 	}
-	_, _ = fmt.Fprintf(rw.Writer(), "\n%s\n", ui.RenderSectionTitle("Phases"))
+	_, _ = fmt.Fprintf(rw.Writer(), "\n%s\n", render.SectionTitle("Phases"))
 
 	phaseNames := make([]string, 0, len(svcState.Phases))
 	for phaseName := range svcState.Phases {

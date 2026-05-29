@@ -27,7 +27,7 @@ import (
 	"unicode"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/render"
 	"devbox-cli/internal/core/ui/statusview"
 	"devbox-cli/internal/shared/daemon"
 	"devbox-cli/internal/shared/docker"
@@ -237,21 +237,21 @@ func RenderDaemons(rows []statusview.DaemonRow) (string, []error) {
 	if len(rows) == 0 {
 		return "", nil
 	}
-	tableRows := make([]ui.DaemonTableRow, len(rows))
+	tableRows := make([]render.DaemonTableRow, len(rows))
 	for i, r := range rows {
-		tableRows[i] = ui.DaemonTableRow{
+		tableRows[i] = render.DaemonTableRow{
 			ID:        r.ID,
 			Params:    r.Params,
 			Container: r.Container,
 			Uptime:    formatUptime(r.Uptime),
 		}
 	}
-	body := ui.RenderDaemonTable(tableRows)
+	body := render.DaemonTable(tableRows)
 	if body == "" {
 		return "", nil
 	}
 	var b strings.Builder
-	b.WriteString(ui.RenderSectionTitle("Daemons"))
+	b.WriteString(render.SectionTitle("Daemons"))
 	b.WriteByte('\n')
 	b.WriteString(body)
 	b.WriteByte('\n')
