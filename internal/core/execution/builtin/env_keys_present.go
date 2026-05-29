@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
 type envKeysPresentBuiltin struct{}
@@ -51,7 +53,7 @@ func (envKeysPresentBuiltin) Run(_ context.Context, with map[string]any, ectx Ex
 		return fmt.Errorf("read %s: %w", file, err)
 	}
 
-	entries := ParseEnvEntries(data)
+	entries := spec.ParseEnvEntries(data)
 	var missing []string
 	for _, k := range keys {
 		if v, ok := entries[k]; !ok || v == "" {

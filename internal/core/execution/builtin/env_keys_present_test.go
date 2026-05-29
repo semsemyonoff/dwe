@@ -8,41 +8,6 @@ import (
 	"testing"
 )
 
-func TestParseEnvEntries(t *testing.T) {
-	t.Parallel()
-	data := []byte(`
-# comment
-KEY_EMPTY=
-KEY_VAL=value
-KEY_DQ_EMPTY=""
-KEY_SQ_EMPTY=''
-KEY_DQ=" v "
-KEY_SQ='hi'
-KEY_MISMATCH="value'
-
-KEY_PLAIN=plain
-`)
-	got := ParseEnvEntries(data)
-	want := map[string]string{
-		"KEY_EMPTY":    "",
-		"KEY_VAL":      "value",
-		"KEY_DQ_EMPTY": "",
-		"KEY_SQ_EMPTY": "",
-		"KEY_DQ":       " v ",
-		"KEY_SQ":       "hi",
-		"KEY_MISMATCH": `"value'`,
-		"KEY_PLAIN":    "plain",
-	}
-	if len(got) != len(want) {
-		t.Fatalf("got %d entries, want %d: %v", len(got), len(want), got)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("key %q: got %q want %q", k, got[k], v)
-		}
-	}
-}
-
 func TestEnvKeysPresentValidate(t *testing.T) {
 	t.Parallel()
 	b := envKeysPresentBuiltin{}

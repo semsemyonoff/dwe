@@ -220,15 +220,15 @@ When each `*Builtin` struct is renamed:
 - Modify: `internal/core/execution/builtin/env_keys_present.go` (now sources `ParseEnvEntries` from spec)
 - Modify: `internal/core/execution/builtin/env_keys_present_test.go` (test calls move to `spec.ParseEnvEntries`)
 
-- [ ] create `spec/spec.go` with `Builtin` interface, `Kind`/`CallerContext` enums, `ExecContext` struct, `Entry` struct — copied verbatim from current `builtin.go` (only the package declaration and import paths change)
-- [ ] create `spec/helpers.go` with `GetStringParam`, `GetBoolParam`, `GetStringSlice`, `GetStringMap`, `GetMapAny`, `GetDurationParam`, `SortedKeys` — exported names (helpers cross package boundary now)
-- [ ] create `spec/envfile.go` with the env-file parsers currently in `configs_copy.go`: exported `ParseEnvEntries`, `ParseEnvKeys`, `EnvLineKey` + their private siblings (`parseEnvKeys`, `envLineKey`). `updateEnvFile` stays with `configs_copy.go` (services-internal — only callsite is `configs_copy.go:114`; no cross-cluster use). Reason: `env_keys_present.go` (going to `env/`) reuses `ParseEnvEntries` from `configs_copy.go` (going to `services/`). Putting the parsers in `spec/` lets both `services/` and `env/` import them without an env→services edge.
-- [ ] **co-locate the 6 existing env-parser tests** with their implementation: move `TestEnvLineKey_*` and `TestParseEnvKeys_*` (6 subtests, `configs_copy_test.go:17-61`) to `spec/envfile_test.go`. Without this, Task 4 would carry tests-for-spec-code into `services/`. Apply same logic that put `TestParseEnvEntries` in `spec/envfile_test.go`.
-- [ ] update `configs_copy.go` to call `spec.ParseEnvEntries` etc. (it stays in root for now; moves to `services/` in Task 4 — the change here is the helper rename only)
-- [ ] update `env_keys_present.go` similarly
-- [ ] update `env_keys_present_test.go` (test calls `ParseEnvEntries` on line 25 — update to `spec.ParseEnvEntries`)
-- [ ] move only `TestGetStringSlice_*` (the 8 subtests at `builtin_test.go:228+`) to `spec/helpers_test.go` — they're the only dedicated helper tests today. Registry/Get/Run/Validate tests stay in root. Other helpers (`getStringParam`, `getBoolParam`, `getDurationParam`, `getStringMap`, `getMapAny`, `sortedKeys`) have no dedicated tests today — acceptable.
-- [ ] run `make test` — must pass before Task 2
+- [x] create `spec/spec.go` with `Builtin` interface, `Kind`/`CallerContext` enums, `ExecContext` struct, `Entry` struct — copied verbatim from current `builtin.go` (only the package declaration and import paths change)
+- [x] create `spec/helpers.go` with `GetStringParam`, `GetBoolParam`, `GetStringSlice`, `GetStringMap`, `GetMapAny`, `GetDurationParam`, `SortedKeys` — exported names (helpers cross package boundary now)
+- [x] create `spec/envfile.go` with the env-file parsers currently in `configs_copy.go`: exported `ParseEnvEntries`, `ParseEnvKeys`, `EnvLineKey` + their private siblings (`parseEnvKeys`, `envLineKey`). `updateEnvFile` stays with `configs_copy.go` (services-internal — only callsite is `configs_copy.go:114`; no cross-cluster use). Reason: `env_keys_present.go` (going to `env/`) reuses `ParseEnvEntries` from `configs_copy.go` (going to `services/`). Putting the parsers in `spec/` lets both `services/` and `env/` import them without an env→services edge.
+- [x] **co-locate the 6 existing env-parser tests** with their implementation: move `TestEnvLineKey_*` and `TestParseEnvKeys_*` (6 subtests, `configs_copy_test.go:17-61`) to `spec/envfile_test.go`. Without this, Task 4 would carry tests-for-spec-code into `services/`. Apply same logic that put `TestParseEnvEntries` in `spec/envfile_test.go`.
+- [x] update `configs_copy.go` to call `spec.ParseEnvEntries` etc. (it stays in root for now; moves to `services/` in Task 4 — the change here is the helper rename only)
+- [x] update `env_keys_present.go` similarly
+- [x] update `env_keys_present_test.go` (test calls `ParseEnvEntries` on line 25 — update to `spec.ParseEnvEntries`)
+- [x] move only `TestGetStringSlice_*` (the 8 subtests at `builtin_test.go:228+`) to `spec/helpers_test.go` — they're the only dedicated helper tests today. Registry/Get/Run/Validate tests stay in root. Other helpers (`getStringParam`, `getBoolParam`, `getDurationParam`, `getStringMap`, `getMapAny`, `sortedKeys`) have no dedicated tests today — acceptable.
+- [x] run `make test` — must pass before Task 2
 
 ### Task 2: Reshape root `builtin.go` to use `spec` types + helper rename across ALL remaining root files
 
