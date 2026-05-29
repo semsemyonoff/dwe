@@ -115,10 +115,11 @@ func buildErrorEnvelope(err error) errorEnvelope {
 }
 
 // ExitCodeFor returns the process exit code to use for a given error.
-// Usage errors (invalid_output, etc.) map to 2; all others map to 1.
+// Usage errors (invalid_output, usage_error, etc.) map to 2; all others map to 1.
 func ExitCodeFor(err error) int {
 	if ce, ok := errors.AsType[*CodedError](err); ok {
-		if ce.Code == "invalid_output" {
+		switch ce.Code {
+		case "invalid_output", "usage_error":
 			return 2
 		}
 	}

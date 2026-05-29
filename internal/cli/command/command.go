@@ -83,7 +83,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			// Inspect route: exact id required; private allowed; cfg load errors tolerated.
 			if inspectFlag {
 				if len(args) == 0 {
-					return errors.New("id required with --inspect")
+					return cmdctx.Err("usage_error", "id required with --inspect")
 				}
 				if flags.Output == "json" {
 					def, err := reg.Get(args[0])
@@ -110,7 +110,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			// Run route: existing selector behavior.
 			cfg, err := config.LoadConfig(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return cmdctx.ErrWrap("project_invalid_config", err)
 			}
 
 			ctx, stop := notifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)

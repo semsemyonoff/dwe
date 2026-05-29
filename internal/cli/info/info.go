@@ -71,7 +71,7 @@ func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	if flags.Output == "json" {
 		data, err := buildInfoData(cfg, infoCfg)
 		if err != nil {
-			return cmdctx.ErrWrap("internal_error", err)
+			return cmdctx.ErrWrap("info_render_failed", err)
 		}
 		return cmdctx.WriteData(flags, cmd, data, func(infoJSON) string { return "" })
 	}

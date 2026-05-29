@@ -365,13 +365,17 @@ func renderSnapshotInspectText(data snapshotInspectJSON) string {
 // snapshots dir. The chosen source identifier is returned alongside.
 func loadInspectManifest(baseDir, arg string) (*snapshotpkg.Manifest, string, error) {
 	if looksLikeTarArchive(arg) {
-		if _, err := os.Stat(arg); err == nil {
-			m, err := snapshotpkg.ReadManifestFromTar(arg)
-			if err != nil {
-				return nil, "", cmdctx.ErrWrap("snapshot_corrupt", err).WithDetail("path", arg)
+		if _, err := os.Stat(arg); err != nil {
+			if os.IsNotExist(err) {
+				return nil, "", cmdctx.ErrWrap("snapshot_not_found", err).WithDetail("path", arg)
 			}
-			return m, arg, nil
+			return nil, "", cmdctx.ErrWrap("snapshot_corrupt", err).WithDetail("path", arg)
 		}
+		m, err := snapshotpkg.ReadManifestFromTar(arg)
+		if err != nil {
+			return nil, "", cmdctx.ErrWrap("snapshot_corrupt", err).WithDetail("path", arg)
+		}
+		return m, arg, nil
 	}
 	if err := snapshotpkg.ValidateName(arg); err != nil {
 		return nil, "", cmdctx.ErrWrap("snapshot_invalid_name", err).WithDetail("name", arg)
