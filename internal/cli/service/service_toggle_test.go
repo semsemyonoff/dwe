@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -91,12 +92,13 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	return filepath.Join(dir, "devbox.yml")
 }
 
-func TestServicesToggle_NonTTY_ReturnsInteractiveRequired(t *testing.T) {
+func TestServicesToggle_NonTTY_RendersListTable(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
 		required  bool
 		enabled   bool
 		container string
 	}{
+		"main":   {required: true, enabled: true},
 		"second": {required: false, enabled: false},
 	})
 
@@ -113,15 +115,78 @@ func TestServicesToggle_NonTTY_ReturnsInteractiveRequired(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := NewCmd("", flags)
-	err := cmd.RunE(cmd, nil)
-	if err == nil {
-		t.Fatal("expected non-TTY error, got nil")
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("non-TTY services should render list, got error: %v", err)
 	}
-	if !errors.Is(err, ErrInteractiveRequired) {
-		t.Errorf("expected ErrInteractiveRequired, got: %v", err)
+	out := stripANSI(outBuf.String())
+	if !strings.Contains(out, "main") {
+		t.Errorf("output should list 'main', got:\n%s", out)
 	}
-	if !strings.Contains(err.Error(), "devbox status") {
-		t.Errorf("error should hint at 'devbox status', got: %v", err)
+	if !strings.Contains(out, "second") {
+		t.Errorf("output should list 'second', got:\n%s", out)
+	}
+	if !strings.Contains(out, "mandatory") {
+		t.Errorf("output should mark 'main' as mandatory, got:\n%s", out)
+	}
+	if !strings.Contains(out, "disabled") {
+		t.Errorf("output should mark 'second' as disabled, got:\n%s", out)
+	}
+}
+
+func TestServicesToggle_JSON_RendersServicesArray(t *testing.T) {
+	configPath := writeTempServiceConfig(t, map[string]struct {
+		required  bool
+		enabled   bool
+		container string
+	}{
+		"main":   {required: true, enabled: true},
+		"second": {required: false, enabled: false},
+	})
+
+	oldInteractive := ui.IsInteractiveFn
+	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	// JSON mode must bypass the toggle even on a TTY.
+	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	oldMS := runMultiSelect
+	t.Cleanup(func() { runMultiSelect = oldMS })
+	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+		t.Fatal("runMultiSelect should not be called in JSON mode")
+		return ui.MultiSelectResult{}, nil
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: configPath, Output: "json"}
+	cmd := NewCmd("", flags)
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("JSON services should not error: %v", err)
+	}
+	var payload struct {
+		Services []struct {
+			Name      string `json:"name"`
+			Type      string `json:"type"`
+			Mandatory bool   `json:"mandatory"`
+			Enabled   bool   `json:"enabled"`
+			Status    string `json:"status"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+		t.Fatalf("invalid JSON output %q: %v", outBuf.String(), err)
+	}
+	byName := map[string]string{}
+	for _, s := range payload.Services {
+		byName[s.Name] = s.Status
+	}
+	if got, ok := byName["main"]; !ok || got == "" {
+		t.Errorf("main missing from services array: %+v", payload.Services)
+	}
+	if got, ok := byName["second"]; !ok || got != "disabled" {
+		t.Errorf("second should have status=disabled, got %q (full: %+v)", got, payload.Services)
 	}
 }
 

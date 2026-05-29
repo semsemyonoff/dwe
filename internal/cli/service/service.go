@@ -18,10 +18,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ErrInteractiveRequired is returned when a mutating command needs a TTY but
-// stdin is not interactive. Commands return it so cobra yields a non-zero exit.
-var ErrInteractiveRequired = errors.New("interactive terminal required")
-
 // NewCmd builds the `devbox services` command tree: bare-form opens a
 // multi-select toggle; subcommands enable / disable handle individual services.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
@@ -29,7 +25,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		GroupID: groupID,
 		Use:     "services",
-		Short:   "Toggle optional services (interactive) or enable/disable individually",
+		Short:   "Toggle optional services (interactive) or list / enable / disable",
 		Long: `Open an interactive multi-select form to enable or disable optional services.
 Required services (including required infra) are always active and shown
 pre-checked / locked. Optional infra services (required: false) appear
@@ -41,7 +37,10 @@ Use --print-plan to preview what lifecycle steps will run after the selection
 without making any changes (you will still use the interactive selector).
 Use --apply to execute the plan non-interactively after writing local.yml.
 
-For a read-only view, run 'devbox status' or one of 'devbox status apps / tools / infra'.`,
+When stdin is not a TTY (piped or non-interactive) or when --output json is
+set, the command renders a read-only listing of every service and its status
+instead of opening the toggle. For a richer view including topology, deploy
+state, and daemons, run 'devbox status'.`,
 		Example: `  devbox services
   devbox services --print-plan
   devbox services enable adminer
@@ -64,11 +63,12 @@ For a read-only view, run 'devbox status' or one of 'devbox status apps / tools 
 	return cmd
 }
 
-// runServicesToggle opens the interactive multi-select toggle form. Non-TTY
-// returns ErrInteractiveRequired with a hint. All-mandatory short-circuits.
+// runServicesToggle opens the interactive multi-select toggle form. When
+// --output json is set or stdin is not a TTY, dispatches to the read-only
+// list renderer. All-mandatory short-circuits.
 func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleToggleFlags) error {
-	if !ui.IsInteractiveFn(cmd.InOrStdin()) {
-		return fmt.Errorf("%w: services: interactive toggle requires a TTY; use 'devbox status' for read-only view", ErrInteractiveRequired)
+	if flags.Output == "json" || !ui.IsInteractiveFn(cmd.InOrStdin()) {
+		return runServicesList(cmd, flags)
 	}
 
 	cfg, err := config.LoadConfig(flags.ConfigPath)
