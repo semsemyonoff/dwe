@@ -326,21 +326,21 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
 - Modify: `internal/cli/deploy/deploy.go`
 - Modify: `internal/cli/deploy/deploy_test.go` (or nearest existing test file for the run/plan paths)
 
-- [ ] create `internal/cli/cmdctx/defaultnotice.go` with `EmitDefaultNotice(cmd *cobra.Command, flags *RootFlags, pipeline string, file string)` per spec in Technical Details — gated on `flags.Output != "json"`, writes via `render.NewWriter(cmd.ErrOrStderr()).Info(...)`
-- [ ] write unit tests for `EmitDefaultNotice` using `cmd.SetErr(&bytes.Buffer{})`: text-mode emits exact info line; JSON mode emits nothing; table-driven over (pipeline, file) pairs covering all four use cases
-- [ ] grep all readers of `cfg.Deploy` / `cfg.Deploy.Phases` across `internal/` to confirm the reconciliation strategy. Expected callers per discovery so far: `internal/core/workflow/deploy/plan.go:39` and `:67` only. Record the full list in the audit doc and pick one strategy:
+- [x] create `internal/cli/cmdctx/defaultnotice.go` with `EmitDefaultNotice(cmd *cobra.Command, flags *RootFlags, pipeline string, file string)` per spec in Technical Details — gated on `flags.Output != "json"`, writes via `render.NewWriter(cmd.ErrOrStderr()).Info(...)`
+- [x] write unit tests for `EmitDefaultNotice` using `cmd.SetErr(&bytes.Buffer{})`: text-mode emits exact info line; JSON mode emits nothing; table-driven over (pipeline, file) pairs covering all four use cases
+- [x] grep all readers of `cfg.Deploy` / `cfg.Deploy.Phases` across `internal/` to confirm the reconciliation strategy. Expected callers per discovery so far: `internal/core/workflow/deploy/plan.go:39` and `:67` only. Record the full list in the audit doc and pick one strategy:
   - **(a)** Keep `LoadConfig` writing empty `&ProjectDeployConfig{}` on missing file; CLI calls `EnsureDeployConfig` and **overwrites `cfg.Deploy` with the Ensure'd value** before `ResolvePlan` runs. Preferred (no layering changes — workflow → config import direction preserved).
   - **(b)** Move Ensure into `LoadConfig`. Requires putting `DefaultDeployConfig` somewhere `config/` can import — would force the default into `internal/core/project/config/`, away from the other defaults. Rejected.
-- [ ] create `internal/core/workflow/deploy/defaults.go` with `DefaultDeployConfig()` returning the contract above (services / start / post-deploy phases). One-line doc comment: returns freshly-allocated default, caller may mutate
-- [ ] add `EnsureDeployConfig(loaded *config.ProjectDeployConfig) (*config.ProjectDeployConfig, bool)` — `loaded == nil` OR `len(loaded.Phases) == 0` → `DefaultDeployConfig(), true`; otherwise return input verbatim with `false`
-- [ ] in `internal/cli/deploy/deploy.go` around line 377: apply the load-site error switch pattern (`errors.Is(ErrNotExist)` → nil; other errors wrapped `fmt.Errorf("load deploy config: %w", err)`); then `projectDeploy, defaulted := deploy.EnsureDeployConfig(projectDeploy)`; immediately overwrite `cfg.Deploy = projectDeploy` with a 2-line "why" comment: `// Reconcile: downstream resolvers in workflow/deploy read cfg.Deploy.Phases directly. Overwrite here so the default propagates through ResolvePlan.`; call `cmdctx.EmitDefaultNotice(cmd, flags, "deploy", "deploy")` when `defaulted` BEFORE plan/run execution
-- [ ] inspect `deploy menu` / `deploy plan` / `deploy run` subcommands in `internal/cli/deploy/` and apply the same Ensure + reconcile + helper-call treatment in each that loads the deploy config independently
-- [ ] write table-driven unit test for `DefaultDeployConfig` shape (one test): phase names, step names, types, cmds, `untracked` flags, `deploy_services` on `services` phase
-- [ ] write table-driven unit test for `EnsureDeployConfig` (one test, three rows): `{nil → default,true}`, `{empty Phases → default,true}`, `{populated → input,false}`
-- [ ] write integration test in `internal/cli/deploy/` using `cmd.SetErr(&bytes.Buffer{})`: bare-minimum project (no `devbox/deploy.yml`) → `deploy plan` succeeds, plan output contains `docker up --wait`, stderr buffer contains the exact info line. **This test must fail on `main` without the fix** (today's silent noop produces zero container-start steps)
-- [ ] write integration test: `deploy plan --output json` with no `deploy.yml` → stderr buffer has no info line, JSON envelope clean
-- [ ] write integration test: project WITH `devbox/deploy.yml` → stderr buffer empty (no info line), user's pipeline used verbatim
-- [ ] run `make test` — must pass before Task 3
+- [x] create `internal/core/workflow/deploy/defaults.go` with `DefaultDeployConfig()` returning the contract above (services / start / post-deploy phases). One-line doc comment: returns freshly-allocated default, caller may mutate
+- [x] add `EnsureDeployConfig(loaded *config.ProjectDeployConfig) (*config.ProjectDeployConfig, bool)` — `loaded == nil` OR `len(loaded.Phases) == 0` → `DefaultDeployConfig(), true`; otherwise return input verbatim with `false`
+- [x] in `internal/cli/deploy/deploy.go` around line 377: apply the load-site error switch pattern (`errors.Is(ErrNotExist)` → nil; other errors wrapped `fmt.Errorf("load deploy config: %w", err)`); then `projectDeploy, defaulted := deploy.EnsureDeployConfig(projectDeploy)`; immediately overwrite `cfg.Deploy = projectDeploy` with a 2-line "why" comment: `// Reconcile: downstream resolvers in workflow/deploy read cfg.Deploy.Phases directly. Overwrite here so the default propagates through ResolvePlan.`; call `cmdctx.EmitDefaultNotice(cmd, flags, "deploy", "deploy")` when `defaulted` BEFORE plan/run execution
+- [x] inspect `deploy menu` / `deploy plan` / `deploy run` subcommands in `internal/cli/deploy/` and apply the same Ensure + reconcile + helper-call treatment in each that loads the deploy config independently
+- [x] write table-driven unit test for `DefaultDeployConfig` shape (one test): phase names, step names, types, cmds, `untracked` flags, `deploy_services` on `services` phase
+- [x] write table-driven unit test for `EnsureDeployConfig` (one test, three rows): `{nil → default,true}`, `{empty Phases → default,true}`, `{populated → input,false}`
+- [x] write integration test in `internal/cli/deploy/` using `cmd.SetErr(&bytes.Buffer{})`: bare-minimum project (no `devbox/deploy.yml`) → `deploy plan` succeeds, plan output contains `docker up --wait`, stderr buffer contains the exact info line. **This test must fail on `main` without the fix** (today's silent noop produces zero container-start steps)
+- [x] write integration test: `deploy plan --output json` with no `deploy.yml` → stderr buffer has no info line, JSON envelope clean
+- [x] write integration test: project WITH `devbox/deploy.yml` → stderr buffer empty (no info line), user's pipeline used verbatim
+- [x] run `make test` — must pass before Task 3
 
 ### Task 3: Reset defaults — constructor, wrapper, call-site wiring
 

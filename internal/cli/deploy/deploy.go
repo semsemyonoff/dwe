@@ -67,6 +67,14 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// Apply deploy default when no deploy.yml is on disk (cfg.Deploy has empty
+	// phases in that case, set by LoadConfig).
+	ensuredDeploy, deployDefaulted := deploy.EnsureDeployConfig(cfg.Deploy)
+	cfg.Deploy = ensuredDeploy
+	if deployDefaulted {
+		cmdctx.EmitDefaultNotice(cmd, flags, "deploy", "deploy")
+	}
+
 	reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
@@ -375,11 +383,18 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 
 	// Load project-level deploy config (absent is valid — some projects only have per-service deploy files)
 	projectDeploy, err := config.LoadProjectDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("loading project deploy config: %w", err)
-	}
-	if errors.Is(err, os.ErrNotExist) {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
 		projectDeploy = nil
+	case err != nil:
+		return fmt.Errorf("load deploy config: %w", err)
+	}
+	projectDeploy, deployDefaulted := deploy.EnsureDeployConfig(projectDeploy)
+	// Reconcile: downstream resolvers in workflow/deploy read cfg.Deploy.Phases directly.
+	// Overwrite here so the default propagates through ResolvePlan.
+	cfg.Deploy = projectDeploy
+	if deployDefaulted {
+		cmdctx.EmitDefaultNotice(cmd, flags, "deploy", "deploy")
 	}
 
 	// Load tracked services and their deploy configs

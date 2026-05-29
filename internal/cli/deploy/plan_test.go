@@ -78,3 +78,88 @@ func TestRunDeployPlan_UnknownServiceErrors(t *testing.T) {
 		t.Errorf("err = %v, want one mentioning the unknown service name", err)
 	}
 }
+
+// TestRunDeployPlan_DefaultPipelineWhenNoDeployYML verifies that a bare project
+// (no devbox/deploy.yml) succeeds, includes the docker-up step from the built-in
+// default, and prints the info line on stderr.
+func TestRunDeployPlan_DefaultPipelineWhenNoDeployYML(t *testing.T) {
+	dir := makeMinimalProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+
+	cmd := &cobra.Command{}
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	if !strings.Contains(outBuf.String(), "docker up --wait") {
+		t.Errorf("plan output missing 'docker up --wait'; got:\n%s", outBuf.String())
+	}
+
+	const wantNotice = "Using built-in default deploy pipeline (no devbox/deploy.yml on disk)."
+	if !strings.Contains(errBuf.String(), wantNotice) {
+		t.Errorf("stderr missing info line %q; got:\n%s", wantNotice, errBuf.String())
+	}
+}
+
+// TestRunDeployPlan_JSONModeNoInfoLine verifies that --output json suppresses
+// the default-pipeline info line on stderr.
+func TestRunDeployPlan_JSONModeNoInfoLine(t *testing.T) {
+	dir := makeMinimalProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml"), Output: "json"}
+
+	cmd := &cobra.Command{}
+	var errBuf bytes.Buffer
+	cmd.SetErr(&errBuf)
+
+	// The plan command still writes text to stdout even in json mode (plan
+	// does not have a JSON output path for the plan table), so we don't assert
+	// on stdout here — only that stderr is empty.
+	_ = runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{})
+
+	if errBuf.Len() != 0 {
+		t.Errorf("json mode: expected empty stderr, got %q", errBuf.String())
+	}
+}
+
+// TestRunDeployPlan_UserDeployYMLNoInfoLine verifies that a project with a
+// devbox/deploy.yml does not emit the default-pipeline info line.
+func TestRunDeployPlan_UserDeployYMLNoInfoLine(t *testing.T) {
+	dir := makeMinimalProject(t)
+
+	// Write a minimal user deploy.yml.
+	devboxDir := filepath.Join(dir, "devbox")
+	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userDeploy := "phases:\n  - name: custom\n    steps:\n      - name: step1\n        type: shell\n        cmd: echo hello\n"
+	if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+
+	cmd := &cobra.Command{}
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	if errBuf.Len() != 0 {
+		t.Errorf("expected no info line when user deploy.yml is present; stderr = %q", errBuf.String())
+	}
+
+	// User's step must appear, not the default.
+	if !strings.Contains(outBuf.String(), "echo hello") {
+		t.Errorf("plan output missing user step 'echo hello'; got:\n%s", outBuf.String())
+	}
+	if strings.Contains(outBuf.String(), "docker up --wait") {
+		t.Errorf("default step 'docker up --wait' should not appear when user deploy.yml is present")
+	}
+}
