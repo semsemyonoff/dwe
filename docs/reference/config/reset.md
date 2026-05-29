@@ -25,15 +25,21 @@ devbox reset run --service <name> [--yes] [--skip-preflight]
 Resets a single service without touching the rest of the project:
 
 1. Runs stop-stage preflight checks (docker, git binaries; port availability check is skipped for stop stage).
-2. If the service is currently **enabled**, runs any `on_disable.before` user commands declared in `devbox/services/<name>/service.yml` (outside the project lock).
-3. Acquires the project lock, then:
-   a. Stops the service container directly via `docker stop` (bypasses compose — works whether the service is enabled or disabled).
-   b. Executes `devbox/services/<name>/reset.yml` if present (same pipeline format as project-wide `reset.yml`).
-   c. Atomically removes the service's deployed state from the journal and writes a `PendingDeploy` entry.
-4. Releases the lock.
+2. Shows an interactive confirmation form listing exactly what will happen (skipped with `--yes`).
+3. If the service is currently **enabled**, runs any `on_disable.before` user commands declared in `devbox/services/<name>/service.yml` (outside the project lock).
+4. Acquires the project lock, then executes a single pipeline composed of:
+   a. **Baseline (always-on):** stop **and remove** the service container directly via `docker stop` + `docker rm -f` (bypasses compose — works whether the service is enabled or disabled).
+   b. **Baseline (conditional):** delete the service directory if the service declares `dir:` in `service.yml` and the directory exists on disk.
+   c. **User pipeline (optional):** the phases declared in `devbox/services/<name>/reset.yml` if present, appended after the baseline.
+5. Atomically removes the service's deployed state from the journal and writes a `PendingDeploy` entry.
+6. Releases the lock.
 
 After a per-service reset, `devbox status` shows a pending-deploy banner for
 the service. Run `devbox deploy run --service <name>` to re-provision it.
+
+**Volumes are not touched automatically.** If you need to drop the service's
+Docker volumes as part of reset, declare a `services/<name>/reset.yml` with a
+step calling [`docker_remove_project_volumes`](deploy.md#docker_remove_project_volumes).
 
 ### Requirements
 
@@ -55,8 +61,9 @@ from `services disable`, not from reset).
 ### Per-service `reset.yml`
 
 `devbox/services/<name>/reset.yml` follows the same format as the project-wide
-`devbox/reset.yml`. It is optional; when absent, only the container stop and
-journal update occur.
+`devbox/reset.yml`. It is **optional** and is appended after the always-on
+baseline (container stop+rm, optional `dir:` removal). When absent, only the
+baseline and the journal update occur.
 
 ```yaml
 # devbox/services/postgres/reset.yml
@@ -64,8 +71,8 @@ phases:
   - name: wipe
     steps:
       - name: drop-volume
-        type: shell
-        cmd: docker volume rm project_postgres_data || true
+        type: builtin
+        cmd: docker_remove_project_volumes
 ```
 
 ### Pending state lifecycle

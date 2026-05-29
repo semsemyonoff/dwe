@@ -378,11 +378,11 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
 - Modify: builtins reference page (locate where existing builtins like `docker_remove_project_volumes` are documented)
 - Modify: `AGENTS.md` (CLAUDE.md is symlink — edit AGENTS.md)
 
-- [ ] update per-service reset reference: document new always-on baseline (stop+rm + delete dir when set+exists) and that `reset.yml` is optional and appended after the baseline; explicitly state volumes are NOT auto-removed and link to `docker_remove_project_volumes` for explicit volume cleanup
-- [ ] add reference entry for new builtin `docker_stop_remove_container` (params: `name` required, `timeout_sec` optional default 10s; behavior: idempotent on missing container; use case: per-service teardown)
-- [ ] update `AGENTS.md` "Compose-bypass for per-service stop" pattern: note that reset now drives stop+rm through the synthetic-pipeline builtin path (not direct `stopServiceLocked`); `stopServiceLocked` remains for `devbox stop <name>` (no removal there)
-- [ ] no new tests for docs; rely on existing docs-subsystem test coverage to catch any breakage
-- [ ] run tests: `make test` — must pass before Task 6
+- [x] update per-service reset reference: document new always-on baseline (stop+rm + delete dir when set+exists) and that `reset.yml` is optional and appended after the baseline; explicitly state volumes are NOT auto-removed and link to `docker_remove_project_volumes` for explicit volume cleanup
+- [x] add reference entry for new builtin `docker_stop_remove_container` (params: `name` required, `timeout_sec` optional default 10s; behavior: idempotent on missing container; use case: per-service teardown)
+- [x] update `AGENTS.md` "Compose-bypass for per-service stop" pattern: note that reset now drives stop+rm through the synthetic-pipeline builtin path (not direct `stopServiceLocked`); `stopServiceLocked` remains for `devbox stop <name>` (no removal there)
+- [x] no new tests for docs; rely on existing docs-subsystem test coverage to catch any breakage
+- [x] run tests: `make test` — must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
 

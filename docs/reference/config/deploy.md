@@ -467,6 +467,7 @@ The following four builtins are reserved for the engine. They cannot appear in u
 | `docker_daemon_start` | Start a named daemon container via `docker compose run -d`. Invoked by the `.start` virtual command generated from `type: daemon` commands. |
 | `docker_daemon_logs` | Tail daemon container logs in the foreground. Invoked by the `.logs` virtual command generated from `type: daemon` commands. |
 | `docker_daemon_stop` | Stop a named daemon container (idempotent). Invoked by the `.stop` virtual command generated from `type: daemon` commands. |
+| `docker_stop_remove_container` | Stop and remove a named container (`docker stop` + `docker rm -f`, both idempotent on missing container). Invoked by the synthetic `container` phase that `devbox reset run --service <name>` prepends to every per-service reset pipeline. Params: `container_template` (string, required; name template, resolved via the project prefix), `stop_timeout` (duration string, optional, default `10s`). On stop failure, propagates the error and does NOT attempt removal. |
 | `daemons_reap` | Stop all project daemon containers. Auto-injected by the engine as the `_auto_reap_daemons` phase at the start of every `stop` lifecycle pipeline. |
 
 **Naming convention:** `docker_*` builtins are Docker-specific; `service_*` builtins operate on per-service folders; unprefixed names are generic. The internal builtins follow the same `docker_*` / unprefixed pattern.
