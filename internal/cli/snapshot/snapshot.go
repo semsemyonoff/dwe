@@ -110,7 +110,7 @@ func runSnapshotList(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
 	}
 	entries, err := snapshotpkg.ListSnapshots(baseDir, snapCfg)
 	if err != nil {
-		return err
+		return cmdctx.ErrWrap("snapshot_list_failed", err)
 	}
 	current, readCurErr := snapshotpkg.ReadCurrent(baseDir)
 	if readCurErr != nil && flags.Output != "json" {
@@ -191,7 +191,7 @@ func runSnapshotCurrent(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
 	baseDir := flags.ProjectRoot()
 	name, err := snapshotpkg.ReadCurrent(baseDir)
 	if err != nil {
-		return err
+		return cmdctx.ErrWrap("snapshot_current_unreadable", err)
 	}
 	if name == "" {
 		if flags.Output == "json" {
