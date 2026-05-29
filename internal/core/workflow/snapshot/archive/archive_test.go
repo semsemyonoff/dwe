@@ -177,8 +177,9 @@ func TestUnpack_AcceptsTrustedArchive(t *testing.T) {
 		t.Fatalf("Unpack: %v", err)
 	}
 	// Manifest has no artifacts list, but data/x.txt exists on disk — should
-	// show up as Extra and trigger VerificationWarned (no prompt since no
-	// Missing/HashMismatch).
+	// show up as Extra and trigger VerificationWarned. silentOpts sets
+	// AssumeYes=true, so prompt-suppression here is gated by AssumeYes, not by
+	// the extras-only branch (covered separately in TestUnpack_VerificationExtraOnly).
 	if ur.Verification != VerificationWarned {
 		t.Errorf("Verification = %v, want VerificationWarned (extra-only)", ur.Verification)
 	}

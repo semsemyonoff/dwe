@@ -1,8 +1,6 @@
 package archive
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -54,24 +52,14 @@ func VerifyExtractedArtifacts(stagingDir string, m *meta.Manifest) (ArtifactVeri
 		}
 		declared[a.Path] = a
 
-		f, err := os.Open(absChild)
+		got, err := meta.HashFile(absChild)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				report.Missing = append(report.Missing, a.Path)
 				continue
 			}
-			return ArtifactVerifyReport{}, fmt.Errorf("verify: open %q: %w", a.Path, err)
+			return ArtifactVerifyReport{}, fmt.Errorf("verify: hash %q: %w", a.Path, err)
 		}
-		h := sha256.New()
-		_, copyErr := io.Copy(h, f)
-		closeErr := f.Close()
-		if copyErr != nil {
-			return ArtifactVerifyReport{}, fmt.Errorf("verify: read %q: %w", a.Path, copyErr)
-		}
-		if closeErr != nil {
-			return ArtifactVerifyReport{}, fmt.Errorf("verify: close %q: %w", a.Path, closeErr)
-		}
-		got := hex.EncodeToString(h.Sum(nil))
 		if !strings.EqualFold(got, a.Sha256) {
 			report.HashMismatch = append(report.HashMismatch, ArtifactHashMismatch{
 				Path:           a.Path,

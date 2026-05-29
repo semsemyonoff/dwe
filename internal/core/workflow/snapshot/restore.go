@@ -337,13 +337,13 @@ func confirmRestore(fn func(RestoreConfirmContext) (bool, error), ctx RestoreCon
 
 // writePreRestoreBackup snapshots the working-copy devbox/local.yml and
 // .devbox/deploy/state.yml into <stateDir>/.pre-restore-backup/, replacing any
-// previous backup atomically (write each file via writeFileAtomic). Missing
-// source files are skipped silently.
+// previous backup atomically (write each file via meta.WriteFileAtomic).
+// Missing source files are skipped silently.
 func writePreRestoreBackup(baseDir string) (string, error) {
 	backupDir := meta.PreRestoreBackup(baseDir)
 	// Remove the previous backup so stale files from an earlier restore can't
 	// confuse manual recovery. We do not need atomicity here: each individual
-	// file write below is atomic via writeFileAtomic.
+	// file write below is atomic via meta.WriteFileAtomic.
 	if err := os.RemoveAll(backupDir); err != nil {
 		return "", fmt.Errorf("remove previous backup: %w", err)
 	}
