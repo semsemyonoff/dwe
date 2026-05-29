@@ -43,6 +43,16 @@ Deploy and reset pipeline declarations.
 
 All three are loaded separately and are not merged with the 3-layer config.
 
+Both `devbox/deploy.yml` and `devbox/reset.yml` are optional. When absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (no devbox/deploy.yml on disk).`
+
+**Default deploy pipeline** (fires when `devbox/deploy.yml` is absent):
+
+Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: devbox`, `cmd: "docker up --wait"`) → `post-deploy` (info display + success message).
+
+**Default reset pipeline** (fires when `devbox/reset.yml` is absent):
+
+Phases: `pre` (confirm prompt) → `stop` (`type: devbox`, `cmd: "docker down"`) → `cleanup` (remove volumes, remove `services/` directory).
+
 ## File roles
 
 | File | Loader | Role |

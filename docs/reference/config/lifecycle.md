@@ -27,12 +27,27 @@ Run / stop pipeline declarations driving `devbox run`, `devbox stop`, and `devbo
 
 It is loaded separately by `LoadLifecycleConfig()` and is **not** merged with the 3-layer config.
 
-The file is optional.
+The file is optional for all commands that use it.
 
-- **`devbox stop` does not require `lifecycle.yml`.** When the file is absent or has no `stop:` section, `devbox stop` runs only the auto-injected `_auto_reap_daemons` phase (which stops any background daemons started via [`type: daemon`](commands.md#type-daemon) commands) and prints the default final message `Project is stopped. Have a nice day!`.
-- **`devbox run` and `devbox restart` still require `lifecycle.yml` with a `run:` section.** When the file is absent, those commands fail with `no lifecycle.yml`. The lower-level commands (`devbox docker up`, `devbox docker down`) work either way.
+When `lifecycle.yml` is absent or a section is absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <run|stop> pipeline (no devbox/lifecycle.yml on disk).` The info line is suppressed in `--output json` mode.
 
-Whenever a `stop:` pipeline runs (synthetic or user-defined), the `_auto_reap_daemons` phase is prepended automatically; it has no opt-out and is visible in plan output for transparency.
+**Default `run:` pipeline** (fires when `lifecycle.yml` is absent or has no `run:` section):
+
+| Field | Value |
+|-------|-------|
+| `update.mode` | `off` (no git probe) |
+| `show_info` | `true` |
+| `final_message` | `Project is ready for work!` |
+| Phases | Single `start` phase: one `type: devbox` step with `cmd: "docker up --wait"` |
+
+**Default `stop:` pipeline** (fires when `lifecycle.yml` is absent or has no `stop:` section):
+
+| Field | Value |
+|-------|-------|
+| `final_message` | `Project is stopped. Have a nice day!` |
+| Phases | Auto-reap phase (see below) + single `stop` phase: one `type: devbox` step with `cmd: "docker down"` |
+
+Whenever a `stop:` pipeline runs (default or user-defined), the `_auto_reap_daemons` phase is prepended automatically; it has no opt-out and is visible in plan output for transparency. It stops any background daemons started via [`type: daemon`](commands.md#type-daemon) commands.
 
 `devbox docker up` and `devbox docker down` are thin Docker Compose passthroughs and never use this pipeline; raw `docker compose stop` / `restart` remain accessible via `devbox docker stop` / `devbox docker restart`.
 

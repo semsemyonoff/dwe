@@ -9,7 +9,13 @@ returns it to a clean state that requires a subsequent deploy.
 devbox reset run [--yes]
 ```
 
-Executes `devbox/reset.yml`. On success the entire deploy state journal is
+Executes `devbox/reset.yml`. The file is **optional** — when absent, Devbox uses the built-in default reset pipeline and prints one info line to stderr: `Using built-in default reset pipeline (no devbox/reset.yml on disk).` The info line is suppressed in `--output json` mode.
+
+**Default reset pipeline** (fires when `devbox/reset.yml` is absent):
+
+Phases: `pre` (confirm prompt: "This will stop containers, remove project volumes, and delete generated data.") → `stop` (`type: devbox`, `cmd: "docker down"`) → `cleanup` (remove all project volumes, remove `services/` directory).
+
+On success the entire deploy state journal is
 removed, so every service appears as not-deployed in `devbox status`.
 
 | Option | Description |

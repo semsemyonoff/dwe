@@ -429,14 +429,14 @@ Run BEFORE the four pipeline tasks so any newly-discovered hidden-mandatory file
 - Modify: `docs/internals/packages.md`
 - Modify: `CLAUDE.md` (note: AGENTS.md is the canonical file — `CLAUDE.md` is a symlink per CLAUDE.md; edit `AGENTS.md`)
 
-- [ ] update `docs/reference/config/deploy.md`: state that `devbox/deploy.yml` is optional; when absent, devbox uses a built-in default pipeline (`services` → `start: docker up --wait` → `post-deploy: info + success`); state that the info line is emitted when the default fires
-- [ ] update `docs/reference/config/lifecycle.md`: same statement for both `run:` and `stop:` sections — when section absent (or file absent), default fires; spell out the default contracts
-- [ ] add or update the reset reference doc to state that `devbox/reset.yml` is optional; spell out default contract (confirm → docker down → remove volumes + remove services/)
-- [ ] update `docs/internals/packages.md` for `internal/core/workflow/{deploy,reset,lifecycle}`: mention `Default*Config` + `Ensure*Config` as the single source of truth for defaults, and the `auto-reap` system phase exception
-- [ ] update `AGENTS.md` "Key Patterns": add a "Pipeline defaults" bullet describing the `Default*`/`Ensure*` pattern (paired Go constructors returning freshly-allocated structs + tuple-return `(cfg, defaulted bool)` wrappers), the full-replacement composition model, the `cmdctx.EmitDefaultNotice` shared CLI helper, the `lifecycle.DefaultedPipeline` typed enum + `RunContext.OnDefaultUsed func(DefaultedPipeline)` callback, and the auto-reap exception. Note that `cfg.Deploy` is post-Ensure overwritten by the CLI deploy entrypoint (so downstream resolvers see the default when `deploy.yml` is absent)
-- [ ] regenerate embedded docs: `make build` (per CLAUDE.md "Build, Test, and Development Commands" — required after `docs/reference/` edits so the binary's embedded docs match)
-- [ ] verify `git diff --exit-code internal/core/docs/content_hashes_gen.go` is clean after `make build` (per CLAUDE.md "Content-hash manifest fallback" — the CI guard)
-- [ ] run `make test` to confirm doc-subsystem golden tests still pass
+- [x] update `docs/reference/config/deploy.md`: state that `devbox/deploy.yml` is optional; when absent, devbox uses a built-in default pipeline (`services` → `start: docker up --wait` → `post-deploy: info + success`); state that the info line is emitted when the default fires
+- [x] update `docs/reference/config/lifecycle.md`: same statement for both `run:` and `stop:` sections — when section absent (or file absent), default fires; spell out the default contracts
+- [x] add or update the reset reference doc to state that `devbox/reset.yml` is optional; spell out default contract (confirm → docker down → remove volumes + remove services/)
+- [x] update `docs/internals/packages.md` for `internal/core/workflow/{deploy,reset,lifecycle}`: mention `Default*Config` + `Ensure*Config` as the single source of truth for defaults, and the `auto-reap` system phase exception
+- [x] update `AGENTS.md` "Key Patterns": add a "Pipeline defaults" bullet describing the `Default*`/`Ensure*` pattern (paired Go constructors returning freshly-allocated structs + tuple-return `(cfg, defaulted bool)` wrappers), the full-replacement composition model, the `cmdctx.EmitDefaultNotice` shared CLI helper, the `lifecycle.DefaultedPipeline` typed enum + `RunContext.OnDefaultUsed func(DefaultedPipeline)` callback, and the auto-reap exception. Note that `cfg.Deploy` is post-Ensure overwritten by the CLI deploy entrypoint (so downstream resolvers see the default when `deploy.yml` is absent)
+- [x] regenerate embedded docs: `make build` (per CLAUDE.md "Build, Test, and Development Commands" — required after `docs/reference/` edits so the binary's embedded docs match)
+- [x] verify `git diff --exit-code internal/core/docs/content_hashes_gen.go` is clean after `make build` (per CLAUDE.md "Content-hash manifest fallback" — the CI guard)
+- [x] run `make test` to confirm doc-subsystem golden tests still pass
 
 ### Task 7: Verify acceptance criteria
 
